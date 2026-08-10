@@ -13,8 +13,9 @@ lessons.md
 *.pkg
 
 # Pinned toolchains, kernel trees, and build outputs are fetched or produced
-# by the harness into .toolchain/ and .build/; both are derived state.
-.toolchain/
+# by the harness. Only the bulky derived state is ignored; the build recipes
+# and the small digest records that contracts reference are tracked source.
+.toolchain/artifacts/
 .build/
 
 # Rust build artifacts.

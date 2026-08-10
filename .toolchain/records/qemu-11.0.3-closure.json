@@ -1,0 +1,103 @@
+{
+  "qemuBinary": "/opt/homebrew/bin/qemu-system-aarch64",
+  "qemuSha256": "af7f6f87c135fa5f08652cda8bc79c01ee560f2ce8e5666c964ad9dda5884232",
+  "qemuVersion": "11.0.3",
+  "homebrewLibraries": [
+    {
+      "path": "/opt/homebrew/opt/capstone/lib/libcapstone.5.dylib",
+      "sha256": "5bb9d5aa85d879bf6f4872b30659dbe3668817a5508c90809c3eef2fccea95a6"
+    },
+    {
+      "path": "/opt/homebrew/opt/dtc/lib/libfdt.1.dylib",
+      "sha256": "0d9d5bc30fd2ac4704822368ef87117211d709821ced4cd38af7e7e96baeb9a5"
+    },
+    {
+      "path": "/opt/homebrew/opt/glib/lib/libgio-2.0.0.dylib",
+      "sha256": "4349f1b8c374046a20a5fa386009870bf0102719dfa7bd0397f4f19cb89c07e9"
+    },
+    {
+      "path": "/opt/homebrew/opt/glib/lib/libglib-2.0.0.dylib",
+      "sha256": "629b656720b26f44814cc1dbb34864f724f36e35f1909a2d008e9a435b7086e5"
+    },
+    {
+      "path": "/opt/homebrew/opt/glib/lib/libgmodule-2.0.0.dylib",
+      "sha256": "50e52e83851fda109d7865cf8496573c1a22b7db16b52bc0c4c012fa5541e365"
+    },
+    {
+      "path": "/opt/homebrew/opt/glib/lib/libgobject-2.0.0.dylib",
+      "sha256": "bbd811feb8c56b19dcddf2ace04737d934e6d49730ec30fc71420aa6e1935c8a"
+    },
+    {
+      "path": "/opt/homebrew/opt/gnutls/lib/libgnutls.30.dylib",
+      "sha256": "a075c7b1ffdca810dd9c9e4fb9fdabc03f302604ca8daf605ecbc5586a91c798"
+    },
+    {
+      "path": "/opt/homebrew/opt/jpeg-turbo/lib/libjpeg.8.dylib",
+      "sha256": "e17205913bfdb5535bbdbc7127d0eeb0970f5e6c85f68f0c75a1e711878e1e3a"
+    },
+    {
+      "path": "/opt/homebrew/opt/libpng/lib/libpng16.16.dylib",
+      "sha256": "0af10df88b17d1c23769d3669786dc35b6e09d45a0122889f769aec29f52dc33"
+    },
+    {
+      "path": "/opt/homebrew/opt/libslirp/lib/libslirp.0.dylib",
+      "sha256": "0a744172726f679c02ad6df4ccd173c2974ec579d2a012923afc7cb5622ad5ed"
+    },
+    {
+      "path": "/opt/homebrew/opt/libssh/lib/libssh.4.dylib",
+      "sha256": "17931e314d18b654504195b6011c50310167a55ddee7b69e767239d648b8c143"
+    },
+    {
+      "path": "/opt/homebrew/opt/libusb/lib/libusb-1.0.0.dylib",
+      "sha256": "d4d61d9f4e5291e64c09783cb61bd1b4c67e202b514f40989504a5852f7560b9"
+    },
+    {
+      "path": "/opt/homebrew/opt/lzo/lib/liblzo2.2.dylib",
+      "sha256": "26b0cdc61d531b9ee95e0a84b37cc6bfc08df29c935f12e4a4278d00dda99132"
+    },
+    {
+      "path": "/opt/homebrew/opt/ncurses/lib/libncursesw.6.dylib",
+      "sha256": "c702ab5d59b93b4c80a434cc258bf10106294b319d0e7bb6929f9bde50e00b22"
+    },
+    {
+      "path": "/opt/homebrew/opt/pixman/lib/libpixman-1.0.dylib",
+      "sha256": "aeaac3e2d09497ad745bb54ba59f3b88713578a2050734891352e3f292524777"
+    },
+    {
+      "path": "/opt/homebrew/opt/snappy/lib/libsnappy.1.dylib",
+      "sha256": "434244ce5bb0550675f2fc9efaad1c44a9b3a5d6dd2be220dd87a9696ae6c525"
+    },
+    {
+      "path": "/opt/homebrew/opt/vde/lib/libvdeplug.3.dylib",
+      "sha256": "46eb4589c300ef668c8ca5a1dae010051b1be3e13066e141a0319cb1618fbb2b"
+    },
+    {
+      "path": "/opt/homebrew/opt/zstd/lib/libzstd.1.dylib",
+      "sha256": "69d8dee81bccdee425d167300d11431f3c5ecc34a3011400e536aa89f7756189"
+    }
+  ],
+  "systemLibraries": [
+    "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
+    "/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices",
+    "/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio",
+    "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+    "/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics",
+    "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
+    "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+    "/System/Library/Frameworks/Hypervisor.framework/Versions/A/Hypervisor",
+    "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit",
+    "/System/Library/Frameworks/Metal.framework/Versions/A/Metal",
+    "/System/Library/Frameworks/ParavirtualizedGraphics.framework/Versions/A/ParavirtualizedGraphics",
+    "/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore",
+    "/System/Library/Frameworks/vmnet.framework/Versions/A/vmnet",
+    "/usr/lib/libbz2.1.0.dylib",
+    "/usr/lib/libcurl.4.dylib",
+    "/usr/lib/libiconv.2.dylib",
+    "/usr/lib/libobjc.A.dylib",
+    "/usr/lib/libpam.2.dylib",
+    "/usr/lib/libsasl2.2.dylib",
+    "/usr/lib/libSystem.B.dylib",
+    "/usr/lib/libz.1.dylib"
+  ],
+  "systemLibrarySource": "dyld-shared-cache (host macOS pinned by apple-container-bootstrap host gate)"
+}

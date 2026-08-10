@@ -15,38 +15,53 @@
     "reference": "docker.io/library/debian:13-slim",
     "platform": "linux/arm64",
     "resolutionPolicy": "Resolve the platform-specific manifest digest at seal time from the registry, record it here as manifestDigest, and never reference the image by tag again.",
-    "manifestDigest": "RESOLVE_AT_SEAL",
+    "indexDigest": "sha256:3a39a0592364683e6bab97937b72cad5a8fa6dcbbee90edb3bb48c7f8e94f258",
+    "manifestDigest": "sha256:c94f5ddd41327aa2d4a7cfba7889056c02936182fd76a513fec6160c97181fc0",
+    "digestVerifiedAgainst": "registry-1.docker.io docker-content-digest header and index manifest, 2026-08-10",
     "aptSnapshot": {
       "policy": "Pin snapshot.debian.org to the timestamp recorded at seal time; record the full installed package manifest (name, version, sha256) after provisioning.",
-      "snapshotTimestamp": "RESOLVE_AT_SEAL",
-      "packageManifest": "RESOLVE_AT_SEAL"
+      "snapshotTimestamp": "20260810T022135Z",
+      "transport": "http (debian:13-slim ships no CA bundle; apt authenticity is anchored in the InRelease GPG signature against debian-archive-keyring, not TLS)",
+      "packageManifest": ".toolchain/records/sealed-package-manifest.tsv",
+      "packageManifestSha256": "f8d1d5eff063ee9939ed0b6939dc69031da7651a03a86d6ece0ae6a3b71d3357",
+      "packageCount": 199
     },
     "postSealNetwork": "none",
-    "sealedImageId": "RESOLVE_AT_SEAL"
+    "sealedImageId": "sha256:31257e9c32dc60a81f426d493190cc75bbe65f32d9fbcb27ef47611b7a434165",
+    "sealedImageTag": "evo-flight-lab:sealed",
+    "dockerfileSha256": "17f500c89e2b7f579dee05e7c8d9ee9b7ece25f8bf576a9f84d7faf62cdd2751"
   },
   "toolchain": {
     "gcc": {
       "expectedVersionPrefix": "14.2",
-      "binarySha256": "RESOLVE_AT_SEAL",
+      "resolvedVersion": "gcc-14 (Debian 14.2.0-19) 14.2.0",
+      "binaryPathInImage": "/usr/bin/gcc-14",
+      "binarySha256": "fb051a6c58961fb6aec758acf50d7d0375eecff740d0706388092829e3fb7a41",
       "vendor": "GNU"
     },
     "clang": {
       "expectedVersionPrefix": "19",
-      "binarySha256": "RESOLVE_AT_SEAL",
+      "resolvedVersion": "Debian clang version 19.1.7 (3+b1)",
+      "binaryPathInImage": "/usr/bin/clang-19",
+      "binarySha256": "8bba5d733f54ada0cc50ba7646a87ddc798d5de73f67e397cdefada07297bb65",
       "vendor": "LLVM"
     },
     "binutils": ["as", "ld", "ar", "nm", "strip", "objcopy", "objdump", "readelf"],
+    "binutilsVersion": "GNU ld (GNU Binutils for Debian) 2.44",
     "rust": {
       "version": "1.97.1",
       "channel": "1.97.1",
       "recordedArtifact": "resolved rustc binary sha256, not the rustup proxy",
-      "rustcSha256": "RESOLVE_AT_SEAL",
+      "rustcPath": "/Users/onehrxn/.rustup/toolchains/1.97.1-aarch64-apple-darwin/bin/rustc",
+      "rustcSha256": "210df6794001b73ec3d453878707fa1e0bdcb63c427024a6e6574bbe5615a4da",
+      "rustcVersion": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
       "rationale": "1.97.1 fixes an LLVM miscompilation present since at least 1.87; the preinstalled 1.94.0 is therefore not acceptable merely because it exists."
     }
   },
   "reproducibility": {
-    "KBUILD_BUILD_TIMESTAMP": "RESOLVE_AT_SEAL",
-    "SOURCE_DATE_EPOCH": "RESOLVE_AT_SEAL",
+    "KBUILD_BUILD_TIMESTAMP": "1786299935",
+    "SOURCE_DATE_EPOCH": "1786299935",
+    "timestampRationale": "Both frozen to the kernel.org releases.json released.timestamp for 6.18.44 (2026-08-09), so the frozen value is itself a fact of the release authority.",
     "KBUILD_BUILD_USER": "evo",
     "KBUILD_BUILD_HOST": "flightlab",
     "LC_ALL": "C",

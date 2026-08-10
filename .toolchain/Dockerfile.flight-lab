@@ -1,0 +1,76 @@
+# Sealed ARM64 Linux build environment for the EvoCC flight lab.
+#
+# Reproducibility contract:
+#   - The base image is referenced by platform manifest digest, never by tag.
+#   - APT is pinned to one snapshot.debian.org timestamp; no "latest" package
+#     can enter the environment after seal.
+#   - The full installed package manifest is exported at build time and
+#     recorded in the flight-lab evidence.
+#   - After seal, all reference builds run with --network=none.
+
+FROM docker.io/library/debian@sha256:c94f5ddd41327aa2d4a7cfba7889056c02936182fd76a513fec6160c97181fc0
+
+ARG APT_SNAPSHOT=20260810T022135Z
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LC_ALL=C \
+    TZ=UTC
+
+# Replace every default apt source with the pinned snapshot. The stock image
+# ships deb.debian.org URIs which resolve to moving targets.
+#
+# Transport is plain HTTP by design: debian:13-slim carries no CA bundle, and
+# apt authenticity is anchored in the InRelease GPG signature verified against
+# the pinned debian-archive-keyring, not in TLS. Installing ca-certificates
+# first would require an unpinned archive round-trip, which is the drift
+# channel this seal exists to close.
+RUN set -eu; \
+    rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list; \
+    printf '%s\n' \
+      "Types: deb" \
+      "URIs: http://snapshot.debian.org/archive/debian/${APT_SNAPSHOT}/" \
+      "Suites: trixie trixie-updates" \
+      "Components: main" \
+      "Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
+      > /etc/apt/sources.list.d/snapshot.sources; \
+    printf '%s\n' \
+      "Types: deb" \
+      "URIs: http://snapshot.debian.org/archive/debian-security/${APT_SNAPSHOT}/" \
+      "Suites: trixie-security" \
+      "Components: main" \
+      "Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
+      > /etc/apt/sources.list.d/snapshot-security.sources
+
+# Kernel reference-build toolchain. Version selection follows the Debian 13
+# baseline: GCC 14.2 and Clang/LLVM 19. No recommends, to keep the manifest
+# minimal and auditable.
+RUN set -eu; \
+    apt-get -o Acquire::Check-Valid-Until=false update; \
+    apt-get install -y --no-install-recommends \
+      bc \
+      binutils \
+      bison \
+      build-essential \
+      cpio \
+      dwarves \
+      flex \
+      gcc-14 \
+      kmod \
+      libelf-dev \
+      libssl-dev \
+      llvm-19 \
+      clang-19 \
+      make \
+      perl \
+      python3 \
+      rsync \
+      zstd; \
+    rm -rf /var/lib/apt/lists/*
+
+# Export the exact installed package manifest into the image so the seal
+# verifier can diff it against the recorded contract without re-provisioning.
+RUN dpkg-query -W -f='${Package}\t${Version}\t${Architecture}\n' | sort \
+      > /opt/flight-lab-package-manifest.tsv
+
+WORKDIR /work
+CMD ["/bin/bash"]

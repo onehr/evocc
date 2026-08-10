@@ -12,8 +12,15 @@
     "tarball": {
       "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.44.tar.xz",
       "signatureUrl": "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.44.tar.sign",
-      "trustAnchor": "GPG signature verification against the kernel.org keyring; the sha256 below is recorded after the first signature-verified fetch.",
-      "sha256": "RESOLVE_AT_FETCH",
+      "trustAnchor": "GPG signature verification against the kernel.org stable release signing key; the sha256 below is recorded after the first signature-verified fetch.",
+      "sha256": "0f72d938f06828e82c90405174fe572287db7bfe089e2fc46572a99a7f240d43",
+      "signatureEvidence": {
+        "verifiedAt": "2026-08-10T04:30:00Z",
+        "signerFingerprint": "647F28654894E3BD457199BE38DBBDC86092693E",
+        "signerIdentity": "Greg Kroah-Hartman (Linux kernel stable release signing key)",
+        "verdict": "Good signature",
+        "keySource": "hkps://keyserver.ubuntu.com (keys.openpgp.org strips user IDs and cannot serve this key)"
+      },
       "resolvedCommit": "RESOLVE_AT_FETCH"
     }
   },
