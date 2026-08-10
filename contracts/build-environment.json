@@ -23,13 +23,16 @@
       "snapshotTimestamp": "20260810T022135Z",
       "transport": "http (debian:13-slim ships no CA bundle; apt authenticity is anchored in the InRelease GPG signature against debian-archive-keyring, not TLS)",
       "packageManifest": ".toolchain/records/sealed-package-manifest.tsv",
-      "packageManifestSha256": "f8d1d5eff063ee9939ed0b6939dc69031da7651a03a86d6ece0ae6a3b71d3357",
-      "packageCount": 199
+      "packageManifestSha256": "6e197238bb8dd83cfbba1cccad055c1747fa9dc5bb28c5aee8c8df24e5fb3643",
+      "packageCount": 200,
+      "amendments": [
+        "2026-08-10: added lld-19 after seal verification found ld.lld-19 missing; a Clang reference lane without the LLVM linker is not an LLVM lane. Image re-sealed and re-verified before any reference build."
+      ]
     },
     "postSealNetwork": "none",
-    "sealedImageId": "sha256:31257e9c32dc60a81f426d493190cc75bbe65f32d9fbcb27ef47611b7a434165",
+    "sealedImageId": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
     "sealedImageTag": "evo-flight-lab:sealed",
-    "dockerfileSha256": "17f500c89e2b7f579dee05e7c8d9ee9b7ece25f8bf576a9f84d7faf62cdd2751"
+    "dockerfileSha256": "1c4c2c19da110d6bb7ad10245aebcf15ac772784163324bee547ba76069983c6"
   },
   "toolchain": {
     "gcc": {
@@ -59,7 +62,8 @@
     }
   },
   "reproducibility": {
-    "KBUILD_BUILD_TIMESTAMP": "1786299935",
+    "KBUILD_BUILD_TIMESTAMP": "Sun Aug 9 18:25:35 UTC 2026",
+    "timestampFormatNote": "KBUILD_BUILD_TIMESTAMP must be a GNU-date-parsable string, not an epoch integer: usr/gen_initramfs.sh feeds it to date -d, and a bare integer silently fails parsing, which drops the -t flag and embeds wall-clock mtimes into initramfs_data.cpio. This was observed as a 29-byte vmlinux divergence between identical rebuilds and root-caused on 2026-08-10.",
     "SOURCE_DATE_EPOCH": "1786299935",
     "timestampRationale": "Both frozen to the kernel.org releases.json released.timestamp for 6.18.44 (2026-08-09), so the frozen value is itself a fact of the release authority.",
     "KBUILD_BUILD_USER": "evo",

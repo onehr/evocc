@@ -25,12 +25,21 @@
     }
   },
   "config": {
-    "base": "ARCH=arm64 defconfig",
-    "freezePolicy": "Generate once, record the raw .config bytes and their sha256 here; shrinking the config to rescue a failing gate is forbidden.",
-    "rawSha256": "RESOLVE_AT_CONFIG",
-    "overrides": {
-      "CONFIG_RANDOMIZE_BASE": "n",
-      "note": "Reproducibility overrides only; no feature reduction."
+    "base": "ARCH=arm64 virtconfig",
+    "baseNote": "virtconfig merges arch/arm64/configs/virt.config onto defconfig; it is the virtualization-guest configuration matching the QEMU virt machine.",
+    "laneSplit": "Kconfig evaluates compiler-capability conditions (CONFIG_HAS_LTO_CLANG, CONFIG_CFI, CONFIG_RANDSTRUCT_FULL, compiler version probes), so one shared .config cannot serve both oracle toolchains. Each lane freezes its own canonical .config; the anti-shrinkage rule applies per lane.",
+    "freezePolicy": "Generate once per lane with that lane's toolchain, canonicalize through olddefconfig, record the raw .config bytes and their sha256 here; shrinking the config to rescue a failing gate is forbidden.",
+    "lanes": {
+      "gcc": {
+        "toolchainProbe": "CC=gcc-14",
+        "record": ".toolchain/records/frozen-kernel-gcc.config",
+        "rawSha256": "4245f8e651667a992a8b49252f3a40b3748ff56657828ef42e3a7ef39edcaf5d"
+      },
+      "clang": {
+        "toolchainProbe": "CC=clang-19 LD=ld.lld-19 AR=llvm-ar-19 NM=llvm-nm-19 OBJCOPY=llvm-objcopy-19 OBJDUMP=llvm-objdump-19 STRIP=llvm-strip-19",
+        "record": ".toolchain/records/frozen-kernel-clang.config",
+        "rawSha256": "edbd53d2a537f42b4d99f3505fc3ff984cb4a326f1af0817621057cc47bb1eae"
+      }
     }
   },
   "qemu": {

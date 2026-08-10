@@ -160,6 +160,7 @@ libz3-4	4.13.3-1	arm64
 libzstd-dev	1.5.7+dfsg-1	arm64
 libzstd1	1.5.7+dfsg-1	arm64
 linux-libc-dev	6.12.101-1	all
+lld-19	1:19.1.7-3+b1	arm64
 llvm-19	1:19.1.7-3+b1	arm64
 llvm-19-linker-tools	1:19.1.7-3+b1	arm64
 llvm-19-runtime	1:19.1.7-3+b1	arm64
