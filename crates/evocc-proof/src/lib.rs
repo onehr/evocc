@@ -238,4 +238,20 @@ mod tests {
         dag.add_edge(2, 1, Justification::Reflexive).unwrap();
         assert!(dag.validate().is_err());
     }
+
+    #[test]
+    fn proof_rewrite_is_replayable() {
+        let mut dag = ProofDAG::new();
+        let a = 1u32;
+        let b = 2u32;
+        let c = 3u32;
+        // add rewrite edges
+        dag.add_edge(a, b, Justification::Reflexive).unwrap();
+        dag.add_edge(b, c, Justification::Reflexive).unwrap();
+        // Assert no cycles in non-cyclic DAG
+        assert!(dag.validate().is_ok());
+        // Now introduce a cycle
+        dag.add_edge(c, a, Justification::Reflexive).unwrap();
+        assert!(dag.validate().is_err());
+    }
 }

@@ -297,8 +297,14 @@ impl<'src> Lexer<'src> {
             b'%' => self.double(TokenKind::Percent, TokenKind::Percent, TokenKind::PercentEq,
                 start_pos, start_line, start_col),
             b'<' => {
-                if self.match_next(b'<').is_some() {
-                    if self.match_next(b'=').is_some() {
+                self.pos += 1;
+                self.col += 1;
+                if self.pos < bytes.len() && bytes[self.pos] == b'<' {
+                    self.pos += 1;
+                    self.col += 1;
+                    if self.pos < bytes.len() && bytes[self.pos] == b'=' {
+                        self.pos += 1;
+                        self.col += 1;
                         Some(Token::new(TokenKind::ShiftLeftEq,
                             SourceSpan::new(self.file, start_pos as u32, self.pos as u32, start_line, start_col),
                             TokenText::Borrowed))
@@ -307,17 +313,27 @@ impl<'src> Lexer<'src> {
                             SourceSpan::new(self.file, start_pos as u32, self.pos as u32, start_line, start_col),
                             TokenText::Borrowed))
                     }
-                } else if self.match_next(b'=').is_some() {
+                } else if self.pos < bytes.len() && bytes[self.pos] == b'=' {
+                    self.pos += 1;
+                    self.col += 1;
                     Some(Token::new(TokenKind::LessEq,
                         SourceSpan::new(self.file, start_pos as u32, self.pos as u32, start_line, start_col),
                         TokenText::Borrowed))
                 } else {
-                    self.single(TokenKind::Less, start_pos, start_line, start_col)
+                    Some(Token::new(TokenKind::Less,
+                        SourceSpan::new(self.file, start_pos as u32, self.pos as u32, start_line, start_col),
+                        TokenText::Borrowed))
                 }
             }
             b'>' => {
-                if self.match_next(b'>').is_some() {
-                    if self.match_next(b'=').is_some() {
+                self.pos += 1;
+                self.col += 1;
+                if self.pos < bytes.len() && bytes[self.pos] == b'>' {
+                    self.pos += 1;
+                    self.col += 1;
+                    if self.pos < bytes.len() && bytes[self.pos] == b'=' {
+                        self.pos += 1;
+                        self.col += 1;
                         Some(Token::new(TokenKind::ShiftRightEq,
                             SourceSpan::new(self.file, start_pos as u32, self.pos as u32, start_line, start_col),
                             TokenText::Borrowed))
@@ -326,30 +342,46 @@ impl<'src> Lexer<'src> {
                             SourceSpan::new(self.file, start_pos as u32, self.pos as u32, start_line, start_col),
                             TokenText::Borrowed))
                     }
-                } else if self.match_next(b'=').is_some() {
+                } else if self.pos < bytes.len() && bytes[self.pos] == b'=' {
+                    self.pos += 1;
+                    self.col += 1;
                     Some(Token::new(TokenKind::GreaterEq,
                         SourceSpan::new(self.file, start_pos as u32, self.pos as u32, start_line, start_col),
                         TokenText::Borrowed))
                 } else {
-                    self.single(TokenKind::Greater, start_pos, start_line, start_col)
+                    Some(Token::new(TokenKind::Greater,
+                        SourceSpan::new(self.file, start_pos as u32, self.pos as u32, start_line, start_col),
+                        TokenText::Borrowed))
                 }
             }
             b'=' => {
-                if self.match_next(b'=').is_some() {
+                self.pos += 1;
+                self.col += 1;
+                if self.pos < bytes.len() && bytes[self.pos] == b'=' {
+                    self.pos += 1;
+                    self.col += 1;
                     Some(Token::new(TokenKind::EqEq,
                         SourceSpan::new(self.file, start_pos as u32, self.pos as u32, start_line, start_col),
                         TokenText::Borrowed))
                 } else {
-                    self.single(TokenKind::Assign, start_pos, start_line, start_col)
+                    Some(Token::new(TokenKind::Assign,
+                        SourceSpan::new(self.file, start_pos as u32, self.pos as u32, start_line, start_col),
+                        TokenText::Borrowed))
                 }
             }
             b'!' => {
-                if self.match_next(b'=').is_some() {
+                self.pos += 1;
+                self.col += 1;
+                if self.pos < bytes.len() && bytes[self.pos] == b'=' {
+                    self.pos += 1;
+                    self.col += 1;
                     Some(Token::new(TokenKind::NotEq,
                         SourceSpan::new(self.file, start_pos as u32, self.pos as u32, start_line, start_col),
                         TokenText::Borrowed))
                 } else {
-                    self.single(TokenKind::Bang, start_pos, start_line, start_col)
+                    Some(Token::new(TokenKind::Bang,
+                        SourceSpan::new(self.file, start_pos as u32, self.pos as u32, start_line, start_col),
+                        TokenText::Borrowed))
                 }
             }
             b'&' => self.double(TokenKind::Amp, TokenKind::AmpAmp, TokenKind::AmpEq,

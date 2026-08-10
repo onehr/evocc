@@ -23,6 +23,8 @@ members = [
     "crates/evocc-evoir",
     "crates/evocc-egraph",
     "crates/evocc-proof",
+    "crates/evocc-parser",
+    "crates/evocc-lower",
 ]
 
 [workspace.package]

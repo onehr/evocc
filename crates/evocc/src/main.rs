@@ -1,24 +1,23 @@
 //! evocc: equality-native, self-contained C compiler.
 //!
-//! Flight-lab scaffold. No compiler capability exists yet; the binary's only
-//! honest behavior is to fail closed. The Day-1 acceptance contract requires
-//! every capability probe to:
+//! Day-3 scope: the driver now supports -E (preprocess) and --parse-only
+//! (parse to C-HIR). Every other pipeline stage remains NOT_IMPLEMENTED.
 //!
-//!   1. print a line containing `NOT_IMPLEMENTED` to stderr,
-//!   2. exit with a nonzero status,
-//!   3. never emit another compiler's version string (which would indicate
-//!      the probe was answered by delegation to GCC or Clang).
+//! The shell delegates real work to the crates built in Day 2-3:
+//!   -E           → evocc-lex → evocc-cpp → token text output
+//!   --parse-only → evocc-lex → evocc-parser → C-HIR (validate only)
 //!
-//! Day-2 adds five pipeline-stage probes matching the acceptance contract:
-//! preprocess, parse, c-hir-emit, evoir-emit, and eqsat-optimize. All remain
-//! RED (NOT_IMPLEMENTED) because the data structures exist but the pipeline
-//! stages that connect them do not.
+//! Probe mode (invocation ends with --probe) is preserved from Day 1-2
+//! and answers NOT_IMPLEMENTED for stages beyond the current capability.
 
+use std::fs;
 use std::process::ExitCode;
 
-/// Capabilities known to the flight lab. The first group is the original
-/// Day-1 set; the second group covers the five pipeline stages probed by
-/// Day-2 acceptance tests.
+use evocc_common::{FileId, SourceFile};
+use evocc_lex::{Lexer, TokenKind};
+use evocc_cpp::Preprocessor;
+use evocc_parser::Parser;
+
 const CAPABILITIES: &[&str] = &[
     "parse",
     "evoir",
@@ -32,8 +31,6 @@ const CAPABILITIES: &[&str] = &[
     "eqsat-optimize",
 ];
 
-/// CLI flags that map to capability names. Any invocation that ends with
-/// `--probe` and contains a known flag registers as a capability probe.
 const FLAG_MAP: &[(&str, &str)] = &[
     ("-E", "preprocess"),
     ("--parse-only", "parse-only"),
@@ -42,44 +39,126 @@ const FLAG_MAP: &[(&str, &str)] = &[
     ("-Oeq", "eqsat-optimize"),
 ];
 
-/// Exit status for every unimplemented capability. Distinct from generic
-/// failure (1) so the harness can distinguish "correctly absent" from
-/// "broken in an unknown way".
-const NOT_IMPLEMENTED_EXIT: u8 = 69; // EX_UNAVAILABLE: service unavailable.
+const NOT_IMPLEMENTED_EXIT: u8 = 69;
+
+fn not_implemented(capability: &str) -> ExitCode {
+    eprintln!("evocc: capability `{capability}` is NOT_IMPLEMENTED");
+    ExitCode::from(NOT_IMPLEMENTED_EXIT)
+}
+
+fn is_probe(args: &[String]) -> bool {
+    args.last().map(|s| s.as_str()) == Some("--probe")
+}
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
-    // Probe-mode invocation: ends with --probe.
-    if args.last().map(|s| s.as_str()) == Some("--probe") {
-        let probe_args: Vec<&str> = args[..args.len() - 1].iter().map(|s| s.as_str()).collect();
-
-        // If any known flag appears, map it to a capability name.
-        for (flag, capability) in FLAG_MAP {
-            if probe_args.iter().any(|a| a == flag || a.starts_with(flag)) {
-                eprintln!("evocc: capability `{capability}` is NOT_IMPLEMENTED");
-                return ExitCode::from(NOT_IMPLEMENTED_EXIT);
-            }
-        }
-
-        // Fallback: check the positional probe pattern from Day-1.
-        if probe_args.len() == 1 && CAPABILITIES.contains(&probe_args[0]) {
-            let cap = probe_args[0];
-            eprintln!("evocc: capability `{cap}` is NOT_IMPLEMENTED");
-            return ExitCode::from(NOT_IMPLEMENTED_EXIT);
-        }
-
-        // Unknown flag combination with --probe: still fail closed.
-        eprintln!("evocc: unrecognized probe invocation is NOT_IMPLEMENTED: {args:?}");
+    if args.is_empty() {
+        eprintln!("usage: evocc <{}> --probe", CAPABILITIES.join("|"));
+        eprintln!("       evocc -E <file>");
+        eprintln!("       evocc --parse-only <file>");
+        eprintln!("evocc: unrecognized invocation is NOT_IMPLEMENTED");
         return ExitCode::from(NOT_IMPLEMENTED_EXIT);
     }
 
-    // Non-probe invocations: spec-compliant or not, all fail closed.
-    if args.is_empty() {
-        eprintln!("usage: evocc <{}> --probe", CAPABILITIES.join("|"));
-        eprintln!("evocc: no compiler pipeline exists yet; every capability is NOT_IMPLEMENTED");
-    } else {
-        eprintln!("evocc: unrecognized invocation is NOT_IMPLEMENTED: {args:?}");
+    if is_probe(&args) {
+        let probe_args: &[String] = &args[..args.len() - 1];
+        for (flag, capability) in FLAG_MAP {
+            if probe_args.iter().any(|a| a == flag || a.starts_with(flag)) {
+                return not_implemented(capability);
+            }
+        }
+        if probe_args.len() == 1 && CAPABILITIES.contains(&probe_args[0].as_str()) {
+            return not_implemented(&probe_args[0]);
+        }
+        // Unknown probe: fail closed.
+        eprintln!("evocc: unrecognized probe invocation is NOT_IMPLEMENTED: {probe_args:?}");
+        return ExitCode::from(NOT_IMPLEMENTED_EXIT);
     }
-    ExitCode::from(NOT_IMPLEMENTED_EXIT)
+
+    // --- Real invocations (non-probe) ------------------------------------
+
+    match args.as_slice() {
+        [flag, file] if flag == "-E" => run_preprocess(file),
+        [flag, file] if flag == "--parse-only" => run_parse(file),
+        _ => {
+            eprintln!("evocc: unrecognized invocation is NOT_IMPLEMENTED: {args:?}");
+            ExitCode::from(NOT_IMPLEMENTED_EXIT)
+        }
+    }
+}
+
+fn run_preprocess(file: &str) -> ExitCode {
+    let src = match fs::read_to_string(file) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("evocc: cannot read `{file}`: {e}");
+            return ExitCode::from(NOT_IMPLEMENTED_EXIT);
+        }
+    };
+
+    let mut tokens = Vec::new();
+    {
+        let mut lex = Lexer::new(FileId::new(1), &src);
+        while let Some(tok) = lex.next() {
+            tokens.push(tok);
+        }
+    }
+
+    let mut pp = Preprocessor::new();
+    for include_path in &[".", "/usr/include", "/usr/local/include"] {
+        pp.add_include_path(include_path.to_string());
+    }
+    let stream = evocc_cpp::TokenStream::new(tokens);
+    let result = pp.process(stream);
+    let final_tokens = result.into_vec();
+
+    // Output token kinds one per line as a simple preprocessed representation.
+    for tok in &final_tokens {
+        if tok.kind == TokenKind::Eof {
+            continue;
+        }
+        // Reconstruct text from the source span.
+        let end = (tok.span.byte_end as usize).min(src.len());
+        let start = (tok.span.byte_start as usize).min(end);
+        let text = &src[start..end];
+        if !text.trim().is_empty() {
+            print!("{text} ");
+        }
+    }
+    println!();
+
+    ExitCode::from(0)
+}
+
+fn run_parse(file: &str) -> ExitCode {
+    let src = match fs::read_to_string(file) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("evocc: cannot read `{file}`: {e}");
+            return ExitCode::from(NOT_IMPLEMENTED_EXIT);
+        }
+    };
+
+    let mut tokens = Vec::new();
+    {
+        let mut lex = Lexer::new(FileId::new(1), &src);
+        while let Some(tok) = lex.next() {
+            tokens.push(tok);
+        }
+    }
+
+    let mut pp = Preprocessor::new();
+    let stream = evocc_cpp::TokenStream::new(tokens);
+    let result = pp.process(stream);
+    let processed = result.into_vec();
+
+    let mut parser = Parser::new(processed, FileId::new(1), &src);
+    let unit = parser.parse_translation_unit();
+
+    if unit.is_empty() {
+        eprintln!("evocc: `{file}` parsed to an empty translation unit");
+    }
+
+    ExitCode::from(0)
 }

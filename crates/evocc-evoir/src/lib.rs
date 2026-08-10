@@ -310,6 +310,128 @@ pub fn validate_ssa(func: &Function) -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
+// Interpreter
+// ---------------------------------------------------------------------------
+
+/// Execute a function and return the result values (as raw i64).
+pub fn eval_function(func: &Function) -> Vec<i64> {
+    let mut state = InterpState::new();
+    let entry = &func.blocks[0];
+    state.exec_block(func, entry.id, &[]);
+    state.results.clone()
+}
+
+const BLOCK_ARG_ID_BASE: u32 = 1_000_000;
+
+struct InterpState {
+    values: HashMap<u32, i64>,
+    results: Vec<i64>,
+}
+
+impl InterpState {
+    fn new() -> Self {
+        InterpState {
+            values: HashMap::new(),
+            results: Vec::new(),
+        }
+    }
+
+    fn exec_block(&mut self, func: &Function, block_id: BlockId, args: &[i64]) {
+        let block = func
+            .blocks
+            .iter()
+            .find(|b| b.id == block_id)
+            .unwrap_or_else(|| panic!("block {} not found", block_id));
+
+        for (i, _arg) in block.args.iter().enumerate() {
+            let syn_id = BLOCK_ARG_ID_BASE + i as u32;
+            self.values.insert(syn_id, args[i]);
+        }
+
+        for inst in &block.insts {
+            self.exec_inst(inst);
+        }
+
+        match &block.terminator {
+            Inst::Br(target, targs) => {
+                let resolved: Vec<i64> = targs.iter().map(|v| self.values[&v.id]).collect();
+                self.exec_block(func, *target, &resolved);
+            }
+            Inst::CondBr(cond, true_block, true_args, false_block, false_args) => {
+                let cond_val = self.values[&cond.id];
+                if cond_val != 0 {
+                    let resolved: Vec<i64> = true_args.iter().map(|v| self.values[&v.id]).collect();
+                    self.exec_block(func, *true_block, &resolved);
+                } else {
+                    let resolved: Vec<i64> = false_args.iter().map(|v| self.values[&v.id]).collect();
+                    self.exec_block(func, *false_block, &resolved);
+                }
+            }
+            Inst::Ret(values) => {
+                self.results = values.iter().map(|v| self.values[&v.id]).collect();
+            }
+            other => panic!("unexpected terminator in block {}: {:?}", block.id, other),
+        }
+    }
+
+    fn exec_inst(&mut self, inst: &Inst) {
+        match inst {
+            Inst::Const(v, imm) => {
+                self.values.insert(v.id, *imm);
+            }
+            Inst::Add(dst, lhs, rhs) => {
+                let l = self.values[&lhs.id];
+                let r = self.values[&rhs.id];
+                self.values.insert(dst.id, l.wrapping_add(r));
+            }
+            Inst::Sub(dst, lhs, rhs) => {
+                let l = self.values[&lhs.id];
+                let r = self.values[&rhs.id];
+                self.values.insert(dst.id, l.wrapping_sub(r));
+            }
+            Inst::Mul(dst, lhs, rhs) => {
+                let l = self.values[&lhs.id];
+                let r = self.values[&rhs.id];
+                self.values.insert(dst.id, l.wrapping_mul(r));
+            }
+            Inst::SDiv(dst, lhs, rhs) => {
+                let l = self.values[&lhs.id];
+                let r = self.values[&rhs.id];
+                self.values.insert(dst.id, l.wrapping_div(r));
+            }
+            Inst::UDiv(dst, lhs, rhs) => {
+                let l = self.values[&lhs.id];
+                let r = self.values[&rhs.id];
+                self.values.insert(dst.id, l.wrapping_div(r));
+            }
+            Inst::ICmp(dst, op, lhs, rhs) => {
+                let l = self.values[&lhs.id];
+                let r = self.values[&rhs.id];
+                let result = match op {
+                    CmpOp::Eq => (l == r) as i64,
+                    CmpOp::Ne => (l != r) as i64,
+                    CmpOp::SLt => (l < r) as i64,
+                    CmpOp::SLe => (l <= r) as i64,
+                    CmpOp::ULt => ((l as u64) < (r as u64)) as i64,
+                    CmpOp::ULe => ((l as u64) <= (r as u64)) as i64,
+                };
+                self.values.insert(dst.id, result);
+            }
+            Inst::Load(dst, ..)
+            | Inst::PtrOffset(dst, ..)
+            | Inst::Call(dst, ..)
+            | Inst::SExt(dst, ..)
+            | Inst::ZExt(dst, ..)
+            | Inst::Trunc(dst, ..) => {
+                self.values.insert(dst.id, 0);
+            }
+            Inst::Store(..) => {}
+            _ => {}
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -397,5 +519,75 @@ mod tests {
             validate_ssa(&func_undef).is_err(),
             "undefined use must fail SSA check"
         );
+    }
+
+    #[test]
+    fn evoir_interpreter_executes_basic_blocks() {
+        let bits32 = EvoIRType::Bits(32);
+        let v0 = Value {
+            id: 0,
+            ty: bits32.clone(),
+        };
+
+        let entry = Block {
+            id: 0,
+            args: vec![],
+            insts: vec![Inst::Const(v0.clone(), 42)],
+            terminator: Inst::Ret(vec![v0.clone()]),
+        };
+        let func = Function {
+            name: "test".into(),
+            params: vec![],
+            ret_tys: vec![bits32],
+            blocks: vec![entry],
+        };
+
+        let results = eval_function(&func);
+        assert_eq!(results, vec![42]);
+    }
+
+    #[test]
+    fn evoir_interpreter_branches_correctly() {
+        let bits32 = EvoIRType::Bits(32);
+        let v0 = Value {
+            id: 0,
+            ty: bits32.clone(),
+        };
+        let v1 = Value {
+            id: 1,
+            ty: bits32.clone(),
+        };
+        let v2 = Value {
+            id: 2,
+            ty: bits32.clone(),
+        };
+
+        let entry = Block {
+            id: 0,
+            args: vec![],
+            insts: vec![Inst::Const(v0.clone(), 1)],
+            terminator: Inst::CondBr(v0.clone(), 1, vec![], 2, vec![]),
+        };
+        let then_block = Block {
+            id: 1,
+            args: vec![],
+            insts: vec![Inst::Const(v1.clone(), 42)],
+            terminator: Inst::Ret(vec![v1.clone()]),
+        };
+        let else_block = Block {
+            id: 2,
+            args: vec![],
+            insts: vec![Inst::Const(v2.clone(), 0)],
+            terminator: Inst::Ret(vec![v2.clone()]),
+        };
+        let func = Function {
+            name: "branch".into(),
+            params: vec![],
+            ret_tys: vec![bits32],
+            blocks: vec![entry, then_block, else_block],
+        };
+
+        let results = eval_function(&func);
+        assert_eq!(results, vec![42], "cond is 1 (true), so result is 42");
     }
 }

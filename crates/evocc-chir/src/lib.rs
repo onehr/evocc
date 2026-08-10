@@ -219,6 +219,83 @@ pub enum CHirDecl {
 pub type CHirUnit = Vec<CHirDecl>;
 
 // ---------------------------------------------------------------------------
+// C-HIR Interpreter
+// ---------------------------------------------------------------------------
+
+use std::collections::HashMap;
+
+pub fn eval_expr(expr: &CHirExpr, vars: &mut HashMap<String, i64>) -> i64 {
+    match expr {
+        CHirExpr::Lit(lit, _) => lit.value as i64,
+        CHirExpr::Ident(name, _) => *vars.get(name).unwrap_or(&0),
+        CHirExpr::Unary(op, inner, _) => {
+            let v = eval_expr(inner, vars);
+            match op {
+                UnaryOp::Neg => -v,
+                UnaryOp::Not => if v == 0 { 1 } else { 0 },
+                UnaryOp::BitNot => !v,
+                UnaryOp::Plus => v,
+                _ => v,
+            }
+        }
+        CHirExpr::Binary(op, lhs, rhs, _) => {
+            let l = eval_expr(lhs, vars);
+            let r = eval_expr(rhs, vars);
+            match op {
+                BinaryOp::Add => l.wrapping_add(r),
+                BinaryOp::Sub => l.wrapping_sub(r),
+                BinaryOp::Mul => l.wrapping_mul(r),
+                BinaryOp::Div => if r != 0 { l / r } else { 0 },
+                BinaryOp::Lt => if l < r { 1 } else { 0 },
+                BinaryOp::Gt => if l > r { 1 } else { 0 },
+                BinaryOp::Le => if l <= r { 1 } else { 0 },
+                BinaryOp::Ge => if l >= r { 1 } else { 0 },
+                BinaryOp::Eq => if l == r { 1 } else { 0 },
+                BinaryOp::Ne => if l != r { 1 } else { 0 },
+                _ => 0,
+            }
+        }
+        CHirExpr::Ternary(cond, t, f, _) => {
+            if eval_expr(cond, vars) != 0 {
+                eval_expr(t, vars)
+            } else {
+                eval_expr(f, vars)
+            }
+        }
+        CHirExpr::Assign(lhs, rhs, _) => {
+            let r = eval_expr(rhs, vars);
+            if let CHirExpr::Ident(name, _) = lhs.as_ref() {
+                vars.insert(name.clone(), r);
+            }
+            r
+        }
+        CHirExpr::Call(_, _, _) => 0,
+        _ => 0,
+    }
+}
+
+pub fn eval_stmt(stmt: &CHirStmt, vars: &mut HashMap<String, i64>) -> Option<i64> {
+    match stmt {
+        CHirStmt::Expr(expr, _) => {
+            eval_expr(expr, vars);
+            None
+        }
+        CHirStmt::Return(expr, _) => {
+            Some(expr.as_ref().map_or(0, |e| eval_expr(e, vars)))
+        }
+        CHirStmt::Compound(stmts, _) => {
+            for s in stmts {
+                if let Some(v) = eval_stmt(s, vars) {
+                    return Some(v);
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -467,5 +544,63 @@ mod tests {
         assert_eq!(IntBase::Dec, IntBase::Dec);
         assert_ne!(IntBase::Hex, IntBase::Oct);
         assert_ne!(IntBase::Bin, IntBase::Dec);
+    }
+
+    fn int_lit_expr(v: i64) -> CHirExpr {
+        CHirExpr::Lit(
+            IntLit { value: v as u64, suffix: IntSuffix::None, base: IntBase::Dec },
+            test_span(),
+        )
+    }
+
+    fn ident_expr(name: &str) -> CHirExpr {
+        CHirExpr::Ident(name.into(), test_span())
+    }
+
+    #[test]
+    fn chir_interpreter_executes_integer_expressions() {
+        let mut vars = HashMap::new();
+
+        // 1 + 2 * 3 → 7
+        let mul = CHirExpr::Binary(
+            BinaryOp::Mul,
+            Box::new(int_lit_expr(2)),
+            Box::new(int_lit_expr(3)),
+            test_span(),
+        );
+        let add = CHirExpr::Binary(
+            BinaryOp::Add,
+            Box::new(int_lit_expr(1)),
+            Box::new(mul),
+            test_span(),
+        );
+        assert_eq!(eval_expr(&add, &mut vars), 7);
+
+        // 1 < 2 → 1
+        let lt = CHirExpr::Binary(
+            BinaryOp::Lt,
+            Box::new(int_lit_expr(1)),
+            Box::new(int_lit_expr(2)),
+            test_span(),
+        );
+        assert_eq!(eval_expr(&lt, &mut vars), 1);
+
+        // 3 > 5 → 0
+        let gt = CHirExpr::Binary(
+            BinaryOp::Gt,
+            Box::new(int_lit_expr(3)),
+            Box::new(int_lit_expr(5)),
+            test_span(),
+        );
+        assert_eq!(eval_expr(&gt, &mut vars), 0);
+
+        // 1 ? 10 : 20 → 10
+        let ternary = CHirExpr::Ternary(
+            Box::new(int_lit_expr(1)),
+            Box::new(int_lit_expr(10)),
+            Box::new(int_lit_expr(20)),
+            test_span(),
+        );
+        assert_eq!(eval_expr(&ternary, &mut vars), 10);
     }
 }

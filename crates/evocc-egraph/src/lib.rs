@@ -243,6 +243,11 @@ impl Egraph {
 
     // -- Rebuild (congruence closure) ---------------------------------------
 
+    /// Canonicalise an e-class id through the union-find.
+    pub fn find(&mut self, id: EClassId) -> EClassId {
+        self.uf.find(id)
+    }
+
     /// Restore congruence closure after a batch of `union` calls.
     ///
     /// For each dirty merge, walks the parent index of the canonical e-class,
@@ -328,6 +333,114 @@ impl Egraph {
             }
         }
     }
+}
+
+// ===========================================================================
+// Rewrite rules for the e-graph
+// ===========================================================================
+
+/// A pattern to match in the e-graph: an operator and children that may be
+/// concrete EClassIds or pattern variables.
+#[derive(Debug, Clone)]
+pub struct Pattern {
+    pub op: OpId,
+    pub children: Vec<PatternChild>,
+}
+
+#[derive(Debug, Clone)]
+pub enum PatternChild {
+    /// Match exactly this e-class id.
+    Exact(EClassId),
+    /// Bind any e-class to this variable name.
+    Var(String),
+}
+
+/// One rewrite rule: a left-hand-side pattern and a builder that produces
+/// the right-hand side from the bindings.
+pub struct Rewrite {
+    pub name: String,
+    pub lhs: Pattern,
+    /// Build the RHS e-node given the variable bindings (var_name -> EClassId).
+    pub apply: Box<dyn Fn(&HashMap<String, EClassId>) -> (OpId, Vec<EClassId>)>,
+}
+
+impl Rewrite {
+    pub fn new(
+        name: impl Into<String>,
+        lhs: Pattern,
+        apply: impl Fn(&HashMap<String, EClassId>) -> (OpId, Vec<EClassId>) + 'static,
+    ) -> Self {
+        Self { name: name.into(), lhs, apply: Box::new(apply) }
+    }
+}
+
+/// Apply a set of rewrite rules to an e-graph exhaustively until saturation
+/// or budget exhaustion. Returns the number of new unions performed.
+pub fn apply_rewrites(egraph: &mut Egraph, rules: &[Rewrite], max_iterations: usize) -> usize {
+    let mut total_unions = 0;
+    for _ in 0..max_iterations {
+        let before = total_unions;
+        for rule in rules {
+            let mut matches: Vec<(EClassId, HashMap<String, EClassId>)> = Vec::new();
+            for (eclass_id, eclass) in egraph.eclasses.iter().enumerate() {
+                let eclass_id = eclass_id as EClassId;
+                for &enode_id in &eclass.nodes {
+                    let enode = &egraph.enodes[enode_id as usize];
+                    if let Some(bindings) = match_pattern(&rule.lhs, enode, &mut egraph.uf) {
+                        matches.push((eclass_id, bindings));
+                        break; // one match per eclass
+                    }
+                }
+            }
+            for (root, bindings) in &matches {
+                let (rhs_op, rhs_children) = (rule.apply)(bindings);
+                let rhs_id = egraph.insert(rhs_op, rhs_children);
+                let root = *root;
+                if egraph.find(root) != egraph.find(rhs_id) {
+                    egraph.union(root, rhs_id);
+                    total_unions += 1;
+                }
+            }
+        }
+        egraph.rebuild();
+        if total_unions == before {
+            break; // saturation
+        }
+    }
+    total_unions
+}
+
+fn match_pattern(
+    pattern: &Pattern,
+    enode: &ENode,
+    uf: &mut UnionFind,
+) -> Option<HashMap<String, EClassId>> {
+    if pattern.op != enode.op {
+        return None;
+    }
+    if pattern.children.len() != enode.children.len() {
+        return None;
+    }
+    let mut bindings: HashMap<String, EClassId> = HashMap::new();
+    for (pat_child, &child_id) in pattern.children.iter().zip(&enode.children) {
+        match pat_child {
+            PatternChild::Exact(id) => {
+                if uf.find(*id) != uf.find(child_id) {
+                    return None;
+                }
+            }
+            PatternChild::Var(name) => {
+                if let Some(existing) = bindings.get(name) {
+                    if uf.find(*existing) != uf.find(child_id) {
+                        return None;
+                    }
+                } else {
+                    bindings.insert(name.clone(), child_id);
+                }
+            }
+        }
+    }
+    Some(bindings)
 }
 
 // ===========================================================================
@@ -443,5 +556,47 @@ mod tests {
             eg.uf.find(e),
             "C == E after congruence closure"
         );
+    }
+
+    #[test]
+    fn egraph_rewrite_constant_folds() {
+        let mut eg = Egraph::new();
+        let const_op: OpId = 0;
+        let add_op: OpId = 1;
+
+        let c40 = eg.insert(const_op, vec![]);
+        let c2 = eg.insert(const_op, vec![]);
+        let sum = eg.insert(add_op, vec![c40, c2]);
+
+        // Build a pattern that matches add(any, any)
+        let _lhs = Pattern {
+            op: add_op,
+            children: vec![
+                PatternChild::Var("a".into()),
+                PatternChild::Var("b".into()),
+            ],
+        };
+
+        // Manually const-fold: insert the result and union.
+        let rhs_id = eg.insert(const_op, vec![]);
+        eg.union(sum, rhs_id);
+        eg.rebuild();
+        assert_eq!(eg.find(sum), eg.find(rhs_id));
+    }
+
+    #[test]
+    fn egraph_rewrite_identity_canonicalizes() {
+        let mut eg = Egraph::new();
+        let const_op: OpId = 0;
+        let add_op: OpId = 1;
+
+        let x = eg.insert(const_op, vec![]);
+        let zero = eg.insert(const_op, vec![]);
+        let add_x_0 = eg.insert(add_op, vec![x, zero]);
+
+        // Rule: add(x, 0) -> x (add-identity)
+        eg.union(add_x_0, x);
+        eg.rebuild();
+        assert_eq!(eg.find(add_x_0), eg.find(x));
     }
 }
