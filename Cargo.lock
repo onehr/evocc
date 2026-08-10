@@ -5,3 +5,49 @@ version = 4
 [[package]]
 name = "evocc"
 version = "0.0.0"
+
+[[package]]
+name = "evocc-chir"
+version = "0.0.0"
+dependencies = [
+ "evocc-common",
+ "evocc-types",
+]
+
+[[package]]
+name = "evocc-common"
+version = "0.0.0"
+
+[[package]]
+name = "evocc-cpp"
+version = "0.0.0"
+dependencies = [
+ "evocc-common",
+ "evocc-lex",
+]
+
+[[package]]
+name = "evocc-egraph"
+version = "0.0.0"
+
+[[package]]
+name = "evocc-evoir"
+version = "0.0.0"
+dependencies = [
+ "evocc-types",
+]
+
+[[package]]
+name = "evocc-lex"
+version = "0.0.0"
+dependencies = [
+ "evocc-common",
+]
+
+[[package]]
+name = "evocc-proof"
+version = "0.0.0"
+
+[[package]]
+name = "evocc-types"
+version = "0.0.0"

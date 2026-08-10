@@ -1,0 +1,9 @@
+[package]
+name = "evocc-lex"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+description = "GNU C11 lexer: token recognition and source locations"
+
+[dependencies]
+evocc-common = { path = "../evocc-common" }

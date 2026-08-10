@@ -5,10 +5,25 @@
 # capability must fail closed with an explicit NOT_IMPLEMENTED verdict; the
 # gate treats silent success, delegation to another compiler, or an unknown
 # failure mode as a contract violation.
+#
+# Day-2 scope: the semantic universe foundation. Eight crates define the
+# compiler's narrow waist: span/diagnostic infrastructure, the type system
+# (C and EvoIR), lexer, preprocessor, both IRs, the e-graph core, and proof
+# justifications. The evocc binary remains a RED capability probe shell.
 
 [workspace]
 resolver = "2"
-members = ["crates/evocc"]
+members = [
+    "crates/evocc",
+    "crates/evocc-common",
+    "crates/evocc-types",
+    "crates/evocc-lex",
+    "crates/evocc-cpp",
+    "crates/evocc-chir",
+    "crates/evocc-evoir",
+    "crates/evocc-egraph",
+    "crates/evocc-proof",
+]
 
 [workspace.package]
 edition = "2021"

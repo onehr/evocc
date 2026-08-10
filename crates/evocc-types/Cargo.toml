@@ -1,0 +1,9 @@
+[package]
+name = "evocc-types"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+description = "C type and EvoIR type universes with target data layout"
+
+[dependencies]
+

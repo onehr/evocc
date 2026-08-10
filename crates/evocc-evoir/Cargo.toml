@@ -1,0 +1,9 @@
+[package]
+name = "evocc-evoir"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+description = "EvoIR: typed block-argument SSA for optimization"
+
+[dependencies]
+evocc-types = { path = "../evocc-types" }

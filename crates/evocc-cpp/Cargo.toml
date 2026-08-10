@@ -1,0 +1,10 @@
+[package]
+name = "evocc-cpp"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+description = "C preprocessor: macro expansion, directives, token stream"
+
+[dependencies]
+evocc-common = { path = "../evocc-common" }
+evocc-lex = { path = "../evocc-lex" }
