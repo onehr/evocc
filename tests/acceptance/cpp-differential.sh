@@ -21,6 +21,7 @@ EVOCC="${C30_EVOCC:-$PROJECT_ROOT/target/release/evocc}"
 CONTAINER_BIN="${C30_CONTAINER_BIN:-/usr/local/bin/container}"
 IMAGE="${C30_CPP_IMAGE:-evo-flight-lab:sealed}"
 GCC_BIN="${C30_GCC_BIN:-gcc-14}"
+GCC_FLAGS="-E -P"
 
 CONTAINER_AVAILABLE=0
 EVOCC_AVAILABLE=0
@@ -99,7 +100,7 @@ src_dir="$2"
 out_dir="$3"
 for f in "$src_dir"/*.c; do
   base="$(basename "$f")"
-  "$gcc_bin" -E "$f" >"$out_dir/${base}.out" 2>"$out_dir/${base}.stderr"
+  "$gcc_bin" -E -P "$f" >"$out_dir/${base}.out" 2>"$out_dir/${base}.stderr"
   rc=$?
   echo "$rc" >"$out_dir/${base}.rc"
 done

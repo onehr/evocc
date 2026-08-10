@@ -110,18 +110,23 @@ fn run_preprocess(file: &str) -> ExitCode {
         pp.add_include_path(include_path.to_string());
     }
     let stream = evocc_cpp::TokenStream::new(tokens);
-    let result = pp.process(stream);
+    let result = pp.process(stream, &src);
     let final_tokens = result.into_vec();
 
-    // Output token kinds one per line as a simple preprocessed representation.
+    // Output token text: decoded tokens carry their own text (from macro
+    // expansion); borrowed tokens reconstruct text from the source span.
     for tok in &final_tokens {
         if tok.kind == TokenKind::Eof {
             continue;
         }
-        // Reconstruct text from the source span.
-        let end = (tok.span.byte_end as usize).min(src.len());
-        let start = (tok.span.byte_start as usize).min(end);
-        let text = &src[start..end];
+        let text = match &tok.text {
+            evocc_lex::TokenText::Decoded(s) => s.as_str(),
+            evocc_lex::TokenText::Borrowed => {
+                let end = (tok.span.byte_end as usize).min(src.len());
+                let start = (tok.span.byte_start as usize).min(end);
+                &src[start..end]
+            }
+        };
         if !text.trim().is_empty() {
             print!("{text} ");
         }
@@ -150,7 +155,7 @@ fn run_parse(file: &str) -> ExitCode {
 
     let mut pp = Preprocessor::new();
     let stream = evocc_cpp::TokenStream::new(tokens);
-    let result = pp.process(stream);
+    let result = pp.process(stream, &src);
     let processed = result.into_vec();
 
     let mut parser = Parser::new(processed, FileId::new(1), &src);
