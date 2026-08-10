@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "contractState": "locked",
+  "purpose": "Define what counts as truth when compiler outputs are compared, and how conflicts are classified. No layer may override a lower layer.",
+  "layers": [
+    {
+      "rank": 1,
+      "name": "frozen-language-contract",
+      "description": "The pinned ISO C / GNU C dialect and AAPCS64/Linux ABI documents. Ultimate authority for defined behavior."
+    },
+    {
+      "rank": 2,
+      "name": "hand-audited-fixtures",
+      "description": "Defined-behavior fixtures with spec citations, reviewed by a human. Each fixture carries its own expected result."
+    },
+    {
+      "rank": 3,
+      "name": "differential-evidence",
+      "description": "Independent GCC and Clang executions of the same defined program. Agreement is evidence, not proof."
+    },
+    {
+      "rank": 4,
+      "name": "abi-observers",
+      "description": "Assembly-level observers and metamorphic tests derived from the ABI contract."
+    },
+    {
+      "rank": 5,
+      "name": "kernel-boot",
+      "description": "Integration and liveness witness only. A booting kernel can never resolve a semantic conflict from layers 1-4."
+    }
+  ],
+  "independence": {
+    "requirement": "The two differential oracles must differ in vendor, resolved realpath, and binary sha256.",
+    "rejectedAliases": [
+      {
+        "path": "/usr/bin/gcc",
+        "reason": "On macOS this is an Apple Clang compatibility alias, not GNU GCC. Treating it as GCC would collapse the two-oracle design into one oracle."
+      }
+    ]
+  },
+  "conflictPolicy": {
+    "oracleDisagreement": "ORACLE_CONFLICT",
+    "majorityVoting": "forbidden",
+    "undefinedBehavior": "UB inputs never produce a single golden result; they are classified EXPECTED_REJECT or excluded from differential comparison.",
+    "kernelBootOverride": "forbidden"
+  },
+  "outcomeTaxonomy": [
+    "PASS",
+    "MISMATCH",
+    "CRASH",
+    "TIMEOUT",
+    "EXPECTED_REJECT",
+    "UNEXPECTED_REJECT",
+    "ORACLE_CONFLICT"
+  ]
+}

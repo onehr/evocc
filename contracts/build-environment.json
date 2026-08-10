@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "contractState": "locked",
+  "purpose": "Freeze the ARM64 Linux build substrate used for all reference compiler work. Every field is either a resolved immutable value or an explicit resolution policy whose output must be recorded before first use.",
+  "containerRuntime": {
+    "kind": "apple-container",
+    "version": "1.2.2",
+    "commitSha": "0190097d06df0b9065f4c2d2c7873c649d81d493",
+    "cliPath": "/usr/local/bin/container",
+    "cliSha256": "08d0cc13c9d34f8467488980e8b0be02925a10a8df9ad0aa1bded0025f458d43",
+    "bootstrapContract": "contracts/apple-container-bootstrap.json",
+    "note": "This is the Day-1 execution substrate. It is installed, receipt-verified, and its bootstrap contract has a full green evidence run."
+  },
+  "buildImage": {
+    "reference": "docker.io/library/debian:13-slim",
+    "platform": "linux/arm64",
+    "resolutionPolicy": "Resolve the platform-specific manifest digest at seal time from the registry, record it here as manifestDigest, and never reference the image by tag again.",
+    "manifestDigest": "RESOLVE_AT_SEAL",
+    "aptSnapshot": {
+      "policy": "Pin snapshot.debian.org to the timestamp recorded at seal time; record the full installed package manifest (name, version, sha256) after provisioning.",
+      "snapshotTimestamp": "RESOLVE_AT_SEAL",
+      "packageManifest": "RESOLVE_AT_SEAL"
+    },
+    "postSealNetwork": "none",
+    "sealedImageId": "RESOLVE_AT_SEAL"
+  },
+  "toolchain": {
+    "gcc": {
+      "expectedVersionPrefix": "14.2",
+      "binarySha256": "RESOLVE_AT_SEAL",
+      "vendor": "GNU"
+    },
+    "clang": {
+      "expectedVersionPrefix": "19",
+      "binarySha256": "RESOLVE_AT_SEAL",
+      "vendor": "LLVM"
+    },
+    "binutils": ["as", "ld", "ar", "nm", "strip", "objcopy", "objdump", "readelf"],
+    "rust": {
+      "version": "1.97.1",
+      "channel": "1.97.1",
+      "recordedArtifact": "resolved rustc binary sha256, not the rustup proxy",
+      "rustcSha256": "RESOLVE_AT_SEAL",
+      "rationale": "1.97.1 fixes an LLVM miscompilation present since at least 1.87; the preinstalled 1.94.0 is therefore not acceptable merely because it exists."
+    }
+  },
+  "reproducibility": {
+    "KBUILD_BUILD_TIMESTAMP": "RESOLVE_AT_SEAL",
+    "SOURCE_DATE_EPOCH": "RESOLVE_AT_SEAL",
+    "KBUILD_BUILD_USER": "evo",
+    "KBUILD_BUILD_HOST": "flightlab",
+    "LC_ALL": "C",
+    "TZ": "UTC",
+    "umask": "022",
+    "knownDriftSources": [
+      "module signing keys",
+      "RANDSTRUCT seeds",
+      "absolute build paths",
+      "unfrozen timestamps"
+    ]
+  },
+  "forbiddenPatterns": ["latest", "TBD", "UNRESOLVED", "master", "main", "HEAD"]
+}

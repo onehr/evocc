@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "contractState": "locked",
+  "host": {
+    "architecture": "arm64",
+    "minimumMacOSMajor": 26
+  },
+  "release": {
+    "version": "1.2.2",
+    "annotatedTagObjectSha": "3c4c59cf6a1099c334f1ad6d485f79969e09f4b9",
+    "commitSha": "0190097d06df0b9065f4c2d2c7873c649d81d493",
+    "releaseUrl": "https://github.com/apple/container/releases/tag/1.2.2",
+    "releaseApiUrl": "https://api.github.com/repos/apple/container/releases/tags/1.2.2",
+    "taggedCommandReferenceUrl": "https://github.com/apple/container/blob/1.2.2/docs/command-reference.md"
+  },
+  "installer": {
+    "assetId": 505922768,
+    "fileName": "container-1.2.2-installer-signed.pkg",
+    "localPath": "/private/tmp/container-1.2.2-installer-signed.pkg",
+    "url": "https://github.com/apple/container/releases/download/1.2.2/container-1.2.2-installer-signed.pkg",
+    "sizeBytes": 117538426,
+    "sha256": "f4c7e73f7203725a3512676dfd9ec6c6a98a37093b6fd4a1b0fdcfcb227e2118",
+    "packageIdentifier": "com.apple.container-installer",
+    "signer": {
+      "commonName": "Developer ID Installer: Apple Inc. - Containerization (UPBK2H6LZM)",
+      "teamId": "UPBK2H6LZM",
+      "sha256Fingerprint": "4519B43D00F55EC63138D403DE1F3C542390EAE3D82E59C1843846FBDFE14F5B",
+      "intermediateCommonName": "Developer ID Certification Authority",
+      "rootCommonName": "Apple Root CA"
+    }
+  },
+  "payload": {
+    "installRoot": "/usr/local/",
+    "cliPath": "/usr/local/bin/container",
+    "cliSha256": "08d0cc13c9d34f8467488980e8b0be02925a10a8df9ad0aa1bded0025f458d43",
+    "uninstallerPath": "/usr/local/bin/uninstall-container.sh",
+    "uninstallerSha256": "51a840ab040bec9855ac66ad7c27b3b48771f69e779cb6d614895a3185a3dbb9"
+  },
+  "runtime": {
+    "appRoot": "/Users/onehrxn/Library/Application Support/com.apple.container/",
+    "apiServerAppName": "container-apiserver",
+    "vminitImage": "ghcr.io/apple/containerization/vminit:0.40.1",
+    "builderImage": "ghcr.io/apple/container-builder-shim/builder:0.13.1",
+    "kernel": {
+      "url": "https://github.com/kata-containers/kata-containers/releases/download/3.28.0/kata-static-3.28.0-arm64.tar.zst",
+      "digest": "sha256:f63d54507d1f18635d94475077e4c2330de4d8e05cedf25f7c38f063b0e66a91",
+      "binaryPath": "opt/kata/share/kata-containers/vmlinux-6.18.15-186"
+    }
+  },
+  "probe": {
+    "platform": "linux/arm64",
+    "image": "docker.io/library/alpine@sha256:2c9d26f410d032d5b1525aa8a873e238b05b90c4ae8618743d4311f0cc827e37",
+    "manifestDigest": "sha256:2c9d26f410d032d5b1525aa8a873e238b05b90c4ae8618743d4311f0cc827e37",
+    "alpineVersion": "3.22.5",
+    "networkUrl": "http://example.com/",
+    "networkExpectedText": "Example Domain",
+    "networkTimeoutSeconds": 15
+  },
+  "resources": {
+    "namePrefix": "c30-bootstrap-",
+    "classifiedPersistentRoots": [
+      "kernels",
+      "networks/default",
+      "apiserver",
+      "plugin-state"
+    ],
+    "classifiedTransientRoots": [
+      "content",
+      "snapshots",
+      "containers",
+      "volumes",
+      "networks"
+    ]
+  },
+  "acceptance": {
+    "requiredTestIds": [
+      "host_is_supported",
+      "contract_is_locked",
+      "installer_asset_is_exact",
+      "installer_signature_is_trusted",
+      "receipt_and_payload_are_exact",
+      "recovery_path_is_available",
+      "runtime_version_is_exact",
+      "kernel_configuration_is_exact",
+      "foreign_mutable_resources_are_absent",
+      "system_lifecycle_is_idempotent",
+      "probe_image_is_exact_arm64",
+      "two_vms_are_independent",
+      "default_host_data_is_not_exposed",
+      "default_network_has_outbound_connectivity",
+      "internal_network_blocks_outbound",
+      "cleanup_has_no_test_residue"
+    ]
+  }
+}

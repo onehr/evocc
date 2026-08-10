@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "contractState": "locked",
+  "purpose": "Freeze the reference kernel source, configuration, and boot predicate for the ARM64 flight lab.",
+  "kernel": {
+    "version": "6.18.44",
+    "series": "6.18",
+    "moniker": "longterm",
+    "maintainedUntil": "2028-12",
+    "releaseAuthority": "https://www.kernel.org/releases.json",
+    "versionDecision": "Pinned to 6.18.44 on 2026-08-10. The original Day-1 goal text named 6.18.43, but the release authority showed 6.18.44 (released 2026-08-09) as the current 6.18 longterm update; per the project rule that version decisions follow the release authority, the pin was amended before any artifact was fetched.",
+    "tarball": {
+      "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.44.tar.xz",
+      "signatureUrl": "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.44.tar.sign",
+      "trustAnchor": "GPG signature verification against the kernel.org keyring; the sha256 below is recorded after the first signature-verified fetch.",
+      "sha256": "RESOLVE_AT_FETCH",
+      "resolvedCommit": "RESOLVE_AT_FETCH"
+    }
+  },
+  "config": {
+    "base": "ARCH=arm64 defconfig",
+    "freezePolicy": "Generate once, record the raw .config bytes and their sha256 here; shrinking the config to rescue a failing gate is forbidden.",
+    "rawSha256": "RESOLVE_AT_CONFIG",
+    "overrides": {
+      "CONFIG_RANDOMIZE_BASE": "n",
+      "note": "Reproducibility overrides only; no feature reduction."
+    }
+  },
+  "qemu": {
+    "version": "11.0.3",
+    "binaryPath": "/opt/homebrew/bin/qemu-system-aarch64",
+    "binarySha256": "af7f6f87c135fa5f08652cda8bc79c01ee560f2ce8e5666c964ad9dda5884232",
+    "machine": "virt-11.0",
+    "machineNote": "Never the floating 'virt' alias; dtb-randomness=off; never '-cpu max'.",
+    "lanes": [
+      {
+        "name": "hvf-host",
+        "role": "fast local flight on the M2 Max",
+        "argv": ["-accel", "hvf", "-cpu", "host"]
+      },
+      {
+        "name": "tcg-cortex-a72",
+        "role": "portable conformance witness with a fixed CPU model",
+        "argv": ["-accel", "tcg", "-cpu", "cortex-a72"]
+      }
+    ],
+    "laneEquivalence": "Both lanes must boot the same Image, but runtime state and timing are NOT claimed bit-identical across CPU models.",
+    "fixedArgv": {
+      "smp": 4,
+      "memoryMiB": 2048,
+      "appendTemplate": "console=ttyAMA0 panic=-1 evo_nonce=NONCE_HERE",
+      "display": "-nographic",
+      "reboot": "-no-reboot"
+    }
+  },
+  "bootPredicate": {
+    "kind": "ordered-nonce-bound",
+    "requirements": [
+      "serial log contains the per-run nonce exactly once, injected via kernel cmdline and echoed by init",
+      "boot markers appear in the contract-defined order",
+      "shutdown is controlled (poweroff), not a panic or timeout",
+      "a replayed log from an earlier run, a fixed marker without nonce, a wrong rootfs, or a wrong nonce must all FAIL the predicate"
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+# Design documents and research notes are internal working material.
+# They are deliberately excluded from the public repository history.
+docs/
+lessons.md
+
+# Runtime evidence is machine-generated output, not source.
+# Evidence directories are large, host-specific, and reproducible by re-running
+# the acceptance harnesses; the repository tracks the harnesses, not the runs.
+.evidence/
+
+# Signed third-party installer payloads are pinned by digest inside contracts.
+# Tracking the binaries themselves would bloat history without adding trust.
+*.pkg
+
+# Pinned toolchains, kernel trees, and build outputs are fetched or produced
+# by the harness into .toolchain/ and .build/; both are derived state.
+.toolchain/
+.build/
+
+# Rust build artifacts.
+target/
+
+# OS noise.
+.DS_Store
