@@ -112,3 +112,20 @@ if [ "$nonce_count" -ne 1 ]; then
 fi
 
 printf 'boot: PASS on %s (nonce verified, ordered markers, controlled shutdown)\n' "$LANE"
+
+# Emit a machine-readable flight receipt so the acceptance gate can re-validate
+# the predicate from the serial log and nonce without rerunning QEMU.
+image_sha="$(/usr/bin/shasum -a 256 "$IMAGE" | awk '{print $1}')"
+log_sha="$(/usr/bin/shasum -a 256 "$SERIAL_LOG" | awk '{print $1}')"
+receipts="$PROJECT_ROOT/.build/reference/flight-receipts.jsonl"
+mkdir -p "$(dirname "$receipts")"
+"${C30_JQ:-/opt/homebrew/bin/jq}" -cn \
+  --arg image "$IMAGE" \
+  --arg imageSha256 "$image_sha" \
+  --arg lane "$LANE" \
+  --arg nonce "$NONCE" \
+  --arg serialLog "$SERIAL_LOG" \
+  --arg serialLogSha256 "$log_sha" \
+  --arg flownAt "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+  '{image:$image,imageSha256:$imageSha256,lane:$lane,nonce:$nonce,serialLog:$serialLog,serialLogSha256:$serialLogSha256,flownAt:$flownAt}' \
+  >> "$receipts"

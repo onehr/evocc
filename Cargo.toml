@@ -1,0 +1,21 @@
+# EvoCC workspace.
+#
+# Day-1 scope: the workspace exists so that the flight lab's
+# compiler_capabilities_are_red gate has a real binary to interrogate. Every
+# capability must fail closed with an explicit NOT_IMPLEMENTED verdict; the
+# gate treats silent success, delegation to another compiler, or an unknown
+# failure mode as a contract violation.
+
+[workspace]
+resolver = "2"
+members = ["crates/evocc"]
+
+[workspace.package]
+edition = "2021"
+license = "GPL-2.0-only"
+
+[profile.release]
+# Reproducible and auditable beats clever for a flight lab: keep debug info
+# for crash forensics and disable nothing that changes semantics.
+debug = true
+lto = false
