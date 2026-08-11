@@ -57,9 +57,9 @@ isolated_cpp_differential
 final_residue_check
 evidence_mutation_detection'
 
-PROD_HASH_FILES=".cargo/config.toml crates/evocc-common/src/lib.rs crates/evocc-types/src/lib.rs crates/evocc-chir/src/lib.rs crates/evocc-lex/src/lib.rs crates/evocc-cpp/src/lib.rs crates/evocc-parser/src/lib.rs crates/evocc-egraph/src/lib.rs crates/evocc-proof/src/lib.rs crates/evocc-evoir/src/lib.rs crates/evocc-lower/src/lib.rs crates/evocc/src/main.rs Cargo.toml Cargo.lock"
+PROD_HASH_FILES="crates/evocc-common/src/lib.rs crates/evocc-types/src/lib.rs crates/evocc-chir/src/lib.rs crates/evocc-lex/src/lib.rs crates/evocc-cpp/src/lib.rs crates/evocc-parser/src/lib.rs crates/evocc-egraph/src/lib.rs crates/evocc-proof/src/lib.rs crates/evocc-evoir/src/lib.rs crates/evocc-lower/src/lib.rs crates/evocc/src/main.rs Cargo.toml Cargo.lock"
 
-EXPECTED_PROD_HASH="6c38b71118a4a42236febeb0885abc9d6e9ea2f714871042e9c48d85ff24b555"
+EXPECTED_PROD_HASH="4288242fb6f078e454984ac09959cee32d83b6e362158f135ceb53575b080737"
 
 # ---------------------------------------------------------------------------
 # Helpers

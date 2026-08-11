@@ -21,7 +21,7 @@
         "verdict": "Good signature",
         "keySource": "hkps://keyserver.ubuntu.com (keys.openpgp.org strips user IDs and cannot serve this key)"
       },
-      "resolvedCommit": "RESOLVE_AT_FETCH"
+      "resolvedCommit": "1efe5d048a391de3ead2804b2e7f86376c356cc5"
     }
   },
   "config": {
