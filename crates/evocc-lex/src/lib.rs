@@ -270,7 +270,10 @@ impl<'src> Lexer<'src> {
             b';' => self.single(TokenKind::Semicolon, start_pos, start_line, start_col),
             b',' => self.single(TokenKind::Comma, start_pos, start_line, start_col),
             b'.' => {
-                if self.match_next(b'.').is_some() && self.match_next(b'.').is_some() {
+                let bytes = self.source.as_bytes();
+                if self.pos + 2 < bytes.len() && bytes[self.pos + 1] == b'.' && bytes[self.pos + 2] == b'.' {
+                    self.pos += 3;
+                    self.col += 3;
                     Some(Token::new(TokenKind::Ellipsis,
                         SourceSpan::new(self.file, start_pos as u32, self.pos as u32, start_line, start_col),
                         TokenText::Borrowed))
@@ -974,8 +977,7 @@ mod tests {
 
     #[test]
     fn lex_operator_ellipsis() {
-        // Only 2 dots are consumed by the ellipsis check; 3rd dot is left
-        assert_kinds("...", &[TokenKind::Ellipsis, TokenKind::Dot, TokenKind::Eof]);
+        assert_kinds("...", &[TokenKind::Ellipsis, TokenKind::Eof]);
     }
 
     #[test]
@@ -1130,9 +1132,8 @@ mod tests {
 
     #[test]
     fn lex_float_suffix_f() {
-        // match_next in . handler skips the 0; f becomes identifier
         assert_kinds("1.0f", &[
-            TokenKind::IntLiteral, TokenKind::Dot,
+            TokenKind::IntLiteral, TokenKind::Dot, TokenKind::IntLiteral,
             TokenKind::Identifier,
             TokenKind::Eof,
         ]);
@@ -1149,9 +1150,8 @@ mod tests {
 
     #[test]
     fn lex_float_exponent_neg() {
-        // 1.0e-5 -> 1, ., e (0 is skipped by . handler), -, 5
         assert_kinds("1.0e-5", &[
-            TokenKind::IntLiteral, TokenKind::Dot,
+            TokenKind::IntLiteral, TokenKind::Dot, TokenKind::IntLiteral,
             TokenKind::Identifier, TokenKind::Minus, TokenKind::IntLiteral,
             TokenKind::Eof,
         ]);
@@ -1159,9 +1159,8 @@ mod tests {
 
     #[test]
     fn lex_float_hex() {
-        // 0x1.2p3 -> 0x1, ., p3 (2 is skipped by . handler)
         assert_kinds("0x1.2p3", &[
-            TokenKind::IntLiteral, TokenKind::Dot,
+            TokenKind::IntLiteral, TokenKind::Dot, TokenKind::IntLiteral,
             TokenKind::Identifier,
             TokenKind::Eof,
         ]);

@@ -647,13 +647,24 @@ impl Preprocessor {
                             let mut current_arg: Vec<Token> = Vec::new();
                             let mut depth = 1u32;
                             while j < len && depth > 0 {
+                                let lexeme = token_lexeme(&raw[j], source);
+                                let text = if lexeme.is_empty() {
+                                    format_placeholder(raw[j].kind)
+                                } else {
+                                    lexeme.to_owned()
+                                };
+                                let decoded = Token {
+                                    kind: raw[j].kind,
+                                    span: raw[j].span,
+                                    text: TokenText::Decoded(text),
+                                };
                                 match raw[j].kind {
-                                    TokenKind::LParen => { depth += 1; if depth > 1 { current_arg.push(raw[j].clone()); } }
-                                    TokenKind::RParen => { depth -= 1; if depth > 0 { current_arg.push(raw[j].clone()); } }
+                                    TokenKind::LParen => { depth += 1; if depth > 1 { current_arg.push(decoded); } }
+                                    TokenKind::RParen => { depth -= 1; if depth > 0 { current_arg.push(decoded); } }
                                     TokenKind::Comma if depth == 1 => {
                                         args.push(std::mem::take(&mut current_arg));
                                     }
-                                    _ => { current_arg.push(raw[j].clone()); }
+                                    _ => { current_arg.push(decoded); }
                                 }
                                 j += 1;
                             }
