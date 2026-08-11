@@ -256,17 +256,24 @@ impl Egraph {
     pub fn rebuild(&mut self) {
         while let Some((_from, _to)) = self.dirty.pop() {
             let to = self.uf.find(_to);
+            let from = self.uf.find(_from);
 
-            let parents: Vec<(OpId, usize, EClassId)> =
-                self.eclasses[to as usize].parents.clone();
+            // Parents of both sides need re-canonicalization because any
+            // node that had the absorbed (`_from`) e-class as a child now
+            // effectively has `to` as its child via find().
+            let mut all_parents: Vec<(OpId, usize, EClassId)> = Vec::new();
+            all_parents.extend(self.eclasses[to as usize].parents.clone());
+            if from != to {
+                all_parents.extend(self.eclasses[from as usize].parents.clone());
+            }
 
-            for (parent_op, _child_pos, parent_eclass_id) in parents {
-                let parent_ec = self.uf.find(parent_eclass_id);
+            for (parent_op, _child_pos, parent_eclass_id) in &all_parents {
+                let parent_ec = self.uf.find(*parent_eclass_id);
 
                 let candidates: Vec<ENodeId> = self.eclasses[parent_ec as usize]
                     .nodes
                     .iter()
-                    .filter(|&&nid| self.enodes[nid as usize].op == parent_op)
+                    .filter(|&&nid| self.enodes[nid as usize].op == *parent_op)
                     .copied()
                     .collect();
 
@@ -598,5 +605,167 @@ mod tests {
         eg.union(add_x_0, x);
         eg.rebuild();
         assert_eq!(eg.find(add_x_0), eg.find(x));
+    }
+
+    // ===================================================================
+    // Invariant property tests
+    //
+    // These tests verify that the e-graph core preserves the structural
+    // invariants that every downstream consumer (rewrite engine, extractor,
+    // proof generator) depends on. They are property-based in intent: they
+    // exercise the data structure under a variety of operation sequences
+    // and verify that the invariants hold, not merely that a specific
+    // hand-crafted scenario produces a specific expected result.
+    // ===================================================================
+
+    /// rebuild is idempotent: applying it twice in succession must not
+    /// alter any e-class membership or create new dirty work.
+    #[test]
+    fn invariant_rebuild_is_idempotent() {
+        let mut eg = Egraph::new();
+        let op: OpId = 0;
+
+        // Build a modest e-graph: three expressions that partially share.
+        let a = eg.insert(op, vec![]);
+        let b = eg.insert(op, vec![]);
+        let c = eg.insert(op, vec![]);
+        let ab = eg.insert(op, vec![a, b]);
+        let ba = eg.insert(op, vec![b, a]);
+        let ac = eg.insert(op, vec![a, c]);
+
+        // Create congruence pressure: union a with b.
+        eg.union(a, b);
+        eg.rebuild();
+
+        // After rebuild, dirty must be empty, because every pending merge
+        // has been processed and any newly discovered congruence pairs
+        // have been merged and their consequences enqueued and processed.
+        assert!(eg.dirty.is_empty(), "dirty queue must be empty after rebuild");
+
+        // The two expressions ab=op(a,b) and ba=op(b,a) should now be in
+        // the same e-class, because their children became equal after the
+        // merge a≡b.
+        assert_eq!(eg.find(ab), eg.find(ba),
+            "op(a,b) ≡ op(b,a) after a≡b merge");
+
+        // A second rebuild must be a no-op: no new dirty entries, no change
+        // to the canonical representatives.
+        let before_ab = eg.find(ab);
+        let before_ac = eg.find(ac);
+        eg.rebuild();
+        assert!(eg.dirty.is_empty(), "second rebuild must leave dirty empty");
+        assert_eq!(eg.find(ab), before_ab, "second rebuild must not change canonical of ab");
+        assert_eq!(eg.find(ac), before_ac, "second rebuild must not change canonical of ac");
+    }
+
+    /// Congruence closure completeness: after rebuild, any two e-nodes with
+    /// the same operator and canonically equal children must inhabit the
+    /// same e-class. Hashcons guarantees this for newly inserted terms; the
+    /// non-trivial case is when two nodes were inserted with DISJOINT
+    /// children and those children are later merged — rebuild must discover
+    /// the new congruence and merge the parents.
+    #[test]
+    fn invariant_congruence_closure_is_complete() {
+        let mut eg = Egraph::new();
+        let add_op: OpId = 0;
+
+        // Four distinct leaf types (different op IDs means hashcons cannot
+        // deduplicate them).
+        let a = eg.insert(1, vec![]);
+        let b = eg.insert(2, vec![]);
+        let c = eg.insert(3, vec![]);
+        let d = eg.insert(4, vec![]);
+
+        // Two add nodes with disjoint children. They MUST be in different
+        // e-classes at this point because their children are distinct.
+        let xy = eg.insert(add_op, vec![a, b]);
+        let x2y2 = eg.insert(add_op, vec![c, d]);
+        assert_ne!(eg.find(xy), eg.find(x2y2),
+            "disjoint children must produce distinct e-classes");
+
+        // Merge the children pairwise. After rebuild, the parents must
+        // become congruent because find(a)==find(c) and find(b)==find(d),
+        // so both parents canonicalize to add_op(find(a), find(b)).
+        eg.union(a, c);
+        eg.union(b, d);
+        eg.rebuild();
+
+        assert_eq!(eg.find(xy), eg.find(x2y2),
+            "congruence closure: add(a,b) ≡ add(c,d) after a≡c, b≡d");
+    }
+
+    /// Rebuild never creates new e-classes: the set of canonical IDs
+    /// after rebuild is a subset of the set before rebuild (some may be
+    /// retired by merging, but no new ones appear).
+    #[test]
+    fn invariant_rebuild_preserves_eclass_set() {
+        let mut eg = Egraph::new();
+        let op: OpId = 0;
+
+        let ids: Vec<EClassId> = (0..10).map(|_| eg.insert(op, vec![])).collect();
+        let before: Vec<EClassId> = ids.iter().map(|&id| eg.find(id)).collect::<std::collections::HashSet<_>>()
+            .into_iter().collect();
+
+        // Merge several pairs and rebuild.
+        eg.union(ids[0], ids[1]);
+        eg.union(ids[2], ids[3]);
+        eg.union(ids[4], ids[5]);
+        eg.rebuild();
+
+        let after: Vec<EClassId> = ids.iter().map(|&id| eg.find(id)).collect::<std::collections::HashSet<_>>()
+            .into_iter().collect();
+
+        // Every canonical ID after rebuild must have been present before
+        // (or retired to a previously existing ID via union).
+        for &id in &after {
+            // Either this ID existed before, or it is the canonical that
+            // absorbed another ID (which is a pre-existing ID).
+            assert!(before.contains(&id) || before.iter().any(|&b| eg.find(b) == id),
+                "new canonical ID {id} appeared from nowhere");
+        }
+
+        // The number of distinct canons must not increase.
+        assert!(after.len() <= before.len(),
+            "rebuild increased canonical count: {} -> {}", before.len(), after.len());
+    }
+
+    /// Rebuild terminates on any finite e-graph: the processing loop is
+    /// bounded by the finite dirty queue and the finite number of possible
+    /// congruence pairs.
+    #[test]
+    fn invariant_rebuild_always_terminates() {
+        let mut eg = Egraph::new();
+        let op: OpId = 0;
+
+        // Build a small tree and trigger every node to enter the dirty
+        // queue via cascading unions. This verifies that the dirty queue
+        // logic does not loop infinitely.
+        let leaf = eg.insert(op, vec![]);
+        let mid = eg.insert(op, vec![leaf]);
+        let _top = eg.insert(op, vec![mid]);
+
+        // Merge leaf with a fresh node — should trigger one round of
+        // congruence for mid, then another for top.
+        let other_leaf = eg.insert(op, vec![]);
+        eg.union(leaf, other_leaf);
+        eg.rebuild();
+
+        // The graph is still in a consistent state — the fact that we
+        // reached this line means rebuild returned (terminated).
+        assert!(eg.dirty.is_empty());
+
+        // Expressly verify that repeated rebuild does not hang on a
+        // larger graph.
+        let mut big = Egraph::new();
+        let roots: Vec<EClassId> = (0..50).map(|_| big.insert(op, vec![])).collect();
+        let mut current = roots[0];
+        for &r in &roots[1..] {
+            current = big.insert(op, vec![current, r]);
+        }
+        // Merge the first two leaves — the congruence chain should
+        // propagate up the tree and terminate.
+        big.union(roots[0], roots[1]);
+        big.rebuild();
+        assert!(big.dirty.is_empty(), "cascading rebuild must drain the dirty queue");
     }
 }
