@@ -162,8 +162,42 @@ impl MacroMap {
         while i < body.len() {
             let tok = &body[i];
 
-            // Stringification: # param -> string literal
-            if tok.kind == TokenKind::Hash {
+            // Token pasting operator (##).
+            // Must come FIRST so that ## isn't misinterpreted as
+            // stringification by the handler below.
+            // The real lexer produces two consecutive HashHash tokens for ##;
+            // tests create a single HashHash token with text "##".
+            // Handle both representations.
+            if tok.kind == TokenKind::HashHash {
+                let next_is_hashhash =
+                    i + 1 < body.len() && body[i + 1].kind == TokenKind::HashHash;
+                let is_double_hash = next_is_hashhash || token_text(tok).len() >= 2;
+                if is_double_hash {
+                    if pending_paste.is_some() {
+                        if next_is_hashhash {
+                            i += 2;
+                        } else {
+                            i += 1;
+                        }
+                        continue;
+                    }
+                    if let Some(last) = result.pop() {
+                        pending_paste = Some(last);
+                    }
+                    if next_is_hashhash {
+                        i += 2; // consume both ## tokens
+                    } else {
+                        i += 1; // consume single ## token
+                    }
+                    continue;
+                }
+                // Single # — fall through to stringification handler
+            }
+
+            // Stringification: # param -> string literal.
+            // The lexer has a bug that returns HashHash for single #, so
+            // we check both Hash and HashHash.
+            if tok.kind == TokenKind::Hash || tok.kind == TokenKind::HashHash {
                 if i + 1 < body.len() {
                     let next = &body[i + 1];
                     if next.kind == TokenKind::Identifier {
@@ -171,7 +205,6 @@ impl MacroMap {
                             let text = tokens_to_string(&arg);
                             let str_tok = make_string_token(&text);
                             if let Some(pt) = pending_paste.take() {
-                                // Paste stringification result onto preceding token
                                 let prev_text = token_text(&pt);
                                 let combined = format!("{}{}", prev_text, str_text(&str_tok));
                                 result.push(make_identifier(&combined));
@@ -187,26 +220,9 @@ impl MacroMap {
                 }
                 // # not followed by identifier: just emit
                 if let Some(pt) = pending_paste.take() {
-                    // This shouldn't really happen; just push pending
                     result.push(pt);
                 }
                 result.push(tok.clone());
-                i += 1;
-                continue;
-            }
-
-            // Token pasting operator
-            if tok.kind == TokenKind::HashHash {
-                // Mark for pending paste: the previous result token and the
-                // next substituted token will be concatenated.
-                if pending_paste.is_some() {
-                    // Double ## — unlikely but handle gracefully
-                    i += 1;
-                    continue;
-                }
-                if let Some(last) = result.pop() {
-                    pending_paste = Some(last);
-                }
                 i += 1;
                 continue;
             }
@@ -237,11 +253,15 @@ impl MacroMap {
                 }
             }
 
-            // Not a special token: emit literally
+            // General fallthrough: emit literally, with token pasting.
             if let Some(pt) = pending_paste.take() {
-                result.push(pt);
+                let prev_text = token_text(&pt);
+                let curr_text = token_text(tok);
+                let combined = format!("{}{}", prev_text, curr_text);
+                result.push(make_identifier(&combined));
+            } else {
+                result.push(tok.clone());
             }
-            result.push(tok.clone());
             i += 1;
         }
 

@@ -118,6 +118,9 @@ fn run_preprocess(file: &str) -> ExitCode {
 
     // Output token text: decoded tokens carry their own text (from macro
     // expansion); borrowed tokens reconstruct text from the source span.
+    // Only insert a space between two "word-like" tokens (identifiers,
+    // numbers, literals) to prevent accidental pasting (e.g. int x → intx).
+    // Never insert space around punctuation/operators.
     let mut prev_kind: Option<TokenKind> = None;
     for tok in &final_tokens {
         if tok.kind == TokenKind::Eof {
@@ -134,18 +137,15 @@ fn run_preprocess(file: &str) -> ExitCode {
         if text.is_empty() {
             continue;
         }
-        // gcc -E preserves original source spacing; our tokens carry no
-        // whitespace, so we approximate by putting a space between every
-        // pair of tokens except where they are naturally tight (close-paren
-        // after a token, token after open-paren).
-        let no_space_before = matches!(tok.kind,
-            TokenKind::Semicolon | TokenKind::Comma | TokenKind::RParen |
-            TokenKind::RBracket | TokenKind::RBrace | TokenKind::Colon
-        );
-        let no_space_after = matches!(prev_kind,
-            Some(TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace)
-        );
-        if !no_space_before && !no_space_after && prev_kind.is_some() {
+        let prev_is_word = prev_kind.is_some_and(is_word_like);
+        let curr_is_word = is_word_like(tok.kind);
+        // Prevent accidental pasting: insert space between two word-like
+        // tokens, or between a number and + / - (which could extend a
+        // pp-number, e.g. 1+2 → single pp-number token).
+        let needs_space = (prev_is_word && curr_is_word)
+            || (prev_kind.is_some_and(is_number_like)
+                && (tok.kind == TokenKind::Plus || tok.kind == TokenKind::Minus));
+        if needs_space {
             print!(" ");
         }
         print!("{text}");
@@ -154,6 +154,37 @@ fn run_preprocess(file: &str) -> ExitCode {
     println!();
 
     ExitCode::from(0)
+}
+
+/// Tokens that could accidentally merge with an adjacent identifier or
+/// number (forming a single valid token). We insert a space between two
+/// "word-like" tokens to prevent accidental pasting.
+fn is_word_like(kind: TokenKind) -> bool {
+    use TokenKind::*;
+    matches!(
+        kind,
+        Identifier
+            | IntLiteral
+            | FloatLiteral
+            | CharLiteral
+            | StringLiteral
+            // Keywords (all collapse into TokenKind variants):
+            | Int | Char | Float | Double | Void
+            | Short | Long | Signed | Unsigned
+            | Struct | Union | Enum | Typedef
+            | Auto | Extern | Static | Register
+            | Const | Volatile | Restrict | Inline
+            | If | Else | Switch | Case | Default
+            | While | Do | For | Goto | Continue | Break | Return
+            | Sizeof | Typeof | Alignas | Alignof
+            | Atomic | Bool | Complex | Imaginary | Noreturn
+            | ThreadLocal | Generic | StaticAssert
+            | Attribute
+    )
+}
+
+fn is_number_like(kind: TokenKind) -> bool {
+    matches!(kind, TokenKind::IntLiteral | TokenKind::FloatLiteral)
 }
 
 fn run_parse(file: &str) -> ExitCode {
