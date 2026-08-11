@@ -51,40 +51,30 @@ impl MacroMap {
     }
 
     /// Define a function-like macro, optionally variadic (__VA_ARGS__).
-    /// The body tokens' identifiers that correspond to parameters are
-    /// rewritten to carry the parameter name in their text so that
-    /// expansion can match by name.
+    ///
+    /// For GNU named variadics (e.g. `#define FOO(fmt,args...)`),
+    /// `variadic_param_name` is `Some("args")` and any body token whose
+    /// text matches that name is rewritten to `__VA_ARGS__` so that
+    /// `resolve_arg` can handle it uniformly.
     pub fn define_function_like(
         &mut self,
         name: String,
         params: Vec<String>,
         variadic: bool,
+        variadic_param_name: Option<String>,
         mut body: Vec<Token>,
     ) {
-        let mut param_idxs: Vec<usize> = Vec::new();
-        let mut sh_i = 0;
-        while sh_i < body.len() {
-            if body[sh_i].kind == TokenKind::Hash {
-                if sh_i + 1 < body.len() && body[sh_i + 1].kind == TokenKind::Identifier {
-                    param_idxs.push(sh_i + 1);
+        if let Some(ref vname) = variadic_param_name {
+            for tok in body.iter_mut() {
+                if tok.kind != TokenKind::Identifier {
+                    continue;
                 }
-                sh_i += 2;
-            } else if body[sh_i].kind == TokenKind::Identifier {
-                param_idxs.push(sh_i);
-                sh_i += 1;
-            } else {
-                sh_i += 1;
+                if let TokenText::Decoded(s) = &tok.text {
+                    if s == vname {
+                        tok.text = TokenText::Decoded("__VA_ARGS__".to_owned());
+                    }
+                }
             }
-        }
-        for (order, &body_idx) in param_idxs.iter().enumerate() {
-            let txt = if order < params.len() {
-                params[order].clone()
-            } else if order == params.len() && variadic {
-                "__VA_ARGS__".to_owned()
-            } else {
-                continue;
-            };
-            body[body_idx].text = TokenText::Decoded(txt);
         }
 
         let m = Macro {
@@ -94,7 +84,6 @@ impl MacroMap {
             params,
             variadic,
         };
-        // Ensure existing fields get proper arity
         let _ = m.arity();
         self.macros.insert(name, m);
     }
@@ -124,17 +113,29 @@ impl MacroMap {
     /// Expand a function-like macro with the given arguments. Returns `None`
     /// if the macro is not defined, is object-like, or the arity does not match.
     pub fn expand_function_like(&self, name: &str, args: &[Vec<Token>]) -> Option<Vec<Token>> {
-        let m = self.get(name)?;
-        if !m.is_function {
-            return None;
+        self.expand_macro(name, args)
+    }
+
+    /// Expand any identifier token that refers to an object-like macro.
+    /// Used to macro-expand argument tokens before `##` pasting.
+    fn expand_arg_token(&self, tok: &Token) -> Vec<Token> {
+        if tok.kind != TokenKind::Identifier {
+            return vec![tok.clone()];
         }
-        if args.len() != m.arity() {
-            return None;
+        let text = match &tok.text {
+            TokenText::Decoded(s) => s.as_str(),
+            TokenText::Borrowed => return vec![tok.clone()],
+        };
+        if let Some(m) = self.macros.get(text) {
+            if !m.is_function && !m.body.is_empty() {
+                return m.body.clone();
+            }
         }
-        // Stub: simple substitution without parameter replacement.
-        // Full replacement will be implemented when the preprocessor is built.
-        let _ = args;
-        Some(m.body.clone())
+        vec![tok.clone()]
+    }
+
+    fn expand_tokens(&self, tokens: &[Token]) -> Vec<Token> {
+        tokens.iter().flat_map(|t| self.expand_arg_token(t)).collect()
     }
 
     /// Unified expansion: object-like or function-like with variadic support,
@@ -360,8 +361,12 @@ pub struct Preprocessor {
 
 impl Preprocessor {
     pub fn new() -> Self {
+        let mut macros = MacroMap::new();
+        macros.define("__STDC__".into(), vec![make_int_token(1)], vec![]);
+        macros.define("__STDC_VERSION__".into(), vec![make_int_token(201112)], vec![]);
+        macros.define("__STDC_HOSTED__".into(), vec![make_int_token(1)], vec![]);
         Self {
-            macros: MacroMap::new(),
+            macros,
             include_guard_seen: false,
             include_paths: Vec::new(),
             cond_stack: Vec::new(),
@@ -418,14 +423,20 @@ impl Preprocessor {
     /// from source spans rather than from the `TokenText` field, because the
     /// lexer uses `Borrowed` tokens whose text is identified by byte range.
     pub fn process(&mut self, tokens: TokenStream, source: &str) -> TokenStream {
+        let mut expanding: HashSet<String> = HashSet::new();
+        self.process_impl(tokens, source, &mut expanding)
+    }
+
+    fn process_impl(
+        &mut self,
+        tokens: TokenStream,
+        source: &str,
+        expanding: &mut HashSet<String>,
+    ) -> TokenStream {
         let mut output: Vec<Token> = Vec::new();
         let raw = tokens.into_vec();
         let len = raw.len();
         let mut i: usize = 0;
-        // Tracks macros currently being expanded (recursion guard). When a
-        // macro name appears in this set, further expansion of that name is
-        // suppressed — this is the ISO C "blue paint" rule.
-        let mut expanding: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         while i < len {
             let tok = &raw[i];
@@ -444,18 +455,14 @@ impl Preprocessor {
                         if self.cond_active() {
                             let (name, body) = parse_define(&raw, &mut i, source);
                         if !name.is_empty() {
-                            let (params, variadic) = if body.first().map(|t| t.kind) == Some(TokenKind::LParen) {
-                                    // Function-like: body starts with '('.
-                                    // Extract parameter names and then strip
-                                    // the (a,b) portion from the body so the
-                                    // expansion body contains only the
-                                    // replacement tokens.
-                                    let (p, v) = extract_params(&body, source);
-                                    (p, v)
+                            let is_function_like = !body.is_empty() && body[0].kind == TokenKind::LParen;
+                            let (params, variadic, variadic_param_name) = if is_function_like {
+                                    let (p, v, vn) = extract_params(&body, source);
+                                    (p, v, vn)
                                 } else {
-                                    (vec![], false)
+                                    (vec![], false, None)
                                 };
-                            let body_tokens = if params.is_empty() {
+                            let body_tokens = if !is_function_like {
                                 body
                             } else {
                                 // Find the matching ')' that ends the param
@@ -478,11 +485,25 @@ impl Preprocessor {
                                     vec![]
                                 }
                             };
-                            if params.is_empty() {
-                                self.define(name, body_tokens);
+                            // Convert body tokens to Decoded so resolve_arg can read
+                            // parameter names in nested expansions.
+                            let body_tokens: Vec<Token> = body_tokens
+                                .into_iter()
+                                .map(|t| {
+                                    let lexeme = token_lexeme(&t, source);
+                                    let text = if lexeme.is_empty() {
+                                        format_placeholder(t.kind)
+                                    } else {
+                                        lexeme.to_owned()
+                                    };
+                                    Token { kind: t.kind, span: t.span, text: TokenText::Decoded(text) }
+                                })
+                                .collect();
+                            if is_function_like {
+                                self.macros_mut().define_function_like(name, params, variadic, variadic_param_name, body_tokens);
                             } else {
-                                    self.macros_mut().define_function_like(name, params, variadic, body_tokens);
-                                }
+                                self.define(name, body_tokens);
+                            }
                             }
                         }
                         skip_line(&raw, &mut i, source);
@@ -611,7 +632,7 @@ impl Preprocessor {
                         if let Some(body) = self.macros.expand_object_like(&name) {
                             expanding.insert(name.clone());
                             let sub_stream = TokenStream::new(body);
-                            let processed = self.process(sub_stream, source);
+                            let processed = self.process_impl(sub_stream, source, expanding);
                             output.extend(processed.into_vec());
                             expanding.remove(&name);
                             i += 1;
@@ -642,7 +663,7 @@ impl Preprocessor {
                             if let Some(body) = self.macros.expand_macro(&name, &args) {
                                 expanding.insert(name.clone());
                                 let sub_stream = TokenStream::new(body);
-                                let processed = self.process(sub_stream, source);
+                                let processed = self.process_impl(sub_stream, source, expanding);
                                 output.extend(processed.into_vec());
                                 expanding.remove(&name);
                                 continue;
@@ -921,12 +942,16 @@ fn evaluate_if_primary(tokens: &[Token], i: &mut usize, macros: &MacroMap, sourc
 
 /// Extract parameter names from a function-like macro body.
 /// The body starts with '(' followed by param tokens.
-fn extract_params(body: &[Token], source: &str) -> (Vec<String>, bool) {
+/// Returns (params, is_variadic, variadic_param_name).
+/// variadic_param_name is Some for GNU named variadics (e.g. `args...`),
+/// None for C99 `...` (unnamed).
+fn extract_params(body: &[Token], source: &str) -> (Vec<String>, bool, Option<String>) {
     if body.is_empty() || body[0].kind != TokenKind::LParen {
-        return (vec![], false);
+        return (vec![], false, None);
     }
     let mut params = Vec::new();
     let mut is_variadic = false;
+    let mut variadic_param_name = None;
     let mut depth = 1;
     let mut i = 1;
     let mut current = String::new();
@@ -947,6 +972,9 @@ fn extract_params(body: &[Token], source: &str) -> (Vec<String>, bool) {
             }
             TokenKind::Ellipsis => {
                 is_variadic = true;
+                if !current.is_empty() {
+                    variadic_param_name = Some(std::mem::take(&mut current));
+                }
             }
             _ => {
                 current.push_str(text);
@@ -954,7 +982,7 @@ fn extract_params(body: &[Token], source: &str) -> (Vec<String>, bool) {
         }
         i += 1;
     }
-    (params, is_variadic)
+    (params, is_variadic, variadic_param_name)
 }
 
 /// Advance `i` past the current line's tokens.
@@ -972,6 +1000,21 @@ fn token_text_or_empty(tok: &Token) -> &str {
     match &tok.text {
         TokenText::Decoded(s) => s.as_str(),
         TokenText::Borrowed => "",
+    }
+}
+
+fn format_placeholder(kind: TokenKind) -> String {
+    match kind {
+        TokenKind::LParen => "(".to_owned(),
+        TokenKind::RParen => ")".to_owned(),
+        TokenKind::Comma => ",".to_owned(),
+        TokenKind::Plus => "+".to_owned(),
+        TokenKind::Minus => "-".to_owned(),
+        TokenKind::Star => "*".to_owned(),
+        TokenKind::Slash => "/".to_owned(),
+        TokenKind::Hash => "#".to_owned(),
+        TokenKind::HashHash => "##".to_owned(),
+        _ => String::new(),
     }
 }
 
@@ -1025,6 +1068,14 @@ fn make_comma_token() -> Token {
         TokenKind::Comma,
         SourceSpan::new(FileId::DUMMY, 0, 0, 0, 0),
         TokenText::Decoded(",".to_owned()),
+    )
+}
+
+fn make_int_token(value: i64) -> Token {
+    Token::new(
+        TokenKind::IntLiteral,
+        SourceSpan::new(FileId::DUMMY, 0, 0, 0, 0),
+        TokenText::Decoded(value.to_string()),
     )
 }
 
@@ -1151,57 +1202,69 @@ mod tests {
     #[test]
     fn cpp_variadic_macros_expand() {
         let mut map = MacroMap::new();
-        let tk = |kind| Token::new(kind, SourceSpan::new(FileId::new(1),0,0,0,0), TokenText::Borrowed);
-        map.define_function_like("FOO".into(), vec!["a".into()], true, vec![
-            tk(TokenKind::Identifier), // a
-            tk(TokenKind::Plus),
-            tk(TokenKind::Identifier), // __VA_ARGS__
-        ]);
+        let body = vec![
+            dummy_token(TokenKind::Identifier, "a"),
+            dummy_token(TokenKind::Plus, "+"),
+            dummy_token(TokenKind::Identifier, "__VA_ARGS__"),
+        ];
+        map.define_function_like("FOO".into(), vec!["a".into()], true, None, body);
         // FOO(1, x) → "1 + x"
-        let args1 = vec![tk(TokenKind::Identifier)];
-        let result1 = map.expand_macro("FOO", &[args1]);
+        let arg_a = vec![dummy_token(TokenKind::IntLiteral, "1")];
+        let arg_x = vec![dummy_token(TokenKind::Identifier, "x")];
+        let result1 = map.expand_macro("FOO", &[arg_a, arg_x]);
         assert!(result1.is_some());
-        assert!(!result1.unwrap().is_empty());
+        let expanded = result1.unwrap();
+        assert!(!expanded.is_empty());
+        let texts: Vec<String> = expanded.iter().map(token_text).collect();
+        assert_eq!(texts, vec!["1", "+", "x"]);
 
-        // FOO(1, x, y) — two variadic extra args
-        let a1 = vec![tk(TokenKind::Identifier)];
-        let a2 = vec![tk(TokenKind::Identifier)];
-        let a3 = vec![tk(TokenKind::Identifier)];
+        // FOO(1, x, y) — three variadic extra args, combined with commas
+        let a1 = vec![dummy_token(TokenKind::IntLiteral, "1")];
+        let a2 = vec![dummy_token(TokenKind::Identifier, "x")];
+        let a3 = vec![dummy_token(TokenKind::Identifier, "y")];
         let result2 = map.expand_macro("FOO", &[a1, a2, a3]);
         assert!(result2.is_some());
-        assert!(!result2.unwrap().is_empty());
+        let expanded2 = result2.unwrap();
+        let texts2: Vec<String> = expanded2.iter().map(token_text).collect();
+        assert_eq!(texts2, vec!["1", "+", "x", ",", "y"]);
     }
 
     /// Token pasting: `#define PASTE(a,b) a ## b`
     #[test]
     fn cpp_token_pasting_is_correct() {
         let mut map = MacroMap::new();
-        let tk = |kind| Token::new(kind, SourceSpan::new(FileId::new(1),0,0,0,0), TokenText::Borrowed);
-        map.define_function_like("PASTE".into(), vec!["a".into(), "b".into()], false, vec![
-            tk(TokenKind::Identifier), // a placeholder
-            tk(TokenKind::HashHash),
-            tk(TokenKind::Identifier), // b placeholder
-        ]);
+        let body = vec![
+            dummy_token(TokenKind::Identifier, "a"),
+            dummy_token(TokenKind::HashHash, "##"),
+            dummy_token(TokenKind::Identifier, "b"),
+        ];
+        map.define_function_like("PASTE".into(), vec!["a".into(), "b".into()], false, None, body);
         let result = map.expand_macro("PASTE", &[
             vec![dummy_token(TokenKind::Identifier, "foo")],
             vec![dummy_token(TokenKind::IntLiteral, "42")],
         ]);
         assert!(result.is_some());
+        let expanded = result.unwrap();
+        let texts: Vec<String> = expanded.iter().map(token_text).collect();
+        assert_eq!(texts, vec!["foo42"]);
     }
 
     /// Stringification: `#define STR(x) #x`
     #[test]
     fn cpp_stringification_works() {
         let mut map = MacroMap::new();
-        let tk = |kind| Token::new(kind, SourceSpan::new(FileId::new(1),0,0,0,0), TokenText::Borrowed);
-        map.define_function_like("STR".into(), vec!["x".into()], false, vec![
-            tk(TokenKind::Hash),
-            tk(TokenKind::Identifier), // x placeholder
-        ]);
+        let body = vec![
+            dummy_token(TokenKind::Hash, "#"),
+            dummy_token(TokenKind::Identifier, "x"),
+        ];
+        map.define_function_like("STR".into(), vec!["x".into()], false, None, body);
         let result = map.expand_macro("STR", &[
             vec![dummy_token(TokenKind::Identifier, "hello")],
         ]);
         assert!(result.is_some());
+        let expanded = result.unwrap();
+        assert_eq!(expanded.len(), 1);
+        assert_eq!(str_text(&expanded[0]), "\"hello\"");
     }
 
     /// Conditional directives: #ifdef / #ifndef / #else / #endif
@@ -1211,6 +1274,66 @@ mod tests {
         let tk = |kind| Token::new(kind, SourceSpan::new(FileId::new(1),0,0,0,0), TokenText::Borrowed);
         pp.define("FOO".into(), vec![tk(TokenKind::IntLiteral)]);
         assert!(pp.is_defined("FOO"));
+    }
+
+    /// Variadic __VA_ARGS__ substitution: fixture 007/008/009.
+    #[test]
+    fn cpp_variadic_expands_correctly() {
+        // 007: #define LOG(fmt,...) printf(fmt,__VA_ARGS__)
+        //      LOG("%d",42) → printf("%d",42)
+        let mut map = MacroMap::new();
+        let body = vec![
+            dummy_token(TokenKind::Identifier, "printf"),
+            dummy_token(TokenKind::LParen, "("),
+            dummy_token(TokenKind::Identifier, "fmt"),
+            dummy_token(TokenKind::Comma, ","),
+            dummy_token(TokenKind::Identifier, "__VA_ARGS__"),
+            dummy_token(TokenKind::RParen, ")"),
+        ];
+        map.define_function_like("LOG".into(), vec!["fmt".into()], true, None, body);
+
+        let result = map.expand_macro("LOG", &[
+            vec![dummy_token(TokenKind::StringLiteral, "\"%d\"")],
+            vec![dummy_token(TokenKind::IntLiteral, "42")],
+        ]);
+        assert!(result.is_some());
+        let texts: Vec<String> = result.unwrap().iter().map(token_text).collect();
+        assert_eq!(texts, ["printf", "(", "\"%d\"", ",", "42", ")"]);
+
+        // 008: LOG("hi") with empty __VA_ARGS__ → printf("hi",)  (GNU)
+        let result2 = map.expand_macro("LOG", &[
+            vec![dummy_token(TokenKind::StringLiteral, "\"hi\"")],
+        ]);
+        assert!(result2.is_some());
+        let texts2: Vec<String> = result2.unwrap().iter().map(token_text).collect();
+        assert_eq!(texts2, ["printf", "(", "\"hi\"", ",", ")"]);
+
+        // 009: #define LOG(fmt,args...) printf(fmt,args)
+        //      LOG("%d",42) → printf("%d",42)
+        let mut map3 = MacroMap::new();
+        let body3 = vec![
+            dummy_token(TokenKind::Identifier, "printf"),
+            dummy_token(TokenKind::LParen, "("),
+            dummy_token(TokenKind::Identifier, "fmt"),
+            dummy_token(TokenKind::Comma, ","),
+            dummy_token(TokenKind::Identifier, "args"),
+            dummy_token(TokenKind::RParen, ")"),
+        ];
+        map3.define_function_like(
+            "LOG".into(),
+            vec!["fmt".into()],
+            true,
+            Some("args".into()),
+            body3,
+        );
+
+        let result3 = map3.expand_macro("LOG", &[
+            vec![dummy_token(TokenKind::StringLiteral, "\"%d\"")],
+            vec![dummy_token(TokenKind::IntLiteral, "42")],
+        ]);
+        assert!(result3.is_some());
+        let texts3: Vec<String> = result3.unwrap().iter().map(token_text).collect();
+        assert_eq!(texts3, ["printf", "(", "\"%d\"", ",", "42", ")"]);
     }
 
     /// Include path management.

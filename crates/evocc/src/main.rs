@@ -106,6 +106,9 @@ fn run_preprocess(file: &str) -> ExitCode {
     }
 
     let mut pp = Preprocessor::new();
+    if let Some(parent) = std::path::Path::new(file).parent() {
+        pp.add_include_path(parent.to_string_lossy().to_string());
+    }
     for include_path in &[".", "/usr/include", "/usr/local/include"] {
         pp.add_include_path(include_path.to_string());
     }
@@ -115,6 +118,7 @@ fn run_preprocess(file: &str) -> ExitCode {
 
     // Output token text: decoded tokens carry their own text (from macro
     // expansion); borrowed tokens reconstruct text from the source span.
+    let mut prev_kind: Option<TokenKind> = None;
     for tok in &final_tokens {
         if tok.kind == TokenKind::Eof {
             continue;
@@ -127,9 +131,25 @@ fn run_preprocess(file: &str) -> ExitCode {
                 &src[start..end]
             }
         };
-        if !text.trim().is_empty() {
-            print!("{text} ");
+        if text.is_empty() {
+            continue;
         }
+        // gcc -E preserves original source spacing; our tokens carry no
+        // whitespace, so we approximate by putting a space between every
+        // pair of tokens except where they are naturally tight (close-paren
+        // after a token, token after open-paren).
+        let no_space_before = matches!(tok.kind,
+            TokenKind::Semicolon | TokenKind::Comma | TokenKind::RParen |
+            TokenKind::RBracket | TokenKind::RBrace | TokenKind::Colon
+        );
+        let no_space_after = matches!(prev_kind,
+            Some(TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace)
+        );
+        if !no_space_before && !no_space_after && prev_kind.is_some() {
+            print!(" ");
+        }
+        print!("{text}");
+        prev_kind = Some(tok.kind);
     }
     println!();
 
