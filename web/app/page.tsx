@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import { NotebookShell } from "./components/NotebookShell";
-import { chapters } from "./generated/notebook";
+import { chaptersFor } from "./generated/notebook";
+
+const chapter = chaptersFor("en")[0];
 
 export const metadata: Metadata = {
-  title: chapters[0].title,
-  description: chapters[0].description,
+  title: chapter.title,
+  description: chapter.description,
+  alternates: { canonical: "/", languages: { en: "/", "zh-CN": "/zh" } },
 };
 
 export default function Home() {
-  return <NotebookShell chapter={chapters[0]} />;
+  return <NotebookShell chapter={chapter} />;
 }

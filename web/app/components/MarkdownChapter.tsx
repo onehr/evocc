@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Children, isValidElement } from "react";
 import { SketchDiagram } from "./SketchDiagram";
+import type { NotebookLocale } from "../generated/notebook";
 
 function headingId(value: string) {
   return value
@@ -22,7 +23,7 @@ function headingText(children: React.ReactNode): string {
       : "";
 }
 
-export function MarkdownChapter({ markdown }: { markdown: string }) {
+export function MarkdownChapter({ markdown, locale }: { markdown: string; locale: NotebookLocale }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -61,7 +62,7 @@ export function MarkdownChapter({ markdown }: { markdown: string }) {
             isValidElement<{ className?: string; children?: React.ReactNode }>(child) &&
             child.props.className === "language-evocc-sketch"
           ) {
-            return <SketchDiagram source={headingText(child.props.children).replace(/\n$/, "")} />;
+            return <SketchDiagram source={headingText(child.props.children).replace(/\n$/, "")} locale={locale} />;
           }
           return <pre>{children}</pre>;
         },

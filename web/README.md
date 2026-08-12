@@ -4,7 +4,7 @@ The web edition of the EvoCC implementation notebook. It presents the material
 in `../docs/notebook/` as a small, book-like site with chapter navigation,
 reading progress, syntax-aware code blocks, and original hand-drawn SVG diagrams.
 
-The Markdown notebook is the source of truth. Do not edit
+The paired English and Chinese Markdown notebooks are the source of truth. Do not edit
 `app/generated/notebook.ts` by hand; it is a checked-in deployment snapshot
 generated from the chapter frontmatter and body.
 
@@ -32,7 +32,8 @@ page and generated snapshot still match the Markdown source.
 
 ## Adding a chapter
 
-Add a Markdown file to `../docs/notebook/` with this frontmatter:
+Add matching Markdown files to `../docs/notebook/` and `../docs/notebook/zh/`
+with this frontmatter:
 
 ```yaml
 ---
@@ -45,7 +46,8 @@ description: One sentence used for the chapter deck and page metadata.
 ```
 
 Then run the verification commands above. Navigation and the on-page table of
-contents are derived automatically.
+contents are derived automatically. The build rejects missing translations or
+any mismatch in chapter number and slug.
 
 Chapter diagrams use a small set of named `evocc-sketch` blocks. Their
 accessible, server-rendered drawings live in `app/components/SketchDiagram.tsx`;

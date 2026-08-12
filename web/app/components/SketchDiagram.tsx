@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { NotebookLocale } from "../generated/notebook";
 
 type Point = [number, number];
 
@@ -29,6 +30,34 @@ const diagrams = {
     note: "The nonce is a causal join. Without it, a beautiful boot log may simply belong to yesterday's run.",
   },
 } as const;
+
+const chineseDiagramCopy: Record<SketchName, { label: string; caption: string; note: string }> = {
+  "egraph-equivalence": {
+    label: " e-class, , ",
+    caption: ", , . ",
+    note: ", . ",
+  },
+  "compiler-territory": {
+    label: "EvoCC GNU C ARM64 ",
+    caption: ", . ",
+    note: "assembler linker EvoCC , EvoCC . ",
+  },
+  "semantic-and-evidence": {
+    label: ", ",
+    caption: ", . ",
+    note: "; . ",
+  },
+  "three-arm64-worlds": {
+    label: " Apple silicon ARM64 ",
+    caption: " Linux , QEMU Image. ",
+    note: ". . ",
+  },
+  "nonce-bound-boot": {
+    label: "nonce-bound kernel boot acceptance flight ",
+    caption: " flight , boot log . ",
+    note: "nonce . , boot log . ",
+  },
+};
 
 export type SketchName = keyof typeof diagrams;
 
@@ -126,27 +155,28 @@ function Network({ x, y, scale = 1 }: { x: number; y: number; scale?: number }) 
   );
 }
 
-function EgraphEquivalence() {
+function EgraphEquivalence({ locale }: { locale: NotebookLocale }) {
+  const zh = locale === "zh";
   return (
     <svg viewBox="0 0 900 430" role="img">
       <SketchDefs />
-      <title>Equivalent forms are collected before cost-guided extraction</title>
+      <title>{zh ? ", " : "Equivalent forms are collected before cost-guided extraction"}</title>
       <path className="sketch-wash" d="M295 82 Q443 18 591 82 Q669 170 590 271 Q444 328 297 271 Q220 169 295 82Z" />
       <RoughPath d="M 445 74 C 354 71 283 118 272 185 C 261 251 335 295 445 302 C 555 295 629 251 618 185 C 607 118 536 71 445 74 Z" />
-      <Label x={445} y={181} className="sketch-display">one e-class</Label>
-      <Label x={445} y={212} className="sketch-muted">all forms known equal</Label>
+      <Label x={445} y={181} className="sketch-display">{zh ? " e-class" : "one e-class"}</Label>
+      <Label x={445} y={212} className="sketch-muted">{zh ? "" : "all forms known equal"}</Label>
 
       <RoughBox x={42} y={68} width={151} height={68} tilt={-2}>
-        <MultilineLabel x={117} y={94} lines={["add %x, 0", "rewrite form"]} className="sketch-small" />
+        <MultilineLabel x={117} y={94} lines={["add %x, 0", zh ? "rewrite " : "rewrite form"]} className="sketch-small" />
       </RoughBox>
       <RoughBox x={47} y={260} width={140} height={62} tilt={2} accent>
-        <MultilineLabel x={117} y={286} lines={["%x", "cheapest form"]} className="sketch-small" />
+        <MultilineLabel x={117} y={286} lines={["%x", zh ? "" : "cheapest form"]} className="sketch-small" />
       </RoughBox>
       <RoughBox x={698} y={76} width={160} height={72} tilt={1}>
-        <MultilineLabel x={778} y={102} lines={["guarded form", "premises attached"]} className="sketch-small" />
+        <MultilineLabel x={778} y={102} lines={zh ? [" guard ", ""] : ["guarded form", "premises attached"]} className="sketch-small" />
       </RoughBox>
       <RoughBox x={700} y={257} width={154} height={70} tilt={-1}>
-        <MultilineLabel x={777} y={283} lines={["target form", "cost = 3"]} className="sketch-small" />
+        <MultilineLabel x={777} y={283} lines={[zh ? "" : "target form", "cost = 3"]} className="sketch-small" />
       </RoughBox>
 
       <RoughPath d="M 193 103 C 246 109 268 132 302 158" arrow />
@@ -155,20 +185,21 @@ function EgraphEquivalence() {
       <RoughPath d="M 596 238 C 644 256 664 281 699 290" arrow />
 
       <RoughBox x={287} y={352} width={316} height={50} tilt={-1}>
-        <Label x={445} y={382} className="sketch-small">proof ledger · rule · substitution · premises</Label>
+        <Label x={445} y={382} className="sketch-small">{zh ? " · · · " : "proof ledger · rule · substitution · premises"}</Label>
       </RoughBox>
       <RoughPath d="M 352 286 C 348 317 358 332 379 351" arrow dashed />
       <RoughPath d="M 540 286 C 546 319 535 334 515 352" arrow dashed />
-      <Label x={676} y={373} anchor="start" className="sketch-annotation">extract once, at the end →</Label>
+      <Label x={676} y={373} anchor="start" className="sketch-annotation">{zh ? " →" : "extract once, at the end →"}</Label>
     </svg>
   );
 }
 
-function CompilerTerritory() {
+function CompilerTerritory({ locale }: { locale: NotebookLocale }) {
+  const zh = locale === "zh";
   return (
     <svg viewBox="0 0 980 520" role="img">
       <SketchDefs />
-      <title>The EvoCC compiler path and its parallel proof path</title>
+      <title>{zh ? "EvoCC " : "The EvoCC compiler path and its parallel proof path"}</title>
       <Paper x={34} y={58} label="GNU C11" />
       <RoughPath d="M 146 100 C 174 100 184 100 208 100" arrow />
 
@@ -178,7 +209,7 @@ function CompilerTerritory() {
 
       <RoughPath d="M 319 105 C 355 107 366 126 390 146" arrow />
       <Tree x={448} y={83} />
-      <Label x={448} y={225} className="sketch-small">parser · C semantics</Label>
+      <Label x={448} y={225} className="sketch-small">{zh ? "parser · C " : "parser · C semantics"}</Label>
 
       <RoughPath d="M 503 177 C 548 185 558 208 580 232" arrow />
       <RoughBox x={575} y={214} width={150} height={106} tilt={-1} accent>
@@ -197,7 +228,7 @@ function CompilerTerritory() {
 
       <RoughPath d="M 648 385 C 602 397 573 410 548 430" arrow />
       <RoughBox x={389} y={397} width={158} height={82} tilt={1}>
-        <MultilineLabel x={468} y={428} lines={["assembly", "+ linker"]} />
+        <MultilineLabel x={468} y={428} lines={zh ? ["", "+ linker"] : ["assembly", "+ linker"]} />
       </RoughBox>
       <RoughPath d="M 389 441 C 343 442 319 427 289 408" arrow />
       <RoughBox x={121} y={366} width={169} height={106} tilt={-1} accent>
@@ -207,24 +238,25 @@ function CompilerTerritory() {
 
       <RoughPath d="M 804 286 C 796 340 814 389 846 421" dashed arrow />
       <RoughBox x={789} y={418} width={155} height={60} tilt={2}>
-        <MultilineLabel x={866} y={442} lines={["proof artifact", "independent replay"]} className="sketch-small" />
+        <MultilineLabel x={866} y={442} lines={zh ? [" artifact", " replay"] : ["proof artifact", "independent replay"]} className="sketch-small" />
       </RoughBox>
-      <Label x={42} y={512} anchor="start" className="sketch-annotation">semantic detail decreases → machine commitment increases</Label>
+      <Label x={42} y={512} anchor="start" className="sketch-annotation">{zh ? " → " : "semantic detail decreases → machine commitment increases"}</Label>
     </svg>
   );
 }
 
-function SemanticAndEvidence() {
-  const semantic = ["source", "C-HIR", "EvoIR", "e-graph", "machine code"];
-  const evidence = ["contracts", "tool identity", "observations", "predicates", "sealed evidence"];
+function SemanticAndEvidence({ locale }: { locale: NotebookLocale }) {
+  const zh = locale === "zh";
+  const semantic = zh ? ["", "C-HIR", "EvoIR", "e-graph", ""] : ["source", "C-HIR", "EvoIR", "e-graph", "machine code"];
+  const evidence = zh ? ["", "", "", "", ""] : ["contracts", "tool identity", "observations", "predicates", "sealed evidence"];
   return (
     <svg viewBox="0 0 920 430" role="img">
       <SketchDefs />
-      <title>The semantic and evidence systems are separate rails with explicit joins</title>
+      <title>{zh ? "" : "The semantic and evidence systems are separate rails with explicit joins"}</title>
       <path className="sketch-wash" d="M32 72 Q450 39 886 68 L884 180 Q455 210 34 177Z" />
       <path className="sketch-wash sketch-wash-green" d="M32 267 Q450 238 887 264 L885 392 Q455 419 34 391Z" />
-      <Label x={54} y={55} anchor="start" className="sketch-annotation">the thing we build</Label>
-      <Label x={54} y={252} anchor="start" className="sketch-annotation">why we believe this run</Label>
+      <Label x={54} y={55} anchor="start" className="sketch-annotation">{zh ? "" : "the thing we build"}</Label>
+      <Label x={54} y={252} anchor="start" className="sketch-annotation">{zh ? "" : "why we believe this run"}</Label>
       <RoughPath d="M 80 139 C 275 125 615 145 842 130" />
       <RoughPath d="M 80 333 C 298 318 620 343 842 326" />
       {semantic.map((label, index) => {
@@ -240,29 +272,30 @@ function SemanticAndEvidence() {
       <RoughPath d="M 277 151 C 335 207 430 251 464 316" dashed arrow />
       <RoughPath d="M 651 151 C 646 213 635 257 651 316" dashed arrow />
       <RoughPath d="M 838 150 C 789 206 744 264 838 315" dashed arrow />
-      <Label x={95} y={218} anchor="start" className="sketch-tiny">constrains</Label>
-      <Label x={444} y={236} className="sketch-tiny">spans · reasons · logs</Label>
-      <Label x={827} y={232} anchor="end" className="sketch-tiny">executes + observes</Label>
+      <Label x={95} y={218} anchor="start" className="sketch-tiny">{zh ? "" : "constrains"}</Label>
+      <Label x={444} y={236} className="sketch-tiny">{zh ? "spans · · logs" : "spans · reasons · logs"}</Label>
+      <Label x={827} y={232} anchor="end" className="sketch-tiny">{zh ? " + " : "executes + observes"}</Label>
     </svg>
   );
 }
 
-function ThreeArm64Worlds() {
+function ThreeArm64Worlds({ locale }: { locale: NotebookLocale }) {
+  const zh = locale === "zh";
   return (
     <svg viewBox="0 0 980 520" role="img">
       <SketchDefs />
-      <title>Apple silicon host, Linux build VM, and two QEMU boot modes</title>
+      <title>{zh ? "Apple silicon , Linux VM QEMU " : "Apple silicon host, Linux build VM, and two QEMU boot modes"}</title>
       <path className="sketch-ground" d="M25 470 C165 446 305 487 461 462 C617 438 762 482 953 455" />
       <RoughBox x={31} y={45} width={918} height={422} tilt={0}>
-        <Label x={72} y={78} anchor="start" className="sketch-annotation">macOS · Apple silicon · the observing host</Label>
+        <Label x={72} y={78} anchor="start" className="sketch-annotation">{zh ? "macOS · Apple silicon · " : "macOS · Apple silicon · the observing host"}</Label>
       </RoughBox>
 
       <RoughBox x={64} y={120} width={245} height={270} tilt={-1} accent>
-        <MultilineLabel x={186} y={151} lines={["sealed Linux", "build micro-VM"]} />
+        <MultilineLabel x={186} y={151} lines={zh ? [" Linux", " micro-VM"] : ["sealed Linux", "build micro-VM"]} />
         <Paper x={98} y={181} label="6.18.44" tilt={-3} />
         <RoughBox x={218} y={190} width={66} height={50}><Label x={251} y={220} className="sketch-small">GCC</Label></RoughBox>
         <RoughBox x={218} y={264} width={66} height={50}><Label x={251} y={294} className="sketch-small">Clang</Label></RoughBox>
-        <Label x={186} y={355} className="sketch-small">two independent Images</Label>
+        <Label x={186} y={355} className="sketch-small">{zh ? " Image" : "two independent Images"}</Label>
       </RoughBox>
 
       <RoughPath d="M 310 250 C 362 221 385 192 418 177" arrow />
@@ -281,14 +314,14 @@ function ThreeArm64Worlds() {
       <RoughPath d="M 631 184 C 679 184 691 190 717 209" arrow />
       <RoughPath d="M 631 366 C 680 361 692 340 718 324" arrow />
       <RoughBox x={718} y={165} width={192} height={218} tilt={1} accent>
-        <Label x={814} y={201}>serial evidence</Label>
+        <Label x={814} y={201}>{zh ? "" : "serial evidence"}</Label>
         <path className="sketch-fine" d="M747 224 H880 M747 248 H866 M747 272 H884 M747 296 H845 M747 320 H875" />
         <Dot x={752} y={347} accent radius={7} />
-        <Label x={770} y={352} anchor="start" className="sketch-small">fresh nonce found</Label>
+        <Label x={770} y={352} anchor="start" className="sketch-small">{zh ? " fresh nonce" : "fresh nonce found"}</Label>
       </RoughBox>
-      <Label x={334} y={493} className="sketch-annotation">build identity</Label>
-      <Label x={621} y={493} className="sketch-annotation">execution diversity</Label>
-      <Label x={844} y={493} className="sketch-annotation">joined observation</Label>
+      <Label x={334} y={493} className="sketch-annotation">{zh ? "" : "build identity"}</Label>
+      <Label x={621} y={493} className="sketch-annotation">{zh ? "" : "execution diversity"}</Label>
+      <Label x={844} y={493} className="sketch-annotation">{zh ? "" : "joined observation"}</Label>
     </svg>
   );
 }
@@ -311,25 +344,26 @@ function BootPanel({ x, letter, stage, lines, active = 0 }: { x: number; letter:
   );
 }
 
-function NonceBoundBoot() {
+function NonceBoundBoot({ locale }: { locale: NotebookLocale }) {
+  const zh = locale === "zh";
   const lines = ["ALIVE", "NONCE N", "DONE"];
   return (
     <svg viewBox="0 0 980 410" role="img">
       <SketchDefs />
-      <title>A nonce-bound boot is accepted in four causally joined stages</title>
-      <BootPanel x={18} letter="A" stage="inject N" lines={lines} active={0} />
-      <BootPanel x={263} letter="B" stage="init starts" lines={lines} active={1} />
-      <BootPanel x={508} letter="C" stage="join this run" lines={lines} active={2} />
-      <BootPanel x={753} letter="D" stage="power off" lines={lines} active={3} />
+      <title>{zh ? "nonce-bound boot " : "A nonce-bound boot is accepted in four causally joined stages"}</title>
+      <BootPanel x={18} letter="A" stage={zh ? " N" : "inject N"} lines={lines} active={0} />
+      <BootPanel x={263} letter="B" stage={zh ? "init " : "init starts"} lines={lines} active={1} />
+      <BootPanel x={508} letter="C" stage={zh ? "" : "join this run"} lines={lines} active={2} />
+      <BootPanel x={753} letter="D" stage={zh ? "" : "power off"} lines={lines} active={3} />
       <RoughPath d="M 208 196 C 230 181 241 181 261 196" arrow />
       <RoughPath d="M 453 196 C 475 181 486 181 506 196" arrow />
       <RoughPath d="M 698 196 C 720 181 731 181 751 196" arrow />
-      <Label x={112} y={365} className="sketch-annotation">boot Image + N</Label>
-      <Label x={357} y={365} className="sketch-annotation">guest speaks</Label>
-      <Label x={602} y={365} className="sketch-annotation">exactly once</Label>
-      <Label x={847} y={365} className="sketch-annotation">controlled exit</Label>
+      <Label x={112} y={365} className="sketch-annotation">{zh ? " Image + N" : "boot Image + N"}</Label>
+      <Label x={357} y={365} className="sketch-annotation">{zh ? "guest " : "guest speaks"}</Label>
+      <Label x={602} y={365} className="sketch-annotation">{zh ? "" : "exactly once"}</Label>
+      <Label x={847} y={365} className="sketch-annotation">{zh ? "" : "controlled exit"}</Label>
       <RoughPath d="M 771 384 C 817 403 879 402 928 377" arrow />
-      <Label x={753} y={400} anchor="start" className="sketch-tiny">only now: PASS</Label>
+      <Label x={753} y={400} anchor="start" className="sketch-tiny">{zh ? ": PASS" : "only now: PASS"}</Label>
     </svg>
   );
 }
@@ -348,26 +382,26 @@ function SketchDefs() {
   );
 }
 
-function Drawing({ name }: { name: SketchName }) {
+function Drawing({ name, locale }: { name: SketchName; locale: NotebookLocale }) {
   switch (name) {
-    case "egraph-equivalence": return <EgraphEquivalence />;
-    case "compiler-territory": return <CompilerTerritory />;
-    case "semantic-and-evidence": return <SemanticAndEvidence />;
-    case "three-arm64-worlds": return <ThreeArm64Worlds />;
-    case "nonce-bound-boot": return <NonceBoundBoot />;
+    case "egraph-equivalence": return <EgraphEquivalence locale={locale} />;
+    case "compiler-territory": return <CompilerTerritory locale={locale} />;
+    case "semantic-and-evidence": return <SemanticAndEvidence locale={locale} />;
+    case "three-arm64-worlds": return <ThreeArm64Worlds locale={locale} />;
+    case "nonce-bound-boot": return <NonceBoundBoot locale={locale} />;
   }
 }
 
-export function SketchDiagram({ source }: { source: string }) {
+export function SketchDiagram({ source, locale }: { source: string; locale: NotebookLocale }) {
   const name = source.trim() as SketchName;
-  const diagram = diagrams[name];
+  const diagram = locale === "zh" ? chineseDiagramCopy[name] : diagrams[name];
   if (!diagram) {
     return <pre className="sketch-unknown"><code>Unknown EvoCC sketch: {source}</code></pre>;
   }
 
   return (
     <figure className="sketch-figure" data-sketch={name} aria-label={diagram.label}>
-      <div className="sketch-canvas"><Drawing name={name} /></div>
+      <div className="sketch-canvas"><Drawing name={name} locale={locale} /></div>
       <div className="sketch-words">
         <figcaption>{diagram.caption}</figcaption>
         <aside>{diagram.note}</aside>

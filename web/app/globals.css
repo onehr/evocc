@@ -125,6 +125,31 @@ a { color: inherit; }
   background: #fffaf5;
 }
 
+.header-actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.language-switch {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  color: var(--ink-muted);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.42);
+  text-decoration: none;
+  font: 600 10px/1 var(--font-book-mono), monospace;
+  letter-spacing: 0.05em;
+}
+
+.language-switch:hover { color: var(--accent); border-color: #c7977c; }
+.language-switch i { color: #b8ada1; font-style: normal; }
+.language-switch .active { color: var(--ink); }
+
 .book-grid {
   display: grid;
   grid-template-columns: minmax(190px, 255px) minmax(0, 790px) minmax(170px, 225px);
@@ -310,6 +335,25 @@ a { color: inherit; }
   color: #302b25;
   font: 400 17px/1.82 var(--font-book-serif), Georgia, serif;
 }
+
+.locale-zh .chapter-header h1,
+.locale-zh .chapter-deck,
+.locale-zh .chapter-prose,
+.locale-zh .chapter-link strong,
+.locale-zh .coming-next strong,
+.locale-zh .chapter-pagination strong {
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", serif;
+}
+
+.locale-zh .chapter-prose {
+  font-size: 17px;
+  line-height: 1.95;
+  letter-spacing: 0.012em;
+}
+
+.locale-zh .chapter-prose > p:first-child { line-height: 1.9; }
+.locale-zh .chapter-prose h2 { letter-spacing: -0.01em; }
+.locale-zh .sketch-label { font-family: "Kaiti SC", "STKaiti", "Noto Serif CJK SC", serif; }
 
 .chapter-prose > p:first-child {
   color: #4a433b;
@@ -664,6 +708,8 @@ a { color: inherit; }
   :root { --header-height: 66px; }
   .book-header { padding: 0 18px; }
   .wordmark small, .header-status span:last-child { display: none; }
+  .header-actions { gap: 8px; }
+  .language-switch { min-height: 30px; padding: 0 8px; }
   .book-grid { display: block; padding: 0 clamp(18px, 5vw, 34px); }
   .chapter-rail {
     position: static;
@@ -698,6 +744,7 @@ a { color: inherit; }
   .wordmark-mark { width: 34px; height: 34px; font-size: 20px; }
   .wordmark strong { font-size: 15px; }
   .header-status { font-size: 9px; }
+  .header-status { display: none; }
   .chapter-header { margin-bottom: 40px; }
   .chapter-header h1 { font-size: 42px; }
   .chapter-prose h2 { margin-top: 60px; font-size: 29px; }
