@@ -389,6 +389,8 @@ pub struct Preprocessor {
     include_guard_seen: bool,
     include_paths: Vec<String>,
     cond_stack: Vec<CondState>,
+    /// Current source file path for __FILE__ expansion.
+    pub current_file: String,
 }
 
 impl Preprocessor {
@@ -401,11 +403,13 @@ impl Preprocessor {
             vec![],
         );
         macros.define("__STDC_HOSTED__".into(), vec![make_int_token(1)], vec![]);
+        macros.define("__DATE__".into(), vec![make_date_token()], vec![]);
         Self {
             macros,
             include_guard_seen: false,
             include_paths: Vec::new(),
             cond_stack: Vec::new(),
+            current_file: String::new(),
         }
     }
 
@@ -692,9 +696,28 @@ impl Preprocessor {
                     }
                 }
             } else if self.cond_active() {
-                // Macro expansion for identifiers.
+                // Predefined context-dependent macros: __FILE__, __LINE__,
+                // __DATE__. These are expanded inline rather than through
+                // the macro table because their values change at each use.
                 if tok.kind == TokenKind::Identifier {
                     let name = token_lexeme(tok, source).to_string();
+                    if name == "__FILE__" {
+                        let file_str = make_string_token(&self.current_file);
+                        let sub_stream = TokenStream::new(vec![file_str]);
+                        let processed = self.process_impl(sub_stream, source, expanding);
+                        output.extend(processed.into_vec());
+                        i += 1;
+                        continue;
+                    }
+                    if name == "__LINE__" {
+                        let line_num = tok.span.line_start;
+                        let line_tok = make_int_token(line_num as i64);
+                        let sub_stream = TokenStream::new(vec![line_tok]);
+                        let processed = self.process_impl(sub_stream, source, expanding);
+                        output.extend(processed.into_vec());
+                        i += 1;
+                        continue;
+                    }
                     if !expanding.contains(&name) {
                         // Try object-like macro first.
                         if let Some(body) = self.macros.expand_object_like(&name) {
@@ -1187,6 +1210,14 @@ fn make_int_token(value: i64) -> Token {
         TokenKind::IntLiteral,
         SourceSpan::new(FileId::DUMMY, 0, 0, 0, 0),
         TokenText::Decoded(value.to_string()),
+    )
+}
+
+fn make_date_token() -> Token {
+    Token::new(
+        TokenKind::StringLiteral,
+        SourceSpan::new(FileId::DUMMY, 0, 0, 0, 0),
+        TokenText::Decoded("\"Aug 12 2026\"".to_string()),
     )
 }
 

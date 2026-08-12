@@ -54,6 +54,8 @@ normalize() {
   sed 's/[[:space:]]\{2,\}/ /g' \
     | sed 's/^[[:space:]]*//' \
     | sed 's/[[:space:]]*$//' \
+    | sed 's|/Users/onehrxn/dev/30days/c30/tests/fixtures/cpp/|/src/|g' \
+    | sed 's|/Users/onehrxn/dev/30days/c30|/src|g' \
     | grep -v '^$' || true
 }
 

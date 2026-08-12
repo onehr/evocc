@@ -113,6 +113,7 @@ fn run_preprocess(file: &str) -> ExitCode {
     }
 
     let mut pp = Preprocessor::new();
+    pp.current_file = file.to_string();
     if let Some(parent) = std::path::Path::new(file).parent() {
         pp.add_include_path(parent.to_string_lossy().to_string());
     }
