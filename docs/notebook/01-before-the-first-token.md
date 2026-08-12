@@ -1,3 +1,11 @@
+---
+title: Before the First Token
+chapter: 1
+day: Day 1
+slug: before-the-first-token
+description: Build the reproducible world, oracle hierarchy, and evidence chain that must exist before EvoCC reads its first source token.
+---
+
 # 1. Before the First Token
 
 > A compiler that cannot identify its inputs cannot explain its output.
