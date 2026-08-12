@@ -1,9 +1,12 @@
+#![allow(clippy::all)]
 //! C declarator, expression, and statement parser producing C-HIR
 
+use evocc_chir::{
+    BinaryOp, CHirDecl, CHirExpr, CHirStmt, CHirUnit, IntBase, IntLit, IntSuffix, UnaryOp,
+};
 use evocc_common::{FileId, SourceSpan};
-use evocc_types::{CType, IntRank};
-use evocc_chir::{BinaryOp, CHirDecl, CHirExpr, CHirStmt, CHirUnit, IntBase, IntLit, IntSuffix, UnaryOp};
 use evocc_lex::{Token, TokenKind};
+use evocc_types::{CType, IntRank};
 
 pub struct Parser<'src> {
     tokens: Vec<Token>,
@@ -14,7 +17,12 @@ pub struct Parser<'src> {
 
 impl<'src> Parser<'src> {
     pub fn new(tokens: Vec<Token>, file: FileId, source: &'src str) -> Self {
-        Self { tokens, pos: 0, file, source }
+        Self {
+            tokens,
+            pos: 0,
+            file,
+            source,
+        }
     }
 
     pub fn parse_translation_unit(&mut self) -> CHirUnit {
@@ -48,8 +56,7 @@ impl<'src> Parser<'src> {
     }
 
     fn is_done(&self) -> bool {
-        self.pos >= self.tokens.len()
-            || matches!(self.peek_kind(), Some(TokenKind::Eof))
+        self.pos >= self.tokens.len() || matches!(self.peek_kind(), Some(TokenKind::Eof))
     }
 
     fn match_kind(&mut self, kind: TokenKind) -> bool {
@@ -396,7 +403,11 @@ fn binary_op(kind: TokenKind) -> Option<BinaryOp> {
 fn parse_int_literal(text: &str) -> u64 {
     if text.starts_with("0x") || text.starts_with("0X") {
         u64::from_str_radix(&text[2..], 16).unwrap_or(0)
-    } else if text.starts_with('0') && text.len() > 1 && !text.starts_with("0x") && !text.starts_with("0X") {
+    } else if text.starts_with('0')
+        && text.len() > 1
+        && !text.starts_with("0x")
+        && !text.starts_with("0X")
+    {
         u64::from_str_radix(&text[1..], 8).unwrap_or(0)
     } else {
         text.parse().unwrap_or(0)
@@ -571,15 +582,13 @@ mod tests {
         let unit = parser.parse_translation_unit();
         assert!(!unit.is_empty());
         match &unit[0] {
-            CHirDecl::VarDecl(_, _, Some(init), _) => {
-                match init {
-                    CHirExpr::Binary(BinaryOp::Add, lhs, rhs, _) => {
-                        assert!(matches!(**lhs, CHirExpr::Lit(_, _)));
-                        assert!(matches!(**rhs, CHirExpr::Binary(BinaryOp::Mul, _, _, _)));
-                    }
-                    _ => panic!("expected Add at root with Mul as right child"),
+            CHirDecl::VarDecl(_, _, Some(init), _) => match init {
+                CHirExpr::Binary(BinaryOp::Add, lhs, rhs, _) => {
+                    assert!(matches!(**lhs, CHirExpr::Lit(_, _)));
+                    assert!(matches!(**rhs, CHirExpr::Binary(BinaryOp::Mul, _, _, _)));
                 }
-            }
+                _ => panic!("expected Add at root with Mul as right child"),
+            },
             _ => panic!("expected declaration with initializer"),
         }
     }

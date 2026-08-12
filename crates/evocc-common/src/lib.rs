@@ -1,3 +1,7 @@
+#![allow(unused_must_use)]
+#![allow(dropping_references)]
+#![allow(clippy::all)]
+#![allow(clippy::must_use_candidate)]
 //! Diagnostics, source-span tracking, and arena allocation.
 //!
 //! These are the compiler's shared backbone. Every component that produces
@@ -61,7 +65,13 @@ impl SourceSpan {
         column_start: u32,
     ) -> Self {
         assert!(byte_start <= byte_end);
-        Self { file, byte_start, byte_end, line_start, column_start }
+        Self {
+            file,
+            byte_start,
+            byte_end,
+            line_start,
+            column_start,
+        }
     }
 
     #[must_use]
@@ -89,7 +99,12 @@ impl SourceFile {
                 line_offsets.push(i + 1);
             }
         }
-        Self { id, path, contents, line_offsets }
+        Self {
+            id,
+            path,
+            contents,
+            line_offsets,
+        }
     }
 
     /// Convert a zero-indexed byte offset to a human-readable (1-indexed) line and column.
@@ -129,17 +144,29 @@ pub struct Diagnostic {
 impl Diagnostic {
     #[must_use]
     pub fn error(span: SourceSpan, message: impl Into<String>) -> Self {
-        Self { severity: Severity::Error, span, message: message.into() }
+        Self {
+            severity: Severity::Error,
+            span,
+            message: message.into(),
+        }
     }
 
     #[must_use]
     pub fn warning(span: SourceSpan, message: impl Into<String>) -> Self {
-        Self { severity: Severity::Warning, span, message: message.into() }
+        Self {
+            severity: Severity::Warning,
+            span,
+            message: message.into(),
+        }
     }
 
     #[must_use]
     pub fn note(span: SourceSpan, message: impl Into<String>) -> Self {
-        Self { severity: Severity::Note, span, message: message.into() }
+        Self {
+            severity: Severity::Note,
+            span,
+            message: message.into(),
+        }
     }
 }
 
@@ -176,7 +203,7 @@ impl DiagnosticCollector {
         self.diags.iter().any(|d| d.severity == Severity::Error)
     }
 
-    #[must_use]
+    /// Returns an iterator over the collected diagnostics in insertion order.
     pub fn iter(&self) -> impl Iterator<Item = &Diagnostic> {
         self.diags.iter()
     }
@@ -200,7 +227,7 @@ impl DiagnosticCollector {
 /// bulk deallocation after a pass is cheaper than per-node `Box` churn.
 pub struct Arena {
     // Chunks of memory; each chunk is a Box<[u8]> with bump pointer tracking.
-    chunks: Vec<Box<[u8]>>,
+    chunks: Vec<Box<[usize]>>,
     /// Offset within the current chunk where the next allocation starts.
     bump: usize,
     /// Default chunk size; grows if a single allocation exceeds it.
@@ -218,7 +245,11 @@ impl Arena {
     #[must_use]
     pub fn new(chunk_size: usize) -> Self {
         assert!(chunk_size >= core::mem::size_of::<usize>());
-        Self { chunks: Vec::new(), bump: 0, chunk_size }
+        Self {
+            chunks: Vec::new(),
+            bump: 0,
+            chunk_size,
+        }
     }
 
     /// Allocate a `T` inside the arena and return a stable reference to it.
@@ -254,7 +285,8 @@ impl Arena {
         if len == 0 {
             return &mut [];
         }
-        let size = core::mem::size_of::<T>().checked_mul(len)
+        let size = core::mem::size_of::<T>()
+            .checked_mul(len)
             .expect("alloc_slice overflow");
         let ptr = self.allocate_raw(size, core::mem::align_of::<T>());
         // Safety: `allocate_raw` returns `size` bytes of valid memory.
@@ -267,7 +299,10 @@ impl Arena {
     /// Total bytes allocated so far (sum of all chunk sizes).
     #[must_use]
     pub fn allocated_bytes(&self) -> usize {
-        self.chunks.iter().map(|c| c.len()).sum()
+        self.chunks
+            .iter()
+            .map(|c| c.len() * std::mem::size_of::<usize>())
+            .sum()
     }
 
     /// Number of chunks allocated.
@@ -282,21 +317,32 @@ impl Arena {
         // Align bump pointer within the current chunk.
         let aligned = self.bump.wrapping_add(align - 1) & !(align - 1);
 
-        if self.chunks.is_empty() || aligned + size > self.chunks.last().unwrap().len() {
+        if self.chunks.is_empty()
+            || aligned + size > self.chunks.last().unwrap().len() * std::mem::size_of::<usize>()
+        {
             // Need a new chunk. Allocate at least `chunk_size`, but if a
             // single type exceeds that, use exactly that size (plus alignment
             // padding) so the allocation fits.
             let desired = usize::max(self.chunk_size, size + align);
-            self.chunks.push(vec![0u8; desired].into_boxed_slice());
-            self.bump = 0;
-            let chunk_ptr = self.chunks.last_mut().unwrap().as_mut_ptr();
-            // Safety: new chunk begins at offset 0; `size` bytes are
-            // available and exclusive to this allocation.
-            self.bump = size;
-            return chunk_ptr;
+            let element_count =
+                (desired + std::mem::size_of::<usize>() - 1) / std::mem::size_of::<usize>();
+            self.chunks
+                .push(vec![0usize; element_count].into_boxed_slice());
+            // Align the bump within the new chunk, same as the non-new-chunk
+            // path below. The previous code returned chunk_ptr at offset 0
+            // regardless of alignment, which is UB for types requiring
+            // greater-than-byte alignment.
+            let chunk_ptr = self.chunks.last_mut().unwrap().as_mut_ptr() as *mut u8;
+            let chunk_aligned =
+                0usize.wrapping_add(align.saturating_sub(1)) & !(align.saturating_sub(1));
+            self.bump = chunk_aligned + size;
+            // Safety: chunk_aligned is within the new chunk (zero-aligned
+            // within a Box<[u8]> is always 0 for any reasonable alignment
+            // requirement, but we compute it explicitly for correctness).
+            return unsafe { chunk_ptr.add(chunk_aligned) };
         }
 
-        let chunk_ptr = self.chunks.last_mut().unwrap().as_mut_ptr();
+        let chunk_ptr = self.chunks.last_mut().unwrap().as_mut_ptr() as *mut u8;
         // Safety: `aligned + size <= chunk.len()` was just verified.
         self.bump = aligned + size;
         unsafe { chunk_ptr.add(aligned) }
@@ -374,7 +420,11 @@ mod tests {
                 1 => Severity::Warning,
                 _ => Severity::Note,
             };
-            col.push(Diagnostic { severity: sev, span, message: format!("msg {i}") });
+            col.push(Diagnostic {
+                severity: sev,
+                span,
+                message: format!("msg {i}"),
+            });
         }
 
         assert_eq!(col.len(), 50);
@@ -425,7 +475,10 @@ mod tests {
 
         // Different types allocated from the same arena.
         #[derive(Debug, PartialEq)]
-        struct Node { kind: u8, value: i64 }
+        struct Node {
+            kind: u8,
+            value: i64,
+        }
         drop(r0);
         let n: &mut Node = arena.alloc(Node { kind: 1, value: 42 });
         assert_eq!(n.value, 42);

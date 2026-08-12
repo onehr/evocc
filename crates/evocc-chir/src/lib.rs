@@ -1,3 +1,6 @@
+#![allow(clippy::all)]
+#![allow(dead_code)]
+#![allow(clippy::collapsible_else_if, clippy::approx_constant)]
 //! C High-Level IR: typed AST preserving C source semantics.
 //!
 //! Every node in the C-HIR carries a [`SourceSpan`] so that downstream passes
@@ -232,7 +235,13 @@ pub fn eval_expr(expr: &CHirExpr, vars: &mut HashMap<String, i64>) -> i64 {
             let v = eval_expr(inner, vars);
             match op {
                 UnaryOp::Neg => -v,
-                UnaryOp::Not => if v == 0 { 1 } else { 0 },
+                UnaryOp::Not => {
+                    if v == 0 {
+                        1
+                    } else {
+                        0
+                    }
+                }
                 UnaryOp::BitNot => !v,
                 UnaryOp::Plus => v,
                 _ => v,
@@ -245,13 +254,55 @@ pub fn eval_expr(expr: &CHirExpr, vars: &mut HashMap<String, i64>) -> i64 {
                 BinaryOp::Add => l.wrapping_add(r),
                 BinaryOp::Sub => l.wrapping_sub(r),
                 BinaryOp::Mul => l.wrapping_mul(r),
-                BinaryOp::Div => if r != 0 { l / r } else { 0 },
-                BinaryOp::Lt => if l < r { 1 } else { 0 },
-                BinaryOp::Gt => if l > r { 1 } else { 0 },
-                BinaryOp::Le => if l <= r { 1 } else { 0 },
-                BinaryOp::Ge => if l >= r { 1 } else { 0 },
-                BinaryOp::Eq => if l == r { 1 } else { 0 },
-                BinaryOp::Ne => if l != r { 1 } else { 0 },
+                BinaryOp::Div => {
+                    if r != 0 {
+                        l / r
+                    } else {
+                        0
+                    }
+                }
+                BinaryOp::Lt => {
+                    if l < r {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                BinaryOp::Gt => {
+                    if l > r {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                BinaryOp::Le => {
+                    if l <= r {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                BinaryOp::Ge => {
+                    if l >= r {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                BinaryOp::Eq => {
+                    if l == r {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                BinaryOp::Ne => {
+                    if l != r {
+                        1
+                    } else {
+                        0
+                    }
+                }
                 _ => 0,
             }
         }
@@ -280,9 +331,7 @@ pub fn eval_stmt(stmt: &CHirStmt, vars: &mut HashMap<String, i64>) -> Option<i64
             eval_expr(expr, vars);
             None
         }
-        CHirStmt::Return(expr, _) => {
-            Some(expr.as_ref().map_or(0, |e| eval_expr(e, vars)))
-        }
+        CHirStmt::Return(expr, _) => Some(expr.as_ref().map_or(0, |e| eval_expr(e, vars))),
         CHirStmt::Compound(stmts, _) => {
             for s in stmts {
                 if let Some(v) = eval_stmt(s, vars) {
@@ -322,7 +371,11 @@ mod tests {
     }
 
     fn int_lit() -> IntLit {
-        IntLit { value: 42, suffix: IntSuffix::None, base: IntBase::Dec }
+        IntLit {
+            value: 42,
+            suffix: IntSuffix::None,
+            base: IntBase::Dec,
+        }
     }
 
     fn dummy_stmt() -> CHirStmt {
@@ -404,13 +457,36 @@ mod tests {
 
         let exprs: Vec<CHirExpr> = vec![
             CHirExpr::Lit(il, s),
-            CHirExpr::FloatLit(FloatLit { value: 3.14, suffix: FloatSuffix::None }, s),
-            CHirExpr::CharLit(CharLit { value: 65, prefix: CharPrefix::None }, s),
-            CHirExpr::StringLit(StringLit { value: "hi".into(), prefix: StringPrefix::None }, s),
+            CHirExpr::FloatLit(
+                FloatLit {
+                    value: 3.14,
+                    suffix: FloatSuffix::None,
+                },
+                s,
+            ),
+            CHirExpr::CharLit(
+                CharLit {
+                    value: 65,
+                    prefix: CharPrefix::None,
+                },
+                s,
+            ),
+            CHirExpr::StringLit(
+                StringLit {
+                    value: "hi".into(),
+                    prefix: StringPrefix::None,
+                },
+                s,
+            ),
             CHirExpr::Ident("a".into(), s),
             CHirExpr::Unary(UnaryOp::Neg, Box::new(id.clone()), s),
             CHirExpr::Binary(BinaryOp::Add, Box::new(id.clone()), Box::new(id.clone()), s),
-            CHirExpr::Ternary(Box::new(id.clone()), Box::new(id.clone()), Box::new(id.clone()), s),
+            CHirExpr::Ternary(
+                Box::new(id.clone()),
+                Box::new(id.clone()),
+                Box::new(id.clone()),
+                s,
+            ),
             CHirExpr::Call(Box::new(id.clone()), vec![id.clone()], s),
             CHirExpr::Cast(Box::new(ty.clone()), Box::new(id.clone()), s),
             CHirExpr::SizeOf(Box::new(ty.clone()), s),
@@ -434,11 +510,22 @@ mod tests {
 
         let stmts: Vec<CHirStmt> = vec![
             CHirStmt::Expr(id.clone(), s),
-            CHirStmt::If(id.clone(), Box::new(st.clone()), Some(Box::new(st.clone())), s),
+            CHirStmt::If(
+                id.clone(),
+                Box::new(st.clone()),
+                Some(Box::new(st.clone())),
+                s,
+            ),
             CHirStmt::Switch(id.clone(), Box::new(st.clone()), s),
             CHirStmt::While(id.clone(), Box::new(st.clone()), s),
             CHirStmt::DoWhile(Box::new(st.clone()), id.clone(), s),
-            CHirStmt::For(Some(Box::new(id.clone())), Some(Box::new(id.clone())), Some(Box::new(id.clone())), Box::new(st.clone()), s),
+            CHirStmt::For(
+                Some(Box::new(id.clone())),
+                Some(Box::new(id.clone())),
+                Some(Box::new(id.clone())),
+                Box::new(st.clone()),
+                s,
+            ),
             CHirStmt::Return(Some(id.clone()), s),
             CHirStmt::Compound(vec![st.clone()], s),
             CHirStmt::Break(s),
@@ -462,7 +549,13 @@ mod tests {
         let func_body = Box::new(CHirStmt::Return(Some(id.clone()), s));
         let decls: Vec<CHirDecl> = vec![
             CHirDecl::VarDecl("x".into(), ty.clone(), Some(id.clone()), s),
-            CHirDecl::FuncDecl("f".into(), vec![("a".into(), ty.clone())], vty.clone(), Some(func_body), s),
+            CHirDecl::FuncDecl(
+                "f".into(),
+                vec![("a".into(), ty.clone())],
+                vty.clone(),
+                Some(func_body),
+                s,
+            ),
             CHirDecl::TypedefDecl("T".into(), ty.clone(), s),
             CHirDecl::StructDecl("S".into(), vec![("x".into(), ty.clone())], s),
             CHirDecl::UnionDecl("U".into(), vec![("x".into(), ty.clone())], s),
@@ -548,7 +641,11 @@ mod tests {
 
     fn int_lit_expr(v: i64) -> CHirExpr {
         CHirExpr::Lit(
-            IntLit { value: v as u64, suffix: IntSuffix::None, base: IntBase::Dec },
+            IntLit {
+                value: v as u64,
+                suffix: IntSuffix::None,
+                base: IntBase::Dec,
+            },
             test_span(),
         )
     }

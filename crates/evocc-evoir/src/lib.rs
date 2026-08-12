@@ -264,7 +264,10 @@ pub fn validate_ssa(func: &Function) -> Result<(), String> {
     for block in &func.blocks {
         for (ai, arg) in block.args.iter().enumerate() {
             let syn_id = BLOCK_ARG_ID_BASE + ai as u32;
-            if let Some(existing) = defs.insert(syn_id, format!("block arg '{}' in block {}", arg.name, block.id)) {
+            if let Some(existing) = defs.insert(
+                syn_id,
+                format!("block arg '{}' in block {}", arg.name, block.id),
+            ) {
                 return Err(format!(
                     "synthetic id v{} for block arg '{}' collides with {}",
                     syn_id, arg.name, existing
@@ -363,7 +366,8 @@ impl InterpState {
                     let resolved: Vec<i64> = true_args.iter().map(|v| self.values[&v.id]).collect();
                     self.exec_block(func, *true_block, &resolved);
                 } else {
-                    let resolved: Vec<i64> = false_args.iter().map(|v| self.values[&v.id]).collect();
+                    let resolved: Vec<i64> =
+                        false_args.iter().map(|v| self.values[&v.id]).collect();
                     self.exec_block(func, *false_block, &resolved);
                 }
             }
@@ -466,7 +470,10 @@ mod tests {
             blocks: vec![block],
         };
 
-        assert!(validate_ssa(&func).is_ok(), "valid function should pass SSA check");
+        assert!(
+            validate_ssa(&func).is_ok(),
+            "valid function should pass SSA check"
+        );
 
         // ------------------------------------------------------------------
         // Invalid: two Const instructions produce the same Value.

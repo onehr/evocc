@@ -216,18 +216,39 @@ mod tests {
     #[test]
     fn congruence_nodes_must_be_nonzero() {
         let mut dag = ProofDAG::new();
-        dag.add_edge(1, 2, Justification::Congruence { lhs_node: 0, rhs_node: 3 })
-            .unwrap();
+        dag.add_edge(
+            1,
+            2,
+            Justification::Congruence {
+                lhs_node: 0,
+                rhs_node: 3,
+            },
+        )
+        .unwrap();
         assert!(dag.validate().is_err());
 
         let mut dag2 = ProofDAG::new();
-        dag2.add_edge(1, 2, Justification::Congruence { lhs_node: 3, rhs_node: 0 })
-            .unwrap();
+        dag2.add_edge(
+            1,
+            2,
+            Justification::Congruence {
+                lhs_node: 3,
+                rhs_node: 0,
+            },
+        )
+        .unwrap();
         assert!(dag2.validate().is_err());
 
         let mut dag3 = ProofDAG::new();
-        dag3.add_edge(1, 2, Justification::Congruence { lhs_node: 3, rhs_node: 4 })
-            .unwrap();
+        dag3.add_edge(
+            1,
+            2,
+            Justification::Congruence {
+                lhs_node: 3,
+                rhs_node: 4,
+            },
+        )
+        .unwrap();
         assert!(dag3.validate().is_ok());
     }
 

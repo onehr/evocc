@@ -59,7 +59,7 @@ evidence_mutation_detection'
 
 PROD_HASH_FILES="crates/evocc-common/src/lib.rs crates/evocc-types/src/lib.rs crates/evocc-chir/src/lib.rs crates/evocc-lex/src/lib.rs crates/evocc-cpp/src/lib.rs crates/evocc-parser/src/lib.rs crates/evocc-egraph/src/lib.rs crates/evocc-proof/src/lib.rs crates/evocc-evoir/src/lib.rs crates/evocc-lower/src/lib.rs crates/evocc/src/main.rs Cargo.toml Cargo.lock"
 
-EXPECTED_PROD_HASH="c8e289e8fff29dba775ebc54b1788f7027a0694ccf03cfe8daf0bbaa15a04098"
+EXPECTED_PROD_HASH="edf4176831310b9ce5a5025c7b0b055320af8afa47866e853b27eae0f315e832"
 
 # ---------------------------------------------------------------------------
 # Helpers

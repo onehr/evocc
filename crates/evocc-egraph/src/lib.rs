@@ -1,3 +1,4 @@
+#![allow(clippy::type_complexity)]
 //! Equality saturation core: union-find, hash-cons, e-classes, and rebuild
 
 use std::collections::HashMap;
@@ -77,6 +78,12 @@ impl UnionFind {
     }
 }
 
+impl Default for UnionFind {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ===========================================================================
 // 4. ENode — an operator applied to child e-classes
 // ===========================================================================
@@ -122,6 +129,12 @@ impl HashCons {
     pub fn insert(&mut self, node: &ENode, id: EClassId, uf: &mut UnionFind) {
         let key = node.canonicalize(uf);
         self.map.insert(key, id);
+    }
+}
+
+impl Default for HashCons {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -225,16 +238,14 @@ impl Egraph {
         let non_canonical = if canonical == a { b } else { a };
 
         // Move nodes.
-        let nodes: Vec<ENodeId> =
-            std::mem::take(&mut self.eclasses[non_canonical as usize].nodes);
+        let nodes: Vec<ENodeId> = std::mem::take(&mut self.eclasses[non_canonical as usize].nodes);
         for &nid in &nodes {
             self.enode_to_eclass[nid as usize] = canonical;
         }
         self.eclasses[canonical as usize].nodes.extend(nodes);
 
         // Move parents.
-        let parents: Vec<_> =
-            std::mem::take(&mut self.eclasses[non_canonical as usize].parents);
+        let parents: Vec<_> = std::mem::take(&mut self.eclasses[non_canonical as usize].parents);
         self.eclasses[canonical as usize].parents.extend(parents);
 
         self.dirty.push((non_canonical, canonical));
@@ -289,8 +300,7 @@ impl Egraph {
     fn repair(&mut self, node_id: ENodeId) {
         let op = self.enodes[node_id as usize].op;
         let old_children = self.enodes[node_id as usize].children.clone();
-        let new_children: Vec<EClassId> =
-            old_children.iter().map(|&c| self.uf.find(c)).collect();
+        let new_children: Vec<EClassId> = old_children.iter().map(|&c| self.uf.find(c)).collect();
 
         if old_children == new_children {
             return;
@@ -310,15 +320,9 @@ impl Egraph {
             self.eclasses[target as usize].nodes.push(node_id);
             self.enode_to_eclass[node_id as usize] = target;
 
-            for (i, &child) in self.enodes[node_id as usize]
-                .children
-                .iter()
-                .enumerate()
-            {
+            for (i, &child) in self.enodes[node_id as usize].children.iter().enumerate() {
                 let child = self.uf.find(child);
-                self.eclasses[child as usize]
-                    .parents
-                    .push((op, i, target));
+                self.eclasses[child as usize].parents.push((op, i, target));
             }
 
             if old_ec != target {
@@ -328,17 +332,17 @@ impl Egraph {
             self.hashcons.map.insert(new_key, old_ec);
             self.eclasses[old_ec as usize].nodes.push(node_id);
 
-            for (i, &child) in self.enodes[node_id as usize]
-                .children
-                .iter()
-                .enumerate()
-            {
+            for (i, &child) in self.enodes[node_id as usize].children.iter().enumerate() {
                 let child = self.uf.find(child);
-                self.eclasses[child as usize]
-                    .parents
-                    .push((op, i, old_ec));
+                self.eclasses[child as usize].parents.push((op, i, old_ec));
             }
         }
+    }
+}
+
+impl Default for Egraph {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -377,7 +381,11 @@ impl Rewrite {
         lhs: Pattern,
         apply: impl Fn(&HashMap<String, EClassId>) -> (OpId, Vec<EClassId>) + 'static,
     ) -> Self {
-        Self { name: name.into(), lhs, apply: Box::new(apply) }
+        Self {
+            name: name.into(),
+            lhs,
+            apply: Box::new(apply),
+        }
     }
 }
 
@@ -522,11 +530,7 @@ mod tests {
 
         // Different constants → different e-classes.
         let b = eg.insert(const_2, vec![]);
-        assert_ne!(
-            eg.uf.find(a),
-            eg.uf.find(b),
-            "A != B (different constants)"
-        );
+        assert_ne!(eg.uf.find(a), eg.uf.find(b), "A != B (different constants)");
 
         // --- Ordered children distinguish e-nodes ---
         let c = eg.insert(add_op, vec![a, b]); // Add(A, B)
@@ -578,10 +582,7 @@ mod tests {
         // Build a pattern that matches add(any, any)
         let _lhs = Pattern {
             op: add_op,
-            children: vec![
-                PatternChild::Var("a".into()),
-                PatternChild::Var("b".into()),
-            ],
+            children: vec![PatternChild::Var("a".into()), PatternChild::Var("b".into())],
         };
 
         // Manually const-fold: insert the result and union.
@@ -640,13 +641,19 @@ mod tests {
         // After rebuild, dirty must be empty, because every pending merge
         // has been processed and any newly discovered congruence pairs
         // have been merged and their consequences enqueued and processed.
-        assert!(eg.dirty.is_empty(), "dirty queue must be empty after rebuild");
+        assert!(
+            eg.dirty.is_empty(),
+            "dirty queue must be empty after rebuild"
+        );
 
         // The two expressions ab=op(a,b) and ba=op(b,a) should now be in
         // the same e-class, because their children became equal after the
         // merge a≡b.
-        assert_eq!(eg.find(ab), eg.find(ba),
-            "op(a,b) ≡ op(b,a) after a≡b merge");
+        assert_eq!(
+            eg.find(ab),
+            eg.find(ba),
+            "op(a,b) ≡ op(b,a) after a≡b merge"
+        );
 
         // A second rebuild must be a no-op: no new dirty entries, no change
         // to the canonical representatives.
@@ -654,8 +661,16 @@ mod tests {
         let before_ac = eg.find(ac);
         eg.rebuild();
         assert!(eg.dirty.is_empty(), "second rebuild must leave dirty empty");
-        assert_eq!(eg.find(ab), before_ab, "second rebuild must not change canonical of ab");
-        assert_eq!(eg.find(ac), before_ac, "second rebuild must not change canonical of ac");
+        assert_eq!(
+            eg.find(ab),
+            before_ab,
+            "second rebuild must not change canonical of ab"
+        );
+        assert_eq!(
+            eg.find(ac),
+            before_ac,
+            "second rebuild must not change canonical of ac"
+        );
     }
 
     /// Congruence closure completeness: after rebuild, any two e-nodes with
@@ -680,8 +695,11 @@ mod tests {
         // e-classes at this point because their children are distinct.
         let xy = eg.insert(add_op, vec![a, b]);
         let x2y2 = eg.insert(add_op, vec![c, d]);
-        assert_ne!(eg.find(xy), eg.find(x2y2),
-            "disjoint children must produce distinct e-classes");
+        assert_ne!(
+            eg.find(xy),
+            eg.find(x2y2),
+            "disjoint children must produce distinct e-classes"
+        );
 
         // Merge the children pairwise. After rebuild, the parents must
         // become congruent because find(a)==find(c) and find(b)==find(d),
@@ -690,8 +708,11 @@ mod tests {
         eg.union(b, d);
         eg.rebuild();
 
-        assert_eq!(eg.find(xy), eg.find(x2y2),
-            "congruence closure: add(a,b) ≡ add(c,d) after a≡c, b≡d");
+        assert_eq!(
+            eg.find(xy),
+            eg.find(x2y2),
+            "congruence closure: add(a,b) ≡ add(c,d) after a≡c, b≡d"
+        );
     }
 
     /// Rebuild never creates new e-classes: the set of canonical IDs
@@ -703,8 +724,12 @@ mod tests {
         let op: OpId = 0;
 
         let ids: Vec<EClassId> = (0..10).map(|_| eg.insert(op, vec![])).collect();
-        let before: Vec<EClassId> = ids.iter().map(|&id| eg.find(id)).collect::<std::collections::HashSet<_>>()
-            .into_iter().collect();
+        let before: Vec<EClassId> = ids
+            .iter()
+            .map(|&id| eg.find(id))
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
 
         // Merge several pairs and rebuild.
         eg.union(ids[0], ids[1]);
@@ -712,21 +737,31 @@ mod tests {
         eg.union(ids[4], ids[5]);
         eg.rebuild();
 
-        let after: Vec<EClassId> = ids.iter().map(|&id| eg.find(id)).collect::<std::collections::HashSet<_>>()
-            .into_iter().collect();
+        let after: Vec<EClassId> = ids
+            .iter()
+            .map(|&id| eg.find(id))
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
 
         // Every canonical ID after rebuild must have been present before
         // (or retired to a previously existing ID via union).
         for &id in &after {
             // Either this ID existed before, or it is the canonical that
             // absorbed another ID (which is a pre-existing ID).
-            assert!(before.contains(&id) || before.iter().any(|&b| eg.find(b) == id),
-                "new canonical ID {id} appeared from nowhere");
+            assert!(
+                before.contains(&id) || before.iter().any(|&b| eg.find(b) == id),
+                "new canonical ID {id} appeared from nowhere"
+            );
         }
 
         // The number of distinct canons must not increase.
-        assert!(after.len() <= before.len(),
-            "rebuild increased canonical count: {} -> {}", before.len(), after.len());
+        assert!(
+            after.len() <= before.len(),
+            "rebuild increased canonical count: {} -> {}",
+            before.len(),
+            after.len()
+        );
     }
 
     /// Rebuild terminates on any finite e-graph: the processing loop is
@@ -766,6 +801,9 @@ mod tests {
         // propagate up the tree and terminate.
         big.union(roots[0], roots[1]);
         big.rebuild();
-        assert!(big.dirty.is_empty(), "cascading rebuild must drain the dirty queue");
+        assert!(
+            big.dirty.is_empty(),
+            "cascading rebuild must drain the dirty queue"
+        );
     }
 }

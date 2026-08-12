@@ -13,9 +13,9 @@
 use std::fs;
 use std::process::ExitCode;
 
-use evocc_common::{FileId, SourceFile};
-use evocc_lex::{Lexer, TokenKind};
+use evocc_common::FileId;
 use evocc_cpp::Preprocessor;
+use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::Parser;
 
 const CAPABILITIES: &[&str] = &[

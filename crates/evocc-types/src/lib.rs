@@ -41,7 +41,10 @@ pub enum IntRank {
 impl IntRank {
     #[must_use]
     pub fn is_signed(self) -> bool {
-        !matches!(self, Self::Bool | Self::UChar | Self::UShort | Self::UInt | Self::ULong | Self::ULongLong)
+        !matches!(
+            self,
+            Self::Bool | Self::UChar | Self::UShort | Self::UInt | Self::ULong | Self::ULongLong
+        )
     }
 }
 
@@ -283,8 +286,14 @@ mod tests {
         assert_eq!(EvoIRType::Bits(64), EvoIRType::Bits(64));
         assert_ne!(EvoIRType::Bits(32), EvoIRType::Bits(64));
 
-        assert!(matches!(EvoIRType::Ptr(AddressSpace::Global), EvoIRType::Ptr(..)));
-        assert_ne!(EvoIRType::Ptr(AddressSpace::Global), EvoIRType::Ptr(AddressSpace::Stack));
+        assert!(matches!(
+            EvoIRType::Ptr(AddressSpace::Global),
+            EvoIRType::Ptr(..)
+        ));
+        assert_ne!(
+            EvoIRType::Ptr(AddressSpace::Global),
+            EvoIRType::Ptr(AddressSpace::Stack)
+        );
 
         assert_eq!(EvoIRType::F32, EvoIRType::F32);
         assert!(matches!(EvoIRType::Mem(Region::All), EvoIRType::Mem(..)));

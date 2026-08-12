@@ -1,16 +1,18 @@
 //! C-HIR to EvoIR semantic lowering
 
-use evocc_chir::{CHirUnit, CHirDecl, CHirStmt, CHirExpr, BinaryOp};
-use evocc_evoir::{Function, Block, BlockId, BlockArg, Inst, Value, CmpOp};
+use evocc_chir::{BinaryOp, CHirDecl, CHirExpr, CHirStmt, CHirUnit};
+use evocc_evoir::{Block, BlockArg, BlockId, CmpOp, Function, Inst, Value};
 use evocc_types::EvoIRType;
 
 pub fn lower_unit(unit: &CHirUnit) -> Vec<Function> {
-    unit.iter().filter_map(|decl| match decl {
-        CHirDecl::FuncDecl(name, _params, _ret_ty, Some(body), _) => {
-            Some(lower_function(name, body))
-        }
-        _ => None,
-    }).collect()
+    unit.iter()
+        .filter_map(|decl| match decl {
+            CHirDecl::FuncDecl(name, _params, _ret_ty, Some(body), _) => {
+                Some(lower_function(name, body))
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 struct LowerContext {
@@ -157,7 +159,10 @@ fn lower_expr(expr: &CHirExpr, ctx: &mut LowerContext) -> u32 {
             ctx.set_terminator(Inst::Br(merge_block, vec![value(fv)]));
             ctx.current_block_id = merge_block;
             let merge = &mut ctx.blocks[merge_block as usize];
-            merge.args.push(BlockArg { name: "ternary".into(), ty: bits32() });
+            merge.args.push(BlockArg {
+                name: "ternary".into(),
+                ty: bits32(),
+            });
             let result = ctx.new_value();
             ctx.emit_inst(Inst::Const(value(result), 0));
             result
@@ -186,14 +191,20 @@ fn lower_expr(expr: &CHirExpr, ctx: &mut LowerContext) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use evocc_chir::{CHirExpr, CHirStmt, CHirDecl, CHirUnit, BinaryOp, IntLit, IntSuffix, IntBase};
     use evocc_chir::eval_expr;
-    use evocc_common::{SourceSpan, FileId};
+    use evocc_chir::{
+        BinaryOp, CHirDecl, CHirExpr, CHirStmt, CHirUnit, IntBase, IntLit, IntSuffix,
+    };
+    use evocc_common::{FileId, SourceSpan};
     use evocc_types::{CType, IntRank};
 
     fn int_lit(v: i64) -> CHirExpr {
         CHirExpr::Lit(
-            IntLit { value: v as u64, suffix: IntSuffix::None, base: IntBase::Dec },
+            IntLit {
+                value: v as u64,
+                suffix: IntSuffix::None,
+                base: IntBase::Dec,
+            },
             test_span(),
         )
     }

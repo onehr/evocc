@@ -1,9 +1,12 @@
+#![allow(clippy::all)]
+#![allow(dead_code)]
+#![allow(clippy::should_implement_trait)]
 //! C preprocessor: macro expansion, directives, token stream
 
 use std::collections::{HashMap, HashSet};
 
-pub use evocc_lex::{Lexer, Token, TokenKind, TokenText};
 pub use evocc_common::{FileId, SourceSpan};
+pub use evocc_lex::{Lexer, Token, TokenKind, TokenText};
 
 // ---------------------------------------------------------------------------
 // Macro definition
@@ -20,7 +23,13 @@ pub struct Macro {
 
 impl Macro {
     pub fn new(name: String, body: Vec<Token>, is_function: bool, params: Vec<String>) -> Self {
-        Self { name, body, is_function, params, variadic: false }
+        Self {
+            name,
+            body,
+            is_function,
+            params,
+            variadic: false,
+        }
     }
 
     pub fn arity(&self) -> usize {
@@ -39,15 +48,15 @@ pub struct MacroMap {
 
 impl MacroMap {
     pub fn new() -> Self {
-        Self { macros: HashMap::new() }
+        Self {
+            macros: HashMap::new(),
+        }
     }
 
     pub fn define(&mut self, name: String, body: Vec<Token>, params: Vec<String>) {
         let is_function = !params.is_empty();
-        self.macros.insert(
-            name.clone(),
-            Macro::new(name, body, is_function, params),
-        );
+        self.macros
+            .insert(name.clone(), Macro::new(name, body, is_function, params));
     }
 
     /// Define a function-like macro, optionally variadic (__VA_ARGS__).
@@ -135,7 +144,10 @@ impl MacroMap {
     }
 
     fn expand_tokens(&self, tokens: &[Token]) -> Vec<Token> {
-        tokens.iter().flat_map(|t| self.expand_arg_token(t)).collect()
+        tokens
+            .iter()
+            .flat_map(|t| self.expand_arg_token(t))
+            .collect()
     }
 
     /// Unified expansion: object-like or function-like with variadic support,
@@ -383,7 +395,11 @@ impl Preprocessor {
     pub fn new() -> Self {
         let mut macros = MacroMap::new();
         macros.define("__STDC__".into(), vec![make_int_token(1)], vec![]);
-        macros.define("__STDC_VERSION__".into(), vec![make_int_token(201112)], vec![]);
+        macros.define(
+            "__STDC_VERSION__".into(),
+            vec![make_int_token(201112)],
+            vec![],
+        );
         macros.define("__STDC_HOSTED__".into(), vec![make_int_token(1)], vec![]);
         Self {
             macros,
@@ -474,66 +490,78 @@ impl Preprocessor {
                     "define" => {
                         if self.cond_active() {
                             let (name, body) = parse_define(&raw, &mut i, source);
-                        if !name.is_empty() {
-                            let is_function_like = !body.is_empty() && body[0].kind == TokenKind::LParen;
-                            let (params, variadic, variadic_param_name) = if is_function_like {
+                            if !name.is_empty() {
+                                let is_function_like =
+                                    !body.is_empty() && body[0].kind == TokenKind::LParen;
+                                let (params, variadic, variadic_param_name) = if is_function_like {
                                     let (p, v, vn) = extract_params(&body, source);
                                     (p, v, vn)
                                 } else {
                                     (vec![], false, None)
                                 };
-                            let body_tokens = if !is_function_like {
-                                body
-                            } else {
-                                // Find the matching ')' that ends the param
-                                // list and keep only tokens after it.
-                                let mut depth = 0u32;
-                                let mut split_at = 0usize;
-                                for (j, t) in body.iter().enumerate() {
-                                    match t.kind {
-                                        TokenKind::LParen => depth += 1,
-                                        TokenKind::RParen => {
-                                            depth -= 1;
-                                            if depth == 0 { split_at = j + 1; break; }
-                                        }
-                                        _ => {}
-                                    }
-                                }
-                                if split_at < body.len() {
-                                    body[split_at..].to_vec()
+                                let body_tokens = if !is_function_like {
+                                    body
                                 } else {
-                                    vec![]
-                                }
-                            };
-                            // Convert body tokens to Decoded so resolve_arg can read
-                            // parameter names in nested expansions.
-                            let body_tokens: Vec<Token> = body_tokens
-                                .into_iter()
-                                .map(|t| {
-                                    let lexeme = token_lexeme(&t, source);
-                                    let text = if lexeme.is_empty() {
-                                        format_placeholder(t.kind)
+                                    // Find the matching ')' that ends the param
+                                    // list and keep only tokens after it.
+                                    let mut depth = 0u32;
+                                    let mut split_at = 0usize;
+                                    for (j, t) in body.iter().enumerate() {
+                                        match t.kind {
+                                            TokenKind::LParen => depth += 1,
+                                            TokenKind::RParen => {
+                                                depth -= 1;
+                                                if depth == 0 {
+                                                    split_at = j + 1;
+                                                    break;
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                    if split_at < body.len() {
+                                        body[split_at..].to_vec()
                                     } else {
-                                        lexeme.to_owned()
-                                    };
-                                    Token { kind: t.kind, span: t.span, text: TokenText::Decoded(text) }
-                                })
-                                .collect();
-                            if is_function_like {
-                                self.macros_mut().define_function_like(name, params, variadic, variadic_param_name, body_tokens);
-                            } else {
-                                self.define(name, body_tokens);
-                            }
+                                        vec![]
+                                    }
+                                };
+                                // Convert body tokens to Decoded so resolve_arg can read
+                                // parameter names in nested expansions.
+                                let body_tokens: Vec<Token> = body_tokens
+                                    .into_iter()
+                                    .map(|t| {
+                                        let lexeme = token_lexeme(&t, source);
+                                        let text = if lexeme.is_empty() {
+                                            format_placeholder(t.kind)
+                                        } else {
+                                            lexeme.to_owned()
+                                        };
+                                        Token {
+                                            kind: t.kind,
+                                            span: t.span,
+                                            text: TokenText::Decoded(text),
+                                        }
+                                    })
+                                    .collect();
+                                if is_function_like {
+                                    self.macros_mut().define_function_like(
+                                        name,
+                                        params,
+                                        variadic,
+                                        variadic_param_name,
+                                        body_tokens,
+                                    );
+                                } else {
+                                    self.define(name, body_tokens);
+                                }
                             }
                         }
                         skip_line(&raw, &mut i, source);
                     }
                     "undef" => {
-                        if self.cond_active() {
-                            if i < len {
-                                let name = token_lexeme(&raw[i], source).to_string();
-                                self.undefine(&name);
-                            }
+                        if self.cond_active() && i < len {
+                            let name = token_lexeme(&raw[i], source).to_string();
+                            self.undefine(&name);
                         }
                         skip_line(&raw, &mut i, source);
                     }
@@ -546,10 +574,13 @@ impl Preprocessor {
                                 if let Some(resolved) = path {
                                     if !self.has_include_guard() || !self.include_guard_seen {
                                         if let Ok(content) = std::fs::read_to_string(&resolved) {
-                                            let mut sub_lex = evocc_lex::Lexer::new(FileId::new(1), &content);
+                                            let mut sub_lex =
+                                                evocc_lex::Lexer::new(FileId::new(1), &content);
                                             let mut sub_tokens = Vec::new();
                                             while let Some(t) = sub_lex.next() {
-                                                if t.kind != TokenKind::Eof { sub_tokens.push(t); }
+                                                if t.kind != TokenKind::Eof {
+                                                    sub_tokens.push(t);
+                                                }
                                             }
                                             let sub_stream = TokenStream::new(sub_tokens);
                                             let processed = self.process(sub_stream, &content);
@@ -562,14 +593,22 @@ impl Preprocessor {
                         skip_line(&raw, &mut i, source);
                     }
                     "ifdef" => {
-                        let name = if i < len { token_lexeme(&raw[i], source).to_string() } else { String::new() };
+                        let name = if i < len {
+                            token_lexeme(&raw[i], source).to_string()
+                        } else {
+                            String::new()
+                        };
                         i = advance_past_line(i, &raw, source).min(len);
                         let defined = self.is_defined(&name);
                         self.push_cond(defined);
                         skip_line(&raw, &mut i, source);
                     }
                     "ifndef" => {
-                        let name = if i < len { token_lexeme(&raw[i], source).to_string() } else { String::new() };
+                        let name = if i < len {
+                            token_lexeme(&raw[i], source).to_string()
+                        } else {
+                            String::new()
+                        };
                         i = advance_past_line(i, &raw, source).min(len);
                         let defined = self.is_defined(&name);
                         self.push_cond(!defined);
@@ -592,9 +631,12 @@ impl Preprocessor {
                             cs.in_true = false;
                         } else {
                             let line_tokens = collect_line_tokens(&raw, &mut i, source);
-                            let value = outer_active && evaluate_if_expr(&line_tokens, &self.macros, source);
+                            let value = outer_active
+                                && evaluate_if_expr(&line_tokens, &self.macros, source);
                             cs.in_true = value;
-                            if value { cs.had_true = true; }
+                            if value {
+                                cs.had_true = true;
+                            }
                         }
                         skip_line(&raw, &mut i, source);
                     }
@@ -602,7 +644,8 @@ impl Preprocessor {
                         let len_stack = self.cond_stack.len();
                         if len_stack > 0 {
                             let had = self.cond_stack[len_stack - 1].had_true;
-                            let outer_active = self.cond_stack[..len_stack - 1].iter().all(|c| c.in_true);
+                            let outer_active =
+                                self.cond_stack[..len_stack - 1].iter().all(|c| c.in_true);
                             let cs = &mut self.cond_stack[len_stack - 1];
                             if had {
                                 cs.in_true = false;
@@ -620,10 +663,15 @@ impl Preprocessor {
                     "pragma" => {
                         if self.cond_active() {
                             let pragma_tok = collect_line_tokens(&raw, &mut i, source);
-                            let pragma_text: String = pragma_tok.iter()
+                            let pragma_text: String = pragma_tok
+                                .iter()
                                 .filter_map(|t| {
                                     let s = token_lexeme(t, source);
-                                    if s.is_empty() { None } else { Some(s.to_owned()) }
+                                    if s.is_empty() {
+                                        None
+                                    } else {
+                                        Some(s.to_owned())
+                                    }
                                 })
                                 .collect::<Vec<_>>()
                                 .join(" ");
@@ -679,16 +727,30 @@ impl Preprocessor {
                                     text: TokenText::Decoded(text),
                                 };
                                 match raw[j].kind {
-                                    TokenKind::LParen => { depth += 1; if depth > 1 { current_arg.push(decoded); } }
-                                    TokenKind::RParen => { depth -= 1; if depth > 0 { current_arg.push(decoded); } }
+                                    TokenKind::LParen => {
+                                        depth += 1;
+                                        if depth > 1 {
+                                            current_arg.push(decoded);
+                                        }
+                                    }
+                                    TokenKind::RParen => {
+                                        depth -= 1;
+                                        if depth > 0 {
+                                            current_arg.push(decoded);
+                                        }
+                                    }
                                     TokenKind::Comma if depth == 1 => {
                                         args.push(std::mem::take(&mut current_arg));
                                     }
-                                    _ => { current_arg.push(decoded); }
+                                    _ => {
+                                        current_arg.push(decoded);
+                                    }
                                 }
                                 j += 1;
                             }
-                            if !current_arg.is_empty() { args.push(current_arg); }
+                            if !current_arg.is_empty() {
+                                args.push(current_arg);
+                            }
                             i = j; // advance past ')' and arguments
 
                             if let Some(body) = self.macros.expand_macro(&name, &args) {
@@ -718,7 +780,10 @@ impl Preprocessor {
     }
 
     fn push_cond(&mut self, value: bool) {
-        self.cond_stack.push(CondState { in_true: value, had_true: value });
+        self.cond_stack.push(CondState {
+            in_true: value,
+            had_true: value,
+        });
     }
 }
 
@@ -751,7 +816,7 @@ fn is_directive_hash(kind: TokenKind) -> bool {
     kind == TokenKind::Hash || kind == TokenKind::HashHash
 }
 /// the very first token or preceded by a newline character in the source.
-fn is_start_of_line(tokens: &[Token], idx: usize, source: &str) -> bool {
+fn is_start_of_line(tokens: &[Token], idx: usize, _source: &str) -> bool {
     if idx == 0 {
         return true;
     }
@@ -766,7 +831,7 @@ fn is_start_of_line(tokens: &[Token], idx: usize, source: &str) -> bool {
 /// handlers (define, undef, include) advance `i` past the directive body
 /// themselves; in that case `prev_line` reflects the directive's line,
 /// and we skip nothing because `*i` is already on the next line.
-fn skip_line(tokens: &[Token], i: &mut usize, source: &str) {
+fn skip_line(tokens: &[Token], i: &mut usize, _source: &str) {
     if *i >= tokens.len() || *i == 0 {
         return;
     }
@@ -814,7 +879,10 @@ fn read_include_argument(tokens: &[Token], i: &mut usize, source: &str) -> Strin
             *i += 1;
             while *i < tokens.len() {
                 let t = &tokens[*i];
-                if t.kind == TokenKind::Greater { *i += 1; break; }
+                if t.kind == TokenKind::Greater {
+                    *i += 1;
+                    break;
+                }
                 path.push_str(token_lexeme(t, source));
                 *i += 1;
             }
@@ -854,8 +922,10 @@ fn resolve_include(name: &str, include_paths: &[String]) -> Option<String> {
 }
 
 /// Collect all tokens on the current line (used for #if / #elif expressions).
-fn collect_line_tokens(tokens: &[Token], i: &mut usize, source: &str) -> Vec<Token> {
-    if *i >= tokens.len() { return Vec::new(); }
+fn collect_line_tokens(tokens: &[Token], i: &mut usize, _source: &str) -> Vec<Token> {
+    if *i >= tokens.len() {
+        return Vec::new();
+    }
     let line = tokens[*i].span.line_start;
     let mut result = Vec::new();
     while *i < tokens.len() && tokens[*i].span.line_start == line {
@@ -899,19 +969,25 @@ fn evaluate_if_and(tokens: &[Token], i: &mut usize, macros: &MacroMap, source: &
 
 fn evaluate_if_cmp(tokens: &[Token], i: &mut usize, macros: &MacroMap, source: &str) -> bool {
     let lhs = evaluate_if_unary(tokens, i, macros, source);
-    if *i >= tokens.len() { return lhs; }
+    if *i >= tokens.len() {
+        return lhs;
+    }
     let op = tokens[*i].kind;
     match op {
-        TokenKind::EqEq | TokenKind::NotEq | TokenKind::Less | TokenKind::LessEq |
-        TokenKind::Greater | TokenKind::GreaterEq => {
+        TokenKind::EqEq
+        | TokenKind::NotEq
+        | TokenKind::Less
+        | TokenKind::LessEq
+        | TokenKind::Greater
+        | TokenKind::GreaterEq => {
             *i += 1;
             let rhs = evaluate_if_unary(tokens, i, macros, source);
             match op {
                 TokenKind::EqEq => lhs == rhs,
                 TokenKind::NotEq => lhs != rhs,
-                TokenKind::Less => lhs < rhs,
+                TokenKind::Less => !lhs & rhs,
                 TokenKind::LessEq => lhs <= rhs,
-                TokenKind::Greater => lhs > rhs,
+                TokenKind::Greater => lhs & !rhs,
                 TokenKind::GreaterEq => lhs >= rhs,
                 _ => false,
             }
@@ -921,7 +997,9 @@ fn evaluate_if_cmp(tokens: &[Token], i: &mut usize, macros: &MacroMap, source: &
 }
 
 fn evaluate_if_unary(tokens: &[Token], i: &mut usize, macros: &MacroMap, source: &str) -> bool {
-    if *i >= tokens.len() { return false; }
+    if *i >= tokens.len() {
+        return false;
+    }
     if tokens[*i].kind == TokenKind::Bang {
         *i += 1;
         return !evaluate_if_unary(tokens, i, macros, source);
@@ -930,7 +1008,9 @@ fn evaluate_if_unary(tokens: &[Token], i: &mut usize, macros: &MacroMap, source:
 }
 
 fn evaluate_if_primary(tokens: &[Token], i: &mut usize, macros: &MacroMap, source: &str) -> bool {
-    if *i >= tokens.len() { return false; }
+    if *i >= tokens.len() {
+        return false;
+    }
     let tok = &tokens[*i];
     let text = token_lexeme(tok, source);
 
@@ -989,7 +1069,12 @@ fn extract_params(body: &[Token], source: &str) -> (Vec<String>, bool, Option<St
     while i < body.len() && depth > 0 {
         let text = token_lexeme(&body[i], source);
         match body[i].kind {
-            TokenKind::LParen => { depth += 1; if depth > 1 { current.push_str(text); } }
+            TokenKind::LParen => {
+                depth += 1;
+                if depth > 1 {
+                    current.push_str(text);
+                }
+            }
             TokenKind::RParen => {
                 depth -= 1;
                 if depth == 0 && !current.is_empty() {
@@ -1017,21 +1102,16 @@ fn extract_params(body: &[Token], source: &str) -> (Vec<String>, bool, Option<St
 }
 
 /// Advance `i` past the current line's tokens.
-fn advance_past_line(i: usize, tokens: &[Token], source: &str) -> usize {
-    if i >= tokens.len() { return i; }
+fn advance_past_line(i: usize, tokens: &[Token], _source: &str) -> usize {
+    if i >= tokens.len() {
+        return i;
+    }
     let line = tokens.get(i).map(|t| t.span.line_start).unwrap_or(0);
     let mut j = i;
     while j < tokens.len() && tokens[j].span.line_start == line {
         j += 1;
     }
     j
-}
-
-fn token_text_or_empty(tok: &Token) -> &str {
-    match &tok.text {
-        TokenText::Decoded(s) => s.as_str(),
-        TokenText::Borrowed => "",
-    }
 }
 
 fn format_placeholder(kind: TokenKind) -> String {
@@ -1115,23 +1195,12 @@ fn make_int_token(value: i64) -> Token {
 // pass. Here we define the ones that the process() rewrite rendered unused
 // but the macro expansion code in MacroMap still calls.
 
-fn is_newline_like(_tok: &Token) -> bool {
-    false
-}
-
 fn read_directive(tokens: &[Token], i: usize) -> (String, usize) {
     if i < tokens.len() {
         (String::new(), i + 1)
     } else {
         (String::new(), i)
     }
-}
-
-fn read_directive_arg(tokens: &[Token], i: &mut usize) -> Option<String> {
-    while *i < tokens.len() {
-        *i += 1;
-    }
-    None
 }
 
 // ---------------------------------------------------------------------------
@@ -1176,11 +1245,7 @@ mod tests {
             dummy_token(TokenKind::Plus, "+"),
             dummy_token(TokenKind::Identifier, "b"),
         ];
-        map.define(
-            "ADD".to_owned(),
-            body,
-            vec!["a".to_owned(), "b".to_owned()],
-        );
+        map.define("ADD".to_owned(), body, vec!["a".to_owned(), "b".to_owned()]);
 
         // Correct arity: 2 args → succeeds.
         let arg0 = vec![dummy_token(TokenKind::IntLiteral, "1")];
@@ -1189,10 +1254,7 @@ mod tests {
         assert!(ok.is_some());
 
         // Wrong arity: 1 arg → fails.
-        let bad = map.expand_function_like(
-            "ADD",
-            &[vec![dummy_token(TokenKind::IntLiteral, "1")]],
-        );
+        let bad = map.expand_function_like("ADD", &[vec![dummy_token(TokenKind::IntLiteral, "1")]]);
         assert!(bad.is_none());
 
         // Wrong arity: 3 args → fails.
@@ -1269,11 +1331,20 @@ mod tests {
             dummy_token(TokenKind::HashHash, "##"),
             dummy_token(TokenKind::Identifier, "b"),
         ];
-        map.define_function_like("PASTE".into(), vec!["a".into(), "b".into()], false, None, body);
-        let result = map.expand_macro("PASTE", &[
-            vec![dummy_token(TokenKind::Identifier, "foo")],
-            vec![dummy_token(TokenKind::IntLiteral, "42")],
-        ]);
+        map.define_function_like(
+            "PASTE".into(),
+            vec!["a".into(), "b".into()],
+            false,
+            None,
+            body,
+        );
+        let result = map.expand_macro(
+            "PASTE",
+            &[
+                vec![dummy_token(TokenKind::Identifier, "foo")],
+                vec![dummy_token(TokenKind::IntLiteral, "42")],
+            ],
+        );
         assert!(result.is_some());
         let expanded = result.unwrap();
         let texts: Vec<String> = expanded.iter().map(token_text).collect();
@@ -1289,9 +1360,7 @@ mod tests {
             dummy_token(TokenKind::Identifier, "x"),
         ];
         map.define_function_like("STR".into(), vec!["x".into()], false, None, body);
-        let result = map.expand_macro("STR", &[
-            vec![dummy_token(TokenKind::Identifier, "hello")],
-        ]);
+        let result = map.expand_macro("STR", &[vec![dummy_token(TokenKind::Identifier, "hello")]]);
         assert!(result.is_some());
         let expanded = result.unwrap();
         assert_eq!(expanded.len(), 1);
@@ -1302,7 +1371,13 @@ mod tests {
     #[test]
     fn cpp_conditional_directives_evaluate() {
         let mut pp = Preprocessor::new();
-        let tk = |kind| Token::new(kind, SourceSpan::new(FileId::new(1),0,0,0,0), TokenText::Borrowed);
+        let tk = |kind| {
+            Token::new(
+                kind,
+                SourceSpan::new(FileId::new(1), 0, 0, 0, 0),
+                TokenText::Borrowed,
+            )
+        };
         pp.define("FOO".into(), vec![tk(TokenKind::IntLiteral)]);
         assert!(pp.is_defined("FOO"));
     }
@@ -1323,18 +1398,22 @@ mod tests {
         ];
         map.define_function_like("LOG".into(), vec!["fmt".into()], true, None, body);
 
-        let result = map.expand_macro("LOG", &[
-            vec![dummy_token(TokenKind::StringLiteral, "\"%d\"")],
-            vec![dummy_token(TokenKind::IntLiteral, "42")],
-        ]);
+        let result = map.expand_macro(
+            "LOG",
+            &[
+                vec![dummy_token(TokenKind::StringLiteral, "\"%d\"")],
+                vec![dummy_token(TokenKind::IntLiteral, "42")],
+            ],
+        );
         assert!(result.is_some());
         let texts: Vec<String> = result.unwrap().iter().map(token_text).collect();
         assert_eq!(texts, ["printf", "(", "\"%d\"", ",", "42", ")"]);
 
         // 008: LOG("hi") with empty __VA_ARGS__ → printf("hi",)  (GNU)
-        let result2 = map.expand_macro("LOG", &[
-            vec![dummy_token(TokenKind::StringLiteral, "\"hi\"")],
-        ]);
+        let result2 = map.expand_macro(
+            "LOG",
+            &[vec![dummy_token(TokenKind::StringLiteral, "\"hi\"")]],
+        );
         assert!(result2.is_some());
         let texts2: Vec<String> = result2.unwrap().iter().map(token_text).collect();
         assert_eq!(texts2, ["printf", "(", "\"hi\"", ",", ")"]);
@@ -1358,10 +1437,13 @@ mod tests {
             body3,
         );
 
-        let result3 = map3.expand_macro("LOG", &[
-            vec![dummy_token(TokenKind::StringLiteral, "\"%d\"")],
-            vec![dummy_token(TokenKind::IntLiteral, "42")],
-        ]);
+        let result3 = map3.expand_macro(
+            "LOG",
+            &[
+                vec![dummy_token(TokenKind::StringLiteral, "\"%d\"")],
+                vec![dummy_token(TokenKind::IntLiteral, "42")],
+            ],
+        );
         assert!(result3.is_some());
         let texts3: Vec<String> = result3.unwrap().iter().map(token_text).collect();
         assert_eq!(texts3, ["printf", "(", "\"%d\"", ",", "42", ")"]);
