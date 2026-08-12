@@ -280,8 +280,10 @@ impl Arena {
         unsafe { core::str::from_utf8_unchecked(slice) }
     }
 
-    /// Allocate a `[T]` of `len` elements (zero-initialized).
-    pub fn alloc_slice<T: Sized + Copy>(&mut self, len: usize) -> &mut [T] {
+    /// Allocate a `[T]` of `len` elements, each initialized to `T::default()`.
+    /// The default-initialization makes this safe for types where all-zero
+    /// bytes would be an invalid bit pattern (NonZeroU8, bool, etc.).
+    pub fn alloc_slice<T: Default>(&mut self, len: usize) -> &mut [T] {
         if len == 0 {
             return &mut [];
         }
@@ -289,9 +291,14 @@ impl Arena {
             .checked_mul(len)
             .expect("alloc_slice overflow");
         let ptr = self.allocate_raw(size, core::mem::align_of::<T>());
-        // Safety: `allocate_raw` returns `size` bytes of valid memory.
+        // Safety: `allocate_raw` returns `size` bytes of valid memory within
+        // a chunk that will not be freed or moved. We write `T::default()` to
+        // each element before creating a reference, so no element ever
+        // contains uninitialized or undefined bytes.
         unsafe {
-            ptr.write_bytes(0, size);
+            for i in 0..len {
+                ptr.cast::<T>().add(i).write(T::default());
+            }
             core::slice::from_raw_parts_mut(ptr.cast::<T>(), len)
         }
     }

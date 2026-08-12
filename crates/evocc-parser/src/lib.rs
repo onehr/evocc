@@ -116,7 +116,9 @@ impl<'src> Parser<'src> {
             self.advance();
             let params = self.parse_parameter_list();
             let rparen_span = self.peek().map(|t| t.span).unwrap_or(name_span);
-            self.expect(TokenKind::RParen);
+            if self.expect(TokenKind::RParen).is_none() {
+                return None; // malformed: missing closing ')' in parameter list
+            }
 
             if self.peek_kind() == Some(TokenKind::LBrace) {
                 let body = self.parse_compound_statement();

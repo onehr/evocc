@@ -77,10 +77,17 @@ fn main() -> ExitCode {
     }
 
     // --- Real invocations (non-probe) ------------------------------------
+    // Scan for mode flags anywhere in the argument list. The last positional
+    // argument is the source file. Additional flags (-std=, -I, -D, etc.)
+    // are silently ignored rather than rejected; they belong to phases of
+    // the pipeline that are not yet implemented.
+    let has_E = args.iter().any(|a| a == "-E");
+    let has_parse_only = args.iter().any(|a| a == "--parse-only");
+    let file = args.last().filter(|a| !a.starts_with('-')).cloned();
 
-    match args.as_slice() {
-        [flag, file] if flag == "-E" => run_preprocess(file),
-        [flag, file] if flag == "--parse-only" => run_parse(file),
+    match (has_E || has_parse_only, file) {
+        (true, Some(f)) if has_E => run_preprocess(&f),
+        (true, Some(f)) => run_parse(&f),
         _ => {
             eprintln!("evocc: unrecognized invocation is NOT_IMPLEMENTED: {args:?}");
             ExitCode::from(NOT_IMPLEMENTED_EXIT)
@@ -144,7 +151,19 @@ fn run_preprocess(file: &str) -> ExitCode {
         // pp-number, e.g. 1+2 → single pp-number token).
         let needs_space = (prev_is_word && curr_is_word)
             || (prev_kind.is_some_and(is_number_like)
-                && (tok.kind == TokenKind::Plus || tok.kind == TokenKind::Minus));
+                && (tok.kind == TokenKind::Plus || tok.kind == TokenKind::Minus))
+            // Prevent operator fusion: two consecutive identical punctuators
+            // must not render as a different operator (e.g. + + → ++).
+            || matches!(
+                (prev_kind, tok.kind),
+                (Some(TokenKind::Plus), TokenKind::Plus)
+                    | (Some(TokenKind::Minus), TokenKind::Minus)
+                    | (Some(TokenKind::Less), TokenKind::Less)
+                    | (Some(TokenKind::Greater), TokenKind::Greater)
+                    | (Some(TokenKind::Amp), TokenKind::Amp)
+                    | (Some(TokenKind::Pipe), TokenKind::Pipe)
+                    | (Some(TokenKind::Colon), TokenKind::Colon)
+            );
         if needs_space {
             print!(" ");
         }
@@ -212,8 +231,11 @@ fn run_parse(file: &str) -> ExitCode {
     let mut parser = Parser::new(processed, FileId::new(1), &src);
     let unit = parser.parse_translation_unit();
 
-    if unit.is_empty() {
-        eprintln!("evocc: `{file}` parsed to an empty translation unit");
+    // A non-empty source file that produced an empty translation unit
+    // indicates a parse failure (malformed input, unexpected token, etc.).
+    if unit.is_empty() && !src.trim().is_empty() {
+        eprintln!("evocc: `{file}`: parse error: malformed input");
+        return ExitCode::from(1);
     }
 
     ExitCode::from(0)
