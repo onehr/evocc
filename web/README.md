@@ -2,7 +2,7 @@
 
 The web edition of the EvoCC implementation notebook. It presents the material
 in `../docs/notebook/` as a small, book-like site with chapter navigation,
-reading progress, syntax-aware code blocks, and rendered Mermaid diagrams.
+reading progress, syntax-aware code blocks, and original hand-drawn SVG diagrams.
 
 The Markdown notebook is the source of truth. Do not edit
 `app/generated/notebook.ts` by hand; it is a checked-in deployment snapshot
@@ -46,3 +46,7 @@ description: One sentence used for the chapter deck and page metadata.
 
 Then run the verification commands above. Navigation and the on-page table of
 contents are derived automatically.
+
+Chapter diagrams use a small set of named `evocc-sketch` blocks. Their
+accessible, server-rendered drawings live in `app/components/SketchDiagram.tsx`;
+the notebook never ships a generic diagramming runtime to readers.

@@ -448,38 +448,141 @@ a { color: inherit; }
   border-top: 1px solid var(--rule);
 }
 
-.diagram {
-  width: calc(100% + 44px);
-  margin: 38px 0 43px -22px;
-  padding: 26px 22px;
+.sketch-figure {
+  width: calc(100% + 74px);
+  margin: 50px 0 54px -37px;
+}
+
+.sketch-canvas {
+  position: relative;
   overflow-x: auto;
-  border: 1px solid #d3c5b3;
-  border-radius: 4px;
-  background: rgba(255, 253, 248, 0.76);
-  box-shadow: 7px 8px 0 #eee5d7;
+  border-top: 1px solid #d7cdc0;
+  border-bottom: 1px solid #d7cdc0;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(166, 83, 47, 0.07), transparent 34%),
+    linear-gradient(rgba(255, 255, 255, 0.54), rgba(250, 246, 238, 0.54));
 }
 
-.diagram > div:not(.diagram-loading) { min-width: 590px; }
-.diagram svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+.sketch-canvas::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  content: "";
+  opacity: 0.12;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.21'/%3E%3C/svg%3E");
+}
 
-.diagram-loading {
+.sketch-canvas svg {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  min-width: 700px;
+  height: auto;
+  color: var(--ink);
+}
+
+.sketch-words {
   display: grid;
-  min-height: 180px;
-  place-items: center;
+  grid-template-columns: minmax(0, 1.7fr) minmax(190px, 0.8fr);
+  gap: 34px;
+  align-items: start;
+  padding: 17px 5px 0;
+}
+
+.sketch-words figcaption {
+  color: #51483f;
+  font: italic 400 14px/1.65 var(--font-book-serif), Georgia, serif;
+}
+
+.sketch-words aside {
+  padding: 8px 0 0 18px;
   color: var(--ink-muted);
-  font: 500 11px/1 var(--font-book-mono), monospace;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  border-top: 1px solid #b9ab99;
+  font: 400 11px/1.55 var(--font-book-sans), system-ui, sans-serif;
 }
 
-.diagram-error figcaption {
-  margin-bottom: 10px;
-  color: var(--accent);
-  font: 600 11px/1 var(--font-book-mono), monospace;
-  text-transform: uppercase;
+.sketch-line path,
+.sketch-ground,
+.sketch-fine,
+.sketch-box {
+  vector-effect: non-scaling-stroke;
+  filter: url(#paper-wobble);
 }
 
-.diagram-error pre { margin: 0; }
+.sketch-line path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sketch-line .sketch-line-echo {
+  opacity: 0.2;
+  stroke-width: 1.15;
+  transform: translate(1.25px, -0.8px);
+}
+
+.sketch-line.sketch-dashed path { stroke-dasharray: 6 7; }
+
+.sketch-box {
+  fill: rgba(255, 253, 247, 0.91);
+  stroke: var(--ink);
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sketch-box-accent { fill: rgba(230, 193, 166, 0.52); stroke: var(--accent); }
+
+.sketch-fine {
+  fill: none;
+  stroke: #675d52;
+  stroke-width: 1.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sketch-ground {
+  fill: none;
+  stroke: #82776a;
+  stroke-width: 1.25;
+  stroke-dasharray: 9 7;
+}
+
+.sketch-dot {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.sketch-dot-accent { fill: #c97346; stroke: #7d3d22; }
+
+.sketch-label {
+  fill: var(--ink);
+  font: 600 17px/1 var(--font-book-sans), system-ui, sans-serif;
+  paint-order: stroke;
+  stroke: rgba(251, 248, 241, 0.7);
+  stroke-width: 2px;
+  stroke-linejoin: round;
+}
+
+.sketch-display { font: italic 700 26px/1 var(--font-book-serif), Georgia, serif; }
+.sketch-small { font-size: 13px; font-weight: 550; }
+.sketch-tiny { font: 500 10px/1 var(--font-book-mono), monospace; }
+.sketch-muted { fill: var(--ink-muted); font-size: 12px; font-weight: 500; }
+.sketch-annotation { fill: #85543c; font: italic 600 15px/1 var(--font-book-serif), Georgia, serif; }
+
+.sketch-wash {
+  fill: rgba(204, 118, 70, 0.08);
+  stroke: none;
+}
+
+.sketch-wash-green { fill: rgba(49, 93, 73, 0.07); }
+
+.sketch-unknown { border-color: #a84a33 !important; }
 
 .section-rail nav {
   display: flex;
@@ -585,7 +688,9 @@ a { color: inherit; }
   .chapter-prose { font-size: 16px; line-height: 1.78; }
   .chapter-cover { width: 100%; margin: 36px 0 0; }
   .chapter-cover img { box-shadow: 6px 7px 0 #e9dfcf; }
-  .diagram { width: 100%; margin-left: 0; padding: 18px 12px; }
+  .sketch-figure { width: 100%; margin: 42px 0 48px; }
+  .sketch-words { grid-template-columns: 1fr; gap: 10px; }
+  .sketch-words aside { padding-left: 0; }
   .chapter-pagination { grid-template-columns: 1fr; }
 }
 

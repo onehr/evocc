@@ -3,7 +3,7 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Children, isValidElement } from "react";
-import { MermaidDiagram } from "./MermaidDiagram";
+import { SketchDiagram } from "./SketchDiagram";
 
 function headingId(value: string) {
   return value
@@ -59,9 +59,9 @@ export function MarkdownChapter({ markdown }: { markdown: string }) {
           const [child] = Children.toArray(children);
           if (
             isValidElement<{ className?: string; children?: React.ReactNode }>(child) &&
-            child.props.className === "language-mermaid"
+            child.props.className === "language-evocc-sketch"
           ) {
-            return <MermaidDiagram source={headingText(child.props.children).replace(/\n$/, "")} />;
+            return <SketchDiagram source={headingText(child.props.children).replace(/\n$/, "")} />;
           }
           return <pre>{children}</pre>;
         },

@@ -29,8 +29,14 @@ test("server-renders the first notebook chapter from the Markdown snapshot", asy
   assert.match(html, /What counts as golden truth\?/);
   assert.match(html, /Challenges/);
   assert.match(html, /On this page/);
-  assert.match(html, /aria-label="Architecture diagram"/);
-  assert.match(html, /Drawing the system map/);
+  assert.match(html, /data-sketch="egraph-equivalence"/);
+  assert.match(html, /data-sketch="compiler-territory"/);
+  assert.match(html, /data-sketch="semantic-and-evidence"/);
+  assert.match(html, /data-sketch="three-arm64-worlds"/);
+  assert.match(html, /data-sketch="nonce-bound-boot"/);
+  assert.equal(html.match(/data-sketch=/g)?.length, 5);
+  assert.match(html, /The nonce is a causal join/);
+  assert.doesNotMatch(html, /mermaid|Drawing the system map/);
   assert.doesNotMatch(html, /<pre><figure/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/);
 });

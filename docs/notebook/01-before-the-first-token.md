@@ -49,16 +49,8 @@ an alternative that would have become better after later transformations.
 
 An e-graph keeps equivalent forms together instead:
 
-```mermaid
-flowchart LR
-    V["SSA value %x"] --> E["one e-class"]
-    E --> A["add %x, 0"]
-    E --> B["%x"]
-    E --> C["another guarded form"]
-    A -. "rewrite reason" .-> P["proof record"]
-    B -. "congruence reason" .-> P
-    C -. "guard premises" .-> P
-    E --> X["cost-guided extraction"]
+```evocc-sketch
+egraph-equivalence
 ```
 
 The optimizer first accumulates representations that are known to be equal,
@@ -98,23 +90,8 @@ and world tokens, typed bit-vector operations, and explicit definedness
 obligations. The authoritative starting contract lives in
 [`docs/evoir-spec.md`](../evoir-spec.md).
 
-```mermaid
-flowchart LR
-    C["GNU C11 source"] --> CPP["EvoCPP"]
-    CPP --> TOK["preprocessing tokens"]
-    TOK --> PARSE["parser + C semantics"]
-    PARSE --> CHIR["C-HIR"]
-    CHIR --> LOWER["semantic lowering"]
-    LOWER --> EVOIR["block-argument SSA EvoIR"]
-    EVOIR --> EQ["persistent equality database"]
-    EQ --> EXT["proof-aware extraction"]
-    EXT --> MIR["EvoMIR"]
-    MIR --> ASM["target assembly"]
-    ASM --> LINK["external assembler + linker"]
-    LINK --> KERNEL["ARM64 Linux Image"]
-
-    EQ -. "merge reasons" .-> PROOF["proof artifact"]
-    PROOF -. "independent replay" .-> CHECK["proof checker"]
+```evocc-sketch
+compiler-territory
 ```
 
 The diagram also marks an important boundary. EvoCC may use an external
@@ -127,21 +104,8 @@ or secretly replace the compiler under test.
 The source-to-kernel path is only half of the project. Beside it is an evidence
 path that answers a different question: *why should we believe this run?*
 
-```mermaid
-flowchart TB
-    subgraph SEM["Semantic system"]
-        S1["source"] --> S2["C-HIR"] --> S3["EvoIR"] --> S4["e-graph"] --> S5["machine code"]
-    end
-
-    subgraph EVI["Evidence system"]
-        E1["locked contracts"] --> E2["exact tool identities"] --> E3["raw observations"] --> E4["acceptance predicates"] --> E5["sealed evidence"]
-    end
-
-    E1 -. constrains .-> S1
-    E2 -. executes .-> S5
-    S2 -. emits spans .-> E3
-    S4 -. emits reasons .-> E3
-    S5 -. produces boot logs .-> E3
+```evocc-sketch
+semantic-and-evidence
 ```
 
 These systems must meet, but they must not be confused.
@@ -189,31 +153,8 @@ The development host is Apple silicon, but the launch target is ARM64 Linux.
 Day 1 separated building from booting while keeping both observable from the
 host.
 
-```mermaid
-flowchart LR
-    subgraph MAC["macOS ARM64 host"]
-        CONTRACTS["locked contracts"]
-        AC["Apple Container 1.2.2"]
-        QH["QEMU 11.0.3 + HVF"]
-        QT["QEMU 11.0.3 + TCG cortex-a72"]
-    end
-
-    subgraph BUILD["Linux ARM64 build micro-VM"]
-        GCC["GCC 14.2 lane"]
-        CLANG["Clang 19.1 lane"]
-        SRC["Linux 6.18.44 + frozen config"]
-    end
-
-    CONTRACTS --> AC
-    AC --> BUILD
-    SRC --> GCC --> GIMAGE["GCC-built Image"]
-    SRC --> CLANG --> CIMAGE["Clang-built Image"]
-    GIMAGE --> QH
-    GIMAGE --> QT
-    CIMAGE --> QH
-    CIMAGE --> QT
-    QH --> LOG1["nonce-bound serial log"]
-    QT --> LOG2["nonce-bound serial log"]
+```evocc-sketch
+three-arm64-worlds
 ```
 
 The Apple Container runtime is itself pinned by
@@ -339,18 +280,8 @@ then requires:
 4. controlled poweroff;
 5. no panic and no timeout.
 
-```mermaid
-sequenceDiagram
-    participant H as Host harness
-    participant Q as QEMU guest
-    participant I as init
-    H->>Q: boot Image with evo_nonce=N
-    Q->>I: start /init
-    I-->>H: EVO_INIT_ALIVE
-    I-->>H: EVO_BOOT_NONCE N
-    I-->>H: EVO_INIT_DONE
-    I->>Q: poweroff
-    Q-->>H: controlled exit
+```evocc-sketch
+nonce-bound-boot
 ```
 
 A log with the wrong nonce, a duplicate nonce, reordered markers, a different
