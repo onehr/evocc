@@ -30,6 +30,7 @@ JQ="${C30_JQ:-/opt/homebrew/bin/jq}"
 SHASUM="${C30_SHASUM:-/usr/bin/shasum}"
 TIMEOUT_BIN="${C30_TIMEOUT:-/opt/homebrew/bin/timeout}"
 CONTAINER_BIN="${C30_CONTAINER_BIN:-/usr/local/bin/container}"
+EVIDENCE_VERIFIER="$SCRIPT_DIR/verify-foundation-evidence.sh"
 
 mkdir -p "$RUN_DIR" "$RAW_DIR"
 : >"$RESULTS"
@@ -59,7 +60,7 @@ evidence_mutation_detection'
 
 PROD_HASH_FILES="crates/evocc-common/src/lib.rs crates/evocc-types/src/lib.rs crates/evocc-chir/src/lib.rs crates/evocc-lex/src/lib.rs crates/evocc-cpp/src/lib.rs crates/evocc-parser/src/lib.rs crates/evocc-egraph/src/lib.rs crates/evocc-proof/src/lib.rs crates/evocc-evoir/src/lib.rs crates/evocc-lower/src/lib.rs crates/evocc/src/main.rs Cargo.toml Cargo.lock"
 
-EXPECTED_PROD_HASH="edf4176831310b9ce5a5025c7b0b055320af8afa47866e853b27eae0f315e832"
+EXPECTED_PROD_HASH="ef616a1c6a79c8875d63823c5b614b6e74a1243acf2381b7d99b91fb6b36bb2b"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -163,7 +164,7 @@ test_workspace_tests_clippy_fmt_pass() {
   local gate_ok=1
   local evidence=''
 
-  cargo test --workspace --locked --offline >"$RAW_DIR/gate3-test.stdout" 2>"$RAW_DIR/gate3-test.stderr"
+  cargo test --workspace --all-targets --locked --offline >"$RAW_DIR/gate3-test.stdout" 2>"$RAW_DIR/gate3-test.stderr"
   local test_rc=$?
   if [ "$test_rc" -ne 0 ]; then
     gate_ok=0
@@ -409,13 +410,15 @@ test_isolated_cpp_differential() {
   local gate_ok=1
 
   if [ -n "$cpp_results" ] && [ -f "$cpp_results" ]; then
-    local pass_count skip_count conflict_count
+    local pass_count skip_count conflict_count nonpass_count total_count
     # summary.json has { counts: { PASS: N, DIFFER: N, ... } }
     pass_count="$("$JQ" -r '.counts.PASS // 0' "$cpp_results" 2>/dev/null)"
     skip_count="$("$JQ" -r '.counts.SKIP // 0' "$cpp_results" 2>/dev/null)"
     conflict_count="$("$JQ" -r '.counts.ORACLE_CONFLICT // 0' "$cpp_results" 2>/dev/null)"
+    nonpass_count="$("$JQ" -r '[.results[] | select(.status != "PASS")] | length' "$cpp_results" 2>/dev/null)"
+    total_count="$("$JQ" -r '.total // 0' "$cpp_results" 2>/dev/null)"
 
-    if [ "$pass_count" -lt 30 ]; then
+    if [ "$pass_count" -ne 34 ] || [ "$total_count" -ne 34 ] || [ "$nonpass_count" -ne 0 ]; then
       gate_ok=0
     fi
     if [ "${skip_count:-0}" -ne 0 ] 2>/dev/null; then
@@ -427,11 +430,11 @@ test_isolated_cpp_differential() {
 
     if [ "$gate_ok" -eq 1 ]; then
       record_result isolated_cpp_differential PASS \
-        "CPP differential: ${pass_count}PASS 0SKIP 0ORACLE_CONFLICT (DIFFER/KNOWN_GAP allowed)" \
+        "CPP differential: exact 34PASS with zero non-PASS outcomes" \
         "raw/gate9-cpp.stdout"
     else
       record_result isolated_cpp_differential FAIL \
-        "CPP differential: ${pass_count}PASS ${skip_count}SKIP ${conflict_count}ORACLE_CONFLICT (requires 30+PASS 0SKIP 0ORACLE_CONFLICT)" \
+        "CPP differential: ${pass_count}/34 PASS, ${nonpass_count} non-PASS, ${skip_count} SKIP, ${conflict_count} ORACLE_CONFLICT" \
         "raw/gate9-cpp.stdout"
     fi
   elif [ "$cpp_rc" -eq 0 ]; then
@@ -488,39 +491,51 @@ test_final_residue_check() {
 
 test_evidence_mutation_detection() {
   local gate_ok=1
+  local fixture="$RAW_DIR/gate11-fixture"
+  rm -rf "$fixture"
+  mkdir -p "$fixture/raw"
+  printf '{"overall":"PASS"}\n' >"$fixture/summary.json"
+  printf '{"id":"control","status":"PASS"}\n' >"$fixture/results.jsonl"
+  printf 'raw witness\n' >"$fixture/raw/witness.txt"
+  write_evidence_manifest "$fixture"
 
-  # Compute SHA-256 of the results.jsonl file.
-  local original_hash
-  original_hash="$(sha256_file "$RESULTS")"
+  bash "$EVIDENCE_VERIFIER" "$fixture" >/dev/null 2>&1 || gate_ok=0
 
-  # Tamper one byte — append a newline to a copy, verify the hash changes, then restore.
-  local tampered="$RAW_DIR/gate11-results-tampered.jsonl"
-  cp "$RESULTS" "$tampered"
-  printf 'X' >>"$tampered"
-  local tampered_hash
-  tampered_hash="$(sha256_file "$tampered")"
+  local original="$RAW_DIR/gate11-results.original"
+  cp "$fixture/results.jsonl" "$original"
+  printf 'X' >>"$fixture/results.jsonl"
+  bash "$EVIDENCE_VERIFIER" "$fixture" >/dev/null 2>&1 && gate_ok=0
+  mv "$original" "$fixture/results.jsonl"
 
-  if [ "$tampered_hash" = "$original_hash" ]; then
-    gate_ok=0
-  fi
+  printf 'surprise\n' >"$fixture/raw/unexpected.txt"
+  bash "$EVIDENCE_VERIFIER" "$fixture" >/dev/null 2>&1 && gate_ok=0
+  rm -f "$fixture/raw/unexpected.txt"
 
-  # Restore (the tampered copy is in raw/; the original results.jsonl was untouched).
-  rm -f "$tampered"
-
-  # Verify the original hash is unchanged.
-  local restored_hash
-  restored_hash="$(sha256_file "$RESULTS")"
-  if [ "$restored_hash" != "$original_hash" ]; then
-    gate_ok=0
-  fi
+  rm -f "$fixture/raw/witness.txt"
+  bash "$EVIDENCE_VERIFIER" "$fixture" >/dev/null 2>&1 && gate_ok=0
+  rm -rf "$fixture"
 
   if [ "$gate_ok" -eq 1 ]; then
     record_result evidence_mutation_detection PASS \
-      "results.jsonl hash changes on tamper and is restored intact" "raw/gate11-*"
+      "independent verifier rejects modified, added, and missing evidence" "evidence-manifest.sha256"
   else
     record_result evidence_mutation_detection FAIL \
       "evidence mutation not detected or restore failed" "raw/gate11-*"
   fi
+}
+
+write_evidence_manifest() {
+  local evidence_dir="$1"
+  local manifest="$evidence_dir/evidence-manifest.sha256"
+  local temporary="$evidence_dir/.evidence-manifest.tmp"
+  (
+    cd "$evidence_dir" || exit 1
+    find . -type f ! -name evidence-manifest.sha256 ! -name .evidence-manifest.tmp | sort \
+      | while IFS= read -r file; do
+          "$SHASUM" -a 256 "$file"
+        done
+  ) >"$temporary"
+  mv "$temporary" "$manifest"
 }
 
 # ---------------------------------------------------------------------------
@@ -563,12 +578,16 @@ test_evidence_mutation_detection
     }
   ' "$RESULTS" >"$SUMMARY"
 
+write_evidence_manifest "$RUN_DIR"
+FINAL_EVIDENCE_OK=1
+bash "$EVIDENCE_VERIFIER" "$RUN_DIR" >/dev/null 2>&1 || FINAL_EVIDENCE_OK=0
+
 chmod 0444 "$RESULTS" "$SUMMARY" 2>/dev/null || true
 
 printf 'evidence: %s\n' "$RUN_DIR"
 "$JQ" '{overall, counts, missingTestIds, unexpectedTestIds, duplicateTestIds}' "$SUMMARY"
 
-if [ "$("$JQ" -r '.overall' "$SUMMARY")" = "PASS" ]; then
+if [ "$("$JQ" -r '.overall' "$SUMMARY")" = "PASS" ] && [ "$FINAL_EVIDENCE_OK" -eq 1 ]; then
   exit 0
 fi
 exit 1

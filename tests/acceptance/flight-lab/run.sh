@@ -403,8 +403,14 @@ test_artifact_set_is_exact() {
     return
   }
 
-  manifest_dir="$RAW_DIR/manifest-check"
-  mkdir -p "$manifest_dir"
+  # First verify the actual declared reference deliverables. Synthetic fault
+  # injections below test the verifier, but cannot substitute for this live
+  # join between the manifest and the files named by it.
+  if [ "$(wc -l <"$manifest" | tr -d ' ')" -ne 28 ] \
+    || ! (cd "$REF_ROOT" && "$SHASUM" -a 256 -c "$(basename "$manifest")" --quiet) \
+      >/dev/null 2>&1; then
+    exact_ok=0
+  fi
 
   # Synthetic fault injections against the verifier itself: missing,
   # modified, and added files must each flip the verdict.
@@ -436,7 +442,7 @@ test_artifact_set_is_exact() {
   verify_artifact_set "$fixture" "$fixture.sha" || exact_ok=0
 
   if [ "$exact_ok" -eq 1 ]; then
-    record_result artifact_set_is_exact PASS "verifier detects missing, modified, and added files; intact set accepted" "$manifest"
+    record_result artifact_set_is_exact PASS "all 28 live deliverables match the manifest; verifier detects missing, modified, and added files" "$manifest"
   else
     record_result artifact_set_is_exact FAIL "artifact-set verifier missed a tamper class or rejected an intact set" "$manifest"
   fi

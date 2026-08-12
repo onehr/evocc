@@ -15,21 +15,41 @@ EVOCC_RAW="$RUN_DIR/evocc"
 GCC_RAW="$RUN_DIR/gcc"
 RESULTS="$RUN_DIR/results.jsonl"
 SUMMARY="$RUN_DIR/summary.json"
+SERIALIZER="$SCRIPT_DIR/cpp-token-serializer.py"
 
 JQ="${C30_JQ:-/opt/homebrew/bin/jq}"
 EVOCC="${C30_EVOCC:-$PROJECT_ROOT/target/release/evocc}"
 CONTAINER_BIN="${C30_CONTAINER_BIN:-/usr/local/bin/container}"
 IMAGE="${C30_CPP_IMAGE:-evo-flight-lab:sealed}"
 GCC_BIN="${C30_GCC_BIN:-gcc-14}"
-GCC_FLAGS="-E -P"
+SOURCE_DATE_EPOCH="${C30_SOURCE_DATE_EPOCH:-1786492800}"
 
 CONTAINER_AVAILABLE=0
 EVOCC_AVAILABLE=0
 
 mkdir -p "$RUN_DIR" "$EVOCC_RAW" "$GCC_RAW"
 
+if [ -z "${C30_EVOCC:-}" ]; then
+  if ! (cd "$PROJECT_ROOT" && cargo build -p evocc --release --locked --offline) \
+    >"$RUN_DIR/evocc-build.stdout" 2>"$RUN_DIR/evocc-build.stderr"; then
+    printf 'failed to build EvoCC from the current source tree\n' >&2
+    exit 2
+  fi
+fi
+
 if [ ! -x "$JQ" ]; then
   printf 'required jq is unavailable: %s\n' "$JQ" >&2
+  exit 2
+fi
+
+if [ ! -f "$SERIALIZER" ]; then
+  printf 'token serializer is unavailable: %s\n' "$SERIALIZER" >&2
+  exit 2
+fi
+
+if ! bash "$SCRIPT_DIR/cpp-token-serializer-selftest.sh" >"$RUN_DIR/serializer-selftest.stdout" \
+  2>"$RUN_DIR/serializer-selftest.stderr"; then
+  printf 'token serializer self-test failed\n' >&2
   exit 2
 fi
 
@@ -50,15 +70,6 @@ else
   CONTAINER_AVAILABLE=1
 fi
 
-normalize() {
-  sed 's/[[:space:]]\{2,\}/ /g' \
-    | sed 's/^[[:space:]]*//' \
-    | sed 's/[[:space:]]*$//' \
-    | sed 's|/Users/onehrxn/dev/30days/c30/tests/fixtures/cpp/|/src/|g' \
-    | sed 's|/Users/onehrxn/dev/30days/c30|/src|g' \
-    | grep -v '^$' || true
-}
-
 record_result() {
   local file="$1"
   local status="$2"
@@ -72,18 +83,16 @@ record_result() {
     >>"$RESULTS"
 }
 
-KNOWN_GAPS="024-include-angle.c 025-include-missing.c"
-KNOWN_CONTEXT_DIFFERENCES="028-predefined-file.c 029-predefined-line.c 030-predefined-date.c"
-
 run_all_evocc() {
   if [ "$EVOCC_AVAILABLE" -ne 1 ]; then
     return 1
   fi
   find "$FIXTURES_DIR" -maxdepth 1 -name '*.c' -type f -print0 | sort -z | while IFS= read -r -d '' src_file; do
     base="$(basename "$src_file")"
-    "$EVOCC" -E "$src_file" \
-      >"$EVOCC_RAW/${base}.out" \
-      2>"$EVOCC_RAW/${base}.stderr"
+    ( cd "$FIXTURES_DIR" && SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" "$EVOCC" \
+        -std=gnu11 -E -P -undef -nostdinc -I. -Iinclude "$base" ) \
+        >"$EVOCC_RAW/${base}.out" \
+        2>"$EVOCC_RAW/${base}.stderr"
     printf '%d\n' "$?" >"$EVOCC_RAW/${base}.rc"
   done
 }
@@ -100,9 +109,13 @@ set -u
 gcc_bin="$1"
 src_dir="$2"
 out_dir="$3"
-for f in "$src_dir"/*.c; do
+source_date_epoch="$4"
+cd "$src_dir" || exit 2
+for f in ./*.c; do
   base="$(basename "$f")"
-  "$gcc_bin" -E -P "$f" >"$out_dir/${base}.out" 2>"$out_dir/${base}.stderr"
+  SOURCE_DATE_EPOCH="$source_date_epoch" "$gcc_bin" \
+    -std=gnu11 -E -P -undef -nostdinc -I. -Iinclude "$base" \
+    >"$out_dir/${base}.out" 2>"$out_dir/${base}.stderr"
   rc=$?
   echo "$rc" >"$out_dir/${base}.rc"
 done
@@ -115,7 +128,7 @@ RUNNER_EOF
     --volume "$gcc_runner:/runner.sh:ro" \
     --volume "$GCC_RAW:/out" \
     "$IMAGE" \
-    /runner.sh "$GCC_BIN" /src /out
+    /runner.sh "$GCC_BIN" /src /out "$SOURCE_DATE_EPOCH"
 
   local gcc_rc=$?
   if [ "$gcc_rc" -ne 0 ]; then
@@ -159,39 +172,32 @@ find "$FIXTURES_DIR" -maxdepth 1 -name '*.c' -type f | sort | while IFS= read -r
   evocc_rc="$(cat "$EVOCC_RAW/${base}.rc" 2>/dev/null || echo 0)"
   gcc_rc="$(cat "$GCC_RAW/${base}.rc" 2>/dev/null || echo 0)"
 
-  if [ "$evocc_rc" -ne 0 ] && [ "$gcc_rc" -eq 0 ]; then
-    case "$KNOWN_GAPS" in
-      *"$base"*)
-        record_result "$base" "KNOWN_GAP" "evocc exit code $evocc_rc vs gcc $gcc_rc (documented gap)"
-        continue
-        ;;
-    esac
-  fi
-
-  evocc_norm="$(normalize <"$evocc_out" 2>/dev/null || true)"
-  gcc_norm="$(normalize <"$gcc_out" 2>/dev/null || true)"
-
-  if [ "$evocc_norm" = "$gcc_norm" ]; then
-    record_result "$base" "PASS" "outputs identical after normalization"
+  if [ "$evocc_rc" -ne "$gcc_rc" ]; then
+    record_result "$base" "ORACLE_CONFLICT" "exit codes differ: evocc=$evocc_rc gcc=$gcc_rc"
     continue
   fi
 
-  case "$KNOWN_CONTEXT_DIFFERENCES" in
-    *"$base"*)
-      record_result "$base" "DIFFER" "output differs (known context-dependent: __FILE__, __LINE__, __DATE__)"
-      continue
-      ;;
-  esac
+  if [ "$evocc_rc" -ne 0 ]; then
+    if [ "$base" = "025-include-missing.c" ] \
+      && grep -F 'nonexistent.h' "$EVOCC_RAW/${base}.stderr" >/dev/null 2>&1 \
+      && grep -F 'nonexistent.h' "$GCC_RAW/${base}.stderr" >/dev/null 2>&1; then
+      record_result "$base" "PASS" "both implementations reject the missing include"
+    else
+      record_result "$base" "ORACLE_CONFLICT" "unexpected controlled rejection: evocc=$evocc_rc gcc=$gcc_rc"
+    fi
+    continue
+  fi
 
-  case "$KNOWN_GAPS" in
-    *"$base"*)
-      record_result "$base" "KNOWN_GAP" "output differs (documented structural gap)"
-      continue
-      ;;
-  esac
+  evocc_tokens="$EVOCC_RAW/${base}.tokens"
+  gcc_tokens="$GCC_RAW/${base}.tokens"
+  if ! /usr/bin/python3 "$SERIALIZER" <"$evocc_out" >"$evocc_tokens" \
+    || ! /usr/bin/python3 "$SERIALIZER" <"$gcc_out" >"$gcc_tokens"; then
+    record_result "$base" "ORACLE_CONFLICT" "token serialization failed"
+    continue
+  fi
 
-  if [ "$evocc_rc" -ne 0 ] && [ "$gcc_rc" -ne 0 ]; then
-    record_result "$base" "DIFFER" "both produced errors but outputs differ"
+  if cmp -s "$evocc_tokens" "$gcc_tokens"; then
+    record_result "$base" "PASS" "preprocessing token streams are identical"
     continue
   fi
 
@@ -210,7 +216,7 @@ done
       counts: ($results | group_by(.status) | map({key: .[0].status, value: length}) | from_entries),
       total: ($results | length),
       overall: (
-        if (all($results[]; .status != "ORACLE_CONFLICT"))
+        if (($results | length) == 34 and all($results[]; .status == "PASS"))
         then "PASS"
         else "FAIL"
         end
