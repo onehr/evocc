@@ -1,6 +1,3 @@
-#![allow(unused_must_use)]
-#![allow(dropping_references)]
-#![allow(clippy::all)]
 #![allow(clippy::must_use_candidate)]
 //! Diagnostics, source-span tracking, and arena allocation.
 //!
@@ -226,12 +223,45 @@ impl DiagnosticCollector {
 /// once. The intended use is single-translation-unit compiler passes where
 /// bulk deallocation after a pass is cheaper than per-node `Box` churn.
 pub struct Arena {
-    // Chunks of memory; each chunk is a Box<[u8]> with bump pointer tracking.
-    chunks: Vec<Box<[usize]>>,
-    /// Offset within the current chunk where the next allocation starts.
-    bump: usize,
+    chunks: Vec<ArenaChunk>,
+    drops: Vec<DropRecord>,
     /// Default chunk size; grows if a single allocation exceeds it.
     chunk_size: usize,
+    /// An arena accepts arbitrary non-Send values, so the arena itself must
+    /// remain on the creating thread until those values have been dropped.
+    _thread_local: core::marker::PhantomData<std::rc::Rc<()>>,
+}
+
+struct ArenaChunk {
+    ptr: core::ptr::NonNull<u8>,
+    layout: std::alloc::Layout,
+    used: usize,
+}
+
+impl Drop for ArenaChunk {
+    fn drop(&mut self) {
+        // Safety: `ptr` was allocated with exactly `layout` and is owned by
+        // this chunk until this destructor runs.
+        unsafe { std::alloc::dealloc(self.ptr.as_ptr(), self.layout) };
+    }
+}
+
+struct DropRecord {
+    ptr: core::ptr::NonNull<u8>,
+    len: usize,
+    drop_fn: unsafe fn(*mut u8, usize),
+}
+
+struct SliceInitGuard<T> {
+    ptr: *mut T,
+    initialized: usize,
+}
+
+impl<T> Drop for SliceInitGuard<T> {
+    fn drop(&mut self) {
+        // Safety: precisely `initialized` consecutive elements were written.
+        unsafe { drop_elements::<T>(self.ptr.cast(), self.initialized) };
+    }
 }
 
 impl Default for Arena {
@@ -247,8 +277,9 @@ impl Arena {
         assert!(chunk_size >= core::mem::size_of::<usize>());
         Self {
             chunks: Vec::new(),
-            bump: 0,
+            drops: Vec::new(),
             chunk_size,
+            _thread_local: core::marker::PhantomData,
         }
     }
 
@@ -259,12 +290,22 @@ impl Arena {
         let size = core::mem::size_of::<T>();
         let align = core::mem::align_of::<T>();
 
+        if core::mem::needs_drop::<T>() {
+            self.drops.reserve(1);
+        }
         let ptr = self.allocate_raw(size, align);
         // Safety: `ptr` points to `size` bytes of freshly allocated memory
         // within a valid chunk that will not be freed or moved until the
         // Arena itself is dropped.
         unsafe {
             ptr.cast::<T>().write(value);
+            if core::mem::needs_drop::<T>() {
+                self.drops.push(DropRecord {
+                    ptr: core::ptr::NonNull::new_unchecked(ptr),
+                    len: 1,
+                    drop_fn: drop_elements::<T>,
+                });
+            }
             &mut *ptr.cast::<T>()
         }
     }
@@ -284,6 +325,16 @@ impl Arena {
     /// The default-initialization makes this safe for types where all-zero
     /// bytes would be an invalid bit pattern (NonZeroU8, bool, etc.).
     pub fn alloc_slice<T: Default>(&mut self, len: usize) -> &mut [T] {
+        self.alloc_slice_with(len, |_| T::default())
+    }
+
+    /// Allocate and initialize a slice inside the arena. If an initializer
+    /// panics, every already-created element is dropped exactly once and the
+    /// arena remains usable.
+    pub fn alloc_slice_with<T, F>(&mut self, len: usize, mut init: F) -> &mut [T]
+    where
+        F: FnMut(usize) -> T,
+    {
         if len == 0 {
             return &mut [];
         }
@@ -291,25 +342,39 @@ impl Arena {
             .checked_mul(len)
             .expect("alloc_slice overflow");
         let ptr = self.allocate_raw(size, core::mem::align_of::<T>());
-        // Safety: `allocate_raw` returns `size` bytes of valid memory within
-        // a chunk that will not be freed or moved. We write `T::default()` to
-        // each element before creating a reference, so no element ever
-        // contains uninitialized or undefined bytes.
+        if core::mem::needs_drop::<T>() {
+            self.drops.reserve(1);
+        }
+        let typed = ptr.cast::<T>();
+        let mut guard = SliceInitGuard {
+            ptr: typed,
+            initialized: 0,
+        };
+
+        // Safety: `allocate_raw` returned storage with the size and alignment
+        // required for `len` values of `T`. The guard owns the initialized
+        // prefix until construction has completed.
         unsafe {
             for i in 0..len {
-                ptr.cast::<T>().add(i).write(T::default());
+                typed.add(i).write(init(i));
+                guard.initialized += 1;
             }
-            core::slice::from_raw_parts_mut(ptr.cast::<T>(), len)
+            core::mem::forget(guard);
+            if core::mem::needs_drop::<T>() {
+                self.drops.push(DropRecord {
+                    ptr: core::ptr::NonNull::new_unchecked(ptr),
+                    len,
+                    drop_fn: drop_elements::<T>,
+                });
+            }
+            core::slice::from_raw_parts_mut(typed, len)
         }
     }
 
     /// Total bytes allocated so far (sum of all chunk sizes).
     #[must_use]
     pub fn allocated_bytes(&self) -> usize {
-        self.chunks
-            .iter()
-            .map(|c| c.len() * std::mem::size_of::<usize>())
-            .sum()
+        self.chunks.iter().map(|chunk| chunk.layout.size()).sum()
     }
 
     /// Number of chunks allocated.
@@ -321,38 +386,83 @@ impl Arena {
     // --- private ----------------------------------------------------------
 
     fn allocate_raw(&mut self, size: usize, align: usize) -> *mut u8 {
-        // Align bump pointer within the current chunk.
-        let aligned = self.bump.wrapping_add(align - 1) & !(align - 1);
-
-        if self.chunks.is_empty()
-            || aligned + size > self.chunks.last().unwrap().len() * std::mem::size_of::<usize>()
-        {
-            // Need a new chunk. Allocate at least `chunk_size`, but if a
-            // single type exceeds that, use exactly that size (plus alignment
-            // padding) so the allocation fits.
-            let desired = usize::max(self.chunk_size, size + align);
-            let element_count =
-                (desired + std::mem::size_of::<usize>() - 1) / std::mem::size_of::<usize>();
-            self.chunks
-                .push(vec![0usize; element_count].into_boxed_slice());
-            // Align the bump within the new chunk, same as the non-new-chunk
-            // path below. The previous code returned chunk_ptr at offset 0
-            // regardless of alignment, which is UB for types requiring
-            // greater-than-byte alignment.
-            let chunk_ptr = self.chunks.last_mut().unwrap().as_mut_ptr() as *mut u8;
-            let chunk_aligned =
-                0usize.wrapping_add(align.saturating_sub(1)) & !(align.saturating_sub(1));
-            self.bump = chunk_aligned + size;
-            // Safety: chunk_aligned is within the new chunk (zero-aligned
-            // within a Box<[u8]> is always 0 for any reasonable alignment
-            // requirement, but we compute it explicitly for correctness).
-            return unsafe { chunk_ptr.add(chunk_aligned) };
+        debug_assert!(align.is_power_of_two());
+        if size == 0 {
+            return std::ptr::without_provenance_mut(align);
         }
 
-        let chunk_ptr = self.chunks.last_mut().unwrap().as_mut_ptr() as *mut u8;
-        // Safety: `aligned + size <= chunk.len()` was just verified.
-        self.bump = aligned + size;
-        unsafe { chunk_ptr.add(aligned) }
+        if let Some(chunk) = self.chunks.last_mut() {
+            if chunk.layout.align() >= align {
+                if let Some(start) = align_up(chunk.used, align) {
+                    if let Some(end) = start.checked_add(size) {
+                        if end <= chunk.layout.size() {
+                            chunk.used = end;
+                            // Safety: start..end is within this live chunk.
+                            return unsafe { chunk.ptr.as_ptr().add(start) };
+                        }
+                    }
+                }
+            }
+        }
+
+        let capacity = self.chunk_size.max(size);
+        let chunk_align = align.max(core::mem::align_of::<usize>());
+        let layout = std::alloc::Layout::from_size_align(capacity, chunk_align)
+            .expect("arena allocation layout overflow");
+        // Safety: layout has non-zero size and valid power-of-two alignment.
+        let allocation = unsafe { std::alloc::alloc(layout) };
+        let ptr = core::ptr::NonNull::new(allocation)
+            .unwrap_or_else(|| std::alloc::handle_alloc_error(layout));
+        self.chunks.push(ArenaChunk {
+            ptr,
+            layout,
+            used: size,
+        });
+        ptr.as_ptr()
+    }
+}
+
+impl Drop for Arena {
+    fn drop(&mut self) {
+        let mut first_panic = None;
+        for record in self.drops.drain(..).rev() {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                // Safety: every record describes initialized values that have
+                // not previously been dropped.
+                unsafe { (record.drop_fn)(record.ptr.as_ptr(), record.len) };
+            }));
+            if first_panic.is_none() {
+                first_panic = result.err();
+            }
+        }
+        if !std::thread::panicking() {
+            if let Some(payload) = first_panic {
+                std::panic::resume_unwind(payload);
+            }
+        }
+    }
+}
+
+fn align_up(offset: usize, align: usize) -> Option<usize> {
+    offset
+        .checked_add(align - 1)
+        .map(|value| value & !(align - 1))
+}
+
+unsafe fn drop_elements<T>(ptr: *mut u8, len: usize) {
+    let typed = ptr.cast::<T>();
+    let mut first_panic = None;
+    for index in (0..len).rev() {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            // Safety: the caller guarantees all `len` elements are initialized.
+            unsafe { core::ptr::drop_in_place(typed.add(index)) };
+        }));
+        if first_panic.is_none() {
+            first_panic = result.err();
+        }
+    }
+    if let Some(payload) = first_panic {
+        std::panic::resume_unwind(payload);
     }
 }
 
@@ -391,7 +501,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn source_span_rejects_negative_width() {
-        SourceSpan::new(FileId::new(1), 10, 5, 1, 1);
+        let _ = SourceSpan::new(FileId::new(1), 10, 5, 1, 1);
     }
 
     #[test]
@@ -486,7 +596,7 @@ mod tests {
             kind: u8,
             value: i64,
         }
-        drop(r0);
+        let _ = r0;
         let n: &mut Node = arena.alloc(Node { kind: 1, value: 42 });
         assert_eq!(n.value, 42);
     }

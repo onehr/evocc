@@ -1,4 +1,3 @@
-#![allow(clippy::all)]
 #![allow(dead_code)]
 #![allow(clippy::collapsible_else_if, clippy::approx_constant)]
 //! C High-Level IR: typed AST preserving C source semantics.
@@ -261,48 +260,12 @@ pub fn eval_expr(expr: &CHirExpr, vars: &mut HashMap<String, i64>) -> i64 {
                         0
                     }
                 }
-                BinaryOp::Lt => {
-                    if l < r {
-                        1
-                    } else {
-                        0
-                    }
-                }
-                BinaryOp::Gt => {
-                    if l > r {
-                        1
-                    } else {
-                        0
-                    }
-                }
-                BinaryOp::Le => {
-                    if l <= r {
-                        1
-                    } else {
-                        0
-                    }
-                }
-                BinaryOp::Ge => {
-                    if l >= r {
-                        1
-                    } else {
-                        0
-                    }
-                }
-                BinaryOp::Eq => {
-                    if l == r {
-                        1
-                    } else {
-                        0
-                    }
-                }
-                BinaryOp::Ne => {
-                    if l != r {
-                        1
-                    } else {
-                        0
-                    }
-                }
+                BinaryOp::Lt => i64::from(l < r),
+                BinaryOp::Gt => i64::from(l > r),
+                BinaryOp::Le => i64::from(l <= r),
+                BinaryOp::Ge => i64::from(l >= r),
+                BinaryOp::Eq => i64::from(l == r),
+                BinaryOp::Ne => i64::from(l != r),
                 _ => 0,
             }
         }

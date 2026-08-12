@@ -1,4 +1,3 @@
-#![allow(clippy::all)]
 //! C declarator, expression, and statement parser producing C-HIR
 
 use evocc_chir::{
@@ -13,6 +12,7 @@ pub struct Parser<'src> {
     pos: usize,
     file: FileId,
     source: &'src str,
+    had_error: bool,
 }
 
 impl<'src> Parser<'src> {
@@ -22,6 +22,7 @@ impl<'src> Parser<'src> {
             pos: 0,
             file,
             source,
+            had_error: false,
         }
     }
 
@@ -31,10 +32,15 @@ impl<'src> Parser<'src> {
             if let Some(decl) = self.parse_external_declaration() {
                 decls.push(decl);
             } else {
+                self.had_error = true;
                 self.advance();
             }
         }
         decls
+    }
+
+    pub fn had_error(&self) -> bool {
+        self.had_error
     }
 
     // ── helpers ────────────────────────────────────────────────────────
@@ -72,12 +78,18 @@ impl<'src> Parser<'src> {
         if self.peek_kind() == Some(kind) {
             self.advance()
         } else {
+            self.had_error = true;
             None
         }
     }
 
-    fn token_text(&self, tok: &Token) -> &'src str {
-        &self.source[tok.span.byte_start as usize..tok.span.byte_end as usize]
+    fn token_text<'a>(&'a self, tok: &'a Token) -> &'a str {
+        if let evocc_lex::TokenText::Decoded(text) = &tok.text {
+            return text;
+        }
+        self.source
+            .get(tok.span.byte_start as usize..tok.span.byte_end as usize)
+            .unwrap_or("")
     }
 
     fn span(&self) -> SourceSpan {
@@ -116,9 +128,7 @@ impl<'src> Parser<'src> {
             self.advance();
             let params = self.parse_parameter_list();
             let rparen_span = self.peek().map(|t| t.span).unwrap_or(name_span);
-            if self.expect(TokenKind::RParen).is_none() {
-                return None; // malformed: missing closing ')' in parameter list
-            }
+            self.expect(TokenKind::RParen)?;
 
             if self.peek_kind() == Some(TokenKind::LBrace) {
                 let body = self.parse_compound_statement();
@@ -187,11 +197,7 @@ impl<'src> Parser<'src> {
         if self.peek_kind() == Some(TokenKind::RParen) {
             return params;
         }
-        loop {
-            let ty = match self.parse_type_specifier() {
-                Some(t) => t,
-                None => break,
-            };
+        while let Some(ty) = self.parse_type_specifier() {
             if let Some(tok) = self.peek() {
                 if tok.kind == TokenKind::Identifier {
                     let name = self.token_text(tok).to_owned();
@@ -340,7 +346,10 @@ impl<'src> Parser<'src> {
     }
 
     fn parse_primary(&mut self) -> CHirExpr {
-        let tok = self.advance().expect("expected primary expression");
+        let Some(tok) = self.advance() else {
+            self.had_error = true;
+            return CHirExpr::Ident("__error__".into(), self.span());
+        };
         match tok.kind {
             TokenKind::IntLiteral => {
                 let text = self.token_text(&tok);
@@ -365,7 +374,10 @@ impl<'src> Parser<'src> {
                 let span = self.merge_span(tok.span, rparen_span);
                 pack_expr(expr, span)
             }
-            _ => CHirExpr::Ident("__error__".into(), tok.span),
+            _ => {
+                self.had_error = true;
+                CHirExpr::Ident("__error__".into(), tok.span)
+            }
         }
     }
 }

@@ -1,4 +1,3 @@
-#![allow(clippy::all)]
 #![allow(dead_code)]
 #![allow(clippy::should_implement_trait)]
 //! C preprocessor: macro expansion, directives, token stream
@@ -366,6 +365,10 @@ impl TokenStream {
         self.tokens.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.tokens.is_empty()
+    }
+
     pub fn into_vec(self) -> Vec<Token> {
         self.tokens
     }
@@ -383,12 +386,21 @@ struct CondState {
     had_true: bool,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct PreprocessError {
+    pub code: &'static str,
+    pub span: SourceSpan,
+    pub message: String,
+}
+
 #[derive(Debug)]
 pub struct Preprocessor {
     macros: MacroMap,
     include_guard_seen: bool,
     include_paths: Vec<String>,
     cond_stack: Vec<CondState>,
+    errors: Vec<PreprocessError>,
+    standard_includes: bool,
     /// Current source file path for __FILE__ expansion.
     pub current_file: String,
 }
@@ -409,6 +421,8 @@ impl Preprocessor {
             include_guard_seen: false,
             include_paths: Vec::new(),
             cond_stack: Vec::new(),
+            errors: Vec::new(),
+            standard_includes: true,
             current_file: String::new(),
         }
     }
@@ -437,8 +451,25 @@ impl Preprocessor {
         &self.include_paths
     }
 
+    pub fn set_standard_includes_enabled(&mut self, enabled: bool) {
+        self.standard_includes = enabled;
+    }
+
+    pub fn errors(&self) -> &[PreprocessError] {
+        &self.errors
+    }
+
+    pub fn has_errors(&self) -> bool {
+        !self.errors.is_empty()
+    }
+
     pub fn define(&mut self, name: String, body: Vec<Token>) {
         self.macros.define(name, body, vec![]);
+    }
+
+    pub fn set_predefined_date(&mut self, date: &str) {
+        self.macros
+            .define("__DATE__".into(), vec![make_string_token(date)], vec![]);
     }
 
     pub fn undefine(&mut self, name: &str) {
@@ -571,10 +602,15 @@ impl Preprocessor {
                     }
                     "include" => {
                         if self.cond_active() {
+                            let directive_span = tok.span;
                             // Parse include argument: "file" or <file>
                             let include_text = read_include_argument(&raw, &mut i, source);
                             if !include_text.is_empty() {
-                                let path = resolve_include(&include_text, &self.include_paths);
+                                let path = resolve_include(
+                                    &include_text,
+                                    &self.include_paths,
+                                    self.standard_includes,
+                                );
                                 if let Some(resolved) = path {
                                     if !self.has_include_guard() || !self.include_guard_seen {
                                         if let Ok(content) = std::fs::read_to_string(&resolved) {
@@ -583,7 +619,13 @@ impl Preprocessor {
                                             let mut sub_tokens = Vec::new();
                                             while let Some(t) = sub_lex.next() {
                                                 if t.kind != TokenKind::Eof {
-                                                    sub_tokens.push(t);
+                                                    let text =
+                                                        token_lexeme(&t, &content).to_owned();
+                                                    sub_tokens.push(Token {
+                                                        kind: t.kind,
+                                                        span: t.span,
+                                                        text: TokenText::Decoded(text),
+                                                    });
                                                 }
                                             }
                                             let sub_stream = TokenStream::new(sub_tokens);
@@ -591,6 +633,12 @@ impl Preprocessor {
                                             output.extend(processed.into_vec());
                                         }
                                     }
+                                } else {
+                                    self.errors.push(PreprocessError {
+                                        code: "E0105",
+                                        span: directive_span,
+                                        message: format!("include-not-found: {include_text}"),
+                                    });
                                 }
                             }
                         }
@@ -686,8 +734,20 @@ impl Preprocessor {
                         skip_line(&raw, &mut i, source);
                     }
                     "error" => {
-                        // #error message → skip; in a real preprocessor this
-                        // would emit a diagnostic.
+                        let message_tokens = collect_line_tokens(&raw, &mut i, source);
+                        if self.cond_active() {
+                            let message = message_tokens
+                                .iter()
+                                .map(|token| token_lexeme(token, source))
+                                .filter(|text| !text.is_empty())
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            self.errors.push(PreprocessError {
+                                code: "E0104",
+                                span: tok.span,
+                                message: format!("error-directive: {message}"),
+                            });
+                        }
                         skip_line(&raw, &mut i, source);
                     }
                     _ => {
@@ -822,7 +882,10 @@ impl Default for Preprocessor {
 
 /// Extract the source text of a token from the original source buffer using
 /// its span. Returns "" for dummy spans or out-of-bounds.
-fn token_lexeme<'a>(tok: &Token, source: &'a str) -> &'a str {
+fn token_lexeme<'a>(tok: &'a Token, source: &'a str) -> &'a str {
+    if let TokenText::Decoded(text) = &tok.text {
+        return text;
+    }
     let start = tok.span.byte_start as usize;
     let end = tok.span.byte_end as usize;
     if start >= source.len() || end > source.len() || start > end {
@@ -919,7 +982,11 @@ fn read_include_argument(tokens: &[Token], i: &mut usize, source: &str) -> Strin
 /// For quoted includes, first search relative to the current directory,
 /// then the include path list. For angle-bracket includes, only search
 /// the include path list.
-fn resolve_include(name: &str, include_paths: &[String]) -> Option<String> {
+fn resolve_include(
+    name: &str,
+    include_paths: &[String],
+    standard_includes: bool,
+) -> Option<String> {
     // Quoted include: try current directory first.
     if !name.starts_with('/') {
         let local = std::path::Path::new(name);
@@ -935,10 +1002,12 @@ fn resolve_include(name: &str, include_paths: &[String]) -> Option<String> {
         }
     }
     // Angle-bracket system includes: try well-known paths.
-    for sys_path in &["/usr/include", "/usr/local/include"] {
-        let candidate = std::path::Path::new(sys_path).join(name);
-        if candidate.exists() {
-            return Some(candidate.to_string_lossy().to_string());
+    if standard_includes {
+        for sys_path in &["/usr/include", "/usr/local/include"] {
+            let candidate = std::path::Path::new(sys_path).join(name);
+            if candidate.exists() {
+                return Some(candidate.to_string_lossy().to_string());
+            }
         }
     }
     None
