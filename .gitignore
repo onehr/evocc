@@ -1,6 +1,9 @@
-# Design documents and research notes are internal working material.
-# They are deliberately excluded from the public repository history.
-docs/
+# Design documents and research notes are internal working material. The
+# reader-facing implementation notebook is the one deliberately tracked
+# exception.
+docs/*
+!docs/notebook/
+!docs/notebook/**
 lessons.md
 
 # Runtime evidence is machine-generated output, not source.
