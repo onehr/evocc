@@ -62,22 +62,67 @@ test("server-renders the complete localized Chinese chapter", async () => {
   assert.doesNotMatch(html, /Drawing the system map|mermaid/);
 });
 
+test("server-renders the detailed bilingual preprocessing chapter and authored diagrams", async () => {
+  const englishResponse = await render("/chapters/from-bytes-to-preprocessing-tokens");
+  assert.equal(englishResponse.status, 200);
+  const english = await englishResponse.text();
+
+  assert.match(english, /<title>From Bytes to Preprocessing Tokens · Building EvoCC<\/title>/i);
+  assert.match(english, /C is translated in phases/);
+  assert.match(english, /Macro expansion is an evaluator/);
+  assert.match(english, /The differential oracle compares tokens, not typography/);
+  assert.match(english, /What Day 2–3 established—and what it did not/);
+  assert.match(english, /href="\/zh\/chapters\/from-bytes-to-preprocessing-tokens"/);
+  for (const sketch of [
+    "translation-phases",
+    "token-anatomy",
+    "maximal-munch",
+    "macro-rescan",
+    "hash-and-paste",
+    "conditional-stack",
+    "include-source-graph",
+    "differential-oracle",
+  ]) {
+    assert.match(english, new RegExp(`data-sketch="${sketch}"`));
+  }
+  assert.equal(english.match(/data-sketch=/g)?.length, 8);
+  assert.doesNotMatch(english, /mermaid/);
+
+  const chineseResponse = await render("/zh/chapters/from-bytes-to-preprocessing-tokens");
+  assert.equal(chineseResponse.status, 200);
+  const chinese = await chineseResponse.text();
+  assert.match(chinese, /<title> Token · Building EvoCC<\/title>/i);
+  assert.match(chinese, /C /);
+  assert.match(chinese, / evaluator/);
+  assert.match(chinese, /Differential oracle token, /);
+  assert.match(chinese, / 2–3 , /);
+  assert.match(chinese, /href="\/chapters\/from-bytes-to-preprocessing-tokens"/);
+  assert.equal(chinese.match(/data-sketch=/g)?.length, 8);
+});
+
 test("generated bilingual content is an exact projection of both chapter sources", async () => {
-  const [source, chineseSource, generated] = await Promise.all([
+  const [source, chineseSource, chapterTwo, chineseChapterTwo, generated] = await Promise.all([
     readFile(new URL("../../docs/notebook/01-before-the-first-token.md", import.meta.url), "utf8"),
     readFile(new URL("../../docs/notebook/zh/01-before-the-first-token.md", import.meta.url), "utf8"),
+    readFile(new URL("../../docs/notebook/02-from-bytes-to-preprocessing-tokens.md", import.meta.url), "utf8"),
+    readFile(new URL("../../docs/notebook/zh/02-from-bytes-to-preprocessing-tokens.md", import.meta.url), "utf8"),
     readFile(new URL("../app/generated/notebook.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(source, /^---\n/);
   assert.match(source, /slug: before-the-first-token/);
   assert.match(chineseSource, /title: Token /);
+  assert.match(chapterTwo, /slug: from-bytes-to-preprocessing-tokens/);
+  assert.match(chineseChapterTwo, /title: Token/);
   assert.match(generated, /"slug": "before-the-first-token"/);
   assert.equal(generated.match(/"slug": "before-the-first-token"/g)?.length, 2);
+  assert.equal(generated.match(/"slug": "from-bytes-to-preprocessing-tokens"/g)?.length, 2);
   assert.match(generated, /"locale": "en"/);
   assert.match(generated, /"locale": "zh"/);
   assert.match(generated, /"title": "Before the First Token"/);
   assert.match(generated, /"title": " Token "/);
+  assert.match(generated, /"title": "From Bytes to Preprocessing Tokens"/);
+  assert.match(generated, /"title": " Token"/);
   assert.match(generated, /A compiler that cannot identify its inputs cannot explain its output\./);
   assert.match(generated, /The artifacts left by Day 1/);
   assert.doesNotMatch(generated, /codex-preview|SkeletonPreview/);

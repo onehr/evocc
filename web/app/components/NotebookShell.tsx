@@ -18,9 +18,9 @@ export function NotebookShell({ chapter }: { chapter: NotebookChapter }) {
   const copy = isChinese ? {
     subtitle: "",
     published: ` ${chapters.length} `,
-    part: " · ",
+    part: chapter.number === 1 ? " · " : " · GNU C Frontend",
     nextTrail: "",
-    nextTitle: " Token",
+    nextTitle: " Token ",
     inProgress: "",
     chapter: "",
     chapterSuffix: "",
@@ -31,16 +31,16 @@ export function NotebookShell({ chapter }: { chapter: NotebookChapter }) {
     coverCaption: ": , . ",
     previous: "",
     next: "",
-    nextPending: " Token",
+    nextPending: "Declarator C-HIR",
     page: "",
     baseline: "",
-    baselineValue: " 1 ",
+    baselineValue: chapter.number === 1 ? " 1 " : " 2–3 Frontend",
   } : {
     subtitle: "A proof-carrying compiler notebook",
     published: `${chapters.length} chapter published`,
-    part: "Part I · Ground Truth",
+    part: chapter.number === 1 ? "Part I · Ground Truth" : "Part II · The GNU C Frontend",
     nextTrail: "Next trail",
-    nextTitle: "From Characters to Preprocessing Tokens",
+    nextTitle: "Giving Tokens Structure",
     inProgress: "In progress",
     chapter: "Chapter",
     chapterSuffix: "",
@@ -51,10 +51,10 @@ export function NotebookShell({ chapter }: { chapter: NotebookChapter }) {
     coverCaption: "The territory ahead: source text becomes a bootable, independently checked result.",
     previous: "Previous",
     next: "Next",
-    nextPending: "Preprocessing Tokens",
+    nextPending: "Declarators and C-HIR",
     page: "On this page",
     baseline: "Chapter baseline",
-    baselineValue: "Day 1 notebook",
+    baselineValue: chapter.number === 1 ? "Day 1 notebook" : "Day 2–3 frontend",
   };
   const alternateHref = chapterHref(chapter, isChinese ? "en" : "zh");
 
@@ -114,16 +114,18 @@ export function NotebookShell({ chapter }: { chapter: NotebookChapter }) {
                 <span>{chapter.wordCount.toLocaleString(isChinese ? "zh-CN" : "en-US")} {copy.units}</span>
                 <span>{copy.updated}</span>
               </div>
-              <figure className="chapter-cover">
-                <Image
-                  src="/evocc-compiler-map.png"
-                  width={1822}
-                  height={863}
-                  priority
-                  alt={copy.coverAlt}
-                />
-                <figcaption>{copy.coverCaption}</figcaption>
-              </figure>
+              {chapter.number === 1 && (
+                <figure className="chapter-cover">
+                  <Image
+                    src="/evocc-compiler-map.png"
+                    width={1822}
+                    height={863}
+                    priority
+                    alt={copy.coverAlt}
+                  />
+                  <figcaption>{copy.coverCaption}</figcaption>
+                </figure>
+              )}
             </header>
             <div className="chapter-prose">
               <MarkdownChapter markdown={chapter.body} locale={chapter.locale} />
@@ -157,7 +159,7 @@ export function NotebookShell({ chapter }: { chapter: NotebookChapter }) {
           </nav>
           <p className="edition-note">
             <span>{copy.baseline}</span>
-            {copy.baselineValue}<br /><code>7b2ae32</code>
+            {copy.baselineValue}<br /><code>source-synchronized</code>
           </p>
         </aside>
       </div>

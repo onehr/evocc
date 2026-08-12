@@ -113,6 +113,119 @@ export const chapters: NotebookChapter[] = [
     "readingMinutes": 12
   },
   {
+    "locale": "en",
+    "slug": "from-bytes-to-preprocessing-tokens",
+    "number": 2,
+    "day": "Day 2–3",
+    "title": "From Bytes to Preprocessing Tokens",
+    "description": "Follow GNU C source through logical lines, preprocessing tokens, macro rescanning, includes, diagnostics, and a token-normalized differential oracle.",
+    "body": "> The difficult part of reading C is deciding which distinctions still exist.\n\nConsider these two fragments:\n\n```c\nleft + +right\nleft++ + right\n```\n\nThey use nearly the same characters. They do not contain the same tokens, and\nthey do not mean the same thing. Now consider this one:\n\n```c\n#define PATH(name) \"include/\" name\n#include PATH(\"config.h\")\n```\n\nThe characters naming the included file do not exist as a contiguous slice of\nthe original source. They are assembled by preprocessing. Later, a diagnostic\nmust still say which file, line, and column produced a bad declaration inside\nthat header.\n\nThis is the work of the C frontend before parsing begins. It is not merely\nsplitting a string at punctuation. The frontend must preserve boundaries that\naffect meaning, erase boundaries that the language says no longer matter, and\ncarry source identity through transformations that manufacture new text.\n\nChapter 1 built a world in which a compiler run can be identified. This\nchapter enters the compiler itself. It reconstructs the Day 2–3 path from\nsource bytes to the token stream consumed by the parser, using the current\nEvoCC implementation and its 34-case preprocessing differential gate as our\nguide.\n\n## 2.1 C is translated in phases\n\nThe C standard describes translation as an ordered sequence of phases. The\nexact standard wording matters, but the engineering point is simpler: **order\nchanges the program**.\n\nA useful working model for EvoCC is:\n\n1. identify the physical source bytes and source file;\n2. form logical lines by handling line continuation;\n3. recognize comments, whitespace, identifiers, literals, and punctuators;\n4. form preprocessing tokens;\n5. interpret directives and expand macros;\n6. concatenate adjacent string literals and parse C syntax later.\n\n```evocc-sketch\ntranslation-phases\n```\n\nEach phase removes information. After a backslash-newline splice, later stages\nmust behave as if that physical line break did not separate the tokens. After\ncomments are removed, the text inside a comment is not available to macro\nexpansion. After maximal-munch tokenization chooses `>>=`, a parser must not\nreinterpret it as `>` followed by `>=` merely because that would make a\ndifferent grammar production succeed.\n\nThis irreversibility gives us a design rule:\n\n> Every stage should consume one explicit representation and produce another.\n> It should not repeatedly guess what an earlier representation may have been.\n\nEvoCC has not yet implemented every historical C translation feature. In\nparticular, the current lexer deliberately characterizes trigraph spellings\nsuch as `??=` as three ordinary punctuators rather than translating them to\n`#`. That is an honest scope boundary, not evidence of full GNU C11 lexical\nconformance. The rest of this chapter distinguishes such boundaries from the\nbehavior that has actually been measured.\n\n## 2.2 A preprocessing token is not yet a C token\n\nThe preprocessor must recognize enough structure to expand macros without\nperforming C type checking. Its vocabulary therefore differs slightly from\nthe parser's.\n\nFor example, a *preprocessing number* is deliberately permissive. Text such as\n`1e+VALUE` can remain one preprocessing number while macros are expanded; only\nlater does the language frontend decide whether the final spelling is a valid\ninteger or floating constant. Likewise, `#` and `##` are meaningful to macro\nreplacement even though they are not ordinary expression operators.\n\nEvoCC's lexer records a token as three joined facts:\n\n```rust\npub struct Token {\n    pub kind: TokenKind,\n    pub span: SourceSpan,\n    pub text: TokenText,\n}\n```\n\n```evocc-sketch\ntoken-anatomy\n```\n\nThe three fields answer different questions:\n\n| Field | Question | Example |\n|---|---|---|\n| `kind` | What grammatical category was recognized? | `Identifier`, `ShiftLeftEq`, `StringLiteral` |\n| `text` | Where does its spelling live? | source-backed `Borrowed` or owned `Decoded(\"size_t\")` |\n| `span` | Which source range caused it? | `FileId(3)`, bytes `48..54`, line 4, column 9 |\n\n`SourceSpan` treats `(FileId, byte_start, byte_end)` as primary identity. Line\nand column are derived human coordinates. That distinction prevents a common\ncompiler bug: two files can both contain “line 4, column 9,” while their byte\nranges and file identities are unrelated.\n\n### Borrowed and Decoded spelling\n\nMost tokens are `Borrowed`. Their text is reconstructed by slicing the source\nbuffer selected by `span.file`. Generated tokens cannot do that. A macro may\nproduce an identifier that never appeared contiguously in the source; an\nincluded header may have byte offsets larger than the entire parent file.\nThose tokens use `Decoded(String)` and carry their own spelling.\n\nThis split repaired a real end-to-end defect. An earlier parser attempted to\nslice the main source buffer using a token span from an included header. A long\nidentifier in the header caused an out-of-bounds panic. The repaired parser\nbranches on `TokenText`: `Decoded` text is used directly, while `Borrowed` text\nis accepted only after its file and byte range are validated.\n\nThe important lesson is not “clone more strings.” It is that **storage\nownership and source provenance are different properties**. A token may own\nits spelling while still pointing to the header location that should appear in\na diagnostic.\n\n## 2.3 Maximal munch makes whitespace semantic\n\nLexers usually follow the longest-token rule: at the current byte, choose the\nlongest valid token. This is often called *maximal munch*.\n\nIt makes the following boundaries significant:\n\n```text\n> > =     versus     >>=\n+ +       versus     ++\n/ *       versus     /*\n. . .     versus     ...\n```\n\nThe lexer can implement the rule locally by testing longer punctuators before\nshorter ones. The more subtle problem appears at the other end of\npreprocessing: `evocc -E` must render a token stream back into text.\n\n```evocc-sketch\nmaximal-munch\n```\n\nSimply concatenating token spellings introduced two serious errors:\n\n```c\nx + +1       // rendered as x++1\nx / *(&y)    // rendered as x/*(&y)\n```\n\nThe first manufactures an increment operator. The second manufactures the\nopening of a block comment and can delete the rest of the program.\n\nEvoCC's renderer now uses a bounded round-trip predicate. It tentatively\nconcatenates the recent output tokens with the next token, lexes that candidate,\nand asks whether the resulting `TokenKind` sequence is exactly the expected\nsequence. If not, it inserts a space and starts a new concatenation group.\n\nFormally, for token spellings `s₁…sₙ` and kinds `k₁…kₙ`, omission of a separator\nis allowed only when:\n\n```text\nlex(s₁ || … || sₙ).kinds = [k₁, …, kₙ]\n```\n\nThis is stronger than a hand-written table of “word-like” tokens. It catches\nmulti-token interactions such as `. . .` and `% : % :`, where pairwise checks\nalone can miss a newly formed punctuator.\n\n## 2.4 Physical lines and logical lines\n\nBackslash-newline continuation is processed before directives and macro calls\nare understood. These are therefore one logical definition:\n\n```c\n#define SCALE(x) ((x) * \\\n                  16)\n```\n\nThe splice is not whitespace. It disappears. If it were replaced by a newline,\nthe macro body would end early; if it were replaced by an ordinary space at the\nwrong point, it could change a token boundary.\n\nLine handling also affects diagnostics. The compiler needs two related views:\n\n- a logical view for deciding whether `#` begins a directive and which tokens\n  belong to the replacement list;\n- a physical-source view for telling the user where those tokens were written.\n\nEvoCC's lexer tracks byte position, line, and column while skipping whitespace\nand both comment forms. It emits one `Eof` token and then behaves as a fused\niterator: repeated calls after EOF return `None`. That last property sounds\nminor, but a non-fused lexer can resurrect stale tokens and make a preprocessor\nloop or process a directive twice.\n\nComments deserve similar care. Removing `/**/` from `int/**/value` must leave\ntwo tokens, `int` and `value`, not manufacture `intvalue`. The representation\nalready has the boundary; the renderer must preserve it.\n\n## 2.5 Macro expansion is an evaluator\n\nA macro system is often explained as textual substitution. That description\nis too weak to implement C.\n\nConsider:\n\n```c\n#define ADD(a, b) ((a) + (b))\n#define TWICE(x)  ADD(x, x)\n\nTWICE(3)\n```\n\nA correct expander must:\n\n1. recognize that `TWICE` is function-like only because `(` follows it;\n2. collect one argument while respecting nested parentheses;\n3. bind the parameter `x` to the argument token sequence `[3]`;\n4. substitute into `ADD(x, x)`;\n5. rescan `ADD(3, 3)` so the newly exposed macro is expanded;\n6. prevent `TWICE` from re-entering itself during its own expansion.\n\n```evocc-sketch\nmacro-rescan\n```\n\nThe expander therefore needs state:\n\n- a macro table containing object-like and function-like definitions;\n- parameter and variadic-parameter bindings;\n- an expansion stack or disabled set;\n- an argument reader with balanced-delimiter depth;\n- a rescan step over the replacement result.\n\n### Why the disabled set is necessary\n\nDirect recursion is obvious:\n\n```c\n#define SELF SELF\nSELF\n```\n\nIndirect recursion is the real test:\n\n```c\n#define A B\n#define B A\nA\n```\n\nA mere recursion-depth limit terminates this input, but it does not implement\nthe language rule; the result depends on an arbitrary number. EvoCC records\nthe names currently being expanded. A name in that set is emitted without\nre-entering its definition. Once the active replacement list is complete, the\nname leaves the set.\n\n### Argument prescan is contextual\n\nOrdinary parameter occurrences use macro-expanded arguments. The sharp\noperators `#` and `##` are exceptions: their adjacent parameter spelling is\nused before normal prescan. This is why wrapper macros such as `XSTR(x)` and\ntwo-level concatenation macros exist in real C code. The order is observable\nand cannot be “simplified” without changing programs.\n\n## 2.6 `#` and `##` are separate languages inside the macro language\n\nStringification converts the token spelling of an argument into a string\nliteral:\n\n```c\n#define STR(x) #x\nSTR(VALUE + 1)       // \"VALUE + 1\", not the expansion of VALUE\n```\n\nToken pasting concatenates the spellings adjacent to `##`:\n\n```c\n#define JOIN(a, b) a ## b\nJOIN(var, 7)         // var7\n```\n\n```evocc-sketch\nhash-and-paste\n```\n\nThe result of pasting is not automatically an identifier. It must be lexed as\na preprocessing token. A valid implementation accepts `var ## 7` as `var7`\nand `1 ## 25` as the preprocessing number `125`, but rejects a concatenation\nthat forms zero tokens or more than one token. Empty arguments introduce a\n*placemarker*: it participates in the paste rule without becoming an output\ntoken.\n\nThis gives `##` a crisp local contract:\n\n```text\npaste(left, right):\n    spelling = left.spelling || right.spelling\n    tokens = lex_preprocessing_token(spelling)\n    require tokens.length == 1\n    return tokens[0]\n```\n\nThe current EvoCC differential corpus measures identifier–identifier,\nidentifier–number, number–number, paste-after-expansion, stringification, space\nnormalization, and pre-expansion ordering. It does **not** by itself prove the\nentire invalid-paste and placemarker state space. The rule above is the semantic\ntarget; the 34 fixtures are a reviewed regression slice of it.\n\n## 2.7 Conditional compilation is a stack machine\n\n`#if` is not a one-line filter. Nesting means the preprocessor must remember\nthe state of every enclosing conditional:\n\n```c\n#if OUTER\n  keep_A\n  #if INNER\n    maybe_B\n  #else\n    keep_C\n  #endif\n#endif\n```\n\n```evocc-sketch\nconditional-stack\n```\n\nEvoCC models each frame with two facts:\n\n- `in_true`: whether this branch is active;\n- `had_true`: whether an earlier branch in this conditional group has already\n  been selected.\n\nAn ordinary token is emitted only if **every** enclosing frame is active. A\ndirective must still be interpreted inside an inactive branch when it affects\nnesting; otherwise the preprocessor could never find the matching `#else` or\n`#endif`.\n\nThe expression after `#if` has its own semantics. `defined(NAME)` is evaluated\nagainst the macro table, remaining identifiers become zero, and integer\noperators follow preprocessing-expression precedence. Reusing the C expression\nparser without defining this smaller language precisely tends to produce\nincorrect behavior around undefined identifiers, short-circuiting, and nested\nconditionals.\n\nA missing `#endif` is not an empty branch. It is a structural error. EvoCC's\ndriver turns preprocessing failures into structured, nonzero diagnostics rather\nthan letting malformed source fall through to a parser that cannot explain the\nreal cause.\n\n## 2.8 Includes turn a buffer into a source graph\n\nBefore `#include`, it is tempting to model a translation unit as one string.\nAfter `#include`, that model is wrong.\n\n```evocc-sketch\ninclude-source-graph\n```\n\nThe preprocessor must combine two kinds of information:\n\n1. **search policy** — quoted sibling paths, explicit `-I` roots, optional\n   standard roots, and the `-nostdinc` switch;\n2. **source identity** — the canonical path and `FileId` of every file whose\n   tokens enter the translation unit.\n\nMacro-expanded include arguments make this more than path parsing:\n\n```c\n#define HEADER \"config.h\"\n#include HEADER\n```\n\nThe include argument must be macro-expanded before it is interpreted as a\nquoted or angle-bracket header name. A missing header is a controlled\npreprocessing error. In the official corpus, fixture\n`025-include-missing.c` requires both EvoCC and GCC to return nonzero and name\nthe same missing subject, `nonexistent.h`.\n\n### Why included tokens own their spelling\n\nSuppose `main.c` is 20 bytes long and an identifier in `types.h` occupies\nbytes `400..430` of that file. The token's source span is valid—but only for\n`types.h`. Slicing `main.c[400..430]` is a panic.\n\nEvoCC assigns stable file identities to included sources and converts their\ntoken spelling to `Decoded` storage before the tokens re-enter parent\nprocessing. The parser can therefore use the owned spelling while diagnostics\ncontinue to point at the header's `FileId` and coordinates.\n\n`#pragma once` and ordinary include guards add another dimension: repeated\nedges in the source graph need not produce repeated tokens. That cache key must\nbe the resolved source identity, not merely the spelling used in one include\ndirective.\n\n## 2.9 Preprocessed output is a serialization format\n\nThe output of `evocc -E` looks like text, but its correctness criterion is a\ntoken stream. Formatting is secondary.\n\nTwo outputs may differ in whitespace while containing exactly the same\npreprocessing tokens:\n\n```text\nresult = (a)+(b)\nresult=( a ) + ( b )\n```\n\nConversely, two outputs may look visually similar while their token boundaries\ndiffer, as `x + +1` and `x++1` demonstrate.\n\nThis suggests two separate properties:\n\n- **semantic serialization:** lexing the rendered output reproduces the exact\n  token kinds and spellings;\n- **presentation:** whitespace and line markers are readable and compatible\n  with the requested flags, such as `-P`.\n\nEvoCC prioritizes the first. The lexer round-trip renderer inserts the minimum\nseparator needed to preserve tokenization. Pretty-printing belongs above this\ncontract, never below it.\n\n## 2.10 The differential oracle compares tokens, not typography\n\nDay 2–3 needs an external check that the implemented slice agrees with an\nexisting GNU C preprocessor. Comparing raw stdout would make harmless spaces\nfail. Removing all whitespace would make token fusion invisible.\n\nThe acceptance path therefore uses an independent serializer:\n\n```evocc-sketch\ndifferential-oracle\n```\n\nFor every fixture, EvoCC and GCC 14 receive the same effective arguments:\n\n```text\n-std=gnu11 -E -P -undef -nostdinc -I. -Iinclude\n```\n\nEach successful stdout is then tokenized by\n[`cpp-token-serializer.py`](../../tests/acceptance/cpp-token-serializer.py), a\nsmall observer that trusts neither compiler. It emits canonical JSON lines:\n\n```json\n{\"kind\":\"identifier\",\"spelling\":\"result\"}\n{\"kind\":\"punctuator\",\"spelling\":\"=\"}\n{\"kind\":\"pp-number\",\"spelling\":\"42\"}\n```\n\nThe serializer applies longest-punctuator matching, recognizes preprocessing\nnumbers and quoted tokens, and ignores incidental whitespace and comments. Its\nown self-test is run before compiler output is accepted.\n\nThe corpus covers object-like, function-like, and variadic macros;\nstringification and token pasting; `#ifdef`, `#ifndef`, `defined`, and\narithmetic `#if`; quoted and angle includes; missing includes; recursive macro\nsuppression; predefined macros; empty input; comments; and directive-boundary\ncases.\n\nMost importantly, the denominator is frozen:\n\n```text\noverall PASS ⇔ total = 34 ∧ every fixture.status = PASS\n```\n\n`SKIP`, `KNOWN_GAP`, missing output, exit-code disagreement, serializer failure,\nor token disagreement cannot be averaged away. A suite that silently falls\nfrom 34 cases to 33 is a different experiment.\n\n### What GCC can and cannot establish\n\nAgreement with GCC is strong differential evidence for this corpus. It is not\nthe definition of C. Both implementations can share a bug, and GCC behavior\noutside the selected dialect or on undefined input is not normative truth.\n\nThis is why the gate uses only reviewed inputs and reports disagreement rather\nthan automatically declaring EvoCC wrong. The language contract and hand-audited\nfixture intent remain above the executable oracle.\n\n## 2.11 Diagnostics are part of the frontend protocol\n\nMalformed input must not become an `__error__` node followed by exit code zero.\nThe command-line contract is:\n\n```text\npath:line:column: error[CODE]: subject-bearing message\n```\n\nwith nonzero exit status, empty normal output for failed preprocessing or\nparse-only operations, and no panic or timeout.\n\nThe location must use the logical command-line identity where C requires it\n(`__FILE__`), while filesystem resolution may use a canonical path and the\ndiagnostic may need the resolved included-file identity. Conflating those three\nnames produces either unstable diagnostics or incorrect predefined macros.\n\nFor the missing-include fixture, the useful facts are not merely “some error\noccurred.” They are:\n\n- preprocessing, not parsing, rejected the program;\n- the exit code is nonzero;\n- the code is stable (`E0105` in the current CLI contract);\n- the missing subject is `nonexistent.h`;\n- the source location points at the responsible include directive.\n\nStable diagnostic codes make tests and tools robust to editorial improvements\nin the prose, while subject and span keep the error useful to a human.\n\n## 2.12 What Day 2–3 established—and what it did not\n\nThe implemented frontend slice now has measured evidence for:\n\n- C11 and selected GNU token categories, longest punctuators, literals,\n  comments, line continuation, source spans, one-shot EOF, and negative tokens;\n- object-like, function-like, and variadic macro behavior across a generated\n  unit campaign and the curated corpus;\n- nested rescan, direct and indirect recursion suppression, stringification,\n  token pasting, conditionals, predefined macros, include search, macro-expanded\n  includes, `-nostdinc`, and `#pragma once` scenarios exercised by tests;\n- token-boundary-preserving `-E` output;\n- exact 34/34 token-normalized agreement in the foundation differential gate;\n- included-header token ownership and structured nonzero diagnostics.\n\nIt does **not** follow that EvoCC is already a complete GNU preprocessor.\nCurrent evidence does not claim:\n\n- trigraph translation;\n- every implementation-defined character-set behavior;\n- the full combinatorial state space of placemarkers and invalid `##` results;\n- every GNU built-in macro and extension;\n- semantic correctness outside the frozen dialect, flags, and fixture domain.\n\nThat distinction is the point of a notebook tied to executable evidence. We\ncan say exactly what became real without turning a successful checkpoint into\na universal theorem.\n\n## 2.13 Running the chapter checkpoint\n\nThe focused Rust suites exercise the lexer and preprocessor implementation:\n\n```sh\ncargo test -p evocc-lex -p evocc-cpp --locked --offline\n```\n\nThe serializer can be checked without invoking either compiler:\n\n```sh\nbash tests/acceptance/cpp-token-serializer-selftest.sh\n```\n\nThe isolated differential performs the 34-case EvoCC/GCC comparison and writes\na new evidence directory:\n\n```sh\nbash tests/acceptance/cpp-differential.sh\n```\n\nThe consolidated foundation gate includes this experiment as\n`isolated_cpp_differential` and requires exact `34 PASS` with zero non-PASS\noutcomes:\n\n```sh\nbash tests/acceptance/foundation-conformance.sh\n```\n\n## 2.14 The boundary we hand to the parser\n\nAt the end of preprocessing, the parser does not receive “a string with the\nmacros removed.” It receives an ordered stream of typed tokens with stable\nspellings and source identities.\n\nThat stream is a narrow waist:\n\n```text\nmany physical files\n    + include policy\n    + conditional state\n    + macro environment\n             │\n             ▼\nordered Token { kind, text, span } stream\n             │\n             ▼\ndeclarations, expressions, and C-HIR\n```\n\nIf this boundary is correct, the parser can concentrate on declarator topology,\nprecedence, types, and source-language meaning. If it is wrong, every later\nstage inherits a fabricated program while retaining no reliable route back to\nthe source.\n\nThe next chapter will cross that waist. C's declarations read inside out,\nfunction and array parameters adjust their types, and the same punctuation can\ndescribe either an expression or a type name. That is where tokens acquire\nstructure.\n\n## Challenges\n\n1. Tokenize `a+++b` using maximal munch. Then insert one space in each possible\n   position and explain which programs change token sequence.\n2. Trace `#define A B`, `#define B(x) x + 1`, and `A(3)` through lookup,\n   substitution, disabled-set membership, and rescan. At which exact step does\n   `B` become callable?\n3. Explain why `STR(VALUE)` and `XSTR(VALUE)` can intentionally produce\n   different strings when `VALUE` is itself a macro.\n4. Design one invalid `##` case that produces zero valid preprocessing tokens\n   and one that produces more than one. What should the diagnostic record?\n5. A header token has `span.file = 7` and `bytes = 400..430`; the root file is\n   only 80 bytes long. Describe the correct route for obtaining its spelling\n   and its diagnostic location.\n6. Raw EvoCC and GCC output differ only in spaces. Give one example where that\n   difference is harmless and one where removing the spaces changes tokens.\n7. Add a 35th fixture locally but leave the acceptance denominator at 34. Should\n   the old run still be called “34/34 PASS”? What additional corpus-identity\n   contract would make the claim unambiguous?\n",
+    "sections": [
+      {
+        "level": 2,
+        "title": "2.1 C is translated in phases",
+        "id": "2-1-c-is-translated-in-phases"
+      },
+      {
+        "level": 2,
+        "title": "2.2 A preprocessing token is not yet a C token",
+        "id": "2-2-a-preprocessing-token-is-not-yet-a-c-token"
+      },
+      {
+        "level": 3,
+        "title": "Borrowed and Decoded spelling",
+        "id": "borrowed-and-decoded-spelling"
+      },
+      {
+        "level": 2,
+        "title": "2.3 Maximal munch makes whitespace semantic",
+        "id": "2-3-maximal-munch-makes-whitespace-semantic"
+      },
+      {
+        "level": 2,
+        "title": "2.4 Physical lines and logical lines",
+        "id": "2-4-physical-lines-and-logical-lines"
+      },
+      {
+        "level": 2,
+        "title": "2.5 Macro expansion is an evaluator",
+        "id": "2-5-macro-expansion-is-an-evaluator"
+      },
+      {
+        "level": 3,
+        "title": "Why the disabled set is necessary",
+        "id": "why-the-disabled-set-is-necessary"
+      },
+      {
+        "level": 3,
+        "title": "Argument prescan is contextual",
+        "id": "argument-prescan-is-contextual"
+      },
+      {
+        "level": 2,
+        "title": "2.6 # and ## are separate languages inside the macro language",
+        "id": "2-6-and-are-separate-languages-inside-the-macro-language"
+      },
+      {
+        "level": 2,
+        "title": "2.7 Conditional compilation is a stack machine",
+        "id": "2-7-conditional-compilation-is-a-stack-machine"
+      },
+      {
+        "level": 2,
+        "title": "2.8 Includes turn a buffer into a source graph",
+        "id": "2-8-includes-turn-a-buffer-into-a-source-graph"
+      },
+      {
+        "level": 3,
+        "title": "Why included tokens own their spelling",
+        "id": "why-included-tokens-own-their-spelling"
+      },
+      {
+        "level": 2,
+        "title": "2.9 Preprocessed output is a serialization format",
+        "id": "2-9-preprocessed-output-is-a-serialization-format"
+      },
+      {
+        "level": 2,
+        "title": "2.10 The differential oracle compares tokens, not typography",
+        "id": "2-10-the-differential-oracle-compares-tokens-not-typography"
+      },
+      {
+        "level": 3,
+        "title": "What GCC can and cannot establish",
+        "id": "what-gcc-can-and-cannot-establish"
+      },
+      {
+        "level": 2,
+        "title": "2.11 Diagnostics are part of the frontend protocol",
+        "id": "2-11-diagnostics-are-part-of-the-frontend-protocol"
+      },
+      {
+        "level": 2,
+        "title": "2.12 What Day 2–3 established—and what it did not",
+        "id": "2-12-what-day-2-3-established-and-what-it-did-not"
+      },
+      {
+        "level": 2,
+        "title": "2.13 Running the chapter checkpoint",
+        "id": "2-13-running-the-chapter-checkpoint"
+      },
+      {
+        "level": 2,
+        "title": "2.14 The boundary we hand to the parser",
+        "id": "2-14-the-boundary-we-hand-to-the-parser"
+      },
+      {
+        "level": 2,
+        "title": "Challenges",
+        "id": "challenges"
+      }
+    ],
+    "wordCount": 3108,
+    "readingMinutes": 15
+  },
+  {
     "locale": "zh",
     "slug": "before-the-first-token",
     "number": 1,
@@ -214,6 +327,119 @@ export const chapters: NotebookChapter[] = [
     ],
     "wordCount": 3683,
     "readingMinutes": 11
+  },
+  {
+    "locale": "zh",
+    "slug": "from-bytes-to-preprocessing-tokens",
+    "number": 2,
+    "day": " 2–3 ",
+    "title": " Token",
+    "description": " GNU C , preprocessing token, , include, token-normalized differential oracle. ",
+    "body": "> C , . \n\n: \n\n```c\nleft + +right\nleft++ + right\n```\n\n, token, . : \n\n```c\n#define PATH(name) \"include/\" name\n#include PATH(\"config.h\")\n```\n\n header , ; . , header , diagnostic , . \n\n C frontend parsing . "". Frontend , , source identity . \n\n"". : 2–3 , source bytes parser token stream, 34-case preprocessing differential gate . \n\n## 2.1 C \n\nC translation phases. , : ****. \n\n EvoCC , : \n\n1. physical source bytes source file; \n2. line continuation, logical lines; \n3. comment, whitespace, identifier, literal punctuator; \n4. preprocessing tokens; \n5. directives macros; \n6. string literal, C syntax. \n\n```evocc-sketch\ntranslation-phases\n```\n\n. backslash-newline splice , token. comment , macro expansion. maximal munch `>>=`, parser grammar production , `>` `>=`. \n\n: \n\n> , ; "". \n\nEvoCC C translation feature. trigraph: lexer `??=` characterization punctuator, `#`. scope boundary, " GNU C11 lexical conformance". . \n\n## 2.2 Preprocessing token C token\n\nPreprocessor , C type checking. parser . \n\n *preprocessing number* . `1e+VALUE` preprocessing number; , frontend spelling . , `#` `##` macro replacement , expression operators. \n\nEvoCC lexer token : \n\n```rust\npub struct Token {\n pub kind: TokenKind,\n pub span: SourceSpan,\n pub text: TokenText,\n}\n```\n\n```evocc-sketch\ntoken-anatomy\n```\n\n: \n\n| | | |\n|---|---|---|\n| `kind` | grammar object? | `Identifier`, `ShiftLeftEq`, `StringLiteral` |\n| `text` | token spelling ? | source-backed `Borrowed` `Decoded(\"size_t\")` |\n| `span` | source token? | `FileId(3)`, bytes `48..54`, 4 9 |\n\n`SourceSpan` `(FileId, byte_start, byte_end)` primary identity; line column . compiler bug: " 4 9 ", byte range file identity . \n\n### Borrowed Decoded spelling\n\n token `Borrowed`. `span.file` source buffer, byte range . token : identifier; header token byte offset parent file. \n\n token `Decoded(String)`, spelling. \n\n end-to-end defect. parser included header span main source buffer. header identifier, out-of-bounds panic. parser `TokenText` : `Decoded` owned text; `Borrowed` file byte range . \n\n" clone String", : **storage ownership source provenance **. token spelling, diagnostic header location. \n\n## 2.3 Maximal munch \n\nLexer longest-token rule: byte , token. *maximal munch*. \n\n, : \n\n```text\n> > = >>=\n+ + ++\n/ * /*\n. . . ...\n```\n\nLexer " punctuator, punctuator". preprocessing : `evocc -E` token stream . \n\n```evocc-sketch\nmaximal-munch\n```\n\n token spelling : \n\n```c\nx + +1 // x++1\nx / *(&y) // x/*(&y)\n```\n\n increment operator; block comment , . \n\nEvoCC renderer bounded round-trip predicate. token token , lexer candidate, `TokenKind` sequence . , , concatenation group . \n\n token spellings `s₁…sₙ` kinds `k₁…kₙ`, separator: \n\n```text\nlex(s₁ || … || sₙ).kinds = [k₁, …, kₙ]\n```\n\n"word-like token ", `. . .` `% : % :` multi-token interaction—— pairwise check punctuator. \n\n## 2.4 \n\n directive macro call , backslash-newline continuation. logical definition: \n\n```c\n#define SCALE(x) ((x) * \\\n 16)\n```\n\nsplice whitespace, . newline, macro body ; , token boundary. \n\nLine handling diagnostics. : \n\n- logical view: `#` directive , token replacement list; \n- physical-source view: token . \n\nEvoCC lexer whitespace, line comment block comment byte position, line column. `Eof`, fused iterator: EOF `None`. , non-fused lexer ""stale token, preprocessor directive. \n\nComment . `int/**/value` `/**/` , `int` `value` token, `intvalue`. , renderer . \n\n## 2.5 evaluator\n\n macro system textual substitution. C. \n\n: \n\n```c\n#define ADD(a, b) ((a) + (b))\n#define TWICE(x) ADD(x, x)\n\nTWICE(3)\n```\n\n expander : \n\n1. `TWICE` `(`, function-like call; \n2. nested-parenthesis depth argument; \n3. parameter `x` argument token sequence `[3]`; \n4. `ADD(x, x)`; \n5. rescan `ADD(3, 3)`, ; \n6. `TWICE` , . \n\n```evocc-sketch\nmacro-rescan\n```\n\n expander : \n\n- object-like function-like definitions macro table; \n- variadic parameter bindings; \n- expansion stack disabled set; \n- balanced delimiter argument reader; \n- replacement result rescan . \n\n### disabled set\n\n: \n\n```c\n#define SELF SELF\nSELF\n```\n\n: \n\n```c\n#define A B\n#define B A\nA\n```\n\n recursion-depth limit , ; . EvoCC macro names. disabled set , definition; replacement list , . \n\n### Argument prescan \n\n parameter occurrence macro-expanded argument. `#` `##` : parameter ordinary prescan spelling. C `XSTR(x)` wrapper concatenation macro, , "". \n\n## 2.6 `#` `##` macro language \n\nStringification argument token spelling string literal: \n\n```c\n#define STR(x) #x\nSTR(VALUE + 1) // \"VALUE + 1\", VALUE \n```\n\nToken pasting `##` spelling: \n\n```c\n#define JOIN(a, b) a ## b\nJOIN(var, 7) // var7\n```\n\n```evocc-sketch\nhash-and-paste\n```\n\nPaste result identifier. lex preprocessing token. `var ## 7` `var7`, `1 ## 25` preprocessing number `125`, token token . *placemarker*: paste rule, output token. \n\n, `##` : \n\n```text\npaste(left, right):\n spelling = left.spelling || right.spelling\n tokens = lex_preprocessing_token(spelling)\n require tokens.length == 1\n return tokens[0]\n```\n\n EvoCC differential corpus identifier–identifier, identifier–number, number–number, paste-after-expansion, stringification, space normalization pre-expansion ordering. **** invalid-paste placemarker . ; 34 fixtures regression slice, . \n\n## 2.7 Conditional compilation stack machine\n\n`#if` . preprocessor enclosing conditional : \n\n```c\n#if OUTER\n keep_A\n #if INNER\n maybe_B\n #else\n keep_C\n #endif\n#endif\n```\n\n```evocc-sketch\nconditional-stack\n```\n\nEvoCC frame : \n\n- `in_true`: branch active; \n- `had_true`: conditional group branch . \n\n**** frame active , ordinary token . inactive branch, directive nesting, ; preprocessor `#else` `#endif`. \n\n`#if` expression . `defined(NAME)` macro table; identifier ; integer operators preprocessing-expression precedence. , C expression parser, undefined identifier, short-circuit nested conditional . \n\n `#endif` " branch", structural error. EvoCC driver preprocessing failure structured, nonzero diagnostic, malformed source parser. \n\n## 2.8 Include buffer source graph\n\n `#include` , translation unit . `#include` , . \n\n```evocc-sketch\ninclude-source-graph\n```\n\nPreprocessor : \n\n1. **search policy**: quoted sibling path, `-I` roots, standard roots, `-nostdinc` switch; \n2. **source identity**: translation unit , canonical path `FileId`. \n\nMacro-expanded include argument : \n\n```c\n#define HEADER \"config.h\"\n#include HEADER\n```\n\nInclude argument macro expansion, quoted angle-bracket header name. header preprocessing error. official corpus , fixture `025-include-missing.c` EvoCC GCC nonzero, missing subject: `nonexistent.h`. \n\n### included token spelling\n\n `main.c` 20 bytes, `types.h` identifier bytes `400..430`. span —— `types.h` . `main.c[400..430]` panic. \n\nEvoCC included source file identity, token parent processing spelling `Decoded` storage. Parser owned spelling, diagnostic header `FileId` . \n\n`#pragma once` include guard : source graph edge, token. cache key resolved source identity, include directive spelling. \n\n## 2.9 Preprocessed output serialization format\n\n`evocc -E` , token stream; . \n\n output whitespace , preprocessing tokens: \n\n```text\nresult = (a)+(b)\nresult=( a ) + ( b )\n```\n\n, output , token boundary , `x + +1` `x++1`. \n\n: \n\n- **semantic serialization**: rendered output lex, token kinds spellings; \n- **presentation**: line marker , `-P` requested flags. \n\nEvoCC . lexer round-trip renderer tokenization separator. Pretty-printing contract , . \n\n## 2.10 Differential oracle token, \n\n 2–3 external check, GNU C preprocessor . raw stdout, ; whitespace , token fusion . \n\n acceptance path serializer: \n\n```evocc-sketch\ndifferential-oracle\n```\n\n fixture , EvoCC GCC 14 : \n\n```text\n-std=gnu11 -E -P -undef -nostdinc -I. -Iinclude\n```\n\n stdout [`cpp-token-serializer.py`](../../../tests/acceptance/cpp-token-serializer.py). observer compiler, canonical JSON lines: \n\n```json\n{\"kind\":\"identifier\",\"spelling\":\"result\"}\n{\"kind\":\"punctuator\",\"spelling\":\"=\"}\n{\"kind\":\"pp-number\",\"spelling\":\"42\"}\n```\n\nSerializer longest-punctuator matching, preprocessing number quoted token, whitespace comment. compiler output , self-test . \n\nCorpus object-like, function-like variadic macro; stringification token pasting; `#ifdef`, `#ifndef`, `defined` arithmetic `#if`; quoted/angle include; missing include; recursive macro suppression; predefined macros; empty input; comments; directive-boundary cases. \n\n, denominator : \n\n```text\noverall PASS ⇔ total = 34 ∧ every fixture.status = PASS\n```\n\n`SKIP`, `KNOWN_GAP`, output , exit code disagreement, serializer failure token disagreement, . Suite 34 case 33 , . \n\n### GCC \n\n corpus , GCC differential evidence, C . bug; GCC selected dialect undefined input , normative truth. \n\n gate disagreement , EvoCC . Language contract fixture intent, executable oracle . \n\n## 2.11 Diagnostic frontend protocol \n\nMalformed input `__error__` node, exit code zero . CLI contract : \n\n```text\npath:line:column: error[CODE]: subject-bearing message\n```\n\n preprocessing parse-only operation nonzero, normal output , panic timeout. \n\nLocation : C `__FILE__` logical command-line identity; filesystem resolution canonical path; included-file diagnostic resolved source identity. , diagnostic, predefined macro semantics. \n\n missing-include fixture , "", : \n\n- preprocessing, parsing; \n- exit code ; \n- code ( CLI contract `E0105`) ; \n- missing subject `nonexistent.h`; \n- source location include directive. \n\n diagnostic code message prose ; subject span . \n\n## 2.12 2–3 , \n\n frontend slice measured evidence: \n\n- C11 selected GNU token categories, longest punctuators, literals, comments, line continuation, source spans, one-shot EOF negative tokens; \n- object-like, function-like, variadic macro generated unit campaign curated corpus ; \n- tests nested rescan, direct/indirect recursion suppression, stringification, token pasting, conditionals, predefined macros, include search, macro-expanded include, `-nostdinc` `#pragma once` scenarios; \n- token boundary `-E` output; \n- foundation differential gate 34/34 token-normalized agreement; \n- included-header token ownership structured nonzero diagnostics. \n\n**** EvoCC GNU preprocessor. : \n\n- trigraph translation; \n- implementation-defined character-set behavior; \n- placemarker invalid `##` result ; \n- GNU built-in macro extensions; \n- frozen dialect, flags fixture domain semantic correctness. \n\n executable evidence notebook : , checkpoint universal theorem. \n\n## 2.13 checkpoint\n\nFocused Rust suites lexer preprocessor implementation: \n\n```sh\ncargo test -p evocc-lex -p evocc-cpp --locked --offline\n```\n\nSerializer compiler : \n\n```sh\nbash tests/acceptance/cpp-token-serializer-selftest.sh\n```\n\nIsolated differential 34-case EvoCC/GCC comparison, evidence directory: \n\n```sh\nbash tests/acceptance/cpp-differential.sh\n```\n\nConsolidated foundation gate `isolated_cpp_differential`, `34 PASS`, non-PASS outcome: \n\n```sh\nbash tests/acceptance/foundation-conformance.sh\n```\n\n## 2.14 parser \n\nPreprocessing , parser "", spelling source identity typed token stream. \n\n stream narrow waist: \n\n```text\n physical files\n + include policy\n + conditional state\n + macro environment\n │\n ▼\nordered Token { kind, text, span } stream\n │\n ▼\ndeclarations, expressions C-HIR\n```\n\n, parser declarator topology, precedence, types source-language meaning. , , . \n\n. C declaration ; function/array parameter type adjustment; punctuation expression, type name. , token . \n\n## \n\n1. maximal munch tokenize `a+++b`. , token sequence. \n2. `#define A B`, `#define B(x) x + 1` `A(3)` lookup, substitution, disabled-set membership rescan. `B` macro? \n3. `VALUE` macro , `STR(VALUE)` `XSTR(VALUE)` . \n4. preprocessing token invalid `##` case, token case. Diagnostic ? \n5. header token `span.file = 7`, `bytes = 400..430`, root file 80 bytes. spelling diagnostic location ? \n6. EvoCC GCC raw output . , token . \n7. 35 fixture, acceptance denominator 34. "34/34 PASS"? corpus-identity contract, ? \n",
+    "sections": [
+      {
+        "level": 2,
+        "title": "2.1 C ",
+        "id": "2-1-c-"
+      },
+      {
+        "level": 2,
+        "title": "2.2 Preprocessing token C token",
+        "id": "2-2-preprocessing-token--c-token"
+      },
+      {
+        "level": 3,
+        "title": "Borrowed Decoded spelling",
+        "id": "borrowed--decoded-spelling"
+      },
+      {
+        "level": 2,
+        "title": "2.3 Maximal munch ",
+        "id": "2-3-maximal-munch-"
+      },
+      {
+        "level": 2,
+        "title": "2.4 ",
+        "id": "2-4-"
+      },
+      {
+        "level": 2,
+        "title": "2.5 evaluator",
+        "id": "2-5--evaluator"
+      },
+      {
+        "level": 3,
+        "title": " disabled set",
+        "id": "-disabled-set"
+      },
+      {
+        "level": 3,
+        "title": "Argument prescan ",
+        "id": "argument-prescan-"
+      },
+      {
+        "level": 2,
+        "title": "2.6 # ## macro language ",
+        "id": "2-6---macro-language-"
+      },
+      {
+        "level": 2,
+        "title": "2.7 Conditional compilation stack machine",
+        "id": "2-7-conditional-compilation--stack-machine"
+      },
+      {
+        "level": 2,
+        "title": "2.8 Include buffer source graph",
+        "id": "2-8-include--buffer--source-graph"
+      },
+      {
+        "level": 3,
+        "title": " included token spelling",
+        "id": "-included-token--spelling"
+      },
+      {
+        "level": 2,
+        "title": "2.9 Preprocessed output serialization format",
+        "id": "2-9-preprocessed-output--serialization-format"
+      },
+      {
+        "level": 2,
+        "title": "2.10 Differential oracle token, ",
+        "id": "2-10-differential-oracle--token-"
+      },
+      {
+        "level": 3,
+        "title": "GCC ",
+        "id": "gcc-"
+      },
+      {
+        "level": 2,
+        "title": "2.11 Diagnostic frontend protocol ",
+        "id": "2-11-diagnostic--frontend-protocol-"
+      },
+      {
+        "level": 2,
+        "title": "2.12 2–3 , ",
+        "id": "2-12--2-3--"
+      },
+      {
+        "level": 2,
+        "title": "2.13 checkpoint",
+        "id": "2-13--checkpoint"
+      },
+      {
+        "level": 2,
+        "title": "2.14 parser ",
+        "id": "2-14--parser-"
+      },
+      {
+        "level": 2,
+        "title": "",
+        "id": ""
+      }
+    ],
+    "wordCount": 4294,
+    "readingMinutes": 14
   }
 ];
 

@@ -29,6 +29,46 @@ const diagrams = {
     caption: "A boot log becomes evidence only after it proves which flight produced it.",
     note: "The nonce is a causal join. Without it, a beautiful boot log may simply belong to yesterday's run.",
   },
+  "translation-phases": {
+    label: "C source passing through physical-line repair, tokenization, directives, macro expansion, and parser handoff",
+    caption: "The preprocessor is a staged transducer: each stage changes which distinctions still exist.",
+    note: "A later stage cannot recover a boundary that an earlier stage erased. This is why splicing, tokenization, expansion, and rendering must have separate contracts.",
+  },
+  "token-anatomy": {
+    label: "An EvoCC preprocessing token joined to spelling storage and a stable source span",
+    caption: "Kind answers what the token is; spelling answers what was written; the span answers where the claim came from.",
+    note: "Borrowed spelling is reconstructed from one source file. Decoded spelling owns generated or cross-file text. Confusing them produces precise, repeatable crashes.",
+  },
+  "maximal-munch": {
+    label: "Four token-boundary examples showing why preprocessed text must not fuse adjacent punctuators",
+    caption: "Equal characters are not enough. The renderer must preserve the token sequence when its output is lexed again.",
+    note: "Whitespace is optional only when concatenation round-trips to the same token kinds. Otherwise one space is semantic armor.",
+  },
+  "macro-rescan": {
+    label: "Function-like macro argument capture, prescan, substitution, disabled-set protection, and rescan",
+    caption: "Macro expansion is a small evaluator with state, not global search-and-replace.",
+    note: "The disabled set breaks direct and indirect recursion. Rescanning is what lets replacement text expose another macro call without expanding forever.",
+  },
+  "hash-and-paste": {
+    label: "Stringification and token pasting following distinct argument-expansion paths",
+    caption: "The two sharpest macro operators deliberately bypass ordinary argument expansion—and then demand different validation.",
+    note: "Stringification preserves the argument's token spelling. Pasting concatenates spellings and must re-lex to exactly one preprocessing token.",
+  },
+  "conditional-stack": {
+    label: "Nested conditional-compilation frames tracking active branches and prior true branches",
+    caption: "A directive is interpreted even when its ordinary tokens are suppressed, because it changes the stack that decides future visibility.",
+    note: "The current line is emitted only when every enclosing frame is active. had_true prevents a later #elif or #else from becoming active twice.",
+  },
+  "include-source-graph": {
+    label: "A translation unit expanded into a graph of source files with stable file identities and owned cross-file token spellings",
+    caption: "An include does not paste anonymous bytes. It introduces another source identity into the same translation unit.",
+    note: "FileId keeps diagnostics attached to the correct file; Decoded token text prevents a header span from being sliced out of the parent source buffer.",
+  },
+  "differential-oracle": {
+    label: "EvoCC and GCC preprocessing the same frozen corpus before an independent token serializer compares results",
+    caption: "Compare preprocessing tokens, exit status, and controlled diagnostics—not incidental whitespace.",
+    note: "The denominator is part of the claim: exactly 34 fixtures must be accounted for, and every one must be PASS. Missing, skipped, or conflicting cases fail the gate.",
+  },
 } as const;
 
 const chineseDiagramCopy: Record<SketchName, { label: string; caption: string; note: string }> = {
@@ -56,6 +96,46 @@ const chineseDiagramCopy: Record<SketchName, { label: string; caption: string; n
     label: "nonce-bound kernel boot acceptance flight ",
     caption: " flight , boot log . ",
     note: "nonce . , boot log . ",
+  },
+  "translation-phases": {
+    label: "C , tokenize, directive, parser ",
+    caption: " transducer; . ",
+    note: ". splice, tokenize, expand render . ",
+  },
+  "token-anatomy": {
+    label: " EvoCC preprocessing token spelling storage source span",
+    caption: "kind , spelling , span . ",
+    note: "Borrowed spelling ; Decoded spelling . . ",
+  },
+  "maximal-munch": {
+    label: " token boundary punctuator ",
+    caption: "; lex , token sequence. ",
+    note: " round-trip token kinds , ; . ",
+  },
+  "macro-rescan": {
+    label: "function-like macro , , , disabled-set ",
+    caption: " evaluator, . ",
+    note: "disabled set ; rescan replacement text macro call, . ",
+  },
+  "hash-and-paste": {
+    label: "stringification token pasting ",
+    caption: " macro operator , . ",
+    note: "Stringification token spelling; pasting spelling, lex preprocessing token. ",
+  },
+  "conditional-stack": {
+    label: " conditional compilation frame active branch prior true branch",
+    caption: " token , directive , stack. ",
+    note: " frame active , ; had_true #elif #else . ",
+  },
+  "include-source-graph": {
+    label: "translation unit file identity spelling source graph",
+    caption: "include ; translation unit source identity. ",
+    note: "FileId ; Decoded token text header span parent source buffer. ",
+  },
+  "differential-oracle": {
+    label: "EvoCC GCC corpus, token serializer ",
+    caption: " preprocessing token, exit status , . ",
+    note: "denominator : 34 fixture, PASS; , gate . ",
   },
 };
 
@@ -368,6 +448,318 @@ function NonceBoundBoot({ locale }: { locale: NotebookLocale }) {
   );
 }
 
+function TranslationPhases({ locale }: { locale: NotebookLocale }) {
+  const zh = locale === "zh";
+  const stages = zh
+    ? [
+        ["", "\\\\ + newline "],
+        ["", "splice "],
+        ["pp-tokens", ""],
+        ["EvoCPP", "directive + macro"],
+        ["parser tokens", ""],
+      ]
+    : [
+        ["physical bytes", "\\\\ + newline still exists"],
+        ["logical lines", "splices are gone"],
+        ["pp-tokens", "boundaries are fixed"],
+        ["EvoCPP", "directives + macros"],
+        ["parser tokens", "syntax handoff"],
+      ];
+  const x = [30, 219, 408, 597, 786];
+  return (
+    <svg viewBox="0 0 980 470" role="img">
+      <SketchDefs />
+      <title>{zh ? "C parser " : "The preprocessing phases C source crosses before parsing"}</title>
+      <path className="sketch-wash" d="M18 70 Q490 34 961 70 L958 258 Q491 289 20 255Z" />
+      {stages.map(([title, detail], index) => (
+        <g key={title}>
+          <RoughBox x={x[index]} y={102} width={152} height={108} tilt={index % 2 === 0 ? -1 : 1} accent={index === 2 || index === 3}>
+            <Label x={x[index] + 76} y={139} className="sketch-small">{title}</Label>
+            <MultilineLabel x={x[index] + 76} y={170} lines={[detail]} className="sketch-tiny" />
+            <Label x={x[index] + 76} y={195} className="sketch-muted">{`phase ${index + 1}`}</Label>
+          </RoughBox>
+          {index < stages.length - 1 && <RoughPath d={`M ${x[index] + 153} 155 C ${x[index] + 168} 142 ${x[index + 1] - 13} 142 ${x[index + 1]} 155`} arrow />}
+        </g>
+      ))}
+
+      <Label x={28} y={312} anchor="start" className="sketch-annotation">{zh ? ", " : "each gate irreversibly removes distinctions"}</Label>
+      <RoughPath d="M 54 341 C 258 328 723 329 920 343" />
+      {[106, 295, 484, 673, 862].map((cx, index) => <Dot key={cx} x={cx} y={337 + (index % 2) * 4} accent={index === 2} radius={7} />)}
+      <RoughBox x={205} y={383} width={565} height={56} tilt={-0.5}>
+        <Label x={487} y={410} className="sketch-small">{zh ? ": FileId + byte span + token spelling" : "carried throughout: FileId + byte span + token spelling"}</Label>
+        <Label x={487} y={429} className="sketch-tiny">{zh ? "" : "the source ledger survives textual transformation"}</Label>
+      </RoughBox>
+      <RoughPath d="M 484 355 L 484 382" dashed arrow />
+    </svg>
+  );
+}
+
+function TokenAnatomy({ locale }: { locale: NotebookLocale }) {
+  const zh = locale === "zh";
+  return (
+    <svg viewBox="0 0 980 500" role="img">
+      <SketchDefs />
+      <title>{zh ? "preprocessing token kind, spelling source span" : "The kind, spelling, and source span of a preprocessing token"}</title>
+      <RoughBox x={314} y={76} width={352} height={245} tilt={-1} accent>
+        <Label x={490} y={112} className="sketch-display">Token</Label>
+        <RoughBox x={347} y={137} width={286} height={43}><Label x={490} y={164} className="sketch-small">kind = Identifier</Label></RoughBox>
+        <RoughBox x={347} y={195} width={286} height={43}><Label x={490} y={222} className="sketch-small">text = Borrowed | Decoded</Label></RoughBox>
+        <RoughBox x={347} y={253} width={286} height={45}><Label x={490} y={280} className="sketch-small">span = (file, bytes, line, column)</Label></RoughBox>
+      </RoughBox>
+
+      <Paper x={35} y={103} label={zh ? "main.c " : "bytes in main.c"} tilt={-2} />
+      <Label x={91} y={217} className="sketch-small">Borrowed</Label>
+      <Label x={91} y={239} className="sketch-tiny">[120..125] → value</Label>
+      <RoughPath d="M 148 144 C 215 145 253 174 346 211" arrow />
+
+      <RoughBox x={39} y={307} width={194} height={83} tilt={2}>
+        <MultilineLabel x={136} y={337} lines={zh ? ["Decoded(\"value\")", ""] : ["Decoded(\"value\")", "generated or cross-file"]} className="sketch-small" />
+      </RoughBox>
+      <RoughPath d="M 233 348 C 287 331 317 286 356 226" arrow />
+
+      <RoughBox x={742} y={83} width={198} height={94} tilt={1}>
+        <MultilineLabel x={841} y={112} lines={["FileId(7)", "bytes 48..53", "line 4 · column 9"]} className="sketch-small" />
+      </RoughBox>
+      <RoughPath d="M 666 270 C 706 247 730 211 783 176" arrow />
+      <RoughBox x={742} y={245} width={198} height={131} tilt={-1}>
+        <MultilineLabel x={841} y={276} lines={zh ? ["source table", "7 → include/x.h", "8 → main.c"] : ["source table", "7 → include/x.h", "8 → main.c"]} className="sketch-small" />
+      </RoughBox>
+      <RoughPath d="M 842 245 L 842 179" dashed arrow />
+
+      <RoughBox x={298} y={417} width={384} height={52} tilt={1}>
+        <Label x={490} y={448} className="sketch-small">{zh ? "invariant: span.file Borrowed text buffer" : "invariant: span.file selects the buffer for Borrowed text"}</Label>
+      </RoughBox>
+    </svg>
+  );
+}
+
+function MaximalMunch({ locale }: { locale: NotebookLocale }) {
+  const zh = locale === "zh";
+  const rows = [
+    { y: 108, wanted: "x  +  +  1", fused: "x++1", good: false },
+    { y: 198, wanted: "x  -  -  1", fused: "x--1", good: false },
+    { y: 288, wanted: "x  /  *  p", fused: "x/*p", good: false },
+    { y: 378, wanted: ".  .  .", fused: "...", good: false },
+  ];
+  return (
+    <svg viewBox="0 0 980 490" role="img">
+      <SketchDefs />
+      <title>{zh ? " token maximal-munch " : "Concatenating adjacent tokens can change maximal-munch tokenization"}</title>
+      <Label x={48} y={58} anchor="start" className="sketch-annotation">{zh ? " token sequence" : "original token sequence"}</Label>
+      <Label x={411} y={58} className="sketch-annotation">{zh ? "" : "concatenate without space"}</Label>
+      <Label x={820} y={58} className="sketch-annotation">{zh ? " lex" : "lex again"}</Label>
+      {rows.map((row, index) => (
+        <g key={row.wanted}>
+          <RoughBox x={35} y={row.y - 30} width={276} height={58} tilt={index % 2 ? 1 : -1}>
+            <Label x={173} y={row.y + 6} className="sketch-small">{row.wanted}</Label>
+          </RoughBox>
+          <RoughPath d={`M 312 ${row.y} C 342 ${row.y - 13} 361 ${row.y - 13} 389 ${row.y}`} arrow />
+          <RoughBox x={392} y={row.y - 30} width={178} height={58} accent>
+            <Label x={481} y={row.y + 6} className="sketch-small">{row.fused}</Label>
+          </RoughBox>
+          <RoughPath d={`M 570 ${row.y} C 611 ${row.y - 10} 631 ${row.y - 10} 665 ${row.y}`} arrow />
+          <RoughBox x={669} y={row.y - 30} width={265} height={58} tilt={index % 2 ? -1 : 1}>
+            <Label x={801} y={row.y} className="sketch-small">{index === 0 ? "Identifier · ++ · Int" : index === 1 ? "Identifier · -- · Int" : index === 2 ? "Identifier · comment" : "Ellipsis"}</Label>
+            <Label x={801} y={row.y + 19} className="sketch-tiny">{zh ? "≠ → " : "≠ original → insert a space"}</Label>
+          </RoughBox>
+        </g>
+      ))}
+      <Label x={484} y={470} className="sketch-annotation">{zh ? "renderer : lex(concat(tokens)) == token kinds ?" : "renderer predicate: lex(concat(tokens)) == token kinds ?"}</Label>
+    </svg>
+  );
+}
+
+function MacroRescan({ locale }: { locale: NotebookLocale }) {
+  const zh = locale === "zh";
+  const labels = zh
+    ? ["", "", " TWICE", "", " ADD"]
+    : ["recognize call", "capture argument", "substitute TWICE", "rescan output", "substitute ADD"];
+  const values = ["TWICE(3)", "x = [3]", "ADD(3, 3)", "ADD is visible", "((3) + (3))"];
+  const xs = [28, 218, 408, 598, 788];
+  return (
+    <svg viewBox="0 0 980 530" role="img">
+      <SketchDefs />
+      <title>{zh ? "macro expansion argument capture, substitution rescan" : "Macro argument capture, substitution, and rescan"}</title>
+      <RoughBox x={55} y={42} width={370} height={74} tilt={-1}>
+        <MultilineLabel x={240} y={70} lines={["#define ADD(a,b) ((a)+(b))", "#define TWICE(x) ADD(x,x)"]} className="sketch-small" />
+      </RoughBox>
+      <RoughBox x={566} y={42} width={350} height={74} tilt={1} accent>
+        <Label x={741} y={71} className="sketch-small">{zh ? "disabled set: TWICE" : "disabled set: TWICE is expanding"}</Label>
+        <Label x={741} y={94} className="sketch-tiny">{"{ TWICE }"}</Label>
+      </RoughBox>
+      {xs.map((x, index) => (
+        <g key={labels[index]}>
+          <RoughBox x={x} y={179} width={158} height={104} tilt={index % 2 === 0 ? -1 : 1} accent={index === 2 || index === 4}>
+            <Label x={x + 79} y={211} className="sketch-tiny">{labels[index]}</Label>
+            <MultilineLabel x={x + 79} y={246} lines={[values[index]]} className="sketch-small" />
+          </RoughBox>
+          {index < xs.length - 1 && <RoughPath d={`M ${x + 158} 231 C ${x + 173} 216 ${xs[index + 1] - 12} 216 ${xs[index + 1]} 231`} arrow />}
+        </g>
+      ))}
+      <RoughPath d="M 486 284 C 488 322 455 348 393 360" dashed arrow />
+      <RoughBox x={232} y={350} width={322} height={67} tilt={-1}>
+        <Label x={393} y={378} className="sketch-small">{zh ? " rescan? " : "why rescan?"}</Label>
+        <Label x={393} y={399} className="sketch-tiny">{zh ? "replacement text macro name" : "replacement text may reveal another macro name"}</Label>
+      </RoughBox>
+      <RoughPath d="M 735 284 C 733 336 686 365 625 381" dashed arrow />
+      <RoughBox x={570} y={359} width={360} height={94} tilt={1}>
+        <MultilineLabel x={750} y={387} lines={zh ? [" disabled set? ", "A→B, B→A ", ""] : ["why a disabled set?", "A→B and B→A must terminate", "the active name cannot re-enter"]} className="sketch-small" />
+      </RoughBox>
+      <Label x={487} y={497} className="sketch-annotation">{zh ? "capture → prescan → substitute → rescan, , " : "capture → prescan → substitute → rescan is semantic order, not implementation taste"}</Label>
+    </svg>
+  );
+}
+
+function HashAndPaste({ locale }: { locale: NotebookLocale }) {
+  const zh = locale === "zh";
+  return (
+    <svg viewBox="0 0 980 520" role="img">
+      <SketchDefs />
+      <title>{zh ? " stringification token pasting " : "The distinct semantics of macro stringification and token pasting"}</title>
+      <path className="sketch-wash" d="M25 53 Q240 31 474 55 L470 453 Q236 476 25 450Z" />
+      <path className="sketch-wash sketch-wash-green" d="M509 55 Q746 28 957 56 L957 452 Q739 476 508 450Z" />
+      <Label x={247} y={73} className="sketch-display"># stringify</Label>
+      <Label x={733} y={73} className="sketch-display">## paste</Label>
+
+      <RoughBox x={62} y={106} width={368} height={62} tilt={-1}><Label x={246} y={143} className="sketch-small">#define STR(x) #x</Label></RoughBox>
+      <RoughBox x={87} y={206} width={318} height={58} accent><Label x={246} y={242} className="sketch-small">STR(VALUE + 1)</Label></RoughBox>
+      <RoughPath d="M 246 168 L 246 205" arrow />
+      <RoughBox x={87} y={307} width={318} height={69} tilt={1}>
+        <MultilineLabel x={246} y={335} lines={["\"VALUE + 1\"", zh ? " spelling, " : "original spelling, space-normalized"]} className="sketch-small" />
+      </RoughBox>
+      <RoughPath d="M 246 264 L 246 306" arrow />
+      <Label x={246} y={419} className="sketch-annotation">{zh ? "" : "argument is not prescanned"}</Label>
+
+      <RoughBox x={548} y={106} width={368} height={62} tilt={1}><Label x={732} y={143} className="sketch-small">#define JOIN(a,b) a ## b</Label></RoughBox>
+      <RoughBox x={573} y={206} width={318} height={58} accent><Label x={732} y={242} className="sketch-small">JOIN(var, 7)</Label></RoughBox>
+      <RoughPath d="M 732 168 L 732 205" arrow />
+      <RoughBox x={573} y={307} width={146} height={69} tilt={-1}><Label x={646} y={348} className="sketch-small">var7</Label></RoughBox>
+      <RoughPath d="M 732 264 C 723 284 699 294 670 306" arrow />
+      <RoughBox x={756} y={307} width={161} height={69} tilt={1} accent>
+        <MultilineLabel x={837} y={334} lines={zh ? ["re-lex gate", " 1 token"] : ["re-lex gate", "exactly 1 token"]} className="sketch-small" />
+      </RoughBox>
+      <RoughPath d="M 720 342 C 735 342 743 342 755 342" arrow />
+      <Label x={732} y={419} className="sketch-annotation">{zh ? "0 2+ tokens → E0106" : "0 or 2+ tokens → E0106"}</Label>
+      <RoughPath d="M 480 95 V 446" dashed />
+      <Label x={490} y={490} className="sketch-tiny">{zh ? " substitution" : "neither path is ordinary substitution"}</Label>
+    </svg>
+  );
+}
+
+function ConditionalStack({ locale }: { locale: NotebookLocale }) {
+  const zh = locale === "zh";
+  const source = ["#if OUTER", "  keep_A", "  #if INNER", "    maybe_B", "  #else", "    keep_C", "  #endif", "#endif"];
+  return (
+    <svg viewBox="0 0 980 530" role="img">
+      <SketchDefs />
+      <title>{zh ? "nested conditional directive active frame stack" : "How nested conditional directives change the active frame stack"}</title>
+      <RoughBox x={37} y={53} width={285} height={411} tilt={-1}>
+        <Label x={179} y={87} className="sketch-annotation">source</Label>
+        {source.map((line, index) => <Label key={line} x={70} y={126 + index * 39} anchor="start" className={line.includes("keep") ? "sketch-small" : "sketch-tiny"}>{`${String(index + 1).padStart(2, "0")}  ${line}`}</Label>)}
+      </RoughBox>
+      <RoughPath d="M 323 121 C 361 123 378 123 412 128" arrow />
+      <RoughPath d="M 323 200 C 361 203 379 204 412 211" arrow />
+      <RoughPath d="M 323 277 C 360 283 378 297 412 312" arrow />
+      <RoughPath d="M 323 355 C 361 355 378 356 412 360" arrow />
+
+      <RoughBox x={414} y={76} width={238} height={91} accent>
+        <MultilineLabel x={533} y={107} lines={["frame 1", "active=true", "had_true=true"]} className="sketch-small" />
+      </RoughBox>
+      <RoughBox x={414} y={185} width={238} height={108} tilt={1}>
+        <MultilineLabel x={533} y={215} lines={["frame 2", "active=false", "had_true=false"]} className="sketch-small" />
+        <Label x={533} y={271} className="sketch-tiny">{zh ? "maybe_B " : "maybe_B is suppressed"}</Label>
+      </RoughBox>
+      <RoughBox x={414} y={309} width={238} height={108} tilt={-1} accent>
+        <MultilineLabel x={533} y={339} lines={["frame 2 after #else", "active=true", "had_true=true"]} className="sketch-small" />
+        <Label x={533} y={395} className="sketch-tiny">{zh ? "keep_C " : "keep_C is emitted"}</Label>
+      </RoughBox>
+
+      <RoughBox x={721} y={110} width={214} height={271} tilt={1}>
+        <Label x={828} y={145} className="sketch-annotation">{zh ? "" : "emission rule"}</Label>
+        <MultilineLabel x={828} y={194} lines={zh ? ["emit(line) ⇔", " frame", " active"] : ["emit(line) ⇔", "every enclosing", "frame is active"]} className="sketch-small" />
+        <RoughPath d="M 766 269 H 891" />
+        <MultilineLabel x={828} y={304} lines={zh ? ["directive ", " stack "] : ["directives still execute", "or the stack cannot recover"]} className="sketch-small" />
+      </RoughBox>
+      <RoughPath d="M 653 242 C 687 242 698 229 721 218" arrow />
+      <Label x={490} y={488} className="sketch-annotation">{zh ? "#endif , text line" : "#endif is a structural operation, not an ordinary text line"}</Label>
+    </svg>
+  );
+}
+
+function IncludeSourceGraph({ locale }: { locale: NotebookLocale }) {
+  const zh = locale === "zh";
+  return (
+    <svg viewBox="0 0 980 550" role="img">
+      <SketchDefs />
+      <title>{zh ? "include graph token provenance" : "Source identity and token provenance across an include graph"}</title>
+      <Paper x={38} y={76} label="main.c · FileId 1" />
+      <Paper x={248} y={38} label="config.h · FileId 2" tilt={2} />
+      <Paper x={248} y={211} label="types.h · FileId 3" tilt={-1} />
+      <Paper x={451} y={128} label="local.h · FileId 4" tilt={1} />
+      <RoughPath d="M 150 111 C 184 91 204 80 248 77" arrow />
+      <RoughPath d="M 150 139 C 181 181 206 219 248 244" arrow />
+      <RoughPath d="M 360 80 C 402 86 421 114 451 147" arrow />
+      <Label x={184} y={78} className="sketch-tiny">{'"config.h"'}</Label>
+      <Label x={180} y={223} className="sketch-tiny">&lt;types.h&gt;</Label>
+
+      <RoughBox x={674} y={54} width={260} height={138} tilt={-1} accent>
+        <MultilineLabel x={804} y={84} lines={zh ? ["include search order", "1. quoted sibling", "2. explicit -I", "3. standard roots"] : ["include search order", "1. quoted sibling", "2. explicit -I", "3. standard roots"]} className="sketch-small" />
+        <Label x={804} y={173} className="sketch-tiny">-nostdinc ⇒ {zh ? " 3 " : "skip layer 3"}</Label>
+      </RoughBox>
+      <RoughPath d="M 557 142 C 601 129 629 112 674 104" arrow />
+
+      <RoughBox x={45} y={376} width={385} height={111} tilt={1}>
+        <MultilineLabel x={237} y={407} lines={zh ? ["header token", "span.file = FileId 3", "text = Decoded(\"size_t\")"] : ["header token", "span.file = FileId 3", "text = Decoded(\"size_t\")"]} className="sketch-small" />
+      </RoughBox>
+      <RoughPath d="M 304 293 C 300 328 283 350 258 376" dashed arrow />
+      <RoughBox x={550} y={345} width={384} height={142} tilt={-1} accent>
+        <Label x={742} y={378} className="sketch-annotation">{zh ? "" : "the prevented old failure"}</Label>
+        <MultilineLabel x={742} y={410} lines={zh ? [" header byte span", " main.c buffer", "→ panic / spelling"] : ["slice main.c using a", "header byte span", "→ panic / wrong spelling"]} className="sketch-small" />
+      </RoughBox>
+      <RoughPath d="M 430 431 C 476 432 507 425 549 418" arrow />
+      <Label x={490} y={524} className="sketch-tiny">{zh ? " translation unit source buffer, span FileId" : "one translation unit may have many buffers; every span belongs to exactly one FileId"}</Label>
+    </svg>
+  );
+}
+
+function DifferentialOracle({ locale }: { locale: NotebookLocale }) {
+  const zh = locale === "zh";
+  return (
+    <svg viewBox="0 0 980 550" role="img">
+      <SketchDefs />
+      <title>{zh ? "34 fixture fail-closed differential oracle" : "The fail-closed differential oracle for 34 preprocessing fixtures"}</title>
+      <RoughBox x={34} y={54} width={188} height={94} tilt={-1}>
+        <MultilineLabel x={128} y={85} lines={zh ? [" corpus", "34 × .c", " argv"] : ["frozen corpus", "34 × .c", "same argv"]} className="sketch-small" />
+      </RoughBox>
+      <RoughPath d="M 222 97 C 260 90 285 76 318 73" arrow />
+      <RoughPath d="M 222 107 C 266 132 286 173 318 204" arrow />
+      <RoughBox x={320} y={39} width={215} height={92} tilt={1} accent>
+        <MultilineLabel x={427} y={71} lines={["EvoCC -E", "stdout · stderr · rc"]} className="sketch-small" />
+      </RoughBox>
+      <RoughBox x={320} y={173} width={215} height={92} tilt={-1}>
+        <MultilineLabel x={427} y={205} lines={["GCC 14 -E", "stdout · stderr · rc"]} className="sketch-small" />
+      </RoughBox>
+
+      <RoughBox x={634} y={87} width={295} height={122} tilt={1}>
+        <Label x={781} y={120} className="sketch-annotation">{zh ? " serializer" : "independent serializer"}</Label>
+        <MultilineLabel x={781} y={151} lines={zh ? ["", " kind + spelling", " punctuator "] : ["ignore incidental space", "keep kind + spelling", "longest punctuator first"]} className="sketch-small" />
+      </RoughBox>
+      <RoughPath d="M 535 84 C 576 88 595 112 634 131" arrow />
+      <RoughPath d="M 535 220 C 581 214 599 185 634 166" arrow />
+
+      <RoughBox x={235} y={343} width={510} height={116} tilt={-1} accent>
+        <Label x={490} y={378} className="sketch-display">PASS ⇔</Label>
+        <MultilineLabel x={490} y={410} lines={zh ? ["rc ∧ token streams ", "missing include: subject "] : ["same rc ∧ identical token streams", "missing include: both controlled-reject the same subject"]} className="sketch-small" />
+      </RoughBox>
+      <RoughPath d="M 781 210 C 750 275 682 314 626 343" arrow />
+      <RoughBox x={32} y={481} width={916} height={48} tilt={1}>
+        <Label x={490} y={511} className="sketch-small">{zh ? "overall PASS ⇔ total = 34 ∧ PASS = 34 ∧ non-PASS = 0" : "overall PASS ⇔ total = 34 ∧ PASS = 34 ∧ non-PASS = 0"}</Label>
+      </RoughBox>
+      <Label x={808} y={305} className="sketch-annotation">{zh ? "DIFFER / SKIP / CONFLICT → FAIL" : "DIFFER / SKIP / CONFLICT → FAIL"}</Label>
+    </svg>
+  );
+}
+
 function SketchDefs() {
   return (
     <defs>
@@ -389,6 +781,14 @@ function Drawing({ name, locale }: { name: SketchName; locale: NotebookLocale })
     case "semantic-and-evidence": return <SemanticAndEvidence locale={locale} />;
     case "three-arm64-worlds": return <ThreeArm64Worlds locale={locale} />;
     case "nonce-bound-boot": return <NonceBoundBoot locale={locale} />;
+    case "translation-phases": return <TranslationPhases locale={locale} />;
+    case "token-anatomy": return <TokenAnatomy locale={locale} />;
+    case "maximal-munch": return <MaximalMunch locale={locale} />;
+    case "macro-rescan": return <MacroRescan locale={locale} />;
+    case "hash-and-paste": return <HashAndPaste locale={locale} />;
+    case "conditional-stack": return <ConditionalStack locale={locale} />;
+    case "include-source-graph": return <IncludeSourceGraph locale={locale} />;
+    case "differential-oracle": return <DifferentialOracle locale={locale} />;
   }
 }
 

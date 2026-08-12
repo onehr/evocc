@@ -36,9 +36,13 @@ Every chapter follows four rules:
 
 ### Part II — The GNU C Frontend
 
-Future chapters will follow the implemented compiler rather than a calendar
-promise: preprocessing tokens, source spans, arena-owned C-HIR, declarations,
-types, statements, functions, and GNU C constructs.
+2. [From Bytes to Preprocessing Tokens](02-from-bytes-to-preprocessing-tokens.md)
+   — How logical lines, maximal munch, macro rescanning, `#`/`##`, conditional
+   stacks, include provenance, and a 34-case differential oracle establish the
+   parser's input boundary.
+
+Later chapters will continue through arena-owned C-HIR, declarators, types,
+statements, functions, and GNU C constructs.
 
 ### Part III — Equality With Reasons
 
