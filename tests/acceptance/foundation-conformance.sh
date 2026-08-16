@@ -1084,6 +1084,67 @@ test_parser_matrix() {
   fi
 }
 
+# ---------------------------------------------------------------------------
+# Independent least-congruence oracle, mutation sensitivity, and proof guard
+# ---------------------------------------------------------------------------
+
+test_egraph_independent_checker() {
+  local mutation_stdout="$RAW_DIR/egraph-mutation.stdout"
+  local mutation_stderr="$RAW_DIR/egraph-mutation.stderr"
+  local checker_stdout="$RAW_DIR/egraph-checker.stdout"
+  local checker_stderr="$RAW_DIR/egraph-checker.stderr"
+  local proof_stdout="$RAW_DIR/proof-semantics.stdout"
+  local proof_stderr="$RAW_DIR/proof-semantics.stderr"
+
+  if [ ! -x "$TIMEOUT_BIN" ]; then
+    record_result egraph_independent_checker FAIL \
+      "required timeout tool is unavailable: $TIMEOUT_BIN" ''
+    return
+  fi
+
+  "$TIMEOUT_BIN" 300 bash "$SCRIPT_DIR/egraph-mutation-selftest.sh" \
+    >"$mutation_stdout" 2>"$mutation_stderr"
+  local mutation_rc=$?
+
+  (
+    cd "$PROJECT_ROOT" || exit 2
+    "$TIMEOUT_BIN" 300 cargo test -p evocc-egraph --test independent_checker \
+      --locked --offline -- --nocapture --test-threads=1
+  ) >"$checker_stdout" 2>"$checker_stderr"
+  local checker_rc=$?
+
+  (
+    cd "$PROJECT_ROOT" || exit 2
+    "$TIMEOUT_BIN" 60 cargo test -p evocc-proof --test semantic_validation \
+      --locked --offline -- --nocapture --test-threads=1
+  ) >"$proof_stdout" 2>"$proof_stderr"
+  local proof_rc=$?
+
+  local mutation_receipts
+  local campaign_receipts
+  local exhaustive_receipts
+  local control_receipts
+  local proof_receipts
+  mutation_receipts="$(awk '/^PASS (egraph_baseline_control|rebuild_noop|repair_noop|missing_parent_update|collapsed_constant)$/ { count += 1 } END { print count + 0 }' "$mutation_stdout")"
+  campaign_receipts="$(awk 'index($0, "EGRAPH_CAMPAIGN seeds=100 actions=10000 ") { count += 1 } END { print count + 0 }' "$checker_stdout")"
+  exhaustive_receipts="$(awk 'index($0, "EGRAPH_EXHAUSTIVE alphabet=5 max_length=6 sequences=19531 ") { count += 1 } END { print count + 0 }' "$checker_stdout")"
+  control_receipts="$(awk 'index($0, "EGRAPH_CHECKER_CONTROLS baseline=1 faults=5") { count += 1 } END { print count + 0 }' "$checker_stdout")"
+  proof_receipts="$(awk 'index($0, "PROOF_SEMANTICS ") { count += 1 } END { print count + 0 }' "$proof_stdout")"
+
+  if [ "$mutation_rc" -eq 0 ] && [ "$checker_rc" -eq 0 ] && [ "$proof_rc" -eq 0 ] && \
+     [ "$mutation_receipts" -eq 5 ] && [ "$campaign_receipts" -eq 1 ] && \
+     [ "$exhaustive_receipts" -eq 1 ] && [ "$control_receipts" -eq 1 ] && \
+     [ "$proof_receipts" -eq 4 ]; then
+    record_result egraph_independent_checker PASS \
+      "five mutants killed; 100x100 plus 19531-sequence oracle campaigns and four proof guards passed" \
+      "raw/egraph-* raw/proof-semantics.*"
+  else
+    record_result egraph_independent_checker FAIL \
+      "e-graph checker failed: rc=$mutation_rc/$checker_rc/$proof_rc receipts=$mutation_receipts/$campaign_receipts/$exhaustive_receipts/$control_receipts/$proof_receipts" \
+      "raw/egraph-* raw/proof-semantics.*"
+  fi
+}
+
 write_evidence_manifest() {
   local evidence_dir="$1"
   local manifest="$evidence_dir/evidence-manifest.sha256"
@@ -1117,6 +1178,7 @@ test_clean_clone_offline_replay
 test_lexer_full_goldens
 test_cpp_three_way_conformance
 test_parser_matrix
+test_egraph_independent_checker
 
 # ---------------------------------------------------------------------------
 # Aggregate: produce summary.json
