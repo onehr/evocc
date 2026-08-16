@@ -598,12 +598,26 @@ test_evidence_mutation_detection() {
 
 test_root_of_trust_envelope() {
   local verifier="$SCRIPT_DIR/verify-root-of-trust-envelope.sh"
+  local selftest="$SCRIPT_DIR/root-of-trust-envelope-selftest.sh"
   local envelope="${C30_ROOT_OF_TRUST_ENVELOPE:-}"
   local expected_sha="${C30_EXPECTED_ROOT_OF_TRUST_ENVELOPE_SHA256:-}"
 
-  if [ ! -x "$verifier" ]; then
+  if [ ! -x "$verifier" ] || [ ! -x "$selftest" ]; then
     record_result root_of_trust_envelope FAIL \
-      "root-of-trust envelope verifier is missing or not executable" ''
+      "root-of-trust envelope verifier or selftest is missing" ''
+    return
+  fi
+
+  bash "$selftest" \
+    >"$RAW_DIR/root-of-trust-selftest.stdout" \
+    2>"$RAW_DIR/root-of-trust-selftest.stderr"
+  local selftest_rc=$?
+  if [ "$selftest_rc" -ne 0 ] || \
+     ! grep -Fxq 'root-of-trust envelope selftest: 7 passed, 0 failed' \
+       "$RAW_DIR/root-of-trust-selftest.stdout"; then
+    record_result root_of_trust_envelope FAIL \
+      "root-of-trust envelope sensitivity failed: rc=$selftest_rc" \
+      "raw/root-of-trust-selftest.stderr"
     return
   fi
   if [ -z "$envelope" ] || [ -z "$expected_sha" ]; then
