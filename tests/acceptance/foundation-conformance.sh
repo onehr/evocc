@@ -1032,6 +1032,58 @@ test_cpp_three_way_conformance() {
   fi
 }
 
+# ---------------------------------------------------------------------------
+# Declarator, expression, EOF, and process-diagnostic parser observations
+# ---------------------------------------------------------------------------
+
+test_parser_matrix() {
+  local matrix_stdout="$RAW_DIR/parser-matrix.stdout"
+  local matrix_stderr="$RAW_DIR/parser-matrix.stderr"
+  local diagnostics_stdout="$RAW_DIR/parser-diagnostics.stdout"
+  local diagnostics_stderr="$RAW_DIR/parser-diagnostics.stderr"
+
+  if [ ! -x "$TIMEOUT_BIN" ]; then
+    record_result parser_matrix FAIL \
+      "required timeout tool is unavailable: $TIMEOUT_BIN" ''
+    return
+  fi
+
+  (
+    cd "$PROJECT_ROOT" || exit 2
+    "$TIMEOUT_BIN" 60 cargo test -p evocc-parser --test parser_matrix \
+      --locked --offline -- --nocapture --test-threads=1
+  ) >"$matrix_stdout" 2>"$matrix_stderr"
+  local matrix_rc=$?
+
+  (
+    cd "$PROJECT_ROOT" || exit 2
+    "$TIMEOUT_BIN" 60 cargo test -p evocc --test parser_diagnostics \
+      --locked --offline -- --nocapture --test-threads=1
+  ) >"$diagnostics_stdout" 2>"$diagnostics_stderr"
+  local diagnostics_rc=$?
+
+  local expression_receipts
+  local declarator_receipts
+  local positive_receipts
+  local negative_receipts
+  expression_receipts="$(awk '$0 == "PARSER_MATRIX expressions=20 unique=20" { count += 1 } END { print count + 0 }' "$matrix_stdout")"
+  declarator_receipts="$(awk '$0 == "PARSER_MATRIX declarators=9 unique=9" { count += 1 } END { print count + 0 }' "$matrix_stdout")"
+  positive_receipts="$(awk '$0 == "PARSER_DIAGNOSTICS positive=3 unique=3" { count += 1 } END { print count + 0 }' "$diagnostics_stdout")"
+  negative_receipts="$(awk '$0 == "PARSER_DIAGNOSTICS negative=25 unique=25" { count += 1 } END { print count + 0 }' "$diagnostics_stdout")"
+
+  if [ "$matrix_rc" -eq 0 ] && [ "$diagnostics_rc" -eq 0 ] && \
+     [ "$expression_receipts" -eq 1 ] && [ "$declarator_receipts" -eq 1 ] && \
+     [ "$positive_receipts" -eq 1 ] && [ "$negative_receipts" -eq 1 ]; then
+    record_result parser_matrix PASS \
+      "20 expression, 9 declarator, 3 positive process, and 25 exact negative cases passed" \
+      "raw/parser-{matrix,diagnostics}.{stdout,stderr}"
+  else
+    record_result parser_matrix FAIL \
+      "parser matrix failed: matrix_rc=$matrix_rc diagnostics_rc=$diagnostics_rc receipts=$expression_receipts/$declarator_receipts/$positive_receipts/$negative_receipts" \
+      "raw/parser-{matrix,diagnostics}.{stdout,stderr}"
+  fi
+}
+
 write_evidence_manifest() {
   local evidence_dir="$1"
   local manifest="$evidence_dir/evidence-manifest.sha256"
@@ -1064,6 +1116,7 @@ test_evidence_mutation_detection
 test_clean_clone_offline_replay
 test_lexer_full_goldens
 test_cpp_three_way_conformance
+test_parser_matrix
 
 # ---------------------------------------------------------------------------
 # Aggregate: produce summary.json
