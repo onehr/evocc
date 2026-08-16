@@ -26,9 +26,9 @@ RESULTS="$RUN_DIR/results.jsonl"
 SUMMARY="$RUN_DIR/summary.json"
 RAW_DIR="$RUN_DIR/raw"
 
-JQ="${C30_JQ:-/opt/homebrew/bin/jq}"
+JQ="${C30_JQ:-/opt/homebrew/Cellar/jq/1.8.2/bin/jq}"
 SHASUM="${C30_SHASUM:-/usr/bin/shasum}"
-TIMEOUT_BIN="${C30_TIMEOUT:-/opt/homebrew/bin/timeout}"
+TIMEOUT_BIN="${C30_TIMEOUT:-/opt/homebrew/Cellar/coreutils/9.11/bin/gtimeout}"
 CONTAINER_BIN="${C30_CONTAINER_BIN:-/usr/local/bin/container}"
 EVIDENCE_VERIFIER="$SCRIPT_DIR/verify-foundation-evidence.sh"
 
@@ -592,6 +592,164 @@ test_evidence_mutation_detection() {
   fi
 }
 
+# ---------------------------------------------------------------------------
+# Clean no-local clone, locked offline replay
+# ---------------------------------------------------------------------------
+
+test_clean_clone_offline_replay() {
+  local gate_ok=1
+  local reason=''
+  local tool_key=''
+  local tool_path=''
+  local expected_path=''
+  local expected_hash=''
+  local actual_hash=''
+  local tools_tsv="$RAW_DIR/clean-clone-tools.tsv"
+  : >"$tools_tsv"
+
+  local git_bin
+  local cargo_bin
+  local rustc_bin
+  git_bin="$("$JQ" -r '.toolchain.hostReplay.git.path // empty' "$BUILD_ENV_CONTRACT")"
+  cargo_bin="$("$JQ" -r '.toolchain.hostReplay.cargo.path // empty' "$BUILD_ENV_CONTRACT")"
+  rustc_bin="$("$JQ" -r '.toolchain.hostReplay.rustc.path // empty' "$BUILD_ENV_CONTRACT")"
+
+  local tool_specs
+  tool_specs="git|$git_bin
+cargo|$cargo_bin
+rustc|$rustc_bin
+jq|$JQ
+shasum|$SHASUM
+timeout|$TIMEOUT_BIN
+bash|$BASH"
+
+  local old_ifs="$IFS"
+  IFS='|'
+  while read -r tool_key tool_path; do
+    [ -n "$tool_key" ] || continue
+    expected_path="$("$JQ" -r --arg key "$tool_key" \
+      '.toolchain.hostReplay[$key].path // empty' "$BUILD_ENV_CONTRACT")"
+    expected_hash="$("$JQ" -r --arg key "$tool_key" \
+      '.toolchain.hostReplay[$key].sha256 // empty' "$BUILD_ENV_CONTRACT")"
+    actual_hash=''
+    if [ -f "$tool_path" ] && [ ! -L "$tool_path" ]; then
+      actual_hash="$("$SHASUM" -a 256 "$tool_path" 2>/dev/null | awk '{print $1}')"
+    fi
+    printf '%s\t%s\t%s\t%s\n' \
+      "$tool_key" "$tool_path" "$expected_hash" "$actual_hash" >>"$tools_tsv"
+    if [ "$tool_path" != "$expected_path" ] || \
+       ! printf '%s\n' "$expected_hash" | grep -Eq '^[0-9a-f]{64}$' || \
+       [ "$actual_hash" != "$expected_hash" ]; then
+      gate_ok=0
+      reason="${reason:+$reason; }tool_identity:$tool_key"
+    fi
+  done <<EOF
+$tool_specs
+EOF
+  IFS="$old_ifs"
+
+  local source_status=''
+  local source_commit=''
+  local source_tree=''
+  if [ "$gate_ok" -eq 1 ]; then
+    source_status="$("$git_bin" -C "$PROJECT_ROOT" status --porcelain=v1 --untracked-files=no 2>/dev/null)"
+    source_commit="$("$git_bin" -C "$PROJECT_ROOT" rev-parse HEAD 2>/dev/null)"
+    source_tree="$("$git_bin" -C "$PROJECT_ROOT" rev-parse 'HEAD^{tree}' 2>/dev/null)"
+    if [ -n "$source_status" ] || \
+       ! printf '%s\n' "$source_commit" | grep -Eq '^[0-9a-f]{40}$' || \
+       ! printf '%s\n' "$source_tree" | grep -Eq '^[0-9a-f]{40}$'; then
+      gate_ok=0
+      reason="${reason:+$reason; }source_tree_not_clean_or_resolved"
+    fi
+  fi
+
+  local scratch=''
+  local clone_dir=''
+  local clone_commit=''
+  local clone_tree=''
+  local clone_rc=1
+  local cargo_rc=1
+  local post_status=''
+  if [ "$gate_ok" -eq 1 ]; then
+    scratch="$(mktemp -d "${TMPDIR:-/tmp}/c30-clean-clone.XXXXXX")"
+    if [ -z "$scratch" ] || [ ! -d "$scratch" ]; then
+      gate_ok=0
+      reason="${reason:+$reason; }scratch_creation_failed"
+    else
+      clone_dir="$scratch/repository"
+      mkdir -p "$scratch/home" "$scratch/cargo-home" "$scratch/target"
+      "$TIMEOUT_BIN" 60 "$git_bin" clone --quiet --no-local --no-hardlinks \
+        "$PROJECT_ROOT" "$clone_dir" \
+        >"$RAW_DIR/clean-clone-git.stdout" 2>"$RAW_DIR/clean-clone-git.stderr"
+      clone_rc=$?
+      if [ "$clone_rc" -ne 0 ]; then
+        gate_ok=0
+        reason="${reason:+$reason; }clone_rc=$clone_rc"
+      else
+        clone_commit="$("$git_bin" -C "$clone_dir" rev-parse HEAD 2>/dev/null)"
+        clone_tree="$("$git_bin" -C "$clone_dir" rev-parse 'HEAD^{tree}' 2>/dev/null)"
+        if [ "$clone_commit" != "$source_commit" ] || [ "$clone_tree" != "$source_tree" ]; then
+          gate_ok=0
+          reason="${reason:+$reason; }clone_identity_mismatch"
+        fi
+      fi
+    fi
+  fi
+
+  if [ "$gate_ok" -eq 1 ]; then
+    (
+      cd "$clone_dir" || exit 2
+      /usr/bin/env -i \
+        PATH="$(dirname "$cargo_bin"):/usr/bin:/bin" \
+        HOME="$scratch/home" \
+        CARGO_HOME="$scratch/cargo-home" \
+        CARGO_TARGET_DIR="$scratch/target" \
+        CARGO_NET_OFFLINE=true \
+        RUSTC="$rustc_bin" \
+        LC_ALL=C \
+        TZ=UTC \
+        "$TIMEOUT_BIN" 300 "$cargo_bin" test \
+          --workspace --all-targets --locked --offline
+    ) >"$RAW_DIR/clean-clone-cargo.stdout" 2>"$RAW_DIR/clean-clone-cargo.stderr"
+    cargo_rc=$?
+    post_status="$("$git_bin" -C "$clone_dir" status --porcelain=v1 --untracked-files=no 2>/dev/null)"
+    if [ "$cargo_rc" -ne 0 ] || [ -n "$post_status" ]; then
+      gate_ok=0
+      reason="${reason:+$reason; }offline_replay_rc=$cargo_rc"
+    fi
+  fi
+
+  "$JQ" -n \
+    --arg sourceCommit "$source_commit" \
+    --arg sourceTree "$source_tree" \
+    --arg cloneCommit "$clone_commit" \
+    --arg cloneTree "$clone_tree" \
+    --argjson cloneRc "$clone_rc" \
+    --argjson cargoRc "$cargo_rc" \
+    --arg cargoHomeState "fresh-empty" \
+    --arg networkPolicy "CARGO_NET_OFFLINE=true + --offline" \
+    '{schemaVersion:1,sourceCommit:$sourceCommit,sourceTree:$sourceTree,
+      cloneCommit:$cloneCommit,cloneTree:$cloneTree,cloneRc:$cloneRc,cargoRc:$cargoRc,
+      cargoHomeState:$cargoHomeState,networkPolicy:$networkPolicy}' \
+    >"$RAW_DIR/clean-clone-receipt.json"
+
+  if [ -n "$scratch" ]; then
+    case "$scratch" in
+      "${TMPDIR:-/tmp}"/c30-clean-clone.*) /bin/rm -rf "$scratch" ;;
+      *) gate_ok=0; reason="${reason:+$reason; }unsafe_cleanup_target" ;;
+    esac
+  fi
+
+  if [ "$gate_ok" -eq 1 ]; then
+    record_result clean_clone_offline_replay PASS \
+      "no-local clone at the same commit/tree passed locked offline workspace tests" \
+      "raw/clean-clone-receipt.json"
+  else
+    record_result clean_clone_offline_replay FAIL \
+      "clean clone replay failed: ${reason:-unknown}" "raw/clean-clone-*"
+  fi
+}
+
 write_evidence_manifest() {
   local evidence_dir="$1"
   local manifest="$evidence_dir/evidence-manifest.sha256"
@@ -621,6 +779,7 @@ test_floating_tag_rejection
 test_isolated_cpp_differential
 test_final_residue_check
 test_evidence_mutation_detection
+test_clean_clone_offline_replay
 
 # ---------------------------------------------------------------------------
 # Aggregate: produce summary.json

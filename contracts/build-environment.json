@@ -61,6 +61,41 @@
       "rustcSha256": "210df6794001b73ec3d453878707fa1e0bdcb63c427024a6e6574bbe5615a4da",
       "rustcVersion": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
       "rationale": "1.97.1 fixes an LLVM miscompilation present since at least 1.87; the preinstalled 1.94.0 is therefore not acceptable merely because it exists."
+    },
+    "hostReplay": {
+      "git": {
+        "path": "/usr/bin/git",
+        "sha256": "44a68ddc1983d6cff3fd35ba3f9ba5f82004216f1dcde69892b3d1b06e408698",
+        "version": "git version 2.50.1 (Apple Git-155)"
+      },
+      "cargo": {
+        "path": "/Users/onehrxn/.rustup/toolchains/1.97.1-aarch64-apple-darwin/bin/cargo",
+        "sha256": "7672ead309d505577c018fff2cafb3433601f073e38cbe87359ac1f7b944bbf5",
+        "version": "cargo 1.97.1 (c980f4866 2026-06-30)"
+      },
+      "rustc": {
+        "path": "/Users/onehrxn/.rustup/toolchains/1.97.1-aarch64-apple-darwin/bin/rustc",
+        "sha256": "210df6794001b73ec3d453878707fa1e0bdcb63c427024a6e6574bbe5615a4da",
+        "version": "rustc 1.97.1 (8bab26f4f 2026-07-14)"
+      },
+      "jq": {
+        "path": "/opt/homebrew/Cellar/jq/1.8.2/bin/jq",
+        "sha256": "48bb6ed02692e21af263979b688faa438656406f70815f3062b491b72a1c6ef5",
+        "version": "jq-1.8.2"
+      },
+      "shasum": {
+        "path": "/usr/bin/shasum",
+        "sha256": "0812595f981a26f813d98dc380af14d4af427626c9339eda29eb849ae13de1e3"
+      },
+      "timeout": {
+        "path": "/opt/homebrew/Cellar/coreutils/9.11/bin/gtimeout",
+        "sha256": "96d98cb3adafdd41570802625f7511d7d340cbcd4cb7a7278d5706c282a59c33",
+        "version": "timeout (GNU coreutils) 9.11"
+      },
+      "bash": {
+        "path": "/bin/bash",
+        "sha256": "a4c638ae036d92d55661de7d50896ec630145acaa3afeb1818ef4fc4e0ee45a7"
+      }
     }
   },
   "reproducibility": {
