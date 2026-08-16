@@ -161,7 +161,7 @@ else
   exit 2
 fi
 
-if [ $((PASSED + FAILED)) -ne 7 ]; then
+if [ $((PASSED + FAILED)) -ne 8 ]; then
   printf 'root-of-trust envelope selftest denominator changed\n' >&2
   exit 2
 fi

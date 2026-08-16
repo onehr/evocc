@@ -613,7 +613,7 @@ test_root_of_trust_envelope() {
     2>"$RAW_DIR/root-of-trust-selftest.stderr"
   local selftest_rc=$?
   if [ "$selftest_rc" -ne 0 ] || \
-     ! grep -Fxq 'root-of-trust envelope selftest: 7 passed, 0 failed' \
+     ! grep -Fxq 'root-of-trust envelope selftest: 8 passed, 0 failed' \
        "$RAW_DIR/root-of-trust-selftest.stdout"; then
     record_result root_of_trust_envelope FAIL \
       "root-of-trust envelope sensitivity failed: rc=$selftest_rc" \
