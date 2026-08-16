@@ -750,6 +750,162 @@ EOF
   fi
 }
 
+# ---------------------------------------------------------------------------
+# External C11 lexer goldens and raw-byte diagnostics
+# ---------------------------------------------------------------------------
+
+test_lexer_full_goldens() {
+  local contract="$PROJECT_ROOT/tests/contracts/lexer-c11-goldens.tsv"
+  local expected_cases=141
+  local gate_ok=1
+  local reason=''
+  local observed_cases=0
+  local unique_ids=0
+  local unique_inputs=0
+  local unique_digests=0
+  local xxd_bin
+  local xxd_hash
+  local cargo_bin
+  local cargo_hash
+  local rustc_bin
+  local rustc_hash
+
+  xxd_bin="$("$JQ" -r '.toolchain.hostReplay.xxd.path // empty' "$BUILD_ENV_CONTRACT")"
+  xxd_hash="$("$JQ" -r '.toolchain.hostReplay.xxd.sha256 // empty' "$BUILD_ENV_CONTRACT")"
+  cargo_bin="$("$JQ" -r '.toolchain.hostReplay.cargo.path // empty' "$BUILD_ENV_CONTRACT")"
+  cargo_hash="$("$JQ" -r '.toolchain.hostReplay.cargo.sha256 // empty' "$BUILD_ENV_CONTRACT")"
+  rustc_bin="$("$JQ" -r '.toolchain.hostReplay.rustc.path // empty' "$BUILD_ENV_CONTRACT")"
+  rustc_hash="$("$JQ" -r '.toolchain.hostReplay.rustc.sha256 // empty' "$BUILD_ENV_CONTRACT")"
+
+  if [ ! -f "$contract" ] || [ -L "$contract" ]; then
+    gate_ok=0
+    reason="golden_contract_missing_or_symlink"
+  elif [ "$(sed -n '1p' "$contract")" != \
+      $'case_id\tinput_hex\texpected_tokens\texpected_diagnostic' ]; then
+    gate_ok=0
+    reason="golden_header_invalid"
+  fi
+
+  if [ "$gate_ok" -eq 1 ]; then
+    observed_cases="$(awk 'NR > 1 && NF { count += 1 } END { print count + 0 }' "$contract")"
+    unique_ids="$(awk -F '\t' 'NR > 1 { print $1 }' "$contract" | sort -u | awk 'NF { count += 1 } END { print count + 0 }')"
+    unique_inputs="$(awk -F '\t' 'NR > 1 { print $2 }' "$contract" | sort -u | awk '{ count += 1 } END { print count + 0 }')"
+    if [ "$observed_cases" -ne "$expected_cases" ] || \
+       [ "$unique_ids" -ne "$expected_cases" ] || \
+       [ "$unique_inputs" -ne "$expected_cases" ]; then
+      gate_ok=0
+      reason="golden_denominator_or_uniqueness_invalid"
+    fi
+  fi
+
+  if [ "$gate_ok" -eq 1 ]; then
+    if [ ! -f "$xxd_bin" ] || [ -L "$xxd_bin" ] || \
+       [ "$(sha256_file "$xxd_bin")" != "$xxd_hash" ] || \
+       [ ! -f "$cargo_bin" ] || [ -L "$cargo_bin" ] || \
+       [ "$(sha256_file "$cargo_bin")" != "$cargo_hash" ] || \
+       [ ! -f "$rustc_bin" ] || [ -L "$rustc_bin" ] || \
+       [ "$(sha256_file "$rustc_bin")" != "$rustc_hash" ]; then
+      gate_ok=0
+      reason="lexer_tool_identity_invalid"
+    fi
+  fi
+
+  local digest_manifest="$RAW_DIR/lexer-input-digests.tsv"
+  : >"$digest_manifest"
+  if [ "$gate_ok" -eq 1 ]; then
+    (
+      awk -F '\t' 'NR > 1 { print $1 "\t" $2 }' "$contract" \
+        | while IFS=$'\t' read -r case_id input_hex; do
+        if ! printf '%s\n' "$input_hex" | grep -Eq '^([0-9a-f]{2})*$'; then
+          exit 1
+        fi
+        local digest
+        digest="$(printf '%s' "$input_hex" | "$xxd_bin" -r -p | "$SHASUM" -a 256 | awk '{print $1}')" || exit 1
+        printf '%s\t%s\n' "$case_id" "$digest"
+      done
+    ) >"$digest_manifest"
+    local digest_rc=$?
+    unique_digests="$(awk -F '\t' '{ print $2 }' "$digest_manifest" | sort -u | awk 'NF { count += 1 } END { print count + 0 }')"
+    if [ "$digest_rc" -ne 0 ] || [ "$unique_digests" -ne "$expected_cases" ]; then
+      gate_ok=0
+      reason="input_digest_recomputation_failed"
+    fi
+  fi
+
+  local scratch=''
+  local lexer_rc=1
+  local diagnostic_rc=1
+  if [ "$gate_ok" -eq 1 ]; then
+    scratch="$(mktemp -d "${TMPDIR:-/tmp}/c30-lexer-goldens.XXXXXX")"
+    if [ -z "$scratch" ] || [ ! -d "$scratch" ]; then
+      gate_ok=0
+      reason="lexer_scratch_creation_failed"
+    else
+      mkdir -p "$scratch/home" "$scratch/cargo-home" "$scratch/target"
+      /usr/bin/env -i \
+        PATH="$(dirname "$cargo_bin"):/usr/bin:/bin" \
+        HOME="$scratch/home" \
+        CARGO_HOME="$scratch/cargo-home" \
+        CARGO_TARGET_DIR="$scratch/target" \
+        CARGO_NET_OFFLINE=true \
+        RUSTC="$rustc_bin" \
+        LC_ALL=C \
+        TZ=UTC \
+        "$TIMEOUT_BIN" 180 "$cargo_bin" test -p evocc-lex \
+          --test c11_full_goldens --locked --offline -- --nocapture \
+        >"$RAW_DIR/lexer-goldens.stdout" 2>"$RAW_DIR/lexer-goldens.stderr"
+      lexer_rc=$?
+
+      /usr/bin/env -i \
+        PATH="$(dirname "$cargo_bin"):/usr/bin:/bin" \
+        HOME="$scratch/home" \
+        CARGO_HOME="$scratch/cargo-home" \
+        CARGO_TARGET_DIR="$scratch/target" \
+        CARGO_NET_OFFLINE=true \
+        RUSTC="$rustc_bin" \
+        LC_ALL=C \
+        TZ=UTC \
+        "$TIMEOUT_BIN" 180 "$cargo_bin" test -p evocc \
+          --test lexer_diagnostics --locked --offline -- --nocapture \
+        >"$RAW_DIR/lexer-diagnostics.stdout" 2>"$RAW_DIR/lexer-diagnostics.stderr"
+      diagnostic_rc=$?
+      if [ "$lexer_rc" -ne 0 ] || [ "$diagnostic_rc" -ne 0 ]; then
+        gate_ok=0
+        reason="lexer_goldens_rc=$lexer_rc diagnostic_rc=$diagnostic_rc"
+      fi
+    fi
+  fi
+
+  "$JQ" -n \
+    --argjson expectedCases "$expected_cases" \
+    --argjson observedCases "$observed_cases" \
+    --argjson uniqueInputDigests "$unique_digests" \
+    --argjson lexerRc "$lexer_rc" \
+    --argjson diagnosticRc "$diagnostic_rc" \
+    --arg contractSha256 "$(sha256_file "$contract" 2>/dev/null || true)" \
+    --arg inputDigestManifestSha256 "$(sha256_file "$digest_manifest")" \
+    '{schemaVersion:1,expectedCases:$expectedCases,observedCases:$observedCases,
+      uniqueInputDigests:$uniqueInputDigests,lexerRc:$lexerRc,diagnosticRc:$diagnosticRc,
+      contractSha256:$contractSha256,inputDigestManifestSha256:$inputDigestManifestSha256}' \
+    >"$RAW_DIR/lexer-golden-receipt.json"
+
+  if [ -n "$scratch" ]; then
+    case "$scratch" in
+      "${TMPDIR:-/tmp}"/c30-lexer-goldens.*) /bin/rm -rf "$scratch" ;;
+      *) gate_ok=0; reason="unsafe_lexer_cleanup_target" ;;
+    esac
+  fi
+
+  if [ "$gate_ok" -eq 1 ]; then
+    record_result lexer_full_goldens PASS \
+      "141 distinct normative inputs match kind, spelling, span, diagnostic, and EOF" \
+      "raw/lexer-golden-receipt.json"
+  else
+    record_result lexer_full_goldens FAIL \
+      "external lexer golden matrix failed: ${reason:-unknown}" "raw/lexer-*"
+  fi
+}
+
 write_evidence_manifest() {
   local evidence_dir="$1"
   local manifest="$evidence_dir/evidence-manifest.sha256"
@@ -780,6 +936,7 @@ test_isolated_cpp_differential
 test_final_residue_check
 test_evidence_mutation_detection
 test_clean_clone_offline_replay
+test_lexer_full_goldens
 
 # ---------------------------------------------------------------------------
 # Aggregate: produce summary.json

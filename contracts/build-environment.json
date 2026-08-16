@@ -95,6 +95,11 @@
       "bash": {
         "path": "/bin/bash",
         "sha256": "a4c638ae036d92d55661de7d50896ec630145acaa3afeb1818ef4fc4e0ee45a7"
+      },
+      "xxd": {
+        "path": "/usr/bin/xxd",
+        "sha256": "7ab0e868c5ba9ed7505c46c29d3204d3d565801ecf708a82d754b50fad7c7b6a",
+        "version": "xxd 2025-08-24"
       }
     }
   },
