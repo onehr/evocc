@@ -1,0 +1,521 @@
+{
+  "schemaVersion": 1,
+  "dialect": "gnu11",
+  "fixtures": [
+    {
+      "file": "001-object-macro-simple.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "pp-number",
+          "spelling": "42"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.3.4 rescan"
+    },
+    {
+      "file": "002-object-macro-multi-token.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "identifier",
+          "spelling": "int"
+        },
+        {
+          "kind": "identifier",
+          "spelling": "x"
+        },
+        {
+          "kind": "punctuator",
+          "spelling": ";"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.3.4 rescan"
+    },
+    {
+      "file": "003-object-macro-empty.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "identifier",
+          "spelling": "int"
+        },
+        {
+          "kind": "identifier",
+          "spelling": "x"
+        },
+        {
+          "kind": "punctuator",
+          "spelling": ";"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.3.4 empty replacement"
+    },
+    {
+      "file": "004-function-macro-simple.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "pp-number",
+          "spelling": "1"
+        },
+        {
+          "kind": "punctuator",
+          "spelling": "+"
+        },
+        {
+          "kind": "pp-number",
+          "spelling": "2"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.3.1 argument substitution"
+    },
+    {
+      "file": "005-function-macro-nested.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "pp-number",
+          "spelling": "3"
+        },
+        {
+          "kind": "punctuator",
+          "spelling": "+"
+        },
+        {
+          "kind": "pp-number",
+          "spelling": "3"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.3.1 prescan and rescan"
+    },
+    {
+      "file": "006-function-macro-no-args.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "pp-number",
+          "spelling": "42"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.3 function-like invocation"
+    },
+    {
+      "file": "007-variadic-macro-normal.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "identifier",
+          "spelling": "printf"
+        },
+        {
+          "kind": "punctuator",
+          "spelling": "("
+        },
+        {
+          "kind": "quoted",
+          "spelling": "\"%d\""
+        },
+        {
+          "kind": "punctuator",
+          "spelling": ","
+        },
+        {
+          "kind": "pp-number",
+          "spelling": "42"
+        },
+        {
+          "kind": "punctuator",
+          "spelling": ")"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.3 variadic substitution"
+    },
+    {
+      "file": "008-variadic-macro-empty.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "identifier",
+          "spelling": "printf"
+        },
+        {
+          "kind": "punctuator",
+          "spelling": "("
+        },
+        {
+          "kind": "quoted",
+          "spelling": "\"hi\""
+        },
+        {
+          "kind": "punctuator",
+          "spelling": ","
+        },
+        {
+          "kind": "punctuator",
+          "spelling": ")"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "GNU C11 empty variadic argument without comma elision"
+    },
+    {
+      "file": "009-variadic-macro-named.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "identifier",
+          "spelling": "printf"
+        },
+        {
+          "kind": "punctuator",
+          "spelling": "("
+        },
+        {
+          "kind": "quoted",
+          "spelling": "\"%d\""
+        },
+        {
+          "kind": "punctuator",
+          "spelling": ","
+        },
+        {
+          "kind": "pp-number",
+          "spelling": "42"
+        },
+        {
+          "kind": "punctuator",
+          "spelling": ")"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "GNU named variadic macro substitution"
+    },
+    {
+      "file": "010-paste-ident-ident.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "identifier",
+          "spelling": "foobar"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.3.3 token paste"
+    },
+    {
+      "file": "011-paste-ident-number.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "identifier",
+          "spelling": "v2"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.3.3 token paste"
+    },
+    {
+      "file": "012-paste-number-number.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "pp-number",
+          "spelling": "12"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.3.3 paste re-lex"
+    },
+    {
+      "file": "013-paste-after-expand.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "identifier",
+          "spelling": "FOO1"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.3.1 and 6.10.3.3 paste operands are not prescanned"
+    },
+    {
+      "file": "014-stringify-simple.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "quoted",
+          "spelling": "\"hello\""
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.3.2 stringification"
+    },
+    {
+      "file": "015-stringify-with-spaces.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "quoted",
+          "spelling": "\"hello world\""
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.3.2 whitespace normalization"
+    },
+    {
+      "file": "016-stringify-before-expand.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "quoted",
+          "spelling": "\"FOO\""
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.3.1 and 6.10.3.2 stringify operand is not prescanned"
+    },
+    {
+      "file": "017-ifdef-defined.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "pp-number",
+          "spelling": "42"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.1 conditional inclusion"
+    },
+    {
+      "file": "018-ifdef-not-defined.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "pp-number",
+          "spelling": "42"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.1 conditional inclusion"
+    },
+    {
+      "file": "019-ifndef.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "pp-number",
+          "spelling": "42"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.1 conditional inclusion"
+    },
+    {
+      "file": "020-if-defined.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "pp-number",
+          "spelling": "42"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.1 defined operator"
+    },
+    {
+      "file": "021-if-arithmetic.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "pp-number",
+          "spelling": "42"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.1 integer constant expression"
+    },
+    {
+      "file": "022-include-quote.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "pp-number",
+          "spelling": "1"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.2 quoted include and rescan"
+    },
+    {
+      "file": "024-include-angle.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "identifier",
+          "spelling": "unsigned"
+        },
+        {
+          "kind": "identifier",
+          "spelling": "long"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.2 angle include and rescan"
+    },
+    {
+      "file": "025-include-missing.c",
+      "expectedRc": 1,
+      "expectsTokens": false,
+      "tokens": [],
+      "diagnostic": {
+        "code": "E0105",
+        "line": 1,
+        "column": 1,
+        "category": "include-not-found",
+        "subject": "nonexistent.h"
+      },
+      "basis": "C11 6.10.2 missing header is a controlled rejection"
+    },
+    {
+      "file": "026-recursive-macro-blocked.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "identifier",
+          "spelling": "FOO"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.3.4 recursion suppression"
+    },
+    {
+      "file": "027-indirect-recursive-blocked.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "identifier",
+          "spelling": "A"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.3.4 indirect recursion suppression"
+    },
+    {
+      "file": "028-predefined-file.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "quoted",
+          "spelling": "\"028-predefined-file.c\""
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.8.1 __FILE__"
+    },
+    {
+      "file": "029-predefined-line.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "pp-number",
+          "spelling": "1"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.8.2 __LINE__"
+    },
+    {
+      "file": "030-predefined-date.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "quoted",
+          "spelling": "\"Aug 12 2026\""
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.8.1 __DATE__ with frozen SOURCE_DATE_EPOCH"
+    },
+    {
+      "file": "031-predefined-stdc.c",
+      "expectedRc": 0,
+      "expectsTokens": true,
+      "tokens": [
+        {
+          "kind": "pp-number",
+          "spelling": "1"
+        }
+      ],
+      "diagnostic": null,
+      "basis": "C11 6.10.8.1 __STDC__"
+    },
+    {
+      "file": "032-empty-file.c",
+      "expectedRc": 0,
+      "expectsTokens": false,
+      "tokens": [],
+      "diagnostic": null,
+      "basis": "C11 5.1.1.2 empty translation unit preprocessing output"
+    },
+    {
+      "file": "033-comments-only.c",
+      "expectedRc": 0,
+      "expectsTokens": false,
+      "tokens": [],
+      "diagnostic": null,
+      "basis": "C11 5.1.1.2 comments become whitespace"
+    },
+    {
+      "file": "034-define-no-space.c",
+      "expectedRc": 0,
+      "expectsTokens": false,
+      "tokens": [],
+      "diagnostic": null,
+      "basis": "C11 6.10.3 empty replacement list"
+    },
+    {
+      "file": "035-hash-at-eof.c",
+      "expectedRc": 0,
+      "expectsTokens": false,
+      "tokens": [],
+      "diagnostic": null,
+      "basis": "C11 6.10 directive consumes no output tokens"
+    }
+  ]
+}

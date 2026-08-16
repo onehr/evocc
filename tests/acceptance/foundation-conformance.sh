@@ -906,6 +906,132 @@ test_lexer_full_goldens() {
   fi
 }
 
+# ---------------------------------------------------------------------------
+# Hand contract plus isolated EvoCC/GCC/Clang preprocessing observations
+# ---------------------------------------------------------------------------
+
+test_cpp_three_way_conformance() {
+  local hand_selftest="$SCRIPT_DIR/cpp-hand-goldens-selftest.sh"
+  local runner="$SCRIPT_DIR/cpp-three-way-conformance.sh"
+  local gate_ok=1
+  local reason=''
+
+  if [ ! -x "$hand_selftest" ]; then
+    record_result cpp_three_way_conformance FAIL \
+      "CPP hand-golden selftest is missing or not executable" ''
+    return
+  fi
+  bash "$hand_selftest" \
+    >"$RAW_DIR/cpp-hand-selftest.stdout" 2>"$RAW_DIR/cpp-hand-selftest.stderr"
+  local hand_rc=$?
+  if [ "$hand_rc" -ne 0 ]; then
+    record_result cpp_three_way_conformance FAIL \
+      "CPP hand-golden sensitivity failed with rc=$hand_rc" \
+      "raw/cpp-hand-selftest.stderr"
+    return
+  fi
+
+  if [ ! -x "$runner" ]; then
+    record_result cpp_three_way_conformance FAIL \
+      "isolated three-way CPP runner is not implemented" \
+      "tests/acceptance/cpp-three-way-conformance.sh"
+    return
+  fi
+
+  local evidence_root="$PROJECT_ROOT/.evidence/cpp-three-way"
+  local before="$RAW_DIR/cpp-three-way-before.txt"
+  local after="$RAW_DIR/cpp-three-way-after.txt"
+  local created="$RAW_DIR/cpp-three-way-created.txt"
+  find "$evidence_root" -mindepth 2 -maxdepth 2 -name summary.json -type f \
+    2>/dev/null | sort >"$before"
+
+  bash "$runner" \
+    >"$RAW_DIR/cpp-three-way.stdout" 2>"$RAW_DIR/cpp-three-way.stderr"
+  local runner_rc=$?
+  find "$evidence_root" -mindepth 2 -maxdepth 2 -name summary.json -type f \
+    2>/dev/null | sort >"$after"
+  comm -13 "$before" "$after" >"$created"
+
+  local created_count
+  created_count="$(awk 'NF { count += 1 } END { print count + 0 }' "$created")"
+  local summary=''
+  if [ "$created_count" -eq 1 ]; then
+    summary="$(sed -n '1p' "$created")"
+  fi
+  local expected_ids
+  expected_ids="$("$JQ" -R . "$PROJECT_ROOT/tests/contracts/cpp-required-fixtures.txt" | "$JQ" -s .)"
+  local subject_manifest
+  local oracle_image
+  local gcc_hash
+  local clang_hash
+  subject_manifest="$("$JQ" -r '.buildImage.manifestDigest' "$BUILD_ENV_CONTRACT")"
+  oracle_image="$("$JQ" -r '.buildImage.sealedImageId' "$BUILD_ENV_CONTRACT")"
+  gcc_hash="$("$JQ" -r '.toolchain.gcc.binarySha256' "$BUILD_ENV_CONTRACT")"
+  clang_hash="$("$JQ" -r '.toolchain.clang.binarySha256' "$BUILD_ENV_CONTRACT")"
+
+  if [ "$runner_rc" -ne 0 ] || [ "$created_count" -ne 1 ] || \
+     [ ! -f "$summary" ] || \
+     ! "$JQ" -e \
+       --argjson expected "$expected_ids" \
+       --arg subjectManifest "$subject_manifest" \
+       --arg oracleImage "$oracle_image" \
+       --arg gccHash "$gcc_hash" \
+       --arg clangHash "$clang_hash" '
+       type == "object" and
+       .schemaVersion == 1 and
+       (.runId | type == "string" and length > 0) and
+       (.sourceCommit | test("^[0-9a-f]{40}$")) and
+       (.sourceTree | test("^[0-9a-f]{40}$")) and
+       .subject.imageManifest == $subjectManifest and
+       .subject.hostTriple == "aarch64-unknown-linux-musl" and
+       .subject.compilerTarget == "aarch64-unknown-linux-gnu" and
+       .subject.staticElf == true and
+       .subject.compilerInventoryEmpty == true and
+       .subject.loadedObjectClosure == [] and
+       .subject.descendantExecs == [] and
+       (.subject.binarySha256 | test("^[0-9a-f]{64}$")) and
+       .oracles.imageId == $oracleImage and
+       .oracles.gccSha256 == $gccHash and
+       .oracles.clangSha256 == $clangHash and
+       .total == 34 and
+       .counts == {PASS:34} and
+       .overall == "PASS" and
+       (.results | type == "array" and length == 34) and
+       ([.results[].file] | sort) == ($expected | sort) and
+       ([.results[].file] | unique | length) == 34 and
+       all(.results[];
+         .status == "PASS" and
+         .timedOut == false and
+         .evoccSignal == 0 and .gccSignal == 0 and .clangSignal == 0 and
+         (.handTokenSha256 | test("^[0-9a-f]{64}$")) and
+         (.evoccTokenSha256 | test("^[0-9a-f]{64}$")) and
+         (.gccTokenSha256 | test("^[0-9a-f]{64}$")) and
+         (.clangTokenSha256 | test("^[0-9a-f]{64}$")) and
+         .handTokenSha256 == .evoccTokenSha256 and
+         .handTokenSha256 == .gccTokenSha256 and
+         .handTokenSha256 == .clangTokenSha256 and
+         (if .file == "025-include-missing.c"
+          then .expectedRc == 1 and .evoccRc == 1 and .gccRc == 1 and .clangRc == 1 and
+               .diagnostic == {code:"E0105",line:1,column:1,
+                 category:"include-not-found",subject:"nonexistent.h"}
+          else .expectedRc == 0 and .evoccRc == 0 and .gccRc == 0 and .clangRc == 0 and
+               .diagnostic == null
+          end)
+       )
+     ' "$summary" >/dev/null 2>&1; then
+    gate_ok=0
+    reason="runner_rc=$runner_rc created=$created_count or summary contract mismatch"
+  fi
+
+  if [ "$gate_ok" -eq 1 ]; then
+    record_result cpp_three_way_conformance PASS \
+      "hand contract, isolated EvoCC, GCC, and Clang agree on all 34 fixtures" "$summary"
+  else
+    record_result cpp_three_way_conformance FAIL \
+      "three-way CPP conformance failed: $reason" "raw/cpp-three-way-*"
+  fi
+}
+
 write_evidence_manifest() {
   local evidence_dir="$1"
   local manifest="$evidence_dir/evidence-manifest.sha256"
@@ -937,6 +1063,7 @@ test_final_residue_check
 test_evidence_mutation_detection
 test_clean_clone_offline_replay
 test_lexer_full_goldens
+test_cpp_three_way_conformance
 
 # ---------------------------------------------------------------------------
 # Aggregate: produce summary.json
