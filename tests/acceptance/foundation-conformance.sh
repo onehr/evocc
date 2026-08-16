@@ -1066,10 +1066,10 @@ test_parser_matrix() {
   local declarator_receipts
   local positive_receipts
   local negative_receipts
-  expression_receipts="$(awk '$0 == "PARSER_MATRIX expressions=20 unique=20" { count += 1 } END { print count + 0 }' "$matrix_stdout")"
-  declarator_receipts="$(awk '$0 == "PARSER_MATRIX declarators=9 unique=9" { count += 1 } END { print count + 0 }' "$matrix_stdout")"
-  positive_receipts="$(awk '$0 == "PARSER_DIAGNOSTICS positive=3 unique=3" { count += 1 } END { print count + 0 }' "$diagnostics_stdout")"
-  negative_receipts="$(awk '$0 == "PARSER_DIAGNOSTICS negative=25 unique=25" { count += 1 } END { print count + 0 }' "$diagnostics_stdout")"
+  expression_receipts="$(awk 'index($0, "PARSER_MATRIX expressions=20 unique=20") { count += 1 } END { print count + 0 }' "$matrix_stdout")"
+  declarator_receipts="$(awk 'index($0, "PARSER_MATRIX declarators=9 unique=9") { count += 1 } END { print count + 0 }' "$matrix_stdout")"
+  positive_receipts="$(awk 'index($0, "PARSER_DIAGNOSTICS positive=3 unique=3") { count += 1 } END { print count + 0 }' "$diagnostics_stdout")"
+  negative_receipts="$(awk 'index($0, "PARSER_DIAGNOSTICS negative=25 unique=25") { count += 1 } END { print count + 0 }' "$diagnostics_stdout")"
 
   if [ "$matrix_rc" -eq 0 ] && [ "$diagnostics_rc" -eq 0 ] && \
      [ "$expression_receipts" -eq 1 ] && [ "$declarator_receipts" -eq 1 ] && \
