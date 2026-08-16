@@ -1,0 +1,8 @@
+root_of_trust_envelope
+clean_clone_offline_replay
+lexer_full_goldens
+cpp_three_way_conformance
+parser_matrix
+arena_miri_conformance
+egraph_independent_checker
+workspace_fresh_clone_replay
