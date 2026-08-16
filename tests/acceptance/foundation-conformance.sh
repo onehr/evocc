@@ -56,7 +56,16 @@ oracle_independence_no_compilers
 floating_tag_rejection
 isolated_cpp_differential
 final_residue_check
-evidence_mutation_detection'
+evidence_mutation_detection
+root_of_trust_envelope
+clean_clone_offline_replay
+lexer_full_goldens
+cpp_three_way_conformance
+parser_matrix
+egraph_independent_checker
+workspace_fresh_clone_replay
+'
+SCRIPT_REQUIRED_IDS="$(printf '%s\n' "$SCRIPT_REQUIRED_IDS" | awk 'NF')"
 
 PROD_HASH_FILES="crates/evocc-common/src/lib.rs crates/evocc-types/src/lib.rs crates/evocc-chir/src/lib.rs crates/evocc-lex/src/lib.rs crates/evocc-cpp/src/lib.rs crates/evocc-parser/src/lib.rs crates/evocc-egraph/src/lib.rs crates/evocc-proof/src/lib.rs crates/evocc-evoir/src/lib.rs crates/evocc-lower/src/lib.rs crates/evocc/src/main.rs Cargo.toml Cargo.lock"
 
@@ -231,31 +240,41 @@ test_flight_lab_acceptance() {
     return
   fi
 
+  local flight_evidence="$PROJECT_ROOT/.evidence/flight-lab"
+  local before="$RAW_DIR/gate5-flight-before.txt"
+  local after="$RAW_DIR/gate5-flight-after.txt"
+  local created="$RAW_DIR/gate5-flight-created.txt"
+  find "$flight_evidence" -mindepth 2 -maxdepth 2 -name summary.json -type f \
+    2>/dev/null | sort >"$before"
+
   bash "$flight_script" >"$RAW_DIR/gate5-flight.stdout" 2>"$RAW_DIR/gate5-flight.stderr"
   local flight_rc=$?
+  find "$flight_evidence" -mindepth 2 -maxdepth 2 -name summary.json -type f \
+    2>/dev/null | sort >"$after"
+  comm -13 "$before" "$after" >"$created"
 
-  # The flight-lab harness writes a summary.json to its own evidence directory.
-  # Find the most recent flight-lab evidence run.
-  local flight_evidence="$PROJECT_ROOT/.evidence/flight-lab"
-  local flight_summary
-  flight_summary="$(find "$flight_evidence" -name summary.json -type f -maxdepth 2 2>/dev/null | sort -r | head -1)"
+  local created_count
+  created_count="$(awk 'NF { count += 1 } END { print count + 0 }' "$created")"
+  local flight_summary=''
+  if [ "$created_count" -eq 1 ]; then
+    flight_summary="$(sed -n '1p' "$created")"
+  fi
 
-  if [ -n "$flight_summary" ] && [ -f "$flight_summary" ]; then
-    local overall
-    overall="$("$JQ" -r '.overall // "UNKNOWN"' "$flight_summary" 2>/dev/null)"
-    if [ "$overall" = "PASS" ]; then
-      record_result flight_lab_acceptance PASS \
-        "flight-lab acceptance: overall PASS" "$flight_summary"
-    else
-      record_result flight_lab_acceptance FAIL \
-        "flight-lab acceptance: overall=$overall, rc=$flight_rc" "$flight_summary"
-    fi
-  elif [ "$flight_rc" -eq 0 ]; then
-    record_result flight_lab_acceptance PASS \
-      "flight-lab acceptance returned 0" "raw/gate5-flight.stdout"
-  else
+  if [ "$flight_rc" -ne 0 ] || [ "$created_count" -ne 1 ] || \
+     [ ! -f "$flight_summary" ] || \
+     ! "$JQ" -e '
+       type == "object" and
+       (.runId | type == "string" and length > 0) and
+       .overall == "PASS" and
+       (.results | type == "array") and
+       all(.results[]; .status == "PASS")
+     ' "$flight_summary" >/dev/null 2>&1; then
     record_result flight_lab_acceptance FAIL \
-      "flight-lab acceptance failed with exit code $flight_rc" "raw/gate5-flight.stderr"
+      "flight-lab must return zero and create exactly one current PASS summary; rc=$flight_rc created=$created_count" \
+      "raw/gate5-flight-created.txt"
+  else
+    record_result flight_lab_acceptance PASS \
+      "flight-lab created one causally joined PASS summary" "$flight_summary"
   fi
 }
 
@@ -351,39 +370,20 @@ test_oracle_independence_no_compilers() {
 # ---------------------------------------------------------------------------
 
 test_floating_tag_rejection() {
-  local gate_ok=1
-
-  local sealed_image_id
-  sealed_image_id="$("$JQ" -r '.buildImage.sealedImageId' "$BUILD_ENV_CONTRACT" 2>/dev/null)" || true
-
-  local manifest_digest
-  manifest_digest="$("$JQ" -r '.buildImage.manifestDigest' "$BUILD_ENV_CONTRACT" 2>/dev/null)" || true
-
-  case "$sealed_image_id" in
-    sha256:[0-9a-f]*)
-      ;;
-    *)
-      gate_ok=0
-      ;;
-  esac
-
-  case "$manifest_digest" in
-    sha256:[0-9a-f]*)
-      ;;
-    *RESOLVE_AT_SEAL*|*RESOLVE_AT*|*TBD*|'')
-      gate_ok=0
-      ;;
-    *)
-      gate_ok=0
-      ;;
-  esac
-
-  if [ "$gate_ok" -eq 1 ]; then
+  if "$JQ" -e '
+      .buildImage as $image |
+      ($image.sealedImageId | type == "string" and test("^sha256:[0-9a-f]{64}$")) and
+      ($image.manifestDigest | type == "string" and test("^sha256:[0-9a-f]{64}$")) and
+      ($image.observedImageId | type == "string" and test("^sha256:[0-9a-f]{64}$")) and
+      ($image.executionReference | type == "string" and test("^sha256:[0-9a-f]{64}$")) and
+      $image.observedImageId == $image.sealedImageId and
+      $image.executionReference == $image.sealedImageId
+    ' "$BUILD_ENV_CONTRACT" >/dev/null 2>&1; then
     record_result floating_tag_rejection PASS \
-      "sealedImageId is sha256:... digest; manifestDigest is resolved" "$BUILD_ENV_CONTRACT"
+      "sealed, observed, and execution image identities are the same immutable digest" "$BUILD_ENV_CONTRACT"
   else
     record_result floating_tag_rejection FAIL \
-      "sealedImageId is not a sha256 digest or manifestDigest is unresolved" "$BUILD_ENV_CONTRACT"
+      "image identity is floating, malformed, or not joined to the observed sealed image" "$BUILD_ENV_CONTRACT"
   fi
 }
 
@@ -399,50 +399,96 @@ test_isolated_cpp_differential() {
     return
   fi
 
+  local cpp_evidence="$PROJECT_ROOT/.evidence/cpp-differential"
+  local before="$RAW_DIR/gate9-cpp-before.txt"
+  local after="$RAW_DIR/gate9-cpp-after.txt"
+  local created="$RAW_DIR/gate9-cpp-created.txt"
+  find "$cpp_evidence" -mindepth 2 -maxdepth 2 -name summary.json -type f \
+    2>/dev/null | sort >"$before"
+
   bash "$cpp_script" >"$RAW_DIR/gate9-cpp.stdout" 2>"$RAW_DIR/gate9-cpp.stderr"
   local cpp_rc=$?
+  find "$cpp_evidence" -mindepth 2 -maxdepth 2 -name summary.json -type f \
+    2>/dev/null | sort >"$after"
+  comm -13 "$before" "$after" >"$created"
 
-  # cpp-differential.sh writes to .evidence/cpp-differential
-  local cpp_evidence="$PROJECT_ROOT/.evidence/cpp-differential"
-  local cpp_results
-  cpp_results="$(find "$cpp_evidence" -name summary.json -type f -maxdepth 2 2>/dev/null | sort -r | head -1)"
+  local created_count
+  created_count="$(awk 'NF { count += 1 } END { print count + 0 }' "$created")"
+  local cpp_results=''
+  if [ "$created_count" -eq 1 ]; then
+    cpp_results="$(sed -n '1p' "$created")"
+  fi
 
-  local gate_ok=1
+  local required_fixtures
+  required_fixtures='001-object-macro-simple.c
+002-object-macro-multi-token.c
+003-object-macro-empty.c
+004-function-macro-simple.c
+005-function-macro-nested.c
+006-function-macro-no-args.c
+007-variadic-macro-normal.c
+008-variadic-macro-empty.c
+009-variadic-macro-named.c
+010-paste-ident-ident.c
+011-paste-ident-number.c
+012-paste-number-number.c
+013-paste-after-expand.c
+014-stringify-simple.c
+015-stringify-with-spaces.c
+016-stringify-before-expand.c
+017-ifdef-defined.c
+018-ifdef-not-defined.c
+019-ifndef.c
+020-if-defined.c
+021-if-arithmetic.c
+022-include-quote.c
+024-include-angle.c
+025-include-missing.c
+026-recursive-macro-blocked.c
+027-indirect-recursive-blocked.c
+028-predefined-file.c
+029-predefined-line.c
+030-predefined-date.c
+031-predefined-stdc.c
+032-empty-file.c
+033-comments-only.c
+034-define-no-space.c
+035-hash-at-eof.c'
+  local expected_json
+  expected_json="$(printf '%s\n' "$required_fixtures" | "$JQ" -R . | "$JQ" -s .)"
 
-  if [ -n "$cpp_results" ] && [ -f "$cpp_results" ]; then
-    local pass_count skip_count conflict_count nonpass_count total_count
-    # summary.json has { counts: { PASS: N, DIFFER: N, ... } }
-    pass_count="$("$JQ" -r '.counts.PASS // 0' "$cpp_results" 2>/dev/null)"
-    skip_count="$("$JQ" -r '.counts.SKIP // 0' "$cpp_results" 2>/dev/null)"
-    conflict_count="$("$JQ" -r '.counts.ORACLE_CONFLICT // 0' "$cpp_results" 2>/dev/null)"
-    nonpass_count="$("$JQ" -r '[.results[] | select(.status != "PASS")] | length' "$cpp_results" 2>/dev/null)"
-    total_count="$("$JQ" -r '.total // 0' "$cpp_results" 2>/dev/null)"
-
-    if [ "$pass_count" -ne 34 ] || [ "$total_count" -ne 34 ] || [ "$nonpass_count" -ne 0 ]; then
-      gate_ok=0
-    fi
-    if [ "${skip_count:-0}" -ne 0 ] 2>/dev/null; then
-      gate_ok=0
-    fi
-    if [ "${conflict_count:-0}" -ne 0 ] 2>/dev/null; then
-      gate_ok=0
-    fi
-
-    if [ "$gate_ok" -eq 1 ]; then
-      record_result isolated_cpp_differential PASS \
-        "CPP differential: exact 34PASS with zero non-PASS outcomes" \
-        "raw/gate9-cpp.stdout"
-    else
-      record_result isolated_cpp_differential FAIL \
-        "CPP differential: ${pass_count}/34 PASS, ${nonpass_count} non-PASS, ${skip_count} SKIP, ${conflict_count} ORACLE_CONFLICT" \
-        "raw/gate9-cpp.stdout"
-    fi
-  elif [ "$cpp_rc" -eq 0 ]; then
-    record_result isolated_cpp_differential PASS \
-      "cpp-differential.sh returned 0" "raw/gate9-cpp.stdout"
-  else
+  if [ "$cpp_rc" -ne 0 ] || [ "$created_count" -ne 1 ] || \
+     [ ! -f "$cpp_results" ] || \
+     ! "$JQ" -e --argjson expected "$expected_json" '
+       type == "object" and
+       (.runId | type == "string" and length > 0) and
+       .overall == "PASS" and
+       .total == 34 and
+       .counts == {PASS:34} and
+       (.results | type == "array" and length == 34) and
+       ([.results[].file] | sort) == ($expected | sort) and
+       ([.results[].file] | unique | length) == 34 and
+       all(.results[];
+         .status == "PASS" and
+         (.evoccRc | type == "number") and
+         (.gccRc | type == "number") and
+         (.evoccSignal == 0) and
+         (.timedOut == false) and
+         (.evoccStdoutSha256 | test("^[0-9a-f]{64}$")) and
+         (.gccStdoutSha256 | test("^[0-9a-f]{64}$")) and
+         .evoccStdoutSha256 == .gccStdoutSha256 and
+         (if .file == "025-include-missing.c"
+          then .evoccRc == 1 and .gccRc == 1 and .diagnosticCode == "E0105"
+          else .evoccRc == 0 and .gccRc == 0
+          end)
+       )
+     ' "$cpp_results" >/dev/null 2>&1; then
     record_result isolated_cpp_differential FAIL \
-      "cpp-differential.sh failed with exit code $cpp_rc" "raw/gate9-cpp.stderr"
+      "CPP child must return zero and create one exact, causally joined 34-case summary; rc=$cpp_rc created=$created_count" \
+      "raw/gate9-cpp-created.txt"
+  else
+    record_result isolated_cpp_differential PASS \
+      "CPP differential has exact IDs and joined return/signal/timeout/hash evidence" "$cpp_results"
   fi
 }
 
@@ -454,15 +500,25 @@ test_final_residue_check() {
   local gate_ok=1
 
   # No QEMU processes may survive.
-  if ps -axo command= 2>/dev/null | grep -F 'qemu-system-aarch64' | grep -F 'evo_nonce=' >/dev/null 2>&1; then
+  if ! ps -axo command= >"$RAW_DIR/gate10-processes.txt" 2>"$RAW_DIR/gate10-processes.stderr"; then
+    gate_ok=0
+  elif grep -F 'qemu-system-aarch64' "$RAW_DIR/gate10-processes.txt" \
+      | grep -F 'evo_nonce=' >/dev/null 2>&1; then
     gate_ok=0
   fi
 
   # No container residue except buildkit.
-  local leftover
-  leftover="$("$CONTAINER_BIN" list --all --format json 2>/dev/null | "$JQ" -r '.[].id' 2>/dev/null | grep -v -x 'buildkit' | grep -c '.' || true)"
-  if [ "${leftover:-0}" -ne 0 ] 2>/dev/null; then
+  local leftover=0
+  if ! "$CONTAINER_BIN" list --all --format json \
+      >"$RAW_DIR/gate10-containers.json" 2>"$RAW_DIR/gate10-containers.stderr" \
+    || ! "$JQ" -e 'type == "array"' "$RAW_DIR/gate10-containers.json" >/dev/null 2>&1; then
     gate_ok=0
+  else
+    leftover="$("$JQ" -r '.[].id' "$RAW_DIR/gate10-containers.json" \
+      | grep -v -x 'buildkit' | grep -c '.' || true)"
+    if [ "${leftover:-0}" -ne 0 ] 2>/dev/null; then
+      gate_ok=0
+    fi
   fi
 
   # Verify production-root files unchanged (recompute hash).
@@ -477,7 +533,13 @@ test_final_residue_check() {
       "no QEMU processes, no container residue (except buildkit), production hash unchanged" ''
   else
     local reason=''
-    ps -axo command= 2>/dev/null | grep -F 'qemu-system-aarch64' | grep -F 'evo_nonce=' >/dev/null 2>&1 && reason="$reason QEMU_residue"
+    if [ ! -s "$RAW_DIR/gate10-processes.txt" ]; then
+      reason="$reason process_inventory_unavailable"
+    elif grep -F 'qemu-system-aarch64' "$RAW_DIR/gate10-processes.txt" \
+        | grep -F 'evo_nonce=' >/dev/null 2>&1; then
+      reason="$reason QEMU_residue"
+    fi
+    [ ! -s "$RAW_DIR/gate10-containers.json" ] && reason="$reason container_inventory_unavailable"
     [ "${leftover:-0}" -ne 0 ] 2>/dev/null && reason="$reason container_residue"
     [ "$current_hash" != "$EXPECTED_PROD_HASH" ] && reason="$reason hash_mismatch($current_hash)"
     record_result final_residue_check FAIL \
@@ -498,21 +560,27 @@ test_evidence_mutation_detection() {
   printf '{"id":"control","status":"PASS"}\n' >"$fixture/results.jsonl"
   printf 'raw witness\n' >"$fixture/raw/witness.txt"
   write_evidence_manifest "$fixture"
+  local expected_manifest_sha
+  expected_manifest_sha="$(sha256_file "$fixture/evidence-manifest.sha256")"
 
-  bash "$EVIDENCE_VERIFIER" "$fixture" >/dev/null 2>&1 || gate_ok=0
+  C30_EXPECTED_EVIDENCE_MANIFEST_SHA256="$expected_manifest_sha" \
+    bash "$EVIDENCE_VERIFIER" "$fixture" >/dev/null 2>&1 || gate_ok=0
 
   local original="$RAW_DIR/gate11-results.original"
   cp "$fixture/results.jsonl" "$original"
   printf 'X' >>"$fixture/results.jsonl"
-  bash "$EVIDENCE_VERIFIER" "$fixture" >/dev/null 2>&1 && gate_ok=0
+  C30_EXPECTED_EVIDENCE_MANIFEST_SHA256="$expected_manifest_sha" \
+    bash "$EVIDENCE_VERIFIER" "$fixture" >/dev/null 2>&1 && gate_ok=0
   mv "$original" "$fixture/results.jsonl"
 
   printf 'surprise\n' >"$fixture/raw/unexpected.txt"
-  bash "$EVIDENCE_VERIFIER" "$fixture" >/dev/null 2>&1 && gate_ok=0
+  C30_EXPECTED_EVIDENCE_MANIFEST_SHA256="$expected_manifest_sha" \
+    bash "$EVIDENCE_VERIFIER" "$fixture" >/dev/null 2>&1 && gate_ok=0
   rm -f "$fixture/raw/unexpected.txt"
 
   rm -f "$fixture/raw/witness.txt"
-  bash "$EVIDENCE_VERIFIER" "$fixture" >/dev/null 2>&1 && gate_ok=0
+  C30_EXPECTED_EVIDENCE_MANIFEST_SHA256="$expected_manifest_sha" \
+    bash "$EVIDENCE_VERIFIER" "$fixture" >/dev/null 2>&1 && gate_ok=0
   rm -rf "$fixture"
 
   if [ "$gate_ok" -eq 1 ]; then
@@ -580,7 +648,9 @@ test_evidence_mutation_detection
 
 write_evidence_manifest "$RUN_DIR"
 FINAL_EVIDENCE_OK=1
-bash "$EVIDENCE_VERIFIER" "$RUN_DIR" >/dev/null 2>&1 || FINAL_EVIDENCE_OK=0
+FINAL_MANIFEST_SHA="$(sha256_file "$RUN_DIR/evidence-manifest.sha256")"
+C30_EXPECTED_EVIDENCE_MANIFEST_SHA256="$FINAL_MANIFEST_SHA" \
+  bash "$EVIDENCE_VERIFIER" "$RUN_DIR" >/dev/null 2>&1 || FINAL_EVIDENCE_OK=0
 
 chmod 0444 "$RESULTS" "$SUMMARY" 2>/dev/null || true
 

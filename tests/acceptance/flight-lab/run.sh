@@ -2,7 +2,7 @@
 
 # Fail-closed acceptance harness for the ARM64 Linux flight lab.
 #
-# The harness aggregates PASS, FAIL, and BLOCKED outcomes across all gates
+# The harness has a closed PASS/FAIL result vocabulary across all gates
 # instead of stopping at the first missing dependency. Day-1 done condition:
 # environment/evidence gates GREEN, both reference kernels BUILD+BOOT, and
 # every EvoCC capability gate RED with an explicit NOT_IMPLEMENTED verdict.
@@ -138,7 +138,7 @@ test_oracles_are_independent() {
   gcc_sha="$("$JQ" -r '.toolchain.gcc.binarySha256' "$BUILD_ENV_CONTRACT")"
   clang_sha="$("$JQ" -r '.toolchain.clang.binarySha256' "$BUILD_ENV_CONTRACT")"
   case "$gcc_sha$clang_sha" in *RESOLVE_AT_SEAL*)
-    record_result oracles_are_independent BLOCKED "oracle digests unresolved" "contracts/build-environment.json"
+    record_result oracles_are_independent FAIL "oracle digests unresolved" "contracts/build-environment.json"
     return ;;
   esac
 
@@ -181,7 +181,7 @@ test_reference_kernel_rebuilds() {
 
   for lane in gcc-lane-1 gcc-lane-2 clang-lane-1 clang-lane-2; do
     [ -f "$REF_ROOT/$lane/artifact-digests.tsv" ] || {
-      record_result reference_kernel_rebuilds BLOCKED "lane $lane has no artifact digests; reference builds have not run" ".build/reference/"
+      record_result reference_kernel_rebuilds FAIL "lane $lane has no artifact digests; reference builds have not run" ".build/reference/"
       return
     }
   done
@@ -250,7 +250,7 @@ test_reference_kernel_boots_fresh() {
   boot_ok=1
 
   [ -f "$RECEIPTS" ] || {
-    record_result reference_kernel_boots_fresh BLOCKED "no flight receipts; boot flights have not run" ".build/reference/"
+    record_result reference_kernel_boots_fresh FAIL "no flight receipts; boot flights have not run" ".build/reference/"
     return
   }
 
@@ -313,7 +313,7 @@ test_provenance_is_closed() {
   for lane in gcc-lane-1 gcc-lane-2 clang-lane-1 clang-lane-2; do
     log="$REF_ROOT/$lane/kbuild-v1.log"
     [ -f "$log" ] || {
-      record_result provenance_is_closed BLOCKED "lane $lane has no Kbuild V=1 stream" ".build/reference/"
+      record_result provenance_is_closed FAIL "lane $lane has no Kbuild V=1 stream" ".build/reference/"
       return
     }
   done
@@ -354,7 +354,7 @@ test_offline_build_has_no_network() {
   sealed_image="$("$JQ" -r '.buildImage.sealedImageTag' "$BUILD_ENV_CONTRACT")"
   sealed_id="$("$JQ" -r '.buildImage.sealedImageId' "$BUILD_ENV_CONTRACT")"
   case "$sealed_id" in *RESOLVE_AT_SEAL*)
-    record_result offline_build_has_no_network BLOCKED "build image not sealed" "contracts/build-environment.json"
+    record_result offline_build_has_no_network FAIL "build image not sealed" "contracts/build-environment.json"
     return ;;
   esac
 
@@ -399,7 +399,7 @@ test_artifact_set_is_exact() {
   # small declared artifacts are hashed, not the full intermediate tree.
   manifest="$REF_ROOT/artifact-manifest.sha256"
   [ -f "$manifest" ] || {
-    record_result artifact_set_is_exact BLOCKED "no artifact manifest; reference builds have not run" ".build/reference/"
+    record_result artifact_set_is_exact FAIL "no artifact manifest; reference builds have not run" ".build/reference/"
     return
   }
 
@@ -485,7 +485,7 @@ test_compiler_capabilities_are_red() {
   evocc_bin="$PROJECT_ROOT/target/release/evocc"
   if [ ! -x "$evocc_bin" ]; then
     if [ ! -f "$PROJECT_ROOT/Cargo.toml" ]; then
-      record_result compiler_capabilities_are_red BLOCKED "evocc workspace does not exist yet" "Cargo.toml"
+      record_result compiler_capabilities_are_red FAIL "evocc workspace does not exist yet" "Cargo.toml"
       return
     fi
     record_result compiler_capabilities_are_red FAIL "workspace exists but the evocc binary was not built" "Cargo.toml"

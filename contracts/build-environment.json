@@ -31,6 +31,8 @@
     },
     "postSealNetwork": "none",
     "sealedImageId": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+    "observedImageId": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+    "executionReference": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
     "sealedImageTag": "evo-flight-lab:sealed",
     "dockerfileSha256": "1c4c2c19da110d6bb7ad10245aebcf15ac772784163324bee547ba76069983c6"
   },

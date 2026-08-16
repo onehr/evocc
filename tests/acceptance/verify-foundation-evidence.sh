@@ -15,12 +15,23 @@ EVIDENCE_DIR="$(cd "$1" 2>/dev/null && pwd -P)" || {
 }
 MANIFEST="$EVIDENCE_DIR/evidence-manifest.sha256"
 SHASUM="${C30_SHASUM:-/usr/bin/shasum}"
+EXPECTED_MANIFEST_SHA="${C30_EXPECTED_EVIDENCE_MANIFEST_SHA256:-}"
 
 [ -f "$MANIFEST" ] || {
   printf 'evidence manifest is missing\n' >&2
   exit 1
 }
 [ -x "$SHASUM" ] || exit 2
+if ! printf '%s\n' "$EXPECTED_MANIFEST_SHA" | grep -Eq '^[0-9a-f]{64}$'; then
+  printf 'external evidence-manifest digest is missing or malformed\n' >&2
+  exit 2
+fi
+
+ACTUAL_MANIFEST_SHA="$("$SHASUM" -a 256 "$MANIFEST" | awk '{print $1}')"
+[ "$ACTUAL_MANIFEST_SHA" = "$EXPECTED_MANIFEST_SHA" ] || {
+  printf 'evidence manifest differs from the externally frozen digest\n' >&2
+  exit 1
+}
 
 if find "$EVIDENCE_DIR" -type l -print | grep -q .; then
   printf 'evidence contains a symbolic link\n' >&2

@@ -16,18 +16,23 @@ GCC_RAW="$RUN_DIR/gcc"
 RESULTS="$RUN_DIR/results.jsonl"
 SUMMARY="$RUN_DIR/summary.json"
 SERIALIZER="$SCRIPT_DIR/cpp-token-serializer.py"
+CPP_REQUIRED="$PROJECT_ROOT/tests/contracts/cpp-required-fixtures.txt"
+BUILD_ENV_CONTRACT="$PROJECT_ROOT/contracts/build-environment.json"
 
 JQ="${C30_JQ:-/opt/homebrew/bin/jq}"
 EVOCC="${C30_EVOCC:-$PROJECT_ROOT/target/release/evocc}"
 CONTAINER_BIN="${C30_CONTAINER_BIN:-/usr/local/bin/container}"
-IMAGE="${C30_CPP_IMAGE:-evo-flight-lab:sealed}"
+IMAGE="${C30_CPP_IMAGE:-}"
+EXPECTED_IMAGE_ID=''
 GCC_BIN="${C30_GCC_BIN:-gcc-14}"
 SOURCE_DATE_EPOCH="${C30_SOURCE_DATE_EPOCH:-1786492800}"
+TIMEOUT_BIN="${C30_TIMEOUT:-/opt/homebrew/bin/timeout}"
 
 CONTAINER_AVAILABLE=0
 EVOCC_AVAILABLE=0
 
 mkdir -p "$RUN_DIR" "$EVOCC_RAW" "$GCC_RAW"
+: >"$RESULTS"
 
 if [ -z "${C30_EVOCC:-}" ]; then
   if ! (cd "$PROJECT_ROOT" && cargo build -p evocc --release --locked --offline) \
@@ -40,6 +45,30 @@ fi
 if [ ! -x "$JQ" ]; then
   printf 'required jq is unavailable: %s\n' "$JQ" >&2
   exit 2
+fi
+if [ ! -x "$TIMEOUT_BIN" ]; then
+  printf 'required timeout is unavailable: %s\n' "$TIMEOUT_BIN" >&2
+  exit 2
+fi
+
+if [ -z "$IMAGE" ]; then
+  IMAGE="$("$JQ" -r '.buildImage.sealedImageTag // empty' "$BUILD_ENV_CONTRACT" 2>/dev/null)"
+fi
+EXPECTED_IMAGE_ID="$("$JQ" -r '.buildImage.executionReference // empty' "$BUILD_ENV_CONTRACT" 2>/dev/null)"
+if ! printf '%s\n' "$EXPECTED_IMAGE_ID" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+  printf 'CPP expected image identity is not an immutable digest: %s\n' "$EXPECTED_IMAGE_ID" >&2
+  exit 2
+fi
+
+if [ ! -r "$CPP_REQUIRED" ]; then
+  printf 'CPP fixture contract is unavailable: %s\n' "$CPP_REQUIRED" >&2
+  exit 2
+fi
+ACTUAL_FIXTURES="$RUN_DIR/actual-fixtures.txt"
+find "$FIXTURES_DIR" -maxdepth 1 -name '*.c' -type f -exec basename {} \; | sort >"$ACTUAL_FIXTURES"
+if ! cmp -s "$CPP_REQUIRED" "$ACTUAL_FIXTURES"; then
+  printf 'CPP fixture namespace differs from the frozen exact ID set\n' >&2
+  exit 1
 fi
 
 if [ ! -f "$SERIALIZER" ]; then
@@ -63,7 +92,16 @@ fi
 if [ ! -x "$CONTAINER_BIN" ]; then
   printf 'container runtime not found at %s\n' "$CONTAINER_BIN" >&2
   CONTAINER_AVAILABLE=0
-elif ! "$CONTAINER_BIN" image inspect "$IMAGE" >/dev/null 2>&1; then
+elif ! "$CONTAINER_BIN" image inspect "$IMAGE" \
+    >"$RUN_DIR/image-inspect-before.stdout" 2>"$RUN_DIR/image-inspect-before.stderr" \
+  || ! "$CONTAINER_BIN" image list --format json --verbose \
+    >"$RUN_DIR/image-list-before.json" 2>"$RUN_DIR/image-list-before.stderr" \
+  || ! "$JQ" -e --arg locator "$IMAGE" --arg id "$EXPECTED_IMAGE_ID" '
+      any(.[];
+        .id == $id and
+        (.configuration.name == $locator or .configuration.name == ($locator | split(":")[0]))
+      )
+    ' "$RUN_DIR/image-list-before.json" >/dev/null 2>&1; then
   printf 'image %s not available in container runtime\n' "$IMAGE" >&2
   CONTAINER_AVAILABLE=0
 else
@@ -74,13 +112,46 @@ record_result() {
   local file="$1"
   local status="$2"
   local message="$3"
+  local evocc_rc="${4:-null}"
+  local gcc_rc="${5:-null}"
+  local evocc_signal="${6:-null}"
+  local gcc_signal="${7:-null}"
+  local timed_out="${8:-false}"
+  local evocc_hash="${9:-}"
+  local gcc_hash="${10:-}"
+  local diagnostic_code="${11:-}"
 
   "$JQ" -cn \
     --arg file "$file" \
     --arg status "$status" \
     --arg message "$message" \
-    '{file:$file,status:$status,message:$message}' \
+    --argjson evoccRc "$evocc_rc" \
+    --argjson gccRc "$gcc_rc" \
+    --argjson evoccSignal "$evocc_signal" \
+    --argjson gccSignal "$gcc_signal" \
+    --argjson timedOut "$timed_out" \
+    --arg evoccStdoutSha256 "$evocc_hash" \
+    --arg gccStdoutSha256 "$gcc_hash" \
+    --arg diagnosticCode "$diagnostic_code" \
+    '{file:$file,status:$status,message:$message,
+      evoccRc:$evoccRc,gccRc:$gccRc,
+      evoccSignal:$evoccSignal,gccSignal:$gccSignal,timedOut:$timedOut,
+      evoccStdoutSha256:$evoccStdoutSha256,gccStdoutSha256:$gccStdoutSha256,
+      diagnosticCode:$diagnosticCode}' \
     >>"$RESULTS"
+}
+
+sha256_file() {
+  /usr/bin/shasum -a 256 "$1" | awk '{print $1}'
+}
+
+signal_from_rc() {
+  local rc="$1"
+  if [ "$rc" -ge 128 ] && [ "$rc" -le 255 ]; then
+    printf '%d\n' "$((rc - 128))"
+  else
+    printf '0\n'
+  fi
 }
 
 run_all_evocc() {
@@ -89,7 +160,7 @@ run_all_evocc() {
   fi
   find "$FIXTURES_DIR" -maxdepth 1 -name '*.c' -type f -print0 | sort -z | while IFS= read -r -d '' src_file; do
     base="$(basename "$src_file")"
-    ( cd "$FIXTURES_DIR" && SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" "$EVOCC" \
+    ( cd "$FIXTURES_DIR" && SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" "$TIMEOUT_BIN" 10 "$EVOCC" \
         -std=gnu11 -E -P -undef -nostdinc -I. -Iinclude "$base" ) \
         >"$EVOCC_RAW/${base}.out" \
         2>"$EVOCC_RAW/${base}.stderr"
@@ -113,7 +184,7 @@ source_date_epoch="$4"
 cd "$src_dir" || exit 2
 for f in ./*.c; do
   base="$(basename "$f")"
-  SOURCE_DATE_EPOCH="$source_date_epoch" "$gcc_bin" \
+  SOURCE_DATE_EPOCH="$source_date_epoch" timeout 10 "$gcc_bin" \
     -std=gnu11 -E -P -undef -nostdinc -I. -Iinclude "$base" \
     >"$out_dir/${base}.out" 2>"$out_dir/${base}.stderr"
   rc=$?
@@ -123,7 +194,7 @@ RUNNER_EOF
 
   chmod +x "$gcc_runner"
 
-  "$CONTAINER_BIN" run --rm \
+  "$TIMEOUT_BIN" 180 "$CONTAINER_BIN" run --rm \
     --volume "$FIXTURES_DIR:/src:ro" \
     --volume "$gcc_runner:/runner.sh:ro" \
     --volume "$GCC_RAW:/out" \
@@ -133,6 +204,17 @@ RUNNER_EOF
   local gcc_rc=$?
   if [ "$gcc_rc" -ne 0 ]; then
     printf 'gcc batch run failed with exit code %d\n' "$gcc_rc" >&2
+    return 1
+  fi
+  if ! "$CONTAINER_BIN" image list --format json --verbose \
+      >"$RUN_DIR/image-list-after.json" 2>"$RUN_DIR/image-list-after.stderr" \
+    || ! "$JQ" -e --arg locator "$IMAGE" --arg id "$EXPECTED_IMAGE_ID" '
+        any(.[];
+          .id == $id and
+          (.configuration.name == $locator or .configuration.name == ($locator | split(":")[0]))
+        )
+      ' "$RUN_DIR/image-list-after.json" >/dev/null 2>&1; then
+    printf 'CPP image locator no longer resolves to the frozen identity\n' >&2
     return 1
   fi
 }
@@ -157,23 +239,33 @@ find "$FIXTURES_DIR" -maxdepth 1 -name '*.c' -type f | sort | while IFS= read -r
   [ -f "$GCC_RAW/${base}.rc" ] || gcc_ok=0
 
   if [ "$evocc_ok" -ne 1 ] && [ "$gcc_ok" -ne 1 ]; then
-    record_result "$base" "SKIPPED" "both evocc and gcc-14 unavailable"
+    record_result "$base" "FAIL" "both evocc and gcc-14 unavailable"
     continue
   fi
   if [ "$evocc_ok" -ne 1 ]; then
-    record_result "$base" "SKIPPED" "evocc unavailable"
+    record_result "$base" "FAIL" "evocc unavailable"
     continue
   fi
   if [ "$gcc_ok" -ne 1 ]; then
-    record_result "$base" "SKIPPED" "gcc-14 container unavailable"
+    record_result "$base" "FAIL" "gcc-14 container unavailable"
     continue
   fi
 
   evocc_rc="$(cat "$EVOCC_RAW/${base}.rc" 2>/dev/null || echo 0)"
   gcc_rc="$(cat "$GCC_RAW/${base}.rc" 2>/dev/null || echo 0)"
+  evocc_signal="$(signal_from_rc "$evocc_rc")"
+  gcc_signal="$(signal_from_rc "$gcc_rc")"
+  timed_out=false
+  if [ "$evocc_rc" -eq 124 ] || [ "$gcc_rc" -eq 124 ]; then
+    timed_out=true
+  fi
+  evocc_raw_hash="$(sha256_file "$evocc_out")"
+  gcc_raw_hash="$(sha256_file "$gcc_out")"
 
   if [ "$evocc_rc" -ne "$gcc_rc" ]; then
-    record_result "$base" "ORACLE_CONFLICT" "exit codes differ: evocc=$evocc_rc gcc=$gcc_rc"
+    record_result "$base" "FAIL" "oracle conflict: exit codes differ: evocc=$evocc_rc gcc=$gcc_rc" \
+      "$evocc_rc" "$gcc_rc" "$evocc_signal" "$gcc_signal" "$timed_out" \
+      "$evocc_raw_hash" "$gcc_raw_hash"
     continue
   fi
 
@@ -181,9 +273,13 @@ find "$FIXTURES_DIR" -maxdepth 1 -name '*.c' -type f | sort | while IFS= read -r
     if [ "$base" = "025-include-missing.c" ] \
       && grep -F 'nonexistent.h' "$EVOCC_RAW/${base}.stderr" >/dev/null 2>&1 \
       && grep -F 'nonexistent.h' "$GCC_RAW/${base}.stderr" >/dev/null 2>&1; then
-      record_result "$base" "PASS" "both implementations reject the missing include"
+      record_result "$base" "PASS" "both implementations reject the missing include" \
+        "$evocc_rc" "$gcc_rc" "$evocc_signal" "$gcc_signal" "$timed_out" \
+        "$evocc_raw_hash" "$gcc_raw_hash" "E0105"
     else
-      record_result "$base" "ORACLE_CONFLICT" "unexpected controlled rejection: evocc=$evocc_rc gcc=$gcc_rc"
+      record_result "$base" "FAIL" "oracle conflict: unexpected controlled rejection: evocc=$evocc_rc gcc=$gcc_rc" \
+        "$evocc_rc" "$gcc_rc" "$evocc_signal" "$gcc_signal" "$timed_out" \
+        "$evocc_raw_hash" "$gcc_raw_hash"
     fi
     continue
   fi
@@ -192,16 +288,20 @@ find "$FIXTURES_DIR" -maxdepth 1 -name '*.c' -type f | sort | while IFS= read -r
   gcc_tokens="$GCC_RAW/${base}.tokens"
   if ! /usr/bin/python3 "$SERIALIZER" <"$evocc_out" >"$evocc_tokens" \
     || ! /usr/bin/python3 "$SERIALIZER" <"$gcc_out" >"$gcc_tokens"; then
-    record_result "$base" "ORACLE_CONFLICT" "token serialization failed"
+    record_result "$base" "FAIL" "oracle conflict: token serialization failed"
     continue
   fi
 
   if cmp -s "$evocc_tokens" "$gcc_tokens"; then
-    record_result "$base" "PASS" "preprocessing token streams are identical"
+    evocc_token_hash="$(sha256_file "$evocc_tokens")"
+    gcc_token_hash="$(sha256_file "$gcc_tokens")"
+    record_result "$base" "PASS" "preprocessing token streams are identical" \
+      "$evocc_rc" "$gcc_rc" "$evocc_signal" "$gcc_signal" "$timed_out" \
+      "$evocc_token_hash" "$gcc_token_hash"
     continue
   fi
 
-  record_result "$base" "ORACLE_CONFLICT" "outputs differ after normalization"
+  record_result "$base" "FAIL" "oracle conflict: outputs differ after normalization"
 done
 
 "$JQ" -s \
