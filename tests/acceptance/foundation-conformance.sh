@@ -593,6 +593,47 @@ test_evidence_mutation_detection() {
 }
 
 # ---------------------------------------------------------------------------
+# Repository-external freeze envelope for normative tests and contracts
+# ---------------------------------------------------------------------------
+
+test_root_of_trust_envelope() {
+  local verifier="$SCRIPT_DIR/verify-root-of-trust-envelope.sh"
+  local envelope="${C30_ROOT_OF_TRUST_ENVELOPE:-}"
+  local expected_sha="${C30_EXPECTED_ROOT_OF_TRUST_ENVELOPE_SHA256:-}"
+
+  if [ ! -x "$verifier" ]; then
+    record_result root_of_trust_envelope FAIL \
+      "root-of-trust envelope verifier is missing or not executable" ''
+    return
+  fi
+  if [ -z "$envelope" ] || [ -z "$expected_sha" ]; then
+    record_result root_of_trust_envelope FAIL \
+      "repository-external freeze envelope and digest were not supplied" ''
+    return
+  fi
+
+  C30_EXPECTED_ROOT_OF_TRUST_ENVELOPE_SHA256="$expected_sha" \
+    bash "$verifier" "$PROJECT_ROOT" "$envelope" \
+      >"$RAW_DIR/root-of-trust.stdout" 2>"$RAW_DIR/root-of-trust.stderr"
+  local verifier_rc=$?
+  local receipts
+  receipts="$(awk 'index($0, "ROOT_OF_TRUST freezeCommit=") == 1 { count += 1 } END { print count + 0 }' "$RAW_DIR/root-of-trust.stdout")"
+
+  if [ "$verifier_rc" -eq 0 ] && [ "$receipts" -eq 1 ]; then
+    cp "$envelope" "$RAW_DIR/root-of-trust-envelope.json"
+    printf '%s  %s\n' "$expected_sha" root-of-trust-envelope.json \
+      >"$RAW_DIR/root-of-trust-envelope.sha256"
+    record_result root_of_trust_envelope PASS \
+      "external envelope digest, frozen trees/files, and live tool identities agree" \
+      "raw/root-of-trust-envelope.json"
+  else
+    record_result root_of_trust_envelope FAIL \
+      "root-of-trust envelope rejected: rc=$verifier_rc receipts=$receipts" \
+      "raw/root-of-trust.stderr"
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # Clean no-local clone, locked offline replay
 # ---------------------------------------------------------------------------
 
@@ -1145,6 +1186,57 @@ test_egraph_independent_checker() {
   fi
 }
 
+# ---------------------------------------------------------------------------
+# Two independent no-local clones with isolated offline Cargo state
+# ---------------------------------------------------------------------------
+
+test_workspace_fresh_clone_replay() {
+  local runner="$SCRIPT_DIR/workspace-fresh-clone-replay.sh"
+  local output_dir="$RAW_DIR/workspace-fresh-clones"
+  local receipt="$output_dir/fresh-clone-receipt.json"
+  mkdir -p "$output_dir"
+
+  if [ ! -x "$runner" ]; then
+    record_result workspace_fresh_clone_replay FAIL \
+      "two-clone replay runner is missing or not executable" ''
+    return
+  fi
+
+  bash "$runner" "$PROJECT_ROOT" "$output_dir" \
+    >"$RAW_DIR/workspace-fresh-clone.stdout" \
+    2>"$RAW_DIR/workspace-fresh-clone.stderr"
+  local runner_rc=$?
+  local source_commit
+  local source_tree
+  source_commit="$(/usr/bin/git -C "$PROJECT_ROOT" rev-parse HEAD 2>/dev/null)"
+  source_tree="$(/usr/bin/git -C "$PROJECT_ROOT" rev-parse 'HEAD^{tree}' 2>/dev/null)"
+
+  if [ "$runner_rc" -eq 0 ] && [ -f "$receipt" ] && \
+     "$JQ" -e --arg commit "$source_commit" --arg tree "$source_tree" '
+       type == "object" and
+       (keys == ["lanes","overall","schemaVersion","sourceCommit","sourceTree"]) and
+       .schemaVersion == 1 and .sourceCommit == $commit and .sourceTree == $tree and
+       .overall == "PASS" and
+       (.lanes | type == "array" and length == 2) and
+       ([.lanes[].lane] == ["one","two"]) and
+       all(.lanes[];
+         keys == ["cargoHomeFresh","clippyRc","cloneRc","commit","fmtRc","lane",
+                  "offline","pass","postStatus","targetFresh","testRc","tree"] and
+         .commit == $commit and .tree == $tree and .cloneRc == 0 and
+         .testRc == 0 and .clippyRc == 0 and .fmtRc == 0 and
+         .postStatus == "" and .pass == true and .cargoHomeFresh == true and
+         .targetFresh == true and .offline == true)
+     ' "$receipt" >/dev/null 2>&1; then
+    record_result workspace_fresh_clone_replay PASS \
+      "two no-local clones independently passed locked offline tests, Clippy, and fmt" \
+      "raw/workspace-fresh-clones/fresh-clone-receipt.json"
+  else
+    record_result workspace_fresh_clone_replay FAIL \
+      "two-clone replay failed: rc=$runner_rc or receipt mismatch" \
+      "raw/workspace-fresh-clones/"
+  fi
+}
+
 write_evidence_manifest() {
   local evidence_dir="$1"
   local manifest="$evidence_dir/evidence-manifest.sha256"
@@ -1174,11 +1266,13 @@ test_floating_tag_rejection
 test_isolated_cpp_differential
 test_final_residue_check
 test_evidence_mutation_detection
+test_root_of_trust_envelope
 test_clean_clone_offline_replay
 test_lexer_full_goldens
 test_cpp_three_way_conformance
 test_parser_matrix
 test_egraph_independent_checker
+test_workspace_fresh_clone_replay
 
 # ---------------------------------------------------------------------------
 # Aggregate: produce summary.json
