@@ -257,7 +257,9 @@ impl<'src> Lexer<'src> {
 
     /// Produce the next token, or `None` if EOF has already been returned.
     pub fn next(&mut self) -> Option<Token> {
-        self.skip_whitespace_and_comments();
+        if let Some(error) = self.skip_whitespace_and_comments() {
+            return Some(error);
+        }
 
         if self.pos >= self.source.len() {
             if self.eof_emitted {
@@ -279,102 +281,24 @@ impl<'src> Lexer<'src> {
         let start_col = self.col;
 
         let bytes = self.source.as_bytes();
+
+        if let Some((prefix_len, quote)) = self.literal_prefix() {
+            return Some(self.quoted_literal(prefix_len, quote, start_pos, start_line, start_col));
+        }
+
+        if bytes[self.pos].is_ascii_digit()
+            || (bytes[self.pos] == b'.'
+                && self.pos + 1 < bytes.len()
+                && bytes[self.pos + 1].is_ascii_digit())
+        {
+            return Some(self.numeric_literal(start_pos, start_line, start_col));
+        }
+
+        if self.is_identifier_start_at(self.pos) {
+            return Some(self.identifier(start_pos, start_line, start_col));
+        }
+
         match bytes[self.pos] {
-            // Identifiers and keywords: [a-zA-Z_$][a-zA-Z0-9_$]*
-            c if is_ident_start(c) => {
-                let end = self.advance_while(is_ident_continue);
-                let lexeme = &self.source[start_pos..end];
-                let kind = try_keyword(lexeme).unwrap_or(TokenKind::Identifier);
-                let span = SourceSpan::new(
-                    self.file,
-                    start_pos as u32,
-                    end as u32,
-                    start_line,
-                    start_col,
-                );
-                Some(Token::new(kind, span, TokenText::Borrowed))
-            }
-            // Numeric literals (integer and float).
-            c if c.is_ascii_digit() => {
-                // Handle hex prefix 0x
-                if c == b'0' && self.pos + 1 < bytes.len() && bytes[self.pos + 1] == b'x' {
-                    self.pos += 2;
-                    self.col += 2;
-                    self.advance_while(|c| c.is_ascii_hexdigit());
-                } else {
-                    self.advance_while(|c| c.is_ascii_digit());
-                }
-                let end = self.pos;
-                let span = SourceSpan::new(
-                    self.file,
-                    start_pos as u32,
-                    end as u32,
-                    start_line,
-                    start_col,
-                );
-                Some(Token::new(TokenKind::IntLiteral, span, TokenText::Borrowed))
-            }
-            // Character literal: 'x' or '\n' etc. (stub: basic form only)
-            b'\'' => {
-                self.pos += 1;
-                self.col += 1;
-                if self.pos < bytes.len() && bytes[self.pos] == b'\\' {
-                    self.pos += 2;
-                    self.col += 2;
-                } else {
-                    self.pos += 1;
-                    self.col += 1;
-                }
-                // expect closing '
-                if self.pos < bytes.len() && bytes[self.pos] == b'\'' {
-                    self.pos += 1;
-                    self.col += 1;
-                }
-                let end = self.pos;
-                let span = SourceSpan::new(
-                    self.file,
-                    start_pos as u32,
-                    end as u32,
-                    start_line,
-                    start_col,
-                );
-                Some(Token::new(
-                    TokenKind::CharLiteral,
-                    span,
-                    TokenText::Borrowed,
-                ))
-            }
-            // String literal
-            b'"' => {
-                self.pos += 1;
-                self.col += 1;
-                while self.pos < bytes.len() && bytes[self.pos] != b'"' {
-                    if bytes[self.pos] == b'\\' && self.pos + 1 < bytes.len() {
-                        self.pos += 2;
-                        self.col += 2;
-                    } else {
-                        self.pos += 1;
-                        self.col += 1;
-                    }
-                }
-                if self.pos < bytes.len() && bytes[self.pos] == b'"' {
-                    self.pos += 1;
-                    self.col += 1;
-                }
-                let end = self.pos;
-                let span = SourceSpan::new(
-                    self.file,
-                    start_pos as u32,
-                    end as u32,
-                    start_line,
-                    start_col,
-                );
-                Some(Token::new(
-                    TokenKind::StringLiteral,
-                    span,
-                    TokenText::Borrowed,
-                ))
-            }
             // Punctuators and operators
             b'(' => self.single(TokenKind::LParen, start_pos, start_line, start_col),
             b')' => self.single(TokenKind::RParen, start_pos, start_line, start_col),
@@ -710,7 +634,7 @@ impl<'src> Lexer<'src> {
 
     // --- private helpers --------------------------------------------------
 
-    fn skip_whitespace_and_comments(&mut self) {
+    fn skip_whitespace_and_comments(&mut self) -> Option<Token> {
         let bytes = self.source.as_bytes();
         loop {
             // Whitespace
@@ -738,12 +662,17 @@ impl<'src> Lexer<'src> {
             // Block comments
             if self.pos + 1 < bytes.len() && bytes[self.pos] == b'/' && bytes[self.pos + 1] == b'*'
             {
+                let start_pos = self.pos;
+                let start_line = self.line;
+                let start_col = self.col;
                 self.pos += 2;
                 self.col += 2;
+                let mut terminated = false;
                 while self.pos + 1 < bytes.len() {
                     if bytes[self.pos] == b'*' && bytes[self.pos + 1] == b'/' {
                         self.pos += 2;
                         self.col += 2;
+                        terminated = true;
                         break;
                     }
                     if bytes[self.pos] == b'\n' {
@@ -754,9 +683,255 @@ impl<'src> Lexer<'src> {
                     }
                     self.pos += 1;
                 }
+                if !terminated {
+                    while self.pos < bytes.len() {
+                        self.advance_source_char();
+                    }
+                    return Some(Token::new(
+                        TokenKind::Error,
+                        SourceSpan::new(
+                            self.file,
+                            start_pos as u32,
+                            self.pos as u32,
+                            start_line,
+                            start_col,
+                        ),
+                        TokenText::Borrowed,
+                    ));
+                }
                 continue;
             }
             break;
+        }
+        None
+    }
+
+    fn literal_prefix(&self) -> Option<(usize, u8)> {
+        let rest = &self.source.as_bytes()[self.pos..];
+        match rest {
+            [quote @ (b'\'' | b'"'), ..] => Some((0, *quote)),
+            [b'L' | b'u' | b'U', quote @ (b'\'' | b'"'), ..] => Some((1, *quote)),
+            [b'u', b'8', b'"', ..] => Some((2, b'"')),
+            _ => None,
+        }
+    }
+
+    fn quoted_literal(
+        &mut self,
+        prefix_len: usize,
+        quote: u8,
+        start_pos: usize,
+        start_line: u32,
+        start_col: u32,
+    ) -> Token {
+        self.pos += prefix_len + 1;
+        self.col += (prefix_len + 1) as u32;
+        let bytes = self.source.as_bytes();
+        let mut terminated = false;
+        while self.pos < bytes.len() {
+            if bytes[self.pos] == quote {
+                self.pos += 1;
+                self.col += 1;
+                terminated = true;
+                break;
+            }
+            if bytes[self.pos] == b'\n' || bytes[self.pos] == b'\r' {
+                break;
+            }
+            if bytes[self.pos] == b'\\' {
+                if self.pos + 1 >= bytes.len() {
+                    self.pos += 1;
+                    self.col += 1;
+                    break;
+                }
+                if bytes[self.pos + 1] == b'\n' {
+                    self.pos += 2;
+                    self.line += 1;
+                    self.col = 1;
+                } else {
+                    self.pos += 2;
+                    self.col += 2;
+                }
+            } else {
+                self.advance_source_char();
+            }
+        }
+        let kind = if terminated {
+            if quote == b'\'' {
+                TokenKind::CharLiteral
+            } else {
+                TokenKind::StringLiteral
+            }
+        } else {
+            TokenKind::Error
+        };
+        Token::new(
+            kind,
+            SourceSpan::new(
+                self.file,
+                start_pos as u32,
+                self.pos as u32,
+                start_line,
+                start_col,
+            ),
+            TokenText::Borrowed,
+        )
+    }
+
+    fn numeric_literal(&mut self, start_pos: usize, start_line: u32, start_col: u32) -> Token {
+        let bytes = self.source.as_bytes();
+        let mut is_float = false;
+        let is_hex = self.pos + 1 < bytes.len()
+            && bytes[self.pos] == b'0'
+            && matches!(bytes[self.pos + 1], b'x' | b'X');
+
+        if bytes[self.pos] == b'.' {
+            is_float = true;
+            self.pos += 1;
+            self.col += 1;
+            self.advance_while(|byte| byte.is_ascii_digit());
+        } else if is_hex {
+            self.pos += 2;
+            self.col += 2;
+            self.advance_while(|byte| byte.is_ascii_hexdigit());
+            if self.pos < bytes.len() && bytes[self.pos] == b'.' {
+                is_float = true;
+                self.pos += 1;
+                self.col += 1;
+                self.advance_while(|byte| byte.is_ascii_hexdigit());
+            }
+        } else {
+            self.advance_while(|byte| byte.is_ascii_digit());
+            if self.pos < bytes.len() && bytes[self.pos] == b'.' {
+                is_float = true;
+                self.pos += 1;
+                self.col += 1;
+                self.advance_while(|byte| byte.is_ascii_digit());
+            }
+        }
+
+        let exponent = if is_hex { b'p' } else { b'e' };
+        if self.pos < bytes.len() && bytes[self.pos].to_ascii_lowercase() == exponent {
+            is_float = true;
+            self.pos += 1;
+            self.col += 1;
+            if self.pos < bytes.len() && matches!(bytes[self.pos], b'+' | b'-') {
+                self.pos += 1;
+                self.col += 1;
+            }
+            self.advance_while(|byte| byte.is_ascii_digit());
+        }
+
+        if is_float {
+            if self.pos < bytes.len() && matches!(bytes[self.pos], b'f' | b'F' | b'l' | b'L') {
+                self.pos += 1;
+                self.col += 1;
+            }
+        } else {
+            self.advance_while(|byte| matches!(byte, b'u' | b'U' | b'l' | b'L'));
+        }
+
+        Token::new(
+            if is_float {
+                TokenKind::FloatLiteral
+            } else {
+                TokenKind::IntLiteral
+            },
+            SourceSpan::new(
+                self.file,
+                start_pos as u32,
+                self.pos as u32,
+                start_line,
+                start_col,
+            ),
+            TokenText::Borrowed,
+        )
+    }
+
+    fn identifier(&mut self, start_pos: usize, start_line: u32, start_col: u32) -> Token {
+        loop {
+            if self.consume_line_splice() || self.consume_ucn() {
+                continue;
+            }
+            let Some(ch) = self.source[self.pos..].chars().next() else {
+                break;
+            };
+            if !(ch == '_' || ch == '$' || ch.is_alphanumeric()) {
+                break;
+            }
+            self.pos += ch.len_utf8();
+            self.col += 1;
+        }
+        let lexeme = &self.source[start_pos..self.pos];
+        let kind = try_keyword(lexeme).unwrap_or(TokenKind::Identifier);
+        Token::new(
+            kind,
+            SourceSpan::new(
+                self.file,
+                start_pos as u32,
+                self.pos as u32,
+                start_line,
+                start_col,
+            ),
+            TokenText::Borrowed,
+        )
+    }
+
+    fn is_identifier_start_at(&self, pos: usize) -> bool {
+        let bytes = self.source.as_bytes();
+        if bytes.get(pos) == Some(&b'\\') {
+            return self.ucn_len_at(pos).is_some();
+        }
+        self.source[pos..]
+            .chars()
+            .next()
+            .is_some_and(|ch| ch == '_' || ch == '$' || ch.is_alphabetic())
+    }
+
+    fn consume_line_splice(&mut self) -> bool {
+        let bytes = self.source.as_bytes();
+        if self.pos + 1 < bytes.len() && bytes[self.pos] == b'\\' && bytes[self.pos + 1] == b'\n' {
+            self.pos += 2;
+            self.line += 1;
+            self.col = 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn ucn_len_at(&self, pos: usize) -> Option<usize> {
+        let bytes = self.source.as_bytes();
+        let digits = match bytes.get(pos..pos + 2)? {
+            [b'\\', b'u'] => 4,
+            [b'\\', b'U'] => 8,
+            _ => return None,
+        };
+        let end = pos + 2 + digits;
+        (end <= bytes.len() && bytes[pos + 2..end].iter().all(u8::is_ascii_hexdigit))
+            .then_some(2 + digits)
+    }
+
+    fn consume_ucn(&mut self) -> bool {
+        if let Some(len) = self.ucn_len_at(self.pos) {
+            self.pos += len;
+            self.col += len as u32;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn advance_source_char(&mut self) {
+        let Some(ch) = self.source[self.pos..].chars().next() else {
+            return;
+        };
+        self.pos += ch.len_utf8();
+        if ch == '\n' {
+            self.line += 1;
+            self.col = 1;
+        } else {
+            self.col += 1;
         }
     }
 
@@ -771,9 +946,9 @@ impl<'src> Lexer<'src> {
 
     fn match_next(&mut self, expected: u8) -> Option<u8> {
         let bytes = self.source.as_bytes();
-        if self.pos < bytes.len() && bytes[self.pos] == expected {
-            self.pos += 1;
-            self.col += 1;
+        if self.pos + 1 < bytes.len() && bytes[self.pos + 1] == expected {
+            self.pos += 2;
+            self.col += 2;
             Some(expected)
         } else {
             None
@@ -847,14 +1022,6 @@ impl<'src> Lexer<'src> {
         );
         Some(Token::new(single_kind, span, TokenText::Borrowed))
     }
-}
-
-fn is_ident_start(c: u8) -> bool {
-    c.is_ascii_alphabetic() || c == b'_' || c == b'$'
-}
-
-fn is_ident_continue(c: u8) -> bool {
-    c.is_ascii_alphanumeric() || c == b'_' || c == b'$'
 }
 
 // ---------------------------------------------------------------------------
@@ -1165,11 +1332,7 @@ mod tests {
 
     #[test]
     fn lex_operator_arrow() {
-        // match_next checks current byte, not next, so -> splits
-        assert_kinds(
-            "->",
-            &[TokenKind::Minus, TokenKind::Greater, TokenKind::Eof],
-        );
+        assert_kinds("->", &[TokenKind::Arrow, TokenKind::Eof]);
     }
 
     #[test]
@@ -1389,16 +1552,12 @@ mod tests {
 
     #[test]
     fn lex_operator_hash() {
-        // match_next consumes the current byte, so lone # becomes HashHash
-        assert_kinds("#", &[TokenKind::HashHash, TokenKind::Eof]);
+        assert_kinds("#", &[TokenKind::Hash, TokenKind::Eof]);
     }
 
     #[test]
     fn lex_operator_hash_hash() {
-        assert_kinds(
-            "##",
-            &[TokenKind::HashHash, TokenKind::HashHash, TokenKind::Eof],
-        );
+        assert_kinds("##", &[TokenKind::HashHash, TokenKind::Eof]);
     }
 
     // ========================================================================
@@ -1422,11 +1581,7 @@ mod tests {
 
     #[test]
     fn lex_int_hex_upper() {
-        // Lexer only recognizes lowercase 0x prefix; 0X splits into IntLiteral + Identifier
-        assert_kinds(
-            "0X1A",
-            &[TokenKind::IntLiteral, TokenKind::Identifier, TokenKind::Eof],
-        );
+        assert_kinds("0X1A", &[TokenKind::IntLiteral, TokenKind::Eof]);
     }
 
     #[test]
@@ -1436,27 +1591,17 @@ mod tests {
 
     #[test]
     fn lex_int_suffix_u() {
-        // Suffix not recognized; splits into literal + identifier
-        assert_kinds(
-            "42u",
-            &[TokenKind::IntLiteral, TokenKind::Identifier, TokenKind::Eof],
-        );
+        assert_kinds("42u", &[TokenKind::IntLiteral, TokenKind::Eof]);
     }
 
     #[test]
     fn lex_int_suffix_ull() {
-        assert_kinds(
-            "42ULL",
-            &[TokenKind::IntLiteral, TokenKind::Identifier, TokenKind::Eof],
-        );
+        assert_kinds("42ULL", &[TokenKind::IntLiteral, TokenKind::Eof]);
     }
 
     #[test]
     fn lex_int_hex_suffix_u() {
-        assert_kinds(
-            "0xFFu",
-            &[TokenKind::IntLiteral, TokenKind::Identifier, TokenKind::Eof],
-        );
+        assert_kinds("0xFFu", &[TokenKind::IntLiteral, TokenKind::Eof]);
     }
 
     #[test]
@@ -1465,74 +1610,32 @@ mod tests {
     }
 
     // ========================================================================
-    // Float-like tokens (5 tests – lexer has no float support yet)
+    // Floating-point literals
     // ========================================================================
 
     #[test]
     fn lex_float_simple() {
-        // 3.14 -> 3, ., 14
-        assert_kinds(
-            "3.14",
-            &[
-                TokenKind::IntLiteral,
-                TokenKind::Dot,
-                TokenKind::IntLiteral,
-                TokenKind::Eof,
-            ],
-        );
+        assert_kinds("3.14", &[TokenKind::FloatLiteral, TokenKind::Eof]);
     }
 
     #[test]
     fn lex_float_suffix_f() {
-        assert_kinds(
-            "1.0f",
-            &[
-                TokenKind::IntLiteral,
-                TokenKind::Dot,
-                TokenKind::IntLiteral,
-                TokenKind::Identifier,
-                TokenKind::Eof,
-            ],
-        );
+        assert_kinds("1.0f", &[TokenKind::FloatLiteral, TokenKind::Eof]);
     }
 
     #[test]
     fn lex_float_exponent() {
-        // 1e10 -> 1, e10 (identifier)
-        assert_kinds(
-            "1e10",
-            &[TokenKind::IntLiteral, TokenKind::Identifier, TokenKind::Eof],
-        );
+        assert_kinds("1e10", &[TokenKind::FloatLiteral, TokenKind::Eof]);
     }
 
     #[test]
     fn lex_float_exponent_neg() {
-        assert_kinds(
-            "1.0e-5",
-            &[
-                TokenKind::IntLiteral,
-                TokenKind::Dot,
-                TokenKind::IntLiteral,
-                TokenKind::Identifier,
-                TokenKind::Minus,
-                TokenKind::IntLiteral,
-                TokenKind::Eof,
-            ],
-        );
+        assert_kinds("1.0e-5", &[TokenKind::FloatLiteral, TokenKind::Eof]);
     }
 
     #[test]
     fn lex_float_hex() {
-        assert_kinds(
-            "0x1.2p3",
-            &[
-                TokenKind::IntLiteral,
-                TokenKind::Dot,
-                TokenKind::IntLiteral,
-                TokenKind::Identifier,
-                TokenKind::Eof,
-            ],
-        );
+        assert_kinds("0x1.2p3", &[TokenKind::FloatLiteral, TokenKind::Eof]);
     }
 
     // ========================================================================
@@ -1561,16 +1664,7 @@ mod tests {
 
     #[test]
     fn lex_char_escape_hex() {
-        // Multi-byte escape '\x41' is not fully handled; the lexer splits it
-        assert_kinds(
-            "'\\x41'",
-            &[
-                TokenKind::CharLiteral,
-                TokenKind::IntLiteral,
-                TokenKind::CharLiteral,
-                TokenKind::Eof,
-            ],
-        );
+        assert_kinds("'\\x41'", &[TokenKind::CharLiteral, TokenKind::Eof]);
     }
 
     #[test]
@@ -1697,20 +1791,12 @@ mod tests {
     }
 
     // ========================================================================
-    // Line continuation (4 tests – lexer lacks continuation; \ becomes Error)
+    // Line continuation
     // ========================================================================
 
     #[test]
     fn lex_line_cont_basic() {
-        assert_kinds(
-            "a\\\nb",
-            &[
-                TokenKind::Identifier,
-                TokenKind::Error,
-                TokenKind::Identifier,
-                TokenKind::Eof,
-            ],
-        );
+        assert_kinds("a\\\nb", &[TokenKind::Identifier, TokenKind::Eof]);
     }
 
     #[test]
@@ -1718,7 +1804,7 @@ mod tests {
         assert_kinds(
             "#define FOO \\\nbar",
             &[
-                TokenKind::HashHash,
+                TokenKind::Hash,
                 TokenKind::Identifier,
                 TokenKind::Identifier,
                 TokenKind::Error,
@@ -1904,7 +1990,7 @@ mod tests {
     fn lex_boundary_define_token() {
         assert_kinds(
             "#define",
-            &[TokenKind::HashHash, TokenKind::Identifier, TokenKind::Eof],
+            &[TokenKind::Hash, TokenKind::Identifier, TokenKind::Eof],
         );
     }
 

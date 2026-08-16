@@ -377,7 +377,17 @@ fn run_parse(options: &DriverOptions) -> ExitCode {
     let mut parser = Parser::new(processed, FileId::new(1), &src);
     let unit = parser.parse_translation_unit();
     if parser.had_error() || (unit.is_empty() && !src.trim().is_empty()) {
-        emit_error(&options.input, 1, 1, "E1000", "malformed input");
+        if let Some(diagnostic) = parser.diagnostic() {
+            emit_error(
+                &options.input,
+                diagnostic.span.line_start.max(1),
+                diagnostic.span.column_start.max(1),
+                diagnostic.code,
+                &diagnostic.message,
+            );
+        } else {
+            emit_error(&options.input, 1, 1, "E1001", "expected-declaration");
+        }
         return ExitCode::from(1);
     }
 

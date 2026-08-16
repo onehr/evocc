@@ -1,6 +1,6 @@
 //! Proof-carrying compiler: justifications and independent proof checker
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 // ---------------------------------------------------------------------------
 // Type aliases (self-contained; no dependency on evocc-egraph)
@@ -76,10 +76,11 @@ impl ProofDAG {
 
     /// Validate the proof DAG.
     ///
-    /// Checks:
-    /// 1. Every edge's `lhs` / `rhs` refer to an eclass id known to the DAG.
-    /// 2. `Congruence` edges use non-zero node ids.
-    /// 3. The graph is acyclic (DFS-based topological check).
+    /// The context-free checker accepts only the empty proof. A non-empty
+    /// rewrite needs a rule/substitution registry, and congruence needs an
+    /// immutable e-node snapshot; accepting opaque numeric IDs here would
+    /// turn a syntactic receipt into a forged semantic proof. Day 4 adds the
+    /// bound-context validator that can accept those edges.
     pub fn validate(&self) -> Result<(), String> {
         for edge in &self.edges {
             if !self.known_ids.contains(&edge.lhs) {
@@ -94,68 +95,21 @@ impl ProofDAG {
                     edge.rhs
                 ));
             }
-            if let Justification::Congruence { lhs_node, rhs_node } = &edge.why {
-                if *lhs_node == 0 {
-                    return Err("Congruence edge has lhs_node == 0".to_string());
-                }
-                if *rhs_node == 0 {
-                    return Err("Congruence edge has rhs_node == 0".to_string());
-                }
-            }
         }
 
-        // Cycle detection via three-colour DFS.
-        #[derive(Clone, Copy, PartialEq, Eq)]
-        enum Color {
-            White,
-            Gray,
-            Black,
-        }
-
-        let mut adj: HashMap<EClassId, Vec<EClassId>> = HashMap::new();
-        for edge in &self.edges {
-            adj.entry(edge.lhs).or_default().push(edge.rhs);
-        }
-
-        let mut color: HashMap<EClassId, Color> = self
-            .known_ids
-            .iter()
-            .map(|&id| (id, Color::White))
-            .collect();
-
-        // Use a manual stack so we stay on the heap for any DAG size.
-        for &id in &self.known_ids {
-            if color[&id] != Color::White {
-                continue;
-            }
-            // DFS stack: (node, iterator-over-neighbors)
-            let mut stack: Vec<(EClassId, usize)> = Vec::new();
-            color.insert(id, Color::Gray);
-            stack.push((id, 0));
-
-            while let Some((node, idx)) = stack.last_mut() {
-                let neighbors = adj.get(node).map(|v| &v[..]).unwrap_or(&[]);
-                if *idx < neighbors.len() {
-                    let next = neighbors[*idx];
-                    *idx += 1;
-                    match color[&next] {
-                        Color::Gray => {
-                            return Err(format!(
-                                "cycle detected: back-edge from {} to {}",
-                                node, next
-                            ));
-                        }
-                        Color::White => {
-                            color.insert(next, Color::Gray);
-                            stack.push((next, 0));
-                        }
-                        Color::Black => { /* already explored */ }
-                    }
-                } else {
-                    color.insert(*node, Color::Black);
-                    stack.pop();
+        if let Some(edge) = self.edges.first() {
+            return match &edge.why {
+                Justification::Reflexive => Err(format!(
+                    "Reflexive cannot justify distinct classes {} and {}",
+                    edge.lhs, edge.rhs
+                )),
+                Justification::Rewrite { .. } => {
+                    Err("Rewrite proof has no bound rule/substitution context".into())
                 }
-            }
+                Justification::Congruence { .. } => {
+                    Err("Congruence proof has no bound e-node snapshot".into())
+                }
+            };
         }
 
         Ok(())
@@ -177,18 +131,17 @@ mod tests {
 
     #[test]
     fn proof_checker_validates_dag() {
-        // -- valid dag: a→b, b→c, a→c (no cycle) --
+        let empty = ProofDAG::new();
+        assert!(empty.validate().is_ok(), "empty proof should pass");
+
+        // Numeric endpoints alone cannot turn Reflexive into a valid proof.
         let mut dag = ProofDAG::new();
         dag.add_edge(1, 2, Justification::Reflexive).unwrap();
         dag.add_edge(2, 3, Justification::Reflexive).unwrap();
         dag.add_edge(1, 3, Justification::Reflexive).unwrap();
-        assert!(dag.validate().is_ok(), "valid DAG should pass");
-
-        // -- add c→a → cycle --
-        dag.add_edge(3, 1, Justification::Reflexive).unwrap();
         assert!(
             dag.validate().is_err(),
-            "DAG with a cycle should be rejected"
+            "context-free Reflexive edges must be rejected"
         );
 
         // -- edge with target id not in the known-id set --
@@ -214,7 +167,7 @@ mod tests {
     }
 
     #[test]
-    fn congruence_nodes_must_be_nonzero() {
+    fn unbound_congruence_is_rejected() {
         let mut dag = ProofDAG::new();
         dag.add_edge(
             1,
@@ -249,7 +202,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(dag3.validate().is_ok());
+        assert!(dag3.validate().is_err());
     }
 
     #[test]
@@ -269,8 +222,8 @@ mod tests {
         // add rewrite edges
         dag.add_edge(a, b, Justification::Reflexive).unwrap();
         dag.add_edge(b, c, Justification::Reflexive).unwrap();
-        // Assert no cycles in non-cyclic DAG
-        assert!(dag.validate().is_ok());
+        // No rule/substitution context is attached yet.
+        assert!(dag.validate().is_err());
         // Now introduce a cycle
         dag.add_edge(c, a, Justification::Reflexive).unwrap();
         assert!(dag.validate().is_err());

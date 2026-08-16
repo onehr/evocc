@@ -1,11 +1,33 @@
 //! C declarator, expression, and statement parser producing C-HIR
 
 use evocc_chir::{
-    BinaryOp, CHirDecl, CHirExpr, CHirStmt, CHirUnit, IntBase, IntLit, IntSuffix, UnaryOp,
+    BinaryOp, CHirDecl, CHirExpr, CHirStmt, CHirUnit, CharLit, CharPrefix, FloatLit, FloatSuffix,
+    IntBase, IntLit, IntSuffix, StringLit, StringPrefix, UnaryOp,
 };
 use evocc_common::{FileId, SourceSpan};
 use evocc_lex::{Token, TokenKind};
-use evocc_types::{CType, IntRank};
+use evocc_types::{ArrayBound, CType, FunctionProto, IntRank, Qualifiers};
+
+#[derive(Debug, Clone)]
+pub struct ParseDiagnostic {
+    pub span: SourceSpan,
+    pub code: &'static str,
+    pub message: String,
+}
+
+#[derive(Debug, Clone)]
+enum DerivedDeclarator {
+    Pointer,
+    Array(ArrayBound),
+    Function(Vec<(String, CType)>, bool),
+}
+
+#[derive(Debug, Clone)]
+struct ParsedDeclarator {
+    name: String,
+    name_span: SourceSpan,
+    derived: Vec<DerivedDeclarator>,
+}
 
 pub struct Parser<'src> {
     tokens: Vec<Token>,
@@ -13,6 +35,7 @@ pub struct Parser<'src> {
     file: FileId,
     source: &'src str,
     had_error: bool,
+    diagnostic: Option<ParseDiagnostic>,
 }
 
 impl<'src> Parser<'src> {
@@ -23,6 +46,7 @@ impl<'src> Parser<'src> {
             file,
             source,
             had_error: false,
+            diagnostic: None,
         }
     }
 
@@ -41,6 +65,10 @@ impl<'src> Parser<'src> {
 
     pub fn had_error(&self) -> bool {
         self.had_error
+    }
+
+    pub fn diagnostic(&self) -> Option<&ParseDiagnostic> {
+        self.diagnostic.as_ref()
     }
 
     // ── helpers ────────────────────────────────────────────────────────
@@ -78,8 +106,23 @@ impl<'src> Parser<'src> {
         if self.peek_kind() == Some(kind) {
             self.advance()
         } else {
-            self.had_error = true;
+            self.report(
+                "E1002",
+                format!("expected-token: {}", token_spelling(kind)),
+                self.span(),
+            );
             None
+        }
+    }
+
+    fn report(&mut self, code: &'static str, message: impl Into<String>, span: SourceSpan) {
+        self.had_error = true;
+        if self.diagnostic.is_none() {
+            self.diagnostic = Some(ParseDiagnostic {
+                span,
+                code,
+                message: message.into(),
+            });
         }
     }
 
@@ -113,39 +156,42 @@ impl<'src> Parser<'src> {
     // ── external declarations ──────────────────────────────────────────
 
     fn parse_external_declaration(&mut self) -> Option<CHirDecl> {
+        let start_span = self.span();
         let ty = self.parse_type_specifier()?;
-        let name_tok = self.peek()?;
-        if name_tok.kind != TokenKind::Identifier {
+        let Some(declarator) = self.parse_declarator() else {
+            self.report("E1001", "expected-declaration", self.span());
             return None;
-        }
-        let name = self.token_text(name_tok).to_owned();
-        let name_span = name_tok.span;
-        self.advance();
+        };
+        let name = declarator.name.clone();
+        let name_span = declarator.name_span;
+        let full_type = apply_declarator(ty, &declarator.derived);
 
-        let start_span = ty_span_start(&ty).unwrap_or(name_span);
-
-        if self.peek_kind() == Some(TokenKind::LParen) {
-            self.advance();
-            let params = self.parse_parameter_list();
-            let rparen_span = self.peek().map(|t| t.span).unwrap_or(name_span);
-            self.expect(TokenKind::RParen)?;
-
+        if let CType::Function(proto) = &full_type {
+            let params = declarator
+                .derived
+                .iter()
+                .find_map(|derived| match derived {
+                    DerivedDeclarator::Function(params, _) => Some(params.clone()),
+                    _ => None,
+                })
+                .unwrap_or_default();
+            let return_type = (*proto.ret).clone();
             if self.peek_kind() == Some(TokenKind::LBrace) {
                 let body = self.parse_compound_statement();
                 let span = self.merge_span(start_span, body_span_end(&body));
                 return Some(CHirDecl::FuncDecl(
                     name,
                     params,
-                    ty,
+                    return_type,
                     Some(Box::new(body)),
                     span,
                 ));
             } else if self.peek_kind() == Some(TokenKind::Semicolon) {
-                let semi_span = self.peek().map(|t| t.span).unwrap_or(rparen_span);
-                self.advance();
+                let semi_span = self.advance().unwrap().span;
                 let span = self.merge_span(start_span, semi_span);
-                return Some(CHirDecl::FuncDecl(name, params, ty, None, span));
+                return Some(CHirDecl::FuncDecl(name, params, return_type, None, span));
             }
+            self.expect(TokenKind::Semicolon);
             return None;
         }
 
@@ -155,11 +201,21 @@ impl<'src> Parser<'src> {
             None
         };
 
-        let semi = self.expect(TokenKind::Semicolon);
+        let semi = if self.peek_kind() == Some(TokenKind::Semicolon) {
+            self.advance()
+        } else {
+            let span = self.span();
+            if self.peek_kind() == Some(TokenKind::Identifier) {
+                self.report("E1004", "trailing-token", span);
+            } else {
+                self.report("E1002", "expected-token: ;", span);
+            }
+            None
+        };
         let end_span = semi.as_ref().map(|t| t.span).unwrap_or(name_span);
         let span = self.merge_span(start_span, end_span);
 
-        Some(CHirDecl::VarDecl(name, ty, init, span))
+        Some(CHirDecl::VarDecl(name, full_type, init, span))
     }
 
     // ── type specifier ─────────────────────────────────────────────────
@@ -190,30 +246,101 @@ impl<'src> Parser<'src> {
         }
     }
 
-    // ── parameter list ─────────────────────────────────────────────────
+    // ── declarators ────────────────────────────────────────────────────
 
-    fn parse_parameter_list(&mut self) -> Vec<(String, CType)> {
-        let mut params = Vec::new();
-        if self.peek_kind() == Some(TokenKind::RParen) {
-            return params;
+    fn parse_declarator(&mut self) -> Option<ParsedDeclarator> {
+        let mut pointers = Vec::new();
+        while self.peek_kind() == Some(TokenKind::Star) {
+            self.advance();
+            pointers.push(DerivedDeclarator::Pointer);
         }
-        while let Some(ty) = self.parse_type_specifier() {
-            if let Some(tok) = self.peek() {
-                if tok.kind == TokenKind::Identifier {
-                    let name = self.token_text(tok).to_owned();
-                    self.advance();
-                    params.push((name, ty));
-                } else {
-                    break;
+
+        let mut declarator = if self.peek_kind() == Some(TokenKind::Identifier) {
+            let token = self.advance().unwrap();
+            ParsedDeclarator {
+                name: self.token_text(&token).to_owned(),
+                name_span: token.span,
+                derived: Vec::new(),
+            }
+        } else if self.match_kind(TokenKind::LParen) {
+            let inner = self.parse_declarator()?;
+            self.expect(TokenKind::RParen)?;
+            inner
+        } else {
+            return None;
+        };
+
+        loop {
+            match self.peek_kind() {
+                Some(TokenKind::LBracket) => {
+                    let open = self.advance().unwrap();
+                    if matches!(
+                        declarator.derived.last(),
+                        Some(DerivedDeclarator::Function(_, _))
+                    ) {
+                        self.report("E1005", "invalid-declarator", open.span);
+                    }
+                    let bound = if self.peek_kind() == Some(TokenKind::RBracket) {
+                        ArrayBound::Unbounded
+                    } else if self.peek_kind() == Some(TokenKind::IntLiteral) {
+                        let token = self.advance().unwrap();
+                        ArrayBound::Fixed(parse_int_literal(self.token_text(&token)))
+                    } else {
+                        ArrayBound::Variable
+                    };
+                    self.expect(TokenKind::RBracket)?;
+                    declarator.derived.push(DerivedDeclarator::Array(bound));
                 }
-            } else {
+                Some(TokenKind::LParen) => {
+                    let open = self.advance().unwrap();
+                    if matches!(declarator.derived.last(), Some(DerivedDeclarator::Array(_))) {
+                        self.report("E1005", "invalid-declarator", open.span);
+                    }
+                    let (params, variadic) = self.parse_parameter_list();
+                    self.expect(TokenKind::RParen)?;
+                    declarator
+                        .derived
+                        .push(DerivedDeclarator::Function(params, variadic));
+                }
+                _ => break,
+            }
+        }
+        declarator.derived.extend(pointers);
+        Some(declarator)
+    }
+
+    fn parse_parameter_list(&mut self) -> (Vec<(String, CType)>, bool) {
+        let mut params = Vec::new();
+        let mut variadic = false;
+        if self.peek_kind() == Some(TokenKind::RParen) {
+            return (params, variadic);
+        }
+        if self.peek_kind() == Some(TokenKind::Void)
+            && self.tokens.get(self.pos + 1).map(|token| token.kind) == Some(TokenKind::RParen)
+        {
+            self.advance();
+            return (params, variadic);
+        }
+        loop {
+            if self.match_kind(TokenKind::Ellipsis) {
+                variadic = true;
                 break;
+            }
+            let Some(base) = self.parse_type_specifier() else {
+                self.report("E1001", "expected-declaration", self.span());
+                break;
+            };
+            if let Some(declarator) = self.parse_declarator() {
+                let ty = apply_declarator(base, &declarator.derived);
+                params.push((declarator.name, ty));
+            } else {
+                params.push((String::new(), base));
             }
             if !self.match_kind(TokenKind::Comma) {
                 break;
             }
         }
-        params
+        (params, variadic)
     }
 
     // ── statements ─────────────────────────────────────────────────────
@@ -282,17 +409,48 @@ impl<'src> Parser<'src> {
     // ── expressions ────────────────────────────────────────────────────
 
     fn parse_expression(&mut self) -> CHirExpr {
+        self.parse_comma()
+    }
+
+    fn parse_comma(&mut self) -> CHirExpr {
+        let mut expression = self.parse_assignment();
+        while self.match_kind(TokenKind::Comma) {
+            let right = self.parse_assignment();
+            let span = self.merge_span(expr_span_start(&expression), expr_span_end(&right));
+            expression = CHirExpr::Comma(Box::new(expression), Box::new(right), span);
+        }
+        expression
+    }
+
+    fn parse_argument_expression(&mut self) -> CHirExpr {
         self.parse_assignment()
     }
 
     fn parse_assignment(&mut self) -> CHirExpr {
-        let lhs = self.parse_binary(0);
+        let lhs = self.parse_conditional();
         if self.match_kind(TokenKind::Assign) {
             let rhs = self.parse_assignment();
             let span = self.merge_span(expr_span_start(&lhs), expr_span_end(&rhs));
             return CHirExpr::Assign(Box::new(lhs), Box::new(rhs), span);
         }
         lhs
+    }
+
+    fn parse_conditional(&mut self) -> CHirExpr {
+        let condition = self.parse_binary(1);
+        if !self.match_kind(TokenKind::Question) {
+            return condition;
+        }
+        let when_true = self.parse_expression();
+        self.expect(TokenKind::Colon);
+        let when_false = self.parse_conditional();
+        let span = self.merge_span(expr_span_start(&condition), expr_span_end(&when_false));
+        CHirExpr::Ternary(
+            Box::new(condition),
+            Box::new(when_true),
+            Box::new(when_false),
+            span,
+        )
     }
 
     fn parse_binary(&mut self, min_prec: u8) -> CHirExpr {
@@ -316,38 +474,144 @@ impl<'src> Parser<'src> {
     }
 
     fn parse_unary(&mut self) -> CHirExpr {
-        match self.peek_kind() {
-            Some(TokenKind::Minus) => {
-                let tok = self.advance().unwrap();
-                let inner = self.parse_unary();
-                let span = self.merge_span(tok.span, expr_span_end(&inner));
-                CHirExpr::Unary(UnaryOp::Neg, Box::new(inner), span)
-            }
-            Some(TokenKind::Plus) => {
-                let tok = self.advance().unwrap();
-                let inner = self.parse_unary();
-                let span = self.merge_span(tok.span, expr_span_end(&inner));
-                CHirExpr::Unary(UnaryOp::Plus, Box::new(inner), span)
-            }
-            Some(TokenKind::Bang) => {
-                let tok = self.advance().unwrap();
-                let inner = self.parse_unary();
-                let span = self.merge_span(tok.span, expr_span_end(&inner));
-                CHirExpr::Unary(UnaryOp::Not, Box::new(inner), span)
-            }
-            Some(TokenKind::Tilde) => {
-                let tok = self.advance().unwrap();
-                let inner = self.parse_unary();
-                let span = self.merge_span(tok.span, expr_span_end(&inner));
-                CHirExpr::Unary(UnaryOp::BitNot, Box::new(inner), span)
-            }
-            _ => self.parse_primary(),
+        let unary = match self.peek_kind() {
+            Some(TokenKind::Minus) => Some(UnaryOp::Neg),
+            Some(TokenKind::Plus) => Some(UnaryOp::Plus),
+            Some(TokenKind::Bang) => Some(UnaryOp::Not),
+            Some(TokenKind::Tilde) => Some(UnaryOp::BitNot),
+            Some(TokenKind::Amp) => Some(UnaryOp::AddrOf),
+            Some(TokenKind::Star) => Some(UnaryOp::Deref),
+            Some(TokenKind::PlusPlus) => Some(UnaryOp::PreInc),
+            Some(TokenKind::MinusMinus) => Some(UnaryOp::PreDec),
+            _ => None,
+        };
+        if let Some(op) = unary {
+            let token = self.advance().unwrap();
+            let operand = self.parse_unary();
+            let span = self.merge_span(token.span, expr_span_end(&operand));
+            return CHirExpr::Unary(op, Box::new(operand), span);
         }
+
+        if self.peek_kind() == Some(TokenKind::Sizeof) {
+            let token = self.advance().unwrap();
+            if self.looks_like_parenthesized_type() {
+                self.advance();
+                let ty = self.parse_type_specifier().unwrap();
+                let end = self.peek().map(|token| token.span).unwrap_or(token.span);
+                self.expect(TokenKind::RParen);
+                return CHirExpr::SizeOf(Box::new(ty), self.merge_span(token.span, end));
+            }
+            let operand = self.parse_unary();
+            let span = self.merge_span(token.span, expr_span_end(&operand));
+            return CHirExpr::SizeOfExpr(Box::new(operand), span);
+        }
+
+        if self.peek_kind() == Some(TokenKind::Alignof) {
+            let token = self.advance().unwrap();
+            self.expect(TokenKind::LParen);
+            let ty = if self
+                .peek_kind()
+                .is_some_and(|kind| self.is_type_specifier_kind(kind))
+            {
+                self.parse_type_specifier().unwrap()
+            } else {
+                self.report("E1003", "expected-expression", self.span());
+                CType::Int(IntRank::Int)
+            };
+            let end = self.peek().map(|token| token.span).unwrap_or(token.span);
+            self.expect(TokenKind::RParen);
+            return CHirExpr::AlignOf(Box::new(ty), self.merge_span(token.span, end));
+        }
+
+        if self.looks_like_parenthesized_type() {
+            let open = self.advance().unwrap();
+            let ty = self.parse_type_specifier().unwrap();
+            let close = self.expect(TokenKind::RParen);
+            if !self.peek_kind().is_some_and(can_start_expression) {
+                let span = close.map_or_else(|| self.span(), |token| token.span);
+                self.report("E1003", "expected-expression", span);
+                return CHirExpr::Ident("__error__".into(), span);
+            }
+            let operand = self.parse_unary();
+            let span = self.merge_span(open.span, expr_span_end(&operand));
+            return CHirExpr::Cast(Box::new(ty), Box::new(operand), span);
+        }
+
+        self.parse_postfix()
+    }
+
+    fn parse_postfix(&mut self) -> CHirExpr {
+        let mut expression = self.parse_primary();
+        loop {
+            match self.peek_kind() {
+                Some(TokenKind::LParen) => {
+                    self.advance();
+                    let mut arguments = Vec::new();
+                    if self.peek_kind() != Some(TokenKind::RParen) {
+                        loop {
+                            arguments.push(self.parse_argument_expression());
+                            if !self.match_kind(TokenKind::Comma) {
+                                break;
+                            }
+                        }
+                    }
+                    let end = self
+                        .peek()
+                        .map(|token| token.span)
+                        .unwrap_or_else(|| self.span());
+                    self.expect(TokenKind::RParen);
+                    let span = self.merge_span(expr_span_start(&expression), end);
+                    expression = CHirExpr::Call(Box::new(expression), arguments, span);
+                }
+                Some(TokenKind::LBracket) => {
+                    self.advance();
+                    let index = self.parse_expression();
+                    let end = self
+                        .peek()
+                        .map(|token| token.span)
+                        .unwrap_or_else(|| self.span());
+                    self.expect(TokenKind::RBracket);
+                    let span = self.merge_span(expr_span_start(&expression), end);
+                    expression = CHirExpr::Index(Box::new(expression), Box::new(index), span);
+                }
+                Some(TokenKind::Dot) | Some(TokenKind::Arrow) => {
+                    let pointer = self.peek_kind() == Some(TokenKind::Arrow);
+                    self.advance();
+                    let Some(member) = self.advance() else {
+                        self.report("E1003", "expected-expression", self.span());
+                        break;
+                    };
+                    if member.kind != TokenKind::Identifier {
+                        self.report("E1003", "expected-expression", member.span);
+                        break;
+                    }
+                    let name = self.token_text(&member).to_owned();
+                    let span = self.merge_span(expr_span_start(&expression), member.span);
+                    expression = if pointer {
+                        CHirExpr::PtrMember(Box::new(expression), name, span)
+                    } else {
+                        CHirExpr::Member(Box::new(expression), name, span)
+                    };
+                }
+                Some(TokenKind::PlusPlus) | Some(TokenKind::MinusMinus) => {
+                    let token = self.advance().unwrap();
+                    let op = if token.kind == TokenKind::PlusPlus {
+                        UnaryOp::PostInc
+                    } else {
+                        UnaryOp::PostDec
+                    };
+                    let span = self.merge_span(expr_span_start(&expression), token.span);
+                    expression = CHirExpr::Unary(op, Box::new(expression), span);
+                }
+                _ => break,
+            }
+        }
+        expression
     }
 
     fn parse_primary(&mut self) -> CHirExpr {
         let Some(tok) = self.advance() else {
-            self.had_error = true;
+            self.report("E1003", "expected-expression", self.span());
             return CHirExpr::Ident("__error__".into(), self.span());
         };
         match tok.kind {
@@ -367,6 +631,27 @@ impl<'src> Parser<'src> {
                 let name = self.token_text(&tok).to_owned();
                 CHirExpr::Ident(name, tok.span)
             }
+            TokenKind::FloatLiteral => CHirExpr::FloatLit(
+                FloatLit {
+                    value: self.token_text(&tok).parse().unwrap_or(0.0),
+                    suffix: FloatSuffix::None,
+                },
+                tok.span,
+            ),
+            TokenKind::CharLiteral => CHirExpr::CharLit(
+                CharLit {
+                    value: 0,
+                    prefix: CharPrefix::None,
+                },
+                tok.span,
+            ),
+            TokenKind::StringLiteral => CHirExpr::StringLit(
+                StringLit {
+                    value: self.token_text(&tok).to_owned(),
+                    prefix: StringPrefix::None,
+                },
+                tok.span,
+            ),
             TokenKind::LParen => {
                 let expr = self.parse_expression();
                 let rparen_span = self.peek().map(|t| t.span).unwrap_or(tok.span);
@@ -375,10 +660,18 @@ impl<'src> Parser<'src> {
                 pack_expr(expr, span)
             }
             _ => {
-                self.had_error = true;
+                self.report("E1003", "expected-expression", tok.span);
                 CHirExpr::Ident("__error__".into(), tok.span)
             }
         }
+    }
+
+    fn looks_like_parenthesized_type(&self) -> bool {
+        self.peek_kind() == Some(TokenKind::LParen)
+            && self
+                .tokens
+                .get(self.pos + 1)
+                .is_some_and(|token| self.is_type_specifier_kind(token.kind))
     }
 }
 
@@ -386,11 +679,16 @@ impl<'src> Parser<'src> {
 
 fn prec(kind: TokenKind) -> u8 {
     match kind {
-        TokenKind::Star | TokenKind::Slash | TokenKind::Percent => 120,
-        TokenKind::Plus | TokenKind::Minus => 110,
-        TokenKind::Less | TokenKind::LessEq | TokenKind::Greater | TokenKind::GreaterEq => 80,
-        TokenKind::EqEq | TokenKind::NotEq => 70,
-        TokenKind::Assign => 10,
+        TokenKind::Star | TokenKind::Slash | TokenKind::Percent => 11,
+        TokenKind::Plus | TokenKind::Minus => 10,
+        TokenKind::ShiftLeft | TokenKind::ShiftRight => 9,
+        TokenKind::Less | TokenKind::LessEq | TokenKind::Greater | TokenKind::GreaterEq => 8,
+        TokenKind::EqEq | TokenKind::NotEq => 7,
+        TokenKind::Amp => 6,
+        TokenKind::Caret => 5,
+        TokenKind::Pipe => 4,
+        TokenKind::AmpAmp => 3,
+        TokenKind::PipePipe => 2,
         _ => 0,
     }
 }
@@ -408,8 +706,64 @@ fn binary_op(kind: TokenKind) -> Option<BinaryOp> {
         TokenKind::GreaterEq => Some(BinaryOp::Ge),
         TokenKind::EqEq => Some(BinaryOp::Eq),
         TokenKind::NotEq => Some(BinaryOp::Ne),
+        TokenKind::ShiftLeft => Some(BinaryOp::Shl),
+        TokenKind::ShiftRight => Some(BinaryOp::Shr),
+        TokenKind::Amp => Some(BinaryOp::BitAnd),
+        TokenKind::Caret => Some(BinaryOp::BitXor),
+        TokenKind::Pipe => Some(BinaryOp::BitOr),
+        TokenKind::AmpAmp => Some(BinaryOp::And),
+        TokenKind::PipePipe => Some(BinaryOp::Or),
         _ => None,
     }
+}
+
+fn apply_declarator(mut ty: CType, derived: &[DerivedDeclarator]) -> CType {
+    for layer in derived.iter().rev() {
+        ty = match layer {
+            DerivedDeclarator::Pointer => CType::Pointer(Box::new(ty), Qualifiers::default()),
+            DerivedDeclarator::Array(bound) => CType::Array(Box::new(ty), bound.clone()),
+            DerivedDeclarator::Function(params, is_variadic) => CType::Function(FunctionProto {
+                params: params.iter().map(|(_, ty)| ty.clone()).collect(),
+                is_variadic: *is_variadic,
+                ret: Box::new(ty),
+            }),
+        };
+    }
+    ty
+}
+
+fn token_spelling(kind: TokenKind) -> &'static str {
+    match kind {
+        TokenKind::Semicolon => ";",
+        TokenKind::RParen => ")",
+        TokenKind::RBracket => "]",
+        TokenKind::RBrace => "}",
+        TokenKind::LParen => "(",
+        TokenKind::Colon => ":",
+        _ => "token",
+    }
+}
+
+fn can_start_expression(kind: TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::Identifier
+            | TokenKind::IntLiteral
+            | TokenKind::FloatLiteral
+            | TokenKind::CharLiteral
+            | TokenKind::StringLiteral
+            | TokenKind::LParen
+            | TokenKind::Minus
+            | TokenKind::Plus
+            | TokenKind::Bang
+            | TokenKind::Tilde
+            | TokenKind::Amp
+            | TokenKind::Star
+            | TokenKind::PlusPlus
+            | TokenKind::MinusMinus
+            | TokenKind::Sizeof
+            | TokenKind::Alignof
+    )
 }
 
 // ── integer literal parsing ────────────────────────────────────────────────
@@ -492,10 +846,6 @@ fn decl_span(d: &CHirDecl) -> SourceSpan {
         CHirDecl::UnionDecl(_, _, s) => *s,
         CHirDecl::EnumDecl(_, _, s) => *s,
     }
-}
-
-fn ty_span_start(_ty: &CType) -> Option<SourceSpan> {
-    None
 }
 
 /// When a parenthesized expression appears, preserve its original span.

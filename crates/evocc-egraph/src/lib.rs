@@ -23,22 +23,17 @@ pub type OpId = u16;
 /// Disjoint-set (union-find) forest for tracking e-class equivalence.
 pub struct UnionFind {
     parent: Vec<EClassId>,
-    rank: Vec<u32>,
 }
 
 impl UnionFind {
     pub fn new() -> Self {
-        UnionFind {
-            parent: Vec::new(),
-            rank: Vec::new(),
-        }
+        UnionFind { parent: Vec::new() }
     }
 
     /// Allocate a fresh singleton set, returning its brand-new id.
     pub fn make_set(&mut self) -> EClassId {
         let id = self.parent.len() as EClassId;
         self.parent.push(id);
-        self.rank.push(0);
         id
     }
 
@@ -54,27 +49,17 @@ impl UnionFind {
         }
     }
 
-    /// Merge the two sets containing `a` and `b` using union-by-rank.
-    /// Returns the canonical (root) id after the merge.
+    /// Merge two sets, choosing the smaller insertion handle as the stable
+    /// representative. Stable roots make proof receipts reproducible.
     pub fn union(&mut self, a: EClassId, b: EClassId) -> EClassId {
         let a = self.find(a);
         let b = self.find(b);
         if a == b {
             return a;
         }
-        let ra = self.rank[a as usize];
-        let rb = self.rank[b as usize];
-        if ra < rb {
-            self.parent[a as usize] = b;
-            b
-        } else if ra > rb {
-            self.parent[b as usize] = a;
-            a
-        } else {
-            self.parent[b as usize] = a;
-            self.rank[a as usize] += 1;
-            a
-        }
+        let (root, child) = if a < b { (a, b) } else { (b, a) };
+        self.parent[child as usize] = root;
+        root
     }
 }
 
@@ -260,83 +245,83 @@ impl Egraph {
     }
 
     /// Restore congruence closure after a batch of `union` calls.
-    ///
-    /// For each dirty merge, walks the parent index of the canonical e-class,
-    /// re-canonicalises every affected e-node, updates the hash-cons table,
-    /// and triggers further merges when congruence creates duplicates.
     pub fn rebuild(&mut self) {
-        while let Some((_from, _to)) = self.dirty.pop() {
-            let to = self.uf.find(_to);
-            let from = self.uf.find(_from);
-
-            // Parents of both sides need re-canonicalization because any
-            // node that had the absorbed (`_from`) e-class as a child now
-            // effectively has `to` as its child via find().
-            let mut all_parents: Vec<(OpId, usize, EClassId)> = Vec::new();
-            all_parents.extend(self.eclasses[to as usize].parents.clone());
-            if from != to {
-                all_parents.extend(self.eclasses[from as usize].parents.clone());
-            }
-
-            for (parent_op, _child_pos, parent_eclass_id) in &all_parents {
-                let parent_ec = self.uf.find(*parent_eclass_id);
-
-                let candidates: Vec<ENodeId> = self.eclasses[parent_ec as usize]
-                    .nodes
-                    .iter()
-                    .filter(|&&nid| self.enodes[nid as usize].op == *parent_op)
-                    .copied()
-                    .collect();
-
-                for node_id in candidates {
-                    self.repair(node_id);
+        // Congruence closure is a least fixed point. Rebuilding the canonical
+        // key table from all live nodes is deliberately simple and avoids
+        // retaining stale reverse-parent entries from incremental repairs.
+        loop {
+            for node in &mut self.enodes {
+                for child in &mut node.children {
+                    *child = self.uf.find(*child);
                 }
             }
+
+            let mut owner_by_key = HashMap::new();
+            let mut collisions = Vec::new();
+            for (node_id, node) in self.enodes.iter().enumerate() {
+                let owner = self.uf.find(self.enode_to_eclass[node_id]);
+                let key = (node.op, node.children.clone());
+                if let Some(&other) = owner_by_key.get(&key) {
+                    if self.uf.find(owner) != self.uf.find(other) {
+                        collisions.push((owner, other));
+                    }
+                } else {
+                    owner_by_key.insert(key, owner);
+                }
+            }
+
+            if collisions.is_empty() {
+                break;
+            }
+            for (left, right) in collisions {
+                self.union(left, right);
+            }
+            self.dirty.clear();
         }
-    }
 
-    /// Re-canonicalise a single e-node, update the hash-cons, and merge
-    /// e-classes if the new canonical form collides with an existing one.
-    fn repair(&mut self, node_id: ENodeId) {
-        let op = self.enodes[node_id as usize].op;
-        let old_children = self.enodes[node_id as usize].children.clone();
-        let new_children: Vec<EClassId> = old_children.iter().map(|&c| self.uf.find(c)).collect();
-
-        if old_children == new_children {
-            return;
+        // Compact congruent duplicate nodes and reconstruct every derived
+        // index from the canonical node set. No stale parent/hashcons entry
+        // survives this boundary.
+        let mut unique = HashMap::new();
+        let mut nodes = Vec::new();
+        let mut owners = Vec::new();
+        for (node_id, mut node) in std::mem::take(&mut self.enodes).into_iter().enumerate() {
+            for child in &mut node.children {
+                *child = self.uf.find(*child);
+            }
+            let owner = self.uf.find(self.enode_to_eclass[node_id]);
+            let key = (node.op, node.children.clone());
+            if unique.insert(key, nodes.len() as ENodeId).is_none() {
+                nodes.push(node);
+                owners.push(owner);
+            }
         }
+        self.enodes = nodes;
+        self.enode_to_eclass = owners;
 
-        self.enodes[node_id as usize].children = new_children.clone();
+        for class in &mut self.eclasses {
+            class.nodes.clear();
+            class.parents.clear();
+        }
+        self.hashcons.map.clear();
 
-        let old_ec = self.uf.find(self.enode_to_eclass[node_id as usize]);
-        self.eclasses[old_ec as usize]
-            .nodes
-            .retain(|&n| n != node_id);
+        for node_id in 0..self.enodes.len() {
+            let owner = self.uf.find(self.enode_to_eclass[node_id]);
+            self.enode_to_eclass[node_id] = owner;
+            self.eclasses[owner as usize].nodes.push(node_id as ENodeId);
 
-        let new_key = (op, new_children);
-
-        if let Some(&target_ec) = self.hashcons.map.get(&new_key) {
-            let target = self.uf.find(target_ec);
-            self.eclasses[target as usize].nodes.push(node_id);
-            self.enode_to_eclass[node_id as usize] = target;
-
-            for (i, &child) in self.enodes[node_id as usize].children.iter().enumerate() {
+            let node = &self.enodes[node_id];
+            self.hashcons
+                .map
+                .insert((node.op, node.children.clone()), owner);
+            for (position, &child) in node.children.iter().enumerate() {
                 let child = self.uf.find(child);
-                self.eclasses[child as usize].parents.push((op, i, target));
-            }
-
-            if old_ec != target {
-                self.union(old_ec, target);
-            }
-        } else {
-            self.hashcons.map.insert(new_key, old_ec);
-            self.eclasses[old_ec as usize].nodes.push(node_id);
-
-            for (i, &child) in self.enodes[node_id as usize].children.iter().enumerate() {
-                let child = self.uf.find(child);
-                self.eclasses[child as usize].parents.push((op, i, old_ec));
+                self.eclasses[child as usize]
+                    .parents
+                    .push((node.op, position, owner));
             }
         }
+        self.dirty.clear();
     }
 }
 
