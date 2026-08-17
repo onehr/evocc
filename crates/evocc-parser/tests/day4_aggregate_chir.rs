@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use evocc_chir::{
-    CHirDecl, CHirExpr, ParameterSyntax, StorageClass, TagMembers, TypeSpecifier,
-    WrittenDeclaratorLayer,
+    CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, ParameterSyntax, StorageClass,
+    TagMembers, TypeSpecifier, WrittenDeclaratorLayer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_lex::{Lexer, TokenKind};
@@ -28,6 +28,7 @@ fn parse<'arena>(source: &str, arena: &'arena Arena) -> evocc_chir::CHirUnit<'ar
     let mut parser = Parser::new(tokens, file(), source);
     let unit = parser.parse_translation_unit_in(arena);
     assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+    assert_unit_owned(arena, &unit);
     unit
 }
 
@@ -62,6 +63,148 @@ fn assert_exact(span: SourceSpan, start: u32, end: u32) {
         SourceSpan::new(file(), start, end, 1, start + 1),
         "unexpected half-open source range"
     );
+}
+
+fn assert_expr_owned(arena: &Arena, expression: &CHirExpr<'_>) {
+    assert!(
+        arena.contains(expression),
+        "expression escaped caller Arena"
+    );
+    match expression {
+        CHirExpr::Lit(..)
+        | CHirExpr::FloatLit(..)
+        | CHirExpr::CharLit(..)
+        | CHirExpr::StringLit(..)
+        | CHirExpr::Ident(..)
+        | CHirExpr::SizeOf(..)
+        | CHirExpr::AlignOf(..) => {}
+        CHirExpr::Unary(_, child, _)
+        | CHirExpr::Cast(_, child, _)
+        | CHirExpr::SizeOfExpr(child, _)
+        | CHirExpr::Member(child, _, _)
+        | CHirExpr::PtrMember(child, _, _) => assert_expr_owned(arena, child),
+        CHirExpr::Binary(_, left, right, _)
+        | CHirExpr::Index(left, right, _)
+        | CHirExpr::Assign(left, right, _)
+        | CHirExpr::Comma(left, right, _) => {
+            assert_expr_owned(arena, left);
+            assert_expr_owned(arena, right);
+        }
+        CHirExpr::Ternary(condition, then_value, else_value, _) => {
+            assert_expr_owned(arena, condition);
+            assert_expr_owned(arena, then_value);
+            assert_expr_owned(arena, else_value);
+        }
+        CHirExpr::Call(callee, arguments, _) => {
+            assert_expr_owned(arena, callee);
+            for argument in arguments {
+                assert_expr_owned(arena, argument);
+            }
+        }
+        CHirExpr::CompoundLit(_, values, _) => {
+            for value in values {
+                assert_expr_owned(arena, value);
+            }
+        }
+    }
+}
+
+fn assert_stmt_owned(arena: &Arena, statement: &CHirStmt<'_>) {
+    assert!(arena.contains(statement), "statement escaped caller Arena");
+    match statement {
+        CHirStmt::Expr(expression, _) => assert_expr_owned(arena, expression),
+        CHirStmt::If(condition, then_branch, else_branch, _) => {
+            assert_expr_owned(arena, condition);
+            assert_stmt_owned(arena, then_branch);
+            if let Some(else_branch) = else_branch {
+                assert_stmt_owned(arena, else_branch);
+            }
+        }
+        CHirStmt::Switch(expression, body, _) | CHirStmt::While(expression, body, _) => {
+            assert_expr_owned(arena, expression);
+            assert_stmt_owned(arena, body);
+        }
+        CHirStmt::DoWhile(body, expression, _) => {
+            assert_stmt_owned(arena, body);
+            assert_expr_owned(arena, expression);
+        }
+        CHirStmt::For(initializer, condition, step, body, _) => {
+            match initializer {
+                CHirForInit::Empty => {}
+                CHirForInit::Expression(expression) => assert_expr_owned(arena, expression),
+                CHirForInit::Declaration(declaration) => assert_decl_owned(arena, declaration),
+            }
+            if let Some(condition) = condition {
+                assert_expr_owned(arena, condition);
+            }
+            if let Some(step) = step {
+                assert_expr_owned(arena, step);
+            }
+            assert_stmt_owned(arena, body);
+        }
+        CHirStmt::Return(value, _) => {
+            if let Some(value) = value {
+                assert_expr_owned(arena, value);
+            }
+        }
+        CHirStmt::Compound(items, _) => {
+            for item in items {
+                match item {
+                    CHirBlockItem::Declaration(declaration) => {
+                        assert_decl_owned(arena, declaration)
+                    }
+                    CHirBlockItem::Statement(statement) => assert_stmt_owned(arena, statement),
+                }
+            }
+        }
+        CHirStmt::Label(_, nested, _)
+        | CHirStmt::Case(_, nested, _)
+        | CHirStmt::Default(nested, _) => assert_stmt_owned(arena, nested),
+        CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {}
+    }
+}
+
+fn assert_decl_owned(arena: &Arena, declaration: &CHirDecl<'_>) {
+    assert!(
+        arena.contains(declaration),
+        "declaration escaped caller Arena"
+    );
+    match declaration {
+        CHirDecl::Object(object) => {
+            if let Some(initializer) = object.initializer {
+                assert_expr_owned(arena, initializer);
+            }
+        }
+        CHirDecl::Function(function) => {
+            if let Some(body) = function.body {
+                assert_stmt_owned(arena, body);
+            }
+        }
+        CHirDecl::Tag(tag) => match &tag.members {
+            TagMembers::Incomplete => {}
+            TagMembers::Struct(members) | TagMembers::Union(members) => {
+                for member in members {
+                    if let Some(width) = member.bit_width {
+                        assert_expr_owned(arena, width);
+                    }
+                }
+            }
+            TagMembers::Enum(enumerators) => {
+                for enumerator in enumerators {
+                    if let Some(value) = enumerator.written_value {
+                        assert_expr_owned(arena, value);
+                    }
+                }
+            }
+        },
+        CHirDecl::Typedef(_) => {}
+    }
+}
+
+fn assert_unit_owned(arena: &Arena, unit: &evocc_chir::CHirUnit<'_>) {
+    for declaration in unit.declarations() {
+        assert_decl_owned(arena, declaration);
+    }
 }
 
 fn assert_tag_use(specifier: &TypeSpecifier, expected_kind: TagKind, start: u32, end: u32) {
