@@ -42,6 +42,7 @@ struct DriverOptions {
     input: String,
     include_paths: Vec<String>,
     forced_includes: Vec<String>,
+    macro_prefix_maps: Vec<(String, String)>,
     definitions: Vec<String>,
     standard_includes: bool,
 }
@@ -129,6 +130,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut input = None;
     let mut include_paths = Vec::new();
     let mut forced_includes = Vec::new();
+    let mut macro_prefix_maps = Vec::new();
     let mut definitions = Vec::new();
     let mut standard_includes = true;
     let mut index = 0;
@@ -171,6 +173,20 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             _ if arg.starts_with("-D") && arg.len() > 2 => {
                 definitions.push(arg[2..].to_owned());
             }
+            _ if arg.starts_with("-fmacro-prefix-map=") => {
+                let payload = &arg["-fmacro-prefix-map=".len()..];
+                let Some((old, new)) = payload.split_once('=') else {
+                    return Err(format!(
+                        "invalid -fmacro-prefix-map `{payload}`; expected non-empty OLD in OLD=NEW"
+                    ));
+                };
+                if old.is_empty() {
+                    return Err(format!(
+                        "invalid -fmacro-prefix-map `{payload}`; expected non-empty OLD in OLD=NEW"
+                    ));
+                }
+                macro_prefix_maps.push((old.to_owned(), new.to_owned()));
+            }
             "-std=gnu11" => {}
             _ if arg.starts_with("-std=") => {
                 return Err(format!("unsupported C language mode `{arg}`"));
@@ -195,6 +211,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         input: input.ok_or_else(|| "an input file is required".to_string())?,
         include_paths,
         forced_includes,
+        macro_prefix_maps,
         definitions,
         standard_includes,
     })
@@ -317,6 +334,9 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     }
     for forced_include in &options.forced_includes {
         pp.add_forced_include(forced_include.clone());
+    }
+    for (old, new) in &options.macro_prefix_maps {
+        pp.add_macro_prefix_map(old.clone(), new.clone());
     }
     for definition in &options.definitions {
         let (name, replacement) = definition

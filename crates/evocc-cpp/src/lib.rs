@@ -401,6 +401,7 @@ pub struct Preprocessor {
     pragma_once_files: HashSet<String>,
     include_paths: Vec<String>,
     forced_includes: Vec<String>,
+    macro_prefix_maps: Vec<(String, String)>,
     cond_stack: Vec<CondState>,
     errors: Vec<PreprocessError>,
     standard_includes: bool,
@@ -429,6 +430,7 @@ impl Preprocessor {
             pragma_once_files: HashSet::new(),
             include_paths: Vec::new(),
             forced_includes: Vec::new(),
+            macro_prefix_maps: Vec::new(),
             cond_stack: Vec::new(),
             errors: Vec::new(),
             standard_includes: true,
@@ -472,6 +474,17 @@ impl Preprocessor {
     /// Configure a command-line `-include FILE` input for this compilation.
     pub fn add_forced_include(&mut self, path: String) {
         self.forced_includes.push(path);
+    }
+
+    /// Configure an ordered `-fmacro-prefix-map=OLD=NEW` mapping.
+    ///
+    /// Day 5 applies these mappings only when expanding `__FILE__`. Physical
+    /// paths used for include lookup, source identity, and diagnostics remain
+    /// unchanged. If multiple mappings match, the last command-line mapping
+    /// wins, matching GCC. No `__BASE_FILE__` or compiler-builtin coverage is
+    /// claimed.
+    pub fn add_macro_prefix_map(&mut self, old: String, new: String) {
+        self.macro_prefix_maps.push((old, new));
     }
 
     pub fn set_standard_includes_enabled(&mut self, enabled: bool) {
@@ -953,7 +966,8 @@ impl Preprocessor {
                 if tok.kind == TokenKind::Identifier {
                     let name = token_lexeme(tok, source).to_string();
                     if name == "__FILE__" {
-                        let file_str = make_string_token(&self.current_file);
+                        let displayed_file = self.mapped_file_name();
+                        let file_str = make_string_token(&displayed_file);
                         let sub_stream = TokenStream::new(vec![file_str]);
                         let processed = self.process_impl(sub_stream, source, expanding, false, 0);
                         output.extend(processed.into_vec());
@@ -1064,6 +1078,15 @@ impl Preprocessor {
         }
 
         TokenStream::new(output)
+    }
+
+    fn mapped_file_name(&self) -> String {
+        for (old, new) in self.macro_prefix_maps.iter().rev() {
+            if let Some(suffix) = self.current_file.strip_prefix(old) {
+                return format!("{new}{suffix}");
+            }
+        }
+        self.current_file.clone()
     }
 
     fn push_cond(&mut self, value: bool, opening_span: SourceSpan) {
