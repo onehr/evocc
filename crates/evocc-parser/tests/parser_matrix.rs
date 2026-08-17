@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
-use evocc_chir::{BinaryOp, CHirDecl, CHirExpr, UnaryOp};
-use evocc_common::FileId;
+use evocc_chir::{BinaryOp, CHirDecl, CHirExpr, ParameterSyntax, UnaryOp};
+use evocc_common::{Arena, FileId};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::Parser;
-use evocc_types::{ArrayBound, CType, IntRank};
+use evocc_types::{ArrayBound, FunctionParameters, IntRank, TypeId, TypeInterner, TypeKind};
 
 struct ExpressionCase {
     id: &'static str,
@@ -171,7 +171,7 @@ const DECLARATORS: &[DeclaratorCase] = &[
     },
 ];
 
-fn parse_unit(source: &str) -> Vec<CHirDecl> {
+fn parse_unit<'arena>(source: &str, arena: &'arena Arena) -> evocc_chir::CHirUnit<'arena> {
     let mut lexer = Lexer::new(FileId::new(17), source);
     let mut tokens = Vec::new();
     while let Some(token) = lexer.next() {
@@ -188,7 +188,7 @@ fn parse_unit(source: &str) -> Vec<CHirDecl> {
     );
 
     let mut parser = Parser::new(tokens, FileId::new(17), source);
-    let unit = parser.parse_translation_unit();
+    let unit = parser.parse_translation_unit_in(arena);
     assert!(
         !parser.had_error(),
         "parser reported an error for {source:?}"
@@ -196,7 +196,7 @@ fn parse_unit(source: &str) -> Vec<CHirDecl> {
     unit
 }
 
-fn canonical_expr(expr: &CHirExpr) -> String {
+fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
     match expr {
         CHirExpr::Lit(value, _) => format!("int({})", value.value),
         CHirExpr::FloatLit(_, _) => "float".into(),
@@ -204,129 +204,171 @@ fn canonical_expr(expr: &CHirExpr) -> String {
         CHirExpr::StringLit(_, _) => "string".into(),
         CHirExpr::Ident(name, _) => format!("id({name})"),
         CHirExpr::Unary(op, operand, _) => {
-            format!("unary({},{})", unary_name(*op), canonical_expr(operand))
+            format!(
+                "unary({},{})",
+                unary_name(*op),
+                canonical_expr(operand, types)
+            )
         }
         CHirExpr::Binary(op, left, right, _) => format!(
             "binary({},{},{})",
             binary_name(*op),
-            canonical_expr(left),
-            canonical_expr(right)
+            canonical_expr(left, types),
+            canonical_expr(right, types)
         ),
         CHirExpr::Ternary(condition, left, right, _) => format!(
             "ternary({},{},{})",
-            canonical_expr(condition),
-            canonical_expr(left),
-            canonical_expr(right)
+            canonical_expr(condition, types),
+            canonical_expr(left, types),
+            canonical_expr(right, types)
         ),
         CHirExpr::Call(callee, arguments, _) => format!(
             "call({},[{}])",
-            canonical_expr(callee),
+            canonical_expr(callee, types),
             arguments
                 .iter()
-                .map(canonical_expr)
+                .map(|argument| canonical_expr(argument, types))
                 .collect::<Vec<_>>()
                 .join(",")
         ),
         CHirExpr::Cast(ty, operand, _) => {
-            format!("cast({},{})", canonical_type(ty), canonical_expr(operand))
+            format!(
+                "cast({},{})",
+                canonical_type(*ty, types),
+                canonical_expr(operand, types)
+            )
         }
-        CHirExpr::SizeOf(ty, _) => format!("sizeof_type({})", canonical_type(ty)),
+        CHirExpr::SizeOf(ty, _) => format!("sizeof_type({})", canonical_type(*ty, types)),
         CHirExpr::SizeOfExpr(operand, _) => {
-            format!("sizeof_expr({})", canonical_expr(operand))
+            format!("sizeof_expr({})", canonical_expr(operand, types))
         }
-        CHirExpr::AlignOf(ty, _) => format!("alignof({})", canonical_type(ty)),
+        CHirExpr::AlignOf(ty, _) => format!("alignof({})", canonical_type(*ty, types)),
         CHirExpr::Member(object, member, _) => {
-            format!("member({},{member})", canonical_expr(object))
+            format!("member({},{member})", canonical_expr(object, types))
         }
         CHirExpr::PtrMember(object, member, _) => {
-            format!("ptr_member({},{member})", canonical_expr(object))
+            format!("ptr_member({},{member})", canonical_expr(object, types))
         }
         CHirExpr::Index(object, index, _) => format!(
             "index({},{})",
-            canonical_expr(object),
-            canonical_expr(index)
+            canonical_expr(object, types),
+            canonical_expr(index, types)
         ),
         CHirExpr::Assign(left, right, _) => {
-            format!("assign({},{})", canonical_expr(left), canonical_expr(right))
+            format!(
+                "assign({},{})",
+                canonical_expr(left, types),
+                canonical_expr(right, types)
+            )
         }
         CHirExpr::CompoundLit(ty, values, _) => format!(
             "compound({},[{}])",
-            canonical_type(ty),
+            canonical_type(*ty, types),
             values
                 .iter()
-                .map(canonical_expr)
+                .map(|value| canonical_expr(value, types))
                 .collect::<Vec<_>>()
                 .join(",")
         ),
         CHirExpr::Comma(left, right, _) => {
-            format!("comma({},{})", canonical_expr(left), canonical_expr(right))
+            format!(
+                "comma({},{})",
+                canonical_expr(left, types),
+                canonical_expr(right, types)
+            )
         }
     }
 }
 
-fn canonical_decl(decl: &CHirDecl) -> String {
+fn canonical_decl(decl: &CHirDecl<'_>, types: &TypeInterner) -> String {
     match decl {
-        CHirDecl::VarDecl(name, ty, None, _) => {
-            format!("var({name},{})", canonical_type(ty))
+        CHirDecl::Object(object) if object.initializer.is_none() => {
+            format!(
+                "var({},{})",
+                object.name.spelling,
+                canonical_type(object.ty, types)
+            )
         }
-        CHirDecl::VarDecl(name, ty, Some(init), _) => format!(
-            "var({name},{},init:{})",
-            canonical_type(ty),
-            canonical_expr(init)
+        CHirDecl::Object(object) => format!(
+            "var({},{},init:{})",
+            object.name.spelling,
+            canonical_type(object.ty, types),
+            canonical_expr(
+                object.initializer.expect("matched initialized object"),
+                types
+            )
         ),
-        CHirDecl::FuncDecl(name, params, ret, None, _) => format!(
-            "fn({name},[{}],{})",
-            params
-                .iter()
-                .map(|(name, ty)| format!("{name}:{}", canonical_type(ty)))
-                .collect::<Vec<_>>()
-                .join(","),
-            canonical_type(ret)
-        ),
+        CHirDecl::Function(function) if function.body.is_none() => {
+            let parameters = match &function.parameters {
+                ParameterSyntax::Unspecified => Vec::new(),
+                ParameterSyntax::Prototype { parameters, .. } => parameters
+                    .iter()
+                    .map(|parameter| {
+                        format!(
+                            "{}:{}",
+                            parameter
+                                .name
+                                .as_ref()
+                                .map_or("", |name| name.spelling.as_str()),
+                            canonical_type(parameter.ty, types)
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            };
+            format!(
+                "fn({},[{}],{})",
+                function.name.spelling,
+                parameters.join(","),
+                canonical_type(function.return_specifier.type_id(), types)
+            )
+        }
         other => format!("unexpected:{other:?}"),
     }
 }
 
-fn canonical_type(ty: &CType) -> String {
-    match ty {
-        CType::Void => "void".into(),
-        CType::Int(rank) => match rank {
+fn canonical_type(ty: TypeId, types: &TypeInterner) -> String {
+    let canonical = types.get(ty).expect("type ID must resolve in its unit");
+    assert_eq!(canonical.qualifiers, Default::default());
+    match &canonical.kind {
+        TypeKind::Void => "void".into(),
+        TypeKind::Int(rank) => match rank {
             IntRank::Char => "char".into(),
             IntRank::Short => "short".into(),
             IntRank::Int => "int".into(),
             IntRank::Long => "long".into(),
             other => format!("int:{other:?}"),
         },
-        CType::Float(kind) => format!("float:{kind:?}"),
-        CType::Complex(kind) => format!("complex:{kind:?}"),
-        CType::Pointer(inner, qualifiers) => {
-            assert_eq!(*qualifiers, Default::default());
-            format!("ptr({})", canonical_type(inner))
-        }
-        CType::Array(inner, bound) => {
+        TypeKind::Float(kind) => format!("float:{kind:?}"),
+        TypeKind::Complex(kind) => format!("complex:{kind:?}"),
+        TypeKind::Pointer(inner) => format!("ptr({})", canonical_type(*inner, types)),
+        TypeKind::Array { element, bound } => {
             let bound = match bound {
                 ArrayBound::Fixed(value) => format!("fixed:{value}"),
                 ArrayBound::Variable => "variable".into(),
                 ArrayBound::Unbounded => "unbounded".into(),
             };
-            format!("array({bound},{})", canonical_type(inner))
+            format!("array({bound},{})", canonical_type(*element, types))
         }
-        CType::Function(proto) => format!(
-            "fn([{}])->{}",
-            proto
-                .params
-                .iter()
-                .map(canonical_type)
-                .collect::<Vec<_>>()
-                .join(","),
-            canonical_type(&proto.ret)
-        ),
-        CType::Struct(value) => format!("struct:{:?}", value.name),
-        CType::Union(value) => format!("union:{:?}", value.name),
-        CType::Enum(value) => format!("enum:{:?}", value.name),
-        CType::Bitfield(inner, width) => format!("bitfield({width},{})", canonical_type(inner)),
-        CType::Typedef(_) => "typedef".into(),
-        CType::TypeOf(inner) => format!("typeof({})", canonical_type(inner)),
+        TypeKind::Function {
+            return_type,
+            parameters,
+        } => {
+            let params = match parameters {
+                FunctionParameters::Unspecified => Vec::new(),
+                FunctionParameters::Prototype { types: params, .. } => params
+                    .iter()
+                    .map(|parameter| canonical_type(*parameter, types))
+                    .collect(),
+            };
+            format!(
+                "fn([{}])->{}",
+                params.join(","),
+                canonical_type(*return_type, types)
+            )
+        }
+        TypeKind::Struct(tag) => format!("struct#{}", tag.raw()),
+        TypeKind::Union(tag) => format!("union#{}", tag.raw()),
+        TypeKind::Enum(tag) => format!("enum#{}", tag.raw()),
     }
 }
 
@@ -394,13 +436,22 @@ fn expression_precedence_and_associativity_matrix() {
             case.id
         );
         let source = format!("int sink = {};", case.expression);
-        let unit = parse_unit(&source);
+        let arena = Arena::default();
+        let unit = parse_unit(&source, &arena);
         assert_eq!(unit.len(), 1, "case {}: {source}", case.id);
-        let CHirDecl::VarDecl(name, _, Some(init), _) = &unit[0] else {
+        let CHirDecl::Object(object) = &unit[0] else {
             panic!("case {} did not produce one initialized object", case.id);
         };
-        assert_eq!(name, "sink", "case {}", case.id);
-        assert_eq!(canonical_expr(init), case.expected, "case {}", case.id);
+        let init = object
+            .initializer
+            .expect("expression case must initialize sink");
+        assert_eq!(object.name.spelling, "sink", "case {}", case.id);
+        assert_eq!(
+            canonical_expr(init, unit.types()),
+            case.expected,
+            "case {}",
+            case.id
+        );
     }
 
     println!(
@@ -423,9 +474,15 @@ fn ordinary_declarator_matrix() {
             "duplicate declarator bytes for {}",
             case.id
         );
-        let unit = parse_unit(case.source);
+        let arena = Arena::default();
+        let unit = parse_unit(case.source, &arena);
         assert_eq!(unit.len(), 1, "case {}: {}", case.id, case.source);
-        assert_eq!(canonical_decl(&unit[0]), case.expected, "case {}", case.id);
+        assert_eq!(
+            canonical_decl(unit[0], unit.types()),
+            case.expected,
+            "case {}",
+            case.id
+        );
     }
 
     println!(

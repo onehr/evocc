@@ -14,7 +14,7 @@ use std::fs;
 use std::io::Write;
 use std::process::ExitCode;
 
-use evocc_common::FileId;
+use evocc_common::{Arena, FileId};
 use evocc_cpp::Preprocessor;
 use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::Parser;
@@ -416,8 +416,9 @@ fn run_parse(options: &DriverOptions) -> ExitCode {
     }
     let processed = result.into_vec();
 
+    let arena = Arena::default();
     let mut parser = Parser::new(processed, FileId::new(1), &src);
-    let unit = parser.parse_translation_unit();
+    let unit = parser.parse_translation_unit_in(&arena);
     if parser.had_error() || (unit.is_empty() && !src.trim().is_empty()) {
         if let Some(diagnostic) = parser.diagnostic() {
             emit_error(

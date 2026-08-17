@@ -1,15 +1,15 @@
 //! C-HIR to EvoIR semantic lowering
 
-use evocc_chir::{BinaryOp, CHirDecl, CHirExpr, CHirStmt, CHirUnit};
+use evocc_chir::{BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirStmt, CHirUnit};
 use evocc_evoir::{Block, BlockArg, BlockId, CmpOp, Function, Inst, Value};
 use evocc_types::EvoIRType;
 
-pub fn lower_unit(unit: &CHirUnit) -> Vec<Function> {
+pub fn lower_unit(unit: &CHirUnit<'_>) -> Vec<Function> {
     unit.iter()
         .filter_map(|decl| match decl {
-            CHirDecl::FuncDecl(name, _params, _ret_ty, Some(body), _) => {
-                Some(lower_function(name, body))
-            }
+            CHirDecl::Function(function) => function
+                .body
+                .map(|body| lower_function(&function.name.spelling, body)),
             _ => None,
         })
         .collect()
@@ -78,7 +78,7 @@ impl LowerContext {
     }
 }
 
-fn lower_function(name: &str, body: &CHirStmt) -> Function {
+fn lower_function(name: &str, body: &CHirStmt<'_>) -> Function {
     let mut ctx = LowerContext::new();
     let result = lower_stmt(body, &mut ctx);
     ctx.set_terminator(Inst::Ret(vec![value(result)]));
@@ -88,14 +88,16 @@ fn lower_function(name: &str, body: &CHirStmt) -> Function {
     func
 }
 
-fn lower_stmt(stmt: &CHirStmt, ctx: &mut LowerContext) -> u32 {
+fn lower_stmt(stmt: &CHirStmt<'_>, ctx: &mut LowerContext) -> u32 {
     match stmt {
         CHirStmt::Return(Some(expr), _) => lower_expr(expr, ctx),
         CHirStmt::Compound(stmts, _) => {
             let mut last = ctx.new_value();
             ctx.emit_inst(Inst::Const(value(last), 0));
-            for s in stmts {
-                last = lower_stmt(s, ctx);
+            for item in stmts {
+                if let CHirBlockItem::Statement(statement) = item {
+                    last = lower_stmt(statement, ctx);
+                }
             }
             last
         }
@@ -116,7 +118,7 @@ fn value(id: u32) -> Value {
     Value { id, ty: bits32() }
 }
 
-fn lower_expr(expr: &CHirExpr, ctx: &mut LowerContext) -> u32 {
+fn lower_expr(expr: &CHirExpr<'_>, ctx: &mut LowerContext) -> u32 {
     match expr {
         CHirExpr::Lit(lit, _) => {
             let v = ctx.new_value();
@@ -193,12 +195,16 @@ mod tests {
     use super::*;
     use evocc_chir::eval_expr;
     use evocc_chir::{
-        BinaryOp, CHirDecl, CHirExpr, CHirStmt, CHirUnit, IntBase, IntLit, IntSuffix,
+        BinaryOp, CHirDecl, CHirExpr, CHirStmt, CHirUnit, FunctionDecl, IntBase, IntLit, IntSuffix,
+        ParameterSyntax, SpannedName, StorageClass, TypeSpecifier, WrittenDeclarator,
+        WrittenDeclaratorLayer,
     };
-    use evocc_common::{FileId, SourceSpan};
-    use evocc_types::{CType, IntRank};
+    use evocc_common::{Arena, FileId, SourceSpan};
+    use evocc_types::{
+        CanonicalType, FunctionParameters, IntRank, Qualifiers, TypeInterner, TypeKind,
+    };
 
-    fn int_lit(v: i64) -> CHirExpr {
+    fn int_lit(v: i64) -> CHirExpr<'static> {
         CHirExpr::Lit(
             IntLit {
                 value: v as u64,
@@ -213,30 +219,69 @@ mod tests {
         SourceSpan::new(FileId::new(0), 0, 0, 0, 0)
     }
 
+    fn arena_alloc<'arena, T: 'arena>(arena: &'arena Arena, value: T) -> &'arena T {
+        // Safety: this test allocates only C-HIR nodes. They contain no Arena
+        // handle and their transitive destructors only release owned buffers.
+        unsafe { arena.alloc_shared(value) }
+    }
+
     #[test]
     fn chir_to_evoir_lowering_preserves_semantics() {
-        let body = CHirStmt::Return(
-            Some(CHirExpr::Binary(
-                BinaryOp::Add,
-                Box::new(int_lit(1)),
-                Box::new(CHirExpr::Binary(
-                    BinaryOp::Mul,
-                    Box::new(int_lit(2)),
-                    Box::new(int_lit(3)),
-                    test_span(),
-                )),
-                test_span(),
-            )),
-            test_span(),
+        let arena = Arena::default();
+        let one = arena_alloc(&arena, int_lit(1));
+        let two = arena_alloc(&arena, int_lit(2));
+        let three = arena_alloc(&arena, int_lit(3));
+        let product = arena_alloc(
+            &arena,
+            CHirExpr::Binary(BinaryOp::Mul, two, three, test_span()),
         );
-        let func_decl = CHirDecl::FuncDecl(
-            "f".into(),
-            vec![],
-            CType::Int(IntRank::Int),
-            Some(Box::new(body)),
-            test_span(),
+        let expression = arena_alloc(
+            &arena,
+            CHirExpr::Binary(BinaryOp::Add, one, product, test_span()),
         );
-        let unit: CHirUnit = vec![func_decl];
+        let body = arena_alloc(&arena, CHirStmt::Return(Some(expression), test_span()));
+
+        let mut types = TypeInterner::new();
+        let int_type = types.intern(CanonicalType {
+            kind: TypeKind::Int(IntRank::Int),
+            qualifiers: Qualifiers::default(),
+        });
+        let function_type = types.intern(CanonicalType {
+            kind: TypeKind::Function {
+                return_type: int_type,
+                parameters: FunctionParameters::Prototype {
+                    types: Vec::new(),
+                    variadic: false,
+                },
+            },
+            qualifiers: Qualifiers::default(),
+        });
+        let func_decl = arena_alloc(
+            &arena,
+            CHirDecl::Function(FunctionDecl {
+                name: SpannedName {
+                    spelling: "f".into(),
+                    span: test_span(),
+                },
+                ty: function_type,
+                return_specifier: TypeSpecifier::Builtin {
+                    ty: int_type,
+                    span: test_span(),
+                },
+                written: WrittenDeclarator {
+                    layers: vec![WrittenDeclaratorLayer::Function { span: test_span() }],
+                    span: test_span(),
+                },
+                parameters: ParameterSyntax::Prototype {
+                    parameters: Vec::new(),
+                    variadic: false,
+                },
+                storage: StorageClass::None,
+                body: Some(body),
+                span: test_span(),
+            }),
+        );
+        let unit = CHirUnit::new(vec![func_decl], types);
 
         let functions = lower_unit(&unit);
         assert_eq!(functions.len(), 1);
@@ -248,20 +293,7 @@ mod tests {
         assert_eq!(results, vec![7]);
 
         let mut vars = std::collections::HashMap::new();
-        let chir_result = eval_expr(
-            &CHirExpr::Binary(
-                BinaryOp::Add,
-                Box::new(int_lit(1)),
-                Box::new(CHirExpr::Binary(
-                    BinaryOp::Mul,
-                    Box::new(int_lit(2)),
-                    Box::new(int_lit(3)),
-                    test_span(),
-                )),
-                test_span(),
-            ),
-            &mut vars,
-        );
+        let chir_result = eval_expr(expression, &mut vars);
         assert_eq!(chir_result, 7);
         assert_eq!(results[0], chir_result);
     }
