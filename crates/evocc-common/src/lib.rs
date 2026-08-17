@@ -215,21 +215,53 @@ impl DiagnosticCollector {
 // Bump allocator (arena)
 // ---------------------------------------------------------------------------
 
-/// A simple bump-pointer arena. Allocates `T`s in a growable slab and returns
-/// `&T` references stable for the arena's entire lifetime.
+/// A simple bump-pointer arena. Allocates `T`s in growable slabs and returns
+/// references stable for the arena's entire lifetime.
 ///
 /// This is intentionally NOT a general-purpose allocator. It does not support
 /// deallocation. When the arena is dropped, all allocated memory is freed at
 /// once. The intended use is single-translation-unit compiler passes where
 /// bulk deallocation after a pass is cheaper than per-node `Box` churn.
+///
+/// The arena is deliberately neither [`Send`] nor [`Sync`]. It may own values
+/// with thread affinity, and its unsafe shared-borrow allocation relies on all
+/// allocation calls being serialized on the owner thread.
+///
+/// ```compile_fail
+/// use evocc_common::Arena;
+///
+/// let arena = Arena::default();
+/// std::thread::spawn(move || drop(arena));
+/// ```
+///
+/// ```compile_fail
+/// use evocc_common::Arena;
+///
+/// let arena = Arena::default();
+/// std::thread::scope(|scope| {
+///     scope.spawn(|| {
+///         let _ = arena.chunk_count();
+///     });
+/// });
+/// ```
 pub struct Arena {
-    chunks: Vec<ArenaChunk>,
-    drops: Vec<DropRecord>,
+    state: std::cell::RefCell<ArenaState>,
     /// Default chunk size; grows if a single allocation exceeds it.
     chunk_size: usize,
+    /// Defense-in-depth phase marker checked before `state`. It does not make
+    /// an `Arena` reference retained by an allocated value valid during Drop.
+    dropping: std::cell::Cell<bool>,
     /// An arena accepts arbitrary non-Send values, so the arena itself must
     /// remain on the creating thread until those values have been dropped.
     _thread_local: core::marker::PhantomData<std::rc::Rc<()>>,
+}
+
+/// Mutable bookkeeping lives behind one `RefCell`; references returned by the
+/// arena point only into separately allocated chunks, never into these vectors.
+/// Moving or growing either vector therefore cannot invalidate an allocation.
+struct ArenaState {
+    chunks: Vec<ArenaChunk>,
+    drops: Vec<DropRecord>,
 }
 
 struct ArenaChunk {
@@ -276,9 +308,12 @@ impl Arena {
     pub fn new(chunk_size: usize) -> Self {
         assert!(chunk_size >= core::mem::size_of::<usize>());
         Self {
-            chunks: Vec::new(),
-            drops: Vec::new(),
+            state: std::cell::RefCell::new(ArenaState {
+                chunks: Vec::new(),
+                drops: Vec::new(),
+            }),
             chunk_size,
+            dropping: std::cell::Cell::new(false),
             _thread_local: core::marker::PhantomData,
         }
     }
@@ -287,27 +322,64 @@ impl Arena {
     /// `alloc` is the hot path for IR node construction and must not allocate
     /// from the global allocator on the common case (chunk has headroom).
     pub fn alloc<T: Sized>(&mut self, value: T) -> &mut T {
+        let ptr = self.allocate_value(value);
+
+        // Safety: the exclusive arena borrow prevents any other safe
+        // allocation while this mutable reference is live. The initialized
+        // value remains in its stable chunk until the arena is dropped.
+        unsafe { &mut *ptr }
+    }
+
+    /// Allocate a `T` through a shared arena borrow.
+    ///
+    /// This narrow escape hatch supports immutable, arena-linked IR graphs.
+    /// Prefer [`Arena::alloc`] whenever a mutable arena borrow is available.
+    ///
+    /// # Safety
+    ///
+    /// `T` must not directly or transitively store a reference or pointer to
+    /// this `Arena`. Neither `T` nor any destructor it transitively runs may
+    /// access this arena during teardown. If a destructor reads another value
+    /// in this arena, that value must have been allocated earlier and must
+    /// remain live under the arena's reverse-allocation drop order. Callers
+    /// must also not mutate stored dependency references to violate that order.
+    pub unsafe fn alloc_shared<'arena, T: Sized + 'arena>(&'arena self, value: T) -> &'arena T {
+        let ptr = self.allocate_value(value);
+
+        // Safety: `allocate_value` initialized this fresh location. The caller
+        // upholds the teardown and dependency-order requirements above.
+        unsafe { &*ptr }
+    }
+
+    fn allocate_value<T: Sized>(&self, value: T) -> *mut T {
+        self.assert_can_allocate();
         let size = core::mem::size_of::<T>();
         let align = core::mem::align_of::<T>();
 
-        if core::mem::needs_drop::<T>() {
-            self.drops.reserve(1);
-        }
-        let ptr = self.allocate_raw(size, align);
-        // Safety: `ptr` points to `size` bytes of freshly allocated memory
-        // within a valid chunk that will not be freed or moved until the
-        // Arena itself is dropped.
-        unsafe {
-            ptr.cast::<T>().write(value);
+        let ptr = {
+            let mut state = self.state.borrow_mut();
             if core::mem::needs_drop::<T>() {
-                self.drops.push(DropRecord {
-                    ptr: core::ptr::NonNull::new_unchecked(ptr),
+                // Reserve before moving `value` into arena storage. Once it is
+                // written, registering its destructor cannot allocate/panic.
+                state.drops.reserve(1);
+            }
+            let ptr = Self::allocate_raw(&mut state, self.chunk_size, size, align);
+            // Safety: `ptr` is correctly aligned fresh storage reserved only
+            // for this value. Chunk buffers do not move until arena teardown.
+            unsafe {
+                ptr.cast::<T>().write(value);
+            }
+            if core::mem::needs_drop::<T>() {
+                state.drops.push(DropRecord {
+                    ptr: core::ptr::NonNull::new(ptr)
+                        .expect("arena allocation returned a null pointer"),
                     len: 1,
                     drop_fn: drop_elements::<T>,
                 });
             }
-            &mut *ptr.cast::<T>()
-        }
+            ptr.cast::<T>()
+        };
+        ptr
     }
 
     /// Allocate a string (`&str`) inside the arena. Common enough to warrant
@@ -335,22 +407,30 @@ impl Arena {
     where
         F: FnMut(usize) -> T,
     {
+        self.assert_can_allocate();
         if len == 0 {
             return &mut [];
         }
         let size = core::mem::size_of::<T>()
             .checked_mul(len)
             .expect("alloc_slice overflow");
-        let ptr = self.allocate_raw(size, core::mem::align_of::<T>());
-        if core::mem::needs_drop::<T>() {
-            self.drops.reserve(1);
-        }
+        let ptr = {
+            let mut state = self.state.borrow_mut();
+            if core::mem::needs_drop::<T>() {
+                state.drops.reserve(1);
+            }
+            Self::allocate_raw(
+                &mut state,
+                self.chunk_size,
+                size,
+                core::mem::align_of::<T>(),
+            )
+        };
         let typed = ptr.cast::<T>();
         let mut guard = SliceInitGuard {
             ptr: typed,
             initialized: 0,
         };
-
         // Safety: `allocate_raw` returned storage with the size and alignment
         // required for `len` values of `T`. The guard owns the initialized
         // prefix until construction has completed.
@@ -359,14 +439,16 @@ impl Arena {
                 typed.add(i).write(init(i));
                 guard.initialized += 1;
             }
-            core::mem::forget(guard);
             if core::mem::needs_drop::<T>() {
-                self.drops.push(DropRecord {
+                // Capacity was reserved before initialization, so this transfer
+                // from the rollback guard to the arena ledger cannot allocate.
+                self.state.borrow_mut().drops.push(DropRecord {
                     ptr: core::ptr::NonNull::new_unchecked(ptr),
                     len,
                     drop_fn: drop_elements::<T>,
                 });
             }
+            core::mem::forget(guard);
             core::slice::from_raw_parts_mut(typed, len)
         }
     }
@@ -374,24 +456,62 @@ impl Arena {
     /// Total bytes allocated so far (sum of all chunk sizes).
     #[must_use]
     pub fn allocated_bytes(&self) -> usize {
-        self.chunks.iter().map(|chunk| chunk.layout.size()).sum()
+        self.state
+            .borrow()
+            .chunks
+            .iter()
+            .map(|chunk| chunk.layout.size())
+            .sum()
     }
 
     /// Number of chunks allocated.
     #[must_use]
     pub fn chunk_count(&self) -> usize {
-        self.chunks.len()
+        self.state.borrow().chunks.len()
+    }
+
+    /// Return whether `value` is backed by one of this arena's live chunks.
+    ///
+    /// This is an ownership witness for references supplied by callers; it
+    /// deliberately accepts subobjects as well as allocation roots.
+    #[must_use]
+    pub fn contains<T>(&self, value: &T) -> bool {
+        let value_start = std::ptr::from_ref(value).cast::<u8>() as usize;
+        let physical_size = core::mem::size_of::<T>().max(1);
+        let Some(value_end) = value_start.checked_add(physical_size) else {
+            return false;
+        };
+
+        self.state.borrow().chunks.iter().any(|chunk| {
+            let chunk_start = chunk.ptr.as_ptr() as usize;
+            let chunk_end = chunk_start + chunk.layout.size();
+            chunk_start <= value_start && value_end <= chunk_end
+        })
     }
 
     // --- private ----------------------------------------------------------
 
-    fn allocate_raw(&mut self, size: usize, align: usize) -> *mut u8 {
+    fn assert_can_allocate(&self) {
+        // This phase check is defensive. `alloc_shared`'s safety contract still
+        // prohibits destructors from retaining and accessing their owner.
+        assert!(
+            !self.dropping.get(),
+            "cannot allocate while Arena is dropping"
+        );
+    }
+
+    fn allocate_raw(
+        state: &mut ArenaState,
+        chunk_size: usize,
+        size: usize,
+        align: usize,
+    ) -> *mut u8 {
         debug_assert!(align.is_power_of_two());
         if size == 0 {
             return std::ptr::without_provenance_mut(align);
         }
 
-        if let Some(chunk) = self.chunks.last_mut() {
+        if let Some(chunk) = state.chunks.last_mut() {
             if chunk.layout.align() >= align {
                 if let Some(start) = align_up(chunk.used, align) {
                     if let Some(end) = start.checked_add(size) {
@@ -405,7 +525,7 @@ impl Arena {
             }
         }
 
-        let capacity = self.chunk_size.max(size);
+        let capacity = chunk_size.max(size);
         let chunk_align = align.max(core::mem::align_of::<usize>());
         let layout = std::alloc::Layout::from_size_align(capacity, chunk_align)
             .expect("arena allocation layout overflow");
@@ -413,7 +533,7 @@ impl Arena {
         let allocation = unsafe { std::alloc::alloc(layout) };
         let ptr = core::ptr::NonNull::new(allocation)
             .unwrap_or_else(|| std::alloc::handle_alloc_error(layout));
-        self.chunks.push(ArenaChunk {
+        state.chunks.push(ArenaChunk {
             ptr,
             layout,
             used: size,
@@ -424,8 +544,13 @@ impl Arena {
 
 impl Drop for Arena {
     fn drop(&mut self) {
+        // Mark teardown before taking the ledger. This is a defensive check for
+        // raw-pointer misuse, not permission for `alloc_shared` values to retain
+        // and access their owner from a destructor.
+        self.dropping.set(true);
+        let drops = std::mem::take(&mut self.state.get_mut().drops);
         let mut first_panic = None;
-        for record in self.drops.drain(..).rev() {
+        for record in drops.into_iter().rev() {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 // Safety: every record describes initialized values that have
                 // not previously been dropped.
@@ -566,19 +691,11 @@ mod tests {
     fn arena_allocation_is_stable() {
         let mut arena = Arena::new(4096);
 
-        // Allocate values one at a time and check each immediately. Holding
-        // shared refs across further allocations requires interior mutability
-        // in the arena; the stability property is verified by checking that
-        // each value remains at its allocated address, not by holding 1024
-        // live refs simultaneously.
         for i in 0..1024 {
             let r: &mut u64 = arena.alloc(i as u64);
             assert_eq!(*r, i as u64);
-            // Mutate to prove we own the allocation (arena did not recycle).
             *r = 0xDEAD;
             assert_eq!(*r, 0xDEAD);
-            // Write back the correct value for later checks.
-            *r = i as u64;
         }
 
         // Large allocation forces a new chunk; arena handles over-size.
@@ -608,12 +725,8 @@ mod tests {
         let s: &str = arena.alloc_str("hello world");
         assert_eq!(s, "hello world");
 
-        // Non-ascii in another arena; the test checks correctness, not
-        // concurrent reachability (which requires interior mutability or
-        // an NLL-aware borrow that Rust's current model does not support
-        // for `&mut self` alloc methods).
-        let mut a2 = Arena::new(256);
-        let s2: &str = a2.alloc_str("编译");
+        let mut second_arena = Arena::new(256);
+        let s2: &str = second_arena.alloc_str("编译");
         assert_eq!(s2, "编译");
     }
 
