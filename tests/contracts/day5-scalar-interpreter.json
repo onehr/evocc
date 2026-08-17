@@ -1,0 +1,4550 @@
+{
+  "cli": {
+    "argv": [
+      "--target=aarch64-unknown-linux-gnu",
+      "--interpret-c-hir",
+      "/dev/stdin"
+    ],
+    "error": {
+      "exitCode": 1,
+      "stderr": "/dev/stdin:<line>:<column>: error[<code>]: <message>\\n",
+      "stdout": ""
+    },
+    "returnValueIsNotProcessExitCode": true,
+    "success": {
+      "exitCode": 0,
+      "stderr": "",
+      "stdout": "<signed-decimal>\\n"
+    }
+  },
+  "controlAxes": [
+    {
+      "id": "return",
+      "index": 0,
+      "resultDelta": 0
+    },
+    {
+      "id": "nested-block",
+      "index": 1,
+      "resultDelta": 1
+    },
+    {
+      "id": "if-true",
+      "index": 2,
+      "resultDelta": 2
+    },
+    {
+      "id": "if-else",
+      "index": 3,
+      "resultDelta": 3
+    },
+    {
+      "id": "while",
+      "index": 4,
+      "resultDelta": 3
+    },
+    {
+      "id": "while-continue",
+      "index": 5,
+      "resultDelta": 4
+    },
+    {
+      "id": "do-while",
+      "index": 6,
+      "resultDelta": 4
+    },
+    {
+      "id": "for-expression-init",
+      "index": 7,
+      "resultDelta": 6
+    },
+    {
+      "id": "for-declaration-init",
+      "index": 8,
+      "resultDelta": 8
+    },
+    {
+      "id": "break",
+      "index": 9,
+      "resultDelta": 3
+    },
+    {
+      "id": "switch-match",
+      "index": 10,
+      "resultDelta": 10
+    },
+    {
+      "id": "switch-fallthrough",
+      "index": 11,
+      "resultDelta": 5
+    },
+    {
+      "id": "switch-default",
+      "index": 12,
+      "resultDelta": 12
+    },
+    {
+      "id": "goto-forward",
+      "index": 13,
+      "resultDelta": 13
+    },
+    {
+      "id": "prefix-postfix-update",
+      "index": 14,
+      "resultDelta": 14
+    },
+    {
+      "id": "block-enum",
+      "index": 15,
+      "resultDelta": 15
+    }
+  ],
+  "definedCases": [
+    {
+      "controlAxis": "return",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 7,
+        "value": 7
+      },
+      "expressionAxis": "literal",
+      "id": "defined.e00_c00.literal.return",
+      "ordinal": 1,
+      "sourceSha256": "1ac2459bbd5f674d9a3d2e5e6bc6f29be42aed77afedb7f54e1fec4141282c52"
+    },
+    {
+      "controlAxis": "nested-block",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 8,
+        "value": 8
+      },
+      "expressionAxis": "literal",
+      "id": "defined.e00_c01.literal.nested-block",
+      "ordinal": 2,
+      "sourceSha256": "310b12864756a69f25f8172853175135e01acac727e02a4589bcdc2d632dcb31"
+    },
+    {
+      "controlAxis": "if-true",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 9,
+        "value": 9
+      },
+      "expressionAxis": "literal",
+      "id": "defined.e00_c02.literal.if-true",
+      "ordinal": 3,
+      "sourceSha256": "eb78b6c9b8c686c81757a517dc4eb0a511276b495ac370d64ae6c4d9e121b497"
+    },
+    {
+      "controlAxis": "if-else",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 10,
+        "value": 10
+      },
+      "expressionAxis": "literal",
+      "id": "defined.e00_c03.literal.if-else",
+      "ordinal": 4,
+      "sourceSha256": "d133d939cc68d2b82f325976d3a9ef4e8e14f795d8c4c7b23c8ce0914d2a0987"
+    },
+    {
+      "controlAxis": "while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 10,
+        "value": 10
+      },
+      "expressionAxis": "literal",
+      "id": "defined.e00_c04.literal.while",
+      "ordinal": 5,
+      "sourceSha256": "a271fab2fcb8aa559611f16c13b8b011ac26159413658613b650d762c7202a5a"
+    },
+    {
+      "controlAxis": "while-continue",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 11,
+        "value": 11
+      },
+      "expressionAxis": "literal",
+      "id": "defined.e00_c05.literal.while-continue",
+      "ordinal": 6,
+      "sourceSha256": "26c4c2e951957207e455bdedd66ec25ad10315e03136c13d1955458e135ffca1"
+    },
+    {
+      "controlAxis": "do-while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 11,
+        "value": 11
+      },
+      "expressionAxis": "literal",
+      "id": "defined.e00_c06.literal.do-while",
+      "ordinal": 7,
+      "sourceSha256": "067c3720dd707901beac6b73f712a001542fcc71e192e0816d5ac1cbd526c580"
+    },
+    {
+      "controlAxis": "for-expression-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 13,
+        "value": 13
+      },
+      "expressionAxis": "literal",
+      "id": "defined.e00_c07.literal.for-expression-init",
+      "ordinal": 8,
+      "sourceSha256": "5475845c8571f1ff3e30f430da731d56d12c329e16c5d1af9a0eea302927f978"
+    },
+    {
+      "controlAxis": "for-declaration-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 15,
+        "value": 15
+      },
+      "expressionAxis": "literal",
+      "id": "defined.e00_c08.literal.for-declaration-init",
+      "ordinal": 9,
+      "sourceSha256": "dd18c2c7b57753fd9bd31ddc2ef0b5fd4f98079d42d077e7f549f92ba65088cc"
+    },
+    {
+      "controlAxis": "break",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 10,
+        "value": 10
+      },
+      "expressionAxis": "literal",
+      "id": "defined.e00_c09.literal.break",
+      "ordinal": 10,
+      "sourceSha256": "021834a1c9730476879cece096817f82428d97f578d0275af07c570073cc9e73"
+    },
+    {
+      "controlAxis": "switch-match",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 17,
+        "value": 17
+      },
+      "expressionAxis": "literal",
+      "id": "defined.e00_c10.literal.switch-match",
+      "ordinal": 11,
+      "sourceSha256": "16145c61d0998c500e5100c1a35f984b79fe60b6f8ce0d94ec3707fbd6598896"
+    },
+    {
+      "controlAxis": "switch-fallthrough",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 12,
+        "value": 12
+      },
+      "expressionAxis": "literal",
+      "id": "defined.e00_c11.literal.switch-fallthrough",
+      "ordinal": 12,
+      "sourceSha256": "26da7b90f66d6a71760f2d8d791dee199b0c32f1cf65f775dbfa731f4e0f81ac"
+    },
+    {
+      "controlAxis": "switch-default",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 19,
+        "value": 19
+      },
+      "expressionAxis": "literal",
+      "id": "defined.e00_c12.literal.switch-default",
+      "ordinal": 13,
+      "sourceSha256": "cce99872f7feb4248b1db60d882d1f1ca0b4fe98ee6bed843c13578ea8c66520"
+    },
+    {
+      "controlAxis": "goto-forward",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 20,
+        "value": 20
+      },
+      "expressionAxis": "literal",
+      "id": "defined.e00_c13.literal.goto-forward",
+      "ordinal": 14,
+      "sourceSha256": "27efc0c0898fdd1efbeaa462714507a13a5edcb87df3dbde338eb5d810be25b5"
+    },
+    {
+      "controlAxis": "prefix-postfix-update",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 21,
+        "value": 21
+      },
+      "expressionAxis": "literal",
+      "id": "defined.e00_c14.literal.prefix-postfix-update",
+      "ordinal": 15,
+      "sourceSha256": "d29fb79725140e2eef800366706747590445c219e763ac5d1e1a4a13c19e96ec"
+    },
+    {
+      "controlAxis": "block-enum",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 22,
+        "value": 22
+      },
+      "expressionAxis": "literal",
+      "id": "defined.e00_c15.literal.block-enum",
+      "ordinal": 16,
+      "sourceSha256": "c35b64a19927175d616deed95b5686323bfd83540eb3c9879d835fa5a98b8939"
+    },
+    {
+      "controlAxis": "return",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 11,
+        "value": 11
+      },
+      "expressionAxis": "signed-negative",
+      "id": "defined.e01_c00.signed-negative.return",
+      "ordinal": 17,
+      "sourceSha256": "4f0d518c5017bec14b9a4f7f395d1f5fb8c6932ef65be51498f5421a0de7c7bc"
+    },
+    {
+      "controlAxis": "nested-block",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 12,
+        "value": 12
+      },
+      "expressionAxis": "signed-negative",
+      "id": "defined.e01_c01.signed-negative.nested-block",
+      "ordinal": 18,
+      "sourceSha256": "9f843e60b1de5a98bd4a5e37815280be4caa81b726f030f614a4aeb052640ea6"
+    },
+    {
+      "controlAxis": "if-true",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 13,
+        "value": 13
+      },
+      "expressionAxis": "signed-negative",
+      "id": "defined.e01_c02.signed-negative.if-true",
+      "ordinal": 19,
+      "sourceSha256": "009a8ed338acbbe4204eff2f081bd0899b9b52d4e7406518857b2a784d656eba"
+    },
+    {
+      "controlAxis": "if-else",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 14,
+        "value": 14
+      },
+      "expressionAxis": "signed-negative",
+      "id": "defined.e01_c03.signed-negative.if-else",
+      "ordinal": 20,
+      "sourceSha256": "6f44f8db1fe3afa07123349f18520467c17827740102db3c968db1b748c6b832"
+    },
+    {
+      "controlAxis": "while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 14,
+        "value": 14
+      },
+      "expressionAxis": "signed-negative",
+      "id": "defined.e01_c04.signed-negative.while",
+      "ordinal": 21,
+      "sourceSha256": "1d5961e4af09de4bb5af5ca3579311232d87e515802b8cd5962638b39fc9b994"
+    },
+    {
+      "controlAxis": "while-continue",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 15,
+        "value": 15
+      },
+      "expressionAxis": "signed-negative",
+      "id": "defined.e01_c05.signed-negative.while-continue",
+      "ordinal": 22,
+      "sourceSha256": "75ee8353cc197467d762e70bb4f02c8ab75d6b3c7128b45a023fa658f650bba5"
+    },
+    {
+      "controlAxis": "do-while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 15,
+        "value": 15
+      },
+      "expressionAxis": "signed-negative",
+      "id": "defined.e01_c06.signed-negative.do-while",
+      "ordinal": 23,
+      "sourceSha256": "88566edd7acca6cc334b520220b36cfcf8d530cbb2215b9ea641a109f8ece8ba"
+    },
+    {
+      "controlAxis": "for-expression-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 17,
+        "value": 17
+      },
+      "expressionAxis": "signed-negative",
+      "id": "defined.e01_c07.signed-negative.for-expression-init",
+      "ordinal": 24,
+      "sourceSha256": "97b6cde405197507a62ff68265a0032a8a5bf1bb76ab3419ba115740108a8d79"
+    },
+    {
+      "controlAxis": "for-declaration-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 19,
+        "value": 19
+      },
+      "expressionAxis": "signed-negative",
+      "id": "defined.e01_c08.signed-negative.for-declaration-init",
+      "ordinal": 25,
+      "sourceSha256": "d05d1d4c3be9837cef02bb1b0eec073a57577cf614aba931c4d271dd400402dc"
+    },
+    {
+      "controlAxis": "break",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 14,
+        "value": 14
+      },
+      "expressionAxis": "signed-negative",
+      "id": "defined.e01_c09.signed-negative.break",
+      "ordinal": 26,
+      "sourceSha256": "c56be794a12c9e3f3b9980e2ba7ddb2ba47331e2e500e4f6294e783e8a1aa10c"
+    },
+    {
+      "controlAxis": "switch-match",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 21,
+        "value": 21
+      },
+      "expressionAxis": "signed-negative",
+      "id": "defined.e01_c10.signed-negative.switch-match",
+      "ordinal": 27,
+      "sourceSha256": "4b0e9c5f00e593cedf51729938d85027aaf2b4aa7c7d0a325bf577a13ff99083"
+    },
+    {
+      "controlAxis": "switch-fallthrough",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 16,
+        "value": 16
+      },
+      "expressionAxis": "signed-negative",
+      "id": "defined.e01_c11.signed-negative.switch-fallthrough",
+      "ordinal": 28,
+      "sourceSha256": "3123938b4fbc66e6f549c67fd3db44c7d6c96445b6a32928033eb4a5c9081709"
+    },
+    {
+      "controlAxis": "switch-default",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 23,
+        "value": 23
+      },
+      "expressionAxis": "signed-negative",
+      "id": "defined.e01_c12.signed-negative.switch-default",
+      "ordinal": 29,
+      "sourceSha256": "af2dd2e34994b49eb2da2abc4a27f9ad188f8e9d23b35ef291c91c704ab62d3a"
+    },
+    {
+      "controlAxis": "goto-forward",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 24,
+        "value": 24
+      },
+      "expressionAxis": "signed-negative",
+      "id": "defined.e01_c13.signed-negative.goto-forward",
+      "ordinal": 30,
+      "sourceSha256": "633db26e0e8ea51e0ea1b9fec33e65390b5cd2cb592c6396d3e720e6ee78fa75"
+    },
+    {
+      "controlAxis": "prefix-postfix-update",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 25,
+        "value": 25
+      },
+      "expressionAxis": "signed-negative",
+      "id": "defined.e01_c14.signed-negative.prefix-postfix-update",
+      "ordinal": 31,
+      "sourceSha256": "f45340a73cc0296862de2ac95a8223f8648ec9739fb49eee8442ef867a11ecec"
+    },
+    {
+      "controlAxis": "block-enum",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 26,
+        "value": 26
+      },
+      "expressionAxis": "signed-negative",
+      "id": "defined.e01_c15.signed-negative.block-enum",
+      "ordinal": 32,
+      "sourceSha256": "3c2d5024bd0c98dde8d69fe0916d5a637cd29646f8991a6730d9bd4e11cbb861"
+    },
+    {
+      "controlAxis": "return",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 8,
+        "value": 8
+      },
+      "expressionAxis": "unary-plus-minus",
+      "id": "defined.e02_c00.unary-plus-minus.return",
+      "ordinal": 33,
+      "sourceSha256": "97ce8d5e143948ef2202891c2a6f618a8aa81b16b727b743ba552b990fab2969"
+    },
+    {
+      "controlAxis": "nested-block",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 9,
+        "value": 9
+      },
+      "expressionAxis": "unary-plus-minus",
+      "id": "defined.e02_c01.unary-plus-minus.nested-block",
+      "ordinal": 34,
+      "sourceSha256": "8fa9b84c5beef9cc81b13f3d94cbfa7b27c18c85fba9216e172dcddcbc5b1ccb"
+    },
+    {
+      "controlAxis": "if-true",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 10,
+        "value": 10
+      },
+      "expressionAxis": "unary-plus-minus",
+      "id": "defined.e02_c02.unary-plus-minus.if-true",
+      "ordinal": 35,
+      "sourceSha256": "3992eb3af962cede7dd20cd65102437df8131927096a2b5af90cfc7e28c25864"
+    },
+    {
+      "controlAxis": "if-else",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 11,
+        "value": 11
+      },
+      "expressionAxis": "unary-plus-minus",
+      "id": "defined.e02_c03.unary-plus-minus.if-else",
+      "ordinal": 36,
+      "sourceSha256": "dc3bc93d6a54a7376e5b9061edf1d13851a4634c0277895854f32e05338a2c15"
+    },
+    {
+      "controlAxis": "while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 11,
+        "value": 11
+      },
+      "expressionAxis": "unary-plus-minus",
+      "id": "defined.e02_c04.unary-plus-minus.while",
+      "ordinal": 37,
+      "sourceSha256": "f4f9b236415caa4c87bd61000ead474b7e83d91f08a00e53cf4807202bf6c7a9"
+    },
+    {
+      "controlAxis": "while-continue",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 12,
+        "value": 12
+      },
+      "expressionAxis": "unary-plus-minus",
+      "id": "defined.e02_c05.unary-plus-minus.while-continue",
+      "ordinal": 38,
+      "sourceSha256": "be91c10a891c6368ea76812766dbc54d12897781414d27bcd5026eb76cad2dbb"
+    },
+    {
+      "controlAxis": "do-while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 12,
+        "value": 12
+      },
+      "expressionAxis": "unary-plus-minus",
+      "id": "defined.e02_c06.unary-plus-minus.do-while",
+      "ordinal": 39,
+      "sourceSha256": "9df6740e6c9796222cc07044917222006ffca69409aab9c85c1bd1745a1f39b9"
+    },
+    {
+      "controlAxis": "for-expression-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 14,
+        "value": 14
+      },
+      "expressionAxis": "unary-plus-minus",
+      "id": "defined.e02_c07.unary-plus-minus.for-expression-init",
+      "ordinal": 40,
+      "sourceSha256": "7bb7513f38058107022bf9228f95c46f6ad99589110d60c2cb920078dd52145a"
+    },
+    {
+      "controlAxis": "for-declaration-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 16,
+        "value": 16
+      },
+      "expressionAxis": "unary-plus-minus",
+      "id": "defined.e02_c08.unary-plus-minus.for-declaration-init",
+      "ordinal": 41,
+      "sourceSha256": "7bbe2dc904c81887836ef44afcc6f4753833e60ab6fd0444ff23f9f1e23cee10"
+    },
+    {
+      "controlAxis": "break",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 11,
+        "value": 11
+      },
+      "expressionAxis": "unary-plus-minus",
+      "id": "defined.e02_c09.unary-plus-minus.break",
+      "ordinal": 42,
+      "sourceSha256": "8c342cd0371d70b3b034207e8907c2f50072b0eb507a5bda46646a771075e4a4"
+    },
+    {
+      "controlAxis": "switch-match",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 18,
+        "value": 18
+      },
+      "expressionAxis": "unary-plus-minus",
+      "id": "defined.e02_c10.unary-plus-minus.switch-match",
+      "ordinal": 43,
+      "sourceSha256": "b2fae6e26bfad2bc58a7a84581f9843cb306dbabaacef3331b7fa4709ef6d675"
+    },
+    {
+      "controlAxis": "switch-fallthrough",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 13,
+        "value": 13
+      },
+      "expressionAxis": "unary-plus-minus",
+      "id": "defined.e02_c11.unary-plus-minus.switch-fallthrough",
+      "ordinal": 44,
+      "sourceSha256": "33073c26c87b56a196e65d2896bcd97516b976c062c9c0defad6ba7a43aa4415"
+    },
+    {
+      "controlAxis": "switch-default",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 20,
+        "value": 20
+      },
+      "expressionAxis": "unary-plus-minus",
+      "id": "defined.e02_c12.unary-plus-minus.switch-default",
+      "ordinal": 45,
+      "sourceSha256": "b1f5fffbb4bf98aab5b929babca9eba3c2e50c3a367a0dba743335454c1c963b"
+    },
+    {
+      "controlAxis": "goto-forward",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 21,
+        "value": 21
+      },
+      "expressionAxis": "unary-plus-minus",
+      "id": "defined.e02_c13.unary-plus-minus.goto-forward",
+      "ordinal": 46,
+      "sourceSha256": "b90114c05bbbdb329280bf8184b602b3dfe77cc2a7f99beec3cf36d17d363db5"
+    },
+    {
+      "controlAxis": "prefix-postfix-update",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 22,
+        "value": 22
+      },
+      "expressionAxis": "unary-plus-minus",
+      "id": "defined.e02_c14.unary-plus-minus.prefix-postfix-update",
+      "ordinal": 47,
+      "sourceSha256": "44d4103eee0fb9fda7dd8c668cdfd0e6f3809152b5dad8a49984922d32facd7f"
+    },
+    {
+      "controlAxis": "block-enum",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 23,
+        "value": 23
+      },
+      "expressionAxis": "unary-plus-minus",
+      "id": "defined.e02_c15.unary-plus-minus.block-enum",
+      "ordinal": 48,
+      "sourceSha256": "b317c5c8dad3a16d7d5589d046b080deed3bf7d39669bdddc0235264cac32bb9"
+    },
+    {
+      "controlAxis": "return",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 2,
+        "value": 2
+      },
+      "expressionAxis": "logical-not",
+      "id": "defined.e03_c00.logical-not.return",
+      "ordinal": 49,
+      "sourceSha256": "d5f442f836f6c72590d8382843a1e0f0011eda3910f6f3f54170858601bd0312"
+    },
+    {
+      "controlAxis": "nested-block",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 3,
+        "value": 3
+      },
+      "expressionAxis": "logical-not",
+      "id": "defined.e03_c01.logical-not.nested-block",
+      "ordinal": 50,
+      "sourceSha256": "9bb8fe158067d02e799bf97831b517b9a27cf06f035aed6538a2c6d17db0398b"
+    },
+    {
+      "controlAxis": "if-true",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 4,
+        "value": 4
+      },
+      "expressionAxis": "logical-not",
+      "id": "defined.e03_c02.logical-not.if-true",
+      "ordinal": 51,
+      "sourceSha256": "6ece106d7805bdee2e93c3fe033457ea68415cf9562bafb179d43c5655b79968"
+    },
+    {
+      "controlAxis": "if-else",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 5,
+        "value": 5
+      },
+      "expressionAxis": "logical-not",
+      "id": "defined.e03_c03.logical-not.if-else",
+      "ordinal": 52,
+      "sourceSha256": "6fe32f9b06439ec6116156db9c2f240488b2b7477487b1da2a4abb0eba2668bd"
+    },
+    {
+      "controlAxis": "while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 5,
+        "value": 5
+      },
+      "expressionAxis": "logical-not",
+      "id": "defined.e03_c04.logical-not.while",
+      "ordinal": 53,
+      "sourceSha256": "aecd2f0358e7e907f88a0cdffca256a1c9044b0d7e85fda092654c230a070651"
+    },
+    {
+      "controlAxis": "while-continue",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 6,
+        "value": 6
+      },
+      "expressionAxis": "logical-not",
+      "id": "defined.e03_c05.logical-not.while-continue",
+      "ordinal": 54,
+      "sourceSha256": "e03eb04ce323679f14503c9803f4feff517cb770342f05da527ac636232f748d"
+    },
+    {
+      "controlAxis": "do-while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 6,
+        "value": 6
+      },
+      "expressionAxis": "logical-not",
+      "id": "defined.e03_c06.logical-not.do-while",
+      "ordinal": 55,
+      "sourceSha256": "88118959c5e6a61c5b56e4964d9f08c073028b6609ab0e1c7557c5fb3baadd94"
+    },
+    {
+      "controlAxis": "for-expression-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 8,
+        "value": 8
+      },
+      "expressionAxis": "logical-not",
+      "id": "defined.e03_c07.logical-not.for-expression-init",
+      "ordinal": 56,
+      "sourceSha256": "0762f4e4040c840e158112a13425702e2db737150938a85e37f1914c22131535"
+    },
+    {
+      "controlAxis": "for-declaration-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 10,
+        "value": 10
+      },
+      "expressionAxis": "logical-not",
+      "id": "defined.e03_c08.logical-not.for-declaration-init",
+      "ordinal": 57,
+      "sourceSha256": "18924aa138e653192f572488671cf54d887a4496fa32b8140295bf3035b27869"
+    },
+    {
+      "controlAxis": "break",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 5,
+        "value": 5
+      },
+      "expressionAxis": "logical-not",
+      "id": "defined.e03_c09.logical-not.break",
+      "ordinal": 58,
+      "sourceSha256": "ba94bca7ebf8d8336d1ae103d39c8acc04dbd80f057fb793d7e33c187fbb4ece"
+    },
+    {
+      "controlAxis": "switch-match",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 12,
+        "value": 12
+      },
+      "expressionAxis": "logical-not",
+      "id": "defined.e03_c10.logical-not.switch-match",
+      "ordinal": 59,
+      "sourceSha256": "ca7ac2d251f0876318bfaf671042a433578ee13681a1d648da741cb579357c5c"
+    },
+    {
+      "controlAxis": "switch-fallthrough",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 7,
+        "value": 7
+      },
+      "expressionAxis": "logical-not",
+      "id": "defined.e03_c11.logical-not.switch-fallthrough",
+      "ordinal": 60,
+      "sourceSha256": "d3e4862d3c3b95da68e66b48fc23d3ee24fd3707c73413976633aaa3e164fd19"
+    },
+    {
+      "controlAxis": "switch-default",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 14,
+        "value": 14
+      },
+      "expressionAxis": "logical-not",
+      "id": "defined.e03_c12.logical-not.switch-default",
+      "ordinal": 61,
+      "sourceSha256": "c1863a11e321039c53181c9aef4e6a557697fa0b8b650d140b4fc0ad6350c0b6"
+    },
+    {
+      "controlAxis": "goto-forward",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 15,
+        "value": 15
+      },
+      "expressionAxis": "logical-not",
+      "id": "defined.e03_c13.logical-not.goto-forward",
+      "ordinal": 62,
+      "sourceSha256": "06286e1337791b4c924a5464ae82e88d2d782c4df3c1e39b887d5f3cdc8ee521"
+    },
+    {
+      "controlAxis": "prefix-postfix-update",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 16,
+        "value": 16
+      },
+      "expressionAxis": "logical-not",
+      "id": "defined.e03_c14.logical-not.prefix-postfix-update",
+      "ordinal": 63,
+      "sourceSha256": "03ad5c081ffc0fed4ddf502fd161715e563e3abc7bf28704346a1f122edcc9f6"
+    },
+    {
+      "controlAxis": "block-enum",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 17,
+        "value": 17
+      },
+      "expressionAxis": "logical-not",
+      "id": "defined.e03_c15.logical-not.block-enum",
+      "ordinal": 64,
+      "sourceSha256": "d52d38c914bdb5154dd40c215506769039b7d21af9a6613189e7a34062ba823f"
+    },
+    {
+      "controlAxis": "return",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 9,
+        "value": 9
+      },
+      "expressionAxis": "bitwise-not",
+      "id": "defined.e04_c00.bitwise-not.return",
+      "ordinal": 65,
+      "sourceSha256": "eef49a047edfd857e2174731cbf93c9b43a062b165e8a91e86934258094024d2"
+    },
+    {
+      "controlAxis": "nested-block",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 10,
+        "value": 10
+      },
+      "expressionAxis": "bitwise-not",
+      "id": "defined.e04_c01.bitwise-not.nested-block",
+      "ordinal": 66,
+      "sourceSha256": "5173c72083b6384b972553c2b0f4ec4a3524d055d785888b3d255abd4d004a10"
+    },
+    {
+      "controlAxis": "if-true",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 11,
+        "value": 11
+      },
+      "expressionAxis": "bitwise-not",
+      "id": "defined.e04_c02.bitwise-not.if-true",
+      "ordinal": 67,
+      "sourceSha256": "6f522e060dbcc00d77dbb6bd637fa71c924384cbaac3bab1e0a7457ecb2b05f3"
+    },
+    {
+      "controlAxis": "if-else",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 12,
+        "value": 12
+      },
+      "expressionAxis": "bitwise-not",
+      "id": "defined.e04_c03.bitwise-not.if-else",
+      "ordinal": 68,
+      "sourceSha256": "f451683d0ada147b3e5dfa40a97a8a54a6a57ed0f8cd75a0ca2301dfdd5f5d66"
+    },
+    {
+      "controlAxis": "while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 12,
+        "value": 12
+      },
+      "expressionAxis": "bitwise-not",
+      "id": "defined.e04_c04.bitwise-not.while",
+      "ordinal": 69,
+      "sourceSha256": "b6e66c40ac84ce99d7198aaf5c63cdb5e2e7e8d8c4e17f1820a4a0d4a120af29"
+    },
+    {
+      "controlAxis": "while-continue",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 13,
+        "value": 13
+      },
+      "expressionAxis": "bitwise-not",
+      "id": "defined.e04_c05.bitwise-not.while-continue",
+      "ordinal": 70,
+      "sourceSha256": "6f2de63e2a23195ac5051eae79cdc5d969b94489fba38cd02a761a38fa8cdb5d"
+    },
+    {
+      "controlAxis": "do-while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 13,
+        "value": 13
+      },
+      "expressionAxis": "bitwise-not",
+      "id": "defined.e04_c06.bitwise-not.do-while",
+      "ordinal": 71,
+      "sourceSha256": "f4c02d178ed611a92d4849f728fdb94a9b501149002586a48e37028e5cee0171"
+    },
+    {
+      "controlAxis": "for-expression-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 15,
+        "value": 15
+      },
+      "expressionAxis": "bitwise-not",
+      "id": "defined.e04_c07.bitwise-not.for-expression-init",
+      "ordinal": 72,
+      "sourceSha256": "9ad6bdfaeea2c7b5740714265d51c662b54d599014c5904b8cd203a7260ee538"
+    },
+    {
+      "controlAxis": "for-declaration-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 17,
+        "value": 17
+      },
+      "expressionAxis": "bitwise-not",
+      "id": "defined.e04_c08.bitwise-not.for-declaration-init",
+      "ordinal": 73,
+      "sourceSha256": "7b4c7d5c5fef5253671038b27c8e39f80e479f49bd382893dbc469d3e5eb8300"
+    },
+    {
+      "controlAxis": "break",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 12,
+        "value": 12
+      },
+      "expressionAxis": "bitwise-not",
+      "id": "defined.e04_c09.bitwise-not.break",
+      "ordinal": 74,
+      "sourceSha256": "a4fb111e9d56dcdea9f2ea6a840fbb48cd1ced6878fff8b67ed5558c5092f505"
+    },
+    {
+      "controlAxis": "switch-match",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 19,
+        "value": 19
+      },
+      "expressionAxis": "bitwise-not",
+      "id": "defined.e04_c10.bitwise-not.switch-match",
+      "ordinal": 75,
+      "sourceSha256": "a655ccdd61e6a90364d8493ec41f6569414708c6001ae5663a5de8a6c9994600"
+    },
+    {
+      "controlAxis": "switch-fallthrough",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 14,
+        "value": 14
+      },
+      "expressionAxis": "bitwise-not",
+      "id": "defined.e04_c11.bitwise-not.switch-fallthrough",
+      "ordinal": 76,
+      "sourceSha256": "2db8436af21fce79c934816bd4578f0fe3700a6e727445b2f53630565907c5fb"
+    },
+    {
+      "controlAxis": "switch-default",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 21,
+        "value": 21
+      },
+      "expressionAxis": "bitwise-not",
+      "id": "defined.e04_c12.bitwise-not.switch-default",
+      "ordinal": 77,
+      "sourceSha256": "aeb5cb004a76bc7225a47ca809cfd7441e283920fe66ec3318333aedfbfb8943"
+    },
+    {
+      "controlAxis": "goto-forward",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 22,
+        "value": 22
+      },
+      "expressionAxis": "bitwise-not",
+      "id": "defined.e04_c13.bitwise-not.goto-forward",
+      "ordinal": 78,
+      "sourceSha256": "4e17e47af6a3182e8e2d27dcbaea8b3aeaa73af7f330b83aa5e1ed564ed57d43"
+    },
+    {
+      "controlAxis": "prefix-postfix-update",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 23,
+        "value": 23
+      },
+      "expressionAxis": "bitwise-not",
+      "id": "defined.e04_c14.bitwise-not.prefix-postfix-update",
+      "ordinal": 79,
+      "sourceSha256": "9ba2fa2f38cf49819dd987b86f3719bc3e34701df4ae6d5f793b87881147f347"
+    },
+    {
+      "controlAxis": "block-enum",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 24,
+        "value": 24
+      },
+      "expressionAxis": "bitwise-not",
+      "id": "defined.e04_c15.bitwise-not.block-enum",
+      "ordinal": 80,
+      "sourceSha256": "eeaac8854e272464cb39d817cc942971784ef224dd85b2f91099ff35b59f990d"
+    },
+    {
+      "controlAxis": "return",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 12,
+        "value": 12
+      },
+      "expressionAxis": "add-subtract",
+      "id": "defined.e05_c00.add-subtract.return",
+      "ordinal": 81,
+      "sourceSha256": "940fdefe77048d6b6ea00ffaf914bb11e260e7612921ab4488cb41f3a5fcecc7"
+    },
+    {
+      "controlAxis": "nested-block",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 13,
+        "value": 13
+      },
+      "expressionAxis": "add-subtract",
+      "id": "defined.e05_c01.add-subtract.nested-block",
+      "ordinal": 82,
+      "sourceSha256": "51c7c1b102303e93fdf31a903de0291202e1c4b58cd3cde0de5378dc076e95cb"
+    },
+    {
+      "controlAxis": "if-true",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 14,
+        "value": 14
+      },
+      "expressionAxis": "add-subtract",
+      "id": "defined.e05_c02.add-subtract.if-true",
+      "ordinal": 83,
+      "sourceSha256": "a97be6f1e81d67577c895ff3a5187b088192588b0733a276a932c137b8500a8b"
+    },
+    {
+      "controlAxis": "if-else",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 15,
+        "value": 15
+      },
+      "expressionAxis": "add-subtract",
+      "id": "defined.e05_c03.add-subtract.if-else",
+      "ordinal": 84,
+      "sourceSha256": "e3497bf22e098bb5a22bfd558d687a44e59654f0d4a05765a51aa617e64320cc"
+    },
+    {
+      "controlAxis": "while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 15,
+        "value": 15
+      },
+      "expressionAxis": "add-subtract",
+      "id": "defined.e05_c04.add-subtract.while",
+      "ordinal": 85,
+      "sourceSha256": "8f3ba44340017d06cb7efc2febbfc3ef669c09fdb4eb88d7bf40e8c14b1b5404"
+    },
+    {
+      "controlAxis": "while-continue",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 16,
+        "value": 16
+      },
+      "expressionAxis": "add-subtract",
+      "id": "defined.e05_c05.add-subtract.while-continue",
+      "ordinal": 86,
+      "sourceSha256": "cb186c6585cd7ab463550ed136dce77acaef3aac56cf7d6363998dca23354c5c"
+    },
+    {
+      "controlAxis": "do-while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 16,
+        "value": 16
+      },
+      "expressionAxis": "add-subtract",
+      "id": "defined.e05_c06.add-subtract.do-while",
+      "ordinal": 87,
+      "sourceSha256": "71b488a3904e154d43655f7dd8bdfa41adb6ffb15fa7ebdf77eb7b1196289a65"
+    },
+    {
+      "controlAxis": "for-expression-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 18,
+        "value": 18
+      },
+      "expressionAxis": "add-subtract",
+      "id": "defined.e05_c07.add-subtract.for-expression-init",
+      "ordinal": 88,
+      "sourceSha256": "050f3e67092a796984325fa3acdd07da1726be5dc3f7199caa7ffa958b230993"
+    },
+    {
+      "controlAxis": "for-declaration-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 20,
+        "value": 20
+      },
+      "expressionAxis": "add-subtract",
+      "id": "defined.e05_c08.add-subtract.for-declaration-init",
+      "ordinal": 89,
+      "sourceSha256": "b988d98d8a3d262e5547067b50a270165e6f611b80de2c92f7100790a9593f4e"
+    },
+    {
+      "controlAxis": "break",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 15,
+        "value": 15
+      },
+      "expressionAxis": "add-subtract",
+      "id": "defined.e05_c09.add-subtract.break",
+      "ordinal": 90,
+      "sourceSha256": "9d5d74038e29dc7285208e38b9be3e50e8720d225342ca0584d8f5339b8ebaba"
+    },
+    {
+      "controlAxis": "switch-match",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 22,
+        "value": 22
+      },
+      "expressionAxis": "add-subtract",
+      "id": "defined.e05_c10.add-subtract.switch-match",
+      "ordinal": 91,
+      "sourceSha256": "10cf53ae456136dc1d500f75a4cc8a202e0f5809f91e2b8123bf02c22cccddf7"
+    },
+    {
+      "controlAxis": "switch-fallthrough",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 17,
+        "value": 17
+      },
+      "expressionAxis": "add-subtract",
+      "id": "defined.e05_c11.add-subtract.switch-fallthrough",
+      "ordinal": 92,
+      "sourceSha256": "a1a8a9162dc29554d1957b217f736f175af9a3c1c117ee1a17694a396ef55339"
+    },
+    {
+      "controlAxis": "switch-default",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 24,
+        "value": 24
+      },
+      "expressionAxis": "add-subtract",
+      "id": "defined.e05_c12.add-subtract.switch-default",
+      "ordinal": 93,
+      "sourceSha256": "6f60eb7e867ccb592332686c7e59b17c1ff4b42a13d50867d7c4d69c9d1f9074"
+    },
+    {
+      "controlAxis": "goto-forward",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 25,
+        "value": 25
+      },
+      "expressionAxis": "add-subtract",
+      "id": "defined.e05_c13.add-subtract.goto-forward",
+      "ordinal": 94,
+      "sourceSha256": "2bcaac2653c75001d53c59284ffda58543a318aee5332242844cfa7e238e8587"
+    },
+    {
+      "controlAxis": "prefix-postfix-update",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 26,
+        "value": 26
+      },
+      "expressionAxis": "add-subtract",
+      "id": "defined.e05_c14.add-subtract.prefix-postfix-update",
+      "ordinal": 95,
+      "sourceSha256": "8e29ae7af34cba6f4c3fcf7ca124b2f38ab33c8e963109970cfd80e52a678f83"
+    },
+    {
+      "controlAxis": "block-enum",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 27,
+        "value": 27
+      },
+      "expressionAxis": "add-subtract",
+      "id": "defined.e05_c15.add-subtract.block-enum",
+      "ordinal": 96,
+      "sourceSha256": "60574f444de0aa83835c0fe8f2d083f2eb8841631b16d025ab0a4d5aa56c572b"
+    },
+    {
+      "controlAxis": "return",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 21,
+        "value": 21
+      },
+      "expressionAxis": "multiply-divide",
+      "id": "defined.e06_c00.multiply-divide.return",
+      "ordinal": 97,
+      "sourceSha256": "fef56acfe43579c1a4059ff513b8be31e4d4e1da49f68814092619f1b642777b"
+    },
+    {
+      "controlAxis": "nested-block",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 22,
+        "value": 22
+      },
+      "expressionAxis": "multiply-divide",
+      "id": "defined.e06_c01.multiply-divide.nested-block",
+      "ordinal": 98,
+      "sourceSha256": "5433653639736b3fc8e46690bade559960a20a799ac1532659f9750ca4dd3d4e"
+    },
+    {
+      "controlAxis": "if-true",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 23,
+        "value": 23
+      },
+      "expressionAxis": "multiply-divide",
+      "id": "defined.e06_c02.multiply-divide.if-true",
+      "ordinal": 99,
+      "sourceSha256": "786d868ce7f03454642ba8f7095e80187c8bc426ed7186d5d6f8f032ed233077"
+    },
+    {
+      "controlAxis": "if-else",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 24,
+        "value": 24
+      },
+      "expressionAxis": "multiply-divide",
+      "id": "defined.e06_c03.multiply-divide.if-else",
+      "ordinal": 100,
+      "sourceSha256": "cc5059f5843b8efa1db3fc10ac63ada68616730eb918b3a02914add9a44ff323"
+    },
+    {
+      "controlAxis": "while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 24,
+        "value": 24
+      },
+      "expressionAxis": "multiply-divide",
+      "id": "defined.e06_c04.multiply-divide.while",
+      "ordinal": 101,
+      "sourceSha256": "c57138060cbcef50a62d0bd373c8580557d5b65ebb845645fe99453e24240051"
+    },
+    {
+      "controlAxis": "while-continue",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 25,
+        "value": 25
+      },
+      "expressionAxis": "multiply-divide",
+      "id": "defined.e06_c05.multiply-divide.while-continue",
+      "ordinal": 102,
+      "sourceSha256": "9498a7e395278e863f90e8175fcfd83aa773653b89dfdf7c372a8c3d33571b53"
+    },
+    {
+      "controlAxis": "do-while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 25,
+        "value": 25
+      },
+      "expressionAxis": "multiply-divide",
+      "id": "defined.e06_c06.multiply-divide.do-while",
+      "ordinal": 103,
+      "sourceSha256": "cb1314a380f701e4a1179bfd4dedf2effede4e65f870a271f14b2bb7482616cc"
+    },
+    {
+      "controlAxis": "for-expression-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 27,
+        "value": 27
+      },
+      "expressionAxis": "multiply-divide",
+      "id": "defined.e06_c07.multiply-divide.for-expression-init",
+      "ordinal": 104,
+      "sourceSha256": "2e90ae0b9aee65210462b455c23d7fb49cf85a9e876c0806bd31213e23980182"
+    },
+    {
+      "controlAxis": "for-declaration-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 29,
+        "value": 29
+      },
+      "expressionAxis": "multiply-divide",
+      "id": "defined.e06_c08.multiply-divide.for-declaration-init",
+      "ordinal": 105,
+      "sourceSha256": "f9fe88d481b654e414aa996008151e60324e5db8acb4846b374126ea0e066e63"
+    },
+    {
+      "controlAxis": "break",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 24,
+        "value": 24
+      },
+      "expressionAxis": "multiply-divide",
+      "id": "defined.e06_c09.multiply-divide.break",
+      "ordinal": 106,
+      "sourceSha256": "75c6edaf38686537a81842de93f4e9fdf5b9864f7343438ab6e23e4730566117"
+    },
+    {
+      "controlAxis": "switch-match",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 31,
+        "value": 31
+      },
+      "expressionAxis": "multiply-divide",
+      "id": "defined.e06_c10.multiply-divide.switch-match",
+      "ordinal": 107,
+      "sourceSha256": "fd829d8ff62ddb7ff1eaf0d00cc33a9e27e37ac27caba7485836cb649361e2f5"
+    },
+    {
+      "controlAxis": "switch-fallthrough",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 26,
+        "value": 26
+      },
+      "expressionAxis": "multiply-divide",
+      "id": "defined.e06_c11.multiply-divide.switch-fallthrough",
+      "ordinal": 108,
+      "sourceSha256": "e70a9464f4dc470bc73e07ae4de0ce16d87e7f25ca05855a9e282aefa205a152"
+    },
+    {
+      "controlAxis": "switch-default",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 33,
+        "value": 33
+      },
+      "expressionAxis": "multiply-divide",
+      "id": "defined.e06_c12.multiply-divide.switch-default",
+      "ordinal": 109,
+      "sourceSha256": "afebeb2ef526aff88a373cee29a03bfbf116f37e18302b3f9613481efc59445e"
+    },
+    {
+      "controlAxis": "goto-forward",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 34,
+        "value": 34
+      },
+      "expressionAxis": "multiply-divide",
+      "id": "defined.e06_c13.multiply-divide.goto-forward",
+      "ordinal": 110,
+      "sourceSha256": "8cf24e741ad3e7b4dbbb9a471aac5a8d8c58cbffb87086bbdebde95f50cf37cb"
+    },
+    {
+      "controlAxis": "prefix-postfix-update",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 35,
+        "value": 35
+      },
+      "expressionAxis": "multiply-divide",
+      "id": "defined.e06_c14.multiply-divide.prefix-postfix-update",
+      "ordinal": 111,
+      "sourceSha256": "3fd0349a2cc4b538f582d4f4ab613d836452c57ab54551def4fcc26b2cbc05bb"
+    },
+    {
+      "controlAxis": "block-enum",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 36,
+        "value": 36
+      },
+      "expressionAxis": "multiply-divide",
+      "id": "defined.e06_c15.multiply-divide.block-enum",
+      "ordinal": 112,
+      "sourceSha256": "71fb3d15186245e5e16bc61ee9959ed2fedd1b3f55a447ea478879979d1aebe9"
+    },
+    {
+      "controlAxis": "return",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 3,
+        "value": 3
+      },
+      "expressionAxis": "remainder",
+      "id": "defined.e07_c00.remainder.return",
+      "ordinal": 113,
+      "sourceSha256": "2b3764a29898427564795cfa44d155e777c75fb708ac585e577a272823324243"
+    },
+    {
+      "controlAxis": "nested-block",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 4,
+        "value": 4
+      },
+      "expressionAxis": "remainder",
+      "id": "defined.e07_c01.remainder.nested-block",
+      "ordinal": 114,
+      "sourceSha256": "4d1fd9019187076dd671d96a484c7dd8eaedd3cba37a5b400e2f70eefd5d5230"
+    },
+    {
+      "controlAxis": "if-true",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 5,
+        "value": 5
+      },
+      "expressionAxis": "remainder",
+      "id": "defined.e07_c02.remainder.if-true",
+      "ordinal": 115,
+      "sourceSha256": "3913c1a7afa83583b93c7533d49b17eadb32ee2158435d4ba7507af54a9ca97f"
+    },
+    {
+      "controlAxis": "if-else",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 6,
+        "value": 6
+      },
+      "expressionAxis": "remainder",
+      "id": "defined.e07_c03.remainder.if-else",
+      "ordinal": 116,
+      "sourceSha256": "2e7057b09382f6a0b5bac082ed14da96738230bd110fc8248fd3b42b83d29e8c"
+    },
+    {
+      "controlAxis": "while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 6,
+        "value": 6
+      },
+      "expressionAxis": "remainder",
+      "id": "defined.e07_c04.remainder.while",
+      "ordinal": 117,
+      "sourceSha256": "dda82b49cc60a47043a7a385c0928d814cd865b61df49c7337fe8b83435f3411"
+    },
+    {
+      "controlAxis": "while-continue",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 7,
+        "value": 7
+      },
+      "expressionAxis": "remainder",
+      "id": "defined.e07_c05.remainder.while-continue",
+      "ordinal": 118,
+      "sourceSha256": "3c52090e079adcb8e3e37843ab07fbec0e214be527832d18609c71f3627efe9e"
+    },
+    {
+      "controlAxis": "do-while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 7,
+        "value": 7
+      },
+      "expressionAxis": "remainder",
+      "id": "defined.e07_c06.remainder.do-while",
+      "ordinal": 119,
+      "sourceSha256": "1249afc55df5eb1cce04c333caf1f5429eee79dadfa120ff89e1eb611a57bc12"
+    },
+    {
+      "controlAxis": "for-expression-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 9,
+        "value": 9
+      },
+      "expressionAxis": "remainder",
+      "id": "defined.e07_c07.remainder.for-expression-init",
+      "ordinal": 120,
+      "sourceSha256": "f3f02d59c92096f88cf1c50957e2b1b4e74502752d9c46c4150f24b7fc481ffc"
+    },
+    {
+      "controlAxis": "for-declaration-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 11,
+        "value": 11
+      },
+      "expressionAxis": "remainder",
+      "id": "defined.e07_c08.remainder.for-declaration-init",
+      "ordinal": 121,
+      "sourceSha256": "94b2764ffe40573b18b141d11f8ccdb4198ac40bf0c92a63c873b4702822208d"
+    },
+    {
+      "controlAxis": "break",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 6,
+        "value": 6
+      },
+      "expressionAxis": "remainder",
+      "id": "defined.e07_c09.remainder.break",
+      "ordinal": 122,
+      "sourceSha256": "33ce1b343a3419e07dac19d6fc0bf4030d0e4ba286c75646ea48c439574b924f"
+    },
+    {
+      "controlAxis": "switch-match",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 13,
+        "value": 13
+      },
+      "expressionAxis": "remainder",
+      "id": "defined.e07_c10.remainder.switch-match",
+      "ordinal": 123,
+      "sourceSha256": "0ef1d4b91d934b83cf2f39fcb7adc66ec9ee2f711184c099a5720cf66c459d63"
+    },
+    {
+      "controlAxis": "switch-fallthrough",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 8,
+        "value": 8
+      },
+      "expressionAxis": "remainder",
+      "id": "defined.e07_c11.remainder.switch-fallthrough",
+      "ordinal": 124,
+      "sourceSha256": "5b71fcd5e8cc8918c3bd64aa2f0c23d8d3b406f5912557a669e8b536d6b1a3b3"
+    },
+    {
+      "controlAxis": "switch-default",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 15,
+        "value": 15
+      },
+      "expressionAxis": "remainder",
+      "id": "defined.e07_c12.remainder.switch-default",
+      "ordinal": 125,
+      "sourceSha256": "c1d57fc5b5e1db810e620947ae35b11dac3cbf188831518c2c4ec8000063179c"
+    },
+    {
+      "controlAxis": "goto-forward",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 16,
+        "value": 16
+      },
+      "expressionAxis": "remainder",
+      "id": "defined.e07_c13.remainder.goto-forward",
+      "ordinal": 126,
+      "sourceSha256": "018ba1b3401423065388579ff416013b1e65f979b0d8362f7ce825dcb7126b28"
+    },
+    {
+      "controlAxis": "prefix-postfix-update",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 17,
+        "value": 17
+      },
+      "expressionAxis": "remainder",
+      "id": "defined.e07_c14.remainder.prefix-postfix-update",
+      "ordinal": 127,
+      "sourceSha256": "41aa845df70a93fb9955d499ae40221d0eb8ce3b166a019cc822eb9144cdf9fd"
+    },
+    {
+      "controlAxis": "block-enum",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 18,
+        "value": 18
+      },
+      "expressionAxis": "remainder",
+      "id": "defined.e07_c15.remainder.block-enum",
+      "ordinal": 128,
+      "sourceSha256": "7e0dae96b63c08c3274506537b7f33d256a085b51022680e5559ed17c56db78e"
+    },
+    {
+      "controlAxis": "return",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 28,
+        "value": 28
+      },
+      "expressionAxis": "shifts",
+      "id": "defined.e08_c00.shifts.return",
+      "ordinal": 129,
+      "sourceSha256": "dfb94b0b91d54e64679c50d7df5fb06b58a958bcd6f92e123c68ac48d8b36f9b"
+    },
+    {
+      "controlAxis": "nested-block",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 29,
+        "value": 29
+      },
+      "expressionAxis": "shifts",
+      "id": "defined.e08_c01.shifts.nested-block",
+      "ordinal": 130,
+      "sourceSha256": "ff73db31f494a68df44a8ad38320e84205c525f38a46eae9fc059f2f27847a46"
+    },
+    {
+      "controlAxis": "if-true",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 30,
+        "value": 30
+      },
+      "expressionAxis": "shifts",
+      "id": "defined.e08_c02.shifts.if-true",
+      "ordinal": 131,
+      "sourceSha256": "727f2016599755a03b5f2b2c59cca483f3c3ed6339d235683337c13b34db9bef"
+    },
+    {
+      "controlAxis": "if-else",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 31,
+        "value": 31
+      },
+      "expressionAxis": "shifts",
+      "id": "defined.e08_c03.shifts.if-else",
+      "ordinal": 132,
+      "sourceSha256": "383b8c4bab4a4dfce7222a60fac0dab4c12c94f54b2410eb9e27b00ffc75a1a7"
+    },
+    {
+      "controlAxis": "while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 31,
+        "value": 31
+      },
+      "expressionAxis": "shifts",
+      "id": "defined.e08_c04.shifts.while",
+      "ordinal": 133,
+      "sourceSha256": "3aea1517aaf1d22192fe18c6bf744dd6794c15f8782bcf0a535788e5fa141867"
+    },
+    {
+      "controlAxis": "while-continue",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 32,
+        "value": 32
+      },
+      "expressionAxis": "shifts",
+      "id": "defined.e08_c05.shifts.while-continue",
+      "ordinal": 134,
+      "sourceSha256": "4677eb1ab0a08e11832ccf74eab6306a826075fb623d60794fbfa87c19cb9459"
+    },
+    {
+      "controlAxis": "do-while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 32,
+        "value": 32
+      },
+      "expressionAxis": "shifts",
+      "id": "defined.e08_c06.shifts.do-while",
+      "ordinal": 135,
+      "sourceSha256": "f171fb807971cd07e9f2cdd16d45754d009b9020591ea8ca91204bc28f4a7872"
+    },
+    {
+      "controlAxis": "for-expression-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 34,
+        "value": 34
+      },
+      "expressionAxis": "shifts",
+      "id": "defined.e08_c07.shifts.for-expression-init",
+      "ordinal": 136,
+      "sourceSha256": "9c22504dca488db8da5b7fa665a702bbb737501f5ad7e2be26ef547587dc868b"
+    },
+    {
+      "controlAxis": "for-declaration-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 36,
+        "value": 36
+      },
+      "expressionAxis": "shifts",
+      "id": "defined.e08_c08.shifts.for-declaration-init",
+      "ordinal": 137,
+      "sourceSha256": "a6ad7c944d30e0f105723f29e3cf442d313a37c069f51361d40918753e43a371"
+    },
+    {
+      "controlAxis": "break",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 31,
+        "value": 31
+      },
+      "expressionAxis": "shifts",
+      "id": "defined.e08_c09.shifts.break",
+      "ordinal": 138,
+      "sourceSha256": "347be19f68f958c2a4a2d44bcc7373589b081d2eb5c6d181527e6e11089edb03"
+    },
+    {
+      "controlAxis": "switch-match",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 38,
+        "value": 38
+      },
+      "expressionAxis": "shifts",
+      "id": "defined.e08_c10.shifts.switch-match",
+      "ordinal": 139,
+      "sourceSha256": "00958093fae8aa62bc1a91f7daa7dcfec89664a4d54703800e2ae1786e2dbf34"
+    },
+    {
+      "controlAxis": "switch-fallthrough",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 33,
+        "value": 33
+      },
+      "expressionAxis": "shifts",
+      "id": "defined.e08_c11.shifts.switch-fallthrough",
+      "ordinal": 140,
+      "sourceSha256": "03c0e972763a3196e60c717d1aa172a7000063912f3f31fb40208ff53cae0f0a"
+    },
+    {
+      "controlAxis": "switch-default",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 40,
+        "value": 40
+      },
+      "expressionAxis": "shifts",
+      "id": "defined.e08_c12.shifts.switch-default",
+      "ordinal": 141,
+      "sourceSha256": "9bce27dba148e1cfa9ebe2cef45bcae18c397470932ae902e697451a5ad93f44"
+    },
+    {
+      "controlAxis": "goto-forward",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 41,
+        "value": 41
+      },
+      "expressionAxis": "shifts",
+      "id": "defined.e08_c13.shifts.goto-forward",
+      "ordinal": 142,
+      "sourceSha256": "0adc9cb8c9d089d4a805e4c5a881f29de5895a61ff55ca39e1e775f1faad710d"
+    },
+    {
+      "controlAxis": "prefix-postfix-update",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 42,
+        "value": 42
+      },
+      "expressionAxis": "shifts",
+      "id": "defined.e08_c14.shifts.prefix-postfix-update",
+      "ordinal": 143,
+      "sourceSha256": "a8572f20a6cdd09a33210505dc0a503a5fce6764841c1e7c816bc40fc7804aa9"
+    },
+    {
+      "controlAxis": "block-enum",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 43,
+        "value": 43
+      },
+      "expressionAxis": "shifts",
+      "id": "defined.e08_c15.shifts.block-enum",
+      "ordinal": 144,
+      "sourceSha256": "8bfa6996cf60410b395d1ff54f69a901a7e839b83bc4c93f4810326ee2e4e33f"
+    },
+    {
+      "controlAxis": "return",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 15,
+        "value": 15
+      },
+      "expressionAxis": "bitwise",
+      "id": "defined.e09_c00.bitwise.return",
+      "ordinal": 145,
+      "sourceSha256": "bc3c7cac401d0d55dc1439321fd89bd0a61b032923e4ae2fbc06dac629dba7f3"
+    },
+    {
+      "controlAxis": "nested-block",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 16,
+        "value": 16
+      },
+      "expressionAxis": "bitwise",
+      "id": "defined.e09_c01.bitwise.nested-block",
+      "ordinal": 146,
+      "sourceSha256": "862220cfd2ad5819b65f3cd30aaaedf8ada63da47e6186df037185cb0acecc0c"
+    },
+    {
+      "controlAxis": "if-true",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 17,
+        "value": 17
+      },
+      "expressionAxis": "bitwise",
+      "id": "defined.e09_c02.bitwise.if-true",
+      "ordinal": 147,
+      "sourceSha256": "8c982ba629ebe0d32d0e79b6f5aed9cf3e958205ace402b0285ddb29ef72cf1c"
+    },
+    {
+      "controlAxis": "if-else",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 18,
+        "value": 18
+      },
+      "expressionAxis": "bitwise",
+      "id": "defined.e09_c03.bitwise.if-else",
+      "ordinal": 148,
+      "sourceSha256": "5812a71e997530be5c3c9b21228df1057b47ca3a79638abc5cef2cc25ba6a4d4"
+    },
+    {
+      "controlAxis": "while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 18,
+        "value": 18
+      },
+      "expressionAxis": "bitwise",
+      "id": "defined.e09_c04.bitwise.while",
+      "ordinal": 149,
+      "sourceSha256": "ca4185bc00f56700182f4ac1119d1ee755f32f1a61f6beda64f01b2fba18035f"
+    },
+    {
+      "controlAxis": "while-continue",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 19,
+        "value": 19
+      },
+      "expressionAxis": "bitwise",
+      "id": "defined.e09_c05.bitwise.while-continue",
+      "ordinal": 150,
+      "sourceSha256": "62799373179f5c63fb5acf69954e5128e0fa7d6001e6fd88593944638f48d5a0"
+    },
+    {
+      "controlAxis": "do-while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 19,
+        "value": 19
+      },
+      "expressionAxis": "bitwise",
+      "id": "defined.e09_c06.bitwise.do-while",
+      "ordinal": 151,
+      "sourceSha256": "8b6df64eb30d5cf801e24abf59647c0696614435776cdc14b0f2563e1c154656"
+    },
+    {
+      "controlAxis": "for-expression-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 21,
+        "value": 21
+      },
+      "expressionAxis": "bitwise",
+      "id": "defined.e09_c07.bitwise.for-expression-init",
+      "ordinal": 152,
+      "sourceSha256": "023a239211c27b898162bb96c0de54267f268063a1d55ce1eb6aa05deeed3a4d"
+    },
+    {
+      "controlAxis": "for-declaration-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 23,
+        "value": 23
+      },
+      "expressionAxis": "bitwise",
+      "id": "defined.e09_c08.bitwise.for-declaration-init",
+      "ordinal": 153,
+      "sourceSha256": "e73a3425267104410fc6aa081e36064e2e2065bf77aaa7003d5ed26083cd9491"
+    },
+    {
+      "controlAxis": "break",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 18,
+        "value": 18
+      },
+      "expressionAxis": "bitwise",
+      "id": "defined.e09_c09.bitwise.break",
+      "ordinal": 154,
+      "sourceSha256": "af0d80b832edc0289679b3b1d5138bf12ab91c7eecc1d438b11e3c0565bc28d9"
+    },
+    {
+      "controlAxis": "switch-match",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 25,
+        "value": 25
+      },
+      "expressionAxis": "bitwise",
+      "id": "defined.e09_c10.bitwise.switch-match",
+      "ordinal": 155,
+      "sourceSha256": "101b96eccbf0e93e9bd5a7afc39c29dd285c18ba3217168068f716d19567ede4"
+    },
+    {
+      "controlAxis": "switch-fallthrough",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 20,
+        "value": 20
+      },
+      "expressionAxis": "bitwise",
+      "id": "defined.e09_c11.bitwise.switch-fallthrough",
+      "ordinal": 156,
+      "sourceSha256": "83190b483a6e020b867935fc5485e953664c2409e09f92d698b2a66c91314a43"
+    },
+    {
+      "controlAxis": "switch-default",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 27,
+        "value": 27
+      },
+      "expressionAxis": "bitwise",
+      "id": "defined.e09_c12.bitwise.switch-default",
+      "ordinal": 157,
+      "sourceSha256": "98309c3428d3848c933a82130d8c62bafd72c4eef9648b7aa115b7a580bbc0c7"
+    },
+    {
+      "controlAxis": "goto-forward",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 28,
+        "value": 28
+      },
+      "expressionAxis": "bitwise",
+      "id": "defined.e09_c13.bitwise.goto-forward",
+      "ordinal": 158,
+      "sourceSha256": "7ae34165f8ab57c7df27bd6688d878263c3904d4725f371e98f747d923fd175b"
+    },
+    {
+      "controlAxis": "prefix-postfix-update",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 29,
+        "value": 29
+      },
+      "expressionAxis": "bitwise",
+      "id": "defined.e09_c14.bitwise.prefix-postfix-update",
+      "ordinal": 159,
+      "sourceSha256": "672ba4fae571abc807765525a3ed5d035c8588cf33c333e3a9cb3c70d5ef6b48"
+    },
+    {
+      "controlAxis": "block-enum",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 30,
+        "value": 30
+      },
+      "expressionAxis": "bitwise",
+      "id": "defined.e09_c15.bitwise.block-enum",
+      "ordinal": 160,
+      "sourceSha256": "581f654bedf746df1548a3ed49dfffc9237b0f1b2329f9558d9d13d5d13e3905"
+    },
+    {
+      "controlAxis": "return",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 3,
+        "value": 3
+      },
+      "expressionAxis": "comparisons",
+      "id": "defined.e10_c00.comparisons.return",
+      "ordinal": 161,
+      "sourceSha256": "c77f654541c5016dcf77d2595ef6c851658e305c7cae8e4f49bd986974685586"
+    },
+    {
+      "controlAxis": "nested-block",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 4,
+        "value": 4
+      },
+      "expressionAxis": "comparisons",
+      "id": "defined.e10_c01.comparisons.nested-block",
+      "ordinal": 162,
+      "sourceSha256": "bda5946b1d80d18af8c830e2e160844a4131d407679ff04bb1912007d4ae2849"
+    },
+    {
+      "controlAxis": "if-true",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 5,
+        "value": 5
+      },
+      "expressionAxis": "comparisons",
+      "id": "defined.e10_c02.comparisons.if-true",
+      "ordinal": 163,
+      "sourceSha256": "9d85621f7ac4b6da84d7eb339579fddce2c99afd1b72a577a493a682e9a34f02"
+    },
+    {
+      "controlAxis": "if-else",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 6,
+        "value": 6
+      },
+      "expressionAxis": "comparisons",
+      "id": "defined.e10_c03.comparisons.if-else",
+      "ordinal": 164,
+      "sourceSha256": "4c6836faf3cff6094e68ce7aee58e3e3214f6dfeec5b4acac1262b7fe0a63b6b"
+    },
+    {
+      "controlAxis": "while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 6,
+        "value": 6
+      },
+      "expressionAxis": "comparisons",
+      "id": "defined.e10_c04.comparisons.while",
+      "ordinal": 165,
+      "sourceSha256": "003f12b46cf9e211834230c6b63b54dfe6ebd1bc1cedcbfe32a60da3b3c59033"
+    },
+    {
+      "controlAxis": "while-continue",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 7,
+        "value": 7
+      },
+      "expressionAxis": "comparisons",
+      "id": "defined.e10_c05.comparisons.while-continue",
+      "ordinal": 166,
+      "sourceSha256": "ca55f700cd47e0f5b8fb04f6d31fbb3df3862a1771f5ee9afe318ca333fa5956"
+    },
+    {
+      "controlAxis": "do-while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 7,
+        "value": 7
+      },
+      "expressionAxis": "comparisons",
+      "id": "defined.e10_c06.comparisons.do-while",
+      "ordinal": 167,
+      "sourceSha256": "80332241ceb8317236ecf11250b0ffe50908aaf4c07039aa2355f84878a1b324"
+    },
+    {
+      "controlAxis": "for-expression-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 9,
+        "value": 9
+      },
+      "expressionAxis": "comparisons",
+      "id": "defined.e10_c07.comparisons.for-expression-init",
+      "ordinal": 168,
+      "sourceSha256": "11662d2d0283c6fd3560b3df94c9f6f4f519a17046feb54e28232526dfcf8070"
+    },
+    {
+      "controlAxis": "for-declaration-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 11,
+        "value": 11
+      },
+      "expressionAxis": "comparisons",
+      "id": "defined.e10_c08.comparisons.for-declaration-init",
+      "ordinal": 169,
+      "sourceSha256": "329ba987cfa8a0d574614778425af8501b972c45f3910b799bf37de2f85b09ef"
+    },
+    {
+      "controlAxis": "break",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 6,
+        "value": 6
+      },
+      "expressionAxis": "comparisons",
+      "id": "defined.e10_c09.comparisons.break",
+      "ordinal": 170,
+      "sourceSha256": "840e731faac7cffcbed22c7c5b5d4e2d2c3a1aff1b7d556f2daedbf66d3ef45f"
+    },
+    {
+      "controlAxis": "switch-match",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 13,
+        "value": 13
+      },
+      "expressionAxis": "comparisons",
+      "id": "defined.e10_c10.comparisons.switch-match",
+      "ordinal": 171,
+      "sourceSha256": "253ef306522a1a284b8b529691c9cd684628fe1bd8b6633393bd97bfcd6e2497"
+    },
+    {
+      "controlAxis": "switch-fallthrough",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 8,
+        "value": 8
+      },
+      "expressionAxis": "comparisons",
+      "id": "defined.e10_c11.comparisons.switch-fallthrough",
+      "ordinal": 172,
+      "sourceSha256": "e02926bd88227b95dfe156a4eaaa88ec3c4b7b3c5f0fe36cbdbc052c4f8905b9"
+    },
+    {
+      "controlAxis": "switch-default",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 15,
+        "value": 15
+      },
+      "expressionAxis": "comparisons",
+      "id": "defined.e10_c12.comparisons.switch-default",
+      "ordinal": 173,
+      "sourceSha256": "5d582ab2052c312421063156bc5e48c55e1508efc1e644ca3a06fcb3626e6676"
+    },
+    {
+      "controlAxis": "goto-forward",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 16,
+        "value": 16
+      },
+      "expressionAxis": "comparisons",
+      "id": "defined.e10_c13.comparisons.goto-forward",
+      "ordinal": 174,
+      "sourceSha256": "d495bd9995c059562fed8576a415fdf77975527bbb5920e9e1fdc16c30643102"
+    },
+    {
+      "controlAxis": "prefix-postfix-update",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 17,
+        "value": 17
+      },
+      "expressionAxis": "comparisons",
+      "id": "defined.e10_c14.comparisons.prefix-postfix-update",
+      "ordinal": 175,
+      "sourceSha256": "afa4dfafc723c31a0f7ad25e4a494d95a74229d5d32335db7bf2b0800803d89c"
+    },
+    {
+      "controlAxis": "block-enum",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 18,
+        "value": 18
+      },
+      "expressionAxis": "comparisons",
+      "id": "defined.e10_c15.comparisons.block-enum",
+      "ordinal": 176,
+      "sourceSha256": "37d6e0f69c08efc739ff0b3a30a4fa8e9a4c867417ca54070c3c870e5a9eafc5"
+    },
+    {
+      "controlAxis": "return",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 1,
+        "value": 1
+      },
+      "expressionAxis": "short-circuit",
+      "id": "defined.e11_c00.short-circuit.return",
+      "ordinal": 177,
+      "sourceSha256": "d591b667486f74c54db6e4e247d40ba413f83dbcf6d2830ebc71125842a14f37"
+    },
+    {
+      "controlAxis": "nested-block",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 2,
+        "value": 2
+      },
+      "expressionAxis": "short-circuit",
+      "id": "defined.e11_c01.short-circuit.nested-block",
+      "ordinal": 178,
+      "sourceSha256": "825c9320bd7e6e4dd9933b3b8871ae979fec609e5e80e9cf28221e3bf08de2d8"
+    },
+    {
+      "controlAxis": "if-true",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 3,
+        "value": 3
+      },
+      "expressionAxis": "short-circuit",
+      "id": "defined.e11_c02.short-circuit.if-true",
+      "ordinal": 179,
+      "sourceSha256": "68d07f6086a2176f84f8d8fd58f70d4b7baa34321086e630d7fb6980185676dc"
+    },
+    {
+      "controlAxis": "if-else",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 4,
+        "value": 4
+      },
+      "expressionAxis": "short-circuit",
+      "id": "defined.e11_c03.short-circuit.if-else",
+      "ordinal": 180,
+      "sourceSha256": "08a94f00c0d02c880816ae1d474be505bed7b56a3282991a188ef03cdbcaf980"
+    },
+    {
+      "controlAxis": "while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 4,
+        "value": 4
+      },
+      "expressionAxis": "short-circuit",
+      "id": "defined.e11_c04.short-circuit.while",
+      "ordinal": 181,
+      "sourceSha256": "41896548486d234037745977c9ce0921949b8fb6ea82f549da877b72a94cd82b"
+    },
+    {
+      "controlAxis": "while-continue",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 5,
+        "value": 5
+      },
+      "expressionAxis": "short-circuit",
+      "id": "defined.e11_c05.short-circuit.while-continue",
+      "ordinal": 182,
+      "sourceSha256": "1ce6fc6c434c71843c678a364a0f3f26efa9850c1ce7b73744e2da7ab2c5d2d0"
+    },
+    {
+      "controlAxis": "do-while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 5,
+        "value": 5
+      },
+      "expressionAxis": "short-circuit",
+      "id": "defined.e11_c06.short-circuit.do-while",
+      "ordinal": 183,
+      "sourceSha256": "d4f978e41ae5bb03afcb8c51c0392e03be32d30aa9d98dae0cb5c7b8f2538dff"
+    },
+    {
+      "controlAxis": "for-expression-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 7,
+        "value": 7
+      },
+      "expressionAxis": "short-circuit",
+      "id": "defined.e11_c07.short-circuit.for-expression-init",
+      "ordinal": 184,
+      "sourceSha256": "f60f1524083196f113a7afc4402b85bac9218be43cfe5abadfdb86033120c4a5"
+    },
+    {
+      "controlAxis": "for-declaration-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 9,
+        "value": 9
+      },
+      "expressionAxis": "short-circuit",
+      "id": "defined.e11_c08.short-circuit.for-declaration-init",
+      "ordinal": 185,
+      "sourceSha256": "e0501f62e06d4cee33d54889b34d620c5257892f76bf1859574cfe8705aa2bae"
+    },
+    {
+      "controlAxis": "break",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 4,
+        "value": 4
+      },
+      "expressionAxis": "short-circuit",
+      "id": "defined.e11_c09.short-circuit.break",
+      "ordinal": 186,
+      "sourceSha256": "0046260a5fe27b890777cda23b83ccd29378c8b7a6de9c6ff6fb002a87cf59b3"
+    },
+    {
+      "controlAxis": "switch-match",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 11,
+        "value": 11
+      },
+      "expressionAxis": "short-circuit",
+      "id": "defined.e11_c10.short-circuit.switch-match",
+      "ordinal": 187,
+      "sourceSha256": "59feb983a585600d3b862d70dd7b376d041bf5c5c17fa4db9a3ece88b9b14f16"
+    },
+    {
+      "controlAxis": "switch-fallthrough",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 6,
+        "value": 6
+      },
+      "expressionAxis": "short-circuit",
+      "id": "defined.e11_c11.short-circuit.switch-fallthrough",
+      "ordinal": 188,
+      "sourceSha256": "eb074f096a58a7186c00f2bfe492ec9a882c60c1f4232a177e01b2850165e8ee"
+    },
+    {
+      "controlAxis": "switch-default",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 13,
+        "value": 13
+      },
+      "expressionAxis": "short-circuit",
+      "id": "defined.e11_c12.short-circuit.switch-default",
+      "ordinal": 189,
+      "sourceSha256": "61ef93250252a9e0054be9218f10fd7077265c6bb16c44bec36042906a5df2d8"
+    },
+    {
+      "controlAxis": "goto-forward",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 14,
+        "value": 14
+      },
+      "expressionAxis": "short-circuit",
+      "id": "defined.e11_c13.short-circuit.goto-forward",
+      "ordinal": 190,
+      "sourceSha256": "2140b4e4b3c76b0b9620295c873734a279154c89900494e5eced63f42a5b2276"
+    },
+    {
+      "controlAxis": "prefix-postfix-update",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 15,
+        "value": 15
+      },
+      "expressionAxis": "short-circuit",
+      "id": "defined.e11_c14.short-circuit.prefix-postfix-update",
+      "ordinal": 191,
+      "sourceSha256": "db2278aaa8b34986fba862871d2ab46eb097a442b9031dddb1b0d9bc6295fa37"
+    },
+    {
+      "controlAxis": "block-enum",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 16,
+        "value": 16
+      },
+      "expressionAxis": "short-circuit",
+      "id": "defined.e11_c15.short-circuit.block-enum",
+      "ordinal": 192,
+      "sourceSha256": "c3da0fc2809391b793b91db003a74b6b1160ee2984a4e9cb980412ba8d5dac99"
+    },
+    {
+      "controlAxis": "return",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 31,
+        "value": 31
+      },
+      "expressionAxis": "conditional-dead-arm",
+      "id": "defined.e12_c00.conditional-dead-arm.return",
+      "ordinal": 193,
+      "sourceSha256": "d9fa841f65e04bc6b650f98c682294cce172dcb5b0ac5ffbe2bdc257069599d1"
+    },
+    {
+      "controlAxis": "nested-block",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 32,
+        "value": 32
+      },
+      "expressionAxis": "conditional-dead-arm",
+      "id": "defined.e12_c01.conditional-dead-arm.nested-block",
+      "ordinal": 194,
+      "sourceSha256": "2b80c92338ee995835a936bac13f4d10287a3336c085679245394c5c14b2db0c"
+    },
+    {
+      "controlAxis": "if-true",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 33,
+        "value": 33
+      },
+      "expressionAxis": "conditional-dead-arm",
+      "id": "defined.e12_c02.conditional-dead-arm.if-true",
+      "ordinal": 195,
+      "sourceSha256": "d8754d2fb287d5e912f595b8d227e8d41084dcc8b6cb4857f84ffc9851333e94"
+    },
+    {
+      "controlAxis": "if-else",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 34,
+        "value": 34
+      },
+      "expressionAxis": "conditional-dead-arm",
+      "id": "defined.e12_c03.conditional-dead-arm.if-else",
+      "ordinal": 196,
+      "sourceSha256": "5ca8bf148916dee6ff77a62b2c37bef17a34d772c25d32cbdfd496b9ed440725"
+    },
+    {
+      "controlAxis": "while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 34,
+        "value": 34
+      },
+      "expressionAxis": "conditional-dead-arm",
+      "id": "defined.e12_c04.conditional-dead-arm.while",
+      "ordinal": 197,
+      "sourceSha256": "c700431f3a62bc1a25bc26f0a25538b8d962179bf5e190300aa974c47b17b217"
+    },
+    {
+      "controlAxis": "while-continue",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 35,
+        "value": 35
+      },
+      "expressionAxis": "conditional-dead-arm",
+      "id": "defined.e12_c05.conditional-dead-arm.while-continue",
+      "ordinal": 198,
+      "sourceSha256": "658e4f3f3ed84a644bf946f2c3cd60653255c8c38350e0edb2ad84ed33f63c39"
+    },
+    {
+      "controlAxis": "do-while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 35,
+        "value": 35
+      },
+      "expressionAxis": "conditional-dead-arm",
+      "id": "defined.e12_c06.conditional-dead-arm.do-while",
+      "ordinal": 199,
+      "sourceSha256": "5a6bfda728d0dfa08481a544e3c6b2c17622a31a0010cfce44c22a205c39934b"
+    },
+    {
+      "controlAxis": "for-expression-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 37,
+        "value": 37
+      },
+      "expressionAxis": "conditional-dead-arm",
+      "id": "defined.e12_c07.conditional-dead-arm.for-expression-init",
+      "ordinal": 200,
+      "sourceSha256": "64b3c5644f23adb220ba92bedf3f33dc62c478043bd25191f213cbd63ea86069"
+    },
+    {
+      "controlAxis": "for-declaration-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 39,
+        "value": 39
+      },
+      "expressionAxis": "conditional-dead-arm",
+      "id": "defined.e12_c08.conditional-dead-arm.for-declaration-init",
+      "ordinal": 201,
+      "sourceSha256": "38c9d116548516c4c18b74316bf063dd8bf814898ad48f048f6a59906b042881"
+    },
+    {
+      "controlAxis": "break",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 34,
+        "value": 34
+      },
+      "expressionAxis": "conditional-dead-arm",
+      "id": "defined.e12_c09.conditional-dead-arm.break",
+      "ordinal": 202,
+      "sourceSha256": "a5d0d82669785eeb39d8dad49db307fd67b41782e8aff02f4e201dc7eaf76cd7"
+    },
+    {
+      "controlAxis": "switch-match",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 41,
+        "value": 41
+      },
+      "expressionAxis": "conditional-dead-arm",
+      "id": "defined.e12_c10.conditional-dead-arm.switch-match",
+      "ordinal": 203,
+      "sourceSha256": "0b0ad050058544ad4e9ec109ee3ce6ea28b243a0d8d31cac993aca0a6946a2f6"
+    },
+    {
+      "controlAxis": "switch-fallthrough",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 36,
+        "value": 36
+      },
+      "expressionAxis": "conditional-dead-arm",
+      "id": "defined.e12_c11.conditional-dead-arm.switch-fallthrough",
+      "ordinal": 204,
+      "sourceSha256": "f8358e564f139be72b316edf3debfe37ce1ba8cafa626555b19dc1b2380464fe"
+    },
+    {
+      "controlAxis": "switch-default",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 43,
+        "value": 43
+      },
+      "expressionAxis": "conditional-dead-arm",
+      "id": "defined.e12_c12.conditional-dead-arm.switch-default",
+      "ordinal": 205,
+      "sourceSha256": "59a87093f4910c924a0065c651130d3faabb8502e6c888538c14b6420012d2b2"
+    },
+    {
+      "controlAxis": "goto-forward",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 44,
+        "value": 44
+      },
+      "expressionAxis": "conditional-dead-arm",
+      "id": "defined.e12_c13.conditional-dead-arm.goto-forward",
+      "ordinal": 206,
+      "sourceSha256": "0707123e01ca499a9a2085cf9e440171af7cb3ee916cb281f009803ec74c7e7f"
+    },
+    {
+      "controlAxis": "prefix-postfix-update",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 45,
+        "value": 45
+      },
+      "expressionAxis": "conditional-dead-arm",
+      "id": "defined.e12_c14.conditional-dead-arm.prefix-postfix-update",
+      "ordinal": 207,
+      "sourceSha256": "cb0a76e5cf795b920b2d3e04243a38f2f376ba2915924242e4111fe95bba90e8"
+    },
+    {
+      "controlAxis": "block-enum",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 46,
+        "value": 46
+      },
+      "expressionAxis": "conditional-dead-arm",
+      "id": "defined.e12_c15.conditional-dead-arm.block-enum",
+      "ordinal": 208,
+      "sourceSha256": "d6d604b48eda3e14616ae6c7a02c1e5e0a27c442d0468fdb5b41a03a7b7f8a53"
+    },
+    {
+      "controlAxis": "return",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 17,
+        "value": 17
+      },
+      "expressionAxis": "comma",
+      "id": "defined.e13_c00.comma.return",
+      "ordinal": 209,
+      "sourceSha256": "beb3a16fa82bbf324e32d8b376e9561dcb7d8a62af9b89bb24611f9abeed8d2f"
+    },
+    {
+      "controlAxis": "nested-block",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 18,
+        "value": 18
+      },
+      "expressionAxis": "comma",
+      "id": "defined.e13_c01.comma.nested-block",
+      "ordinal": 210,
+      "sourceSha256": "861a79ae856c67a3b02663818ded684df068febf79ab441a73835e19c756467b"
+    },
+    {
+      "controlAxis": "if-true",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 19,
+        "value": 19
+      },
+      "expressionAxis": "comma",
+      "id": "defined.e13_c02.comma.if-true",
+      "ordinal": 211,
+      "sourceSha256": "87c73967faa3f2b42c720a5fd2bbaf52847b503770279b2e141c717d8578445d"
+    },
+    {
+      "controlAxis": "if-else",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 20,
+        "value": 20
+      },
+      "expressionAxis": "comma",
+      "id": "defined.e13_c03.comma.if-else",
+      "ordinal": 212,
+      "sourceSha256": "a342e4ae55cd56120ccef6ee4e71231af30b339849c74765163ac1520aeefbd3"
+    },
+    {
+      "controlAxis": "while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 20,
+        "value": 20
+      },
+      "expressionAxis": "comma",
+      "id": "defined.e13_c04.comma.while",
+      "ordinal": 213,
+      "sourceSha256": "ef41bf7abda400451ef1bebe100f31ec41dc4cd95ba1784bd8e80aa01d2136be"
+    },
+    {
+      "controlAxis": "while-continue",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 21,
+        "value": 21
+      },
+      "expressionAxis": "comma",
+      "id": "defined.e13_c05.comma.while-continue",
+      "ordinal": 214,
+      "sourceSha256": "587c67bc44f2075bb71f25d5fe9198730a0d3832e17be98ddc5872e9a539349f"
+    },
+    {
+      "controlAxis": "do-while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 21,
+        "value": 21
+      },
+      "expressionAxis": "comma",
+      "id": "defined.e13_c06.comma.do-while",
+      "ordinal": 215,
+      "sourceSha256": "8591ab12b93e8cf25c9572e0321060d7a83294be3efae0345b795490cf28ccba"
+    },
+    {
+      "controlAxis": "for-expression-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 23,
+        "value": 23
+      },
+      "expressionAxis": "comma",
+      "id": "defined.e13_c07.comma.for-expression-init",
+      "ordinal": 216,
+      "sourceSha256": "a4fbaa03b282d1b972598e3bbddd157e60e9cbbf46618c4ac6eb288fde9283e7"
+    },
+    {
+      "controlAxis": "for-declaration-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 25,
+        "value": 25
+      },
+      "expressionAxis": "comma",
+      "id": "defined.e13_c08.comma.for-declaration-init",
+      "ordinal": 217,
+      "sourceSha256": "9ba9e8d0f2d52a34ca8401e6a3c87b6ed90c19b94fd6b7ec1fcf70c165d56ef3"
+    },
+    {
+      "controlAxis": "break",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 20,
+        "value": 20
+      },
+      "expressionAxis": "comma",
+      "id": "defined.e13_c09.comma.break",
+      "ordinal": 218,
+      "sourceSha256": "23f9509dd3e3e84d17becbf13a28f61cfd9cf3075d5c8138001da02788e1f927"
+    },
+    {
+      "controlAxis": "switch-match",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 27,
+        "value": 27
+      },
+      "expressionAxis": "comma",
+      "id": "defined.e13_c10.comma.switch-match",
+      "ordinal": 219,
+      "sourceSha256": "8a15e60c482faf7b1cda49aca4d5996754dda9b34c4864a71d7048a3891f2ee9"
+    },
+    {
+      "controlAxis": "switch-fallthrough",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 22,
+        "value": 22
+      },
+      "expressionAxis": "comma",
+      "id": "defined.e13_c11.comma.switch-fallthrough",
+      "ordinal": 220,
+      "sourceSha256": "dadbf5066630136b6cede74a6d409322de00a65f2356b6c55aecc0831d9b2281"
+    },
+    {
+      "controlAxis": "switch-default",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 29,
+        "value": 29
+      },
+      "expressionAxis": "comma",
+      "id": "defined.e13_c12.comma.switch-default",
+      "ordinal": 221,
+      "sourceSha256": "33c0f518a89de6368f4fd5795f141382f3e6d7b2544ecd04ce2f8547acc79da6"
+    },
+    {
+      "controlAxis": "goto-forward",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 30,
+        "value": 30
+      },
+      "expressionAxis": "comma",
+      "id": "defined.e13_c13.comma.goto-forward",
+      "ordinal": 222,
+      "sourceSha256": "ed2314859e3b4b9bac72b7f0103d5e4fc0c4e7cf20cf41dc90367b5997bb9b24"
+    },
+    {
+      "controlAxis": "prefix-postfix-update",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 31,
+        "value": 31
+      },
+      "expressionAxis": "comma",
+      "id": "defined.e13_c14.comma.prefix-postfix-update",
+      "ordinal": 223,
+      "sourceSha256": "010821be7980e20730427ecf0d220470db28177f1ee76ed5d9f577c169a76ed6"
+    },
+    {
+      "controlAxis": "block-enum",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 32,
+        "value": 32
+      },
+      "expressionAxis": "comma",
+      "id": "defined.e13_c15.comma.block-enum",
+      "ordinal": 224,
+      "sourceSha256": "394742366980b4b6e47c289807c087dd6f39b772635a8c8b12886eb3d2f894bb"
+    },
+    {
+      "controlAxis": "return",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 7,
+        "value": 7
+      },
+      "expressionAxis": "integer-casts",
+      "id": "defined.e14_c00.integer-casts.return",
+      "ordinal": 225,
+      "sourceSha256": "2d73c449b9464219934134b024e336d84ed1394da6a828739109ecac45be479a"
+    },
+    {
+      "controlAxis": "nested-block",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 8,
+        "value": 8
+      },
+      "expressionAxis": "integer-casts",
+      "id": "defined.e14_c01.integer-casts.nested-block",
+      "ordinal": 226,
+      "sourceSha256": "270a137b850299df134d06d06895d48160e7dad233c872db632b8b31e7c0eff3"
+    },
+    {
+      "controlAxis": "if-true",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 9,
+        "value": 9
+      },
+      "expressionAxis": "integer-casts",
+      "id": "defined.e14_c02.integer-casts.if-true",
+      "ordinal": 227,
+      "sourceSha256": "6ae1d03271156c36e761ea363b9996622c0da31e58b061ad05b7359c62bf2035"
+    },
+    {
+      "controlAxis": "if-else",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 10,
+        "value": 10
+      },
+      "expressionAxis": "integer-casts",
+      "id": "defined.e14_c03.integer-casts.if-else",
+      "ordinal": 228,
+      "sourceSha256": "661b76e43cd8b2f9c7311b30fb84235a4f50d8a587a925d862de41cec4dc366f"
+    },
+    {
+      "controlAxis": "while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 10,
+        "value": 10
+      },
+      "expressionAxis": "integer-casts",
+      "id": "defined.e14_c04.integer-casts.while",
+      "ordinal": 229,
+      "sourceSha256": "215534344503b697a6e2e7e859dd1bcc38d6bd2b8edf37a5b1556aa6213e4c8c"
+    },
+    {
+      "controlAxis": "while-continue",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 11,
+        "value": 11
+      },
+      "expressionAxis": "integer-casts",
+      "id": "defined.e14_c05.integer-casts.while-continue",
+      "ordinal": 230,
+      "sourceSha256": "6dbb3bf02981cc63ab0e75caf1ce83d417df89511abd023aad3bc33a49cc98ab"
+    },
+    {
+      "controlAxis": "do-while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 11,
+        "value": 11
+      },
+      "expressionAxis": "integer-casts",
+      "id": "defined.e14_c06.integer-casts.do-while",
+      "ordinal": 231,
+      "sourceSha256": "fc90b5a75aaf8cf42f0866ee20ba0e99d49b2fa4d72ead487611071b8ca89f36"
+    },
+    {
+      "controlAxis": "for-expression-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 13,
+        "value": 13
+      },
+      "expressionAxis": "integer-casts",
+      "id": "defined.e14_c07.integer-casts.for-expression-init",
+      "ordinal": 232,
+      "sourceSha256": "41e82f5d2748479d52c2384cfd5f5c6b054c490cc2367e01a28efc7931e56522"
+    },
+    {
+      "controlAxis": "for-declaration-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 15,
+        "value": 15
+      },
+      "expressionAxis": "integer-casts",
+      "id": "defined.e14_c08.integer-casts.for-declaration-init",
+      "ordinal": 233,
+      "sourceSha256": "2fb9a3e5a23cbc09683c1223ee1e268ee407aa6d2c49e3258eb5389587223952"
+    },
+    {
+      "controlAxis": "break",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 10,
+        "value": 10
+      },
+      "expressionAxis": "integer-casts",
+      "id": "defined.e14_c09.integer-casts.break",
+      "ordinal": 234,
+      "sourceSha256": "4f7adc10c9dde10c928b00ea52eb2bbaee5ffec00490910f7a24c06eaf342f9c"
+    },
+    {
+      "controlAxis": "switch-match",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 17,
+        "value": 17
+      },
+      "expressionAxis": "integer-casts",
+      "id": "defined.e14_c10.integer-casts.switch-match",
+      "ordinal": 235,
+      "sourceSha256": "8eb8b943dd5226f7e67679d0dc35301c513c4ae8ec8baa0909b4e90fa4e6a0a9"
+    },
+    {
+      "controlAxis": "switch-fallthrough",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 12,
+        "value": 12
+      },
+      "expressionAxis": "integer-casts",
+      "id": "defined.e14_c11.integer-casts.switch-fallthrough",
+      "ordinal": 236,
+      "sourceSha256": "88c68313174b3123bfcda0b36e3cbd92eac1dceac7f11cfb5e680d4aafdfb7e0"
+    },
+    {
+      "controlAxis": "switch-default",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 19,
+        "value": 19
+      },
+      "expressionAxis": "integer-casts",
+      "id": "defined.e14_c12.integer-casts.switch-default",
+      "ordinal": 237,
+      "sourceSha256": "47223285f4b091ceb009420298f78a7391c4be3a7de5b06dfb4d82a76998562d"
+    },
+    {
+      "controlAxis": "goto-forward",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 20,
+        "value": 20
+      },
+      "expressionAxis": "integer-casts",
+      "id": "defined.e14_c13.integer-casts.goto-forward",
+      "ordinal": 238,
+      "sourceSha256": "cf8c05cd8c59d33f63f2c83deb99fde373ca5585c29aff2ed4c6a2567172539f"
+    },
+    {
+      "controlAxis": "prefix-postfix-update",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 21,
+        "value": 21
+      },
+      "expressionAxis": "integer-casts",
+      "id": "defined.e14_c14.integer-casts.prefix-postfix-update",
+      "ordinal": 239,
+      "sourceSha256": "21f5c08cd2c494fff587ac1ef187916ca0c6d7bda7b70d1538e4eea6844ef4fe"
+    },
+    {
+      "controlAxis": "block-enum",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 22,
+        "value": 22
+      },
+      "expressionAxis": "integer-casts",
+      "id": "defined.e14_c15.integer-casts.block-enum",
+      "ordinal": 240,
+      "sourceSha256": "07c2d8eb96c32a904a0586b02d76cc34162dcc858e90a273dc14f240907d3970"
+    },
+    {
+      "controlAxis": "return",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 12,
+        "value": 12
+      },
+      "expressionAxis": "sizeof-alignof",
+      "id": "defined.e15_c00.sizeof-alignof.return",
+      "ordinal": 241,
+      "sourceSha256": "fa63518816d6802e2fee079d02ad08fbb2e8ba58c3502c954ebab6b95eda9140"
+    },
+    {
+      "controlAxis": "nested-block",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 13,
+        "value": 13
+      },
+      "expressionAxis": "sizeof-alignof",
+      "id": "defined.e15_c01.sizeof-alignof.nested-block",
+      "ordinal": 242,
+      "sourceSha256": "b15d5379c8634f38764f3506b291e86e056ea046ab85817b5d8f4dccd4857c0c"
+    },
+    {
+      "controlAxis": "if-true",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 14,
+        "value": 14
+      },
+      "expressionAxis": "sizeof-alignof",
+      "id": "defined.e15_c02.sizeof-alignof.if-true",
+      "ordinal": 243,
+      "sourceSha256": "77f9892e4e5250a1682de462865f1314e0878ae5a0569709854f06145f482b4e"
+    },
+    {
+      "controlAxis": "if-else",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 15,
+        "value": 15
+      },
+      "expressionAxis": "sizeof-alignof",
+      "id": "defined.e15_c03.sizeof-alignof.if-else",
+      "ordinal": 244,
+      "sourceSha256": "374f342c3ab38f502bd3de8f7ed20f60281d70b485ab3ad4fd38597715fe5957"
+    },
+    {
+      "controlAxis": "while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 15,
+        "value": 15
+      },
+      "expressionAxis": "sizeof-alignof",
+      "id": "defined.e15_c04.sizeof-alignof.while",
+      "ordinal": 245,
+      "sourceSha256": "13481958919887ea643fdc90288643b8cd9226223c870c5522f1d6890eb1e77c"
+    },
+    {
+      "controlAxis": "while-continue",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 16,
+        "value": 16
+      },
+      "expressionAxis": "sizeof-alignof",
+      "id": "defined.e15_c05.sizeof-alignof.while-continue",
+      "ordinal": 246,
+      "sourceSha256": "7ca97e550cdf71b37f0d7634ea2418fd912010a626c1773b75e2c651b4ec740b"
+    },
+    {
+      "controlAxis": "do-while",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 16,
+        "value": 16
+      },
+      "expressionAxis": "sizeof-alignof",
+      "id": "defined.e15_c06.sizeof-alignof.do-while",
+      "ordinal": 247,
+      "sourceSha256": "bb8bdd02cd9cd8dbb82533638c960e2d0d89b55542d2a0f92c8afec2a9f31d78"
+    },
+    {
+      "controlAxis": "for-expression-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 18,
+        "value": 18
+      },
+      "expressionAxis": "sizeof-alignof",
+      "id": "defined.e15_c07.sizeof-alignof.for-expression-init",
+      "ordinal": 248,
+      "sourceSha256": "58453f50836d4951755302fde6e18479da905d2bd8a1d0891e17f59eac10dba3"
+    },
+    {
+      "controlAxis": "for-declaration-init",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 20,
+        "value": 20
+      },
+      "expressionAxis": "sizeof-alignof",
+      "id": "defined.e15_c08.sizeof-alignof.for-declaration-init",
+      "ordinal": 249,
+      "sourceSha256": "d35b03eb78dd758abcc640d75a9db3a6935026d500f950a940d33c1c465c9631"
+    },
+    {
+      "controlAxis": "break",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 15,
+        "value": 15
+      },
+      "expressionAxis": "sizeof-alignof",
+      "id": "defined.e15_c09.sizeof-alignof.break",
+      "ordinal": 250,
+      "sourceSha256": "581b0ad9b2da7ff25fea09c616406865dae4d9256fc9c372839e4cccf691fb5b"
+    },
+    {
+      "controlAxis": "switch-match",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 22,
+        "value": 22
+      },
+      "expressionAxis": "sizeof-alignof",
+      "id": "defined.e15_c10.sizeof-alignof.switch-match",
+      "ordinal": 251,
+      "sourceSha256": "3e333eeacebba051b273e64eb7507c5bdf7e7c4904d30fa3c1a4fe4ed072cc52"
+    },
+    {
+      "controlAxis": "switch-fallthrough",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 17,
+        "value": 17
+      },
+      "expressionAxis": "sizeof-alignof",
+      "id": "defined.e15_c11.sizeof-alignof.switch-fallthrough",
+      "ordinal": 252,
+      "sourceSha256": "60218bdba7f48ca90ce0dafdf7425deb25038b30edbe018ebca780d5054633d8"
+    },
+    {
+      "controlAxis": "switch-default",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 24,
+        "value": 24
+      },
+      "expressionAxis": "sizeof-alignof",
+      "id": "defined.e15_c12.sizeof-alignof.switch-default",
+      "ordinal": 253,
+      "sourceSha256": "0189b996b6b2a9fcdd571d7e0eca78ca7b76f45c2e084c2072ef06f3e540f6c8"
+    },
+    {
+      "controlAxis": "goto-forward",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 25,
+        "value": 25
+      },
+      "expressionAxis": "sizeof-alignof",
+      "id": "defined.e15_c13.sizeof-alignof.goto-forward",
+      "ordinal": 254,
+      "sourceSha256": "b574a6890e16812d7ab4136d34343919fb8e8d2434a3dd404cd6b88c5e880c9f"
+    },
+    {
+      "controlAxis": "prefix-postfix-update",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 26,
+        "value": 26
+      },
+      "expressionAxis": "sizeof-alignof",
+      "id": "defined.e15_c14.sizeof-alignof.prefix-postfix-update",
+      "ordinal": 255,
+      "sourceSha256": "f216576411b405def2213dff06253926ca29879b7a1acc2c122fb2b2059c6184"
+    },
+    {
+      "controlAxis": "block-enum",
+      "expected": {
+        "kind": "RETURN",
+        "nativeExitCode": 27,
+        "value": 27
+      },
+      "expressionAxis": "sizeof-alignof",
+      "id": "defined.e15_c15.sizeof-alignof.block-enum",
+      "ordinal": 256,
+      "sourceSha256": "239c27b3b2447d9c6ea27810b6d128526a6a415ed154f1395e425e23c57c2897"
+    }
+  ],
+  "definedOracleAuthority": {
+    "clang": {
+      "path": "/usr/bin/clang-19",
+      "sha256": "8bba5d733f54ada0cc50ba7646a87ddc798d5de73f67e397cdefada07297bb65",
+      "version": "Debian clang version 19.1.7 (3+b1)"
+    },
+    "compilerFlags": [
+      "-std=gnu11",
+      "-O0",
+      "-g0",
+      "-pipe"
+    ],
+    "evidenceStatus": "NOT_MEASURED_IN_THIS_FREEZE",
+    "expectedRejectNativeExecution": "PROHIBITED",
+    "gcc": {
+      "path": "/usr/bin/gcc-14",
+      "sha256": "fb051a6c58961fb6aec758acf50d7d0375eecff740d0706388092829e3fb7a41",
+      "version": "gcc-14 (Debian 14.2.0-19) 14.2.0"
+    },
+    "imageId": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+    "requiredConsensus": "GCC_AND_CLANG_NATIVE_EXIT_CODE",
+    "scope": "definedCasesOnly"
+  },
+  "denominators": {
+    "defined": 256,
+    "definedColumns": 16,
+    "definedRows": 16,
+    "expectedReject": 64,
+    "expectedRejectFamilies": 8,
+    "expectedRejectVariants": 8
+  },
+  "expectedRejectCases": [
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 131,
+        "byteStart": 86,
+        "code": "E3002",
+        "column": 87,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "integer-division-by-zero",
+        "sourceSlice": "a_division_by_zero_00 / b_division_by_zero_00"
+      },
+      "family": "division-by-zero",
+      "id": "reject.division-by-zero.v00",
+      "ordinal": 1,
+      "sourceSha256": "c41a0c365c84d9e2ad77c8cf03ee66fc65e2cd6524663fb17283c55e9bb7c3c8",
+      "variant": 0
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 132,
+        "byteStart": 87,
+        "code": "E3002",
+        "column": 88,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "integer-division-by-zero",
+        "sourceSlice": "a_division_by_zero_01 / b_division_by_zero_01"
+      },
+      "family": "division-by-zero",
+      "id": "reject.division-by-zero.v01",
+      "ordinal": 2,
+      "sourceSha256": "8483a7066136e7ed7f10449c3f24cd4bf347ea4fd4d6ad353a7b2a755795e438",
+      "variant": 1
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 131,
+        "byteStart": 86,
+        "code": "E3002",
+        "column": 87,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "integer-division-by-zero",
+        "sourceSlice": "a_division_by_zero_02 / b_division_by_zero_02"
+      },
+      "family": "division-by-zero",
+      "id": "reject.division-by-zero.v02",
+      "ordinal": 3,
+      "sourceSha256": "ab6a613387ab1f7b833cc102605c869da865608fe1fe81743bf5b24e85bdd45c",
+      "variant": 2
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 132,
+        "byteStart": 87,
+        "code": "E3002",
+        "column": 88,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "integer-division-by-zero",
+        "sourceSlice": "a_division_by_zero_03 / b_division_by_zero_03"
+      },
+      "family": "division-by-zero",
+      "id": "reject.division-by-zero.v03",
+      "ordinal": 4,
+      "sourceSha256": "1442592ada92b7667aaf6b30fbee5f7a15fc6367388c98e70eef288621a7b4e3",
+      "variant": 3
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 132,
+        "byteStart": 87,
+        "code": "E3002",
+        "column": 88,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "integer-division-by-zero",
+        "sourceSlice": "a_division_by_zero_04 / b_division_by_zero_04"
+      },
+      "family": "division-by-zero",
+      "id": "reject.division-by-zero.v04",
+      "ordinal": 5,
+      "sourceSha256": "0a3734cc15e63ccb727a568bf456f9f38ab9dc121b249808083e6a6f63d6d9a1",
+      "variant": 4
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 133,
+        "byteStart": 88,
+        "code": "E3002",
+        "column": 89,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "integer-division-by-zero",
+        "sourceSlice": "a_division_by_zero_05 / b_division_by_zero_05"
+      },
+      "family": "division-by-zero",
+      "id": "reject.division-by-zero.v05",
+      "ordinal": 6,
+      "sourceSha256": "dd3462a187807c32f1c7b6e74b202ca32c914697c9a1f5240c081fe9b1ce293f",
+      "variant": 5
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 140,
+        "byteStart": 95,
+        "code": "E3002",
+        "column": 96,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "integer-division-by-zero",
+        "sourceSlice": "a_division_by_zero_06 / b_division_by_zero_06"
+      },
+      "family": "division-by-zero",
+      "id": "reject.division-by-zero.v06",
+      "ordinal": 7,
+      "sourceSha256": "556d9d91169b1c96df4236795eccd0efacef7d5126bfc472573a559f8fd761d2",
+      "variant": 6
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 141,
+        "byteStart": 96,
+        "code": "E3002",
+        "column": 97,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "integer-division-by-zero",
+        "sourceSlice": "a_division_by_zero_07 / b_division_by_zero_07"
+      },
+      "family": "division-by-zero",
+      "id": "reject.division-by-zero.v07",
+      "ordinal": 8,
+      "sourceSha256": "6b8fd9613c88aa60cc53c65d2f4d64a7c7847a27eae99e4c20874ef0fb03f72a",
+      "variant": 7
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 135,
+        "byteStart": 88,
+        "code": "E3003",
+        "column": 89,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "integer-remainder-by-zero",
+        "sourceSlice": "a_remainder_by_zero_00 % b_remainder_by_zero_00"
+      },
+      "family": "remainder-by-zero",
+      "id": "reject.remainder-by-zero.v00",
+      "ordinal": 9,
+      "sourceSha256": "396b196f296c23d9d6917096506e2f187754372f4520b43f23fadb86ce76dc66",
+      "variant": 0
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 136,
+        "byteStart": 89,
+        "code": "E3003",
+        "column": 90,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "integer-remainder-by-zero",
+        "sourceSlice": "a_remainder_by_zero_01 % b_remainder_by_zero_01"
+      },
+      "family": "remainder-by-zero",
+      "id": "reject.remainder-by-zero.v01",
+      "ordinal": 10,
+      "sourceSha256": "0e3e8f4b779628f2339138d75e4cf38e32eb818748b35a4856b9532000caa10e",
+      "variant": 1
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 135,
+        "byteStart": 88,
+        "code": "E3003",
+        "column": 89,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "integer-remainder-by-zero",
+        "sourceSlice": "a_remainder_by_zero_02 % b_remainder_by_zero_02"
+      },
+      "family": "remainder-by-zero",
+      "id": "reject.remainder-by-zero.v02",
+      "ordinal": 11,
+      "sourceSha256": "691f1d4d0e8e21141dbccd8c7fcc674f94e4ae73e59d0e5409eefbc6ea2350c1",
+      "variant": 2
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 136,
+        "byteStart": 89,
+        "code": "E3003",
+        "column": 90,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "integer-remainder-by-zero",
+        "sourceSlice": "a_remainder_by_zero_03 % b_remainder_by_zero_03"
+      },
+      "family": "remainder-by-zero",
+      "id": "reject.remainder-by-zero.v03",
+      "ordinal": 12,
+      "sourceSha256": "84d21f6f072dce538a36c2b9c1c732203783b10808382e5dab94aff6f24be722",
+      "variant": 3
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 137,
+        "byteStart": 90,
+        "code": "E3003",
+        "column": 91,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "integer-remainder-by-zero",
+        "sourceSlice": "a_remainder_by_zero_04 % b_remainder_by_zero_04"
+      },
+      "family": "remainder-by-zero",
+      "id": "reject.remainder-by-zero.v04",
+      "ordinal": 13,
+      "sourceSha256": "f96112c3735fc5ede9bd5c55d23916b15dd6cafb844e1b398cb676d99b1c8675",
+      "variant": 4
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 138,
+        "byteStart": 91,
+        "code": "E3003",
+        "column": 92,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "integer-remainder-by-zero",
+        "sourceSlice": "a_remainder_by_zero_05 % b_remainder_by_zero_05"
+      },
+      "family": "remainder-by-zero",
+      "id": "reject.remainder-by-zero.v05",
+      "ordinal": 14,
+      "sourceSha256": "5249dfca7c924a505249ecc360ea3410f2cd234cb426626bc6fa8ec5a312c6f4",
+      "variant": 5
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 144,
+        "byteStart": 97,
+        "code": "E3003",
+        "column": 98,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "integer-remainder-by-zero",
+        "sourceSlice": "a_remainder_by_zero_06 % b_remainder_by_zero_06"
+      },
+      "family": "remainder-by-zero",
+      "id": "reject.remainder-by-zero.v06",
+      "ordinal": 15,
+      "sourceSha256": "70ef075a2b4566e1161aef08c6b01a6b0a33f6d524d38b99429d55bd947bda73",
+      "variant": 6
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 145,
+        "byteStart": 98,
+        "code": "E3003",
+        "column": 99,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "integer-remainder-by-zero",
+        "sourceSlice": "a_remainder_by_zero_07 % b_remainder_by_zero_07"
+      },
+      "family": "remainder-by-zero",
+      "id": "reject.remainder-by-zero.v07",
+      "ordinal": 16,
+      "sourceSha256": "247234f3afffb760c9151a9f745d5260738d22448748a617fd88742b46aa7e8b",
+      "variant": 7
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 152,
+        "byteStart": 101,
+        "code": "E3004",
+        "column": 102,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_add_overflow_00 + b_signed_add_overflow_00"
+      },
+      "family": "signed-add-overflow",
+      "id": "reject.signed-add-overflow.v00",
+      "ordinal": 17,
+      "sourceSha256": "7515317c3c7acef83194ee4bef384359507c543dc800f25110bd7fbb098bc8d4",
+      "variant": 0
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 152,
+        "byteStart": 101,
+        "code": "E3004",
+        "column": 102,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_add_overflow_01 + b_signed_add_overflow_01"
+      },
+      "family": "signed-add-overflow",
+      "id": "reject.signed-add-overflow.v01",
+      "ordinal": 18,
+      "sourceSha256": "d41c0097a5bab4deb95379f08772f9a63c4bebfbe696c67d5905ef055e7c2931",
+      "variant": 1
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 152,
+        "byteStart": 101,
+        "code": "E3004",
+        "column": 102,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_add_overflow_02 + b_signed_add_overflow_02"
+      },
+      "family": "signed-add-overflow",
+      "id": "reject.signed-add-overflow.v02",
+      "ordinal": 19,
+      "sourceSha256": "852f07c8f84ed16f03db51d3563201d7c9b4efdeef074d05dd3a4d1807cd5ba0",
+      "variant": 2
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 161,
+        "byteStart": 110,
+        "code": "E3004",
+        "column": 111,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_add_overflow_03 + b_signed_add_overflow_03"
+      },
+      "family": "signed-add-overflow",
+      "id": "reject.signed-add-overflow.v03",
+      "ordinal": 20,
+      "sourceSha256": "adb105ade2b80edf1533eecd7c49724ce0d2e954606d3de17da98af2c0633f4e",
+      "variant": 3
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 154,
+        "byteStart": 103,
+        "code": "E3004",
+        "column": 104,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_add_overflow_04 + b_signed_add_overflow_04"
+      },
+      "family": "signed-add-overflow",
+      "id": "reject.signed-add-overflow.v04",
+      "ordinal": 21,
+      "sourceSha256": "97f748ff1ee82a80acb9d688f195d5bba7ecc7b870940cb40d30d9ec2f44b0ef",
+      "variant": 4
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 154,
+        "byteStart": 103,
+        "code": "E3004",
+        "column": 104,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_add_overflow_05 + b_signed_add_overflow_05"
+      },
+      "family": "signed-add-overflow",
+      "id": "reject.signed-add-overflow.v05",
+      "ordinal": 22,
+      "sourceSha256": "f134e9c173f39e3e53657d5de1e2a13afb85ed2a25ab82c30b5ab56b599c731c",
+      "variant": 5
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 154,
+        "byteStart": 103,
+        "code": "E3004",
+        "column": 104,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_add_overflow_06 + b_signed_add_overflow_06"
+      },
+      "family": "signed-add-overflow",
+      "id": "reject.signed-add-overflow.v06",
+      "ordinal": 23,
+      "sourceSha256": "a0d24c27add714264f0498d6d3f90cee3ab8bacf68e2172e5a02e1c0d8abc145",
+      "variant": 6
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 163,
+        "byteStart": 112,
+        "code": "E3004",
+        "column": 113,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_add_overflow_07 + b_signed_add_overflow_07"
+      },
+      "family": "signed-add-overflow",
+      "id": "reject.signed-add-overflow.v07",
+      "ordinal": 24,
+      "sourceSha256": "20537c826f18d0093eacab49c8db7db6505bf6f1ecc3a28078b43d5a2b9596a5",
+      "variant": 7
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 173,
+        "byteStart": 112,
+        "code": "E3004",
+        "column": 113,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_subtract_overflow_00 - b_signed_subtract_overflow_00"
+      },
+      "family": "signed-subtract-overflow",
+      "id": "reject.signed-subtract-overflow.v00",
+      "ordinal": 25,
+      "sourceSha256": "96d9b7d1df56e7359680b6ca7a7801c1e226e63b8c430ef25f3c66ef44c7bb76",
+      "variant": 0
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 173,
+        "byteStart": 112,
+        "code": "E3004",
+        "column": 113,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_subtract_overflow_01 - b_signed_subtract_overflow_01"
+      },
+      "family": "signed-subtract-overflow",
+      "id": "reject.signed-subtract-overflow.v01",
+      "ordinal": 26,
+      "sourceSha256": "bc6aacda7cd858b6089401f36403d4841447c92e763f510426f606461ad179a2",
+      "variant": 1
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 173,
+        "byteStart": 112,
+        "code": "E3004",
+        "column": 113,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_subtract_overflow_02 - b_signed_subtract_overflow_02"
+      },
+      "family": "signed-subtract-overflow",
+      "id": "reject.signed-subtract-overflow.v02",
+      "ordinal": 27,
+      "sourceSha256": "3b3c6c7343d164f0873493d0e095c657e5ba4b4054b7840b68c4ca1a49ef4dad",
+      "variant": 2
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 182,
+        "byteStart": 121,
+        "code": "E3004",
+        "column": 122,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_subtract_overflow_03 - b_signed_subtract_overflow_03"
+      },
+      "family": "signed-subtract-overflow",
+      "id": "reject.signed-subtract-overflow.v03",
+      "ordinal": 28,
+      "sourceSha256": "255090b8f78136efe2764504a56dd15cb91594759af82175668dc282fb8481b7",
+      "variant": 3
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 173,
+        "byteStart": 112,
+        "code": "E3004",
+        "column": 113,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_subtract_overflow_04 - b_signed_subtract_overflow_04"
+      },
+      "family": "signed-subtract-overflow",
+      "id": "reject.signed-subtract-overflow.v04",
+      "ordinal": 29,
+      "sourceSha256": "dc8f4e2c7fa726228d043dc50048ae601371e485c1fea9d0dd70e763a067d1cb",
+      "variant": 4
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 173,
+        "byteStart": 112,
+        "code": "E3004",
+        "column": 113,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_subtract_overflow_05 - b_signed_subtract_overflow_05"
+      },
+      "family": "signed-subtract-overflow",
+      "id": "reject.signed-subtract-overflow.v05",
+      "ordinal": 30,
+      "sourceSha256": "a8faa4f4456f040643c41831a70cffec4610040f03d9ac296fead25d7e781608",
+      "variant": 5
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 173,
+        "byteStart": 112,
+        "code": "E3004",
+        "column": 113,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_subtract_overflow_06 - b_signed_subtract_overflow_06"
+      },
+      "family": "signed-subtract-overflow",
+      "id": "reject.signed-subtract-overflow.v06",
+      "ordinal": 31,
+      "sourceSha256": "6f685451c7220ce5d1727ef51d0264cacb08f91bb48b20b24da4ccd02ce47c3d",
+      "variant": 6
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 182,
+        "byteStart": 121,
+        "code": "E3004",
+        "column": 122,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_subtract_overflow_07 - b_signed_subtract_overflow_07"
+      },
+      "family": "signed-subtract-overflow",
+      "id": "reject.signed-subtract-overflow.v07",
+      "ordinal": 32,
+      "sourceSha256": "87cf8471bc51fb8dcbde9e15c2a04fff29331ad56d69befd476797129f38f905",
+      "variant": 7
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 172,
+        "byteStart": 111,
+        "code": "E3004",
+        "column": 112,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_multiply_overflow_00 * b_signed_multiply_overflow_00"
+      },
+      "family": "signed-multiply-overflow",
+      "id": "reject.signed-multiply-overflow.v00",
+      "ordinal": 33,
+      "sourceSha256": "6faa00627f1ab619b77b4b43dab86ff27a61e7e4305c8e864ad4ca05fe53009d",
+      "variant": 0
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 171,
+        "byteStart": 110,
+        "code": "E3004",
+        "column": 111,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_multiply_overflow_01 * b_signed_multiply_overflow_01"
+      },
+      "family": "signed-multiply-overflow",
+      "id": "reject.signed-multiply-overflow.v01",
+      "ordinal": 34,
+      "sourceSha256": "6245082fb8bda2232e79bf82f03788c6dde5f9fa93f70a0a62bb8af6db88569d",
+      "variant": 1
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 171,
+        "byteStart": 110,
+        "code": "E3004",
+        "column": 111,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_multiply_overflow_02 * b_signed_multiply_overflow_02"
+      },
+      "family": "signed-multiply-overflow",
+      "id": "reject.signed-multiply-overflow.v02",
+      "ordinal": 35,
+      "sourceSha256": "628de128a2592a16161e2dede0d8db69cb143b22c9b3ff4db696b587b55738a9",
+      "variant": 2
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 173,
+        "byteStart": 112,
+        "code": "E3004",
+        "column": 113,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_multiply_overflow_03 * b_signed_multiply_overflow_03"
+      },
+      "family": "signed-multiply-overflow",
+      "id": "reject.signed-multiply-overflow.v03",
+      "ordinal": 36,
+      "sourceSha256": "e045a916c00ae90bcba8cb6745fa760a20e9d608635b45479eefd51ed08c865b",
+      "variant": 3
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 173,
+        "byteStart": 112,
+        "code": "E3004",
+        "column": 113,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_multiply_overflow_04 * b_signed_multiply_overflow_04"
+      },
+      "family": "signed-multiply-overflow",
+      "id": "reject.signed-multiply-overflow.v04",
+      "ordinal": 37,
+      "sourceSha256": "cb5ca59e0f1b8650679c7d3cd00dfb5f1039622be22b62d28035b9e3713cc958",
+      "variant": 4
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 172,
+        "byteStart": 111,
+        "code": "E3004",
+        "column": 112,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_multiply_overflow_05 * b_signed_multiply_overflow_05"
+      },
+      "family": "signed-multiply-overflow",
+      "id": "reject.signed-multiply-overflow.v05",
+      "ordinal": 38,
+      "sourceSha256": "3e4a7aa24b6206c557915bbc70d8cba484b086184388e9140a7c7ed085d839a6",
+      "variant": 5
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 174,
+        "byteStart": 113,
+        "code": "E3004",
+        "column": 114,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_multiply_overflow_06 * b_signed_multiply_overflow_06"
+      },
+      "family": "signed-multiply-overflow",
+      "id": "reject.signed-multiply-overflow.v06",
+      "ordinal": 39,
+      "sourceSha256": "071480819bed0da39776e14abc0e16e3595991c907ce319a0f5c24c9bdcaac50",
+      "variant": 6
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 174,
+        "byteStart": 113,
+        "code": "E3004",
+        "column": 114,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_multiply_overflow_07 * b_signed_multiply_overflow_07"
+      },
+      "family": "signed-multiply-overflow",
+      "id": "reject.signed-multiply-overflow.v07",
+      "ordinal": 40,
+      "sourceSha256": "bda97d8cd7aaf360994641451039675ffbfa625171dfa13db4d78001bad43470",
+      "variant": 7
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 145,
+        "byteStart": 93,
+        "code": "E3005",
+        "column": 94,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "invalid-shift-count",
+        "sourceSlice": "a_invalid_shift_count_00 << b_invalid_shift_count_00"
+      },
+      "family": "invalid-shift-count",
+      "id": "reject.invalid-shift-count.v00",
+      "ordinal": 41,
+      "sourceSha256": "db500a2f73070c5e27d7b285bd5ed14ad541f2803e6414bddacbcdeed62b0f5c",
+      "variant": 0
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 145,
+        "byteStart": 93,
+        "code": "E3005",
+        "column": 94,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "invalid-shift-count",
+        "sourceSlice": "a_invalid_shift_count_01 >> b_invalid_shift_count_01"
+      },
+      "family": "invalid-shift-count",
+      "id": "reject.invalid-shift-count.v01",
+      "ordinal": 42,
+      "sourceSha256": "7f30d516be54358675d5c3f45f921878217e2b226b7f2e804677738ac953d461",
+      "variant": 1
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 145,
+        "byteStart": 93,
+        "code": "E3005",
+        "column": 94,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "invalid-shift-count",
+        "sourceSlice": "a_invalid_shift_count_02 << b_invalid_shift_count_02"
+      },
+      "family": "invalid-shift-count",
+      "id": "reject.invalid-shift-count.v02",
+      "ordinal": 43,
+      "sourceSha256": "2031881d01e2df63b0b10753b55e639ec293e6a0f686ffd0dbfb13622b7be8b1",
+      "variant": 2
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 145,
+        "byteStart": 93,
+        "code": "E3005",
+        "column": 94,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "invalid-shift-count",
+        "sourceSlice": "a_invalid_shift_count_03 >> b_invalid_shift_count_03"
+      },
+      "family": "invalid-shift-count",
+      "id": "reject.invalid-shift-count.v03",
+      "ordinal": 44,
+      "sourceSha256": "f3a502a29a4d79733c6d4a63aad18751e8fcec7022d7f19e1ec0c4c5f533a1f4",
+      "variant": 3
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 146,
+        "byteStart": 94,
+        "code": "E3005",
+        "column": 95,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "invalid-shift-count",
+        "sourceSlice": "a_invalid_shift_count_04 << b_invalid_shift_count_04"
+      },
+      "family": "invalid-shift-count",
+      "id": "reject.invalid-shift-count.v04",
+      "ordinal": 45,
+      "sourceSha256": "111ab275da308e402c8a8b92335e12f8a7d2581e90a256358766176b71b7f7fb",
+      "variant": 4
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 146,
+        "byteStart": 94,
+        "code": "E3005",
+        "column": 95,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "invalid-shift-count",
+        "sourceSlice": "a_invalid_shift_count_05 >> b_invalid_shift_count_05"
+      },
+      "family": "invalid-shift-count",
+      "id": "reject.invalid-shift-count.v05",
+      "ordinal": 46,
+      "sourceSha256": "109f5d4f99970ad62b8f965fd9ec9124837ee848eb0262202b08a7153b93c187",
+      "variant": 5
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 147,
+        "byteStart": 95,
+        "code": "E3005",
+        "column": 96,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "invalid-shift-count",
+        "sourceSlice": "a_invalid_shift_count_06 << b_invalid_shift_count_06"
+      },
+      "family": "invalid-shift-count",
+      "id": "reject.invalid-shift-count.v06",
+      "ordinal": 47,
+      "sourceSha256": "1fdb5e238e726521000e319ba2f33018cef517e64faee6ee828950e839f74c7b",
+      "variant": 6
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 153,
+        "byteStart": 101,
+        "code": "E3005",
+        "column": 102,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "invalid-shift-count",
+        "sourceSlice": "a_invalid_shift_count_07 >> b_invalid_shift_count_07"
+      },
+      "family": "invalid-shift-count",
+      "id": "reject.invalid-shift-count.v07",
+      "ordinal": 48,
+      "sourceSha256": "c9bfd8b8313db32941322f6fcfc6fb4e5b40f1f931b47ccb70b7c31fdcf3ff94",
+      "variant": 7
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 81,
+        "byteStart": 64,
+        "code": "E3004",
+        "column": 65,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "-a_signed_edge_00"
+      },
+      "family": "signed-edge",
+      "id": "reject.signed-edge.v00",
+      "ordinal": 49,
+      "sourceSha256": "0e69533692bf03f927e7bab8af86eb460ad6fdbfbf305520936f4fabeca9354d",
+      "variant": 0
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 83,
+        "byteStart": 66,
+        "code": "E3004",
+        "column": 67,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "-a_signed_edge_01"
+      },
+      "family": "signed-edge",
+      "id": "reject.signed-edge.v01",
+      "ordinal": 50,
+      "sourceSha256": "1c04176685466e644836cf51c4424a514b67e9aebd2cbdcb781faae4131ce9b3",
+      "variant": 1
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 126,
+        "byteStart": 91,
+        "code": "E3004",
+        "column": 92,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_edge_02 / b_signed_edge_02"
+      },
+      "family": "signed-edge",
+      "id": "reject.signed-edge.v02",
+      "ordinal": 51,
+      "sourceSha256": "708bce7c3dc4286903bf92147092b29e16b68fb56684637f45e5ccd521ae3881",
+      "variant": 2
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 126,
+        "byteStart": 91,
+        "code": "E3004",
+        "column": 92,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "signed-integer-overflow",
+        "sourceSlice": "a_signed_edge_03 % b_signed_edge_03"
+      },
+      "family": "signed-edge",
+      "id": "reject.signed-edge.v03",
+      "ordinal": 52,
+      "sourceSha256": "bd0fdf328b013d88b88797c309e4603f36f8c0a2ca993c5c9c162ead9c73682f",
+      "variant": 3
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 113,
+        "byteStart": 77,
+        "code": "E3006",
+        "column": 78,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "invalid-signed-left-shift",
+        "sourceSlice": "a_signed_edge_04 << b_signed_edge_04"
+      },
+      "family": "signed-edge",
+      "id": "reject.signed-edge.v04",
+      "ordinal": 53,
+      "sourceSha256": "18b2e13c4aebaf52cd8a9295230501ce1dbd905096e6c2f9560e096942433561",
+      "variant": 4
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 113,
+        "byteStart": 77,
+        "code": "E3006",
+        "column": 78,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "invalid-signed-left-shift",
+        "sourceSlice": "a_signed_edge_05 << b_signed_edge_05"
+      },
+      "family": "signed-edge",
+      "id": "reject.signed-edge.v05",
+      "ordinal": 54,
+      "sourceSha256": "f137f54702011e2adc7eec05006592771a9f1834632f2377cc9c8a28b23b3b33",
+      "variant": 5
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 121,
+        "byteStart": 85,
+        "code": "E3006",
+        "column": 86,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "invalid-signed-left-shift",
+        "sourceSlice": "a_signed_edge_06 << b_signed_edge_06"
+      },
+      "family": "signed-edge",
+      "id": "reject.signed-edge.v06",
+      "ordinal": 55,
+      "sourceSha256": "29aa351f3dbe2546bd0df63858432ec8cc2b0ef191177282de96c583e5bb8567",
+      "variant": 6
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 113,
+        "byteStart": 77,
+        "code": "E3006",
+        "column": 78,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "invalid-signed-left-shift",
+        "sourceSlice": "a_signed_edge_07 << b_signed_edge_07"
+      },
+      "family": "signed-edge",
+      "id": "reject.signed-edge.v07",
+      "ordinal": 56,
+      "sourceSha256": "afa5970d206412185b994ec2e4f0b08addc2546bff2774ecc2d5faba07110015",
+      "variant": 7
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 66,
+        "byteStart": 57,
+        "code": "E3001",
+        "column": 58,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "read-of-uninitialized-object: uninit_00",
+        "sourceSlice": "uninit_00"
+      },
+      "family": "uninitialized-read",
+      "id": "reject.uninitialized-read.v00",
+      "ordinal": 57,
+      "sourceSha256": "1ab49daec898d052fbc23cf931813e4f9c0086b524198f79ce0e74f451863932",
+      "variant": 0
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 66,
+        "byteStart": 57,
+        "code": "E3001",
+        "column": 58,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "read-of-uninitialized-object: uninit_01",
+        "sourceSlice": "uninit_01"
+      },
+      "family": "uninitialized-read",
+      "id": "reject.uninitialized-read.v01",
+      "ordinal": 58,
+      "sourceSha256": "4885f92a76f254fdb63b60d558427e3e9ad66d6a89c700b9338d5bd8e421239e",
+      "variant": 1
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 66,
+        "byteStart": 57,
+        "code": "E3001",
+        "column": 58,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "read-of-uninitialized-object: uninit_02",
+        "sourceSlice": "uninit_02"
+      },
+      "family": "uninitialized-read",
+      "id": "reject.uninitialized-read.v02",
+      "ordinal": 59,
+      "sourceSha256": "e72f342d54f79d4ea7472ff2ddcc0856d628c73438af5fc2940ffebfd0697693",
+      "variant": 2
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 66,
+        "byteStart": 57,
+        "code": "E3001",
+        "column": 58,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "read-of-uninitialized-object: uninit_03",
+        "sourceSlice": "uninit_03"
+      },
+      "family": "uninitialized-read",
+      "id": "reject.uninitialized-read.v03",
+      "ordinal": 60,
+      "sourceSha256": "b8e8b4775cb7eaeb6ba324eafeb8c3c39efcd041430c5afa43f49f15c0e97cf9",
+      "variant": 3
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 66,
+        "byteStart": 57,
+        "code": "E3001",
+        "column": 58,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "read-of-uninitialized-object: uninit_04",
+        "sourceSlice": "uninit_04"
+      },
+      "family": "uninitialized-read",
+      "id": "reject.uninitialized-read.v04",
+      "ordinal": 61,
+      "sourceSha256": "62838609631dc067e624bc335c2e7a687e42faa0d48898d998131f16ad29695d",
+      "variant": 4
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 66,
+        "byteStart": 57,
+        "code": "E3001",
+        "column": 58,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "read-of-uninitialized-object: uninit_05",
+        "sourceSlice": "uninit_05"
+      },
+      "family": "uninitialized-read",
+      "id": "reject.uninitialized-read.v05",
+      "ordinal": 62,
+      "sourceSha256": "5253568be4aac1fad5b3a78c156fc1a4b6f69cdd955eb2f6db022867e73735b5",
+      "variant": 5
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 66,
+        "byteStart": 57,
+        "code": "E3001",
+        "column": 58,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "read-of-uninitialized-object: uninit_06",
+        "sourceSlice": "uninit_06"
+      },
+      "family": "uninitialized-read",
+      "id": "reject.uninitialized-read.v06",
+      "ordinal": 63,
+      "sourceSha256": "407eb298b9237dceb5c6f4548b22eef2584821089e3655aec011495b9cfd80b9",
+      "variant": 6
+    },
+    {
+      "classification": "EXPECTED_REJECT",
+      "diagnostic": {
+        "byteEnd": 66,
+        "byteStart": 57,
+        "code": "E3001",
+        "column": 58,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "read-of-uninitialized-object: uninit_07",
+        "sourceSlice": "uninit_07"
+      },
+      "family": "uninitialized-read",
+      "id": "reject.uninitialized-read.v07",
+      "ordinal": 64,
+      "sourceSha256": "ad800f0c0ac3e06d2672a3c0ff60313c639090b8f55bbbbb74a888a8820afe09",
+      "variant": 7
+    }
+  ],
+  "expressionAxes": [
+    {
+      "expression": "7",
+      "id": "literal",
+      "index": 0,
+      "value": 7
+    },
+    {
+      "expression": "(-9 + 20)",
+      "id": "signed-negative",
+      "index": 1,
+      "value": 11
+    },
+    {
+      "expression": "+(-(-8))",
+      "id": "unary-plus-minus",
+      "index": 2,
+      "value": 8
+    },
+    {
+      "expression": "(!0 + !!9)",
+      "id": "logical-not",
+      "index": 3,
+      "value": 2
+    },
+    {
+      "expression": "~(-10)",
+      "id": "bitwise-not",
+      "index": 4,
+      "value": 9
+    },
+    {
+      "expression": "(20 + 5 - 13)",
+      "id": "add-subtract",
+      "index": 5,
+      "value": 12
+    },
+    {
+      "expression": "(6 * 7 / 2)",
+      "id": "multiply-divide",
+      "index": 6,
+      "value": 21
+    },
+    {
+      "expression": "(53 % 10)",
+      "id": "remainder",
+      "index": 7,
+      "value": 3
+    },
+    {
+      "expression": "((3 << 3) + (32 >> 3))",
+      "id": "shifts",
+      "index": 8,
+      "value": 28
+    },
+    {
+      "expression": "((29 & 15) | (8 ^ 3))",
+      "id": "bitwise",
+      "index": 9,
+      "value": 15
+    },
+    {
+      "expression": "((4 < 9) + (9 >= 9) + (3 != 4))",
+      "id": "comparisons",
+      "index": 10,
+      "value": 3
+    },
+    {
+      "expression": "((0 && (1 / 0)) + (1 || (1 / 0)))",
+      "id": "short-circuit",
+      "index": 11,
+      "value": 1
+    },
+    {
+      "expression": "(1 ? 31 : (1 / 0))",
+      "id": "conditional-dead-arm",
+      "index": 12,
+      "value": 31
+    },
+    {
+      "expression": "(2, 17)",
+      "id": "comma",
+      "index": 13,
+      "value": 17
+    },
+    {
+      "expression": "((int)(unsigned char)260 + (int)(signed char)3)",
+      "id": "integer-casts",
+      "index": 14,
+      "value": 7
+    },
+    {
+      "expression": "((int)sizeof(int) + (int)_Alignof(long))",
+      "id": "sizeof-alignof",
+      "index": 15,
+      "value": 12
+    }
+  ],
+  "modelPolicy": {
+    "defined": "independent exact integer/control-flow model",
+    "entry": "zero-parameter int main(void)",
+    "expectedReject": "hand-audited runtime-error witnesses",
+    "memoryAndPointerOperations": "excluded",
+    "nestedMutation": "excluded",
+    "undefinedBehaviorOracleClaim": false
+  },
+  "runtimeControls": [
+    {
+      "diagnostic": {
+        "byteEnd": 29,
+        "byteStart": 17,
+        "code": "E3008",
+        "column": 18,
+        "file": "/dev/stdin",
+        "fileId": 1,
+        "line": 1,
+        "message": "interpreter-fuel-exhausted",
+        "sourceSlice": "for (;;) { }"
+      },
+      "id": "control.fuel-exhaustion",
+      "sourceSha256": "736e7db36fc0c6d233939db232e46c7fc3b4be9e1ae7e4f3fbd4d114ee35c613"
+    }
+  ],
+  "schema": "c30.day5.scalar-interpreter.v1",
+  "target": "aarch64-unknown-linux-gnu"
+}
