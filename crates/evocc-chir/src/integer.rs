@@ -435,6 +435,13 @@ pub fn eval_binary_integer(
             if ty.signed {
                 let left = left.mathematical_value();
                 let right = right.mathematical_value();
+                // C defines both `/` and `%` in terms of a representable
+                // quotient.  MIN / -1 is not representable in the result
+                // type, so the paired remainder expression is undefined too
+                // even though its mathematical remainder would be zero.
+                if left == ty.signed_min() && right == -1 {
+                    return Err(IntegerError::SignedOverflow);
+                }
                 let value = if op == BinaryOp::Div {
                     left.checked_div(right)
                 } else {

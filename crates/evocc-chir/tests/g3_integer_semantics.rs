@@ -147,6 +147,14 @@ fn checked_arithmetic_distinguishes_runtime_failure_classes() {
         ),
         Err(IntegerError::SignedOverflow)
     );
+    assert_eq!(
+        eval_binary_integer(
+            BinaryOp::Mod,
+            integer(i32::MIN as u64, CIntegerType::INT),
+            CInteger::int(-1),
+        ),
+        Err(IntegerError::SignedOverflow)
+    );
 }
 
 #[test]

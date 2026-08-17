@@ -7,6 +7,7 @@ description = "Equality-native, self-contained C compiler (flight-lab scaffold)"
 
 [dependencies]
 evocc-common = { path = "../evocc-common" }
+evocc-chir = { path = "../evocc-chir" }
 evocc-lex = { path = "../evocc-lex" }
 evocc-cpp = { path = "../evocc-cpp" }
 evocc-parser = { path = "../evocc-parser" }

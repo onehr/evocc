@@ -14,6 +14,7 @@
 
 pub mod initializer;
 pub mod integer;
+pub mod interp;
 pub mod semantic;
 
 pub use initializer::{

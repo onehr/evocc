@@ -1,7 +1,8 @@
 //! evocc: equality-native, self-contained C compiler.
 //!
-//! Day-3 scope: the driver now supports -E (preprocess) and --parse-only
-//! (parse to C-HIR). Every other pipeline stage remains NOT_IMPLEMENTED.
+//! The driver supports preprocessing, C-HIR validation, and the bounded Day-5
+//! scalar C-HIR interpreter. Later optimization and code-generation stages
+//! remain NOT_IMPLEMENTED.
 //!
 //! The shell delegates real work to the crates built in Day 2-3:
 //!   -E           → evocc-lex → evocc-cpp → token text output
@@ -14,6 +15,10 @@ use std::fs;
 use std::io::Write;
 use std::process::ExitCode;
 
+use evocc_chir::{
+    interp::{interpret_scalar_function, InterpreterLimits},
+    CHirDecl,
+};
 use evocc_common::{Arena, FileId};
 use evocc_cpp::Preprocessor;
 use evocc_lex::{Lexer, TokenKind};
@@ -23,6 +28,7 @@ use evocc_parser::Parser;
 enum DriverMode {
     Preprocess,
     ParseOnly,
+    InterpretCHir,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -49,6 +55,7 @@ const CAPABILITIES: &[&str] = &[
     "kernel-build",
     "preprocess",
     "parse-only",
+    "interpret-c-hir",
     "c-hir-emit",
     "evoir-emit",
     "eqsat-optimize",
@@ -57,6 +64,7 @@ const CAPABILITIES: &[&str] = &[
 const FLAG_MAP: &[(&str, &str)] = &[
     ("-E", "preprocess"),
     ("--parse-only", "parse-only"),
+    ("--interpret-c-hir", "interpret-c-hir"),
     ("--emit=c-hir", "c-hir-emit"),
     ("--emit=evoir", "evoir-emit"),
     ("-Oeq", "eqsat-optimize"),
@@ -80,6 +88,7 @@ fn main() -> ExitCode {
         eprintln!("usage: evocc <{}> --probe", CAPABILITIES.join("|"));
         eprintln!("       evocc -E [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --parse-only [--target={SUPPORTED_TARGET}] <file>");
+        eprintln!("       evocc --interpret-c-hir [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("evocc: unrecognized invocation is NOT_IMPLEMENTED");
         return ExitCode::from(NOT_IMPLEMENTED_EXIT);
     }
@@ -109,6 +118,7 @@ fn main() -> ExitCode {
     match options.mode {
         DriverMode::Preprocess => run_preprocess(&options),
         DriverMode::ParseOnly => run_parse(&options),
+        DriverMode::InterpretCHir => run_interpret(&options),
     }
 }
 
@@ -126,6 +136,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         match arg.as_str() {
             "-E" => set_mode(&mut mode, DriverMode::Preprocess)?,
             "--parse-only" => set_mode(&mut mode, DriverMode::ParseOnly)?,
+            "--interpret-c-hir" => set_mode(&mut mode, DriverMode::InterpretCHir)?,
             "--target" => {
                 index += 1;
                 let value = args
@@ -174,7 +185,9 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     }
 
     Ok(DriverOptions {
-        mode: mode.ok_or_else(|| "exactly one of -E or --parse-only is required".to_string())?,
+        mode: mode.ok_or_else(|| {
+            "exactly one of -E, --parse-only, or --interpret-c-hir is required".to_string()
+        })?,
         target: target.unwrap_or(DriverTarget::Aarch64UnknownLinuxGnu),
         input: input.ok_or_else(|| "an input file is required".to_string())?,
         include_paths,
@@ -390,6 +403,14 @@ fn can_concatenate(group: &[(TokenKind, String)], kind: TokenKind, text: &str) -
 }
 
 fn run_parse(options: &DriverOptions) -> ExitCode {
+    run_parsed(options, false)
+}
+
+fn run_interpret(options: &DriverOptions) -> ExitCode {
+    run_parsed(options, true)
+}
+
+fn run_parsed(options: &DriverOptions, interpret: bool) -> ExitCode {
     let (src, tokens) = match read_and_lex(&options.input) {
         Ok(value) => value,
         Err(code) => return code,
@@ -437,6 +458,70 @@ fn run_parse(options: &DriverOptions) -> ExitCode {
         return ExitCode::from(1);
     }
 
+    if !interpret {
+        return ExitCode::SUCCESS;
+    }
+
+    let Some(entry) = unit.iter().find_map(|declaration| match declaration {
+        CHirDecl::Function(function)
+            if function.body.is_some() && function.name.spelling == "main" =>
+        {
+            Some(function.symbol)
+        }
+        _ => None,
+    }) else {
+        emit_error(
+            &options.input,
+            1,
+            1,
+            "E3007",
+            "interpreter-entry-function-not-found: main",
+        );
+        return ExitCode::from(1);
+    };
+
+    let outcome = match interpret_scalar_function(&unit, entry, InterpreterLimits::default()) {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            let span = error.span();
+            emit_error(
+                span.and_then(|span| pp.source_path(span.file))
+                    .unwrap_or(options.input.as_str()),
+                span.map_or(1, |span| span.line_start.max(1)),
+                span.map_or(1, |span| span.column_start.max(1)),
+                error.code(),
+                &error.message(),
+            );
+            return ExitCode::from(1);
+        }
+    };
+    let Some(value) = outcome.return_value else {
+        emit_error(
+            &options.input,
+            1,
+            1,
+            "E3007",
+            "interpreter-main-returned-no-value",
+        );
+        return ExitCode::from(1);
+    };
+    let mathematical = match value.mathematical_value(unit.types()) {
+        Ok(value) => value,
+        Err(_) => {
+            emit_error(
+                &options.input,
+                1,
+                1,
+                "E3007",
+                "interpreter-main-return-type-is-not-scalar-integer",
+            );
+            return ExitCode::from(1);
+        }
+    };
+    let mut stdout = std::io::stdout().lock();
+    if writeln!(stdout, "{mathematical}").is_err() {
+        return ExitCode::from(1);
+    }
     ExitCode::SUCCESS
 }
 
