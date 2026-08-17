@@ -17,7 +17,7 @@ use evocc_chir::{
     UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer, WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
-use evocc_lex::{Token, TokenKind};
+use evocc_lex::{Token, TokenKind, TokenText};
 use evocc_types::{
     ArrayBound, BitFieldSpec, CanonicalType, ComplexBase, EnumConstant, FloatKind,
     FunctionParameters, IntRank, Qualifiers, RecordField, TagDefinition, TagId, TagKind, TagState,
@@ -206,7 +206,22 @@ pub struct Parser<'src, 'arena> {
 }
 
 impl<'src, 'arena> Parser<'src, 'arena> {
-    pub fn new(tokens: Vec<Token>, file: FileId, source: &'src str) -> Self {
+    pub fn new(mut tokens: Vec<Token>, file: FileId, source: &'src str) -> Self {
+        // GNU alternate keyword spellings must remain identifiers through
+        // preprocessing so they can be macro-expanded or token-pasted. Turn
+        // the exact surviving spelling into its parser keyword only at this
+        // boundary.
+        for token in &mut tokens {
+            let spelling = match &token.text {
+                TokenText::Decoded(text) => Some(text.as_str()),
+                TokenText::Borrowed => {
+                    source.get(token.span.byte_start as usize..token.span.byte_end as usize)
+                }
+            };
+            if token.kind == TokenKind::Identifier && spelling == Some("__signed__") {
+                token.kind = TokenKind::Signed;
+            }
+        }
         let symbols = SymbolTable::new();
         let current_scope = symbols.file_scope();
         Self {

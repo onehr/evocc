@@ -1202,6 +1202,33 @@ mod tests {
     }
 
     #[test]
+    fn lex_gnu_signed_spelling_remains_an_identifier_for_preprocessing() {
+        let source = "x __signed__ __signed_ ___signed__ __signed___";
+        let tokens = lex(source);
+        assert_eq!(
+            tokens.iter().map(|token| token.kind).collect::<Vec<_>>(),
+            vec![
+                TokenKind::Identifier,
+                TokenKind::Identifier,
+                TokenKind::Identifier,
+                TokenKind::Identifier,
+                TokenKind::Identifier,
+                TokenKind::Eof,
+            ],
+            "the preprocessor must still be able to expand or paste the GNU spelling",
+        );
+
+        let alias = &tokens[1];
+        assert_eq!(alias.span.file, FileId::new(1));
+        assert_eq!((alias.span.byte_start, alias.span.byte_end), (2, 12));
+        assert_eq!((alias.span.line_start, alias.span.column_start), (1, 3));
+        assert_eq!(
+            &source[alias.span.byte_start as usize..alias.span.byte_end as usize],
+            "__signed__",
+        );
+    }
+
+    #[test]
     fn lex_keyword_sizeof() {
         assert_kinds("sizeof", &[TokenKind::Sizeof, TokenKind::Eof]);
     }
