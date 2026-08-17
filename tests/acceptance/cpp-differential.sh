@@ -98,8 +98,8 @@ elif ! "$CONTAINER_BIN" image inspect "$IMAGE" \
     >"$RUN_DIR/image-list-before.json" 2>"$RUN_DIR/image-list-before.stderr" \
   || ! "$JQ" -e --arg locator "$IMAGE" --arg id "$EXPECTED_IMAGE_ID" '
       any(.[];
-        .id == $id and
-        (.configuration.name == $locator or .configuration.name == ($locator | split(":")[0]))
+        .configuration.descriptor.digest == $id and
+        .configuration.name == $locator
       )
     ' "$RUN_DIR/image-list-before.json" >/dev/null 2>&1; then
   printf 'image %s not available in container runtime\n' "$IMAGE" >&2
@@ -210,8 +210,8 @@ RUNNER_EOF
       >"$RUN_DIR/image-list-after.json" 2>"$RUN_DIR/image-list-after.stderr" \
     || ! "$JQ" -e --arg locator "$IMAGE" --arg id "$EXPECTED_IMAGE_ID" '
         any(.[];
-          .id == $id and
-          (.configuration.name == $locator or .configuration.name == ($locator | split(":")[0]))
+          .configuration.descriptor.digest == $id and
+          .configuration.name == $locator
         )
       ' "$RUN_DIR/image-list-after.json" >/dev/null 2>&1; then
     printf 'CPP image locator no longer resolves to the frozen identity\n' >&2
