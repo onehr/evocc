@@ -3,9 +3,9 @@
 use std::collections::HashMap;
 
 use evocc_chir::{
-    BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirStmt, CHirUnit, CharLit, CharPrefix,
-    EnumeratorDecl, FloatLit, FloatSuffix, FunctionDecl, IntBase, IntLit, IntSuffix, ObjectDecl,
-    ParameterDecl, ParameterSyntax, RecordMember, SpannedName, StorageClass, StringLit,
+    BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, CharLit,
+    CharPrefix, EnumeratorDecl, FloatLit, FloatSuffix, FunctionDecl, IntBase, IntLit, IntSuffix,
+    ObjectDecl, ParameterDecl, ParameterSyntax, RecordMember, SpannedName, StorageClass, StringLit,
     StringPrefix, TagDecl, TagMembers, TypeSpecifier, TypedefDecl, UnaryOp, WrittenDeclarator,
     WrittenDeclaratorLayer,
 };
@@ -64,17 +64,27 @@ struct TagBinding {
     kind: TagKind,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DeclarationContext {
+    File,
+    Block,
+    ForInitializer,
+}
+
 pub struct Parser<'src, 'arena> {
     tokens: Vec<Token>,
     pos: usize,
     file: FileId,
     source: &'src str,
     had_error: bool,
+    error_count: usize,
     diagnostic: Option<ParseDiagnostic>,
     arena: Option<&'arena Arena>,
     types: TypeInterner,
     tags: HashMap<String, TagBinding>,
     side_declarations: Vec<&'arena CHirDecl<'arena>>,
+    loop_depth: usize,
+    switch_depth: usize,
 }
 
 impl<'src, 'arena> Parser<'src, 'arena> {
@@ -85,11 +95,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             file,
             source,
             had_error: false,
+            error_count: 0,
             diagnostic: None,
             arena: None,
             types: TypeInterner::new(),
             tags: HashMap::new(),
             side_declarations: Vec::new(),
+            loop_depth: 0,
+            switch_depth: 0,
         }
     }
 
@@ -98,6 +111,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.arena = Some(arena);
         let mut decls = Vec::new();
         while !self.is_done() {
+            if let Some((code, message)) = misplaced_statement_diagnostic(self.peek_kind()) {
+                self.report(code, message, self.span());
+                self.advance();
+                continue;
+            }
             let before = self.pos;
             if let Some(mut parsed) = self.parse_external_declaration() {
                 decls.append(&mut parsed);
@@ -164,6 +182,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn report(&mut self, code: &'static str, message: impl Into<String>, span: SourceSpan) {
         self.had_error = true;
+        self.error_count += 1;
         if self.diagnostic.is_none() {
             self.diagnostic = Some(ParseDiagnostic {
                 span,
@@ -224,6 +243,35 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     // ── external declarations ──────────────────────────────────────────
 
     fn parse_external_declaration(&mut self) -> Option<Vec<&'arena CHirDecl<'arena>>> {
+        self.parse_declaration(DeclarationContext::File)
+    }
+
+    fn parse_declaration(
+        &mut self,
+        context: DeclarationContext,
+    ) -> Option<Vec<&'arena CHirDecl<'arena>>> {
+        let types_checkpoint = self.types.clone();
+        let tags_checkpoint = self.tags.clone();
+        let side_checkpoint = self.side_declarations.clone();
+        let error_checkpoint = self.error_count;
+        let side_start = side_checkpoint.len();
+
+        let result = self.parse_declaration_inner(context, side_start);
+        if result.is_none() || self.error_count != error_checkpoint {
+            self.types = types_checkpoint;
+            self.tags = tags_checkpoint;
+            self.side_declarations = side_checkpoint;
+            None
+        } else {
+            result
+        }
+    }
+
+    fn parse_declaration_inner(
+        &mut self,
+        context: DeclarationContext,
+        side_start: usize,
+    ) -> Option<Vec<&'arena CHirDecl<'arena>>> {
         let start_span = self.span();
         let storage = self.parse_storage_class();
         let Some(specifier) = self.parse_type_specifier() else {
@@ -234,7 +282,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if self.peek_kind() == Some(TokenKind::Semicolon) {
             let semi = self.advance().expect("peeked semicolon");
             let declaration_span = self.merge_span(start_span, semi.span);
-            let mut declarations = std::mem::take(&mut self.side_declarations);
+            let mut declarations = self.side_declarations.split_off(side_start);
             if let Some(event) = specifier.tag_event {
                 declarations.push(self.finish_tag_event(event, declaration_span));
             } else {
@@ -263,7 +311,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 })
                 .unwrap_or(ParameterSyntax::Unspecified);
             let body = if self.peek_kind() == Some(TokenKind::LBrace) {
-                Some(self.parse_compound_statement())
+                let open = self.span();
+                let body = self.parse_function_body();
+                if context != DeclarationContext::File {
+                    self.report("E1205", "nested-function-definition", open);
+                }
+                Some(body)
             } else {
                 None
             };
@@ -273,7 +326,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.declaration_end(declarator.name.span)
             };
             let declaration_span = self.merge_span(start_span, end_span);
-            let mut declarations = std::mem::take(&mut self.side_declarations);
+            let mut declarations = self.side_declarations.split_off(side_start);
             if let Some(event) = specifier.tag_event {
                 declarations.push(self.finish_tag_event(event, declaration_span));
             }
@@ -291,13 +344,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
 
         let initializer = if self.match_kind(TokenKind::Assign) {
-            Some(self.parse_expression())
+            Some(self.parse_expression()?)
         } else {
             None
         };
         let end_span = self.declaration_end(declarator.name.span);
         let declaration_span = self.merge_span(start_span, end_span);
-        let mut declarations = std::mem::take(&mut self.side_declarations);
+        let mut declarations = self.side_declarations.split_off(side_start);
         if let Some(event) = specifier.tag_event {
             declarations.push(self.finish_tag_event(event, declaration_span));
         }
@@ -322,6 +375,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         };
         declarations.push(self.alloc_node(declaration));
         Some(declarations)
+    }
+
+    fn parse_function_body(&mut self) -> &'arena CHirStmt<'arena> {
+        let outer_loop_depth = std::mem::replace(&mut self.loop_depth, 0);
+        let outer_switch_depth = std::mem::replace(&mut self.switch_depth, 0);
+        let body = self.parse_compound_statement();
+        self.loop_depth = outer_loop_depth;
+        self.switch_depth = outer_switch_depth;
+        body
     }
 
     fn declaration_end(&mut self, fallback: SourceSpan) -> SourceSpan {
@@ -598,7 +660,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.apply_declarator(specifier.surface.type_id(), &decl.derived)
                 });
             let bit_width = if self.match_kind(TokenKind::Colon) {
-                Some(self.parse_expression())
+                self.parse_expression()
             } else {
                 None
             };
@@ -656,7 +718,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 span: token.span,
             };
             let written_value = if self.match_kind(TokenKind::Assign) {
-                Some(self.parse_assignment())
+                self.parse_assignment()
             } else {
                 None
             };
@@ -917,6 +979,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn parse_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
         match self.peek_kind()? {
+            TokenKind::If => self.parse_if_statement(),
+            TokenKind::Switch => self.parse_switch_statement(),
+            TokenKind::While => self.parse_while_statement(),
+            TokenKind::Do => self.parse_do_while_statement(),
+            TokenKind::For => self.parse_for_statement(),
             TokenKind::Return => {
                 let ret_tok = self.advance().unwrap();
                 let start_span = ret_tok.span;
@@ -925,26 +992,199 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let span = self.merge_span(start_span, semi_span);
                     return Some(self.alloc_node(CHirStmt::Return(None, span)));
                 }
-                let expr = self.parse_expression();
+                let expr = self.parse_expression()?;
                 let semi = self.expect(TokenKind::Semicolon);
                 let end_span = semi.as_ref().map_or(expr.span(), |token| token.span);
                 let span = self.merge_span(start_span, end_span);
                 Some(self.alloc_node(CHirStmt::Return(Some(expr), span)))
             }
+            TokenKind::Break => {
+                let keyword = self.advance().expect("peeked break");
+                if self.loop_depth == 0 && self.switch_depth == 0 {
+                    self.report("E1201", "break-outside-loop-or-switch", keyword.span);
+                }
+                let semicolon = self.expect(TokenKind::Semicolon);
+                let end = semicolon.as_ref().map_or(keyword.span, |token| token.span);
+                let span = self.merge_span(keyword.span, end);
+                Some(self.alloc_node(CHirStmt::Break(span)))
+            }
+            TokenKind::Continue => {
+                let keyword = self.advance().expect("peeked continue");
+                if self.loop_depth == 0 {
+                    self.report("E1202", "continue-outside-loop", keyword.span);
+                }
+                let semicolon = self.expect(TokenKind::Semicolon);
+                let end = semicolon.as_ref().map_or(keyword.span, |token| token.span);
+                let span = self.merge_span(keyword.span, end);
+                Some(self.alloc_node(CHirStmt::Continue(span)))
+            }
+            TokenKind::Goto => self.parse_goto_statement(),
+            TokenKind::Case => self.parse_case_statement(),
+            TokenKind::Default => self.parse_default_statement(),
             TokenKind::LBrace => Some(self.parse_compound_statement()),
             TokenKind::Semicolon => {
                 let semi = self.advance().unwrap();
                 Some(self.alloc_node(CHirStmt::Null(semi.span)))
             }
+            TokenKind::Identifier
+                if self.tokens.get(self.pos + 1).map(|token| token.kind)
+                    == Some(TokenKind::Colon) =>
+            {
+                self.parse_label_statement()
+            }
             _ => {
                 let start = self.span();
-                let expr = self.parse_expression();
+                let expr = self.parse_expression()?;
                 let semi = self.expect(TokenKind::Semicolon);
                 let end = semi.as_ref().map_or(expr.span(), |token| token.span);
                 let span = self.merge_span(start, end);
                 Some(self.alloc_node(CHirStmt::Expr(expr, span)))
             }
         }
+    }
+
+    fn parse_if_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
+        let keyword = self.advance().expect("peeked if");
+        self.expect(TokenKind::LParen)?;
+        let condition = self.parse_expression()?;
+        self.expect(TokenKind::RParen)?;
+        let then_branch = self.parse_statement()?;
+        let else_branch = if self.match_kind(TokenKind::Else) {
+            Some(self.parse_statement()?)
+        } else {
+            None
+        };
+        let end = else_branch.map_or_else(|| then_branch.span(), CHirStmt::span);
+        let span = self.merge_span(keyword.span, end);
+        Some(self.alloc_node(CHirStmt::If(condition, then_branch, else_branch, span)))
+    }
+
+    fn parse_switch_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
+        let keyword = self.advance().expect("peeked switch");
+        self.expect(TokenKind::LParen)?;
+        let expression = self.parse_expression()?;
+        self.expect(TokenKind::RParen)?;
+        self.switch_depth += 1;
+        let body = self.parse_statement();
+        self.switch_depth -= 1;
+        let body = body?;
+        let span = self.merge_span(keyword.span, body.span());
+        Some(self.alloc_node(CHirStmt::Switch(expression, body, span)))
+    }
+
+    fn parse_while_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
+        let keyword = self.advance().expect("peeked while");
+        self.expect(TokenKind::LParen)?;
+        let condition = self.parse_expression()?;
+        self.expect(TokenKind::RParen)?;
+        self.loop_depth += 1;
+        let body = self.parse_statement();
+        self.loop_depth -= 1;
+        let body = body?;
+        let span = self.merge_span(keyword.span, body.span());
+        Some(self.alloc_node(CHirStmt::While(condition, body, span)))
+    }
+
+    fn parse_do_while_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
+        let keyword = self.advance().expect("peeked do");
+        self.loop_depth += 1;
+        let body = self.parse_statement();
+        self.loop_depth -= 1;
+        let body = body?;
+        self.expect(TokenKind::While)?;
+        self.expect(TokenKind::LParen)?;
+        let condition = self.parse_expression()?;
+        self.expect(TokenKind::RParen)?;
+        let semicolon = self.expect(TokenKind::Semicolon)?;
+        let span = self.merge_span(keyword.span, semicolon.span);
+        Some(self.alloc_node(CHirStmt::DoWhile(body, condition, span)))
+    }
+
+    fn parse_for_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
+        let keyword = self.advance().expect("peeked for");
+        self.expect(TokenKind::LParen)?;
+
+        let initializer = if self.match_kind(TokenKind::Semicolon) {
+            CHirForInit::Empty
+        } else if self
+            .peek_kind()
+            .is_some_and(|kind| self.is_declaration_start(kind))
+        {
+            let declarations = self.parse_declaration(DeclarationContext::ForInitializer)?;
+            CHirForInit::Declaration(declarations)
+        } else {
+            let expression = self.parse_expression()?;
+            self.expect(TokenKind::Semicolon)?;
+            CHirForInit::Expression(expression)
+        };
+
+        let condition = if self.match_kind(TokenKind::Semicolon) {
+            None
+        } else {
+            let expression = self.parse_expression()?;
+            self.expect(TokenKind::Semicolon)?;
+            Some(expression)
+        };
+        let step = if self.peek_kind() == Some(TokenKind::RParen) {
+            None
+        } else {
+            Some(self.parse_expression()?)
+        };
+        self.expect(TokenKind::RParen)?;
+
+        self.loop_depth += 1;
+        let body = self.parse_statement();
+        self.loop_depth -= 1;
+        let body = body?;
+        let span = self.merge_span(keyword.span, body.span());
+        Some(self.alloc_node(CHirStmt::For(initializer, condition, step, body, span)))
+    }
+
+    fn parse_goto_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
+        let keyword = self.advance().expect("peeked goto");
+        let token = self.expect(TokenKind::Identifier)?;
+        let label = SpannedName {
+            spelling: self.token_text(&token).to_owned(),
+            span: token.span,
+        };
+        let semicolon = self.expect(TokenKind::Semicolon)?;
+        let span = self.merge_span(keyword.span, semicolon.span);
+        Some(self.alloc_node(CHirStmt::Goto(label, span)))
+    }
+
+    fn parse_label_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
+        let token = self.advance().expect("peeked label");
+        let label = SpannedName {
+            spelling: self.token_text(&token).to_owned(),
+            span: token.span,
+        };
+        self.expect(TokenKind::Colon)?;
+        let nested = self.parse_statement()?;
+        let span = self.merge_span(token.span, nested.span());
+        Some(self.alloc_node(CHirStmt::Label(label, nested, span)))
+    }
+
+    fn parse_case_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
+        let keyword = self.advance().expect("peeked case");
+        if self.switch_depth == 0 {
+            self.report("E1203", "case-outside-switch", keyword.span);
+        }
+        let value = self.parse_expression()?;
+        self.expect(TokenKind::Colon)?;
+        let nested = self.parse_statement()?;
+        let span = self.merge_span(keyword.span, nested.span());
+        Some(self.alloc_node(CHirStmt::Case(value, nested, span)))
+    }
+
+    fn parse_default_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
+        let keyword = self.advance().expect("peeked default");
+        if self.switch_depth == 0 {
+            self.report("E1204", "default-outside-switch", keyword.span);
+        }
+        self.expect(TokenKind::Colon)?;
+        let nested = self.parse_statement()?;
+        let span = self.merge_span(keyword.span, nested.span());
+        Some(self.alloc_node(CHirStmt::Default(nested, span)))
     }
 
     fn parse_compound_statement(&mut self) -> &'arena CHirStmt<'arena> {
@@ -957,7 +1197,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .peek_kind()
                 .is_some_and(|kind| self.is_declaration_start(kind))
             {
-                if let Some(declarations) = self.parse_external_declaration() {
+                if let Some(declarations) = self.parse_declaration(DeclarationContext::Block) {
                     items.extend(declarations.into_iter().map(CHirBlockItem::Declaration));
                 }
             } else if let Some(statement) = self.parse_statement() {
@@ -1015,48 +1255,48 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     // ── expressions ────────────────────────────────────────────────────
 
-    fn parse_expression(&mut self) -> &'arena CHirExpr<'arena> {
+    fn parse_expression(&mut self) -> Option<&'arena CHirExpr<'arena>> {
         self.parse_comma()
     }
 
-    fn parse_comma(&mut self) -> &'arena CHirExpr<'arena> {
-        let mut expression = self.parse_assignment();
+    fn parse_comma(&mut self) -> Option<&'arena CHirExpr<'arena>> {
+        let mut expression = self.parse_assignment()?;
         while self.match_kind(TokenKind::Comma) {
-            let right = self.parse_assignment();
+            let right = self.parse_assignment()?;
             let span = self.merge_span(expression.span(), right.span());
             expression = self.alloc_node(CHirExpr::Comma(expression, right, span));
         }
-        expression
+        Some(expression)
     }
 
-    fn parse_argument_expression(&mut self) -> &'arena CHirExpr<'arena> {
+    fn parse_argument_expression(&mut self) -> Option<&'arena CHirExpr<'arena>> {
         self.parse_assignment()
     }
 
-    fn parse_assignment(&mut self) -> &'arena CHirExpr<'arena> {
-        let lhs = self.parse_conditional();
+    fn parse_assignment(&mut self) -> Option<&'arena CHirExpr<'arena>> {
+        let lhs = self.parse_conditional()?;
         if self.match_kind(TokenKind::Assign) {
-            let rhs = self.parse_assignment();
+            let rhs = self.parse_assignment()?;
             let span = self.merge_span(lhs.span(), rhs.span());
-            return self.alloc_node(CHirExpr::Assign(lhs, rhs, span));
+            return Some(self.alloc_node(CHirExpr::Assign(lhs, rhs, span)));
         }
-        lhs
+        Some(lhs)
     }
 
-    fn parse_conditional(&mut self) -> &'arena CHirExpr<'arena> {
-        let condition = self.parse_binary(1);
+    fn parse_conditional(&mut self) -> Option<&'arena CHirExpr<'arena>> {
+        let condition = self.parse_binary(1)?;
         if !self.match_kind(TokenKind::Question) {
-            return condition;
+            return Some(condition);
         }
-        let when_true = self.parse_expression();
-        self.expect(TokenKind::Colon);
-        let when_false = self.parse_conditional();
+        let when_true = self.parse_expression()?;
+        self.expect(TokenKind::Colon)?;
+        let when_false = self.parse_conditional()?;
         let span = self.merge_span(condition.span(), when_false.span());
-        self.alloc_node(CHirExpr::Ternary(condition, when_true, when_false, span))
+        Some(self.alloc_node(CHirExpr::Ternary(condition, when_true, when_false, span)))
     }
 
-    fn parse_binary(&mut self, min_prec: u8) -> &'arena CHirExpr<'arena> {
-        let mut lhs = self.parse_unary();
+    fn parse_binary(&mut self, min_prec: u8) -> Option<&'arena CHirExpr<'arena>> {
+        let mut lhs = self.parse_unary()?;
         loop {
             let op_kind = match self.peek_kind() {
                 Some(k) if prec(k) >= min_prec => k,
@@ -1068,14 +1308,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             };
             let op_prec = prec(op_kind);
             self.advance();
-            let rhs = self.parse_binary(op_prec + 1);
+            let rhs = self.parse_binary(op_prec + 1)?;
             let span = self.merge_span(lhs.span(), rhs.span());
             lhs = self.alloc_node(CHirExpr::Binary(op, lhs, rhs, span));
         }
-        lhs
+        Some(lhs)
     }
 
-    fn parse_unary(&mut self) -> &'arena CHirExpr<'arena> {
+    fn parse_unary(&mut self) -> Option<&'arena CHirExpr<'arena>> {
         let unary = match self.peek_kind() {
             Some(TokenKind::Minus) => Some(UnaryOp::Neg),
             Some(TokenKind::Plus) => Some(UnaryOp::Plus),
@@ -1089,33 +1329,33 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         };
         if let Some(op) = unary {
             let token = self.advance().unwrap();
-            let operand = self.parse_unary();
+            let operand = self.parse_unary()?;
             let span = self.merge_span(token.span, operand.span());
-            return self.alloc_node(CHirExpr::Unary(op, operand, span));
+            return Some(self.alloc_node(CHirExpr::Unary(op, operand, span)));
         }
 
         if self.peek_kind() == Some(TokenKind::Sizeof) {
             let token = self.advance().unwrap();
             if self.looks_like_parenthesized_type() {
                 self.advance();
-                let specifier = self.parse_type_specifier().unwrap();
+                let specifier = self.parse_type_specifier()?;
                 let end = self.peek().map(|token| token.span).unwrap_or(token.span);
-                self.expect(TokenKind::RParen);
+                self.expect(TokenKind::RParen)?;
                 let span = self.merge_span(token.span, end);
                 if let Some(event) = specifier.tag_event {
                     let declaration = self.finish_tag_event(event, span);
                     self.side_declarations.push(declaration);
                 }
-                return self.alloc_node(CHirExpr::SizeOf(specifier.surface.type_id(), span));
+                return Some(self.alloc_node(CHirExpr::SizeOf(specifier.surface.type_id(), span)));
             }
-            let operand = self.parse_unary();
+            let operand = self.parse_unary()?;
             let span = self.merge_span(token.span, operand.span());
-            return self.alloc_node(CHirExpr::SizeOfExpr(operand, span));
+            return Some(self.alloc_node(CHirExpr::SizeOfExpr(operand, span)));
         }
 
         if self.peek_kind() == Some(TokenKind::Alignof) {
             let token = self.advance().unwrap();
-            self.expect(TokenKind::LParen);
+            self.expect(TokenKind::LParen)?;
             let specifier = if self
                 .peek_kind()
                 .is_some_and(|kind| self.is_type_specifier_kind(kind))
@@ -1124,45 +1364,43 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             } else {
                 self.report("E1003", "expected-expression", self.span());
                 None
-            };
+            }?;
             let end = self.peek().map(|token| token.span).unwrap_or(token.span);
-            self.expect(TokenKind::RParen);
+            self.expect(TokenKind::RParen)?;
             let span = self.merge_span(token.span, end);
-            let ty = if let Some(specifier) = specifier {
-                if let Some(event) = specifier.tag_event {
-                    let declaration = self.finish_tag_event(event, span);
-                    self.side_declarations.push(declaration);
-                }
-                specifier.surface.type_id()
-            } else {
-                self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default())
-            };
-            return self.alloc_node(CHirExpr::AlignOf(ty, span));
+            if let Some(event) = specifier.tag_event {
+                let declaration = self.finish_tag_event(event, span);
+                self.side_declarations.push(declaration);
+            }
+            return Some(self.alloc_node(CHirExpr::AlignOf(specifier.surface.type_id(), span)));
         }
 
         if self.looks_like_parenthesized_type() {
             let open = self.advance().unwrap();
-            let specifier = self.parse_type_specifier().unwrap();
-            let close = self.expect(TokenKind::RParen);
+            let specifier = self.parse_type_specifier()?;
+            let close = self.expect(TokenKind::RParen)?;
             if !self.peek_kind().is_some_and(can_start_expression) {
-                let span = close.map_or_else(|| self.span(), |token| token.span);
-                self.report("E1003", "expected-expression", span);
-                return self.alloc_node(CHirExpr::Ident("__error__".into(), span));
+                self.report("E1003", "expected-expression", close.span);
+                return None;
             }
-            let operand = self.parse_unary();
+            let operand = self.parse_unary()?;
             let span = self.merge_span(open.span, operand.span());
             if let Some(event) = specifier.tag_event {
                 let declaration = self.finish_tag_event(event, span);
                 self.side_declarations.push(declaration);
             }
-            return self.alloc_node(CHirExpr::Cast(specifier.surface.type_id(), operand, span));
+            return Some(self.alloc_node(CHirExpr::Cast(
+                specifier.surface.type_id(),
+                operand,
+                span,
+            )));
         }
 
         self.parse_postfix()
     }
 
-    fn parse_postfix(&mut self) -> &'arena CHirExpr<'arena> {
-        let mut expression = self.parse_primary();
+    fn parse_postfix(&mut self) -> Option<&'arena CHirExpr<'arena>> {
+        let mut expression = self.parse_primary()?;
         loop {
             match self.peek_kind() {
                 Some(TokenKind::LParen) => {
@@ -1170,7 +1408,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let mut arguments = Vec::new();
                     if self.peek_kind() != Some(TokenKind::RParen) {
                         loop {
-                            arguments.push(self.parse_argument_expression());
+                            arguments.push(self.parse_argument_expression()?);
                             if !self.match_kind(TokenKind::Comma) {
                                 break;
                             }
@@ -1180,18 +1418,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         .peek()
                         .map(|token| token.span)
                         .unwrap_or_else(|| self.span());
-                    self.expect(TokenKind::RParen);
+                    self.expect(TokenKind::RParen)?;
                     let span = self.merge_span(expression.span(), end);
                     expression = self.alloc_node(CHirExpr::Call(expression, arguments, span));
                 }
                 Some(TokenKind::LBracket) => {
                     self.advance();
-                    let index = self.parse_expression();
+                    let index = self.parse_expression()?;
                     let end = self
                         .peek()
                         .map(|token| token.span)
                         .unwrap_or_else(|| self.span());
-                    self.expect(TokenKind::RBracket);
+                    self.expect(TokenKind::RBracket)?;
                     let span = self.merge_span(expression.span(), end);
                     expression = self.alloc_node(CHirExpr::Index(expression, index, span));
                 }
@@ -1227,13 +1465,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 _ => break,
             }
         }
-        expression
+        Some(expression)
     }
 
-    fn parse_primary(&mut self) -> &'arena CHirExpr<'arena> {
+    fn parse_primary(&mut self) -> Option<&'arena CHirExpr<'arena>> {
         let Some(tok) = self.advance() else {
             self.report("E1003", "expected-expression", self.span());
-            return self.alloc_node(CHirExpr::Ident("__error__".into(), self.span()));
+            return None;
         };
         let expression = match tok.kind {
             TokenKind::IntLiteral => {
@@ -1274,18 +1512,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 tok.span,
             ),
             TokenKind::LParen => {
-                let expr = self.parse_expression();
+                let expr = self.parse_expression()?;
                 let rparen_span = self.peek().map(|t| t.span).unwrap_or(tok.span);
-                self.expect(TokenKind::RParen);
+                self.expect(TokenKind::RParen)?;
                 let span = self.merge_span(tok.span, rparen_span);
-                return self.alloc_node(respan_expr(expr, span));
+                return Some(self.alloc_node(respan_expr(expr, span)));
             }
             _ => {
                 self.report("E1003", "expected-expression", tok.span);
-                CHirExpr::Ident("__error__".into(), tok.span)
+                return None;
             }
         };
-        self.alloc_node(expression)
+        Some(self.alloc_node(expression))
     }
 
     fn looks_like_parenthesized_type(&self) -> bool {
@@ -1341,6 +1579,8 @@ fn binary_op(kind: TokenKind) -> Option<BinaryOp> {
 
 fn token_spelling(kind: TokenKind) -> &'static str {
     match kind {
+        TokenKind::Identifier => "identifier",
+        TokenKind::While => "while",
         TokenKind::Semicolon => ";",
         TokenKind::RParen => ")",
         TokenKind::RBracket => "]",
@@ -1348,6 +1588,16 @@ fn token_spelling(kind: TokenKind) -> &'static str {
         TokenKind::LParen => "(",
         TokenKind::Colon => ":",
         _ => "token",
+    }
+}
+
+fn misplaced_statement_diagnostic(kind: Option<TokenKind>) -> Option<(&'static str, &'static str)> {
+    match kind {
+        Some(TokenKind::Break) => Some(("E1201", "break-outside-loop-or-switch")),
+        Some(TokenKind::Continue) => Some(("E1202", "continue-outside-loop")),
+        Some(TokenKind::Case) => Some(("E1203", "case-outside-switch")),
+        Some(TokenKind::Default) => Some(("E1204", "default-outside-switch")),
+        _ => None,
     }
 }
 
@@ -1458,6 +1708,24 @@ mod tests {
             panic!("expected initialized object")
         };
         object.initializer.expect("expected initializer")
+    }
+
+    fn parse_rejected<'arena>(
+        source: &str,
+        arena: &'arena Arena,
+    ) -> (CHirUnit<'arena>, ParseDiagnostic) {
+        let mut lexer = Lexer::new(FileId::new(99), source);
+        let mut tokens = Vec::new();
+        while let Some(token) = lexer.next() {
+            tokens.push(token);
+        }
+        let mut parser = Parser::new(tokens, FileId::new(99), source);
+        let unit = parser.parse_translation_unit_in(arena);
+        let diagnostic = parser
+            .diagnostic()
+            .cloned()
+            .expect("malformed input must produce one diagnostic");
+        (unit, diagnostic)
     }
 
     #[test]
@@ -1620,5 +1888,66 @@ mod tests {
             },
             _ => panic!("expected function"),
         }
+    }
+
+    #[test]
+    fn misplaced_statement_keywords_have_context_diagnostics() {
+        let cases = [
+            ("break;", "break", "E1201", "break-outside-loop-or-switch"),
+            ("continue;", "continue", "E1202", "continue-outside-loop"),
+            ("case 1: ;", "case", "E1203", "case-outside-switch"),
+            ("default: ;", "default", "E1204", "default-outside-switch"),
+            (
+                "int f(void) { break; }",
+                "break",
+                "E1201",
+                "break-outside-loop-or-switch",
+            ),
+            (
+                "int f(void) { continue; }",
+                "continue",
+                "E1202",
+                "continue-outside-loop",
+            ),
+            (
+                "int f(void) { case 1: ; }",
+                "case",
+                "E1203",
+                "case-outside-switch",
+            ),
+            (
+                "int f(void) { default: ; }",
+                "default",
+                "E1204",
+                "default-outside-switch",
+            ),
+        ];
+
+        for (source, keyword, code, message) in cases {
+            let arena = Arena::default();
+            let (_, diagnostic) = parse_rejected(source, &arena);
+            let start = source.find(keyword).expect("keyword in source") as u32;
+            assert_eq!(diagnostic.code, code, "source {source:?}");
+            assert_eq!(diagnostic.message, message, "source {source:?}");
+            assert_eq!(diagnostic.span.file, FileId::new(99));
+            assert_eq!(diagnostic.span.byte_start, start, "source {source:?}");
+            assert_eq!(
+                diagnostic.span.byte_end,
+                start + keyword.len() as u32,
+                "source {source:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn malformed_expression_does_not_fabricate_a_chir_declaration() {
+        let arena = Arena::default();
+        let (unit, diagnostic) = parse_rejected("int broken = !;", &arena);
+        assert_eq!(diagnostic.code, "E1003");
+        assert_eq!(diagnostic.message, "expected-expression");
+        assert!(
+            unit.is_empty(),
+            "a rejected expression must not survive in reachable C-HIR: {unit:?}"
+        );
     }
 }

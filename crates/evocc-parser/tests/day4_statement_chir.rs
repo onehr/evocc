@@ -1,9 +1,12 @@
 use std::collections::HashSet;
 
-use evocc_chir::{BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, TagMembers};
+use evocc_chir::{
+    BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, TagMembers, TypeSpecifier,
+};
 use evocc_common::{Arena, FileId};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::Parser;
+use evocc_types::TagState;
 
 struct ShapeCase {
     id: &'static str,
@@ -126,6 +129,26 @@ fn parse<'arena>(source: &str, arena: &'arena Arena) -> evocc_chir::CHirUnit<'ar
     unit
 }
 
+fn parse_with_diagnostic<'arena>(
+    source: &str,
+    arena: &'arena Arena,
+) -> (evocc_chir::CHirUnit<'arena>, evocc_parser::ParseDiagnostic) {
+    let mut lexer = Lexer::new(file(), source);
+    let mut tokens = Vec::new();
+    while let Some(token) = lexer.next() {
+        assert_ne!(token.kind, TokenKind::Error, "lexer rejected {source:?}");
+        tokens.push(token);
+    }
+
+    let mut parser = Parser::new(tokens, file(), source);
+    let unit = parser.parse_translation_unit_in(arena);
+    let diagnostic = parser
+        .diagnostic()
+        .cloned()
+        .expect("malformed translation unit must be rejected");
+    (unit, diagnostic)
+}
+
 fn assert_expression_owned(arena: &Arena, expression: &CHirExpr<'_>) {
     assert!(
         arena.contains(expression),
@@ -230,8 +253,10 @@ fn assert_statement_owned(arena: &Arena, statement: &CHirStmt<'_>) {
             match initializer {
                 CHirForInit::Empty => {}
                 CHirForInit::Expression(expression) => assert_expression_owned(arena, expression),
-                CHirForInit::Declaration(declaration) => {
-                    assert_declaration_owned(arena, declaration)
+                CHirForInit::Declaration(declarations) => {
+                    for declaration in declarations {
+                        assert_declaration_owned(arena, declaration);
+                    }
                 }
             }
             if let Some(condition) = condition {
@@ -408,9 +433,14 @@ fn statement_fingerprint(statement: &CHirStmt<'_>) -> String {
                 CHirForInit::Expression(expression) => {
                     format!("expr:{}", expression_fingerprint(expression))
                 }
-                CHirForInit::Declaration(declaration) => {
-                    format!("decl:{}", declaration_fingerprint(declaration))
-                }
+                CHirForInit::Declaration(declarations) => format!(
+                    "decl:{}",
+                    declarations
+                        .iter()
+                        .map(|declaration| declaration_fingerprint(declaration))
+                        .collect::<Vec<_>>()
+                        .join("|")
+                ),
             };
             format!(
                 "for({},{},{},{})",
@@ -508,4 +538,155 @@ fn statement_trees_have_independent_canonical_fingerprints() {
             case.id
         );
     }
+}
+
+#[test]
+fn for_declaration_initializer_preserves_every_declaration_event() {
+    let source = "int outer(void) { for (struct S { int x; } s;;) break; return 0; }";
+    let arena = Arena::default();
+    let unit = parse(source, &arena);
+    let CHirDecl::Function(function) = unit.declarations()[0] else {
+        panic!("expected outer function")
+    };
+    let CHirStmt::Compound(items, _) = function.body.expect("outer body") else {
+        panic!("expected compound body")
+    };
+    let CHirBlockItem::Statement(CHirStmt::For(initializer, _, _, _, _)) = items[0] else {
+        panic!("expected leading for statement")
+    };
+    let CHirForInit::Declaration(declarations) = initializer else {
+        panic!("expected declaration initializer")
+    };
+    let declaration_start = source.find("struct S").expect("initializer start") as u32;
+    let declaration_end = source.find(";;").expect("initializer terminator") as u32 + 1;
+    for declaration in declarations {
+        assert_eq!(declaration.span().file, file());
+        assert_eq!(declaration.span().byte_start, declaration_start);
+        assert_eq!(declaration.span().byte_end, declaration_end);
+    }
+    let fingerprint = declarations
+        .iter()
+        .map(|declaration| match declaration {
+            CHirDecl::Tag(tag) => format!(
+                "tag({})",
+                tag.name
+                    .as_ref()
+                    .map_or("anonymous", |name| name.spelling.as_str())
+            ),
+            CHirDecl::Object(object) => format!("object({})", object.name.spelling),
+            other => panic!("unexpected for-init declaration: {other:?}"),
+        })
+        .collect::<Vec<_>>()
+        .join(";");
+    assert_eq!(
+        fingerprint, "tag(S);object(s)",
+        "the tag declaration must not disappear behind the object declaration"
+    );
+}
+
+#[test]
+fn nested_function_definitions_are_rejected_at_a_fresh_statement_context() {
+    let cases = [
+        (
+            "int outer(int x) { while (x) { int inner(void) { break; } } return x; }",
+            "E1201",
+            "break-outside-loop-or-switch",
+            "break",
+            0,
+            5,
+        ),
+        (
+            "int outer(int x) { switch (x) { int inner(void) { case 1: return 1; } } return x; }",
+            "E1203",
+            "case-outside-switch",
+            "case",
+            0,
+            4,
+        ),
+        (
+            "int outer(void) { int inner(void) { return 1; } return 0; }",
+            "E1205",
+            "nested-function-definition",
+            "inner(void) {",
+            "inner(void) ".len(),
+            1,
+        ),
+    ];
+
+    for (source, code, message, anchor, offset, width) in cases {
+        let arena = Arena::default();
+        let (unit, diagnostic) = parse_with_diagnostic(source, &arena);
+        let start = source.find(anchor).expect("diagnostic anchor") as u32 + offset as u32;
+        assert_eq!(diagnostic.code, code, "source {source:?}");
+        assert_eq!(diagnostic.message, message, "source {source:?}");
+        assert_eq!(diagnostic.span.file, file());
+        assert_eq!(diagnostic.span.byte_start, start, "source {source:?}");
+        assert_eq!(diagnostic.span.byte_end, start + width, "source {source:?}");
+        assert!(
+            unit.is_empty(),
+            "a declaration containing a rejected function body must roll back: {unit:?}"
+        );
+    }
+}
+
+#[test]
+fn failed_declaration_cannot_leak_side_declarations_into_the_next_one() {
+    let source = "int broken = sizeof(struct S { int x; }) + ; int ok;";
+    let arena = Arena::default();
+    let (unit, diagnostic) = parse_with_diagnostic(source, &arena);
+    let expected_start = source.find("; int ok").expect("failing semicolon") as u32;
+    assert_eq!(diagnostic.code, "E1003");
+    assert_eq!(diagnostic.message, "expected-expression");
+    assert_eq!(diagnostic.span.file, file());
+    assert_eq!(diagnostic.span.byte_start, expected_start);
+    assert_eq!(diagnostic.span.byte_end, expected_start + 1);
+
+    assert_eq!(
+        unit.len(),
+        1,
+        "failed declaration events must not attach to the next declaration: {unit:?}"
+    );
+    let CHirDecl::Object(object) = unit.declarations()[0] else {
+        panic!("only the later valid object may remain reachable: {unit:?}")
+    };
+    assert_eq!(object.name.spelling, "ok");
+}
+
+#[test]
+fn failed_declaration_rolls_back_type_and_tag_state() {
+    let source = "int broken = sizeof(struct S { int x; }) + ; struct S ok;";
+    let arena = Arena::default();
+    let (unit, _) = parse_with_diagnostic(source, &arena);
+    assert_eq!(
+        unit.len(),
+        2,
+        "later declaration must recreate its tag event"
+    );
+
+    let CHirDecl::Tag(tag) = unit.declarations()[0] else {
+        panic!("later declaration must expose a fresh tag event: {unit:?}")
+    };
+    assert!(
+        matches!(tag.members, TagMembers::Incomplete),
+        "the failed complete definition must have been rolled back"
+    );
+    let later_start = source.rfind("struct S ok;").expect("later declaration") as u32;
+    assert_eq!(tag.span.byte_start, later_start);
+    assert_eq!(tag.span.byte_end, source.len() as u32);
+    assert!(matches!(
+        unit.types().tag(tag.tag).map(|record| &record.state),
+        Some(TagState::Incomplete)
+    ));
+
+    let CHirDecl::Object(object) = unit.declarations()[1] else {
+        panic!("later object declaration missing: {unit:?}")
+    };
+    assert_eq!(object.name.spelling, "ok");
+    let TypeSpecifier::Tag {
+        tag: object_tag, ..
+    } = object.specifier
+    else {
+        panic!("later object must retain its struct specifier")
+    };
+    assert_eq!(object_tag, tag.tag);
 }

@@ -132,7 +132,11 @@ fn assert_stmt_owned(arena: &Arena, statement: &CHirStmt<'_>) {
             match initializer {
                 CHirForInit::Empty => {}
                 CHirForInit::Expression(expression) => assert_expr_owned(arena, expression),
-                CHirForInit::Declaration(declaration) => assert_decl_owned(arena, declaration),
+                CHirForInit::Declaration(declarations) => {
+                    for declaration in declarations {
+                        assert_decl_owned(arena, declaration);
+                    }
+                }
             }
             if let Some(condition) = condition {
                 assert_expr_owned(arena, condition);

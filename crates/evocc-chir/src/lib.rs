@@ -231,7 +231,7 @@ pub enum CHirBlockItem<'arena> {
 pub enum CHirForInit<'arena> {
     Empty,
     Expression(&'arena CHirExpr<'arena>),
-    Declaration(&'arena CHirDecl<'arena>),
+    Declaration(Vec<&'arena CHirDecl<'arena>>),
 }
 
 #[derive(Debug, Clone)]
@@ -819,7 +819,13 @@ mod tests {
             arena_stmt(&arena, CHirStmt::DoWhile(st, id, s)),
             arena_stmt(
                 &arena,
-                CHirStmt::For(CHirForInit::Declaration(dc), Some(id), Some(id), st, s),
+                CHirStmt::For(
+                    CHirForInit::Declaration(vec![dc]),
+                    Some(id),
+                    Some(id),
+                    st,
+                    s,
+                ),
             ),
             arena_stmt(&arena, CHirStmt::Return(Some(id), s)),
             arena_stmt(
