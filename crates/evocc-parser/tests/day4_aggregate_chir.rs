@@ -766,7 +766,7 @@ fn function_parameter_form_is_canonical_but_names_and_spans_are_not() {
             _ => panic!("expected only functions"),
         })
         .collect::<Vec<_>>();
-    let kind = |index| resolved(unit.types(), functions[index].ty);
+    let kind = |index: usize| resolved(unit.types(), functions[index].ty);
     for function in &functions {
         assert_function_consistent(&unit, function);
     }
@@ -799,12 +799,12 @@ fn function_parameter_form_is_canonical_but_names_and_spans_are_not() {
     let names = |function: &evocc_chir::FunctionDecl<'_>| match &function.parameters {
         ParameterSyntax::Prototype { parameters, .. } => parameters
             .iter()
-            .map(|parameter| parameter.name.as_ref().map(|name| name.spelling.as_str()))
+            .map(|parameter| parameter.name.as_ref().map(|name| name.spelling.clone()))
             .collect::<Vec<_>>(),
         ParameterSyntax::Unspecified => Vec::new(),
     };
-    assert_eq!(names(functions[2]), vec![Some("left")]);
-    assert_eq!(names(functions[3]), vec![Some("right")]);
+    assert_eq!(names(functions[2]), vec![Some("left".to_owned())]);
+    assert_eq!(names(functions[3]), vec![Some("right".to_owned())]);
     assert_exact(functions[2].span, 36, 56);
     assert_exact(functions[2].name.span, 40, 45);
     assert_exact(functions[2].written.span, 40, 55);
