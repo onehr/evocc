@@ -512,10 +512,16 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 if object.storage != StorageClass::None {
                     suffixes.push(format!("storage:{}", storage_name(object.storage)));
                 }
-                if let Some(initializer) = object.initializer {
+                if let Some(initializer) = object.initializer.as_ref() {
                     suffixes.push(format!(
                         "init={}",
-                        self.expression(&format!("{path}.initializer"), initializer)
+                        self.expression(
+                            &format!("{path}.initializer"),
+                            initializer
+                                .written()
+                                .expression()
+                                .expect("Day 4 uses expression initializers"),
+                        )
                     ));
                 }
                 let suffix = if suffixes.is_empty() {

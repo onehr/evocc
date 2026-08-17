@@ -929,7 +929,13 @@ fn enumerator_declarations_and_uses_join_exact_symbols() {
         false,
     );
     assert_ident(
-        value.initializer.expect("value initializer"),
+        value
+            .initializer
+            .as_ref()
+            .expect("value initializer")
+            .written()
+            .expression()
+            .expect("enumerator binding uses an expression initializer"),
         ENUM_BINDINGS,
         1,
         b,

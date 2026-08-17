@@ -183,8 +183,14 @@ fn assert_decl_owned(arena: &Arena, declaration: &CHirDecl<'_>) {
     );
     match declaration {
         CHirDecl::Object(object) => {
-            if let Some(initializer) = object.initializer {
-                assert_expr_owned(arena, initializer);
+            if let Some(initializer) = object.initializer.as_ref() {
+                assert_expr_owned(
+                    arena,
+                    initializer
+                        .written()
+                        .expression()
+                        .expect("Day 4 uses expression initializers"),
+                );
             }
         }
         CHirDecl::Function(function) => {

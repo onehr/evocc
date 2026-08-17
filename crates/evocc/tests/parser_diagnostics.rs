@@ -183,8 +183,8 @@ const NEGATIVE_CASES: &[NegativeCase] = &[
     },
     NegativeCase {
         id: "expr.trailing_token",
-        source: "int sink = sink right;",
-        column: 17,
+        source: "int sink = 1 right;",
+        column: 14,
         code: "E1004",
         message: "trailing-token",
     },
@@ -192,10 +192,7 @@ const NEGATIVE_CASES: &[NegativeCase] = &[
 
 const POSITIVE_CONTROLS: &[(&str, &str)] = &[
     ("control.object", "int value;"),
-    (
-        "control.precedence",
-        "int left; int middle; int right; int sink = left + middle * right;",
-    ),
+    ("control.precedence", "int sink = 1 + 2 * 3;"),
     ("control.function", "int compute(int left, long right);"),
 ];
 

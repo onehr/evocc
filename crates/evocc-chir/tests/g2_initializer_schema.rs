@@ -89,10 +89,7 @@ fn normalized_plan_resolves_paths_and_preserves_action_order() {
             InitAction::store_string(
                 name.clone(),
                 char_array,
-                StringLit {
-                    value: "abc".to_owned(),
-                    prefix: StringPrefix::None,
-                },
+                StringLit::single("abc", StringPrefix::None),
                 span(2),
             ),
         ],
@@ -175,10 +172,7 @@ fn string_actions_require_character_arrays() {
         vec![InitAction::store_string(
             SubobjectPath::root(),
             int_array,
-            StringLit {
-                value: "abc".to_owned(),
-                prefix: StringPrefix::None,
-            },
+            StringLit::single("abc", StringPrefix::None),
             span(1),
         )],
     );
@@ -210,10 +204,7 @@ fn validation_rejects_prefix_overlap_wrong_step_and_oversized_string() {
             InitAction::store_string(
                 root.clone(),
                 short_string,
-                StringLit {
-                    value: "a".to_owned(),
-                    prefix: StringPrefix::None,
-                },
+                StringLit::single("a", StringPrefix::None),
                 span(1),
             ),
             InitAction::zero_scalar(element.clone(), char_ty),
@@ -246,10 +237,7 @@ fn validation_rejects_prefix_overlap_wrong_step_and_oversized_string() {
         vec![InitAction::store_string(
             SubobjectPath::root(),
             short_string,
-            StringLit {
-                value: "abc".to_owned(),
-                prefix: StringPrefix::None,
-            },
+            StringLit::single("abc", StringPrefix::None),
             span(2),
         )],
     );
@@ -318,10 +306,7 @@ fn validation_rejects_union_sibling_writes_and_unsupported_wide_strings() {
         vec![InitAction::store_string(
             SubobjectPath::root(),
             char_array,
-            StringLit {
-                value: "abc".to_owned(),
-                prefix: StringPrefix::L,
-            },
+            StringLit::single("abc", StringPrefix::L),
             span(3),
         )],
     );
@@ -331,6 +316,37 @@ fn validation_rejects_union_sibling_writes_and_unsupported_wide_strings() {
             action: 0,
             path: SubobjectPath::root(),
             prefix: StringPrefix::L,
+        })
+    );
+}
+
+#[test]
+fn validation_rejects_forged_string_fragment_source_facts() {
+    let mut types = TypeInterner::new();
+    let character = types.intern(plain(TypeKind::Int(IntRank::Char)));
+    let unbounded = types.intern(plain(TypeKind::Array {
+        element: character,
+        bound: ArrayBound::Unbounded,
+    }));
+    let literal = StringLit {
+        value: "long".to_owned(),
+        prefix: StringPrefix::None,
+        fragments: vec!["x".to_owned()],
+    };
+    let plan = InitPlan::new(
+        unbounded,
+        vec![InitAction::store_string(
+            SubobjectPath::root(),
+            unbounded,
+            literal,
+            span(1),
+        )],
+    );
+    assert_eq!(
+        plan.validate(&types),
+        Err(InitPlanError::InvalidStringLiteral {
+            action: 0,
+            path: SubobjectPath::root(),
         })
     );
 }

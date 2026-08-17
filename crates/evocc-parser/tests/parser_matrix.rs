@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 
-use evocc_chir::{AssignmentOp, BinaryOp, CHirDecl, CHirExpr, ParameterSyntax, UnaryOp, UpdateOp};
+use evocc_chir::{
+    AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirStmt, ParameterSyntax, UnaryOp,
+    UpdateOp,
+};
 use evocc_common::{Arena, FileId};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::Parser;
@@ -311,7 +314,13 @@ fn canonical_decl(decl: &CHirDecl<'_>, types: &TypeInterner) -> String {
             object.name.spelling,
             canonical_type(object.ty, types),
             canonical_expr(
-                object.initializer.expect("matched initialized object"),
+                object
+                    .initializer
+                    .as_ref()
+                    .expect("matched initialized object")
+                    .written()
+                    .expression()
+                    .expect("matrix uses expression initializers"),
                 types
             )
         ),
@@ -473,18 +482,27 @@ fn expression_precedence_and_associativity_matrix() {
             "duplicate expression bytes for {}",
             case.id
         );
-        let source = format!("{EXPRESSION_BINDINGS}int sink = {};", case.expression);
+        let source = format!(
+            "{EXPRESSION_BINDINGS}int matrix_probe(void) {{ {}; return 0; }}",
+            case.expression
+        );
         let arena = Arena::default();
         let unit = parse_unit(&source, &arena);
-        let CHirDecl::Object(object) = unit.declarations().last().expect("sink declaration") else {
-            panic!("case {} did not produce one initialized object", case.id);
+        let CHirDecl::Function(function) = unit.declarations().last().expect("probe declaration")
+        else {
+            panic!("case {} did not produce one probe function", case.id);
         };
-        let init = object
-            .initializer
-            .expect("expression case must initialize sink");
-        assert_eq!(object.name.spelling, "sink", "case {}", case.id);
+        let CHirStmt::Compound(items, _) = function.body.expect("probe definition") else {
+            panic!("case {} probe body was not compound", case.id);
+        };
+        let Some(CHirBlockItem::Statement(statement)) = items.first() else {
+            panic!("case {} has no expression statement", case.id);
+        };
+        let CHirStmt::Expr(expression, _) = statement else {
+            panic!("case {} first statement was not an expression", case.id);
+        };
         assert_eq!(
-            canonical_expr(init, unit.types()),
+            canonical_expr(expression, unit.types()),
             case.expected,
             "case {}",
             case.id

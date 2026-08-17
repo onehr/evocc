@@ -204,8 +204,14 @@ fn assert_declaration_owned(arena: &Arena, declaration: &CHirDecl<'_>) {
     );
     match declaration {
         CHirDecl::Object(object) => {
-            if let Some(initializer) = object.initializer {
-                assert_expression_owned(arena, initializer);
+            if let Some(initializer) = object.initializer.as_ref() {
+                assert_expression_owned(
+                    arena,
+                    initializer
+                        .written()
+                        .expression()
+                        .expect("Day 4 uses expression initializers"),
+                );
             }
         }
         CHirDecl::Function(function) => {
@@ -340,9 +346,17 @@ fn declaration_fingerprint(declaration: &CHirDecl<'_>) -> String {
         CHirDecl::Object(object) => format!(
             "object({}={})",
             object.name.spelling,
-            object
-                .initializer
-                .map_or_else(|| "-".into(), expression_fingerprint)
+            object.initializer.as_ref().map_or_else(
+                || "-".into(),
+                |initializer| {
+                    expression_fingerprint(
+                        initializer
+                            .written()
+                            .expression()
+                            .expect("Day 4 uses expression initializers"),
+                    )
+                }
+            )
         ),
         _ => panic!("declaration outside statement shape contract: {declaration:?}"),
     }

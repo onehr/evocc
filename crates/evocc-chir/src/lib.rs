@@ -16,7 +16,8 @@ pub mod initializer;
 pub mod semantic;
 
 pub use initializer::{
-    InitAction, InitPlan, InitPlanError, SubobjectPath, SubobjectStep, WrittenInitializer,
+    InitAction, InitPlan, InitPlanError, ObjectInitializer, SubobjectPath, SubobjectStep,
+    WrittenInitializer,
 };
 pub use semantic::{
     AssignmentOp, ExprCategory, ExprFacts, ExprFactsError, NotAssignmentOperator, ScalarPlace,
@@ -86,8 +87,41 @@ pub enum CharPrefix {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StringLit {
+    /// Raw contents of the full literal sequence, without prefixes or quotes.
     pub value: String,
     pub prefix: StringPrefix,
+    /// Raw contents of each preprocessing string-literal token. Boundaries
+    /// are semantic: `"\\x1" "2"` has two units, unlike `"\\x12"`.
+    pub fragments: Vec<String>,
+}
+
+impl StringLit {
+    #[must_use]
+    pub fn single(value: impl Into<String>, prefix: StringPrefix) -> Self {
+        let value = value.into();
+        Self {
+            fragments: vec![value.clone()],
+            value,
+            prefix,
+        }
+    }
+
+    /// Number of explicit code units before the implicit terminating zero.
+    ///
+    /// `value` contains raw literal contents without a prefix or quotes, so
+    /// escape spelling remains distinguishable from directly encoded text.
+    #[must_use]
+    pub fn explicit_unit_count(&self) -> Option<u64> {
+        if self.fragments.is_empty() {
+            return count_c_string_units(&self.value, self.prefix);
+        }
+        if self.fragments.concat() != self.value {
+            return None;
+        }
+        self.fragments.iter().try_fold(0_u64, |total, fragment| {
+            total.checked_add(count_c_string_units(fragment, self.prefix)?)
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -99,6 +133,92 @@ pub enum StringPrefix {
     /// C11 `U` prefix (`char32_t` code units).
     U,
     U8,
+}
+
+fn count_c_string_units(contents: &str, prefix: StringPrefix) -> Option<u64> {
+    let mut chars = contents.chars().peekable();
+    let mut units = 0_u64;
+    while let Some(character) = chars.next() {
+        if character != '\\' {
+            let width = match prefix {
+                StringPrefix::None | StringPrefix::U8 => character.len_utf8(),
+                StringPrefix::U16 => character.len_utf16(),
+                StringPrefix::L | StringPrefix::U => 1,
+            };
+            units = units.checked_add(u64::try_from(width).ok()?)?;
+            continue;
+        }
+
+        let escaped = chars.next()?;
+        match escaped {
+            '\n' => continue,
+            '\r' => {
+                if chars.peek() == Some(&'\n') {
+                    chars.next();
+                }
+                continue;
+            }
+            'x' => {
+                let mut digits = 0;
+                while chars.peek().is_some_and(|next| next.is_ascii_hexdigit()) {
+                    chars.next();
+                    digits += 1;
+                }
+                if digits == 0 {
+                    return None;
+                }
+            }
+            'u' => {
+                let mut value = 0_u32;
+                for _ in 0..4 {
+                    value = value
+                        .checked_mul(16)?
+                        .checked_add(chars.next()?.to_digit(16)?)?;
+                }
+                if value < 0xa0 && !matches!(value, 0x24 | 0x40 | 0x60) {
+                    return None;
+                }
+                let character = char::from_u32(value)?;
+                let width = match prefix {
+                    StringPrefix::None | StringPrefix::U8 => character.len_utf8(),
+                    StringPrefix::U16 => character.len_utf16(),
+                    StringPrefix::L | StringPrefix::U => 1,
+                };
+                units = units.checked_add(u64::try_from(width).ok()?)?;
+                continue;
+            }
+            'U' => {
+                let mut value = 0_u32;
+                for _ in 0..8 {
+                    value = value
+                        .checked_mul(16)?
+                        .checked_add(chars.next()?.to_digit(16)?)?;
+                }
+                if value < 0xa0 && !matches!(value, 0x24 | 0x40 | 0x60) {
+                    return None;
+                }
+                let character = char::from_u32(value)?;
+                let width = match prefix {
+                    StringPrefix::None | StringPrefix::U8 => character.len_utf8(),
+                    StringPrefix::U16 => character.len_utf16(),
+                    StringPrefix::L | StringPrefix::U => 1,
+                };
+                units = units.checked_add(u64::try_from(width).ok()?)?;
+                continue;
+            }
+            '0'..='7' => {
+                for _ in 0..2 {
+                    if !chars.peek().is_some_and(|next| matches!(next, '0'..='7')) {
+                        break;
+                    }
+                    chars.next();
+                }
+            }
+            _ => {}
+        }
+        units = units.checked_add(1)?;
+    }
+    Some(units)
 }
 
 // ---------------------------------------------------------------------------
@@ -489,7 +609,7 @@ pub struct ObjectDecl<'arena> {
     pub specifier: TypeSpecifier,
     pub written: WrittenDeclarator,
     pub storage: StorageClass,
-    pub initializer: Option<&'arena CHirExpr<'arena>>,
+    pub initializer: Option<ObjectInitializer<'arena>>,
     pub span: SourceSpan,
 }
 
@@ -812,6 +932,20 @@ mod tests {
         ty: TypeId,
         initializer: Option<&'arena CHirExpr<'arena>>,
     ) -> CHirDecl<'arena> {
+        let initializer = initializer.map(|expression| {
+            ObjectInitializer::new(
+                WrittenInitializer::Expression(expression),
+                InitPlan::new(
+                    ty,
+                    vec![InitAction::store_scalar(
+                        SubobjectPath::root(),
+                        ty,
+                        expression,
+                        expression.span(),
+                    )],
+                ),
+            )
+        });
         CHirDecl::Object(ObjectDecl {
             symbol: test_symbol(
                 name_spelling,
@@ -888,13 +1022,7 @@ mod tests {
             ),
             arena_expr(
                 &arena,
-                CHirExpr::StringLit(
-                    StringLit {
-                        value: "hi".into(),
-                        prefix: StringPrefix::None,
-                    },
-                    s,
-                ),
+                CHirExpr::StringLit(StringLit::single("hi", StringPrefix::None), s),
             ),
             arena_expr(&arena, ident("a", int_id)),
             arena_expr(&arena, CHirExpr::Unary(UnaryOp::Neg, id, s)),
@@ -1114,6 +1242,28 @@ mod tests {
         assert_eq!(IntBase::Dec, IntBase::Dec);
         assert_ne!(IntBase::Hex, IntBase::Oct);
         assert_ne!(IntBase::Bin, IntBase::Dec);
+    }
+
+    #[test]
+    fn string_literal_fragment_integrity_fails_closed() {
+        let forged = StringLit {
+            value: "long".to_owned(),
+            prefix: StringPrefix::None,
+            fragments: vec!["x".to_owned()],
+        };
+        assert_eq!(forged.explicit_unit_count(), None);
+
+        let separated = StringLit {
+            value: "\\x12".to_owned(),
+            prefix: StringPrefix::None,
+            fragments: vec!["\\x1".to_owned(), "2".to_owned()],
+        };
+        assert_eq!(separated.explicit_unit_count(), Some(2));
+
+        assert_eq!(
+            StringLit::single("\\u0061", StringPrefix::None).explicit_unit_count(),
+            None,
+        );
     }
 
     fn int_lit_expr<'arena>(arena: &'arena Arena, v: i64) -> &'arena CHirExpr<'arena> {

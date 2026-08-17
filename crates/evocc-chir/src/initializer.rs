@@ -13,6 +13,40 @@ use evocc_types::{
 
 use crate::{CHirExpr, StringLit, StringPrefix};
 
+/// The single authoritative representation of one written object
+/// initializer and its checked, normalized meaning.
+///
+/// Keeping these together prevents later consumers from accidentally
+/// interpreting the surface brace tree while ignoring the canonical write
+/// plan (or vice versa).
+#[derive(Debug, Clone)]
+pub struct ObjectInitializer<'arena> {
+    pub written: WrittenInitializer<'arena>,
+    pub plan: InitPlan<'arena>,
+}
+
+impl<'arena> ObjectInitializer<'arena> {
+    #[must_use]
+    pub fn new(written: WrittenInitializer<'arena>, plan: InitPlan<'arena>) -> Self {
+        Self { written, plan }
+    }
+
+    #[must_use]
+    pub fn span(&self) -> SourceSpan {
+        self.written.span()
+    }
+
+    #[must_use]
+    pub fn written(&self) -> &WrittenInitializer<'arena> {
+        &self.written
+    }
+
+    #[must_use]
+    pub fn plan(&self) -> &InitPlan<'arena> {
+        &self.plan
+    }
+}
+
 /// Initializer syntax exactly as written, including nested brace boundaries.
 #[derive(Debug, Clone)]
 pub enum WrittenInitializer<'arena> {
@@ -23,7 +57,7 @@ pub enum WrittenInitializer<'arena> {
     },
 }
 
-impl WrittenInitializer<'_> {
+impl<'arena> WrittenInitializer<'arena> {
     #[must_use]
     pub fn span(&self) -> SourceSpan {
         match self {
@@ -41,7 +75,7 @@ impl WrittenInitializer<'_> {
     }
 
     #[must_use]
-    pub fn expression(&self) -> Option<&CHirExpr<'_>> {
+    pub fn expression(&self) -> Option<&'arena CHirExpr<'arena>> {
         match self {
             Self::Expression(expression) => Some(expression),
             Self::List { .. } => None,
@@ -50,14 +84,14 @@ impl WrittenInitializer<'_> {
 }
 
 /// One structural step from an initialized object to a subobject.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SubobjectStep {
     Field { field_index: usize },
     Index { index: u64 },
 }
 
 /// A canonical structural path relative to an [`InitPlan`]'s target object.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SubobjectPath {
     steps: Vec<SubobjectStep>,
 }
@@ -289,18 +323,20 @@ impl<'arena> InitPlan<'arena> {
             }
         }
 
-        for first_action in 0..self.actions.len() {
-            for second_action in (first_action + 1)..self.actions.len() {
-                let first_path = self.actions[first_action].path();
-                let second_path = self.actions[second_action].path();
-                if paths_overlap(types, self.target_type, first_path, second_path) {
-                    return Err(InitPlanError::OverlappingActions {
-                        first_action,
-                        second_action,
-                        first_path: first_path.clone(),
-                        second_path: second_path.clone(),
-                    });
-                }
+        let mut order: Vec<_> = (0..self.actions.len()).collect();
+        order.sort_unstable_by_key(|index| self.actions[*index].path());
+        for pair in order.windows(2) {
+            let first_action = pair[0];
+            let second_action = pair[1];
+            let first_path = self.actions[first_action].path();
+            let second_path = self.actions[second_action].path();
+            if paths_overlap(types, self.target_type, first_path, second_path) {
+                return Err(InitPlanError::OverlappingActions {
+                    first_action,
+                    second_action,
+                    first_path: first_path.clone(),
+                    second_path: second_path.clone(),
+                });
             }
         }
 
@@ -507,10 +543,11 @@ fn validate_string_destination(
         });
     };
     let is_character = types.get(*element).is_some_and(|element_type| {
-        matches!(
-            element_type.kind,
-            TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar)
-        )
+        !element_type.qualifiers.is_atomic
+            && matches!(
+                element_type.kind,
+                TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar)
+            )
     });
     if !is_character {
         return Err(InitPlanError::StringDestinationIsNotCharacterArray {
@@ -520,9 +557,13 @@ fn validate_string_destination(
         });
     }
 
+    let Some(units) = literal.explicit_unit_count() else {
+        return Err(InitPlanError::InvalidStringLiteral {
+            action,
+            path: path.clone(),
+        });
+    };
     if let ArrayBound::Fixed(bound) = bound {
-        let units = literal.value.len();
-        let units = u64::try_from(units).unwrap_or(u64::MAX);
         if units > *bound {
             return Err(InitPlanError::StringInitializerTooLong {
                 action,
@@ -614,6 +655,10 @@ pub enum InitPlanError {
         action: usize,
         path: SubobjectPath,
         prefix: StringPrefix,
+    },
+    InvalidStringLiteral {
+        action: usize,
+        path: SubobjectPath,
     },
     StringInitializerTooLong {
         action: usize,
@@ -745,6 +790,10 @@ impl fmt::Display for InitPlanError {
             Self::UnsupportedStringPrefix { action, prefix, .. } => write!(
                 formatter,
                 "initializer action {action} uses unsupported wide string prefix {prefix:?}"
+            ),
+            Self::InvalidStringLiteral { action, .. } => write!(
+                formatter,
+                "initializer action {action} has inconsistent or invalid string source facts"
             ),
             Self::StringInitializerTooLong {
                 action,
