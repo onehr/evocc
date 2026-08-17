@@ -157,9 +157,13 @@ fn assert_stmt_owned(arena: &Arena, statement: &CHirStmt<'_>) {
                 }
             }
         }
-        CHirStmt::Label(_, nested, _)
-        | CHirStmt::Case(_, nested, _)
-        | CHirStmt::Default(nested, _) => assert_stmt_owned(arena, nested),
+        CHirStmt::Label(_, nested, _) | CHirStmt::Default(nested, _) => {
+            assert_stmt_owned(arena, nested)
+        }
+        CHirStmt::Case(value, nested, _) => {
+            assert_expr_owned(arena, value);
+            assert_stmt_owned(arena, nested);
+        }
         CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {}
     }
 }
