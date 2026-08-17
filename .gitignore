@@ -1,7 +1,8 @@
 # Design documents and research notes are internal working material. The
-# reader-facing implementation notebook is the one deliberately tracked
-# exception.
+# normative roadmap and reader-facing implementation notebook are deliberately
+# tracked exceptions.
 docs/*
+!docs/roadmap.md
 !docs/notebook/
 !docs/notebook/**
 lessons.md

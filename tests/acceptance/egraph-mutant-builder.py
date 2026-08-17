@@ -48,22 +48,24 @@ def main() -> int:
     if mutant == "rebuild_noop":
         source = replace_function(source, "    pub fn rebuild(&mut self) {", "{}")
     elif mutant == "repair_noop":
-        source = replace_function(
+        source = replace_once(
             source,
-            "    fn repair(&mut self, node_id: ENodeId) {",
-            "{ let _ = node_id; }",
+            """            for (position, &child) in node.children.iter().enumerate() {
+                let child = self.uf.find(child);
+                self.eclasses[child as usize]
+                    .parents
+                    .push((node.op, position, owner));
+            }
+""",
+            """            // Mutant: omit reverse-parent reconstruction.
+""",
         )
     elif mutant == "missing_parent_update":
-        old = """        for (i, &child) in children.iter().enumerate() {
-            let child = self.uf.find(child);
-            self.eclasses[child as usize]
-                .parents
-                .push((op, i, class_id));
-        }
-
-        class_id
-"""
-        source = replace_once(source, old, "        class_id\n")
+        source = replace_once(
+            source,
+            "                    .push((node.op, position, owner));\n",
+            "                    .push((node.op, position, child));\n",
+        )
     elif mutant == "collapsed_constant":
         source = replace_once(
             source,

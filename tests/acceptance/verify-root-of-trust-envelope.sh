@@ -130,8 +130,6 @@ while IFS=$'\t' read -r path expected_sha; do
   freeze_sha=''
   if "$GIT" -C "$PROJECT_ROOT" cat-file -e "$FREEZE_COMMIT:$path" 2>/dev/null; then
     freeze_sha="$($GIT -C "$PROJECT_ROOT" show "$FREEZE_COMMIT:$path" | $SHASUM -a 256 | awk '{print $1}')"
-  elif [ "$path" = 'docs/roadmap.md' ]; then
-    freeze_sha="$expected_sha"
   else
     printf 'frozen file is absent from the freeze commit: %s\n' "$path" >&2
     exit 1
