@@ -76,6 +76,7 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
         let unqualified = match &canonical.kind {
             TypeKind::Void => "void".to_owned(),
             TypeKind::BuiltinVaList => "builtin-va-list".to_owned(),
+            TypeKind::GnuInt128(signedness) => format!("gnu-int128:{signedness:?}"),
             TypeKind::Int(IntRank::Int) => "int".to_owned(),
             TypeKind::Int(IntRank::UInt) => "uint".to_owned(),
             TypeKind::Int(IntRank::Long) => "long".to_owned(),

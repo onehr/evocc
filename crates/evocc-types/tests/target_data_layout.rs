@@ -1,7 +1,7 @@
 use evocc_types::{
     ArrayBound, BitFieldSpec, CanonicalType, ComplexBase, EnumConstant, FloatKind,
-    FunctionParameters, IntRank, LayoutError, Qualifiers, RecordField, TagDefinition, TagKind,
-    TargetDataLayout, TypeInterner, TypeKind, TypeLayout,
+    FunctionParameters, GnuInt128Signedness, IntRank, LayoutError, Qualifiers, RecordField,
+    TagDefinition, TagKind, TargetDataLayout, TypeInterner, TypeKind, TypeLayout,
 };
 
 fn plain(kind: TypeKind) -> CanonicalType {
@@ -122,6 +122,26 @@ fn aarch64_lp64_scalar_pointer_array_and_enum_layouts() {
         layout.layout_of(&types, wide_enum_ty),
         Ok(TypeLayout::new(8, 8)),
         "a mixed negative/above-INT_MAX enum fits neither int nor unsigned int"
+    );
+}
+
+#[test]
+fn aarch64_gnu_int128_layout_preserves_signedness_identity() {
+    let mut types = TypeInterner::new();
+    let signed = types.intern(plain(TypeKind::GnuInt128(GnuInt128Signedness::Signed)));
+    let signed_again = types.intern(plain(TypeKind::GnuInt128(GnuInt128Signedness::Signed)));
+    let unsigned = types.intern(plain(TypeKind::GnuInt128(GnuInt128Signedness::Unsigned)));
+
+    assert_eq!(signed, signed_again);
+    assert_ne!(signed, unsigned);
+    let layout = TargetDataLayout::aarch64_unknown_linux_gnu();
+    assert_eq!(
+        layout.layout_of(&types, signed),
+        Ok(TypeLayout::new(16, 16))
+    );
+    assert_eq!(
+        layout.layout_of(&types, unsigned),
+        Ok(TypeLayout::new(16, 16))
     );
 }
 

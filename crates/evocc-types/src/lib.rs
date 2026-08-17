@@ -40,6 +40,17 @@ pub enum IntRank {
     ULongLong,
 }
 
+/// Signedness of GNU's compiler-provided 128-bit integer type.
+///
+/// This is deliberately separate from [`IntRank`]. The shared Day 5 integer
+/// kernel stores target values in `u64`, so treating `__int128` as another
+/// ordinary rank would make unsupported evaluation paths silently truncate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GnuInt128Signedness {
+    Signed,
+    Unsigned,
+}
+
 impl IntRank {
     #[must_use]
     pub fn is_signed(self) -> bool {
@@ -201,6 +212,11 @@ pub enum TypeKind {
     /// Day 5 needs its identity for declarations and typedefs. Layout and
     /// varargs operations fail closed instead of guessing a target ABI shape.
     BuiltinVaList,
+    /// GNU `__int128`, retained as an opaque signed or unsigned type.
+    ///
+    /// Its target layout is known, but Day 5 intentionally provides no value
+    /// representation or arithmetic semantics for it.
+    GnuInt128(GnuInt128Signedness),
     Int(IntRank),
     Float(FloatKind),
     Complex(ComplexBase),
@@ -496,6 +512,7 @@ impl TypeInterner {
             TypeKind::Enum(tag) => self.require_tag(*tag, TagKind::Enum),
             TypeKind::Void
             | TypeKind::BuiltinVaList
+            | TypeKind::GnuInt128(_)
             | TypeKind::Int(_)
             | TypeKind::Float(_)
             | TypeKind::Complex(_) => Ok(()),
@@ -840,6 +857,7 @@ impl<'a> LayoutContext<'a> {
         match kind {
             TypeKind::Void | TypeKind::Function { .. } => Err(LayoutError::NonObjectType(ty)),
             TypeKind::BuiltinVaList => Err(LayoutError::UnsupportedBuiltinType(ty)),
+            TypeKind::GnuInt128(_) => Ok(TypeLayout::new(16, 16)),
             TypeKind::Int(rank) => Ok(integer_layout(rank)),
             TypeKind::Float(kind) => Ok(float_layout(kind)),
             TypeKind::Complex(base) => Ok(complex_layout(base)),

@@ -21,8 +21,8 @@ use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_lex::{Token, TokenKind, TokenText};
 use evocc_types::{
     ArrayBound, BitFieldSpec, CanonicalType, ComplexBase, EnumConstant, FloatKind,
-    FunctionParameters, IntRank, Qualifiers, RecordField, TagDefinition, TagId, TagKind, TagState,
-    TargetDataLayout, TypeId, TypeInterner, TypeKind, TypeLayout,
+    FunctionParameters, GnuInt128Signedness, IntRank, Qualifiers, RecordField, TagDefinition,
+    TagId, TagKind, TagState, TargetDataLayout, TypeId, TypeInterner, TypeKind, TypeLayout,
 };
 
 #[derive(Debug, Clone)]
@@ -225,6 +225,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__signed__") => TokenKind::Signed,
                     Some("__extension__") => TokenKind::GnuExtension,
                     Some("__builtin_va_list") => TokenKind::BuiltinVaList,
+                    Some("__int128") => TokenKind::GnuInt128,
                     _ => TokenKind::Identifier,
                 };
             }
@@ -680,6 +681,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let kind = match (left_type.kind, right_type.kind) {
             (TypeKind::Void, TypeKind::Void) => TypeKind::Void,
             (TypeKind::BuiltinVaList, TypeKind::BuiltinVaList) => TypeKind::BuiltinVaList,
+            (TypeKind::GnuInt128(left), TypeKind::GnuInt128(right)) if left == right => {
+                TypeKind::GnuInt128(right)
+            }
             (TypeKind::Int(left), TypeKind::Int(right)) if left == right => TypeKind::Int(right),
             (TypeKind::Float(left), TypeKind::Float(right)) if left == right => {
                 TypeKind::Float(right)
@@ -1650,9 +1654,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 visiting.remove(&target);
                 Ok(())
             }
-            TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. } => {
-                Err(InitializerPreflightError::InvalidObject)
-            }
+            TypeKind::Void
+            | TypeKind::BuiltinVaList
+            | TypeKind::GnuInt128(_)
+            | TypeKind::Function { .. } => Err(InitializerPreflightError::InvalidObject),
         }
     }
 
@@ -1716,9 +1721,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_),
                 WrittenInitializer::Expression(_),
             ) => Ok(0),
-            (TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. }, _) => {
-                Err(InitializerPreflightError::InvalidObject)
-            }
+            (
+                TypeKind::Void
+                | TypeKind::BuiltinVaList
+                | TypeKind::GnuInt128(_)
+                | TypeKind::Function { .. },
+                _,
+            ) => Err(InitializerPreflightError::InvalidObject),
         }
     }
 
@@ -1816,6 +1825,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | TypeKind::Enum(_)
             | TypeKind::Void
             | TypeKind::BuiltinVaList
+            | TypeKind::GnuInt128(_)
             | TypeKind::Function { .. } => {
                 return Err(InitializerPreflightError::InvalidObject);
             }
@@ -1931,9 +1941,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 visiting.remove(&target);
                 Ok(count)
             }
-            TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. } => {
-                Err(InitializerPreflightError::InvalidObject)
-            }
+            TypeKind::Void
+            | TypeKind::BuiltinVaList
+            | TypeKind::GnuInt128(_)
+            | TypeKind::Function { .. } => Err(InitializerPreflightError::InvalidObject),
         }
     }
 
@@ -2179,7 +2190,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 Some(())
             }
-            TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. } => None,
+            TypeKind::Void
+            | TypeKind::BuiltinVaList
+            | TypeKind::GnuInt128(_)
+            | TypeKind::Function { .. } => None,
         }
     }
 
@@ -2311,6 +2325,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             TypeKind::Void
             | TypeKind::BuiltinVaList
+            | TypeKind::GnuInt128(_)
             | TypeKind::Int(_)
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
@@ -2877,9 +2892,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return false;
         };
         match kind {
-            TypeKind::Int(_) | TypeKind::Float(_) | TypeKind::Complex(_) | TypeKind::Pointer(_) => {
-                true
-            }
+            TypeKind::GnuInt128(_)
+            | TypeKind::Int(_)
+            | TypeKind::Float(_)
+            | TypeKind::Complex(_)
+            | TypeKind::Pointer(_) => true,
             TypeKind::Array { element, .. } => {
                 self.record_member_type_is_complete(element, containing_tag, visiting)
             }
@@ -2982,6 +2999,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             ) => Some(64),
             TypeKind::Void
             | TypeKind::BuiltinVaList
+            | TypeKind::GnuInt128(_)
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
             | TypeKind::Pointer(_)
@@ -3015,6 +3033,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             TypeKind::Void
             | TypeKind::BuiltinVaList
+            | TypeKind::GnuInt128(_)
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
             | TypeKind::Pointer(_)
@@ -4199,6 +4218,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TokenKind::Union
                 | TokenKind::Enum
                 | TokenKind::BuiltinVaList
+                | TokenKind::GnuInt128
         )
     }
 
@@ -4846,7 +4866,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     TypeKind::Void => OperandTypeClass::Void,
                     TypeKind::Array { .. }
                     | TypeKind::Function { .. }
-                    | TypeKind::BuiltinVaList => OperandTypeClass::Other,
+                    | TypeKind::BuiltinVaList
+                    | TypeKind::GnuInt128(_) => OperandTypeClass::Other,
                 }
             }
         }
@@ -5504,6 +5525,7 @@ fn is_builtin_type_word(kind: TokenKind) -> bool {
         kind,
         TokenKind::Void
             | TokenKind::BuiltinVaList
+            | TokenKind::GnuInt128
             | TokenKind::Bool
             | TokenKind::Char
             | TokenKind::Short
@@ -5527,6 +5549,7 @@ fn resolve_builtin_type(words: &[TokenKind]) -> Option<TypeKind> {
     let count = |needle| words.iter().filter(|kind| **kind == needle).count();
     let void = count(TokenKind::Void);
     let builtin_va_list = count(TokenKind::BuiltinVaList);
+    let gnu_int128 = count(TokenKind::GnuInt128);
     let boolean = count(TokenKind::Bool);
     let character = count(TokenKind::Char);
     let short = count(TokenKind::Short);
@@ -5540,6 +5563,7 @@ fn resolve_builtin_type(words: &[TokenKind]) -> Option<TypeKind> {
 
     if void > 1
         || builtin_va_list > 1
+        || gnu_int128 > 1
         || boolean > 1
         || character > 1
         || short > 1
@@ -5558,6 +5582,16 @@ fn resolve_builtin_type(words: &[TokenKind]) -> Option<TypeKind> {
     let total = words.len();
     if builtin_va_list == 1 {
         return (total == 1).then_some(TypeKind::BuiltinVaList);
+    }
+    if gnu_int128 == 1 {
+        if total != 1 + signed + unsigned {
+            return None;
+        }
+        return Some(TypeKind::GnuInt128(if unsigned == 1 {
+            GnuInt128Signedness::Unsigned
+        } else {
+            GnuInt128Signedness::Signed
+        }));
     }
     if void == 1 {
         return (total == 1).then_some(TypeKind::Void);

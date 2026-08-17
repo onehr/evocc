@@ -358,6 +358,7 @@ fn canonical_type(ty: TypeId, types: &TypeInterner) -> String {
     match &canonical.kind {
         TypeKind::Void => "void".into(),
         TypeKind::BuiltinVaList => "builtin-va-list".into(),
+        TypeKind::GnuInt128(signedness) => format!("gnu-int128:{signedness:?}"),
         TypeKind::Int(rank) => match rank {
             IntRank::Char => "char".into(),
             IntRank::Short => "short".into(),

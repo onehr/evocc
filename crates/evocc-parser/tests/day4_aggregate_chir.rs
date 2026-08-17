@@ -343,6 +343,7 @@ fn type_fingerprint(
     let unqualified = match &canonical.kind {
         TypeKind::Void => "void".into(),
         TypeKind::BuiltinVaList => "builtin-va-list".into(),
+        TypeKind::GnuInt128(signedness) => format!("gnu-int128:{signedness:?}"),
         TypeKind::Int(IntRank::Int) => "int".into(),
         TypeKind::Int(IntRank::Long) => "long".into(),
         TypeKind::Int(rank) => format!("int:{rank:?}"),
