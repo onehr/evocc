@@ -290,6 +290,7 @@ mod tests {
                     variadic: false,
                 },
                 storage: StorageClass::None,
+                inline_spans: Vec::new(),
                 body: Some(body),
                 span: test_span(),
             }),

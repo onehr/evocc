@@ -260,6 +260,7 @@ impl<'arena> Fixture<'arena> {
                     variadic: false,
                 },
                 storage: StorageClass::None,
+                inline_spans: Vec::new(),
                 body: Some(body),
                 span: span(0, 40),
             }),

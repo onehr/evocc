@@ -848,15 +848,23 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         side_start: usize,
     ) -> Option<Vec<&'arena CHirDecl<'arena>>> {
         let start_span = self.span();
-        let storage = self.parse_storage_class();
-        let Some(specifier) = self.parse_type_specifier() else {
+        let mut storage = None;
+        let mut inline_spans = Vec::new();
+        self.parse_declaration_modifiers(&mut storage, &mut inline_spans);
+        let Some(specifier) = self.parse_declaration_type_specifier(&mut inline_spans) else {
             self.report("E1001", "expected-declaration", self.span());
             return None;
         };
+        self.parse_declaration_modifiers(&mut storage, &mut inline_spans);
+        let storage = storage.unwrap_or(StorageClass::None);
 
         if self.peek_kind() == Some(TokenKind::Semicolon) {
             let semi = self.advance().expect("peeked semicolon");
             let declaration_span = self.merge_span(start_span, semi.span);
+            if let Some(span) = inline_spans.first().copied() {
+                self.report("E1401", "inline-specifier-on-non-function", span);
+                return None;
+            }
             let mut declarations = self.side_declarations.split_off(side_start);
             if let Some(event) = specifier.tag_event {
                 declarations.push(self.finish_tag_event(event, declaration_span));
@@ -926,6 +934,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.declaration_end(declarator.name.span)
             };
             let declaration_span = self.merge_span(start_span, end_span);
+            if context == DeclarationContext::ForInitializer {
+                self.report(
+                    "E1206",
+                    "function-declaration-in-for-initializer",
+                    declarator.name.span,
+                );
+                return None;
+            }
+            if storage == StorageClass::Typedef {
+                if let Some(span) = inline_spans.first().copied() {
+                    self.report("E1401", "inline-specifier-on-non-function", span);
+                    return None;
+                }
+            }
             let mut declarations = self.side_declarations.split_off(side_start);
             if let Some(event) = specifier.tag_event {
                 declarations.push(self.finish_tag_event(event, declaration_span));
@@ -938,6 +960,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 written,
                 parameters,
                 storage,
+                inline_spans,
                 body,
                 span: declaration_span,
             })));
@@ -984,6 +1007,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         };
         let end_span = self.declaration_end(declarator.name.span);
         let declaration_span = self.merge_span(start_span, end_span);
+        if let Some(span) = inline_spans.first().copied() {
+            self.report("E1401", "inline-specifier-on-non-function", span);
+            return None;
+        }
         let mut declarations = self.side_declarations.split_off(side_start);
         if let Some(event) = specifier.tag_event {
             declarations.push(self.finish_tag_event(event, declaration_span));
@@ -2315,9 +2342,53 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         storage
     }
 
+    fn parse_declaration_modifiers(
+        &mut self,
+        storage: &mut Option<StorageClass>,
+        inline_spans: &mut Vec<SourceSpan>,
+    ) {
+        loop {
+            if self.peek_kind() == Some(TokenKind::Inline) {
+                inline_spans.push(self.advance().expect("peeked inline specifier").span);
+                continue;
+            }
+            if storage.is_none()
+                && matches!(
+                    self.peek_kind(),
+                    Some(
+                        TokenKind::Typedef
+                            | TokenKind::Extern
+                            | TokenKind::Static
+                            | TokenKind::Auto
+                            | TokenKind::Register
+                            | TokenKind::ThreadLocal
+                    )
+                )
+            {
+                *storage = Some(self.parse_storage_class());
+                continue;
+            }
+            break;
+        }
+    }
+
     fn parse_type_specifier(&mut self) -> Option<ParsedSpecifier<'arena>> {
+        self.parse_type_specifier_inner(None)
+    }
+
+    fn parse_declaration_type_specifier(
+        &mut self,
+        inline_spans: &mut Vec<SourceSpan>,
+    ) -> Option<ParsedSpecifier<'arena>> {
+        self.parse_type_specifier_inner(Some(inline_spans))
+    }
+
+    fn parse_type_specifier_inner(
+        &mut self,
+        mut inline_spans: Option<&mut Vec<SourceSpan>>,
+    ) -> Option<ParsedSpecifier<'arena>> {
         let start = self.span();
-        let mut qualifiers = self.parse_qualifiers();
+        let mut qualifiers = self.parse_qualifiers_with_inline(&mut inline_spans);
         if matches!(
             self.peek_kind(),
             Some(TokenKind::Struct | TokenKind::Union | TokenKind::Enum)
@@ -2338,7 +2409,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 spelling: self.token_text(&token).to_owned(),
                 span: token.span,
             };
-            let trailing = self.parse_qualifiers();
+            let trailing = self.parse_qualifiers_with_inline(&mut inline_spans);
             qualifiers = merge_qualifiers(qualifiers, trailing);
             let end = self
                 .tokens
@@ -2359,6 +2430,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut words = Vec::new();
         let mut end = None;
         while let Some(kind) = self.peek_kind() {
+            if self.capture_inline_specifier(&mut inline_spans) {
+                continue;
+            }
             if is_builtin_type_word(kind) {
                 let token = self.advance().expect("peeked builtin type word");
                 words.push(kind);
@@ -2398,6 +2472,42 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             },
             tag_event: None,
         })
+    }
+
+    fn capture_inline_specifier(
+        &mut self,
+        inline_spans: &mut Option<&mut Vec<SourceSpan>>,
+    ) -> bool {
+        if inline_spans.is_none() || self.peek_kind() != Some(TokenKind::Inline) {
+            return false;
+        }
+        let span = self.advance().expect("peeked inline specifier").span;
+        inline_spans
+            .as_mut()
+            .expect("inline capture was enabled")
+            .push(span);
+        true
+    }
+
+    fn parse_qualifiers_with_inline(
+        &mut self,
+        inline_spans: &mut Option<&mut Vec<SourceSpan>>,
+    ) -> Qualifiers {
+        let mut qualifiers = Qualifiers::default();
+        loop {
+            if self.capture_inline_specifier(inline_spans) {
+                continue;
+            }
+            match self.peek_kind() {
+                Some(TokenKind::Const) => qualifiers.is_const = true,
+                Some(TokenKind::Volatile) => qualifiers.is_volatile = true,
+                Some(TokenKind::Restrict) => qualifiers.is_restrict = true,
+                Some(TokenKind::Atomic) => qualifiers.is_atomic = true,
+                _ => break,
+            }
+            self.advance();
+        }
+        qualifiers
     }
 
     fn parse_qualifiers(&mut self) -> Qualifiers {
@@ -3435,10 +3545,26 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 variadic = true;
                 break;
             }
+            while self.peek_kind() == Some(TokenKind::Inline) {
+                let token = self.advance().expect("peeked inline specifier");
+                self.report(
+                    "E1401",
+                    "inline-specifier-on-parameter-declaration",
+                    token.span,
+                );
+            }
             let Some(specifier) = self.parse_type_specifier() else {
                 self.report("E1001", "expected-declaration", self.span());
                 break;
             };
+            while self.peek_kind() == Some(TokenKind::Inline) {
+                let token = self.advance().expect("peeked inline specifier");
+                self.report(
+                    "E1401",
+                    "inline-specifier-on-parameter-declaration",
+                    token.span,
+                );
+            }
             let start = specifier.surface.span();
             let (name, derived, written, end) =
                 if matches!(self.peek_kind(), Some(TokenKind::Comma | TokenKind::RParen)) {
@@ -3872,7 +3998,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut items = Vec::new();
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
             let before = self.pos;
-            if self.is_declaration_start() {
+            if self.is_declaration_start() || self.peek_kind() == Some(TokenKind::Inline) {
                 if let Some(declarations) = self.parse_declaration(DeclarationContext::Block) {
                     items.extend(declarations.into_iter().map(CHirBlockItem::Declaration));
                 }

@@ -625,6 +625,13 @@ pub struct FunctionDecl<'arena> {
     pub written: WrittenDeclarator,
     pub parameters: ParameterSyntax,
     pub storage: StorageClass,
+    /// Every written C11 `inline` function specifier, in source order.
+    ///
+    /// An empty vector means the declaration is not inline; retaining every
+    /// token preserves both the written count and each exact source origin.
+    /// Day 5 preserves syntax and provenance only; C11 6.7.4 inline-definition
+    /// and linkage semantics are not modeled by this field.
+    pub inline_spans: Vec<SourceSpan>,
     pub body: Option<&'arena CHirStmt<'arena>>,
     pub span: SourceSpan,
 }
@@ -1134,6 +1141,7 @@ mod tests {
                     },
                     parameters: ParameterSyntax::Unspecified,
                     storage: StorageClass::None,
+                    inline_spans: Vec::new(),
                     body: Some(func_body),
                     span: s,
                 }),
