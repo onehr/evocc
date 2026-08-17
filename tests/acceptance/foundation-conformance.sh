@@ -69,7 +69,7 @@ SCRIPT_REQUIRED_IDS="$(printf '%s\n' "$SCRIPT_REQUIRED_IDS" | awk 'NF')"
 
 PROD_HASH_FILES="crates/evocc-common/src/lib.rs crates/evocc-types/src/lib.rs crates/evocc-chir/src/lib.rs crates/evocc-lex/src/lib.rs crates/evocc-cpp/src/lib.rs crates/evocc-parser/src/lib.rs crates/evocc-egraph/src/lib.rs crates/evocc-proof/src/lib.rs crates/evocc-evoir/src/lib.rs crates/evocc-lower/src/lib.rs crates/evocc/src/main.rs Cargo.toml Cargo.lock"
 
-EXPECTED_PROD_HASH="ef616a1c6a79c8875d63823c5b614b6e74a1243acf2381b7d99b91fb6b36bb2b"
+EXPECTED_PROD_HASH="19f24006968551e04c39d3e609f0f8829f74ff7433e35cc348e54dd4b3e89201"
 
 # ---------------------------------------------------------------------------
 # Helpers
