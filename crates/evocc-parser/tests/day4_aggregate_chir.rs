@@ -4,7 +4,7 @@ use evocc_chir::{
     CHirDecl, CHirExpr, ParameterSyntax, StorageClass, TagMembers, TypeSpecifier,
     WrittenDeclaratorLayer,
 };
-use evocc_common::{FileId, SourceSpan};
+use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::Parser;
 use evocc_types::{
@@ -18,7 +18,7 @@ fn file() -> FileId {
     FileId::new(FILE_RAW)
 }
 
-fn parse(source: &str) -> evocc_chir::CHirUnit {
+fn parse<'arena>(source: &str, arena: &'arena Arena) -> evocc_chir::CHirUnit<'arena> {
     let mut lexer = Lexer::new(file(), source);
     let mut tokens = Vec::new();
     while let Some(token) = lexer.next() {
@@ -26,12 +26,13 @@ fn parse(source: &str) -> evocc_chir::CHirUnit {
         tokens.push(token);
     }
     let mut parser = Parser::new(tokens, file(), source);
-    let unit = parser.parse_translation_unit();
+    let unit = parser.parse_translation_unit_in(arena);
     assert!(!parser.had_error(), "{:?}", parser.diagnostic());
     unit
 }
 
 fn parse_diagnostic(source: &str) -> evocc_parser::ParseDiagnostic {
+    let arena = Arena::default();
     let mut lexer = Lexer::new(file(), source);
     let mut tokens = Vec::new();
     while let Some(token) = lexer.next() {
@@ -39,7 +40,7 @@ fn parse_diagnostic(source: &str) -> evocc_parser::ParseDiagnostic {
         tokens.push(token);
     }
     let mut parser = Parser::new(tokens, file(), source);
-    let _ = parser.parse_translation_unit();
+    let _ = parser.parse_translation_unit_in(&arena);
     assert!(parser.had_error(), "malformed tag input was accepted");
     parser.diagnostic().expect("structured diagnostic").clone()
 }
@@ -71,7 +72,7 @@ fn assert_tag_use(specifier: &TypeSpecifier, expected_kind: TagKind, start: u32,
     assert_exact(name.as_ref().expect("named tag use").span, start, end);
 }
 
-fn assert_tag_consistent(unit: &evocc_chir::CHirUnit) {
+fn assert_tag_consistent(unit: &evocc_chir::CHirUnit<'_>) {
     let defined = unit
         .declarations()
         .iter()
@@ -119,7 +120,10 @@ fn assert_tag_consistent(unit: &evocc_chir::CHirUnit) {
     }
 }
 
-fn assert_function_consistent(unit: &evocc_chir::CHirUnit, function: &evocc_chir::FunctionDecl) {
+fn assert_function_consistent(
+    unit: &evocc_chir::CHirUnit<'_>,
+    function: &evocc_chir::FunctionDecl<'_>,
+) {
     let TypeKind::Function {
         return_type,
         parameters: canonical,
@@ -154,7 +158,11 @@ fn assert_function_consistent(unit: &evocc_chir::CHirUnit, function: &evocc_chir
     }
 }
 
-fn tag_label(unit: &evocc_chir::CHirUnit, ordinals: &HashMap<TagId, usize>, tag: TagId) -> String {
+fn tag_label(
+    unit: &evocc_chir::CHirUnit<'_>,
+    ordinals: &HashMap<TagId, usize>,
+    tag: TagId,
+) -> String {
     let record = unit.types().tag(tag).expect("tag ID owned by unit");
     let kind = match record.kind {
         TagKind::Struct => "struct",
@@ -166,7 +174,7 @@ fn tag_label(unit: &evocc_chir::CHirUnit, ordinals: &HashMap<TagId, usize>, tag:
 }
 
 fn type_fingerprint(
-    unit: &evocc_chir::CHirUnit,
+    unit: &evocc_chir::CHirUnit<'_>,
     ordinals: &HashMap<TagId, usize>,
     ty: TypeId,
 ) -> String {
@@ -232,7 +240,7 @@ fn type_fingerprint(
     }
 }
 
-fn fingerprint(unit: &evocc_chir::CHirUnit) -> String {
+fn fingerprint(unit: &evocc_chir::CHirUnit<'_>) -> String {
     let ordinals = unit
         .declarations()
         .iter()
@@ -341,6 +349,7 @@ fn fingerprint(unit: &evocc_chir::CHirUnit) -> String {
 
 #[test]
 fn aggregate_definitions_preserve_nominal_types_source_facts_and_spans() {
+    let arena = Arena::default();
     let sources = [
         "struct Pair { int left; long right; };\n",
         "struct Forward; struct Forward *forward_head;\n",
@@ -372,12 +381,12 @@ fn aggregate_definitions_preserve_nominal_types_source_facts_and_spans() {
         "aggregate input denominator must be byte-unique"
     );
     for (source, expected) in sources.iter().zip(expected_fingerprints) {
-        let unit = parse(source);
+        let unit = parse(source, &arena);
         assert_tag_consistent(&unit);
         assert_eq!(fingerprint(&unit), expected, "source {source:?}");
     }
 
-    let pair = parse(sources[0]);
+    let pair = parse(sources[0], &arena);
     let CHirDecl::Tag(pair_decl) = &pair.declarations()[0] else {
         panic!("expected pair tag")
     };
@@ -409,7 +418,7 @@ fn aggregate_definitions_preserve_nominal_types_source_facts_and_spans() {
     assert_exact(pair_fields[1].written.span, 29, 34);
     assert!(pair_fields.iter().all(|field| field.bit_width.is_none()));
 
-    let forward = parse(sources[1]);
+    let forward = parse(sources[1], &arena);
     let (CHirDecl::Tag(forward_tag), CHirDecl::Object(forward_object)) =
         (&forward.declarations()[0], &forward.declarations()[1])
     else {
@@ -438,7 +447,7 @@ fn aggregate_definitions_preserve_nominal_types_source_facts_and_spans() {
         WrittenDeclaratorLayer::Pointer { .. }
     ));
 
-    let anonymous = parse(sources[2]);
+    let anonymous = parse(sources[2], &arena);
     let (CHirDecl::Tag(anonymous_tag), CHirDecl::Object(point)) =
         (&anonymous.declarations()[0], &anonymous.declarations()[1])
     else {
@@ -461,7 +470,7 @@ fn aggregate_definitions_preserve_nominal_types_source_facts_and_spans() {
         &TypeKind::Struct(anonymous_tag.tag)
     );
 
-    let nested = parse(sources[3]);
+    let nested = parse(sources[3], &arena);
     let (CHirDecl::Tag(inner), CHirDecl::Tag(outer)) =
         (&nested.declarations()[0], &nested.declarations()[1])
     else {
@@ -488,7 +497,7 @@ fn aggregate_definitions_preserve_nominal_types_source_facts_and_spans() {
         &TypeKind::Struct(inner.tag)
     );
 
-    let recursive = parse(sources[4]);
+    let recursive = parse(sources[4], &arena);
     let CHirDecl::Tag(node) = &recursive.declarations()[0] else {
         panic!("expected node tag")
     };
@@ -510,7 +519,7 @@ fn aggregate_definitions_preserve_nominal_types_source_facts_and_spans() {
         &TypeKind::Struct(node.tag)
     );
 
-    let union = parse(sources[5]);
+    let union = parse(sources[5], &arena);
     let CHirDecl::Tag(word) = &union.declarations()[0] else {
         panic!("expected union tag")
     };
@@ -527,7 +536,7 @@ fn aggregate_definitions_preserve_nominal_types_source_facts_and_spans() {
     assert_exact(word_fields[1].span, 31, 47);
     assert_exact(word_fields[1].name.as_ref().unwrap().span, 36, 46);
 
-    let enumeration = parse(sources[6]);
+    let enumeration = parse(sources[6], &arena);
     let CHirDecl::Tag(mode) = &enumeration.declarations()[0] else {
         panic!("expected enum tag")
     };
@@ -557,7 +566,7 @@ fn aggregate_definitions_preserve_nominal_types_source_facts_and_spans() {
         assert_span(constant.span, sources[6]);
     }
 
-    let function = parse(sources[7]);
+    let function = parse(sources[7], &arena);
     let (CHirDecl::Tag(item), CHirDecl::Function(inspect)) =
         (&function.declarations()[0], &function.declarations()[1])
     else {
@@ -597,8 +606,9 @@ fn aggregate_definitions_preserve_nominal_types_source_facts_and_spans() {
 
 #[test]
 fn function_parameter_form_is_canonical_but_names_and_spans_are_not() {
+    let arena = Arena::default();
     let source = "int unspecified(); int empty(void); int named(int left); int renamed(int right); int varargs(int head, ...);\n";
-    let unit = parse(source);
+    let unit = parse(source, &arena);
     assert_eq!(unit.declarations().len(), 5);
 
     let functions = unit
@@ -639,7 +649,7 @@ fn function_parameter_form_is_canonical_but_names_and_spans_are_not() {
             ..
         } if types.len() == 1
     ));
-    let names = |function: &evocc_chir::FunctionDecl| match &function.parameters {
+    let names = |function: &evocc_chir::FunctionDecl<'_>| match &function.parameters {
         ParameterSyntax::Prototype { parameters, .. } => parameters
             .iter()
             .map(|parameter| parameter.name.as_ref().map(|name| name.spelling.as_str()))
@@ -682,8 +692,9 @@ fn function_parameter_form_is_canonical_but_names_and_spans_are_not() {
 
 #[test]
 fn same_shape_anonymous_tags_remain_nominally_distinct() {
+    let arena = Arena::default();
     let source = "struct { int value; } first; struct { int value; } second;\n";
-    let unit = parse(source);
+    let unit = parse(source, &arena);
     assert_eq!(unit.declarations().len(), 4);
     let tags = unit
         .declarations()
@@ -718,8 +729,9 @@ fn same_shape_anonymous_tags_remain_nominally_distinct() {
 
 #[test]
 fn forward_definition_and_later_reference_share_one_completed_tag() {
+    let arena = Arena::default();
     let source = "struct Later; struct Later { int value; }; struct Later *tail;\n";
-    let unit = parse(source);
+    let unit = parse(source, &arena);
     assert_eq!(unit.declarations().len(), 3);
     let (CHirDecl::Tag(forward), CHirDecl::Tag(definition), CHirDecl::Object(tail)) = (
         &unit.declarations()[0],
@@ -747,9 +759,10 @@ fn forward_definition_and_later_reference_share_one_completed_tag() {
 
 #[test]
 fn returned_unit_owns_types_and_source_facts_after_parser_input_is_dropped() {
+    let arena = Arena::default();
     let unit = {
         let source = String::from("struct Durable { int value; };\n");
-        parse(&source)
+        parse(&source, &arena)
     };
     assert_eq!(
         fingerprint(&unit),
@@ -763,8 +776,9 @@ fn returned_unit_owns_types_and_source_facts_after_parser_input_is_dropped() {
 
 #[test]
 fn array_parameter_adjusts_to_pointer_without_losing_written_declarator() {
+    let arena = Arena::default();
     let source = "int array_parameter(int values[3]); int pointer_parameter(int *values);\n";
-    let unit = parse(source);
+    let unit = parse(source, &arena);
     let functions = unit
         .declarations()
         .iter()
@@ -809,8 +823,9 @@ fn array_parameter_adjusts_to_pointer_without_losing_written_declarator() {
 
 #[test]
 fn bit_field_width_syntax_is_preserved_without_computing_layout() {
+    let arena = Arena::default();
     let source = "struct Flags { unsigned ready : 1; unsigned mode : 3; unsigned : 0; };\n";
-    let unit = parse(source);
+    let unit = parse(source, &arena);
     let CHirDecl::Tag(flags) = &unit.declarations()[0] else {
         panic!("expected Flags tag")
     };
@@ -827,7 +842,7 @@ fn bit_field_width_syntax_is_preserved_without_computing_layout() {
             TypeKind::Int(IntRank::UInt)
         ));
     }
-    let width = |field: &evocc_chir::RecordMember| match field.bit_width.as_ref() {
+    let width = |field: &evocc_chir::RecordMember<'_>| match field.bit_width {
         Some(CHirExpr::Lit(value, _)) => value.value,
         other => panic!("expected literal bit width, got {other:?}"),
     };
