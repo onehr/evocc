@@ -1,0 +1,467 @@
+{
+  "schemaVersion": 1,
+  "contractState": "locked",
+  "frozenBeforeProductionEdit": {
+    "day4Commit": "2f1c1570ee5268a082734dd8061e49bd2ff37dbf",
+    "day4Tree": "35a06ec6e7d123ef97104589c552b0259829f818",
+    "selectionDateUtc": "2026-08-17"
+  },
+  "kernel": {
+    "version": "6.18.44",
+    "resolvedCommit": "1efe5d048a391de3ead2804b2e7f86376c356cc5",
+    "sourceArchivePath": ".toolchain/artifacts/linux-6.18.44.tar.xz",
+    "sourceArchiveSha256": "0f72d938f06828e82c90405174fe572287db7bfe089e2fc46572a99a7f240d43"
+  },
+  "selection": {
+    "seed": "evocc-day5-kernel-cohort-v1",
+    "rankDefinition": "SHA256(UTF8(seed + TAB + sourcePath + LF))",
+    "eligibility": "target-side .c source is a non-empty regular file below /work/src in the pinned source archive; its original .o.cmd exists in gcc-lane-1, gcc-lane-2, clang-lane-1, and clang-lane-2; generated output-tree sources are ineligible",
+    "stratification": "the four lowest rank hashes in each required top-level directory",
+    "eligibleCounts": {
+      "init": 8,
+      "kernel": 241,
+      "lib": 199,
+      "mm": 87
+    },
+    "selectedPerDomain": 4,
+    "selectedTotal": 16,
+    "replacementPolicy": "forbidden; an outcome remains in the cohort regardless of greenness"
+  },
+  "classifications": [
+    "driver",
+    "preprocess",
+    "lex",
+    "parse",
+    "sema",
+    "layout",
+    "out-of-Day5"
+  ],
+  "classificationPolicy": "Every unsuccessful lane has exactly one class, the first stable diagnostic code, source path/span when emitted, and a verified reduced-reproducer SHA-256 before Day 5 acceptance. Success is a separate outcome, never a failure class. No skip state exists.",
+  "baselineReductionPolicy": "Reconnaissance may emit PENDING_REDUCTION only while acceptanceReady is false; PENDING_REDUCTION is a measured incomplete result, never a valid final record or a substitute for a reduced-reproducer hash.",
+  "configs": {
+    "gcc": {
+      "recordPath": ".toolchain/records/frozen-kernel-gcc.config",
+      "sha256": "4245f8e651667a992a8b49252f3a40b3748ff56657828ef42e3a7ef39edcaf5d",
+      "laneCopies": {
+        "gcc-lane-1": "4245f8e651667a992a8b49252f3a40b3748ff56657828ef42e3a7ef39edcaf5d",
+        "gcc-lane-2": "4245f8e651667a992a8b49252f3a40b3748ff56657828ef42e3a7ef39edcaf5d"
+      }
+    },
+    "clang": {
+      "recordPath": ".toolchain/records/frozen-kernel-clang.config",
+      "sha256": "edbd53d2a537f42b4d99f3505fc3ff984cb4a326f1af0817621057cc47bb1eae",
+      "laneCopies": {
+        "clang-lane-1": "edbd53d2a537f42b4d99f3505fc3ff984cb4a326f1af0817621057cc47bb1eae",
+        "clang-lane-2": "edbd53d2a537f42b4d99f3505fc3ff984cb4a326f1af0817621057cc47bb1eae"
+      }
+    }
+  },
+  "hashDefinitions": {
+    "savedCommandSha256": "SHA256 of bytes after the first-line delimiter ` := `, excluding the line terminator",
+    "argvSha256": "SHA256 of POSIX-shlex-decoded argv entries, each followed by one NUL byte",
+    "inputClosureSha256": "SHA256 of sorted UTF-8 rows logicalPath + TAB + fileSha256 + TAB + byteLength + LF; closure is the .o.cmd dependency set plus source and lane .config; missing wildcard dependencies are omitted; a file below .build/linux-src is normalized as source/<kernel-relative-path>, while a lane-generated file below .build/reference/<lane> (including .config) is normalized as output/<lane-relative-path>",
+    "recordSha256": "SHA256 of the complete .o.cmd file bytes"
+  },
+  "translationUnits": [
+    {
+      "id": "init-init-task",
+      "domain": "init",
+      "sourcePath": "init/init_task.c",
+      "sourceSha256": "d8c695bf9bb6bf597f520b700e1a93a91cf34ae3564f307007729302de15f7db",
+      "sourceBytes": 6805,
+      "selectionRankSha256": "461332172c6449d81248c90b4da769540c25c1a025b0579f9e405a1fe34fe952",
+      "commandRecordPath": "init/.init_task.o.cmd",
+      "commands": {
+        "gcc": {
+          "recordSha256ByLane": {"gcc-lane-1": "2165381a01c074354d603cf0f169ff01a57d7b6e7e0f94776750ae3502cbd965", "gcc-lane-2": "2165381a01c074354d603cf0f169ff01a57d7b6e7e0f94776750ae3502cbd965"},
+          "savedCommandSha256": "d781303ae005a4dc22cfdb88a7dbda3dce00c3853754edcfedbfcc709a9f0185",
+          "argvSha256": "db151d473cea85d2345d58ba34c6d08f6239cce7516effc893e013c039f0561b",
+          "argvCount": 110,
+          "inputClosure": {"files": 1070, "bytes": 6254586, "sha256": "b6004e9fa1c333d1e0fb770020e2d2a3ad54e1327a4f757520d8ab567edbab34"}
+        },
+        "clang": {
+          "recordSha256ByLane": {"clang-lane-1": "bb4a4bfe74825dd34d5198c6092d290104c6d664b92758534f065e612f9dd348", "clang-lane-2": "bb4a4bfe74825dd34d5198c6092d290104c6d664b92758534f065e612f9dd348"},
+          "savedCommandSha256": "0ef403e512905581c9eb28846fd7c1c2d3379ca3a875e8e82b95433ba953e898",
+          "argvSha256": "eeb5480d0ae7c17ba6cdf69b2591b1fa7b51f650f65c5366ef1c15ee3f976e7b",
+          "argvCount": 109,
+          "inputClosure": {"files": 1073, "bytes": 6255835, "sha256": "0a3c75c38055954cb193467b13b66685cc01f63206ce386e7156d78f464bb996"}
+        }
+      }
+    },
+    {
+      "id": "init-do-mounts-initrd",
+      "domain": "init",
+      "sourcePath": "init/do_mounts_initrd.c",
+      "sourceSha256": "7a3f51a14545001e6a7c3da5a52b96eee19ba818e8bce9e986bd3f359378afa1",
+      "sourceBytes": 3848,
+      "selectionRankSha256": "620cfae9e3d15eacb15a4bd6f530a869688caad31d9c31498ffb35d7662cf569",
+      "commandRecordPath": "init/.do_mounts_initrd.o.cmd",
+      "commands": {
+        "gcc": {
+          "recordSha256ByLane": {"gcc-lane-1": "34dce0708f2c107dee3b0523253ecdf96525e42b25846329b3cb1a1e05af902b", "gcc-lane-2": "34dce0708f2c107dee3b0523253ecdf96525e42b25846329b3cb1a1e05af902b"},
+          "savedCommandSha256": "519cf5c05b8f177e19a9d9eb35419ae68899d4303ae47d6f72dc414764dc442a",
+          "argvSha256": "cc53019281daebaa1bc931272ca88d7fdd94d5b6f26ce017f2fc5db1ccd358cb",
+          "argvCount": 110,
+          "inputClosure": {"files": 1070, "bytes": 6795619, "sha256": "96132866172064809c840a90418e4eee329cd06d5e24142d66bec3c33b259dff"}
+        },
+        "clang": {
+          "recordSha256ByLane": {"clang-lane-1": "7ad83247522953af1b2e56c523f4f5c2531bea1a9cb8d927a912090665053153", "clang-lane-2": "7ad83247522953af1b2e56c523f4f5c2531bea1a9cb8d927a912090665053153"},
+          "savedCommandSha256": "b6f033d20db0d3f21808d4756b201f44025986da55b553c85b0bf9ebc31ce938",
+          "argvSha256": "9fc506c5a4d2d9fbd1e15381d24ec9167fc36fd008cb5607641631f13c7cd6de",
+          "argvCount": 109,
+          "inputClosure": {"files": 1073, "bytes": 6796868, "sha256": "2709984caae7ab5a47afdb089409878b7be2abcc2b18f8698469fbfd3e481c7d"}
+        }
+      }
+    },
+    {
+      "id": "init-version-timestamp",
+      "domain": "init",
+      "sourcePath": "init/version-timestamp.c",
+      "sourceSha256": "2077d9078642392c33229d7dec821ba5efe3c3ca0d9c139bbc898f6c63fcdbab",
+      "sourceBytes": 819,
+      "selectionRankSha256": "9bc754da722aa6d4505ffe44385cede6f5d1aca031331e75b88463a2c5440dd3",
+      "commandRecordPath": "init/.version-timestamp.o.cmd",
+      "commands": {
+        "gcc": {
+          "recordSha256ByLane": {"gcc-lane-1": "b982d468b040bf0eeba5b3b5f895b91c094657e605ee50f27a577dca1d8a418b", "gcc-lane-2": "b982d468b040bf0eeba5b3b5f895b91c094657e605ee50f27a577dca1d8a418b"},
+          "savedCommandSha256": "c75a1c8092d18aaebce7dc42712e8255017e8318966dd7c178a780f78f3759c2",
+          "argvSha256": "4e6fe46327ca4303734e867a399d2772b494e84888bf2e96b6a5cd3029351398",
+          "argvCount": 112,
+          "inputClosure": {"files": 775, "bytes": 4751569, "sha256": "21de29f25402a051a2110c68e1261ef83eb77e5803ef0a60d263daa2ce20c06f"}
+        },
+        "clang": {
+          "recordSha256ByLane": {"clang-lane-1": "87b0263afcef4a60957b19c42eb5123058227d687292e6b52984ec5b6bf8e3a8", "clang-lane-2": "87b0263afcef4a60957b19c42eb5123058227d687292e6b52984ec5b6bf8e3a8"},
+          "savedCommandSha256": "04940bbf390e68b60e04e4c5a26f364cb560cd63a1491219bb20e68355a4fed8",
+          "argvSha256": "8cc385aeb44553ace378eaa97020ab5483b0e680293d503d33b5002d33d2ae44",
+          "argvCount": 111,
+          "inputClosure": {"files": 777, "bytes": 4752800, "sha256": "66ffb37b34db5a76e89340bfae05256bd645a8c101b02c3a70695d95f62f43e0"}
+        }
+      }
+    },
+    {
+      "id": "init-do-mounts",
+      "domain": "init",
+      "sourcePath": "init/do_mounts.c",
+      "sourceSha256": "2826547dadbd1ca27c694a419a82b149c38f18c693b2e049319790316fc85e15",
+      "sourceBytes": 11241,
+      "selectionRankSha256": "a8e851ca29289cb1cdbcccd7826db09622eb3b6594d9edfd0ab16188d4ee782e",
+      "commandRecordPath": "init/.do_mounts.o.cmd",
+      "commands": {
+        "gcc": {
+          "recordSha256ByLane": {"gcc-lane-1": "6b75edbca38c5d377eb94e022dfd4b7c4468fa3796312ef9fc91fce8990cef98", "gcc-lane-2": "6b75edbca38c5d377eb94e022dfd4b7c4468fa3796312ef9fc91fce8990cef98"},
+          "savedCommandSha256": "53c0806c05c860f6bd1b7e0366acb730112306dfd63bd529846f3c6e7b5eac0b",
+          "argvSha256": "471c47871c15dff482676737b472cf08dc8d12fe376a8c04e894612bcd31272d",
+          "argvCount": 110,
+          "inputClosure": {"files": 1340, "bytes": 8630781, "sha256": "e8899356b012d2e5102fb1f88996bc2a7c0b2999ea53c3236d87eeff8856a792"}
+        },
+        "clang": {
+          "recordSha256ByLane": {"clang-lane-1": "51393426f1e9159cf101b960e928588070abfb861f3d07eade017112540cd945", "clang-lane-2": "51393426f1e9159cf101b960e928588070abfb861f3d07eade017112540cd945"},
+          "savedCommandSha256": "dda0e304a0b895c9d19e2d0c8b1de8f37f1b04e378f159ced4e9264debd50ad8",
+          "argvSha256": "98840bd2d14bf53545a02e7758326e4a820e4cfe51dd31d5e47ea06edd9b9f4f",
+          "argvCount": 109,
+          "inputClosure": {"files": 1343, "bytes": 8632030, "sha256": "6602bbad3e5fc5c62fcf70dc20d34cf174af1f5f8cc21a4d66f9f29d3103ccb8"}
+        }
+      }
+    },
+    {
+      "id": "kernel-locking-semaphore",
+      "domain": "kernel",
+      "sourcePath": "kernel/locking/semaphore.c",
+      "sourceSha256": "644dbfb08decf1e63d14b5c81066758f1d5b8938de5cd7530cdd2bf000d86ffa",
+      "sourceBytes": 8950,
+      "selectionRankSha256": "005ede53788123c5cbac5129f3190991e9e3c5ee334feb87fa1530ce385e324b",
+      "commandRecordPath": "kernel/locking/.semaphore.o.cmd",
+      "commands": {
+        "gcc": {
+          "recordSha256ByLane": {"gcc-lane-1": "42e1ad3902946015bdb7ffbf670dbba3c13da55d891839357fe88aa756e52cd7", "gcc-lane-2": "42e1ad3902946015bdb7ffbf670dbba3c13da55d891839357fe88aa756e52cd7"},
+          "savedCommandSha256": "d738dc02c2f068f10f2fbb6527468dedf59810bf708e06c723566a0753726a89",
+          "argvSha256": "5dfaafde391d1cf3d609d1f5c88028d401349952554f3eb68ed8878f6d2d676f",
+          "argvCount": 108,
+          "inputClosure": {"files": 941, "bytes": 5542664, "sha256": "539ca0826123959b69a36d9f2e707515d634d801b7246a79a9eda4791f677f2e"}
+        },
+        "clang": {
+          "recordSha256ByLane": {"clang-lane-1": "27d115c5db830775247d9df1b20ecc80088ea6697157720c3cac6782276ebc4a", "clang-lane-2": "27d115c5db830775247d9df1b20ecc80088ea6697157720c3cac6782276ebc4a"},
+          "savedCommandSha256": "7e793210c58be582226ffeb9c1e3f3e193ac3e88a0658f27cbbef33daf95d23b",
+          "argvSha256": "aa52132a41a12ea7c5974873b9e506ed6fe3fddf59896d4514f90d4cb96cbeb8",
+          "argvCount": 107,
+          "inputClosure": {"files": 944, "bytes": 5543913, "sha256": "f41df62f20ce0e6d2367c74cc36d30e1582e2d64e70053dc831ce39b688ae945"}
+        }
+      }
+    },
+    {
+      "id": "kernel-bpf-token",
+      "domain": "kernel",
+      "sourcePath": "kernel/bpf/token.c",
+      "sourceSha256": "72ec3352e1c033512f237796dd1fb90236556eb081830c3247e52885985e471a",
+      "sourceBytes": 6955,
+      "selectionRankSha256": "014b7f2c9e74e5a055b03dafa303b1a11d64b69cccd419d40124dd10e942de64",
+      "commandRecordPath": "kernel/bpf/.token.o.cmd",
+      "commands": {
+        "gcc": {
+          "recordSha256ByLane": {"gcc-lane-1": "ec05ccc74708757c123939df5cad14d81e2eb9e8af4a97e1ffd36e613d1d8cae", "gcc-lane-2": "ec05ccc74708757c123939df5cad14d81e2eb9e8af4a97e1ffd36e613d1d8cae"},
+          "savedCommandSha256": "8c13fe47608210e255ad78900e820a04abdcf470697918054db86bac09743008",
+          "argvSha256": "4f29edcd80fcbcd5df50eca5146e4ecbf851fa05b21a49473ac0ea6bfdcf4f57",
+          "argvCount": 108,
+          "inputClosure": {"files": 1029, "bytes": 6460726, "sha256": "ea2ef79cd18ac979a56640101eb35cd55555194d15a56faebccbcef152855636"}
+        },
+        "clang": {
+          "recordSha256ByLane": {"clang-lane-1": "0e34da065d5e8c54840111b7114a23f6650ab93185c4d343047c0acd73c215c3", "clang-lane-2": "0e34da065d5e8c54840111b7114a23f6650ab93185c4d343047c0acd73c215c3"},
+          "savedCommandSha256": "e2c787e5155f6897ecf876f879c54eb020d59b4d0ea084626230173c378942d3",
+          "argvSha256": "c484e3ce41be52f2f731c5249245406838f6d23b481982441d5b0c8ec8b1fcdc",
+          "argvCount": 107,
+          "inputClosure": {"files": 1032, "bytes": 6461975, "sha256": "41f1d351b714de906097a79f51391ebb068ed600b6b47bea8ea7ce4e53812b47"}
+        }
+      }
+    },
+    {
+      "id": "kernel-power-console",
+      "domain": "kernel",
+      "sourcePath": "kernel/power/console.c",
+      "sourceSha256": "6f000ed436905b22302b1a01929ab1bd37497e8054854f67354f27e2e8cd7102",
+      "sourceBytes": 3679,
+      "selectionRankSha256": "043ecae94f20b15a6d1c72c66c50055f3a44b36445a4f5be08e965769ed91144",
+      "commandRecordPath": "kernel/power/.console.o.cmd",
+      "commands": {
+        "gcc": {
+          "recordSha256ByLane": {"gcc-lane-1": "9182ff80801b67325070292f70ea5c534f4b42e4ab3acea52ef6cc5b505a859d", "gcc-lane-2": "9182ff80801b67325070292f70ea5c534f4b42e4ab3acea52ef6cc5b505a859d"},
+          "savedCommandSha256": "56f564c221a74ab269669cc234f98250a6273ac43de4724a9bd7500c9062de0a",
+          "argvSha256": "5d95ee6ae353e63c870a28d65b1e99258a72ac8f1da791c8342419fdb4362ab4",
+          "argvCount": 108,
+          "inputClosure": {"files": 1052, "bytes": 6180080, "sha256": "b43cb7e449464b81dce7206df2633067453458ff160c57eef872f8fb194012c2"}
+        },
+        "clang": {
+          "recordSha256ByLane": {"clang-lane-1": "caa4568cbbc0e91925dbf327b695ba80ef4ec9ad61fdb57d898c94f481300465", "clang-lane-2": "caa4568cbbc0e91925dbf327b695ba80ef4ec9ad61fdb57d898c94f481300465"},
+          "savedCommandSha256": "c138490c5a69cefc015e8c46379475445201f90468cbb3df4bf1bcfc1252e65f",
+          "argvSha256": "89800b9ad34652c9f43911a53210f3cbf5f6bb533957d9b66a7effab8d91cd69",
+          "argvCount": 107,
+          "inputClosure": {"files": 1055, "bytes": 6181329, "sha256": "7b4c3d423d0ac4810886cda1c58f7e88126466cef0dd30c44f077a3a80372400"}
+        }
+      }
+    },
+    {
+      "id": "kernel-power-main",
+      "domain": "kernel",
+      "sourcePath": "kernel/power/main.c",
+      "sourceSha256": "f8eb032af1f0f295f5deb133ae7a8da43636e44e8bd32312b4293072656bcef8",
+      "sourceBytes": 26898,
+      "selectionRankSha256": "048f0713450ee84cadff0eed19ec9b2cda6fe4f5395880a78d9687e74feb77f7",
+      "commandRecordPath": "kernel/power/.main.o.cmd",
+      "commands": {
+        "gcc": {
+          "recordSha256ByLane": {"gcc-lane-1": "0b30f578b48cb60664d8a124cb86ea3d5987152cd5e5c87d73ef87046577afb1", "gcc-lane-2": "0b30f578b48cb60664d8a124cb86ea3d5987152cd5e5c87d73ef87046577afb1"},
+          "savedCommandSha256": "ea62df01e3797d1dbd14f80bf49ebc14cb256208c9458e1314bb18544a9fe745",
+          "argvSha256": "fa615102fd3dddfccc021dd02c41c83cfcf5852cd3394482e0a279a01aa5bf23",
+          "argvCount": 108,
+          "inputClosure": {"files": 1161, "bytes": 7562076, "sha256": "94f03a477987a35e57e35a29aa77c9b9f195520654d202be9ddffaa348c0dc8c"}
+        },
+        "clang": {
+          "recordSha256ByLane": {"clang-lane-1": "0ce6bbefededcc0766c9b4355511602f22edf6ebd0edf62c09cb1c2c0309cd0b", "clang-lane-2": "0ce6bbefededcc0766c9b4355511602f22edf6ebd0edf62c09cb1c2c0309cd0b"},
+          "savedCommandSha256": "22d28cb8cbbe543493fcb4cd80c0b61ef79fea580c2d1ea8d939e67594fa7265",
+          "argvSha256": "a5167a1590633aad82c58380046193fee3e656c49860f985a1510d91fc46b85a",
+          "argvCount": 107,
+          "inputClosure": {"files": 1164, "bytes": 7563325, "sha256": "6b60e6728693248d1ed6cf78d6102dbb5938f98a7ba7e05dbe2870c076f305fa"}
+        }
+      }
+    },
+    {
+      "id": "lib-bitrev",
+      "domain": "lib",
+      "sourcePath": "lib/bitrev.c",
+      "sourceSha256": "cf5c0a12f814d7ae5fd528a56c4923b7557f7b90fa390a20c4624da42fc577de",
+      "sourceBytes": 1971,
+      "selectionRankSha256": "003d698f2af21723837c31c6b7735dc39494710d034570999a339fa13cba37e3",
+      "commandRecordPath": "lib/.bitrev.o.cmd",
+      "commands": {
+        "gcc": {
+          "recordSha256ByLane": {"gcc-lane-1": "8492572930435512503c904c139d2d664f30c4c328e3928c6b9e1ac5a8d9a82f", "gcc-lane-2": "8492572930435512503c904c139d2d664f30c4c328e3928c6b9e1ac5a8d9a82f"},
+          "savedCommandSha256": "28bbdad79c25644d9c624c70d35f81338c6faa396e11d6b93477f4dac5a4eb07",
+          "argvSha256": "53d896e71287750673007dcf471574e419f5886aa9ead4b5b94826a85a27bd09",
+          "argvCount": 108,
+          "inputClosure": {"files": 19, "bytes": 245429, "sha256": "c40be464f61d806a27d618d3829988c986d37f44cf8d36c408edef4473956865"}
+        },
+        "clang": {
+          "recordSha256ByLane": {"clang-lane-1": "7faa4975ef06cac14565139feed485969263c9bfbc73f6bb82f111e8732bb002", "clang-lane-2": "7faa4975ef06cac14565139feed485969263c9bfbc73f6bb82f111e8732bb002"},
+          "savedCommandSha256": "03a4cb7f9b5a672d0cc0cbf270e7f8fc081e7c4db962190b81222c5a49088216",
+          "argvSha256": "7614808e77879c1b7852bf2c3b386e04c11f09aab0174f68671046208bfca9c8",
+          "argvCount": 107,
+          "inputClosure": {"files": 21, "bytes": 246678, "sha256": "e9b63de49f914917bc63354a1ccec2b1e6f7c564291dc6203745d1e7e793e050"}
+        }
+      }
+    },
+    {
+      "id": "lib-crypto-mpi-generic-mpih-lshift",
+      "domain": "lib",
+      "sourcePath": "lib/crypto/mpi/generic_mpih-lshift.c",
+      "sourceSha256": "482fa7dbacb10aa867223f8144a3aef6bc90ce9d4297c38ec8e204eddeec2219",
+      "sourceBytes": 1494,
+      "selectionRankSha256": "029ab65c566cd6af32417ac1428a62e579f97f85a62f0932e7fce1410360c86f",
+      "commandRecordPath": "lib/crypto/mpi/.generic_mpih-lshift.o.cmd",
+      "commands": {
+        "gcc": {
+          "recordSha256ByLane": {"gcc-lane-1": "b0467517c80dd38857cba2998e5578eced1bd4b3c67ed25a3438f7a12be495bb", "gcc-lane-2": "b0467517c80dd38857cba2998e5578eced1bd4b3c67ed25a3438f7a12be495bb"},
+          "savedCommandSha256": "6597328f740e958f214371807f1c6cc73244670c4f8cadcffc2093c77cb87011",
+          "argvSha256": "bd440bf9635d3f3889a85cd41c1a6f84dd0764cef7ae08f6b44851fa94a6ce29",
+          "argvCount": 108,
+          "inputClosure": {"files": 799, "bytes": 4931929, "sha256": "b91e72aaf88c5099fb2d8cfdf9dd460d3f0eda87c7e7f0bea5e0a1157f899bd9"}
+        },
+        "clang": {
+          "recordSha256ByLane": {"clang-lane-1": "347a3d8ec3fd0c335bea8b688fd27e846559a834e765722f28122d3278060849", "clang-lane-2": "347a3d8ec3fd0c335bea8b688fd27e846559a834e765722f28122d3278060849"},
+          "savedCommandSha256": "7a0cb839633cf609b55967233d0b501ef80f941a5dad4bcb929fe7109f9e1e47",
+          "argvSha256": "c94875b1e0da927ee66bc5f91cb20c9f2dc3f972f847a7ab6a918d5bba01cd5a",
+          "argvCount": 107,
+          "inputClosure": {"files": 802, "bytes": 4933178, "sha256": "f4fd178304d174945401e8865b70537acff3edbc8aae03b53748ddce06b62c20"}
+        }
+      }
+    },
+    {
+      "id": "lib-kstrtox",
+      "domain": "lib",
+      "sourcePath": "lib/kstrtox.c",
+      "sourceSha256": "5c53d62885e1830fe33a24884343805d2523c6a1b47bed09a2c1bd12a116e1dc",
+      "sourceBytes": 11106,
+      "selectionRankSha256": "02c36b338cf59e0fedbe089e744ac6220dd73e407f8ad16603959020c27827b0",
+      "commandRecordPath": "lib/.kstrtox.o.cmd",
+      "commands": {
+        "gcc": {
+          "recordSha256ByLane": {"gcc-lane-1": "d89f550a4940513e288012b1436876188789d13cf32c15930eff7058d093d35d", "gcc-lane-2": "d89f550a4940513e288012b1436876188789d13cf32c15930eff7058d093d35d"},
+          "savedCommandSha256": "6f02806da39405a2ea79fa9922737e0aafa74f8def62c4de6f4f8e45d93263a2",
+          "argvSha256": "91735965dcbe5402a32547224551ace3e904f5a7e7886f2d376fb532798f9928",
+          "argvCount": 108,
+          "inputClosure": {"files": 548, "bytes": 3292299, "sha256": "d0f8d93cbaaedce07442ad55d49a1f0027e72e49ab62e1cda69a7ad5a4fc2c83"}
+        },
+        "clang": {
+          "recordSha256ByLane": {"clang-lane-1": "85c3503cede430f5b47eef93565e164281e549b4d1cac40ce5ea37113938a6f8", "clang-lane-2": "85c3503cede430f5b47eef93565e164281e549b4d1cac40ce5ea37113938a6f8"},
+          "savedCommandSha256": "7316c4575fcc1d8caa140690c192f49dc6fe00f251cbad1e877e3dd128ae9974",
+          "argvSha256": "fec474e3a57d820db8a07a498bd0fdd694e14dea37e73c6415ab16a70bab9c4a",
+          "argvCount": 107,
+          "inputClosure": {"files": 550, "bytes": 3293548, "sha256": "d86991846ffafc07dfef12394dd615ea7d4b2e6aa8390ad30702d4930b37d725"}
+        }
+      }
+    },
+    {
+      "id": "lib-fdt-wip",
+      "domain": "lib",
+      "sourcePath": "lib/fdt_wip.c",
+      "sourceSha256": "b551753d10f13045ef721e47487c5dc2f2a5eb5bf9250ab7b9f8bb163a2a6b25",
+      "sourceBytes": 73,
+      "selectionRankSha256": "04030bdd4b866befee681cff99143869fc1e849d9aad287225ed4c7de864b9b9",
+      "commandRecordPath": "lib/.fdt_wip.o.cmd",
+      "commands": {
+        "gcc": {
+          "recordSha256ByLane": {"gcc-lane-1": "9796f75061542c83edd1096eebeadee0ccfe3ad6954b7b1110a0ff15af7edcaf", "gcc-lane-2": "9796f75061542c83edd1096eebeadee0ccfe3ad6954b7b1110a0ff15af7edcaf"},
+          "savedCommandSha256": "f47df5798fb638911e7b3f64d21772cf63e88630603f454263e6428bf9e221b3",
+          "argvSha256": "af68fadb6550f239325dc4a90598fef02f58a3e54ec29370a856db04a7cb58cf",
+          "argvCount": 110,
+          "inputClosure": {"files": 78, "bytes": 502123, "sha256": "832ba3774d10613b03e95cb3af544c8cc8be2101c7aa6fceab3a4e597ccbdafe"}
+        },
+        "clang": {
+          "recordSha256ByLane": {"clang-lane-1": "89de8059c0a392b760561015c0bdbafd3d5e8ded57cc8789f0a7dfad26eb284e", "clang-lane-2": "89de8059c0a392b760561015c0bdbafd3d5e8ded57cc8789f0a7dfad26eb284e"},
+          "savedCommandSha256": "3a8c8c019bcc0a3951d71d87e17d3251dc614a1f257e3c8b5399ae12a9752057",
+          "argvSha256": "058d11d164dcf215746a694187df11e3185f2363ed052f47123897c8f55eb525",
+          "argvCount": 109,
+          "inputClosure": {"files": 80, "bytes": 503372, "sha256": "9f2eecfbab08f1e4bb2a50415d7172234493f1102f331d6a2801331216bfd59d"}
+        }
+      }
+    },
+    {
+      "id": "mm-memtest",
+      "domain": "mm",
+      "sourcePath": "mm/memtest.c",
+      "sourceSha256": "5059d4bf5f0aa444d923bffc3a415211802aacedf6d0dd5b8d0e7662c2dcec77",
+      "sourceBytes": 3533,
+      "selectionRankSha256": "0453f6ee5f4a581a04c60da88f8e4b9382bd981833294c5fb4904a3c73e6d1c2",
+      "commandRecordPath": "mm/.memtest.o.cmd",
+      "commands": {
+        "gcc": {
+          "recordSha256ByLane": {"gcc-lane-1": "983f88bb0f96934c47a9eb4c02c9427045ccdccac5662b9e4f9a27e954523f15", "gcc-lane-2": "983f88bb0f96934c47a9eb4c02c9427045ccdccac5662b9e4f9a27e954523f15"},
+          "savedCommandSha256": "4a0ad76a73523fd43ff0231dcbc8562edc1b85f24bf0e6b42dae8904d830f5f7",
+          "argvSha256": "68f6365c9d9189d01c23f5faf2520e81a6f275225656ad759044baf8b7c8f8a8",
+          "argvCount": 108,
+          "inputClosure": {"files": 763, "bytes": 4772173, "sha256": "337ab273301f588d8c9b9e584897053e257e010e9b33df54dcc030e442759109"}
+        },
+        "clang": {
+          "recordSha256ByLane": {"clang-lane-1": "22c53c02b90007de8fdbda6b00e86eb7491f00e90101a3bb725bf69864462501", "clang-lane-2": "22c53c02b90007de8fdbda6b00e86eb7491f00e90101a3bb725bf69864462501"},
+          "savedCommandSha256": "6a1e17d0cd42e74dd486abc724ef6736618a66eb8da7d9e4c348b7de05ba0b6b",
+          "argvSha256": "e468328e75eb4cf6b714726b7c0c8f228b24f8750be23a4aed2d996442246024",
+          "argvCount": 107,
+          "inputClosure": {"files": 765, "bytes": 4773422, "sha256": "b63a21c6a4d583c554039b5f2708319a8ba0da9c0370edaae306a3bebc768e04"}
+        }
+      }
+    },
+    {
+      "id": "mm-mprotect",
+      "domain": "mm",
+      "sourcePath": "mm/mprotect.c",
+      "sourceSha256": "8dd60148bdd87fcd102924be058fb1c6291c570a82d9da9c9df1a5000747dad5",
+      "sourceBytes": 28226,
+      "selectionRankSha256": "05626c5ca5649921ba9c55563160ea97b068ae336f71d0e88e1b4b8123307027",
+      "commandRecordPath": "mm/.mprotect.o.cmd",
+      "commands": {
+        "gcc": {
+          "recordSha256ByLane": {"gcc-lane-1": "305c26cfb50c1f014461e615bfd3746cb80370f609ddc974694fa3d1823f32f7", "gcc-lane-2": "305c26cfb50c1f014461e615bfd3746cb80370f609ddc974694fa3d1823f32f7"},
+          "savedCommandSha256": "0ac207b7ac23e2d971b1c579d98e598e534bf9d982e61e05fc2e8bf0756cb5af",
+          "argvSha256": "1031137a48bfae888f959f98773a32efb35d163359a3f8192fefa2fadbf016d5",
+          "argvCount": 108,
+          "inputClosure": {"files": 1110, "bytes": 7131102, "sha256": "1820b3f6072e5cfd8528d2c5db1bb2d250b931348541d550e2126a2d83f7bb2c"}
+        },
+        "clang": {
+          "recordSha256ByLane": {"clang-lane-1": "6c701abe4f81dcb37edd6532fd769740a91a7e1a3f353da476bf975ebe571814", "clang-lane-2": "6c701abe4f81dcb37edd6532fd769740a91a7e1a3f353da476bf975ebe571814"},
+          "savedCommandSha256": "ed2d98759514e680ba0e8378b0f30977e19345acdd7734160ee794afaa0453de",
+          "argvSha256": "ee8c2d89a6457487ee845e29257fff39733b359c1a0d563afd5a9709d876b7b7",
+          "argvCount": 107,
+          "inputClosure": {"files": 1113, "bytes": 7132351, "sha256": "128b2b2f28dd5f0ccf6bc5a9833f917e1690d6dce70381aa484dc2d3fe6616f1"}
+        }
+      }
+    },
+    {
+      "id": "mm-mincore",
+      "domain": "mm",
+      "sourcePath": "mm/mincore.c",
+      "sourceSha256": "fb7d79cf25163d23b84701f82549fa81f9fd6bb4bf504b567f3f37006d6bf17e",
+      "sourceBytes": 8481,
+      "selectionRankSha256": "07e5f8ba8a7f85a8a669c413fe0b4e3225643b02c2580e367ea3425d8108bc08",
+      "commandRecordPath": "mm/.mincore.o.cmd",
+      "commands": {
+        "gcc": {
+          "recordSha256ByLane": {"gcc-lane-1": "22546016c5a889535bcb8b7fee782f10060df28b2d275034e394cb184b982588", "gcc-lane-2": "22546016c5a889535bcb8b7fee782f10060df28b2d275034e394cb184b982588"},
+          "savedCommandSha256": "8c8e0580dfe0b2f187e18fdb542664a5fc7efa8e8bde79be3ba5b2d14b635451",
+          "argvSha256": "ca457707faea1f6bd4d3ac77345da41c98665c652489ed3ff5127416ba50a6fb",
+          "argvCount": 108,
+          "inputClosure": {"files": 1093, "bytes": 7052609, "sha256": "1250a668a43166e2a3da3b2d076a24410ed4e4162355a4584db6433affb960ef"}
+        },
+        "clang": {
+          "recordSha256ByLane": {"clang-lane-1": "45cea607dee97cfdba83c074deccce6ea1c30b4d766b6560c1bc722095db5cf5", "clang-lane-2": "45cea607dee97cfdba83c074deccce6ea1c30b4d766b6560c1bc722095db5cf5"},
+          "savedCommandSha256": "a0ee91bbb57c192c009febcfecc56f86da78a9bb2a7d3daa0b0c59c2b35b6e1d",
+          "argvSha256": "fd2738edef5c9b464136285be0b6e70dde4dabc6375a2e8d3e357d81101bacd7",
+          "argvCount": 107,
+          "inputClosure": {"files": 1096, "bytes": 7053858, "sha256": "64c68154d9ef3099d5e55f0906706bf93e3474bdbe5f1e05df33df78d390818b"}
+        }
+      }
+    },
+    {
+      "id": "mm-page-vma-mapped",
+      "domain": "mm",
+      "sourcePath": "mm/page_vma_mapped.c",
+      "sourceSha256": "f0252f01437caa5a2d5af25fa8361759bda827a36c38ef586e24ba26d5148e94",
+      "sourceBytes": 10121,
+      "selectionRankSha256": "0846e708ef314a09f7801abcbc5f92780486fa4a6094a32dda785344a8ebc01d",
+      "commandRecordPath": "mm/.page_vma_mapped.o.cmd",
+      "commands": {
+        "gcc": {
+          "recordSha256ByLane": {"gcc-lane-1": "13c68e7f4036f8102f26f720627f88942ae81865dad6fcee8b6d8c5b0b3d7a96", "gcc-lane-2": "13c68e7f4036f8102f26f720627f88942ae81865dad6fcee8b6d8c5b0b3d7a96"},
+          "savedCommandSha256": "fc6955b09e28142f3bb83252514b62ed93511d8710d7b055b31bc3bad2568a0b",
+          "argvSha256": "756e03c11439ee77c2e5dea8a636b0b4574aa5ca7888ae3aacf4e08c507e25b5",
+          "argvCount": 108,
+          "inputClosure": {"files": 1008, "bytes": 6114941, "sha256": "4b9640e8d28da845efab69fd9ad282dc4b13f272c14dd2e3acce4ab04f80bdd3"}
+        },
+        "clang": {
+          "recordSha256ByLane": {"clang-lane-1": "8965bcfd2231ae74abf6ec318a7d931151f6e390bacbffb219d8aa0a0da3e5ed", "clang-lane-2": "8965bcfd2231ae74abf6ec318a7d931151f6e390bacbffb219d8aa0a0da3e5ed"},
+          "savedCommandSha256": "4e0a82751a622468140d8c315b5824062a611a697146ae0071d887eea7106d6f",
+          "argvSha256": "094684a68034ab0e5e095a7f668e24409625ea69b7f7a02164dedeabb4d408d2",
+          "argvCount": 107,
+          "inputClosure": {"files": 1011, "bytes": 6116190, "sha256": "37e38b705111786636da70d5466c85910787a3f0e08cf4897ca21accd58db89d"}
+        }
+      }
+    }
+  ]
+}
