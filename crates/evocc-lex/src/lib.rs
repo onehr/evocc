@@ -8,6 +8,8 @@
 //! GNU extensions include `$` in identifiers, `\e` escape sequence, and the
 //! `__attribute__` keyword. ISO-only parsing is a subset; no separate mode.
 
+use std::borrow::Cow;
+
 use evocc_common::{FileId, SourceSpan};
 
 // ---------------------------------------------------------------------------
@@ -230,29 +232,146 @@ pub fn try_keyword(lexeme: &str) -> Option<TokenKind> {
 
 /// A pull-style lexer that produces tokens from a source file.
 ///
-/// The lexer does not own the source text; it borrows a `&str` from the
-/// `SourceFile`. EOF is a real token, not an error, and the lexer returns
-/// `Some(TokenKind::Eof)` exactly once.
+/// The lexer borrows the physical source text and, only when needed, owns a
+/// phase-2 view with backslash-newline pairs removed. EOF is a real token,
+/// not an error, and the lexer returns `Some(TokenKind::Eof)` exactly once.
+#[derive(Debug, Clone, Copy)]
+struct LineSplice {
+    logical_offset: usize,
+    removed_total: usize,
+}
+
 pub struct Lexer<'src> {
     file: FileId,
-    source: &'src str,
+    raw_source: &'src str,
+    source: Cow<'src, str>,
+    line_splices: Vec<LineSplice>,
+    raw_line_starts: Vec<usize>,
     pos: usize,
     line: u32,
     col: u32,
     eof_emitted: bool,
 }
 
+fn splice_physical_lines(source: &str) -> (Cow<'_, str>, Vec<LineSplice>) {
+    let bytes = source.as_bytes();
+    let mut first_splice = None;
+    for index in 0..bytes.len() {
+        if bytes[index] == b'\\'
+            && (bytes.get(index + 1) == Some(&b'\n')
+                || (bytes.get(index + 1) == Some(&b'\r') && bytes.get(index + 2) == Some(&b'\n')))
+        {
+            first_splice = Some(index);
+            break;
+        }
+    }
+    let Some(first_splice) = first_splice else {
+        return (Cow::Borrowed(source), Vec::new());
+    };
+
+    let mut logical = String::with_capacity(source.len());
+    let mut splices = Vec::new();
+    let mut copied_through = 0;
+    let mut cursor = first_splice;
+    let mut removed_total = 0;
+    while cursor < bytes.len() {
+        let removed = if bytes[cursor] == b'\\' && bytes.get(cursor + 1) == Some(&b'\n') {
+            2
+        } else if bytes[cursor] == b'\\'
+            && bytes.get(cursor + 1) == Some(&b'\r')
+            && bytes.get(cursor + 2) == Some(&b'\n')
+        {
+            3
+        } else {
+            cursor += 1;
+            continue;
+        };
+
+        logical.push_str(&source[copied_through..cursor]);
+        removed_total += removed;
+        splices.push(LineSplice {
+            logical_offset: logical.len(),
+            removed_total,
+        });
+        cursor += removed;
+        copied_through = cursor;
+    }
+    logical.push_str(&source[copied_through..]);
+    (Cow::Owned(logical), splices)
+}
+
 impl<'src> Lexer<'src> {
     #[must_use]
     pub fn new(file: FileId, source: &'src str) -> Self {
+        let (logical_source, line_splices) = splice_physical_lines(source);
+        let mut raw_line_starts = vec![0];
+        raw_line_starts.extend(
+            source
+                .as_bytes()
+                .iter()
+                .enumerate()
+                .filter_map(|(index, byte)| (*byte == b'\n').then_some(index + 1)),
+        );
         Self {
             file,
-            source,
+            raw_source: source,
+            source: logical_source,
+            line_splices,
+            raw_line_starts,
             pos: 0,
             line: 1,
             col: 1,
             eof_emitted: false,
         }
+    }
+
+    fn physical_offset(&self, logical_offset: usize, include_splices_at_offset: bool) -> usize {
+        let count = self.line_splices.partition_point(|splice| {
+            splice.logical_offset < logical_offset
+                || (include_splices_at_offset && splice.logical_offset == logical_offset)
+        });
+        let removed = count
+            .checked_sub(1)
+            .map_or(0, |index| self.line_splices[index].removed_total);
+        logical_offset + removed
+    }
+
+    fn physical_line_col(&self, physical_offset: usize) -> (u32, u32) {
+        let line_index = self
+            .raw_line_starts
+            .partition_point(|line_start| *line_start <= physical_offset)
+            .saturating_sub(1);
+        let line_start = self.raw_line_starts[line_index];
+        let column = self.raw_source[line_start..physical_offset].chars().count() + 1;
+        ((line_index + 1) as u32, column as u32)
+    }
+
+    fn make_token(&self, kind: TokenKind, logical_start: usize, logical_end: usize) -> Token {
+        let physical_start = self.physical_offset(logical_start, true);
+        let physical_end = if logical_start == logical_end {
+            physical_start
+        } else {
+            self.physical_offset(logical_end, false)
+        };
+        let (line, column) = self.physical_line_col(physical_start);
+        let logical_text = &self.source[logical_start..logical_end];
+        let physical_text = &self.raw_source[physical_start..physical_end];
+        let text = if logical_text == physical_text {
+            TokenText::Borrowed
+        } else {
+            TokenText::Decoded(logical_text.to_owned())
+        };
+        Token::new(
+            kind,
+            SourceSpan::new(
+                self.file,
+                physical_start as u32,
+                physical_end as u32,
+                line,
+                column,
+            ),
+            text,
+        )
     }
 
     /// Produce the next token, or `None` if EOF has already been returned.
@@ -266,48 +385,37 @@ impl<'src> Lexer<'src> {
                 return None;
             }
             self.eof_emitted = true;
-            let span = SourceSpan::new(
-                self.file,
-                self.pos as u32,
-                self.pos as u32,
-                self.line,
-                self.col,
-            );
-            return Some(Token::new(TokenKind::Eof, span, TokenText::Borrowed));
+            return Some(self.make_token(TokenKind::Eof, self.pos, self.pos));
         }
 
         let start_pos = self.pos;
-        let start_line = self.line;
-        let start_col = self.col;
-
-        let bytes = self.source.as_bytes();
 
         if let Some((prefix_len, quote)) = self.literal_prefix() {
-            return Some(self.quoted_literal(prefix_len, quote, start_pos, start_line, start_col));
+            return Some(self.quoted_literal(prefix_len, quote, start_pos));
         }
 
-        if bytes[self.pos].is_ascii_digit()
-            || (bytes[self.pos] == b'.'
-                && self.pos + 1 < bytes.len()
-                && bytes[self.pos + 1].is_ascii_digit())
+        if self.source.as_bytes()[self.pos].is_ascii_digit()
+            || (self.source.as_bytes()[self.pos] == b'.'
+                && self.pos + 1 < self.source.len()
+                && self.source.as_bytes()[self.pos + 1].is_ascii_digit())
         {
-            return Some(self.numeric_literal(start_pos, start_line, start_col));
+            return Some(self.numeric_literal(start_pos));
         }
 
         if self.is_identifier_start_at(self.pos) {
-            return Some(self.identifier(start_pos, start_line, start_col));
+            return Some(self.identifier(start_pos));
         }
 
-        match bytes[self.pos] {
+        match self.source.as_bytes()[self.pos] {
             // Punctuators and operators
-            b'(' => self.single(TokenKind::LParen, start_pos, start_line, start_col),
-            b')' => self.single(TokenKind::RParen, start_pos, start_line, start_col),
-            b'[' => self.single(TokenKind::LBracket, start_pos, start_line, start_col),
-            b']' => self.single(TokenKind::RBracket, start_pos, start_line, start_col),
-            b'{' => self.single(TokenKind::LBrace, start_pos, start_line, start_col),
-            b'}' => self.single(TokenKind::RBrace, start_pos, start_line, start_col),
-            b';' => self.single(TokenKind::Semicolon, start_pos, start_line, start_col),
-            b',' => self.single(TokenKind::Comma, start_pos, start_line, start_col),
+            b'(' => self.single(TokenKind::LParen, start_pos),
+            b')' => self.single(TokenKind::RParen, start_pos),
+            b'[' => self.single(TokenKind::LBracket, start_pos),
+            b']' => self.single(TokenKind::RBracket, start_pos),
+            b'{' => self.single(TokenKind::LBrace, start_pos),
+            b'}' => self.single(TokenKind::RBrace, start_pos),
+            b';' => self.single(TokenKind::Semicolon, start_pos),
+            b',' => self.single(TokenKind::Comma, start_pos),
             b'.' => {
                 let bytes = self.source.as_bytes();
                 if self.pos + 2 < bytes.len()
@@ -316,19 +424,9 @@ impl<'src> Lexer<'src> {
                 {
                     self.pos += 3;
                     self.col += 3;
-                    Some(Token::new(
-                        TokenKind::Ellipsis,
-                        SourceSpan::new(
-                            self.file,
-                            start_pos as u32,
-                            self.pos as u32,
-                            start_line,
-                            start_col,
-                        ),
-                        TokenText::Borrowed,
-                    ))
+                    Some(self.make_token(TokenKind::Ellipsis, start_pos, self.pos))
                 } else {
-                    self.single(TokenKind::Dot, start_pos, start_line, start_col)
+                    self.single(TokenKind::Dot, start_pos)
                 }
             }
             b'+' => self.double(
@@ -336,30 +434,16 @@ impl<'src> Lexer<'src> {
                 TokenKind::PlusPlus,
                 TokenKind::PlusEq,
                 start_pos,
-                start_line,
-                start_col,
             ),
             b'-' => {
                 if self.match_next(b'>').is_some() {
-                    Some(Token::new(
-                        TokenKind::Arrow,
-                        SourceSpan::new(
-                            self.file,
-                            start_pos as u32,
-                            self.pos as u32,
-                            start_line,
-                            start_col,
-                        ),
-                        TokenText::Borrowed,
-                    ))
+                    Some(self.make_token(TokenKind::Arrow, start_pos, self.pos))
                 } else {
                     self.double(
                         TokenKind::Minus,
                         TokenKind::MinusMinus,
                         TokenKind::MinusEq,
                         start_pos,
-                        start_line,
-                        start_col,
                     )
                 }
             }
@@ -368,26 +452,21 @@ impl<'src> Lexer<'src> {
                 TokenKind::Star,
                 TokenKind::StarEq,
                 start_pos,
-                start_line,
-                start_col,
             ),
             b'/' => self.double(
                 TokenKind::Slash,
                 TokenKind::Slash,
                 TokenKind::SlashEq,
                 start_pos,
-                start_line,
-                start_col,
             ),
             b'%' => self.double(
                 TokenKind::Percent,
                 TokenKind::Percent,
                 TokenKind::PercentEq,
                 start_pos,
-                start_line,
-                start_col,
             ),
             b'<' => {
+                let bytes = self.source.as_bytes();
                 self.pos += 1;
                 self.col += 1;
                 if self.pos < bytes.len() && bytes[self.pos] == b'<' {
@@ -396,59 +475,20 @@ impl<'src> Lexer<'src> {
                     if self.pos < bytes.len() && bytes[self.pos] == b'=' {
                         self.pos += 1;
                         self.col += 1;
-                        Some(Token::new(
-                            TokenKind::ShiftLeftEq,
-                            SourceSpan::new(
-                                self.file,
-                                start_pos as u32,
-                                self.pos as u32,
-                                start_line,
-                                start_col,
-                            ),
-                            TokenText::Borrowed,
-                        ))
+                        Some(self.make_token(TokenKind::ShiftLeftEq, start_pos, self.pos))
                     } else {
-                        Some(Token::new(
-                            TokenKind::ShiftLeft,
-                            SourceSpan::new(
-                                self.file,
-                                start_pos as u32,
-                                self.pos as u32,
-                                start_line,
-                                start_col,
-                            ),
-                            TokenText::Borrowed,
-                        ))
+                        Some(self.make_token(TokenKind::ShiftLeft, start_pos, self.pos))
                     }
                 } else if self.pos < bytes.len() && bytes[self.pos] == b'=' {
                     self.pos += 1;
                     self.col += 1;
-                    Some(Token::new(
-                        TokenKind::LessEq,
-                        SourceSpan::new(
-                            self.file,
-                            start_pos as u32,
-                            self.pos as u32,
-                            start_line,
-                            start_col,
-                        ),
-                        TokenText::Borrowed,
-                    ))
+                    Some(self.make_token(TokenKind::LessEq, start_pos, self.pos))
                 } else {
-                    Some(Token::new(
-                        TokenKind::Less,
-                        SourceSpan::new(
-                            self.file,
-                            start_pos as u32,
-                            self.pos as u32,
-                            start_line,
-                            start_col,
-                        ),
-                        TokenText::Borrowed,
-                    ))
+                    Some(self.make_token(TokenKind::Less, start_pos, self.pos))
                 }
             }
             b'>' => {
+                let bytes = self.source.as_bytes();
                 self.pos += 1;
                 self.col += 1;
                 if self.pos < bytes.len() && bytes[self.pos] == b'>' {
@@ -457,118 +497,40 @@ impl<'src> Lexer<'src> {
                     if self.pos < bytes.len() && bytes[self.pos] == b'=' {
                         self.pos += 1;
                         self.col += 1;
-                        Some(Token::new(
-                            TokenKind::ShiftRightEq,
-                            SourceSpan::new(
-                                self.file,
-                                start_pos as u32,
-                                self.pos as u32,
-                                start_line,
-                                start_col,
-                            ),
-                            TokenText::Borrowed,
-                        ))
+                        Some(self.make_token(TokenKind::ShiftRightEq, start_pos, self.pos))
                     } else {
-                        Some(Token::new(
-                            TokenKind::ShiftRight,
-                            SourceSpan::new(
-                                self.file,
-                                start_pos as u32,
-                                self.pos as u32,
-                                start_line,
-                                start_col,
-                            ),
-                            TokenText::Borrowed,
-                        ))
+                        Some(self.make_token(TokenKind::ShiftRight, start_pos, self.pos))
                     }
                 } else if self.pos < bytes.len() && bytes[self.pos] == b'=' {
                     self.pos += 1;
                     self.col += 1;
-                    Some(Token::new(
-                        TokenKind::GreaterEq,
-                        SourceSpan::new(
-                            self.file,
-                            start_pos as u32,
-                            self.pos as u32,
-                            start_line,
-                            start_col,
-                        ),
-                        TokenText::Borrowed,
-                    ))
+                    Some(self.make_token(TokenKind::GreaterEq, start_pos, self.pos))
                 } else {
-                    Some(Token::new(
-                        TokenKind::Greater,
-                        SourceSpan::new(
-                            self.file,
-                            start_pos as u32,
-                            self.pos as u32,
-                            start_line,
-                            start_col,
-                        ),
-                        TokenText::Borrowed,
-                    ))
+                    Some(self.make_token(TokenKind::Greater, start_pos, self.pos))
                 }
             }
             b'=' => {
+                let bytes = self.source.as_bytes();
                 self.pos += 1;
                 self.col += 1;
                 if self.pos < bytes.len() && bytes[self.pos] == b'=' {
                     self.pos += 1;
                     self.col += 1;
-                    Some(Token::new(
-                        TokenKind::EqEq,
-                        SourceSpan::new(
-                            self.file,
-                            start_pos as u32,
-                            self.pos as u32,
-                            start_line,
-                            start_col,
-                        ),
-                        TokenText::Borrowed,
-                    ))
+                    Some(self.make_token(TokenKind::EqEq, start_pos, self.pos))
                 } else {
-                    Some(Token::new(
-                        TokenKind::Assign,
-                        SourceSpan::new(
-                            self.file,
-                            start_pos as u32,
-                            self.pos as u32,
-                            start_line,
-                            start_col,
-                        ),
-                        TokenText::Borrowed,
-                    ))
+                    Some(self.make_token(TokenKind::Assign, start_pos, self.pos))
                 }
             }
             b'!' => {
+                let bytes = self.source.as_bytes();
                 self.pos += 1;
                 self.col += 1;
                 if self.pos < bytes.len() && bytes[self.pos] == b'=' {
                     self.pos += 1;
                     self.col += 1;
-                    Some(Token::new(
-                        TokenKind::NotEq,
-                        SourceSpan::new(
-                            self.file,
-                            start_pos as u32,
-                            self.pos as u32,
-                            start_line,
-                            start_col,
-                        ),
-                        TokenText::Borrowed,
-                    ))
+                    Some(self.make_token(TokenKind::NotEq, start_pos, self.pos))
                 } else {
-                    Some(Token::new(
-                        TokenKind::Bang,
-                        SourceSpan::new(
-                            self.file,
-                            start_pos as u32,
-                            self.pos as u32,
-                            start_line,
-                            start_col,
-                        ),
-                        TokenText::Borrowed,
-                    ))
+                    Some(self.make_token(TokenKind::Bang, start_pos, self.pos))
                 }
             }
             b'&' => self.double(
@@ -576,43 +538,27 @@ impl<'src> Lexer<'src> {
                 TokenKind::AmpAmp,
                 TokenKind::AmpEq,
                 start_pos,
-                start_line,
-                start_col,
             ),
             b'|' => self.double(
                 TokenKind::Pipe,
                 TokenKind::PipePipe,
                 TokenKind::PipeEq,
                 start_pos,
-                start_line,
-                start_col,
             ),
             b'^' => self.double(
                 TokenKind::Caret,
                 TokenKind::Caret,
                 TokenKind::CaretEq,
                 start_pos,
-                start_line,
-                start_col,
             ),
-            b'~' => self.single(TokenKind::Tilde, start_pos, start_line, start_col),
-            b'?' => self.single(TokenKind::Question, start_pos, start_line, start_col),
-            b':' => self.single(TokenKind::Colon, start_pos, start_line, start_col),
+            b'~' => self.single(TokenKind::Tilde, start_pos),
+            b'?' => self.single(TokenKind::Question, start_pos),
+            b':' => self.single(TokenKind::Colon, start_pos),
             b'#' => {
                 if self.match_next(b'#').is_some() {
-                    Some(Token::new(
-                        TokenKind::HashHash,
-                        SourceSpan::new(
-                            self.file,
-                            start_pos as u32,
-                            self.pos as u32,
-                            start_line,
-                            start_col,
-                        ),
-                        TokenText::Borrowed,
-                    ))
+                    Some(self.make_token(TokenKind::HashHash, start_pos, self.pos))
                 } else {
-                    self.single(TokenKind::Hash, start_pos, start_line, start_col)
+                    self.single(TokenKind::Hash, start_pos)
                 }
             }
             _ => {
@@ -620,14 +566,7 @@ impl<'src> Lexer<'src> {
                 // char so the lexer never loops infinitely.
                 self.pos += 1;
                 self.col += 1;
-                let span = SourceSpan::new(
-                    self.file,
-                    start_pos as u32,
-                    self.pos as u32,
-                    start_line,
-                    start_col,
-                );
-                Some(Token::new(TokenKind::Error, span, TokenText::Borrowed))
+                Some(self.make_token(TokenKind::Error, start_pos, self.pos))
             }
         }
     }
@@ -663,8 +602,6 @@ impl<'src> Lexer<'src> {
             if self.pos + 1 < bytes.len() && bytes[self.pos] == b'/' && bytes[self.pos + 1] == b'*'
             {
                 let start_pos = self.pos;
-                let start_line = self.line;
-                let start_col = self.col;
                 self.pos += 2;
                 self.col += 2;
                 let mut terminated = false;
@@ -685,19 +622,15 @@ impl<'src> Lexer<'src> {
                 }
                 if !terminated {
                     while self.pos < bytes.len() {
-                        self.advance_source_char();
+                        if bytes[self.pos] == b'\n' {
+                            self.line += 1;
+                            self.col = 1;
+                        } else {
+                            self.col += 1;
+                        }
+                        self.pos += 1;
                     }
-                    return Some(Token::new(
-                        TokenKind::Error,
-                        SourceSpan::new(
-                            self.file,
-                            start_pos as u32,
-                            self.pos as u32,
-                            start_line,
-                            start_col,
-                        ),
-                        TokenText::Borrowed,
-                    ));
+                    return Some(self.make_token(TokenKind::Error, start_pos, self.pos));
                 }
                 continue;
             }
@@ -716,14 +649,7 @@ impl<'src> Lexer<'src> {
         }
     }
 
-    fn quoted_literal(
-        &mut self,
-        prefix_len: usize,
-        quote: u8,
-        start_pos: usize,
-        start_line: u32,
-        start_col: u32,
-    ) -> Token {
+    fn quoted_literal(&mut self, prefix_len: usize, quote: u8, start_pos: usize) -> Token {
         self.pos += prefix_len + 1;
         self.col += (prefix_len + 1) as u32;
         let bytes = self.source.as_bytes();
@@ -753,7 +679,12 @@ impl<'src> Lexer<'src> {
                     self.col += 2;
                 }
             } else {
-                self.advance_source_char();
+                let ch = self.source[self.pos..]
+                    .chars()
+                    .next()
+                    .expect("position is within the source");
+                self.pos += ch.len_utf8();
+                self.col += 1;
             }
         }
         let kind = if terminated {
@@ -765,27 +696,16 @@ impl<'src> Lexer<'src> {
         } else {
             TokenKind::Error
         };
-        Token::new(
-            kind,
-            SourceSpan::new(
-                self.file,
-                start_pos as u32,
-                self.pos as u32,
-                start_line,
-                start_col,
-            ),
-            TokenText::Borrowed,
-        )
+        self.make_token(kind, start_pos, self.pos)
     }
 
-    fn numeric_literal(&mut self, start_pos: usize, start_line: u32, start_col: u32) -> Token {
-        let bytes = self.source.as_bytes();
+    fn numeric_literal(&mut self, start_pos: usize) -> Token {
         let mut is_float = false;
-        let is_hex = self.pos + 1 < bytes.len()
-            && bytes[self.pos] == b'0'
-            && matches!(bytes[self.pos + 1], b'x' | b'X');
+        let is_hex = self.pos + 1 < self.source.len()
+            && self.source.as_bytes()[self.pos] == b'0'
+            && matches!(self.source.as_bytes()[self.pos + 1], b'x' | b'X');
 
-        if bytes[self.pos] == b'.' {
+        if self.source.as_bytes()[self.pos] == b'.' {
             is_float = true;
             self.pos += 1;
             self.col += 1;
@@ -794,7 +714,7 @@ impl<'src> Lexer<'src> {
             self.pos += 2;
             self.col += 2;
             self.advance_while(|byte| byte.is_ascii_hexdigit());
-            if self.pos < bytes.len() && bytes[self.pos] == b'.' {
+            if self.source.as_bytes().get(self.pos) == Some(&b'.') {
                 is_float = true;
                 self.pos += 1;
                 self.col += 1;
@@ -802,7 +722,7 @@ impl<'src> Lexer<'src> {
             }
         } else {
             self.advance_while(|byte| byte.is_ascii_digit());
-            if self.pos < bytes.len() && bytes[self.pos] == b'.' {
+            if self.source.as_bytes().get(self.pos) == Some(&b'.') {
                 is_float = true;
                 self.pos += 1;
                 self.col += 1;
@@ -811,11 +731,21 @@ impl<'src> Lexer<'src> {
         }
 
         let exponent = if is_hex { b'p' } else { b'e' };
-        if self.pos < bytes.len() && bytes[self.pos].to_ascii_lowercase() == exponent {
+        if self
+            .source
+            .as_bytes()
+            .get(self.pos)
+            .is_some_and(|byte| byte.to_ascii_lowercase() == exponent)
+        {
             is_float = true;
             self.pos += 1;
             self.col += 1;
-            if self.pos < bytes.len() && matches!(bytes[self.pos], b'+' | b'-') {
+            if self
+                .source
+                .as_bytes()
+                .get(self.pos)
+                .is_some_and(|byte| matches!(byte, b'+' | b'-'))
+            {
                 self.pos += 1;
                 self.col += 1;
             }
@@ -823,7 +753,12 @@ impl<'src> Lexer<'src> {
         }
 
         if is_float {
-            if self.pos < bytes.len() && matches!(bytes[self.pos], b'f' | b'F' | b'l' | b'L') {
+            if self
+                .source
+                .as_bytes()
+                .get(self.pos)
+                .is_some_and(|byte| matches!(byte, b'f' | b'F' | b'l' | b'L'))
+            {
                 self.pos += 1;
                 self.col += 1;
             }
@@ -831,26 +766,20 @@ impl<'src> Lexer<'src> {
             self.advance_while(|byte| matches!(byte, b'u' | b'U' | b'l' | b'L'));
         }
 
-        Token::new(
+        self.make_token(
             if is_float {
                 TokenKind::FloatLiteral
             } else {
                 TokenKind::IntLiteral
             },
-            SourceSpan::new(
-                self.file,
-                start_pos as u32,
-                self.pos as u32,
-                start_line,
-                start_col,
-            ),
-            TokenText::Borrowed,
+            start_pos,
+            self.pos,
         )
     }
 
-    fn identifier(&mut self, start_pos: usize, start_line: u32, start_col: u32) -> Token {
+    fn identifier(&mut self, start_pos: usize) -> Token {
         loop {
-            if self.consume_line_splice() || self.consume_ucn() {
+            if self.consume_ucn() {
                 continue;
             }
             let Some(ch) = self.source[self.pos..].chars().next() else {
@@ -864,17 +793,7 @@ impl<'src> Lexer<'src> {
         }
         let lexeme = &self.source[start_pos..self.pos];
         let kind = try_keyword(lexeme).unwrap_or(TokenKind::Identifier);
-        Token::new(
-            kind,
-            SourceSpan::new(
-                self.file,
-                start_pos as u32,
-                self.pos as u32,
-                start_line,
-                start_col,
-            ),
-            TokenText::Borrowed,
-        )
+        self.make_token(kind, start_pos, self.pos)
     }
 
     fn is_identifier_start_at(&self, pos: usize) -> bool {
@@ -886,18 +805,6 @@ impl<'src> Lexer<'src> {
             .chars()
             .next()
             .is_some_and(|ch| ch == '_' || ch == '$' || ch.is_alphabetic())
-    }
-
-    fn consume_line_splice(&mut self) -> bool {
-        let bytes = self.source.as_bytes();
-        if self.pos + 1 < bytes.len() && bytes[self.pos] == b'\\' && bytes[self.pos + 1] == b'\n' {
-            self.pos += 2;
-            self.line += 1;
-            self.col = 1;
-            true
-        } else {
-            false
-        }
     }
 
     fn ucn_len_at(&self, pos: usize) -> Option<usize> {
@@ -922,19 +829,6 @@ impl<'src> Lexer<'src> {
         }
     }
 
-    fn advance_source_char(&mut self) {
-        let Some(ch) = self.source[self.pos..].chars().next() else {
-            return;
-        };
-        self.pos += ch.len_utf8();
-        if ch == '\n' {
-            self.line += 1;
-            self.col = 1;
-        } else {
-            self.col += 1;
-        }
-    }
-
     fn advance_while(&mut self, pred: fn(u8) -> bool) -> usize {
         let bytes = self.source.as_bytes();
         while self.pos < bytes.len() && pred(bytes[self.pos]) {
@@ -955,24 +849,10 @@ impl<'src> Lexer<'src> {
         }
     }
 
-    fn single(
-        &mut self,
-        kind: TokenKind,
-        start_pos: usize,
-        start_line: u32,
-        start_col: u32,
-    ) -> Option<Token> {
+    fn single(&mut self, kind: TokenKind, start_pos: usize) -> Option<Token> {
         self.pos += 1;
         self.col += 1;
-        let end = self.pos;
-        let span = SourceSpan::new(
-            self.file,
-            start_pos as u32,
-            end as u32,
-            start_line,
-            start_col,
-        );
-        Some(Token::new(kind, span, TokenText::Borrowed))
+        Some(self.make_token(kind, start_pos, self.pos))
     }
 
     fn double(
@@ -981,8 +861,6 @@ impl<'src> Lexer<'src> {
         double_kind: TokenKind,
         eq_kind: TokenKind,
         start_pos: usize,
-        start_line: u32,
-        start_col: u32,
     ) -> Option<Token> {
         self.pos += 1;
         self.col += 1;
@@ -991,36 +869,15 @@ impl<'src> Lexer<'src> {
             if bytes[self.pos] == b'=' {
                 self.pos += 1;
                 self.col += 1;
-                let span = SourceSpan::new(
-                    self.file,
-                    start_pos as u32,
-                    self.pos as u32,
-                    start_line,
-                    start_col,
-                );
-                return Some(Token::new(eq_kind, span, TokenText::Borrowed));
+                return Some(self.make_token(eq_kind, start_pos, self.pos));
             }
             if single_kind != double_kind && bytes[self.pos] == bytes[start_pos] {
                 self.pos += 1;
                 self.col += 1;
-                let span = SourceSpan::new(
-                    self.file,
-                    start_pos as u32,
-                    self.pos as u32,
-                    start_line,
-                    start_col,
-                );
-                return Some(Token::new(double_kind, span, TokenText::Borrowed));
+                return Some(self.make_token(double_kind, start_pos, self.pos));
             }
         }
-        let span = SourceSpan::new(
-            self.file,
-            start_pos as u32,
-            self.pos as u32,
-            start_line,
-            start_col,
-        );
-        Some(Token::new(single_kind, span, TokenText::Borrowed))
+        Some(self.make_token(single_kind, start_pos, self.pos))
     }
 }
 
@@ -1834,7 +1691,6 @@ mod tests {
                 TokenKind::Hash,
                 TokenKind::Identifier,
                 TokenKind::Identifier,
-                TokenKind::Error,
                 TokenKind::Identifier,
                 TokenKind::Eof,
             ],
@@ -1843,20 +1699,68 @@ mod tests {
 
     #[test]
     fn lex_line_cont_crlf() {
+        assert_kinds("a\\\r\nb", &[TokenKind::Identifier, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn phase_two_splices_join_tokens_but_keep_physical_spans() {
+        let source = "si\\\ngned 12\\\r\n34 +\\\n+ tail";
+        let tokens = lex(source);
+        assert_eq!(
+            tokens.iter().map(|token| token.kind).collect::<Vec<_>>(),
+            vec![
+                TokenKind::Signed,
+                TokenKind::IntLiteral,
+                TokenKind::PlusPlus,
+                TokenKind::Identifier,
+                TokenKind::Eof,
+            ],
+        );
+
+        let spelling = |token: &Token| match &token.text {
+            TokenText::Decoded(text) => text.clone(),
+            TokenText::Borrowed => {
+                source[token.span.byte_start as usize..token.span.byte_end as usize].to_owned()
+            }
+        };
+        assert_eq!(spelling(&tokens[0]), "signed");
+        assert_eq!(spelling(&tokens[1]), "1234");
+        assert_eq!(spelling(&tokens[2]), "++");
+        assert_eq!(tokens[0].span, SourceSpan::new(FileId::new(1), 0, 8, 1, 1),);
+        assert_eq!(tokens[1].span, SourceSpan::new(FileId::new(1), 9, 16, 2, 6),);
+        assert_eq!(
+            tokens[2].span,
+            SourceSpan::new(FileId::new(1), 17, 21, 3, 4),
+        );
+        assert_eq!(
+            tokens[3].span,
+            SourceSpan::new(FileId::new(1), 22, 26, 4, 3),
+        );
+    }
+
+    #[test]
+    fn phase_two_splice_extends_a_line_comment() {
         assert_kinds(
-            "a\\\r\nb",
+            "// hidden \\\ncontinued\nint visible;",
             &[
+                TokenKind::Int,
                 TokenKind::Identifier,
-                TokenKind::Error,
-                TokenKind::Identifier,
+                TokenKind::Semicolon,
                 TokenKind::Eof,
             ],
         );
     }
 
     #[test]
+    fn phase_two_splice_keeps_a_following_error_on_its_physical_line() {
+        let tokens = lex("int ok;\\\n@");
+        assert_eq!(tokens[3].kind, TokenKind::Error);
+        assert_eq!(tokens[3].span, SourceSpan::new(FileId::new(1), 9, 10, 2, 1),);
+    }
+
+    #[test]
     fn lex_line_cont_inside_string() {
-        // Inside a string the generic \X skip handles the newline
+        // Phase 2 removes the pair before the string token is recognized.
         assert_kinds(
             "\"hello\\\nworld\"",
             &[TokenKind::StringLiteral, TokenKind::Eof],

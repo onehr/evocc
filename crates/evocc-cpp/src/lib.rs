@@ -1137,28 +1137,56 @@ fn token_lexeme<'a>(tok: &'a Token, source: &'a str) -> &'a str {
 fn is_directive_hash(kind: TokenKind) -> bool {
     kind == TokenKind::Hash || kind == TokenKind::HashHash
 }
-/// the very first token or preceded by a newline character in the source.
-fn is_start_of_line(tokens: &[Token], idx: usize, _source: &str) -> bool {
+
+/// Return whether the physical source gap contains a newline that survives C
+/// translation phase 2. Backslash-LF and backslash-CRLF pairs do not end a
+/// preprocessor directive, even though the following token has a different
+/// physical `line_start`.
+fn has_logical_newline_between(previous: &Token, current: &Token, source: &str) -> bool {
+    let start = previous.span.byte_end as usize;
+    let end = current.span.byte_start as usize;
+    if start > end || end > source.len() {
+        return previous.span.line_start != current.span.line_start;
+    }
+
+    let gap = &source.as_bytes()[start..end];
+    let mut index = 0;
+    while index < gap.len() {
+        if gap[index] == b'\\' && gap.get(index + 1) == Some(&b'\n') {
+            index += 2;
+        } else if gap[index] == b'\\'
+            && gap.get(index + 1) == Some(&b'\r')
+            && gap.get(index + 2) == Some(&b'\n')
+        {
+            index += 3;
+        } else if gap[index] == b'\n' {
+            return true;
+        } else {
+            index += 1;
+        }
+    }
+    false
+}
+
+/// A token starts a logical preprocessing line when it is the first token or
+/// when an unspliced newline separates it from the previous token.
+fn is_start_of_line(tokens: &[Token], idx: usize, source: &str) -> bool {
     if idx == 0 {
         return true;
     }
-    let prev = &tokens[idx - 1];
-    let curr = &tokens[idx];
-    // If the line number changed, there was a newline between them.
-    prev.span.line_start != curr.span.line_start
+    has_logical_newline_between(&tokens[idx - 1], &tokens[idx], source)
 }
 
-/// Skip tokens until we reach a token on a different line than the token
-/// immediately before `*i`. This respects the fact that some directive
-/// handlers (define, undef, include) advance `i` past the directive body
-/// themselves; in that case `prev_line` reflects the directive's line,
-/// and we skip nothing because `*i` is already on the next line.
-fn skip_line(tokens: &[Token], i: &mut usize, _source: &str) {
+/// Skip tokens until the next logical line. If a directive handler already
+/// advanced `i` to that line, this leaves it untouched.
+fn skip_line(tokens: &[Token], i: &mut usize, source: &str) {
     if *i >= tokens.len() || *i == 0 {
         return;
     }
-    let prev_line = tokens[*i - 1].span.line_start;
-    while *i < tokens.len() && tokens[*i].span.line_start == prev_line {
+    let mut previous = *i - 1;
+    while *i < tokens.len() && !has_logical_newline_between(&tokens[previous], &tokens[*i], source)
+    {
+        previous = *i;
         *i += 1;
     }
 }
@@ -1171,13 +1199,18 @@ fn parse_define(tokens: &[Token], i: &mut usize, source: &str) -> (String, Vec<T
         return (String::new(), Vec::new());
     }
     let t = &tokens[*i];
+    if *i > 0 && has_logical_newline_between(&tokens[*i - 1], t, source) {
+        return (String::new(), Vec::new());
+    }
     let name = token_lexeme(t, source).to_string();
     *i += 1;
-    // Read remaining tokens on this line as the body.
+    // Read remaining tokens on this logical line as the body.
     let mut body = Vec::new();
-    let line_start = t.span.line_start;
-    while *i < tokens.len() && tokens[*i].span.line_start == line_start {
+    let mut previous = *i - 1;
+    while *i < tokens.len() && !has_logical_newline_between(&tokens[previous], &tokens[*i], source)
+    {
         body.push(tokens[*i].clone());
+        previous = *i;
         *i += 1;
     }
     (name, body)
@@ -1263,15 +1296,22 @@ fn resolved_existing_path(path: &std::path::Path) -> Option<String> {
         .map(|resolved| resolved.to_string_lossy().into_owned())
 }
 
-/// Collect all tokens on the current line (used for #if / #elif expressions).
-fn collect_line_tokens(tokens: &[Token], i: &mut usize, _source: &str) -> Vec<Token> {
+/// Collect all tokens on the current logical preprocessing line.
+fn collect_line_tokens(tokens: &[Token], i: &mut usize, source: &str) -> Vec<Token> {
     if *i >= tokens.len() {
         return Vec::new();
     }
-    let line = tokens[*i].span.line_start;
+    if *i > 0 && has_logical_newline_between(&tokens[*i - 1], &tokens[*i], source) {
+        return Vec::new();
+    }
     let mut result = Vec::new();
-    while *i < tokens.len() && tokens[*i].span.line_start == line {
+    result.push(tokens[*i].clone());
+    let mut previous = *i;
+    *i += 1;
+    while *i < tokens.len() && !has_logical_newline_between(&tokens[previous], &tokens[*i], source)
+    {
         result.push(tokens[*i].clone());
+        previous = *i;
         *i += 1;
     }
     result
@@ -1443,14 +1483,18 @@ fn extract_params(body: &[Token], source: &str) -> (Vec<String>, bool, Option<St
     (params, is_variadic, variadic_param_name)
 }
 
-/// Advance `i` past the current line's tokens.
-fn advance_past_line(i: usize, tokens: &[Token], _source: &str) -> usize {
+/// Advance `i` past the current logical line's tokens.
+fn advance_past_line(i: usize, tokens: &[Token], source: &str) -> usize {
     if i >= tokens.len() {
         return i;
     }
-    let line = tokens.get(i).map(|t| t.span.line_start).unwrap_or(0);
-    let mut j = i;
-    while j < tokens.len() && tokens[j].span.line_start == line {
+    if i > 0 && has_logical_newline_between(&tokens[i - 1], &tokens[i], source) {
+        return i;
+    }
+    let mut j = i + 1;
+    let mut previous = i;
+    while j < tokens.len() && !has_logical_newline_between(&tokens[previous], &tokens[j], source) {
+        previous = j;
         j += 1;
     }
     j
