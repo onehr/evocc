@@ -214,6 +214,11 @@ pub struct Parser<'src, 'arena> {
     types: TypeInterner,
     symbols: SymbolTable,
     current_scope: ScopeId,
+    /// Parameter names whose C point of declaration has been reached while
+    /// their prototype is still being parsed. They shadow outer typedef names
+    /// immediately, but receive permanent SymbolIds only after the enclosing
+    /// function declarator is complete, preserving declaration-point ID order.
+    temporary_parameter_shadows: Vec<(ScopeId, String)>,
     entities: HashMap<SymbolId, EntityState>,
     external_entities: HashMap<String, SymbolId>,
     side_declarations: Vec<&'arena CHirDecl<'arena>>,
@@ -238,6 +243,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             types: TypeInterner::new(),
             symbols,
             current_scope,
+            temporary_parameter_shadows: Vec::new(),
             entities: HashMap::new(),
             external_entities: HashMap::new(),
             side_declarations: Vec::new(),
@@ -401,6 +407,25 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn intern(&mut self, kind: TypeKind, qualifiers: Qualifiers) -> TypeId {
         self.types.intern(CanonicalType { kind, qualifiers })
+    }
+
+    fn qualify_typedef_type(&mut self, ty: TypeId, qualifiers: Qualifiers) -> TypeId {
+        let aliased = self
+            .types
+            .get(ty)
+            .expect("typedef symbols only reference interned types")
+            .clone();
+        let qualifiers = merge_qualifiers(aliased.qualifiers, qualifiers);
+        match aliased.kind {
+            // C11 6.7.3p9: qualifiers applied to an array typedef qualify its
+            // element type, not the array layer. Recurse for multidimensional
+            // arrays so no impossible qualified-array canonical form escapes.
+            TypeKind::Array { element, bound } => {
+                let element = self.qualify_typedef_type(element, qualifiers);
+                self.intern(TypeKind::Array { element, bound }, Qualifiers::default())
+            }
+            kind => self.intern(kind, qualifiers),
+        }
     }
 
     fn symbol_in_current_scope(&self, spelling: &str) -> Option<SymbolId> {
@@ -799,7 +824,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 ExprFacts::lvalue(symbol.ty(), modifiable, addressable)
                     .expect("ordinary object facts are internally consistent")
             }
-            SymbolKind::Typedef => ExprFacts::value(symbol.ty()),
+            SymbolKind::Typedef => {
+                unreachable!("typedef names are rejected before expression facts are built")
+            }
         }
     }
 
@@ -1070,6 +1097,30 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 _ => unreachable!("tag keyword checked above"),
             };
             return self.parse_tag_specifier(kind, qualifiers, token.span);
+        }
+
+        if let Some((symbol, alias_ty)) = self.peek_typedef_name() {
+            let token = self.advance().expect("peeked typedef name");
+            let name = SpannedName {
+                spelling: self.token_text(&token).to_owned(),
+                span: token.span,
+            };
+            let trailing = self.parse_qualifiers();
+            qualifiers = merge_qualifiers(qualifiers, trailing);
+            let end = self
+                .tokens
+                .get(self.pos.saturating_sub(1))
+                .map_or(token.span, |token| token.span);
+            let ty = self.qualify_typedef_type(alias_ty, qualifiers);
+            return Some(ParsedSpecifier {
+                surface: TypeSpecifier::TypedefName {
+                    ty,
+                    symbol,
+                    name,
+                    span: self.merge_span(start, end),
+                },
+                tag_event: None,
+            });
         }
 
         let mut words = Vec::new();
@@ -2065,6 +2116,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 variadic,
             };
         }
+        let shadow_checkpoint = self.temporary_parameter_shadows.len();
         loop {
             if self.match_kind(TokenKind::Ellipsis) {
                 variadic = true;
@@ -2086,6 +2138,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         },
                         start,
                     )
+                } else if self.parameter_declarator_prefers_abstract() {
+                    match self.parse_abstract_declarator() {
+                        Some(declarator) => {
+                            let written = self.written_abstract_declarator(&declarator);
+                            (None, declarator.derived, written, declarator.span)
+                        }
+                        None => (
+                            None,
+                            Vec::new(),
+                            WrittenDeclarator {
+                                layers: Vec::new(),
+                                span: start,
+                            },
+                            start,
+                        ),
+                    }
                 } else {
                     let declarator_start = self.pos;
                     let error_checkpoint = self.error_count;
@@ -2139,6 +2207,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let declaration = self.finish_tag_event(event, span);
                 self.side_declarations.push(declaration);
             }
+            let declared_name = name.as_ref().map(|name| name.spelling.clone());
             params.push(ParameterDecl {
                 symbol: None,
                 name,
@@ -2147,14 +2216,32 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 written,
                 span,
             });
+            if let Some(spelling) = declared_name {
+                self.temporary_parameter_shadows
+                    .push((self.current_scope, spelling));
+            }
             if !self.match_kind(TokenKind::Comma) {
                 break;
             }
         }
+        self.temporary_parameter_shadows.truncate(shadow_checkpoint);
         ParameterSyntax::Prototype {
             parameters: params,
             variadic,
         }
+    }
+
+    fn parameter_declarator_prefers_abstract(&self) -> bool {
+        let mut index = self.pos;
+        if self.tokens.get(index).map(|token| token.kind) != Some(TokenKind::LParen) {
+            return false;
+        }
+        while self.tokens.get(index).map(|token| token.kind) == Some(TokenKind::LParen) {
+            index += 1;
+        }
+        self.tokens
+            .get(index)
+            .is_some_and(|token| self.typedef_name(token).is_some())
     }
 
     fn adjust_parameter_type(&mut self, ty: TypeId) -> TypeId {
@@ -2384,10 +2471,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
         let initializer = if self.match_kind(TokenKind::Semicolon) {
             CHirForInit::Empty
-        } else if self
-            .peek_kind()
-            .is_some_and(|kind| self.is_declaration_start(kind))
-        {
+        } else if self.is_declaration_start() {
             let declarations = self.parse_declaration(DeclarationContext::ForInitializer)?;
             CHirForInit::Declaration(declarations)
         } else {
@@ -2475,10 +2559,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut items = Vec::new();
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
             let before = self.pos;
-            if self
-                .peek_kind()
-                .is_some_and(|kind| self.is_declaration_start(kind))
-            {
+            if self.is_declaration_start() {
                 if let Some(declarations) = self.parse_declaration(DeclarationContext::Block) {
                     items.extend(declarations.into_iter().map(CHirBlockItem::Declaration));
                 }
@@ -2503,9 +2584,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.alloc_node(CHirStmt::Compound(items, span))
     }
 
-    fn is_declaration_start(&self, kind: TokenKind) -> bool {
+    fn is_declaration_start(&self) -> bool {
+        let Some(token) = self.peek() else {
+            return false;
+        };
+        // Labels occupy their own namespace. Even when the same spelling is
+        // currently a typedef name, `identifier:` is unambiguously a labeled
+        // statement rather than the start of a declaration.
+        if token.kind == TokenKind::Identifier
+            && self.tokens.get(self.pos + 1).map(|token| token.kind) == Some(TokenKind::Colon)
+        {
+            return false;
+        }
         matches!(
-            kind,
+            token.kind,
             TokenKind::Auto
                 | TokenKind::Extern
                 | TokenKind::Register
@@ -2516,7 +2608,58 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TokenKind::Volatile
                 | TokenKind::Restrict
                 | TokenKind::Atomic
-        ) || self.is_type_specifier_kind(kind)
+        ) || self.token_starts_type_name(token)
+    }
+
+    fn peek_typedef_name(&self) -> Option<(SymbolId, TypeId)> {
+        self.typedef_name(self.peek()?)
+    }
+
+    fn typedef_name(&self, token: &Token) -> Option<(SymbolId, TypeId)> {
+        if token.kind != TokenKind::Identifier {
+            return None;
+        }
+        let spelling = self.token_text(token);
+        if self.temporary_parameter_shadow_is_visible(spelling) {
+            return None;
+        }
+        let symbol = self
+            .symbols
+            .resolve(self.current_scope, spelling)
+            .expect("the parser current scope is always live")?;
+        let declaration = self
+            .symbols
+            .symbol(symbol)
+            .expect("resolved symbol belongs to the same table");
+        (declaration.kind() == SymbolKind::Typedef).then_some((symbol, declaration.ty()))
+    }
+
+    fn temporary_parameter_shadow_is_visible(&self, spelling: &str) -> bool {
+        let mut scope = Some(self.current_scope);
+        while let Some(current) = scope {
+            if self
+                .temporary_parameter_shadows
+                .iter()
+                .rev()
+                .any(|(shadow_scope, shadow)| *shadow_scope == current && shadow == spelling)
+            {
+                return true;
+            }
+            scope = self
+                .symbols
+                .scope(current)
+                .expect("the parser current scope ancestry is always live")
+                .parent();
+        }
+        false
+    }
+
+    fn token_starts_type_name(&self, token: &Token) -> bool {
+        matches!(
+            token.kind,
+            TokenKind::Const | TokenKind::Volatile | TokenKind::Restrict | TokenKind::Atomic
+        ) || self.is_type_specifier_kind(token.kind)
+            || self.typedef_name(token).is_some()
     }
 
     fn is_type_specifier_kind(&self, kind: TokenKind) -> bool {
@@ -2643,8 +2786,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let token = self.advance().unwrap();
             self.expect(TokenKind::LParen)?;
             let type_name = if self
-                .peek_kind()
-                .is_some_and(|kind| self.is_type_specifier_kind(kind))
+                .peek()
+                .is_some_and(|token| self.token_starts_type_name(token))
             {
                 self.parse_type_name()
             } else {
@@ -2778,6 +2921,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     );
                     return None;
                 };
+                if self
+                    .symbols
+                    .symbol(symbol)
+                    .expect("resolved symbol belongs to the same table")
+                    .kind()
+                    == SymbolKind::Typedef
+                {
+                    self.report(
+                        "E2003",
+                        format!("typedef-name-not-expression: {spelling}"),
+                        tok.span,
+                    );
+                    return None;
+                }
                 let facts = self.facts_for_symbol(symbol);
                 CHirExpr::Ident {
                     symbol,
@@ -2827,7 +2984,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             && self
                 .tokens
                 .get(self.pos + 1)
-                .is_some_and(|token| self.is_type_specifier_kind(token.kind))
+                .is_some_and(|token| self.token_starts_type_name(token))
+    }
+}
+
+fn merge_qualifiers(left: Qualifiers, right: Qualifiers) -> Qualifiers {
+    Qualifiers {
+        is_const: left.is_const || right.is_const,
+        is_volatile: left.is_volatile || right.is_volatile,
+        is_restrict: left.is_restrict || right.is_restrict,
+        is_atomic: left.is_atomic || right.is_atomic,
     }
 }
 

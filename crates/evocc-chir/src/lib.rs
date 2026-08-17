@@ -347,6 +347,18 @@ pub enum TypeSpecifier {
         ty: TypeId,
         span: SourceSpan,
     },
+    /// A type spelled through the ordinary-identifier namespace.
+    ///
+    /// `ty` is the canonical type of this particular use (including any
+    /// qualifiers written around the typedef name), while `symbol` preserves
+    /// the stable identity of the typedef declaration that was selected by
+    /// lexical lookup.
+    TypedefName {
+        ty: TypeId,
+        symbol: SymbolId,
+        name: SpannedName,
+        span: SourceSpan,
+    },
     Tag {
         ty: TypeId,
         tag: TagId,
@@ -360,14 +372,16 @@ impl TypeSpecifier {
     #[must_use]
     pub fn type_id(&self) -> TypeId {
         match self {
-            Self::Builtin { ty, .. } | Self::Tag { ty, .. } => *ty,
+            Self::Builtin { ty, .. } | Self::TypedefName { ty, .. } | Self::Tag { ty, .. } => *ty,
         }
     }
 
     #[must_use]
     pub fn span(&self) -> SourceSpan {
         match self {
-            Self::Builtin { span, .. } | Self::Tag { span, .. } => *span,
+            Self::Builtin { span, .. }
+            | Self::TypedefName { span, .. }
+            | Self::Tag { span, .. } => *span,
         }
     }
 }
