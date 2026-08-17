@@ -177,7 +177,7 @@ fn lower_expr(expr: &CHirExpr<'_>, ctx: &mut LowerContext) -> u32 {
             ctx.emit_inst(Inst::Sub(value(r), value(zero), value(v)));
             r
         }
-        CHirExpr::Ident(_name, _) => {
+        CHirExpr::Ident { .. } => {
             let v = ctx.new_value();
             ctx.emit_inst(Inst::Const(value(v), 0));
             v
@@ -196,8 +196,8 @@ mod tests {
     use evocc_chir::eval_expr;
     use evocc_chir::{
         BinaryOp, CHirDecl, CHirExpr, CHirStmt, CHirUnit, FunctionDecl, IntBase, IntLit, IntSuffix,
-        ParameterSyntax, SpannedName, StorageClass, TypeSpecifier, WrittenDeclarator,
-        WrittenDeclaratorLayer,
+        ParameterSyntax, SpannedName, StorageClass, SymbolData, SymbolTable, TypeSpecifier,
+        WrittenDeclarator, WrittenDeclaratorLayer,
     };
     use evocc_common::{Arena, FileId, SourceSpan};
     use evocc_types::{
@@ -256,9 +256,22 @@ mod tests {
             },
             qualifiers: Qualifiers::default(),
         });
+        let mut symbols = SymbolTable::new();
+        let function_symbol = symbols
+            .declare(
+                symbols.file_scope(),
+                "f",
+                SymbolData::Function {
+                    storage: StorageClass::None,
+                },
+                function_type,
+                test_span(),
+            )
+            .unwrap();
         let func_decl = arena_alloc(
             &arena,
             CHirDecl::Function(FunctionDecl {
+                symbol: function_symbol,
                 name: SpannedName {
                     spelling: "f".into(),
                     span: test_span(),
@@ -281,7 +294,7 @@ mod tests {
                 span: test_span(),
             }),
         );
-        let unit = CHirUnit::new(vec![func_decl], types);
+        let unit = CHirUnit::new(vec![func_decl], types, symbols);
 
         let functions = lower_unit(&unit);
         assert_eq!(functions.len(), 1);

@@ -353,6 +353,48 @@ fn checkpoints_restore_stale_branches_and_reject_foreign_tables() {
 }
 
 #[test]
+fn linked_aliases_and_composite_type_updates_preserve_identity_and_roll_back() {
+    let mut types = TypeInterner::new();
+    let int = int_type(&mut types);
+    let long = types.intern(CanonicalType {
+        kind: TypeKind::Int(IntRank::Long),
+        qualifiers: Qualifiers::default(),
+    });
+    let mut symbols = SymbolTable::new();
+    let file = symbols.file_scope();
+    let entity = symbols
+        .declare(
+            file,
+            "linked",
+            SymbolData::Object {
+                storage: StorageClass::Extern,
+            },
+            int,
+            span(1),
+        )
+        .unwrap();
+    let block = symbols
+        .create_scope(file, ScopeKind::Block, Some(span(2)))
+        .unwrap();
+    let checkpoint = symbols.checkpoint();
+
+    assert_eq!(symbols.bind_existing(block, entity), Ok(entity));
+    assert_eq!(symbols.bind_existing(block, entity), Ok(entity));
+    assert_eq!(symbols.resolve(block, "linked").unwrap(), Some(entity));
+    assert_eq!(symbols.scope_symbols(block).unwrap(), &[entity]);
+    assert_eq!(symbols.symbols_in_source_order().len(), 1);
+
+    symbols.update_symbol_type(entity, long).unwrap();
+    assert_eq!(symbols.symbol(entity).unwrap().ty(), long);
+
+    symbols.rollback(checkpoint).unwrap();
+    assert_eq!(symbols.scope_symbols(block).unwrap(), &[]);
+    assert_eq!(symbols.resolve(block, "linked").unwrap(), Some(entity));
+    assert_eq!(symbols.symbol(entity).unwrap().ty(), int);
+    assert_eq!(symbols.symbols_in_source_order().len(), 1);
+}
+
+#[test]
 fn every_assignment_operator_round_trips_and_invalid_facts_fail_closed() {
     let assignments = [
         AssignmentOp::Simple,

@@ -171,7 +171,7 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
             CHirExpr::StringLit(value, _) => {
                 format!("string({:?},{:?})", value.value, value.prefix)
             }
-            CHirExpr::Ident(name, _) => format!("id({name})"),
+            CHirExpr::Ident { spelling, .. } => format!("id({spelling})"),
             CHirExpr::Unary(operator, child, _) => {
                 let operator = unary_name(*operator);
                 let child = self.expression(&format!("{path}.operand"), child);

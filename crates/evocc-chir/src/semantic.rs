@@ -394,6 +394,57 @@ impl SymbolTable {
         Ok(id)
     }
 
+    /// Make an already-declared linked entity visible in another lexical
+    /// scope without allocating a second semantic identity.
+    ///
+    /// C block-scope `extern` declarations and block-scope function
+    /// declarations use this operation to join the file-scope entity while
+    /// retaining normal lexical lookup in the block.
+    pub fn bind_existing(
+        &mut self,
+        scope: ScopeId,
+        symbol: SymbolId,
+    ) -> Result<SymbolId, SymbolTableError> {
+        let scope_index = self.scope_index(scope)?;
+        let declaration = self.symbol(symbol)?;
+        let spelling = declaration.spelling.clone();
+
+        if let Some(existing) = self.scopes[scope_index]
+            .symbols
+            .iter()
+            .copied()
+            .find(|id| self.symbols[id.raw() as usize].spelling == spelling)
+        {
+            return if existing == symbol {
+                Ok(symbol)
+            } else {
+                Err(SymbolTableError::DuplicateInScope {
+                    scope,
+                    existing,
+                    spelling,
+                })
+            };
+        }
+
+        self.scopes[scope_index].symbols.push(symbol);
+        Ok(symbol)
+    }
+
+    /// Replace the canonical composite type associated with an existing C
+    /// entity while preserving its stable [`SymbolId`].
+    pub fn update_symbol_type(
+        &mut self,
+        symbol: SymbolId,
+        ty: TypeId,
+    ) -> Result<(), SymbolTableError> {
+        let declaration = self
+            .symbols
+            .get_mut(symbol.raw() as usize)
+            .ok_or(SymbolTableError::UnknownSymbol(symbol))?;
+        declaration.ty = ty;
+        Ok(())
+    }
+
     /// Bind a nominal tag name in C's independent tag namespace.
     pub fn declare_tag(
         &mut self,

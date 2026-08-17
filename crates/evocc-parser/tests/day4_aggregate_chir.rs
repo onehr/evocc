@@ -75,7 +75,7 @@ fn assert_expr_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         | CHirExpr::FloatLit(..)
         | CHirExpr::CharLit(..)
         | CHirExpr::StringLit(..)
-        | CHirExpr::Ident(..)
+        | CHirExpr::Ident { .. }
         | CHirExpr::SizeOf(..)
         | CHirExpr::AlignOf(..) => {}
         CHirExpr::Unary(_, child, _)

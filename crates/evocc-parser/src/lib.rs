@@ -4,10 +4,11 @@ use std::collections::HashMap;
 
 use evocc_chir::{
     BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, CharLit,
-    CharPrefix, EnumeratorDecl, FloatLit, FloatSuffix, FunctionDecl, IntBase, IntLit, IntSuffix,
-    ObjectDecl, ParameterDecl, ParameterSyntax, RecordMember, SpannedName, StorageClass, StringLit,
-    StringPrefix, TagDecl, TagMembers, TypeSpecifier, TypedefDecl, UnaryOp, WrittenDeclarator,
-    WrittenDeclaratorLayer,
+    CharPrefix, EnumeratorDecl, ExprFacts, FloatLit, FloatSuffix, FunctionDecl, IntBase, IntLit,
+    IntSuffix, ObjectDecl, ParameterDecl, ParameterSyntax, RecordMember, ScopeId, ScopeKind,
+    SpannedName, StorageClass, StringLit, StringPrefix, SymbolData, SymbolId, SymbolKind,
+    SymbolTable, SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl, UnaryOp,
+    WrittenDeclarator, WrittenDeclaratorLayer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_lex::{Token, TokenKind};
@@ -36,13 +37,28 @@ enum DerivedDeclarator {
     },
     Function {
         parameters: ParameterSyntax,
+        scope: ScopeId,
         span: SourceSpan,
     },
+}
+
+fn derived_declarator_span(layer: &DerivedDeclarator) -> SourceSpan {
+    match layer {
+        DerivedDeclarator::Pointer { span, .. }
+        | DerivedDeclarator::Array { span, .. }
+        | DerivedDeclarator::Function { span, .. } => *span,
+    }
 }
 
 #[derive(Debug, Clone)]
 struct ParsedDeclarator {
     name: SpannedName,
+    derived: Vec<DerivedDeclarator>,
+    span: SourceSpan,
+}
+
+#[derive(Debug, Clone)]
+struct ParsedAbstractDeclarator {
     derived: Vec<DerivedDeclarator>,
     span: SourceSpan,
 }
@@ -54,15 +70,10 @@ struct ParsedSpecifier<'arena> {
 
 struct PendingTag<'arena> {
     tag: TagId,
+    scope: ScopeId,
     name: Option<SpannedName>,
     members: TagMembers<'arena>,
     specifier_span: SourceSpan,
-}
-
-#[derive(Clone, Copy)]
-struct TagBinding {
-    tag: TagId,
-    kind: TagKind,
 }
 
 /// A value and its C integer type after target-specific literal selection.
@@ -82,21 +93,6 @@ struct CIntegerType {
     bits: u8,
     rank: u8,
     signed: bool,
-}
-
-/// An enumerator's canonical mathematical value is distinct from the type of
-/// the identifier expression that names it. In particular, `A = 1U` still
-/// declares `A` as an `int` constant under C11 because the value fits `int`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct EnumConstantBinding {
-    canonical_value: i64,
-    expression_type: CIntegerType,
-}
-
-impl EnumConstantBinding {
-    fn expression_value(self) -> CInteger {
-        CInteger::new(self.canonical_value as u64, self.expression_type)
-    }
 }
 
 impl CIntegerType {
@@ -191,6 +187,20 @@ enum DeclarationContext {
     ForInitializer,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EntityLinkage {
+    None,
+    Internal,
+    External,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct EntityState {
+    linkage: EntityLinkage,
+    thread_local: bool,
+    has_definition: bool,
+}
+
 pub struct Parser<'src, 'arena> {
     tokens: Vec<Token>,
     pos: usize,
@@ -198,11 +208,14 @@ pub struct Parser<'src, 'arena> {
     source: &'src str,
     had_error: bool,
     error_count: usize,
+    rollback_error_count: usize,
     diagnostic: Option<ParseDiagnostic>,
     arena: Option<&'arena Arena>,
     types: TypeInterner,
-    tags: HashMap<String, TagBinding>,
-    enum_constants: HashMap<String, EnumConstantBinding>,
+    symbols: SymbolTable,
+    current_scope: ScopeId,
+    entities: HashMap<SymbolId, EntityState>,
+    external_entities: HashMap<String, SymbolId>,
     side_declarations: Vec<&'arena CHirDecl<'arena>>,
     loop_depth: usize,
     switch_depth: usize,
@@ -210,6 +223,8 @@ pub struct Parser<'src, 'arena> {
 
 impl<'src, 'arena> Parser<'src, 'arena> {
     pub fn new(tokens: Vec<Token>, file: FileId, source: &'src str) -> Self {
+        let symbols = SymbolTable::new();
+        let current_scope = symbols.file_scope();
         Self {
             tokens,
             pos: 0,
@@ -217,11 +232,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             source,
             had_error: false,
             error_count: 0,
+            rollback_error_count: 0,
             diagnostic: None,
             arena: None,
             types: TypeInterner::new(),
-            tags: HashMap::new(),
-            enum_constants: HashMap::new(),
+            symbols,
+            current_scope,
+            entities: HashMap::new(),
+            external_entities: HashMap::new(),
             side_declarations: Vec::new(),
             loop_depth: 0,
             switch_depth: 0,
@@ -247,7 +265,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.advance();
             }
         }
-        CHirUnit::new(decls, std::mem::take(&mut self.types))
+        CHirUnit::new(
+            decls,
+            std::mem::take(&mut self.types),
+            std::mem::take(&mut self.symbols),
+        )
     }
 
     pub fn had_error(&self) -> bool {
@@ -305,6 +327,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn report(&mut self, code: &'static str, message: impl Into<String>, span: SourceSpan) {
         self.had_error = true;
         self.error_count += 1;
+        // An unresolved use is removed at the expression/statement boundary,
+        // so a surrounding function can still retain its fully resolved
+        // declarations and scopes for diagnostics. Declaration-shape and
+        // redefinition errors remain transactional.
+        if code != "E2001" {
+            self.rollback_error_count += 1;
+        }
         if self.diagnostic.is_none() {
             self.diagnostic = Some(ParseDiagnostic {
                 span,
@@ -374,6 +403,406 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.types.intern(CanonicalType { kind, qualifiers })
     }
 
+    fn symbol_in_current_scope(&self, spelling: &str) -> Option<SymbolId> {
+        self.symbols
+            .scope_symbols(self.current_scope)
+            .expect("the parser current scope is always live")
+            .iter()
+            .rev()
+            .copied()
+            .find(|symbol| {
+                self.symbols
+                    .symbol(*symbol)
+                    .is_ok_and(|symbol| symbol.spelling() == spelling)
+            })
+    }
+
+    fn linked_symbol_in_parent_scopes(&self, spelling: &str) -> Option<SymbolId> {
+        let mut scope = self
+            .symbols
+            .scope(self.current_scope)
+            .expect("the parser current scope is always live")
+            .parent();
+        while let Some(scope_id) = scope {
+            let lexical_scope = self
+                .symbols
+                .scope(scope_id)
+                .expect("scope parent IDs belong to the same table");
+            if let Some(symbol) = lexical_scope
+                .symbols()
+                .iter()
+                .rev()
+                .copied()
+                .find(|symbol| {
+                    self.symbols
+                        .symbol(*symbol)
+                        .is_ok_and(|symbol| symbol.spelling() == spelling)
+                })
+            {
+                if self
+                    .entities
+                    .get(&symbol)
+                    .is_some_and(|state| state.linkage != EntityLinkage::None)
+                {
+                    return Some(symbol);
+                }
+            }
+            scope = lexical_scope.parent();
+        }
+        None
+    }
+
+    fn declare_symbol(&mut self, name: &SpannedName, data: SymbolData, ty: TypeId) -> SymbolId {
+        let in_current_scope = self.symbol_in_current_scope(&name.spelling);
+        let lexically_visible = in_current_scope.or_else(|| {
+            if matches!(data.kind(), SymbolKind::Function)
+                || matches!(
+                    data,
+                    SymbolData::Object {
+                        storage: StorageClass::Extern
+                    }
+                )
+            {
+                self.linked_symbol_in_parent_scopes(&name.spelling)
+            } else {
+                None
+            }
+        });
+        let new_linkage = self.declaration_linkage(data);
+        let existing = lexically_visible.or_else(|| {
+            (new_linkage != EntityLinkage::None
+                && matches!(data.kind(), SymbolKind::Object | SymbolKind::Function))
+            .then(|| self.external_entities.get(&name.spelling).copied())
+            .flatten()
+        });
+
+        if let Some(existing) = existing {
+            let joins_outer_scope = in_current_scope.is_none();
+            if self.merge_redeclaration(existing, data, ty) {
+                if joins_outer_scope {
+                    self.symbols
+                        .bind_existing(self.current_scope, existing)
+                        .expect("a resolved outer spelling is not duplicated locally");
+                }
+                return existing;
+            }
+            self.report_redefinition(name);
+            return existing;
+        }
+
+        match self
+            .symbols
+            .declare(self.current_scope, &name.spelling, data, ty, name.span)
+        {
+            Ok(symbol) => {
+                let linkage = self.declaration_linkage(data);
+                self.entities.insert(
+                    symbol,
+                    EntityState {
+                        linkage,
+                        thread_local: data.storage_class() == Some(StorageClass::ThreadLocal),
+                        has_definition: false,
+                    },
+                );
+                if linkage == EntityLinkage::External {
+                    self.external_entities.insert(name.spelling.clone(), symbol);
+                }
+                symbol
+            }
+            Err(SymbolTableError::DuplicateInScope { existing, .. }) => {
+                self.report_redefinition(name);
+                existing
+            }
+            Err(error) => panic!("parser constructed an invalid symbol-table operation: {error}"),
+        }
+    }
+
+    fn report_redefinition(&mut self, name: &SpannedName) {
+        self.report(
+            "E2002",
+            format!("ordinary-identifier-redefinition: {}", name.spelling),
+            name.span,
+        );
+    }
+
+    fn declaration_linkage(&self, data: SymbolData) -> EntityLinkage {
+        let file_scope = self.current_scope == self.symbols.file_scope();
+        match data {
+            SymbolData::Function {
+                storage: StorageClass::Static,
+            } if file_scope => EntityLinkage::Internal,
+            SymbolData::Function { .. } => EntityLinkage::External,
+            SymbolData::Object {
+                storage: StorageClass::Static,
+            } if file_scope => EntityLinkage::Internal,
+            SymbolData::Object {
+                storage: StorageClass::Extern,
+            } => EntityLinkage::External,
+            SymbolData::Object { .. } if file_scope => EntityLinkage::External,
+            SymbolData::Object { .. }
+            | SymbolData::Parameter { .. }
+            | SymbolData::Typedef
+            | SymbolData::Enumerator { .. } => EntityLinkage::None,
+        }
+    }
+
+    fn merge_redeclaration(&mut self, symbol: SymbolId, data: SymbolData, ty: TypeId) -> bool {
+        let (existing_kind, existing_ty) = {
+            let existing = self
+                .symbols
+                .symbol(symbol)
+                .expect("scope symbol IDs belong to the same table");
+            (existing.kind(), existing.ty())
+        };
+        if existing_kind != data.kind() {
+            return false;
+        }
+
+        if existing_kind == SymbolKind::Typedef {
+            return existing_ty == ty;
+        }
+        if !matches!(existing_kind, SymbolKind::Object | SymbolKind::Function) {
+            return false;
+        }
+
+        let Some(mut state) = self.entities.get(&symbol).copied() else {
+            return false;
+        };
+        let new_thread_local = data.storage_class() == Some(StorageClass::ThreadLocal);
+        if state.thread_local != new_thread_local {
+            return false;
+        }
+
+        let new_linkage = self.declaration_linkage(data);
+        let storage = data.storage_class().unwrap_or(StorageClass::None);
+        state.linkage = match (state.linkage, new_linkage) {
+            (EntityLinkage::Internal, EntityLinkage::External)
+                if storage == StorageClass::Extern
+                    || (existing_kind == SymbolKind::Function && storage == StorageClass::None) =>
+            {
+                EntityLinkage::Internal
+            }
+            (old, new) if old == new && old != EntityLinkage::None => old,
+            _ => return false,
+        };
+
+        let Some(composite) = self.composite_type(existing_ty, ty, false) else {
+            return false;
+        };
+        self.symbols
+            .update_symbol_type(symbol, composite)
+            .expect("scope symbol IDs belong to the same table");
+        self.entities.insert(symbol, state);
+        true
+    }
+
+    fn mark_definition(&mut self, symbol: SymbolId, name: &SpannedName) {
+        let Some(state) = self.entities.get_mut(&symbol) else {
+            return;
+        };
+        if state.has_definition {
+            self.report_redefinition(name);
+        } else {
+            state.has_definition = true;
+        }
+    }
+
+    fn composite_type(
+        &mut self,
+        left: TypeId,
+        right: TypeId,
+        ignore_top_qualifiers: bool,
+    ) -> Option<TypeId> {
+        if left == right {
+            return Some(right);
+        }
+        let left_type = self.types.get(left)?.clone();
+        let right_type = self.types.get(right)?.clone();
+        if !ignore_top_qualifiers && left_type.qualifiers != right_type.qualifiers {
+            return None;
+        }
+        let qualifiers = if ignore_top_qualifiers {
+            Qualifiers::default()
+        } else {
+            right_type.qualifiers
+        };
+
+        let kind = match (left_type.kind, right_type.kind) {
+            (TypeKind::Void, TypeKind::Void) => TypeKind::Void,
+            (TypeKind::Int(left), TypeKind::Int(right)) if left == right => TypeKind::Int(right),
+            (TypeKind::Float(left), TypeKind::Float(right)) if left == right => {
+                TypeKind::Float(right)
+            }
+            (TypeKind::Complex(left), TypeKind::Complex(right)) if left == right => {
+                TypeKind::Complex(right)
+            }
+            (TypeKind::Pointer(left), TypeKind::Pointer(right)) => {
+                TypeKind::Pointer(self.composite_type(left, right, false)?)
+            }
+            (
+                TypeKind::Array {
+                    element: left_element,
+                    bound: left_bound,
+                },
+                TypeKind::Array {
+                    element: right_element,
+                    bound: right_bound,
+                },
+            ) => {
+                let element = self.composite_type(left_element, right_element, false)?;
+                let bound = match (left_bound, right_bound) {
+                    (ArrayBound::Unbounded, bound) | (bound, ArrayBound::Unbounded) => bound,
+                    (left, right) if left == right => right,
+                    _ => return None,
+                };
+                TypeKind::Array { element, bound }
+            }
+            (
+                TypeKind::Function {
+                    return_type: left_return,
+                    parameters: left_parameters,
+                },
+                TypeKind::Function {
+                    return_type: right_return,
+                    parameters: right_parameters,
+                },
+            ) => {
+                let return_type = self.composite_type(left_return, right_return, false)?;
+                let parameters =
+                    self.composite_function_parameters(left_parameters, right_parameters)?;
+                TypeKind::Function {
+                    return_type,
+                    parameters,
+                }
+            }
+            (TypeKind::Struct(left), TypeKind::Struct(right)) if left == right => {
+                TypeKind::Struct(right)
+            }
+            (TypeKind::Union(left), TypeKind::Union(right)) if left == right => {
+                TypeKind::Union(right)
+            }
+            (TypeKind::Enum(left), TypeKind::Enum(right)) if left == right => TypeKind::Enum(right),
+            _ => return None,
+        };
+        Some(self.intern(kind, qualifiers))
+    }
+
+    fn composite_function_parameters(
+        &mut self,
+        left: FunctionParameters,
+        right: FunctionParameters,
+    ) -> Option<FunctionParameters> {
+        match (left, right) {
+            (FunctionParameters::Unspecified, FunctionParameters::Unspecified) => {
+                Some(FunctionParameters::Unspecified)
+            }
+            (FunctionParameters::Unspecified, prototype @ FunctionParameters::Prototype { .. })
+            | (prototype @ FunctionParameters::Prototype { .. }, FunctionParameters::Unspecified) => {
+                self.prototype_survives_default_promotions(&prototype)
+                    .then_some(prototype)
+            }
+            (
+                FunctionParameters::Prototype {
+                    types: left,
+                    variadic: left_variadic,
+                },
+                FunctionParameters::Prototype {
+                    types: right,
+                    variadic: right_variadic,
+                },
+            ) => {
+                if left_variadic != right_variadic || left.len() != right.len() {
+                    return None;
+                }
+                let types = left
+                    .into_iter()
+                    .zip(right)
+                    .map(|(left, right)| self.composite_type(left, right, true))
+                    .collect::<Option<Vec<_>>>()?;
+                Some(FunctionParameters::Prototype {
+                    types,
+                    variadic: right_variadic,
+                })
+            }
+        }
+    }
+
+    fn prototype_survives_default_promotions(&self, parameters: &FunctionParameters) -> bool {
+        let FunctionParameters::Prototype { types, variadic } = parameters else {
+            return true;
+        };
+        !variadic
+            && types.iter().all(|ty| {
+                self.types.get(*ty).is_some_and(|ty| match ty.kind {
+                    TypeKind::Int(rank) => matches!(
+                        rank,
+                        IntRank::Int
+                            | IntRank::UInt
+                            | IntRank::Long
+                            | IntRank::ULong
+                            | IntRank::LongLong
+                            | IntRank::ULongLong
+                    ),
+                    TypeKind::Float(FloatKind::F16 | FloatKind::F32) => false,
+                    TypeKind::Complex(ComplexBase::CF16 | ComplexBase::CF32) => false,
+                    TypeKind::Enum(_) => false,
+                    _ => true,
+                })
+            })
+    }
+
+    fn create_scope(&mut self, kind: ScopeKind, span: Option<SourceSpan>) -> ScopeId {
+        self.symbols
+            .create_scope(self.current_scope, kind, span)
+            .expect("the parser current scope is always live")
+    }
+
+    fn tag_in_current_scope(&self, spelling: &str) -> Option<TagId> {
+        self.symbols
+            .scope_tags(self.current_scope)
+            .expect("the parser current scope is always live")
+            .iter()
+            .rev()
+            .copied()
+            .find(|tag| {
+                self.symbols
+                    .tags_in_source_order()
+                    .iter()
+                    .rev()
+                    .any(|binding| {
+                        binding.scope() == self.current_scope
+                            && binding.tag() == *tag
+                            && binding.spelling() == spelling
+                    })
+            })
+    }
+
+    fn facts_for_symbol(&self, symbol: SymbolId) -> ExprFacts {
+        let symbol = self
+            .symbols
+            .symbol(symbol)
+            .expect("resolved symbol belongs to the same table");
+        match symbol.kind() {
+            SymbolKind::Function => ExprFacts::function_designator(symbol.ty()),
+            SymbolKind::Enumerator => ExprFacts::value(symbol.ty()),
+            SymbolKind::Object | SymbolKind::Parameter => {
+                let canonical = self
+                    .types
+                    .get(symbol.ty())
+                    .expect("symbol types are interned before binding");
+                let modifiable = !canonical.qualifiers.is_const
+                    && !matches!(
+                        canonical.kind,
+                        TypeKind::Array { .. } | TypeKind::Function { .. }
+                    );
+                let addressable = symbol.storage_class() != Some(StorageClass::Register);
+                ExprFacts::lvalue(symbol.ty(), modifiable, addressable)
+                    .expect("ordinary object facts are internally consistent")
+            }
+            SymbolKind::Typedef => ExprFacts::value(symbol.ty()),
+        }
+    }
+
     // ── external declarations ──────────────────────────────────────────
 
     fn parse_external_declaration(&mut self) -> Option<Vec<&'arena CHirDecl<'arena>>> {
@@ -385,17 +814,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         context: DeclarationContext,
     ) -> Option<Vec<&'arena CHirDecl<'arena>>> {
         let types_checkpoint = self.types.clone();
-        let tags_checkpoint = self.tags.clone();
-        let enum_constants_checkpoint = self.enum_constants.clone();
+        let symbols_checkpoint = self.symbols.checkpoint();
+        let entities_checkpoint = self.entities.clone();
+        let external_entities_checkpoint = self.external_entities.clone();
         let side_checkpoint = self.side_declarations.clone();
-        let error_checkpoint = self.error_count;
+        let rollback_error_checkpoint = self.rollback_error_count;
         let side_start = side_checkpoint.len();
 
         let result = self.parse_declaration_inner(context, side_start);
-        if result.is_none() || self.error_count != error_checkpoint {
+        if result.is_none() || self.rollback_error_count != rollback_error_checkpoint {
             self.types = types_checkpoint;
-            self.tags = tags_checkpoint;
-            self.enum_constants = enum_constants_checkpoint;
+            self.symbols
+                .rollback(symbols_checkpoint)
+                .expect("parser declaration checkpoints are table-local");
+            self.entities = entities_checkpoint;
+            self.external_entities = external_entities_checkpoint;
             self.side_declarations = side_checkpoint;
             None
         } else {
@@ -427,7 +860,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return Some(declarations);
         }
 
-        let Some(declarator) = self.parse_declarator() else {
+        let Some(declarator) = self.parse_declarator(true) else {
             self.report("E1001", "expected-declaration", self.span());
             return None;
         };
@@ -438,22 +871,41 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.types.get(full_type).map(|ty| &ty.kind),
             Some(TypeKind::Function { .. })
         ) {
-            let parameters = declarator
+            let (mut parameters, parameter_scope) = declarator
                 .derived
                 .iter()
                 .find_map(|layer| match layer {
-                    DerivedDeclarator::Function { parameters, .. } => Some(parameters.clone()),
+                    DerivedDeclarator::Function {
+                        parameters, scope, ..
+                    } => Some((parameters.clone(), *scope)),
                     _ => None,
                 })
-                .unwrap_or(ParameterSyntax::Unspecified);
-            let body = if self.peek_kind() == Some(TokenKind::LBrace) {
+                .expect("a canonical function type has a written function layer");
+            let symbol = self.declare_symbol(
+                &declarator.name,
+                SymbolData::Function { storage },
+                full_type,
+            );
+            let has_body = self.peek_kind() == Some(TokenKind::LBrace);
+            if has_body {
+                self.mark_definition(symbol, &declarator.name);
+            }
+            let body = if has_body {
                 let open = self.span();
+                let outer_scope = self.current_scope;
+                self.current_scope = parameter_scope;
+                self.bind_parameters(&mut parameters);
                 let body = self.parse_function_body();
+                self.current_scope = outer_scope;
                 if context != DeclarationContext::File {
                     self.report("E1205", "nested-function-definition", open);
                 }
                 Some(body)
             } else {
+                let outer_scope = self.current_scope;
+                self.current_scope = parameter_scope;
+                self.bind_parameters(&mut parameters);
+                self.current_scope = outer_scope;
                 None
             };
             let end_span = if let Some(body) = body {
@@ -467,6 +919,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 declarations.push(self.finish_tag_event(event, declaration_span));
             }
             declarations.push(self.alloc_node(CHirDecl::Function(FunctionDecl {
+                symbol,
                 name: declarator.name,
                 ty: full_type,
                 return_specifier: specifier.surface,
@@ -479,6 +932,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return Some(declarations);
         }
 
+        let symbol_data = if storage == StorageClass::Typedef {
+            SymbolData::Typedef
+        } else {
+            SymbolData::Object { storage }
+        };
+        // An ordinary identifier's scope begins immediately after its
+        // declarator, so self-references in an initializer resolve to this
+        // declaration rather than an outer shadowed name.
+        let has_initializer = self.peek_kind() == Some(TokenKind::Assign);
+        let symbol = self.declare_symbol(&declarator.name, symbol_data, full_type);
+        if has_initializer && storage != StorageClass::Typedef {
+            self.mark_definition(symbol, &declarator.name);
+        }
         let initializer = if self.match_kind(TokenKind::Assign) {
             Some(self.parse_expression()?)
         } else {
@@ -492,6 +958,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         let declaration = if storage == StorageClass::Typedef {
             CHirDecl::Typedef(TypedefDecl {
+                symbol,
                 name: declarator.name,
                 ty: full_type,
                 specifier: specifier.surface,
@@ -500,6 +967,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             })
         } else {
             CHirDecl::Object(ObjectDecl {
+                symbol,
                 name: declarator.name,
                 ty: full_type,
                 specifier: specifier.surface,
@@ -513,10 +981,31 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some(declarations)
     }
 
+    fn bind_parameters(&mut self, syntax: &mut ParameterSyntax) {
+        let ParameterSyntax::Prototype { parameters, .. } = syntax else {
+            return;
+        };
+        for parameter in parameters {
+            let Some(name) = parameter.name.as_ref() else {
+                parameter.symbol = None;
+                continue;
+            };
+            parameter.symbol = Some(self.declare_symbol(
+                name,
+                SymbolData::Parameter {
+                    storage: StorageClass::None,
+                },
+                parameter.ty,
+            ));
+        }
+    }
+
     fn parse_function_body(&mut self) -> &'arena CHirStmt<'arena> {
         let outer_loop_depth = std::mem::replace(&mut self.loop_depth, 0);
         let outer_switch_depth = std::mem::replace(&mut self.switch_depth, 0);
-        let body = self.parse_compound_statement();
+        // The function's outer compound statement and its parameters share
+        // one function scope. Nested compounds create block scopes normally.
+        let body = self.parse_compound_statement(false);
         self.loop_depth = outer_loop_depth;
         self.switch_depth = outer_switch_depth;
         body
@@ -542,6 +1031,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     ) -> &'arena CHirDecl<'arena> {
         self.alloc_node(CHirDecl::Tag(TagDecl {
             tag: event.tag,
+            scope: event.scope,
             name: event.name,
             members: event.members,
             span: declaration_span,
@@ -657,52 +1147,67 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             None
         };
         let is_definition = self.peek_kind() == Some(TokenKind::LBrace);
+        let is_pure_forward =
+            !is_definition && name.is_some() && self.peek_kind() == Some(TokenKind::Semicolon);
         if name.is_none() && !is_definition {
             self.report("E1001", "expected-declaration", self.span());
             return None;
         }
 
+        let declaration_scope = self.current_scope;
         let mut fresh = false;
-        let binding = if let Some(name) = &name {
-            if let Some(binding) = self.tags.get(&name.spelling).copied() {
-                if binding.kind != requested_kind {
+        let (tag, binding_kind) = if let Some(name) = &name {
+            // A definition and a declaration containing only a tag specifier
+            // operate in the current scope. In particular, `struct S;` in an
+            // inner block introduces a fresh tag even when an outer S is
+            // visible. A tag specifier used by a declarator instead denotes
+            // the nearest visible tag.
+            let existing = if is_definition || is_pure_forward {
+                self.tag_in_current_scope(&name.spelling)
+            } else {
+                self.symbols
+                    .resolve_tag(self.current_scope, &name.spelling)
+                    .expect("the parser current scope is always live")
+            };
+            if let Some(tag) = existing {
+                let kind = self
+                    .types
+                    .tag(tag)
+                    .expect("symbol-table tags belong to the type interner")
+                    .kind;
+                if kind != requested_kind {
                     self.report(
                         "E1102",
                         format!("conflicting-tag-kind: {}", name.spelling),
                         name.span,
                     );
                 }
-                binding
+                (tag, kind)
             } else {
                 fresh = true;
                 let tag = self
                     .types
                     .declare_tag(requested_kind, Some(name.spelling.clone()));
-                let binding = TagBinding {
-                    tag,
-                    kind: requested_kind,
-                };
-                self.tags.insert(name.spelling.clone(), binding);
-                binding
+                self.symbols
+                    .declare_tag(self.current_scope, &name.spelling, tag, name.span)
+                    .expect("a fresh scoped tag spelling cannot be a duplicate");
+                (tag, requested_kind)
             }
         } else {
             fresh = true;
-            TagBinding {
-                tag: self.types.declare_tag(requested_kind, None),
-                kind: requested_kind,
-            }
+            (self.types.declare_tag(requested_kind, None), requested_kind)
         };
 
-        let semantic_kind = match binding.kind {
-            TagKind::Struct => TypeKind::Struct(binding.tag),
-            TagKind::Union => TypeKind::Union(binding.tag),
-            TagKind::Enum => TypeKind::Enum(binding.tag),
+        let semantic_kind = match binding_kind {
+            TagKind::Struct => TypeKind::Struct(tag),
+            TagKind::Union => TypeKind::Union(tag),
+            TagKind::Enum => TypeKind::Enum(tag),
         };
         let ty = self.intern(semantic_kind, qualifiers);
 
         if is_definition {
             let duplicate = matches!(
-                self.types.tag(binding.tag).map(|tag| &tag.state),
+                self.types.tag(tag).map(|tag| &tag.state),
                 Some(TagState::Complete(_))
             );
             if duplicate {
@@ -716,16 +1221,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             self.advance();
             let (members, definition) = match requested_kind {
-                TagKind::Struct | TagKind::Union => self.parse_record_members(requested_kind),
-                TagKind::Enum => self.parse_enum_members(),
+                TagKind::Struct | TagKind::Union => self.parse_record_members(requested_kind)?,
+                TagKind::Enum => self.parse_enum_members()?,
             };
             let close = self.expect(TokenKind::RBrace);
             let end = close
                 .as_ref()
                 .map_or_else(|| self.span(), |token| token.span);
             if !duplicate
-                && binding.kind == requested_kind
-                && self.types.complete_tag(binding.tag, definition).is_err()
+                && binding_kind == requested_kind
+                && self.types.complete_tag(tag, definition).is_err()
             {
                 self.report(
                     "E1101",
@@ -737,13 +1242,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             Some(ParsedSpecifier {
                 surface: TypeSpecifier::Tag {
                     ty,
-                    tag: binding.tag,
+                    tag,
                     kind: requested_kind,
                     name: name.clone(),
                     span: specifier_span,
                 },
                 tag_event: Some(PendingTag {
-                    tag: binding.tag,
+                    tag,
+                    scope: declaration_scope,
                     name,
                     members,
                     specifier_span,
@@ -755,13 +1261,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             Some(ParsedSpecifier {
                 surface: TypeSpecifier::Tag {
                     ty,
-                    tag: binding.tag,
+                    tag,
                     kind: requested_kind,
                     name: name.clone(),
                     span: specifier_span,
                 },
-                tag_event: fresh.then_some(PendingTag {
-                    tag: binding.tag,
+                tag_event: (fresh || is_pure_forward).then_some(PendingTag {
+                    tag,
+                    scope: declaration_scope,
                     name,
                     members: TagMembers::Incomplete,
                     specifier_span,
@@ -770,7 +1277,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
-    fn parse_record_members(&mut self, kind: TagKind) -> (TagMembers<'arena>, TagDefinition) {
+    fn parse_record_members(
+        &mut self,
+        kind: TagKind,
+    ) -> Option<(TagMembers<'arena>, TagDefinition)> {
         let mut members = Vec::new();
         let mut canonical = Vec::new();
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
@@ -786,7 +1296,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             ) {
                 None
             } else {
-                self.parse_declarator()
+                self.parse_declarator(false)
             };
             let ty = declarator
                 .as_ref()
@@ -794,7 +1304,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.apply_declarator(specifier.surface.type_id(), &decl.derived)
                 });
             let bit_width = if self.match_kind(TokenKind::Colon) {
-                self.parse_expression()
+                Some(self.parse_expression()?)
             } else {
                 None
             };
@@ -838,14 +1348,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 span,
             });
         }
-        match kind {
+        Some(match kind {
             TagKind::Struct => (
                 TagMembers::Struct(members),
                 TagDefinition::Struct(canonical),
             ),
             TagKind::Union => (TagMembers::Union(members), TagDefinition::Union(canonical)),
             TagKind::Enum => unreachable!("enum members use parse_enum_members"),
-        }
+        })
     }
 
     /// Validate the C11 bit-field constraints that are independent of record
@@ -964,6 +1474,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
+    fn intern_c_integer_type(&mut self, ty: CIntegerType) -> TypeId {
+        let rank = match (ty.bits, ty.rank, ty.signed) {
+            (1, 0, false) => IntRank::Bool,
+            (32, 3, true) => IntRank::Int,
+            (32, 3, false) => IntRank::UInt,
+            (64, 4, true) => IntRank::Long,
+            (64, 4, false) => IntRank::ULong,
+            (64, 5, true) => IntRank::LongLong,
+            (64, 5, false) => IntRank::ULongLong,
+            _ => unreachable!("unsupported target integer type: {ty:?}"),
+        };
+        self.intern(TypeKind::Int(rank), Qualifiers::default())
+    }
+
     /// Evaluate the C11 integer constant-expression subset needed by enum
     /// initializers and bit-field widths for `aarch64-unknown-linux-gnu`.
     /// Unsupported or undefined operations fail closed and are diagnosed by
@@ -974,12 +1498,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::CharLit(literal, _) => {
                 Ok(CInteger::int(i32::try_from(literal.value).map_err(|_| ())?))
             }
-            CHirExpr::Ident(name, _) => self
-                .enum_constants
-                .get(name)
-                .copied()
-                .map(EnumConstantBinding::expression_value)
-                .ok_or(()),
+            CHirExpr::Ident { symbol, .. } => {
+                let symbol = self.symbols.symbol(*symbol).map_err(|_| ())?;
+                let SymbolData::Enumerator { value } = symbol.data() else {
+                    return Err(());
+                };
+                Ok(CInteger::new(
+                    value as u64,
+                    self.canonical_integer_type(symbol.ty())?,
+                ))
+            }
             CHirExpr::Unary(op, operand, _) => {
                 eval_unary_integer(*op, self.eval_integer_constant_expression(operand)?)
             }
@@ -1061,11 +1589,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         match expression {
             CHirExpr::Lit(literal, _) => Ok(integer_literal_value(*literal)?.ty),
             CHirExpr::CharLit(_, _) => Ok(CIntegerType::INT),
-            CHirExpr::Ident(name, _) => self
-                .enum_constants
-                .get(name)
-                .map(|binding| binding.expression_type)
-                .ok_or(()),
+            CHirExpr::Ident { symbol, .. } => {
+                let symbol = self.symbols.symbol(*symbol).map_err(|_| ())?;
+                if symbol.kind() != SymbolKind::Enumerator {
+                    return Err(());
+                }
+                self.canonical_integer_type(symbol.ty())
+            }
             CHirExpr::Unary(op, operand, _) => match op {
                 UnaryOp::Plus | UnaryOp::Neg | UnaryOp::BitNot => {
                     Ok(CInteger::new(0, self.integer_expression_type(operand)?)
@@ -1151,7 +1681,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
-    fn parse_enum_members(&mut self) -> (TagMembers<'arena>, TagDefinition) {
+    fn parse_enum_members(&mut self) -> Option<(TagMembers<'arena>, TagDefinition)> {
         let mut members = Vec::new();
         let mut canonical = Vec::new();
         let mut next_value = Some(0_i128);
@@ -1164,7 +1694,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 span: token.span,
             };
             let written_value = if self.match_kind(TokenKind::Assign) {
-                self.parse_assignment()
+                Some(self.parse_assignment()?)
             } else {
                 None
             };
@@ -1205,14 +1735,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 name: name.spelling.clone(),
                 value,
             });
-            self.enum_constants.insert(
-                name.spelling.clone(),
-                EnumConstantBinding {
-                    canonical_value: value,
-                    expression_type: enum_integer_type(value, value),
-                },
-            );
+            let expression_ty = self.intern_c_integer_type(enum_integer_type(value, value));
+            let symbol =
+                self.declare_symbol(&name, SymbolData::Enumerator { value }, expression_ty);
             members.push(EnumeratorDecl {
+                symbol,
                 name,
                 value,
                 written_value,
@@ -1223,7 +1750,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 break;
             }
         }
-        (TagMembers::Enum(members), TagDefinition::Enum(canonical))
+        Some((TagMembers::Enum(members), TagDefinition::Enum(canonical)))
     }
 
     /// Parse the bounded abstract-declarator subset required by G1 type names:
@@ -1274,7 +1801,116 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     // ── declarators ────────────────────────────────────────────────────
 
-    fn parse_declarator(&mut self) -> Option<ParsedDeclarator> {
+    fn parse_abstract_declarator(&mut self) -> Option<ParsedAbstractDeclarator> {
+        let mut pointers = Vec::new();
+        while self.peek_kind() == Some(TokenKind::Star) {
+            let star = self.advance().expect("peeked star");
+            let qualifiers = self.parse_qualifiers();
+            let end = self
+                .tokens
+                .get(self.pos.saturating_sub(1))
+                .map_or(star.span, |token| token.span);
+            pointers.push(DerivedDeclarator::Pointer {
+                qualifiers,
+                span: self.merge_span(star.span, end),
+            });
+        }
+
+        let grouped = self.peek_kind() == Some(TokenKind::LParen)
+            && matches!(
+                self.tokens.get(self.pos + 1).map(|token| token.kind),
+                Some(TokenKind::Star | TokenKind::LParen | TokenKind::LBracket)
+            );
+        let mut declarator = if grouped {
+            let open = self.advance().expect("peeked abstract grouping");
+            let mut inner = self.parse_abstract_declarator()?;
+            let close = self.expect(TokenKind::RParen)?;
+            inner.span = self.merge_span(open.span, close.span);
+            inner
+        } else {
+            let span = pointers
+                .first()
+                .map(derived_declarator_span)
+                .unwrap_or_else(|| self.span());
+            ParsedAbstractDeclarator {
+                derived: Vec::new(),
+                span,
+            }
+        };
+
+        loop {
+            match self.peek_kind() {
+                Some(TokenKind::LBracket) => {
+                    let open = self.advance().expect("peeked abstract array");
+                    if matches!(
+                        declarator.derived.last(),
+                        Some(DerivedDeclarator::Function { .. })
+                    ) {
+                        self.report("E1005", "invalid-declarator", open.span);
+                    }
+                    let bound = if self.peek_kind() == Some(TokenKind::RBracket) {
+                        ArrayBound::Unbounded
+                    } else if self.peek_kind() == Some(TokenKind::IntLiteral) {
+                        let token = self.advance().expect("peeked fixed array bound");
+                        match parse_int_literal(self.token_text(&token)) {
+                            Some(literal) => ArrayBound::Fixed(literal.value),
+                            None => {
+                                self.report("E1006", "invalid-integer-literal", token.span);
+                                ArrayBound::Variable
+                            }
+                        }
+                    } else {
+                        self.report("E1005", "unsupported-abstract-declarator", self.span());
+                        ArrayBound::Variable
+                    };
+                    let close = self.expect(TokenKind::RBracket)?;
+                    let layer_span = self.merge_span(open.span, close.span);
+                    declarator.derived.push(DerivedDeclarator::Array {
+                        bound,
+                        span: layer_span,
+                    });
+                    declarator.span = self.merge_span(declarator.span, layer_span);
+                }
+                Some(TokenKind::LParen) => {
+                    let open = self.advance().expect("peeked abstract function");
+                    if matches!(
+                        declarator.derived.last(),
+                        Some(DerivedDeclarator::Array { .. })
+                    ) {
+                        self.report("E1005", "invalid-declarator", open.span);
+                    }
+                    let outer_scope = self.current_scope;
+                    let parameter_scope =
+                        self.create_scope(ScopeKind::FunctionPrototype, Some(open.span));
+                    self.current_scope = parameter_scope;
+                    let parameters = self.parse_parameter_list();
+                    self.current_scope = outer_scope;
+                    let close = self.expect(TokenKind::RParen)?;
+                    let layer_span = self.merge_span(open.span, close.span);
+                    declarator.derived.push(DerivedDeclarator::Function {
+                        parameters,
+                        scope: parameter_scope,
+                        span: layer_span,
+                    });
+                    declarator.span = self.merge_span(declarator.span, layer_span);
+                }
+                _ => break,
+            }
+        }
+
+        if let Some(pointer) = pointers.first() {
+            declarator.span = self.merge_span(derived_declarator_span(pointer), declarator.span);
+        }
+        declarator.derived.extend(pointers);
+        if declarator.derived.is_empty() {
+            self.report("E1005", "unsupported-abstract-declarator", self.span());
+            None
+        } else {
+            Some(declarator)
+        }
+    }
+
+    fn parse_declarator(&mut self, function_definition_possible: bool) -> Option<ParsedDeclarator> {
         let mut pointers = Vec::new();
         while self.peek_kind() == Some(TokenKind::Star) {
             let star = self.advance().expect("peeked star");
@@ -1301,7 +1937,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
         } else if self.peek_kind() == Some(TokenKind::LParen) {
             let open = self.advance().expect("peeked left parenthesis");
-            let mut inner = self.parse_declarator()?;
+            let mut inner = self.parse_declarator(function_definition_possible)?;
             let close = self.expect(TokenKind::RParen)?;
             inner.span = self.merge_span(open.span, close.span);
             inner
@@ -1348,10 +1984,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     ) {
                         self.report("E1005", "invalid-declarator", open.span);
                     }
+                    let parameter_scope_kind = if function_definition_possible {
+                        self.upcoming_function_scope_kind()
+                    } else {
+                        ScopeKind::FunctionPrototype
+                    };
+                    let outer_scope = self.current_scope;
+                    let parameter_scope = self.create_scope(parameter_scope_kind, Some(open.span));
+                    self.current_scope = parameter_scope;
                     let parameters = self.parse_parameter_list();
+                    self.current_scope = outer_scope;
                     let close = self.expect(TokenKind::RParen)?;
                     declarator.derived.push(DerivedDeclarator::Function {
                         parameters,
+                        scope: parameter_scope,
                         span: self.merge_span(open.span, close.span),
                     });
                     declarator.span = self.merge_span(declarator.span, close.span);
@@ -1368,6 +2014,40 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         declarator.derived.extend(pointers);
         Some(declarator)
+    }
+
+    fn upcoming_function_scope_kind(&self) -> ScopeKind {
+        let mut depth = 1_usize;
+        let mut index = self.pos;
+        while let Some(token) = self.tokens.get(index) {
+            match token.kind {
+                TokenKind::LParen => depth += 1,
+                TokenKind::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        index += 1;
+                        // Parenthesized declarators may contribute closing
+                        // parentheses between the parameter list and body.
+                        while self.tokens.get(index).map(|token| token.kind)
+                            == Some(TokenKind::RParen)
+                        {
+                            index += 1;
+                        }
+                        return if self.tokens.get(index).map(|token| token.kind)
+                            == Some(TokenKind::LBrace)
+                        {
+                            ScopeKind::Function
+                        } else {
+                            ScopeKind::FunctionPrototype
+                        };
+                    }
+                }
+                TokenKind::Eof => break,
+                _ => {}
+            }
+            index += 1;
+        }
+        ScopeKind::FunctionPrototype
     }
 
     fn parse_parameter_list(&mut self) -> ParameterSyntax {
@@ -1395,35 +2075,76 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 break;
             };
             let start = specifier.surface.span();
-            let declarator =
+            let (name, derived, written, end) =
                 if matches!(self.peek_kind(), Some(TokenKind::Comma | TokenKind::RParen)) {
-                    None
+                    (
+                        None,
+                        Vec::new(),
+                        WrittenDeclarator {
+                            layers: Vec::new(),
+                            span: start,
+                        },
+                        start,
+                    )
                 } else {
-                    self.parse_declarator()
+                    let declarator_start = self.pos;
+                    let error_checkpoint = self.error_count;
+                    match self.parse_declarator(false) {
+                        Some(declarator) => {
+                            let written = self.written_declarator(&declarator);
+                            (
+                                Some(declarator.name),
+                                declarator.derived,
+                                written,
+                                declarator.span,
+                            )
+                        }
+                        None if self.error_count == error_checkpoint => {
+                            // A name-less declarator begins with the same pointer
+                            // and parenthesis tokens as a named declarator. Retry
+                            // from the exact token checkpoint with the bounded
+                            // abstract grammar instead of silently dropping the
+                            // consumed layers.
+                            self.pos = declarator_start;
+                            if let Some(declarator) = self.parse_abstract_declarator() {
+                                let written = self.written_abstract_declarator(&declarator);
+                                (None, declarator.derived, written, declarator.span)
+                            } else {
+                                (
+                                    None,
+                                    Vec::new(),
+                                    WrittenDeclarator {
+                                        layers: Vec::new(),
+                                        span: start,
+                                    },
+                                    start,
+                                )
+                            }
+                        }
+                        None => (
+                            None,
+                            Vec::new(),
+                            WrittenDeclarator {
+                                layers: Vec::new(),
+                                span: start,
+                            },
+                            start,
+                        ),
+                    }
                 };
-            let unadjusted = declarator
-                .as_ref()
-                .map_or(specifier.surface.type_id(), |decl| {
-                    self.apply_declarator(specifier.surface.type_id(), &decl.derived)
-                });
+            let unadjusted = self.apply_declarator(specifier.surface.type_id(), &derived);
             let ty = self.adjust_parameter_type(unadjusted);
-            let end = declarator.as_ref().map_or(start, |decl| decl.span);
             let span = self.merge_span(start, end);
             if let Some(event) = specifier.tag_event {
                 let declaration = self.finish_tag_event(event, span);
                 self.side_declarations.push(declaration);
             }
             params.push(ParameterDecl {
-                name: declarator.as_ref().map(|decl| decl.name.clone()),
+                symbol: None,
+                name,
                 ty,
                 specifier: specifier.surface,
-                written: declarator.as_ref().map_or(
-                    WrittenDeclarator {
-                        layers: Vec::new(),
-                        span: start,
-                    },
-                    |decl| self.written_declarator(decl),
-                ),
+                written,
                 span,
             });
             if !self.match_kind(TokenKind::Comma) {
@@ -1486,9 +2207,23 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn written_declarator(&self, declarator: &ParsedDeclarator) -> WrittenDeclarator {
+        self.written_derived(&declarator.derived, declarator.span)
+    }
+
+    fn written_abstract_declarator(
+        &self,
+        declarator: &ParsedAbstractDeclarator,
+    ) -> WrittenDeclarator {
+        self.written_derived(&declarator.derived, declarator.span)
+    }
+
+    fn written_derived(
+        &self,
+        derived: &[DerivedDeclarator],
+        span: SourceSpan,
+    ) -> WrittenDeclarator {
         WrittenDeclarator {
-            layers: declarator
-                .derived
+            layers: derived
                 .iter()
                 .map(|layer| match layer {
                     DerivedDeclarator::Pointer { qualifiers, span } => {
@@ -1506,7 +2241,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     }
                 })
                 .collect(),
-            span: declarator.span,
+            span,
         }
     }
 
@@ -1556,7 +2291,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             TokenKind::Goto => self.parse_goto_statement(),
             TokenKind::Case => self.parse_case_statement(),
             TokenKind::Default => self.parse_default_statement(),
-            TokenKind::LBrace => Some(self.parse_compound_statement()),
+            TokenKind::LBrace => Some(self.parse_compound_statement(true)),
             TokenKind::Semicolon => {
                 let semi = self.advance().unwrap();
                 Some(self.alloc_node(CHirStmt::Null(semi.span)))
@@ -1637,6 +2372,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn parse_for_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
         let keyword = self.advance().expect("peeked for");
+        let outer_scope = self.current_scope;
+        self.current_scope = self.create_scope(ScopeKind::For, Some(keyword.span));
+        let result = self.parse_for_statement_in_scope(keyword);
+        self.current_scope = outer_scope;
+        result
+    }
+
+    fn parse_for_statement_in_scope(&mut self, keyword: Token) -> Option<&'arena CHirStmt<'arena>> {
         self.expect(TokenKind::LParen)?;
 
         let initializer = if self.match_kind(TokenKind::Semicolon) {
@@ -1722,9 +2465,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some(self.alloc_node(CHirStmt::Default(nested, span)))
     }
 
-    fn parse_compound_statement(&mut self) -> &'arena CHirStmt<'arena> {
+    fn parse_compound_statement(&mut self, create_block_scope: bool) -> &'arena CHirStmt<'arena> {
         let lbrace = self.expect(TokenKind::LBrace).unwrap();
         let start_span = lbrace.span;
+        let outer_scope = self.current_scope;
+        if create_block_scope {
+            self.current_scope = self.create_scope(ScopeKind::Block, Some(lbrace.span));
+        }
         let mut items = Vec::new();
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
             let before = self.pos;
@@ -1750,6 +2497,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         };
         let end = rbrace.as_ref().map_or(start_span, |token| token.span);
         let span = self.merge_span(start_span, end);
+        if create_block_scope {
+            self.current_scope = outer_scope;
+        }
         self.alloc_node(CHirStmt::Compound(items, span))
     }
 
@@ -2015,8 +2765,26 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 CHirExpr::Lit(literal, tok.span)
             }
             TokenKind::Identifier => {
-                let name = self.token_text(&tok).to_owned();
-                CHirExpr::Ident(name, tok.span)
+                let spelling = self.token_text(&tok).to_owned();
+                let Some(symbol) = self
+                    .symbols
+                    .resolve(self.current_scope, &spelling)
+                    .expect("the parser current scope is always live")
+                else {
+                    self.report(
+                        "E2001",
+                        format!("undeclared-identifier: {spelling}"),
+                        tok.span,
+                    );
+                    return None;
+                };
+                let facts = self.facts_for_symbol(symbol);
+                CHirExpr::Ident {
+                    symbol,
+                    spelling,
+                    facts,
+                    span: tok.span,
+                }
             }
             TokenKind::FloatLiteral => {
                 let Some(literal) = parse_float_literal(self.token_text(&tok)) else {
@@ -2720,7 +3488,17 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
         CHirExpr::FloatLit(literal, _) => CHirExpr::FloatLit(*literal, paren_span),
         CHirExpr::CharLit(literal, _) => CHirExpr::CharLit(*literal, paren_span),
         CHirExpr::StringLit(literal, _) => CHirExpr::StringLit(literal.clone(), paren_span),
-        CHirExpr::Ident(name, _) => CHirExpr::Ident(name.clone(), paren_span),
+        CHirExpr::Ident {
+            symbol,
+            spelling,
+            facts,
+            ..
+        } => CHirExpr::Ident {
+            symbol: *symbol,
+            spelling: spelling.clone(),
+            facts: *facts,
+            span: paren_span,
+        },
         CHirExpr::Unary(op, operand, _) => CHirExpr::Unary(*op, operand, paren_span),
         CHirExpr::Binary(op, lhs, rhs, _) => CHirExpr::Binary(*op, lhs, rhs, paren_span),
         CHirExpr::Ternary(condition, when_true, when_false, _) => {
@@ -2924,10 +3702,10 @@ mod tests {
     #[test]
     fn parser_handles_assignment() {
         let arena = Arena::default();
-        let expr = parse_expr("x = 5;", &arena);
+        let expr = parse_expr("sink = 5;", &arena);
         match expr {
             CHirExpr::Assign(lhs, rhs, _) => {
-                assert!(matches!(*lhs, CHirExpr::Ident(_, _)));
+                assert!(matches!(*lhs, CHirExpr::Ident { .. }));
                 assert!(matches!(*rhs, CHirExpr::Lit(_, _)));
             }
             _ => panic!("expected assignment"),
@@ -3030,7 +3808,10 @@ mod tests {
         assert!(parser.had_error());
         assert!(unit.is_empty());
         assert!(
-            !parser.enum_constants.contains_key("MUST_NOT_LEAK"),
+            unit.symbols()
+                .resolve(unit.symbols().file_scope(), "MUST_NOT_LEAK")
+                .unwrap()
+                .is_none(),
             "a rejected declaration must roll back ordinary-name bindings"
         );
     }

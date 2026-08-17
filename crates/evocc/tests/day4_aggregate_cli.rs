@@ -16,7 +16,7 @@ const DAY_1_TO_3_CONTROLS: &[PositiveCase] = &[
     },
     PositiveCase {
         id: "control.expression",
-        source: "int sink = left + middle * right;\n",
+        source: "int left; int middle; int right; int sink = left + middle * right;\n",
     },
     PositiveCase {
         id: "control.function_declarator",

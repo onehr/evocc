@@ -159,7 +159,7 @@ fn assert_expression_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         | CHirExpr::FloatLit(..)
         | CHirExpr::CharLit(..)
         | CHirExpr::StringLit(..)
-        | CHirExpr::Ident(..)
+        | CHirExpr::Ident { .. }
         | CHirExpr::SizeOf(..)
         | CHirExpr::AlignOf(..) => {}
         CHirExpr::Unary(_, child, _)
@@ -311,7 +311,7 @@ fn binary_name(operator: BinaryOp) -> &'static str {
 fn expression_fingerprint(expression: &CHirExpr<'_>) -> String {
     match expression {
         CHirExpr::Lit(literal, _) => format!("int({})", literal.value),
-        CHirExpr::Ident(name, _) => format!("id({name})"),
+        CHirExpr::Ident { spelling, .. } => format!("id({spelling})"),
         CHirExpr::Binary(operator, left, right, _) => format!(
             "binary({},{},{})",
             binary_name(*operator),

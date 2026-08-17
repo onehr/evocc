@@ -159,7 +159,12 @@ pub enum CHirExpr<'arena> {
     FloatLit(FloatLit, SourceSpan),
     CharLit(CharLit, SourceSpan),
     StringLit(StringLit, SourceSpan),
-    Ident(String, SourceSpan),
+    Ident {
+        symbol: SymbolId,
+        spelling: String,
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
     Unary(UnaryOp, &'arena CHirExpr<'arena>, SourceSpan),
     Binary(
         BinaryOp,
@@ -210,7 +215,7 @@ impl CHirExpr<'_> {
             | Self::FloatLit(_, span)
             | Self::CharLit(_, span)
             | Self::StringLit(_, span)
-            | Self::Ident(_, span)
+            | Self::Ident { span, .. }
             | Self::Unary(_, _, span)
             | Self::Binary(_, _, _, span)
             | Self::Ternary(_, _, _, span)
@@ -392,6 +397,9 @@ pub struct WrittenDeclarator {
 
 #[derive(Debug, Clone)]
 pub struct ParameterDecl {
+    /// Named parameters have an ordinary-identifier binding. Unnamed
+    /// prototype parameters deliberately have no symbol.
+    pub symbol: Option<SymbolId>,
     pub name: Option<SpannedName>,
     pub ty: TypeId,
     pub specifier: TypeSpecifier,
@@ -420,6 +428,7 @@ pub struct RecordMember<'arena> {
 
 #[derive(Debug, Clone)]
 pub struct EnumeratorDecl<'arena> {
+    pub symbol: SymbolId,
     pub name: SpannedName,
     pub value: i64,
     pub written_value: Option<&'arena CHirExpr<'arena>>,
@@ -437,6 +446,7 @@ pub enum TagMembers<'arena> {
 #[derive(Debug, Clone)]
 pub struct TagDecl<'arena> {
     pub tag: TagId,
+    pub scope: ScopeId,
     pub name: Option<SpannedName>,
     pub members: TagMembers<'arena>,
     /// The containing declaration, including its terminating semicolon.
@@ -448,6 +458,7 @@ pub struct TagDecl<'arena> {
 
 #[derive(Debug, Clone)]
 pub struct ObjectDecl<'arena> {
+    pub symbol: SymbolId,
     pub name: SpannedName,
     pub ty: TypeId,
     pub specifier: TypeSpecifier,
@@ -459,6 +470,7 @@ pub struct ObjectDecl<'arena> {
 
 #[derive(Debug, Clone)]
 pub struct FunctionDecl<'arena> {
+    pub symbol: SymbolId,
     pub name: SpannedName,
     /// The complete canonical function type, not merely its return type.
     pub ty: TypeId,
@@ -472,6 +484,7 @@ pub struct FunctionDecl<'arena> {
 
 #[derive(Debug, Clone)]
 pub struct TypedefDecl {
+    pub symbol: SymbolId,
     pub name: SpannedName,
     pub ty: TypeId,
     pub specifier: TypeSpecifier,
@@ -507,14 +520,20 @@ impl CHirDecl<'_> {
 pub struct CHirUnit<'arena> {
     declarations: Vec<&'arena CHirDecl<'arena>>,
     types: TypeInterner,
+    symbols: SymbolTable,
 }
 
 impl<'arena> CHirUnit<'arena> {
     #[must_use]
-    pub fn new(declarations: Vec<&'arena CHirDecl<'arena>>, types: TypeInterner) -> Self {
+    pub fn new(
+        declarations: Vec<&'arena CHirDecl<'arena>>,
+        types: TypeInterner,
+        symbols: SymbolTable,
+    ) -> Self {
         Self {
             declarations,
             types,
+            symbols,
         }
     }
 
@@ -526,6 +545,11 @@ impl<'arena> CHirUnit<'arena> {
     #[must_use]
     pub fn types(&self) -> &TypeInterner {
         &self.types
+    }
+
+    #[must_use]
+    pub fn symbols(&self) -> &SymbolTable {
+        &self.symbols
     }
 
     #[must_use]
@@ -569,7 +593,7 @@ use std::collections::HashMap;
 pub fn eval_expr(expr: &CHirExpr<'_>, vars: &mut HashMap<String, i64>) -> i64 {
     match expr {
         CHirExpr::Lit(lit, _) => lit.value as i64,
-        CHirExpr::Ident(name, _) => *vars.get(name).unwrap_or(&0),
+        CHirExpr::Ident { spelling, .. } => *vars.get(spelling).unwrap_or(&0),
         CHirExpr::Unary(op, inner, _) => {
             let v = eval_expr(inner, vars);
             match op {
@@ -618,8 +642,8 @@ pub fn eval_expr(expr: &CHirExpr<'_>, vars: &mut HashMap<String, i64>) -> i64 {
         }
         CHirExpr::Assign(lhs, rhs, _) => {
             let r = eval_expr(rhs, vars);
-            if let CHirExpr::Ident(name, _) = &**lhs {
-                vars.insert(name.clone(), r);
+            if let CHirExpr::Ident { spelling, .. } = &**lhs {
+                vars.insert(spelling.clone(), r);
             }
             r
         }
@@ -730,12 +754,41 @@ mod tests {
         arena_alloc(arena, declaration)
     }
 
+    fn test_symbol(spelling: &str, ty: TypeId, data: SymbolData) -> SymbolId {
+        let mut symbols = SymbolTable::new();
+        symbols
+            .declare(symbols.file_scope(), spelling, data, ty, test_span())
+            .unwrap()
+    }
+
+    fn ident<'arena>(spelling: &str, ty: TypeId) -> CHirExpr<'arena> {
+        CHirExpr::Ident {
+            symbol: test_symbol(
+                spelling,
+                ty,
+                SymbolData::Object {
+                    storage: StorageClass::None,
+                },
+            ),
+            spelling: spelling.into(),
+            facts: ExprFacts::lvalue(ty, true, true).unwrap(),
+            span: test_span(),
+        }
+    }
+
     fn object_decl<'arena>(
         name_spelling: &str,
         ty: TypeId,
         initializer: Option<&'arena CHirExpr<'arena>>,
     ) -> CHirDecl<'arena> {
         CHirDecl::Object(ObjectDecl {
+            symbol: test_symbol(
+                name_spelling,
+                ty,
+                SymbolData::Object {
+                    storage: StorageClass::None,
+                },
+            ),
             name: name(name_spelling),
             ty,
             specifier: builtin_specifier(ty),
@@ -751,10 +804,10 @@ mod tests {
         let arena = Arena::default();
         let s = test_span();
         let d = FileId::DUMMY;
-        let id = arena_expr(&arena, CHirExpr::Ident("x".into(), s));
-        let st = arena_stmt(&arena, CHirStmt::Null(s));
         let mut types = TypeInterner::new();
         let int_id = int_type_id(&mut types);
+        let id = arena_expr(&arena, ident("x", int_id));
+        let st = arena_stmt(&arena, CHirStmt::Null(s));
         let function_id = function_type_id(&mut types, int_id);
         let tag_id = types.declare_tag(TagKind::Struct, Some("S".into()));
         let dc = arena_decl(&arena, object_decl("local", int_id, None));
@@ -798,7 +851,7 @@ mod tests {
                     s,
                 ),
             ),
-            arena_expr(&arena, CHirExpr::Ident("a".into(), s)),
+            arena_expr(&arena, ident("a", int_id)),
             arena_expr(&arena, CHirExpr::Unary(UnaryOp::Neg, id, s)),
             arena_expr(&arena, CHirExpr::Binary(BinaryOp::Add, id, id, s)),
             arena_expr(&arena, CHirExpr::Ternary(id, id, id, s)),
@@ -870,6 +923,13 @@ mod tests {
             arena_decl(
                 &arena,
                 CHirDecl::Function(FunctionDecl {
+                    symbol: test_symbol(
+                        "f",
+                        function_id,
+                        SymbolData::Function {
+                            storage: StorageClass::None,
+                        },
+                    ),
                     name: name("f"),
                     ty: function_id,
                     return_specifier: builtin_specifier(int_id),
@@ -887,6 +947,7 @@ mod tests {
                 &arena,
                 CHirDecl::Tag(TagDecl {
                     tag: tag_id,
+                    scope: SymbolTable::new().file_scope(),
                     name: Some(name("S")),
                     members: TagMembers::Incomplete,
                     span: s,
@@ -896,6 +957,7 @@ mod tests {
             arena_decl(
                 &arena,
                 CHirDecl::Typedef(TypedefDecl {
+                    symbol: test_symbol("T", int_id, SymbolData::Typedef),
                     name: name("T"),
                     ty: int_id,
                     specifier: builtin_specifier(int_id),
@@ -920,7 +982,7 @@ mod tests {
         let first = arena_decl(&arena, object_decl("a", int_id, None));
         let second = arena_decl(&arena, object_decl("b", int_id, None));
 
-        let unit = CHirUnit::new(vec![first, second], types);
+        let unit = CHirUnit::new(vec![first, second], types, SymbolTable::new());
 
         assert_eq!(unit.len(), 2);
         assert!(std::ptr::eq(unit.declarations()[0], first));
@@ -931,7 +993,9 @@ mod tests {
     fn nested_exprs_compile() {
         let arena = Arena::default();
         let s = test_span();
-        let id = arena_expr(&arena, CHirExpr::Ident("x".into(), s));
+        let mut types = TypeInterner::new();
+        let int_id = int_type_id(&mut types);
+        let id = arena_expr(&arena, ident("x", int_id));
         let unary = arena_expr(&arena, CHirExpr::Unary(UnaryOp::Neg, id, s));
         let call = arena_expr(&arena, CHirExpr::Call(id, vec![id], s));
         let nested = arena_expr(&arena, CHirExpr::Binary(BinaryOp::Add, unary, call, s));
@@ -942,7 +1006,9 @@ mod tests {
     fn nested_stmts_compile() {
         let arena = Arena::default();
         let s = test_span();
-        let id = arena_expr(&arena, CHirExpr::Ident("x".into(), s));
+        let mut types = TypeInterner::new();
+        let int_id = int_type_id(&mut types);
+        let id = arena_expr(&arena, ident("x", int_id));
         let st = arena_stmt(&arena, CHirStmt::Expr(id, s));
         let compound = arena_stmt(
             &arena,
@@ -958,7 +1024,9 @@ mod tests {
         let arena = Arena::default();
         let s = test_span();
         let st = arena_stmt(&arena, CHirStmt::Null(s));
-        let id = arena_expr(&arena, CHirExpr::Ident("x".into(), s));
+        let mut types = TypeInterner::new();
+        let int_id = int_type_id(&mut types);
+        let id = arena_expr(&arena, ident("x", int_id));
 
         let for_all = arena_stmt(
             &arena,

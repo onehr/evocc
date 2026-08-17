@@ -326,8 +326,6 @@ def statement_models(seed: str, column: int) -> tuple[StatementModel, ...]:
     v = generated_identifier(seed, "value", column)
     local = generated_identifier(seed, "local", column)
     label = generated_identifier(seed, "label", column)
-    callee = generated_identifier(seed, "callee", column)
-    obj = generated_identifier(seed, "record", column)
     member = generated_identifier(seed, "member", column)
     a = generated_literal(seed, "literal_a", column)
     b = generated_literal(seed, "literal_b", column)
@@ -364,10 +362,10 @@ def statement_models(seed: str, column: int) -> tuple[StatementModel, ...]:
         stmt("block.declaration", f"{{ {{ int {local}; {local} = {v}; }} }}", f"compound[compound[decl(object({local},int)),expr(assign(id({local}),id({v})))]]", ("stmt.compound", f"{{ int {local}; {local} = {v}; }}", 0), ("decl.block", f"int {local};", 0)),
         stmt("block.initialized_declaration", f"{{ int {local} = {a}; return {local}; }}", f"compound[decl(object({local},int,init=int({a}))),return(id({local}))]", ("decl.block", f"int {local} = {a};", 0), ("stmt.return", f"return {local};", 0)),
         stmt("expression.comma", f"{{ ({v} = {a}, {v} = {b}); }}", f"compound[expr(comma(assign(id({v}),int({a})),assign(id({v}),int({b}))))]", ("stmt.expr", f"({v} = {a}, {v} = {b});", 0)),
-        stmt("expression.call", f"{{ {callee}({v}, {a}); }}", f"compound[expr(call(id({callee}),[id({v}),int({a})]))]", ("stmt.expr", f"{callee}({v}, {a});", 0)),
-        stmt("expression.member", f"{{ {obj}.{member}; }}", f"compound[expr(member(id({obj}),{member}))]", ("stmt.expr", f"{obj}.{member};", 0)),
-        stmt("expression.pointer_member", f"{{ {obj}->{member}; }}", f"compound[expr(ptr_member(id({obj}),{member}))]", ("stmt.expr", f"{obj}->{member};", 0)),
-        stmt("expression.index", f"{{ {obj}[{v}]; }}", f"compound[expr(index(id({obj}),id({v})))]", ("stmt.expr", f"{obj}[{v}];", 0)),
+        stmt("expression.call", f"{{ {v}({v}, {a}); }}", f"compound[expr(call(id({v}),[id({v}),int({a})]))]", ("stmt.expr", f"{v}({v}, {a});", 0)),
+        stmt("expression.member", f"{{ {v}.{member}; }}", f"compound[expr(member(id({v}),{member}))]", ("stmt.expr", f"{v}.{member};", 0)),
+        stmt("expression.pointer_member", f"{{ {v}->{member}; }}", f"compound[expr(ptr_member(id({v}),{member}))]", ("stmt.expr", f"{v}->{member};", 0)),
+        stmt("expression.index", f"{{ {v}[{v}]; }}", f"compound[expr(index(id({v}),id({v})))]", ("stmt.expr", f"{v}[{v}];", 0)),
         stmt("expression.ternary", f"{{ {v} ? {a} : {b}; }}", f"compound[expr(ternary(id({v}),int({a}),int({b})))]", ("stmt.expr", f"{v} ? {a} : {b};", 0)),
         stmt("expression.sizeof_type", "{ sizeof(int); }", "compound[expr(sizeof(type:int))]", ("stmt.expr", "sizeof(int);", 0)),
         stmt("expression.sizeof_expr", f"{{ sizeof {v}; }}", f"compound[expr(sizeof_expr(id({v})))]", ("stmt.expr", f"sizeof {v};", 0)),
@@ -1572,7 +1570,11 @@ def valid_cases(seed: str = DEFAULT_SEED) -> list[ValidCase]:
             declaration = declaration_models(seed, declaration_index)[declaration_index]
             statement = statement_models(seed, statement_index)[statement_index]
             function_name = generated_identifier(seed, "function", declaration_index, statement_index)
-            parameter_name = generated_identifier(seed, "parameter", declaration_index, statement_index)
+            # Every ordinary identifier expression in the statement axis now
+            # resolves to this real function parameter (or to a local declared
+            # by that statement).  The old, independent parameter spelling
+            # left 31/40 statement axes with undeclared free identifiers.
+            parameter_name = generated_identifier(seed, "value", statement_index)
             prefix = " ".join(declaration.parts)
             function = f"int {function_name}(int {parameter_name}) {statement.body}"
             source = f"{prefix} {function}\n"

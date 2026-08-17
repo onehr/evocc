@@ -5,7 +5,10 @@ use std::time::{Duration, Instant};
 
 const DAY_1_TO_3_CONTROLS: &[(&str, &str)] = &[
     ("object declaration", "int value;"),
-    ("expression precedence", "int sink = left + middle * right;"),
+    (
+        "expression precedence",
+        "int left; int middle; int right; int sink = left + middle * right;",
+    ),
     ("function declarator", "int compute(int left, long right);"),
 ];
 

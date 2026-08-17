@@ -123,6 +123,12 @@ const EXPRESSIONS: &[ExpressionCase] = &[
     },
 ];
 
+const EXPRESSION_BINDINGS: &str = concat!(
+    "int seed; int callee; int left; int right; int items; int index; ",
+    "int object; int pointer; int counter; int value; int middle; ",
+    "int alpha; int beta; int gamma; int delta; int condition; int one; int two; "
+);
+
 const DECLARATORS: &[DeclaratorCase] = &[
     DeclaratorCase {
         id: "decl.object",
@@ -202,7 +208,7 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
         CHirExpr::FloatLit(_, _) => "float".into(),
         CHirExpr::CharLit(_, _) => "char".into(),
         CHirExpr::StringLit(_, _) => "string".into(),
-        CHirExpr::Ident(name, _) => format!("id({name})"),
+        CHirExpr::Ident { spelling, .. } => format!("id({spelling})"),
         CHirExpr::Unary(op, operand, _) => {
             format!(
                 "unary({},{})",
@@ -435,11 +441,10 @@ fn expression_precedence_and_associativity_matrix() {
             "duplicate expression bytes for {}",
             case.id
         );
-        let source = format!("int sink = {};", case.expression);
+        let source = format!("{EXPRESSION_BINDINGS}int sink = {};", case.expression);
         let arena = Arena::default();
         let unit = parse_unit(&source, &arena);
-        assert_eq!(unit.len(), 1, "case {}: {source}", case.id);
-        let CHirDecl::Object(object) = &unit[0] else {
+        let CHirDecl::Object(object) = unit.declarations().last().expect("sink declaration") else {
             panic!("case {} did not produce one initialized object", case.id);
         };
         let init = object

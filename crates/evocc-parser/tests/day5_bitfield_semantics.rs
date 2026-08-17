@@ -28,7 +28,7 @@ fn first_diagnostic(source: &str) -> ParseDiagnostic {
 fn assert_diagnostic(source: &str, code: &'static str, message: &str, highlighted_source: &str) {
     let diagnostic = first_diagnostic(source);
     let byte_start = source
-        .find(highlighted_source)
+        .rfind(highlighted_source)
         .unwrap_or_else(|| panic!("missing highlight {highlighted_source:?}"));
     assert_eq!(diagnostic.code, code);
     assert_eq!(diagnostic.message, message);
@@ -60,9 +60,15 @@ fn bit_field_constraint_failures_have_stable_codes_messages_and_spans() {
             "-1",
         ),
         (
-            "struct S { unsigned int x : limit; };",
+            "int limit; struct S { unsigned int x : limit; };",
             "E1303",
             "bit-field-width-is-not-an-integer-constant",
+            "limit",
+        ),
+        (
+            "struct S { unsigned int x : limit; };",
+            "E2001",
+            "undeclared-identifier: limit",
             "limit",
         ),
         (
@@ -168,7 +174,7 @@ fn short_circuit_and_conditional_constant_expressions_do_not_evaluate_dead_arms(
     let source = concat!(
         "struct Constants { ",
         "unsigned int : 0 && (1 / 0); ",
-        "unsigned int b : 1 ? 7 : limit; ",
+        "unsigned int b : 1 ? 7 : (1 / 0); ",
         "};"
     );
     let arena = Arena::default();
