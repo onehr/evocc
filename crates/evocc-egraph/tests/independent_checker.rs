@@ -1,9 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use evocc_egraph::{EClassId, Egraph, OpId};
+use evocc_egraph::{
+    EClassId, Egraph, EgraphSnapshot, MergeOutcome, NodeId, OpId, Pattern, PatternChild,
+    RuleSnapshot,
+};
 
 #[derive(Clone)]
 struct NodeRecord {
+    id: NodeId,
     op: OpId,
     children: Vec<EClassId>,
     owner: EClassId,
@@ -99,18 +103,70 @@ fn insert_traced(
     op: OpId,
     children: Vec<EClassId>,
 ) -> EClassId {
-    let before = graph.enodes.len();
-    let owner = graph.insert(op, children.clone());
-    match graph.enodes.len().checked_sub(before) {
-        Some(1) => trace.nodes.push(NodeRecord {
+    let before = graph.audit_snapshot();
+    let outcome = graph.insert_with_node(op, children.clone());
+    let after = graph.audit_snapshot();
+    match (
+        outcome.inserted,
+        after.nodes.len().checked_sub(before.nodes.len()),
+    ) {
+        (true, Some(1)) => trace.nodes.push(NodeRecord {
+            id: outcome.node,
             op,
             children,
-            owner,
+            owner: outcome.eclass,
         }),
-        Some(0) => {}
-        other => panic!("one insertion changed the node arena by {other:?}"),
+        (false, Some(0)) => {}
+        other => panic!("one insertion reported an inconsistent node-arena change: {other:?}"),
     }
-    owner
+    assert!(
+        after.nodes.iter().any(|node| node.id == outcome.node),
+        "insert outcome references a missing stable node"
+    );
+    outcome.eclass
+}
+
+fn merge_validated(graph: &mut Egraph, left: EClassId, right: EClassId) {
+    let lhs_node = graph
+        .node_witness(left)
+        .expect("left structural-test class has a node witness");
+    let rhs_node = graph
+        .node_witness(right)
+        .expect("right structural-test class has a node witness");
+    let lhs = graph.node_snapshot(lhs_node).expect("lhs test snapshot");
+    let rhs = graph.node_snapshot(rhs_node).expect("rhs test snapshot");
+    let rule = RuleSnapshot {
+        id: graph
+            .proof_certificate()
+            .rules
+            .last()
+            .map_or(1, |entry| entry.id + 1),
+        lhs: Pattern {
+            op: lhs.op,
+            children: lhs
+                .original_children
+                .iter()
+                .copied()
+                .map(PatternChild::Exact)
+                .collect(),
+        },
+        rhs: Pattern {
+            op: rhs.op,
+            children: rhs
+                .original_children
+                .iter()
+                .copied()
+                .map(PatternChild::Exact)
+                .collect(),
+        },
+    };
+    graph
+        .register_rule(rule.clone())
+        .expect("structural-test rule is valid");
+    let outcome = graph
+        .merge_rewrite(rule.id, lhs_node, rhs_node, Vec::new())
+        .expect("structural-test rewrite validates before merging");
+    assert!(matches!(outcome, MergeOutcome::Merged(_)));
 }
 
 fn assert_partition(graph: &mut Egraph, trace: &Trace, oracle: &mut Dsu) -> usize {
@@ -138,6 +194,7 @@ type ParentEntry = (OpId, usize, EClassId);
 
 fn structural_snapshot(
     graph: &mut Egraph,
+    snapshot: &EgraphSnapshot,
     trace: &Trace,
     oracle: &mut Dsu,
 ) -> (
@@ -145,7 +202,7 @@ fn structural_snapshot(
     BTreeSet<NodeKey>,
     BTreeMap<EClassId, Vec<ParentEntry>>,
 ) {
-    assert!(graph.dirty.is_empty(), "rebuild left pending dirty work");
+    assert!(snapshot.dirty.is_empty(), "rebuild left pending dirty work");
 
     let owners = trace
         .nodes
@@ -157,46 +214,82 @@ fn structural_snapshot(
         .map(|&owner| graph.find(owner))
         .collect::<Vec<_>>();
 
-    let class_roots = (0..graph.eclasses.len())
-        .map(|index| graph.find(index as EClassId))
+    let class_roots = snapshot
+        .classes
+        .iter()
+        .enumerate()
+        .map(|(index, class)| {
+            assert_eq!(
+                class.id, index as EClassId,
+                "snapshot class order/id drifted"
+            );
+            graph.find(class.id)
+        })
         .collect::<Vec<_>>();
-    let mut node_owners = vec![None; graph.enodes.len()];
-    for (index, class) in graph.eclasses.iter().enumerate() {
+    let nodes_by_id = snapshot
+        .nodes
+        .iter()
+        .map(|node| (node.id, node))
+        .collect::<BTreeMap<_, _>>();
+    assert_eq!(
+        nodes_by_id.len(),
+        snapshot.nodes.len(),
+        "snapshot repeats a stable node id"
+    );
+    let mut node_owners = BTreeMap::new();
+    for (index, class) in snapshot.classes.iter().enumerate() {
         let root = class_roots[index];
-        if root != index as EClassId {
+        if root != class.id {
             assert!(
                 class.nodes.is_empty(),
-                "retired class {index} retains nodes"
+                "retired class {} retains nodes",
+                class.id
             );
             assert!(
                 class.parents.is_empty(),
-                "retired class {index} retains parents"
+                "retired class {} retains parents",
+                class.id
             );
             continue;
         }
         for &node_id in &class.nodes {
-            let slot = node_owners
-                .get_mut(node_id as usize)
-                .expect("e-class references an in-range node");
+            let node = nodes_by_id
+                .get(&node_id)
+                .expect("e-class references a present stable node");
             assert!(
-                slot.replace(root).is_none(),
-                "node {node_id} has multiple owners"
+                node_owners.insert(node_id, root).is_none(),
+                "node {node_id:?} has multiple owners"
+            );
+            assert_eq!(
+                node.owner, root,
+                "node {node_id:?} owner disagrees with class membership"
             );
         }
     }
-    assert!(
-        node_owners.iter().all(Option::is_some),
+    assert_eq!(
+        node_owners.len(),
+        snapshot.nodes.len(),
         "every live arena node has exactly one canonical owner"
     );
 
     let mut actual_keys = BTreeSet::new();
     let mut expected_parents: BTreeMap<EClassId, Vec<ParentEntry>> = BTreeMap::new();
-    for (node_id, node) in graph.enodes.iter().enumerate() {
-        let owner = node_owners[node_id].expect("node owner");
+    for node in &snapshot.nodes {
+        let node_id = node.id;
+        let owner = node_owners[&node_id];
+        let owner_root = *class_roots
+            .get(node.owner as usize)
+            .expect("node owner is an in-range class");
+        assert_eq!(
+            node.owner, owner_root,
+            "node {node_id:?} has a non-canonical owner"
+        );
         let mut children = Vec::new();
         for (position, &child) in node.children.iter().enumerate() {
-            let canonical = class_roots[child as usize];
-            assert_eq!(child, canonical, "node {node_id} retains a stale child");
+            let canonical = *class_roots
+                .get(child as usize)
+                .expect("node child is an in-range class");
+            assert_eq!(child, canonical, "node {node_id:?} retains a stale child");
             children.push(canonical);
             expected_parents
                 .entry(canonical)
@@ -224,16 +317,15 @@ fn structural_snapshot(
         "live canonical node-key set drifted"
     );
 
-    let live_nodes = graph
-        .enodes
+    let live_nodes = snapshot
+        .nodes
         .iter()
-        .enumerate()
-        .map(|(node_id, node)| {
+        .map(|node| {
             (
-                node_id,
+                node.id,
                 node.op,
                 node.children.clone(),
-                node_owners[node_id].expect("node owner"),
+                node_owners[&node.id],
             )
         })
         .collect::<Vec<_>>();
@@ -261,16 +353,20 @@ fn structural_snapshot(
         assert_eq!(
             graph.find(owner),
             graph.find(witness.owner),
-            "node {node_id} key belongs to the wrong production class"
+            "node {node_id:?} key belongs to the wrong production class"
+        );
+        assert_eq!(
+            node_id, witness.id,
+            "canonical key is attached to the wrong stable node"
         );
     }
 
     let mut actual_parents = BTreeMap::new();
-    for (index, class) in graph.eclasses.iter().enumerate() {
-        if class_roots[index] == index as EClassId {
+    for (index, class) in snapshot.classes.iter().enumerate() {
+        if class_roots[index] == class.id {
             let mut parents = class.parents.clone();
             parents.sort_unstable();
-            actual_parents.insert(index as EClassId, parents);
+            actual_parents.insert(class.id, parents);
         }
     }
     for parents in expected_parents.values_mut() {
@@ -290,38 +386,52 @@ fn structural_snapshot(
 
 fn assert_hashcons_probe(graph: &mut Egraph, keys: &BTreeSet<NodeKey>) {
     for (op, children) in keys {
-        let before = graph.enodes.len();
-        let expected_owner = graph.insert(*op, children.clone());
+        let before = graph.audit_snapshot();
+        let outcome = graph.insert_with_node(*op, children.clone());
+        let after = graph.audit_snapshot();
+        assert!(!outcome.inserted, "hashcons inserted an existing key");
         assert_eq!(
-            graph.enodes.len(),
-            before,
+            after.nodes.len(),
+            before.nodes.len(),
             "hashcons missed existing key ({op}, {children:?})"
         );
-        let expected_owner = graph.find(expected_owner);
-        let matching_owner = graph
-            .eclasses
+        assert_eq!(
+            before, after,
+            "hashcons probe changed the detached structural snapshot"
+        );
+        let expected_owner = graph.find(outcome.eclass);
+        let matching = after
+            .nodes
             .iter()
-            .enumerate()
-            .find_map(|(class_id, class)| {
-                class.nodes.iter().find_map(|&node_id| {
-                    let node = &graph.enodes[node_id as usize];
-                    (node.op == *op && node.children == *children).then_some(class_id as EClassId)
-                })
-            })
+            .find(|node| node.op == *op && node.children == *children)
             .expect("existing key has a live node");
-        assert_eq!(expected_owner, graph.find(matching_owner));
+        assert_eq!(
+            outcome.node, matching.id,
+            "hashcons returned the wrong node"
+        );
+        assert_eq!(expected_owner, graph.find(matching.owner));
     }
 }
 
-fn assert_graph(graph: &mut Egraph, trace: &Trace) -> (usize, OracleStats) {
+fn assert_graph_snapshot(
+    graph: &mut Egraph,
+    trace: &Trace,
+    snapshot: EgraphSnapshot,
+) -> (usize, OracleStats) {
     let (mut oracle, stats) = least_congruence(trace);
     let checks = assert_partition(graph, trace, &mut oracle);
-    let before = structural_snapshot(graph, trace, &mut oracle);
+    let before = structural_snapshot(graph, &snapshot, trace, &mut oracle);
     assert_hashcons_probe(graph, &before.1);
     graph.rebuild();
-    let after = structural_snapshot(graph, trace, &mut oracle);
+    let rebuilt = graph.audit_snapshot();
+    let after = structural_snapshot(graph, &rebuilt, trace, &mut oracle);
     assert_eq!(before, after, "a second rebuild changed observable state");
     (checks, stats)
+}
+
+fn assert_graph(graph: &mut Egraph, trace: &Trace) -> (usize, OracleStats) {
+    let snapshot = graph.audit_snapshot();
+    assert_graph_snapshot(graph, trace, snapshot)
 }
 
 fn simple_graph() -> (Egraph, Trace, EClassId, EClassId) {
@@ -334,7 +444,7 @@ fn simple_graph() -> (Egraph, Trace, EClassId, EClassId) {
     (graph, trace, left, right)
 }
 
-fn must_reject_fault(
+fn must_reject_semantic_fault(
     label: &str,
     exercise: impl FnOnce(&mut Egraph, &mut Trace, EClassId, EClassId),
 ) {
@@ -346,26 +456,45 @@ fn must_reject_fault(
     assert!(result.is_err(), "checker accepted injected fault {label}");
 }
 
+fn must_reject_snapshot_fault(
+    label: &str,
+    exercise: impl FnOnce(&mut EgraphSnapshot, EClassId, EClassId),
+) {
+    let (mut graph, trace, left, right) = simple_graph();
+    let mut snapshot = graph.audit_snapshot();
+    exercise(&mut snapshot, left, right);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        assert_graph_snapshot(&mut graph, &trace, snapshot)
+    }));
+    assert!(result.is_err(), "checker accepted injected fault {label}");
+}
+
 #[test]
 fn checker_fault_controls_are_detected() {
     let (mut baseline, baseline_trace, _, _) = simple_graph();
     assert_graph(&mut baseline, &baseline_trace);
 
-    must_reject_fault("overmerge", |graph, _, left, right| {
-        graph.union(left, right);
+    must_reject_semantic_fault("overmerge", |graph, _, left, right| {
+        merge_validated(graph, left, right);
         graph.rebuild();
     });
-    must_reject_fault("undermerge", |_, trace, left, right| {
+    must_reject_semantic_fault("undermerge", |_, trace, left, right| {
         trace.explicit_unions.push((left, right));
     });
-    must_reject_fault("missing_parent", |graph, _, left, _| {
-        graph.eclasses[left as usize].parents.clear();
+    must_reject_snapshot_fault("missing_parent", |snapshot, left, _| {
+        snapshot
+            .classes
+            .iter_mut()
+            .find(|class| class.id == left)
+            .expect("left class is present in snapshot")
+            .parents
+            .clear();
     });
-    must_reject_fault("pending_dirty", |graph, _, left, right| {
-        graph.dirty.push((left, right));
+    must_reject_snapshot_fault("pending_dirty", |snapshot, left, right| {
+        snapshot.dirty.push((left, right));
     });
-    must_reject_fault("wrong_node_op", |graph, _, _, _| {
-        graph.enodes.last_mut().expect("parent node").op = 99;
+    must_reject_snapshot_fault("wrong_node_op", |snapshot, _, _| {
+        snapshot.nodes.last_mut().expect("parent node").op = 99;
     });
 
     println!("EGRAPH_CHECKER_CONTROLS baseline=1 faults=5");
@@ -439,7 +568,7 @@ fn run_campaign(seed: u64, metrics: &mut CampaignMetrics) {
                         })
                     })
                     .count();
-                graph.union(left, right);
+                merge_validated(&mut graph, left, right);
                 trace.explicit_unions.push((left, right));
                 metrics.real_unions += 1;
             }
@@ -477,7 +606,7 @@ fn run_campaign(seed: u64, metrics: &mut CampaignMetrics) {
                     let right = handles[rng.index(handles.len())];
                     let (mut before, _) = least_congruence(&trace);
                     if before.find(left) != before.find(right) {
-                        graph.union(left, right);
+                        merge_validated(&mut graph, left, right);
                         trace.explicit_unions.push((left, right));
                         metrics.real_unions += 1;
                     }
@@ -539,7 +668,7 @@ fn execute_small_sequence(sequence: &[u8], pair_checks: &mut usize) {
             2 => {
                 let (mut oracle, _) = least_congruence(&trace);
                 if oracle.find(left) != oracle.find(right) {
-                    graph.union(left, right);
+                    merge_validated(&mut graph, left, right);
                     trace.explicit_unions.push((left, right));
                 }
                 graph.rebuild();

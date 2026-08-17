@@ -1,7 +1,12 @@
 #![allow(clippy::type_complexity)]
 //! Equality saturation core: union-find, hash-cons, e-classes, and rebuild
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+
+pub use evocc_proof::{
+    Binding, MergeReceipt, NodeId, Pattern, PatternChild, ProofCertificate, ProofEvent, RuleId,
+    RuleSnapshot, UnionReason,
+};
 
 // ---------------------------------------------------------------------------
 // Type aliases (items 1 & 3 of the roadmap)
@@ -15,6 +20,41 @@ pub type ENodeId = u32;
 
 /// Operator identifier (encodes both the symbol and its arity / semantics).
 pub type OpId = u16;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InsertOutcome {
+    pub eclass: EClassId,
+    pub node: NodeId,
+    pub inserted: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MergeOutcome {
+    AlreadyEquivalent { root: EClassId },
+    Merged(MergeReceipt),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuditNode {
+    pub id: NodeId,
+    pub op: OpId,
+    pub children: Vec<EClassId>,
+    pub owner: EClassId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuditClass {
+    pub id: EClassId,
+    pub nodes: Vec<NodeId>,
+    pub parents: Vec<(OpId, usize, EClassId)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EgraphSnapshot {
+    pub nodes: Vec<AuditNode>,
+    pub classes: Vec<AuditClass>,
+    pub dirty: Vec<(EClassId, EClassId)>,
+}
 
 // ===========================================================================
 // 2. UnionFind — disjoint-set with path compression & union-by-rank
@@ -145,14 +185,20 @@ pub struct EClass {
 /// The e-graph: union-find, hash-cons table, arena for e-nodes and
 /// e-classes, a dirty-worklist, and reverse enode→eclass pointers.
 pub struct Egraph {
-    pub uf: UnionFind,
-    pub hashcons: HashCons,
-    pub enodes: Vec<ENode>,
-    pub eclasses: Vec<EClass>,
+    uf: UnionFind,
+    hashcons: HashCons,
+    enodes: Vec<ENode>,
+    eclasses: Vec<EClass>,
     /// Pending merges — `(non_canonical, canonical)` pairs queued for rebuild.
-    pub dirty: Vec<(EClassId, EClassId)>,
+    dirty: Vec<(EClassId, EClassId)>,
     /// Quick lookup: which e-class each e-node currently resides in.
     enode_to_eclass: Vec<EClassId>,
+    /// Stable proof identity for each current physical e-node slot.
+    stable_node_ids: Vec<NodeId>,
+    /// Append-only insertion and real-union audit stream.
+    proof_events: Vec<ProofEvent>,
+    next_node_id: u64,
+    rules: BTreeMap<RuleId, RuleSnapshot>,
 }
 
 impl Egraph {
@@ -164,7 +210,38 @@ impl Egraph {
             eclasses: Vec::new(),
             dirty: Vec::new(),
             enode_to_eclass: Vec::new(),
+            stable_node_ids: Vec::new(),
+            proof_events: Vec::new(),
+            next_node_id: 0,
+            rules: BTreeMap::new(),
         }
+    }
+
+    pub fn with_rules(rules: &[RuleSnapshot]) -> Result<Self, String> {
+        let mut graph = Self::new();
+        for rule in rules {
+            graph.register_rule(rule.clone())?;
+        }
+        Ok(graph)
+    }
+
+    pub fn register_rule(&mut self, rule: RuleSnapshot) -> Result<(), String> {
+        if let Some(existing) = self.rules.get(&rule.id) {
+            return if existing == &rule {
+                Ok(())
+            } else {
+                Err(format!(
+                    "RuleId {} is already bound to another rule",
+                    rule.id
+                ))
+            };
+        }
+        let mut candidate = self.rules.values().cloned().collect::<Vec<_>>();
+        candidate.push(rule.clone());
+        candidate.sort_by_key(|entry| entry.id);
+        evocc_proof::ProofContext::new(candidate).map_err(|error| error.to_string())?;
+        self.rules.insert(rule.id, rule);
+        Ok(())
     }
 
     // -- Insertion ----------------------------------------------------------
@@ -175,14 +252,36 @@ impl Egraph {
     /// table, and — if the term is genuinely new — creates a fresh e-node and
     /// e-class, updating parent indexes.
     pub fn insert(&mut self, op: OpId, children: Vec<EClassId>) -> EClassId {
+        self.insert_with_node(op, children).eclass
+    }
+
+    /// Insert a term and return the node witness selected by hash-consing.
+    ///
+    /// The Day 4 proof campaign exercises this richer form; the legacy
+    /// `insert` entry point remains a compatibility wrapper.
+    pub fn insert_with_node(&mut self, op: OpId, children: Vec<EClassId>) -> InsertOutcome {
         let children: Vec<EClassId> = children.iter().map(|&c| self.uf.find(c)).collect();
         let key = (op, children.clone());
 
         if let Some(&existing) = self.hashcons.map.get(&key) {
-            return existing;
+            let slot = self
+                .enodes
+                .iter()
+                .position(|candidate| candidate.op == op && candidate.children == children)
+                .expect("hash-cons entry has a live node witness");
+            return InsertOutcome {
+                eclass: self.uf.find(existing),
+                node: self.stable_node_ids[slot],
+                inserted: false,
+            };
         }
 
-        let node_id = self.enodes.len() as ENodeId;
+        let node_slot = self.enodes.len() as ENodeId;
+        let stable_node_id = NodeId(self.next_node_id);
+        self.next_node_id = self
+            .next_node_id
+            .checked_add(1)
+            .expect("stable proof NodeId space exhausted");
         self.enodes.push(ENode {
             op,
             children: children.clone(),
@@ -191,11 +290,19 @@ impl Egraph {
         let class_id = self.uf.make_set();
         self.eclasses.push(EClass {
             id: class_id,
-            nodes: vec![node_id],
+            nodes: vec![node_slot],
             parents: Vec::new(),
         });
         self.hashcons.map.insert(key, class_id);
         self.enode_to_eclass.push(class_id);
+        self.stable_node_ids.push(stable_node_id);
+        self.proof_events
+            .push(ProofEvent::Insert(evocc_proof::NodeSnapshot {
+                id: stable_node_id,
+                owner: class_id,
+                op,
+                original_children: children.clone(),
+            }));
 
         for (i, &child) in children.iter().enumerate() {
             let child = self.uf.find(child);
@@ -204,37 +311,207 @@ impl Egraph {
                 .push((op, i, class_id));
         }
 
-        class_id
+        InsertOutcome {
+            eclass: class_id,
+            node: stable_node_id,
+            inserted: true,
+        }
     }
 
     // -- Merging ------------------------------------------------------------
 
-    /// Declare that e-classes `a` and `b` are equivalent.
-    ///
-    /// Merges the two sets in the union-find, moves nodes and parents to the
-    /// canonical e-class, and enqueues a dirty entry for the rebuild pass.
-    pub fn union(&mut self, a: EClassId, b: EClassId) -> EClassId {
-        let a = self.uf.find(a);
-        let b = self.uf.find(b);
-        if a == b {
-            return a;
+    pub fn merge_rewrite(
+        &mut self,
+        rule: RuleId,
+        lhs_node: NodeId,
+        rhs_node: NodeId,
+        substitution: Vec<Binding>,
+    ) -> Result<MergeOutcome, String> {
+        self.validate_rewrite_reason(rule, lhs_node, rhs_node, &substitution)?;
+        let lhs = self.node_owner_root(lhs_node)?;
+        let rhs = self.node_owner_root(rhs_node)?;
+        Ok(self.merge_recorded(
+            lhs,
+            rhs,
+            UnionReason::UnconditionalRewrite {
+                rule,
+                lhs_node,
+                rhs_node,
+                substitution,
+            },
+        ))
+    }
+
+    pub fn merge_congruence(
+        &mut self,
+        lhs_node: NodeId,
+        rhs_node: NodeId,
+    ) -> Result<MergeOutcome, String> {
+        self.validate_congruence_reason(lhs_node, rhs_node)?;
+        let lhs = self.node_owner_root(lhs_node)?;
+        let rhs = self.node_owner_root(rhs_node)?;
+        Ok(self.merge_recorded(lhs, rhs, UnionReason::Congruence { lhs_node, rhs_node }))
+    }
+
+    /// The sole production funnel for a real e-class union. Every successful
+    /// mutation appends exactly one prevalidated immutable receipt.
+    fn merge_recorded(&mut self, a: EClassId, b: EClassId, reason: UnionReason) -> MergeOutcome {
+        let lhs_pre = self.uf.find(a);
+        let rhs_pre = self.uf.find(b);
+        if lhs_pre == rhs_pre {
+            return MergeOutcome::AlreadyEquivalent { root: lhs_pre };
         }
-        let canonical = self.uf.union(a, b);
-        let non_canonical = if canonical == a { b } else { a };
+        let result = self.uf.union(lhs_pre, rhs_pre);
+        let non_canonical = if result == lhs_pre { rhs_pre } else { lhs_pre };
 
         // Move nodes.
         let nodes: Vec<ENodeId> = std::mem::take(&mut self.eclasses[non_canonical as usize].nodes);
         for &nid in &nodes {
-            self.enode_to_eclass[nid as usize] = canonical;
+            self.enode_to_eclass[nid as usize] = result;
         }
-        self.eclasses[canonical as usize].nodes.extend(nodes);
+        self.eclasses[result as usize].nodes.extend(nodes);
 
         // Move parents.
         let parents: Vec<_> = std::mem::take(&mut self.eclasses[non_canonical as usize].parents);
-        self.eclasses[canonical as usize].parents.extend(parents);
+        self.eclasses[result as usize].parents.extend(parents);
 
-        self.dirty.push((non_canonical, canonical));
-        canonical
+        self.dirty.push((non_canonical, result));
+        let receipt = MergeReceipt {
+            lhs_pre,
+            rhs_pre,
+            result,
+            reason,
+        };
+        self.proof_events.push(ProofEvent::Union(receipt.clone()));
+        MergeOutcome::Merged(receipt)
+    }
+
+    fn proof_node(&self, id: NodeId) -> Result<evocc_proof::NodeSnapshot, String> {
+        self.node_snapshot(id)
+            .ok_or_else(|| format!("unknown stable NodeId {}", id.0))
+    }
+
+    fn canonical_checked(&mut self, id: EClassId) -> Result<EClassId, String> {
+        if id as usize >= self.eclasses.len() {
+            return Err(format!("unknown e-class {id}"));
+        }
+        Ok(self.uf.find(id))
+    }
+
+    fn node_owner_root(&mut self, id: NodeId) -> Result<EClassId, String> {
+        let owner = self.proof_node(id)?.owner;
+        self.canonical_checked(owner)
+    }
+
+    fn validate_rewrite_reason(
+        &mut self,
+        rule_id: RuleId,
+        lhs_node_id: NodeId,
+        rhs_node_id: NodeId,
+        substitution: &[Binding],
+    ) -> Result<(), String> {
+        let rule = self
+            .rules
+            .get(&rule_id)
+            .cloned()
+            .ok_or_else(|| format!("unknown trusted RuleId {rule_id}"))?;
+        let lhs_node = self.proof_node(lhs_node_id)?;
+        let rhs_node = self.proof_node(rhs_node_id)?;
+
+        let mut bindings = BTreeMap::new();
+        let mut previous: Option<&str> = None;
+        for binding in substitution {
+            if previous.is_some_and(|name| binding.variable.as_str() <= name) {
+                return Err("substitution bindings must be strictly sorted".into());
+            }
+            let canonical = self.canonical_checked(binding.eclass)?;
+            if canonical != binding.eclass {
+                return Err(format!(
+                    "substitution {} is not canonical",
+                    binding.variable
+                ));
+            }
+            bindings.insert(binding.variable.clone(), binding.eclass);
+            previous = Some(binding.variable.as_str());
+        }
+        let expected = pattern_variables(&rule.lhs);
+        let actual = bindings.keys().cloned().collect::<BTreeSet<_>>();
+        if actual != expected {
+            return Err("substitution domain does not exactly match the rule LHS".into());
+        }
+
+        self.validate_pattern_match(&rule.lhs, &lhs_node, &bindings)?;
+        self.validate_pattern_match(&rule.rhs, &rhs_node, &bindings)?;
+        Ok(())
+    }
+
+    fn validate_pattern_match(
+        &mut self,
+        pattern: &Pattern,
+        node: &evocc_proof::NodeSnapshot,
+        bindings: &BTreeMap<String, EClassId>,
+    ) -> Result<(), String> {
+        if pattern.op != node.op || pattern.children.len() != node.original_children.len() {
+            return Err("rewrite pattern does not match its node witness".into());
+        }
+        for (pattern_child, &node_child) in pattern.children.iter().zip(&node.original_children) {
+            let expected = match pattern_child {
+                PatternChild::Exact(eclass) => *eclass,
+                PatternChild::Var(variable) => *bindings
+                    .get(variable)
+                    .ok_or_else(|| format!("missing binding for {variable}"))?,
+            };
+            let expected = self.canonical_checked(expected)?;
+            let observed = self.canonical_checked(node_child)?;
+            if expected != observed {
+                return Err("rewrite child does not match its pattern".into());
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_congruence_reason(
+        &mut self,
+        lhs_node_id: NodeId,
+        rhs_node_id: NodeId,
+    ) -> Result<(), String> {
+        let lhs = self.proof_node(lhs_node_id)?;
+        let rhs = self.proof_node(rhs_node_id)?;
+        if lhs.op != rhs.op || lhs.original_children.len() != rhs.original_children.len() {
+            return Err("congruence witnesses have different operators or arities".into());
+        }
+        for (&lhs_child, &rhs_child) in lhs.original_children.iter().zip(&rhs.original_children) {
+            if self.canonical_checked(lhs_child)? != self.canonical_checked(rhs_child)? {
+                return Err("congruence witness children are not equivalent".into());
+            }
+        }
+        Ok(())
+    }
+
+    /// Snapshot the complete producer audit stream and current partition.
+    pub fn proof_certificate(&mut self) -> ProofCertificate {
+        let mut owners = self
+            .proof_events
+            .iter()
+            .filter_map(|event| match event {
+                ProofEvent::Insert(node) => Some(node.owner),
+                ProofEvent::Union(_) => None,
+            })
+            .collect::<Vec<_>>();
+        owners.sort_unstable();
+        owners.dedup();
+        let final_roots = owners
+            .into_iter()
+            .map(|eclass| evocc_proof::FinalRoot {
+                eclass,
+                root: self.uf.find(eclass),
+            })
+            .collect();
+        ProofCertificate {
+            rules: self.rules.values().cloned().collect(),
+            events: self.proof_events.clone(),
+            final_roots,
+        }
     }
 
     // -- Rebuild (congruence closure) ---------------------------------------
@@ -244,7 +521,57 @@ impl Egraph {
         self.uf.find(id)
     }
 
-    /// Restore congruence closure after a batch of `union` calls.
+    /// Return one stable insertion witness owned by `id`'s current class.
+    pub fn node_witness(&mut self, id: EClassId) -> Option<NodeId> {
+        let root = self.uf.find(id);
+        for slot in 0..self.enodes.len() {
+            if self.uf.find(self.enode_to_eclass[slot]) == root {
+                return Some(self.stable_node_ids[slot]);
+            }
+        }
+        None
+    }
+
+    /// Return an immutable insertion-time node witness.
+    pub fn node_snapshot(&self, id: NodeId) -> Option<evocc_proof::NodeSnapshot> {
+        self.proof_events.iter().find_map(|event| match event {
+            ProofEvent::Insert(node) if node.id == id => Some(node.clone()),
+            _ => None,
+        })
+    }
+
+    /// Detached, read-only structural view. Physical arena slots never cross
+    /// this API boundary; node membership uses append-only proof `NodeId`s.
+    pub fn audit_snapshot(&mut self) -> EgraphSnapshot {
+        let nodes = (0..self.enodes.len())
+            .map(|slot| AuditNode {
+                id: self.stable_node_ids[slot],
+                op: self.enodes[slot].op,
+                children: self.enodes[slot].children.clone(),
+                owner: self.uf.find(self.enode_to_eclass[slot]),
+            })
+            .collect();
+        let classes = self
+            .eclasses
+            .iter()
+            .map(|class| AuditClass {
+                id: class.id,
+                nodes: class
+                    .nodes
+                    .iter()
+                    .map(|&slot| self.stable_node_ids[slot as usize])
+                    .collect(),
+                parents: class.parents.clone(),
+            })
+            .collect();
+        EgraphSnapshot {
+            nodes,
+            classes,
+            dirty: self.dirty.clone(),
+        }
+    }
+
+    /// Restore congruence closure after a batch of validated reasoned merges.
     pub fn rebuild(&mut self) {
         // Congruence closure is a least fixed point. Rebuilding the canonical
         // key table from all live nodes is deliberately simple and avoids
@@ -256,25 +583,35 @@ impl Egraph {
                 }
             }
 
-            let mut owner_by_key = HashMap::new();
+            let mut owner_by_key: HashMap<(OpId, Vec<EClassId>), (EClassId, NodeId)> =
+                HashMap::new();
             let mut collisions = Vec::new();
-            for (node_id, node) in self.enodes.iter().enumerate() {
-                let owner = self.uf.find(self.enode_to_eclass[node_id]);
+            for (node_slot, node) in self.enodes.iter().enumerate() {
+                let owner = self.uf.find(self.enode_to_eclass[node_slot]);
+                let witness = self.stable_node_ids[node_slot];
                 let key = (node.op, node.children.clone());
-                if let Some(&other) = owner_by_key.get(&key) {
-                    if self.uf.find(owner) != self.uf.find(other) {
-                        collisions.push((owner, other));
+                if let Some(&(other_owner, other_witness)) = owner_by_key.get(&key) {
+                    if self.uf.find(owner) != self.uf.find(other_owner) {
+                        collisions.push((owner, other_owner, witness, other_witness));
                     }
                 } else {
-                    owner_by_key.insert(key, owner);
+                    owner_by_key.insert(key, (owner, witness));
                 }
             }
 
             if collisions.is_empty() {
                 break;
             }
-            for (left, right) in collisions {
-                self.union(left, right);
+            for (left, right, lhs_node, rhs_node) in collisions {
+                debug_assert_eq!(self.uf.find(left), self.node_owner_root(lhs_node).unwrap());
+                debug_assert_eq!(self.uf.find(right), self.node_owner_root(rhs_node).unwrap());
+                let outcome = self
+                    .merge_congruence(lhs_node, rhs_node)
+                    .expect("rebuild collision has valid congruence witnesses");
+                debug_assert!(matches!(
+                    outcome,
+                    MergeOutcome::Merged(_) | MergeOutcome::AlreadyEquivalent { .. }
+                ));
             }
             self.dirty.clear();
         }
@@ -285,19 +622,27 @@ impl Egraph {
         let mut unique = HashMap::new();
         let mut nodes = Vec::new();
         let mut owners = Vec::new();
-        for (node_id, mut node) in std::mem::take(&mut self.enodes).into_iter().enumerate() {
+        let mut stable_node_ids = Vec::new();
+        let old_nodes = std::mem::take(&mut self.enodes);
+        let old_stable_node_ids = std::mem::take(&mut self.stable_node_ids);
+        for (node_id, (mut node, stable_node_id)) in
+            old_nodes.into_iter().zip(old_stable_node_ids).enumerate()
+        {
             for child in &mut node.children {
                 *child = self.uf.find(*child);
             }
             let owner = self.uf.find(self.enode_to_eclass[node_id]);
             let key = (node.op, node.children.clone());
-            if unique.insert(key, nodes.len() as ENodeId).is_none() {
+            if let std::collections::hash_map::Entry::Vacant(entry) = unique.entry(key) {
+                entry.insert(nodes.len() as ENodeId);
                 nodes.push(node);
                 owners.push(owner);
+                stable_node_ids.push(stable_node_id);
             }
         }
         self.enodes = nodes;
         self.enode_to_eclass = owners;
+        self.stable_node_ids = stable_node_ids;
 
         for class in &mut self.eclasses {
             class.nodes.clear();
@@ -335,41 +680,30 @@ impl Default for Egraph {
 // Rewrite rules for the e-graph
 // ===========================================================================
 
-/// A pattern to match in the e-graph: an operator and children that may be
-/// concrete EClassIds or pattern variables.
-#[derive(Debug, Clone)]
-pub struct Pattern {
-    pub op: OpId,
-    pub children: Vec<PatternChild>,
-}
-
-#[derive(Debug, Clone)]
-pub enum PatternChild {
-    /// Match exactly this e-class id.
-    Exact(EClassId),
-    /// Bind any e-class to this variable name.
-    Var(String),
-}
-
 /// One rewrite rule: a left-hand-side pattern and a builder that produces
 /// the right-hand side from the bindings.
 pub struct Rewrite {
+    pub id: RuleId,
     pub name: String,
     pub lhs: Pattern,
-    /// Build the RHS e-node given the variable bindings (var_name -> EClassId).
-    pub apply: Box<dyn Fn(&HashMap<String, EClassId>) -> (OpId, Vec<EClassId>)>,
+    pub rhs: Pattern,
 }
 
 impl Rewrite {
-    pub fn new(
-        name: impl Into<String>,
-        lhs: Pattern,
-        apply: impl Fn(&HashMap<String, EClassId>) -> (OpId, Vec<EClassId>) + 'static,
-    ) -> Self {
+    pub fn new(id: RuleId, name: impl Into<String>, lhs: Pattern, rhs: Pattern) -> Self {
         Self {
+            id,
             name: name.into(),
             lhs,
-            apply: Box::new(apply),
+            rhs,
+        }
+    }
+
+    pub fn snapshot(&self) -> RuleSnapshot {
+        RuleSnapshot {
+            id: self.id,
+            lhs: self.lhs.clone(),
+            rhs: self.rhs.clone(),
         }
     }
 }
@@ -381,23 +715,49 @@ pub fn apply_rewrites(egraph: &mut Egraph, rules: &[Rewrite], max_iterations: us
     for _ in 0..max_iterations {
         let before = total_unions;
         for rule in rules {
-            let mut matches: Vec<(EClassId, HashMap<String, EClassId>)> = Vec::new();
+            if egraph.register_rule(rule.snapshot()).is_err() {
+                continue;
+            }
+            let mut matches: Vec<(EClassId, ENodeId, HashMap<String, EClassId>)> = Vec::new();
             for (eclass_id, eclass) in egraph.eclasses.iter().enumerate() {
                 let eclass_id = eclass_id as EClassId;
                 for &enode_id in &eclass.nodes {
                     let enode = &egraph.enodes[enode_id as usize];
                     if let Some(bindings) = match_pattern(&rule.lhs, enode, &mut egraph.uf) {
-                        matches.push((eclass_id, bindings));
+                        matches.push((eclass_id, enode_id, bindings));
                         break; // one match per eclass
                     }
                 }
             }
-            for (root, bindings) in &matches {
-                let (rhs_op, rhs_children) = (rule.apply)(bindings);
-                let rhs_id = egraph.insert(rhs_op, rhs_children);
+            for (root, lhs_node, bindings) in &matches {
+                let lhs_stable_node = egraph.stable_node_ids[*lhs_node as usize];
+                let Some(rhs_children) = rule
+                    .rhs
+                    .children
+                    .iter()
+                    .map(|child| match child {
+                        PatternChild::Exact(eclass) => Some(*eclass),
+                        PatternChild::Var(variable) => bindings.get(variable).copied(),
+                    })
+                    .collect::<Option<Vec<_>>>()
+                else {
+                    continue;
+                };
+                let rhs = egraph.insert_with_node(rule.rhs.op, rhs_children);
                 let root = *root;
-                if egraph.find(root) != egraph.find(rhs_id) {
-                    egraph.union(root, rhs_id);
+                if egraph.find(root) != egraph.find(rhs.eclass) {
+                    let mut substitution = bindings
+                        .iter()
+                        .map(|(variable, &eclass)| Binding {
+                            variable: variable.clone(),
+                            eclass: egraph.find(eclass),
+                        })
+                        .collect::<Vec<_>>();
+                    substitution.sort_by(|left, right| left.variable.cmp(&right.variable));
+                    let outcome = egraph
+                        .merge_rewrite(rule.id, lhs_stable_node, rhs.node, substitution)
+                        .expect("matched declarative rewrite validates before merging");
+                    debug_assert!(matches!(outcome, MergeOutcome::Merged(_)));
                     total_unions += 1;
                 }
             }
@@ -408,6 +768,17 @@ pub fn apply_rewrites(egraph: &mut Egraph, rules: &[Rewrite], max_iterations: us
         }
     }
     total_unions
+}
+
+fn pattern_variables(pattern: &Pattern) -> BTreeSet<String> {
+    pattern
+        .children
+        .iter()
+        .filter_map(|child| match child {
+            PatternChild::Exact(_) => None,
+            PatternChild::Var(variable) => Some(variable.clone()),
+        })
+        .collect()
 }
 
 fn match_pattern(
@@ -450,6 +821,48 @@ fn match_pattern(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn merge_for_test(graph: &mut Egraph, left: EClassId, right: EClassId) -> EClassId {
+        let lhs_node = graph
+            .node_witness(left)
+            .expect("left test class has a node witness");
+        let rhs_node = graph
+            .node_witness(right)
+            .expect("right test class has a node witness");
+        let lhs = graph.node_snapshot(lhs_node).expect("lhs snapshot");
+        let rhs = graph.node_snapshot(rhs_node).expect("rhs snapshot");
+        let rule = RuleSnapshot {
+            id: graph.rules.keys().next_back().copied().unwrap_or(0) + 1,
+            lhs: Pattern {
+                op: lhs.op,
+                children: lhs
+                    .original_children
+                    .iter()
+                    .copied()
+                    .map(PatternChild::Exact)
+                    .collect(),
+            },
+            rhs: Pattern {
+                op: rhs.op,
+                children: rhs
+                    .original_children
+                    .iter()
+                    .copied()
+                    .map(PatternChild::Exact)
+                    .collect(),
+            },
+        };
+        graph
+            .register_rule(rule.clone())
+            .expect("test rule is valid");
+        match graph
+            .merge_rewrite(rule.id, lhs_node, rhs_node, Vec::new())
+            .expect("test rewrite validates")
+        {
+            MergeOutcome::AlreadyEquivalent { root } => root,
+            MergeOutcome::Merged(receipt) => receipt.result,
+        }
+    }
 
     // -- 2. UnionFind -------------------------------------------------------
 
@@ -536,7 +949,7 @@ mod tests {
         );
 
         // --- Union triggers congruence ---
-        eg.union(a, b); // now A == B
+        merge_for_test(&mut eg, a, b); // now A == B
         eg.rebuild();
 
         // Add(A, B) and Add(B, A) both become Add(A, A) after rebuild.
@@ -572,7 +985,7 @@ mod tests {
 
         // Manually const-fold: insert the result and union.
         let rhs_id = eg.insert(const_op, vec![]);
-        eg.union(sum, rhs_id);
+        merge_for_test(&mut eg, sum, rhs_id);
         eg.rebuild();
         assert_eq!(eg.find(sum), eg.find(rhs_id));
     }
@@ -588,9 +1001,66 @@ mod tests {
         let add_x_0 = eg.insert(add_op, vec![x, zero]);
 
         // Rule: add(x, 0) -> x (add-identity)
-        eg.union(add_x_0, x);
+        merge_for_test(&mut eg, add_x_0, x);
         eg.rebuild();
         assert_eq!(eg.find(add_x_0), eg.find(x));
+    }
+
+    #[test]
+    fn invalid_congruence_is_rejected_before_graph_or_proof_mutation() {
+        let mut eg = Egraph::new();
+        let left = eg.insert_with_node(10, Vec::new());
+        let right = eg.insert_with_node(11, Vec::new());
+        let before_certificate = eg.proof_certificate();
+        let before_left = eg.find(left.eclass);
+        let before_right = eg.find(right.eclass);
+
+        let error = eg
+            .merge_congruence(left.node, right.node)
+            .expect_err("different leaf operators are not congruent");
+
+        assert!(error.contains("different operators or arities"));
+        assert_eq!(eg.find(left.eclass), before_left);
+        assert_eq!(eg.find(right.eclass), before_right);
+        assert_ne!(eg.find(left.eclass), eg.find(right.eclass));
+        assert_eq!(eg.proof_certificate(), before_certificate);
+    }
+
+    #[test]
+    fn conflicting_rule_registration_is_rejected_without_authority_drift() {
+        let first = RuleSnapshot {
+            id: 7,
+            lhs: Pattern {
+                op: 20,
+                children: Vec::new(),
+            },
+            rhs: Pattern {
+                op: 21,
+                children: Vec::new(),
+            },
+        };
+        let conflicting = RuleSnapshot {
+            id: first.id,
+            lhs: Pattern {
+                op: 20,
+                children: Vec::new(),
+            },
+            rhs: Pattern {
+                op: 22,
+                children: Vec::new(),
+            },
+        };
+        let mut eg = Egraph::with_rules(std::slice::from_ref(&first))
+            .expect("the initial trusted registry is valid");
+        let before = eg.proof_certificate();
+
+        let error = eg
+            .register_rule(conflicting)
+            .expect_err("one RuleId cannot be rebound");
+
+        assert!(error.contains("already bound"));
+        assert_eq!(eg.proof_certificate(), before);
+        assert_eq!(eg.proof_certificate().rules, vec![first]);
     }
 
     // ===================================================================
@@ -620,7 +1090,7 @@ mod tests {
         let ac = eg.insert(op, vec![a, c]);
 
         // Create congruence pressure: union a with b.
-        eg.union(a, b);
+        merge_for_test(&mut eg, a, b);
         eg.rebuild();
 
         // After rebuild, dirty must be empty, because every pending merge
@@ -689,8 +1159,8 @@ mod tests {
         // Merge the children pairwise. After rebuild, the parents must
         // become congruent because find(a)==find(c) and find(b)==find(d),
         // so both parents canonicalize to add_op(find(a), find(b)).
-        eg.union(a, c);
-        eg.union(b, d);
+        merge_for_test(&mut eg, a, c);
+        merge_for_test(&mut eg, b, d);
         eg.rebuild();
 
         assert_eq!(
@@ -717,9 +1187,9 @@ mod tests {
             .collect();
 
         // Merge several pairs and rebuild.
-        eg.union(ids[0], ids[1]);
-        eg.union(ids[2], ids[3]);
-        eg.union(ids[4], ids[5]);
+        merge_for_test(&mut eg, ids[0], ids[1]);
+        merge_for_test(&mut eg, ids[2], ids[3]);
+        merge_for_test(&mut eg, ids[4], ids[5]);
         eg.rebuild();
 
         let after: Vec<EClassId> = ids
@@ -767,7 +1237,7 @@ mod tests {
         // Merge leaf with a fresh node — should trigger one round of
         // congruence for mid, then another for top.
         let other_leaf = eg.insert(op, vec![]);
-        eg.union(leaf, other_leaf);
+        merge_for_test(&mut eg, leaf, other_leaf);
         eg.rebuild();
 
         // The graph is still in a consistent state — the fact that we
@@ -784,7 +1254,7 @@ mod tests {
         }
         // Merge the first two leaves — the congruence chain should
         // propagate up the tree and terminate.
-        big.union(roots[0], roots[1]);
+        merge_for_test(&mut big, roots[0], roots[1]);
         big.rebuild();
         assert!(
             big.dirty.is_empty(),

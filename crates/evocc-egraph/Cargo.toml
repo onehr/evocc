@@ -6,4 +6,4 @@ license.workspace = true
 description = "Equality saturation core: union-find, hash-cons, e-classes, and rebuild"
 
 [dependencies]
-
+evocc-proof = { path = "../evocc-proof" }

@@ -11,13 +11,15 @@ export LC_ALL=C
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
 SOURCE="$PROJECT_ROOT/crates/evocc-egraph/src/lib.rs"
+PROOF_SOURCE="$PROJECT_ROOT/crates/evocc-proof/src/lib.rs"
 INDEPENDENT_CHECKER="$PROJECT_ROOT/crates/evocc-egraph/tests/independent_checker.rs"
 BUILDER="$SCRIPT_DIR/egraph-mutant-builder.py"
 CARGO_BIN="${C30_CARGO:-$(command -v cargo)}"
 PYTHON_BIN="${C30_PYTHON:-/usr/bin/python3}"
 TIMEOUT_BIN="${C30_TIMEOUT:-/opt/homebrew/bin/timeout}"
 
-if [ ! -r "$SOURCE" ] || [ ! -r "$INDEPENDENT_CHECKER" ] || \
+if [ ! -r "$SOURCE" ] || [ ! -r "$PROOF_SOURCE" ] || \
+   [ ! -r "$INDEPENDENT_CHECKER" ] || \
    [ ! -r "$BUILDER" ] || [ ! -x "$CARGO_BIN" ] || \
    [ ! -x "$PYTHON_BIN" ] || [ ! -x "$TIMEOUT_BIN" ]; then
   printf 'egraph mutation self-test setup is incomplete\n' >&2
@@ -32,7 +34,7 @@ FAILED=0
 
 make_crate() {
   local root="$1"
-  mkdir -p "$root/src" "$root/tests"
+  mkdir -p "$root/src" "$root/tests" "$root/evocc-proof/src"
   printf '%s\n' \
     '[package]' \
     'name = "evocc-egraph"' \
@@ -40,7 +42,17 @@ make_crate() {
     'edition = "2021"' \
     '' \
     '[dependencies]' \
+    'evocc-proof = { path = "evocc-proof" }' \
     >"$root/Cargo.toml"
+  printf '%s\n' \
+    '[package]' \
+    'name = "evocc-proof"' \
+    'version = "0.0.0"' \
+    'edition = "2021"' \
+    '' \
+    '[dependencies]' \
+    >"$root/evocc-proof/Cargo.toml"
+  cp "$PROOF_SOURCE" "$root/evocc-proof/src/lib.rs"
   cp "$INDEPENDENT_CHECKER" "$root/tests/independent_checker.rs"
 }
 

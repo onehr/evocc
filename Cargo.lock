@@ -35,6 +35,9 @@ dependencies = [
 [[package]]
 name = "evocc-egraph"
 version = "0.0.0"
+dependencies = [
+ "evocc-proof",
+]
 
 [[package]]
 name = "evocc-evoir"
