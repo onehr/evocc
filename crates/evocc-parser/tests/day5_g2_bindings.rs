@@ -781,7 +781,7 @@ fn nested_block_shadowing_uses_distinct_ids_and_nearest_resolution() {
     let CHirStmt::Expr(assignment, _) = statement(&nested_items[1]) else {
         panic!("expected nested assignment");
     };
-    let CHirExpr::Assign(left, _, _) = assignment else {
+    let CHirExpr::Assign { target: left, .. } = assignment else {
         panic!("expected x = 1");
     };
     assert_ident(
@@ -845,7 +845,12 @@ fn for_declaration_gets_one_dedicated_child_scope() {
         ExprCategory::LValue,
         true,
     );
-    let CHirExpr::Assign(step_i, value, _) = step.expect("for step") else {
+    let CHirExpr::Assign {
+        target: step_i,
+        value,
+        ..
+    } = step.expect("for step")
+    else {
         panic!("expected i = i + 1");
     };
     assert_ident(
@@ -1728,7 +1733,10 @@ fn sibling_block_externs_and_later_file_declaration_share_one_entity() {
     let CHirStmt::Expr(assignment, _) = statement(&first_block[1]) else {
         panic!("expected assignment through first block extern");
     };
-    let CHirExpr::Assign(first_use, _, _) = assignment else {
+    let CHirExpr::Assign {
+        target: first_use, ..
+    } = assignment
+    else {
         panic!("expected x = 1");
     };
     assert_ident(

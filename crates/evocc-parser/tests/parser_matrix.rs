@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use evocc_chir::{BinaryOp, CHirDecl, CHirExpr, ParameterSyntax, UnaryOp};
+use evocc_chir::{AssignmentOp, BinaryOp, CHirDecl, CHirExpr, ParameterSyntax, UnaryOp, UpdateOp};
 use evocc_common::{Arena, FileId};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::Parser;
@@ -216,6 +216,11 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
                 canonical_expr(operand, types)
             )
         }
+        CHirExpr::Update { op, target, .. } => format!(
+            "unary({},{})",
+            update_name(*op),
+            canonical_expr(target, types)
+        ),
         CHirExpr::Binary(op, left, right, _) => format!(
             "binary({},{},{})",
             binary_name(*op),
@@ -260,9 +265,15 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
             canonical_expr(object, types),
             canonical_expr(index, types)
         ),
-        CHirExpr::Assign(left, right, _) => {
+        CHirExpr::Assign {
+            op,
+            target: left,
+            value: right,
+            ..
+        } => {
             format!(
-                "assign({},{})",
+                "{}({},{})",
+                assignment_name(*op),
                 canonical_expr(left, types),
                 canonical_expr(right, types)
             )
@@ -385,11 +396,32 @@ fn unary_name(op: UnaryOp) -> &'static str {
         UnaryOp::BitNot => "bit_not",
         UnaryOp::AddrOf => "addr",
         UnaryOp::Deref => "deref",
-        UnaryOp::PreInc => "pre_inc",
-        UnaryOp::PreDec => "pre_dec",
-        UnaryOp::PostInc => "post_inc",
-        UnaryOp::PostDec => "post_dec",
         UnaryOp::Plus => "plus",
+    }
+}
+
+fn update_name(op: UpdateOp) -> &'static str {
+    match op {
+        UpdateOp::PreIncrement => "pre_inc",
+        UpdateOp::PreDecrement => "pre_dec",
+        UpdateOp::PostIncrement => "post_inc",
+        UpdateOp::PostDecrement => "post_dec",
+    }
+}
+
+fn assignment_name(op: AssignmentOp) -> &'static str {
+    match op {
+        AssignmentOp::Simple => "assign",
+        AssignmentOp::Add => "add_assign",
+        AssignmentOp::Subtract => "sub_assign",
+        AssignmentOp::Multiply => "mul_assign",
+        AssignmentOp::Divide => "div_assign",
+        AssignmentOp::Remainder => "mod_assign",
+        AssignmentOp::ShiftLeft => "shl_assign",
+        AssignmentOp::ShiftRight => "shr_assign",
+        AssignmentOp::BitAnd => "bit_and_assign",
+        AssignmentOp::BitOr => "bit_or_assign",
+        AssignmentOp::BitXor => "bit_xor_assign",
     }
 }
 

@@ -773,6 +773,19 @@ pub enum AssignmentOp {
     BitXor,
 }
 
+/// Prefix/postfix scalar updates kept distinct from ordinary unary operators.
+///
+/// Each operation mutates exactly one storage place. Keeping this semantic
+/// operator in C-HIR avoids desugaring `x++` into an expression that mentions
+/// or evaluates `x` more than once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UpdateOp {
+    PreIncrement,
+    PreDecrement,
+    PostIncrement,
+    PostDecrement,
+}
+
 impl AssignmentOp {
     #[must_use]
     pub fn is_compound(self) -> bool {
@@ -879,6 +892,82 @@ impl ScalarPlace {
     }
 }
 
+/// The bounded scalar update plan consumed by the future evaluator.
+///
+/// This is deliberately a plan, not an interpreter: S3 proves the number of
+/// storage effects without introducing Day-7 memory or G3 execution state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UpdatePlan {
+    Assignment {
+        place: ScalarPlace,
+        op: AssignmentOp,
+    },
+    Update {
+        place: ScalarPlace,
+        op: UpdateOp,
+    },
+}
+
+impl UpdatePlan {
+    #[must_use]
+    pub const fn assignment(place: ScalarPlace, op: AssignmentOp) -> Self {
+        Self::Assignment { place, op }
+    }
+
+    #[must_use]
+    pub const fn update(place: ScalarPlace, op: UpdateOp) -> Self {
+        Self::Update { place, op }
+    }
+
+    #[must_use]
+    pub const fn place(self) -> ScalarPlace {
+        match self {
+            Self::Assignment { place, .. } | Self::Update { place, .. } => place,
+        }
+    }
+
+    #[must_use]
+    pub const fn effect(self) -> UpdateEffect {
+        let loads = match self {
+            Self::Assignment {
+                op: AssignmentOp::Simple,
+                ..
+            } => 0,
+            Self::Assignment { .. } | Self::Update { .. } => 1,
+        };
+        UpdateEffect {
+            place_lookups: 1,
+            loads,
+            stores: 1,
+        }
+    }
+}
+
+/// Exact storage-operation counts for one [`UpdatePlan`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct UpdateEffect {
+    place_lookups: u8,
+    loads: u8,
+    stores: u8,
+}
+
+impl UpdateEffect {
+    #[must_use]
+    pub const fn place_lookups(self) -> u8 {
+        self.place_lookups
+    }
+
+    #[must_use]
+    pub const fn loads(self) -> u8 {
+        self.loads
+    }
+
+    #[must_use]
+    pub const fn stores(self) -> u8 {
+        self.stores
+    }
+}
+
 /// Why a symbol cannot identify a direct scalar storage place.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScalarPlaceError {
@@ -914,3 +1003,73 @@ impl fmt::Display for ScalarPlaceError {
 }
 
 impl std::error::Error for ScalarPlaceError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use evocc_common::{FileId, SourceSpan};
+    use evocc_types::{CanonicalType, IntRank, Qualifiers};
+
+    fn scalar_place() -> ScalarPlace {
+        let mut types = TypeInterner::new();
+        let ty = types.intern(CanonicalType {
+            kind: TypeKind::Int(IntRank::Int),
+            qualifiers: Qualifiers::default(),
+        });
+        let mut symbols = SymbolTable::new();
+        let symbol = symbols
+            .declare(
+                symbols.file_scope(),
+                "value",
+                SymbolData::Object {
+                    storage: StorageClass::None,
+                },
+                ty,
+                SourceSpan::new(FileId::new(1), 0, 5, 1, 1),
+            )
+            .unwrap();
+        ScalarPlace::bind(&symbols, &types, symbol).unwrap()
+    }
+
+    #[test]
+    fn scalar_update_plans_witness_exactly_one_place_and_store() {
+        let place = scalar_place();
+        let simple = UpdatePlan::assignment(place, AssignmentOp::Simple);
+        assert_eq!(simple.place(), place);
+        assert_eq!(simple.effect().place_lookups(), 1);
+        assert_eq!(simple.effect().loads(), 0);
+        assert_eq!(simple.effect().stores(), 1);
+
+        for op in [
+            AssignmentOp::Add,
+            AssignmentOp::Subtract,
+            AssignmentOp::Multiply,
+            AssignmentOp::Divide,
+            AssignmentOp::Remainder,
+            AssignmentOp::ShiftLeft,
+            AssignmentOp::ShiftRight,
+            AssignmentOp::BitAnd,
+            AssignmentOp::BitOr,
+            AssignmentOp::BitXor,
+        ] {
+            let plan = UpdatePlan::assignment(place, op);
+            assert_eq!(plan.place(), place);
+            assert_eq!(plan.effect().place_lookups(), 1);
+            assert_eq!(plan.effect().loads(), 1);
+            assert_eq!(plan.effect().stores(), 1);
+        }
+
+        for op in [
+            UpdateOp::PreIncrement,
+            UpdateOp::PreDecrement,
+            UpdateOp::PostIncrement,
+            UpdateOp::PostDecrement,
+        ] {
+            let plan = UpdatePlan::update(place, op);
+            assert_eq!(plan.place(), place);
+            assert_eq!(plan.effect().place_lookups(), 1);
+            assert_eq!(plan.effect().loads(), 1);
+            assert_eq!(plan.effect().stores(), 1);
+        }
+    }
+}

@@ -21,7 +21,8 @@ pub use initializer::{
 pub use semantic::{
     AssignmentOp, ExprCategory, ExprFacts, ExprFactsError, NotAssignmentOperator, ScalarPlace,
     ScalarPlaceError, Scope, ScopeId, ScopeKind, Symbol, SymbolData, SymbolId, SymbolKind,
-    SymbolTable, SymbolTableCheckpoint, SymbolTableError, TagBinding,
+    SymbolTable, SymbolTableCheckpoint, SymbolTableError, TagBinding, UpdateEffect, UpdateOp,
+    UpdatePlan,
 };
 
 use evocc_common::SourceSpan;
@@ -93,6 +94,9 @@ pub struct StringLit {
 pub enum StringPrefix {
     None,
     L,
+    /// C11 `u` prefix (`char16_t` code units).
+    U16,
+    /// C11 `U` prefix (`char32_t` code units).
     U,
     U8,
 }
@@ -108,10 +112,6 @@ pub enum UnaryOp {
     BitNot,
     AddrOf,
     Deref,
-    PreInc,
-    PreDec,
-    PostInc,
-    PostDec,
     Plus,
 }
 
@@ -194,11 +194,21 @@ pub enum CHirExpr<'arena> {
         &'arena CHirExpr<'arena>,
         SourceSpan,
     ),
-    Assign(
-        &'arena CHirExpr<'arena>,
-        &'arena CHirExpr<'arena>,
-        SourceSpan,
-    ),
+    Assign {
+        op: AssignmentOp,
+        place: ScalarPlace,
+        target: &'arena CHirExpr<'arena>,
+        value: &'arena CHirExpr<'arena>,
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
+    Update {
+        op: UpdateOp,
+        place: ScalarPlace,
+        target: &'arena CHirExpr<'arena>,
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
     CompoundLit(TypeId, Vec<&'arena CHirExpr<'arena>>, SourceSpan),
     Comma(
         &'arena CHirExpr<'arena>,
@@ -227,7 +237,8 @@ impl CHirExpr<'_> {
             | Self::Member(_, _, span)
             | Self::PtrMember(_, _, span)
             | Self::Index(_, _, span)
-            | Self::Assign(_, _, span)
+            | Self::Assign { span, .. }
+            | Self::Update { span, .. }
             | Self::CompoundLit(_, _, span)
             | Self::Comma(_, _, span) => *span,
         }
@@ -654,13 +665,19 @@ pub fn eval_expr(expr: &CHirExpr<'_>, vars: &mut HashMap<String, i64>) -> i64 {
                 eval_expr(f, vars)
             }
         }
-        CHirExpr::Assign(lhs, rhs, _) => {
-            let r = eval_expr(rhs, vars);
-            if let CHirExpr::Ident { spelling, .. } = &**lhs {
+        CHirExpr::Assign {
+            op: AssignmentOp::Simple,
+            target,
+            value,
+            ..
+        } => {
+            let r = eval_expr(value, vars);
+            if let CHirExpr::Ident { spelling, .. } = &**target {
                 vars.insert(spelling.clone(), r);
             }
             r
         }
+        CHirExpr::Assign { .. } | CHirExpr::Update { .. } => 0,
         CHirExpr::Call(_, _, _) => 0,
         _ => 0,
     }
@@ -821,6 +838,20 @@ mod tests {
         let mut types = TypeInterner::new();
         let int_id = int_type_id(&mut types);
         let id = arena_expr(&arena, ident("x", int_id));
+        let mut symbols = SymbolTable::new();
+        let place_symbol = symbols
+            .declare(
+                symbols.file_scope(),
+                "x",
+                SymbolData::Object {
+                    storage: StorageClass::None,
+                },
+                int_id,
+                s,
+            )
+            .unwrap();
+        let place = ScalarPlace::bind(&symbols, &types, place_symbol).unwrap();
+        let value_facts = ExprFacts::value(int_id);
         let st = arena_stmt(&arena, CHirStmt::Null(s));
         let function_id = function_type_id(&mut types, int_id);
         let tag_id = types.declare_tag(TagKind::Struct, Some("S".into()));
@@ -877,7 +908,27 @@ mod tests {
             arena_expr(&arena, CHirExpr::Member(id, "f".into(), s)),
             arena_expr(&arena, CHirExpr::PtrMember(id, "f".into(), s)),
             arena_expr(&arena, CHirExpr::Index(id, id, s)),
-            arena_expr(&arena, CHirExpr::Assign(id, id, s)),
+            arena_expr(
+                &arena,
+                CHirExpr::Assign {
+                    op: AssignmentOp::Simple,
+                    place,
+                    target: id,
+                    value: id,
+                    facts: value_facts,
+                    span: s,
+                },
+            ),
+            arena_expr(
+                &arena,
+                CHirExpr::Update {
+                    op: UpdateOp::PostIncrement,
+                    place,
+                    target: id,
+                    facts: value_facts,
+                    span: s,
+                },
+            ),
             arena_expr(&arena, CHirExpr::CompoundLit(int_id, vec![id], s)),
             arena_expr(&arena, CHirExpr::Comma(id, id, s)),
         ];

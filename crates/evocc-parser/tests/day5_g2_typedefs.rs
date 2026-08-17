@@ -492,7 +492,12 @@ fn declarator_name_hides_typedef_only_after_its_own_type_specifier() {
     let CHirStmt::Expr(assignment, _) = block_statement(&nested_items[1]) else {
         panic!("expected assignment after T T");
     };
-    let CHirExpr::Assign(lhs, rhs, _) = assignment else {
+    let CHirExpr::Assign {
+        target: lhs,
+        value: rhs,
+        ..
+    } = assignment
+    else {
         panic!("expected assignment expression");
     };
     assert_identifier_symbol(lhs, inner.symbol);

@@ -14,9 +14,9 @@ use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 
 use evocc_chir::{
-    BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, ParameterSyntax,
-    SpannedName, StorageClass, TagMembers, TypeSpecifier, UnaryOp, WrittenDeclarator,
-    WrittenDeclaratorLayer,
+    AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt,
+    ParameterSyntax, SpannedName, StorageClass, TagMembers, TypeSpecifier, UnaryOp, UpdateOp,
+    WrittenDeclarator, WrittenDeclaratorLayer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_lex::{Lexer, TokenKind};
@@ -177,6 +177,13 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 let child = self.expression(&format!("{path}.operand"), child);
                 format!("{operator}({child})")
             }
+            CHirExpr::Update {
+                op, target: child, ..
+            } => {
+                let operator = update_name(*op);
+                let child = self.expression(&format!("{path}.operand"), child);
+                format!("{operator}({child})")
+            }
             CHirExpr::Binary(operator, left, right, _) => {
                 let operator = binary_name(*operator);
                 let left = self.expression(&format!("{path}.left"), left);
@@ -224,10 +231,16 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 let index = self.expression(&format!("{path}.index"), index);
                 format!("index({object},{index})")
             }
-            CHirExpr::Assign(left, right, _) => {
+            CHirExpr::Assign {
+                op,
+                target: left,
+                value: right,
+                ..
+            } => {
+                let operator = assignment_name(*op);
                 let left = self.expression(&format!("{path}.left"), left);
                 let right = self.expression(&format!("{path}.right"), right);
-                format!("assign({left},{right})")
+                format!("{operator}({left},{right})")
             }
             CHirExpr::CompoundLit(ty, values, _) => {
                 let values = values
@@ -588,11 +601,32 @@ fn unary_name(operator: UnaryOp) -> &'static str {
         UnaryOp::BitNot => "bit_not",
         UnaryOp::AddrOf => "addr_of",
         UnaryOp::Deref => "deref",
-        UnaryOp::PreInc => "pre_inc",
-        UnaryOp::PreDec => "pre_dec",
-        UnaryOp::PostInc => "post_inc",
-        UnaryOp::PostDec => "post_dec",
         UnaryOp::Plus => "plus",
+    }
+}
+
+fn update_name(operator: UpdateOp) -> &'static str {
+    match operator {
+        UpdateOp::PreIncrement => "pre_inc",
+        UpdateOp::PreDecrement => "pre_dec",
+        UpdateOp::PostIncrement => "post_inc",
+        UpdateOp::PostDecrement => "post_dec",
+    }
+}
+
+fn assignment_name(operator: AssignmentOp) -> &'static str {
+    match operator {
+        AssignmentOp::Simple => "assign",
+        AssignmentOp::Add => "add_assign",
+        AssignmentOp::Subtract => "sub_assign",
+        AssignmentOp::Multiply => "mul_assign",
+        AssignmentOp::Divide => "div_assign",
+        AssignmentOp::Remainder => "mod_assign",
+        AssignmentOp::ShiftLeft => "shl_assign",
+        AssignmentOp::ShiftRight => "shr_assign",
+        AssignmentOp::BitAnd => "bit_and_assign",
+        AssignmentOp::BitOr => "bit_or_assign",
+        AssignmentOp::BitXor => "bit_xor_assign",
     }
 }
 

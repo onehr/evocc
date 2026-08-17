@@ -83,12 +83,16 @@ fn assert_expr_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         | CHirExpr::SizeOfExpr(child, _)
         | CHirExpr::Member(child, _, _)
         | CHirExpr::PtrMember(child, _, _) => assert_expr_owned(arena, child),
+        CHirExpr::Update { target, .. } => assert_expr_owned(arena, target),
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
-        | CHirExpr::Assign(left, right, _)
         | CHirExpr::Comma(left, right, _) => {
             assert_expr_owned(arena, left);
             assert_expr_owned(arena, right);
+        }
+        CHirExpr::Assign { target, value, .. } => {
+            assert_expr_owned(arena, target);
+            assert_expr_owned(arena, value);
         }
         CHirExpr::Ternary(condition, then_value, else_value, _) => {
             assert_expr_owned(arena, condition);

@@ -3,12 +3,13 @@
 use std::collections::HashMap;
 
 use evocc_chir::{
-    BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, CharLit,
-    CharPrefix, EnumeratorDecl, ExprFacts, FloatLit, FloatSuffix, FunctionDecl, IntBase, IntLit,
-    IntSuffix, ObjectDecl, ParameterDecl, ParameterSyntax, RecordMember, ScopeId, ScopeKind,
-    SpannedName, StorageClass, StringLit, StringPrefix, SymbolData, SymbolId, SymbolKind,
-    SymbolTable, SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl, UnaryOp,
-    WrittenDeclarator, WrittenDeclaratorLayer,
+    AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit,
+    CharLit, CharPrefix, EnumeratorDecl, ExprCategory, ExprFacts, FloatLit, FloatSuffix,
+    FunctionDecl, IntBase, IntLit, IntSuffix, ObjectDecl, ParameterDecl, ParameterSyntax,
+    RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName, StorageClass, StringLit,
+    StringPrefix, SymbolData, SymbolId, SymbolKind, SymbolTable, SymbolTableError, TagDecl,
+    TagMembers, TypeSpecifier, TypedefDecl, UnaryOp, UpdateOp, WrittenDeclarator,
+    WrittenDeclaratorLayer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_lex::{Token, TokenKind};
@@ -185,6 +186,63 @@ enum DeclarationContext {
     File,
     Block,
     ForInitializer,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DirectUpdateTarget {
+    symbol: SymbolId,
+    ty: TypeId,
+}
+
+/// The pointed-to type of a converted pointer expression. `pointee` carries
+/// structural identity while `qualifiers` may be the union formed by a
+/// conditional expression even when no matching canonical TypeId exists yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct InferredPointerType {
+    pointee: TypeId,
+    qualifiers: Qualifiers,
+}
+
+/// A side-effect-free expression-type fact used while validating update
+/// operators. Synthetic literal/arithmetic types are kept out of the
+/// canonical interner so semantic checking cannot perturb declaration TypeId
+/// allocation or source-order fingerprints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InferredType {
+    Canonical(TypeId),
+    Integer(CIntegerType),
+    Real(FloatKind),
+    Complex(ComplexBase),
+    Pointer(InferredPointerType),
+    StringArray(StringPrefix),
+    StringPointer(StringPrefix),
+}
+
+#[derive(Debug, Clone, Copy)]
+struct InferredExpressionType {
+    ty: InferredType,
+    category: ExprCategory,
+    null_pointer_constant: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum OperandTypeClass {
+    Integer(CIntegerType),
+    Real(FloatKind),
+    Complex(ComplexBase),
+    Pointer(InferredPointerType),
+    StringPointer(StringPrefix),
+    Aggregate(TypeId),
+    Void,
+    Other,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UpdateConstraint {
+    Scalar,
+    PointerBoundary,
+    AggregateBoundary,
+    Invalid,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1627,7 +1685,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::Member(_, _, _)
             | CHirExpr::PtrMember(_, _, _)
             | CHirExpr::Index(_, _, _)
-            | CHirExpr::Assign(_, _, _)
+            | CHirExpr::Assign { .. }
+            | CHirExpr::Update { .. }
             | CHirExpr::CompoundLit(_, _, _)
             | CHirExpr::Comma(_, _, _) => Err(()),
         }
@@ -1657,12 +1716,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.integer_expression_type(operand)?;
                     Ok(CIntegerType::INT)
                 }
-                UnaryOp::AddrOf
-                | UnaryOp::Deref
-                | UnaryOp::PreInc
-                | UnaryOp::PreDec
-                | UnaryOp::PostInc
-                | UnaryOp::PostDec => Err(()),
+                UnaryOp::AddrOf | UnaryOp::Deref => Err(()),
             },
             CHirExpr::Binary(op, left, right, _) => {
                 let left = CInteger::new(0, self.integer_expression_type(left)?).promoted();
@@ -1726,7 +1780,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::Member(_, _, _)
             | CHirExpr::PtrMember(_, _, _)
             | CHirExpr::Index(_, _, _)
-            | CHirExpr::Assign(_, _, _)
+            | CHirExpr::Assign { .. }
+            | CHirExpr::Update { .. }
             | CHirExpr::CompoundLit(_, _, _)
             | CHirExpr::Comma(_, _, _) => Err(()),
         }
@@ -2703,13 +2758,725 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn parse_assignment(&mut self) -> Option<&'arena CHirExpr<'arena>> {
-        let lhs = self.parse_conditional()?;
-        if self.match_kind(TokenKind::Assign) {
-            let rhs = self.parse_assignment()?;
-            let span = self.merge_span(lhs.span(), rhs.span());
-            return Some(self.alloc_node(CHirExpr::Assign(lhs, rhs, span)));
+        let target = self.parse_conditional()?;
+        let Some(op) = self.peek_kind().and_then(assignment_op) else {
+            return Some(target);
+        };
+        self.advance();
+        // Diagnose the target first, but still consume the complete
+        // right-associative RHS so recovery resumes at the statement boundary.
+        let direct_target = self.direct_update_target(target);
+        let value = self.parse_assignment()?;
+        let direct_target = direct_target?;
+        let span = self.merge_span(target.span(), value.span());
+        match self.assignment_constraint(op, direct_target.ty, value) {
+            UpdateConstraint::Scalar => {}
+            UpdateConstraint::PointerBoundary => {
+                self.report("E2704", "not-covered-day7: pointer-update", span);
+                return None;
+            }
+            UpdateConstraint::AggregateBoundary => {
+                self.report(
+                    "E2703",
+                    "not-covered-day7: aggregate-assignment",
+                    target.span(),
+                );
+                return None;
+            }
+            UpdateConstraint::Invalid => {
+                self.report("E2102", "invalid-update-operands", span);
+                return None;
+            }
         }
-        Some(lhs)
+        let place = self.finish_scalar_update_place(direct_target, target.span())?;
+        let facts = ExprFacts::value(place.ty());
+        Some(self.alloc_node(CHirExpr::Assign {
+            op,
+            place,
+            target,
+            value,
+            facts,
+            span,
+        }))
+    }
+
+    fn direct_update_target(&mut self, target: &CHirExpr<'_>) -> Option<DirectUpdateTarget> {
+        if matches!(
+            target,
+            CHirExpr::Member(_, _, _)
+                | CHirExpr::PtrMember(_, _, _)
+                | CHirExpr::Index(_, _, _)
+                | CHirExpr::Unary(UnaryOp::Deref, _, _)
+        ) {
+            self.report(
+                "E2701",
+                "not-covered-day7: indirect-memory-lvalue",
+                target.span(),
+            );
+            return None;
+        }
+
+        let CHirExpr::Ident { symbol, facts, .. } = target else {
+            self.report("E2101", "expected-modifiable-lvalue", target.span());
+            return None;
+        };
+        if !facts.is_modifiable_lvalue() {
+            self.report("E2101", "expected-modifiable-lvalue", target.span());
+            return None;
+        }
+        Some(DirectUpdateTarget {
+            symbol: *symbol,
+            ty: facts.ty(),
+        })
+    }
+
+    fn finish_scalar_update_place(
+        &mut self,
+        target: DirectUpdateTarget,
+        target_span: SourceSpan,
+    ) -> Option<ScalarPlace> {
+        let canonical = self
+            .types
+            .get(target.ty)
+            .expect("identifier facts only reference interned types");
+        if canonical.qualifiers.is_volatile || canonical.qualifiers.is_atomic {
+            self.report(
+                "E2702",
+                "not-covered-day7: volatile-or-atomic-update",
+                target_span,
+            );
+            return None;
+        }
+        match ScalarPlace::bind(&self.symbols, &self.types, target.symbol) {
+            Ok(place) => Some(place),
+            Err(_) => {
+                self.report("E2101", "expected-modifiable-lvalue", target_span);
+                None
+            }
+        }
+    }
+
+    fn assignment_constraint(
+        &self,
+        op: AssignmentOp,
+        target_ty: TypeId,
+        value: &CHirExpr<'_>,
+    ) -> UpdateConstraint {
+        let left = self.operand_type_class(InferredType::Canonical(target_ty));
+        let Some(right) = self.converted_expression_type(value) else {
+            return UpdateConstraint::Invalid;
+        };
+        let right_class = self.operand_type_class(right.ty);
+
+        match op {
+            AssignmentOp::Simple => match (left, right_class) {
+                (left, right) if is_arithmetic_class(left) && is_arithmetic_class(right) => {
+                    UpdateConstraint::Scalar
+                }
+                (OperandTypeClass::Integer(ty), OperandTypeClass::Pointer(_))
+                    if ty == CIntegerType::BOOL =>
+                {
+                    UpdateConstraint::Scalar
+                }
+                (OperandTypeClass::Integer(ty), OperandTypeClass::StringPointer(_))
+                    if ty == CIntegerType::BOOL =>
+                {
+                    UpdateConstraint::Scalar
+                }
+                (OperandTypeClass::Pointer(left), OperandTypeClass::Pointer(right)) => {
+                    if self.pointer_assignment_compatible(left, right) {
+                        UpdateConstraint::Scalar
+                    } else {
+                        UpdateConstraint::Invalid
+                    }
+                }
+                (OperandTypeClass::Pointer(left), OperandTypeClass::StringPointer(prefix)) => {
+                    if self.pointer_accepts_string(left, prefix) {
+                        UpdateConstraint::Scalar
+                    } else {
+                        UpdateConstraint::Invalid
+                    }
+                }
+                (OperandTypeClass::Pointer(_), OperandTypeClass::Integer(_))
+                    if right.null_pointer_constant =>
+                {
+                    UpdateConstraint::Scalar
+                }
+                (OperandTypeClass::Aggregate(left), OperandTypeClass::Aggregate(right)) => {
+                    if self.same_unqualified_type(left, right) {
+                        UpdateConstraint::AggregateBoundary
+                    } else {
+                        UpdateConstraint::Invalid
+                    }
+                }
+                _ => UpdateConstraint::Invalid,
+            },
+            AssignmentOp::Add | AssignmentOp::Subtract => match (left, right_class) {
+                (left, right) if is_arithmetic_class(left) && is_arithmetic_class(right) => {
+                    UpdateConstraint::Scalar
+                }
+                (OperandTypeClass::Pointer(pointee), OperandTypeClass::Integer(_)) => {
+                    if self.pointer_arithmetic_is_valid(pointee.pointee) {
+                        UpdateConstraint::PointerBoundary
+                    } else {
+                        UpdateConstraint::Invalid
+                    }
+                }
+                _ => UpdateConstraint::Invalid,
+            },
+            AssignmentOp::Multiply | AssignmentOp::Divide => {
+                if is_arithmetic_class(left) && is_arithmetic_class(right_class) {
+                    UpdateConstraint::Scalar
+                } else {
+                    UpdateConstraint::Invalid
+                }
+            }
+            AssignmentOp::Remainder
+            | AssignmentOp::ShiftLeft
+            | AssignmentOp::ShiftRight
+            | AssignmentOp::BitAnd
+            | AssignmentOp::BitOr
+            | AssignmentOp::BitXor => {
+                if is_integer_class(left) && is_integer_class(right_class) {
+                    UpdateConstraint::Scalar
+                } else {
+                    UpdateConstraint::Invalid
+                }
+            }
+        }
+    }
+
+    fn update_constraint(&self, target_ty: TypeId) -> UpdateConstraint {
+        match self.operand_type_class(InferredType::Canonical(target_ty)) {
+            OperandTypeClass::Integer(_) | OperandTypeClass::Real(_) => UpdateConstraint::Scalar,
+            OperandTypeClass::Pointer(pointee) => {
+                if self.pointer_arithmetic_is_valid(pointee.pointee) {
+                    UpdateConstraint::PointerBoundary
+                } else {
+                    UpdateConstraint::Invalid
+                }
+            }
+            OperandTypeClass::Complex(_)
+            | OperandTypeClass::StringPointer(_)
+            | OperandTypeClass::Aggregate(_)
+            | OperandTypeClass::Void
+            | OperandTypeClass::Other => UpdateConstraint::Invalid,
+        }
+    }
+
+    /// Infer the type and value category represented by an existing C-HIR
+    /// expression. This is intentionally read-only over the type interner:
+    /// literal and usual-arithmetic result types use `InferredType` values so
+    /// validating an expression never changes later declaration identities.
+    fn expression_type(&self, expression: &CHirExpr<'_>) -> Option<InferredExpressionType> {
+        let (ty, category) = match expression {
+            CHirExpr::Lit(literal, _) => (
+                InferredType::Integer(integer_literal_value(*literal).ok()?.ty),
+                ExprCategory::Value,
+            ),
+            CHirExpr::FloatLit(literal, _) => (
+                InferredType::Real(match literal.suffix {
+                    FloatSuffix::F => FloatKind::F32,
+                    FloatSuffix::None => FloatKind::F64,
+                    FloatSuffix::L => FloatKind::F128,
+                }),
+                ExprCategory::Value,
+            ),
+            CHirExpr::CharLit(_, _) => (
+                InferredType::Integer(CIntegerType::INT),
+                ExprCategory::Value,
+            ),
+            CHirExpr::Ident { facts, .. } => {
+                (InferredType::Canonical(facts.ty()), facts.category())
+            }
+            CHirExpr::Unary(op, operand, _) => {
+                let operand = match op {
+                    UnaryOp::AddrOf => self.expression_type(operand)?,
+                    UnaryOp::Plus | UnaryOp::Neg | UnaryOp::Not | UnaryOp::BitNot => {
+                        self.converted_expression_type(operand)?
+                    }
+                    UnaryOp::Deref => self.converted_expression_type(operand)?,
+                };
+                match op {
+                    UnaryOp::Plus | UnaryOp::Neg => (
+                        self.promoted_arithmetic_type(operand.ty)?,
+                        ExprCategory::Value,
+                    ),
+                    UnaryOp::Not => {
+                        if !is_scalar_class(self.operand_type_class(operand.ty)) {
+                            return None;
+                        }
+                        (
+                            InferredType::Integer(CIntegerType::INT),
+                            ExprCategory::Value,
+                        )
+                    }
+                    UnaryOp::BitNot => {
+                        let OperandTypeClass::Integer(integer) =
+                            self.operand_type_class(operand.ty)
+                        else {
+                            return None;
+                        };
+                        (
+                            InferredType::Integer(CInteger::new(0, integer).promoted().ty),
+                            ExprCategory::Value,
+                        )
+                    }
+                    UnaryOp::AddrOf => {
+                        let InferredType::Canonical(pointee) = operand.ty else {
+                            return None;
+                        };
+                        (
+                            InferredType::Pointer(self.inferred_pointer_type(pointee)?),
+                            ExprCategory::Value,
+                        )
+                    }
+                    UnaryOp::Deref => {
+                        let OperandTypeClass::Pointer(pointee) =
+                            self.operand_type_class(operand.ty)
+                        else {
+                            return None;
+                        };
+                        let category = if matches!(
+                            self.types.get(pointee.pointee).map(|ty| &ty.kind),
+                            Some(TypeKind::Function { .. })
+                        ) {
+                            ExprCategory::FunctionDesignator
+                        } else {
+                            ExprCategory::LValue
+                        };
+                        (InferredType::Canonical(pointee.pointee), category)
+                    }
+                }
+            }
+            CHirExpr::Binary(op, left, right, _) => {
+                let left = self.converted_expression_type(left)?;
+                let right = self.converted_expression_type(right)?;
+                let ty = self.binary_expression_type(*op, left, right)?;
+                (ty, ExprCategory::Value)
+            }
+            CHirExpr::Ternary(condition, when_true, when_false, _) => {
+                let condition = self.converted_expression_type(condition)?;
+                if !is_scalar_class(self.operand_type_class(condition.ty)) {
+                    return None;
+                }
+                let when_true = self.converted_expression_type(when_true)?;
+                let when_false = self.converted_expression_type(when_false)?;
+                let ty = self.conditional_expression_type(when_true, when_false)?;
+                (ty, ExprCategory::Value)
+            }
+            CHirExpr::Call(callee, _, _) => {
+                let callee = self.converted_expression_type(callee)?;
+                let OperandTypeClass::Pointer(function) = self.operand_type_class(callee.ty) else {
+                    return None;
+                };
+                let TypeKind::Function { return_type, .. } =
+                    self.types.get(function.pointee).map(|ty| &ty.kind)?
+                else {
+                    return None;
+                };
+                (InferredType::Canonical(*return_type), ExprCategory::Value)
+            }
+            CHirExpr::Cast(ty, _, _) => (InferredType::Canonical(*ty), ExprCategory::Value),
+            CHirExpr::SizeOf(_, _) | CHirExpr::SizeOfExpr(_, _) | CHirExpr::AlignOf(_, _) => (
+                InferredType::Integer(CIntegerType::ULONG),
+                ExprCategory::Value,
+            ),
+            CHirExpr::Assign { facts, .. } | CHirExpr::Update { facts, .. } => {
+                (InferredType::Canonical(facts.ty()), facts.category())
+            }
+            CHirExpr::CompoundLit(ty, _, _) => (InferredType::Canonical(*ty), ExprCategory::LValue),
+            CHirExpr::Comma(_, right, _) => {
+                let right = self.converted_expression_type(right)?;
+                (right.ty, ExprCategory::Value)
+            }
+            CHirExpr::StringLit(literal, _) => (
+                InferredType::StringArray(literal.prefix),
+                ExprCategory::LValue,
+            ),
+            CHirExpr::Member(_, _, _) | CHirExpr::PtrMember(_, _, _) | CHirExpr::Index(_, _, _) => {
+                return None
+            }
+        };
+        Some(InferredExpressionType {
+            ty,
+            category,
+            null_pointer_constant: self.is_null_pointer_constant(expression),
+        })
+    }
+
+    fn converted_expression_type(
+        &self,
+        expression: &CHirExpr<'_>,
+    ) -> Option<InferredExpressionType> {
+        let mut inferred = self.expression_type(expression)?;
+        if let InferredType::Canonical(ty) = inferred.ty {
+            match self.types.get(ty).map(|ty| &ty.kind)? {
+                TypeKind::Array { element, .. } => {
+                    inferred.ty = InferredType::Pointer(self.inferred_pointer_type(*element)?);
+                }
+                TypeKind::Function { .. } => {
+                    inferred.ty = InferredType::Pointer(self.inferred_pointer_type(ty)?);
+                }
+                _ => {}
+            }
+        } else if let InferredType::StringArray(prefix) = inferred.ty {
+            inferred.ty = InferredType::StringPointer(prefix);
+        }
+        if inferred.category != ExprCategory::Value {
+            inferred.category = ExprCategory::Value;
+        }
+        Some(inferred)
+    }
+
+    fn promoted_arithmetic_type(&self, ty: InferredType) -> Option<InferredType> {
+        Some(match self.operand_type_class(ty) {
+            OperandTypeClass::Integer(integer) => {
+                InferredType::Integer(CInteger::new(0, integer).promoted().ty)
+            }
+            OperandTypeClass::Real(real) => InferredType::Real(real),
+            OperandTypeClass::Complex(complex) => InferredType::Complex(complex),
+            OperandTypeClass::Pointer(_)
+            | OperandTypeClass::StringPointer(_)
+            | OperandTypeClass::Aggregate(_)
+            | OperandTypeClass::Void
+            | OperandTypeClass::Other => return None,
+        })
+    }
+
+    fn binary_expression_type(
+        &self,
+        op: BinaryOp,
+        left: InferredExpressionType,
+        right: InferredExpressionType,
+    ) -> Option<InferredType> {
+        let left_class = self.operand_type_class(left.ty);
+        let right_class = self.operand_type_class(right.ty);
+        match op {
+            BinaryOp::Add => match (left_class, right_class) {
+                (OperandTypeClass::Pointer(pointee), OperandTypeClass::Integer(_))
+                | (OperandTypeClass::Integer(_), OperandTypeClass::Pointer(pointee)) => {
+                    Some(InferredType::Pointer(pointee))
+                }
+                (OperandTypeClass::StringPointer(prefix), OperandTypeClass::Integer(_))
+                | (OperandTypeClass::Integer(_), OperandTypeClass::StringPointer(prefix)) => {
+                    Some(InferredType::StringPointer(prefix))
+                }
+                _ => self.usual_arithmetic_expression_type(left.ty, right.ty),
+            },
+            BinaryOp::Sub => match (left_class, right_class) {
+                (OperandTypeClass::Pointer(pointee), OperandTypeClass::Integer(_)) => {
+                    Some(InferredType::Pointer(pointee))
+                }
+                (OperandTypeClass::StringPointer(prefix), OperandTypeClass::Integer(_)) => {
+                    Some(InferredType::StringPointer(prefix))
+                }
+                (OperandTypeClass::Pointer(left), OperandTypeClass::Pointer(right))
+                    if self.pointer_types_compatible(left, right) =>
+                {
+                    Some(InferredType::Integer(CIntegerType::LONG))
+                }
+                (OperandTypeClass::StringPointer(prefix), OperandTypeClass::Pointer(pointee))
+                | (OperandTypeClass::Pointer(pointee), OperandTypeClass::StringPointer(prefix))
+                    if self.pointer_accepts_string(pointee, prefix) =>
+                {
+                    Some(InferredType::Integer(CIntegerType::LONG))
+                }
+                (OperandTypeClass::StringPointer(left), OperandTypeClass::StringPointer(right))
+                    if left == right =>
+                {
+                    Some(InferredType::Integer(CIntegerType::LONG))
+                }
+                _ => self.usual_arithmetic_expression_type(left.ty, right.ty),
+            },
+            BinaryOp::Mul | BinaryOp::Div => {
+                self.usual_arithmetic_expression_type(left.ty, right.ty)
+            }
+            BinaryOp::Mod | BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor => {
+                let (OperandTypeClass::Integer(left), OperandTypeClass::Integer(right)) =
+                    (left_class, right_class)
+                else {
+                    return None;
+                };
+                Some(InferredType::Integer(usual_arithmetic_type(
+                    CInteger::new(0, left).promoted().ty,
+                    CInteger::new(0, right).promoted().ty,
+                )))
+            }
+            BinaryOp::Shl | BinaryOp::Shr => {
+                let (OperandTypeClass::Integer(left), OperandTypeClass::Integer(_)) =
+                    (left_class, right_class)
+                else {
+                    return None;
+                };
+                Some(InferredType::Integer(CInteger::new(0, left).promoted().ty))
+            }
+            BinaryOp::Lt
+            | BinaryOp::Le
+            | BinaryOp::Gt
+            | BinaryOp::Ge
+            | BinaryOp::Eq
+            | BinaryOp::Ne => {
+                let compatible_pointers = match (left_class, right_class) {
+                    (OperandTypeClass::Pointer(left), OperandTypeClass::Pointer(right)) => {
+                        self.pointer_types_compatible(left, right)
+                    }
+                    (
+                        OperandTypeClass::Pointer(pointee),
+                        OperandTypeClass::StringPointer(prefix),
+                    )
+                    | (
+                        OperandTypeClass::StringPointer(prefix),
+                        OperandTypeClass::Pointer(pointee),
+                    ) => self.pointer_accepts_string(pointee, prefix),
+                    (
+                        OperandTypeClass::StringPointer(left),
+                        OperandTypeClass::StringPointer(right),
+                    ) => left == right,
+                    _ => false,
+                };
+                let comparable = (is_arithmetic_class(left_class)
+                    && is_arithmetic_class(right_class))
+                    || compatible_pointers
+                    || (matches!(left_class, OperandTypeClass::Pointer(_))
+                        && right.null_pointer_constant)
+                    || (matches!(right_class, OperandTypeClass::Pointer(_))
+                        && left.null_pointer_constant)
+                    || (matches!(left_class, OperandTypeClass::StringPointer(_))
+                        && right.null_pointer_constant)
+                    || (matches!(right_class, OperandTypeClass::StringPointer(_))
+                        && left.null_pointer_constant);
+                comparable.then_some(InferredType::Integer(CIntegerType::INT))
+            }
+            BinaryOp::And | BinaryOp::Or => (is_scalar_class(left_class)
+                && is_scalar_class(right_class))
+            .then_some(InferredType::Integer(CIntegerType::INT)),
+            BinaryOp::Comma
+            | BinaryOp::Assign
+            | BinaryOp::AddAssign
+            | BinaryOp::SubAssign
+            | BinaryOp::MulAssign
+            | BinaryOp::DivAssign
+            | BinaryOp::ModAssign
+            | BinaryOp::ShlAssign
+            | BinaryOp::ShrAssign
+            | BinaryOp::BitAndAssign
+            | BinaryOp::BitOrAssign
+            | BinaryOp::BitXorAssign => None,
+        }
+    }
+
+    fn conditional_expression_type(
+        &self,
+        when_true: InferredExpressionType,
+        when_false: InferredExpressionType,
+    ) -> Option<InferredType> {
+        if when_true.ty == when_false.ty {
+            return Some(when_true.ty);
+        }
+        if let Some(arithmetic) = self.usual_arithmetic_expression_type(when_true.ty, when_false.ty)
+        {
+            return Some(arithmetic);
+        }
+        match (
+            self.operand_type_class(when_true.ty),
+            self.operand_type_class(when_false.ty),
+        ) {
+            (OperandTypeClass::Pointer(left), OperandTypeClass::Pointer(right))
+                if self.pointer_types_compatible(left, right) =>
+            {
+                self.composite_pointer_type(left, right)
+                    .map(InferredType::Pointer)
+            }
+            (OperandTypeClass::Pointer(pointee), OperandTypeClass::StringPointer(prefix))
+            | (OperandTypeClass::StringPointer(prefix), OperandTypeClass::Pointer(pointee))
+                if self.pointer_accepts_string(pointee, prefix) =>
+            {
+                Some(InferredType::Pointer(pointee))
+            }
+            (OperandTypeClass::Pointer(pointee), OperandTypeClass::Integer(_))
+                if when_false.null_pointer_constant =>
+            {
+                Some(InferredType::Pointer(pointee))
+            }
+            (OperandTypeClass::StringPointer(prefix), OperandTypeClass::Integer(_))
+                if when_false.null_pointer_constant =>
+            {
+                Some(InferredType::StringPointer(prefix))
+            }
+            (OperandTypeClass::Integer(_), OperandTypeClass::StringPointer(prefix))
+                if when_true.null_pointer_constant =>
+            {
+                Some(InferredType::StringPointer(prefix))
+            }
+            (OperandTypeClass::Integer(_), OperandTypeClass::Pointer(pointee))
+                if when_true.null_pointer_constant =>
+            {
+                Some(InferredType::Pointer(pointee))
+            }
+            (OperandTypeClass::Aggregate(left), OperandTypeClass::Aggregate(right))
+                if self.same_unqualified_type(left, right) =>
+            {
+                Some(InferredType::Canonical(left))
+            }
+            _ => None,
+        }
+    }
+
+    fn usual_arithmetic_expression_type(
+        &self,
+        left: InferredType,
+        right: InferredType,
+    ) -> Option<InferredType> {
+        let left = self.operand_type_class(left);
+        let right = self.operand_type_class(right);
+        match (left, right) {
+            (OperandTypeClass::Integer(left), OperandTypeClass::Integer(right)) => {
+                Some(InferredType::Integer(usual_arithmetic_type(
+                    CInteger::new(0, left).promoted().ty,
+                    CInteger::new(0, right).promoted().ty,
+                )))
+            }
+            (left, right) if is_arithmetic_class(left) && is_arithmetic_class(right) => {
+                let has_complex = matches!(left, OperandTypeClass::Complex(_))
+                    || matches!(right, OperandTypeClass::Complex(_));
+                let floating = widest_floating_kind(left, right)?;
+                if has_complex {
+                    Some(InferredType::Complex(complex_base_for_float(floating)))
+                } else {
+                    Some(InferredType::Real(floating))
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn operand_type_class(&self, ty: InferredType) -> OperandTypeClass {
+        match ty {
+            InferredType::Integer(integer) => OperandTypeClass::Integer(integer),
+            InferredType::Real(real) => OperandTypeClass::Real(real),
+            InferredType::Complex(complex) => OperandTypeClass::Complex(complex),
+            InferredType::Pointer(pointee) => OperandTypeClass::Pointer(pointee),
+            InferredType::StringArray(_) => OperandTypeClass::Other,
+            InferredType::StringPointer(prefix) => OperandTypeClass::StringPointer(prefix),
+            InferredType::Canonical(ty) => {
+                let Some(canonical) = self.types.get(ty) else {
+                    return OperandTypeClass::Other;
+                };
+                match canonical.kind {
+                    TypeKind::Int(rank) => integer_rank_type(rank)
+                        .map(OperandTypeClass::Integer)
+                        .unwrap_or(OperandTypeClass::Other),
+                    TypeKind::Enum(_) => self
+                        .canonical_integer_type(ty)
+                        .map(OperandTypeClass::Integer)
+                        .unwrap_or(OperandTypeClass::Other),
+                    TypeKind::Float(real) => OperandTypeClass::Real(real),
+                    TypeKind::Complex(complex) => OperandTypeClass::Complex(complex),
+                    TypeKind::Pointer(pointee) => self
+                        .inferred_pointer_type(pointee)
+                        .map(OperandTypeClass::Pointer)
+                        .unwrap_or(OperandTypeClass::Other),
+                    TypeKind::Struct(_) | TypeKind::Union(_) => OperandTypeClass::Aggregate(ty),
+                    TypeKind::Void => OperandTypeClass::Void,
+                    TypeKind::Array { .. } | TypeKind::Function { .. } => OperandTypeClass::Other,
+                }
+            }
+        }
+    }
+
+    fn pointer_arithmetic_is_valid(&self, pointee: TypeId) -> bool {
+        TargetDataLayout::aarch64_unknown_linux_gnu()
+            .layout_of(&self.types, pointee)
+            .is_ok()
+    }
+
+    fn inferred_pointer_type(&self, pointee: TypeId) -> Option<InferredPointerType> {
+        Some(InferredPointerType {
+            pointee,
+            qualifiers: self.types.get(pointee)?.qualifiers,
+        })
+    }
+
+    fn pointer_accepts_string(&self, pointer: InferredPointerType, prefix: StringPrefix) -> bool {
+        self.types.get(pointer.pointee).is_some_and(|pointee| {
+            matches!(pointee.kind, TypeKind::Void)
+                || matches!(
+                    (prefix, &pointee.kind),
+                    (
+                        StringPrefix::None | StringPrefix::U8,
+                        TypeKind::Int(IntRank::Char)
+                    ) | (StringPrefix::L, TypeKind::Int(IntRank::Int))
+                        | (StringPrefix::U16, TypeKind::Int(IntRank::UShort))
+                        | (StringPrefix::U, TypeKind::Int(IntRank::UInt))
+                )
+        })
+    }
+
+    fn pointer_assignment_compatible(
+        &self,
+        target: InferredPointerType,
+        source: InferredPointerType,
+    ) -> bool {
+        self.pointer_types_compatible(target, source)
+            && qualifiers_include(target.qualifiers, source.qualifiers)
+    }
+
+    fn pointer_types_compatible(
+        &self,
+        left: InferredPointerType,
+        right: InferredPointerType,
+    ) -> bool {
+        let (Some(left), Some(right)) =
+            (self.types.get(left.pointee), self.types.get(right.pointee))
+        else {
+            return false;
+        };
+        if left.kind == right.kind {
+            return true;
+        }
+        matches!(
+            (&left.kind, &right.kind),
+            (TypeKind::Void, right) if is_object_type_kind(right)
+        ) || matches!(
+            (&left.kind, &right.kind),
+            (left, TypeKind::Void) if is_object_type_kind(left)
+        )
+    }
+
+    fn composite_pointer_type(
+        &self,
+        left: InferredPointerType,
+        right: InferredPointerType,
+    ) -> Option<InferredPointerType> {
+        if !self.pointer_types_compatible(left, right) {
+            return None;
+        }
+        let left_kind = &self.types.get(left.pointee)?.kind;
+        let right_kind = &self.types.get(right.pointee)?.kind;
+        let pointee = match (left_kind, right_kind) {
+            (TypeKind::Void, _) => left.pointee,
+            (_, TypeKind::Void) => right.pointee,
+            _ => left.pointee,
+        };
+        Some(InferredPointerType {
+            pointee,
+            qualifiers: merge_qualifiers(left.qualifiers, right.qualifiers),
+        })
+    }
+
+    fn same_unqualified_type(&self, left: TypeId, right: TypeId) -> bool {
+        match (self.types.get(left), self.types.get(right)) {
+            (Some(left), Some(right)) => left.kind == right.kind,
+            _ => false,
+        }
+    }
+
+    fn is_null_pointer_constant(&self, expression: &CHirExpr<'_>) -> bool {
+        self.integer_expression_type(expression).is_ok()
+            && self
+                .eval_integer_constant_expression(expression)
+                .is_ok_and(|value| value.raw == 0)
     }
 
     fn parse_conditional(&mut self) -> Option<&'arena CHirExpr<'arena>> {
@@ -2745,6 +3512,40 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn parse_unary(&mut self) -> Option<&'arena CHirExpr<'arena>> {
+        if matches!(
+            self.peek_kind(),
+            Some(TokenKind::PlusPlus | TokenKind::MinusMinus)
+        ) {
+            let token = self.advance().expect("peeked prefix update");
+            let target = self.parse_unary()?;
+            let direct_target = self.direct_update_target(target)?;
+            let op = if token.kind == TokenKind::PlusPlus {
+                UpdateOp::PreIncrement
+            } else {
+                UpdateOp::PreDecrement
+            };
+            let span = self.merge_span(token.span, target.span());
+            match self.update_constraint(direct_target.ty) {
+                UpdateConstraint::Scalar => {}
+                UpdateConstraint::PointerBoundary => {
+                    self.report("E2704", "not-covered-day7: pointer-update", span);
+                    return None;
+                }
+                UpdateConstraint::AggregateBoundary | UpdateConstraint::Invalid => {
+                    self.report("E2102", "invalid-update-operands", span);
+                    return None;
+                }
+            }
+            let place = self.finish_scalar_update_place(direct_target, target.span())?;
+            return Some(self.alloc_node(CHirExpr::Update {
+                op,
+                place,
+                target,
+                facts: ExprFacts::value(place.ty()),
+                span,
+            }));
+        }
+
         let unary = match self.peek_kind() {
             Some(TokenKind::Minus) => Some(UnaryOp::Neg),
             Some(TokenKind::Plus) => Some(UnaryOp::Plus),
@@ -2752,8 +3553,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             Some(TokenKind::Tilde) => Some(UnaryOp::BitNot),
             Some(TokenKind::Amp) => Some(UnaryOp::AddrOf),
             Some(TokenKind::Star) => Some(UnaryOp::Deref),
-            Some(TokenKind::PlusPlus) => Some(UnaryOp::PreInc),
-            Some(TokenKind::MinusMinus) => Some(UnaryOp::PreDec),
             _ => None,
         };
         if let Some(op) = unary {
@@ -2879,13 +3678,33 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 Some(TokenKind::PlusPlus) | Some(TokenKind::MinusMinus) => {
                     let token = self.advance().unwrap();
+                    let target = expression;
+                    let direct_target = self.direct_update_target(target)?;
                     let op = if token.kind == TokenKind::PlusPlus {
-                        UnaryOp::PostInc
+                        UpdateOp::PostIncrement
                     } else {
-                        UnaryOp::PostDec
+                        UpdateOp::PostDecrement
                     };
-                    let span = self.merge_span(expression.span(), token.span);
-                    expression = self.alloc_node(CHirExpr::Unary(op, expression, span));
+                    let span = self.merge_span(target.span(), token.span);
+                    match self.update_constraint(direct_target.ty) {
+                        UpdateConstraint::Scalar => {}
+                        UpdateConstraint::PointerBoundary => {
+                            self.report("E2704", "not-covered-day7: pointer-update", span);
+                            return None;
+                        }
+                        UpdateConstraint::AggregateBoundary | UpdateConstraint::Invalid => {
+                            self.report("E2102", "invalid-update-operands", span);
+                            return None;
+                        }
+                    }
+                    let place = self.finish_scalar_update_place(direct_target, target.span())?;
+                    expression = self.alloc_node(CHirExpr::Update {
+                        op,
+                        place,
+                        target,
+                        facts: ExprFacts::value(place.ty()),
+                        span,
+                    });
                 }
                 _ => break,
             }
@@ -2957,13 +3776,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 };
                 CHirExpr::CharLit(literal, tok.span)
             }
-            TokenKind::StringLiteral => CHirExpr::StringLit(
-                StringLit {
-                    value: self.token_text(&tok).to_owned(),
-                    prefix: StringPrefix::None,
-                },
-                tok.span,
-            ),
+            TokenKind::StringLiteral => {
+                let Some(literal) = parse_string_literal(self.token_text(&tok)) else {
+                    self.report("E1006", "invalid-string-literal", tok.span);
+                    return None;
+                };
+                CHirExpr::StringLit(literal, tok.span)
+            }
             TokenKind::LParen => {
                 let expr = self.parse_expression()?;
                 let rparen_span = self.peek().map(|t| t.span).unwrap_or(tok.span);
@@ -2995,6 +3814,84 @@ fn merge_qualifiers(left: Qualifiers, right: Qualifiers) -> Qualifiers {
         is_restrict: left.is_restrict || right.is_restrict,
         is_atomic: left.is_atomic || right.is_atomic,
     }
+}
+
+fn is_integer_class(class: OperandTypeClass) -> bool {
+    matches!(class, OperandTypeClass::Integer(_))
+}
+
+fn is_arithmetic_class(class: OperandTypeClass) -> bool {
+    matches!(
+        class,
+        OperandTypeClass::Integer(_) | OperandTypeClass::Real(_) | OperandTypeClass::Complex(_)
+    )
+}
+
+fn is_scalar_class(class: OperandTypeClass) -> bool {
+    is_arithmetic_class(class)
+        || matches!(
+            class,
+            OperandTypeClass::Pointer(_) | OperandTypeClass::StringPointer(_)
+        )
+}
+
+fn floating_kind(class: OperandTypeClass) -> Option<FloatKind> {
+    match class {
+        OperandTypeClass::Real(kind) => Some(kind),
+        OperandTypeClass::Complex(base) => Some(match base {
+            ComplexBase::CF16 => FloatKind::F16,
+            ComplexBase::CF32 => FloatKind::F32,
+            ComplexBase::CF64 => FloatKind::F64,
+            ComplexBase::CF128 => FloatKind::F128,
+        }),
+        OperandTypeClass::Integer(_)
+        | OperandTypeClass::Pointer(_)
+        | OperandTypeClass::StringPointer(_)
+        | OperandTypeClass::Aggregate(_)
+        | OperandTypeClass::Void
+        | OperandTypeClass::Other => None,
+    }
+}
+
+fn floating_rank(kind: FloatKind) -> u8 {
+    match kind {
+        FloatKind::F16 => 0,
+        FloatKind::F32 => 1,
+        FloatKind::F64 => 2,
+        FloatKind::F128 => 3,
+    }
+}
+
+fn widest_floating_kind(left: OperandTypeClass, right: OperandTypeClass) -> Option<FloatKind> {
+    match (floating_kind(left), floating_kind(right)) {
+        (Some(left), Some(right)) => Some(if floating_rank(left) >= floating_rank(right) {
+            left
+        } else {
+            right
+        }),
+        (Some(kind), None) | (None, Some(kind)) => Some(kind),
+        (None, None) => None,
+    }
+}
+
+fn complex_base_for_float(kind: FloatKind) -> ComplexBase {
+    match kind {
+        FloatKind::F16 => ComplexBase::CF16,
+        FloatKind::F32 => ComplexBase::CF32,
+        FloatKind::F64 => ComplexBase::CF64,
+        FloatKind::F128 => ComplexBase::CF128,
+    }
+}
+
+fn qualifiers_include(target: Qualifiers, source: Qualifiers) -> bool {
+    (!source.is_const || target.is_const)
+        && (!source.is_volatile || target.is_volatile)
+        && (!source.is_restrict || target.is_restrict)
+        && (!source.is_atomic || target.is_atomic)
+}
+
+fn is_object_type_kind(kind: &TypeKind) -> bool {
+    !matches!(kind, TypeKind::Void | TypeKind::Function { .. })
 }
 
 // ── precedence table ───────────────────────────────────────────────────────
@@ -3035,6 +3932,23 @@ fn binary_op(kind: TokenKind) -> Option<BinaryOp> {
         TokenKind::Pipe => Some(BinaryOp::BitOr),
         TokenKind::AmpAmp => Some(BinaryOp::And),
         TokenKind::PipePipe => Some(BinaryOp::Or),
+        _ => None,
+    }
+}
+
+fn assignment_op(kind: TokenKind) -> Option<AssignmentOp> {
+    match kind {
+        TokenKind::Assign => Some(AssignmentOp::Simple),
+        TokenKind::PlusEq => Some(AssignmentOp::Add),
+        TokenKind::MinusEq => Some(AssignmentOp::Subtract),
+        TokenKind::StarEq => Some(AssignmentOp::Multiply),
+        TokenKind::SlashEq => Some(AssignmentOp::Divide),
+        TokenKind::PercentEq => Some(AssignmentOp::Remainder),
+        TokenKind::ShiftLeftEq => Some(AssignmentOp::ShiftLeft),
+        TokenKind::ShiftRightEq => Some(AssignmentOp::ShiftRight),
+        TokenKind::AmpEq => Some(AssignmentOp::BitAnd),
+        TokenKind::CaretEq => Some(AssignmentOp::BitXor),
+        TokenKind::PipeEq => Some(AssignmentOp::BitOr),
         _ => None,
     }
 }
@@ -3282,6 +4196,25 @@ fn parse_float_literal(text: &str) -> Option<FloatLit> {
     })
 }
 
+fn parse_string_literal(text: &str) -> Option<StringLit> {
+    let (quoted, prefix) = if let Some(quoted) = text.strip_prefix("u8") {
+        (quoted, StringPrefix::U8)
+    } else if let Some(quoted) = text.strip_prefix('u') {
+        (quoted, StringPrefix::U16)
+    } else if let Some(quoted) = text.strip_prefix('U') {
+        (quoted, StringPrefix::U)
+    } else if let Some(quoted) = text.strip_prefix('L') {
+        (quoted, StringPrefix::L)
+    } else {
+        (text, StringPrefix::None)
+    };
+    quoted.strip_prefix('"')?.strip_suffix('"')?;
+    Some(StringLit {
+        value: text.to_owned(),
+        prefix,
+    })
+}
+
 fn parse_char_literal(text: &str) -> Option<CharLit> {
     let (quoted, prefix) = if let Some(quoted) = text.strip_prefix("u8") {
         (quoted, CharPrefix::U8)
@@ -3514,12 +4447,7 @@ fn eval_unary_integer(op: UnaryOp, operand: CInteger) -> Result<CInteger, ()> {
         UnaryOp::Neg => Ok(CInteger::new(0_u64.wrapping_sub(operand.raw), operand.ty)),
         UnaryOp::Not => Ok(CInteger::int(i32::from(!operand.truth()))),
         UnaryOp::BitNot => Ok(CInteger::new(!operand.raw, operand.ty)),
-        UnaryOp::AddrOf
-        | UnaryOp::Deref
-        | UnaryOp::PreInc
-        | UnaryOp::PreDec
-        | UnaryOp::PostInc
-        | UnaryOp::PostDec => Err(()),
+        UnaryOp::AddrOf | UnaryOp::Deref => Err(()),
     }
 }
 
@@ -3682,7 +4610,34 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
             CHirExpr::PtrMember(object, name.clone(), paren_span)
         }
         CHirExpr::Index(object, index, _) => CHirExpr::Index(object, index, paren_span),
-        CHirExpr::Assign(lhs, rhs, _) => CHirExpr::Assign(lhs, rhs, paren_span),
+        CHirExpr::Assign {
+            op,
+            place,
+            target,
+            value,
+            facts,
+            ..
+        } => CHirExpr::Assign {
+            op: *op,
+            place: *place,
+            target,
+            value,
+            facts: *facts,
+            span: paren_span,
+        },
+        CHirExpr::Update {
+            op,
+            place,
+            target,
+            facts,
+            ..
+        } => CHirExpr::Update {
+            op: *op,
+            place: *place,
+            target,
+            facts: *facts,
+            span: paren_span,
+        },
         CHirExpr::CompoundLit(ty, values, _) => {
             CHirExpr::CompoundLit(*ty, values.clone(), paren_span)
         }
@@ -3870,9 +4825,17 @@ mod tests {
         let arena = Arena::default();
         let expr = parse_expr("sink = 5;", &arena);
         match expr {
-            CHirExpr::Assign(lhs, rhs, _) => {
-                assert!(matches!(*lhs, CHirExpr::Ident { .. }));
-                assert!(matches!(*rhs, CHirExpr::Lit(_, _)));
+            CHirExpr::Assign {
+                op,
+                target,
+                value,
+                facts,
+                ..
+            } => {
+                assert_eq!(*op, AssignmentOp::Simple);
+                assert!(matches!(*target, CHirExpr::Ident { .. }));
+                assert!(matches!(*value, CHirExpr::Lit(_, _)));
+                assert_eq!(facts.category(), evocc_chir::ExprCategory::Value);
             }
             _ => panic!("expected assignment"),
         }
