@@ -95,3 +95,61 @@ fn preprocessed_output_does_not_fuse_tokens() {
         assert!(!rendered.contains(forbidden), "{rendered}");
     }
 }
+
+#[test]
+fn supported_target_is_accepted_for_frontend_modes() {
+    let output = stdin_run(
+        &["--target=aarch64-unknown-linux-gnu", "-E", "/dev/stdin"],
+        b"int value;\n",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap().trim(),
+        "int value;"
+    );
+
+    let output = stdin_run(
+        &[
+            "--parse-only",
+            "--target",
+            "aarch64-unknown-linux-gnu",
+            "/dev/stdin",
+        ],
+        b"int value;\n",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.stdout.is_empty());
+}
+
+#[test]
+fn unsupported_or_missing_target_fails_closed() {
+    for args in [
+        vec!["--target=x86_64-unknown-linux-gnu", "-E", "/dev/stdin"],
+        vec!["-E", "--target", "arm64-apple-darwin", "/dev/stdin"],
+        vec!["-E", "--target="],
+        vec!["-E", "--target"],
+        vec![
+            "-E",
+            "--target=aarch64-unknown-linux-gnu",
+            "--target=aarch64-unknown-linux-gnu",
+            "/dev/stdin",
+        ],
+    ] {
+        let output = stdin_run(&args, b"int value;\n");
+        assert_eq!(output.status.code(), Some(1), "args={args:?}");
+        assert!(output.stdout.is_empty(), "args={args:?}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("target"),
+            "args={args:?}, stderr={}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}

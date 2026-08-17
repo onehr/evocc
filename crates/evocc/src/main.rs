@@ -25,13 +25,21 @@ enum DriverMode {
     ParseOnly,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DriverTarget {
+    Aarch64UnknownLinuxGnu,
+}
+
 struct DriverOptions {
     mode: DriverMode,
+    target: DriverTarget,
     input: String,
     include_paths: Vec<String>,
     definitions: Vec<String>,
     standard_includes: bool,
 }
+
+const SUPPORTED_TARGET: &str = "aarch64-unknown-linux-gnu";
 
 const CAPABILITIES: &[&str] = &[
     "parse",
@@ -70,8 +78,8 @@ fn main() -> ExitCode {
 
     if args.is_empty() {
         eprintln!("usage: evocc <{}> --probe", CAPABILITIES.join("|"));
-        eprintln!("       evocc -E <file>");
-        eprintln!("       evocc --parse-only <file>");
+        eprintln!("       evocc -E [--target={SUPPORTED_TARGET}] <file>");
+        eprintln!("       evocc --parse-only [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("evocc: unrecognized invocation is NOT_IMPLEMENTED");
         return ExitCode::from(NOT_IMPLEMENTED_EXIT);
     }
@@ -106,6 +114,7 @@ fn main() -> ExitCode {
 
 fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut mode = None;
+    let mut target = None;
     let mut input = None;
     let mut include_paths = Vec::new();
     let mut definitions = Vec::new();
@@ -117,6 +126,17 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         match arg.as_str() {
             "-E" => set_mode(&mut mode, DriverMode::Preprocess)?,
             "--parse-only" => set_mode(&mut mode, DriverMode::ParseOnly)?,
+            "--target" => {
+                index += 1;
+                let value = args
+                    .get(index)
+                    .ok_or_else(|| "--target requires an argument".to_string())?;
+                set_target(&mut target, parse_target(value)?)?;
+            }
+            _ if arg.starts_with("--target=") => {
+                let value = &arg["--target=".len()..];
+                set_target(&mut target, parse_target(value)?)?;
+            }
             "-P" | "-undef" => {}
             "-nostdinc" => standard_includes = false,
             "-I" | "-D" => {
@@ -155,11 +175,28 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
 
     Ok(DriverOptions {
         mode: mode.ok_or_else(|| "exactly one of -E or --parse-only is required".to_string())?,
+        target: target.unwrap_or(DriverTarget::Aarch64UnknownLinuxGnu),
         input: input.ok_or_else(|| "an input file is required".to_string())?,
         include_paths,
         definitions,
         standard_includes,
     })
+}
+
+fn parse_target(value: &str) -> Result<DriverTarget, String> {
+    match value {
+        SUPPORTED_TARGET => Ok(DriverTarget::Aarch64UnknownLinuxGnu),
+        _ => Err(format!(
+            "unsupported target `{value}`; supported target is `{SUPPORTED_TARGET}`"
+        )),
+    }
+}
+
+fn set_target(slot: &mut Option<DriverTarget>, target: DriverTarget) -> Result<(), String> {
+    if slot.replace(target).is_some() {
+        return Err("--target may be specified only once".into());
+    }
+    Ok(())
 }
 
 fn set_mode(slot: &mut Option<DriverMode>, mode: DriverMode) -> Result<(), String> {
@@ -245,7 +282,12 @@ fn read_and_lex(file: &str) -> Result<(String, Vec<evocc_lex::Token>), ExitCode>
 }
 
 fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, String> {
-    let mut pp = Preprocessor::new();
+    // Dispatch through the selected frontend target even though the Day-3
+    // preprocessor does not yet expose target-specific predefined macros.
+    // This is target selection for preprocessing/parsing, not a codegen claim.
+    let mut pp = match options.target {
+        DriverTarget::Aarch64UnknownLinuxGnu => Preprocessor::new(),
+    };
     pp.current_file = options.input.clone();
     pp.set_standard_includes_enabled(options.standard_includes);
     pp.set_predefined_date(&predefined_date());
