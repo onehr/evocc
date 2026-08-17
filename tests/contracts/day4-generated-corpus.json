@@ -1,0 +1,14 @@
+{
+  "schema": "c30.day4.generated-corpus.v1",
+  "seed": "d4-2026-08-17",
+  "model_file_id": 73,
+  "declaration_axes": 25,
+  "statement_axes": 40,
+  "valid_count": 1000,
+  "malformed_families": 20,
+  "malformed_variants_per_family": 10,
+  "malformed_count": 200,
+  "valid_input_sha256": "d8ca409079d9f4d4ba0a2a9a0fd1a099008a18a09db320772828521328f3e726",
+  "malformed_input_sha256": "3bc67f6e764964a78595b88ff0766f18dd52bb8fe725a3bae39ed67463cbd995",
+  "manifest_sha256": "8abdf7a5100d4dc187141508ba049138d3c80bc7742df069ff1674e83d25e577"
+}
