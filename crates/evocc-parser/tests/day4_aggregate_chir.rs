@@ -46,7 +46,7 @@ fn parse_diagnostic(source: &str) -> evocc_parser::ParseDiagnostic {
     parser.diagnostic().expect("structured diagnostic").clone()
 }
 
-fn resolved<'a>(types: &'a TypeInterner, id: TypeId) -> &'a TypeKind {
+fn resolved(types: &TypeInterner, id: TypeId) -> &TypeKind {
     &types.get(id).expect("type ID owned by unit").kind
 }
 
