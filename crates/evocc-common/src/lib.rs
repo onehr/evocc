@@ -321,7 +321,28 @@ impl Arena {
     /// Allocate a `T` inside the arena and return a stable reference to it.
     /// `alloc` is the hot path for IR node construction and must not allocate
     /// from the global allocator on the common case (chunk has headroom).
-    pub fn alloc<T: Sized>(&mut self, value: T) -> &mut T {
+    ///
+    /// Safe allocation accepts only owned `'static` values because the arena's
+    /// heterogeneous drop ledger erases `T`'s lifetime. A shorter external
+    /// borrow could otherwise expire before the arena runs its destructor.
+    ///
+    /// ```compile_fail
+    /// use evocc_common::Arena;
+    ///
+    /// struct BorrowingDrop<'a>(&'a str);
+    /// impl Drop for BorrowingDrop<'_> {
+    ///     fn drop(&mut self) {
+    ///         std::hint::black_box(self.0);
+    ///     }
+    /// }
+    ///
+    /// let mut arena = Arena::default();
+    /// {
+    ///     let external = String::from("short lived");
+    ///     let _ = arena.alloc(BorrowingDrop(&external));
+    /// }
+    /// ```
+    pub fn alloc<T: Sized + 'static>(&mut self, value: T) -> &mut T {
         let ptr = self.allocate_value(value);
 
         // Safety: the exclusive arena borrow prevents any other safe
@@ -338,11 +359,15 @@ impl Arena {
     /// # Safety
     ///
     /// `T` must not directly or transitively store a reference or pointer to
-    /// this `Arena`. Neither `T` nor any destructor it transitively runs may
-    /// access this arena during teardown. If a destructor reads another value
-    /// in this arena, that value must have been allocated earlier and must
-    /// remain live under the arena's reverse-allocation drop order. Callers
-    /// must also not mutate stored dependency references to violate that order.
+    /// this `Arena`. Every external borrow embedded in `T` must remain valid
+    /// until the arena's physical teardown completes; the inferred `'arena`
+    /// lifetime can be shorter when the returned reference is ignored, so it
+    /// does not establish this by itself. Neither `T` nor any destructor it
+    /// transitively runs may access this arena during teardown. If a destructor
+    /// reads another value in this arena, that value must have been allocated
+    /// earlier and must remain live under the arena's reverse-allocation drop
+    /// order. Callers must not mutate stored dependency references to violate
+    /// that order.
     pub unsafe fn alloc_shared<'arena, T: Sized + 'arena>(&'arena self, value: T) -> &'arena T {
         let ptr = self.allocate_value(value);
 
@@ -396,14 +421,14 @@ impl Arena {
     /// Allocate a `[T]` of `len` elements, each initialized to `T::default()`.
     /// The default-initialization makes this safe for types where all-zero
     /// bytes would be an invalid bit pattern (NonZeroU8, bool, etc.).
-    pub fn alloc_slice<T: Default>(&mut self, len: usize) -> &mut [T] {
+    pub fn alloc_slice<T: Default + 'static>(&mut self, len: usize) -> &mut [T] {
         self.alloc_slice_with(len, |_| T::default())
     }
 
     /// Allocate and initialize a slice inside the arena. If an initializer
     /// panics, every already-created element is dropped exactly once and the
     /// arena remains usable.
-    pub fn alloc_slice_with<T, F>(&mut self, len: usize, mut init: F) -> &mut [T]
+    pub fn alloc_slice_with<T: 'static, F>(&mut self, len: usize, mut init: F) -> &mut [T]
     where
         F: FnMut(usize) -> T,
     {
@@ -722,7 +747,11 @@ mod tests {
     fn arena_alloc_str_is_valid_utf8() {
         let mut arena = Arena::new(256);
 
-        let s: &str = arena.alloc_str("hello world");
+        let s: &str;
+        {
+            let external = String::from("hello world");
+            s = arena.alloc_str(&external);
+        }
         assert_eq!(s, "hello world");
 
         let mut second_arena = Arena::new(256);
