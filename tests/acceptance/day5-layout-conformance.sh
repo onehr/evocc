@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Deterministic Day-5 AArch64 layout differential. Oracle-only modes can
-# measure/freeze evidence, but only --subject can produce a conformance PASS.
+# Deterministic Day-5 AArch64 layout differential. Oracle-only mode can
+# measure/freeze evidence, but only a freshly built production subject can
+# produce a conformance PASS.
 
 set -u
 set -o pipefail
@@ -14,6 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
 MANIFEST="$PROJECT_ROOT/tests/contracts/day5-layout-cases.json"
 CORPUS="$SCRIPT_DIR/day5-layout-corpus.py"
+SUBJECT_OBSERVER="$SCRIPT_DIR/day5-layout-subject.py"
 BUILD_ENV="$PROJECT_ROOT/contracts/build-environment.json"
 EVIDENCE_ROOT="${C30_DAY5_LAYOUT_EVIDENCE_ROOT:-$PROJECT_ROOT/.evidence/day5-layout}"
 RUN_ID="$(date -u '+%Y%m%dT%H%M%SZ')-$$"
@@ -27,25 +29,23 @@ TIMEOUT_BIN="${C30_TIMEOUT:-/opt/homebrew/Cellar/coreutils/9.11/bin/gtimeout}"
 ORACLE_TAG="evo-flight-lab:sealed"
 
 usage() {
-  printf 'usage: %s --oracles-only | --subject OBSERVATIONS.tsv\n' "$0" >&2
+  printf 'usage: %s --oracles-only | --subject\n' "$0" >&2
   exit 2
 }
 
 [ "$#" -ge 1 ] || usage
 mode="$1"
-subject=''
 case "$mode" in
   --oracles-only)
     [ "$#" -eq 1 ] || usage
     ;;
   --subject)
-    [ "$#" -eq 2 ] || usage
-    subject="$2"
+    [ "$#" -eq 1 ] || usage
     ;;
   *) usage ;;
 esac
 
-for path in "$MANIFEST" "$CORPUS" "$BUILD_ENV"; do
+for path in "$MANIFEST" "$CORPUS" "$SUBJECT_OBSERVER" "$BUILD_ENV"; do
   [ -f "$path" ] && [ ! -L "$path" ] || {
     printf 'required Day-5 layout input is missing or symbolic: %s\n' "$path" >&2
     exit 2
@@ -57,13 +57,6 @@ for tool in "$PYTHON" "$JQ" "$SHASUM" "$CONTAINER_BIN" "$TIMEOUT_BIN"; do
     exit 2
   }
 done
-if [ "$mode" = --subject ]; then
-  [ -f "$subject" ] && [ ! -L "$subject" ] || {
-    printf 'subject observation file is missing or symbolic: %s\n' "$subject" >&2
-    exit 2
-  }
-fi
-
 mkdir -p "$RUN_DIR/tmp-gcc" "$RUN_DIR/tmp-clang"
 
 cleanup_names=''
@@ -297,7 +290,45 @@ cmp -s "$RUN_DIR/images-before.json" "$RUN_DIR/images-after.json" || {
 }
 
 if [ "$mode" = --subject ]; then
-  cp "$subject" "$RUN_DIR/subject.observations.tsv"
+  cargo="$("$JQ" -r '.toolchain.hostReplay.cargo.path' "$BUILD_ENV")"
+  cargo_sha="$("$JQ" -r '.toolchain.hostReplay.cargo.sha256' "$BUILD_ENV")"
+  rustc="$("$JQ" -r '.toolchain.hostReplay.rustc.path' "$BUILD_ENV")"
+  rustc_sha="$("$JQ" -r '.toolchain.hostReplay.rustc.sha256' "$BUILD_ENV")"
+  for tool in "$cargo" "$rustc"; do
+    [ -x "$tool" ] && [ ! -L "$tool" ] || {
+      printf 'pinned Day-5 Rust tool is unavailable or symbolic: %s\n' "$tool" >&2
+      exit 2
+    }
+  done
+  [ "$(sha256_file "$cargo")" = "$cargo_sha" ] || {
+    printf 'pinned Day-5 Cargo identity differs\n' >&2
+    exit 1
+  }
+  [ "$(sha256_file "$rustc")" = "$rustc_sha" ] || {
+    printf 'pinned Day-5 rustc identity differs\n' >&2
+    exit 1
+  }
+
+  mkdir -p "$RUN_DIR/cargo-home" "$RUN_DIR/cargo-target"
+  /usr/bin/env -i \
+    PATH=/usr/bin:/bin LC_ALL=C TZ=UTC \
+    CARGO_HOME="$RUN_DIR/cargo-home" \
+    CARGO_TARGET_DIR="$RUN_DIR/cargo-target" \
+    RUSTC="$rustc" \
+    "$cargo" build --manifest-path "$PROJECT_ROOT/Cargo.toml" \
+      -p evocc-parser --example day5_layout_probe --locked --offline \
+      >"$RUN_DIR/subject-build.stdout" 2>"$RUN_DIR/subject-build.stderr" || exit 1
+  subject_probe="$RUN_DIR/cargo-target/debug/examples/day5_layout_probe"
+  [ -x "$subject_probe" ] && [ ! -L "$subject_probe" ] || {
+    printf 'fresh Day-5 subject probe was not produced\n' >&2
+    exit 1
+  }
+  sha256_file "$subject_probe" >"$RUN_DIR/subject-probe.sha256"
+  cp "$SUBJECT_OBSERVER" "$RUN_DIR/day5-layout-subject.py"
+  sha256_file "$RUN_DIR/day5-layout-subject.py" >"$RUN_DIR/day5-layout-subject.sha256"
+  PYTHONDONTWRITEBYTECODE=1 "$PYTHON" "$SUBJECT_OBSERVER" \
+    "$MANIFEST" "$subject_probe" >"$RUN_DIR/subject.observations.tsv" \
+    2>"$RUN_DIR/subject.observations.stderr" || exit 1
   sha256_file "$RUN_DIR/subject.observations.tsv" >"$RUN_DIR/subject.observations.sha256"
   PYTHONDONTWRITEBYTECODE=1 "$PYTHON" "$CORPUS" compare-subject \
     "$MANIFEST" "$RUN_DIR/subject.observations.tsv" >"$RUN_DIR/subject-summary.json" \
@@ -308,11 +339,18 @@ if [ "$mode" = --subject ]; then
     --arg runId "$RUN_ID" --arg manifestSha "$(sha256_file "$MANIFEST")" \
     --arg sourceSha "$(sha256_file "$RUN_DIR/layout-observer.c")" \
     --arg consensusSha "$(sha256_file "$RUN_DIR/oracle-consensus.tsv")" \
+    --arg subjectProbeSha "$(sha256_file "$subject_probe")" \
+    --arg subjectObserverSha "$(sha256_file "$SUBJECT_OBSERVER")" \
+    --arg cargoPath "$cargo" --arg cargoSha "$cargo_sha" \
+    --arg rustcPath "$rustc" --arg rustcSha "$rustc_sha" \
     --arg executionRef "$oracle_image_id" --arg discoveryTag "$ORACLE_TAG" \
     --arg runAlias "$oracle_run_ref" --arg policyVersion "$binding_policy_version" \
     '{schemaVersion:1,runId:$runId,mode:"subject",status:$subjectSummary[0].status,
       manifestSha256:$manifestSha,observerSourceSha256:$sourceSha,
       oracleConsensusSha256:$consensusSha,
+      subjectExecution:{freshCargoTarget:true,probeSha256:$subjectProbeSha,
+        observerSha256:$subjectObserverSha,
+        cargo:{path:$cargoPath,sha256:$cargoSha},rustc:{path:$rustcPath,sha256:$rustcSha}},
       oracleExecution:{frozenDigest:$executionRef,discoveryTag:$discoveryTag,
         runAlias:$runAlias,digestAddressableLocalExecution:false,
         bindingPolicyVersion:$policyVersion,

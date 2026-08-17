@@ -12,8 +12,9 @@ use evocc_chir::{
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_lex::{Token, TokenKind};
 use evocc_types::{
-    ArrayBound, CanonicalType, EnumConstant, FloatKind, FunctionParameters, IntRank, Qualifiers,
-    RecordField, TagDefinition, TagId, TagKind, TagState, TypeId, TypeInterner, TypeKind,
+    ArrayBound, BitFieldSpec, CanonicalType, ComplexBase, EnumConstant, FloatKind,
+    FunctionParameters, IntRank, Qualifiers, RecordField, TagDefinition, TagId, TagKind, TagState,
+    TargetDataLayout, TypeId, TypeInterner, TypeKind, TypeLayout,
 };
 
 #[derive(Debug, Clone)]
@@ -64,6 +65,125 @@ struct TagBinding {
     kind: TagKind,
 }
 
+/// A value and its C integer type after target-specific literal selection.
+///
+/// `raw` always contains the low `ty.bits` bits. Signed values use the target's
+/// two's-complement representation; keeping the representation separate from
+/// interpretation lets unsigned arithmetic wrap without routing through a
+/// wider signed host integer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CInteger {
+    raw: u64,
+    ty: CIntegerType,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CIntegerType {
+    bits: u8,
+    rank: u8,
+    signed: bool,
+}
+
+/// An enumerator's canonical mathematical value is distinct from the type of
+/// the identifier expression that names it. In particular, `A = 1U` still
+/// declares `A` as an `int` constant under C11 because the value fits `int`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct EnumConstantBinding {
+    canonical_value: i64,
+    expression_type: CIntegerType,
+}
+
+impl EnumConstantBinding {
+    fn expression_value(self) -> CInteger {
+        CInteger::new(self.canonical_value as u64, self.expression_type)
+    }
+}
+
+impl CIntegerType {
+    const BOOL: Self = Self::new(1, 0, false);
+    const INT: Self = Self::new(32, 3, true);
+    const UINT: Self = Self::new(32, 3, false);
+    const LONG: Self = Self::new(64, 4, true);
+    const ULONG: Self = Self::new(64, 4, false);
+    const LONG_LONG: Self = Self::new(64, 5, true);
+    const ULONG_LONG: Self = Self::new(64, 5, false);
+
+    const fn new(bits: u8, rank: u8, signed: bool) -> Self {
+        Self { bits, rank, signed }
+    }
+
+    const fn unsigned_version(self) -> Self {
+        Self {
+            signed: false,
+            ..self
+        }
+    }
+
+    const fn mask(self) -> u64 {
+        if self.bits == 64 {
+            u64::MAX
+        } else {
+            (1_u64 << self.bits) - 1
+        }
+    }
+
+    const fn signed_min(self) -> i128 {
+        -(1_i128 << (self.bits - 1))
+    }
+
+    const fn signed_max(self) -> i128 {
+        (1_i128 << (self.bits - 1)) - 1
+    }
+}
+
+impl CInteger {
+    const fn new(raw: u64, ty: CIntegerType) -> Self {
+        Self {
+            raw: raw & ty.mask(),
+            ty,
+        }
+    }
+
+    const fn int(value: i32) -> Self {
+        Self::new(value as u64, CIntegerType::INT)
+    }
+
+    fn mathematical_value(self) -> i128 {
+        if !self.ty.signed {
+            return i128::from(self.raw);
+        }
+        let sign_bit = 1_u64 << (self.ty.bits - 1);
+        if self.raw & sign_bit == 0 {
+            i128::from(self.raw)
+        } else {
+            i128::from(self.raw) - (1_i128 << self.ty.bits)
+        }
+    }
+
+    const fn truth(self) -> bool {
+        self.raw != 0
+    }
+
+    fn cast(self, target: CIntegerType) -> Self {
+        if target == CIntegerType::BOOL {
+            return Self::new(u64::from(self.truth()), target);
+        }
+        if self.ty.signed && target.bits > self.ty.bits && self.mathematical_value() < 0 {
+            return Self::new(self.mathematical_value() as u64, target);
+        }
+        Self::new(self.raw, target)
+    }
+
+    fn promoted(self) -> Self {
+        if self.ty.rank < CIntegerType::INT.rank {
+            // Every AArch64 integer type below `int` fits in signed `int`.
+            self.cast(CIntegerType::INT)
+        } else {
+            self
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum DeclarationContext {
     File,
@@ -82,6 +202,7 @@ pub struct Parser<'src, 'arena> {
     arena: Option<&'arena Arena>,
     types: TypeInterner,
     tags: HashMap<String, TagBinding>,
+    enum_constants: HashMap<String, EnumConstantBinding>,
     side_declarations: Vec<&'arena CHirDecl<'arena>>,
     loop_depth: usize,
     switch_depth: usize,
@@ -100,6 +221,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             arena: None,
             types: TypeInterner::new(),
             tags: HashMap::new(),
+            enum_constants: HashMap::new(),
             side_declarations: Vec::new(),
             loop_depth: 0,
             switch_depth: 0,
@@ -264,6 +386,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     ) -> Option<Vec<&'arena CHirDecl<'arena>>> {
         let types_checkpoint = self.types.clone();
         let tags_checkpoint = self.tags.clone();
+        let enum_constants_checkpoint = self.enum_constants.clone();
         let side_checkpoint = self.side_declarations.clone();
         let error_checkpoint = self.error_count;
         let side_start = side_checkpoint.len();
@@ -272,6 +395,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if result.is_none() || self.error_count != error_checkpoint {
             self.types = types_checkpoint;
             self.tags = tags_checkpoint;
+            self.enum_constants = enum_constants_checkpoint;
             self.side_declarations = side_checkpoint;
             None
         } else {
@@ -443,57 +567,55 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn parse_type_specifier(&mut self) -> Option<ParsedSpecifier<'arena>> {
         let start = self.span();
-        let qualifiers = self.parse_qualifiers();
-        let token = self.advance()?;
-        let kind = match token.kind {
-            TokenKind::Void => TypeKind::Void,
-            TokenKind::Int | TokenKind::Signed => TypeKind::Int(IntRank::Int),
-            TokenKind::Long => TypeKind::Int(IntRank::Long),
-            TokenKind::Short => TypeKind::Int(IntRank::Short),
-            TokenKind::Char => TypeKind::Int(IntRank::Char),
-            TokenKind::Unsigned => {
-                let rank = match self.peek_kind() {
-                    Some(TokenKind::Char) => {
-                        self.advance();
-                        IntRank::UChar
-                    }
-                    Some(TokenKind::Short) => {
-                        self.advance();
-                        IntRank::UShort
-                    }
-                    Some(TokenKind::Long) => {
-                        self.advance();
-                        IntRank::ULong
-                    }
-                    Some(TokenKind::Int) => {
-                        self.advance();
-                        IntRank::UInt
-                    }
-                    _ => IntRank::UInt,
-                };
-                TypeKind::Int(rank)
+        let mut qualifiers = self.parse_qualifiers();
+        if matches!(
+            self.peek_kind(),
+            Some(TokenKind::Struct | TokenKind::Union | TokenKind::Enum)
+        ) {
+            let token = self.advance().expect("peeked tag keyword");
+            let kind = match token.kind {
+                TokenKind::Struct => TagKind::Struct,
+                TokenKind::Union => TagKind::Union,
+                TokenKind::Enum => TagKind::Enum,
+                _ => unreachable!("tag keyword checked above"),
+            };
+            return self.parse_tag_specifier(kind, qualifiers, token.span);
+        }
+
+        let mut words = Vec::new();
+        let mut end = None;
+        while let Some(kind) = self.peek_kind() {
+            if is_builtin_type_word(kind) {
+                let token = self.advance().expect("peeked builtin type word");
+                words.push(kind);
+                end = Some(token.span);
+                continue;
             }
-            TokenKind::Float => TypeKind::Float(FloatKind::F32),
-            TokenKind::Double => TypeKind::Float(FloatKind::F64),
-            TokenKind::Bool => TypeKind::Int(IntRank::Bool),
-            TokenKind::Struct => {
-                return self.parse_tag_specifier(TagKind::Struct, qualifiers, token.span)
-            }
-            TokenKind::Union => {
-                return self.parse_tag_specifier(TagKind::Union, qualifiers, token.span)
-            }
-            TokenKind::Enum => {
-                return self.parse_tag_specifier(TagKind::Enum, qualifiers, token.span)
-            }
-            _ => {
-                self.pos = self.pos.saturating_sub(1);
-                return None;
-            }
+            let qualifier = match kind {
+                TokenKind::Const => Some((&mut qualifiers.is_const, true)),
+                TokenKind::Volatile => Some((&mut qualifiers.is_volatile, true)),
+                TokenKind::Restrict => Some((&mut qualifiers.is_restrict, true)),
+                TokenKind::Atomic => Some((&mut qualifiers.is_atomic, true)),
+                _ => None,
+            };
+            let Some((slot, value)) = qualifier else {
+                break;
+            };
+            *slot = value;
+            end = self.advance().map(|token| token.span);
+        }
+        if words.is_empty() {
+            return None;
+        }
+        let end = end.expect("a builtin type word established an end span");
+        let Some(kind) = resolve_builtin_type(&words) else {
+            self.report(
+                "E1007",
+                "invalid-type-specifier-combination",
+                self.merge_span(start, end),
+            );
+            return None;
         };
-        let end = self
-            .tokens
-            .get(self.pos.saturating_sub(1))
-            .map_or(token.span, |t| t.span);
         let ty = self.intern(kind, qualifiers);
         Some(ParsedSpecifier {
             surface: TypeSpecifier::Builtin {
@@ -687,6 +809,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.side_declarations.push(declaration);
             }
             let name = declarator.as_ref().map(|decl| decl.name.clone());
+            let canonical_bit_field = bit_width.and_then(|width| {
+                self.validate_bit_field(
+                    ty,
+                    name.as_ref().map(|name| name.spelling.as_str()),
+                    specifier.surface.span(),
+                    width,
+                )
+            });
             let written = declarator.as_ref().map_or(
                 WrittenDeclarator {
                     layers: Vec::new(),
@@ -697,6 +827,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             canonical.push(RecordField {
                 name: name.as_ref().map(|name| name.spelling.clone()),
                 ty,
+                bit_field: canonical_bit_field,
             });
             members.push(RecordMember {
                 name,
@@ -717,10 +848,313 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
+    /// Validate the C11 bit-field constraints that are independent of record
+    /// placement. The written expression remains in C-HIR even when this
+    /// reports an error; only validated metadata enters the canonical type.
+    fn validate_bit_field(
+        &mut self,
+        ty: TypeId,
+        name: Option<&str>,
+        type_span: SourceSpan,
+        width_expression: &CHirExpr<'_>,
+    ) -> Option<BitFieldSpec> {
+        let Some(base_width_bits) = self.bit_field_base_width(ty) else {
+            self.report("E1305", "bit-field-has-non-integer-type", type_span);
+            return None;
+        };
+
+        let width = match self.eval_integer_constant_expression(width_expression) {
+            Ok(width) => width.mathematical_value(),
+            Err(()) => {
+                self.report(
+                    "E1303",
+                    "bit-field-width-is-not-an-integer-constant",
+                    width_expression.span(),
+                );
+                return None;
+            }
+        };
+
+        if width < 0 {
+            self.report(
+                "E1302",
+                format!("bit-field-width-is-negative: {width}"),
+                width_expression.span(),
+            );
+            return None;
+        }
+        if width == 0 && name.is_some() {
+            self.report(
+                "E1304",
+                "named-bit-field-has-zero-width",
+                width_expression.span(),
+            );
+            return None;
+        }
+        if width > i128::from(base_width_bits) {
+            self.report(
+                "E1301",
+                format!("bit-field-width-exceeds-type: {width} > {base_width_bits}"),
+                width_expression.span(),
+            );
+            return None;
+        }
+
+        Some(BitFieldSpec {
+            width_bits: u16::try_from(width)
+                .expect("validated bit-field width fits the supported integer base type"),
+        })
+    }
+
+    fn bit_field_base_width(&self, ty: TypeId) -> Option<u16> {
+        let canonical = self.types.get(ty)?;
+        match &canonical.kind {
+            TypeKind::Int(IntRank::Bool) => Some(1),
+            TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar) => Some(8),
+            TypeKind::Int(IntRank::Short | IntRank::UShort) => Some(16),
+            TypeKind::Int(IntRank::Int | IntRank::UInt) => Some(32),
+            TypeKind::Enum(_) => TargetDataLayout::aarch64_unknown_linux_gnu()
+                .layout_of(&self.types, ty)
+                .ok()
+                .and_then(|layout| layout.size_bytes.checked_mul(8))
+                .and_then(|bits| u16::try_from(bits).ok()),
+            TypeKind::Int(
+                IntRank::Long | IntRank::ULong | IntRank::LongLong | IntRank::ULongLong,
+            ) => Some(64),
+            TypeKind::Void
+            | TypeKind::Float(_)
+            | TypeKind::Complex(_)
+            | TypeKind::Pointer(_)
+            | TypeKind::Array { .. }
+            | TypeKind::Function { .. }
+            | TypeKind::Struct(_)
+            | TypeKind::Union(_) => None,
+        }
+    }
+
+    fn canonical_integer_type(&self, ty: TypeId) -> Result<CIntegerType, ()> {
+        let canonical = self.types.get(ty).ok_or(())?;
+        match canonical.kind {
+            TypeKind::Int(rank) => integer_rank_type(rank).ok_or(()),
+            TypeKind::Enum(tag) => {
+                let definition = self.types.tag(tag).ok_or(())?;
+                let TagState::Complete(TagDefinition::Enum(constants)) = &definition.state else {
+                    return Err(());
+                };
+                let minimum = constants
+                    .iter()
+                    .map(|constant| constant.value)
+                    .min()
+                    .unwrap_or(0);
+                let maximum = constants
+                    .iter()
+                    .map(|constant| constant.value)
+                    .max()
+                    .unwrap_or(0);
+                Ok(enum_integer_type(minimum, maximum))
+            }
+            TypeKind::Void
+            | TypeKind::Float(_)
+            | TypeKind::Complex(_)
+            | TypeKind::Pointer(_)
+            | TypeKind::Array { .. }
+            | TypeKind::Function { .. }
+            | TypeKind::Struct(_)
+            | TypeKind::Union(_) => Err(()),
+        }
+    }
+
+    /// Evaluate the C11 integer constant-expression subset needed by enum
+    /// initializers and bit-field widths for `aarch64-unknown-linux-gnu`.
+    /// Unsupported or undefined operations fail closed and are diagnosed by
+    /// the semantic caller as E1303.
+    fn eval_integer_constant_expression(&self, expression: &CHirExpr<'_>) -> Result<CInteger, ()> {
+        match expression {
+            CHirExpr::Lit(literal, _) => integer_literal_value(*literal),
+            CHirExpr::CharLit(literal, _) => {
+                Ok(CInteger::int(i32::try_from(literal.value).map_err(|_| ())?))
+            }
+            CHirExpr::Ident(name, _) => self
+                .enum_constants
+                .get(name)
+                .copied()
+                .map(EnumConstantBinding::expression_value)
+                .ok_or(()),
+            CHirExpr::Unary(op, operand, _) => {
+                eval_unary_integer(*op, self.eval_integer_constant_expression(operand)?)
+            }
+            CHirExpr::Binary(op, left, right, _) => {
+                let left = self.eval_integer_constant_expression(left)?;
+                if *op == BinaryOp::And && !left.truth() {
+                    return Ok(CInteger::int(0));
+                }
+                if *op == BinaryOp::Or && left.truth() {
+                    return Ok(CInteger::int(1));
+                }
+                let right = self.eval_integer_constant_expression(right)?;
+                eval_binary_integer(*op, left, right)
+            }
+            CHirExpr::Ternary(condition, when_true, when_false, _) => {
+                let selected = if self.eval_integer_constant_expression(condition)?.truth() {
+                    when_true
+                } else {
+                    when_false
+                };
+                let value = self.eval_integer_constant_expression(selected)?;
+                match (
+                    self.integer_expression_type(when_true),
+                    self.integer_expression_type(when_false),
+                ) {
+                    (Ok(when_true), Ok(when_false)) => Ok(value.cast(usual_arithmetic_type(
+                        CInteger::new(0, when_true).promoted().ty,
+                        CInteger::new(0, when_false).promoted().ty,
+                    ))),
+                    // Keep the established dead-arm behavior for identifiers
+                    // whose ordinary declaration/type is not available yet.
+                    // The selected arm was evaluated and is authoritative.
+                    _ => Ok(value),
+                }
+            }
+            CHirExpr::Cast(ty, operand, _) => {
+                let target = self.canonical_integer_type(*ty)?;
+                if let CHirExpr::FloatLit(literal, _) = operand {
+                    return floating_literal_to_integer(*literal, target);
+                }
+                Ok(self.eval_integer_constant_expression(operand)?.cast(target))
+            }
+            CHirExpr::SizeOf(ty, _) => {
+                let layout = TargetDataLayout::aarch64_unknown_linux_gnu()
+                    .layout_of(&self.types, *ty)
+                    .map_err(|_| ())?;
+                Ok(CInteger::new(layout.size_bytes, CIntegerType::ULONG))
+            }
+            CHirExpr::AlignOf(ty, _) => {
+                let layout = TargetDataLayout::aarch64_unknown_linux_gnu()
+                    .layout_of(&self.types, *ty)
+                    .map_err(|_| ())?;
+                Ok(CInteger::new(
+                    u64::from(layout.align_bytes),
+                    CIntegerType::ULONG,
+                ))
+            }
+            CHirExpr::SizeOfExpr(operand, _) => {
+                let operand_type = self.integer_expression_type(operand)?;
+                let layout = integer_expression_layout(operand_type)?;
+                Ok(CInteger::new(layout.size_bytes, CIntegerType::ULONG))
+            }
+            CHirExpr::FloatLit(_, _)
+            | CHirExpr::StringLit(_, _)
+            | CHirExpr::Call(_, _, _)
+            | CHirExpr::Member(_, _, _)
+            | CHirExpr::PtrMember(_, _, _)
+            | CHirExpr::Index(_, _, _)
+            | CHirExpr::Assign(_, _, _)
+            | CHirExpr::CompoundLit(_, _, _)
+            | CHirExpr::Comma(_, _, _) => Err(()),
+        }
+    }
+
+    /// Determine an integer expression's target type without evaluating its
+    /// value. This is what permits conditional conversion and `sizeof expr`
+    /// while preserving C's unevaluated/dead operand rules.
+    fn integer_expression_type(&self, expression: &CHirExpr<'_>) -> Result<CIntegerType, ()> {
+        match expression {
+            CHirExpr::Lit(literal, _) => Ok(integer_literal_value(*literal)?.ty),
+            CHirExpr::CharLit(_, _) => Ok(CIntegerType::INT),
+            CHirExpr::Ident(name, _) => self
+                .enum_constants
+                .get(name)
+                .map(|binding| binding.expression_type)
+                .ok_or(()),
+            CHirExpr::Unary(op, operand, _) => match op {
+                UnaryOp::Plus | UnaryOp::Neg | UnaryOp::BitNot => {
+                    Ok(CInteger::new(0, self.integer_expression_type(operand)?)
+                        .promoted()
+                        .ty)
+                }
+                UnaryOp::Not => {
+                    self.integer_expression_type(operand)?;
+                    Ok(CIntegerType::INT)
+                }
+                UnaryOp::AddrOf
+                | UnaryOp::Deref
+                | UnaryOp::PreInc
+                | UnaryOp::PreDec
+                | UnaryOp::PostInc
+                | UnaryOp::PostDec => Err(()),
+            },
+            CHirExpr::Binary(op, left, right, _) => {
+                let left = CInteger::new(0, self.integer_expression_type(left)?).promoted();
+                let right = CInteger::new(0, self.integer_expression_type(right)?).promoted();
+                match op {
+                    BinaryOp::Add
+                    | BinaryOp::Sub
+                    | BinaryOp::Mul
+                    | BinaryOp::Div
+                    | BinaryOp::Mod
+                    | BinaryOp::BitAnd
+                    | BinaryOp::BitOr
+                    | BinaryOp::BitXor => Ok(usual_arithmetic_type(left.ty, right.ty)),
+                    BinaryOp::Shl | BinaryOp::Shr => Ok(left.ty),
+                    BinaryOp::Lt
+                    | BinaryOp::Le
+                    | BinaryOp::Gt
+                    | BinaryOp::Ge
+                    | BinaryOp::Eq
+                    | BinaryOp::Ne
+                    | BinaryOp::And
+                    | BinaryOp::Or => Ok(CIntegerType::INT),
+                    BinaryOp::Comma
+                    | BinaryOp::Assign
+                    | BinaryOp::AddAssign
+                    | BinaryOp::SubAssign
+                    | BinaryOp::MulAssign
+                    | BinaryOp::DivAssign
+                    | BinaryOp::ModAssign
+                    | BinaryOp::ShlAssign
+                    | BinaryOp::ShrAssign
+                    | BinaryOp::BitAndAssign
+                    | BinaryOp::BitOrAssign
+                    | BinaryOp::BitXorAssign => Err(()),
+                }
+            }
+            CHirExpr::Ternary(condition, when_true, when_false, _) => {
+                self.integer_expression_type(condition)?;
+                let when_true = CInteger::new(0, self.integer_expression_type(when_true)?)
+                    .promoted()
+                    .ty;
+                let when_false = CInteger::new(0, self.integer_expression_type(when_false)?)
+                    .promoted()
+                    .ty;
+                Ok(usual_arithmetic_type(when_true, when_false))
+            }
+            CHirExpr::Cast(ty, _, _) => self.canonical_integer_type(*ty),
+            CHirExpr::SizeOf(ty, _) | CHirExpr::AlignOf(ty, _) => {
+                TargetDataLayout::aarch64_unknown_linux_gnu()
+                    .layout_of(&self.types, *ty)
+                    .map_err(|_| ())?;
+                Ok(CIntegerType::ULONG)
+            }
+            CHirExpr::SizeOfExpr(operand, _) => {
+                integer_expression_layout(self.integer_expression_type(operand)?)?;
+                Ok(CIntegerType::ULONG)
+            }
+            CHirExpr::FloatLit(_, _)
+            | CHirExpr::StringLit(_, _)
+            | CHirExpr::Call(_, _, _)
+            | CHirExpr::Member(_, _, _)
+            | CHirExpr::PtrMember(_, _, _)
+            | CHirExpr::Index(_, _, _)
+            | CHirExpr::Assign(_, _, _)
+            | CHirExpr::CompoundLit(_, _, _)
+            | CHirExpr::Comma(_, _, _) => Err(()),
+        }
+    }
+
     fn parse_enum_members(&mut self) -> (TagMembers<'arena>, TagDefinition) {
         let mut members = Vec::new();
         let mut canonical = Vec::new();
-        let mut next_value = 0_i64;
+        let mut next_value = Some(0_i128);
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
             let Some(token) = self.expect(TokenKind::Identifier) else {
                 break;
@@ -734,25 +1168,108 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             } else {
                 None
             };
-            let value = written_value.map_or(next_value, integer_constant_value);
+            let mathematical_value = if let Some(expression) = written_value {
+                self.eval_integer_constant_expression(expression)
+                    .map(CInteger::mathematical_value)
+            } else {
+                next_value.ok_or(())
+            };
+            let mathematical_value = match mathematical_value {
+                Ok(value) => value,
+                Err(()) => {
+                    self.report(
+                        "E1303",
+                        "enumerator-value-is-not-an-integer-constant",
+                        written_value.map_or(name.span, CHirExpr::span),
+                    );
+                    while !matches!(self.peek_kind(), Some(TokenKind::RBrace) | None) {
+                        self.advance();
+                    }
+                    break;
+                }
+            };
+            let Ok(value) = i64::try_from(mathematical_value) else {
+                self.report(
+                    "E1303",
+                    "enumerator-value-is-not-representable",
+                    written_value.map_or(name.span, CHirExpr::span),
+                );
+                while !matches!(self.peek_kind(), Some(TokenKind::RBrace) | None) {
+                    self.advance();
+                }
+                break;
+            };
             let end = written_value.map_or(name.span, CHirExpr::span);
             let span = self.merge_span(name.span, end);
             canonical.push(EnumConstant {
                 name: name.spelling.clone(),
                 value,
             });
+            self.enum_constants.insert(
+                name.spelling.clone(),
+                EnumConstantBinding {
+                    canonical_value: value,
+                    expression_type: enum_integer_type(value, value),
+                },
+            );
             members.push(EnumeratorDecl {
                 name,
                 value,
                 written_value,
                 span,
             });
-            next_value = value.saturating_add(1);
+            next_value = mathematical_value.checked_add(1);
             if !self.match_kind(TokenKind::Comma) {
                 break;
             }
         }
         (TagMembers::Enum(members), TagDefinition::Enum(canonical))
+    }
+
+    /// Parse the bounded abstract-declarator subset required by G1 type names:
+    /// pointer layers and fixed-size array suffixes. Function types, VLAs,
+    /// parenthesized abstract declarators, and GNU attributes remain rejected.
+    fn parse_type_name(&mut self) -> Option<(TypeId, Option<PendingTag<'arena>>)> {
+        let specifier = self.parse_type_specifier()?;
+        let mut pointers = Vec::new();
+        while self.peek_kind() == Some(TokenKind::Star) {
+            let star = self.advance().expect("peeked pointer star");
+            let qualifiers = self.parse_qualifiers();
+            let end = self
+                .tokens
+                .get(self.pos.saturating_sub(1))
+                .map_or(star.span, |token| token.span);
+            pointers.push(DerivedDeclarator::Pointer {
+                qualifiers,
+                span: self.merge_span(star.span, end),
+            });
+        }
+
+        let mut derived = Vec::new();
+        while self.peek_kind() == Some(TokenKind::LBracket) {
+            let open = self.advance().expect("peeked array open");
+            let bound = if self.peek_kind() == Some(TokenKind::IntLiteral) {
+                let token = self.advance().expect("peeked fixed array bound");
+                match parse_int_literal(self.token_text(&token)) {
+                    Some(literal) => ArrayBound::Fixed(literal.value),
+                    None => {
+                        self.report("E1006", "invalid-integer-literal", token.span);
+                        return None;
+                    }
+                }
+            } else {
+                self.report("E1005", "unsupported-abstract-declarator", self.span());
+                return None;
+            };
+            let close = self.expect(TokenKind::RBracket)?;
+            derived.push(DerivedDeclarator::Array {
+                bound,
+                span: self.merge_span(open.span, close.span),
+            });
+        }
+        derived.extend(pointers);
+        let ty = self.apply_declarator(specifier.surface.type_id(), &derived);
+        Some((ty, specifier.tag_event))
     }
 
     // ── declarators ────────────────────────────────────────────────────
@@ -806,7 +1323,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         ArrayBound::Unbounded
                     } else if self.peek_kind() == Some(TokenKind::IntLiteral) {
                         let token = self.advance().unwrap();
-                        ArrayBound::Fixed(parse_int_literal(self.token_text(&token)))
+                        match parse_int_literal(self.token_text(&token)) {
+                            Some(literal) => ArrayBound::Fixed(literal.value),
+                            None => {
+                                self.report("E1006", "invalid-integer-literal", token.span);
+                                ArrayBound::Variable
+                            }
+                        }
                     } else {
                         ArrayBound::Variable
                     };
@@ -1258,6 +1781,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TokenKind::Unsigned
                 | TokenKind::Float
                 | TokenKind::Double
+                | TokenKind::Complex
                 | TokenKind::Bool
                 | TokenKind::Struct
                 | TokenKind::Union
@@ -1350,15 +1874,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let token = self.advance().unwrap();
             if self.looks_like_parenthesized_type() {
                 self.advance();
-                let specifier = self.parse_type_specifier()?;
+                let (ty, tag_event) = self.parse_type_name()?;
                 let end = self.peek().map(|token| token.span).unwrap_or(token.span);
                 self.expect(TokenKind::RParen)?;
                 let span = self.merge_span(token.span, end);
-                if let Some(event) = specifier.tag_event {
+                if let Some(event) = tag_event {
                     let declaration = self.finish_tag_event(event, span);
                     self.side_declarations.push(declaration);
                 }
-                return Some(self.alloc_node(CHirExpr::SizeOf(specifier.surface.type_id(), span)));
+                return Some(self.alloc_node(CHirExpr::SizeOf(ty, span)));
             }
             let operand = self.parse_unary()?;
             let span = self.merge_span(token.span, operand.span());
@@ -1368,11 +1892,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if self.peek_kind() == Some(TokenKind::Alignof) {
             let token = self.advance().unwrap();
             self.expect(TokenKind::LParen)?;
-            let specifier = if self
+            let type_name = if self
                 .peek_kind()
                 .is_some_and(|kind| self.is_type_specifier_kind(kind))
             {
-                self.parse_type_specifier()
+                self.parse_type_name()
             } else {
                 self.report("E1003", "expected-expression", self.span());
                 None
@@ -1380,16 +1904,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let end = self.peek().map(|token| token.span).unwrap_or(token.span);
             self.expect(TokenKind::RParen)?;
             let span = self.merge_span(token.span, end);
-            if let Some(event) = specifier.tag_event {
+            if let Some(event) = type_name.1 {
                 let declaration = self.finish_tag_event(event, span);
                 self.side_declarations.push(declaration);
             }
-            return Some(self.alloc_node(CHirExpr::AlignOf(specifier.surface.type_id(), span)));
+            return Some(self.alloc_node(CHirExpr::AlignOf(type_name.0, span)));
         }
 
         if self.looks_like_parenthesized_type() {
             let open = self.advance().unwrap();
-            let specifier = self.parse_type_specifier()?;
+            let (ty, tag_event) = self.parse_type_name()?;
             let close = self.expect(TokenKind::RParen)?;
             if !self.peek_kind().is_some_and(can_start_expression) {
                 self.report("E1003", "expected-expression", close.span);
@@ -1397,15 +1921,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             let operand = self.parse_unary()?;
             let span = self.merge_span(open.span, operand.span());
-            if let Some(event) = specifier.tag_event {
+            if let Some(event) = tag_event {
                 let declaration = self.finish_tag_event(event, span);
                 self.side_declarations.push(declaration);
             }
-            return Some(self.alloc_node(CHirExpr::Cast(
-                specifier.surface.type_id(),
-                operand,
-                span,
-            )));
+            return Some(self.alloc_node(CHirExpr::Cast(ty, operand, span)));
         }
 
         self.parse_postfix()
@@ -1488,34 +2008,30 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let expression = match tok.kind {
             TokenKind::IntLiteral => {
                 let text = self.token_text(&tok);
-                let value = parse_int_literal(text);
-                CHirExpr::Lit(
-                    IntLit {
-                        value,
-                        suffix: IntSuffix::None,
-                        base: IntBase::Dec,
-                    },
-                    tok.span,
-                )
+                let Some(literal) = parse_int_literal(text) else {
+                    self.report("E1006", "invalid-integer-literal", tok.span);
+                    return None;
+                };
+                CHirExpr::Lit(literal, tok.span)
             }
             TokenKind::Identifier => {
                 let name = self.token_text(&tok).to_owned();
                 CHirExpr::Ident(name, tok.span)
             }
-            TokenKind::FloatLiteral => CHirExpr::FloatLit(
-                FloatLit {
-                    value: self.token_text(&tok).parse().unwrap_or(0.0),
-                    suffix: FloatSuffix::None,
-                },
-                tok.span,
-            ),
-            TokenKind::CharLiteral => CHirExpr::CharLit(
-                CharLit {
-                    value: 0,
-                    prefix: CharPrefix::None,
-                },
-                tok.span,
-            ),
+            TokenKind::FloatLiteral => {
+                let Some(literal) = parse_float_literal(self.token_text(&tok)) else {
+                    self.report("E1006", "invalid-floating-literal", tok.span);
+                    return None;
+                };
+                CHirExpr::FloatLit(literal, tok.span)
+            }
+            TokenKind::CharLiteral => {
+                let Some(literal) = parse_char_literal(self.token_text(&tok)) else {
+                    self.report("E1006", "invalid-character-literal", tok.span);
+                    return None;
+                };
+                CHirExpr::CharLit(literal, tok.span)
+            }
             TokenKind::StringLiteral => CHirExpr::StringLit(
                 StringLit {
                     value: self.token_text(&tok).to_owned(),
@@ -1635,19 +2151,565 @@ fn can_start_expression(kind: TokenKind) -> bool {
     )
 }
 
+fn is_builtin_type_word(kind: TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::Void
+            | TokenKind::Bool
+            | TokenKind::Char
+            | TokenKind::Short
+            | TokenKind::Int
+            | TokenKind::Long
+            | TokenKind::Signed
+            | TokenKind::Unsigned
+            | TokenKind::Float
+            | TokenKind::Double
+            | TokenKind::Complex
+    )
+}
+
+/// Resolve the order-independent builtin declaration-specifier multiset.
+///
+/// C permits combinations such as `unsigned const long int`; consuming the
+/// words one at a time as complete types loses that grammar. This resolver
+/// accepts exactly the standard integer, real, and complex families and
+/// rejects contradictory or duplicate words.
+fn resolve_builtin_type(words: &[TokenKind]) -> Option<TypeKind> {
+    let count = |needle| words.iter().filter(|kind| **kind == needle).count();
+    let void = count(TokenKind::Void);
+    let boolean = count(TokenKind::Bool);
+    let character = count(TokenKind::Char);
+    let short = count(TokenKind::Short);
+    let integer = count(TokenKind::Int);
+    let long = count(TokenKind::Long);
+    let signed = count(TokenKind::Signed);
+    let unsigned = count(TokenKind::Unsigned);
+    let float = count(TokenKind::Float);
+    let double = count(TokenKind::Double);
+    let complex = count(TokenKind::Complex);
+
+    if void > 1
+        || boolean > 1
+        || character > 1
+        || short > 1
+        || integer > 1
+        || long > 2
+        || signed > 1
+        || unsigned > 1
+        || float > 1
+        || double > 1
+        || complex > 1
+        || (signed != 0 && unsigned != 0)
+    {
+        return None;
+    }
+
+    let total = words.len();
+    if void == 1 {
+        return (total == 1).then_some(TypeKind::Void);
+    }
+    if boolean == 1 {
+        return (total == 1).then_some(TypeKind::Int(IntRank::Bool));
+    }
+
+    if complex == 1 {
+        if signed != 0
+            || unsigned != 0
+            || short != 0
+            || integer != 0
+            || character != 0
+            || boolean != 0
+            || void != 0
+        {
+            return None;
+        }
+        return match (float, double, long) {
+            (1, 0, 0) => Some(TypeKind::Complex(ComplexBase::CF32)),
+            (0, 1, 0) => Some(TypeKind::Complex(ComplexBase::CF64)),
+            (0, 1, 1) => Some(TypeKind::Complex(ComplexBase::CF128)),
+            _ => None,
+        };
+    }
+
+    if float == 1 {
+        return (total == 1).then_some(TypeKind::Float(FloatKind::F32));
+    }
+    if double == 1 {
+        if signed != 0 || unsigned != 0 || short != 0 || integer != 0 || character != 0 {
+            return None;
+        }
+        return match long {
+            0 => Some(TypeKind::Float(FloatKind::F64)),
+            1 => Some(TypeKind::Float(FloatKind::F128)),
+            _ => None,
+        };
+    }
+    if character == 1 {
+        if short != 0 || long != 0 || integer != 0 {
+            return None;
+        }
+        return Some(TypeKind::Int(if unsigned == 1 {
+            IntRank::UChar
+        } else if signed == 1 {
+            IntRank::SChar
+        } else {
+            IntRank::Char
+        }));
+    }
+    if short == 1 {
+        if long != 0 || character != 0 {
+            return None;
+        }
+        return Some(TypeKind::Int(if unsigned == 1 {
+            IntRank::UShort
+        } else {
+            IntRank::Short
+        }));
+    }
+    if long != 0 {
+        if short != 0 || character != 0 {
+            return None;
+        }
+        return Some(TypeKind::Int(match (unsigned, long) {
+            (1, 1) => IntRank::ULong,
+            (1, 2) => IntRank::ULongLong,
+            (0, 1) => IntRank::Long,
+            (0, 2) => IntRank::LongLong,
+            _ => return None,
+        }));
+    }
+    if integer <= 1 && signed <= 1 && unsigned <= 1 && total != 0 {
+        return Some(TypeKind::Int(if unsigned == 1 {
+            IntRank::UInt
+        } else {
+            IntRank::Int
+        }));
+    }
+    None
+}
+
 // ── integer literal parsing ────────────────────────────────────────────────
 
-fn parse_int_literal(text: &str) -> u64 {
-    if text.starts_with("0x") || text.starts_with("0X") {
-        u64::from_str_radix(&text[2..], 16).unwrap_or(0)
-    } else if text.starts_with('0')
-        && text.len() > 1
-        && !text.starts_with("0x")
-        && !text.starts_with("0X")
-    {
-        u64::from_str_radix(&text[1..], 8).unwrap_or(0)
+fn parse_int_literal(text: &str) -> Option<IntLit> {
+    let (base, radix, prefix_len) = if text.starts_with("0x") || text.starts_with("0X") {
+        (IntBase::Hex, 16, 2)
+    } else if text.starts_with("0b") || text.starts_with("0B") {
+        (IntBase::Bin, 2, 2)
+    } else if text.starts_with('0') && text.len() > 1 {
+        (IntBase::Oct, 8, 1)
     } else {
-        text.parse().unwrap_or(0)
+        (IntBase::Dec, 10, 0)
+    };
+
+    let digit_count = text[prefix_len..]
+        .bytes()
+        .take_while(|byte| match radix {
+            2 => matches!(byte, b'0' | b'1'),
+            8 => matches!(byte, b'0'..=b'7'),
+            10 => byte.is_ascii_digit(),
+            16 => byte.is_ascii_hexdigit(),
+            _ => unreachable!("known integer literal radix"),
+        })
+        .count();
+    if digit_count == 0 && prefix_len != 1 {
+        return None;
+    }
+    let digit_end = prefix_len + digit_count;
+    let digits = if prefix_len == 1 && digit_count == 0 {
+        "0"
+    } else {
+        &text[prefix_len..digit_end]
+    };
+    let suffix = match text[digit_end..].to_ascii_lowercase().as_str() {
+        "" => IntSuffix::None,
+        "u" => IntSuffix::U,
+        "l" => IntSuffix::L,
+        "ul" | "lu" => IntSuffix::UL,
+        "ll" => IntSuffix::LL,
+        "ull" | "llu" => IntSuffix::ULL,
+        _ => return None,
+    };
+    Some(IntLit {
+        value: u64::from_str_radix(digits, radix).ok()?,
+        suffix,
+        base,
+    })
+}
+
+fn parse_float_literal(text: &str) -> Option<FloatLit> {
+    let (number, suffix) = match text.as_bytes().last().copied() {
+        Some(b'f' | b'F') => (&text[..text.len() - 1], FloatSuffix::F),
+        Some(b'l' | b'L') => (&text[..text.len() - 1], FloatSuffix::L),
+        _ => (text, FloatSuffix::None),
+    };
+    Some(FloatLit {
+        value: number.parse().ok()?,
+        suffix,
+    })
+}
+
+fn parse_char_literal(text: &str) -> Option<CharLit> {
+    let (quoted, prefix) = if let Some(quoted) = text.strip_prefix("u8") {
+        (quoted, CharPrefix::U8)
+    } else if let Some(quoted) = text.strip_prefix('u') {
+        (quoted, CharPrefix::U)
+    } else if let Some(quoted) = text.strip_prefix('U') {
+        (quoted, CharPrefix::U)
+    } else if let Some(quoted) = text.strip_prefix('L') {
+        (quoted, CharPrefix::L)
+    } else {
+        (text, CharPrefix::None)
+    };
+    let contents = quoted.strip_prefix('\'')?.strip_suffix('\'')?;
+    let value = if let Some(escape) = contents.strip_prefix('\\') {
+        match escape {
+            "'" => u32::from(b'\''),
+            "\"" => u32::from(b'\"'),
+            "?" => u32::from(b'?'),
+            "\\" => u32::from(b'\\'),
+            "a" => 7,
+            "b" => 8,
+            "f" => 12,
+            "n" => 10,
+            "r" => 13,
+            "t" => 9,
+            "v" => 11,
+            _ if escape.starts_with('x') => {
+                let digits = &escape[1..];
+                if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                    return None;
+                }
+                u32::from_str_radix(digits, 16).ok()?
+            }
+            _ if escape.starts_with('u') && escape.len() == 5 => {
+                u32::from_str_radix(&escape[1..], 16).ok()?
+            }
+            _ if escape.starts_with('U') && escape.len() == 9 => {
+                u32::from_str_radix(&escape[1..], 16).ok()?
+            }
+            _ if escape.len() <= 3 && escape.bytes().all(|byte| matches!(byte, b'0'..=b'7')) => {
+                u32::from_str_radix(escape, 8).ok()?
+            }
+            _ => return None,
+        }
+    } else {
+        let mut characters = contents.chars();
+        let value = u32::from(characters.next()?);
+        if characters.next().is_some() {
+            return None;
+        }
+        value
+    };
+    if matches!(prefix, CharPrefix::None | CharPrefix::U8) && value > u32::from(u8::MAX) {
+        return None;
+    }
+    char::from_u32(value)?;
+    Some(CharLit { value, prefix })
+}
+
+fn integer_rank_type(rank: IntRank) -> Option<CIntegerType> {
+    Some(match rank {
+        IntRank::Bool => CIntegerType::BOOL,
+        // GNU AArch64 uses unsigned plain `char`; all three character types
+        // still promote to signed `int` before arithmetic.
+        IntRank::Char | IntRank::UChar => CIntegerType::new(8, 1, false),
+        IntRank::SChar => CIntegerType::new(8, 1, true),
+        IntRank::Short => CIntegerType::new(16, 2, true),
+        IntRank::UShort => CIntegerType::new(16, 2, false),
+        IntRank::Int => CIntegerType::INT,
+        IntRank::UInt => CIntegerType::UINT,
+        IntRank::Long => CIntegerType::LONG,
+        IntRank::ULong => CIntegerType::ULONG,
+        IntRank::LongLong => CIntegerType::LONG_LONG,
+        IntRank::ULongLong => CIntegerType::ULONG_LONG,
+    })
+}
+
+fn enum_integer_type(minimum: i64, maximum: i64) -> CIntegerType {
+    if minimum >= i64::from(i32::MIN) && maximum <= i64::from(i32::MAX) {
+        CIntegerType::INT
+    } else if minimum >= 0 && maximum <= i64::from(u32::MAX) {
+        CIntegerType::UINT
+    } else if minimum >= 0 {
+        // GNU AArch64 selects an unsigned eight-byte mode for an all-positive
+        // enum that exceeds `unsigned int`.
+        CIntegerType::ULONG
+    } else {
+        CIntegerType::LONG
+    }
+}
+
+fn integer_expression_layout(ty: CIntegerType) -> Result<TypeLayout, ()> {
+    let rank = match (ty.bits, ty.rank, ty.signed) {
+        (1, 0, false) => IntRank::Bool,
+        (8, 1, true) => IntRank::SChar,
+        (8, 1, false) => IntRank::UChar,
+        (16, 2, true) => IntRank::Short,
+        (16, 2, false) => IntRank::UShort,
+        (32, 3, true) => IntRank::Int,
+        (32, 3, false) => IntRank::UInt,
+        (64, 4, true) => IntRank::Long,
+        (64, 4, false) => IntRank::ULong,
+        (64, 5, true) => IntRank::LongLong,
+        (64, 5, false) => IntRank::ULongLong,
+        _ => return Err(()),
+    };
+    let mut types = TypeInterner::new();
+    let ty = types.intern(CanonicalType {
+        kind: TypeKind::Int(rank),
+        qualifiers: Qualifiers::default(),
+    });
+    TargetDataLayout::aarch64_unknown_linux_gnu()
+        .layout_of(&types, ty)
+        .map_err(|_| ())
+}
+
+fn floating_literal_to_integer(literal: FloatLit, target: CIntegerType) -> Result<CInteger, ()> {
+    let value = literal.value;
+    if !value.is_finite() {
+        return Err(());
+    }
+    if target == CIntegerType::BOOL {
+        return Ok(CInteger::new(u64::from(value != 0.0), target));
+    }
+    let truncated = value.trunc();
+    if target.signed {
+        let bound = 2_f64.powi(i32::from(target.bits) - 1);
+        if truncated < -bound || truncated >= bound {
+            return Err(());
+        }
+        Ok(CInteger::new((truncated as i64) as u64, target))
+    } else {
+        let upper_bound = 2_f64.powi(i32::from(target.bits));
+        if truncated < 0.0 || truncated >= upper_bound {
+            return Err(());
+        }
+        Ok(CInteger::new(truncated as u64, target))
+    }
+}
+
+fn integer_literal_value(literal: IntLit) -> Result<CInteger, ()> {
+    let decimal = literal.base == IntBase::Dec;
+    let candidates: &[CIntegerType] = match (literal.suffix, decimal) {
+        (IntSuffix::None, true) => &[
+            CIntegerType::INT,
+            CIntegerType::LONG,
+            CIntegerType::LONG_LONG,
+        ],
+        (IntSuffix::None, false) => &[
+            CIntegerType::INT,
+            CIntegerType::UINT,
+            CIntegerType::LONG,
+            CIntegerType::ULONG,
+            CIntegerType::LONG_LONG,
+            CIntegerType::ULONG_LONG,
+        ],
+        (IntSuffix::U, _) => &[
+            CIntegerType::UINT,
+            CIntegerType::ULONG,
+            CIntegerType::ULONG_LONG,
+        ],
+        (IntSuffix::L, true) => &[CIntegerType::LONG, CIntegerType::LONG_LONG],
+        (IntSuffix::L, false) => &[
+            CIntegerType::LONG,
+            CIntegerType::ULONG,
+            CIntegerType::LONG_LONG,
+            CIntegerType::ULONG_LONG,
+        ],
+        (IntSuffix::UL, _) => &[CIntegerType::ULONG, CIntegerType::ULONG_LONG],
+        (IntSuffix::LL, true) => &[CIntegerType::LONG_LONG],
+        (IntSuffix::LL, false) => &[CIntegerType::LONG_LONG, CIntegerType::ULONG_LONG],
+        (IntSuffix::ULL, _) => &[CIntegerType::ULONG_LONG],
+    };
+    let ty = candidates.iter().copied().find(|candidate| {
+        if candidate.signed {
+            i128::from(literal.value) <= candidate.signed_max()
+        } else {
+            literal.value <= candidate.mask()
+        }
+    });
+    ty.map(|ty| CInteger::new(literal.value, ty)).ok_or(())
+}
+
+fn usual_arithmetic_type(left: CIntegerType, right: CIntegerType) -> CIntegerType {
+    if left == right {
+        return left;
+    }
+    if left.signed == right.signed {
+        return if left.rank >= right.rank { left } else { right };
+    }
+    let (signed, unsigned) = if left.signed {
+        (left, right)
+    } else {
+        (right, left)
+    };
+    if unsigned.rank >= signed.rank {
+        return unsigned;
+    }
+    if signed.bits > unsigned.bits {
+        return signed;
+    }
+    signed.unsigned_version()
+}
+
+fn converted_pair(left: CInteger, right: CInteger) -> (CInteger, CInteger, CIntegerType) {
+    let left = left.promoted();
+    let right = right.promoted();
+    let ty = usual_arithmetic_type(left.ty, right.ty);
+    (left.cast(ty), right.cast(ty), ty)
+}
+
+fn integer_from_mathematical(value: i128, ty: CIntegerType) -> Result<CInteger, ()> {
+    if ty.signed && !(ty.signed_min()..=ty.signed_max()).contains(&value) {
+        return Err(());
+    }
+    if !ty.signed && !(0..=i128::from(ty.mask())).contains(&value) {
+        return Err(());
+    }
+    Ok(CInteger::new(value as u64, ty))
+}
+
+fn eval_unary_integer(op: UnaryOp, operand: CInteger) -> Result<CInteger, ()> {
+    let operand = operand.promoted();
+    match op {
+        UnaryOp::Plus => Ok(operand),
+        UnaryOp::Neg if operand.ty.signed => integer_from_mathematical(
+            operand.mathematical_value().checked_neg().ok_or(())?,
+            operand.ty,
+        ),
+        UnaryOp::Neg => Ok(CInteger::new(0_u64.wrapping_sub(operand.raw), operand.ty)),
+        UnaryOp::Not => Ok(CInteger::int(i32::from(!operand.truth()))),
+        UnaryOp::BitNot => Ok(CInteger::new(!operand.raw, operand.ty)),
+        UnaryOp::AddrOf
+        | UnaryOp::Deref
+        | UnaryOp::PreInc
+        | UnaryOp::PreDec
+        | UnaryOp::PostInc
+        | UnaryOp::PostDec => Err(()),
+    }
+}
+
+fn eval_binary_integer(op: BinaryOp, left: CInteger, right: CInteger) -> Result<CInteger, ()> {
+    if matches!(op, BinaryOp::Shl | BinaryOp::Shr) {
+        return eval_integer_shift(op, left.promoted(), right.promoted());
+    }
+    if matches!(op, BinaryOp::And | BinaryOp::Or) {
+        return Ok(CInteger::int(i32::from(match op {
+            BinaryOp::And => left.truth() && right.truth(),
+            BinaryOp::Or => left.truth() || right.truth(),
+            _ => unreachable!(),
+        })));
+    }
+    let (left, right, ty) = converted_pair(left, right);
+    if matches!(
+        op,
+        BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge | BinaryOp::Eq | BinaryOp::Ne
+    ) {
+        let ordering = if ty.signed {
+            left.mathematical_value().cmp(&right.mathematical_value())
+        } else {
+            left.raw.cmp(&right.raw)
+        };
+        return Ok(CInteger::int(i32::from(match op {
+            BinaryOp::Lt => ordering.is_lt(),
+            BinaryOp::Le => !ordering.is_gt(),
+            BinaryOp::Gt => ordering.is_gt(),
+            BinaryOp::Ge => !ordering.is_lt(),
+            BinaryOp::Eq => ordering.is_eq(),
+            BinaryOp::Ne => !ordering.is_eq(),
+            _ => unreachable!(),
+        })));
+    }
+    match op {
+        BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul if ty.signed => {
+            let left = left.mathematical_value();
+            let right = right.mathematical_value();
+            let value = match op {
+                BinaryOp::Add => left.checked_add(right),
+                BinaryOp::Sub => left.checked_sub(right),
+                BinaryOp::Mul => left.checked_mul(right),
+                _ => unreachable!(),
+            }
+            .ok_or(())?;
+            integer_from_mathematical(value, ty)
+        }
+        BinaryOp::Add => Ok(CInteger::new(left.raw.wrapping_add(right.raw), ty)),
+        BinaryOp::Sub => Ok(CInteger::new(left.raw.wrapping_sub(right.raw), ty)),
+        BinaryOp::Mul => Ok(CInteger::new(left.raw.wrapping_mul(right.raw), ty)),
+        BinaryOp::Div | BinaryOp::Mod => {
+            if right.raw == 0 {
+                return Err(());
+            }
+            if ty.signed {
+                let left = left.mathematical_value();
+                let right = right.mathematical_value();
+                let value = if op == BinaryOp::Div {
+                    left.checked_div(right)
+                } else {
+                    left.checked_rem(right)
+                }
+                .ok_or(())?;
+                integer_from_mathematical(value, ty)
+            } else {
+                Ok(CInteger::new(
+                    if op == BinaryOp::Div {
+                        left.raw / right.raw
+                    } else {
+                        left.raw % right.raw
+                    },
+                    ty,
+                ))
+            }
+        }
+        BinaryOp::BitAnd => Ok(CInteger::new(left.raw & right.raw, ty)),
+        BinaryOp::BitOr => Ok(CInteger::new(left.raw | right.raw, ty)),
+        BinaryOp::BitXor => Ok(CInteger::new(left.raw ^ right.raw, ty)),
+        BinaryOp::Shl
+        | BinaryOp::Shr
+        | BinaryOp::Lt
+        | BinaryOp::Le
+        | BinaryOp::Gt
+        | BinaryOp::Ge
+        | BinaryOp::Eq
+        | BinaryOp::Ne
+        | BinaryOp::And
+        | BinaryOp::Or => unreachable!("handled before arithmetic dispatch"),
+        BinaryOp::Comma
+        | BinaryOp::Assign
+        | BinaryOp::AddAssign
+        | BinaryOp::SubAssign
+        | BinaryOp::MulAssign
+        | BinaryOp::DivAssign
+        | BinaryOp::ModAssign
+        | BinaryOp::ShlAssign
+        | BinaryOp::ShrAssign
+        | BinaryOp::BitAndAssign
+        | BinaryOp::BitOrAssign
+        | BinaryOp::BitXorAssign => Err(()),
+    }
+}
+
+fn eval_integer_shift(op: BinaryOp, left: CInteger, right: CInteger) -> Result<CInteger, ()> {
+    let shift = u32::try_from(right.mathematical_value()).map_err(|_| ())?;
+    if shift >= u32::from(left.ty.bits) {
+        return Err(());
+    }
+    match op {
+        BinaryOp::Shl if left.ty.signed => {
+            let left_value = left.mathematical_value();
+            if left_value < 0 {
+                return Err(());
+            }
+            let value = left_value.checked_mul(1_i128 << shift).ok_or(())?;
+            integer_from_mathematical(value, left.ty)
+        }
+        BinaryOp::Shl => Ok(CInteger::new(left.raw << shift, left.ty)),
+        BinaryOp::Shr if left.ty.signed => integer_from_mathematical(
+            left.mathematical_value().checked_shr(shift).ok_or(())?,
+            left.ty,
+        ),
+        BinaryOp::Shr => Ok(CInteger::new(left.raw >> shift, left.ty)),
+        _ => unreachable!("shift helper called only for shifts"),
     }
 }
 
@@ -1681,16 +2743,6 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
             CHirExpr::CompoundLit(*ty, values.clone(), paren_span)
         }
         CHirExpr::Comma(lhs, rhs, _) => CHirExpr::Comma(lhs, rhs, paren_span),
-    }
-}
-
-fn integer_constant_value(expression: &CHirExpr<'_>) -> i64 {
-    match expression {
-        CHirExpr::Lit(literal, _) => literal.value as i64,
-        CHirExpr::Unary(UnaryOp::Neg, operand, _) => -integer_constant_value(operand),
-        CHirExpr::Unary(UnaryOp::Plus, operand, _) => integer_constant_value(operand),
-        CHirExpr::Unary(UnaryOp::BitNot, operand, _) => !integer_constant_value(operand),
-        _ => 0,
     }
 }
 
@@ -1960,6 +3012,26 @@ mod tests {
         assert!(
             unit.is_empty(),
             "a rejected expression must not survive in reachable C-HIR: {unit:?}"
+        );
+    }
+
+    #[test]
+    fn failed_declaration_rolls_back_enumerator_bindings() {
+        let source = "enum { MUST_NOT_LEAK = 7 } broken trailing;";
+        let mut lexer = Lexer::new(FileId::new(99), source);
+        let mut tokens = Vec::new();
+        while let Some(token) = lexer.next() {
+            tokens.push(token);
+        }
+        let arena = Arena::default();
+        let mut parser = Parser::new(tokens, FileId::new(99), source);
+        let unit = parser.parse_translation_unit_in(&arena);
+
+        assert!(parser.had_error());
+        assert!(unit.is_empty());
+        assert!(
+            !parser.enum_constants.contains_key("MUST_NOT_LEAK"),
+            "a rejected declaration must roll back ordinary-name bindings"
         );
     }
 

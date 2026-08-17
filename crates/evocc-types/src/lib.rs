@@ -11,11 +11,11 @@
 //! spaces, memory regions, and effects. It belongs to the optimizer and
 //! backend.
 //!
-//! The `TargetLayout` trait bridges the two: given a `CType` and a target
-//! triple, it answers `size_of`, `align_of`, and struct field offsets. The
-//! trait is deliberately narrow to make it straightforward to implement for
-//! Apple AArch64, Linux AAPCS64, and x86-64 SysV with no target-specific
-//! leakage into the type definition itself.
+//! [`TargetDataLayout`] is the production bridge from canonical [`TypeId`]s to
+//! concrete ABI sizes, alignments, record offsets, and bit-field allocation.
+//! The older [`TargetLayout`] trait remains only for compatibility with the
+//! Day 1--3 structural `CType` API; new frontend code must not use it as layout
+//! authority.
 
 use std::collections::HashMap;
 
@@ -234,6 +234,21 @@ pub enum TagKind {
 pub struct RecordField {
     pub name: Option<String>,
     pub ty: TypeId,
+    /// Bit-field width after integer constant-expression evaluation.
+    ///
+    /// `None` is an ordinary record member. `Some(0)` represents an unnamed
+    /// zero-width allocation barrier; semantic analysis and target layout both
+    /// reject a named zero-width bit-field.
+    pub bit_field: Option<BitFieldSpec>,
+}
+
+/// Target-independent, semantically evaluated bit-field syntax.
+///
+/// Storage-unit selection and bit offsets are target ABI decisions and are
+/// therefore intentionally absent from this frontend representation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BitFieldSpec {
+    pub width_bits: u16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -575,6 +590,632 @@ pub trait TargetLayout {
     fn bitfield_layout(&self, base: &CType, width_bits: u8) -> (u8, u64);
 }
 
+/// Size and ABI alignment of one complete object type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TypeLayout {
+    pub size_bytes: u64,
+    pub align_bytes: u32,
+}
+
+impl TypeLayout {
+    #[must_use]
+    pub const fn new(size_bytes: u64, align_bytes: u32) -> Self {
+        Self {
+            size_bytes,
+            align_bytes,
+        }
+    }
+}
+
+/// Target allocation details for one C bit-field.
+///
+/// `bit_offset` is counted from the least-significant bit of the storage unit
+/// because `aarch64-unknown-linux-gnu` is little-endian. The allocation unit
+/// may begin before an earlier ordinary field: AAPCS64 permits a bit-field to
+/// start at the next free bit when it still fits in its naturally aligned
+/// container.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BitFieldLayout {
+    pub storage_byte_offset: u64,
+    pub storage_size_bytes: u32,
+    pub bit_offset: u16,
+    pub width_bits: u16,
+}
+
+/// Layout of one source-order record field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RecordFieldLayout {
+    pub field_index: usize,
+    /// Byte containing the first bit of a bit-field, or the ordinary member's
+    /// addressable byte offset.
+    pub byte_offset: u64,
+    /// Layout of the declared base/member type. A flexible array has size zero
+    /// here and retains its element alignment.
+    pub layout: TypeLayout,
+    pub bit_field: Option<BitFieldLayout>,
+}
+
+/// Complete ABI layout of a struct or union.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RecordLayout {
+    pub size_bytes: u64,
+    pub align_bytes: u32,
+    pub fields: Vec<RecordFieldLayout>,
+    /// Bytes after the last occupied member (or after a flexible member's
+    /// zero-sized position) that are included in `sizeof`.
+    pub tail_padding_bytes: u64,
+    /// Padding between the occupied fixed prefix and a final flexible array.
+    /// `None` distinguishes records without a flexible array from a zero-gap
+    /// flexible prefix.
+    pub flexible_array_padding_bytes: Option<u64>,
+}
+
+impl RecordLayout {
+    /// Return source-order byte offsets without discarding richer field data.
+    #[must_use]
+    pub fn field_offsets(&self) -> Vec<u64> {
+        self.fields.iter().map(|field| field.byte_offset).collect()
+    }
+
+    #[must_use]
+    pub const fn type_layout(&self) -> TypeLayout {
+        TypeLayout::new(self.size_bytes, self.align_bytes)
+    }
+}
+
+/// A canonical type has no valid, finite object layout for this target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LayoutError {
+    UnknownType(TypeId),
+    UnknownTag(TagId),
+    IncompleteTag(TagId),
+    IncompleteArray(TypeId),
+    NonObjectType(TypeId),
+    VariableLengthArray(TypeId),
+    NotRecordTag {
+        tag: TagId,
+        actual: TagKind,
+    },
+    RecursiveByValue(TagId),
+    FlexibleArrayNotLast {
+        tag: TagId,
+        field_index: usize,
+    },
+    FlexibleArrayInUnion {
+        tag: TagId,
+        field_index: usize,
+    },
+    InvalidBitFieldBase {
+        tag: TagId,
+        field_index: usize,
+        ty: TypeId,
+    },
+    NamedZeroWidthBitField {
+        tag: TagId,
+        field_index: usize,
+    },
+    BitFieldWidthExceedsType {
+        tag: TagId,
+        field_index: usize,
+        width_bits: u16,
+        type_bits: u16,
+    },
+    ArithmeticOverflow,
+}
+
+impl std::fmt::Display for LayoutError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnknownType(id) => write!(formatter, "unknown type ID {}", id.raw()),
+            Self::UnknownTag(id) => write!(formatter, "unknown tag ID {}", id.raw()),
+            Self::IncompleteTag(id) => write!(formatter, "tag ID {} is incomplete", id.raw()),
+            Self::IncompleteArray(id) => {
+                write!(formatter, "array type ID {} has no bound", id.raw())
+            }
+            Self::NonObjectType(id) => {
+                write!(formatter, "type ID {} is not an object type", id.raw())
+            }
+            Self::VariableLengthArray(id) => {
+                write!(formatter, "VLA type ID {} has no static layout", id.raw())
+            }
+            Self::NotRecordTag { tag, actual } => write!(
+                formatter,
+                "tag ID {} is {actual:?}, not a struct or union",
+                tag.raw()
+            ),
+            Self::RecursiveByValue(id) => write!(
+                formatter,
+                "tag ID {} contains itself recursively by value",
+                id.raw()
+            ),
+            Self::FlexibleArrayNotLast { tag, field_index } => write!(
+                formatter,
+                "field {field_index} of tag ID {} is a non-final flexible array",
+                tag.raw()
+            ),
+            Self::FlexibleArrayInUnion { tag, field_index } => write!(
+                formatter,
+                "field {field_index} of union tag ID {} is a flexible array",
+                tag.raw()
+            ),
+            Self::InvalidBitFieldBase {
+                tag,
+                field_index,
+                ty,
+            } => write!(
+                formatter,
+                "field {field_index} of tag ID {} uses non-integral bit-field type ID {}",
+                tag.raw(),
+                ty.raw()
+            ),
+            Self::NamedZeroWidthBitField { tag, field_index } => write!(
+                formatter,
+                "field {field_index} of tag ID {} is a named zero-width bit-field",
+                tag.raw()
+            ),
+            Self::BitFieldWidthExceedsType {
+                tag,
+                field_index,
+                width_bits,
+                type_bits,
+            } => write!(
+                formatter,
+                "field {field_index} of tag ID {} has width {width_bits}, exceeding its {type_bits}-bit base type",
+                tag.raw()
+            ),
+            Self::ArithmeticOverflow => formatter.write_str("object layout arithmetic overflow"),
+        }
+    }
+}
+
+impl std::error::Error for LayoutError {}
+
+/// GNU AArch64 target layout over the canonical [`TypeInterner`] universe.
+///
+/// The constructor names the target explicitly so a future x86-64 or Apple
+/// AArch64 implementation cannot silently inherit this ABI's decisions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TargetDataLayout {
+    _private: (),
+}
+
+impl TargetDataLayout {
+    #[must_use]
+    pub const fn aarch64_unknown_linux_gnu() -> Self {
+        Self { _private: () }
+    }
+
+    /// Compute the layout of a complete canonical object type.
+    pub fn layout_of(&self, types: &TypeInterner, ty: TypeId) -> Result<TypeLayout, LayoutError> {
+        LayoutContext::new(self, types).layout_type(ty)
+    }
+
+    /// Compute source-order field placement and padding for a struct or union.
+    pub fn record_layout(
+        &self,
+        types: &TypeInterner,
+        tag: TagId,
+    ) -> Result<RecordLayout, LayoutError> {
+        LayoutContext::new(self, types).layout_record(tag)
+    }
+}
+
+struct LayoutContext<'a> {
+    _target: &'a TargetDataLayout,
+    types: &'a TypeInterner,
+    active_tags: Vec<TagId>,
+}
+
+impl<'a> LayoutContext<'a> {
+    fn new(target: &'a TargetDataLayout, types: &'a TypeInterner) -> Self {
+        Self {
+            _target: target,
+            types,
+            active_tags: Vec::new(),
+        }
+    }
+
+    fn layout_type(&mut self, ty: TypeId) -> Result<TypeLayout, LayoutError> {
+        let kind = self
+            .types
+            .get(ty)
+            .ok_or(LayoutError::UnknownType(ty))?
+            .kind
+            .clone();
+        match kind {
+            TypeKind::Void | TypeKind::Function { .. } => Err(LayoutError::NonObjectType(ty)),
+            TypeKind::Int(rank) => Ok(integer_layout(rank)),
+            TypeKind::Float(kind) => Ok(float_layout(kind)),
+            TypeKind::Complex(base) => Ok(complex_layout(base)),
+            TypeKind::Pointer(_) => Ok(TypeLayout::new(8, 8)),
+            TypeKind::Array { element, bound } => match bound {
+                ArrayBound::Fixed(count) => {
+                    let element = self.layout_type(element)?;
+                    let size = element
+                        .size_bytes
+                        .checked_mul(count)
+                        .ok_or(LayoutError::ArithmeticOverflow)?;
+                    Ok(TypeLayout::new(size, element.align_bytes))
+                }
+                ArrayBound::Variable => Err(LayoutError::VariableLengthArray(ty)),
+                ArrayBound::Unbounded => Err(LayoutError::IncompleteArray(ty)),
+            },
+            TypeKind::Struct(tag) | TypeKind::Union(tag) => {
+                Ok(self.layout_record(tag)?.type_layout())
+            }
+            TypeKind::Enum(tag) => self.layout_enum(tag),
+        }
+    }
+
+    fn layout_enum(&self, tag_id: TagId) -> Result<TypeLayout, LayoutError> {
+        let tag = self
+            .types
+            .tag(tag_id)
+            .ok_or(LayoutError::UnknownTag(tag_id))?;
+        let TagState::Complete(TagDefinition::Enum(constants)) = &tag.state else {
+            return if matches!(tag.state, TagState::Incomplete) {
+                Err(LayoutError::IncompleteTag(tag_id))
+            } else {
+                Err(LayoutError::NotRecordTag {
+                    tag: tag_id,
+                    actual: tag.kind,
+                })
+            };
+        };
+
+        // GNU C with -fno-short-enums uses at least `int`. Values outside the
+        // 32-bit signed/unsigned domains require an eight-byte integer mode.
+        let minimum = constants
+            .iter()
+            .map(|constant| constant.value)
+            .min()
+            .unwrap_or(0);
+        let maximum = constants
+            .iter()
+            .map(|constant| constant.value)
+            .max()
+            .unwrap_or(0);
+        let fits_signed_int = minimum >= i64::from(i32::MIN) && maximum <= i64::from(i32::MAX);
+        let fits_unsigned_int = minimum >= 0 && maximum <= i64::from(u32::MAX);
+        if fits_signed_int || fits_unsigned_int {
+            Ok(TypeLayout::new(4, 4))
+        } else {
+            Ok(TypeLayout::new(8, 8))
+        }
+    }
+
+    fn layout_record(&mut self, tag_id: TagId) -> Result<RecordLayout, LayoutError> {
+        let tag = self
+            .types
+            .tag(tag_id)
+            .ok_or(LayoutError::UnknownTag(tag_id))?;
+        let kind = tag.kind;
+        if !matches!(kind, TagKind::Struct | TagKind::Union) {
+            return Err(LayoutError::NotRecordTag {
+                tag: tag_id,
+                actual: kind,
+            });
+        }
+        let definition = match &tag.state {
+            TagState::Incomplete => return Err(LayoutError::IncompleteTag(tag_id)),
+            TagState::Complete(definition) => definition.clone(),
+        };
+        if self.active_tags.contains(&tag_id) {
+            return Err(LayoutError::RecursiveByValue(tag_id));
+        }
+
+        self.active_tags.push(tag_id);
+        let result = match definition {
+            TagDefinition::Struct(fields) => self.layout_struct(tag_id, &fields),
+            TagDefinition::Union(fields) => self.layout_union(tag_id, &fields),
+            TagDefinition::Enum(_) => unreachable!("tag kind checked above"),
+        };
+        let popped = self.active_tags.pop();
+        debug_assert_eq!(popped, Some(tag_id));
+        result
+    }
+
+    fn layout_struct(
+        &mut self,
+        tag: TagId,
+        fields: &[RecordField],
+    ) -> Result<RecordLayout, LayoutError> {
+        let mut cursor_bits = 0_u64;
+        let mut occupied_end_bytes = 0_u64;
+        let mut record_align = 1_u32;
+        let mut layouts = Vec::with_capacity(fields.len());
+        let mut flexible_array_padding_bytes = None;
+        let mut flexible_position = None;
+
+        for (field_index, field) in fields.iter().enumerate() {
+            if let Some(spec) = field.bit_field {
+                let (base_layout, type_bits) = self.bit_field_base(tag, field_index, field.ty)?;
+                // AAPCS64 10.1.8: the container type contributes to aggregate
+                // alignment even for anonymous and zero-width bit-fields.
+                record_align = record_align.max(base_layout.align_bytes);
+                if spec.width_bits == 0 && field.name.is_some() {
+                    return Err(LayoutError::NamedZeroWidthBitField { tag, field_index });
+                }
+                if spec.width_bits > type_bits {
+                    return Err(LayoutError::BitFieldWidthExceedsType {
+                        tag,
+                        field_index,
+                        width_bits: spec.width_bits,
+                        type_bits,
+                    });
+                }
+
+                let unit_bits = base_layout
+                    .size_bytes
+                    .checked_mul(8)
+                    .ok_or(LayoutError::ArithmeticOverflow)?;
+                let start_bits = if spec.width_bits == 0 {
+                    checked_align_up(cursor_bits, unit_bits)?
+                } else {
+                    let container_start = (cursor_bits / unit_bits) * unit_bits;
+                    let container_end = container_start
+                        .checked_add(unit_bits)
+                        .ok_or(LayoutError::ArithmeticOverflow)?;
+                    let tentative_end = cursor_bits
+                        .checked_add(u64::from(spec.width_bits))
+                        .ok_or(LayoutError::ArithmeticOverflow)?;
+                    if tentative_end <= container_end {
+                        cursor_bits
+                    } else {
+                        checked_align_up(cursor_bits, unit_bits)?
+                    }
+                };
+                let end_bits = start_bits
+                    .checked_add(u64::from(spec.width_bits))
+                    .ok_or(LayoutError::ArithmeticOverflow)?;
+                let storage_bits = (start_bits / unit_bits) * unit_bits;
+                let relative_bit_offset = start_bits - storage_bits;
+                let bit_offset = u16::try_from(relative_bit_offset)
+                    .map_err(|_| LayoutError::ArithmeticOverflow)?;
+                let storage_size_bytes = u32::try_from(base_layout.size_bytes)
+                    .map_err(|_| LayoutError::ArithmeticOverflow)?;
+
+                cursor_bits = end_bits;
+                if spec.width_bits != 0 {
+                    occupied_end_bytes = occupied_end_bytes.max(bits_to_bytes(end_bits)?);
+                }
+                layouts.push(RecordFieldLayout {
+                    field_index,
+                    byte_offset: start_bits / 8,
+                    layout: base_layout,
+                    bit_field: Some(BitFieldLayout {
+                        storage_byte_offset: storage_bits / 8,
+                        storage_size_bytes,
+                        bit_offset,
+                        width_bits: spec.width_bits,
+                    }),
+                });
+                continue;
+            }
+
+            if let Some(element) = self.unbounded_array_element(field.ty)? {
+                if field_index + 1 != fields.len() {
+                    return Err(LayoutError::FlexibleArrayNotLast { tag, field_index });
+                }
+                let element_layout = self.layout_type(element)?;
+                let prefix_end = occupied_end_bytes;
+                let placement_end = bits_to_bytes(cursor_bits)?;
+                let offset = checked_align_up(
+                    placement_end.max(occupied_end_bytes),
+                    u64::from(element_layout.align_bytes),
+                )?;
+                record_align = record_align.max(element_layout.align_bytes);
+                flexible_array_padding_bytes = Some(
+                    offset
+                        .checked_sub(prefix_end)
+                        .ok_or(LayoutError::ArithmeticOverflow)?,
+                );
+                flexible_position = Some(offset);
+                cursor_bits = offset
+                    .checked_mul(8)
+                    .ok_or(LayoutError::ArithmeticOverflow)?;
+                layouts.push(RecordFieldLayout {
+                    field_index,
+                    byte_offset: offset,
+                    layout: TypeLayout::new(0, element_layout.align_bytes),
+                    bit_field: None,
+                });
+                continue;
+            }
+
+            let field_layout = self.layout_type(field.ty)?;
+            let cursor_bytes = bits_to_bytes(cursor_bits)?;
+            let offset = checked_align_up(cursor_bytes, u64::from(field_layout.align_bytes))?;
+            let end = offset
+                .checked_add(field_layout.size_bytes)
+                .ok_or(LayoutError::ArithmeticOverflow)?;
+            cursor_bits = end.checked_mul(8).ok_or(LayoutError::ArithmeticOverflow)?;
+            occupied_end_bytes = occupied_end_bytes.max(end);
+            record_align = record_align.max(field_layout.align_bytes);
+            layouts.push(RecordFieldLayout {
+                field_index,
+                byte_offset: offset,
+                layout: field_layout,
+                bit_field: None,
+            });
+        }
+
+        let unrounded_size = bits_to_bytes(cursor_bits)?;
+        let size_bytes = checked_align_up(unrounded_size, u64::from(record_align))?;
+        let tail_base = flexible_position.unwrap_or(occupied_end_bytes);
+        let tail_padding_bytes = size_bytes
+            .checked_sub(tail_base)
+            .ok_or(LayoutError::ArithmeticOverflow)?;
+        Ok(RecordLayout {
+            size_bytes,
+            align_bytes: record_align,
+            fields: layouts,
+            tail_padding_bytes,
+            flexible_array_padding_bytes,
+        })
+    }
+
+    fn layout_union(
+        &mut self,
+        tag: TagId,
+        fields: &[RecordField],
+    ) -> Result<RecordLayout, LayoutError> {
+        let mut member_extent = 0_u64;
+        let mut record_align = 1_u32;
+        let mut layouts = Vec::with_capacity(fields.len());
+
+        for (field_index, field) in fields.iter().enumerate() {
+            if let Some(spec) = field.bit_field {
+                let (base_layout, type_bits) = self.bit_field_base(tag, field_index, field.ty)?;
+                record_align = record_align.max(base_layout.align_bytes);
+                if spec.width_bits == 0 && field.name.is_some() {
+                    return Err(LayoutError::NamedZeroWidthBitField { tag, field_index });
+                }
+                if spec.width_bits > type_bits {
+                    return Err(LayoutError::BitFieldWidthExceedsType {
+                        tag,
+                        field_index,
+                        width_bits: spec.width_bits,
+                        type_bits,
+                    });
+                }
+                if spec.width_bits != 0 {
+                    member_extent = member_extent.max(base_layout.size_bytes);
+                }
+                layouts.push(RecordFieldLayout {
+                    field_index,
+                    byte_offset: 0,
+                    layout: base_layout,
+                    bit_field: Some(BitFieldLayout {
+                        storage_byte_offset: 0,
+                        storage_size_bytes: u32::try_from(base_layout.size_bytes)
+                            .map_err(|_| LayoutError::ArithmeticOverflow)?,
+                        bit_offset: 0,
+                        width_bits: spec.width_bits,
+                    }),
+                });
+                continue;
+            }
+
+            if self.unbounded_array_element(field.ty)?.is_some() {
+                return Err(LayoutError::FlexibleArrayInUnion { tag, field_index });
+            }
+            let field_layout = self.layout_type(field.ty)?;
+            member_extent = member_extent.max(field_layout.size_bytes);
+            record_align = record_align.max(field_layout.align_bytes);
+            layouts.push(RecordFieldLayout {
+                field_index,
+                byte_offset: 0,
+                layout: field_layout,
+                bit_field: None,
+            });
+        }
+
+        let size_bytes = checked_align_up(member_extent, u64::from(record_align))?;
+        Ok(RecordLayout {
+            size_bytes,
+            align_bytes: record_align,
+            fields: layouts,
+            tail_padding_bytes: size_bytes
+                .checked_sub(member_extent)
+                .ok_or(LayoutError::ArithmeticOverflow)?,
+            flexible_array_padding_bytes: None,
+        })
+    }
+
+    fn unbounded_array_element(&self, ty: TypeId) -> Result<Option<TypeId>, LayoutError> {
+        let canonical = self.types.get(ty).ok_or(LayoutError::UnknownType(ty))?;
+        Ok(match canonical.kind {
+            TypeKind::Array {
+                element,
+                bound: ArrayBound::Unbounded,
+            } => Some(element),
+            _ => None,
+        })
+    }
+
+    fn bit_field_base(
+        &mut self,
+        tag: TagId,
+        field_index: usize,
+        ty: TypeId,
+    ) -> Result<(TypeLayout, u16), LayoutError> {
+        let kind = self
+            .types
+            .get(ty)
+            .ok_or(LayoutError::UnknownType(ty))?
+            .kind
+            .clone();
+        match kind {
+            TypeKind::Int(rank) => {
+                let layout = integer_layout(rank);
+                let value_bits = if rank == IntRank::Bool {
+                    1
+                } else {
+                    u16::try_from(layout.size_bytes * 8)
+                        .map_err(|_| LayoutError::ArithmeticOverflow)?
+                };
+                Ok((layout, value_bits))
+            }
+            TypeKind::Enum(enum_tag) => {
+                let layout = self.layout_enum(enum_tag)?;
+                let value_bits = u16::try_from(layout.size_bytes * 8)
+                    .map_err(|_| LayoutError::ArithmeticOverflow)?;
+                Ok((layout, value_bits))
+            }
+            _ => Err(LayoutError::InvalidBitFieldBase {
+                tag,
+                field_index,
+                ty,
+            }),
+        }
+    }
+}
+
+fn integer_layout(rank: IntRank) -> TypeLayout {
+    match rank {
+        IntRank::Bool | IntRank::Char | IntRank::SChar | IntRank::UChar => TypeLayout::new(1, 1),
+        IntRank::Short | IntRank::UShort => TypeLayout::new(2, 2),
+        IntRank::Int | IntRank::UInt => TypeLayout::new(4, 4),
+        IntRank::Long | IntRank::ULong | IntRank::LongLong | IntRank::ULongLong => {
+            TypeLayout::new(8, 8)
+        }
+    }
+}
+
+fn float_layout(kind: FloatKind) -> TypeLayout {
+    match kind {
+        FloatKind::F16 => TypeLayout::new(2, 2),
+        FloatKind::F32 => TypeLayout::new(4, 4),
+        FloatKind::F64 => TypeLayout::new(8, 8),
+        FloatKind::F128 => TypeLayout::new(16, 16),
+    }
+}
+
+fn complex_layout(base: ComplexBase) -> TypeLayout {
+    match base {
+        ComplexBase::CF16 => TypeLayout::new(4, 2),
+        ComplexBase::CF32 => TypeLayout::new(8, 4),
+        ComplexBase::CF64 => TypeLayout::new(16, 8),
+        ComplexBase::CF128 => TypeLayout::new(32, 16),
+    }
+}
+
+fn checked_align_up(value: u64, alignment: u64) -> Result<u64, LayoutError> {
+    debug_assert!(alignment.is_power_of_two());
+    let mask = alignment - 1;
+    value
+        .checked_add(mask)
+        .map(|sum| sum & !mask)
+        .ok_or(LayoutError::ArithmeticOverflow)
+}
+
+fn bits_to_bytes(bits: u64) -> Result<u64, LayoutError> {
+    bits.checked_add(7)
+        .map(|rounded| rounded / 8)
+        .ok_or(LayoutError::ArithmeticOverflow)
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -696,6 +1337,7 @@ mod tests {
                 TagDefinition::Struct(vec![RecordField {
                     name: Some("field".into()),
                     ty: unknown_type,
+                    bit_field: None,
                 }]),
             ),
             Err(TagCompletionError::UnknownType(unknown_type))
