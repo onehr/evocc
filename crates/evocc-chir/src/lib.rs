@@ -12,6 +12,18 @@
 
 #![doc = concat!("evocc-chir v", env!("CARGO_PKG_VERSION"))]
 
+pub mod initializer;
+pub mod semantic;
+
+pub use initializer::{
+    InitAction, InitPlan, InitPlanError, SubobjectPath, SubobjectStep, WrittenInitializer,
+};
+pub use semantic::{
+    AssignmentOp, ExprCategory, ExprFacts, ExprFactsError, NotAssignmentOperator, ScalarPlace,
+    ScalarPlaceError, Scope, ScopeId, ScopeKind, Symbol, SymbolData, SymbolId, SymbolKind,
+    SymbolTable, SymbolTableCheckpoint, SymbolTableError, TagBinding,
+};
+
 use evocc_common::SourceSpan;
 use evocc_types::{ArrayBound, Qualifiers, TagId, TagKind, TypeId, TypeInterner};
 
