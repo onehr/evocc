@@ -223,7 +223,8 @@ fn run_preprocess(options: &DriverOptions) -> ExitCode {
     if pp.has_errors() {
         for error in pp.errors() {
             emit_error(
-                &options.input,
+                pp.source_path(error.span.file)
+                    .unwrap_or(options.input.as_str()),
                 error.span.line_start.max(1),
                 error.span.column_start.max(1),
                 error.code,
@@ -405,7 +406,8 @@ fn run_parse(options: &DriverOptions) -> ExitCode {
     if pp.has_errors() {
         for error in pp.errors() {
             emit_error(
-                &options.input,
+                pp.source_path(error.span.file)
+                    .unwrap_or(options.input.as_str()),
                 error.span.line_start.max(1),
                 error.span.column_start.max(1),
                 error.code,
@@ -422,7 +424,8 @@ fn run_parse(options: &DriverOptions) -> ExitCode {
     if parser.had_error() || (unit.is_empty() && !src.trim().is_empty()) {
         if let Some(diagnostic) = parser.diagnostic() {
             emit_error(
-                &options.input,
+                pp.source_path(diagnostic.span.file)
+                    .unwrap_or(options.input.as_str()),
                 diagnostic.span.line_start.max(1),
                 diagnostic.span.column_start.max(1),
                 diagnostic.code,

@@ -384,6 +384,7 @@ impl TokenStream {
 struct CondState {
     in_true: bool,
     had_true: bool,
+    opening_span: SourceSpan,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -401,6 +402,10 @@ pub struct Preprocessor {
     cond_stack: Vec<CondState>,
     errors: Vec<PreprocessError>,
     standard_includes: bool,
+    source_ids: HashMap<String, FileId>,
+    source_paths: HashMap<FileId, String>,
+    reserved_file_ids: HashSet<FileId>,
+    next_file_id: u32,
     /// Current source file path for __FILE__ expansion.
     pub current_file: String,
 }
@@ -423,6 +428,10 @@ impl Preprocessor {
             cond_stack: Vec::new(),
             errors: Vec::new(),
             standard_includes: true,
+            source_ids: HashMap::new(),
+            source_paths: HashMap::new(),
+            reserved_file_ids: HashSet::new(),
+            next_file_id: 1,
             current_file: String::new(),
         }
     }
@@ -463,6 +472,12 @@ impl Preprocessor {
         !self.errors.is_empty()
     }
 
+    /// Return the resolved source path registered for `file` in this
+    /// preprocessing run.
+    pub fn source_path(&self, file: FileId) -> Option<&str> {
+        self.source_paths.get(&file).map(String::as_str)
+    }
+
     pub fn define(&mut self, name: String, body: Vec<Token>) {
         self.macros.define(name, body, vec![]);
     }
@@ -494,8 +509,89 @@ impl Preprocessor {
     /// from source spans rather than from the `TokenText` field, because the
     /// lexer uses `Borrowed` tokens whose text is identified by byte range.
     pub fn process(&mut self, tokens: TokenStream, source: &str) -> TokenStream {
+        self.reset_source_table();
+        self.cond_stack.clear();
+        self.errors.clear();
+        self.register_entry_source(&tokens);
         let mut expanding: HashSet<String> = HashSet::new();
-        self.process_impl(tokens, source, &mut expanding)
+        self.process_impl(tokens, source, &mut expanding, true, 0)
+    }
+
+    fn reset_source_table(&mut self) {
+        self.source_ids.clear();
+        self.source_paths.clear();
+        self.reserved_file_ids.clear();
+        self.next_file_id = 1;
+    }
+
+    fn register_entry_source(&mut self, tokens: &TokenStream) {
+        let Some(file) = tokens
+            .tokens
+            .iter()
+            .map(|token| token.span.file)
+            .find(|file| *file != FileId::DUMMY)
+        else {
+            return;
+        };
+        self.reserved_file_ids.extend(
+            tokens
+                .tokens
+                .iter()
+                .map(|token| token.span.file)
+                .filter(|file| *file != FileId::DUMMY),
+        );
+        let max_file = tokens
+            .tokens
+            .iter()
+            .map(|token| token.span.file)
+            .filter(|file| *file != FileId::DUMMY)
+            .max_by_key(|file| file.raw())
+            .expect("entry source has a non-dummy FileId");
+        self.next_file_id = max_file.raw().checked_add(1).unwrap_or(1);
+        if !self.current_file.is_empty() {
+            self.register_source_with_id(file, self.current_file.clone());
+        }
+    }
+
+    fn register_source_with_id(&mut self, file: FileId, path: String) {
+        if let Some(existing) = self.source_ids.get(&path) {
+            assert_eq!(
+                *existing, file,
+                "one source path cannot have multiple FileIds"
+            );
+            return;
+        }
+        if let Some(existing) = self.source_paths.get(&file) {
+            assert_eq!(
+                existing, &path,
+                "one FileId cannot identify multiple source paths"
+            );
+            return;
+        }
+        self.reserved_file_ids.insert(file);
+        self.source_ids.insert(path.clone(), file);
+        self.source_paths.insert(file, path);
+    }
+
+    fn intern_source(&mut self, path: &str) -> FileId {
+        if let Some(file) = self.source_ids.get(path) {
+            return *file;
+        }
+
+        let first_candidate = self.next_file_id;
+        loop {
+            let file = FileId::new(self.next_file_id);
+            self.next_file_id = self.next_file_id.checked_add(1).unwrap_or(1);
+            if self.reserved_file_ids.insert(file) {
+                self.source_ids.insert(path.to_owned(), file);
+                self.source_paths.insert(file, path.to_owned());
+                return file;
+            }
+            assert_ne!(
+                self.next_file_id, first_candidate,
+                "source FileId space exhausted"
+            );
+        }
     }
 
     fn process_impl(
@@ -503,6 +599,8 @@ impl Preprocessor {
         tokens: TokenStream,
         source: &str,
         expanding: &mut HashSet<String>,
+        directives_enabled: bool,
+        conditional_floor: usize,
     ) -> TokenStream {
         let mut output: Vec<Token> = Vec::new();
         let raw = tokens.into_vec();
@@ -512,7 +610,10 @@ impl Preprocessor {
         while i < len {
             let tok = &raw[i];
 
-            if is_directive_hash(tok.kind) && is_start_of_line(&raw, i, source) {
+            if directives_enabled
+                && is_directive_hash(tok.kind)
+                && is_start_of_line(&raw, i, source)
+            {
                 i += 1;
                 if i >= len {
                     output.push(tok.clone());
@@ -608,14 +709,16 @@ impl Preprocessor {
                             if !include_text.is_empty() {
                                 let path = resolve_include(
                                     &include_text,
+                                    &self.current_file,
                                     &self.include_paths,
                                     self.standard_includes,
                                 );
                                 if let Some(resolved) = path {
                                     if !self.has_include_guard() || !self.include_guard_seen {
                                         if let Ok(content) = std::fs::read_to_string(&resolved) {
+                                            let header_file = self.intern_source(&resolved);
                                             let mut sub_lex =
-                                                evocc_lex::Lexer::new(FileId::new(1), &content);
+                                                evocc_lex::Lexer::new(header_file, &content);
                                             let mut sub_tokens = Vec::new();
                                             while let Some(t) = sub_lex.next() {
                                                 if t.kind != TokenKind::Eof {
@@ -629,7 +732,19 @@ impl Preprocessor {
                                                 }
                                             }
                                             let sub_stream = TokenStream::new(sub_tokens);
-                                            let processed = self.process(sub_stream, &content);
+                                            let previous_file = std::mem::replace(
+                                                &mut self.current_file,
+                                                resolved.clone(),
+                                            );
+                                            let include_floor = self.cond_stack.len();
+                                            let processed = self.process_impl(
+                                                sub_stream,
+                                                &content,
+                                                expanding,
+                                                true,
+                                                include_floor,
+                                            );
+                                            self.current_file = previous_file;
                                             output.extend(processed.into_vec());
                                         }
                                     }
@@ -652,7 +767,7 @@ impl Preprocessor {
                         };
                         i = advance_past_line(i, &raw, source).min(len);
                         let defined = self.is_defined(&name);
-                        self.push_cond(defined);
+                        self.push_cond(defined, tok.span);
                         skip_line(&raw, &mut i, source);
                     }
                     "ifndef" => {
@@ -663,7 +778,7 @@ impl Preprocessor {
                         };
                         i = advance_past_line(i, &raw, source).min(len);
                         let defined = self.is_defined(&name);
-                        self.push_cond(!defined);
+                        self.push_cond(!defined, tok.span);
                         skip_line(&raw, &mut i, source);
                     }
                     "if" => {
@@ -672,29 +787,43 @@ impl Preprocessor {
                         // and integer comparisons.
                         let expr_tokens = collect_line_tokens(&raw, &mut i, source);
                         let value = evaluate_if_expr(&expr_tokens, &self.macros, source);
-                        self.push_cond(value);
+                        self.push_cond(value, tok.span);
                         skip_line(&raw, &mut i, source);
                     }
                     "elif" => {
-                        let had = self.cond_stack.last().map(|c| c.had_true).unwrap_or(false);
-                        let outer_active = self.cond_stack.iter().rev().skip(1).all(|c| c.in_true);
-                        let cs = self.cond_stack.last_mut().unwrap();
-                        if had {
-                            cs.in_true = false;
+                        if self.cond_stack.len() <= conditional_floor {
+                            self.push_unmatched_conditional(tok.span);
                         } else {
-                            let line_tokens = collect_line_tokens(&raw, &mut i, source);
-                            let value = outer_active
-                                && evaluate_if_expr(&line_tokens, &self.macros, source);
-                            cs.in_true = value;
-                            if value {
-                                cs.had_true = true;
+                            let had = self
+                                .cond_stack
+                                .last()
+                                .map(|condition| condition.had_true)
+                                .unwrap_or(false);
+                            let outer_active =
+                                self.cond_stack.iter().rev().skip(1).all(|c| c.in_true);
+                            let cs = self
+                                .cond_stack
+                                .last_mut()
+                                .expect("conditional stack was checked above");
+                            if had {
+                                cs.in_true = false;
+                            } else {
+                                let line_tokens = collect_line_tokens(&raw, &mut i, source);
+                                let value = outer_active
+                                    && evaluate_if_expr(&line_tokens, &self.macros, source);
+                                cs.in_true = value;
+                                if value {
+                                    cs.had_true = true;
+                                }
                             }
                         }
                         skip_line(&raw, &mut i, source);
                     }
                     "else" => {
                         let len_stack = self.cond_stack.len();
-                        if len_stack > 0 {
+                        if len_stack <= conditional_floor {
+                            self.push_unmatched_conditional(tok.span);
+                        } else {
                             let had = self.cond_stack[len_stack - 1].had_true;
                             let outer_active =
                                 self.cond_stack[..len_stack - 1].iter().all(|c| c.in_true);
@@ -709,7 +838,11 @@ impl Preprocessor {
                         skip_line(&raw, &mut i, source);
                     }
                     "endif" => {
-                        self.cond_stack.pop();
+                        if self.cond_stack.len() <= conditional_floor {
+                            self.push_unmatched_conditional(tok.span);
+                        } else {
+                            self.cond_stack.pop();
+                        }
                         skip_line(&raw, &mut i, source);
                     }
                     "pragma" => {
@@ -764,7 +897,7 @@ impl Preprocessor {
                     if name == "__FILE__" {
                         let file_str = make_string_token(&self.current_file);
                         let sub_stream = TokenStream::new(vec![file_str]);
-                        let processed = self.process_impl(sub_stream, source, expanding);
+                        let processed = self.process_impl(sub_stream, source, expanding, false, 0);
                         output.extend(processed.into_vec());
                         i += 1;
                         continue;
@@ -773,7 +906,7 @@ impl Preprocessor {
                         let line_num = tok.span.line_start;
                         let line_tok = make_int_token(line_num as i64);
                         let sub_stream = TokenStream::new(vec![line_tok]);
-                        let processed = self.process_impl(sub_stream, source, expanding);
+                        let processed = self.process_impl(sub_stream, source, expanding, false, 0);
                         output.extend(processed.into_vec());
                         i += 1;
                         continue;
@@ -783,7 +916,8 @@ impl Preprocessor {
                         if let Some(body) = self.macros.expand_object_like(&name) {
                             expanding.insert(name.clone());
                             let sub_stream = TokenStream::new(body);
-                            let processed = self.process_impl(sub_stream, source, expanding);
+                            let processed =
+                                self.process_impl(sub_stream, source, expanding, false, 0);
                             output.extend(processed.into_vec());
                             expanding.remove(&name);
                             i += 1;
@@ -839,7 +973,8 @@ impl Preprocessor {
                             if let Some(body) = self.macros.expand_macro(&name, &args) {
                                 expanding.insert(name.clone());
                                 let sub_stream = TokenStream::new(body);
-                                let processed = self.process_impl(sub_stream, source, expanding);
+                                let processed =
+                                    self.process_impl(sub_stream, source, expanding, false, 0);
                                 output.extend(processed.into_vec());
                                 expanding.remove(&name);
                                 continue;
@@ -859,13 +994,33 @@ impl Preprocessor {
             }
         }
 
+        if directives_enabled {
+            let unmatched = self
+                .cond_stack
+                .drain(conditional_floor..)
+                .map(|state| state.opening_span)
+                .collect::<Vec<_>>();
+            for span in unmatched {
+                self.push_unmatched_conditional(span);
+            }
+        }
+
         TokenStream::new(output)
     }
 
-    fn push_cond(&mut self, value: bool) {
+    fn push_cond(&mut self, value: bool, opening_span: SourceSpan) {
         self.cond_stack.push(CondState {
             in_true: value,
             had_true: value,
+            opening_span,
+        });
+    }
+
+    fn push_unmatched_conditional(&mut self, span: SourceSpan) {
+        self.errors.push(PreprocessError {
+            code: "E0102",
+            span,
+            message: "unmatched-conditional".into(),
         });
     }
 }
@@ -984,33 +1139,47 @@ fn read_include_argument(tokens: &[Token], i: &mut usize, source: &str) -> Strin
 /// the include path list.
 fn resolve_include(
     name: &str,
+    current_file: &str,
     include_paths: &[String],
     standard_includes: bool,
 ) -> Option<String> {
-    // Quoted include: try current directory first.
+    // Quoted include: try beside the active source, then the process working
+    // directory. `read_include_argument` has already removed the delimiters.
     if !name.starts_with('/') {
+        if let Some(parent) = std::path::Path::new(current_file).parent() {
+            let candidate = parent.join(name);
+            if let Some(resolved) = resolved_existing_path(&candidate) {
+                return Some(resolved);
+            }
+        }
         let local = std::path::Path::new(name);
-        if local.exists() {
-            return Some(local.to_string_lossy().to_string());
+        if let Some(resolved) = resolved_existing_path(local) {
+            return Some(resolved);
         }
     }
     // Search include paths.
     for dir in include_paths {
         let candidate = std::path::Path::new(dir).join(name);
-        if candidate.exists() {
-            return Some(candidate.to_string_lossy().to_string());
+        if let Some(resolved) = resolved_existing_path(&candidate) {
+            return Some(resolved);
         }
     }
     // Angle-bracket system includes: try well-known paths.
     if standard_includes {
         for sys_path in &["/usr/include", "/usr/local/include"] {
             let candidate = std::path::Path::new(sys_path).join(name);
-            if candidate.exists() {
-                return Some(candidate.to_string_lossy().to_string());
+            if let Some(resolved) = resolved_existing_path(&candidate) {
+                return Some(resolved);
             }
         }
     }
     None
+}
+
+fn resolved_existing_path(path: &std::path::Path) -> Option<String> {
+    std::fs::canonicalize(path)
+        .ok()
+        .map(|resolved| resolved.to_string_lossy().into_owned())
 }
 
 /// Collect all tokens on the current line (used for #if / #elif expressions).
