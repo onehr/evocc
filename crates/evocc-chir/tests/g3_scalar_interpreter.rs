@@ -227,6 +227,7 @@ impl<'arena> Fixture<'arena> {
                 },
                 storage: StorageClass::None,
                 initializer,
+                gnu_extension_spans: Vec::new(),
                 span: at,
             }),
         );
@@ -261,6 +262,7 @@ impl<'arena> Fixture<'arena> {
                 },
                 storage: StorageClass::None,
                 inline_spans: Vec::new(),
+                gnu_extension_spans: Vec::new(),
                 body: Some(body),
                 span: span(0, 40),
             }),

@@ -75,6 +75,7 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
         let canonical = self.unit.types().get(ty).expect("type belongs to unit");
         let unqualified = match &canonical.kind {
             TypeKind::Void => "void".to_owned(),
+            TypeKind::BuiltinVaList => "builtin-va-list".to_owned(),
             TypeKind::Int(IntRank::Int) => "int".to_owned(),
             TypeKind::Int(IntRank::UInt) => "uint".to_owned(),
             TypeKind::Int(IntRank::Long) => "long".to_owned(),

@@ -196,6 +196,11 @@ pub struct CanonicalType {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeKind {
     Void,
+    /// Canonical but deliberately opaque compiler-provided va-list type.
+    ///
+    /// Day 5 needs its identity for declarations and typedefs. Layout and
+    /// varargs operations fail closed instead of guessing a target ABI shape.
+    BuiltinVaList,
     Int(IntRank),
     Float(FloatKind),
     Complex(ComplexBase),
@@ -489,7 +494,11 @@ impl TypeInterner {
             TypeKind::Struct(tag) => self.require_tag(*tag, TagKind::Struct),
             TypeKind::Union(tag) => self.require_tag(*tag, TagKind::Union),
             TypeKind::Enum(tag) => self.require_tag(*tag, TagKind::Enum),
-            TypeKind::Void | TypeKind::Int(_) | TypeKind::Float(_) | TypeKind::Complex(_) => Ok(()),
+            TypeKind::Void
+            | TypeKind::BuiltinVaList
+            | TypeKind::Int(_)
+            | TypeKind::Float(_)
+            | TypeKind::Complex(_) => Ok(()),
         }
     }
 
@@ -671,6 +680,7 @@ pub enum LayoutError {
     IncompleteTag(TagId),
     IncompleteArray(TypeId),
     NonObjectType(TypeId),
+    UnsupportedBuiltinType(TypeId),
     VariableLengthArray(TypeId),
     NotRecordTag {
         tag: TagId,
@@ -715,6 +725,11 @@ impl std::fmt::Display for LayoutError {
             Self::NonObjectType(id) => {
                 write!(formatter, "type ID {} is not an object type", id.raw())
             }
+            Self::UnsupportedBuiltinType(id) => write!(
+                formatter,
+                "type ID {} is an opaque builtin type without a target layout",
+                id.raw()
+            ),
             Self::VariableLengthArray(id) => {
                 write!(formatter, "VLA type ID {} has no static layout", id.raw())
             }
@@ -824,6 +839,7 @@ impl<'a> LayoutContext<'a> {
             .clone();
         match kind {
             TypeKind::Void | TypeKind::Function { .. } => Err(LayoutError::NonObjectType(ty)),
+            TypeKind::BuiltinVaList => Err(LayoutError::UnsupportedBuiltinType(ty)),
             TypeKind::Int(rank) => Ok(integer_layout(rank)),
             TypeKind::Float(kind) => Ok(float_layout(kind)),
             TypeKind::Complex(base) => Ok(complex_layout(base)),

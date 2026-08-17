@@ -342,6 +342,7 @@ fn type_fingerprint(
     let canonical = unit.types().get(ty).expect("type ID owned by unit");
     let unqualified = match &canonical.kind {
         TypeKind::Void => "void".into(),
+        TypeKind::BuiltinVaList => "builtin-va-list".into(),
         TypeKind::Int(IntRank::Int) => "int".into(),
         TypeKind::Int(IntRank::Long) => "long".into(),
         TypeKind::Int(rank) => format!("int:{rank:?}"),

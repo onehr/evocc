@@ -291,6 +291,7 @@ mod tests {
                 },
                 storage: StorageClass::None,
                 inline_spans: Vec::new(),
+                gnu_extension_spans: Vec::new(),
                 body: Some(body),
                 span: test_span(),
             }),

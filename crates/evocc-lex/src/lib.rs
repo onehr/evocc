@@ -95,6 +95,10 @@ pub enum TokenKind {
     // GNU extensions treated as keywords.
     Typeof,
     Attribute,
+    // GNU spellings that remain identifiers through preprocessing and are
+    // promoted only at the parser boundary when their exact spelling survives.
+    GnuExtension,
+    BuiltinVaList,
     // Identifiers (including GNU `$`-containing identifiers).
     Identifier,
     // Literals.

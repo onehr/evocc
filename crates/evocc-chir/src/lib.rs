@@ -601,6 +601,9 @@ pub struct TagDecl<'arena> {
     /// Only the `struct`/`union`/`enum` specifier, excluding the semicolon and
     /// any enclosing object or function declarator.
     pub specifier_span: SourceSpan,
+    /// Every declaration-prefix GNU `__extension__` marker, in source order.
+    /// These spans are provenance only and have no semantic effect.
+    pub gnu_extension_spans: Vec<SourceSpan>,
 }
 
 #[derive(Debug, Clone)]
@@ -612,6 +615,8 @@ pub struct ObjectDecl<'arena> {
     pub written: WrittenDeclarator,
     pub storage: StorageClass,
     pub initializer: Option<ObjectInitializer<'arena>>,
+    /// Every declaration-prefix GNU `__extension__` marker, in source order.
+    pub gnu_extension_spans: Vec<SourceSpan>,
     pub span: SourceSpan,
 }
 
@@ -632,6 +637,8 @@ pub struct FunctionDecl<'arena> {
     /// Day 5 preserves syntax and provenance only; C11 6.7.4 inline-definition
     /// and linkage semantics are not modeled by this field.
     pub inline_spans: Vec<SourceSpan>,
+    /// Every declaration-prefix GNU `__extension__` marker, in source order.
+    pub gnu_extension_spans: Vec<SourceSpan>,
     pub body: Option<&'arena CHirStmt<'arena>>,
     pub span: SourceSpan,
 }
@@ -643,6 +650,8 @@ pub struct TypedefDecl {
     pub ty: TypeId,
     pub specifier: TypeSpecifier,
     pub written: WrittenDeclarator,
+    /// Every declaration-prefix GNU `__extension__` marker, in source order.
+    pub gnu_extension_spans: Vec<SourceSpan>,
     pub span: SourceSpan,
 }
 
@@ -969,6 +978,7 @@ mod tests {
             written: written_declarator(),
             storage: StorageClass::None,
             initializer,
+            gnu_extension_spans: Vec::new(),
             span: test_span(),
         })
     }
@@ -1142,6 +1152,7 @@ mod tests {
                     parameters: ParameterSyntax::Unspecified,
                     storage: StorageClass::None,
                     inline_spans: Vec::new(),
+                    gnu_extension_spans: Vec::new(),
                     body: Some(func_body),
                     span: s,
                 }),
@@ -1155,6 +1166,7 @@ mod tests {
                     members: TagMembers::Incomplete,
                     span: s,
                     specifier_span: s,
+                    gnu_extension_spans: Vec::new(),
                 }),
             ),
             arena_decl(
@@ -1165,6 +1177,7 @@ mod tests {
                     ty: int_id,
                     specifier: builtin_specifier(int_id),
                     written: written_declarator(),
+                    gnu_extension_spans: Vec::new(),
                     span: s,
                 }),
             ),

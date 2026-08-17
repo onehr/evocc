@@ -209,9 +209,9 @@ pub struct Parser<'src, 'arena> {
 
 impl<'src, 'arena> Parser<'src, 'arena> {
     pub fn new(mut tokens: Vec<Token>, file: FileId, source: &'src str) -> Self {
-        // GNU alternate keyword spellings must remain identifiers through
+        // GNU contextual spellings must remain identifiers through
         // preprocessing so they can be macro-expanded or token-pasted. Turn
-        // the exact surviving spelling into its parser keyword only at this
+        // an exact surviving spelling into its parser token only at this
         // boundary.
         for token in &mut tokens {
             let spelling = match &token.text {
@@ -220,8 +220,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     source.get(token.span.byte_start as usize..token.span.byte_end as usize)
                 }
             };
-            if token.kind == TokenKind::Identifier && spelling == Some("__signed__") {
-                token.kind = TokenKind::Signed;
+            if token.kind == TokenKind::Identifier {
+                token.kind = match spelling {
+                    Some("__signed__") => TokenKind::Signed,
+                    Some("__extension__") => TokenKind::GnuExtension,
+                    Some("__builtin_va_list") => TokenKind::BuiltinVaList,
+                    _ => TokenKind::Identifier,
+                };
             }
         }
         let symbols = SymbolTable::new();
@@ -674,6 +679,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
         let kind = match (left_type.kind, right_type.kind) {
             (TypeKind::Void, TypeKind::Void) => TypeKind::Void,
+            (TypeKind::BuiltinVaList, TypeKind::BuiltinVaList) => TypeKind::BuiltinVaList,
             (TypeKind::Int(left), TypeKind::Int(right)) if left == right => TypeKind::Int(right),
             (TypeKind::Float(left), TypeKind::Float(right)) if left == right => {
                 TypeKind::Float(right)
@@ -889,6 +895,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         side_start: usize,
     ) -> Option<Vec<&'arena CHirDecl<'arena>>> {
         let start_span = self.span();
+        let mut gnu_extension_spans = Vec::new();
+        while self.peek_kind() == Some(TokenKind::GnuExtension) {
+            gnu_extension_spans.push(
+                self.advance()
+                    .expect("peeked GNU extension declaration prefix")
+                    .span,
+            );
+        }
         let mut storage = None;
         let mut inline_spans = Vec::new();
         self.parse_declaration_modifiers(&mut storage, &mut inline_spans);
@@ -908,7 +922,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             let mut declarations = self.side_declarations.split_off(side_start);
             if let Some(event) = specifier.tag_event {
-                declarations.push(self.finish_tag_event(event, declaration_span));
+                declarations.push(self.finish_tag_event(
+                    event,
+                    declaration_span,
+                    gnu_extension_spans,
+                ));
             } else {
                 self.report("E1001", "expected-declaration", semi.span);
             }
@@ -991,7 +1009,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             let mut declarations = self.side_declarations.split_off(side_start);
             if let Some(event) = specifier.tag_event {
-                declarations.push(self.finish_tag_event(event, declaration_span));
+                declarations.push(self.finish_tag_event(
+                    event,
+                    declaration_span,
+                    gnu_extension_spans.clone(),
+                ));
             }
             declarations.push(self.alloc_node(CHirDecl::Function(FunctionDecl {
                 symbol,
@@ -1002,6 +1024,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 parameters,
                 storage,
                 inline_spans,
+                gnu_extension_spans,
                 body,
                 span: declaration_span,
             })));
@@ -1054,7 +1077,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         let mut declarations = self.side_declarations.split_off(side_start);
         if let Some(event) = specifier.tag_event {
-            declarations.push(self.finish_tag_event(event, declaration_span));
+            declarations.push(self.finish_tag_event(
+                event,
+                declaration_span,
+                gnu_extension_spans.clone(),
+            ));
         }
         let declaration = if storage == StorageClass::Typedef {
             CHirDecl::Typedef(TypedefDecl {
@@ -1063,6 +1090,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 ty: full_type,
                 specifier: specifier.surface,
                 written,
+                gnu_extension_spans,
                 span: declaration_span,
             })
         } else {
@@ -1074,6 +1102,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 written,
                 storage,
                 initializer,
+                gnu_extension_spans,
                 span: declaration_span,
             })
         };
@@ -1621,7 +1650,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 visiting.remove(&target);
                 Ok(())
             }
-            TypeKind::Void | TypeKind::Function { .. } => {
+            TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. } => {
                 Err(InitializerPreflightError::InvalidObject)
             }
         }
@@ -1687,7 +1716,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_),
                 WrittenInitializer::Expression(_),
             ) => Ok(0),
-            (TypeKind::Void | TypeKind::Function { .. }, _) => {
+            (TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. }, _) => {
                 Err(InitializerPreflightError::InvalidObject)
             }
         }
@@ -1786,6 +1815,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | TypeKind::Pointer(_)
             | TypeKind::Enum(_)
             | TypeKind::Void
+            | TypeKind::BuiltinVaList
             | TypeKind::Function { .. } => {
                 return Err(InitializerPreflightError::InvalidObject);
             }
@@ -1901,7 +1931,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 visiting.remove(&target);
                 Ok(count)
             }
-            TypeKind::Void | TypeKind::Function { .. } => {
+            TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. } => {
                 Err(InitializerPreflightError::InvalidObject)
             }
         }
@@ -2149,7 +2179,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 Some(())
             }
-            TypeKind::Void | TypeKind::Function { .. } => None,
+            TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. } => None,
         }
     }
 
@@ -2280,6 +2310,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 Some(children)
             }
             TypeKind::Void
+            | TypeKind::BuiltinVaList
             | TypeKind::Int(_)
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
@@ -2356,6 +2387,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         &self,
         event: PendingTag<'arena>,
         declaration_span: SourceSpan,
+        gnu_extension_spans: Vec<SourceSpan>,
     ) -> &'arena CHirDecl<'arena> {
         self.alloc_node(CHirDecl::Tag(TagDecl {
             tag: event.tag,
@@ -2364,6 +2396,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             members: event.members,
             span: declaration_span,
             specifier_span: event.specifier_span,
+            gnu_extension_spans,
         }))
     }
 
@@ -2753,7 +2786,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let end = semi.as_ref().map_or(fallback, |token| token.span);
             let span = self.merge_span(start, end);
             if let Some(event) = specifier.tag_event {
-                let declaration = self.finish_tag_event(event, span);
+                let declaration = self.finish_tag_event(event, span, Vec::new());
                 self.side_declarations.push(declaration);
             }
             let is_anonymous_aggregate = matches!(
@@ -2870,7 +2903,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .types
                 .tag(tag)
                 .is_some_and(|tag| matches!(tag.state, TagState::Complete(TagDefinition::Enum(_)))),
-            TypeKind::Void | TypeKind::Function { .. } => false,
+            TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. } => false,
         }
     }
 
@@ -2948,6 +2981,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 IntRank::Long | IntRank::ULong | IntRank::LongLong | IntRank::ULongLong,
             ) => Some(64),
             TypeKind::Void
+            | TypeKind::BuiltinVaList
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
             | TypeKind::Pointer(_)
@@ -2980,6 +3014,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 Ok(enum_integer_type(minimum, maximum))
             }
             TypeKind::Void
+            | TypeKind::BuiltinVaList
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
             | TypeKind::Pointer(_)
@@ -3684,7 +3719,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let ty = self.adjust_parameter_type(unadjusted);
             let span = self.merge_span(start, end);
             if let Some(event) = specifier.tag_event {
-                let declaration = self.finish_tag_event(event, span);
+                let declaration = self.finish_tag_event(event, span, Vec::new());
                 self.side_declarations.push(declaration);
             }
             let declared_name = name.as_ref().map(|name| name.spelling.clone());
@@ -3949,9 +3984,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn parse_for_statement_in_scope(&mut self, keyword: Token) -> Option<&'arena CHirStmt<'arena>> {
         self.expect(TokenKind::LParen)?;
 
+        // `__extension__` in a for initializer is outside the frozen Day 5
+        // declaration-prefix consensus and must not be silently reinterpreted
+        // as one here.
         let initializer = if self.match_kind(TokenKind::Semicolon) {
             CHirForInit::Empty
-        } else if self.is_declaration_start() {
+        } else if self.peek_kind() != Some(TokenKind::GnuExtension) && self.is_declaration_start() {
             let declarations = self.parse_declaration(DeclarationContext::ForInitializer)?;
             CHirForInit::Declaration(declarations)
         } else {
@@ -4080,6 +4118,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             token.kind,
             TokenKind::Auto
                 | TokenKind::Extern
+                | TokenKind::GnuExtension
                 | TokenKind::Register
                 | TokenKind::Static
                 | TokenKind::ThreadLocal
@@ -4159,6 +4198,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TokenKind::Struct
                 | TokenKind::Union
                 | TokenKind::Enum
+                | TokenKind::BuiltinVaList
         )
     }
 
@@ -4804,7 +4844,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         .unwrap_or(OperandTypeClass::Other),
                     TypeKind::Struct(_) | TypeKind::Union(_) => OperandTypeClass::Aggregate(ty),
                     TypeKind::Void => OperandTypeClass::Void,
-                    TypeKind::Array { .. } | TypeKind::Function { .. } => OperandTypeClass::Other,
+                    TypeKind::Array { .. }
+                    | TypeKind::Function { .. }
+                    | TypeKind::BuiltinVaList => OperandTypeClass::Other,
                 }
             }
         }
@@ -4996,7 +5038,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.expect(TokenKind::RParen)?;
                 let span = self.merge_span(token.span, end);
                 if let Some(event) = tag_event {
-                    let declaration = self.finish_tag_event(event, span);
+                    let declaration = self.finish_tag_event(event, span, Vec::new());
                     self.side_declarations.push(declaration);
                 }
                 return Some(self.alloc_node(CHirExpr::SizeOf(ty, span)));
@@ -5022,7 +5064,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.expect(TokenKind::RParen)?;
             let span = self.merge_span(token.span, end);
             if let Some(event) = type_name.1 {
-                let declaration = self.finish_tag_event(event, span);
+                let declaration = self.finish_tag_event(event, span, Vec::new());
                 self.side_declarations.push(declaration);
             }
             return Some(self.alloc_node(CHirExpr::AlignOf(type_name.0, span)));
@@ -5043,7 +5085,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let operand = self.parse_unary()?;
             let span = self.merge_span(open.span, operand.span());
             if let Some(event) = tag_event {
-                let declaration = self.finish_tag_event(event, span);
+                let declaration = self.finish_tag_event(event, span, Vec::new());
                 self.side_declarations.push(declaration);
             }
             return Some(self.alloc_node(CHirExpr::Cast(ty, operand, span)));
@@ -5461,6 +5503,7 @@ fn is_builtin_type_word(kind: TokenKind) -> bool {
     matches!(
         kind,
         TokenKind::Void
+            | TokenKind::BuiltinVaList
             | TokenKind::Bool
             | TokenKind::Char
             | TokenKind::Short
@@ -5483,6 +5526,7 @@ fn is_builtin_type_word(kind: TokenKind) -> bool {
 fn resolve_builtin_type(words: &[TokenKind]) -> Option<TypeKind> {
     let count = |needle| words.iter().filter(|kind| **kind == needle).count();
     let void = count(TokenKind::Void);
+    let builtin_va_list = count(TokenKind::BuiltinVaList);
     let boolean = count(TokenKind::Bool);
     let character = count(TokenKind::Char);
     let short = count(TokenKind::Short);
@@ -5495,6 +5539,7 @@ fn resolve_builtin_type(words: &[TokenKind]) -> Option<TypeKind> {
     let complex = count(TokenKind::Complex);
 
     if void > 1
+        || builtin_va_list > 1
         || boolean > 1
         || character > 1
         || short > 1
@@ -5511,6 +5556,9 @@ fn resolve_builtin_type(words: &[TokenKind]) -> Option<TypeKind> {
     }
 
     let total = words.len();
+    if builtin_va_list == 1 {
+        return (total == 1).then_some(TypeKind::BuiltinVaList);
+    }
     if void == 1 {
         return (total == 1).then_some(TypeKind::Void);
     }

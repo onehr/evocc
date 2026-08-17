@@ -18,7 +18,7 @@ fn unique_source_path() -> PathBuf {
 #[test]
 fn parse_only_stops_after_exact_first_error_before_large_valid_tail() {
     let source_path = unique_source_path();
-    let mut source = String::from("__extension__ typedef signed long long extension_type;\n");
+    let mut source = String::from("int +;\n");
     for index in 0..20_000 {
         source.push_str(&format!("typedef int tail_{index};\n"));
     }
@@ -56,7 +56,7 @@ fn parse_only_stops_after_exact_first_error_before_large_valid_tail() {
     assert_eq!(
         String::from_utf8(output.stderr).expect("diagnostic is UTF-8"),
         format!(
-            "{}:1:1: error[E1001]: expected-declaration\n",
+            "{}:1:5: error[E1001]: expected-declaration\n",
             source_path.to_string_lossy()
         )
     );
