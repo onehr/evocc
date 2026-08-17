@@ -41,6 +41,7 @@ struct DriverOptions {
     target: DriverTarget,
     input: String,
     include_paths: Vec<String>,
+    forced_includes: Vec<String>,
     definitions: Vec<String>,
     standard_includes: bool,
 }
@@ -127,6 +128,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut target = None;
     let mut input = None;
     let mut include_paths = Vec::new();
+    let mut forced_includes = Vec::new();
     let mut definitions = Vec::new();
     let mut standard_includes = true;
     let mut index = 0;
@@ -150,16 +152,17 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             }
             "-P" | "-undef" => {}
             "-nostdinc" => standard_includes = false,
-            "-I" | "-D" => {
+            "-I" | "-D" | "-include" => {
                 index += 1;
                 let value = args
                     .get(index)
                     .ok_or_else(|| format!("{arg} requires an argument"))?
                     .clone();
-                if arg == "-I" {
-                    include_paths.push(value);
-                } else {
-                    definitions.push(value);
+                match arg.as_str() {
+                    "-I" => include_paths.push(value),
+                    "-D" => definitions.push(value),
+                    "-include" => forced_includes.push(value),
+                    _ => unreachable!("matched driver option"),
                 }
             }
             _ if arg.starts_with("-I") && arg.len() > 2 => {
@@ -191,6 +194,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         target: target.unwrap_or(DriverTarget::Aarch64UnknownLinuxGnu),
         input: input.ok_or_else(|| "an input file is required".to_string())?,
         include_paths,
+        forced_includes,
         definitions,
         standard_includes,
     })
@@ -310,6 +314,9 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     }
     for include_path in &options.include_paths {
         pp.add_include_path(include_path.clone());
+    }
+    for forced_include in &options.forced_includes {
+        pp.add_forced_include(forced_include.clone());
     }
     for definition in &options.definitions {
         let (name, replacement) = definition

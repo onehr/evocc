@@ -398,7 +398,9 @@ pub struct PreprocessError {
 pub struct Preprocessor {
     macros: MacroMap,
     include_guard_seen: bool,
+    pragma_once_files: HashSet<String>,
     include_paths: Vec<String>,
+    forced_includes: Vec<String>,
     cond_stack: Vec<CondState>,
     errors: Vec<PreprocessError>,
     standard_includes: bool,
@@ -424,7 +426,9 @@ impl Preprocessor {
         Self {
             macros,
             include_guard_seen: false,
+            pragma_once_files: HashSet::new(),
             include_paths: Vec::new(),
+            forced_includes: Vec::new(),
             cond_stack: Vec::new(),
             errors: Vec::new(),
             standard_includes: true,
@@ -446,6 +450,11 @@ impl Preprocessor {
 
     pub fn pragma_once(&mut self) {
         self.include_guard_seen = true;
+        if !self.current_file.is_empty() {
+            let identity = resolved_existing_path(std::path::Path::new(&self.current_file))
+                .unwrap_or_else(|| self.current_file.clone());
+            self.pragma_once_files.insert(identity);
+        }
     }
 
     pub fn has_include_guard(&self) -> bool {
@@ -458,6 +467,11 @@ impl Preprocessor {
 
     pub fn include_paths(&self) -> &[String] {
         &self.include_paths
+    }
+
+    /// Configure a command-line `-include FILE` input for this compilation.
+    pub fn add_forced_include(&mut self, path: String) {
+        self.forced_includes.push(path);
     }
 
     pub fn set_standard_includes_enabled(&mut self, enabled: bool) {
@@ -512,9 +526,80 @@ impl Preprocessor {
         self.reset_source_table();
         self.cond_stack.clear();
         self.errors.clear();
+        self.include_guard_seen = false;
+        self.pragma_once_files.clear();
         self.register_entry_source(&tokens);
         let mut expanding: HashSet<String> = HashSet::new();
-        self.process_impl(tokens, source, &mut expanding, true, 0)
+        let entry_span = tokens
+            .tokens
+            .iter()
+            .find(|token| token.span.file != FileId::DUMMY)
+            .map(|token| SourceSpan::new(token.span.file, 0, 0, 1, 1))
+            .unwrap_or_else(|| SourceSpan::new(FileId::DUMMY, 0, 0, 1, 1));
+        let mut output = Vec::new();
+
+        // `-include FILE` has the same macro environment and source registry
+        // as the main translation unit. Process each configured file before
+        // the entry stream and preserve argv order.
+        for requested in self.forced_includes.clone() {
+            let Some(resolved) = resolved_existing_path(std::path::Path::new(&requested)) else {
+                self.errors.push(PreprocessError {
+                    code: "E0105",
+                    span: entry_span,
+                    message: format!("forced-include-not-found: {requested}"),
+                });
+                continue;
+            };
+            if self.pragma_once_files.contains(&resolved) {
+                continue;
+            }
+            match self.process_resolved_source(&resolved, &mut expanding) {
+                Ok(processed) => output.extend(processed.into_vec()),
+                Err(_) => self.errors.push(PreprocessError {
+                    code: "E0105",
+                    span: entry_span,
+                    message: format!("forced-include-not-found: {requested}"),
+                }),
+            }
+        }
+
+        output.extend(
+            self.process_impl(tokens, source, &mut expanding, true, 0)
+                .into_vec(),
+        );
+        TokenStream::new(output)
+    }
+
+    fn process_resolved_source(
+        &mut self,
+        resolved: &str,
+        expanding: &mut HashSet<String>,
+    ) -> Result<TokenStream, std::io::Error> {
+        let content = std::fs::read_to_string(resolved)?;
+        let file = self.intern_source(resolved);
+        let mut lexer = evocc_lex::Lexer::new(file, &content);
+        let mut tokens = Vec::new();
+        while let Some(token) = lexer.next() {
+            if token.kind != TokenKind::Eof {
+                let text = token_lexeme(&token, &content).to_owned();
+                tokens.push(Token {
+                    kind: token.kind,
+                    span: token.span,
+                    text: TokenText::Decoded(text),
+                });
+            }
+        }
+        let previous_file = std::mem::replace(&mut self.current_file, resolved.to_owned());
+        let conditional_floor = self.cond_stack.len();
+        let processed = self.process_impl(
+            TokenStream::new(tokens),
+            &content,
+            expanding,
+            true,
+            conditional_floor,
+        );
+        self.current_file = previous_file;
+        Ok(processed)
     }
 
     fn reset_source_table(&mut self) {
@@ -714,37 +799,10 @@ impl Preprocessor {
                                     self.standard_includes,
                                 );
                                 if let Some(resolved) = path {
-                                    if !self.has_include_guard() || !self.include_guard_seen {
-                                        if let Ok(content) = std::fs::read_to_string(&resolved) {
-                                            let header_file = self.intern_source(&resolved);
-                                            let mut sub_lex =
-                                                evocc_lex::Lexer::new(header_file, &content);
-                                            let mut sub_tokens = Vec::new();
-                                            while let Some(t) = sub_lex.next() {
-                                                if t.kind != TokenKind::Eof {
-                                                    let text =
-                                                        token_lexeme(&t, &content).to_owned();
-                                                    sub_tokens.push(Token {
-                                                        kind: t.kind,
-                                                        span: t.span,
-                                                        text: TokenText::Decoded(text),
-                                                    });
-                                                }
-                                            }
-                                            let sub_stream = TokenStream::new(sub_tokens);
-                                            let previous_file = std::mem::replace(
-                                                &mut self.current_file,
-                                                resolved.clone(),
-                                            );
-                                            let include_floor = self.cond_stack.len();
-                                            let processed = self.process_impl(
-                                                sub_stream,
-                                                &content,
-                                                expanding,
-                                                true,
-                                                include_floor,
-                                            );
-                                            self.current_file = previous_file;
+                                    if !self.pragma_once_files.contains(&resolved) {
+                                        if let Ok(processed) =
+                                            self.process_resolved_source(&resolved, expanding)
+                                        {
                                             output.extend(processed.into_vec());
                                         }
                                     }
