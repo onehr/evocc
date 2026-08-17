@@ -652,7 +652,45 @@ def sanitize_preprocessed(raw_path: Path, parser_path: Path, line_map_path: Path
     return mappings
 
 
-def parse_diagnostic(stderr: str, default_source: str, mappings: list[dict[str, Any]] | None) -> dict[str, Any]:
+def kernel_relative_diagnostic_path(emitted_path: str) -> str:
+    path = Path(emitted_path)
+    require(path.is_absolute(), f"raw diagnostic path is not absolute: {emitted_path}")
+    try:
+        source_root = SOURCE_ROOT.resolve(strict=True)
+        resolved = path.resolve(strict=True)
+    except OSError as error:
+        raise ContractError(f"raw diagnostic path cannot be resolved: {emitted_path}: {error}") from error
+    require(
+        resolved != source_root and source_root in resolved.parents,
+        f"raw diagnostic path is outside frozen kernel source: {emitted_path}",
+    )
+    require(resolved.is_file(), f"raw diagnostic path is not a file: {emitted_path}")
+    return resolved.relative_to(source_root).as_posix()
+
+
+def verify_raw_source_diagnostic_identity(diagnostic: dict[str, Any]) -> None:
+    emitted_path = diagnostic.get("emittedPath")
+    if emitted_path is None:
+        return
+    expected_path = kernel_relative_diagnostic_path(emitted_path)
+    require(
+        diagnostic.get("sourcePath") == expected_path,
+        "raw diagnostic source path does not match its emitted kernel path",
+    )
+    require(
+        diagnostic.get("sourceSpan") == diagnostic.get("emittedSpan"),
+        "raw diagnostic source span does not preserve its emitted span",
+    )
+
+
+def parse_diagnostic(
+    stderr: str,
+    default_source: str,
+    mappings: list[dict[str, Any]] | None,
+    *,
+    raw_source: bool = False,
+) -> dict[str, Any]:
+    require(not raw_source or mappings is None, "raw diagnostics cannot use oracle line mappings")
     first_nonempty = next((line for line in stderr.splitlines() if line.strip()), "")
     diagnostic: dict[str, Any] = {
         "code": "DRIVER_NONZERO_EXIT",
@@ -680,6 +718,8 @@ def parse_diagnostic(stderr: str, default_source: str, mappings: list[dict[str, 
             diagnostic["sourceSpan"] = {"line": mapped["originLine"], "column": None}
             diagnostic["sourceMapping"] = "oracle-line-marker; column unavailable after macro expansion"
         else:
+            if raw_source:
+                diagnostic["sourcePath"] = kernel_relative_diagnostic_path(match.group("path"))
             diagnostic["sourceSpan"] = {"line": line, "column": column}
     elif "unsupported option" in first_nonempty:
         diagnostic["code"] = "DRIVER_UNSUPPORTED_OPTION"
@@ -760,7 +800,13 @@ def observed_result(
         result.update({"outcome": "success", "classification": None, "diagnostic": None, "reproducer": None})
     else:
         stderr = stderr_path.read_text(encoding="utf-8", errors="replace")
-        diagnostic = parse_diagnostic(stderr, unit["sourcePath"], mappings)
+        raw_source = phase == "raw-source-preprocess"
+        diagnostic = parse_diagnostic(
+            stderr,
+            unit["sourcePath"],
+            mappings,
+            raw_source=raw_source,
+        )
         if return_code == 0 and not timed_out:
             diagnostic.update(
                 {
@@ -775,6 +821,8 @@ def observed_result(
                     "sourceSpan": None,
                 }
             )
+        if raw_source:
+            verify_raw_source_diagnostic_identity(diagnostic)
         classification = failure_class(diagnostic, phase, timed_out)
         require(classification in FAILURE_CLASSES, f"invalid classification {classification}")
         result.update(
@@ -1393,6 +1441,79 @@ def run_self_tests(contract_path: Path) -> None:
             declaration_rejected = True
         require(declaration_rejected, "missing source-declaration mutant bypassed verifier")
 
+        def self_test_observation(
+            name: str,
+            phase: str,
+            stderr: str,
+            mappings: list[dict[str, Any]] | None = None,
+        ) -> dict[str, Any]:
+            stdout_path = temporary / f"{name}.stdout"
+            stderr_path = temporary / f"{name}.stderr"
+            stdout_path.write_bytes(b"")
+            stderr_path.write_text(stderr, encoding="utf-8")
+            return observed_result(
+                unit,
+                f"self-test-{name}",
+                phase,
+                1,
+                False,
+                stdout_path,
+                stderr_path,
+                mappings=mappings,
+            )
+
+        raw_header = SOURCE_ROOT / "include/linux/compiler_types.h"
+        raw_header_result = self_test_observation(
+            "raw-header",
+            "raw-source-preprocess",
+            f'{raw_header}:189:1: error[E0104]: error-directive: "Unknown compiler"\n',
+        )
+        raw_header_diagnostic = raw_header_result["diagnostic"]
+        require(
+            raw_header_diagnostic["sourcePath"] == "include/linux/compiler_types.h",
+            "raw header diagnostic was misattributed to the root TU",
+        )
+        require(
+            raw_header_diagnostic["sourceSpan"] == {"line": 189, "column": 1},
+            "raw header diagnostic lost its exact source span",
+        )
+        root_tu_mutant = dict(raw_header_diagnostic)
+        root_tu_mutant["sourcePath"] = unit["sourcePath"]
+        root_tu_mutant_rejected = False
+        try:
+            verify_raw_source_diagnostic_identity(root_tu_mutant)
+        except ContractError:
+            root_tu_mutant_rejected = True
+        require(root_tu_mutant_rejected, "root-TU attribution mutant bypassed verifier")
+
+        outside_source = temporary / "outside-source.c"
+        outside_source.write_text("#error outside\n", encoding="utf-8")
+        outside_path_rejected = False
+        try:
+            self_test_observation(
+                "outside-source",
+                "raw-source-preprocess",
+                f"{outside_source}:1:1: error[E0104]: error-directive: outside\n",
+            )
+        except ContractError:
+            outside_path_rejected = True
+        require(outside_path_rejected, "outside-root raw diagnostic mutant bypassed verifier")
+
+        parser_result = self_test_observation(
+            "parser-line-marker",
+            "oracle-preprocessed-parse",
+            "/tmp/parser-input.c:7:13: error[E1001]: expected-declaration\n",
+            [{"originPath": "include/linux/compiler.h", "originLine": 265}] * 7,
+        )
+        parser_diagnostic = parser_result["diagnostic"]
+        require(
+            parser_diagnostic["sourcePath"] == "include/linux/compiler.h"
+            and parser_diagnostic["sourceSpan"] == {"line": 265, "column": None}
+            and parser_diagnostic.get("sourceMapping")
+            == "oracle-line-marker; column unavailable after macro expansion",
+            "parser line-marker diagnostic mapping drifted",
+        )
+
         build_env = load_json(BUILD_ENV_CONTRACT)
         expected = build_env["buildImage"]["executionReference"]
         image_swap_rejected = False
@@ -1475,7 +1596,9 @@ def run_self_tests(contract_path: Path) -> None:
         "DAY5_KERNEL_RECON_SELFTEST "
         "true_mutant=PASS source_declaration_mutant=PASS image_swap_mutant=PASS "
         "fake_container_path_hash_mutants=PASS fake_cargo_path_hash_mutants=PASS "
-        "wrapper_rustflags_mutants=PASS source_drift_mutant=PASS"
+        "wrapper_rustflags_mutants=PASS source_drift_mutant=PASS "
+        "raw_root_tu_attribution_mutant=PASS raw_outside_root_mutant=PASS "
+        "parser_line_marker_control=PASS"
     )
 
 
