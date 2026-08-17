@@ -1,6 +1,7 @@
 //! C declarator, expression, and statement parser producing C-HIR
 
 use std::collections::{HashMap, HashSet};
+use std::num::NonZeroUsize;
 
 use evocc_chir::integer::{
     enum_integer_type, eval_binary_integer, eval_unary_integer, floating_literal_to_integer,
@@ -187,6 +188,7 @@ pub struct Parser<'src, 'arena> {
     source: &'src str,
     had_error: bool,
     error_count: usize,
+    error_limit: Option<NonZeroUsize>,
     rollback_error_count: usize,
     diagnostic: Option<ParseDiagnostic>,
     arena: Option<&'arena Arena>,
@@ -231,6 +233,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             source,
             had_error: false,
             error_count: 0,
+            error_limit: None,
             rollback_error_count: 0,
             diagnostic: None,
             arena: None,
@@ -246,6 +249,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
+    /// Stop parsing after this many diagnostics have been committed.
+    ///
+    /// Parsers are unlimited by default so library users retain structural
+    /// recovery. Configure a limit before calling [`Self::parse_translation_unit_in`]
+    /// when only a bounded diagnostic prefix is required.
+    pub fn set_error_limit(&mut self, limit: NonZeroUsize) {
+        self.error_limit = Some(limit);
+    }
+
     pub fn parse_translation_unit_in(&mut self, arena: &'arena Arena) -> CHirUnit<'arena> {
         assert!(self.arena.is_none(), "Parser instances parse only one unit");
         self.arena = Some(arena);
@@ -253,6 +265,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         while !self.is_done() {
             if let Some((code, message)) = misplaced_statement_diagnostic(self.peek_kind()) {
                 self.report(code, message, self.span());
+                if self.reached_error_limit() {
+                    break;
+                }
                 self.advance();
                 continue;
             }
@@ -260,8 +275,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             if let Some(mut parsed) = self.parse_external_declaration() {
                 decls.append(&mut parsed);
             }
+            if self.reached_error_limit() {
+                break;
+            }
             if self.pos == before {
                 self.report("E1001", "expected-declaration", self.span());
+                if self.reached_error_limit() {
+                    break;
+                }
                 self.advance();
             }
         }
@@ -278,6 +299,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     pub fn diagnostic(&self) -> Option<&ParseDiagnostic> {
         self.diagnostic.as_ref()
+    }
+
+    fn reached_error_limit(&self) -> bool {
+        self.error_limit
+            .is_some_and(|limit| self.error_count >= limit.get())
     }
 
     // ── helpers ────────────────────────────────────────────────────────

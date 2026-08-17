@@ -13,6 +13,7 @@
 
 use std::fs;
 use std::io::Write;
+use std::num::NonZeroUsize;
 use std::process::ExitCode;
 
 use evocc_chir::{
@@ -468,6 +469,7 @@ fn run_parsed(options: &DriverOptions, interpret: bool) -> ExitCode {
 
     let arena = Arena::default();
     let mut parser = Parser::new(processed, FileId::new(1), &src);
+    parser.set_error_limit(NonZeroUsize::MIN);
     let unit = parser.parse_translation_unit_in(&arena);
     if parser.had_error() || (unit.is_empty() && !src.trim().is_empty()) {
         if let Some(diagnostic) = parser.diagnostic() {
