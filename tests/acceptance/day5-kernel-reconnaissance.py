@@ -652,27 +652,28 @@ def sanitize_preprocessed(raw_path: Path, parser_path: Path, line_map_path: Path
     return mappings
 
 
-def kernel_relative_diagnostic_path(emitted_path: str) -> str:
+def raw_diagnostic_source_path(emitted_path: str) -> str:
     path = Path(emitted_path)
     require(path.is_absolute(), f"raw diagnostic path is not absolute: {emitted_path}")
     try:
         source_root = SOURCE_ROOT.resolve(strict=True)
+        output_root = (REFERENCE_ROOT / "gcc-lane-1").resolve(strict=True)
         resolved = path.resolve(strict=True)
     except OSError as error:
         raise ContractError(f"raw diagnostic path cannot be resolved: {emitted_path}: {error}") from error
-    require(
-        resolved != source_root and source_root in resolved.parents,
-        f"raw diagnostic path is outside frozen kernel source: {emitted_path}",
-    )
     require(resolved.is_file(), f"raw diagnostic path is not a file: {emitted_path}")
-    return resolved.relative_to(source_root).as_posix()
+    if resolved != source_root and source_root in resolved.parents:
+        return resolved.relative_to(source_root).as_posix()
+    if resolved != output_root and output_root in resolved.parents:
+        return f"@gcc-output/{resolved.relative_to(output_root).as_posix()}"
+    raise ContractError(f"raw diagnostic path is outside frozen raw-input roots: {emitted_path}")
 
 
 def verify_raw_source_diagnostic_identity(diagnostic: dict[str, Any]) -> None:
     emitted_path = diagnostic.get("emittedPath")
     if emitted_path is None:
         return
-    expected_path = kernel_relative_diagnostic_path(emitted_path)
+    expected_path = raw_diagnostic_source_path(emitted_path)
     require(
         diagnostic.get("sourcePath") == expected_path,
         "raw diagnostic source path does not match its emitted kernel path",
@@ -719,7 +720,7 @@ def parse_diagnostic(
             diagnostic["sourceMapping"] = "oracle-line-marker; column unavailable after macro expansion"
         else:
             if raw_source:
-                diagnostic["sourcePath"] = kernel_relative_diagnostic_path(match.group("path"))
+                diagnostic["sourcePath"] = raw_diagnostic_source_path(match.group("path"))
             diagnostic["sourceSpan"] = {"line": line, "column": column}
     elif "unsupported option" in first_nonempty:
         diagnostic["code"] = "DRIVER_UNSUPPORTED_OPTION"
@@ -1477,6 +1478,24 @@ def run_self_tests(contract_path: Path) -> None:
             raw_header_diagnostic["sourceSpan"] == {"line": 189, "column": 1},
             "raw header diagnostic lost its exact source span",
         )
+
+        generated_header = REFERENCE_ROOT / "gcc-lane-1/include/generated/autoconf.h"
+        generated_header_result = self_test_observation(
+            "raw-generated-header",
+            "raw-source-preprocess",
+            f"{generated_header}:23:7: error[E0104]: generated-header-control\n",
+        )
+        generated_header_diagnostic = generated_header_result["diagnostic"]
+        require(
+            generated_header_diagnostic["sourcePath"]
+            == "@gcc-output/include/generated/autoconf.h",
+            "raw generated-header diagnostic lost its stable output identity",
+        )
+        require(
+            generated_header_diagnostic["sourceSpan"] == {"line": 23, "column": 7},
+            "raw generated-header diagnostic lost its exact source span",
+        )
+
         root_tu_mutant = dict(raw_header_diagnostic)
         root_tu_mutant["sourcePath"] = unit["sourcePath"]
         root_tu_mutant_rejected = False
@@ -1485,6 +1504,18 @@ def run_self_tests(contract_path: Path) -> None:
         except ContractError:
             root_tu_mutant_rejected = True
         require(root_tu_mutant_rejected, "root-TU attribution mutant bypassed verifier")
+
+        other_lane_header = REFERENCE_ROOT / "clang-lane-1/include/generated/autoconf.h"
+        other_lane_rejected = False
+        try:
+            self_test_observation(
+                "other-lane-header",
+                "raw-source-preprocess",
+                f"{other_lane_header}:23:7: error[E0104]: other-lane-control\n",
+            )
+        except ContractError:
+            other_lane_rejected = True
+        require(other_lane_rejected, "non-raw-lane generated header bypassed verifier")
 
         outside_source = temporary / "outside-source.c"
         outside_source.write_text("#error outside\n", encoding="utf-8")
@@ -1598,6 +1629,7 @@ def run_self_tests(contract_path: Path) -> None:
         "fake_container_path_hash_mutants=PASS fake_cargo_path_hash_mutants=PASS "
         "wrapper_rustflags_mutants=PASS source_drift_mutant=PASS "
         "raw_root_tu_attribution_mutant=PASS raw_outside_root_mutant=PASS "
+        "raw_generated_output_control=PASS raw_other_lane_mutant=PASS "
         "parser_line_marker_control=PASS"
     )
 
