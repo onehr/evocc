@@ -2,6 +2,11 @@
 
 use std::collections::{HashMap, HashSet};
 
+use evocc_chir::integer::{
+    enum_integer_type, eval_binary_integer, eval_unary_integer, floating_literal_to_integer,
+    integer_literal_value, integer_type_for_rank, rank_for_integer_type, usual_arithmetic_type,
+    CInteger, CIntegerType,
+};
 use evocc_chir::{
     AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit,
     CharLit, CharPrefix, EnumeratorDecl, ExprCategory, ExprFacts, FloatLit, FloatSuffix,
@@ -75,110 +80,6 @@ struct PendingTag<'arena> {
     name: Option<SpannedName>,
     members: TagMembers<'arena>,
     specifier_span: SourceSpan,
-}
-
-/// A value and its C integer type after target-specific literal selection.
-///
-/// `raw` always contains the low `ty.bits` bits. Signed values use the target's
-/// two's-complement representation; keeping the representation separate from
-/// interpretation lets unsigned arithmetic wrap without routing through a
-/// wider signed host integer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct CInteger {
-    raw: u64,
-    ty: CIntegerType,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct CIntegerType {
-    bits: u8,
-    rank: u8,
-    signed: bool,
-}
-
-impl CIntegerType {
-    const BOOL: Self = Self::new(1, 0, false);
-    const INT: Self = Self::new(32, 3, true);
-    const UINT: Self = Self::new(32, 3, false);
-    const LONG: Self = Self::new(64, 4, true);
-    const ULONG: Self = Self::new(64, 4, false);
-    const LONG_LONG: Self = Self::new(64, 5, true);
-    const ULONG_LONG: Self = Self::new(64, 5, false);
-
-    const fn new(bits: u8, rank: u8, signed: bool) -> Self {
-        Self { bits, rank, signed }
-    }
-
-    const fn unsigned_version(self) -> Self {
-        Self {
-            signed: false,
-            ..self
-        }
-    }
-
-    const fn mask(self) -> u64 {
-        if self.bits == 64 {
-            u64::MAX
-        } else {
-            (1_u64 << self.bits) - 1
-        }
-    }
-
-    const fn signed_min(self) -> i128 {
-        -(1_i128 << (self.bits - 1))
-    }
-
-    const fn signed_max(self) -> i128 {
-        (1_i128 << (self.bits - 1)) - 1
-    }
-}
-
-impl CInteger {
-    const fn new(raw: u64, ty: CIntegerType) -> Self {
-        Self {
-            raw: raw & ty.mask(),
-            ty,
-        }
-    }
-
-    const fn int(value: i32) -> Self {
-        Self::new(value as u64, CIntegerType::INT)
-    }
-
-    fn mathematical_value(self) -> i128 {
-        if !self.ty.signed {
-            return i128::from(self.raw);
-        }
-        let sign_bit = 1_u64 << (self.ty.bits - 1);
-        if self.raw & sign_bit == 0 {
-            i128::from(self.raw)
-        } else {
-            i128::from(self.raw) - (1_i128 << self.ty.bits)
-        }
-    }
-
-    const fn truth(self) -> bool {
-        self.raw != 0
-    }
-
-    fn cast(self, target: CIntegerType) -> Self {
-        if target == CIntegerType::BOOL {
-            return Self::new(u64::from(self.truth()), target);
-        }
-        if self.ty.signed && target.bits > self.ty.bits && self.mathematical_value() < 0 {
-            return Self::new(self.mathematical_value() as u64, target);
-        }
-        Self::new(self.raw, target)
-    }
-
-    fn promoted(self) -> Self {
-        if self.ty.rank < CIntegerType::INT.rank {
-            // Every AArch64 integer type below `int` fits in signed `int`.
-            self.cast(CIntegerType::INT)
-        } else {
-            self
-        }
-    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -2909,7 +2810,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn canonical_integer_type(&self, ty: TypeId) -> Result<CIntegerType, ()> {
         let canonical = self.types.get(ty).ok_or(())?;
         match canonical.kind {
-            TypeKind::Int(rank) => integer_rank_type(rank).ok_or(()),
+            TypeKind::Int(rank) => Ok(integer_type_for_rank(rank)),
             TypeKind::Enum(tag) => {
                 let definition = self.types.tag(tag).ok_or(())?;
                 let TagState::Complete(TagDefinition::Enum(constants)) = &definition.state else {
@@ -2939,16 +2840,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn intern_c_integer_type(&mut self, ty: CIntegerType) -> TypeId {
-        let rank = match (ty.bits, ty.rank, ty.signed) {
-            (1, 0, false) => IntRank::Bool,
-            (32, 3, true) => IntRank::Int,
-            (32, 3, false) => IntRank::UInt,
-            (64, 4, true) => IntRank::Long,
-            (64, 4, false) => IntRank::ULong,
-            (64, 5, true) => IntRank::LongLong,
-            (64, 5, false) => IntRank::ULongLong,
-            _ => unreachable!("unsupported target integer type: {ty:?}"),
-        };
+        let rank = rank_for_integer_type(ty)
+            .unwrap_or_else(|| unreachable!("unsupported target integer type: {ty:?}"));
         self.intern(TypeKind::Int(rank), Qualifiers::default())
     }
 
@@ -2958,7 +2851,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// the semantic caller as E1303.
     fn eval_integer_constant_expression(&self, expression: &CHirExpr<'_>) -> Result<CInteger, ()> {
         match expression {
-            CHirExpr::Lit(literal, _) => integer_literal_value(*literal),
+            CHirExpr::Lit(literal, _) => integer_literal_value(*literal).map_err(|_| ()),
             CHirExpr::CharLit(literal, _) => {
                 Ok(CInteger::int(i32::try_from(literal.value).map_err(|_| ())?))
             }
@@ -2974,6 +2867,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             CHirExpr::Unary(op, operand, _) => {
                 eval_unary_integer(*op, self.eval_integer_constant_expression(operand)?)
+                    .map_err(|_| ())
             }
             CHirExpr::Binary(op, left, right, _) => {
                 let left = self.eval_integer_constant_expression(left)?;
@@ -2984,7 +2878,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     return Ok(CInteger::int(1));
                 }
                 let right = self.eval_integer_constant_expression(right)?;
-                eval_binary_integer(*op, left, right)
+                eval_binary_integer(*op, left, right).map_err(|_| ())
             }
             CHirExpr::Ternary(condition, when_true, when_false, _) => {
                 let selected = if self.eval_integer_constant_expression(condition)?.truth() {
@@ -2998,8 +2892,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.integer_expression_type(when_false),
                 ) {
                     (Ok(when_true), Ok(when_false)) => Ok(value.cast(usual_arithmetic_type(
-                        CInteger::new(0, when_true).promoted().ty,
-                        CInteger::new(0, when_false).promoted().ty,
+                        CInteger::new(0, when_true).promoted().ty(),
+                        CInteger::new(0, when_false).promoted().ty(),
                     ))),
                     // Keep the established dead-arm behavior for identifiers
                     // whose ordinary declaration/type is not available yet.
@@ -3010,7 +2904,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::Cast(ty, operand, _) => {
                 let target = self.canonical_integer_type(*ty)?;
                 if let CHirExpr::FloatLit(literal, _) = operand {
-                    return floating_literal_to_integer(*literal, target);
+                    return floating_literal_to_integer(*literal, target).map_err(|_| ());
                 }
                 Ok(self.eval_integer_constant_expression(operand)?.cast(target))
             }
@@ -3052,7 +2946,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// while preserving C's unevaluated/dead operand rules.
     fn integer_expression_type(&self, expression: &CHirExpr<'_>) -> Result<CIntegerType, ()> {
         match expression {
-            CHirExpr::Lit(literal, _) => Ok(integer_literal_value(*literal)?.ty),
+            CHirExpr::Lit(literal, _) => Ok(integer_literal_value(*literal).map_err(|_| ())?.ty()),
             CHirExpr::CharLit(_, _) => Ok(CIntegerType::INT),
             CHirExpr::Ident { symbol, .. } => {
                 let symbol = self.symbols.symbol(*symbol).map_err(|_| ())?;
@@ -3065,7 +2959,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 UnaryOp::Plus | UnaryOp::Neg | UnaryOp::BitNot => {
                     Ok(CInteger::new(0, self.integer_expression_type(operand)?)
                         .promoted()
-                        .ty)
+                        .ty())
                 }
                 UnaryOp::Not => {
                     self.integer_expression_type(operand)?;
@@ -3084,8 +2978,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     | BinaryOp::Mod
                     | BinaryOp::BitAnd
                     | BinaryOp::BitOr
-                    | BinaryOp::BitXor => Ok(usual_arithmetic_type(left.ty, right.ty)),
-                    BinaryOp::Shl | BinaryOp::Shr => Ok(left.ty),
+                    | BinaryOp::BitXor => Ok(usual_arithmetic_type(left.ty(), right.ty())),
+                    BinaryOp::Shl | BinaryOp::Shr => Ok(left.ty()),
                     BinaryOp::Lt
                     | BinaryOp::Le
                     | BinaryOp::Gt
@@ -3112,10 +3006,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.integer_expression_type(condition)?;
                 let when_true = CInteger::new(0, self.integer_expression_type(when_true)?)
                     .promoted()
-                    .ty;
+                    .ty();
                 let when_false = CInteger::new(0, self.integer_expression_type(when_false)?)
                     .promoted()
-                    .ty;
+                    .ty();
                 Ok(usual_arithmetic_type(when_true, when_false))
             }
             CHirExpr::Cast(ty, _, _) => self.canonical_integer_type(*ty),
@@ -4335,7 +4229,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn expression_type(&self, expression: &CHirExpr<'_>) -> Option<InferredExpressionType> {
         let (ty, category) = match expression {
             CHirExpr::Lit(literal, _) => (
-                InferredType::Integer(integer_literal_value(*literal).ok()?.ty),
+                InferredType::Integer(integer_literal_value(*literal).ok()?.ty()),
                 ExprCategory::Value,
             ),
             CHirExpr::FloatLit(literal, _) => (
@@ -4382,7 +4276,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                             return None;
                         };
                         (
-                            InferredType::Integer(CInteger::new(0, integer).promoted().ty),
+                            InferredType::Integer(CInteger::new(0, integer).promoted().ty()),
                             ExprCategory::Value,
                         )
                     }
@@ -4496,7 +4390,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn promoted_arithmetic_type(&self, ty: InferredType) -> Option<InferredType> {
         Some(match self.operand_type_class(ty) {
             OperandTypeClass::Integer(integer) => {
-                InferredType::Integer(CInteger::new(0, integer).promoted().ty)
+                InferredType::Integer(CInteger::new(0, integer).promoted().ty())
             }
             OperandTypeClass::Real(real) => InferredType::Real(real),
             OperandTypeClass::Complex(complex) => InferredType::Complex(complex),
@@ -4563,8 +4457,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     return None;
                 };
                 Some(InferredType::Integer(usual_arithmetic_type(
-                    CInteger::new(0, left).promoted().ty,
-                    CInteger::new(0, right).promoted().ty,
+                    CInteger::new(0, left).promoted().ty(),
+                    CInteger::new(0, right).promoted().ty(),
                 )))
             }
             BinaryOp::Shl | BinaryOp::Shr => {
@@ -4573,7 +4467,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 else {
                     return None;
                 };
-                Some(InferredType::Integer(CInteger::new(0, left).promoted().ty))
+                Some(InferredType::Integer(
+                    CInteger::new(0, left).promoted().ty(),
+                ))
             }
             BinaryOp::Lt
             | BinaryOp::Le
@@ -4697,8 +4593,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         match (left, right) {
             (OperandTypeClass::Integer(left), OperandTypeClass::Integer(right)) => {
                 Some(InferredType::Integer(usual_arithmetic_type(
-                    CInteger::new(0, left).promoted().ty,
-                    CInteger::new(0, right).promoted().ty,
+                    CInteger::new(0, left).promoted().ty(),
+                    CInteger::new(0, right).promoted().ty(),
                 )))
             }
             (left, right) if is_arithmetic_class(left) && is_arithmetic_class(right) => {
@@ -4728,9 +4624,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     return OperandTypeClass::Other;
                 };
                 match canonical.kind {
-                    TypeKind::Int(rank) => integer_rank_type(rank)
-                        .map(OperandTypeClass::Integer)
-                        .unwrap_or(OperandTypeClass::Other),
+                    TypeKind::Int(rank) => OperandTypeClass::Integer(integer_type_for_rank(rank)),
                     TypeKind::Enum(_) => self
                         .canonical_integer_type(ty)
                         .map(OperandTypeClass::Integer)
@@ -4840,7 +4734,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.integer_expression_type(expression).is_ok()
             && self
                 .eval_integer_constant_expression(expression)
-                .is_ok_and(|value| value.raw == 0)
+                .is_ok_and(|value| value.raw_bits() == 0)
     }
 
     fn parse_conditional(&mut self) -> Option<&'arena CHirExpr<'arena>> {
@@ -5677,53 +5571,8 @@ fn parse_char_literal(text: &str) -> Option<CharLit> {
     Some(CharLit { value, prefix })
 }
 
-fn integer_rank_type(rank: IntRank) -> Option<CIntegerType> {
-    Some(match rank {
-        IntRank::Bool => CIntegerType::BOOL,
-        // GNU AArch64 uses unsigned plain `char`; all three character types
-        // still promote to signed `int` before arithmetic.
-        IntRank::Char | IntRank::UChar => CIntegerType::new(8, 1, false),
-        IntRank::SChar => CIntegerType::new(8, 1, true),
-        IntRank::Short => CIntegerType::new(16, 2, true),
-        IntRank::UShort => CIntegerType::new(16, 2, false),
-        IntRank::Int => CIntegerType::INT,
-        IntRank::UInt => CIntegerType::UINT,
-        IntRank::Long => CIntegerType::LONG,
-        IntRank::ULong => CIntegerType::ULONG,
-        IntRank::LongLong => CIntegerType::LONG_LONG,
-        IntRank::ULongLong => CIntegerType::ULONG_LONG,
-    })
-}
-
-fn enum_integer_type(minimum: i64, maximum: i64) -> CIntegerType {
-    if minimum >= i64::from(i32::MIN) && maximum <= i64::from(i32::MAX) {
-        CIntegerType::INT
-    } else if minimum >= 0 && maximum <= i64::from(u32::MAX) {
-        CIntegerType::UINT
-    } else if minimum >= 0 {
-        // GNU AArch64 selects an unsigned eight-byte mode for an all-positive
-        // enum that exceeds `unsigned int`.
-        CIntegerType::ULONG
-    } else {
-        CIntegerType::LONG
-    }
-}
-
 fn integer_expression_layout(ty: CIntegerType) -> Result<TypeLayout, ()> {
-    let rank = match (ty.bits, ty.rank, ty.signed) {
-        (1, 0, false) => IntRank::Bool,
-        (8, 1, true) => IntRank::SChar,
-        (8, 1, false) => IntRank::UChar,
-        (16, 2, true) => IntRank::Short,
-        (16, 2, false) => IntRank::UShort,
-        (32, 3, true) => IntRank::Int,
-        (32, 3, false) => IntRank::UInt,
-        (64, 4, true) => IntRank::Long,
-        (64, 4, false) => IntRank::ULong,
-        (64, 5, true) => IntRank::LongLong,
-        (64, 5, false) => IntRank::ULongLong,
-        _ => return Err(()),
-    };
+    let rank = rank_for_integer_type(ty).ok_or(())?;
     let mut types = TypeInterner::new();
     let ty = types.intern(CanonicalType {
         kind: TypeKind::Int(rank),
@@ -5732,250 +5581,6 @@ fn integer_expression_layout(ty: CIntegerType) -> Result<TypeLayout, ()> {
     TargetDataLayout::aarch64_unknown_linux_gnu()
         .layout_of(&types, ty)
         .map_err(|_| ())
-}
-
-fn floating_literal_to_integer(literal: FloatLit, target: CIntegerType) -> Result<CInteger, ()> {
-    let value = literal.value;
-    if !value.is_finite() {
-        return Err(());
-    }
-    if target == CIntegerType::BOOL {
-        return Ok(CInteger::new(u64::from(value != 0.0), target));
-    }
-    let truncated = value.trunc();
-    if target.signed {
-        let bound = 2_f64.powi(i32::from(target.bits) - 1);
-        if truncated < -bound || truncated >= bound {
-            return Err(());
-        }
-        Ok(CInteger::new((truncated as i64) as u64, target))
-    } else {
-        let upper_bound = 2_f64.powi(i32::from(target.bits));
-        if truncated < 0.0 || truncated >= upper_bound {
-            return Err(());
-        }
-        Ok(CInteger::new(truncated as u64, target))
-    }
-}
-
-fn integer_literal_value(literal: IntLit) -> Result<CInteger, ()> {
-    let decimal = literal.base == IntBase::Dec;
-    let candidates: &[CIntegerType] = match (literal.suffix, decimal) {
-        (IntSuffix::None, true) => &[
-            CIntegerType::INT,
-            CIntegerType::LONG,
-            CIntegerType::LONG_LONG,
-        ],
-        (IntSuffix::None, false) => &[
-            CIntegerType::INT,
-            CIntegerType::UINT,
-            CIntegerType::LONG,
-            CIntegerType::ULONG,
-            CIntegerType::LONG_LONG,
-            CIntegerType::ULONG_LONG,
-        ],
-        (IntSuffix::U, _) => &[
-            CIntegerType::UINT,
-            CIntegerType::ULONG,
-            CIntegerType::ULONG_LONG,
-        ],
-        (IntSuffix::L, true) => &[CIntegerType::LONG, CIntegerType::LONG_LONG],
-        (IntSuffix::L, false) => &[
-            CIntegerType::LONG,
-            CIntegerType::ULONG,
-            CIntegerType::LONG_LONG,
-            CIntegerType::ULONG_LONG,
-        ],
-        (IntSuffix::UL, _) => &[CIntegerType::ULONG, CIntegerType::ULONG_LONG],
-        (IntSuffix::LL, true) => &[CIntegerType::LONG_LONG],
-        (IntSuffix::LL, false) => &[CIntegerType::LONG_LONG, CIntegerType::ULONG_LONG],
-        (IntSuffix::ULL, _) => &[CIntegerType::ULONG_LONG],
-    };
-    let ty = candidates.iter().copied().find(|candidate| {
-        if candidate.signed {
-            i128::from(literal.value) <= candidate.signed_max()
-        } else {
-            literal.value <= candidate.mask()
-        }
-    });
-    ty.map(|ty| CInteger::new(literal.value, ty)).ok_or(())
-}
-
-fn usual_arithmetic_type(left: CIntegerType, right: CIntegerType) -> CIntegerType {
-    if left == right {
-        return left;
-    }
-    if left.signed == right.signed {
-        return if left.rank >= right.rank { left } else { right };
-    }
-    let (signed, unsigned) = if left.signed {
-        (left, right)
-    } else {
-        (right, left)
-    };
-    if unsigned.rank >= signed.rank {
-        return unsigned;
-    }
-    if signed.bits > unsigned.bits {
-        return signed;
-    }
-    signed.unsigned_version()
-}
-
-fn converted_pair(left: CInteger, right: CInteger) -> (CInteger, CInteger, CIntegerType) {
-    let left = left.promoted();
-    let right = right.promoted();
-    let ty = usual_arithmetic_type(left.ty, right.ty);
-    (left.cast(ty), right.cast(ty), ty)
-}
-
-fn integer_from_mathematical(value: i128, ty: CIntegerType) -> Result<CInteger, ()> {
-    if ty.signed && !(ty.signed_min()..=ty.signed_max()).contains(&value) {
-        return Err(());
-    }
-    if !ty.signed && !(0..=i128::from(ty.mask())).contains(&value) {
-        return Err(());
-    }
-    Ok(CInteger::new(value as u64, ty))
-}
-
-fn eval_unary_integer(op: UnaryOp, operand: CInteger) -> Result<CInteger, ()> {
-    let operand = operand.promoted();
-    match op {
-        UnaryOp::Plus => Ok(operand),
-        UnaryOp::Neg if operand.ty.signed => integer_from_mathematical(
-            operand.mathematical_value().checked_neg().ok_or(())?,
-            operand.ty,
-        ),
-        UnaryOp::Neg => Ok(CInteger::new(0_u64.wrapping_sub(operand.raw), operand.ty)),
-        UnaryOp::Not => Ok(CInteger::int(i32::from(!operand.truth()))),
-        UnaryOp::BitNot => Ok(CInteger::new(!operand.raw, operand.ty)),
-        UnaryOp::AddrOf | UnaryOp::Deref => Err(()),
-    }
-}
-
-fn eval_binary_integer(op: BinaryOp, left: CInteger, right: CInteger) -> Result<CInteger, ()> {
-    if matches!(op, BinaryOp::Shl | BinaryOp::Shr) {
-        return eval_integer_shift(op, left.promoted(), right.promoted());
-    }
-    if matches!(op, BinaryOp::And | BinaryOp::Or) {
-        return Ok(CInteger::int(i32::from(match op {
-            BinaryOp::And => left.truth() && right.truth(),
-            BinaryOp::Or => left.truth() || right.truth(),
-            _ => unreachable!(),
-        })));
-    }
-    let (left, right, ty) = converted_pair(left, right);
-    if matches!(
-        op,
-        BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge | BinaryOp::Eq | BinaryOp::Ne
-    ) {
-        let ordering = if ty.signed {
-            left.mathematical_value().cmp(&right.mathematical_value())
-        } else {
-            left.raw.cmp(&right.raw)
-        };
-        return Ok(CInteger::int(i32::from(match op {
-            BinaryOp::Lt => ordering.is_lt(),
-            BinaryOp::Le => !ordering.is_gt(),
-            BinaryOp::Gt => ordering.is_gt(),
-            BinaryOp::Ge => !ordering.is_lt(),
-            BinaryOp::Eq => ordering.is_eq(),
-            BinaryOp::Ne => !ordering.is_eq(),
-            _ => unreachable!(),
-        })));
-    }
-    match op {
-        BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul if ty.signed => {
-            let left = left.mathematical_value();
-            let right = right.mathematical_value();
-            let value = match op {
-                BinaryOp::Add => left.checked_add(right),
-                BinaryOp::Sub => left.checked_sub(right),
-                BinaryOp::Mul => left.checked_mul(right),
-                _ => unreachable!(),
-            }
-            .ok_or(())?;
-            integer_from_mathematical(value, ty)
-        }
-        BinaryOp::Add => Ok(CInteger::new(left.raw.wrapping_add(right.raw), ty)),
-        BinaryOp::Sub => Ok(CInteger::new(left.raw.wrapping_sub(right.raw), ty)),
-        BinaryOp::Mul => Ok(CInteger::new(left.raw.wrapping_mul(right.raw), ty)),
-        BinaryOp::Div | BinaryOp::Mod => {
-            if right.raw == 0 {
-                return Err(());
-            }
-            if ty.signed {
-                let left = left.mathematical_value();
-                let right = right.mathematical_value();
-                let value = if op == BinaryOp::Div {
-                    left.checked_div(right)
-                } else {
-                    left.checked_rem(right)
-                }
-                .ok_or(())?;
-                integer_from_mathematical(value, ty)
-            } else {
-                Ok(CInteger::new(
-                    if op == BinaryOp::Div {
-                        left.raw / right.raw
-                    } else {
-                        left.raw % right.raw
-                    },
-                    ty,
-                ))
-            }
-        }
-        BinaryOp::BitAnd => Ok(CInteger::new(left.raw & right.raw, ty)),
-        BinaryOp::BitOr => Ok(CInteger::new(left.raw | right.raw, ty)),
-        BinaryOp::BitXor => Ok(CInteger::new(left.raw ^ right.raw, ty)),
-        BinaryOp::Shl
-        | BinaryOp::Shr
-        | BinaryOp::Lt
-        | BinaryOp::Le
-        | BinaryOp::Gt
-        | BinaryOp::Ge
-        | BinaryOp::Eq
-        | BinaryOp::Ne
-        | BinaryOp::And
-        | BinaryOp::Or => unreachable!("handled before arithmetic dispatch"),
-        BinaryOp::Comma
-        | BinaryOp::Assign
-        | BinaryOp::AddAssign
-        | BinaryOp::SubAssign
-        | BinaryOp::MulAssign
-        | BinaryOp::DivAssign
-        | BinaryOp::ModAssign
-        | BinaryOp::ShlAssign
-        | BinaryOp::ShrAssign
-        | BinaryOp::BitAndAssign
-        | BinaryOp::BitOrAssign
-        | BinaryOp::BitXorAssign => Err(()),
-    }
-}
-
-fn eval_integer_shift(op: BinaryOp, left: CInteger, right: CInteger) -> Result<CInteger, ()> {
-    let shift = u32::try_from(right.mathematical_value()).map_err(|_| ())?;
-    if shift >= u32::from(left.ty.bits) {
-        return Err(());
-    }
-    match op {
-        BinaryOp::Shl if left.ty.signed => {
-            let left_value = left.mathematical_value();
-            if left_value < 0 {
-                return Err(());
-            }
-            let value = left_value.checked_mul(1_i128 << shift).ok_or(())?;
-            integer_from_mathematical(value, left.ty)
-        }
-        BinaryOp::Shl => Ok(CInteger::new(left.raw << shift, left.ty)),
-        BinaryOp::Shr if left.ty.signed => integer_from_mathematical(
-            left.mathematical_value().checked_shr(shift).ok_or(())?,
-            left.ty,
-        ),
-        BinaryOp::Shr => Ok(CInteger::new(left.raw >> shift, left.ty)),
-        _ => unreachable!("shift helper called only for shifts"),
-    }
 }
 
 /// When a parenthesized expression appears, preserve its original span.

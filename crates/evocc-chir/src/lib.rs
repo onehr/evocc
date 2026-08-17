@@ -13,6 +13,7 @@
 #![doc = concat!("evocc-chir v", env!("CARGO_PKG_VERSION"))]
 
 pub mod initializer;
+pub mod integer;
 pub mod semantic;
 
 pub use initializer::{
