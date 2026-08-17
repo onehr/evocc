@@ -210,8 +210,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn merge_span(&self, start: SourceSpan, end: SourceSpan) -> SourceSpan {
+        // A SourceSpan is a range within exactly one source file. Most parser
+        // composites join tokens from that same file, so preserve the token
+        // origin instead of replacing it with the parser's main-file ID.
+        //
+        // Macro expansion can eventually place endpoints from different
+        // files in one syntactic node. Until CHIR has an explicit expansion
+        // provenance model, fail closed to the start token as the node's
+        // primary origin. Combining offsets from different files would create
+        // a range that is valid in neither source.
+        if start.file != end.file {
+            return start;
+        }
         SourceSpan::new(
-            self.file,
+            start.file,
             start.byte_start,
             end.byte_end,
             start.line_start,
@@ -1948,6 +1960,24 @@ mod tests {
         assert!(
             unit.is_empty(),
             "a rejected expression must not survive in reachable C-HIR: {unit:?}"
+        );
+    }
+
+    #[test]
+    fn span_composition_never_mixes_file_coordinate_systems() {
+        let parser = Parser::new(Vec::new(), FileId::new(99), "");
+        let header_start = SourceSpan::new(FileId::new(701), 4, 9, 2, 3);
+        let header_end = SourceSpan::new(FileId::new(701), 20, 24, 3, 7);
+        assert_eq!(
+            parser.merge_span(header_start, header_end),
+            SourceSpan::new(FileId::new(701), 4, 24, 2, 3)
+        );
+
+        let main_end = SourceSpan::new(FileId::new(702), 40, 44, 5, 2);
+        assert_eq!(
+            parser.merge_span(header_start, main_end),
+            header_start,
+            "cross-file endpoints must select the start token as primary origin"
         );
     }
 }
