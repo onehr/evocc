@@ -1,8 +1,8 @@
 //! evocc: equality-native, self-contained C compiler.
 //!
-//! The driver supports preprocessing, C-HIR validation, and the bounded Day-5
-//! scalar C-HIR interpreter. Later optimization and code-generation stages
-//! remain NOT_IMPLEMENTED.
+//! The driver supports preprocessing, C-HIR validation, both scalar Day-6
+//! interpreters, and canonical EvoIR text emission. Later optimization and
+//! code-generation stages remain NOT_IMPLEMENTED.
 //!
 //! The shell delegates real work to the crates built in Day 2-3:
 //!   -E           → evocc-lex → evocc-cpp → token text output
@@ -22,14 +22,29 @@ use evocc_chir::{
 };
 use evocc_common::{Arena, FileId};
 use evocc_cpp::Preprocessor;
+use evocc_evoir::{
+    interpret_module, render_module, InterpreterLimits as EvoIrLimits, Module, RuntimeValue,
+};
 use evocc_lex::{Lexer, TokenKind};
+use evocc_lower::lower_unit;
 use evocc_parser::Parser;
+use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum DriverMode {
     Preprocess,
     ParseOnly,
     InterpretCHir,
+    EmitEvoIr,
+    InterpretEvoIr,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ParsedAction {
+    Validate,
+    InterpretCHir,
+    EmitEvoIr,
+    InterpretEvoIr,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -61,6 +76,7 @@ const CAPABILITIES: &[&str] = &[
     "interpret-c-hir",
     "c-hir-emit",
     "evoir-emit",
+    "evoir-interpret",
     "eqsat-optimize",
 ];
 
@@ -70,7 +86,15 @@ const FLAG_MAP: &[(&str, &str)] = &[
     ("--interpret-c-hir", "interpret-c-hir"),
     ("--emit=c-hir", "c-hir-emit"),
     ("--emit=evoir", "evoir-emit"),
+    ("--interpret-evoir", "evoir-interpret"),
     ("-Oeq", "eqsat-optimize"),
+];
+
+const IMPLEMENTED_EVOIR_PROBES: &[&str] = &[
+    "evoir-emit",
+    "evoir-interpret",
+    "--emit=evoir",
+    "--interpret-evoir",
 ];
 
 const NOT_IMPLEMENTED_EXIT: u8 = 69;
@@ -92,19 +116,30 @@ fn main() -> ExitCode {
         eprintln!("       evocc -E [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --parse-only [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --interpret-c-hir [--target={SUPPORTED_TARGET}] <file>");
+        eprintln!("       evocc --emit=evoir [--target={SUPPORTED_TARGET}] <file>");
+        eprintln!("       evocc --interpret-evoir [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("evocc: unrecognized invocation is NOT_IMPLEMENTED");
         return ExitCode::from(NOT_IMPLEMENTED_EXIT);
     }
 
     if is_probe(&args) {
         let probe_args: &[String] = &args[..args.len() - 1];
-        for (flag, capability) in FLAG_MAP {
-            if probe_args.iter().any(|a| a == flag || a.starts_with(flag)) {
+        if probe_args.len() == 1 {
+            let probe = probe_args[0].as_str();
+            if IMPLEMENTED_EVOIR_PROBES.contains(&probe) {
+                return ExitCode::SUCCESS;
+            }
+            if CAPABILITIES.contains(&probe) {
+                return not_implemented(probe);
+            }
+            if let Some((_, capability)) = FLAG_MAP.iter().find(|(flag, _)| *flag == probe) {
                 return not_implemented(capability);
             }
         }
-        if probe_args.len() == 1 && CAPABILITIES.contains(&probe_args[0].as_str()) {
-            return not_implemented(&probe_args[0]);
+        for (flag, capability) in FLAG_MAP {
+            if probe_args.iter().any(|argument| argument == flag) {
+                return not_implemented(capability);
+            }
         }
         // Unknown probe: fail closed.
         eprintln!("evocc: unrecognized probe invocation is NOT_IMPLEMENTED: {probe_args:?}");
@@ -120,8 +155,10 @@ fn main() -> ExitCode {
     };
     match options.mode {
         DriverMode::Preprocess => run_preprocess(&options),
-        DriverMode::ParseOnly => run_parse(&options),
-        DriverMode::InterpretCHir => run_interpret(&options),
+        DriverMode::ParseOnly => run_parsed(&options, ParsedAction::Validate),
+        DriverMode::InterpretCHir => run_parsed(&options, ParsedAction::InterpretCHir),
+        DriverMode::EmitEvoIr => run_parsed(&options, ParsedAction::EmitEvoIr),
+        DriverMode::InterpretEvoIr => run_parsed(&options, ParsedAction::InterpretEvoIr),
     }
 }
 
@@ -142,6 +179,8 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "-E" => set_mode(&mut mode, DriverMode::Preprocess)?,
             "--parse-only" => set_mode(&mut mode, DriverMode::ParseOnly)?,
             "--interpret-c-hir" => set_mode(&mut mode, DriverMode::InterpretCHir)?,
+            "--emit=evoir" => set_mode(&mut mode, DriverMode::EmitEvoIr)?,
+            "--interpret-evoir" => set_mode(&mut mode, DriverMode::InterpretEvoIr)?,
             "--target" => {
                 index += 1;
                 let value = args
@@ -206,7 +245,8 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
 
     Ok(DriverOptions {
         mode: mode.ok_or_else(|| {
-            "exactly one of -E, --parse-only, or --interpret-c-hir is required".to_string()
+            "exactly one of -E, --parse-only, --interpret-c-hir, --emit=evoir, or --interpret-evoir is required"
+                .to_string()
         })?,
         target: target.unwrap_or(DriverTarget::Aarch64UnknownLinuxGnu),
         input: input.ok_or_else(|| "an input file is required".to_string())?,
@@ -236,7 +276,10 @@ fn set_target(slot: &mut Option<DriverTarget>, target: DriverTarget) -> Result<(
 
 fn set_mode(slot: &mut Option<DriverMode>, mode: DriverMode) -> Result<(), String> {
     if slot.replace(mode).is_some() {
-        return Err("exactly one of -E or --parse-only is required".into());
+        return Err(
+            "exactly one of -E, --parse-only, --interpret-c-hir, --emit=evoir, or --interpret-evoir is required"
+                .into(),
+        );
     }
     Ok(())
 }
@@ -430,15 +473,7 @@ fn can_concatenate(group: &[(TokenKind, String)], kind: TokenKind, text: &str) -
     actual == expected
 }
 
-fn run_parse(options: &DriverOptions) -> ExitCode {
-    run_parsed(options, false)
-}
-
-fn run_interpret(options: &DriverOptions) -> ExitCode {
-    run_parsed(options, true)
-}
-
-fn run_parsed(options: &DriverOptions, interpret: bool) -> ExitCode {
+fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     let (src, tokens) = match read_and_lex(&options.input) {
         Ok(value) => value,
         Err(code) => return code,
@@ -487,10 +522,46 @@ fn run_parsed(options: &DriverOptions, interpret: bool) -> ExitCode {
         return ExitCode::from(1);
     }
 
-    if !interpret {
-        return ExitCode::SUCCESS;
+    match action {
+        ParsedAction::Validate => ExitCode::SUCCESS,
+        ParsedAction::InterpretCHir => interpret_chir(options, &pp, &unit),
+        ParsedAction::EmitEvoIr | ParsedAction::InterpretEvoIr => {
+            let target = match options.target {
+                DriverTarget::Aarch64UnknownLinuxGnu => {
+                    TargetDataLayout::aarch64_unknown_linux_gnu()
+                }
+            };
+            let module = match lower_unit(&unit, &target) {
+                Ok(module) => module,
+                Err(error) => {
+                    let span = error.span();
+                    emit_error(
+                        span.and_then(|span| pp.source_path(span.file))
+                            .unwrap_or(options.input.as_str()),
+                        span.map_or(1, |span| span.line_start.max(1)),
+                        span.map_or(1, |span| span.column_start.max(1)),
+                        error.code(),
+                        &error.message(),
+                    );
+                    return ExitCode::from(1);
+                }
+            };
+            match action {
+                ParsedAction::EmitEvoIr => emit_evoir(&module),
+                ParsedAction::InterpretEvoIr => interpret_evoir(options, &module),
+                ParsedAction::Validate | ParsedAction::InterpretCHir => {
+                    unreachable!("matched EvoIR action")
+                }
+            }
+        }
     }
+}
 
+fn interpret_chir(
+    options: &DriverOptions,
+    pp: &Preprocessor,
+    unit: &evocc_chir::CHirUnit<'_>,
+) -> ExitCode {
     let Some(entry) = unit.iter().find_map(|declaration| match declaration {
         CHirDecl::Function(function)
             if function.body.is_some() && function.name.spelling == "main" =>
@@ -509,7 +580,7 @@ fn run_parsed(options: &DriverOptions, interpret: bool) -> ExitCode {
         return ExitCode::from(1);
     };
 
-    let outcome = match interpret_scalar_function(&unit, entry, InterpreterLimits::default()) {
+    let outcome = match interpret_scalar_function(unit, entry, InterpreterLimits::default()) {
         Ok(outcome) => outcome,
         Err(error) => {
             let span = error.span();
@@ -552,6 +623,118 @@ fn run_parsed(options: &DriverOptions, interpret: bool) -> ExitCode {
         return ExitCode::from(1);
     }
     ExitCode::SUCCESS
+}
+
+fn emit_evoir(module: &Module) -> ExitCode {
+    let mut stdout = std::io::stdout().lock();
+    if writeln!(stdout, "{}", render_module(module)).is_err() {
+        return ExitCode::from(1);
+    }
+    ExitCode::SUCCESS
+}
+
+fn interpret_evoir(options: &DriverOptions, module: &Module) -> ExitCode {
+    let (arguments, declared_results) = match evoir_main_contract(module) {
+        Ok(contract) => contract,
+        Err(message) => {
+            emit_error(&options.input, 1, 1, "E3007", message);
+            return ExitCode::from(1);
+        }
+    };
+    let outcome = match interpret_module(module, "main", &arguments, EvoIrLimits::new(100_000)) {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            emit_error(&options.input, 1, 1, error.code(), &error.message());
+            return ExitCode::from(1);
+        }
+    };
+    if outcome.return_values.len() != declared_results.len()
+        || outcome
+            .return_values
+            .iter()
+            .zip(&declared_results)
+            .any(|(value, declared)| &value.ty != declared)
+    {
+        emit_error(
+            &options.input,
+            1,
+            1,
+            "E3007",
+            "evoir-main-result-does-not-match-declaration",
+        );
+        return ExitCode::from(1);
+    }
+    let Some(value) = outcome.return_values.first() else {
+        emit_error(
+            &options.input,
+            1,
+            1,
+            "E3007",
+            "evoir-main-returned-no-value",
+        );
+        return ExitCode::from(1);
+    };
+    let mathematical = match signed_scalar(value) {
+        Ok(value) => value,
+        Err(message) => {
+            emit_error(&options.input, 1, 1, "E3007", message);
+            return ExitCode::from(1);
+        }
+    };
+    let mut stdout = std::io::stdout().lock();
+    if writeln!(stdout, "{mathematical}").is_err() {
+        return ExitCode::from(1);
+    }
+    ExitCode::SUCCESS
+}
+
+fn evoir_main_contract(
+    module: &Module,
+) -> Result<(Vec<RuntimeValue>, Vec<EvoIRType>), &'static str> {
+    let main = module
+        .functions
+        .iter()
+        .find(|function| function.name == "main")
+        .ok_or("evoir-entry-function-not-found: main")?;
+    let arguments = match main.params.as_slice() {
+        [] => Vec::new(),
+        [memory, world]
+            if memory.ty == EvoIRType::Mem(Region::All) && world.ty == EvoIRType::World =>
+        {
+            vec![
+                RuntimeValue::new(memory.ty.clone(), 0),
+                RuntimeValue::new(world.ty.clone(), 0),
+            ]
+        }
+        _ => return Err("evoir-main-parameters-are-not-canonical"),
+    };
+    let has_effect_results = match main.ret_tys.as_slice() {
+        [EvoIRType::Bits(1..=64)] => false,
+        [EvoIRType::Bits(1..=64), EvoIRType::Mem(Region::All), EvoIRType::World] => true,
+        _ => return Err("evoir-main-results-are-not-canonical"),
+    };
+    if has_effect_results != !arguments.is_empty() {
+        return Err("evoir-main-effect-interface-is-inconsistent");
+    }
+    Ok((arguments, main.ret_tys.clone()))
+}
+
+fn signed_scalar(value: &RuntimeValue) -> Result<i128, &'static str> {
+    let EvoIRType::Bits(width @ 1..=64) = value.ty else {
+        return Err("evoir-main-return-type-is-not-scalar-integer");
+    };
+    let mask = if width == 64 {
+        u64::MAX
+    } else {
+        (1_u64 << width) - 1
+    };
+    let raw = value.raw_bits & mask;
+    let sign_bit = 1_u64 << (width - 1);
+    Ok(if raw & sign_bit == 0 {
+        i128::from(raw)
+    } else {
+        i128::from(raw) - (1_i128 << width)
+    })
 }
 
 fn emit_error(file: &str, line: u32, column: u32, code: &str, message: &str) {

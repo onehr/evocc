@@ -275,7 +275,7 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
     br ^b3(%v8, %v9)
 
 ^b3(%v10: bits<32>, %v11: bits<1>):
-    %v12 = zext %v11 to bits<32>
+    %v12 = zext.bits<32> %v11
     %v13 = const.bits<32> 1
     %v14 = const.bits<32> 0
     %v15 = icmp.ne %v13, %v14
@@ -292,7 +292,7 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
     br ^b6(%v21, %v22, %v23)
 
 ^b6(%v24: bits<32>, %v25: bits<32>, %v26: bits<1>):
-    %v27 = zext %v26 to bits<32>
+    %v27 = zext.bits<32> %v26
     %v28 = const.bits<32> 100
     %v29 = signed_mul_defined %v24, %v28
     ub.assume.signed_overflow %v29
@@ -781,7 +781,7 @@ fn render_inst(inst: &Inst) -> String {
             branch_target(*false_target, false_args)
         ),
         Inst::Ret(returned) => format!("ret {}", values(returned)),
-        Inst::Trap(reason) => format!("trap.{}", reason.message()),
+        Inst::Trap(reason) => format!("trap.{}", reason.mnemonic()),
         Inst::Load {
             result,
             address,
@@ -843,22 +843,22 @@ fn render_inst(inst: &Inst) -> String {
             )
         }
         Inst::SExt(result, source, ty) => format!(
-            "{} = sext {} to {}",
+            "{} = sext.{} {}",
             value(result),
-            value(source),
-            render_type(ty)
+            render_type(ty),
+            value(source)
         ),
         Inst::ZExt(result, source, ty) => format!(
-            "{} = zext {} to {}",
+            "{} = zext.{} {}",
             value(result),
-            value(source),
-            render_type(ty)
+            render_type(ty),
+            value(source)
         ),
         Inst::Trunc(result, source, ty) => format!(
-            "{} = trunc {} to {}",
+            "{} = trunc.{} {}",
             value(result),
-            value(source),
-            render_type(ty)
+            render_type(ty),
+            value(source)
         ),
     }
 }
@@ -1032,10 +1032,10 @@ fn parse_golden_blocks(function: &str) -> Result<Vec<GoldenBlock<'_>>, String> {
 
 fn inferred_definition_type(rhs: &str) -> Option<String> {
     let operation = rhs.split_whitespace().next()?;
-    if matches!(operation, "sext" | "zext" | "trunc") {
-        return rhs
-            .rsplit_once(" to ")
-            .map(|(_, target)| target.trim().to_owned());
+    for prefix in ["sext.", "zext.", "trunc."] {
+        if let Some(ty) = operation.strip_prefix(prefix) {
+            return Some(ty.to_owned());
+        }
     }
     if let Some(ty) = operation.strip_prefix("const.") {
         return Some(ty.to_owned());
@@ -1787,6 +1787,11 @@ fn run_case(case: &Case) -> Result<CaseObservation, String> {
     let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
         .map_err(|error| error.to_string())?;
     let functions = module.functions.clone();
+    let actual_evoir = evocc_evoir::render_module(&module);
+    let independent_render = render_unit(&functions);
+    if independent_render != actual_evoir {
+        return Err("production and independent EvoIR renderers disagree".to_owned());
+    }
     let validation = evocc_evoir::validate_module(&module);
     let execution = observe_evoir(&functions);
     let (evoir, evoir_steps) = match execution {
@@ -1798,7 +1803,7 @@ fn run_case(case: &Case) -> Result<CaseObservation, String> {
         evoir,
         evoir_steps,
         validation,
-        actual_evoir: render_unit(&functions),
+        actual_evoir,
     })
 }
 

@@ -9,8 +9,11 @@ dependencies = [
  "evocc-chir",
  "evocc-common",
  "evocc-cpp",
+ "evocc-evoir",
  "evocc-lex",
+ "evocc-lower",
  "evocc-parser",
+ "evocc-types",
 ]
 
 [[package]]

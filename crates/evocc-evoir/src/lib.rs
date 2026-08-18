@@ -8,6 +8,10 @@ use std::fmt;
 
 use evocc_types::{EvoIRType, Region};
 
+mod text;
+
+pub use text::render_module;
+
 // ---------------------------------------------------------------------------
 // Core data types
 // ---------------------------------------------------------------------------
@@ -131,6 +135,14 @@ impl TrapReason {
     pub const fn message(self) -> &'static str {
         match self {
             Self::ScalarFunctionFellOffEnd => "scalar-function-fell-off-end",
+        }
+    }
+
+    /// Stable suffix used by the Section 9 textual syntax.
+    #[must_use]
+    pub const fn mnemonic(self) -> &'static str {
+        match self {
+            Self::ScalarFunctionFellOffEnd => "scalar_function_fell_off_end",
         }
     }
 }

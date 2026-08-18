@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.5** | **Authoritative reference** | **2026-08-18**
+**Revision 1.6** | **Authoritative reference** | **2026-08-18**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1015,7 +1015,7 @@ The EvoIR textual syntax is a human-readable format used in:
 
 - Test fixtures
 - `evo-run` interpreter input
-- `--emit-evoir` compiler output
+- `--emit=evoir` compiler output
 - Debugging and inspection
 
 ```text
@@ -1068,8 +1068,8 @@ func @sum(%p: ptr<generic>, %n: bits<64>, %m: mem<all>, %w: world)
     br ^loop(%p_entry, %n_entry, %zero, %acc, %m_entry, %w_entry)
 
 ^loop(%p_loop: ptr<generic>, %n_loop: bits<64>, %i_loop: bits<64>, %acc_loop: bits<32>, %m_loop: mem<all>, %w_loop: world):
-    %done = icmp.uge %i_loop, %n_loop
-    cond_br %done, ^exit(%acc_loop, %m_loop, %w_loop), ^body(%p_loop, %n_loop, %i_loop, %acc_loop, %m_loop, %w_loop)
+    %more = icmp.ult %i_loop, %n_loop
+    cond_br %more, ^body(%p_loop, %n_loop, %i_loop, %acc_loop, %m_loop, %w_loop), ^exit(%acc_loop, %m_loop, %w_loop)
 
 ^body(%p_body: ptr<generic>, %n_body: bits<64>, %i_body: bits<64>, %acc_body: bits<32>, %m_body: mem<all>, %w_body: world):
     %addr = ptr.offset %p_body, %i_body
@@ -1428,6 +1428,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.6 | 2026-08-18 | Makes `--emit=evoir` the canonical driver spelling, binds it to the exhaustive Section 9 renderer, names the first stored block `^entry` independently of numeric block identity, and corrects the complete example to use the supported `icmp.ult` comparison. |
 | 1.5 | 2026-08-18 | Defines transportable Day 6 scalar `uninitialized.bits<N>` poison with consume-time `E3001`, distinct from Day 7 memory initializedness; adds the zero-operand `trap.scalar_function_fell_off_end` terminator and exact `E3007` behavior without placeholder returns or effect tokens. |
 | 1.4 | 2026-08-18 | Requires every module-level call/effect participant, including callers, to use the canonical trailing `mem<R>, world` parameter and return interface; makes the UB reason mandatory semantic metadata; assigns the five Day 6 integer reasons exactly the C-HIR `E3002` through `E3006` diagnostics; and freezes executable remainder, shift, bitwise, and non-conflating div/rem/shift predicate shapes, including independently promoted shift-amount widths and signedness. |
 | 1.3 | 2026-08-18 | Adds module validation and explicit heap-backed call-frame execution for direct calls and recursion under one shared step budget; records typed signed-overflow `ub.assume` failure; and names the concrete target data-layout service used by current lowering. |

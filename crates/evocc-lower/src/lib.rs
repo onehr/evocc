@@ -99,6 +99,39 @@ impl fmt::Display for LowerError {
 
 impl std::error::Error for LowerError {}
 
+impl LowerError {
+    /// Stable diagnostic code for the C-HIR to EvoIR lowering boundary.
+    #[must_use]
+    pub const fn code(&self) -> &'static str {
+        "E3101"
+    }
+
+    /// Source location associated with a source-derived lowering failure.
+    ///
+    /// Generated-SSA validation failures have no single C source location and
+    /// are therefore reported at the driver's stable `1:1` fallback.
+    #[must_use]
+    pub const fn span(&self) -> Option<SourceSpan> {
+        match self {
+            Self::UnknownSymbol { span, .. }
+            | Self::UnknownType { span, .. }
+            | Self::UnsupportedType { span, .. }
+            | Self::UnsupportedExpression { span, .. }
+            | Self::UnsupportedStatement { span, .. }
+            | Self::MalformedFunction { span, .. }
+            | Self::InvalidControlFlow { span, .. }
+            | Self::Layout { span, .. } => Some(*span),
+            Self::InvalidGeneratedSsa { .. } => None,
+        }
+    }
+
+    /// Stable driver-facing diagnostic message.
+    #[must_use]
+    pub fn message(&self) -> String {
+        format!("evoir-lowering-failed: {self}")
+    }
+}
+
 #[derive(Debug, Clone)]
 struct FunctionInfo {
     name: String,
