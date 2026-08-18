@@ -1,0 +1,227 @@
+{
+  "schemaVersion": 1,
+  "contractId": "c30.day6.acceptance-receipt.v1",
+  "status": "ACCEPTED",
+  "recordedAt": "2026-08-18",
+  "resolution": "The first commit whose tree contains this receipt byte-for-byte is the Day 6 acceptance freeze commit. The implementation commit and tree below are the exact bytes replayed in two independent --no-local clones before this receipt was written.",
+  "baseline": {
+    "day5ClosingCommit": "963a56775fc933382d199d6825c1844d3e5426ba",
+    "phase0Contract": {
+      "path": "tests/contracts/day6-phase0-baseline.json",
+      "sha256": "81a556eafdfb6ddc4ca29f4cd0996534e1cf9fe6ecc508642053c853467de703"
+    }
+  },
+  "day6CommitChain": [
+    {
+      "gate": "tests-only-equivalence-red",
+      "commit": "52cfceb5e7d42b1802a3b500e6552a1324821ca6"
+    },
+    {
+      "gate": "block-argument-ssa-core",
+      "commit": "556052e0e98f5c3b4fb334a6591290fb59a52c5a"
+    },
+    {
+      "gate": "semantic-lowering-and-two-authorities",
+      "commit": "2f55c15a0602cde275a8ccb23ce6f928f2c8e9e4"
+    },
+    {
+      "gate": "differential-corpus",
+      "commit": "9c2d3b9203bbc15a2eb8d0dcb0cffa96f48bfe20"
+    },
+    {
+      "gate": "driver-and-textual-evoir",
+      "commit": "77b5a82e600d244ae25cdd704b8efdae30303682",
+      "tree": "43f051a2756cc11bfc762f217bd446226bef48b6"
+    }
+  ],
+  "dashboard": {
+    "kernel": {
+      "preprocessedTranslationUnits": {
+        "passed": 0,
+        "total": 16,
+        "unchangedFromPhase0": true
+      },
+      "parsedTranslationUnits": {
+        "passedBothOracleInputs": 1,
+        "total": 16,
+        "unchangedFromPhase0": true
+      },
+      "compiledTranslationUnits": {
+        "passed": 0,
+        "total": 16,
+        "status": "NOT_IMPLEMENTED",
+        "unchangedFromPhase0": true
+      }
+    },
+    "differentialCleanExecution": {
+      "day5AuthoritativeDefined": {
+        "passed": 256,
+        "total": 256
+      },
+      "day5AuthoritativeTypedInvalid": {
+        "passed": 64,
+        "total": 64
+      },
+      "day6GeneratedCallRecursionLoop": {
+        "passed": 256,
+        "total": 256
+      },
+      "day6DriverLoopCall": {
+        "passed": 1,
+        "total": 1,
+        "comparison": "C-HIR and EvoIR CLI outputs are byte-identical"
+      },
+      "aggregate": {
+        "passed": 577,
+        "total": 577,
+        "mismatches": 0,
+        "skips": 0
+      }
+    },
+    "evoirValidation": {
+      "g3Programs": {
+        "passed": 576,
+        "total": 576
+      },
+      "g4ByteUniqueDriverProgram": {
+        "passed": 1,
+        "total": 1
+      },
+      "aggregate": {
+        "passed": 577,
+        "total": 577,
+        "rate": "100%"
+      }
+    },
+    "driverCapabilities": {
+      "implemented": [
+        "evoir-emit",
+        "evoir-interpret"
+      ],
+      "implementedFlagAliases": [
+        "--emit=evoir",
+        "--interpret-evoir"
+      ],
+      "broadEvoirProbe": {
+        "exitCode": 69,
+        "status": "NOT_IMPLEMENTED"
+      }
+    }
+  },
+  "artifactManifest": [
+    {
+      "path": "crates/evocc-lower/tests/day6_g3_differential.rs",
+      "sha256": "ab1b0505addfe2d6fabf8725a31186decc4255e0922585c10c1f516d58f67cde"
+    },
+    {
+      "path": "crates/evocc-evoir/src/lib.rs",
+      "sha256": "826ec607b4d309f947dfe0a228da367b3a24a5bc6d345f969959b13785bd0a06"
+    },
+    {
+      "path": "crates/evocc-evoir/src/text.rs",
+      "sha256": "2e90b84478359aec6809ae5c800719d8b1815134c0fc413e5e8e06c536058352"
+    },
+    {
+      "path": "crates/evocc-lower/src/lib.rs",
+      "sha256": "2e611cb404b1401512886aa278866d9494c8ebd680f6ca3ccd35c27617c86016"
+    },
+    {
+      "path": "crates/evocc/src/main.rs",
+      "sha256": "a36374673b10d49c38e67825f4996f1d276bcde8ff978a68d9802100233ff74d"
+    },
+    {
+      "path": "crates/evocc/tests/day6_evoir_cli_red.rs",
+      "sha256": "468a1d861111b0d8fd2d2f0050bf50f64174252461e0c4a5c1a49edbf0e2c0cb"
+    },
+    {
+      "path": "docs/evoir-spec.md",
+      "sha256": "0b646599064fccbc9bf5055b9a9a103f50cbf1fc25ef0144bb9eb95d36cbf787"
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "8399915b90f0223d3fe668e19b66c09848ea4836a72189ae14bceac7b527cd10"
+    }
+  ],
+  "measuredGates": [
+    {
+      "command": "cargo test --workspace --all-targets --locked --offline",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo clippy --workspace --all-targets --locked --offline -- -D warnings",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "result": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "isolatedCloneReplays": [
+    {
+      "id": "clone-a",
+      "creation": "git clone --no-local",
+      "head": "77b5a82e600d244ae25cdd704b8efdae30303682",
+      "tree": "43f051a2756cc11bfc762f217bd446226bef48b6",
+      "workspaceTests": "PASS",
+      "clippyDenyWarnings": "PASS",
+      "formatCheck": "PASS",
+      "diffCheck": "PASS",
+      "preciseEvoirProbesExit": 0,
+      "broadEvoirProbeExit": 69,
+      "workingTreeClean": true
+    },
+    {
+      "id": "clone-b",
+      "creation": "git clone --no-local",
+      "head": "77b5a82e600d244ae25cdd704b8efdae30303682",
+      "tree": "43f051a2756cc11bfc762f217bd446226bef48b6",
+      "workspaceTests": "PASS",
+      "clippyDenyWarnings": "PASS",
+      "formatCheck": "PASS",
+      "diffCheck": "PASS",
+      "preciseEvoirProbesExit": 0,
+      "broadEvoirProbeExit": 69,
+      "workingTreeClean": true
+    }
+  ],
+  "independentReview": {
+    "driver": {
+      "critical": 0,
+      "high": 0,
+      "faultsRejected": [
+        "ordinary main parameter injected as zero",
+        "void main replaced by placeholder zero result",
+        "EvoIR step budget replaced by an unbounded budget"
+      ]
+    },
+    "textRenderer": {
+      "critical": 0,
+      "high": 0,
+      "faultsRejected": [
+        "store mnemonic corruption",
+        "signed and unsigned shift-predicate mnemonic corruption",
+        "UB reason mnemonic corruption",
+        "entry block inferred from numeric ID rather than block order"
+      ]
+    }
+  },
+  "strictExclusionsPreserved": [
+    "Day 7 memory, pointer, provenance, heap, and global-object semantics",
+    "Day 8 persistent EClassId mapping and e-graph integration",
+    "Day 9 attributes, typeof, and statement expressions",
+    "EvoMIR, backend, ABI lowering, Kbuild, and unboxed harness expansion"
+  ],
+  "day5Debt": {
+    "status": "OPEN",
+    "contract": {
+      "path": "tests/contracts/day5-closing-amendment.json",
+      "sha256": "a7116f1e7b2f4e13877f2344a9d9f1e295f38a58734ecff6c08bdb94582a9a33"
+    },
+    "day9EntryBlocked": true,
+    "excludedUntrackedPath": "tests/acceptance/day5-kernel-reductions-observer-selftest.py"
+  }
+}
