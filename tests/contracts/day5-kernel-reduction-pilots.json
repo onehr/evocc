@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 1,
+  "contractId": "c30.day5.kernel-reduction-pilots.v1",
+  "contractState": "locked",
+  "measurementStatus": "NOT_MEASURED",
+  "purpose": "Freeze the exact pre-execution authority for three representative real Day-5 kernel reduction pilots. This contract contains no measured outcome, receipt hash, oracle result, or expected diagnostic output and must never be result-shaped after execution.",
+  "parentAuthority": {
+    "policyId": "c30.day5.kernel-reduction-policy.v1",
+    "policyPath": "tests/contracts/day5-kernel-reduction-policy.json",
+    "policyBytes": 29127,
+    "policySha256": "ce4687d43a75c5cf22e94ae983304a4b88544a517c27e241ae51e34b27398d83",
+    "sourceEvidenceRunId": "20260817T225959Z-57627",
+    "sourceFailures": 46,
+    "obligationManifestSha256": "39af1ba905884d739789c996ede7b24ba08c07d3be39b77a643363334d9ec2a1"
+  },
+  "pilots": [
+    {
+      "failureId": "4835fdc46c9b283c1ce2bc1f5070c92874e2c7c506699555e8797689a83faaff",
+      "failureSignatureSha256": "a610a167024289392b59bcadc9143c4ad52c79320bc7d66f1f8d759317ba0bfa",
+      "sourceRecordSha256": "a45092b3f5893c33655fe159b934c5a0cf90597f8698721baedd8f1c5fc40600",
+      "lane": "clang-preprocessed-parser",
+      "tuId": "kernel-power-console",
+      "sourcePath": "kernel/power/console.c",
+      "phase": "oracle-preprocessed-parse",
+      "classification": "parse",
+      "diagnostic": {
+        "code": "E1002",
+        "message": "expected-token: ;",
+        "sourcePath": "include/uapi/linux/types.h",
+        "sourceSpan": {
+          "line": 17,
+          "column": null
+        },
+        "emittedSpan": {
+          "line": 199,
+          "column": 36
+        }
+      },
+      "candidateSelector": {
+        "kind": "preprocessed-parser",
+        "seedArtifact": "artifacts.parserInput",
+        "seedLines": [
+          199
+        ]
+      },
+      "minimalityClaim": "preprocessed-line-1-minimal-v1",
+      "atomCount": 1
+    },
+    {
+      "failureId": "869b322a04168ffbbac452763bf0081b20c3b69bdea7ffd6fc27bb65c5ff4b5f",
+      "failureSignatureSha256": "133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad",
+      "sourceRecordSha256": "29002169f253de0f785db12015d1bd21e97fe0f813029046bf37d7c7488b3303",
+      "lane": "gcc-preprocessed-parser",
+      "tuId": "init-do-mounts",
+      "sourcePath": "init/do_mounts.c",
+      "phase": "oracle-preprocessed-parse",
+      "classification": "parse",
+      "diagnostic": {
+        "code": "E1001",
+        "message": "expected-declaration",
+        "sourcePath": "include/linux/compiler.h",
+        "sourceSpan": {
+          "line": 265,
+          "column": null
+        },
+        "emittedSpan": {
+          "line": 47,
+          "column": 15
+        }
+      },
+      "candidateSelector": {
+        "kind": "preprocessed-parser",
+        "seedArtifact": "artifacts.parserInput",
+        "seedLines": [
+          47,
+          48,
+          50
+        ]
+      },
+      "minimalityClaim": "preprocessed-line-1-minimal-v1",
+      "atomCount": 3
+    },
+    {
+      "failureId": "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+      "failureSignatureSha256": "04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5",
+      "sourceRecordSha256": "31b1ecab1fcddc68cc9b023f452491a75bf6f92bb6b256506798d7f4b0b82698",
+      "lane": "evocpp-raw",
+      "tuId": "lib-bitrev",
+      "sourcePath": "lib/bitrev.c",
+      "phase": "raw-source-preprocess",
+      "classification": "preprocess",
+      "diagnostic": {
+        "code": "E0104",
+        "message": "error-directive: \"Unknown compiler\"",
+        "sourcePath": "include/linux/compiler_types.h",
+        "sourceSpan": {
+          "line": 189,
+          "column": 1
+        },
+        "emittedSpan": {
+          "line": 189,
+          "column": 1
+        }
+      },
+      "candidateSelector": {
+        "kind": "raw-closure",
+        "seedFamilies": {
+          "subject": "gcc",
+          "gcc": "gcc",
+          "clang": "clang"
+        },
+        "sharedSourceFiles": [
+          {
+            "logicalPath": "source/include/linux/compiler-version.h",
+            "seedLines": [
+              3,
+              5
+            ]
+          },
+          {
+            "logicalPath": "source/include/linux/compiler_types.h",
+            "seedLines": [
+              183,
+              185,
+              188,
+              189,
+              190
+            ]
+          },
+          {
+            "logicalPath": "source/include/linux/kconfig.h",
+            "seedLines": [
+              2,
+              75
+            ]
+          },
+          {
+            "logicalPath": "source/lib/bitrev.c",
+            "seedLines": [
+              2,
+              47
+            ]
+          }
+        ],
+        "outputFiles": []
+      },
+      "minimalityClaim": "raw-closure-file-and-line-1-minimal-v1",
+      "atomCount": 15
+    }
+  ],
+  "minimalityAuthority": {
+    "orderedAtoms": [
+      {
+        "failureId": "4835fdc46c9b283c1ce2bc1f5070c92874e2c7c506699555e8797689a83faaff",
+        "atomId": "line:000001:seed:000199:60666f0e531afd342f9d932371efbf56bf3960a153c0a330d1a6410712135d43"
+      },
+      {
+        "failureId": "869b322a04168ffbbac452763bf0081b20c3b69bdea7ffd6fc27bb65c5ff4b5f",
+        "atomId": "line:000001:seed:000047:1dc72afbd454b82ebde925fdc868d0fa365ab5eb72747ba8a943e7c4596f814a"
+      },
+      {
+        "failureId": "869b322a04168ffbbac452763bf0081b20c3b69bdea7ffd6fc27bb65c5ff4b5f",
+        "atomId": "line:000002:seed:000048:a6fb08fda1acb957b6116bd37811a1fe41a01611c0631edbf786d6889a27a55c"
+      },
+      {
+        "failureId": "869b322a04168ffbbac452763bf0081b20c3b69bdea7ffd6fc27bb65c5ff4b5f",
+        "atomId": "line:000003:seed:000050:412ca345ccf75bf9c0806bce695be8de808b79984251a7a54d202cf6101dd451"
+      },
+      {
+        "failureId": "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+        "atomId": "file:source/include/linux/compiler-version.h"
+      },
+      {
+        "failureId": "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+        "atomId": "file:source/include/linux/compiler_types.h"
+      },
+      {
+        "failureId": "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+        "atomId": "file:source/include/linux/kconfig.h"
+      },
+      {
+        "failureId": "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+        "atomId": "file:source/lib/bitrev.c"
+      },
+      {
+        "failureId": "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+        "atomId": "line:source/include/linux/compiler-version.h:candidate:000001:seed:000003:828e3e299f3b9d70811c16bcd5479ff53045cac93e926c6ca9dd7e03d399158e"
+      },
+      {
+        "failureId": "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+        "atomId": "line:source/include/linux/compiler-version.h:candidate:000002:seed:000005:9a349bbd1a21104f051e34b2c8a9e70cc7fbb50bc19a67781f2a140c386d9438"
+      },
+      {
+        "failureId": "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+        "atomId": "line:source/include/linux/compiler_types.h:candidate:000001:seed:000183:160ff45a7fd2f5d71175bedca609184afb2bd28d253b6b91dbb3a917d9471df4"
+      },
+      {
+        "failureId": "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+        "atomId": "line:source/include/linux/compiler_types.h:candidate:000002:seed:000185:139728a78fc015f14e2e8c874814a3b4988a0e23b992db9a0f43beb71722d21c"
+      },
+      {
+        "failureId": "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+        "atomId": "line:source/include/linux/compiler_types.h:candidate:000003:seed:000188:a95dbf91f6d6c3dc84eb44907afe37bdec7e3aa1cd0a07042249536df254415c"
+      },
+      {
+        "failureId": "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+        "atomId": "line:source/include/linux/compiler_types.h:candidate:000004:seed:000189:22be01bb72c771b529008fbbe5d19c014ecb1d382e773a0d530b692a210a6dd6"
+      },
+      {
+        "failureId": "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+        "atomId": "line:source/include/linux/compiler_types.h:candidate:000005:seed:000190:9a349bbd1a21104f051e34b2c8a9e70cc7fbb50bc19a67781f2a140c386d9438"
+      },
+      {
+        "failureId": "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+        "atomId": "line:source/include/linux/kconfig.h:candidate:000001:seed:000002:3c4ca0d5ddcebfc36b06cda436aa29781b664f5f4d029232966fc5500a97732f"
+      },
+      {
+        "failureId": "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+        "atomId": "line:source/include/linux/kconfig.h:candidate:000002:seed:000075:f82c27c30a6425b71131c1907909ff19ad29fd7d0e7da3521b4790e8b84930b7"
+      },
+      {
+        "failureId": "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+        "atomId": "line:source/lib/bitrev.c:candidate:000001:seed:000002:39b228d16b47abea253edd5ff4763d615e07183a1b97ed4407bafd31db8b0345"
+      },
+      {
+        "failureId": "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+        "atomId": "line:source/lib/bitrev.c:candidate:000002:seed:000047:761e3e106d7c80c0ee0efb1835362ca5b1084a8e225f9e47edd67cb600b82a09"
+      }
+    ],
+    "totalAtoms": 19,
+    "executionRule": "Execute every ordered single-atom deletion with one subject observation and both pinned compiler observations, including variants with an empty retained file or a missing file. Structural invalidity is an observed non-interesting result, never a skip or a reduced denominator.",
+    "interestingness": "The deletion is removable only if the exact causally anchored subject failure is reproduced and both pinned compilers accept the exact materialized deleted candidate or closure bytes."
+  },
+  "executionIsolation": {
+    "subjectReplays": 3,
+    "stablePrivatePaths": true,
+    "resetSameHomeAndTmpdirBeforeEveryReplay": true,
+    "sealedContainerInputs": "Only the exact candidate or family closure bytes may enter the sealed container. Expected results, frozen source-failure fields, receipts, goldens, and verdict fields are prohibited container inputs.",
+    "requiredCompilers": [
+      "gcc",
+      "clang"
+    ]
+  },
+  "verdictSemantics": {
+    "verifiedPilotRecords": 3,
+    "pilotAcceptanceValid": true,
+    "globalVerdict": "INCOMPLETE",
+    "acceptanceValid": false,
+    "sourceFailures": 46,
+    "remainingFailures": 43
+  },
+  "receiptAuthority": {
+    "schemaVersion": 1,
+    "creation": "atomic-no-overwrite",
+    "replayRequiresCallerExpectedReceiptSha256": true,
+    "resultAndReceiptBindPilotContractSha256": true,
+    "measuredReceiptIndex": "separate-post-run-authority"
+  }
+}
