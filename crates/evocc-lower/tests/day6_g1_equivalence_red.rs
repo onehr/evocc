@@ -292,25 +292,45 @@ fn observe_evoir(function: &Function) -> Result<i128, String> {
     let function = function.clone();
     let (sender, receiver) = mpsc::sync_channel(1);
     thread::spawn(move || {
-        let evaluated = catch_unwind(AssertUnwindSafe(|| evocc_evoir::eval_function(&function)))
-            .map_err(|_| "EvoIR interpreter panicked".to_owned());
+        let evaluated = catch_unwind(AssertUnwindSafe(|| {
+            evocc_evoir::eval_function(&function, &[], evocc_evoir::InterpreterLimits::new(100_000))
+        }))
+        .map_err(|_| "EvoIR interpreter panicked".to_owned());
         let _ = sender.send(evaluated);
     });
     let evaluated = receiver
         .recv_timeout(Duration::from_secs(1))
-        .map_err(|_| "EvoIR interpreter exceeded the one-second watchdog".to_owned())??;
-    if evaluated.len() != expected_return_count {
+        .map_err(|_| "EvoIR interpreter exceeded the one-second watchdog".to_owned())??
+        .map_err(|error| error.to_string())?;
+    if evaluated.return_values.len() != expected_return_count {
         return Err(format!(
             "EvoIR interpreter returned {} values for {} declared results",
-            evaluated.len(),
+            evaluated.return_values.len(),
             expected_return_count
         ));
     }
-    evaluated
+    let value = evaluated
+        .return_values
         .first()
-        .copied()
-        .map(i128::from)
-        .ok_or_else(|| "EvoIR interpreter returned no scalar value".to_owned())
+        .ok_or_else(|| "EvoIR interpreter returned no scalar value".to_owned())?;
+    let EvoIRType::Bits(width @ 1..=64) = value.ty else {
+        return Err(format!(
+            "EvoIR main returned non-scalar or unsupported type {:?}",
+            value.ty
+        ));
+    };
+    let mask = if width == 64 {
+        u64::MAX
+    } else {
+        (1_u64 << width) - 1
+    };
+    let raw = value.raw_bits & mask;
+    let sign_bit = 1_u64 << (width - 1);
+    Ok(if raw & sign_bit == 0 {
+        i128::from(raw)
+    } else {
+        i128::from(raw) - (1_i128 << width)
+    })
 }
 
 fn render_type(ty: &EvoIRType) -> String {
@@ -436,21 +456,65 @@ fn render_inst(inst: &Inst) -> String {
             branch_target(*false_target, false_args)
         ),
         Inst::Ret(returned) => format!("ret {}", values(returned)),
-        Inst::Load(result, address, ty) => format!(
-            "{} = load {} : {}",
+        Inst::Load {
+            result,
+            address,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+        } => format!(
+            "({}, {}, {}) = load {}, {}, {} : {}",
             value(result),
+            value(mem_out),
+            value(world_out),
+            value(mem_in),
+            value(world_in),
             value(address),
-            render_type(ty)
+            render_type(&result.ty)
         ),
-        Inst::Store(address, stored) => format!("store {}, {}", value(address), value(stored)),
+        Inst::Store {
+            address,
+            value: stored,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+        } => format!(
+            "({}, {}) = store {}, {}, {}, {}",
+            value(mem_out),
+            value(world_out),
+            value(mem_in),
+            value(world_in),
+            value(address),
+            value(stored)
+        ),
         Inst::PtrOffset(result, base, offset) => format!(
             "{} = ptr.offset {}, {}",
             value(result),
             value(base),
             value(offset)
         ),
-        Inst::Call(result, callee, args, _) => {
-            format!("{} = call @{callee}({})", value(result), values(args))
+        Inst::Call {
+            results,
+            callee,
+            args,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+        } => {
+            let mut rendered_results = results.iter().map(value).collect::<Vec<_>>();
+            rendered_results.push(value(mem_out));
+            rendered_results.push(value(world_out));
+            let mut rendered_args = args.iter().map(value).collect::<Vec<_>>();
+            rendered_args.push(value(mem_in));
+            rendered_args.push(value(world_in));
+            format!(
+                "({}) = call @{callee}({})",
+                rendered_results.join(", "),
+                rendered_args.join(", ")
+            )
         }
         Inst::SExt(result, source, ty) => format!(
             "{} = sext {} to {}",
@@ -500,7 +564,13 @@ fn render_function(function: &Function) -> String {
         let arguments = block
             .args
             .iter()
-            .map(|argument| format!("%{}: {}", argument.name, render_type(&argument.ty)))
+            .map(|argument| {
+                format!(
+                    "{}: {}",
+                    value(&argument.value),
+                    render_type(&argument.value.ty)
+                )
+            })
             .collect::<Vec<_>>()
             .join(", ");
         if arguments.is_empty() {

@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.1** | **Authoritative reference** | **2026-08-18**
+**Revision 1.2** | **Authoritative reference** | **2026-08-18**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -115,8 +115,11 @@ The safe starting point is `mem<all>`. Region splitting (to `mem<stack>` +
 ### 1.5 World Token
 
 The `world` type is a singleton. The world token `%w: world` is a global
-ordering token consumed and produced by volatile operations, atomic operations,
-and IO operations. It acts as a scheduling barrier across all regions.
+ordering token. The Day 6 instruction layout threads it through every memory
+operation and call; volatile, atomic, and IO operations give that flow an
+observable scheduling-barrier meaning across all regions. A normal memory
+operation still produces a fresh SSA identity while preserving the same
+abstract world state.
 
 ### 1.6 SIMD and Tuples
 
@@ -402,13 +405,13 @@ All comparison operations are total, pure, and never trap.
 
 `sext`: sign-extends `%a` from its current width to `N` bits. The sign bit
 (bit `W-1` where `W` is the source width) is replicated into the high `N-W`
-bits. Requires `N >= W`.
+bits. Requires `N >= W`; `N == W` is the identity conversion.
 
 `zext`: zero-extends `%a` from its current width to `N` bits. The high `N-W`
-bits are set to zero. Requires `N >= W`.
+bits are set to zero. Requires `N >= W`; `N == W` is the identity conversion.
 
 `trunc`: truncates `%a` from its current width to `N` bits. The low `N` bits
-are preserved. Requires `N <= W`.
+are preserved. Requires `N <= W`; `N == W` is the identity conversion.
 
 ### 3.7 Pointer Operations
 
@@ -432,27 +435,33 @@ when the resulting pointer is within a valid object.
 ### 3.8 Memory Operations
 
 ```
-%v  = load %m, %ptr : Type
-%m1 = store %m, %ptr, %val
+(%v, %m1, %w1) = load %m0, %w0, %ptr : Type
+(%m1, %w1) = store %m0, %w0, %ptr, %val
 ```
 
 | Field | Description |
 |---|---|
-| `%m` | `mem<R>` token defining the memory snapshot to read from or update. |
-| `%m1` | `mem<R>` token describing memory after the store. |
+| `%m0` | `mem<R>` token defining the memory snapshot to read from or update. |
+| `%w0` | `world` token before the operation. |
+| `%m1` | `mem<R>` token after the operation. A load produces a distinct SSA token for the unchanged snapshot. |
+| `%w1` | `world` token after the operation. For a non-observable access it denotes the same world state with a new SSA identity. |
 | `%ptr` | `ptr<AS>` value. |
 | `%val` | Value to store. |
 | `Type` | The type being loaded. |
 
 **Semantics.**
 
-`load(%m, %ptr)`: returns the value of type `Type` stored at address `%ptr`
-in memory state `%m`. The load is non-volatile and non-atomic. It is undefined
+`load(%m0, %w0, %ptr)`: returns the value of type `Type` stored at address
+`%ptr`, plus explicitly threaded `%m1` and `%w1` tokens. The load is
+non-volatile and non-atomic. It is undefined
 behavior if `%ptr` does not point to a valid, initialized object of at least
 the size and alignment required by `Type`.
 
-`store(%m, %ptr, %val)`: returns a new memory token `%m1` that is identical
-to `%m` except that the value at address `%ptr` has been replaced with `%val`.
+`store(%m0, %w0, %ptr, %val)`: returns a new memory token `%m1` that is
+identical to `%m0` except that the value at address `%ptr` has been replaced
+with `%val`, plus the explicitly threaded `%w1`. Day 6 conservatively uses
+one `mem<all>` token; later region refinement does not change this instruction
+layout.
 
 ### 3.9 Control Flow (Terminators)
 
@@ -499,10 +508,10 @@ types of `values` must exactly match the function's declared return types.
 | Field | Description |
 |---|---|
 | `@callee` | Callee function name (symbol). |
-| `args...` | Non-memory, non-world arguments. |
+| `args...` | Ordinary arguments whose types do not contain `mem<_>` or `world`, including inside tuples or vectors. |
 | `%m0` | `mem<R>` token before the call. |
 | `%w0` | `world` token before the call. |
-| `%ret_vals...` | Return values from the callee. |
+| `%ret_vals...` | Ordinary return values whose types do not contain `mem<_>` or `world`. |
 | `%m1` | `mem<R>` token after the call. |
 | `%w1` | `world` token after the call. |
 
@@ -555,13 +564,15 @@ region annotation and refined by pointer analysis.
 
 ### 4.3 World Token Semantics
 
-The `world` token `%w` is a global ordering token. Instructions that carry
-`volatile = true`, `atomic = true`, or `io = true` must consume and produce
-the world token.
+The `world` token `%w` is a global ordering token. Day 6 reserves world input
+and output positions on every memory instruction. A normal non-observable
+access forwards the same abstract state through a distinct SSA token;
+instructions that carry `volatile = true`, `atomic = true`, or `io = true`
+use that token as an ordering constraint.
 
 ```text
 ; Volatile load pattern
-(%val, %w1) = vload %m, %w, %ptr : Type
+(%val, %m1, %w1) = vload %m, %w, %ptr : Type
 ```
 
 The world token acts as a **scheduling barrier**. Two operations that do not
@@ -600,12 +611,15 @@ Memory is represented as a functional state threaded through operations.
 Conceptually:
 
 ```text
-load(Mem, Ptr)  -> Value        returns the value at address Ptr in memory Mem
-store(Mem, Ptr, Val) -> Mem'    returns a new memory Mem' with Val at Ptr
+load(Mem, World, Ptr) -> (Value, Mem', World')
+store(Mem, World, Ptr, Val) -> (Mem', World')
 ```
 
-Memory tokens are immutable values. A `store` instruction does not mutate
-its input token; it produces a **new** token representing the updated state.
+Memory and world tokens are immutable values. Neither operation mutates its
+input tokens; each produces fresh SSA token identities. For a normal load,
+`Mem'` and `World'` denote unchanged abstract states. A store's `Mem'` denotes
+the updated state, while its `World'` remains an explicitly threaded ordering
+state.
 
 ### 5.2 Alias Facts
 
@@ -980,11 +994,11 @@ func @sum(%p: ptr<generic>, %n: bits<64>, %m: mem<all>, %w: world)
 
 ^body(%p_body: ptr<generic>, %n_body: bits<64>, %i_body: bits<64>, %acc_body: bits<32>, %m_body: mem<all>, %w_body: world):
     %addr = ptr.offset %p_body, %i_body
-    %x    = load %m_body, %addr : bits<32>
+    (%x, %m_loaded, %w_loaded) = load %m_body, %w_body, %addr : bits<32>
     %acc1 = add.bits<32> %acc_body, %x
     %one  = const.bits<64> 1
     %i1   = add.bits<64> %i_body, %one
-    br ^loop(%p_body, %n_body, %i1, %acc1, %m_body, %w_body)
+    br ^loop(%p_body, %n_body, %i1, %acc1, %m_loaded, %w_loaded)
 
 ^exit(%r_exit: bits<32>, %m_exit: mem<all>, %w_exit: world):
     ret %r_exit, %m_exit, %w_exit
@@ -1073,10 +1087,10 @@ C lvalues lower to EvoIR pointer operations:
 
 ```text
 Read:   %ptr = ptr.offset %base, %field_offset
-        %val = load %m, %ptr : Type
+        (%val, %m1, %w1) = load %m0, %w0, %ptr : Type
 
 Write:  %ptr = ptr.offset %base, %field_offset
-        %m1  = store %m, %ptr, %val
+        (%m1, %w1) = store %m0, %w0, %ptr, %val
 ```
 
 The base pointer and field offset are computed from the C-HIR aggregate layout
@@ -1092,9 +1106,9 @@ defined by the C abstract machine:
 ; x = y + z;
 ; w = load *p;
 
-%tmp = add %y, %z           ; first expression
-%m1  = store %m0, %x_addr, %tmp
-%val = load %m1, %ptr       ; second expression (sees the store)
+%tmp = add %y, %z                                      ; first expression
+(%m1, %w1) = store %m0, %w0, %x_addr, %tmp
+(%val, %m2, %w2) = load %m1, %w1, %ptr                ; sees the store
 ```
 
 #### 10.1.5 Undefined Behavior Lowering
@@ -1110,7 +1124,7 @@ operation:
 | `x / y` (signed) | `ub.assume signed_div_defined(x, y)` → `sdiv.bits<N> x, y` |
 | `x / y` (unsigned) | `ub.assume divisor_nonzero(y)` → `udiv.bits<N> x, y` |
 | `x << y` | `ub.assume shift_defined(x, y)` → `shl.bits<N> x, y` |
-| `*p` (dereference) | `ub.assume pointer_valid(p)` → `load %m, p : Type` |
+| `*p` (dereference) | `ub.assume pointer_valid(p)` → `load %m, %w, p : Type` |
 | `p[i]` | `ub.assume access_in_bounds(p + i, size)` → memory access |
 
 The lowering agent must not elide UB checks. The EqSat agent may later prove
@@ -1127,7 +1141,7 @@ C struct and union types lower to explicit offset computations:
 %a_addr = ptr.offset %s_base, const.bits<64> 0           ; offset of field a
 %b_addr = ptr.offset %s_base, const.bits<64> 4            ; offset of field b
 %val    = const.bits<8> 42
-%m1     = store %m0, %b_addr, %val                        ; store to s.b
+(%m1, %w1) = store %m0, %w0, %b_addr, %val               ; store to s.b
 ```
 
 Bitfields lower to load-modify-store sequences using bitwise operations:
@@ -1136,11 +1150,11 @@ Bitfields lower to load-modify-store sequences using bitwise operations:
 ; struct { unsigned f : 3; } s;
 ; s.f = 5;
 
-%old    = load %m0, %s_addr : bits<8>                    ; load containing byte
+(%old, %m1, %w1) = load %m0, %w0, %s_addr : bits<8>      ; load containing byte
 %masked = and.bits<8> %old, const.bits<8> 0b11111000     ; clear field bits
 %shift  = shl.bits<8> const.bits<8> 5, const.bits<8> 0   ; shift value into place
 %new    = or.bits<8> %masked, %shift                      ; insert field
-%m1     = store %m0, %s_addr, %new                        ; write back
+(%m2, %w2) = store %m1, %w1, %s_addr, %new               ; write back
 ```
 
 #### 10.1.7 Function Call Lowering
@@ -1221,14 +1235,32 @@ following invariant carried through the persistent equality database:
 ### 10.4 Verification
 
 Every transformation that claims to produce a valid EvoIR program must pass
-the SSA validator (see `crates/evocc-evoir/src/lib.rs:validate_ssa`). A
-conforming validator must enforce:
+the SSA validator (see `crates/evocc-evoir/src/lib.rs:validate_ssa`). The
+function-local validator must enforce:
 
-1. Every `Value.id` has exactly one definition site
-2. Every `Value.id` used as an operand is defined
-3. Block argument arities match across all predecessor edges
-4. Return types match the function declaration
-5. Call argument and return types match the callee declaration
+1. Every block argument and instruction result owns one function-unique
+   `Value.id` definition
+2. Every operand is a current-block argument or a preceding instruction result
+   in that same block
+3. Entry arguments match interface parameters positionally
+4. Block argument arities and types match across every predecessor edge
+5. Every non-entry block is reachable from the entry block
+6. Return types match the function declaration
+7. Each `mem<R>` and `world` token is consumed, replaced, and forwarded exactly
+   once through each effect, edge, and return boundary
+
+Module validation additionally checks each call's ordinary argument and return
+types against the callee declaration. The function-local validator still
+checks local use-def, ordinary-value versus effect-token positions, and exact
+`mem<R>`/`world` threading without guessing a callee signature. Day 6 lowering
+uses the conservative `mem<all>` region.
+
+The Day 6 reference interpreter executes `bits<N>` values for `1 <= N <= 64`
+and may forward opaque `mem<R>` and `world` tokens at block/function
+boundaries. It advances an explicit block program counter and charges one step
+for each instruction and terminator. Pointer, floating, vector, tuple, memory
+access, and call execution remain typed unsupported operations until their
+scheduled semantic phases; they must never produce a placeholder value.
 
 ---
 
@@ -1256,12 +1288,12 @@ conforming validator must enforce:
 | | `icmp.sle` | `bits<1>` | `%a`, `%b` : `bits<N>` | no |
 | | `icmp.ult` | `bits<1>` | `%a`, `%b` : `bits<N>` | no |
 | | `icmp.ule` | `bits<1>` | `%a`, `%b` : `bits<N>` | no |
-| Extension | `sext.bits<N>` | `bits<N>` | `%a` : `bits<W>` (W < N) | no |
-| | `zext.bits<N>` | `bits<N>` | `%a` : `bits<W>` (W < N) | no |
-| | `trunc.bits<N>` | `bits<N>` | `%a` : `bits<W>` (W > N) | no |
+| Extension | `sext.bits<N>` | `bits<N>` | `%a` : `bits<W>` (W <= N) | no |
+| | `zext.bits<N>` | `bits<N>` | `%a` : `bits<W>` (W <= N) | no |
+| | `trunc.bits<N>` | `bits<N>` | `%a` : `bits<W>` (W >= N) | no |
 | Pointer | `ptr.offset` | `ptr<AS>` | `%base` : `ptr<AS>`, `%offset` : `bits<N>` | no |
-| Memory | `load` | Type | `%m` : `mem<R>`, `%ptr` : `ptr<AS>` | yes |
-| | `store` | — | `%m` : `mem<R>`, `%ptr` : `ptr<AS>`, `%val` : Type | yes |
+| Memory | `load` | Type, `mem<R>`, `world` | `%m` : `mem<R>`, `%w` : `world`, `%ptr` : `ptr<AS>` | yes |
+| | `store` | `mem<R>`, `world` | `%m` : `mem<R>`, `%w` : `world`, `%ptr` : `ptr<AS>`, `%val` : Type | yes |
 | Control | `br ^target(args...)` | — | block label, values | n/a |
 | | `cond_br %c, ^t(targs), ^e(eargs)` | — | condition, blocks, values | n/a |
 | | `ret values...` | — | return values | n/a |
@@ -1298,5 +1330,6 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.2 | 2026-08-18 | Freezes named memory/world input and output token positions for `load`, `store`, and `call`; makes token flow region-polymorphic while Day 6 lowering uses conservative `mem<all>`; permits equal-width identity conversions; separates function-local SSA/effect validation from module call-signature validation; and records the bounded, typed Day 6 interpreter subset. |
 | 1.1 | 2026-08-18 | Makes formal parameters non-SSA call-interface binders, requires real unique `Value` IDs on entry and non-entry block arguments, requires all cross-block values to be passed explicitly, types the signed add/subtract/multiply definedness predicates used by lowering, and corrects the Section 9 examples. |
 | 1.0 | 2026-08-10 | Initial specification. Defines the complete EvoIR semantic contract for Day 4 of the 30-day EvoCC build. |

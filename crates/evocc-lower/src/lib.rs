@@ -122,7 +122,7 @@ fn lower_expr(expr: &CHirExpr<'_>, ctx: &mut LowerContext) -> u32 {
     match expr {
         CHirExpr::Lit(lit, _) => {
             let v = ctx.new_value();
-            ctx.emit_inst(Inst::Const(value(v), lit.value as i64));
+            ctx.emit_inst(Inst::Const(value(v), lit.value));
             v
         }
         CHirExpr::Binary(op, lhs, rhs, _) => {
@@ -160,10 +160,11 @@ fn lower_expr(expr: &CHirExpr<'_>, ctx: &mut LowerContext) -> u32 {
             let fv = lower_expr(f, ctx);
             ctx.set_terminator(Inst::Br(merge_block, vec![value(fv)]));
             ctx.current_block_id = merge_block;
+            let merge_value = ctx.new_value();
             let merge = &mut ctx.blocks[merge_block as usize];
             merge.args.push(BlockArg {
                 name: "ternary".into(),
-                ty: bits32(),
+                value: value(merge_value),
             });
             let result = ctx.new_value();
             ctx.emit_inst(Inst::Const(value(result), 0));
@@ -304,12 +305,18 @@ mod tests {
 
         assert!(evocc_evoir::validate_ssa(evoir_func).is_ok());
 
-        let results = evocc_evoir::eval_function(evoir_func);
-        assert_eq!(results, vec![7]);
+        let outcome = evocc_evoir::eval_function(
+            evoir_func,
+            &[],
+            evocc_evoir::InterpreterLimits::new(100_000),
+        )
+        .expect("lowered EvoIR executes");
+        let results = outcome.return_values;
+        assert_eq!(results, vec![evocc_evoir::RuntimeValue::bits(32, 7)]);
 
         let mut vars = std::collections::HashMap::new();
         let chir_result = eval_expr(expression, &mut vars);
         assert_eq!(chir_result, 7);
-        assert_eq!(results[0], chir_result);
+        assert_eq!(results[0].raw_bits, chir_result as u64);
     }
 }
