@@ -1,0 +1,344 @@
+{
+  "schemaVersion": 1,
+  "policyId": "c30.day5.kernel-reduction-policy.v1",
+  "contractState": "locked",
+  "purpose": "Bind one independently verified, deletion-only reduced candidate to each failed record in the frozen Day-5 kernel reconnaissance run. A shared diagnostic signature is never a substitute for the exact 46-record bijection.",
+  "sourceEvidence": {
+    "runId": "20260817T225959Z-57627",
+    "relativeRoot": ".evidence/day5-kernel-reconnaissance/20260817T225959Z-57627",
+    "expectedObservations": 48,
+    "expectedFailures": 46,
+    "expectedSuccesses": 2,
+    "authorityArtifacts": {
+      "summary": {
+        "path": "summary.json",
+        "bytes": 4159,
+        "sha256": "5be019759dd930237d696c2456bc783aa6f82eefbf7c11ecec6f98550857781e"
+      },
+      "results": {
+        "path": "results.jsonl",
+        "bytes": 69603,
+        "sha256": "d65b3f6cf2594ed5053a922a2c671f648c5b3f44378e97ceef5bb98b568727f7"
+      },
+      "kernelCohortContract": {
+        "path": "kernel-cohort.json",
+        "bytes": 28713,
+        "sha256": "09d0e2eaf0734949164a491d30df640bf396ff7586ef495f938f565b8879a306"
+      },
+      "buildEnvironmentContract": {
+        "path": "build-environment.json",
+        "bytes": 6649,
+        "sha256": "f2c01de733815e9036904896009ae565f1bd96d8acefea015a8ef5930b1790c9"
+      },
+      "hostBuildAuthority": {
+        "path": "host-build-authority.json",
+        "bytes": 2103,
+        "sha256": "826b7747c9922f5ad314a31254e75d49e1e0c28849f5473464afbc1a7db948a8"
+      },
+      "reconnaissanceRunner": {
+        "path": "runner.py",
+        "bytes": 77236,
+        "sha256": "41c1da122feb83aa17d3a9567af03f7dc2bd8133ce4c9b5e32c38008c6360dad"
+      },
+      "runConfig": {
+        "path": "run-config.json",
+        "bytes": 601,
+        "sha256": "c8d22343d41d5a035a2dc1038dc116d3b1a2d3ec14baef3ea35f41c60d9199b5"
+      },
+      "kernelInputClosureStart": {
+        "path": "kernel-input-closure.start.tsv",
+        "bytes": 3356,
+        "sha256": "7574e0e540d827f60af1a24eb1ae856d0c81071c2a29088fa8c7d76f81cadb0b"
+      },
+      "kernelInputClosureEnd": {
+        "path": "kernel-input-closure.end.tsv",
+        "bytes": 3356,
+        "sha256": "7574e0e540d827f60af1a24eb1ae856d0c81071c2a29088fa8c7d76f81cadb0b"
+      },
+      "subjectBuildInputClosureStart": {
+        "path": "evocc-build-inputs.tsv",
+        "bytes": 8294,
+        "sha256": "c993f678ec85fa9782f292ae57408177772686a4430bd005f37f02651704f1d3"
+      },
+      "subjectBuildInputClosureEnd": {
+        "path": "evocc-build-inputs.end.tsv",
+        "bytes": 8294,
+        "sha256": "c993f678ec85fa9782f292ae57408177772686a4430bd005f37f02651704f1d3"
+      },
+      "kernelCohortDigestRecord": {
+        "path": "contract.sha256",
+        "bytes": 65,
+        "sha256": "81b857c534b921cc910227eee66bae766e590a4ee7fccc312a59632e97678adf"
+      },
+      "subjectDigestRecord": {
+        "path": "evocc.sha256",
+        "bytes": 65,
+        "sha256": "e8f9f74de3033bdec74e68cfea7f412cbbf046ff3da904587c5d1e80d1f26dff"
+      }
+    },
+    "authorityEqualities": [
+      ["kernelInputClosureStart", "kernelInputClosureEnd"],
+      ["subjectBuildInputClosureStart", "subjectBuildInputClosureEnd"]
+    ],
+    "executionAuthority": {
+      "subjectEvidenceRelativePath": "cargo-target/debug/evocc",
+      "subjectSha256": "965415907442bdb584107c5762b1bb91c849eec6deda78d9f59c6d31d87bff8f",
+      "containerCliSha256": "08d0cc13c9d34f8467488980e8b0be02925a10a8df9ad0aa1bded0025f458d43",
+      "cargoSha256": "7672ead309d505577c018fff2cafb3433601f073e38cbe87359ac1f7b944bbf5",
+      "rustcSha256": "210df6794001b73ec3d453878707fa1e0bdcb63c427024a6e6574bbe5615a4da",
+      "sealedImageId": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+      "rawSeedRoots": {
+        "source": {"base": "repository", "path": ".build/linux-src"},
+        "gccOutput": {"base": "repository", "path": ".build/reference/gcc-lane-1"},
+        "clangOutput": {"base": "repository", "path": ".build/reference/clang-lane-1"}
+      },
+      "referenceCompilers": {
+        "gcc": {
+          "path": "/usr/bin/gcc-14",
+          "version": "gcc-14 (Debian 14.2.0-19) 14.2.0",
+          "sha256": "fb051a6c58961fb6aec758acf50d7d0375eecff740d0706388092829e3fb7a41"
+        },
+        "clang": {
+          "path": "/usr/bin/clang-19",
+          "version": "Debian clang version 19.1.7 (3+b1)",
+          "sha256": "8bba5d733f54ada0cc50ba7646a87ddc798d5de73f67e397cdefada07297bb65"
+        }
+      }
+    }
+  },
+  "obligationDerivation": {
+    "canonicalJson": "utf8-json-sort-keys-compact-separators-trailing-lf-v1",
+    "identityObject": {
+      "orderedByCanonicalJson": true,
+      "fields": [
+        "classification",
+        "diagnostic.code",
+        "diagnostic.message",
+        "diagnostic.sourcePath",
+        "diagnostic.sourceSpan.line",
+        "diagnostic.sourceSpan.column",
+        "lane",
+        "phase",
+        "returnCode",
+        "sourcePath",
+        "timedOut",
+        "tuId"
+      ]
+    },
+    "failureId": "lowercase-hex-sha256(canonical-json(identity-object))",
+    "failureSignatureObjectFields": [
+      "classification",
+      "diagnostic.code",
+      "diagnostic.message",
+      "diagnostic.sourcePath",
+      "diagnostic.sourceSpan.line",
+      "diagnostic.sourceSpan.column",
+      "phase",
+      "returnCode",
+      "timedOut"
+    ],
+    "failureSignatureSha256": "lowercase-hex-sha256(canonical-json(failure-signature-object))",
+    "sourceRecordSha256": "lowercase-hex-sha256(canonical-json(complete-results-jsonl-record))",
+    "obligationManifestSha256": "39af1ba905884d739789c996ede7b24ba08c07d3be39b77a643363334d9ec2a1",
+    "obligationManifestEncoding": "concatenated canonical-json obligation entries sorted by failureId; entry keys are failureId,failureSignatureSha256,sourceRecordSha256",
+    "obligations": [
+      {"failureId":"075d0899c3a71ded560fe1ea3cbb98f62cc835f123c9d20cbfa80b449d516420","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"e0c4dacab37fd87da58eae6d76f910783ca7c431236e68c32e116a0f09cd4992"},
+      {"failureId":"0d465cfa69a4f31c8521f11347ccf035402a16365f6b9b134776ccfa4b5ff957","failureSignatureSha256":"a610a167024289392b59bcadc9143c4ad52c79320bc7d66f1f8d759317ba0bfa","sourceRecordSha256":"3ca227e97929bffd73933f21c93d3524fb8a67c6e4010b00def9525a2ca6b0da"},
+      {"failureId":"12d75bfc667e799282a54b21fd37ca61fea5701c58c382596db1b74652a3fe79","failureSignatureSha256":"a610a167024289392b59bcadc9143c4ad52c79320bc7d66f1f8d759317ba0bfa","sourceRecordSha256":"d574e087532689b65aced7056e969d14d0659d69de2e9c1b956708aab4531387"},
+      {"failureId":"137d071dfd9079405a9b5ad0db72a4293590f9303e97ae4bd71e8ae63e2a4d63","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"c2a4b5e8845eadb73ceb55221983751e56196ed1d7efaaa6d44d55de7d098ca5"},
+      {"failureId":"184ba3047ee26716f485ffae2342b25bde54a7cd82b9b0a6ff853e3b72c55aef","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"72e1975d512d6f758b32d0e1865dee0438f5d80a103b8d65c0174585f6426c90"},
+      {"failureId":"1bfa87cd90c5cf72e91276d8177c5d2872818d81021491c1e4d764919fbb330b","failureSignatureSha256":"04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5","sourceRecordSha256":"9b4d38409eb2a5d8a89e6b842d48a606f464326ae01fe6d48ace650e213fd688"},
+      {"failureId":"1dfd5878207463920931e8fab91fdc47ab3e72f036ec70acaf087a427564d51e","failureSignatureSha256":"a610a167024289392b59bcadc9143c4ad52c79320bc7d66f1f8d759317ba0bfa","sourceRecordSha256":"1c2ba047b48de70fff360e57e9b3aa7421cd90da454729fb863daf92612e88c7"},
+      {"failureId":"1e23e47972dea724b790b489ff8fc2eaac1ef2b73b6791268b321f5f4e0eceb7","failureSignatureSha256":"04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5","sourceRecordSha256":"4655c77ac9e4a341942372b1f5bdbf9781b2ed387f2c4ee32897bc7163e386ac"},
+      {"failureId":"289076842f8633bc7e21fa4575362193d42b618d4b8985007d30aff2fcbff47d","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"173a9fd24b37f978ab20b2c77a1a11c9999b340e23d4b5407b3ce00fdd749b80"},
+      {"failureId":"2cc27d2ef9c65e8bede223b5327e61caf3b965b1fc1d7b03f507e3f3bb90435c","failureSignatureSha256":"04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5","sourceRecordSha256":"9b603eaf3f91b5751e987398d9dd7b46acb88745f822dffe2cd9b62f7632bab7"},
+      {"failureId":"35939e7e4d9575a8693dbf234a6991d862fa7f29d51d01c8ba55e4423bc6e1eb","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"cdf773397d6b9f37b397f7aa1a4886c743c4e29e859dd1f8219bff1a89b45f40"},
+      {"failureId":"363411750e201629b86762ded6c4460fff024e08eb629ce435645eab0e96287f","failureSignatureSha256":"04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5","sourceRecordSha256":"782cde5a4b4c6326d4fa6a6d65dc3cd8b9b8a64d4f4899a8329fe0d2358522e1"},
+      {"failureId":"37f9b6497ae40411fae1da60eae0186e55c9966f7cad0e8bf47686412a10fad8","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"a8f7bf9accca11852a693a1ea247f125632a9a07f317b92c02a9097bc3620dea"},
+      {"failureId":"39f2b7c8b311c5004c2b5bd02c97bd5c2af00dae0b1f879f20f2234dee65707b","failureSignatureSha256":"04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5","sourceRecordSha256":"be4581e88c0358bda7b1f5349ac4ace5e3f81aa53789893db60042b86dcafdb0"},
+      {"failureId":"3dc161a62e992017fb4e605aa05e1f92833779e3c1aab1b7a0e142602017b181","failureSignatureSha256":"04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5","sourceRecordSha256":"80dc181d7485121862b8f292fcf3e2a3d5fa1448403c147ce8322facc1106617"},
+      {"failureId":"3f8394043030c42c12e2730e6f7292f049a5ce61fa3ed13f9d37ce039e92ca6c","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"458cb0b1eeeb6ad74a07ac72f63780975e1079bfc70f833ee815275d2968fc09"},
+      {"failureId":"4835fdc46c9b283c1ce2bc1f5070c92874e2c7c506699555e8797689a83faaff","failureSignatureSha256":"a610a167024289392b59bcadc9143c4ad52c79320bc7d66f1f8d759317ba0bfa","sourceRecordSha256":"a45092b3f5893c33655fe159b934c5a0cf90597f8698721baedd8f1c5fc40600"},
+      {"failureId":"55ae0facdddb439be6c93235a9fb05a61d4c9ff2ac59574594c68247f8b007ce","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"fb366628f8f127f47d838b36f5c1f276c62f8cae8d2bd4b8f13f4f5815cdecb8"},
+      {"failureId":"5e9bbf9d25c334ef688b28f3feef7d2f575b4a509af093144f1906c86231c9ee","failureSignatureSha256":"a610a167024289392b59bcadc9143c4ad52c79320bc7d66f1f8d759317ba0bfa","sourceRecordSha256":"e399601417ee359484f761f2fd2285cef21ef48913fa4d732d3dba54bd48598a"},
+      {"failureId":"6380eae2fb9bee4c9995819c5be9ba434c82cd695e43eb415f59f33095f549d7","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"efbf8d90b8ccf04ca31c0e089e09e1161eb5c43e7d18cf96e5a198b1cbb703d3"},
+      {"failureId":"72ec3a4e1d4078158ce3a7a6ee03aa7f3cb2102a6f297e3bf05720bd603ae7f1","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"eaf06ff19edb231ab01e9cd0af2c634b132dbf8044837c881f90171ab3127002"},
+      {"failureId":"76be8107f48323e44d06ec8e1fbdde8a5c60336936369b4baaeb3edcb83d7642","failureSignatureSha256":"a610a167024289392b59bcadc9143c4ad52c79320bc7d66f1f8d759317ba0bfa","sourceRecordSha256":"590c778a0cfbe3887467678652f322372adb897a9d9dcada305d0a9ac081570c"},
+      {"failureId":"789842a04ec4c0af664ef680ce14a23bb74e8c8fa95b5539170e4181d7a25c23","failureSignatureSha256":"04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5","sourceRecordSha256":"ea5702a4e84394810149e1c9d660b22a921da789b5727b61254f56305e847269"},
+      {"failureId":"7fa0c28f35d87b23fd3c69e713e8ab8f7ce96174b739e6657341a92badb771da","failureSignatureSha256":"04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5","sourceRecordSha256":"461a95086035a1115c499b16928de51b3e7c6899046971f7eb7b2e33e9ae3bb1"},
+      {"failureId":"860c0dc3ddc4a4c47ae31fab98ebb67fa06bf54a6041fa8b3be7ed9f806cec04","failureSignatureSha256":"a610a167024289392b59bcadc9143c4ad52c79320bc7d66f1f8d759317ba0bfa","sourceRecordSha256":"dd6230708ce4128c0acadf3d159b9d61b46e3f3fae965f1901a305b78a1a4906"},
+      {"failureId":"869b322a04168ffbbac452763bf0081b20c3b69bdea7ffd6fc27bb65c5ff4b5f","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"29002169f253de0f785db12015d1bd21e97fe0f813029046bf37d7c7488b3303"},
+      {"failureId":"92681bd89379967f7052416cc1bd08961f18a5b4a69c045503857228ab9f43c1","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"fce9dc1ad3eca79b2a8fafd835e0aecb3b592edc61ab73734a1563fbbd6c2571"},
+      {"failureId":"9299452ceeacec55828a9a697ceb368b8d68b2b2d4cf3f7d24a3edc8cb4d458d","failureSignatureSha256":"a610a167024289392b59bcadc9143c4ad52c79320bc7d66f1f8d759317ba0bfa","sourceRecordSha256":"28dc2689d27550a2f55081ff995d9f7c118e87a60fa17b78f2eca319121585ef"},
+      {"failureId":"943b952c696e5378a1609330c56722591d282b27e6e3290ecb76a13116fd6a0d","failureSignatureSha256":"04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5","sourceRecordSha256":"e96e45071296b4dac3dc335bbb2f5ef7c961a644164073ee739c6e5b86fbd49f"},
+      {"failureId":"970e52c9721213b35f920e6ec6bb199e2339e68a801df786d0f3a86108a07581","failureSignatureSha256":"04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5","sourceRecordSha256":"241b764183488b6475ce0d513657be8064bfd12028f94acbd24582eb2daa9b0d"},
+      {"failureId":"98e08a39a1f0bbdfcba2eb35e1b0ce129deca316d0c63b8e27a6e11187f91440","failureSignatureSha256":"04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5","sourceRecordSha256":"190e64bbfaf9e5e68d139bada4a082593c0d52a7dbffca1a949423f32fcafd02"},
+      {"failureId":"9ff52c6ebc1c4ab7250865913c52370c8d6ee64f360b9e10981526e5ce35a995","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"86f786063a814b8115758d8dc842c1b91a6a60b277537d20c52b79e604100d54"},
+      {"failureId":"a67498281ff50339df7d690bbf383df40824775b2f385584afa96c33f7831a72","failureSignatureSha256":"04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5","sourceRecordSha256":"a5bb3c30a88c4e40908157ce1efcae13c8e389c2aae87ec91d9d43226d34794d"},
+      {"failureId":"ada8e2b5bb8266eb4f62bc0087c1e72126337312df9c4ca87ace9bfbfdc55c71","failureSignatureSha256":"04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5","sourceRecordSha256":"27a7b4953acfcd887976a4f8f397a2e1453e45c9eb1da4573c914ab9d58b6be0"},
+      {"failureId":"b49e8e66800a55ab9c50b7a329691dcbcebd0572b3c071f2507d0198ba31dd72","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"e36a1048322d03ea060b64a3e72e3b612d6ce50b7ec3cf5bd8add2335f98af79"},
+      {"failureId":"bacf6a682b4a74633152eb28d9b6d0039b47e03d8ba9b7ab9d368076c860b396","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"496e87bb1fc7e61caaf44327a4f708ca422acb29ddc3f96fb302780d976d4392"},
+      {"failureId":"bc550efdf32315ab3fcf555cc8394e001c2164df2aafcff5c973157acfed5537","failureSignatureSha256":"a610a167024289392b59bcadc9143c4ad52c79320bc7d66f1f8d759317ba0bfa","sourceRecordSha256":"2d6bdc4406d6f82aad83551d6c26b55a1faca8f70dbf9b9f87eaa0c29ee20a92"},
+      {"failureId":"c45120d6b59455a3eb2f47cb4c50dd7f7ad82d6e2aaed7853d9a41fb921b3315","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"5a975b833e2c66c36331d6ce64767400aa6fde764560fd47c540328f620462ff"},
+      {"failureId":"ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796","failureSignatureSha256":"04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5","sourceRecordSha256":"31b1ecab1fcddc68cc9b023f452491a75bf6f92bb6b256506798d7f4b0b82698"},
+      {"failureId":"e10e3e22dc39d7caaff51d0990e3dff901c9224b2e1975b16bb5846db84d49e4","failureSignatureSha256":"a610a167024289392b59bcadc9143c4ad52c79320bc7d66f1f8d759317ba0bfa","sourceRecordSha256":"77fa9cd2210ef56b8cae066d47a550ac58fc6c41a748512480609a36dbd2d49c"},
+      {"failureId":"e1da4c08fc7eb243ec5b715127c012bf336005f71e06c6c4e0dcbe89466900c7","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"6b621059f1c37eb6c294f1e760cdaf5368e67e69c8effc72f2f15dbd2b9ac5a5"},
+      {"failureId":"eab2d885cb7fb7526c693d09c1206c134d0a4a00b78275c30c2bb67d218d7288","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"79636b1e3d44221a5d892fe861be6d9cb1691e7339e466e399baea27455cdae3"},
+      {"failureId":"ef88b66d8b62b14fbce0fdb98c795605fd3d3d9c7f147e2b916124d1edac370c","failureSignatureSha256":"04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5","sourceRecordSha256":"c7b4afaeecfa5fe07f723fcecc6589b0e22e11d5c76bd860bf22b0c118a85d49"},
+      {"failureId":"f05e4f3879b1706db9b481889e3159e3918d932d64f544e664349b3fee286789","failureSignatureSha256":"04fdae8380ba1456b90bcf2894bd9b517f66036186525203a15d52ca18aa9ee5","sourceRecordSha256":"4b4cf908139a51e6377001b75da3ea8bc6d53b025a0712d4e23ae59182ec70f2"},
+      {"failureId":"fc3586e94c0513739a2bc19ec229a2f039a30f630f56872180cea01dd12c55d7","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"f0148c4f650bd4c389f7d656e7d491a41e16011096b52ef968510c5fd2679fa9"},
+      {"failureId":"fd9d93e708f7bd7f4eebf31fac7579c0b0b9ea38ad26dc938d2cbee14e16f845","failureSignatureSha256":"133a962675955383720f03d943aeaf8570894f127594fa9950b82eceb12292ad","sourceRecordSha256":"f2b0097598baaf3440ad8d5e2a27246f72327249954db736ee44e14235316296"}
+    ]
+  },
+  "overlayPolicy": {
+    "manifestPath": "overlay.json",
+    "rootExactKeys": ["policyId", "records", "schemaVersion", "sourceEvidenceRunId"],
+    "recordExactKeys": ["candidate", "failureId", "state"],
+    "inputState": "CANDIDATE",
+    "verifierOnlyState": "VERIFIED",
+    "oneRecordPerFailureId": true,
+    "candidatePathsUniqueAndConfined": true,
+    "symbolicLinks": "PROHIBITED",
+    "hardLinks": "PROHIBITED",
+    "overlaySuppliedOracleReplayArgvEnvironmentTimeoutOrReceipt": "PROHIBITED",
+    "parserCandidate": {
+      "kind": "preprocessed-parser",
+      "exactKeys": ["bytes", "kind", "lineage", "path", "sha256"],
+      "lineageEntryExactKeys": ["candidateLine", "seedLine", "seedLineSha256"],
+      "lineage": "Candidate physical lines, including their terminators, must be a nonempty in-order deletion-only subsequence of the obligation's verified artifacts.parserInput seed. Line numbers are one-based and bijective.",
+      "minimality": "preprocessed-line-1-minimal-v1"
+    },
+    "rawCandidate": {
+      "kind": "raw-closure",
+      "exactKeys": ["bundleSha256", "kind", "referenceClosures", "rootSourcePath", "subjectClosure"],
+      "closureExactKeys": ["closureSha256", "files", "root", "seedFamily"],
+      "fileExactKeys": ["bytes", "lineage", "logicalPath", "sha256"],
+      "lineageEntryExactKeys": ["candidateLine", "seedLine", "seedLineSha256"],
+      "closureEncoding": "sorted logicalPath<TAB>sha256<TAB>bytes<LF>",
+      "bundleEncoding": "canonical JSON of rootSourcePath, subjectClosure closureSha256/root/seedFamily, and both sorted referenceClosures closureSha256/root/seedFamily values",
+      "storageLayout": "For failureId F, subjectClosure file bytes are stored under candidates/F/subject/<logicalPath>, referenceClosures.gcc under candidates/F/reference-gcc/<logicalPath>, and referenceClosures.clang under candidates/F/reference-clang/<logicalPath>. logicalPath is a normalized source/<path> or output/<path> and cannot escape its derived directory. The overlay cannot supply or override a physical path. Each closure.root is the logical source/<rootSourcePath>, not a physical directory.",
+      "subjectClosure": "Derived only from the exact verified inputs/<tuId>.gcc.inputs.tsv captured by the source run and executed by EvoCPP.",
+      "referenceClosures": {
+        "gcc": "Derived independently from the exact frozen gcc-lane-1 command record and input closure.",
+        "clang": "Derived independently from the exact frozen clang-lane-1 command record and input closure. It must not reuse the GCC output closure or argv."
+      },
+      "sharedSourceInvariant": "Every retained source/<path> must exist in both family seeds with byte-identical seed bytes and use the same line selection in subject, GCC, and Clang closures. Family-specific output/<path> files may differ and carry separate lineage/digests. A logical path with conflicting source bytes is rejected.",
+      "rootInvariant": "rootSourcePath equals the obligation sourcePath; each closure root equals source/<rootSourcePath>; that root logicalPath occurs exactly once in each closure; every logicalPath is unique; bundleSha256 binds rootSourcePath and all three closure identities.",
+      "lineage": "Every retained file is a nonempty in-order deletion-only physical-line subsequence of its own verified family seed file. Every physical line, including a blank line and its terminator, is an atom.",
+      "minimality": "raw-closure-file-and-line-1-minimal-v1"
+    }
+  },
+  "replayPolicy": {
+    "baselineReplayCount": 3,
+    "requiredStableReplays": 3,
+    "parserCommand": ["<verified-subject>", "--parse-only", "--target=aarch64-unknown-linux-gnu", "<private-candidate>"],
+    "rawCommand": "The obligation's verified evocpp-raw argv; rewrite only the subject executable, source root, GCC output root, and root-source path to verifier-created private candidate paths.",
+    "timeouts": {
+      "parser": "run-config.json parserTimeoutSecondsPerTu",
+      "raw": "run-config.json generalTimeoutSeconds"
+    },
+    "environment": {
+      "LANG": "C",
+      "LC_ALL": "C",
+      "TZ": "UTC",
+      "SOURCE_DATE_EPOCH": "build-environment.json reproducibility.SOURCE_DATE_EPOCH",
+      "HOME": "fresh private verifier directory",
+      "TMPDIR": "fresh private verifier directory"
+    },
+    "normalizedObservationFields": [
+      "classification",
+      "diagnostic.code",
+      "diagnostic.message",
+      "diagnostic.sourcePath",
+      "diagnostic.sourceSpan.line",
+      "diagnostic.sourceSpan.column",
+      "phase",
+      "returnCode",
+      "timedOut"
+    ],
+    "originalAnchorFields": ["lane", "sourcePath", "tuId"],
+    "stableReplayExactFields": [
+      "argvSha256",
+      "candidateDigest",
+      "environmentSha256",
+      "returnCode",
+      "stderrSha256",
+      "stdoutSha256",
+      "subjectSha256",
+      "timedOut"
+    ],
+    "stableReplayRule": "All three fresh subject executions must have byte-identical stableReplayExactFields. The verifier separately derives and compares the normalized causal signature; normalized equality never substitutes for byte-exact stdout/stderr, argv, environment, or candidate identity.",
+    "sourceFailureReproduction": "The verifier independently derives the frozen failure signature from source results and requires the candidate's three normalized subject observations to be byte-identical to it. This is only reproduction evidence, never an oracle or an acceptance verdict. An overlay cannot supply or override this digest.",
+    "causalAnchor": {
+      "parser": "Bind the complete frozen source record, parserInput descriptor, diagnostic emitted line/column, exact seed-line bytes at that coordinate, and the corresponding captured line-map row. A candidate diagnostic is valid only when its deletion-only lineage maps the emitted token back to that same seed coordinate and then to the frozen sourcePath/sourceSpan; matching only code/message/source line is insufficient.",
+      "raw": "Bind the complete frozen source record, exact seed-closure logical path and file digest containing the emitted diagnostic, and the diagnostic's physical seed line/column. A private candidate must map its emitted diagnostic back to that same retained seed coordinate; matching only E0104 or the normalized header path is insufficient.",
+      "overlayMaySupplyAnchor": false,
+      "sourceRecordSha256BindsOriginalEmittedFacts": true
+    },
+    "minimality": "After the stable baseline, independently evaluate every single allowed atom deletion with the complete interestingness predicate: the exact causally anchored subject failure is reproduced and both pinned compilers accept the exact deleted candidate bytes. Zero deletion may satisfy that conjunction. A deletion that preserves the subject failure but breaks either oracle is not removable. This is only the named line/file 1-minimal claim, never token or global minimality."
+  },
+  "referenceAcceptance": {
+    "authority": "Both independently identified compilers must execute inside the exact sealed image. Host lookalikes, tags, one-compiler success, source-signature replay, and overlay assertions are not acceptance evidence.",
+    "imageIdentity": "Before and after every compiler invocation, inspect the run-unique container and require sourceEvidence.executionAuthority.sealedImageId. Delete the run-unique alias after use.",
+    "compilerIdentity": "Inside the sealed image, require exact path, version string, binary SHA-256, and different GCC/Clang binary digests from sourceEvidence.executionAuthority.referenceCompilers.",
+    "network": "none",
+    "exactCandidateBytes": true,
+    "parserCommands": {
+      "gcc": ["/usr/bin/gcc-14", "-std=gnu11", "-fsyntax-only", "-x", "c", "<exact-private-candidate>"],
+      "clang": ["/usr/bin/clang-19", "-std=gnu11", "-fsyntax-only", "-x", "c", "<exact-private-candidate>"]
+    },
+    "rawCommands": {
+      "gcc": "Derive from the frozen gcc-lane-1 command record for the obligation's TU and its verified input closure; replace only the executable and verified source/output roots with GCC-14 and private raw-closure roots, then retain the frozen preprocessing projection plus -E -P.",
+      "clang": "Derive independently from the frozen clang-lane-1 command record for the obligation's TU and its verified input closure; replace only the executable and verified source/output roots with Clang-19 and private raw-closure roots, then retain the frozen preprocessing projection plus -E -P.",
+      "crossFamilyArgvReuse": "PROHIBITED",
+      "acceptedCandidate": "The exact candidate closure must preprocess with return code zero and no timeout under both independently derived family projections."
+    },
+    "acceptedReturnCode": 0,
+    "timeout": "run-config.json generalTimeoutSeconds",
+    "requiredCompilers": ["gcc", "clang"],
+    "receiptFields": [
+      "candidateDigest",
+      "commandSha256",
+      "compilerPath",
+      "compilerSha256",
+      "compilerVersion",
+      "imageId",
+      "returnCode",
+      "stderrSha256",
+      "stdoutSha256",
+      "timedOut"
+    ]
+  },
+  "verdictPolicy": {
+    "phase1AuditSourceMayPass": true,
+    "phase1VerifyOverlayVerdict": "INCOMPLETE",
+    "phase1AcceptanceValid": false,
+    "verifiedRequiresAll": [
+      "exact source-authority audit",
+      "exact 46-obligation overlay bijection",
+      "independently checked deletion-only lineage and candidate digests",
+      "three identical subject replays reproducing the frozen source failure",
+      "pinned GCC-14 acceptance of the exact candidate bytes in the sealed image",
+      "pinned Clang-19 acceptance of the exact candidate bytes in the sealed image",
+      "complete named one-deletion sweep with zero deletions satisfying the full subject-failure-and-both-oracles predicate"
+    ],
+    "missingGateVerdict": "INCOMPLETE",
+    "missingGateAcceptanceValid": false,
+    "verifierMayEmitVerifiedOnlyAfterAllGates": true,
+    "sourceSignatureAloneIsOracle": false
+  },
+  "integrationPolicy": {
+    "historicalResultsImmutable": true,
+    "verifiedResultsOverlayRequired": true,
+    "reconnaissanceSummaryMayTrustStateString": false,
+    "pendingCountDerivation": "Recompute the exact 46-way failureId bijection and independently validate every receipt, candidate bundle, subject replay, two-oracle receipt, causal anchor, and minimality denominator before treating any obligation as VERIFIED.",
+    "forgedVerifiedStateMustRemainPending": true
+  },
+  "cli": {
+    "auditSource": "tests/acceptance/day5-kernel-reductions.py audit-source --policy <policy> --evidence <source-evidence-directory>",
+    "verifyOverlay": "tests/acceptance/day5-kernel-reductions.py verify-overlay --policy <policy> --evidence <source-evidence-directory> --overlay <candidate-overlay-directory>",
+    "selfTest": "tests/acceptance/day5-kernel-reductions.py --self-test",
+    "contractFailureExitCode": 2,
+    "contractFailurePrefix": "day5-kernel-reductions: FAIL:"
+  }
+}
