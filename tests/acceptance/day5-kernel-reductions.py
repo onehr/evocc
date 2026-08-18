@@ -17,9 +17,13 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import shlex
+import shutil
 import stat
+import subprocess
 import sys
 import tempfile
+import time
 from typing import Any, Iterable
 
 
@@ -192,6 +196,206 @@ REQUIRED_OBSERVATION_LANES = [
     "gcc-preprocessed-parser",
     "clang-preprocessed-parser",
 ]
+PILOT_CONTRACT_KEYS = {
+    "contractId",
+    "contractState",
+    "executionIsolation",
+    "measurementStatus",
+    "minimalityAuthority",
+    "observerAuthority",
+    "oracleEvidenceAuthority",
+    "parentAuthority",
+    "pilots",
+    "purpose",
+    "receiptAuthority",
+    "schemaVersion",
+    "verdictSemantics",
+}
+PHASE2_PILOT_FAILURE_IDS = [
+    "4835fdc46c9b283c1ce2bc1f5070c92874e2c7c506699555e8797689a83faaff",
+    "869b322a04168ffbbac452763bf0081b20c3b69bdea7ffd6fc27bb65c5ff4b5f",
+    "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
+]
+OBSERVER_AUTHORITY_KEYS = {
+    "absenceBehavior",
+    "attestationTrust",
+    "authorityState",
+    "checkpoints",
+    "executable",
+    "liveMeasurementPermitted",
+    "measurementStatus",
+    "oracleInputRunCount",
+    "oracleRunCount",
+    "protocolId",
+    "provisional",
+    "requiredExecutionBoundary",
+    "schemaVersion",
+    "subjectRunCount",
+}
+PILOT_PARENT_KEYS = {
+    "obligationManifestSha256",
+    "policyBytes",
+    "policyId",
+    "policyPath",
+    "policySha256",
+    "sourceEvidenceRunId",
+    "sourceFailures",
+}
+PILOT_KEYS = {
+    "atomCount",
+    "candidateSelector",
+    "classification",
+    "diagnostic",
+    "failureId",
+    "failureSignatureSha256",
+    "lane",
+    "minimalityClaim",
+    "phase",
+    "sourcePath",
+    "sourceRecordSha256",
+    "tuId",
+}
+PILOT_RESULT_KEYS = {
+    "acceptanceValid",
+    "globalVerdict",
+    "mode",
+    "obligationManifestSha256",
+    "pilotAcceptanceValid",
+    "pilotContractSha256",
+    "policySha256",
+    "receiptSha256",
+    "records",
+    "remainingFailures",
+    "sourceEvidenceRunId",
+    "sourceFailures",
+    "verifiedPilots",
+    "verdict",
+}
+PILOT_RECEIPT_KEYS = {
+    "artifactClosure",
+    "executionEvidence",
+    "executionAuthority",
+    "obligationManifestSha256",
+    "overlayClosureSha256",
+    "pilotContractSha256",
+    "pilotFailureIds",
+    "policyId",
+    "policySha256",
+    "records",
+    "schemaVersion",
+    "sourceEvidenceRunId",
+}
+PILOT_RECEIPT_RECORD_KEYS = {
+    "candidate",
+    "causalAnchorSha256",
+    "failureId",
+    "minimality",
+    "referenceAcceptance",
+    "sourceRecordSha256",
+    "state",
+    "subjectReplays",
+}
+SUBJECT_RECEIPT_KEYS = {
+    "argv",
+    "argvSha256",
+    "candidateDigest",
+    "causalAnchorSha256",
+    "environment",
+    "environmentSha256",
+    "inputClosureSha256",
+    "normalizedObservation",
+    "privateDirectory",
+    "returnCode",
+    "stderr",
+    "stderrSha256",
+    "stdout",
+    "stdoutSha256",
+    "subjectSha256",
+    "timedOut",
+}
+ORACLE_RECEIPT_KEYS = {
+    "candidateDigest",
+    "command",
+    "commandSha256",
+    "compilerPath",
+    "compilerSha256",
+    "compilerVersion",
+    "containerInputs",
+    "environment",
+    "executionRunId",
+    "imageId",
+    "inputClosureSha256",
+    "returnCode",
+    "stderr",
+    "stderrSha256",
+    "stdout",
+    "stdoutSha256",
+    "timedOut",
+}
+EXECUTION_EVIDENCE_KEYS = {
+    "aliasCleanup",
+    "compilerIdentities",
+    "containerCli",
+    "counts",
+    "preflight",
+    "runOrderSha256",
+    "runs",
+    "schemaVersion",
+}
+EXECUTION_COUNTS = {
+    "baselineAcceptance": 6,
+    "compilerIdentity": 2,
+    "minimalityDeletion": 38,
+    "receiptOracles": 44,
+    "total": 46,
+}
+RUN_EVIDENCE_KEYS = {
+    "cleanup",
+    "containerAfter",
+    "containerBefore",
+    "containerName",
+    "family",
+    "imageAfter",
+    "imageBefore",
+    "inputClosureSha256",
+    "purpose",
+    "runId",
+}
+CLEANUP_EVIDENCE_KEYS = {
+    "deleteReturnCode",
+    "deleteStderr",
+    "deleteStdout",
+    "postDeleteInspectReturnCode",
+    "postDeleteInspectStderr",
+    "postDeleteInspectStdout",
+}
+MINIMALITY_RECEIPT_KEYS = {
+    "atomOrderSha256",
+    "atoms",
+    "claim",
+    "removableAtoms",
+    "testedAtoms",
+    "totalAtoms",
+}
+ATOM_RECEIPT_KEYS = {
+    "atomId",
+    "candidateDigest",
+    "interesting",
+    "referenceAcceptance",
+    "subjectObservation",
+}
+EXECUTION_ENVIRONMENT_KEYS = {
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "SOURCE_DATE_EPOCH",
+    "TMPDIR",
+    "TZ",
+}
+DIAGNOSTIC_RE = re.compile(
+    r"^(?P<path>.+):(?P<line>[0-9]+):(?P<column>[0-9]+): "
+    r"error\[(?P<code>[^]]+)\]: (?P<message>.*)$"
+)
 
 
 class ContractError(RuntimeError):
@@ -1691,12 +1895,553 @@ def audit_source(
     )
     return {
         "policy": policy,
+        "policyBytes": len(policy_bytes),
+        "policyPath": policy_path.resolve(strict=True),
         "policySha256": policy_sha256,
         "evidence": evidence,
         "records": records,
         "failures": failures,
         "manifestSha256": manifest,
         "sourceEvidenceRunId": source["runId"],
+    }
+
+
+def load_bound_json(path: Path, label: str) -> tuple[dict[str, Any], bytes, str]:
+    try:
+        data = path.read_bytes()
+    except OSError as error:
+        raise ContractError(f"cannot read JSON {label}: {error}") from error
+    value = decode_json(data, label)
+    require(isinstance(value, dict), f"JSON root is not an object: {label}")
+    return value, data, digest(data)
+
+
+def audit_pilot_contract(
+    audited: dict[str, Any], pilot_contract_path: Path
+) -> dict[str, Any]:
+    contract_value, contract_bytes, contract_sha256 = load_bound_json(
+        pilot_contract_path, "pilot contract"
+    )
+    contract = exact_keys(contract_value, PILOT_CONTRACT_KEYS, "pilot contract")
+    require(contract["schemaVersion"] == 3, "pilot contract schemaVersion drift")
+    require(
+        contract["contractId"] == "c30.day5.kernel-reduction-pilots.v3",
+        "pilot contractId drift",
+    )
+    require(contract["contractState"] == "locked", "pilot contract is not locked")
+    require(
+        contract["measurementStatus"] == "NOT_MEASURED",
+        "pilot contract contains measured status",
+    )
+    purpose = require_string(contract["purpose"], "pilot contract purpose")
+    require(
+        "no measured outcome" in purpose,
+        "pilot contract purpose does not preserve pre-execution authority",
+    )
+
+    parent = exact_keys(
+        contract["parentAuthority"], PILOT_PARENT_KEYS, "pilot parent authority"
+    )
+    policy = audited["policy"]
+    require(parent["policyId"] == policy["policyId"], "pilot parent policyId drift")
+    parent_policy_path = confined_path(
+        ROOT,
+        parent["policyPath"],
+        "pilot parent policyPath",
+    ).resolve(strict=True)
+    require(
+        parent_policy_path == audited["policyPath"],
+        "pilot parent policyPath does not identify the audited policy",
+    )
+    require(
+        parent["policyBytes"] == audited["policyBytes"],
+        "pilot parent policy byte count drift",
+    )
+    require(
+        parent["policySha256"] == audited["policySha256"],
+        "pilot parent policy SHA-256 drift",
+    )
+    require(
+        parent["sourceEvidenceRunId"] == audited["sourceEvidenceRunId"],
+        "pilot parent source run drift",
+    )
+    require(
+        parent["sourceFailures"] == len(audited["failures"]),
+        "pilot parent failure denominator drift",
+    )
+    require(
+        parent["obligationManifestSha256"] == audited["manifestSha256"],
+        "pilot parent obligation manifest drift",
+    )
+
+    by_failure_id = record_by_failure_id(audited)
+    pilots_value = contract["pilots"]
+    require(
+        isinstance(pilots_value, list) and len(pilots_value) == 3,
+        "pilot contract pilot denominator drift",
+    )
+    pilots: list[dict[str, Any]] = []
+    pilot_ids: list[str] = []
+    atom_counts: dict[str, int] = {}
+    for index, pilot_value in enumerate(pilots_value):
+        pilot = exact_keys(pilot_value, PILOT_KEYS, f"pilots[{index}]")
+        failure_id = require_hash(pilot["failureId"], f"pilots[{index}].failureId")
+        require(
+            failure_id in by_failure_id,
+            f"pilot failureId is not an obligation: {failure_id}",
+        )
+        record = by_failure_id[failure_id]
+        derived = obligation(record)
+        require(
+            pilot["failureSignatureSha256"] == derived["failureSignatureSha256"],
+            f"pilot failure signature drift: {failure_id}",
+        )
+        require(
+            pilot["sourceRecordSha256"] == derived["sourceRecordSha256"],
+            f"pilot source record drift: {failure_id}",
+        )
+        for name in ("lane", "tuId", "sourcePath", "phase", "classification"):
+            require(
+                pilot[name] == record[name],
+                f"pilot {name} disagrees with source record: {failure_id}",
+            )
+        diagnostic = exact_keys(
+            pilot["diagnostic"],
+            {"code", "emittedSpan", "message", "sourcePath", "sourceSpan"},
+            f"pilots[{index}].diagnostic",
+        )
+        source_diagnostic = record["diagnostic"]
+        require(
+            diagnostic
+            == {
+                "code": source_diagnostic["code"],
+                "emittedSpan": source_diagnostic["emittedSpan"],
+                "message": source_diagnostic["message"],
+                "sourcePath": source_diagnostic["sourcePath"],
+                "sourceSpan": source_diagnostic["sourceSpan"],
+            },
+            f"pilot diagnostic drift: {failure_id}",
+        )
+        selector = pilot["candidateSelector"]
+        if record["lane"] == "evocpp-raw":
+            raw_selector = exact_keys(
+                selector,
+                {"kind", "outputFiles", "seedFamilies", "sharedSourceFiles"},
+                f"pilots[{index}].candidateSelector",
+            )
+            require(raw_selector["kind"] == "raw-closure", "raw pilot kind drift")
+            require(
+                raw_selector["seedFamilies"]
+                == {"subject": "gcc", "gcc": "gcc", "clang": "clang"},
+                "raw pilot seed families drift",
+            )
+            require(
+                isinstance(raw_selector["outputFiles"], list),
+                "raw outputFiles is not a list",
+            )
+            files = raw_selector["sharedSourceFiles"]
+            require(
+                isinstance(files, list) and bool(files),
+                "raw sharedSourceFiles is empty",
+            )
+            logicals: list[str] = []
+            line_atoms = 0
+            for file_index, file_value in enumerate(files):
+                item = exact_keys(
+                    file_value,
+                    {"logicalPath", "seedLines"},
+                    f"raw selector file[{file_index}]",
+                )
+                logical = normalize_closure_logical(
+                    item["logicalPath"],
+                    f"raw selector file[{file_index}].logicalPath",
+                    require_normalized=True,
+                )
+                require(
+                    logical.startswith("source/"),
+                    "raw shared selector includes output file",
+                )
+                lines = item["seedLines"]
+                require(
+                    isinstance(lines, list)
+                    and bool(lines)
+                    and all(is_int(line) and line >= 1 for line in lines)
+                    and lines == sorted(set(lines)),
+                    f"raw selector seedLines invalid: {logical}",
+                )
+                logicals.append(logical)
+                line_atoms += len(lines)
+            require(
+                logicals == sorted(set(logicals)),
+                "raw selector files are not unique/sorted",
+            )
+            output_files = raw_selector["outputFiles"]
+            require(
+                all(isinstance(item, dict) for item in output_files),
+                "raw outputFiles contains a non-object",
+            )
+            atom_count = len(files) + len(output_files) + line_atoms
+        else:
+            parser_selector = exact_keys(
+                selector,
+                {"kind", "seedArtifact", "seedLines"},
+                f"pilots[{index}].candidateSelector",
+            )
+            require(
+                parser_selector["kind"] == "preprocessed-parser"
+                and parser_selector["seedArtifact"] == "artifacts.parserInput",
+                f"parser pilot selector drift: {failure_id}",
+            )
+            lines = parser_selector["seedLines"]
+            require(
+                isinstance(lines, list)
+                and bool(lines)
+                and all(is_int(line) and line >= 1 for line in lines)
+                and lines == sorted(set(lines)),
+                f"parser pilot seedLines invalid: {failure_id}",
+            )
+            atom_count = len(lines)
+        require_int(pilot["atomCount"], f"pilots[{index}].atomCount", minimum=1)
+        require(
+            pilot["atomCount"] == atom_count,
+            f"pilot atom denominator drift: {failure_id}",
+        )
+        require_string(pilot["minimalityClaim"], f"pilots[{index}].minimalityClaim")
+        pilots.append(pilot)
+        pilot_ids.append(failure_id)
+        atom_counts[failure_id] = atom_count
+    require(
+        pilot_ids == sorted(set(pilot_ids)), "pilot failureIds are not unique/sorted"
+    )
+    require(
+        pilot_ids == PHASE2_PILOT_FAILURE_IDS,
+        "pilot failureId set/order drift",
+    )
+
+    minimality = exact_keys(
+        contract["minimalityAuthority"],
+        {"executionRule", "interestingness", "orderedAtoms", "totalAtoms"},
+        "pilot minimalityAuthority",
+    )
+    ordered_atoms = minimality["orderedAtoms"]
+    require(isinstance(ordered_atoms, list), "pilot orderedAtoms is not a list")
+    observed_counts = {failure_id: 0 for failure_id in pilot_ids}
+    for index, value in enumerate(ordered_atoms):
+        atom = exact_keys(value, {"atomId", "failureId"}, f"orderedAtoms[{index}]")
+        failure_id = require_hash(atom["failureId"], f"orderedAtoms[{index}].failureId")
+        require(
+            failure_id in observed_counts,
+            f"ordered atom has unknown pilot: {failure_id}",
+        )
+        require_string(atom["atomId"], f"orderedAtoms[{index}].atomId")
+        observed_counts[failure_id] += 1
+    total_atoms = require_int(
+        minimality["totalAtoms"], "minimalityAuthority.totalAtoms", minimum=1
+    )
+    require(
+        total_atoms == len(ordered_atoms) == 19,
+        "pilot ordered atom denominator drift",
+    )
+    require(
+        observed_counts == atom_counts, "pilot per-obligation atom denominator drift"
+    )
+    execution_rule = require_string(
+        minimality["executionRule"], "minimalityAuthority.executionRule"
+    )
+    require(
+        "including variants with an empty retained file or a missing file"
+        in execution_rule,
+        "pilot minimality authority permits structural skips",
+    )
+    interestingness = require_string(
+        minimality["interestingness"], "minimalityAuthority.interestingness"
+    )
+    require(
+        "both pinned compilers accept" in interestingness,
+        "pilot interestingness omits two-oracle acceptance",
+    )
+
+    isolation = exact_keys(
+        contract["executionIsolation"],
+        {
+            "requiredCompilers",
+            "resetSameHomeAndTmpdirBeforeEveryReplay",
+            "sealedContainerInputs",
+            "stablePrivatePaths",
+            "subjectReplays",
+        },
+        "pilot executionIsolation",
+    )
+    require(isolation["subjectReplays"] == 3, "pilot subject replay denominator drift")
+    require(
+        isolation["stablePrivatePaths"] is True, "pilot private paths are not stable"
+    )
+    require(
+        isolation["resetSameHomeAndTmpdirBeforeEveryReplay"] is True,
+        "pilot private directory reset disabled",
+    )
+    require(
+        isolation["requiredCompilers"] == ["gcc", "clang"], "pilot compiler set drift"
+    )
+    require_string(
+        isolation["sealedContainerInputs"], "executionIsolation.sealedContainerInputs"
+    )
+    oracle_authority = exact_keys(
+        contract["oracleEvidenceAuthority"],
+        {
+            "cleanup",
+            "containerDescriptor",
+            "containerRuns",
+            "perRun",
+            "preflight",
+            "runOrder",
+            "schemaVersion",
+        },
+        "pilot oracleEvidenceAuthority",
+    )
+    require(
+        oracle_authority["schemaVersion"] == 2,
+        "pilot oracle evidence schemaVersion drift",
+    )
+    require(
+        exact_keys(
+            oracle_authority["containerRuns"],
+            set(EXECUTION_COUNTS),
+            "pilot oracle containerRuns",
+        )
+        == EXECUTION_COUNTS,
+        "pilot oracle execution denominator drift",
+    )
+    descriptor_authority = exact_keys(
+        oracle_authority["containerDescriptor"],
+        {
+            "afterExitStatus",
+            "afterState",
+            "beforeState",
+            "capAdd",
+            "capDrop",
+            "image",
+            "initProcess",
+            "mounts",
+            "exactEnvironment",
+            "exactInputMountSource",
+            "networks",
+            "platform",
+            "publishedPorts",
+            "publishedSockets",
+            "readOnlyRoot",
+            "rosetta",
+            "sameIdAndConfigurationBeforeAfter",
+            "ssh",
+            "virtualization",
+        },
+        "pilot oracle containerDescriptor",
+    )
+    require(
+        descriptor_authority["sameIdAndConfigurationBeforeAfter"] is True
+        and descriptor_authority["beforeState"] == "stopped-without-startedDate"
+        and descriptor_authority["afterState"] == "stopped-with-startedDate"
+        and descriptor_authority["platform"] == "linux/arm64"
+        and descriptor_authority["readOnlyRoot"] is True
+        and descriptor_authority["networks"] == []
+        and descriptor_authority["capAdd"] == []
+        and descriptor_authority["capDrop"] == ["ALL"]
+        and descriptor_authority["publishedPorts"] == []
+        and descriptor_authority["publishedSockets"] == []
+        and descriptor_authority["rosetta"] is False
+        and descriptor_authority["ssh"] is False
+        and descriptor_authority["virtualization"] is False
+        and descriptor_authority["exactEnvironment"] is True
+        and descriptor_authority["exactInputMountSource"] is True,
+        "pilot oracle container descriptor authority drift",
+    )
+    for name in ("image", "initProcess", "mounts", "afterExitStatus"):
+        require_string(descriptor_authority[name], f"oracleEvidenceAuthority.{name}")
+    require(
+        "after.status.exitCode" in descriptor_authority["afterExitStatus"]
+        and "no unlisted variables" in descriptor_authority["initProcess"]
+        and "descriptor source equals" in descriptor_authority["mounts"],
+        "pilot oracle descriptor semantic binding drift",
+    )
+    require_string(oracle_authority["runOrder"], "oracleEvidenceAuthority.runOrder")
+    require_string(oracle_authority["preflight"], "oracleEvidenceAuthority.preflight")
+    require_string(oracle_authority["perRun"], "oracleEvidenceAuthority.perRun")
+    require(
+        exact_keys(
+            oracle_authority["cleanup"],
+            {
+                "aliasDeleteRequired",
+                "containerDeleteRequired",
+                "exceptionTotalCleanup",
+                "externalPostCleanupAttestationRequired",
+                "inspectFailureIsAbsence",
+                "partialEvidenceForbidden",
+                "plannedResourceLedgerRequired",
+                "postAliasDeleteSuccessfulInventoryRequired",
+                "postDeleteSuccessfulInventoryRequired",
+                "registerBeforeSideEffect",
+            },
+            "pilot oracle cleanup",
+        )
+        == {
+            "aliasDeleteRequired": True,
+            "containerDeleteRequired": True,
+            "exceptionTotalCleanup": True,
+            "externalPostCleanupAttestationRequired": True,
+            "inspectFailureIsAbsence": False,
+            "partialEvidenceForbidden": True,
+            "plannedResourceLedgerRequired": True,
+            "postAliasDeleteSuccessfulInventoryRequired": True,
+            "postDeleteSuccessfulInventoryRequired": True,
+            "registerBeforeSideEffect": True,
+        },
+        "pilot oracle cleanup authority drift",
+    )
+    observer = exact_keys(
+        contract["observerAuthority"],
+        OBSERVER_AUTHORITY_KEYS,
+        "pilot observer authority",
+    )
+    require(observer["schemaVersion"] == 1, "pilot observer schemaVersion drift")
+    require(
+        observer["authorityState"] == "ABSENT"
+        and observer["measurementStatus"] == "NOT_MEASURED"
+        and observer["provisional"] is True
+        and observer["liveMeasurementPermitted"] is False,
+        "pilot absent observer sentinel drift",
+    )
+    require(
+        observer["protocolId"] == "c30.day5.phase2-external-observer.v1"
+        and observer["attestationTrust"] == "externally-pinned-sha256"
+        and observer["checkpoints"] == ["plan", "pre-cleanup", "post-cleanup"]
+        and observer["requiredExecutionBoundary"]
+        == [
+            "subject",
+            "oracle-input-closure",
+            "oracle-before",
+            "oracle-start",
+            "oracle-after",
+            "cleanup",
+        ]
+        and observer["oracleRunCount"] == 46
+        and observer["oracleInputRunCount"] == 44
+        and observer["subjectRunCount"] == 28,
+        "pilot observer protocol/denominator authority drift",
+    )
+    executable = exact_keys(
+        observer["executable"],
+        {"bytes", "path", "sha256"},
+        "pilot observer executable sentinel",
+    )
+    require(
+        executable == {"bytes": 0, "path": None, "sha256": digest(b"")}
+        and "Reject before subject or container execution"
+        in require_string(observer["absenceBehavior"], "observer absenceBehavior"),
+        "pilot observer executable ABSENT sentinel drift",
+    )
+    verdict = exact_keys(
+        contract["verdictSemantics"],
+        {
+            "acceptanceValid",
+            "globalVerdict",
+            "pilotAcceptanceValid",
+            "remainingFailures",
+            "sourceFailures",
+            "verifiedPilotRecords",
+        },
+        "pilot verdictSemantics",
+    )
+    require(
+        verdict
+        == {
+            "acceptanceValid": False,
+            "globalVerdict": "INCOMPLETE",
+            "pilotAcceptanceValid": True,
+            "remainingFailures": len(audited["failures"]) - len(pilots),
+            "sourceFailures": len(audited["failures"]),
+            "verifiedPilotRecords": len(pilots),
+        },
+        "pilot verdict semantics drift",
+    )
+    receipt_authority = exact_keys(
+        contract["receiptAuthority"],
+        {
+            "cleanupEvidenceRequired",
+            "cleanupLedgerRequired",
+            "creation",
+            "externalReceiptIndexRequired",
+            "executionEvidenceRequired",
+            "executionRunCount",
+            "measuredReceiptIndex",
+            "noReplacePrimitiveRequired",
+            "observerEvidenceRequired",
+            "observerOracleInputRunCount",
+            "observerOracleRunCount",
+            "observerSubjectRunCount",
+            "rawDescriptorArtifactsInClosure",
+            "replayRequiresTrustedReceiptIndexSha256",
+            "resultAndReceiptBindPilotContractSha256",
+            "schemaVersion",
+        },
+        "pilot receiptAuthority",
+    )
+    require(
+        receipt_authority
+        == {
+            "cleanupEvidenceRequired": True,
+            "cleanupLedgerRequired": True,
+            "creation": "atomic-no-overwrite-with-no-replace-primitive",
+            "externalReceiptIndexRequired": True,
+            "executionEvidenceRequired": True,
+            "executionRunCount": 46,
+            "measuredReceiptIndex": "separate-externally-pinned-post-run-authority",
+            "noReplacePrimitiveRequired": True,
+            "observerEvidenceRequired": True,
+            "observerOracleInputRunCount": 44,
+            "observerOracleRunCount": 46,
+            "observerSubjectRunCount": 28,
+            "rawDescriptorArtifactsInClosure": True,
+            "replayRequiresTrustedReceiptIndexSha256": True,
+            "resultAndReceiptBindPilotContractSha256": True,
+            "schemaVersion": 3,
+        },
+        "pilot receipt authority drift",
+    )
+
+    forbidden = {
+        "measuredAt",
+        "oracleResults",
+        "outcome",
+        "receiptSha256",
+        "returnCode",
+        "stderr",
+        "stdout",
+        "subjectResults",
+        "timedOut",
+    }
+
+    def reject_measured(value: Any, label: str) -> None:
+        if isinstance(value, dict):
+            overlap = set(value) & forbidden
+            require(
+                not overlap,
+                f"pilot contract contains measured fields at {label}: {sorted(overlap)}",
+            )
+            for name, child in value.items():
+                reject_measured(child, f"{label}.{name}")
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                reject_measured(child, f"{label}[{index}]")
+
+    reject_measured(contract, "pilotContract")
+    return {
+        "bytes": len(contract_bytes),
+        "contract": contract,
+        "observerAuthority": observer,
+        "orderedAtoms": ordered_atoms,
+        "pilotIds": pilot_ids,
+        "pilots": pilots,
+        "sha256": contract_sha256,
     }
 
 
@@ -1721,6 +2466,17 @@ def reject_overlay_symlinks(root: Path) -> None:
                     path.stat().st_nlink == 1,
                     f"overlay hard-link isolation violation: {path.relative_to(root)}",
                 )
+
+
+def require_live_pilot_observer_authority(
+    pilot_authority: dict[str, Any],
+) -> None:
+    observer = pilot_authority["observerAuthority"]
+    require(
+        observer["authorityState"] != "ABSENT"
+        and observer["liveMeasurementPermitted"] is True,
+        "pilot observer authority is ABSENT; live measurement is not permitted",
+    )
 
 
 def physical_lines(data: bytes) -> list[bytes]:
@@ -2486,6 +3242,395 @@ def validate_overlay_manifest(
     return {"records": validated}
 
 
+def file_closure(root: Path, *, excluded: set[str] | None = None) -> dict[str, Any]:
+    excluded = excluded or set()
+    entries: list[dict[str, Any]] = []
+    seen_inodes: set[tuple[int, int]] = set()
+    for path in sorted(root.rglob("*"), key=lambda value: value.as_posix()):
+        relative = path.relative_to(root).as_posix()
+        if relative in excluded:
+            continue
+        mode = path.lstat().st_mode
+        require(
+            not stat.S_ISLNK(mode), f"file closure contains symbolic link: {relative}"
+        )
+        if stat.S_ISDIR(mode):
+            continue
+        require(stat.S_ISREG(mode), f"file closure contains special entry: {relative}")
+        info = path.stat()
+        require(info.st_nlink == 1, f"file closure contains hard link: {relative}")
+        inode = (info.st_dev, info.st_ino)
+        require(inode not in seen_inodes, f"file closure aliases inode: {relative}")
+        seen_inodes.add(inode)
+        entries.append(descriptor(path, relative))
+    rows = [
+        f"{entry['path']}\t{entry['sha256']}\t{entry['bytes']}\n".encode("utf-8")
+        for entry in entries
+    ]
+    return {
+        "bytes": sum(entry["bytes"] for entry in entries),
+        "files": entries,
+        "sha256": digest(b"".join(rows)),
+    }
+
+
+def closure_sha256(files: dict[str, bytes]) -> str:
+    return digest(
+        b"".join(
+            f"{logical}\t{digest(data)}\t{len(data)}\n".encode("utf-8")
+            for logical, data in sorted(files.items())
+        )
+    )
+
+
+def raw_bundle_sha256(
+    root_source_path: str,
+    subject: dict[str, bytes],
+    gcc: dict[str, bytes],
+    clang: dict[str, bytes],
+) -> str:
+    root = f"source/{root_source_path}"
+    return digest(
+        canonical(
+            {
+                "referenceClosures": {
+                    "clang": {
+                        "closureSha256": closure_sha256(clang),
+                        "root": root,
+                        "seedFamily": "clang",
+                    },
+                    "gcc": {
+                        "closureSha256": closure_sha256(gcc),
+                        "root": root,
+                        "seedFamily": "gcc",
+                    },
+                },
+                "rootSourcePath": root_source_path,
+                "subjectClosure": {
+                    "closureSha256": closure_sha256(subject),
+                    "root": root,
+                    "seedFamily": "gcc",
+                },
+            }
+        )
+    )
+
+
+def pilot_anchor(model: dict[str, Any]) -> dict[str, Any]:
+    record = model["record"]
+    failure_id = model["failureId"]
+    diagnostic = record["diagnostic"]
+    seed_line = diagnostic["emittedSpan"]["line"]
+    if model["kind"] == "preprocessed-parser":
+        mapping = next(
+            (item for item in model["lineage"] if item["seedLine"] == seed_line),
+            None,
+        )
+        require(mapping is not None, f"pilot deletes parser causal line: {failure_id}")
+        return {
+            "candidateLine": mapping["candidateLine"],
+            "failureId": failure_id,
+            "kind": model["kind"],
+            "seedLine": seed_line,
+            "seedLineSha256": mapping["seedLineSha256"],
+            "sourceColumn": diagnostic["sourceSpan"]["column"],
+            "sourceLine": diagnostic["sourceSpan"]["line"],
+            "sourcePath": diagnostic["sourcePath"],
+            "sourceRecordSha256": obligation(record)["sourceRecordSha256"],
+        }
+    logical = f"source/{diagnostic['sourcePath']}"
+    mapping = next(
+        (
+            item
+            for item in model["rawLineage"][logical]
+            if item["seedLine"] == seed_line
+        ),
+        None,
+    )
+    require(mapping is not None, f"pilot deletes raw causal line: {failure_id}")
+    return {
+        "candidateLine": mapping["candidateLine"],
+        "failureId": failure_id,
+        "kind": model["kind"],
+        "logicalPath": logical,
+        "seedLine": seed_line,
+        "seedLineSha256": mapping["seedLineSha256"],
+        "sourceColumn": diagnostic["sourceSpan"]["column"],
+        "sourceLine": diagnostic["sourceSpan"]["line"],
+        "sourcePath": diagnostic["sourcePath"],
+        "sourceRecordSha256": obligation(record)["sourceRecordSha256"],
+    }
+
+
+def parser_variant(model: dict[str, Any], deleted_line: int | None) -> dict[str, Any]:
+    lines = physical_lines(model["parserData"])
+    kept = [
+        (line, mapping)
+        for index, (line, mapping) in enumerate(zip(lines, model["lineage"]), start=1)
+        if index != deleted_line
+    ]
+    data = b"".join(line for line, _ in kept)
+    lineage = [
+        {**mapping, "candidateLine": index}
+        for index, (_, mapping) in enumerate(kept, start=1)
+    ]
+    files = {"candidate.c": data}
+    return {
+        "candidateDigest": digest(data),
+        "inputs": {family: dict(files) for family in ("subject", "gcc", "clang")},
+        "lineage": lineage,
+    }
+
+
+def raw_variant(
+    model: dict[str, Any],
+    deleted_file: str | None,
+    deleted_line: tuple[str, int] | None,
+) -> dict[str, Any]:
+    inputs: dict[str, dict[str, bytes]] = {}
+    lineages: dict[str, list[dict[str, Any]]] = {
+        logical: copy.deepcopy(value) for logical, value in model["rawLineage"].items()
+    }
+    for family, original in model["rawFiles"].items():
+        files = dict(original)
+        if deleted_file is not None:
+            files.pop(deleted_file, None)
+        if deleted_line is not None:
+            logical, candidate_line = deleted_line
+            lines = physical_lines(files[logical])
+            files[logical] = b"".join(
+                line
+                for index, line in enumerate(lines, start=1)
+                if index != candidate_line
+            )
+        inputs[family] = files
+    if deleted_file is not None:
+        lineages.pop(deleted_file, None)
+    if deleted_line is not None:
+        logical, candidate_line = deleted_line
+        retained = [
+            item
+            for index, item in enumerate(lineages[logical], start=1)
+            if index != candidate_line
+        ]
+        lineages[logical] = [
+            {**item, "candidateLine": index}
+            for index, item in enumerate(retained, start=1)
+        ]
+    return {
+        "candidateDigest": raw_bundle_sha256(
+            model["record"]["sourcePath"],
+            inputs["subject"],
+            inputs["gcc"],
+            inputs["clang"],
+        ),
+        "inputs": inputs,
+        "rawLineage": lineages,
+    }
+
+
+def pilot_atoms(model: dict[str, Any]) -> list[dict[str, Any]]:
+    atoms: list[dict[str, Any]] = []
+    if model["kind"] == "preprocessed-parser":
+        for item in model["lineage"]:
+            atoms.append(
+                {
+                    "atomId": (
+                        f"line:{item['candidateLine']:06d}:seed:{item['seedLine']:06d}:"
+                        f"{item['seedLineSha256']}"
+                    ),
+                    "variant": parser_variant(model, item["candidateLine"]),
+                }
+            )
+    else:
+        for logical in sorted(model["rawFiles"]["subject"]):
+            atoms.append(
+                {
+                    "atomId": f"file:{logical}",
+                    "variant": raw_variant(model, logical, None),
+                }
+            )
+            for item in model["rawLineage"][logical]:
+                atoms.append(
+                    {
+                        "atomId": (
+                            f"line:{logical}:candidate:{item['candidateLine']:06d}:"
+                            f"seed:{item['seedLine']:06d}:{item['seedLineSha256']}"
+                        ),
+                        "variant": raw_variant(
+                            model, None, (logical, item["candidateLine"])
+                        ),
+                    }
+                )
+    return sorted(atoms, key=lambda value: value["atomId"])
+
+
+def validate_pilot_overlay(
+    audited: dict[str, Any], pilot_authority: dict[str, Any], overlay: Path
+) -> dict[str, Any]:
+    overlay_root = require_plain_root(overlay, "pilot overlay root")
+    reject_overlay_symlinks(overlay_root)
+    manifest_path = confined_path(
+        overlay_root,
+        audited["policy"]["overlayPolicy"]["manifestPath"],
+        "pilot overlay manifest",
+    )
+    manifest = load_json(manifest_path, "pilot overlay manifest")
+    overlay_policy = audited["policy"]["overlayPolicy"]
+    exact_keys(manifest, set(overlay_policy["rootExactKeys"]), "pilot overlay manifest")
+    require(manifest["schemaVersion"] == 1, "pilot overlay schemaVersion drift")
+    require(
+        manifest["policyId"] == audited["policy"]["policyId"],
+        "pilot overlay policyId drift",
+    )
+    require(
+        manifest["sourceEvidenceRunId"] == audited["sourceEvidenceRunId"],
+        "pilot overlay source run drift",
+    )
+    records = manifest["records"]
+    require(isinstance(records, list), "pilot overlay records is not a list")
+    require(
+        [value.get("failureId") for value in records if isinstance(value, dict)]
+        == pilot_authority["pilotIds"],
+        "pilot overlay failureId set/order drift",
+    )
+    by_source_id = record_by_failure_id(audited)
+    pilots_by_id = {value["failureId"]: value for value in pilot_authority["pilots"]}
+    seen_paths: set[Path] = {manifest_path.resolve(strict=True)}
+    manifest_info = manifest_path.stat()
+    seen_inodes: set[tuple[int, int]] = {(manifest_info.st_dev, manifest_info.st_ino)}
+    models: dict[str, dict[str, Any]] = {}
+    for index, record_value in enumerate(records):
+        entry = exact_keys(
+            record_value,
+            set(overlay_policy["recordExactKeys"]),
+            f"pilot overlay.records[{index}]",
+        )
+        failure_id = entry["failureId"]
+        require(
+            entry["state"] == "CANDIDATE",
+            f"pilot overlay state is not CANDIDATE: {failure_id}",
+        )
+        source_record = by_source_id[failure_id]
+        candidate = entry["candidate"]
+        pilot = pilots_by_id[failure_id]
+        selector = pilot["candidateSelector"]
+        if source_record["lane"] == "evocpp-raw":
+            validate_raw_candidate(
+                audited,
+                overlay_root,
+                failure_id,
+                source_record,
+                candidate,
+                seen_paths,
+                seen_inodes,
+            )
+            require(
+                candidate["kind"] == selector["kind"],
+                f"pilot raw candidate kind drift: {failure_id}",
+            )
+            raw_files: dict[str, dict[str, bytes]] = {}
+            for family, flavor, closure in (
+                ("subject", "subject", candidate["subjectClosure"]),
+                ("gcc", "reference-gcc", candidate["referenceClosures"]["gcc"]),
+                ("clang", "reference-clang", candidate["referenceClosures"]["clang"]),
+            ):
+                raw_files[family] = {
+                    item["logicalPath"]: (
+                        overlay_root
+                        / "candidates"
+                        / failure_id
+                        / flavor
+                        / item["logicalPath"]
+                    ).read_bytes()
+                    for item in closure["files"]
+                }
+            shared_selector = selector["sharedSourceFiles"]
+            expected_logicals = [item["logicalPath"] for item in shared_selector]
+            require(
+                sorted(raw_files["subject"]) == sorted(expected_logicals),
+                f"pilot raw selector file set drift: {failure_id}",
+            )
+            raw_lineage = {
+                item["logicalPath"]: item["lineage"]
+                for item in candidate["subjectClosure"]["files"]
+            }
+            for expected in shared_selector:
+                require(
+                    [item["seedLine"] for item in raw_lineage[expected["logicalPath"]]]
+                    == expected["seedLines"],
+                    f"pilot raw selector lineage drift: {failure_id}:{expected['logicalPath']}",
+                )
+            model = {
+                "candidateDigest": candidate["bundleSha256"],
+                "candidateManifest": candidate,
+                "failureId": failure_id,
+                "kind": "raw-closure",
+                "rawFiles": raw_files,
+                "rawLineage": raw_lineage,
+                "record": source_record,
+            }
+        else:
+            validated = validate_parser_candidate(
+                audited,
+                overlay_root,
+                failure_id,
+                source_record,
+                candidate,
+                seen_paths,
+                seen_inodes,
+            )
+            require(
+                candidate["kind"] == selector["kind"],
+                f"pilot parser candidate kind drift: {failure_id}",
+            )
+            require(
+                [item["seedLine"] for item in candidate["lineage"]]
+                == selector["seedLines"],
+                f"pilot parser selector lineage drift: {failure_id}",
+            )
+            model = {
+                "candidateDigest": candidate["sha256"],
+                "candidateManifest": candidate,
+                "failureId": failure_id,
+                "kind": "preprocessed-parser",
+                "lineage": copy.deepcopy(candidate["lineage"]),
+                "parserData": validated["candidatePath"].read_bytes(),
+                "record": source_record,
+            }
+        atoms = pilot_atoms(model)
+        require(
+            len(atoms) == pilot["atomCount"],
+            f"pilot overlay atom denominator drift: {failure_id}",
+        )
+        model["atoms"] = atoms
+        model["anchor"] = pilot_anchor(model)
+        model["anchorSha256"] = digest(canonical(model["anchor"]))
+        models[failure_id] = model
+    expected_atoms = [
+        {"atomId": atom["atomId"], "failureId": failure_id}
+        for failure_id in pilot_authority["pilotIds"]
+        for atom in models[failure_id]["atoms"]
+    ]
+    require(
+        pilot_authority["orderedAtoms"] == expected_atoms,
+        "pilot contract ordered atoms disagree with overlay",
+    )
+    actual_files = {
+        path.resolve(strict=True) for path in overlay_root.rglob("*") if path.is_file()
+    }
+    require(
+        actual_files == seen_paths,
+        "pilot overlay contains unreferenced or missing files",
+    )
+    return {
+        "closureSha256": file_closure(overlay_root)["sha256"],
+        "manifest": manifest,
+        "models": models,
+        "root": overlay_root,
+    }
+
+
 def verify_overlay_phase1(
     policy_path: Path, evidence: Path, overlay: Path
 ) -> dict[str, Any]:
@@ -2508,6 +3653,2555 @@ def verify_overlay_phase1(
         "structurallyValidCandidates": len(validated["records"]),
         "verdict": "INCOMPLETE",
     }
+
+
+def prepare_pilot_scope(
+    policy_path: Path,
+    pilot_contract_path: Path,
+    evidence: Path,
+    overlay: Path,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    audited = audit_source(policy_path, evidence)
+    pilot_authority = audit_pilot_contract(audited, pilot_contract_path)
+    require_live_pilot_observer_authority(pilot_authority)
+    pilot_overlay = validate_pilot_overlay(audited, pilot_authority, overlay)
+    return audited, pilot_authority, pilot_overlay
+
+
+def reset_directory(path: Path) -> None:
+    if path.exists():
+        require(
+            path.is_dir() and not path.is_symlink(),
+            f"private reset target is unsafe: {path}",
+        )
+        shutil.rmtree(path)
+    path.mkdir(parents=True)
+
+
+def materialize_inputs(root: Path, files: dict[str, bytes]) -> None:
+    reset_directory(root)
+    for logical, data in sorted(files.items()):
+        normalized = (
+            normalize_closure_logical(
+                logical,
+                f"private input {logical}",
+                require_normalized=True,
+            )
+            if "/" in logical
+            else safe_relative(logical, f"private input {logical}")
+        )
+        path = root / normalized
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+
+def captured_process(
+    argv: list[str],
+    environment: dict[str, str] | None,
+    stdout_path: Path,
+    stderr_path: Path,
+    timeout: int,
+) -> tuple[int, bool]:
+    stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    stderr_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
+            completed = subprocess.run(
+                argv,
+                env=environment,
+                stdin=subprocess.DEVNULL,
+                stdout=stdout,
+                stderr=stderr,
+                timeout=timeout,
+                check=False,
+            )
+        return completed.returncode, False
+    except subprocess.TimeoutExpired:
+        return 124, True
+
+
+def receipt_artifact(receipt_root: Path, path: Path) -> dict[str, Any]:
+    relative = path.relative_to(receipt_root).as_posix()
+    return descriptor(path, relative)
+
+
+def failure_classification(code: str, phase: str) -> str:
+    if phase == "raw-source-preprocess":
+        return "preprocess" if code.startswith("E01") else "driver"
+    if code.startswith("E00"):
+        return "lex"
+    if code.startswith("E01"):
+        return "preprocess"
+    if code.startswith("E1"):
+        return "parse"
+    if code.startswith("E2"):
+        return "sema"
+    if code.startswith("E3"):
+        return "layout"
+    return "driver"
+
+
+def parser_line_map(
+    audited: dict[str, Any], record: dict[str, Any]
+) -> dict[int, dict[str, Any]]:
+    root = require_plain_root(audited["evidence"] / "parser", "parser line-map root")
+    path = audit_descriptor(
+        root, record["artifacts"]["lineMap"], "pilot parser lineMap"
+    )
+    rows: dict[int, dict[str, Any]] = {}
+    for number, line in enumerate(path.read_bytes().splitlines(keepends=True), start=1):
+        require(
+            line.endswith(b"\n") and line != b"\n",
+            f"pilot lineMap row malformed: {number}",
+        )
+        value = exact_keys(
+            decode_json(line, f"pilot lineMap:{number}"),
+            {"originLine", "originPath", "parserLine"},
+            f"pilot lineMap:{number}",
+        )
+        parser_line = require_int(
+            value["parserLine"], f"pilot lineMap:{number}.parserLine", minimum=1
+        )
+        require(
+            parser_line not in rows,
+            f"pilot lineMap duplicates parserLine: {parser_line}",
+        )
+        rows[parser_line] = value
+    return rows
+
+
+def normalized_subject_observation(
+    audited: dict[str, Any],
+    model: dict[str, Any],
+    variant: dict[str, Any],
+    private_inputs: Path,
+    return_code: int,
+    timed_out: bool,
+    stderr_data: bytes,
+) -> tuple[dict[str, Any] | None, str | None]:
+    if timed_out or return_code == 0:
+        return None, None
+    first = next(
+        (
+            line
+            for line in stderr_data.decode("utf-8", errors="replace").splitlines()
+            if line.strip()
+        ),
+        "",
+    )
+    match = DIAGNOSTIC_RE.match(first)
+    if match is None:
+        return None, None
+    code = match.group("code")
+    message = match.group("message")
+    live_line = int(match.group("line"))
+    live_column = int(match.group("column"))
+    record = model["record"]
+    frozen = record["diagnostic"]
+    source_path: str | None = None
+    source_span: dict[str, Any] | None = None
+    causal = False
+    if model["kind"] == "preprocessed-parser":
+        mapping = next(
+            (item for item in variant["lineage"] if item["candidateLine"] == live_line),
+            None,
+        )
+        if mapping is not None:
+            seed_line = mapping["seedLine"]
+            origin = parser_line_map(audited, record).get(seed_line)
+            if origin is not None:
+                source_path = origin["originPath"]
+                source_span = {"column": None, "line": origin["originLine"]}
+                causal = (
+                    seed_line == frozen["emittedSpan"]["line"]
+                    and live_column == frozen["emittedSpan"]["column"]
+                    and source_path == frozen["sourcePath"]
+                    and source_span == frozen["sourceSpan"]
+                )
+    else:
+        emitted = Path(match.group("path")).resolve(strict=False)
+        source_root = (private_inputs / "source").resolve(strict=True)
+        if emitted != source_root and source_root in emitted.parents:
+            logical = "source/" + emitted.relative_to(source_root).as_posix()
+            mapping = next(
+                (
+                    item
+                    for item in variant["rawLineage"].get(logical, [])
+                    if item["candidateLine"] == live_line
+                ),
+                None,
+            )
+            if mapping is not None:
+                source_path = logical.removeprefix("source/")
+                source_span = {"column": live_column, "line": mapping["seedLine"]}
+                causal = (
+                    logical == f"source/{frozen['sourcePath']}"
+                    and mapping["seedLine"] == frozen["emittedSpan"]["line"]
+                    and live_column == frozen["emittedSpan"]["column"]
+                    and source_span == frozen["sourceSpan"]
+                )
+    if source_path is None or source_span is None:
+        return None, None
+    observation = {
+        "classification": failure_classification(code, record["phase"]),
+        "diagnostic": {
+            "code": code,
+            "message": message,
+            "sourcePath": source_path,
+            "sourceSpan": source_span,
+        },
+        "phase": record["phase"],
+        "returnCode": return_code,
+        "timedOut": timed_out,
+    }
+    anchor_sha256 = model["anchorSha256"] if causal else None
+    return observation, anchor_sha256
+
+
+def raw_subject_argv(
+    audited: dict[str, Any],
+    model: dict[str, Any],
+    private_inputs: Path,
+    subject_path: Path,
+) -> list[str]:
+    record = model["record"]
+    raw_root = require_plain_root(audited["evidence"] / "evocpp-raw", "raw argv root")
+    argv_path = audit_descriptor(
+        raw_root, record["artifacts"]["argv"], "pilot raw argv"
+    )
+    argv_record = load_json(argv_path, "pilot raw argv")
+    argv_value = argv_record.get("argv")
+    require(
+        isinstance(argv_value, list)
+        and bool(argv_value)
+        and all(isinstance(item, str) for item in argv_value),
+        "pilot raw argv is invalid",
+    )
+    roots = raw_seed_roots(audited)
+    source_root = str(roots["source"])
+    output_root = str(roots["gccOutput"])
+    private_source = str(private_inputs / "source")
+    private_output = str(private_inputs / "output")
+    rewritten = [str(subject_path)]
+    for value in argv_value[1:]:
+        rewritten.append(
+            value.replace(source_root, private_source).replace(
+                output_root, private_output
+            )
+        )
+    return rewritten
+
+
+def run_subject_receipt(
+    audited: dict[str, Any],
+    model: dict[str, Any],
+    variant: dict[str, Any],
+    receipt_root: Path,
+    execution_root: Path,
+    artifact_prefix: str,
+    stable_private_key: str,
+    timeout: int,
+    source_date_epoch: str,
+) -> dict[str, Any]:
+    private_root = execution_root / stable_private_key
+    inputs = private_root / "inputs"
+    home = private_root / "home"
+    temporary = private_root / "tmp"
+    materialize_inputs(inputs, variant["inputs"]["subject"])
+    reset_directory(home)
+    reset_directory(temporary)
+    entries_after_reset = sorted(
+        [path.name for path in [*home.iterdir(), *temporary.iterdir()]]
+    )
+    require(entries_after_reset == [], "private HOME/TMPDIR reset is not empty")
+    environment = {
+        "HOME": str(home),
+        "LANG": "C",
+        "LC_ALL": "C",
+        "SOURCE_DATE_EPOCH": source_date_epoch,
+        "TMPDIR": str(temporary),
+        "TZ": "UTC",
+    }
+    subject_path = confined_path(
+        audited["evidence"],
+        audited["policy"]["sourceEvidence"]["executionAuthority"][
+            "subjectEvidenceRelativePath"
+        ],
+        "pilot subject executable",
+    )
+    if model["kind"] == "preprocessed-parser":
+        argv = [
+            str(subject_path),
+            "--parse-only",
+            "--target=aarch64-unknown-linux-gnu",
+            str(inputs / "candidate.c"),
+        ]
+    else:
+        argv = raw_subject_argv(audited, model, inputs, subject_path)
+    stdout_path = receipt_root / f"{artifact_prefix}.stdout"
+    stderr_path = receipt_root / f"{artifact_prefix}.stderr"
+    return_code, timed_out = captured_process(
+        argv, environment, stdout_path, stderr_path, timeout
+    )
+    normalized, anchor_sha256 = normalized_subject_observation(
+        audited,
+        model,
+        variant,
+        inputs,
+        return_code,
+        timed_out,
+        stderr_path.read_bytes(),
+    )
+    stdout = receipt_artifact(receipt_root, stdout_path)
+    stderr = receipt_artifact(receipt_root, stderr_path)
+    return {
+        "argv": argv,
+        "argvSha256": digest(canonical(argv)),
+        "candidateDigest": variant["candidateDigest"],
+        "causalAnchorSha256": anchor_sha256,
+        "environment": environment,
+        "environmentSha256": digest(canonical(environment)),
+        "inputClosureSha256": closure_sha256(variant["inputs"]["subject"]),
+        "normalizedObservation": normalized,
+        "privateDirectory": {
+            "entriesAfterReset": entries_after_reset,
+            "home": str(home),
+            "resetBeforeExecution": True,
+            "tmpdir": str(temporary),
+        },
+        "returnCode": return_code,
+        "stderr": stderr,
+        "stderrSha256": stderr["sha256"],
+        "stdout": stdout,
+        "stdoutSha256": stdout["sha256"],
+        "subjectSha256": audited["policy"]["sourceEvidence"]["executionAuthority"][
+            "subjectSha256"
+        ],
+        "timedOut": timed_out,
+    }
+
+
+def execute_subject_checkpoint(
+    audited: dict[str, Any],
+    pilot_overlay: dict[str, Any],
+    receipt_root: Path,
+    execution_root: Path,
+) -> dict[str, Any]:
+    source_artifacts = audited["policy"]["sourceEvidence"]["authorityArtifacts"]
+    build_environment = load_json(
+        confined_path(
+            audited["evidence"],
+            source_artifacts["buildEnvironmentContract"]["path"],
+            "pilot build-environment contract",
+        ),
+        "pilot build-environment contract",
+    )
+    run_config = load_json(
+        confined_path(
+            audited["evidence"],
+            source_artifacts["runConfig"]["path"],
+            "pilot run-config",
+        ),
+        "pilot run-config",
+    )
+    source_date_epoch = require_string(
+        build_environment.get("reproducibility", {}).get("SOURCE_DATE_EPOCH"),
+        "pilot SOURCE_DATE_EPOCH",
+    )
+    values: dict[str, Any] = {}
+    stable_fields = {
+        "argvSha256",
+        "candidateDigest",
+        "environmentSha256",
+        "returnCode",
+        "stderrSha256",
+        "stdoutSha256",
+        "subjectSha256",
+        "timedOut",
+    }
+    for failure_id, model in sorted(pilot_overlay["models"].items()):
+        timeout = require_int(
+            run_config[
+                "parserTimeoutSecondsPerTu"
+                if model["kind"] == "preprocessed-parser"
+                else "generalTimeoutSeconds"
+            ],
+            f"pilot subject timeout {failure_id}",
+            minimum=1,
+        )
+        baseline = (
+            parser_variant(model, None)
+            if model["kind"] == "preprocessed-parser"
+            else raw_variant(model, None, None)
+        )
+        replays = [
+            run_subject_receipt(
+                audited,
+                model,
+                baseline,
+                receipt_root,
+                execution_root,
+                f"artifacts/{failure_id}/baseline/subject-{index}",
+                f"{failure_id}/baseline-private",
+                timeout,
+                source_date_epoch,
+            )
+            for index in range(3)
+        ]
+        expected_observation = signature(model["record"])
+        for index, replay in enumerate(replays):
+            require(
+                not replay["timedOut"],
+                f"pilot baseline subject timed out: {failure_id}:{index}",
+            )
+            require(
+                replay["normalizedObservation"] == expected_observation,
+                f"pilot baseline does not reproduce source failure: {failure_id}:{index}",
+            )
+            require(
+                replay["causalAnchorSha256"] == model["anchorSha256"],
+                f"pilot baseline causal anchor drift: {failure_id}:{index}",
+            )
+        stable = [{name: replay[name] for name in stable_fields} for replay in replays]
+        require(
+            stable[0] == stable[1] == stable[2],
+            f"pilot subject replays are unstable: {failure_id}",
+        )
+        require(
+            replays[0]["environment"]
+            == replays[1]["environment"]
+            == replays[2]["environment"],
+            f"pilot subject environments are unstable: {failure_id}",
+        )
+        require(
+            replays[0]["privateDirectory"]
+            == replays[1]["privateDirectory"]
+            == replays[2]["privateDirectory"],
+            f"pilot private reset paths are unstable: {failure_id}",
+        )
+        atoms: list[dict[str, Any]] = []
+        for index, atom in enumerate(model["atoms"]):
+            observation = run_subject_receipt(
+                audited,
+                model,
+                atom["variant"],
+                receipt_root,
+                execution_root,
+                f"artifacts/{failure_id}/atoms/{index:03d}/subject",
+                f"{failure_id}/atom-{index:03d}",
+                timeout,
+                source_date_epoch,
+            )
+            require(
+                not observation["timedOut"],
+                f"pilot deletion subject timed out: {failure_id}:{index}",
+            )
+            atoms.append(
+                {
+                    "atomId": atom["atomId"],
+                    "subjectObservation": observation,
+                    "variant": atom["variant"],
+                }
+            )
+        values[failure_id] = {
+            "atoms": atoms,
+            "baseline": baseline,
+            "subjectReplays": replays,
+        }
+    return values
+
+
+def control_process(
+    argv: list[str], timeout: int = 60
+) -> subprocess.CompletedProcess[bytes]:
+    try:
+        return subprocess.run(
+            argv,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise ContractError(f"control process timed out: {argv[:3]}") from error
+
+
+def decoded_json_output(
+    completed: subprocess.CompletedProcess[bytes], label: str
+) -> dict[str, Any]:
+    require(
+        completed.returncode == 0,
+        f"{label} failed: {completed.stderr.decode('utf-8', errors='replace').strip()}",
+    )
+    value = decode_json(completed.stdout, label)
+    if isinstance(value, list):
+        require(len(value) == 1, f"{label} returned multiple records")
+        value = value[0]
+    require(isinstance(value, dict), f"{label} did not return an object")
+    return value
+
+
+def require_image_identity(container_bin: str, reference: str, expected: str) -> None:
+    inspected = decoded_json_output(
+        control_process([container_bin, "image", "inspect", reference]),
+        f"image inspect {reference}",
+    )
+    observed = "sha256:" + str(inspected.get("id", "")).removeprefix("sha256:")
+    require(observed == expected, f"sealed image identity drift: {reference}")
+
+
+def require_container_identity(
+    container_bin: str, name: str, expected_image: str, alias: str
+) -> None:
+    inspected = decoded_json_output(
+        control_process([container_bin, "inspect", name]),
+        f"container inspect {name}",
+    )
+    configuration = inspected.get("configuration")
+    require(isinstance(configuration, dict), "container inspection lacks configuration")
+    image = configuration.get("image")
+    require(isinstance(image, dict), "container inspection lacks image")
+    descriptor_value = image.get("descriptor")
+    require(
+        isinstance(descriptor_value, dict),
+        "container inspection lacks image descriptor",
+    )
+    require(
+        descriptor_value.get("digest") == expected_image,
+        "container image descriptor drift",
+    )
+    canonical_alias = (
+        alias if "/" in alias.split(":", 1)[0] else f"docker.io/library/{alias}"
+    )
+    require(image.get("reference") == canonical_alias, "container image alias drift")
+    platform = configuration.get("platform")
+    require(
+        isinstance(platform, dict)
+        and platform.get("os") == "linux"
+        and platform.get("architecture") == "arm64",
+        "container platform drift",
+    )
+    require(configuration.get("readOnly") is True, "container root is not read-only")
+    require(configuration.get("networks") == [], "container has a network")
+    require(configuration.get("capDrop") == ["ALL"], "container capability drop drift")
+
+
+def bound_container_process(
+    container_bin: str,
+    alias: str,
+    expected_image: str,
+    name: str,
+    command: list[str],
+    environment: dict[str, str],
+    stdout_path: Path,
+    stderr_path: Path,
+    timeout: int,
+    input_root: Path | None,
+) -> tuple[int, bool]:
+    require_image_identity(container_bin, alias, expected_image)
+    create = [
+        container_bin,
+        "create",
+        "--name",
+        name,
+        "--platform",
+        "linux/arm64",
+        "--network",
+        "none",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--tmpfs",
+        "/tmp",
+        "--workdir",
+        "/inputs" if input_root is not None else "/tmp",
+    ]
+    for key, value in sorted(environment.items()):
+        create.extend(("--env", f"{key}={value}"))
+    if input_root is not None:
+        require(
+            input_root.is_dir() and not input_root.is_symlink(),
+            "oracle input root is unsafe",
+        )
+        create.extend(("--volume", f"{input_root}:/inputs:ro"))
+    create.extend((alias, *command))
+    created = False
+    try:
+        completed = control_process(create)
+        require(
+            completed.returncode == 0,
+            "cannot create sealed oracle container: "
+            + completed.stderr.decode("utf-8", errors="replace").strip(),
+        )
+        created = True
+        require_container_identity(container_bin, name, expected_image, alias)
+        return_code, timed_out = captured_process(
+            [container_bin, "start", "--attach", name],
+            None,
+            stdout_path,
+            stderr_path,
+            timeout,
+        )
+        if timed_out:
+            control_process([container_bin, "stop", name])
+        require_container_identity(container_bin, name, expected_image, alias)
+        require_image_identity(container_bin, alias, expected_image)
+        return return_code, timed_out
+    finally:
+        if created:
+            deleted = control_process([container_bin, "delete", name])
+            require(
+                deleted.returncode == 0,
+                f"cannot delete sealed oracle container: {name}",
+            )
+
+
+def write_artifact(receipt_root: Path, relative: str, data: bytes) -> dict[str, Any]:
+    path = receipt_root / safe_relative(relative, f"receipt artifact {relative}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    require(not path.exists(), f"receipt artifact path reused: {relative}")
+    path.write_bytes(data)
+    require(path.stat().st_nlink == 1, f"receipt artifact is hard-linked: {relative}")
+    return descriptor(path, relative)
+
+
+def control_json_artifact(
+    argv: list[str], receipt_root: Path, relative: str, label: str
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    completed = control_process(argv)
+    require(
+        completed.returncode == 0,
+        f"{label} failed: {completed.stderr.decode('utf-8', errors='replace').strip()}",
+    )
+    artifact = write_artifact(receipt_root, relative, completed.stdout)
+    return artifact, decoded_json_output(completed, label)
+
+
+def image_inspection_artifact(
+    container_bin: str,
+    reference: str,
+    expected_image: str,
+    receipt_root: Path,
+    relative: str,
+    label: str,
+) -> dict[str, Any]:
+    artifact, inspected = control_json_artifact(
+        [container_bin, "image", "inspect", reference], receipt_root, relative, label
+    )
+    observed = "sha256:" + str(inspected.get("id", "")).removeprefix("sha256:")
+    require(observed == expected_image, f"sealed image identity drift: {reference}")
+    return artifact
+
+
+def environment_items(value: Any, label: str) -> dict[str, str]:
+    require(isinstance(value, list), f"{label} is not a list")
+    environment: dict[str, str] = {}
+    for index, item in enumerate(value):
+        require(
+            isinstance(item, str) and "=" in item,
+            f"{label}[{index}] is not NAME=value",
+        )
+        name, content = item.split("=", 1)
+        require(name not in environment, f"{label} duplicates {name}")
+        environment[name] = content
+    return environment
+
+
+def mount_type(value: Any) -> str | None:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict) and len(value) == 1:
+        return next(iter(value))
+    return None
+
+
+def validate_container_pair(
+    before: dict[str, Any],
+    after: dict[str, Any],
+    name: str,
+    alias: str,
+    expected_image: str,
+    command: list[str],
+    environment: dict[str, str],
+    has_inputs: bool,
+) -> None:
+    require(before.get("id") == name, f"container before ID drift: {name}")
+    require(after.get("id") == name, f"container after ID drift: {name}")
+    before_configuration = before.get("configuration")
+    after_configuration = after.get("configuration")
+    require(
+        isinstance(before_configuration, dict)
+        and before_configuration == after_configuration,
+        f"container configuration changed during execution: {name}",
+    )
+    configuration = before_configuration
+    image = configuration.get("image")
+    require(isinstance(image, dict), f"container image descriptor absent: {name}")
+    image_descriptor = image.get("descriptor")
+    require(
+        isinstance(image_descriptor, dict)
+        and image_descriptor.get("digest") == expected_image,
+        f"container sealed image drift: {name}",
+    )
+    canonical_alias = (
+        alias if "/" in alias.split(":", 1)[0] else f"docker.io/library/{alias}"
+    )
+    require(image.get("reference") == canonical_alias, f"container alias drift: {name}")
+    platform = configuration.get("platform")
+    require(
+        isinstance(platform, dict)
+        and platform.get("os") == "linux"
+        and platform.get("architecture") == "arm64",
+        f"container platform drift: {name}",
+    )
+    require(configuration.get("readOnly") is True, f"container root writable: {name}")
+    require(configuration.get("networks") == [], f"container network present: {name}")
+    require(configuration.get("capAdd") == [], f"container capabilities added: {name}")
+    require(configuration.get("capDrop") == ["ALL"], f"container capDrop drift: {name}")
+    require(
+        configuration.get("publishedPorts") == [], f"container publishes ports: {name}"
+    )
+    require(
+        configuration.get("publishedSockets") == [],
+        f"container publishes sockets: {name}",
+    )
+    for key in ("rosetta", "ssh", "virtualization"):
+        require(configuration.get(key) is False, f"container enables {key}: {name}")
+    process = configuration.get("initProcess")
+    require(isinstance(process, dict), f"container init process absent: {name}")
+    require(
+        process.get("executable") == command[0], f"container executable drift: {name}"
+    )
+    require(
+        process.get("arguments") == command[1:], f"container arguments drift: {name}"
+    )
+    require(
+        process.get("workingDirectory") == ("/inputs" if has_inputs else "/tmp"),
+        f"container working directory drift: {name}",
+    )
+    effective_environment = environment_items(
+        process.get("environment"), f"container environment {name}"
+    )
+    for key, value in environment.items():
+        require(
+            effective_environment.get(key) == value,
+            f"container environment drift: {name}:{key}",
+        )
+    mounts = configuration.get("mounts")
+    require(isinstance(mounts, list), f"container mounts absent: {name}")
+    by_destination: dict[str, dict[str, Any]] = {}
+    for value in mounts:
+        require(isinstance(value, dict), f"container mount invalid: {name}")
+        destination = value.get("destination")
+        require(
+            isinstance(destination, str) and destination not in by_destination,
+            f"container mount destination invalid: {name}",
+        )
+        by_destination[destination] = value
+    expected_destinations = {"/tmp", "/inputs"} if has_inputs else {"/tmp"}
+    require(
+        set(by_destination) == expected_destinations,
+        f"container mount set drift: {name}",
+    )
+    require(
+        mount_type(by_destination["/tmp"].get("type")) == "tmpfs",
+        f"container /tmp is not tmpfs: {name}",
+    )
+    if has_inputs:
+        inputs = by_destination["/inputs"]
+        require(
+            mount_type(inputs.get("type")) == "virtiofs"
+            and inputs.get("options") == ["ro"],
+            f"container /inputs mount is not readonly virtiofs: {name}",
+        )
+        source = inputs.get("source")
+        require(
+            isinstance(source, str) and Path(source).is_absolute(),
+            f"container /inputs source is not absolute: {name}",
+        )
+    before_status = before.get("status")
+    after_status = after.get("status")
+    require(isinstance(before_status, dict), f"container before status absent: {name}")
+    require(isinstance(after_status, dict), f"container after status absent: {name}")
+    require(
+        before_status.get("state") == "stopped" and "startedDate" not in before_status,
+        f"container before state is not pristine stopped: {name}",
+    )
+    require(
+        after_status.get("state") == "stopped"
+        and isinstance(after_status.get("startedDate"), str)
+        and bool(after_status["startedDate"]),
+        f"container after state does not prove execution: {name}",
+    )
+
+
+def evidenced_container_process(
+    authority: dict[str, Any],
+    run_id: str,
+    purpose: str,
+    family: str,
+    command: list[str],
+    environment: dict[str, str],
+    stdout_path: Path,
+    stderr_path: Path,
+    timeout: int,
+    input_root: Path | None,
+    input_closure_sha256: str | None,
+    receipt_root: Path,
+) -> tuple[int, bool]:
+    container_bin = authority["containerBin"]
+    alias = authority["alias"]
+    expected_image = authority["expectedImage"]
+    authority["invocation"] += 1
+    ordinal = authority["invocation"]
+    name = f"c30-pilot-{ordinal:03d}-{authority['token']}"
+    prefix = f"artifacts/execution/runs/{ordinal:03d}"
+    image_before = image_inspection_artifact(
+        container_bin,
+        alias,
+        expected_image,
+        receipt_root,
+        f"{prefix}/image-before.json",
+        f"{run_id} image before",
+    )
+    create = [
+        container_bin,
+        "create",
+        "--name",
+        name,
+        "--platform",
+        "linux/arm64",
+        "--network",
+        "none",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--tmpfs",
+        "/tmp",
+        "--workdir",
+        "/inputs" if input_root is not None else "/tmp",
+    ]
+    for key, value in sorted(environment.items()):
+        create.extend(("--env", f"{key}={value}"))
+    if input_root is not None:
+        require(
+            input_root.is_dir() and not input_root.is_symlink(),
+            "oracle input root is unsafe",
+        )
+        create.extend(("--volume", f"{input_root}:/inputs:ro"))
+    create.extend((alias, *command))
+    completed = control_process(create)
+    require(
+        completed.returncode == 0,
+        "cannot create sealed oracle container: "
+        + completed.stderr.decode("utf-8", errors="replace").strip(),
+    )
+    authority["retainedNames"].append(name)
+    container_before, before = control_json_artifact(
+        [container_bin, "inspect", name],
+        receipt_root,
+        f"{prefix}/container-before.json",
+        f"{run_id} container before",
+    )
+    return_code, timed_out = captured_process(
+        [container_bin, "start", "--attach", name],
+        None,
+        stdout_path,
+        stderr_path,
+        timeout,
+    )
+    if timed_out:
+        stopped = control_process([container_bin, "stop", name])
+        if stopped.returncode != 0:
+            stopped = control_process([container_bin, "kill", name])
+        require(stopped.returncode == 0, f"cannot stop timed-out container: {name}")
+    container_after, after = control_json_artifact(
+        [container_bin, "inspect", name],
+        receipt_root,
+        f"{prefix}/container-after.json",
+        f"{run_id} container after",
+    )
+    image_after = image_inspection_artifact(
+        container_bin,
+        alias,
+        expected_image,
+        receipt_root,
+        f"{prefix}/image-after.json",
+        f"{run_id} image after",
+    )
+    validate_container_pair(
+        before,
+        after,
+        name,
+        alias,
+        expected_image,
+        command,
+        environment,
+        input_root is not None,
+    )
+    authority["runs"].append(
+        {
+            "cleanup": None,
+            "containerAfter": container_after,
+            "containerBefore": container_before,
+            "containerName": name,
+            "family": family,
+            "imageAfter": image_after,
+            "imageBefore": image_before,
+            "inputClosureSha256": input_closure_sha256,
+            "purpose": purpose,
+            "runId": run_id,
+        }
+    )
+    return return_code, timed_out
+
+
+def prepare_oracle_authority(
+    audited: dict[str, Any], execution_root: Path, receipt_root: Path
+) -> dict[str, Any]:
+    artifacts = audited["policy"]["sourceEvidence"]["authorityArtifacts"]
+    build_environment = load_json(
+        confined_path(
+            audited["evidence"],
+            artifacts["buildEnvironmentContract"]["path"],
+            "oracle build-environment contract",
+        ),
+        "oracle build-environment contract",
+    )
+    host_authority = load_json(
+        confined_path(
+            audited["evidence"],
+            artifacts["hostBuildAuthority"]["path"],
+            "oracle host-build authority",
+        ),
+        "oracle host-build authority",
+    )
+    container_value = host_authority.get("tools", {}).get("container", {})
+    container_path = Path(
+        require_string(container_value.get("path"), "container CLI path")
+    )
+    require(container_path.is_absolute(), "container CLI path is not absolute")
+    require(
+        container_path.is_file() and not container_path.is_symlink(),
+        "container CLI is absent or symbolic",
+    )
+    require(os.access(container_path, os.X_OK), "container CLI is not executable")
+    execution = audited["policy"]["sourceEvidence"]["executionAuthority"]
+    require(
+        len(container_path.read_bytes()) == container_value.get("bytes")
+        and digest(container_path.read_bytes()) == execution["containerCliSha256"],
+        "container CLI SHA-256 drift before pilot execution",
+    )
+    container_bin = str(container_path)
+    expected_version = require_string(
+        build_environment.get("containerRuntime", {}).get("version"),
+        "container runtime version",
+    )
+    version = control_process([container_bin, "--version"])
+    require(
+        version.returncode == 0
+        and expected_version in version.stdout.decode("utf-8", errors="replace"),
+        "container runtime version drift before pilot execution",
+    )
+    build_image = build_environment.get("buildImage", {})
+    discovery = require_string(
+        build_image.get("sealedImageTag"), "sealed image discovery tag"
+    )
+    expected_image = execution["sealedImageId"]
+    token = digest(str(execution_root).encode("utf-8"))[:12]
+    alias = f"c30-day5-pilot-{os.getpid()}-{token}:bound"
+    discovery_image = image_inspection_artifact(
+        container_bin,
+        discovery,
+        expected_image,
+        receipt_root,
+        "artifacts/execution/preflight/discovery-image.json",
+        "preflight discovery image",
+    )
+    tagged = control_process([container_bin, "image", "tag", discovery, alias])
+    require(
+        tagged.returncode == 0,
+        "cannot create pilot image alias: "
+        + tagged.stderr.decode("utf-8", errors="replace").strip(),
+    )
+    try:
+        alias_image = image_inspection_artifact(
+            container_bin,
+            alias,
+            expected_image,
+            receipt_root,
+            "artifacts/execution/preflight/alias-image.json",
+            "preflight alias image",
+        )
+    except Exception:
+        control_process([container_bin, "image", "delete", alias])
+        raise
+    return {
+        "alias": alias,
+        "aliasLive": True,
+        "buildEnvironment": build_environment,
+        "containerBin": container_bin,
+        "containerCli": {
+            "bytes": container_value["bytes"],
+            "path": container_value["path"],
+            "sha256": execution["containerCliSha256"],
+            "version": expected_version,
+        },
+        "expectedImage": expected_image,
+        "invocation": 0,
+        "preflight": {
+            "alias": alias,
+            "aliasImage": alias_image,
+            "discoveryImage": discovery_image,
+            "discoveryReference": discovery,
+            "expectedImage": expected_image,
+        },
+        "retainedNames": [],
+        "runs": [],
+        "token": token,
+    }
+
+
+def delete_oracle_authority(authority: dict[str, Any]) -> None:
+    deleted = control_process(
+        [authority["containerBin"], "image", "delete", authority["alias"]]
+    )
+    require(deleted.returncode == 0, "cannot delete pilot image alias")
+
+
+def captured_control_evidence(
+    argv: list[str], receipt_root: Path, prefix: str
+) -> tuple[int, dict[str, Any], dict[str, Any]]:
+    stdout_path = receipt_root / f"{prefix}.stdout"
+    stderr_path = receipt_root / f"{prefix}.stderr"
+    return_code, timed_out = captured_process(argv, None, stdout_path, stderr_path, 60)
+    require(not timed_out, f"control command timed out: {argv[:3]}")
+    return (
+        return_code,
+        receipt_artifact(receipt_root, stdout_path),
+        receipt_artifact(receipt_root, stderr_path),
+    )
+
+
+def cleanup_run_evidence(
+    authority: dict[str, Any], run: dict[str, Any], receipt_root: Path, ordinal: int
+) -> dict[str, Any]:
+    container_bin = authority["containerBin"]
+    name = run["containerName"]
+    prefix = f"artifacts/execution/runs/{ordinal:03d}/cleanup"
+    delete_code, delete_stdout, delete_stderr = captured_control_evidence(
+        [container_bin, "delete", name], receipt_root, f"{prefix}/delete"
+    )
+    require(delete_code == 0, f"cannot delete retained pilot container: {name}")
+    inspect_code, inspect_stdout, inspect_stderr = captured_control_evidence(
+        [container_bin, "inspect", name], receipt_root, f"{prefix}/post-delete-inspect"
+    )
+    require(
+        inspect_code != 0,
+        f"deleted pilot container remains inspectable: {name}",
+    )
+    authority["retainedNames"].remove(name)
+    return {
+        "deleteReturnCode": delete_code,
+        "deleteStderr": delete_stderr,
+        "deleteStdout": delete_stdout,
+        "postDeleteInspectReturnCode": inspect_code,
+        "postDeleteInspectStderr": inspect_stderr,
+        "postDeleteInspectStdout": inspect_stdout,
+    }
+
+
+def cleanup_alias_evidence(
+    authority: dict[str, Any], receipt_root: Path
+) -> dict[str, Any]:
+    container_bin = authority["containerBin"]
+    alias = authority["alias"]
+    prefix = "artifacts/execution/alias-cleanup"
+    delete_code, delete_stdout, delete_stderr = captured_control_evidence(
+        [container_bin, "image", "delete", alias], receipt_root, f"{prefix}/delete"
+    )
+    require(delete_code == 0, "cannot delete pilot image alias")
+    inspect_code, inspect_stdout, inspect_stderr = captured_control_evidence(
+        [container_bin, "image", "inspect", alias],
+        receipt_root,
+        f"{prefix}/post-delete-inspect",
+    )
+    require(inspect_code != 0, "deleted pilot image alias remains inspectable")
+    authority["aliasLive"] = False
+    return {
+        "deleteReturnCode": delete_code,
+        "deleteStderr": delete_stderr,
+        "deleteStdout": delete_stdout,
+        "postDeleteInspectReturnCode": inspect_code,
+        "postDeleteInspectStderr": inspect_stderr,
+        "postDeleteInspectStdout": inspect_stdout,
+    }
+
+
+def best_effort_oracle_cleanup(authority: dict[str, Any]) -> None:
+    container_bin = authority["containerBin"]
+    for name in list(authority["retainedNames"]):
+        control_process([container_bin, "stop", name])
+        control_process([container_bin, "delete", "--force", name])
+        authority["retainedNames"].remove(name)
+    if authority.get("aliasLive"):
+        control_process([container_bin, "image", "delete", authority["alias"]])
+        authority["aliasLive"] = False
+
+
+def observer_checkpoint(
+    observer_ready_file: Path | None,
+    observer_ack_file: Path | None,
+    audited: dict[str, Any],
+    pilot_authority: dict[str, Any],
+    pilot_overlay: dict[str, Any],
+    authority: dict[str, Any],
+) -> None:
+    require(
+        (observer_ready_file is None) == (observer_ack_file is None),
+        "observer ready/ack files must be supplied together",
+    )
+    if observer_ready_file is None or observer_ack_file is None:
+        return
+    require(not observer_ready_file.exists(), "observer ready file already exists")
+    require(not observer_ack_file.exists(), "observer ack file already exists")
+    observer_ready_file.parent.mkdir(parents=True, exist_ok=True)
+    ready = {
+        "alias": authority["alias"],
+        "overlayClosureSha256": pilot_overlay["closureSha256"],
+        "pilotContractSha256": pilot_authority["sha256"],
+        "policySha256": audited["policySha256"],
+        "runs": [
+            {"containerName": run["containerName"], "runId": run["runId"]}
+            for run in authority["runs"]
+        ],
+        "schemaVersion": 1,
+    }
+    ready_bytes = canonical(ready)
+    ready_sha256 = digest(ready_bytes)
+    try:
+        with observer_ready_file.open("xb") as output:
+            output.write(ready_bytes)
+    except OSError as error:
+        raise ContractError(f"cannot publish observer ready file: {error}") from error
+    deadline = time.monotonic() + 1800
+    while not observer_ack_file.exists():
+        require(time.monotonic() < deadline, "observer acknowledgement timed out")
+        time.sleep(0.25)
+    require(
+        observer_ack_file.is_file() and not observer_ack_file.is_symlink(),
+        "observer acknowledgement is not a plain file",
+    )
+    acknowledgement = exact_keys(
+        decode_json(observer_ack_file.read_bytes(), "observer acknowledgement"),
+        {"readySha256"},
+        "observer acknowledgement",
+    )
+    require(
+        acknowledgement["readySha256"] == ready_sha256,
+        "observer acknowledgement does not bind the ready inventory",
+    )
+
+
+def oracle_environment(source_date_epoch: str) -> dict[str, str]:
+    return {
+        "HOME": "/tmp/c30-pilot-home",
+        "LANG": "C",
+        "LC_ALL": "C",
+        "SOURCE_DATE_EPOCH": source_date_epoch,
+        "TMPDIR": "/tmp/c30-pilot-tmp",
+        "TZ": "UTC",
+    }
+
+
+def verify_compiler_identities(
+    audited: dict[str, Any], authority: dict[str, Any], receipt_root: Path
+) -> dict[str, Any]:
+    environment = oracle_environment(
+        require_string(
+            authority["buildEnvironment"]
+            .get("reproducibility", {})
+            .get("SOURCE_DATE_EPOCH"),
+            "oracle SOURCE_DATE_EPOCH",
+        )
+    )
+    compilers = audited["policy"]["sourceEvidence"]["executionAuthority"][
+        "referenceCompilers"
+    ]
+    identities: dict[str, Any] = {}
+    for family in ("gcc", "clang"):
+        compiler = compilers[family]
+        stdout_path = receipt_root / f"artifacts/execution/identities/{family}.stdout"
+        stderr_path = receipt_root / f"artifacts/execution/identities/{family}.stderr"
+        command = [
+            "/bin/sh",
+            "-c",
+            '/usr/bin/sha256sum "$1"; "$1" --version',
+            "c30-compiler-identity",
+            compiler["path"],
+        ]
+        return_code, timed_out = evidenced_container_process(
+            authority,
+            f"identity:{family}",
+            "compiler-identity",
+            family,
+            command,
+            environment,
+            stdout_path,
+            stderr_path,
+            60,
+            None,
+            None,
+            receipt_root,
+        )
+        require(
+            not timed_out and return_code == 0,
+            f"cannot measure {family} compiler identity",
+        )
+        lines = stdout_path.read_text(encoding="utf-8", errors="strict").splitlines()
+        require(bool(lines), f"{family} compiler identity output is empty")
+        require(
+            lines[0].split()[0] == compiler["sha256"],
+            f"{family} compiler SHA-256 drift",
+        )
+        require(
+            len(lines) >= 2 and lines[1] == compiler["version"],
+            f"{family} compiler version drift",
+        )
+        stdout = receipt_artifact(receipt_root, stdout_path)
+        stderr = receipt_artifact(receipt_root, stderr_path)
+        identities[family] = {
+            "command": command,
+            "commandSha256": digest(canonical(command)),
+            "compilerPath": compiler["path"],
+            "compilerSha256": compiler["sha256"],
+            "compilerVersion": compiler["version"],
+            "environment": environment,
+            "executionRunId": f"identity:{family}",
+            "stderr": stderr,
+            "stderrSha256": stderr["sha256"],
+            "stdout": stdout,
+            "stdoutSha256": stdout["sha256"],
+        }
+    return identities
+
+
+def first_saved_argv(path: Path) -> list[str]:
+    try:
+        first = path.read_bytes().splitlines()[0].decode("utf-8", errors="strict")
+    except (OSError, IndexError, UnicodeDecodeError) as error:
+        raise ContractError(f"cannot decode command record {path}: {error}") from error
+    require(" := " in first, f"command record lacks saved-command delimiter: {path}")
+    try:
+        argv = shlex.split(first.split(" := ", 1)[1], posix=True)
+    except ValueError as error:
+        raise ContractError(f"cannot parse command record {path}: {error}") from error
+    require(bool(argv), f"command record argv is empty: {path}")
+    return argv
+
+
+def raw_oracle_command(
+    audited: dict[str, Any], model: dict[str, Any], family: str
+) -> list[str]:
+    artifacts = audited["policy"]["sourceEvidence"]["authorityArtifacts"]
+    cohort = load_json(
+        confined_path(
+            audited["evidence"],
+            artifacts["kernelCohortContract"]["path"],
+            "pilot kernel cohort",
+        ),
+        "pilot kernel cohort",
+    )
+    unit = next(
+        (
+            value
+            for value in cohort["translationUnits"]
+            if value.get("id") == model["record"]["tuId"]
+        ),
+        None,
+    )
+    require(isinstance(unit, dict), "pilot TU is absent from kernel cohort")
+    roots = raw_seed_roots(audited)
+    command_path = roots[f"{family}Output"] / unit["commandRecordPath"]
+    expected_sha256 = unit["commands"][family]["recordSha256ByLane"][f"{family}-lane-1"]
+    require(
+        command_path.is_file() and not command_path.is_symlink(),
+        f"missing {family} command record",
+    )
+    require(
+        digest(command_path.read_bytes()) == expected_sha256,
+        f"{family} command record SHA-256 drift",
+    )
+    original = first_saved_argv(command_path)
+    compiler = audited["policy"]["sourceEvidence"]["executionAuthority"][
+        "referenceCompilers"
+    ][family]["path"]
+    projected = [compiler, "-E", "-P"]
+
+    def translate_path(value: str) -> str:
+        if value.startswith("/work/src/"):
+            return "/inputs/source/" + value.removeprefix("/work/src/")
+        if value.startswith("/work/out/"):
+            return "/inputs/output/" + value.removeprefix("/work/out/")
+        relative = value.removeprefix("./")
+        return "/inputs/output/" + relative
+
+    separate_paths = {"-I", "-include", "-imacros", "-isystem", "-iquote"}
+    index = 1
+    while index < len(original):
+        value = original[index]
+        if value.startswith(("-Wp,-MMD,", "-Wp,-MD,")) or value == "-c":
+            index += 1
+            continue
+        if value == "-o":
+            require(
+                index + 1 < len(original), f"{family} command record has dangling -o"
+            )
+            index += 2
+            continue
+        if value in separate_paths:
+            require(
+                index + 1 < len(original),
+                f"{family} command record has dangling {value}",
+            )
+            projected.extend((value, translate_path(original[index + 1])))
+            index += 2
+            continue
+        if value.startswith("-I") and len(value) > 2:
+            projected.append("-I" + translate_path(value[2:]))
+        elif value.startswith("-fmacro-prefix-map=/work/src/"):
+            projected.append(value.replace("/work/src/", "/inputs/source/"))
+        elif value.startswith("/work/src/"):
+            projected.append(translate_path(value))
+        else:
+            projected.append(value)
+        index += 1
+    return projected
+
+
+def input_descriptors(files: dict[str, bytes]) -> list[dict[str, Any]]:
+    return [
+        {"bytes": len(data), "logicalPath": logical, "sha256": digest(data)}
+        for logical, data in sorted(files.items())
+    ]
+
+
+def run_oracle_receipt(
+    audited: dict[str, Any],
+    authority: dict[str, Any],
+    model: dict[str, Any],
+    variant: dict[str, Any],
+    family: str,
+    receipt_root: Path,
+    execution_root: Path,
+    artifact_prefix: str,
+    timeout: int,
+    run_id: str,
+    purpose: str,
+) -> dict[str, Any]:
+    inputs = execution_root / "oracle-inputs" / artifact_prefix / family
+    materialize_inputs(inputs, variant["inputs"][family])
+    compiler = audited["policy"]["sourceEvidence"]["executionAuthority"][
+        "referenceCompilers"
+    ][family]
+    if model["kind"] == "preprocessed-parser":
+        command = [
+            value.replace("<exact-private-candidate>", "/inputs/candidate.c")
+            for value in audited["policy"]["referenceAcceptance"]["parserCommands"][
+                family
+            ]
+        ]
+    else:
+        command = raw_oracle_command(audited, model, family)
+    environment = oracle_environment(
+        require_string(
+            authority["buildEnvironment"]
+            .get("reproducibility", {})
+            .get("SOURCE_DATE_EPOCH"),
+            "oracle SOURCE_DATE_EPOCH",
+        )
+    )
+    stdout_path = receipt_root / f"{artifact_prefix}/{family}.stdout"
+    stderr_path = receipt_root / f"{artifact_prefix}/{family}.stderr"
+    input_closure = closure_sha256(variant["inputs"][family])
+    return_code, timed_out = evidenced_container_process(
+        authority,
+        run_id,
+        purpose,
+        family,
+        command,
+        environment,
+        stdout_path,
+        stderr_path,
+        timeout,
+        inputs,
+        input_closure,
+        receipt_root,
+    )
+    stdout = receipt_artifact(receipt_root, stdout_path)
+    stderr = receipt_artifact(receipt_root, stderr_path)
+    return {
+        "candidateDigest": variant["candidateDigest"],
+        "command": command,
+        "commandSha256": digest(canonical(command)),
+        "compilerPath": compiler["path"],
+        "compilerSha256": compiler["sha256"],
+        "compilerVersion": compiler["version"],
+        "containerInputs": input_descriptors(variant["inputs"][family]),
+        "environment": environment,
+        "executionRunId": run_id,
+        "imageId": authority["expectedImage"],
+        "inputClosureSha256": input_closure,
+        "returnCode": return_code,
+        "stderr": stderr,
+        "stderrSha256": stderr["sha256"],
+        "stdout": stdout,
+        "stdoutSha256": stdout["sha256"],
+        "timedOut": timed_out,
+    }
+
+
+def execute_oracle_checkpoint(
+    audited: dict[str, Any],
+    pilot_authority: dict[str, Any],
+    pilot_overlay: dict[str, Any],
+    subject_values: dict[str, Any],
+    receipt_root: Path,
+    execution_root: Path,
+    observer_ready_file: Path | None,
+    observer_ack_file: Path | None,
+) -> dict[str, Any]:
+    artifacts = audited["policy"]["sourceEvidence"]["authorityArtifacts"]
+    run_config = load_json(
+        confined_path(
+            audited["evidence"],
+            artifacts["runConfig"]["path"],
+            "pilot oracle run-config",
+        ),
+        "pilot oracle run-config",
+    )
+    timeout = require_int(
+        run_config["generalTimeoutSeconds"], "pilot oracle timeout", minimum=1
+    )
+    authority: dict[str, Any] | None = None
+    try:
+        authority = prepare_oracle_authority(audited, execution_root, receipt_root)
+        identities = verify_compiler_identities(audited, authority, receipt_root)
+        for failure_id, model in sorted(pilot_overlay["models"].items()):
+            baseline = subject_values[failure_id]["baseline"]
+            baseline_references = {
+                family: run_oracle_receipt(
+                    audited,
+                    authority,
+                    model,
+                    baseline,
+                    family,
+                    receipt_root,
+                    execution_root,
+                    f"artifacts/{failure_id}/baseline/oracle",
+                    timeout,
+                    f"baseline:{failure_id}:{family}",
+                    "baseline-acceptance",
+                )
+                for family in ("gcc", "clang")
+            }
+            for family, receipt in baseline_references.items():
+                require(
+                    not receipt["timedOut"],
+                    f"pilot baseline {family} timed out: {failure_id}",
+                )
+                require(
+                    receipt["returnCode"] == 0,
+                    f"pilot baseline {family} rejected candidate: {failure_id}",
+                )
+            subject_values[failure_id]["referenceAcceptance"] = baseline_references
+            for index, atom in enumerate(subject_values[failure_id]["atoms"]):
+                atom["referenceAcceptance"] = {
+                    family: run_oracle_receipt(
+                        audited,
+                        authority,
+                        model,
+                        atom["variant"],
+                        family,
+                        receipt_root,
+                        execution_root,
+                        f"artifacts/{failure_id}/atoms/{index:03d}/oracle",
+                        timeout,
+                        f"atom:{failure_id}:{index:03d}:{family}",
+                        "minimality-deletion",
+                    )
+                    for family in ("gcc", "clang")
+                }
+                for family, receipt in atom["referenceAcceptance"].items():
+                    require(
+                        not receipt["timedOut"],
+                        f"pilot deletion {family} timed out: {failure_id}:{index}",
+                    )
+        expected_run_ids = ["identity:gcc", "identity:clang"]
+        for failure_id in pilot_authority["pilotIds"]:
+            expected_run_ids.extend(
+                f"baseline:{failure_id}:{family}" for family in ("gcc", "clang")
+            )
+            for index, _ in enumerate(pilot_overlay["models"][failure_id]["atoms"]):
+                expected_run_ids.extend(
+                    f"atom:{failure_id}:{index:03d}:{family}"
+                    for family in ("gcc", "clang")
+                )
+        require(
+            len(expected_run_ids) == 46
+            and authority["invocation"] == 46
+            and [run["runId"] for run in authority["runs"]] == expected_run_ids,
+            "pilot oracle execution run denominator/order drift",
+        )
+        observer_checkpoint(
+            observer_ready_file,
+            observer_ack_file,
+            audited,
+            pilot_authority,
+            pilot_overlay,
+            authority,
+        )
+        for ordinal, run in enumerate(authority["runs"], start=1):
+            run["cleanup"] = cleanup_run_evidence(authority, run, receipt_root, ordinal)
+        alias_cleanup = cleanup_alias_evidence(authority, receipt_root)
+        require(
+            not authority["retainedNames"] and not authority["aliasLive"],
+            "pilot oracle cleanup is incomplete",
+        )
+        execution_evidence = {
+            "aliasCleanup": alias_cleanup,
+            "compilerIdentities": identities,
+            "containerCli": authority["containerCli"],
+            "counts": copy.deepcopy(EXECUTION_COUNTS),
+            "preflight": authority["preflight"],
+            "runOrderSha256": digest(canonical(expected_run_ids)),
+            "runs": authority["runs"],
+            "schemaVersion": 1,
+        }
+        exact_keys(
+            execution_evidence,
+            EXECUTION_EVIDENCE_KEYS,
+            "measured executionEvidence",
+        )
+        return {
+            "executionEvidence": execution_evidence,
+            "observations": subject_values,
+        }
+    except Exception:
+        if authority is not None:
+            best_effort_oracle_cleanup(authority)
+        raise
+
+
+def assemble_pilot_receipt(
+    audited: dict[str, Any],
+    pilot_authority: dict[str, Any],
+    pilot_overlay: dict[str, Any],
+    observations: dict[str, Any],
+    execution_evidence: dict[str, Any],
+    receipt_root: Path,
+) -> dict[str, Any]:
+    records: list[dict[str, Any]] = []
+    pilots = {value["failureId"]: value for value in pilot_authority["pilots"]}
+    for failure_id, model in sorted(pilot_overlay["models"].items()):
+        measured = observations[failure_id]
+        atoms: list[dict[str, Any]] = []
+        removable = 0
+        for atom in measured["atoms"]:
+            subject = atom["subjectObservation"]
+            references = atom["referenceAcceptance"]
+            subject_matches = (
+                subject["normalizedObservation"] == signature(model["record"])
+                and subject["causalAnchorSha256"] == model["anchorSha256"]
+            )
+            interesting = (
+                subject_matches
+                and references["gcc"]["returnCode"] == 0
+                and not references["gcc"]["timedOut"]
+                and references["clang"]["returnCode"] == 0
+                and not references["clang"]["timedOut"]
+            )
+            removable += int(interesting)
+            atoms.append(
+                {
+                    "atomId": atom["atomId"],
+                    "candidateDigest": atom["variant"]["candidateDigest"],
+                    "interesting": interesting,
+                    "referenceAcceptance": references,
+                    "subjectObservation": subject,
+                }
+            )
+        require(
+            removable == 0,
+            f"pilot candidate has removable deletion atom: {failure_id}",
+        )
+        atom_ids = [value["atomId"] for value in atoms]
+        records.append(
+            {
+                "candidate": {
+                    "digest": model["candidateDigest"],
+                    "kind": model["kind"],
+                },
+                "causalAnchorSha256": model["anchorSha256"],
+                "failureId": failure_id,
+                "minimality": {
+                    "atomOrderSha256": digest(canonical(atom_ids)),
+                    "atoms": atoms,
+                    "claim": pilots[failure_id]["minimalityClaim"],
+                    "removableAtoms": removable,
+                    "testedAtoms": len(atoms),
+                    "totalAtoms": len(atoms),
+                },
+                "referenceAcceptance": measured["referenceAcceptance"],
+                "sourceRecordSha256": obligation(model["record"])["sourceRecordSha256"],
+                "state": "VERIFIED",
+                "subjectReplays": measured["subjectReplays"],
+            }
+        )
+    require(
+        [value["failureId"] for value in records] == pilot_authority["pilotIds"],
+        "pilot receipt record order drift",
+    )
+    return {
+        "artifactClosure": file_closure(receipt_root),
+        "executionEvidence": execution_evidence,
+        "executionAuthority": copy.deepcopy(
+            audited["policy"]["sourceEvidence"]["executionAuthority"]
+        ),
+        "obligationManifestSha256": audited["manifestSha256"],
+        "overlayClosureSha256": pilot_overlay["closureSha256"],
+        "pilotContractSha256": pilot_authority["sha256"],
+        "pilotFailureIds": pilot_authority["pilotIds"],
+        "policyId": audited["policy"]["policyId"],
+        "policySha256": audited["policySha256"],
+        "records": records,
+        "schemaVersion": 2,
+        "sourceEvidenceRunId": audited["sourceEvidenceRunId"],
+    }
+
+
+def pilot_result(
+    audited: dict[str, Any],
+    pilot_authority: dict[str, Any],
+    receipt: dict[str, Any],
+    receipt_sha256: str,
+    mode: str,
+) -> dict[str, Any]:
+    verdict = pilot_authority["contract"]["verdictSemantics"]
+    records = receipt["records"]
+    result = {
+        "acceptanceValid": verdict["acceptanceValid"],
+        "globalVerdict": verdict["globalVerdict"],
+        "mode": mode,
+        "obligationManifestSha256": audited["manifestSha256"],
+        "pilotAcceptanceValid": verdict["pilotAcceptanceValid"],
+        "pilotContractSha256": pilot_authority["sha256"],
+        "policySha256": audited["policySha256"],
+        "receiptSha256": receipt_sha256,
+        "records": [
+            {
+                "failureId": value["failureId"],
+                "receiptSha256": digest(canonical(value)),
+                "state": value["state"],
+            }
+            for value in records
+        ],
+        "remainingFailures": verdict["remainingFailures"],
+        "sourceEvidenceRunId": audited["sourceEvidenceRunId"],
+        "sourceFailures": verdict["sourceFailures"],
+        "verifiedPilots": verdict["verifiedPilotRecords"],
+        "verdict": "PILOT_VERIFIED",
+    }
+    exact_keys(result, PILOT_RESULT_KEYS, "pilot result")
+    return result
+
+
+def verify_pilots_phase2(
+    policy_path: Path,
+    pilot_contract_path: Path,
+    evidence: Path,
+    overlay: Path,
+    receipt_dir: Path,
+    observer_ready_file: Path | None = None,
+    observer_ack_file: Path | None = None,
+) -> dict[str, Any]:
+    require(not receipt_dir.exists(), "pilot receipt directory already exists")
+    require(
+        (observer_ready_file is None) == (observer_ack_file is None),
+        "observer ready/ack files must be supplied together",
+    )
+    audited, pilot_authority, pilot_overlay = prepare_pilot_scope(
+        policy_path, pilot_contract_path, evidence, overlay
+    )
+    receipt_dir.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix=".day5-pilot-receipt-staging-", dir=receipt_dir.parent
+    ) as receipt_staging, tempfile.TemporaryDirectory(
+        prefix="c30-day5-pilot-execution-"
+    ) as execution_staging:
+        observations = execute_subject_checkpoint(
+            audited,
+            pilot_overlay,
+            Path(receipt_staging),
+            Path(execution_staging),
+        )
+        oracle_values = execute_oracle_checkpoint(
+            audited,
+            pilot_authority,
+            pilot_overlay,
+            observations,
+            Path(receipt_staging),
+            Path(execution_staging),
+            observer_ready_file,
+            observer_ack_file,
+        )
+        receipt = assemble_pilot_receipt(
+            audited,
+            pilot_authority,
+            pilot_overlay,
+            oracle_values["observations"],
+            oracle_values["executionEvidence"],
+            Path(receipt_staging),
+        )
+        receipt_bytes = canonical(receipt)
+        receipt_sha256 = digest(receipt_bytes)
+        receipt_path = Path(receipt_staging) / "receipt.json"
+        receipt_path.write_bytes(receipt_bytes)
+        require(receipt_path.stat().st_nlink == 1, "pilot receipt is hard-linked")
+        require(
+            not receipt_dir.exists(),
+            "pilot receipt directory appeared during execution",
+        )
+        os.rename(receipt_staging, receipt_dir)
+    return pilot_result(audited, pilot_authority, receipt, receipt_sha256, "executed")
+
+
+def expected_execution_run_ids(pilot_overlay: dict[str, Any]) -> list[str]:
+    values = ["identity:gcc", "identity:clang"]
+    for failure_id, model in sorted(pilot_overlay["models"].items()):
+        values.extend(f"baseline:{failure_id}:{family}" for family in ("gcc", "clang"))
+        for index, _ in enumerate(model["atoms"]):
+            values.extend(
+                f"atom:{failure_id}:{index:03d}:{family}" for family in ("gcc", "clang")
+            )
+    require(len(values) == 46, "receipt execution denominator drift")
+    return values
+
+
+def validate_receipt_artifact(
+    receipt_root: Path,
+    value: Any,
+    label: str,
+    seen: set[str],
+) -> dict[str, Any]:
+    artifact = descriptor_schema(value, label)
+    relative = safe_relative(artifact["path"], f"{label}.path")
+    require(relative != "receipt.json", f"{label} aliases receipt.json")
+    require(relative not in seen, f"receipt artifact is referenced twice: {relative}")
+    path = confined_path(receipt_root, relative, label)
+    info = path.stat()
+    require(info.st_nlink == 1, f"receipt artifact is hard-linked: {relative}")
+    require(
+        descriptor(path, relative) == artifact, f"receipt artifact drift: {relative}"
+    )
+    seen.add(relative)
+    return artifact
+
+
+def receipt_artifact_json(
+    receipt_root: Path, artifact: dict[str, Any], label: str
+) -> dict[str, Any]:
+    path = confined_path(receipt_root, artifact["path"], label)
+    value = decode_json(path.read_bytes(), label)
+    if isinstance(value, list):
+        require(len(value) == 1, f"{label} contains multiple descriptors")
+        value = value[0]
+    require(isinstance(value, dict), f"{label} is not a descriptor object")
+    return value
+
+
+def validate_receipt_image_artifact(
+    receipt_root: Path,
+    value: Any,
+    label: str,
+    seen: set[str],
+    expected_image: str,
+) -> None:
+    artifact = validate_receipt_artifact(receipt_root, value, label, seen)
+    inspected = receipt_artifact_json(receipt_root, artifact, label)
+    observed = "sha256:" + str(inspected.get("id", "")).removeprefix("sha256:")
+    require(observed == expected_image, f"{label} image identity drift")
+
+
+def validate_receipt_environment(value: Any, label: str) -> dict[str, str]:
+    environment = exact_keys(value, EXECUTION_ENVIRONMENT_KEYS, f"{label} environment")
+    for name, item in environment.items():
+        require(isinstance(item, str), f"{label} environment {name} is not text")
+    require(
+        environment["LANG"] == "C"
+        and environment["LC_ALL"] == "C"
+        and environment["TZ"] == "UTC",
+        f"{label} locale/timezone environment drift",
+    )
+    return environment
+
+
+def validate_receipt_cleanup(
+    receipt_root: Path,
+    value: Any,
+    label: str,
+    seen: set[str],
+) -> None:
+    cleanup = exact_keys(value, CLEANUP_EVIDENCE_KEYS, label)
+    require(cleanup["deleteReturnCode"] == 0, f"{label} delete failed")
+    require(
+        is_int(cleanup["postDeleteInspectReturnCode"])
+        and cleanup["postDeleteInspectReturnCode"] != 0,
+        f"{label} post-delete inspection did not prove absence",
+    )
+    for name in (
+        "deleteStdout",
+        "deleteStderr",
+        "postDeleteInspectStdout",
+        "postDeleteInspectStderr",
+    ):
+        validate_receipt_artifact(receipt_root, cleanup[name], f"{label}.{name}", seen)
+
+
+def validate_execution_evidence_receipt(
+    audited: dict[str, Any],
+    pilot_overlay: dict[str, Any],
+    receipt_root: Path,
+    value: Any,
+    seen: set[str],
+) -> dict[str, Any]:
+    evidence = exact_keys(value, EXECUTION_EVIDENCE_KEYS, "receipt executionEvidence")
+    require(evidence["schemaVersion"] == 1, "executionEvidence schemaVersion drift")
+    require(
+        exact_keys(evidence["counts"], set(EXECUTION_COUNTS), "execution counts")
+        == EXECUTION_COUNTS,
+        "execution evidence counts drift",
+    )
+    policy = audited["policy"]
+    source_artifacts = policy["sourceEvidence"]["authorityArtifacts"]
+    host = load_json(
+        confined_path(
+            audited["evidence"],
+            source_artifacts["hostBuildAuthority"]["path"],
+            "receipt host build authority",
+        ),
+        "receipt host build authority",
+    )
+    build = load_json(
+        confined_path(
+            audited["evidence"],
+            source_artifacts["buildEnvironmentContract"]["path"],
+            "receipt build environment",
+        ),
+        "receipt build environment",
+    )
+    execution = policy["sourceEvidence"]["executionAuthority"]
+    container_tool = host["tools"]["container"]
+    require(
+        exact_keys(
+            evidence["containerCli"],
+            {"bytes", "path", "sha256", "version"},
+            "receipt container CLI",
+        )
+        == {
+            "bytes": container_tool["bytes"],
+            "path": container_tool["path"],
+            "sha256": execution["containerCliSha256"],
+            "version": build["containerRuntime"]["version"],
+        },
+        "receipt container CLI authority drift",
+    )
+    preflight = exact_keys(
+        evidence["preflight"],
+        {
+            "alias",
+            "aliasImage",
+            "discoveryImage",
+            "discoveryReference",
+            "expectedImage",
+        },
+        "receipt execution preflight",
+    )
+    require(
+        preflight["expectedImage"] == execution["sealedImageId"],
+        "receipt expected image drift",
+    )
+    require(
+        preflight["discoveryReference"] == build["buildImage"]["sealedImageTag"],
+        "receipt discovery image reference drift",
+    )
+    alias = preflight["alias"]
+    require(
+        isinstance(alias, str)
+        and alias.startswith("c30-day5-pilot-")
+        and alias.endswith(":bound"),
+        "receipt image alias is invalid",
+    )
+    for name in ("discoveryImage", "aliasImage"):
+        validate_receipt_image_artifact(
+            receipt_root,
+            preflight[name],
+            f"receipt preflight {name}",
+            seen,
+            execution["sealedImageId"],
+        )
+    expected_ids = expected_execution_run_ids(pilot_overlay)
+    runs = evidence["runs"]
+    require(isinstance(runs, list) and len(runs) == 46, "receipt run count drift")
+    require(
+        [item.get("runId") for item in runs if isinstance(item, dict)] == expected_ids,
+        "receipt execution run set/order drift",
+    )
+    require(
+        evidence["runOrderSha256"] == digest(canonical(expected_ids)),
+        "receipt execution run order hash drift",
+    )
+    run_map: dict[str, dict[str, Any]] = {}
+    container_names: set[str] = set()
+    for index, run_value in enumerate(runs):
+        run = exact_keys(run_value, RUN_EVIDENCE_KEYS, f"execution runs[{index}]")
+        run_id = run["runId"]
+        parts = run_id.split(":")
+        if parts[0] == "identity" and len(parts) == 2:
+            purpose, family = "compiler-identity", parts[1]
+        elif parts[0] == "baseline" and len(parts) == 3:
+            purpose, family = "baseline-acceptance", parts[2]
+        elif parts[0] == "atom" and len(parts) == 4:
+            purpose, family = "minimality-deletion", parts[3]
+        else:
+            raise ContractError(f"invalid receipt execution runId: {run_id}")
+        require(family in {"gcc", "clang"}, f"receipt run family drift: {run_id}")
+        require(
+            run["purpose"] == purpose and run["family"] == family,
+            f"receipt run purpose/family drift: {run_id}",
+        )
+        name = require_string(run["containerName"], f"{run_id}.containerName")
+        require(
+            name.startswith("c30-pilot-") and name not in container_names,
+            f"receipt container name invalid/reused: {run_id}",
+        )
+        container_names.add(name)
+        if purpose == "compiler-identity":
+            require(
+                run["inputClosureSha256"] is None,
+                f"identity run has candidate inputs: {run_id}",
+            )
+        else:
+            require_hash(run["inputClosureSha256"], f"{run_id} input closure")
+        for artifact_name in ("imageBefore", "imageAfter"):
+            validate_receipt_image_artifact(
+                receipt_root,
+                run[artifact_name],
+                f"{run_id}.{artifact_name}",
+                seen,
+                execution["sealedImageId"],
+            )
+        before_artifact = validate_receipt_artifact(
+            receipt_root, run["containerBefore"], f"{run_id}.containerBefore", seen
+        )
+        after_artifact = validate_receipt_artifact(
+            receipt_root, run["containerAfter"], f"{run_id}.containerAfter", seen
+        )
+        validate_receipt_cleanup(
+            receipt_root, run["cleanup"], f"{run_id}.cleanup", seen
+        )
+        run_map[run_id] = {
+            "after": receipt_artifact_json(
+                receipt_root, after_artifact, f"{run_id}.containerAfter"
+            ),
+            "before": receipt_artifact_json(
+                receipt_root, before_artifact, f"{run_id}.containerBefore"
+            ),
+            "value": run,
+        }
+    identities = exact_keys(
+        evidence["compilerIdentities"],
+        {"gcc", "clang"},
+        "receipt compiler identities",
+    )
+    source_date_epoch = require_string(
+        build.get("reproducibility", {}).get("SOURCE_DATE_EPOCH"),
+        "receipt SOURCE_DATE_EPOCH",
+    )
+    expected_environment = oracle_environment(source_date_epoch)
+    for family in ("gcc", "clang"):
+        identity = exact_keys(
+            identities[family],
+            {
+                "command",
+                "commandSha256",
+                "compilerPath",
+                "compilerSha256",
+                "compilerVersion",
+                "environment",
+                "executionRunId",
+                "stderr",
+                "stderrSha256",
+                "stdout",
+                "stdoutSha256",
+            },
+            f"receipt {family} compiler identity",
+        )
+        compiler = execution["referenceCompilers"][family]
+        command = [
+            "/bin/sh",
+            "-c",
+            '/usr/bin/sha256sum "$1"; "$1" --version',
+            "c30-compiler-identity",
+            compiler["path"],
+        ]
+        require(
+            identity["executionRunId"] == f"identity:{family}"
+            and identity["command"] == command
+            and identity["commandSha256"] == digest(canonical(command))
+            and identity["compilerPath"] == compiler["path"]
+            and identity["compilerSha256"] == compiler["sha256"]
+            and identity["compilerVersion"] == compiler["version"]
+            and identity["environment"] == expected_environment,
+            f"receipt {family} compiler identity authority drift",
+        )
+        stdout = validate_receipt_artifact(
+            receipt_root, identity["stdout"], f"identity {family} stdout", seen
+        )
+        stderr = validate_receipt_artifact(
+            receipt_root, identity["stderr"], f"identity {family} stderr", seen
+        )
+        require(
+            identity["stdoutSha256"] == stdout["sha256"]
+            and identity["stderrSha256"] == stderr["sha256"],
+            f"receipt {family} identity stream hash drift",
+        )
+        lines = (
+            confined_path(receipt_root, stdout["path"], f"identity {family} stdout")
+            .read_text(encoding="utf-8", errors="strict")
+            .splitlines()
+        )
+        require(
+            bool(lines)
+            and lines[0].split()[0] == compiler["sha256"]
+            and len(lines) >= 2
+            and lines[1] == compiler["version"],
+            f"receipt {family} measured identity drift",
+        )
+        run = run_map[f"identity:{family}"]
+        validate_container_pair(
+            run["before"],
+            run["after"],
+            run["value"]["containerName"],
+            alias,
+            execution["sealedImageId"],
+            command,
+            expected_environment,
+            False,
+        )
+    validate_receipt_cleanup(
+        receipt_root, evidence["aliasCleanup"], "receipt alias cleanup", seen
+    )
+    return {"alias": alias, "runs": run_map}
+
+
+def validate_subject_receipt_value(
+    audited: dict[str, Any],
+    model: dict[str, Any],
+    variant: dict[str, Any],
+    receipt_root: Path,
+    value: Any,
+    label: str,
+    seen: set[str],
+    *,
+    baseline: bool,
+) -> dict[str, Any]:
+    receipt = exact_keys(value, SUBJECT_RECEIPT_KEYS, label)
+    require(
+        receipt["candidateDigest"] == variant["candidateDigest"],
+        f"{label} candidate digest drift",
+    )
+    require(
+        receipt["inputClosureSha256"] == closure_sha256(variant["inputs"]["subject"]),
+        f"{label} input closure drift",
+    )
+    execution = audited["policy"]["sourceEvidence"]["executionAuthority"]
+    require(
+        receipt["subjectSha256"] == execution["subjectSha256"],
+        f"{label} subject identity drift",
+    )
+    environment = validate_receipt_environment(receipt["environment"], label)
+    require(
+        receipt["environmentSha256"] == digest(canonical(environment)),
+        f"{label} environment hash drift",
+    )
+    private = exact_keys(
+        receipt["privateDirectory"],
+        {"entriesAfterReset", "home", "resetBeforeExecution", "tmpdir"},
+        f"{label}.privateDirectory",
+    )
+    require(
+        private["resetBeforeExecution"] is True and private["entriesAfterReset"] == [],
+        f"{label} private directory was not reset",
+    )
+    home = Path(require_string(private["home"], f"{label} private HOME"))
+    temporary = Path(require_string(private["tmpdir"], f"{label} private TMPDIR"))
+    require(
+        home.is_absolute()
+        and temporary.is_absolute()
+        and home != temporary
+        and home.parent == temporary.parent
+        and environment["HOME"] == str(home)
+        and environment["TMPDIR"] == str(temporary),
+        f"{label} private path/environment drift",
+    )
+    subject_path = confined_path(
+        audited["evidence"],
+        execution["subjectEvidenceRelativePath"],
+        f"{label} subject executable",
+    )
+    inputs = home.parent / "inputs"
+    expected_argv = (
+        [
+            str(subject_path),
+            "--parse-only",
+            "--target=aarch64-unknown-linux-gnu",
+            str(inputs / "candidate.c"),
+        ]
+        if model["kind"] == "preprocessed-parser"
+        else raw_subject_argv(audited, model, inputs, subject_path)
+    )
+    require(
+        receipt["argv"] == expected_argv
+        and receipt["argvSha256"] == digest(canonical(expected_argv)),
+        f"{label} subject argv drift",
+    )
+    stdout = validate_receipt_artifact(
+        receipt_root, receipt["stdout"], f"{label}.stdout", seen
+    )
+    stderr = validate_receipt_artifact(
+        receipt_root, receipt["stderr"], f"{label}.stderr", seen
+    )
+    require(
+        receipt["stdoutSha256"] == stdout["sha256"]
+        and receipt["stderrSha256"] == stderr["sha256"],
+        f"{label} stream hash drift",
+    )
+    require(is_int(receipt["returnCode"]), f"{label} returnCode is not an integer")
+    require(receipt["timedOut"] is False, f"{label} timed out")
+    if baseline:
+        require(
+            receipt["normalizedObservation"] == signature(model["record"])
+            and receipt["causalAnchorSha256"] == model["anchorSha256"],
+            f"{label} does not reproduce the frozen causal failure",
+        )
+    else:
+        require(
+            receipt["causalAnchorSha256"] in {None, model["anchorSha256"]},
+            f"{label} has an alien causal anchor",
+        )
+        require(
+            receipt["normalizedObservation"] is None
+            or isinstance(receipt["normalizedObservation"], dict),
+            f"{label} normalized observation has invalid type",
+        )
+    return receipt
+
+
+def validate_oracle_receipt_value(
+    audited: dict[str, Any],
+    model: dict[str, Any],
+    variant: dict[str, Any],
+    family: str,
+    expected_run_id: str,
+    execution_evidence: dict[str, Any],
+    receipt_root: Path,
+    overlay_root: Path,
+    value: Any,
+    label: str,
+    seen: set[str],
+    *,
+    require_acceptance: bool,
+) -> dict[str, Any]:
+    receipt = exact_keys(value, ORACLE_RECEIPT_KEYS, label)
+    execution = audited["policy"]["sourceEvidence"]["executionAuthority"]
+    compiler = execution["referenceCompilers"][family]
+    require(
+        receipt["compilerPath"] == compiler["path"]
+        and receipt["compilerSha256"] == compiler["sha256"]
+        and receipt["compilerVersion"] == compiler["version"]
+        and receipt["imageId"] == execution["sealedImageId"],
+        f"{label} compiler/image authority drift",
+    )
+    require(
+        receipt["candidateDigest"] == variant["candidateDigest"]
+        and receipt["executionRunId"] == expected_run_id,
+        f"{label} candidate/run binding drift",
+    )
+    inputs = variant["inputs"][family]
+    input_closure = closure_sha256(inputs)
+    require(
+        receipt["containerInputs"] == input_descriptors(inputs)
+        and receipt["inputClosureSha256"] == input_closure,
+        f"{label} container input closure drift",
+    )
+    expected_command = (
+        [
+            item.replace("<exact-private-candidate>", "/inputs/candidate.c")
+            for item in audited["policy"]["referenceAcceptance"]["parserCommands"][
+                family
+            ]
+        ]
+        if model["kind"] == "preprocessed-parser"
+        else raw_oracle_command(audited, model, family)
+    )
+    require(
+        receipt["command"] == expected_command
+        and receipt["commandSha256"] == digest(canonical(expected_command)),
+        f"{label} compiler command drift",
+    )
+    source_artifacts = audited["policy"]["sourceEvidence"]["authorityArtifacts"]
+    build = load_json(
+        confined_path(
+            audited["evidence"],
+            source_artifacts["buildEnvironmentContract"]["path"],
+            f"{label} build environment",
+        ),
+        f"{label} build environment",
+    )
+    expected_environment = oracle_environment(
+        require_string(
+            build.get("reproducibility", {}).get("SOURCE_DATE_EPOCH"),
+            f"{label} SOURCE_DATE_EPOCH",
+        )
+    )
+    require(
+        receipt["environment"] == expected_environment,
+        f"{label} compiler environment drift",
+    )
+    serialized = canonical(
+        {"command": receipt["command"], "environment": receipt["environment"]}
+    ).decode("utf-8")
+    for forbidden in (
+        str(audited["policyPath"]),
+        str(audited["evidence"]),
+        str(receipt_root),
+        str(overlay_root),
+        "expectedResult",
+        "expected-result",
+        "golden",
+        "receipt.json",
+        "sourceRecordSha256",
+        "failureSignatureSha256",
+    ):
+        require(
+            forbidden not in serialized, f"{label} leaks oracle authority: {forbidden}"
+        )
+    stdout = validate_receipt_artifact(
+        receipt_root, receipt["stdout"], f"{label}.stdout", seen
+    )
+    stderr = validate_receipt_artifact(
+        receipt_root, receipt["stderr"], f"{label}.stderr", seen
+    )
+    require(
+        receipt["stdoutSha256"] == stdout["sha256"]
+        and receipt["stderrSha256"] == stderr["sha256"],
+        f"{label} stream hash drift",
+    )
+    require(is_int(receipt["returnCode"]), f"{label} returnCode is not integer")
+    require(receipt["timedOut"] is False, f"{label} timed out")
+    if require_acceptance:
+        require(receipt["returnCode"] == 0, f"{label} rejected the exact candidate")
+    run = execution_evidence["runs"].get(expected_run_id)
+    require(isinstance(run, dict), f"{label} execution descriptor is absent")
+    require(
+        run["value"]["inputClosureSha256"] == input_closure,
+        f"{label} execution descriptor input closure drift",
+    )
+    validate_container_pair(
+        run["before"],
+        run["after"],
+        run["value"]["containerName"],
+        execution_evidence["alias"],
+        execution["sealedImageId"],
+        expected_command,
+        expected_environment,
+        True,
+    )
+    return receipt
+
+
+def validate_pilot_receipt(
+    audited: dict[str, Any],
+    pilot_authority: dict[str, Any],
+    pilot_overlay: dict[str, Any],
+    receipt_dir: Path,
+    expected_receipt_sha256: str,
+) -> tuple[dict[str, Any], str]:
+    receipt_root = require_plain_root(receipt_dir, "pilot receipt root")
+    file_closure(receipt_root)
+    receipt_path = confined_path(receipt_root, "receipt.json", "pilot receipt")
+    require(receipt_path.stat().st_nlink == 1, "pilot receipt is hard-linked")
+    receipt_bytes = receipt_path.read_bytes()
+    receipt_sha256 = digest(receipt_bytes)
+    require(
+        receipt_sha256 == expected_receipt_sha256,
+        "pilot receipt does not match caller expected SHA-256",
+    )
+    receipt_value = decode_json(receipt_bytes, "pilot receipt")
+    require(isinstance(receipt_value, dict), "pilot receipt root is not an object")
+    receipt = exact_keys(receipt_value, PILOT_RECEIPT_KEYS, "pilot receipt")
+    require(canonical(receipt) == receipt_bytes, "pilot receipt is not canonical JSON")
+    require(receipt["schemaVersion"] == 2, "pilot receipt schemaVersion drift")
+    require(
+        receipt["policyId"] == audited["policy"]["policyId"]
+        and receipt["policySha256"] == audited["policySha256"]
+        and receipt["sourceEvidenceRunId"] == audited["sourceEvidenceRunId"]
+        and receipt["obligationManifestSha256"] == audited["manifestSha256"]
+        and receipt["pilotContractSha256"] == pilot_authority["sha256"]
+        and receipt["pilotFailureIds"] == pilot_authority["pilotIds"]
+        and receipt["executionAuthority"]
+        == audited["policy"]["sourceEvidence"]["executionAuthority"]
+        and receipt["overlayClosureSha256"] == pilot_overlay["closureSha256"],
+        "pilot receipt root authority drift",
+    )
+    artifact_closure = exact_keys(
+        receipt["artifactClosure"],
+        {"bytes", "files", "sha256"},
+        "pilot receipt artifactClosure",
+    )
+    require(
+        artifact_closure == file_closure(receipt_root, excluded={"receipt.json"}),
+        "pilot receipt artifact closure drift",
+    )
+    seen: set[str] = set()
+    execution_evidence = validate_execution_evidence_receipt(
+        audited,
+        pilot_overlay,
+        receipt_root,
+        receipt["executionEvidence"],
+        seen,
+    )
+    records = receipt["records"]
+    require(
+        isinstance(records, list) and len(records) == len(pilot_authority["pilotIds"]),
+        "pilot receipt record denominator drift",
+    )
+    require(
+        [item.get("failureId") for item in records if isinstance(item, dict)]
+        == pilot_authority["pilotIds"],
+        "pilot receipt records are not exact/sorted",
+    )
+    stable_fields = {
+        "argvSha256",
+        "candidateDigest",
+        "environmentSha256",
+        "returnCode",
+        "stderrSha256",
+        "stdoutSha256",
+        "subjectSha256",
+        "timedOut",
+    }
+    for record_index, value in enumerate(records):
+        record = exact_keys(
+            value,
+            PILOT_RECEIPT_RECORD_KEYS,
+            f"pilot receipt.records[{record_index}]",
+        )
+        failure_id = record["failureId"]
+        model = pilot_overlay["models"][failure_id]
+        source_record = model["record"]
+        require(record["state"] == "VERIFIED", f"pilot state drift: {failure_id}")
+        require(
+            record["sourceRecordSha256"]
+            == obligation(source_record)["sourceRecordSha256"]
+            and record["candidate"]
+            == {"digest": model["candidateDigest"], "kind": model["kind"]}
+            and record["causalAnchorSha256"] == model["anchorSha256"],
+            f"pilot receipt identity drift: {failure_id}",
+        )
+        baseline = (
+            parser_variant(model, None)
+            if model["kind"] == "preprocessed-parser"
+            else raw_variant(model, None, None)
+        )
+        replay_values = record["subjectReplays"]
+        require(
+            isinstance(replay_values, list) and len(replay_values) == 3,
+            f"pilot subject replay denominator drift: {failure_id}",
+        )
+        replays = [
+            validate_subject_receipt_value(
+                audited,
+                model,
+                baseline,
+                receipt_root,
+                replay,
+                f"{failure_id} subject replay {index}",
+                seen,
+                baseline=True,
+            )
+            for index, replay in enumerate(replay_values)
+        ]
+        stable = [{name: replay[name] for name in stable_fields} for replay in replays]
+        require(
+            stable[0] == stable[1] == stable[2]
+            and replays[0]["environment"]
+            == replays[1]["environment"]
+            == replays[2]["environment"]
+            and replays[0]["privateDirectory"]
+            == replays[1]["privateDirectory"]
+            == replays[2]["privateDirectory"],
+            f"pilot subject replay instability: {failure_id}",
+        )
+        references = exact_keys(
+            record["referenceAcceptance"],
+            {"gcc", "clang"},
+            f"{failure_id} baseline references",
+        )
+        baseline_oracles = {
+            family: validate_oracle_receipt_value(
+                audited,
+                model,
+                baseline,
+                family,
+                f"baseline:{failure_id}:{family}",
+                execution_evidence,
+                receipt_root,
+                pilot_overlay["root"],
+                references[family],
+                f"{failure_id} baseline {family}",
+                seen,
+                require_acceptance=True,
+            )
+            for family in ("gcc", "clang")
+        }
+        require(
+            baseline_oracles["gcc"]["compilerSha256"]
+            != baseline_oracles["clang"]["compilerSha256"],
+            f"pilot baseline compiler identities alias: {failure_id}",
+        )
+        minimality = exact_keys(
+            record["minimality"],
+            MINIMALITY_RECEIPT_KEYS,
+            f"{failure_id} minimality",
+        )
+        expected_atoms = model["atoms"]
+        expected_atom_ids = [atom["atomId"] for atom in expected_atoms]
+        expected_claim = (
+            audited["policy"]["overlayPolicy"]["parserCandidate"]["minimality"]
+            if model["kind"] == "preprocessed-parser"
+            else audited["policy"]["overlayPolicy"]["rawCandidate"]["minimality"]
+        )
+        require(
+            minimality["claim"] == expected_claim
+            and minimality["totalAtoms"]
+            == minimality["testedAtoms"]
+            == len(expected_atoms)
+            and minimality["removableAtoms"] == 0
+            and minimality["atomOrderSha256"] == digest(canonical(expected_atom_ids)),
+            f"pilot minimality authority drift: {failure_id}",
+        )
+        atoms = minimality["atoms"]
+        require(
+            isinstance(atoms, list) and len(atoms) == len(expected_atoms),
+            f"pilot minimality atom denominator drift: {failure_id}",
+        )
+        for atom_index, (atom_value, expected_atom) in enumerate(
+            zip(atoms, expected_atoms)
+        ):
+            atom = exact_keys(
+                atom_value,
+                ATOM_RECEIPT_KEYS,
+                f"{failure_id} minimality atom {atom_index}",
+            )
+            variant = expected_atom["variant"]
+            require(
+                atom["atomId"] == expected_atom["atomId"]
+                and atom["candidateDigest"] == variant["candidateDigest"],
+                f"pilot minimality atom identity drift: {failure_id}:{atom_index}",
+            )
+            subject = validate_subject_receipt_value(
+                audited,
+                model,
+                variant,
+                receipt_root,
+                atom["subjectObservation"],
+                f"{failure_id} atom {atom_index} subject",
+                seen,
+                baseline=False,
+            )
+            atom_references = exact_keys(
+                atom["referenceAcceptance"],
+                {"gcc", "clang"},
+                f"{failure_id} atom {atom_index} references",
+            )
+            oracle_values = {
+                family: validate_oracle_receipt_value(
+                    audited,
+                    model,
+                    variant,
+                    family,
+                    f"atom:{failure_id}:{atom_index:03d}:{family}",
+                    execution_evidence,
+                    receipt_root,
+                    pilot_overlay["root"],
+                    atom_references[family],
+                    f"{failure_id} atom {atom_index} {family}",
+                    seen,
+                    require_acceptance=False,
+                )
+                for family in ("gcc", "clang")
+            }
+            subject_matches = (
+                subject["normalizedObservation"] == signature(source_record)
+                and subject["causalAnchorSha256"] == model["anchorSha256"]
+            )
+            interesting = (
+                subject_matches
+                and oracle_values["gcc"]["returnCode"] == 0
+                and not oracle_values["gcc"]["timedOut"]
+                and oracle_values["clang"]["returnCode"] == 0
+                and not oracle_values["clang"]["timedOut"]
+            )
+            require(
+                atom["interesting"] is interesting and not interesting,
+                f"pilot minimality interestingness drift: {failure_id}:{atom_index}",
+            )
+    require(
+        seen == {item["path"] for item in artifact_closure["files"]},
+        "pilot receipt has unreferenced or multiply referenced artifacts",
+    )
+    require(
+        sum(len(model["atoms"]) for model in pilot_overlay["models"].values()) == 19,
+        "pilot receipt deletion atom denominator drift",
+    )
+    return receipt, receipt_sha256
+
+
+def replay_pilot_receipt_phase2(
+    policy_path: Path,
+    pilot_contract_path: Path,
+    evidence: Path,
+    overlay: Path,
+    receipt_dir: Path,
+    expected_receipt_sha256: str,
+) -> dict[str, Any]:
+    require_hash(expected_receipt_sha256, "expected pilot receipt SHA-256")
+    audited, pilot_authority, pilot_overlay = prepare_pilot_scope(
+        policy_path, pilot_contract_path, evidence, overlay
+    )
+    receipt, receipt_sha256 = validate_pilot_receipt(
+        audited,
+        pilot_authority,
+        pilot_overlay,
+        receipt_dir,
+        expected_receipt_sha256,
+    )
+    return pilot_result(
+        audited, pilot_authority, receipt, receipt_sha256, "receipt-replay"
+    )
 
 
 def store(path: Path, value: Any) -> None:
@@ -3349,6 +7043,25 @@ def parser() -> argparse.ArgumentParser:
     verify.add_argument("--policy", type=Path, required=True)
     verify.add_argument("--evidence", type=Path, required=True)
     verify.add_argument("--overlay", type=Path, required=True)
+    pilots = subparsers.add_parser(
+        "verify-pilots", help="execute the exact locked Phase-2 pilot contract"
+    )
+    pilots.add_argument("--pilot-contract", type=Path, required=True)
+    pilots.add_argument("--policy", type=Path, required=True)
+    pilots.add_argument("--evidence", type=Path, required=True)
+    pilots.add_argument("--overlay", type=Path, required=True)
+    pilots.add_argument("--receipt-dir", type=Path, required=True)
+    pilots.add_argument("--observer-ready-file", type=Path)
+    pilots.add_argument("--observer-ack-file", type=Path)
+    replay = subparsers.add_parser(
+        "replay-pilot-receipt", help="independently audit an immutable pilot receipt"
+    )
+    replay.add_argument("--pilot-contract", type=Path, required=True)
+    replay.add_argument("--policy", type=Path, required=True)
+    replay.add_argument("--evidence", type=Path, required=True)
+    replay.add_argument("--overlay", type=Path, required=True)
+    replay.add_argument("--receipt-dir", type=Path, required=True)
+    replay.add_argument("--expected-receipt-sha256", required=True)
     return value
 
 
@@ -3379,6 +7092,43 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "verify-overlay":
             result = verify_overlay_phase1(args.policy, args.evidence, args.overlay)
+            print(
+                json.dumps(
+                    result, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                )
+            )
+            return 0
+        if args.command == "verify-pilots":
+            observer_ready = args.observer_ready_file
+            observer_ack = args.observer_ack_file
+            if observer_ready is None and os.environ.get("C30_DAY5_OBSERVER_READY"):
+                observer_ready = Path(os.environ["C30_DAY5_OBSERVER_READY"])
+            if observer_ack is None and os.environ.get("C30_DAY5_OBSERVER_ACK"):
+                observer_ack = Path(os.environ["C30_DAY5_OBSERVER_ACK"])
+            result = verify_pilots_phase2(
+                args.policy,
+                args.pilot_contract,
+                args.evidence,
+                args.overlay,
+                args.receipt_dir,
+                observer_ready,
+                observer_ack,
+            )
+            print(
+                json.dumps(
+                    result, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                )
+            )
+            return 0
+        if args.command == "replay-pilot-receipt":
+            result = replay_pilot_receipt_phase2(
+                args.policy,
+                args.pilot_contract,
+                args.evidence,
+                args.overlay,
+                args.receipt_dir,
+                args.expected_receipt_sha256,
+            )
             print(
                 json.dumps(
                     result, ensure_ascii=False, sort_keys=True, separators=(",", ":")

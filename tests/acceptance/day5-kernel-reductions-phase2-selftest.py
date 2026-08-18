@@ -1553,8 +1553,13 @@ def run_verifier(*args: str, timeout: int = 1800) -> subprocess.CompletedProcess
     )
 
 
-def verify_command(overlay: Path, receipt: Path) -> subprocess.CompletedProcess[str]:
-    return run_verifier(
+def verify_command(
+    overlay: Path,
+    receipt: Path,
+    observer_ready: Path | None = None,
+    observer_ack: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    args = [
         "verify-pilots",
         "--pilot-contract",
         str(PILOT_CONTRACT),
@@ -1566,7 +1571,21 @@ def verify_command(overlay: Path, receipt: Path) -> subprocess.CompletedProcess[
         str(overlay),
         "--receipt-dir",
         str(receipt),
+    ]
+    require(
+        (observer_ready is None) == (observer_ack is None),
+        "selftest observer ready/ack paths must be paired",
     )
+    if observer_ready is not None and observer_ack is not None:
+        args.extend(
+            [
+                "--observer-ready-file",
+                str(observer_ready),
+                "--observer-ack-file",
+                str(observer_ack),
+            ]
+        )
+    return run_verifier(*args)
 
 
 def replay_command(
@@ -3599,6 +3618,57 @@ def mechanism_fault_controls(root: Path) -> int:
     return 2
 
 
+def absent_observer_gate_fault_control(root: Path, overlay: Path) -> None:
+    spec = importlib.util.spec_from_file_location(
+        "day5_kernel_reductions_v3_absent_gate", VERIFIER
+    )
+    require(spec is not None and spec.loader is not None, "cannot import verifier")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    reached: list[str] = []
+
+    def forbidden_boundary(*_args: Any, **_kwargs: Any) -> None:
+        reached.append("execution")
+        raise module.ContractError("injected post-observer-gate boundary")
+
+    for name in (
+        "validate_pilot_overlay",
+        "execute_subject_checkpoint",
+        "prepare_oracle_authority",
+        "execute_oracle_checkpoint",
+        "observer_checkpoint",
+    ):
+        setattr(module, name, forbidden_boundary)
+    receipt = root / "fault-control-receipt"
+    observer = root / "fault-control-observer"
+    before = snapshot(root)
+    error: Exception | None = None
+    try:
+        module.verify_pilots_phase2(
+            POLICY,
+            PILOT_CONTRACT,
+            EVIDENCE,
+            overlay,
+            receipt,
+            observer / "ready.json",
+            observer / "ack.json",
+        )
+    except module.ContractError as caught:
+        error = caught
+    require(
+        str(error)
+        == "pilot observer authority is ABSENT; live measurement is not permitted",
+        f"fault-controlled ABSENT gate drift: {error}",
+    )
+    require(
+        reached == []
+        and snapshot(root) == before
+        and not receipt.exists()
+        and not observer.exists(),
+        "ABSENT gate reached overlay, receipt, observer, subject, or container work",
+    )
+
+
 def main() -> int:
     try:
         policy, records = audit_authority()
@@ -3620,27 +3690,45 @@ def main() -> int:
             receipt_root = root / "receipt"
             observer_authority = pilot_contract["observerAuthority"]
             if observer_authority["authorityState"] == "ABSENT":
-                production_source = VERIFIER.read_text(encoding="utf-8")
-                require(
-                    'contract["schemaVersion"] == 2' in production_source,
-                    "refusing to invoke a v3-aware verifier while observer authority is ABSENT",
+                absent_observer_gate_fault_control(root, overlay)
+                observer_root = root / "observer"
+                observer_ready = observer_root / "ready.json"
+                observer_ack = observer_root / "ack.json"
+                before = snapshot(root)
+                overlay_before = snapshot(overlay)
+                executed = verify_command(
+                    overlay,
+                    receipt_root,
+                    observer_ready,
+                    observer_ack,
                 )
-                executed = verify_command(overlay, receipt_root)
                 require_rejected(
                     executed,
-                    "v3 contract against current v2 production boundary",
+                    "v3 ABSENT observer pre-execution gate",
                     receipt_root,
                 )
                 require(
-                    executed.stderr
+                    executed.stdout == ""
+                    and executed.returncode == 2
+                    and executed.stderr
                     == FAILURE_PREFIX
-                    + "pilot contract keys differ: missing=[] extra=['observerAuthority']\n",
-                    "current production did not stop at the pre-execution v2/v3 boundary",
+                    + "pilot observer authority is ABSENT; "
+                    "live measurement is not permitted\n",
+                    "production did not stop at the exact v3 ABSENT observer gate",
+                )
+                require(
+                    snapshot(root) == before
+                    and snapshot(overlay) == overlay_before
+                    and not receipt_root.exists()
+                    and not observer_root.exists()
+                    and not observer_ready.exists()
+                    and not observer_ack.exists(),
+                    "v3 ABSENT observer gate left an overlay, receipt, or observer side effect",
                 )
                 print(
                     "DAY5_KERNEL_REDUCTIONS_PHASE2_SELFTEST RED "
                     "schema=3 observer_authority=ABSENT live_measurement_permitted=0 "
-                    "production_boundary=pilot-contract-v2-root-keys "
+                    "production_boundary=observer-authority-absent "
                     "pilots=3 deletion_atoms=19 oracle_runs=46 subject_runs=28 "
                     f"obligation_manifest_sha256={MANIFEST_SHA256}"
                 )
