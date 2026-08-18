@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -113,6 +114,7 @@ RECEIPT_KEYS = {
     "executionEvidence",
     "executionAuthority",
     "obligationManifestSha256",
+    "observerEvidence",
     "overlayClosureSha256",
     "pilotContractSha256",
     "pilotFailureIds",
@@ -217,12 +219,122 @@ PILOT_CONTRACT_KEYS = {
     "measurementStatus",
     "minimalityAuthority",
     "oracleEvidenceAuthority",
+    "observerAuthority",
     "parentAuthority",
     "pilots",
     "purpose",
     "receiptAuthority",
     "schemaVersion",
     "verdictSemantics",
+}
+
+OBSERVER_IDENTITY_KEYS = {"bytes", "path", "sha256"}
+OBSERVER_ARTIFACT_KEYS = {"bytes", "path", "sha256"}
+OBSERVER_ORACLE_RUN_KEYS = {
+    "afterDescriptor",
+    "beforeDescriptor",
+    "cleanupTargetIndex",
+    "commandSha256",
+    "containerName",
+    "environmentSha256",
+    "exitCode",
+    "expectedInputClosureSha256",
+    "family",
+    "mountSource",
+    "mountSourceSha256",
+    "observedInputClosureSha256",
+    "purpose",
+    "runId",
+    "timedOut",
+}
+OBSERVER_SUBJECT_RUN_KEYS = {
+    "argvSha256",
+    "environmentSha256",
+    "expectedInputClosureSha256",
+    "inputRoot",
+    "inputRootSha256",
+    "observedInputClosureSha256",
+    "returnCode",
+    "runId",
+    "stderrSha256",
+    "stdoutSha256",
+    "subjectSha256",
+    "timedOut",
+}
+CLEANUP_LEDGER_KEYS = {
+    "aliasAbsent",
+    "allAbsent",
+    "attempts",
+    "containerInventory",
+    "containerInventoryReturnCode",
+    "containerNamesAbsent",
+    "imageInventory",
+    "imageInventoryReturnCode",
+    "plannedAlias",
+    "plannedContainerNames",
+}
+CLEANUP_ATTEMPT_KEYS = {
+    "deleteAttempted",
+    "deleteReturnCode",
+    "error",
+    "stopAttempted",
+    "stopReturnCode",
+    "target",
+    "targetKind",
+}
+OBSERVER_EVIDENCE_KEYS = {
+    "attestation",
+    "attestationSha256",
+    "cleanupLedger",
+    "observerIdentity",
+    "oracleRunOrderSha256",
+    "oracleRuns",
+    "plan",
+    "planSha256",
+    "protocolId",
+    "schemaVersion",
+    "subjectRunOrderSha256",
+    "subjectRuns",
+}
+OBSERVER_ATTESTATION_KEYS = {
+    "cleanupLedger",
+    "observerIdentity",
+    "oracleRunOrderSha256",
+    "oracleRuns",
+    "planSha256",
+    "protocolId",
+    "schemaVersion",
+    "subjectRunOrderSha256",
+    "subjectRuns",
+}
+OBSERVER_PLAN_KEYS = {
+    "containerCliSha256",
+    "expectedImage",
+    "observerExecutableSha256",
+    "oracleInputRoot",
+    "oracleInputRootSha256",
+    "oracleRunIds",
+    "oracleRunOrderSha256",
+    "overlayClosureSha256",
+    "pilotContractSha256",
+    "policySha256",
+    "protocolId",
+    "schemaVersion",
+    "subjectExecutionRoot",
+    "subjectExecutionRootSha256",
+    "subjectRunIds",
+    "subjectRunOrderSha256",
+}
+RECEIPT_INDEX_KEYS = {
+    "observerAttestationSha256",
+    "observerExecutableSha256",
+    "oracleRunOrderSha256",
+    "overlayClosureSha256",
+    "pilotContractSha256",
+    "policySha256",
+    "receiptSha256",
+    "schemaVersion",
+    "subjectRunOrderSha256",
 }
 
 EXECUTION_EVIDENCE_KEYS = {
@@ -279,17 +391,19 @@ CLEANUP_EVIDENCE_KEYS = {
     "deleteReturnCode",
     "deleteStderr",
     "deleteStdout",
-    "postDeleteInspectReturnCode",
-    "postDeleteInspectStderr",
-    "postDeleteInspectStdout",
+    "postDeleteInventoryReturnCode",
+    "postDeleteInventoryStderr",
+    "postDeleteInventoryStdout",
+    "targetAbsent",
 }
 ALIAS_CLEANUP_EVIDENCE_KEYS = {
     "deleteReturnCode",
     "deleteStderr",
     "deleteStdout",
-    "postDeleteInspectReturnCode",
-    "postDeleteInspectStderr",
-    "postDeleteInspectStdout",
+    "postDeleteInventoryReturnCode",
+    "postDeleteInventoryStderr",
+    "postDeleteInventoryStdout",
+    "targetAbsent",
 }
 
 
@@ -538,9 +652,9 @@ def audit_pilot_contract(
         PILOT_CONTRACT_KEYS,
         "pilot contract",
     )
-    require(contract["schemaVersion"] == 2, "pilot contract schemaVersion drift")
+    require(contract["schemaVersion"] == 3, "pilot contract schemaVersion drift")
     require(
-        contract["contractId"] == "c30.day5.kernel-reduction-pilots.v2",
+        contract["contractId"] == "c30.day5.kernel-reduction-pilots.v3",
         "pilot contract ID drift",
     )
     require(contract["contractState"] == "locked", "pilot contract is not locked")
@@ -695,7 +809,7 @@ def audit_pilot_contract(
         "pilot oracle evidence authority",
     )
     require(
-        oracle_authority["schemaVersion"] == 1,
+        oracle_authority["schemaVersion"] == 2,
         "pilot oracle evidence schemaVersion drift",
     )
     require(
@@ -721,8 +835,16 @@ def audit_pilot_contract(
         and descriptor_authority["publishedSockets"] == []
         and descriptor_authority["rosetta"] is False
         and descriptor_authority["ssh"] is False
-        and descriptor_authority["virtualization"] is False,
+        and descriptor_authority["virtualization"] is False
+        and descriptor_authority["exactEnvironment"] is True
+        and descriptor_authority["exactInputMountSource"] is True,
         "pilot Apple Container descriptor authority drift",
+    )
+    require(
+        "after.status.exitCode" in descriptor_authority["afterExitStatus"]
+        and "no unlisted variables" in descriptor_authority["initProcess"]
+        and "descriptor source equals" in descriptor_authority["mounts"],
+        "pilot descriptor semantic binding authority drift",
     )
     cleanup_authority = oracle_authority["cleanup"]
     require(
@@ -730,11 +852,77 @@ def audit_pilot_contract(
         == {
             "aliasDeleteRequired": True,
             "containerDeleteRequired": True,
+            "exceptionTotalCleanup": True,
+            "externalPostCleanupAttestationRequired": True,
+            "inspectFailureIsAbsence": False,
             "partialEvidenceForbidden": True,
-            "postAliasDeleteInspectMustReportAbsent": True,
-            "postDeleteInspectMustReportAbsent": True,
+            "plannedResourceLedgerRequired": True,
+            "postAliasDeleteSuccessfulInventoryRequired": True,
+            "postDeleteSuccessfulInventoryRequired": True,
+            "registerBeforeSideEffect": True,
         },
         "pilot oracle cleanup authority drift",
+    )
+    observer = exact_keys(
+        contract["observerAuthority"],
+        {
+            "absenceBehavior",
+            "attestationTrust",
+            "authorityState",
+            "checkpoints",
+            "executable",
+            "liveMeasurementPermitted",
+            "measurementStatus",
+            "oracleInputRunCount",
+            "oracleRunCount",
+            "protocolId",
+            "provisional",
+            "requiredExecutionBoundary",
+            "schemaVersion",
+            "subjectRunCount",
+        },
+        "pilot observer authority",
+    )
+    require(observer["schemaVersion"] == 1, "observer schemaVersion drift")
+    require(
+        observer["authorityState"] == "ABSENT"
+        and observer["measurementStatus"] == "NOT_MEASURED"
+        and observer["provisional"] is True
+        and observer["liveMeasurementPermitted"] is False,
+        "absent observer sentinel drift",
+    )
+    require(
+        observer["protocolId"] == "c30.day5.phase2-external-observer.v1"
+        and observer["attestationTrust"] == "externally-pinned-sha256"
+        and observer["checkpoints"] == ["plan", "pre-cleanup", "post-cleanup"]
+        and observer["requiredExecutionBoundary"]
+        == [
+            "subject",
+            "oracle-input-closure",
+            "oracle-before",
+            "oracle-start",
+            "oracle-after",
+            "cleanup",
+        ]
+        and observer["oracleRunCount"] == 46
+        and observer["oracleInputRunCount"] == 44
+        and observer["subjectRunCount"] == 28,
+        "observer protocol/denominator authority drift",
+    )
+    require(
+        exact_keys(
+            observer["executable"],
+            OBSERVER_IDENTITY_KEYS,
+            "observer executable sentinel",
+        )
+        == {
+            "bytes": 0,
+            "path": None,
+            "sha256": hashlib.sha256(b"").hexdigest(),
+        }
+        and "Reject before subject or container execution"
+        in observer["absenceBehavior"],
+        "observer executable ABSENT sentinel drift",
     )
     require(
         contract["verdictSemantics"]
@@ -752,14 +940,21 @@ def audit_pilot_contract(
         contract["receiptAuthority"]
         == {
             "cleanupEvidenceRequired": True,
-            "creation": "atomic-no-overwrite",
+            "cleanupLedgerRequired": True,
+            "creation": "atomic-no-overwrite-with-no-replace-primitive",
+            "externalReceiptIndexRequired": True,
             "executionEvidenceRequired": True,
             "executionRunCount": 46,
-            "measuredReceiptIndex": "separate-post-run-authority",
+            "measuredReceiptIndex": "separate-externally-pinned-post-run-authority",
+            "noReplacePrimitiveRequired": True,
+            "observerEvidenceRequired": True,
+            "observerOracleInputRunCount": 44,
+            "observerOracleRunCount": 46,
+            "observerSubjectRunCount": 28,
             "rawDescriptorArtifactsInClosure": True,
-            "replayRequiresCallerExpectedReceiptSha256": True,
+            "replayRequiresTrustedReceiptIndexSha256": True,
             "resultAndReceiptBindPilotContractSha256": True,
-            "schemaVersion": 2,
+            "schemaVersion": 3,
         },
         "pilot receipt authority drift",
     )
@@ -1268,6 +1463,84 @@ def expected_execution_run_ids(models: dict[str, dict[str, Any]]) -> list[str]:
     return values
 
 
+def expected_subject_run_ids(models: dict[str, dict[str, Any]]) -> list[str]:
+    values: list[str] = []
+    for failure_id in PILOT_FAILURE_IDS:
+        values.extend(
+            f"subject:baseline:{failure_id}:{index:03d}" for index in range(3)
+        )
+        values.extend(
+            f"subject:atom:{failure_id}:{index:03d}"
+            for index, _ in enumerate(expected_atoms(models[failure_id]))
+        )
+    require(len(values) == 28, f"subject execution denominator drift: {len(values)}")
+    return values
+
+
+def expected_oracle_input_closures(
+    models: dict[str, dict[str, Any]],
+) -> dict[str, str | None]:
+    values: dict[str, str | None] = {"identity:gcc": None, "identity:clang": None}
+    for failure_id in PILOT_FAILURE_IDS:
+        model = models[failure_id]
+        baseline = (
+            variant_from_parser(model, None)
+            if model["kind"] == "preprocessed-parser"
+            else variant_from_raw(model, None, None)
+        )
+        for family in ("gcc", "clang"):
+            values[f"baseline:{failure_id}:{family}"] = closure_sha(
+                baseline["inputs"][family]
+            )
+        for index, atom in enumerate(expected_atoms(model)):
+            for family in ("gcc", "clang"):
+                values[f"atom:{failure_id}:{index:03d}:{family}"] = closure_sha(
+                    atom["variant"]["inputs"][family]
+                )
+    require(
+        len(values) == 46 and sum(value is not None for value in values.values()) == 44,
+        "oracle input-closure denominator drift",
+    )
+    return values
+
+
+def expected_oracle_input_root(materialization_root: Path, run_id: str) -> Path | None:
+    parts = run_id.split(":")
+    if parts[0] == "identity" and len(parts) == 2:
+        return None
+    if parts[0] == "baseline" and len(parts) == 3:
+        return (
+            materialization_root
+            / "artifacts"
+            / parts[1]
+            / "baseline"
+            / "oracle"
+            / parts[2]
+        )
+    if parts[0] == "atom" and len(parts) == 4:
+        return (
+            materialization_root
+            / "artifacts"
+            / parts[1]
+            / "atoms"
+            / parts[2]
+            / "oracle"
+            / parts[3]
+        )
+    raise TestFailure(f"invalid oracle materialization runId: {run_id}")
+
+
+def expected_subject_input_root(execution_root: Path, run_id: str) -> Path:
+    parts = run_id.split(":")
+    if len(parts) != 4 or parts[0] != "subject":
+        raise TestFailure(f"invalid subject materialization runId: {run_id}")
+    if parts[1] == "baseline":
+        return execution_root / parts[2] / "baseline-private" / "inputs"
+    if parts[1] == "atom":
+        return execution_root / parts[2] / f"atom-{parts[3]}" / "inputs"
+    raise TestFailure(f"invalid subject materialization runId: {run_id}")
+
+
 def run_verifier(*args: str, timeout: int = 1800) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(VERIFIER), *args],
@@ -1315,6 +1588,31 @@ def replay_command(
     if expected_sha256 is not None:
         args.extend(["--expected-receipt-sha256", expected_sha256])
     return run_verifier(*args)
+
+
+def trusted_replay_command(
+    overlay: Path,
+    receipt: Path,
+    receipt_index: Path,
+    expected_index_sha256: str,
+) -> subprocess.CompletedProcess[str]:
+    return run_verifier(
+        "replay-pilot-receipt",
+        "--pilot-contract",
+        str(PILOT_CONTRACT),
+        "--policy",
+        str(POLICY),
+        "--evidence",
+        str(EVIDENCE),
+        "--overlay",
+        str(overlay),
+        "--receipt-dir",
+        str(receipt),
+        "--receipt-index",
+        str(receipt_index),
+        "--expected-receipt-index-sha256",
+        expected_index_sha256,
+    )
 
 
 def parse_success(
@@ -1488,15 +1786,15 @@ def validate_cleanup_evidence(
     cleanup = exact_keys(value, expected_keys, label)
     require(cleanup["deleteReturnCode"] == 0, f"{label} delete failed")
     require(
-        isinstance(cleanup["postDeleteInspectReturnCode"], int)
-        and cleanup["postDeleteInspectReturnCode"] != 0,
-        f"{label} post-delete inspection did not report absence",
+        cleanup["postDeleteInventoryReturnCode"] == 0
+        and cleanup["targetAbsent"] is True,
+        f"{label} lacks successful parsed absence inventory",
     )
     for name in (
         "deleteStdout",
         "deleteStderr",
-        "postDeleteInspectStdout",
-        "postDeleteInspectStderr",
+        "postDeleteInventoryStdout",
+        "postDeleteInventoryStderr",
     ):
         check_artifact(
             receipt_root,
@@ -1534,6 +1832,7 @@ def validate_container_descriptor_pair(
     command: list[str],
     environment: dict[str, str],
     has_inputs: bool,
+    expected_exit_code: int,
 ) -> None:
     label = f"execution run {run['runId']}"
     require(before.get("id") == run["containerName"], f"{label} before ID drift")
@@ -1582,11 +1881,10 @@ def validate_container_descriptor_pair(
     effective_environment = environment_list(
         process.get("environment"), f"{label} environment"
     )
-    for name, expected in environment.items():
-        require(
-            effective_environment.get(name) == expected,
-            f"{label} environment {name} drift",
-        )
+    require(
+        effective_environment == environment,
+        f"{label} environment is not the exact frozen map",
+    )
     mounts = configuration.get("mounts")
     require(isinstance(mounts, list), f"{label} mount list absent")
     by_destination: dict[str, dict[str, Any]] = {}
@@ -1617,6 +1915,18 @@ def validate_container_descriptor_pair(
             isinstance(source, str) and Path(source).is_absolute(),
             f"{label} /inputs source is not absolute",
         )
+        parts = run["runId"].split(":")
+        suffix = (
+            f"oracle-inputs/artifacts/{parts[1]}/baseline/oracle/{parts[2]}"
+            if parts[0] == "baseline"
+            else (
+                f"oracle-inputs/artifacts/{parts[1]}/atoms/{parts[2]}/oracle/{parts[3]}"
+            )
+        )
+        require(
+            PurePosixPath(source).as_posix().endswith("/" + suffix),
+            f"{label} /inputs source is not the runId-derived materialization",
+        )
     before_status = before.get("status")
     after_status = after.get("status")
     require(isinstance(before_status, dict), f"{label} before status absent")
@@ -1628,8 +1938,11 @@ def validate_container_descriptor_pair(
     require(
         after_status.get("state") == "stopped"
         and isinstance(after_status.get("startedDate"), str)
-        and bool(after_status["startedDate"]),
-        f"{label} after state does not prove start",
+        and bool(after_status["startedDate"])
+        and isinstance(after_status.get("exitCode"), int)
+        and not isinstance(after_status["exitCode"], bool)
+        and after_status["exitCode"] == expected_exit_code,
+        f"{label} after state/exitCode does not bind the recorded result",
     )
 
 
@@ -1859,6 +2172,7 @@ def validate_execution_evidence(
             command,
             environment,
             False,
+            0,
         )
     validate_cleanup_evidence(
         receipt_root,
@@ -1868,6 +2182,305 @@ def validate_execution_evidence(
         ALIAS_CLEANUP_EVIDENCE_KEYS,
     )
     return {"alias": preflight["alias"], "runs": run_by_id}
+
+
+def validate_observer_evidence(
+    receipt_root: Path,
+    value: Any,
+    policy: dict[str, Any],
+    models: dict[str, dict[str, Any]],
+    overlay: Path,
+    execution_evidence: dict[str, Any],
+    seen_artifacts: set[str],
+) -> dict[str, Any]:
+    evidence = exact_keys(value, OBSERVER_EVIDENCE_KEYS, "observerEvidence")
+    require(evidence["schemaVersion"] == 1, "observer evidence schemaVersion drift")
+    require(
+        evidence["protocolId"] == "c30.day5.phase2-external-observer.v1",
+        "observer protocol drift",
+    )
+    identity = exact_keys(
+        evidence["observerIdentity"], OBSERVER_IDENTITY_KEYS, "observer identity"
+    )
+    require(
+        isinstance(identity["path"], str)
+        and bool(identity["path"])
+        and isinstance(identity["bytes"], int)
+        and not isinstance(identity["bytes"], bool)
+        and identity["bytes"] > 0,
+        "measured receipt uses the ABSENT observer sentinel",
+    )
+    require_hash(identity["sha256"], "observer executable SHA-256")
+    require(
+        identity["sha256"] != hashlib.sha256(b"").hexdigest(),
+        "measured receipt uses the zero-byte observer identity",
+    )
+    expected_ids = expected_execution_run_ids(models)
+    subject_ids = expected_subject_run_ids(models)
+    plan = check_artifact(
+        receipt_root, evidence["plan"], "observer plan", seen_artifacts
+    )
+    attestation = check_artifact(
+        receipt_root,
+        evidence["attestation"],
+        "observer attestation",
+        seen_artifacts,
+    )
+    require(
+        evidence["planSha256"] == plan["sha256"]
+        and evidence["attestationSha256"] == attestation["sha256"],
+        "observer plan/attestation hash drift",
+    )
+    planned = exact_keys(
+        artifact_json(receipt_root, plan, "observer plan"),
+        OBSERVER_PLAN_KEYS,
+        "observer plan body",
+    )
+    oracle_input_root = planned["oracleInputRoot"]
+    subject_execution_root = planned["subjectExecutionRoot"]
+    require(
+        isinstance(oracle_input_root, str)
+        and Path(oracle_input_root).is_absolute()
+        and Path(oracle_input_root).as_posix() == oracle_input_root
+        and isinstance(subject_execution_root, str)
+        and Path(subject_execution_root).is_absolute()
+        and Path(subject_execution_root).as_posix() == subject_execution_root
+        and ".." not in Path(oracle_input_root).parts
+        and ".." not in Path(subject_execution_root).parts
+        and Path(oracle_input_root) == Path(subject_execution_root) / "oracle-inputs",
+        "observer materialization roots are not exact absolute paths",
+    )
+    execution = policy["sourceEvidence"]["executionAuthority"]
+    require(
+        planned
+        == {
+            "containerCliSha256": execution["containerCliSha256"],
+            "expectedImage": execution["sealedImageId"],
+            "observerExecutableSha256": identity["sha256"],
+            "oracleInputRoot": oracle_input_root,
+            "oracleInputRootSha256": digest(canonical(oracle_input_root)),
+            "oracleRunIds": expected_ids,
+            "oracleRunOrderSha256": digest(canonical(expected_ids)),
+            "overlayClosureSha256": regular_closure(overlay)["sha256"],
+            "pilotContractSha256": digest(PILOT_CONTRACT.read_bytes()),
+            "policySha256": digest(POLICY.read_bytes()),
+            "protocolId": "c30.day5.phase2-external-observer.v1",
+            "schemaVersion": 1,
+            "subjectExecutionRoot": subject_execution_root,
+            "subjectExecutionRootSha256": digest(canonical(subject_execution_root)),
+            "subjectRunIds": subject_ids,
+            "subjectRunOrderSha256": digest(canonical(subject_ids)),
+        },
+        "observer pre-execution plan authority drift",
+    )
+    attested = exact_keys(
+        artifact_json(receipt_root, attestation, "observer attestation"),
+        OBSERVER_ATTESTATION_KEYS,
+        "observer attestation body",
+    )
+    require(
+        attested
+        == {name: evidence[name] for name in sorted(OBSERVER_ATTESTATION_KEYS)},
+        "observer receipt fields disagree with the raw attestation",
+    )
+
+    expected_closures = expected_oracle_input_closures(models)
+    oracle_runs = evidence["oracleRuns"]
+    require(
+        isinstance(oracle_runs, list) and len(oracle_runs) == 46,
+        "observer oracle run denominator drift",
+    )
+    require(
+        [item.get("runId") for item in oracle_runs if isinstance(item, dict)]
+        == expected_ids
+        and evidence["oracleRunOrderSha256"] == digest(canonical(expected_ids)),
+        "observer oracle run order drift",
+    )
+    observer_runs: dict[str, dict[str, Any]] = {}
+    for index, run_value in enumerate(oracle_runs):
+        run = exact_keys(
+            run_value, OBSERVER_ORACLE_RUN_KEYS, f"observer oracleRuns[{index}]"
+        )
+        run_id = run["runId"]
+        execution_run = execution_evidence["runs"].get(run_id)
+        require(isinstance(execution_run, dict), f"observer run is unplanned: {run_id}")
+        purpose, family = expected_run_purpose(run_id)
+        require(
+            run["containerName"] == execution_run["value"]["containerName"]
+            and run["purpose"] == purpose
+            and run["family"] == family
+            and run["cleanupTargetIndex"] == index,
+            f"observer run identity drift: {run_id}",
+        )
+        expected_closure = expected_closures[run_id]
+        require(
+            run["expectedInputClosureSha256"] == expected_closure
+            and run["observedInputClosureSha256"] == expected_closure,
+            f"observer actual input closure drift: {run_id}",
+        )
+        if expected_closure is None:
+            require(
+                run["mountSource"] is None and run["mountSourceSha256"] is None,
+                f"observer identity run has an input mount: {run_id}",
+            )
+        else:
+            source = run["mountSource"]
+            expected_source = expected_oracle_input_root(
+                Path(oracle_input_root), run_id
+            )
+            require(
+                isinstance(source, str)
+                and expected_source is not None
+                and Path(source) == expected_source
+                and run["mountSourceSha256"] == digest(canonical(source)),
+                f"observer mount-source binding drift: {run_id}",
+            )
+        for name in ("commandSha256", "environmentSha256"):
+            require_hash(run[name], f"observer {run_id} {name}")
+        require(
+            isinstance(run["exitCode"], int)
+            and not isinstance(run["exitCode"], bool)
+            and run["timedOut"] is False,
+            f"observer outcome drift: {run_id}",
+        )
+        before = check_artifact(
+            receipt_root,
+            run["beforeDescriptor"],
+            f"observer {run_id} before descriptor",
+            seen_artifacts,
+        )
+        after = check_artifact(
+            receipt_root,
+            run["afterDescriptor"],
+            f"observer {run_id} after descriptor",
+            seen_artifacts,
+        )
+        before_value = artifact_json(receipt_root, before, f"observer {run_id} before")
+        after_value = artifact_json(receipt_root, after, f"observer {run_id} after")
+        require(
+            before_value.get("id") == run["containerName"]
+            and after_value.get("id") == run["containerName"],
+            f"observer raw descriptor identity drift: {run_id}",
+        )
+        observer_runs[run_id] = {
+            **run,
+            "_afterDescriptorValue": after_value,
+            "_beforeDescriptorValue": before_value,
+        }
+
+    subject_runs = evidence["subjectRuns"]
+    require(
+        isinstance(subject_runs, list) and len(subject_runs) == 28,
+        "observer subject run denominator drift",
+    )
+    require(
+        [item.get("runId") for item in subject_runs if isinstance(item, dict)]
+        == subject_ids
+        and evidence["subjectRunOrderSha256"] == digest(canonical(subject_ids)),
+        "observer subject run order drift",
+    )
+    observer_subjects: dict[str, dict[str, Any]] = {}
+    expected_subject = policy["sourceEvidence"]["executionAuthority"]["subjectSha256"]
+    for index, run_value in enumerate(subject_runs):
+        run = exact_keys(
+            run_value, OBSERVER_SUBJECT_RUN_KEYS, f"observer subjectRuns[{index}]"
+        )
+        root = run["inputRoot"]
+        expected_root = expected_subject_input_root(
+            Path(subject_execution_root), run["runId"]
+        )
+        require(
+            run["subjectSha256"] == expected_subject
+            and isinstance(root, str)
+            and Path(root) == expected_root
+            and run["inputRootSha256"] == digest(canonical(root))
+            and run["expectedInputClosureSha256"] == run["observedInputClosureSha256"]
+            and isinstance(run["returnCode"], int)
+            and not isinstance(run["returnCode"], bool)
+            and run["timedOut"] is False,
+            f"observer subject authority drift: {run['runId']}",
+        )
+        for name in (
+            "argvSha256",
+            "environmentSha256",
+            "expectedInputClosureSha256",
+            "observedInputClosureSha256",
+            "stdoutSha256",
+            "stderrSha256",
+        ):
+            require_hash(run[name], f"observer subject {run['runId']} {name}")
+        observer_subjects[run["runId"]] = run
+
+    cleanup = exact_keys(
+        evidence["cleanupLedger"], CLEANUP_LEDGER_KEYS, "observer cleanup ledger"
+    )
+    expected_names = [
+        execution_evidence["runs"][run_id]["value"]["containerName"]
+        for run_id in expected_ids
+    ]
+    require(
+        cleanup["plannedContainerNames"] == expected_names
+        and cleanup["plannedAlias"] == execution_evidence["alias"]
+        and cleanup["containerInventoryReturnCode"] == 0
+        and cleanup["imageInventoryReturnCode"] == 0
+        and cleanup["containerNamesAbsent"] is True
+        and cleanup["aliasAbsent"] is True
+        and cleanup["allAbsent"] is True,
+        "observer cleanup plan/closure drift",
+    )
+    attempts = cleanup["attempts"]
+    require(
+        isinstance(attempts, list) and len(attempts) == 47,
+        "observer cleanup attempt denominator drift",
+    )
+    expected_targets = [*expected_names, execution_evidence["alias"]]
+    require(
+        [item.get("target") for item in attempts if isinstance(item, dict)]
+        == expected_targets,
+        "observer cleanup target order drift",
+    )
+    for index, attempt_value in enumerate(attempts):
+        attempt = exact_keys(
+            attempt_value, CLEANUP_ATTEMPT_KEYS, f"cleanup attempts[{index}]"
+        )
+        require(
+            attempt["deleteAttempted"] is True
+            and attempt["deleteReturnCode"] == 0
+            and attempt["error"] is None,
+            f"cleanup target was not successfully attempted: {attempt['target']}",
+        )
+        if index < 46:
+            require(
+                attempt["targetKind"] == "container"
+                and isinstance(attempt["stopAttempted"], bool)
+                and (
+                    (
+                        attempt["stopAttempted"] is True
+                        and isinstance(attempt["stopReturnCode"], int)
+                        and not isinstance(attempt["stopReturnCode"], bool)
+                    )
+                    or (
+                        attempt["stopAttempted"] is False
+                        and attempt["stopReturnCode"] is None
+                    )
+                ),
+                f"container cleanup attempt drift: {attempt['target']}",
+            )
+        else:
+            require(
+                attempt["targetKind"] == "image-alias"
+                and attempt["stopAttempted"] is False
+                and attempt["stopReturnCode"] is None,
+                "image alias cleanup attempt drift",
+            )
+    for name in ("containerInventory", "imageInventory"):
+        check_artifact(
+            receipt_root,
+            cleanup[name],
+            f"observer cleanup {name}",
+            seen_artifacts,
+        )
+    return {"oracleRuns": observer_runs, "subjectRuns": observer_subjects}
 
 
 def forbidden_container_texts(receipt_root: Path, overlay: Path) -> list[str]:
@@ -1895,6 +2508,7 @@ def validate_subject_receipt(
     receipt_root: Path,
     seen_artifacts: set[str],
     baseline: bool,
+    observer_run: dict[str, Any],
 ) -> dict[str, Any]:
     receipt = exact_keys(value, SUBJECT_RECEIPT_KEYS, label)
     require(
@@ -1958,6 +2572,25 @@ def validate_subject_receipt(
         isinstance(receipt["returnCode"], int), f"{label} return code is not integer"
     )
     require(receipt["timedOut"] is False, f"{label} timed out")
+    require(
+        observer_run["subjectSha256"] == receipt["subjectSha256"]
+        and observer_run["argvSha256"] == receipt["argvSha256"]
+        and observer_run["environmentSha256"] == receipt["environmentSha256"]
+        and observer_run["expectedInputClosureSha256"] == receipt["inputClosureSha256"]
+        and observer_run["observedInputClosureSha256"] == receipt["inputClosureSha256"]
+        and observer_run["returnCode"] == receipt["returnCode"]
+        and observer_run["timedOut"] == receipt["timedOut"]
+        and observer_run["stdoutSha256"] == receipt["stdoutSha256"]
+        and observer_run["stderrSha256"] == receipt["stderrSha256"],
+        f"{label} disagrees with external observer evidence",
+    )
+    normalized = receipt["normalizedObservation"]
+    if normalized is not None:
+        require(
+            normalized.get("returnCode") == receipt["returnCode"]
+            and normalized.get("timedOut") == receipt["timedOut"],
+            f"{label} normalized outcome contradicts process outcome",
+        )
     if baseline:
         require(
             receipt["normalizedObservation"] == normalized_observation(model["record"]),
@@ -2067,6 +2700,27 @@ def validate_oracle_receipt(
         run["inputClosureSha256"] == receipt["inputClosureSha256"],
         f"{label} execution input closure drift",
     )
+    observer_run = execution_evidence["observerRuns"].get(expected_run_id)
+    require(isinstance(observer_run, dict), f"{label} observer descriptor absent")
+    require(
+        observer_run["commandSha256"] == receipt["commandSha256"]
+        and observer_run["environmentSha256"] == digest(canonical(environment))
+        and observer_run["expectedInputClosureSha256"] == receipt["inputClosureSha256"]
+        and observer_run["observedInputClosureSha256"] == receipt["inputClosureSha256"]
+        and observer_run["exitCode"] == receipt["returnCode"]
+        and observer_run["timedOut"] == receipt["timedOut"],
+        f"{label} disagrees with external observer evidence",
+    )
+    descriptor_mounts = run_info["before"]["configuration"]["mounts"]
+    descriptor_source = next(
+        item.get("source")
+        for item in descriptor_mounts
+        if item.get("destination") == "/inputs"
+    )
+    require(
+        observer_run["mountSource"] == descriptor_source,
+        f"{label} observer/descriptor mount source drift",
+    )
     validate_container_descriptor_pair(
         run_info["before"],
         run_info["after"],
@@ -2076,6 +2730,21 @@ def validate_oracle_receipt(
         command,
         environment,
         True,
+        receipt["returnCode"],
+    )
+    validate_container_descriptor_pair(
+        observer_run["_beforeDescriptorValue"],
+        observer_run["_afterDescriptorValue"],
+        {
+            "containerName": observer_run["containerName"],
+            "runId": observer_run["runId"],
+        },
+        execution_evidence["alias"],
+        receipt["imageId"],
+        command,
+        environment,
+        True,
+        receipt["returnCode"],
     )
     return receipt
 
@@ -2095,7 +2764,7 @@ def validate_receipt(
     receipt = load(receipt_path, "pilot receipt")
     require(canonical(receipt) == receipt_bytes, "receipt.json is not canonical")
     exact_keys(receipt, RECEIPT_KEYS, "pilot receipt")
-    require(receipt["schemaVersion"] == 2, "receipt schemaVersion drift")
+    require(receipt["schemaVersion"] == 3, "receipt schemaVersion drift")
     require(receipt["policyId"] == policy["policyId"], "receipt policy ID drift")
     require(
         receipt["policySha256"] == digest(POLICY.read_bytes()),
@@ -2133,6 +2802,40 @@ def validate_receipt(
         models,
         seen_artifacts,
     )
+    observer_evidence = validate_observer_evidence(
+        receipt_root,
+        receipt["observerEvidence"],
+        policy,
+        models,
+        overlay,
+        execution_evidence,
+        seen_artifacts,
+    )
+    execution_evidence["observerRuns"] = observer_evidence["oracleRuns"]
+    for family in ("gcc", "clang"):
+        identity = receipt["executionEvidence"]["compilerIdentities"][family]
+        observed = observer_evidence["oracleRuns"][f"identity:{family}"]
+        require(
+            observed["commandSha256"] == identity["commandSha256"]
+            and observed["environmentSha256"]
+            == digest(canonical(identity["environment"]))
+            and observed["exitCode"] == 0,
+            f"observer compiler identity drift: {family}",
+        )
+        validate_container_descriptor_pair(
+            observed["_beforeDescriptorValue"],
+            observed["_afterDescriptorValue"],
+            {
+                "containerName": observed["containerName"],
+                "runId": observed["runId"],
+            },
+            execution_evidence["alias"],
+            policy["sourceEvidence"]["executionAuthority"]["sealedImageId"],
+            identity["command"],
+            identity["environment"],
+            False,
+            0,
+        )
     receipt_records = receipt["records"]
     require(
         isinstance(receipt_records, list) and len(receipt_records) == 3,
@@ -2187,6 +2890,9 @@ def validate_receipt(
                 receipt_root,
                 seen_artifacts,
                 baseline=True,
+                observer_run=observer_evidence["subjectRuns"][
+                    f"subject:baseline:{failure_id}:{index:03d}"
+                ],
             )
             for index, replay in enumerate(replays)
         ]
@@ -2291,6 +2997,9 @@ def validate_receipt(
                 receipt_root,
                 seen_artifacts,
                 baseline=False,
+                observer_run=observer_evidence["subjectRuns"][
+                    f"subject:atom:{failure_id}:{atom_index:03d}"
+                ],
             )
             atom_references = exact_keys(
                 atom["referenceAcceptance"],
@@ -2373,6 +3082,46 @@ def mutate_receipt(
     return digest((destination / "receipt.json").read_bytes())
 
 
+def rewrite_json_artifact(
+    receipt_root: Path,
+    artifact: dict[str, Any],
+    action: Callable[[dict[str, Any]], None],
+) -> None:
+    path = artifact_path(receipt_root, artifact)
+    value = load(path, f"mutant artifact {artifact['path']}")
+    action(value)
+    store(path, value)
+    artifact.update(descriptor(path, artifact["path"]))
+
+
+def mutate_receipt_tree(
+    source: Path,
+    destination: Path,
+    action: Callable[[Path, dict[str, Any]], None],
+) -> str:
+    shutil.copytree(source, destination)
+    receipt_path = destination / "receipt.json"
+    value = load(receipt_path, "mutant receipt")
+    action(destination, value)
+    evidence = value.get("observerEvidence")
+    if isinstance(evidence, dict):
+        attestation = evidence.get("attestation")
+        require(
+            isinstance(attestation, dict),
+            "self-consistent mutant lacks observer attestation",
+        )
+        attestation_path = artifact_path(destination, attestation)
+        store(
+            attestation_path,
+            {name: evidence[name] for name in sorted(OBSERVER_ATTESTATION_KEYS)},
+        )
+        attestation.update(descriptor(attestation_path, attestation["path"]))
+        evidence["attestationSha256"] = attestation["sha256"]
+    value["artifactClosure"] = regular_closure(destination, excluded={"receipt.json"})
+    store(receipt_path, value)
+    return digest(receipt_path.read_bytes())
+
+
 def first_receipt_record(receipt: dict[str, Any]) -> dict[str, Any]:
     records = receipt["records"]
     require(isinstance(records, list) and bool(records), "mutant receipt lacks records")
@@ -2395,6 +3144,149 @@ def semantic_receipt_mutants(
             f"semantic receipt mutant {name}",
         )
         controls += 1
+
+    def expect_tree_mutant(
+        name: str, action: Callable[[Path, dict[str, Any]], None]
+    ) -> None:
+        nonlocal controls
+        mutant = root / name
+        mutant_sha = mutate_receipt_tree(receipt_root, mutant, action)
+        require_rejected(
+            replay_command(overlay, mutant, mutant_sha),
+            f"self-consistent v3 receipt mutant {name}",
+        )
+        controls += 1
+
+    expect_mutant(
+        "receipt-missing-observer-evidence",
+        lambda value: value.pop("observerEvidence"),
+    )
+
+    def zero_byte_observer(mutant_root: Path, value: dict[str, Any]) -> None:
+        evidence = value["observerEvidence"]
+        empty_sha256 = hashlib.sha256(b"").hexdigest()
+        evidence["observerIdentity"].update(
+            {"bytes": 0, "path": None, "sha256": empty_sha256}
+        )
+        rewrite_json_artifact(
+            mutant_root,
+            evidence["plan"],
+            lambda plan: plan.update({"observerExecutableSha256": empty_sha256}),
+        )
+        evidence["planSha256"] = evidence["plan"]["sha256"]
+
+    expect_tree_mutant("receipt-zero-byte-observer-identity", zero_byte_observer)
+
+    def wrong_observed_closure(_root: Path, value: dict[str, Any]) -> None:
+        value["observerEvidence"]["oracleRuns"][2].update(
+            {"observedInputClosureSha256": "0" * 64}
+        )
+
+    expect_tree_mutant(
+        "receipt-observer-input-closure-mismatch", wrong_observed_closure
+    )
+
+    def wrong_mount_source(mutant_root: Path, value: dict[str, Any]) -> None:
+        execution_run = value["executionEvidence"]["runs"][2]
+        observer_run = value["observerEvidence"]["oracleRuns"][2]
+
+        def rewrite_source(descriptor_value: dict[str, Any]) -> None:
+            mount = next(
+                item
+                for item in descriptor_value["configuration"]["mounts"]
+                if item.get("destination") == "/inputs"
+            )
+            mount["source"] = "/tmp/attacker-inputs"
+
+        for artifact in (
+            execution_run["containerBefore"],
+            execution_run["containerAfter"],
+            observer_run["beforeDescriptor"],
+            observer_run["afterDescriptor"],
+        ):
+            rewrite_json_artifact(mutant_root, artifact, rewrite_source)
+        observer_run["mountSource"] = "/tmp/attacker-inputs"
+        observer_run["mountSourceSha256"] = digest(
+            canonical(observer_run["mountSource"])
+        )
+
+    expect_tree_mutant("receipt-wrong-materialized-mount-source", wrong_mount_source)
+
+    def contradictory_exit_code(mutant_root: Path, value: dict[str, Any]) -> None:
+        execution_run = value["executionEvidence"]["runs"][2]
+        observer_run = value["observerEvidence"]["oracleRuns"][2]
+
+        def rewrite_exit(descriptor_value: dict[str, Any]) -> None:
+            descriptor_value["status"]["exitCode"] = 1
+
+        for artifact in (
+            execution_run["containerAfter"],
+            observer_run["afterDescriptor"],
+        ):
+            rewrite_json_artifact(mutant_root, artifact, rewrite_exit)
+        observer_run["exitCode"] = 1
+
+    expect_tree_mutant("receipt-exit-code-contradiction", contradictory_exit_code)
+
+    def contradictory_subject(_root: Path, value: dict[str, Any]) -> None:
+        record = first_receipt_record(value)
+        failure_id = record["failureId"]
+        for index, replay in enumerate(record["subjectReplays"]):
+            replay["returnCode"] = 0
+            value["observerEvidence"]["subjectRuns"][index]["returnCode"] = 0
+            require(
+                value["observerEvidence"]["subjectRuns"][index]["runId"]
+                == f"subject:baseline:{failure_id}:{index:03d}",
+                "subject contradiction mutant selected the wrong observer run",
+            )
+
+    expect_tree_mutant(
+        "receipt-subject-normalization-contradiction", contradictory_subject
+    )
+
+    def extra_init_environment(mutant_root: Path, value: dict[str, Any]) -> None:
+        execution_run = value["executionEvidence"]["runs"][2]
+        observer_run = value["observerEvidence"]["oracleRuns"][2]
+
+        def append_environment(descriptor_value: dict[str, Any]) -> None:
+            descriptor_value["configuration"]["initProcess"]["environment"].append(
+                "GCC_EXEC_PREFIX=/evil"
+            )
+
+        for artifact in (
+            execution_run["containerBefore"],
+            execution_run["containerAfter"],
+            observer_run["beforeDescriptor"],
+            observer_run["afterDescriptor"],
+        ):
+            rewrite_json_artifact(mutant_root, artifact, append_environment)
+
+    expect_tree_mutant("receipt-extra-init-environment", extra_init_environment)
+
+    def service_unavailable_absence(_root: Path, value: dict[str, Any]) -> None:
+        value["executionEvidence"]["runs"][0]["cleanup"].update(
+            {"postDeleteInventoryReturnCode": 125, "targetAbsent": True}
+        )
+        value["observerEvidence"]["cleanupLedger"].update(
+            {
+                "allAbsent": True,
+                "containerInventoryReturnCode": 125,
+                "containerNamesAbsent": True,
+            }
+        )
+
+    expect_tree_mutant(
+        "receipt-cleanup-service-unavailable", service_unavailable_absence
+    )
+
+    def omit_cleanup_attempt(_root: Path, value: dict[str, Any]) -> None:
+        ledger = value["observerEvidence"]["cleanupLedger"]
+        ledger["plannedContainerNames"].pop()
+        ledger["attempts"].pop(-2)
+
+    expect_tree_mutant(
+        "receipt-incomplete-exception-cleanup-ledger", omit_cleanup_attempt
+    )
 
     expect_mutant(
         "receipt-missing-execution-evidence",
@@ -2449,7 +3341,14 @@ def semantic_receipt_mutants(
     expect_mutant("receipt-omitted-atom", omit_atom)
 
     def duplicate_atom(value: dict[str, Any]) -> None:
-        minimality = first_receipt_record(value)["minimality"]
+        record = next(
+            item for item in value["records"] if item["failureId"] == E1001_FAILURE_ID
+        )
+        minimality = record["minimality"]
+        require(
+            len(minimality["atoms"]) >= 2,
+            "duplicate-atom control requires at least two atoms",
+        )
         minimality["atoms"][1] = copy.deepcopy(minimality["atoms"][0])
         ids = [item["atomId"] for item in minimality["atoms"]]
         minimality["atomOrderSha256"] = digest(canonical(ids))
@@ -2626,6 +3525,80 @@ def receipt_integrity_mutants(
     return controls
 
 
+def mechanism_fault_controls(root: Path) -> int:
+    spec = importlib.util.spec_from_file_location(
+        "day5_kernel_reductions_v3_under_test", VERIFIER
+    )
+    require(spec is not None and spec.loader is not None, "cannot import verifier")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    publish = getattr(module, "publish_receipt_no_replace", None)
+    require(callable(publish), "production no-replace publish primitive is absent")
+    staging = root / "publish-race-staging"
+    destination = root / "publish-race-destination"
+    staging.mkdir()
+    (staging / "receipt.json").write_bytes(b"staged")
+    destination.mkdir()
+    destination_inode = destination.stat().st_ino
+    rejected = False
+    try:
+        publish(staging, destination)
+    except (module.ContractError, OSError):
+        rejected = True
+    require(rejected, "empty-destination publication race was not rejected")
+    require(
+        destination.is_dir()
+        and destination.stat().st_ino == destination_inode
+        and list(destination.iterdir()) == [],
+        "no-replace publication overwrote the racing destination",
+    )
+    require(
+        staging.is_dir() and (staging / "receipt.json").read_bytes() == b"staged",
+        "rejected no-replace publication consumed staging",
+    )
+
+    cleanup = getattr(module, "cleanup_registered_oracle_resources", None)
+    require(callable(cleanup), "exception-total cleanup primitive is absent")
+    names = [f"c30-pilot-{index:03d}-fault" for index in range(1, 47)]
+    alias = "c30-day5-pilot-fault:bound"
+    calls: list[list[str]] = []
+    faulted = False
+
+    def fault_runner(argv: list[str]) -> subprocess.CompletedProcess[bytes]:
+        nonlocal faulted
+        calls.append(argv)
+        if not faulted:
+            faulted = True
+            raise module.ContractError("injected first cleanup timeout")
+        return subprocess.CompletedProcess(argv, 0, b"", b"")
+
+    ledger = cleanup(
+        {
+            "alias": alias,
+            "aliasLive": True,
+            "containerBin": "/absent/container",
+            "retainedNames": list(names),
+        },
+        runner=fault_runner,
+    )
+    exact_keys(ledger, CLEANUP_LEDGER_KEYS, "fault-injected cleanup ledger")
+    require(
+        ledger["plannedContainerNames"] == names
+        and ledger["plannedAlias"] == alias
+        and len(ledger["attempts"]) == 47,
+        "cleanup fault injection lost a planned resource",
+    )
+    attempted_targets = {
+        argv[-1] for argv in calls if argv and argv[-1] in {*names, alias}
+    }
+    require(
+        attempted_targets == {*names, alias},
+        "cleanup aborted after the first injected exception",
+    )
+    return 2
+
+
 def main() -> int:
     try:
         policy, records = audit_authority()
@@ -2645,6 +3618,34 @@ def main() -> int:
                 f"pilot atom denominator drift: {expected_denominators}",
             )
             receipt_root = root / "receipt"
+            observer_authority = pilot_contract["observerAuthority"]
+            if observer_authority["authorityState"] == "ABSENT":
+                production_source = VERIFIER.read_text(encoding="utf-8")
+                require(
+                    'contract["schemaVersion"] == 2' in production_source,
+                    "refusing to invoke a v3-aware verifier while observer authority is ABSENT",
+                )
+                executed = verify_command(overlay, receipt_root)
+                require_rejected(
+                    executed,
+                    "v3 contract against current v2 production boundary",
+                    receipt_root,
+                )
+                require(
+                    executed.stderr
+                    == FAILURE_PREFIX
+                    + "pilot contract keys differ: missing=[] extra=['observerAuthority']\n",
+                    "current production did not stop at the pre-execution v2/v3 boundary",
+                )
+                print(
+                    "DAY5_KERNEL_REDUCTIONS_PHASE2_SELFTEST RED "
+                    "schema=3 observer_authority=ABSENT live_measurement_permitted=0 "
+                    "production_boundary=pilot-contract-v2-root-keys "
+                    "pilots=3 deletion_atoms=19 oracle_runs=46 subject_runs=28 "
+                    f"obligation_manifest_sha256={MANIFEST_SHA256}"
+                )
+                return 1
+            mechanism_controls = mechanism_fault_controls(root)
             executed = verify_command(overlay, receipt_root)
             if (
                 executed.returncode == 2
@@ -2696,7 +3697,7 @@ def main() -> int:
                 "no-overwrite rejection modified the existing receipt",
             )
 
-            controls = 1
+            controls = 1 + mechanism_controls
             controls += semantic_receipt_mutants(root, overlay, receipt_root)
             controls += overlay_input_mutants(
                 root, overlay, receipt_root, receipt_sha256

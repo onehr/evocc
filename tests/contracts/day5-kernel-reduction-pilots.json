@@ -1,9 +1,9 @@
 {
-  "schemaVersion": 2,
-  "contractId": "c30.day5.kernel-reduction-pilots.v2",
+  "schemaVersion": 3,
+  "contractId": "c30.day5.kernel-reduction-pilots.v3",
   "contractState": "locked",
   "measurementStatus": "NOT_MEASURED",
-  "purpose": "Freeze the exact pre-execution authority for three representative real Day-5 kernel reduction pilots. This contract contains no measured outcome, receipt hash, oracle result, or expected diagnostic output and must never be result-shaped after execution.",
+  "purpose": "Freeze the exact pre-execution authority for three representative real Day-5 kernel reduction pilots. This contract contains no measured outcome, receipt hash, oracle result, or expected diagnostic output and must never be result-shaped after execution. The mandatory external observer authority is deliberately ABSENT, so live measurement is prohibited until a separately reviewed observer executable identity replaces the zero-byte sentinel.",
   "parentAuthority": {
     "policyId": "c30.day5.kernel-reduction-policy.v1",
     "policyPath": "tests/contracts/day5-kernel-reduction-policy.json",
@@ -242,7 +242,7 @@
     ]
   },
   "oracleEvidenceAuthority": {
-    "schemaVersion": 1,
+    "schemaVersion": 2,
     "containerRuns": {
       "compilerIdentity": 2,
       "baselineAcceptance": 6,
@@ -251,8 +251,8 @@
       "total": 46
     },
     "runOrder": "First identity:gcc and identity:clang; then, for each failureId in exact pilot order, baseline gcc and clang followed by every contract-ordered atom in exact order with gcc then clang. The canonical ordered runId list is receipt-bound by runOrderSha256.",
-    "preflight": "Bind the exact host container CLI file identity and version, the targeted discovery-image inspection, the run-unique alias inspection, and the expected sealed image descriptor before any compiler container starts. Raw inspection artifacts are receipt artifacts and part of artifactClosure.",
-    "perRun": "Every one of the 46 container runs has one exact run descriptor. It binds a unique runId and container name, purpose and compiler family, exact input-closure identity, targeted image inspections immediately before and after, raw container inspections before and after execution, and checked deletion plus post-deletion absence evidence. Every raw stdout/stderr/inspection artifact is independently hashed and included exactly once in artifactClosure.",
+    "preflight": "Bind the exact host container CLI file identity and version before and after execution, the targeted discovery-image inspection, the run-unique alias inspection, and the expected sealed image descriptor before any compiler container starts. The external observer independently binds the CLI, observer executable, image, plan, and actual input closures. Raw inspection artifacts are receipt artifacts and part of artifactClosure.",
+    "perRun": "Every one of the 46 container runs has one exact verifier descriptor and one exact externally attested run descriptor. Each binds a unique runId and container name, purpose and compiler family, exact command, exact final environment, exact runId-derived materialized input root and regular-file closure, targeted image inspections immediately before and after, raw container inspections before and after execution, after.status.exitCode equal to the recorded process result, and checked deletion plus successful post-deletion inventory evidence. Every raw stdout/stderr/inspection/observer artifact is independently hashed and included exactly once in artifactClosure.",
     "containerDescriptor": {
       "sameIdAndConfigurationBeforeAfter": true,
       "beforeState": "stopped-without-startedDate",
@@ -270,16 +270,55 @@
       "rosetta": false,
       "ssh": false,
       "virtualization": false,
-      "initProcess": "Exact compiler command, exact controlled environment, and exact /inputs or /tmp working directory must be derived from the raw Apple Container descriptor; copied receipt fields are not authority.",
-      "mounts": "Compiler identity runs have only the private /tmp tmpfs. Receipt-oracle runs additionally have exactly one readonly virtiofs /inputs mount whose materialized regular-file closure equals the bound inputClosureSha256. No other user mount is allowed."
+      "initProcess": "Exact compiler command, exact final controlled environment with no unlisted variables, and exact /inputs or /tmp working directory must be derived from the raw Apple Container descriptor; copied receipt fields are not authority.",
+      "mounts": "Compiler identity runs have only the private /tmp tmpfs. Receipt-oracle runs additionally have exactly one readonly virtiofs /inputs mount whose descriptor source equals the canonical runId-derived materialized input root and whose actual regular-file closure, independently hashed immediately before start, equals the bound inputClosureSha256. No other user mount is allowed.",
+      "afterExitStatus": "after.status.exitCode is mandatory and equals the independently observed process result used by reference acceptance and minimality.",
+      "exactEnvironment": true,
+      "exactInputMountSource": true
     },
     "cleanup": {
       "containerDeleteRequired": true,
-      "postDeleteInspectMustReportAbsent": true,
       "aliasDeleteRequired": true,
-      "postAliasDeleteInspectMustReportAbsent": true,
-      "partialEvidenceForbidden": true
+      "partialEvidenceForbidden": true,
+      "plannedResourceLedgerRequired": true,
+      "registerBeforeSideEffect": true,
+      "exceptionTotalCleanup": true,
+      "inspectFailureIsAbsence": false,
+      "postDeleteSuccessfulInventoryRequired": true,
+      "postAliasDeleteSuccessfulInventoryRequired": true,
+      "externalPostCleanupAttestationRequired": true
     }
+  },
+  "observerAuthority": {
+    "schemaVersion": 1,
+    "authorityState": "ABSENT",
+    "measurementStatus": "NOT_MEASURED",
+    "provisional": true,
+    "liveMeasurementPermitted": false,
+    "protocolId": "c30.day5.phase2-external-observer.v1",
+    "executable": {
+      "path": null,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "attestationTrust": "externally-pinned-sha256",
+    "requiredExecutionBoundary": [
+      "subject",
+      "oracle-input-closure",
+      "oracle-before",
+      "oracle-start",
+      "oracle-after",
+      "cleanup"
+    ],
+    "checkpoints": [
+      "plan",
+      "pre-cleanup",
+      "post-cleanup"
+    ],
+    "oracleRunCount": 46,
+    "oracleInputRunCount": 44,
+    "subjectRunCount": 28,
+    "absenceBehavior": "Reject before subject or container execution, create no receipt or measured index, and preserve NOT_MEASURED."
   },
   "verdictSemantics": {
     "verifiedPilotRecords": 3,
@@ -290,14 +329,21 @@
     "remainingFailures": 43
   },
   "receiptAuthority": {
-    "schemaVersion": 2,
-    "creation": "atomic-no-overwrite",
-    "replayRequiresCallerExpectedReceiptSha256": true,
+    "schemaVersion": 3,
+    "creation": "atomic-no-overwrite-with-no-replace-primitive",
+    "replayRequiresTrustedReceiptIndexSha256": true,
     "resultAndReceiptBindPilotContractSha256": true,
-    "measuredReceiptIndex": "separate-post-run-authority",
+    "measuredReceiptIndex": "separate-externally-pinned-post-run-authority",
+    "externalReceiptIndexRequired": true,
+    "observerEvidenceRequired": true,
     "executionEvidenceRequired": true,
     "executionRunCount": 46,
+    "observerOracleRunCount": 46,
+    "observerOracleInputRunCount": 44,
+    "observerSubjectRunCount": 28,
     "rawDescriptorArtifactsInClosure": true,
-    "cleanupEvidenceRequired": true
+    "cleanupEvidenceRequired": true,
+    "cleanupLedgerRequired": true,
+    "noReplacePrimitiveRequired": true
   }
 }
