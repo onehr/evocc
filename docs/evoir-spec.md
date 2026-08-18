@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.2** | **Authoritative reference** | **2026-08-18**
+**Revision 1.5** | **Authoritative reference** | **2026-08-18**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -175,7 +175,10 @@ func @name(%p1: T1, ..., %pN: TN, %m: mem<R>, %w: world)
 The function signature **explicitly carries** memory and world tokens so effects
 are threaded through the call graph. Every function that may read or write
 memory, or that may call such functions, must accept and return `mem<R>` and
-`world` tokens.
+`world` tokens. For every such call/effect participant, the Day 6 canonical
+interface places exactly one `mem<R>` followed by exactly one `world` after all
+ordinary parameters, and the same `mem<R>, world` pair after all ordinary
+returns.
 
 ### 2.2 Basic Blocks
 
@@ -337,6 +340,32 @@ potentially trapping operations ahead of operations with observable side
 effects unless the UB assumption guaranteeing non-trapping dominates that
 reordering.
 
+#### 3.3.1 Integer UB Predicates
+
+The predicates used to guard division, remainder, and shifts are executable
+`bits<1>` instructions, not annotations inferred by the interpreter:
+
+```text
+%nonzero = divisor_nonzero %divisor
+%no_overflow = signed_div_rem_no_overflow %lhs, %rhs
+%count_ok = shift_count_defined.signed %shifted, %amount
+%count_ok = shift_count_defined.unsigned %shifted, %amount
+%shl_ok = signed_shl_defined.signed %shifted, %amount
+%shl_ok = signed_shl_defined.unsigned %shifted, %amount
+```
+
+The div/rem predicate operands must have matching widths. Shifted values and
+shift amounts may have different widths after integer promotion:
+`%shifted : bits<N>` and `%amount : bits<M>`. `divisor_nonzero` is false exactly
+for a zero bit pattern. `signed_div_rem_no_overflow` is false exactly for signed
+`MIN, -1`; it remains true for a zero divisor so that a separate assumption
+selects `E3002` or `E3003`. `shift_count_defined` uses `N` as the bound and
+decodes `%amount` at width `M` with the declared source signedness; it is true
+exactly for mathematical counts in `[0, N)`. `signed_shl_defined` performs the
+same independent-width decode and is false for an invalid count, a negative
+left operand, or a shifted result not representable in signed `bits<N>`; it
+never traps while computing the predicate.
+
 ### 3.4 Bitwise Operations
 
 ```
@@ -350,20 +379,28 @@ reordering.
 
 | Field | Description |
 |---|---|
-| `N` | Bit width. |
+| `N` | Bit width of `%a` and the result. |
+| `%b` | Shift amount of independently promoted type `bits<M>` for shifts; `bits<N>` for `and`, `or`, and `xor`. |
 
 **Semantics.**
 
 `and`, `or`, `xor`: bitwise logical operations on `N`-bit values. Total.
 
-`shl`: shift left. The low `N` bits of `%b` specify the shift amount.
-Undefined behavior if the shift amount >= `N`.
+`shl`: shift left. `%b` is decoded at its own `M`-bit width. C
+lowering must first assert `shift_count_defined` and, for signed left shift,
+`signed_shl_defined` with their distinct reasons.
 
 `lshr`: logical shift right. Zeros fill the vacated high bits.
-Undefined behavior if the shift amount >= `N`.
+C lowering must first assert `shift_count_defined`.
 
 `ashr`: arithmetic shift right. The sign bit (bit `N-1` of `%a`) fills the
-vacated high bits. Undefined behavior if the shift amount >= `N`.
+vacated high bits. C lowering must first assert `shift_count_defined`.
+
+The raw shift instructions are total so the interpreter cannot panic on a
+malformed or unguarded path. For an amount at least `N`, `shl` and `lshr`
+produce zero; `ashr` produces all zeroes or all ones according to the sign bit.
+Those fallback values are not C semantics: a valid C lowering dominates the
+instruction with the typed invalid-count assumption.
 
 ### 3.5 Comparisons
 
@@ -548,16 +585,20 @@ EffectSummary {
 | Instruction | reads | writes | volatile | atomic | io | may_trap | may_unwind |
 |---|---|---|---|---|---|---|---|
 | `const` | `{}` | `{}` | false | false | false | false | false |
+| `uninitialized.bits<N>` | `{}` | `{}` | false | false | false | false | false |
 | `add`, `sub`, `mul` | `{}` | `{}` | false | false | false | false | false |
 | `sdiv`, `udiv`, `srem`, `urem` | `{}` | `{}` | false | false | false | true | false |
+| integer UB predicates | `{}` | `{}` | false | false | false | false | false |
+| `ub.assume.<reason>` | `{}` | `{}` | false | false | false | true | false |
 | `and`, `or`, `xor` | `{}` | `{}` | false | false | false | false | false |
-| `shl`, `lshr`, `ashr` | `{}` | `{}` | false | false | false | true | false |
+| `shl`, `lshr`, `ashr` | `{}` | `{}` | false | false | false | false | false |
 | `icmp.*` | `{}` | `{}` | false | false | false | false | false |
 | `sext`, `zext`, `trunc` | `{}` | `{}` | false | false | false | false | false |
 | `ptr.offset` | `{}` | `{}` | false | false | false | false | false |
 | `load` (normal) | `{R}` | `{}` | false | false | false | true | false |
 | `store` (normal) | `{}` | `{R}` | false | false | false | true | false |
 | `call` | depends on callee | depends on callee | depends | depends | depends | depends | depends |
+| `trap.scalar_function_fell_off_end` | `{}` | `{}` | false | false | false | true | false |
 
 For `load` and `store`, the region `R` is determined by the memory token's
 region annotation and refined by pointer analysis.
@@ -713,17 +754,31 @@ reordering and eliminates spurious memory dependencies.
 
 ### 6.1 Explicit UB Model
 
-C undefined behavior is made explicit in EvoIR through `ub.assume`:
+C undefined behavior is made explicit in EvoIR through typed
+`ub.assume.<reason>` instructions:
 
 ```text
-%ok = signed_add_defined %x, %y    ; checks: does x+y overflow?
-ub.assume %ok                       ; if false at runtime, UB
+%ok = signed_add_defined %x, %y
+ub.assume.signed_overflow %ok       ; false reports E3004
 %z = add.bits %x, %y                ; total bit-vector operation
 ```
 
-The `ub.assume` instruction declares a runtime condition. If the condition is
-false at runtime, the program has undefined behavior and the compiler may
-assume the condition is true for all reachable executions.
+The `ub.assume.<reason>` instruction declares a runtime condition and carries
+the source-level UB class explicitly. If the condition is false at runtime,
+the program has undefined behavior, the interpreter reports the diagnostic
+selected by `<reason>`, and the compiler may assume the condition is true for
+all reachable executions. The reason is semantic metadata, not an inference
+from the condition's `bits<1>` type.
+
+The Day 6 integer reasons are fixed as follows:
+
+| Reason suffix | Diagnostic | Runtime message |
+|---|---|---|
+| `division_by_zero` | `E3002` | `integer-division-by-zero` |
+| `remainder_by_zero` | `E3003` | `integer-remainder-by-zero` |
+| `signed_overflow` | `E3004` | `signed-integer-overflow` |
+| `invalid_shift_count` | `E3005` | `invalid-shift-count` |
+| `invalid_signed_left_shift` | `E3006` | `invalid-signed-left-shift` |
 
 For operands of type `bits<N>`, `signed_add_defined`,
 `signed_sub_defined`, and `signed_mul_defined` each have type
@@ -734,20 +789,32 @@ mathematical result is representable by the signed `N`-bit C result type.
 
 | Obligation | Condition | Lowered Pattern |
 |---|---|---|
-| Signed addition overflow | `x + y` is not representable | `signed_add_defined(x, y)` → `ub.assume` → `add` |
-| Signed subtraction overflow | `x - y` is not representable | `signed_sub_defined(x, y)` → `ub.assume` → `sub` |
-| Signed multiplication overflow | `x * y` is not representable | `signed_mul_defined(x, y)` → `ub.assume` → `mul` |
-| Signed division overflow | `x == INT_MIN && y == -1` | `signed_div_defined(x, y)` → `ub.assume` → `sdiv` |
-| Division by zero | `y == 0` | `divisor_nonzero(y)` → `ub.assume` → `sdiv`/`udiv` |
-| Shift amount >= width | `shift_amt >= N` | `shift_defined(x, amt)` → `ub.assume` → `shl`/`lshr`/`ashr` |
-| Null pointer dereference | `p == null` | `pointer_valid(p)` → `ub.assume` → `load`/`store` |
-| Out-of-bounds access | `p` outside object bounds | `access_in_bounds(p, size)` → `ub.assume` → `load`/`store` |
-| Use of uninitialized value | read from uninitialized storage | `value_initialized(p)` → `ub.assume` → `load` |
-| Strict aliasing violation | incompatible effective types | `aliasing_valid(p, type)` → `ub.assume` → `load`/`store` |
+| Signed addition overflow | `x + y` is not representable | `signed_add_defined(x, y)` → `ub.assume.signed_overflow` → `add` |
+| Signed subtraction overflow | `x - y` is not representable | `signed_sub_defined(x, y)` → `ub.assume.signed_overflow` → `sub` |
+| Signed multiplication overflow | `x * y` is not representable | `signed_mul_defined(x, y)` → `ub.assume.signed_overflow` → `mul` |
+| Signed division/remainder overflow | `x == INT_MIN && y == -1` | `signed_div_rem_no_overflow(x, y)` → `ub.assume.signed_overflow` → signed div/rem |
+| Division by zero | `y == 0` | `divisor_nonzero(y)` → `ub.assume.division_by_zero` → `sdiv`/`udiv` |
+| Remainder by zero | `y == 0` | `divisor_nonzero(y)` → `ub.assume.remainder_by_zero` → `srem`/`urem` |
+| Shift amount invalid for width | mathematical `shift_amt` is outside `[0, N)` | `shift_count_defined.<signedness>(x, amt)` → `ub.assume.invalid_shift_count` → shift |
+| Invalid signed left shift | signed `x << y` is not representable | `signed_shl_defined.<signedness>(x, y)` → `ub.assume.invalid_signed_left_shift` → `shl` |
+| Null pointer dereference | `p == null` | reserved for the Day 7 memory model |
+| Out-of-bounds access | `p` outside object bounds | reserved for the Day 7 memory model |
+| Use of uninitialized scalar SSA value | consume a value defined by `uninitialized.bits<N>` | Day 6 interpreter reports `E3001` at the consuming instruction or terminator |
+| Read from uninitialized memory storage | load from storage whose initializedness is false | reserved for the Day 7 memory model |
+| Strict aliasing violation | incompatible effective types | reserved for the Day 7 memory model |
+
+`uninitialized.bits<N>` defines an ordinary poison value with a real SSA
+identity. Branch operands and block arguments may copy that poison without
+trapping, which lets definite assignment on a later path overwrite it. Any
+semantic consumption—arithmetic, comparison, conversion, branch condition,
+ordinary call argument, or return—reports `E3001 read-of-uninitialized-object`.
+It is not a zero value and it must never be silently replaced by one. This
+Day 6 rule models scalar automatic locals only; initializedness of memory,
+pointers, aggregates, globals, and heap objects remains Day 7 work.
 
 ### 6.3 UB and Optimization
 
-A `ub.assume %ok` instruction creates a fact `ok == true` that is available
+A `ub.assume.<reason> %ok` instruction creates a fact `ok == true` that is available
 in all dominated blocks. The EqSat engine uses this fact:
 
 ```text
@@ -765,7 +832,7 @@ equivalent.
 
 ### 6.4 Propagation Rules
 
-UB facts propagate forward. An `ub.assume %ok` in block `B` creates a fact
+UB facts propagate forward. An `ub.assume.<reason> %ok` in block `B` creates a fact
 that holds in every block dominated by `B` along paths where `%ok` was true.
 This is expressed in the equality context `Γ` (Section 7).
 
@@ -797,7 +864,7 @@ produce the same value but trap under different conditions are **not** equal.
 | Range facts | `%x ∈ [0, 100]` | Loop bounds, comparisons |
 | Alignment facts | `%p` is 8-byte aligned | `__attribute__((aligned))` |
 | Provenance facts | `%p` has provenance from `malloc` | Allocation site |
-| UB assumptions | `signed_add_defined(%x, %y)` | `ub.assume` |
+| UB assumptions | `signed_add_defined(%x, %y)` | `ub.assume.signed_overflow` |
 | No-overflow facts | `add_defined(%x, %y)` | UB assumption propagation |
 | Alias facts | `NoAlias(%p, %q)` | Alias analysis |
 
@@ -958,11 +1025,16 @@ func @name(%param1: Type1, ..., %paramN: TypeN, %mem: mem<R>, %w: world)
 {
 ^block_label(%arg1: Type1, ...):
     %value = op.type_args operand1, ..., operandN
+    %value = uninitialized.type
+    ub.assume.<reason> %condition
     terminator
 
 ^block_label2(%arg1: Type1, ...):
     ...
 }
+
+<reason> := division_by_zero | remainder_by_zero | signed_overflow
+          | invalid_shift_count | invalid_signed_left_shift
 ```
 
 ### 9.2 Lexical Rules
@@ -970,7 +1042,14 @@ func @name(%param1: Type1, ..., %paramN: TypeN, %mem: mem<R>, %w: world)
 - Lines starting with `^` are block labels
 - `%name` is a value reference or definition
 - `%name = op args` is an instruction definition
+- `%name = uninitialized.bits<N>` defines transportable scalar poison; it does
+  not trap until semantically consumed
 - `@name` is a function reference
+- `ub.assume.<reason> %condition` is a typed UB obligation; the reason suffix
+  is mandatory and `%condition` has type `bits<1>`
+- `trap.scalar_function_fell_off_end` is a zero-operand CFG terminator that
+  reports `E3007 scalar-function-fell-off-end`; it carries no placeholder
+  return value or effect token
 - Types are delimited by angle brackets and parentheses: `bits<32>`, `ptr<generic>`, `mem<all>`, `tuple<...>`
 - Comments start with `;` and continue to end of line
 - Block comments are not supported in textual syntax
@@ -1014,7 +1093,7 @@ func @checked_add(%x: bits<32>, %y: bits<32>, %m: mem<all>, %w: world)
 {
 ^entry(%x_entry: bits<32>, %y_entry: bits<32>, %m_entry: mem<all>, %w_entry: world):
     %ok = signed_add_defined %x_entry, %y_entry
-    ub.assume %ok
+    ub.assume.signed_overflow %ok
     %z = add.bits<32> %x_entry, %y_entry
     ret %z, %m_entry, %w_entry
 }
@@ -1043,6 +1122,9 @@ func @caller(%a: bits<32>, %m0: mem<all>, %w0: world)
   block argument definitions.
 - Block labels (`^name`) are local to a function.
 - Function names (`@name`) are global symbols.
+- A `ub.assume` without a reason suffix is malformed. The Day 6 accepted
+  suffixes are `division_by_zero`, `remainder_by_zero`, `signed_overflow`,
+  `invalid_shift_count`, and `invalid_signed_left_shift`.
 - The entry block must be named `^entry` (convention) and must be the first
   block in the function body.
 - Terminators must appear as the last instruction in a block.
@@ -1069,8 +1151,9 @@ Every C-HIR expression lowers to an EvoIR value of the corresponding
 | `T*` | `ptr<AS>` where `AS` depends on the pointee's storage duration |
 | `void` (in return position) | `void` (empty return type) |
 
-The mapping is mediated by the `TargetLayout` trait, which provides `size_of`,
-`align_of`, and related methods for the current target.
+The mapping is mediated by the target data-layout service. The current pinned
+AArch64 implementation is `TargetDataLayout`, which provides `layout_of` and
+`record_layout` queries; lowering must not hard-code target widths.
 
 #### 10.1.2 Qualifier Lowering
 
@@ -1093,8 +1176,8 @@ Write:  %ptr = ptr.offset %base, %field_offset
         (%m1, %w1) = store %m0, %w0, %ptr, %val
 ```
 
-The base pointer and field offset are computed from the C-HIR aggregate layout
-via `TargetLayout::field_offset`.
+The base pointer and field offset are computed from the field placements
+returned by `TargetDataLayout::record_layout`.
 
 #### 10.1.4 Sequencing Lowering
 
@@ -1113,19 +1196,24 @@ defined by the C abstract machine:
 
 #### 10.1.5 Undefined Behavior Lowering
 
-C operations with undefined behavior lower to an `ub.assume` before a total
-operation:
+C operations with undefined behavior lower to a typed `ub.assume.<reason>`
+before a total operation:
 
 | C Expression | EvoIR Pattern |
 |---|---|
-| `x + y` (signed) | `ub.assume signed_add_defined(x, y)` → `add.bits<N> x, y` |
-| `x - y` (signed) | `ub.assume signed_sub_defined(x, y)` → `sub.bits<N> x, y` |
-| `x * y` (signed) | `ub.assume signed_mul_defined(x, y)` → `mul.bits<N> x, y` |
-| `x / y` (signed) | `ub.assume signed_div_defined(x, y)` → `sdiv.bits<N> x, y` |
-| `x / y` (unsigned) | `ub.assume divisor_nonzero(y)` → `udiv.bits<N> x, y` |
-| `x << y` | `ub.assume shift_defined(x, y)` → `shl.bits<N> x, y` |
-| `*p` (dereference) | `ub.assume pointer_valid(p)` → `load %m, %w, p : Type` |
-| `p[i]` | `ub.assume access_in_bounds(p + i, size)` → memory access |
+| `x + y` (signed) | `ub.assume.signed_overflow signed_add_defined(x, y)` → `add.bits<N> x, y` |
+| `x - y` (signed) | `ub.assume.signed_overflow signed_sub_defined(x, y)` → `sub.bits<N> x, y` |
+| `x * y` (signed) | `ub.assume.signed_overflow signed_mul_defined(x, y)` → `mul.bits<N> x, y` |
+| `x / y` (signed) | `divisor_nonzero(y)` → `ub.assume.division_by_zero`; `signed_div_rem_no_overflow(x, y)` → `ub.assume.signed_overflow`; then `sdiv.bits<N> x, y` |
+| `x / y` (unsigned) | `divisor_nonzero(y)` → `ub.assume.division_by_zero` → `udiv.bits<N> x, y` |
+| `x % y` (signed) | `divisor_nonzero(y)` → `ub.assume.remainder_by_zero`; `signed_div_rem_no_overflow(x, y)` → `ub.assume.signed_overflow`; then `srem.bits<N> x, y` |
+| `x % y` (unsigned) | `divisor_nonzero(y)` → `ub.assume.remainder_by_zero` → `urem.bits<N> x, y` |
+| any shift | `shift_count_defined.<signedness>(x, y)` → `ub.assume.invalid_shift_count` → shift operation |
+| signed `x << y` | count obligation; `signed_shl_defined.<signedness>(x, y)` → `ub.assume.invalid_signed_left_shift`; then `shl.bits<N> x, y` |
+| read of an uninitialized scalar local | `uninitialized.bits<N>` is threaded through SSA until a semantic consumer reports `E3001` |
+| reachable end of a non-`main`, non-void function | `trap.scalar_function_fell_off_end` reports `E3007` |
+| `*p` (dereference) | Day 7 memory-model obligation → `load %m, %w, p : Type` |
+| `p[i]` | Day 7 memory-model obligation → memory access |
 
 The lowering agent must not elide UB checks. The EqSat agent may later prove
 them redundant and eliminate them.
@@ -1257,10 +1345,14 @@ uses the conservative `mem<all>` region.
 
 The Day 6 reference interpreter executes `bits<N>` values for `1 <= N <= 64`
 and may forward opaque `mem<R>` and `world` tokens at block/function
-boundaries. It advances an explicit block program counter and charges one step
-for each instruction and terminator. Pointer, floating, vector, tuple, memory
-access, and call execution remain typed unsupported operations until their
-scheduled semantic phases; they must never produce a placeholder value.
+boundaries. It advances explicit block and call-frame program counters and
+charges one shared step budget for every instruction and terminator across
+direct calls and recursion. Module validation resolves every direct callee and
+checks the ordinary arguments/results plus the exact trailing effect-token
+interface of every call/effect participant, including callers. Pointer,
+floating, vector, tuple, and memory-access execution remain typed unsupported
+until their scheduled semantic phases; they must never produce a placeholder
+value.
 
 ---
 
@@ -1276,12 +1368,16 @@ scheduled semantic phases; they must never produce a placeholder value.
 | | `udiv.bits<N>` | `bits<N>` | `%a`, `%b` : `bits<N>` | yes |
 | | `srem.bits<N>` | `bits<N>` | `%a`, `%b` : `bits<N>` | yes |
 | | `urem.bits<N>` | `bits<N>` | `%a`, `%b` : `bits<N>` | yes |
+| UB predicate | `divisor_nonzero` | `bits<1>` | `%divisor` : `bits<N>` | no |
+| | `signed_div_rem_no_overflow` | `bits<1>` | `%a`, `%b` : `bits<N>` | no |
+| | `shift_count_defined.signed` / `.unsigned` | `bits<1>` | `%shifted` : `bits<N>`, `%amount` : `bits<M>` | no |
+| | `signed_shl_defined.signed` / `.unsigned` | `bits<1>` | `%shifted` : `bits<N>`, `%amount` : `bits<M>` | no |
 | Bitwise | `and.bits<N>` | `bits<N>` | `%a`, `%b` : `bits<N>` | no |
 | | `or.bits<N>` | `bits<N>` | `%a`, `%b` : `bits<N>` | no |
 | | `xor.bits<N>` | `bits<N>` | `%a`, `%b` : `bits<N>` | no |
-| | `shl.bits<N>` | `bits<N>` | `%a`, `%b` : `bits<N>` | yes |
-| | `lshr.bits<N>` | `bits<N>` | `%a`, `%b` : `bits<N>` | yes |
-| | `ashr.bits<N>` | `bits<N>` | `%a`, `%b` : `bits<N>` | yes |
+| | `shl.bits<N>` | `bits<N>` | `%a` : `bits<N>`, `%b` : `bits<M>` | no |
+| | `lshr.bits<N>` | `bits<N>` | `%a` : `bits<N>`, `%b` : `bits<M>` | no |
+| | `ashr.bits<N>` | `bits<N>` | `%a` : `bits<N>`, `%b` : `bits<M>` | no |
 | Comparison | `icmp.eq` | `bits<1>` | `%a`, `%b` : `bits<N>` | no |
 | | `icmp.ne` | `bits<1>` | `%a`, `%b` : `bits<N>` | no |
 | | `icmp.slt` | `bits<1>` | `%a`, `%b` : `bits<N>` | no |
@@ -1297,8 +1393,10 @@ scheduled semantic phases; they must never produce a placeholder value.
 | Control | `br ^target(args...)` | — | block label, values | n/a |
 | | `cond_br %c, ^t(targs), ^e(eargs)` | — | condition, blocks, values | n/a |
 | | `ret values...` | — | return values | n/a |
+| | `trap.scalar_function_fell_off_end` | — | — | yes |
 | Calls | `call @callee(args..., %m, %w)` | ret values, `mem`, `world` | callee, args, memory, world | depends |
-| UB | `ub.assume %cond` | — | `%cond` : `bits<1>` | n/a |
+| UB | `ub.assume.<reason> %cond` | — | `%cond` : `bits<1>` | yes |
+| Scalar poison | `uninitialized.bits<N>` | `bits<N>` | — | on consumption |
 
 ---
 
@@ -1330,6 +1428,9 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.5 | 2026-08-18 | Defines transportable Day 6 scalar `uninitialized.bits<N>` poison with consume-time `E3001`, distinct from Day 7 memory initializedness; adds the zero-operand `trap.scalar_function_fell_off_end` terminator and exact `E3007` behavior without placeholder returns or effect tokens. |
+| 1.4 | 2026-08-18 | Requires every module-level call/effect participant, including callers, to use the canonical trailing `mem<R>, world` parameter and return interface; makes the UB reason mandatory semantic metadata; assigns the five Day 6 integer reasons exactly the C-HIR `E3002` through `E3006` diagnostics; and freezes executable remainder, shift, bitwise, and non-conflating div/rem/shift predicate shapes, including independently promoted shift-amount widths and signedness. |
+| 1.3 | 2026-08-18 | Adds module validation and explicit heap-backed call-frame execution for direct calls and recursion under one shared step budget; records typed signed-overflow `ub.assume` failure; and names the concrete target data-layout service used by current lowering. |
 | 1.2 | 2026-08-18 | Freezes named memory/world input and output token positions for `load`, `store`, and `call`; makes token flow region-polymorphic while Day 6 lowering uses conservative `mem<all>`; permits equal-width identity conversions; separates function-local SSA/effect validation from module call-signature validation; and records the bounded, typed Day 6 interpreter subset. |
 | 1.1 | 2026-08-18 | Makes formal parameters non-SSA call-interface binders, requires real unique `Value` IDs on entry and non-entry block arguments, requires all cross-block values to be passed explicitly, types the signed add/subtract/multiply definedness predicates used by lowering, and corrects the Section 9 examples. |
 | 1.0 | 2026-08-10 | Initial specification. Defines the complete EvoIR semantic contract for Day 4 of the 30-day EvoCC build. |

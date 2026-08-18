@@ -8,11 +8,11 @@ use std::time::Duration;
 use evocc_chir::interp::{interpret_scalar_function, InterpreterLimits};
 use evocc_chir::{CHirDecl, CHirUnit, SymbolId};
 use evocc_common::{Arena, FileId};
-use evocc_evoir::{BlockId, CmpOp, Function, Inst, Value};
+use evocc_evoir::{BlockId, CmpOp, Function, Inst, Module, RuntimeValue, Value};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_lower::lower_unit;
 use evocc_parser::Parser;
-use evocc_types::{AddressSpace, EvoIRType, Region};
+use evocc_types::{AddressSpace, EvoIRType, Region, TargetDataLayout};
 
 struct Case {
     id: &'static str,
@@ -64,7 +64,7 @@ const CASES: &[Case] = &[
     %v0 = const.bits<32> 3
     %v1 = const.bits<32> 4
     %v2 = signed_add_defined %v0, %v1
-    ub.assume %v2
+    ub.assume.signed_overflow %v2
     %v3 = add.bits<32> %v0, %v1
     ret %v3
 }"#,
@@ -87,11 +87,11 @@ const CASES: &[Case] = &[
 
 ^b2(%v8: bits<32>, %v9: bits<32>, %v10: bits<32>):
     %v11 = signed_add_defined %v9, %v10
-    ub.assume %v11
+    ub.assume.signed_overflow %v11
     %v12 = add.bits<32> %v9, %v10
     %v13 = const.bits<32> 1
     %v14 = signed_sub_defined %v8, %v13
-    ub.assume %v14
+    ub.assume.signed_overflow %v14
     %v15 = sub.bits<32> %v8, %v13
     br ^b1(%v15, %v10, %v12)
 
@@ -136,7 +136,7 @@ const CASES: &[Case] = &[
 ^b6(%v18: bits<32>):
     %v19 = const.bits<32> 5
     %v20 = signed_add_defined %v18, %v19
-    ub.assume %v20
+    ub.assume.signed_overflow %v20
     %v21 = add.bits<32> %v18, %v19
     br ^b7(%v21)
 
@@ -172,13 +172,13 @@ const CASES: &[Case] = &[
 ^b4(%v14: bits<32>, %v15: bits<32>):
     %v16 = const.bits<32> 1
     %v17 = signed_add_defined %v14, %v16
-    ub.assume %v17
+    ub.assume.signed_overflow %v17
     %v18 = add.bits<32> %v14, %v16
     br ^b1(%v18, %v15)
 
 ^b5(%v19: bits<32>, %v20: bits<32>):
     %v21 = signed_add_defined %v20, %v19
-    ub.assume %v21
+    ub.assume.signed_overflow %v21
     %v22 = add.bits<32> %v20, %v19
     br ^b4(%v19, %v22)
 
@@ -194,7 +194,7 @@ const CASES: &[Case] = &[
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<32> 1
     %v4 = signed_add_defined %v0, %v3
-    ub.assume %v4
+    ub.assume.signed_overflow %v4
     %v5 = add.bits<32> %v0, %v3
     ret %v5, %v1, %v2
 }
@@ -222,16 +222,16 @@ func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = ta
 ^b2(%v8: bits<32>, %v9: mem<all>, %v10: world):
     %v11 = const.bits<32> 1
     %v12 = signed_sub_defined %v8, %v11
-    ub.assume %v12
+    ub.assume.signed_overflow %v12
     %v13 = sub.bits<32> %v8, %v11
     (%v14, %v15, %v16) = call @fib(%v13, %v9, %v10)
     %v17 = const.bits<32> 2
     %v18 = signed_sub_defined %v8, %v17
-    ub.assume %v18
+    ub.assume.signed_overflow %v18
     %v19 = sub.bits<32> %v8, %v17
     (%v20, %v21, %v22) = call @fib(%v19, %v15, %v16)
     %v23 = signed_add_defined %v14, %v20
-    ub.assume %v23
+    ub.assume.signed_overflow %v23
     %v24 = add.bits<32> %v14, %v20
     ret %v24, %v21, %v22
 }
@@ -242,6 +242,183 @@ func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = ta
     (%v3, %v4, %v5) = call @fib(%v2, %v0, %v1)
     ret %v3, %v4, %v5
 }"#,
+    },
+];
+
+struct ExtendedCase {
+    case: Case,
+    expected_evoir_steps: Option<u64>,
+}
+
+const EXTENDED_CASES: &[ExtendedCase] = &[
+    ExtendedCase {
+        case: Case {
+            id: "logical_short_circuit_side_effects",
+            source: "int main(void) { int x = 7; int a = 0 && (x = 99); int b = 1 || (x = 88); return x * 100 + a * 10 + b; }\n",
+            expected: 701,
+            golden_evoir: r#"func @main() -> (bits<32>) cc = target_default {
+^entry:
+    %v0 = const.bits<32> 7
+    %v1 = const.bits<32> 0
+    %v2 = const.bits<32> 0
+    %v3 = icmp.ne %v1, %v2
+    cond_br %v3, ^b1(%v0), ^b2(%v0)
+
+^b1(%v4: bits<32>):
+    %v5 = const.bits<32> 99
+    %v6 = const.bits<32> 0
+    %v7 = icmp.ne %v5, %v6
+    br ^b3(%v5, %v7)
+
+^b2(%v8: bits<32>):
+    %v9 = const.bits<1> 0
+    br ^b3(%v8, %v9)
+
+^b3(%v10: bits<32>, %v11: bits<1>):
+    %v12 = zext %v11 to bits<32>
+    %v13 = const.bits<32> 1
+    %v14 = const.bits<32> 0
+    %v15 = icmp.ne %v13, %v14
+    cond_br %v15, ^b5(%v10, %v12), ^b4(%v10, %v12)
+
+^b4(%v16: bits<32>, %v17: bits<32>):
+    %v18 = const.bits<32> 88
+    %v19 = const.bits<32> 0
+    %v20 = icmp.ne %v18, %v19
+    br ^b6(%v18, %v17, %v20)
+
+^b5(%v21: bits<32>, %v22: bits<32>):
+    %v23 = const.bits<1> 1
+    br ^b6(%v21, %v22, %v23)
+
+^b6(%v24: bits<32>, %v25: bits<32>, %v26: bits<1>):
+    %v27 = zext %v26 to bits<32>
+    %v28 = const.bits<32> 100
+    %v29 = signed_mul_defined %v24, %v28
+    ub.assume.signed_overflow %v29
+    %v30 = mul.bits<32> %v24, %v28
+    %v31 = const.bits<32> 10
+    %v32 = signed_mul_defined %v25, %v31
+    ub.assume.signed_overflow %v32
+    %v33 = mul.bits<32> %v25, %v31
+    %v34 = signed_add_defined %v30, %v33
+    ub.assume.signed_overflow %v34
+    %v35 = add.bits<32> %v30, %v33
+    %v36 = signed_add_defined %v35, %v27
+    ub.assume.signed_overflow %v36
+    %v37 = add.bits<32> %v35, %v27
+    ret %v37
+}"#,
+        },
+        expected_evoir_steps: None,
+    },
+    ExtendedCase {
+        case: Case {
+            id: "do_while_continue_break",
+            source: "int main(void) { int i = 0; int sum = 0; do { i++; if (i == 2) continue; if (i == 5) break; sum += i; } while (i < 8); return sum * 10 + i; }\n",
+            expected: 85,
+            golden_evoir: r#"func @main() -> (bits<32>) cc = target_default {
+^entry:
+    %v0 = const.bits<32> 0
+    %v1 = const.bits<32> 0
+    br ^b1(%v0, %v1)
+
+^b1(%v2: bits<32>, %v3: bits<32>):
+    %v4 = const.bits<32> 1
+    %v5 = signed_add_defined %v2, %v4
+    ub.assume.signed_overflow %v5
+    %v6 = add.bits<32> %v2, %v4
+    %v7 = const.bits<32> 2
+    %v8 = icmp.eq %v6, %v7
+    cond_br %v8, ^b4(%v6, %v3), ^b2(%v3, %v6)
+
+^b2(%v9: bits<32>, %v10: bits<32>):
+    %v11 = const.bits<32> 5
+    %v12 = icmp.eq %v10, %v11
+    cond_br %v12, ^b5(%v10, %v9), ^b3(%v9, %v10)
+
+^b3(%v13: bits<32>, %v14: bits<32>):
+    %v15 = signed_add_defined %v13, %v14
+    ub.assume.signed_overflow %v15
+    %v16 = add.bits<32> %v13, %v14
+    br ^b4(%v14, %v16)
+
+^b4(%v17: bits<32>, %v18: bits<32>):
+    %v19 = const.bits<32> 8
+    %v20 = icmp.slt %v17, %v19
+    cond_br %v20, ^b1(%v17, %v18), ^b5(%v17, %v18)
+
+^b5(%v21: bits<32>, %v22: bits<32>):
+    %v23 = const.bits<32> 10
+    %v24 = signed_mul_defined %v22, %v23
+    ub.assume.signed_overflow %v24
+    %v25 = mul.bits<32> %v22, %v23
+    %v26 = signed_add_defined %v25, %v21
+    ub.assume.signed_overflow %v26
+    %v27 = add.bits<32> %v25, %v21
+    ret %v27
+}"#,
+        },
+        expected_evoir_steps: None,
+    },
+    ExtendedCase {
+        case: Case {
+            id: "forward_and_backward_goto",
+            source: "int main(void) { int x = 0; goto start; again: x += 3; start: x += 1; if (x < 5) goto again; return x; }\n",
+            expected: 5,
+            golden_evoir: r#"func @main() -> (bits<32>) cc = target_default {
+^entry:
+    %v0 = const.bits<32> 0
+    br ^b2(%v0)
+
+^b1(%v1: bits<32>):
+    %v2 = const.bits<32> 3
+    %v3 = signed_add_defined %v1, %v2
+    ub.assume.signed_overflow %v3
+    %v4 = add.bits<32> %v1, %v2
+    br ^b2(%v4)
+
+^b2(%v5: bits<32>):
+    %v6 = const.bits<32> 1
+    %v7 = signed_add_defined %v5, %v6
+    ub.assume.signed_overflow %v7
+    %v8 = add.bits<32> %v5, %v6
+    %v9 = const.bits<32> 5
+    %v10 = icmp.slt %v8, %v9
+    cond_br %v10, ^b3(%v8), ^b4(%v8)
+
+^b3(%v11: bits<32>):
+    br ^b1(%v11)
+
+^b4(%v12: bits<32>):
+    ret %v12
+}"#,
+        },
+        expected_evoir_steps: None,
+    },
+    ExtendedCase {
+        case: Case {
+            id: "void_helper_expression_statement",
+            source: "void touch(int x) { x += 1; return; } int main(void) { touch(41); return 42; }\n",
+            expected: 42,
+            golden_evoir: r#"func @touch(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (mem<all>, world) cc = target_default {
+^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
+    %v3 = const.bits<32> 1
+    %v4 = signed_add_defined %v0, %v3
+    ub.assume.signed_overflow %v4
+    %v5 = add.bits<32> %v0, %v3
+    ret %v1, %v2
+}
+
+func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default {
+^entry(%v0: mem<all>, %v1: world):
+    %v2 = const.bits<32> 41
+    (%v3, %v4) = call @touch(%v2, %v0, %v1)
+    %v5 = const.bits<32> 42
+    ret %v5, %v3, %v4
+}"#,
+        },
+        expected_evoir_steps: Some(9),
     },
 ];
 
@@ -287,13 +464,42 @@ fn observe_chir(unit: &CHirUnit<'_>) -> Result<i128, String> {
         .map_err(|error| error.to_string())
 }
 
-fn observe_evoir(function: &Function) -> Result<i128, String> {
-    let expected_return_count = function.ret_tys.len();
-    let function = function.clone();
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct EvoExecutionObservation {
+    value: i128,
+    steps: u64,
+}
+
+fn observe_evoir(functions: &[Function]) -> Result<EvoExecutionObservation, String> {
+    let main = functions
+        .iter()
+        .find(|function| function.name == "main")
+        .ok_or_else(|| "lowering produced no @main".to_owned())?;
+    let expected_return_count = main.ret_tys.len();
+    let entry_arguments = main
+        .params
+        .iter()
+        .enumerate()
+        .map(|(index, parameter)| match &parameter.ty {
+            EvoIRType::Mem(_) | EvoIRType::World => Ok(RuntimeValue::new(parameter.ty.clone(), 0)),
+            _ => Err(format!(
+                "EvoIR main has unsupported ordinary entry parameter {index}: {:?}",
+                parameter.ty
+            )),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let module = Module {
+        functions: functions.to_vec(),
+    };
     let (sender, receiver) = mpsc::sync_channel(1);
     thread::spawn(move || {
         let evaluated = catch_unwind(AssertUnwindSafe(|| {
-            evocc_evoir::eval_function(&function, &[], evocc_evoir::InterpreterLimits::new(100_000))
+            evocc_evoir::interpret_module(
+                &module,
+                "main",
+                &entry_arguments,
+                evocc_evoir::InterpreterLimits::new(100_000),
+            )
         }))
         .map_err(|_| "EvoIR interpreter panicked".to_owned());
         let _ = sender.send(evaluated);
@@ -326,10 +532,14 @@ fn observe_evoir(function: &Function) -> Result<i128, String> {
     };
     let raw = value.raw_bits & mask;
     let sign_bit = 1_u64 << (width - 1);
-    Ok(if raw & sign_bit == 0 {
+    let value = if raw & sign_bit == 0 {
         i128::from(raw)
     } else {
         i128::from(raw) - (1_i128 << width)
+    };
+    Ok(EvoExecutionObservation {
+        value,
+        steps: evaluated.steps,
     })
 }
 
@@ -399,6 +609,11 @@ fn render_inst(inst: &Inst) -> String {
             value(result),
             render_type(&result.ty)
         ),
+        Inst::Uninitialized(result) => format!(
+            "{} = uninitialized.{}",
+            value(result),
+            render_type(&result.ty)
+        ),
         Inst::Add(result, left, right) => format!(
             "{} = add.{} {}, {}",
             value(result),
@@ -420,6 +635,116 @@ fn render_inst(inst: &Inst) -> String {
             value(left),
             value(right)
         ),
+        Inst::SRem(result, left, right) => format!(
+            "{} = srem.{} {}, {}",
+            value(result),
+            render_type(&result.ty),
+            value(left),
+            value(right)
+        ),
+        Inst::URem(result, left, right) => format!(
+            "{} = urem.{} {}, {}",
+            value(result),
+            render_type(&result.ty),
+            value(left),
+            value(right)
+        ),
+        Inst::Shl(result, left, right) => format!(
+            "{} = shl.{} {}, {}",
+            value(result),
+            render_type(&result.ty),
+            value(left),
+            value(right)
+        ),
+        Inst::AShr(result, left, right) => format!(
+            "{} = ashr.{} {}, {}",
+            value(result),
+            render_type(&result.ty),
+            value(left),
+            value(right)
+        ),
+        Inst::LShr(result, left, right) => format!(
+            "{} = lshr.{} {}, {}",
+            value(result),
+            render_type(&result.ty),
+            value(left),
+            value(right)
+        ),
+        Inst::And(result, left, right) => format!(
+            "{} = and.{} {}, {}",
+            value(result),
+            render_type(&result.ty),
+            value(left),
+            value(right)
+        ),
+        Inst::Or(result, left, right) => format!(
+            "{} = or.{} {}, {}",
+            value(result),
+            render_type(&result.ty),
+            value(left),
+            value(right)
+        ),
+        Inst::Xor(result, left, right) => format!(
+            "{} = xor.{} {}, {}",
+            value(result),
+            render_type(&result.ty),
+            value(left),
+            value(right)
+        ),
+        Inst::SignedAddDefined(result, left, right) => format!(
+            "{} = signed_add_defined {}, {}",
+            value(result),
+            value(left),
+            value(right)
+        ),
+        Inst::SignedSubDefined(result, left, right) => format!(
+            "{} = signed_sub_defined {}, {}",
+            value(result),
+            value(left),
+            value(right)
+        ),
+        Inst::SignedMulDefined(result, left, right) => format!(
+            "{} = signed_mul_defined {}, {}",
+            value(result),
+            value(left),
+            value(right)
+        ),
+        Inst::DivisorNonZero(result, divisor) => {
+            format!("{} = divisor_nonzero {}", value(result), value(divisor))
+        }
+        Inst::SignedDivRemNoOverflow(result, left, right) => format!(
+            "{} = signed_div_rem_no_overflow {}, {}",
+            value(result),
+            value(left),
+            value(right)
+        ),
+        Inst::ShiftCountDefined {
+            result,
+            shifted,
+            amount,
+            amount_signed,
+        } => format!(
+            "{} = shift_count_defined.{} {}, {}",
+            value(result),
+            if *amount_signed { "signed" } else { "unsigned" },
+            value(shifted),
+            value(amount)
+        ),
+        Inst::SignedShlDefined {
+            result,
+            shifted,
+            amount,
+            amount_signed,
+        } => format!(
+            "{} = signed_shl_defined.{} {}, {}",
+            value(result),
+            if *amount_signed { "signed" } else { "unsigned" },
+            value(shifted),
+            value(amount)
+        ),
+        Inst::UbAssume(condition, reason) => {
+            format!("ub.assume.{} {}", reason.mnemonic(), value(condition))
+        }
         Inst::SDiv(result, left, right) => format!(
             "{} = sdiv.{} {}, {}",
             value(result),
@@ -456,6 +781,7 @@ fn render_inst(inst: &Inst) -> String {
             branch_target(*false_target, false_args)
         ),
         Inst::Ret(returned) => format!("ret {}", values(returned)),
+        Inst::Trap(reason) => format!("trap.{}", reason.message()),
         Inst::Load {
             result,
             address,
@@ -706,15 +1032,32 @@ fn parse_golden_blocks(function: &str) -> Result<Vec<GoldenBlock<'_>>, String> {
 
 fn inferred_definition_type(rhs: &str) -> Option<String> {
     let operation = rhs.split_whitespace().next()?;
+    if matches!(operation, "sext" | "zext" | "trunc") {
+        return rhs
+            .rsplit_once(" to ")
+            .map(|(_, target)| target.trim().to_owned());
+    }
     if let Some(ty) = operation.strip_prefix("const.") {
         return Some(ty.to_owned());
     }
-    for prefix in ["add.", "sub.", "mul.", "sdiv.", "udiv."] {
+    if let Some(ty) = operation.strip_prefix("uninitialized.") {
+        return Some(ty.to_owned());
+    }
+    for prefix in [
+        "add.", "sub.", "mul.", "sdiv.", "udiv.", "srem.", "urem.", "shl.", "ashr.", "lshr.",
+        "and.", "or.", "xor.",
+    ] {
         if let Some(ty) = operation.strip_prefix(prefix) {
             return Some(ty.to_owned());
         }
     }
-    if operation.starts_with("icmp.") || operation.ends_with("_defined") {
+    if operation.starts_with("icmp.")
+        || operation.ends_with("_defined")
+        || operation.starts_with("shift_count_defined.")
+        || operation.starts_with("signed_shl_defined.")
+        || operation == "divisor_nonzero"
+        || operation == "signed_div_rem_no_overflow"
+    {
         return Some("bits<1>".to_owned());
     }
     None
@@ -883,7 +1226,23 @@ fn validate_golden_function(
                     ));
                 }
             }
-            if let Some(condition) = line.strip_prefix("ub.assume ") {
+            if let Some(assumption) = line.strip_prefix("ub.assume.") {
+                let (reason, condition) = assumption
+                    .split_once(' ')
+                    .ok_or_else(|| format!("{} has malformed ub.assume", block.label))?;
+                if !matches!(
+                    reason,
+                    "division_by_zero"
+                        | "remainder_by_zero"
+                        | "signed_overflow"
+                        | "invalid_shift_count"
+                        | "invalid_signed_left_shift"
+                ) {
+                    return Err(format!(
+                        "{} has unknown ub.assume reason {reason}",
+                        block.label
+                    ));
+                }
                 let condition = percent_names(condition);
                 if condition.len() != 1
                     || local_definitions.get(&condition[0]).map(String::as_str) != Some("bits<1>")
@@ -1245,6 +1604,45 @@ fn ruling_compliant_goldens_are_frozen_for_eight_unique_programs() {
         );
         assert_golden_ruling(case);
     }
+    let mut step_proofs = Vec::new();
+    for extended in EXTENDED_CASES {
+        let case = &extended.case;
+        assert!(
+            ids.insert(case.id),
+            "extended case ID is duplicated: {}",
+            case.id
+        );
+        assert!(
+            sources.insert(case.source),
+            "extended source is duplicated: {}",
+            case.id
+        );
+        assert!(
+            goldens.insert(case.golden_evoir),
+            "extended golden is duplicated: {}",
+            case.id
+        );
+        assert_golden_ruling(case);
+        if let Some(steps) = extended.expected_evoir_steps {
+            step_proofs.push((case.id, steps));
+        }
+    }
+    assert_eq!(ids.len(), 12, "combined proof-set ID denominator changed");
+    assert_eq!(
+        sources.len(),
+        12,
+        "combined proof-set source denominator changed"
+    );
+    assert_eq!(
+        goldens.len(),
+        12,
+        "combined proof-set golden denominator changed"
+    );
+    assert_eq!(
+        step_proofs,
+        vec![("void_helper_expression_statement", 9)],
+        "exact execution-step proof set changed"
+    );
 }
 
 #[test]
@@ -1377,6 +1775,7 @@ fn main() {
 struct CaseObservation {
     chir: Result<i128, String>,
     evoir: Result<i128, String>,
+    evoir_steps: Result<u64, String>,
     validation: Result<(), String>,
     actual_evoir: String,
 }
@@ -1385,21 +1784,58 @@ fn run_case(case: &Case) -> Result<CaseObservation, String> {
     let arena = Arena::default();
     let unit = parse(case.source, &arena)?;
     let chir = observe_chir(&unit);
-    let functions = lower_unit(&unit);
-    let validation = functions.iter().try_for_each(|function| {
-        evocc_evoir::validate_ssa(function).map_err(|error| format!("@{}: {error}", function.name))
-    });
-    let evoir = functions
-        .iter()
-        .find(|function| function.name == "main")
-        .ok_or_else(|| "lowering produced no @main".to_owned())
-        .and_then(observe_evoir);
+    let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+        .map_err(|error| error.to_string())?;
+    let functions = module.functions.clone();
+    let validation = evocc_evoir::validate_module(&module);
+    let execution = observe_evoir(&functions);
+    let (evoir, evoir_steps) = match execution {
+        Ok(execution) => (Ok(execution.value), Ok(execution.steps)),
+        Err(error) => (Err(error.clone()), Err(error)),
+    };
     Ok(CaseObservation {
         chir,
         evoir,
+        evoir_steps,
         validation,
         actual_evoir: render_unit(&functions),
     })
+}
+
+#[test]
+fn additional_day6_lowering_constructs_have_golden_and_execution_proofs() {
+    assert_eq!(
+        EXTENDED_CASES.len(),
+        4,
+        "extended proof denominator changed"
+    );
+    for extended in EXTENDED_CASES {
+        let case = &extended.case;
+        let observation = run_case(case)
+            .unwrap_or_else(|error| panic!("{}: lowering pipeline failed: {error}", case.id));
+        assert_eq!(observation.chir, Ok(case.expected), "{}: C-HIR", case.id);
+        assert_eq!(observation.evoir, Ok(case.expected), "{}: EvoIR", case.id);
+        assert_eq!(
+            observation.validation,
+            Ok(()),
+            "{}: generated EvoIR must validate",
+            case.id
+        );
+        assert_eq!(
+            observation.actual_evoir, case.golden_evoir,
+            "{}: exact EvoIR golden mismatch; steps={:?}",
+            case.id, observation.evoir_steps
+        );
+        if let Some(expected_steps) = extended.expected_evoir_steps {
+            assert_eq!(
+                observation.evoir_steps,
+                Ok(expected_steps),
+                "{}: exact execution proof changed",
+                case.id
+            );
+        }
+        assert_golden_ruling(case);
+    }
 }
 
 #[test]

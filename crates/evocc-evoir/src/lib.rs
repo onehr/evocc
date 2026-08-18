@@ -58,6 +58,83 @@ pub enum CmpOp {
     ULe,
 }
 
+/// The source-level undefined-behavior class guarded by [`Inst::UbAssume`].
+///
+/// The condition alone is deliberately insufficient to recover this
+/// information: two arbitrary `bits<1>` values have identical EvoIR types but
+/// may represent different C runtime diagnostics.  Lowering therefore records
+/// the reason explicitly and the interpreter preserves it on failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UbReason {
+    DivisionByZero,
+    RemainderByZero,
+    SignedOverflow,
+    InvalidShiftCount,
+    InvalidSignedLeftShift,
+}
+
+impl UbReason {
+    /// Stable diagnostic code shared with the C-HIR scalar interpreter.
+    #[must_use]
+    pub const fn diagnostic(self) -> &'static str {
+        match self {
+            Self::DivisionByZero => "E3002",
+            Self::RemainderByZero => "E3003",
+            Self::SignedOverflow => "E3004",
+            Self::InvalidShiftCount => "E3005",
+            Self::InvalidSignedLeftShift => "E3006",
+        }
+    }
+
+    /// Stable diagnostic message shared with the C-HIR scalar interpreter.
+    #[must_use]
+    pub const fn message(self) -> &'static str {
+        match self {
+            Self::DivisionByZero => "integer-division-by-zero",
+            Self::RemainderByZero => "integer-remainder-by-zero",
+            Self::SignedOverflow => "signed-integer-overflow",
+            Self::InvalidShiftCount => "invalid-shift-count",
+            Self::InvalidSignedLeftShift => "invalid-signed-left-shift",
+        }
+    }
+
+    /// Stable suffix used by the Section 9 textual syntax.
+    #[must_use]
+    pub const fn mnemonic(self) -> &'static str {
+        match self {
+            Self::DivisionByZero => "division_by_zero",
+            Self::RemainderByZero => "remainder_by_zero",
+            Self::SignedOverflow => "signed_overflow",
+            Self::InvalidShiftCount => "invalid_shift_count",
+            Self::InvalidSignedLeftShift => "invalid_signed_left_shift",
+        }
+    }
+}
+
+/// A typed, fail-closed reason for terminating execution without returning.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TrapReason {
+    ScalarFunctionFellOffEnd,
+}
+
+impl TrapReason {
+    /// Stable diagnostic code shared with the C-HIR scalar interpreter.
+    #[must_use]
+    pub const fn diagnostic(self) -> &'static str {
+        match self {
+            Self::ScalarFunctionFellOffEnd => "E3007",
+        }
+    }
+
+    /// Stable diagnostic message shared with the C-HIR scalar interpreter.
+    #[must_use]
+    pub const fn message(self) -> &'static str {
+        match self {
+            Self::ScalarFunctionFellOffEnd => "scalar-function-fell-off-end",
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Instructions
 // ---------------------------------------------------------------------------
@@ -73,12 +150,66 @@ pub enum Inst {
     /// pattern. The result type determines how many low bits are retained.
     Const(Value, u64),
 
+    /// Define an ordinary typed SSA value whose source object has not been
+    /// initialized. This instruction has no operands and creates poison that
+    /// may be copied through block arguments. Any semantic read traps with the
+    /// typed uninitialized-read diagnostic.
+    Uninitialized(Value),
+
     /// `Add(result, lhs, rhs)`: integer addition.
     Add(Value, Value, Value),
     /// `Sub(result, lhs, rhs)`: integer subtraction.
     Sub(Value, Value, Value),
     /// `Mul(result, lhs, rhs)`: integer multiplication.
     Mul(Value, Value, Value),
+    /// Signed remainder. Defined executions truncate the quotient toward zero.
+    SRem(Value, Value, Value),
+    /// Unsigned remainder.
+    URem(Value, Value, Value),
+    /// Total bit-vector left shift; C shift validity is carried separately.
+    Shl(Value, Value, Value),
+    /// Total arithmetic right shift.
+    AShr(Value, Value, Value),
+    /// Total logical right shift.
+    LShr(Value, Value, Value),
+    /// Bitwise conjunction.
+    And(Value, Value, Value),
+    /// Bitwise disjunction.
+    Or(Value, Value, Value),
+    /// Bitwise exclusive-or.
+    Xor(Value, Value, Value),
+
+    /// True when signed addition of `lhs` and `rhs` is representable.
+    SignedAddDefined(Value, Value, Value),
+    /// True when signed subtraction of `lhs` and `rhs` is representable.
+    SignedSubDefined(Value, Value, Value),
+    /// True when signed multiplication of `lhs` and `rhs` is representable.
+    SignedMulDefined(Value, Value, Value),
+    /// True exactly when `divisor` is not zero.
+    DivisorNonZero(Value, Value),
+    /// True unless signed division/remainder would compute `MIN / -1`.
+    /// A zero divisor is deliberately handled by a separate predicate.
+    SignedDivRemNoOverflow(Value, Value, Value),
+    /// True when `amount`, interpreted with its source signedness, is in the
+    /// half-open range `[0, width(shifted))`.
+    ShiftCountDefined {
+        result: Value,
+        shifted: Value,
+        amount: Value,
+        amount_signed: bool,
+    },
+    /// True when a signed left shift is representable. Invalid counts return
+    /// false rather than relying on a preceding shift-count assumption.
+    SignedShlDefined {
+        result: Value,
+        shifted: Value,
+        amount: Value,
+        amount_signed: bool,
+    },
+
+    /// Assert a typed `bits<1>` UB obligation. A false condition reports the
+    /// exact source-level diagnostic identified by `UbReason`.
+    UbAssume(Value, UbReason),
     /// `SDiv(result, lhs, rhs)`: signed integer division.
     SDiv(Value, Value, Value),
     /// `UDiv(result, lhs, rhs)`: unsigned integer division.
@@ -97,6 +228,10 @@ pub enum Inst {
 
     /// `Ret(values)`: return from function with the given values.
     Ret(Vec<Value>),
+
+    /// Terminate execution with an explicit typed failure. Unlike `Ret`, a
+    /// trap has no ordinary results or effect-token operands.
+    Trap(TrapReason),
 
     /// Load through `address`, consuming and producing explicit effect tokens.
     /// The loaded type is owned by `result`.
@@ -153,9 +288,23 @@ pub enum Inst {
 pub fn inst_results(inst: &Inst) -> Vec<&Value> {
     match inst {
         Inst::Const(v, _)
+        | Inst::Uninitialized(v)
         | Inst::Add(v, ..)
         | Inst::Sub(v, ..)
         | Inst::Mul(v, ..)
+        | Inst::SRem(v, ..)
+        | Inst::URem(v, ..)
+        | Inst::Shl(v, ..)
+        | Inst::AShr(v, ..)
+        | Inst::LShr(v, ..)
+        | Inst::And(v, ..)
+        | Inst::Or(v, ..)
+        | Inst::Xor(v, ..)
+        | Inst::SignedAddDefined(v, ..)
+        | Inst::SignedSubDefined(v, ..)
+        | Inst::SignedMulDefined(v, ..)
+        | Inst::DivisorNonZero(v, ..)
+        | Inst::SignedDivRemNoOverflow(v, ..)
         | Inst::SDiv(v, ..)
         | Inst::UDiv(v, ..)
         | Inst::ICmp(v, ..)
@@ -163,6 +312,9 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
         | Inst::SExt(v, ..)
         | Inst::ZExt(v, ..)
         | Inst::Trunc(v, ..) => vec![v],
+        Inst::ShiftCountDefined { result, .. } | Inst::SignedShlDefined { result, .. } => {
+            vec![result]
+        }
         Inst::Load {
             result,
             mem_out,
@@ -183,7 +335,9 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
             definitions.push(world_out);
             definitions
         }
-        Inst::Br(..) | Inst::CondBr(..) | Inst::Ret(..) => vec![],
+        Inst::Br(..) | Inst::CondBr(..) | Inst::Ret(..) | Inst::Trap(..) | Inst::UbAssume(..) => {
+            vec![]
+        }
     }
 }
 
@@ -191,13 +345,35 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
 #[must_use]
 pub fn inst_uses(inst: &Inst) -> Vec<&Value> {
     match inst {
-        Inst::Const(..) => vec![],
+        Inst::Const(..) | Inst::Uninitialized(..) | Inst::Trap(..) => vec![],
 
         Inst::Add(_, lhs, rhs)
         | Inst::Sub(_, lhs, rhs)
         | Inst::Mul(_, lhs, rhs)
+        | Inst::SRem(_, lhs, rhs)
+        | Inst::URem(_, lhs, rhs)
+        | Inst::Shl(_, lhs, rhs)
+        | Inst::AShr(_, lhs, rhs)
+        | Inst::LShr(_, lhs, rhs)
+        | Inst::And(_, lhs, rhs)
+        | Inst::Or(_, lhs, rhs)
+        | Inst::Xor(_, lhs, rhs)
+        | Inst::SignedAddDefined(_, lhs, rhs)
+        | Inst::SignedSubDefined(_, lhs, rhs)
+        | Inst::SignedMulDefined(_, lhs, rhs)
+        | Inst::SignedDivRemNoOverflow(_, lhs, rhs)
         | Inst::SDiv(_, lhs, rhs)
         | Inst::UDiv(_, lhs, rhs) => vec![lhs, rhs],
+
+        Inst::DivisorNonZero(_, divisor) => vec![divisor],
+        Inst::ShiftCountDefined {
+            shifted, amount, ..
+        }
+        | Inst::SignedShlDefined {
+            shifted, amount, ..
+        } => vec![shifted, amount],
+
+        Inst::UbAssume(condition, _) => vec![condition],
 
         Inst::ICmp(_, _, lhs, rhs) => vec![lhs, rhs],
 
@@ -265,6 +441,12 @@ pub struct Function {
     pub params: Vec<FunctionParam>,
     pub ret_tys: Vec<EvoIRType>,
     pub blocks: Vec<Block>,
+}
+
+/// A collection of mutually callable EvoIR functions.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Module {
+    pub functions: Vec<Function>,
 }
 
 // ---------------------------------------------------------------------------
@@ -434,12 +616,210 @@ pub fn validate_ssa(func: &Function) -> Result<(), String> {
                     &format!("return in block {}", block.id),
                 )?;
             }
+            Inst::Trap(_) => {}
             _ => return Err(format!("block {} has an invalid terminator", block.id)),
         }
     }
 
     validate_reachability(func, entry.id)?;
 
+    Ok(())
+}
+
+/// Validate every function and all inter-function call signatures.
+pub fn validate_module(module: &Module) -> Result<(), String> {
+    let mut functions = HashMap::new();
+    for function in &module.functions {
+        if functions.insert(function.name.as_str(), function).is_some() {
+            return Err(format!("duplicate function symbol '{}'", function.name));
+        }
+        validate_ssa(function)
+            .map_err(|message| format!("function '{}': {message}", function.name))?;
+    }
+
+    let mut effect_participants = HashSet::new();
+    for function in &module.functions {
+        for block in &function.blocks {
+            for instruction in &block.insts {
+                match instruction {
+                    Inst::Call { callee, .. } => {
+                        effect_participants.insert(function.name.as_str());
+                        effect_participants.insert(callee.as_str());
+                    }
+                    Inst::Load { .. } | Inst::Store { .. } => {
+                        effect_participants.insert(function.name.as_str());
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    for function in &module.functions {
+        if effect_participants.contains(function.name.as_str()) {
+            callable_signature(function)
+                .map_err(|message| format!("call/effect participant: {message}"))?;
+        }
+    }
+
+    for caller in &module.functions {
+        for block in &caller.blocks {
+            for (index, instruction) in block.insts.iter().enumerate() {
+                let Inst::Call {
+                    results,
+                    callee,
+                    args,
+                    mem_in,
+                    world_in,
+                    mem_out,
+                    world_out,
+                } = instruction
+                else {
+                    continue;
+                };
+                let target = functions.get(callee.as_str()).ok_or_else(|| {
+                    format!(
+                        "function '{}' block {} instruction {} calls missing callee '{}'",
+                        caller.name, block.id, index, callee
+                    )
+                })?;
+                validate_call_signature(
+                    caller, block.id, index, target, results, args, mem_in, world_in, mem_out,
+                    world_out,
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+struct CallableSignature<'a> {
+    ordinary_params: &'a [FunctionParam],
+    ordinary_returns: &'a [EvoIRType],
+    memory_region: Region,
+}
+
+fn callable_signature(function: &Function) -> Result<CallableSignature<'_>, String> {
+    if function.params.len() < 2 || function.ret_tys.len() < 2 {
+        return Err(format!(
+            "function '{}' lacks trailing mem<R>, world parameters and returns",
+            function.name
+        ));
+    }
+    let parameter_split = function.params.len() - 2;
+    let return_split = function.ret_tys.len() - 2;
+    let memory_region = match (
+        &function.params[parameter_split].ty,
+        &function.params[parameter_split + 1].ty,
+    ) {
+        (EvoIRType::Mem(region), EvoIRType::World) => *region,
+        _ => {
+            return Err(format!(
+                "function '{}' must end parameters with mem<R>, world",
+                function.name
+            ));
+        }
+    };
+    match (
+        &function.ret_tys[return_split],
+        &function.ret_tys[return_split + 1],
+    ) {
+        (EvoIRType::Mem(region), EvoIRType::World) if *region == memory_region => {}
+        _ => {
+            return Err(format!(
+                "function '{}' must end returns with mem<{:?}>, world",
+                function.name, memory_region
+            ));
+        }
+    }
+    for parameter in &function.params[..parameter_split] {
+        if contains_effect_token(&parameter.ty)? {
+            return Err(format!(
+                "function '{}' ordinary parameter '{}' contains an effect token",
+                function.name, parameter.name
+            ));
+        }
+    }
+    for (index, ty) in function.ret_tys[..return_split].iter().enumerate() {
+        if contains_effect_token(ty)? {
+            return Err(format!(
+                "function '{}' ordinary return {} contains an effect token",
+                function.name, index
+            ));
+        }
+    }
+    Ok(CallableSignature {
+        ordinary_params: &function.params[..parameter_split],
+        ordinary_returns: &function.ret_tys[..return_split],
+        memory_region,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_call_signature(
+    caller: &Function,
+    block: BlockId,
+    instruction: usize,
+    callee: &Function,
+    results: &[Value],
+    args: &[Value],
+    mem_in: &Value,
+    world_in: &Value,
+    mem_out: &Value,
+    world_out: &Value,
+) -> Result<(), String> {
+    let signature = callable_signature(callee).map_err(|message| {
+        format!(
+            "function '{}' block {} instruction {}: {message}",
+            caller.name, block, instruction
+        )
+    })?;
+    if args.len() != signature.ordinary_params.len() {
+        return Err(format!(
+            "call from '{}' to '{}' has {} ordinary arguments, expected {}",
+            caller.name,
+            callee.name,
+            args.len(),
+            signature.ordinary_params.len()
+        ));
+    }
+    for (index, (argument, parameter)) in args.iter().zip(signature.ordinary_params).enumerate() {
+        if argument.ty != parameter.ty {
+            return Err(format!(
+                "call from '{}' to '{}' argument {} has type {:?}, expected {:?}",
+                caller.name, callee.name, index, argument.ty, parameter.ty
+            ));
+        }
+    }
+    if results.len() != signature.ordinary_returns.len() {
+        return Err(format!(
+            "call from '{}' to '{}' has {} ordinary results, expected {}",
+            caller.name,
+            callee.name,
+            results.len(),
+            signature.ordinary_returns.len()
+        ));
+    }
+    for (index, (result, expected)) in results.iter().zip(signature.ordinary_returns).enumerate() {
+        if &result.ty != expected {
+            return Err(format!(
+                "call from '{}' to '{}' result {} has type {:?}, expected {:?}",
+                caller.name, callee.name, index, result.ty, expected
+            ));
+        }
+    }
+    let expected_memory = EvoIRType::Mem(signature.memory_region);
+    if mem_in.ty != expected_memory || mem_out.ty != expected_memory {
+        return Err(format!(
+            "call from '{}' to '{}' must thread memory token {:?}",
+            caller.name, callee.name, expected_memory
+        ));
+    }
+    if world_in.ty != EvoIRType::World || world_out.ty != EvoIRType::World {
+        return Err(format!(
+            "call from '{}' to '{}' must thread a world token",
+            caller.name, callee.name
+        ));
+    }
     Ok(())
 }
 
@@ -499,7 +879,10 @@ fn require_local_value(
 }
 
 fn is_terminator(inst: &Inst) -> bool {
-    matches!(inst, Inst::Br(..) | Inst::CondBr(..) | Inst::Ret(..))
+    matches!(
+        inst,
+        Inst::Br(..) | Inst::CondBr(..) | Inst::Ret(..) | Inst::Trap(..)
+    )
 }
 
 fn validate_edge(
@@ -669,7 +1052,7 @@ fn validate_reachability(func: &Function, entry: BlockId) -> Result<(), String> 
                 pending.push(*true_block);
                 pending.push(*false_block);
             }
-            Inst::Ret(_) => {}
+            Inst::Ret(_) | Inst::Trap(_) => {}
             _ => {
                 return Err(format!("block {} has an invalid terminator", block_id));
             }
@@ -807,12 +1190,62 @@ impl EffectState {
 fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String> {
     match inst {
         Inst::Const(result, _) => expect_bits(&result.ty, "const result", block),
+        Inst::Uninitialized(result) => expect_data_type(&result.ty, "uninitialized result", block),
         Inst::Add(result, lhs, rhs)
         | Inst::Sub(result, lhs, rhs)
         | Inst::Mul(result, lhs, rhs)
+        | Inst::SRem(result, lhs, rhs)
+        | Inst::URem(result, lhs, rhs)
+        | Inst::And(result, lhs, rhs)
+        | Inst::Or(result, lhs, rhs)
+        | Inst::Xor(result, lhs, rhs)
         | Inst::SDiv(result, lhs, rhs)
         | Inst::UDiv(result, lhs, rhs) => {
             expect_same_bits(result, lhs, rhs, "integer arithmetic", block)
+        }
+        Inst::Shl(result, shifted, amount)
+        | Inst::AShr(result, shifted, amount)
+        | Inst::LShr(result, shifted, amount) => {
+            expect_shift_bits(result, shifted, amount, "shift", block)
+        }
+        Inst::SignedAddDefined(result, lhs, rhs)
+        | Inst::SignedSubDefined(result, lhs, rhs)
+        | Inst::SignedMulDefined(result, lhs, rhs) => {
+            expect_binary_bits_predicate(result, lhs, rhs, "signed-definedness", block)
+        }
+        Inst::DivisorNonZero(result, divisor) => {
+            expect_unary_bits_predicate(result, divisor, "nonzero-divisor", block)
+        }
+        Inst::SignedDivRemNoOverflow(result, lhs, rhs) => {
+            expect_binary_bits_predicate(result, lhs, rhs, "signed-div-rem-overflow", block)
+        }
+        Inst::ShiftCountDefined {
+            result,
+            shifted,
+            amount,
+            ..
+        } => expect_shift_predicate(result, shifted, amount, "shift-count", block),
+        Inst::SignedShlDefined {
+            result,
+            shifted,
+            amount,
+            ..
+        } => expect_shift_predicate(
+            result,
+            shifted,
+            amount,
+            "signed-left-shift-definedness",
+            block,
+        ),
+        Inst::UbAssume(condition, _) => {
+            if condition.ty == EvoIRType::Bits(1) {
+                Ok(())
+            } else {
+                Err(format!(
+                    "ub.assume in block {} uses {:?}, expected bits<1>",
+                    block, condition.ty
+                ))
+            }
         }
         Inst::ICmp(result, _, lhs, rhs) => {
             if result.ty != EvoIRType::Bits(1) {
@@ -890,7 +1323,7 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
         Inst::Trunc(result, source, target) => {
             validate_conversion(result, source, target, Conversion::Truncate, block)
         }
-        Inst::Br(..) | Inst::CondBr(..) | Inst::Ret(..) => Err(format!(
+        Inst::Br(..) | Inst::CondBr(..) | Inst::Ret(..) | Inst::Trap(..) => Err(format!(
             "terminator found in instruction list of block {}",
             block
         )),
@@ -911,6 +1344,77 @@ fn expect_same_bits(
         ));
     }
     expect_bits(&result.ty, operation, block)
+}
+
+fn expect_shift_bits(
+    result: &Value,
+    shifted: &Value,
+    amount: &Value,
+    operation: &str,
+    block: BlockId,
+) -> Result<(), String> {
+    if result.ty != shifted.ty {
+        return Err(format!(
+            "{} in block {} has different result and shifted types {:?} and {:?}",
+            operation, block, result.ty, shifted.ty
+        ));
+    }
+    expect_bits(&shifted.ty, &format!("{operation} shifted operand"), block)?;
+    expect_bits(&amount.ty, &format!("{operation} amount"), block)
+}
+
+fn expect_unary_bits_predicate(
+    result: &Value,
+    operand: &Value,
+    operation: &str,
+    block: BlockId,
+) -> Result<(), String> {
+    if result.ty != EvoIRType::Bits(1) {
+        return Err(format!(
+            "{} result in block {} has type {:?}, expected bits<1>",
+            operation, block, result.ty
+        ));
+    }
+    expect_bits(&operand.ty, &format!("{operation} operand"), block)
+}
+
+fn expect_binary_bits_predicate(
+    result: &Value,
+    lhs: &Value,
+    rhs: &Value,
+    operation: &str,
+    block: BlockId,
+) -> Result<(), String> {
+    if result.ty != EvoIRType::Bits(1) {
+        return Err(format!(
+            "{} result in block {} has type {:?}, expected bits<1>",
+            operation, block, result.ty
+        ));
+    }
+    if lhs.ty != rhs.ty {
+        return Err(format!(
+            "{} operands in block {} have different types {:?} and {:?}",
+            operation, block, lhs.ty, rhs.ty
+        ));
+    }
+    expect_bits(&lhs.ty, &format!("{operation} operand"), block)
+}
+
+fn expect_shift_predicate(
+    result: &Value,
+    shifted: &Value,
+    amount: &Value,
+    operation: &str,
+    block: BlockId,
+) -> Result<(), String> {
+    if result.ty != EvoIRType::Bits(1) {
+        return Err(format!(
+            "{} result in block {} has type {:?}, expected bits<1>",
+            operation, block, result.ty
+        ));
+    }
+    expect_bits(&shifted.ty, &format!("{operation} shifted operand"), block)?;
+    expect_bits(&amount.ty, &format!("{operation} amount"), block)
 }
 
 fn expect_bits(ty: &EvoIRType, role: &str, block: BlockId) -> Result<(), String> {
@@ -1160,6 +1664,15 @@ impl RuntimeValue {
     }
 }
 
+/// Private runtime state for an SSA value. Public entry arguments and
+/// successful results are always initialized; poison exists only while an
+/// interpreter is executing validated EvoIR.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InternalValue {
+    Initialized(u64),
+    Uninitialized,
+}
+
 /// Successful EvoIR execution together with the exact charged step count.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterpreterOutcome {
@@ -1170,8 +1683,14 @@ pub struct InterpreterOutcome {
 /// A defined failure from EvoIR validation or execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InterpreterError {
+    InvalidModule {
+        message: String,
+    },
     InvalidFunction {
         message: String,
+    },
+    MissingEntryFunction {
+        name: String,
     },
     EntryArgumentCount {
         expected: usize,
@@ -1202,6 +1721,12 @@ pub enum InterpreterError {
         block: BlockId,
         value: u32,
     },
+    UninitializedRead {
+        block: BlockId,
+    },
+    MissingReturn {
+        block: BlockId,
+    },
     UnsupportedBitWidth {
         block: BlockId,
         width: u16,
@@ -1210,9 +1735,22 @@ pub enum InterpreterError {
         block: BlockId,
         operation: &'static str,
     },
+    RemainderByZero {
+        block: BlockId,
+        operation: &'static str,
+    },
     SignedDivisionOverflow {
         block: BlockId,
         width: u16,
+    },
+    SignedRemainderOverflow {
+        block: BlockId,
+        width: u16,
+    },
+    UndefinedBehavior {
+        block: BlockId,
+        diagnostic: &'static str,
+        message: &'static str,
     },
     UnsupportedInstruction {
         block: BlockId,
@@ -1220,10 +1758,48 @@ pub enum InterpreterError {
     },
 }
 
+impl InterpreterError {
+    /// Stable diagnostic code aligned with the C-HIR scalar interpreter.
+    #[must_use]
+    pub const fn code(&self) -> &'static str {
+        match self {
+            Self::UninitializedRead { .. } => "E3001",
+            Self::MissingReturn { .. } => "E3007",
+            Self::DivisionByZero { .. } => "E3002",
+            Self::RemainderByZero { .. } => "E3003",
+            Self::SignedDivisionOverflow { .. } | Self::SignedRemainderOverflow { .. } => "E3004",
+            Self::UndefinedBehavior { diagnostic, .. } => diagnostic,
+            Self::StepBudgetExceeded { .. } => "E3008",
+            _ => "E3007",
+        }
+    }
+
+    /// Stable diagnostic message aligned with the C-HIR scalar interpreter.
+    #[must_use]
+    pub fn message(&self) -> String {
+        match self {
+            Self::UninitializedRead { .. } => "read-of-uninitialized-object".to_owned(),
+            Self::MissingReturn { .. } => "scalar-function-fell-off-end".to_owned(),
+            Self::DivisionByZero { .. } => "integer-division-by-zero".to_owned(),
+            Self::RemainderByZero { .. } => "integer-remainder-by-zero".to_owned(),
+            Self::SignedDivisionOverflow { .. } | Self::SignedRemainderOverflow { .. } => {
+                "signed-integer-overflow".to_owned()
+            }
+            Self::UndefinedBehavior { message, .. } => (*message).to_owned(),
+            Self::StepBudgetExceeded { .. } => "interpreter-fuel-exhausted".to_owned(),
+            _ => self.to_string(),
+        }
+    }
+}
+
 impl fmt::Display for InterpreterError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidModule { message } => write!(formatter, "invalid EvoIR module: {message}"),
             Self::InvalidFunction { message } => write!(formatter, "invalid EvoIR: {message}"),
+            Self::MissingEntryFunction { name } => {
+                write!(formatter, "missing EvoIR entry function '{name}'")
+            }
             Self::EntryArgumentCount { expected, actual } => write!(
                 formatter,
                 "entry argument count mismatch: expected {expected}, got {actual}"
@@ -1255,6 +1831,14 @@ impl fmt::Display for InterpreterError {
             Self::MissingValue { block, value } => {
                 write!(formatter, "missing EvoIR value v{value} in block {block}")
             }
+            Self::UninitializedRead { block } => write!(
+                formatter,
+                "E3001: read-of-uninitialized-object (uninitialized value in block {block})"
+            ),
+            Self::MissingReturn { block } => write!(
+                formatter,
+                "E3007: scalar-function-fell-off-end (trap in block {block})"
+            ),
             Self::UnsupportedBitWidth { block, width } => write!(
                 formatter,
                 "EvoIR interpreter does not support bits<{width}> in block {block}"
@@ -1262,9 +1846,24 @@ impl fmt::Display for InterpreterError {
             Self::DivisionByZero { block, operation } => {
                 write!(formatter, "{operation} by zero in block {block}")
             }
+            Self::RemainderByZero { block, operation } => {
+                write!(formatter, "{operation} by zero in block {block}")
+            }
             Self::SignedDivisionOverflow { block, width } => write!(
                 formatter,
                 "signed division overflow for bits<{width}> in block {block}"
+            ),
+            Self::SignedRemainderOverflow { block, width } => write!(
+                formatter,
+                "signed remainder overflow for bits<{width}> in block {block}"
+            ),
+            Self::UndefinedBehavior {
+                block,
+                diagnostic,
+                message,
+            } => write!(
+                formatter,
+                "{diagnostic}: {message} (ub.assume failed in block {block})"
             ),
             Self::UnsupportedInstruction { block, operation } => write!(
                 formatter,
@@ -1340,21 +1939,21 @@ pub fn interpret_function(
         charge_step(&mut steps, limits, block.id)?;
         match &block.terminator {
             Inst::Br(target, arguments) => {
-                incoming = resolve_values(arguments, block.id, &values)?;
+                incoming = copy_values(arguments, block.id, &values)?;
                 program_counter = *target;
             }
             Inst::CondBr(condition, true_block, true_arguments, false_block, false_arguments) => {
                 let condition_value = read_value(&values, condition, block.id)?;
                 if condition_value != 0 {
-                    incoming = resolve_values(true_arguments, block.id, &values)?;
+                    incoming = copy_values(true_arguments, block.id, &values)?;
                     program_counter = *true_block;
                 } else {
-                    incoming = resolve_values(false_arguments, block.id, &values)?;
+                    incoming = copy_values(false_arguments, block.id, &values)?;
                     program_counter = *false_block;
                 }
             }
             Inst::Ret(returned) => {
-                let raw_values = resolve_values(returned, block.id, &values)?;
+                let raw_values = read_values(returned, block.id, &values)?;
                 let return_values = raw_values
                     .into_iter()
                     .zip(returned)
@@ -1368,6 +1967,9 @@ pub fn interpret_function(
                     steps,
                 });
             }
+            Inst::Trap(TrapReason::ScalarFunctionFellOffEnd) => {
+                return Err(InterpreterError::MissingReturn { block: block.id });
+            }
             _ => {
                 return Err(InterpreterError::InvalidFunction {
                     message: format!("block {} has a non-terminator", block.id),
@@ -1375,6 +1977,317 @@ pub fn interpret_function(
             }
         }
     }
+}
+
+#[derive(Clone)]
+struct CallReturnBinding {
+    results: Vec<Value>,
+    mem_out: Value,
+    world_out: Value,
+}
+
+struct ModuleFrame {
+    function_index: usize,
+    block: BlockId,
+    incoming: Vec<InternalValue>,
+    values: HashMap<u32, InternalValue>,
+    next_instruction: usize,
+    entered: bool,
+    return_binding: Option<CallReturnBinding>,
+}
+
+impl ModuleFrame {
+    fn new(
+        function_index: usize,
+        block: BlockId,
+        incoming: Vec<InternalValue>,
+        return_binding: Option<CallReturnBinding>,
+    ) -> Self {
+        Self {
+            function_index,
+            block,
+            incoming,
+            values: HashMap::new(),
+            next_instruction: 0,
+            entered: false,
+            return_binding,
+        }
+    }
+}
+
+enum FrameAction {
+    Instruction(Inst),
+    Terminator(Inst),
+}
+
+/// Interpret one entry function in a validated module.
+///
+/// Function calls push explicit heap-backed frames. All instructions and
+/// terminators in every frame debit the same step budget.
+pub fn interpret_module(
+    module: &Module,
+    entry_name: &str,
+    entry_args: &[RuntimeValue],
+    limits: InterpreterLimits,
+) -> Result<InterpreterOutcome, InterpreterError> {
+    validate_module(module).map_err(|message| InterpreterError::InvalidModule { message })?;
+    let function_indices: HashMap<&str, usize> = module
+        .functions
+        .iter()
+        .enumerate()
+        .map(|(index, function)| (function.name.as_str(), index))
+        .collect();
+    let entry_index = function_indices.get(entry_name).copied().ok_or_else(|| {
+        InterpreterError::MissingEntryFunction {
+            name: entry_name.to_owned(),
+        }
+    })?;
+    let entry_function = &module.functions[entry_index];
+    let entry_block =
+        entry_function
+            .blocks
+            .first()
+            .ok_or_else(|| InterpreterError::InvalidModule {
+                message: format!("function '{}' has no entry block", entry_function.name),
+            })?;
+    if entry_args.len() != entry_block.args.len() {
+        return Err(InterpreterError::EntryArgumentCount {
+            expected: entry_block.args.len(),
+            actual: entry_args.len(),
+        });
+    }
+    let incoming = entry_args
+        .iter()
+        .zip(&entry_block.args)
+        .enumerate()
+        .map(|(index, (value, argument))| {
+            normalize_runtime_input(value, &argument.value.ty, index, entry_block.id)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut frames = vec![ModuleFrame::new(
+        entry_index,
+        entry_block.id,
+        incoming,
+        None,
+    )];
+    let mut steps = 0;
+
+    loop {
+        let frame_index =
+            frames
+                .len()
+                .checked_sub(1)
+                .ok_or_else(|| InterpreterError::InvalidModule {
+                    message: "interpreter frame stack became empty".to_owned(),
+                })?;
+        if !frames[frame_index].entered {
+            enter_module_frame(module, &mut frames[frame_index])?;
+        }
+        let action = module_frame_action(module, &frames[frame_index])?;
+        let block_id = frames[frame_index].block;
+        charge_step(&mut steps, limits, block_id)?;
+
+        match action {
+            FrameAction::Instruction(instruction) => {
+                frames[frame_index].next_instruction += 1;
+                if let Inst::Call {
+                    results,
+                    callee,
+                    args,
+                    mem_in,
+                    world_in,
+                    mem_out,
+                    world_out,
+                } = instruction
+                {
+                    let mut call_arguments: Vec<InternalValue> =
+                        read_values(&args, block_id, &frames[frame_index].values)?
+                            .into_iter()
+                            .map(InternalValue::Initialized)
+                            .collect();
+                    call_arguments.push(InternalValue::Initialized(read_value(
+                        &frames[frame_index].values,
+                        &mem_in,
+                        block_id,
+                    )?));
+                    call_arguments.push(InternalValue::Initialized(read_value(
+                        &frames[frame_index].values,
+                        &world_in,
+                        block_id,
+                    )?));
+                    let callee_index =
+                        function_indices
+                            .get(callee.as_str())
+                            .copied()
+                            .ok_or_else(|| InterpreterError::InvalidModule {
+                                message: format!("call targets missing function '{callee}'"),
+                            })?;
+                    let callee_entry =
+                        module.functions[callee_index]
+                            .blocks
+                            .first()
+                            .ok_or_else(|| InterpreterError::InvalidModule {
+                                message: format!("callee '{callee}' has no entry block"),
+                            })?;
+                    frames.push(ModuleFrame::new(
+                        callee_index,
+                        callee_entry.id,
+                        call_arguments,
+                        Some(CallReturnBinding {
+                            results,
+                            mem_out,
+                            world_out,
+                        }),
+                    ));
+                } else {
+                    execute_instruction(&instruction, block_id, &mut frames[frame_index].values)?;
+                }
+            }
+            FrameAction::Terminator(terminator) => match terminator {
+                Inst::Br(target, arguments) => {
+                    let incoming = copy_values(&arguments, block_id, &frames[frame_index].values)?;
+                    set_module_frame_block(&mut frames[frame_index], target, incoming);
+                }
+                Inst::CondBr(
+                    condition,
+                    true_block,
+                    true_arguments,
+                    false_block,
+                    false_arguments,
+                ) => {
+                    let condition = read_value(&frames[frame_index].values, &condition, block_id)?;
+                    let (target, arguments) = if condition != 0 {
+                        (true_block, true_arguments)
+                    } else {
+                        (false_block, false_arguments)
+                    };
+                    let incoming = copy_values(&arguments, block_id, &frames[frame_index].values)?;
+                    set_module_frame_block(&mut frames[frame_index], target, incoming);
+                }
+                Inst::Ret(returned) => {
+                    let returned_raw =
+                        read_values(&returned, block_id, &frames[frame_index].values)?;
+                    let returned_types = module.functions[frames[frame_index].function_index]
+                        .ret_tys
+                        .clone();
+                    let completed =
+                        frames
+                            .pop()
+                            .ok_or_else(|| InterpreterError::InvalidModule {
+                                message: "return observed with no active frame".to_owned(),
+                            })?;
+                    if let Some(binding) = completed.return_binding {
+                        bind_call_return(&mut frames, binding, returned_raw)?;
+                    } else {
+                        let return_values = returned_raw
+                            .into_iter()
+                            .zip(returned_types)
+                            .map(|(raw_bits, ty)| RuntimeValue { ty, raw_bits })
+                            .collect();
+                        return Ok(InterpreterOutcome {
+                            return_values,
+                            steps,
+                        });
+                    }
+                }
+                Inst::Trap(TrapReason::ScalarFunctionFellOffEnd) => {
+                    return Err(InterpreterError::MissingReturn { block: block_id });
+                }
+                _ => {
+                    return Err(InterpreterError::InvalidModule {
+                        message: format!("block {block_id} has an invalid terminator"),
+                    });
+                }
+            },
+        }
+    }
+}
+
+fn enter_module_frame(module: &Module, frame: &mut ModuleFrame) -> Result<(), InterpreterError> {
+    let function = module.functions.get(frame.function_index).ok_or_else(|| {
+        InterpreterError::InvalidModule {
+            message: format!("missing function index {}", frame.function_index),
+        }
+    })?;
+    let block = function
+        .blocks
+        .iter()
+        .find(|block| block.id == frame.block)
+        .ok_or(InterpreterError::MissingBlock { block: frame.block })?;
+    if frame.incoming.len() != block.args.len() {
+        return Err(InterpreterError::EntryArgumentCount {
+            expected: block.args.len(),
+            actual: frame.incoming.len(),
+        });
+    }
+    for (argument, runtime_value) in block.args.iter().zip(frame.incoming.drain(..)) {
+        frame.values.insert(argument.value.id, runtime_value);
+    }
+    frame.next_instruction = 0;
+    frame.entered = true;
+    Ok(())
+}
+
+fn module_frame_action(
+    module: &Module,
+    frame: &ModuleFrame,
+) -> Result<FrameAction, InterpreterError> {
+    let function = module.functions.get(frame.function_index).ok_or_else(|| {
+        InterpreterError::InvalidModule {
+            message: format!("missing function index {}", frame.function_index),
+        }
+    })?;
+    let block = function
+        .blocks
+        .iter()
+        .find(|block| block.id == frame.block)
+        .ok_or(InterpreterError::MissingBlock { block: frame.block })?;
+    Ok(if frame.next_instruction < block.insts.len() {
+        FrameAction::Instruction(block.insts[frame.next_instruction].clone())
+    } else {
+        FrameAction::Terminator(block.terminator.clone())
+    })
+}
+
+fn set_module_frame_block(frame: &mut ModuleFrame, block: BlockId, incoming: Vec<InternalValue>) {
+    frame.block = block;
+    frame.incoming = incoming;
+    frame.entered = false;
+}
+
+fn bind_call_return(
+    frames: &mut [ModuleFrame],
+    binding: CallReturnBinding,
+    returned: Vec<u64>,
+) -> Result<(), InterpreterError> {
+    let expected = binding.results.len() + 2;
+    if returned.len() != expected {
+        return Err(InterpreterError::InvalidModule {
+            message: format!(
+                "callee returned {} values to a call expecting {expected}",
+                returned.len()
+            ),
+        });
+    }
+    let caller = frames
+        .last_mut()
+        .ok_or_else(|| InterpreterError::InvalidModule {
+            message: "callee return has no caller frame".to_owned(),
+        })?;
+    for (result, raw_bits) in binding.results.iter().zip(&returned) {
+        caller
+            .values
+            .insert(result.id, InternalValue::Initialized(*raw_bits));
+    }
+    caller.values.insert(
+        binding.mem_out.id,
+        InternalValue::Initialized(returned[binding.results.len()]),
+    );
+    caller.values.insert(
+        binding.world_out.id,
+        InternalValue::Initialized(returned[binding.results.len() + 1]),
+    );
+    Ok(())
 }
 
 /// Explicit compatibility spelling for [`interpret_function`].
@@ -1402,47 +2315,197 @@ fn charge_step(
     Ok(())
 }
 
+fn write_value(values: &mut HashMap<u32, InternalValue>, result: &Value, raw_bits: u64) {
+    values.insert(result.id, InternalValue::Initialized(raw_bits));
+}
+
 fn execute_instruction(
     inst: &Inst,
     block: BlockId,
-    values: &mut HashMap<u32, u64>,
+    values: &mut HashMap<u32, InternalValue>,
 ) -> Result<(), InterpreterError> {
     match inst {
         Inst::Const(result, immediate) => {
             let kernel = IntegerKernel::for_value(result, block)?;
-            values.insert(result.id, kernel.normalize(*immediate));
+            write_value(values, result, kernel.normalize(*immediate));
+        }
+        Inst::Uninitialized(result) => {
+            values.insert(result.id, InternalValue::Uninitialized);
         }
         Inst::Add(result, lhs, rhs) => {
             let kernel = IntegerKernel::for_value(result, block)?;
             let left = read_value(values, lhs, block)?;
             let right = read_value(values, rhs, block)?;
-            values.insert(result.id, kernel.add(left, right));
+            write_value(values, result, kernel.add(left, right));
         }
         Inst::Sub(result, lhs, rhs) => {
             let kernel = IntegerKernel::for_value(result, block)?;
             let left = read_value(values, lhs, block)?;
             let right = read_value(values, rhs, block)?;
-            values.insert(result.id, kernel.sub(left, right));
+            write_value(values, result, kernel.sub(left, right));
         }
         Inst::Mul(result, lhs, rhs) => {
             let kernel = IntegerKernel::for_value(result, block)?;
             let left = read_value(values, lhs, block)?;
             let right = read_value(values, rhs, block)?;
-            values.insert(result.id, kernel.mul(left, right));
+            write_value(values, result, kernel.mul(left, right));
+        }
+        Inst::SRem(result, lhs, rhs) => {
+            let kernel = IntegerKernel::for_value(result, block)?;
+            let left = read_value(values, lhs, block)?;
+            let right = read_value(values, rhs, block)?;
+            write_value(values, result, kernel.srem(left, right, block)?);
+        }
+        Inst::URem(result, lhs, rhs) => {
+            let kernel = IntegerKernel::for_value(result, block)?;
+            let left = read_value(values, lhs, block)?;
+            let right = read_value(values, rhs, block)?;
+            write_value(values, result, kernel.urem(left, right, block)?);
+        }
+        Inst::Shl(result, lhs, rhs) => {
+            let kernel = IntegerKernel::for_value(result, block)?;
+            let left = read_value(values, lhs, block)?;
+            let right = read_value(values, rhs, block)?;
+            write_value(values, result, kernel.shl(left, right));
+        }
+        Inst::AShr(result, lhs, rhs) => {
+            let kernel = IntegerKernel::for_value(result, block)?;
+            let left = read_value(values, lhs, block)?;
+            let right = read_value(values, rhs, block)?;
+            write_value(values, result, kernel.ashr(left, right));
+        }
+        Inst::LShr(result, lhs, rhs) => {
+            let kernel = IntegerKernel::for_value(result, block)?;
+            let left = read_value(values, lhs, block)?;
+            let right = read_value(values, rhs, block)?;
+            write_value(values, result, kernel.lshr(left, right));
+        }
+        Inst::And(result, lhs, rhs) => {
+            let kernel = IntegerKernel::for_value(result, block)?;
+            let left = read_value(values, lhs, block)?;
+            let right = read_value(values, rhs, block)?;
+            write_value(values, result, kernel.normalize(left & right));
+        }
+        Inst::Or(result, lhs, rhs) => {
+            let kernel = IntegerKernel::for_value(result, block)?;
+            let left = read_value(values, lhs, block)?;
+            let right = read_value(values, rhs, block)?;
+            write_value(values, result, kernel.normalize(left | right));
+        }
+        Inst::Xor(result, lhs, rhs) => {
+            let kernel = IntegerKernel::for_value(result, block)?;
+            let left = read_value(values, lhs, block)?;
+            let right = read_value(values, rhs, block)?;
+            write_value(values, result, kernel.normalize(left ^ right));
+        }
+        Inst::SignedAddDefined(result, lhs, rhs) => {
+            let kernel = IntegerKernel::for_value(lhs, block)?;
+            let left = read_value(values, lhs, block)?;
+            let right = read_value(values, rhs, block)?;
+            write_value(
+                values,
+                result,
+                u64::from(kernel.signed_add_defined(left, right)),
+            );
+        }
+        Inst::SignedSubDefined(result, lhs, rhs) => {
+            let kernel = IntegerKernel::for_value(lhs, block)?;
+            let left = read_value(values, lhs, block)?;
+            let right = read_value(values, rhs, block)?;
+            write_value(
+                values,
+                result,
+                u64::from(kernel.signed_sub_defined(left, right)),
+            );
+        }
+        Inst::SignedMulDefined(result, lhs, rhs) => {
+            let kernel = IntegerKernel::for_value(lhs, block)?;
+            let left = read_value(values, lhs, block)?;
+            let right = read_value(values, rhs, block)?;
+            write_value(
+                values,
+                result,
+                u64::from(kernel.signed_mul_defined(left, right)),
+            );
+        }
+        Inst::DivisorNonZero(result, divisor) => {
+            let kernel = IntegerKernel::for_value(divisor, block)?;
+            let divisor = read_value(values, divisor, block)?;
+            write_value(values, result, u64::from(kernel.normalize(divisor) != 0));
+        }
+        Inst::SignedDivRemNoOverflow(result, lhs, rhs) => {
+            let kernel = IntegerKernel::for_value(lhs, block)?;
+            let left = read_value(values, lhs, block)?;
+            let right = read_value(values, rhs, block)?;
+            write_value(
+                values,
+                result,
+                u64::from(kernel.signed_div_rem_no_overflow(left, right)),
+            );
+        }
+        Inst::ShiftCountDefined {
+            result,
+            shifted,
+            amount,
+            amount_signed,
+        } => {
+            let _shifted = read_value(values, shifted, block)?;
+            let amount_raw = read_value(values, amount, block)?;
+            let shifted_kernel = IntegerKernel::for_value(shifted, block)?;
+            let amount_kernel = IntegerKernel::for_value(amount, block)?;
+            write_value(
+                values,
+                result,
+                u64::from(shifted_kernel.shift_count_defined(
+                    amount_kernel,
+                    amount_raw,
+                    *amount_signed,
+                )),
+            );
+        }
+        Inst::SignedShlDefined {
+            result,
+            shifted,
+            amount,
+            amount_signed,
+        } => {
+            let shifted_kernel = IntegerKernel::for_value(shifted, block)?;
+            let amount_kernel = IntegerKernel::for_value(amount, block)?;
+            let shifted = read_value(values, shifted, block)?;
+            let amount = read_value(values, amount, block)?;
+            write_value(
+                values,
+                result,
+                u64::from(shifted_kernel.signed_shl_defined(
+                    shifted,
+                    amount_kernel,
+                    amount,
+                    *amount_signed,
+                )),
+            );
+        }
+        Inst::UbAssume(condition, reason) => {
+            if read_value(values, condition, block)? == 0 {
+                return Err(InterpreterError::UndefinedBehavior {
+                    block,
+                    diagnostic: reason.diagnostic(),
+                    message: reason.message(),
+                });
+            }
         }
         Inst::SDiv(result, lhs, rhs) => {
             let kernel = IntegerKernel::for_value(result, block)?;
             let left = read_value(values, lhs, block)?;
             let right = read_value(values, rhs, block)?;
             let quotient = kernel.sdiv(left, right, block)?;
-            values.insert(result.id, quotient);
+            write_value(values, result, quotient);
         }
         Inst::UDiv(result, lhs, rhs) => {
             let kernel = IntegerKernel::for_value(result, block)?;
             let left = read_value(values, lhs, block)?;
             let right = read_value(values, rhs, block)?;
             let quotient = kernel.udiv(left, right, block)?;
-            values.insert(result.id, quotient);
+            write_value(values, result, quotient);
         }
         Inst::ICmp(result, operation, lhs, rhs) => {
             let kernel = IntegerKernel::for_value(lhs, block)?;
@@ -1456,14 +2519,15 @@ fn execute_instruction(
                 CmpOp::ULt => kernel.normalize(left) < kernel.normalize(right),
                 CmpOp::ULe => kernel.normalize(left) <= kernel.normalize(right),
             };
-            values.insert(result.id, u64::from(comparison));
+            write_value(values, result, u64::from(comparison));
         }
         Inst::SExt(result, source, _) => {
             let source_kernel = IntegerKernel::for_value(source, block)?;
             let target_kernel = IntegerKernel::for_value(result, block)?;
             let raw = read_value(values, source, block)?;
-            values.insert(
-                result.id,
+            write_value(
+                values,
+                result,
                 target_kernel.encode_signed(source_kernel.signed(raw)),
             );
         }
@@ -1471,8 +2535,9 @@ fn execute_instruction(
             let source_kernel = IntegerKernel::for_value(source, block)?;
             let target_kernel = IntegerKernel::for_value(result, block)?;
             let raw = read_value(values, source, block)?;
-            values.insert(
-                result.id,
+            write_value(
+                values,
+                result,
                 target_kernel.normalize(source_kernel.normalize(raw)),
             );
         }
@@ -1500,7 +2565,7 @@ fn execute_instruction(
                 operation: "pointer offset",
             });
         }
-        Inst::Br(..) | Inst::CondBr(..) | Inst::Ret(..) => {
+        Inst::Br(..) | Inst::CondBr(..) | Inst::Ret(..) | Inst::Trap(..) => {
             return Err(InterpreterError::InvalidFunction {
                 message: format!("terminator appears in instructions of block {block}"),
             });
@@ -1510,23 +2575,45 @@ fn execute_instruction(
 }
 
 fn read_value(
-    values: &HashMap<u32, u64>,
+    values: &HashMap<u32, InternalValue>,
     value: &Value,
     block: BlockId,
 ) -> Result<u64, InterpreterError> {
-    values
+    match values
         .get(&value.id)
         .copied()
         .ok_or(InterpreterError::MissingValue {
             block,
             value: value.id,
-        })
+        })? {
+        InternalValue::Initialized(raw_bits) => Ok(raw_bits),
+        InternalValue::Uninitialized => Err(InterpreterError::UninitializedRead { block }),
+    }
 }
 
-fn resolve_values(
+fn copy_values(
     arguments: &[Value],
     block: BlockId,
-    values: &HashMap<u32, u64>,
+    values: &HashMap<u32, InternalValue>,
+) -> Result<Vec<InternalValue>, InterpreterError> {
+    arguments
+        .iter()
+        .map(|argument| {
+            values
+                .get(&argument.id)
+                .copied()
+                .ok_or(InterpreterError::MissingValue {
+                    block,
+                    value: argument.id,
+                })
+        })
+        .collect()
+}
+
+fn read_values(
+    arguments: &[Value],
+    block: BlockId,
+    values: &HashMap<u32, InternalValue>,
 ) -> Result<Vec<u64>, InterpreterError> {
     arguments
         .iter()
@@ -1539,7 +2626,7 @@ fn normalize_runtime_input(
     expected: &EvoIRType,
     index: usize,
     block: BlockId,
-) -> Result<u64, InterpreterError> {
+) -> Result<InternalValue, InterpreterError> {
     validate_value_type(&value.ty)
         .map_err(|message| InterpreterError::InvalidEntryArgument { index, message })?;
     if &value.ty != expected {
@@ -1550,10 +2637,10 @@ fn normalize_runtime_input(
         });
     }
     match expected {
-        EvoIRType::Bits(_) => {
-            Ok(IntegerKernel::for_type(expected, block)?.normalize(value.raw_bits))
-        }
-        EvoIRType::Mem(_) | EvoIRType::World => Ok(value.raw_bits),
+        EvoIRType::Bits(_) => Ok(InternalValue::Initialized(
+            IntegerKernel::for_type(expected, block)?.normalize(value.raw_bits),
+        )),
+        EvoIRType::Mem(_) | EvoIRType::World => Ok(InternalValue::Initialized(value.raw_bits)),
         _ => Err(InterpreterError::UnsupportedRuntimeType {
             index,
             ty: expected.clone(),
@@ -1608,6 +2695,94 @@ impl IntegerKernel {
         self.normalize(left.wrapping_mul(right))
     }
 
+    fn shl(self, left: u64, amount: u64) -> u64 {
+        if amount >= u64::from(self.width) {
+            0
+        } else {
+            self.normalize(self.normalize(left) << amount)
+        }
+    }
+
+    fn lshr(self, left: u64, amount: u64) -> u64 {
+        if amount >= u64::from(self.width) {
+            0
+        } else {
+            self.normalize(left) >> amount
+        }
+    }
+
+    fn ashr(self, left: u64, amount: u64) -> u64 {
+        if amount >= u64::from(self.width) {
+            if self.signed(left) < 0 {
+                self.mask
+            } else {
+                0
+            }
+        } else {
+            self.encode_signed(self.signed(left) >> amount)
+        }
+    }
+
+    fn signed_add_defined(self, left: u64, right: u64) -> bool {
+        self.signed_fits(self.signed(left) + self.signed(right))
+    }
+
+    fn signed_sub_defined(self, left: u64, right: u64) -> bool {
+        self.signed_fits(self.signed(left) - self.signed(right))
+    }
+
+    fn signed_mul_defined(self, left: u64, right: u64) -> bool {
+        self.signed_fits(self.signed(left) * self.signed(right))
+    }
+
+    fn signed_div_rem_no_overflow(self, left: u64, right: u64) -> bool {
+        let minimum = -(1_i128 << (self.width - 1));
+        !(self.signed(left) == minimum && self.signed(right) == -1)
+    }
+
+    fn decoded_shift_amount(
+        self,
+        amount_kernel: Self,
+        amount: u64,
+        amount_signed: bool,
+    ) -> Option<u64> {
+        let mathematical = if amount_signed {
+            amount_kernel.signed(amount)
+        } else {
+            i128::from(amount_kernel.normalize(amount))
+        };
+        if mathematical < 0 || mathematical >= i128::from(self.width) {
+            None
+        } else {
+            u64::try_from(mathematical).ok()
+        }
+    }
+
+    fn shift_count_defined(self, amount_kernel: Self, amount: u64, amount_signed: bool) -> bool {
+        self.decoded_shift_amount(amount_kernel, amount, amount_signed)
+            .is_some()
+    }
+
+    fn signed_shl_defined(
+        self,
+        left: u64,
+        amount_kernel: Self,
+        amount: u64,
+        amount_signed: bool,
+    ) -> bool {
+        let Some(amount) = self.decoded_shift_amount(amount_kernel, amount, amount_signed) else {
+            return false;
+        };
+        let left = self.signed(left);
+        left >= 0 && self.signed_fits(left << amount)
+    }
+
+    fn signed_fits(self, value: i128) -> bool {
+        let minimum = -(1_i128 << (self.width - 1));
+        let maximum = (1_i128 << (self.width - 1)) - 1;
+        (minimum..=maximum).contains(&value)
+    }
+
     fn signed(self, value: u64) -> i128 {
         let value = self.normalize(value);
         let sign_bit = 1_u64 << (self.width - 1);
@@ -1651,6 +2826,37 @@ impl IntegerKernel {
             });
         }
         Ok(left / right)
+    }
+
+    fn srem(self, left: u64, right: u64, block: BlockId) -> Result<u64, InterpreterError> {
+        let left = self.signed(left);
+        let right = self.signed(right);
+        if right == 0 {
+            return Err(InterpreterError::RemainderByZero {
+                block,
+                operation: "signed remainder",
+            });
+        }
+        let minimum = -(1_i128 << (self.width - 1));
+        if left == minimum && right == -1 {
+            return Err(InterpreterError::SignedRemainderOverflow {
+                block,
+                width: self.width,
+            });
+        }
+        Ok(self.encode_signed(left % right))
+    }
+
+    fn urem(self, left: u64, right: u64, block: BlockId) -> Result<u64, InterpreterError> {
+        let left = self.normalize(left);
+        let right = self.normalize(right);
+        if right == 0 {
+            return Err(InterpreterError::RemainderByZero {
+                block,
+                operation: "unsigned remainder",
+            });
+        }
+        Ok(left % right)
     }
 }
 
@@ -2257,13 +3463,35 @@ mod tests {
                 terminator: Inst::Ret(vec![quotient]),
             }],
         };
+        let division_error = eval_function(&division, &[], InterpreterLimits::new(4))
+            .expect_err("zero divisor must fail");
         assert!(matches!(
-            eval_function(&division, &[], InterpreterLimits::new(4)),
-            Err(InterpreterError::DivisionByZero {
+            &division_error,
+            InterpreterError::DivisionByZero {
                 operation: "signed division",
                 ..
-            })
+            }
         ));
+        assert_eq!(division_error.code(), "E3002");
+        assert_eq!(division_error.message(), "integer-division-by-zero");
+
+        let mut remainder = division.clone();
+        remainder.name = "remainder".to_owned();
+        let Inst::SDiv(result, lhs, rhs) = remainder.blocks[0].insts[2].clone() else {
+            panic!("fixture signed division");
+        };
+        remainder.blocks[0].insts[2] = Inst::SRem(result, lhs, rhs);
+        let remainder_error = eval_function(&remainder, &[], InterpreterLimits::new(4))
+            .expect_err("zero remainder divisor must fail");
+        assert!(matches!(
+            &remainder_error,
+            InterpreterError::RemainderByZero {
+                operation: "signed remainder",
+                ..
+            }
+        ));
+        assert_eq!(remainder_error.code(), "E3003");
+        assert_eq!(remainder_error.message(), "integer-remainder-by-zero");
 
         assert!(matches!(
             eval_function(
@@ -2280,5 +3508,1499 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    fn identity_callee(name: &str, ordinary_ty: EvoIRType, region: Region) -> Function {
+        let memory_ty = EvoIRType::Mem(region);
+        let input = value(0, ordinary_ty.clone());
+        let memory = value(1, memory_ty.clone());
+        let world = value(2, EvoIRType::World);
+        Function {
+            name: name.to_owned(),
+            params: vec![
+                FunctionParam {
+                    name: "input".to_owned(),
+                    ty: ordinary_ty.clone(),
+                },
+                FunctionParam {
+                    name: "memory".to_owned(),
+                    ty: memory_ty.clone(),
+                },
+                FunctionParam {
+                    name: "world".to_owned(),
+                    ty: EvoIRType::World,
+                },
+            ],
+            ret_tys: vec![ordinary_ty, memory_ty, EvoIRType::World],
+            blocks: vec![Block {
+                id: 0,
+                args: vec![
+                    argument("input", input.clone()),
+                    argument("memory", memory.clone()),
+                    argument("world", world.clone()),
+                ],
+                insts: vec![],
+                terminator: Inst::Ret(vec![input, memory, world]),
+            }],
+        }
+    }
+
+    fn direct_call_module() -> Module {
+        let memory_ty = EvoIRType::Mem(Region::All);
+        let memory_in = value(0, memory_ty.clone());
+        let world_in = value(1, EvoIRType::World);
+        let argument_value = bits(2, 32);
+        let result = bits(3, 32);
+        let memory_out = value(4, memory_ty.clone());
+        let world_out = value(5, EvoIRType::World);
+        let main = Function {
+            name: "main".to_owned(),
+            params: vec![
+                FunctionParam {
+                    name: "memory".to_owned(),
+                    ty: memory_ty.clone(),
+                },
+                FunctionParam {
+                    name: "world".to_owned(),
+                    ty: EvoIRType::World,
+                },
+            ],
+            ret_tys: vec![EvoIRType::Bits(32), memory_ty.clone(), EvoIRType::World],
+            blocks: vec![Block {
+                id: 0,
+                args: vec![
+                    argument("memory", memory_in.clone()),
+                    argument("world", world_in.clone()),
+                ],
+                insts: vec![
+                    Inst::Const(argument_value.clone(), 41),
+                    Inst::Call {
+                        results: vec![result.clone()],
+                        callee: "identity".to_owned(),
+                        args: vec![argument_value],
+                        mem_in: memory_in,
+                        world_in,
+                        mem_out: memory_out.clone(),
+                        world_out: world_out.clone(),
+                    },
+                ],
+                terminator: Inst::Ret(vec![result, memory_out, world_out]),
+            }],
+        };
+        Module {
+            functions: vec![
+                identity_callee("identity", EvoIRType::Bits(32), Region::All),
+                main,
+            ],
+        }
+    }
+
+    fn recursive_countdown_module() -> Module {
+        let memory_ty = EvoIRType::Mem(Region::All);
+        let n = bits(0, 32);
+        let memory = value(1, memory_ty.clone());
+        let world = value(2, EvoIRType::World);
+        let zero = bits(3, 32);
+        let condition = bits(4, 1);
+        let base_n = bits(5, 32);
+        let base_memory = value(6, memory_ty.clone());
+        let base_world = value(7, EvoIRType::World);
+        let recur_n = bits(8, 32);
+        let recur_memory = value(9, memory_ty.clone());
+        let recur_world = value(10, EvoIRType::World);
+        let one = bits(11, 32);
+        let next_n = bits(12, 32);
+        let result = bits(13, 32);
+        let memory_out = value(14, memory_ty.clone());
+        let world_out = value(15, EvoIRType::World);
+        let countdown = Function {
+            name: "countdown".to_owned(),
+            params: vec![
+                FunctionParam {
+                    name: "n".to_owned(),
+                    ty: EvoIRType::Bits(32),
+                },
+                FunctionParam {
+                    name: "memory".to_owned(),
+                    ty: memory_ty.clone(),
+                },
+                FunctionParam {
+                    name: "world".to_owned(),
+                    ty: EvoIRType::World,
+                },
+            ],
+            ret_tys: vec![EvoIRType::Bits(32), memory_ty.clone(), EvoIRType::World],
+            blocks: vec![
+                Block {
+                    id: 0,
+                    args: vec![
+                        argument("n", n.clone()),
+                        argument("memory", memory.clone()),
+                        argument("world", world.clone()),
+                    ],
+                    insts: vec![
+                        Inst::Const(zero.clone(), 0),
+                        Inst::ICmp(condition.clone(), CmpOp::Eq, n.clone(), zero),
+                    ],
+                    terminator: Inst::CondBr(
+                        condition,
+                        1,
+                        vec![n.clone(), memory.clone(), world.clone()],
+                        2,
+                        vec![n, memory, world],
+                    ),
+                },
+                Block {
+                    id: 1,
+                    args: vec![
+                        argument("n", base_n.clone()),
+                        argument("memory", base_memory.clone()),
+                        argument("world", base_world.clone()),
+                    ],
+                    insts: vec![],
+                    terminator: Inst::Ret(vec![base_n, base_memory, base_world]),
+                },
+                Block {
+                    id: 2,
+                    args: vec![
+                        argument("n", recur_n.clone()),
+                        argument("memory", recur_memory.clone()),
+                        argument("world", recur_world.clone()),
+                    ],
+                    insts: vec![
+                        Inst::Const(one.clone(), 1),
+                        Inst::Sub(next_n.clone(), recur_n, one),
+                        Inst::Call {
+                            results: vec![result.clone()],
+                            callee: "countdown".to_owned(),
+                            args: vec![next_n],
+                            mem_in: recur_memory,
+                            world_in: recur_world,
+                            mem_out: memory_out.clone(),
+                            world_out: world_out.clone(),
+                        },
+                    ],
+                    terminator: Inst::Ret(vec![result, memory_out, world_out]),
+                },
+            ],
+        };
+
+        let mut module = direct_call_module();
+        let main = module.functions.pop().expect("fixture main");
+        let mut main = main;
+        let Inst::Const(_, immediate) = &mut main.blocks[0].insts[0] else {
+            panic!("fixture constant");
+        };
+        *immediate = 3;
+        let Inst::Call { callee, .. } = &mut main.blocks[0].insts[1] else {
+            panic!("fixture call");
+        };
+        *callee = "countdown".to_owned();
+        Module {
+            functions: vec![countdown, main],
+        }
+    }
+
+    #[test]
+    fn module_validation_checks_symbols_ordinary_signature_and_effect_interface() {
+        let module = direct_call_module();
+        validate_module(&module).expect("well-typed direct call module");
+
+        let mut duplicate = module.clone();
+        duplicate.functions[1].name = "identity".to_owned();
+        assert!(validate_module(&duplicate)
+            .expect_err("duplicate symbols must fail")
+            .contains("duplicate function"));
+
+        let mut missing = module.clone();
+        let Inst::Call { callee, .. } = &mut missing.functions[1].blocks[0].insts[1] else {
+            panic!("fixture call");
+        };
+        *callee = "missing".to_owned();
+        assert!(validate_module(&missing)
+            .expect_err("missing callee must fail")
+            .contains("missing callee"));
+
+        let mut wrong_arity = module.clone();
+        let Inst::Call { args, .. } = &mut wrong_arity.functions[1].blocks[0].insts[1] else {
+            panic!("fixture call");
+        };
+        args.clear();
+        assert!(validate_module(&wrong_arity)
+            .expect_err("ordinary argument arity must fail")
+            .contains("ordinary arguments"));
+
+        let mut wrong_result_arity = module.clone();
+        let caller = &mut wrong_result_arity.functions[1];
+        caller.ret_tys.remove(0);
+        let Inst::Call { results, .. } = &mut caller.blocks[0].insts[1] else {
+            panic!("fixture call");
+        };
+        results.clear();
+        let Inst::Ret(returned) = &mut caller.blocks[0].terminator else {
+            panic!("fixture return");
+        };
+        returned.remove(0);
+        assert!(validate_module(&wrong_result_arity)
+            .expect_err("ordinary result arity must fail")
+            .contains("ordinary results"));
+
+        let mut wrong_argument_type = module.clone();
+        let callee = &mut wrong_argument_type.functions[0];
+        callee.params[0].ty = EvoIRType::Bits(64);
+        callee.ret_tys[0] = EvoIRType::Bits(64);
+        callee.blocks[0].args[0].value.ty = EvoIRType::Bits(64);
+        let Inst::Ret(returned) = &mut callee.blocks[0].terminator else {
+            panic!("fixture return");
+        };
+        returned[0].ty = EvoIRType::Bits(64);
+        assert!(validate_module(&wrong_argument_type)
+            .expect_err("ordinary argument type must fail")
+            .contains("argument 0"));
+
+        let mut wrong_result_type = module.clone();
+        let caller = &mut wrong_result_type.functions[1];
+        caller.ret_tys[0] = EvoIRType::Bits(64);
+        let Inst::Call { results, .. } = &mut caller.blocks[0].insts[1] else {
+            panic!("fixture call");
+        };
+        results[0].ty = EvoIRType::Bits(64);
+        let Inst::Ret(returned) = &mut caller.blocks[0].terminator else {
+            panic!("fixture return");
+        };
+        returned[0].ty = EvoIRType::Bits(64);
+        assert!(validate_module(&wrong_result_type)
+            .expect_err("ordinary result type must fail")
+            .contains("result 0"));
+
+        let mut missing_effect_interface = module.clone();
+        let callee = &mut missing_effect_interface.functions[0];
+        callee.params.truncate(1);
+        callee.ret_tys.truncate(1);
+        callee.blocks[0].args.truncate(1);
+        let Inst::Ret(returned) = &mut callee.blocks[0].terminator else {
+            panic!("fixture return");
+        };
+        returned.truncate(1);
+        assert!(validate_module(&missing_effect_interface)
+            .expect_err("callee effect interface must be explicit")
+            .contains("lacks trailing mem<R>, world"));
+
+        let mut reordered_caller_parameters = module.clone();
+        let caller = &mut reordered_caller_parameters.functions[1];
+        caller.params.swap(0, 1);
+        caller.blocks[0].args.swap(0, 1);
+        validate_ssa(caller).expect("reordered caller remains function-local SSA valid");
+        assert!(validate_module(&reordered_caller_parameters)
+            .expect_err("a call-bearing caller must have canonical trailing parameters")
+            .contains("function 'main' must end parameters with mem<R>, world"));
+
+        let mut reordered_caller_returns = module.clone();
+        let caller = &mut reordered_caller_returns.functions[1];
+        caller.ret_tys.swap(1, 2);
+        let Inst::Ret(returned) = &mut caller.blocks[0].terminator else {
+            panic!("fixture return");
+        };
+        returned.swap(1, 2);
+        validate_ssa(caller).expect("reordered caller remains function-local SSA valid");
+        assert!(validate_module(&reordered_caller_returns)
+            .expect_err("a call-bearing caller must have canonical trailing returns")
+            .contains("function 'main' must end returns with mem<All>, world"));
+
+        let mut wrong_region = module;
+        let callee = &mut wrong_region.functions[0];
+        callee.params[1].ty = EvoIRType::Mem(Region::Stack);
+        callee.ret_tys[1] = EvoIRType::Mem(Region::Stack);
+        callee.blocks[0].args[1].value.ty = EvoIRType::Mem(Region::Stack);
+        let Inst::Ret(returned) = &mut callee.blocks[0].terminator else {
+            panic!("fixture return");
+        };
+        returned[1].ty = EvoIRType::Mem(Region::Stack);
+        assert!(validate_module(&wrong_region)
+            .expect_err("memory region mismatch must fail")
+            .contains("memory token"));
+    }
+
+    #[test]
+    fn module_interpreter_executes_calls_and_preserves_tokens() {
+        let outcome = interpret_module(
+            &direct_call_module(),
+            "main",
+            &[
+                RuntimeValue::new(EvoIRType::Mem(Region::All), 17),
+                RuntimeValue::new(EvoIRType::World, 19),
+            ],
+            InterpreterLimits::new(4),
+        )
+        .expect("direct call execution");
+        assert_eq!(
+            outcome.return_values,
+            vec![
+                RuntimeValue::bits(32, 41),
+                RuntimeValue::new(EvoIRType::Mem(Region::All), 17),
+                RuntimeValue::new(EvoIRType::World, 19),
+            ]
+        );
+        assert_eq!(outcome.steps, 4);
+    }
+
+    #[test]
+    fn module_interpreter_recurses_with_one_shared_step_budget() {
+        let module = recursive_countdown_module();
+        validate_module(&module).expect("recursive module validates");
+        let arguments = [
+            RuntimeValue::new(EvoIRType::Mem(Region::All), 23),
+            RuntimeValue::new(EvoIRType::World, 29),
+        ];
+        let outcome = interpret_module(&module, "main", &arguments, InterpreterLimits::new(28))
+            .expect("recursive execution uses explicit frames");
+        assert_eq!(outcome.return_values[0], RuntimeValue::bits(32, 0));
+        assert_eq!(outcome.steps, 28);
+        assert!(matches!(
+            interpret_module(&module, "main", &arguments, InterpreterLimits::new(27)),
+            Err(InterpreterError::StepBudgetExceeded {
+                budget: 27,
+                steps: 27,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn signed_definedness_and_ub_assume_have_typed_runtime_semantics() {
+        let ten = bits(0, 8);
+        let one = bits(1, 8);
+        let add_ok = bits(2, 1);
+        let sum = bits(3, 8);
+        let function = Function {
+            name: "defined_add".to_owned(),
+            params: vec![],
+            ret_tys: vec![EvoIRType::Bits(8)],
+            blocks: vec![Block {
+                id: 0,
+                args: vec![],
+                insts: vec![
+                    Inst::Const(ten.clone(), 10),
+                    Inst::Const(one.clone(), 1),
+                    Inst::SignedAddDefined(add_ok.clone(), ten.clone(), one.clone()),
+                    Inst::UbAssume(add_ok, UbReason::SignedOverflow),
+                    Inst::Add(sum.clone(), ten, one),
+                ],
+                terminator: Inst::Ret(vec![sum]),
+            }],
+        };
+        let outcome = eval_function(&function, &[], InterpreterLimits::new(6))
+            .expect("defined signed addition");
+        assert_eq!(outcome.return_values, vec![RuntimeValue::bits(8, 11)]);
+
+        let mut wrong_predicate_type = function.clone();
+        let Inst::SignedAddDefined(result, ..) = &mut wrong_predicate_type.blocks[0].insts[2]
+        else {
+            panic!("fixture definedness predicate");
+        };
+        result.ty = EvoIRType::Bits(2);
+        let Inst::UbAssume(condition, _) = &mut wrong_predicate_type.blocks[0].insts[3] else {
+            panic!("fixture ub.assume");
+        };
+        condition.ty = EvoIRType::Bits(2);
+        assert!(validate_ssa(&wrong_predicate_type)
+            .expect_err("definedness result must be bits<1>")
+            .contains("signed-definedness result"));
+
+        let mut wrong_operand_type = function.clone();
+        let Inst::Const(right, _) = &mut wrong_operand_type.blocks[0].insts[1] else {
+            panic!("fixture constant");
+        };
+        right.ty = EvoIRType::Bits(16);
+        let Inst::SignedAddDefined(_, _, right) = &mut wrong_operand_type.blocks[0].insts[2] else {
+            panic!("fixture definedness predicate");
+        };
+        right.ty = EvoIRType::Bits(16);
+        assert!(validate_ssa(&wrong_operand_type)
+            .expect_err("definedness operands must have equal width")
+            .contains("different types"));
+
+        let mut wrong_assumption_type = function.clone();
+        let Inst::Const(condition, _) = &wrong_assumption_type.blocks[0].insts[0] else {
+            panic!("fixture constant");
+        };
+        wrong_assumption_type.blocks[0].insts[3] =
+            Inst::UbAssume(condition.clone(), UbReason::SignedOverflow);
+        assert!(validate_ssa(&wrong_assumption_type)
+            .expect_err("ub.assume condition must be bits<1>")
+            .contains("ub.assume"));
+
+        let max = bits(10, 8);
+        let one = bits(11, 8);
+        let add_ok = bits(12, 1);
+        let overflow = Function {
+            name: "overflow".to_owned(),
+            params: vec![],
+            ret_tys: vec![],
+            blocks: vec![Block {
+                id: 0,
+                args: vec![],
+                insts: vec![
+                    Inst::Const(max.clone(), 0x7f),
+                    Inst::Const(one.clone(), 1),
+                    Inst::SignedAddDefined(add_ok.clone(), max, one),
+                    Inst::UbAssume(add_ok, UbReason::SignedOverflow),
+                ],
+                terminator: Inst::Ret(vec![]),
+            }],
+        };
+        assert!(matches!(
+            eval_function(&overflow, &[], InterpreterLimits::new(5)),
+            Err(InterpreterError::UndefinedBehavior {
+                diagnostic: "E3004",
+                ..
+            })
+        ));
+
+        let left = bits(20, 8);
+        let right = bits(21, 8);
+        let sub_ok = bits(22, 1);
+        let mul_ok = bits(23, 1);
+        let predicates = Function {
+            name: "predicates".to_owned(),
+            params: vec![],
+            ret_tys: vec![EvoIRType::Bits(1), EvoIRType::Bits(1)],
+            blocks: vec![Block {
+                id: 0,
+                args: vec![],
+                insts: vec![
+                    Inst::Const(left.clone(), 0x80),
+                    Inst::Const(right.clone(), 2),
+                    Inst::SignedSubDefined(sub_ok.clone(), left.clone(), right.clone()),
+                    Inst::SignedMulDefined(mul_ok.clone(), left, right),
+                ],
+                terminator: Inst::Ret(vec![sub_ok, mul_ok]),
+            }],
+        };
+        let outcome = eval_function(&predicates, &[], InterpreterLimits::new(5))
+            .expect("definedness predicates execute");
+        assert_eq!(
+            outcome.return_values,
+            vec![RuntimeValue::bits(1, 0), RuntimeValue::bits(1, 0)]
+        );
+    }
+
+    #[test]
+    fn extended_integer_ops_and_separated_ub_predicates_execute() {
+        let neg_seven = bits(0, 8);
+        let three = bits(1, 8);
+        let seven = bits(2, 8);
+        let two = bits(3, 8);
+        let neg_four = bits(4, 8);
+        let five = bits(5, 8);
+        let wide_invalid_count = bits(6, 16);
+        let srem = bits(7, 8);
+        let urem = bits(8, 8);
+        let shl = bits(9, 8);
+        let ashr = bits(10, 8);
+        let lshr = bits(11, 8);
+        let and = bits(12, 8);
+        let or = bits(13, 8);
+        let xor = bits(14, 8);
+        let invalid_shl = bits(15, 8);
+        let operations = Function {
+            name: "extended_integer_ops".to_owned(),
+            params: vec![],
+            ret_tys: vec![EvoIRType::Bits(8); 9],
+            blocks: vec![Block {
+                id: 0,
+                args: vec![],
+                insts: vec![
+                    Inst::Const(neg_seven.clone(), 0xf9),
+                    Inst::Const(three.clone(), 3),
+                    Inst::Const(seven.clone(), 7),
+                    Inst::Const(two.clone(), 2),
+                    Inst::Const(neg_four.clone(), 0xfc),
+                    Inst::Const(five.clone(), 5),
+                    Inst::Const(wide_invalid_count.clone(), 256),
+                    Inst::SRem(srem.clone(), neg_seven, three.clone()),
+                    Inst::URem(urem.clone(), seven, three.clone()),
+                    Inst::Shl(shl.clone(), three.clone(), two.clone()),
+                    Inst::AShr(ashr.clone(), neg_four.clone(), two.clone()),
+                    Inst::LShr(lshr.clone(), neg_four, two),
+                    Inst::And(and.clone(), five.clone(), three.clone()),
+                    Inst::Or(or.clone(), five.clone(), three.clone()),
+                    Inst::Xor(xor.clone(), five, three),
+                    Inst::Shl(invalid_shl.clone(), shl.clone(), wide_invalid_count),
+                ],
+                terminator: Inst::Ret(vec![srem, urem, shl, ashr, lshr, and, or, xor, invalid_shl]),
+            }],
+        };
+        let outcome = eval_function(&operations, &[], InterpreterLimits::new(17))
+            .expect("extended integer operations execute");
+        assert_eq!(
+            outcome.return_values,
+            vec![
+                RuntimeValue::bits(8, 0xff),
+                RuntimeValue::bits(8, 1),
+                RuntimeValue::bits(8, 12),
+                RuntimeValue::bits(8, 0xff),
+                RuntimeValue::bits(8, 0x3f),
+                RuntimeValue::bits(8, 1),
+                RuntimeValue::bits(8, 7),
+                RuntimeValue::bits(8, 6),
+                RuntimeValue::bits(8, 0),
+            ]
+        );
+
+        let zero = bits(20, 8);
+        let one = bits(21, 8);
+        let minimum = bits(22, 8);
+        let minus_one = bits(23, 8);
+        let minus_one_count = bits(24, 8);
+        let width_count = bits(25, 8);
+        let six = bits(26, 8);
+        let seven = bits(27, 8);
+        let predicates: Vec<Value> = (30..=40).map(|id| bits(id, 1)).collect();
+        let predicate_function = Function {
+            name: "separated_predicates".to_owned(),
+            params: vec![],
+            ret_tys: vec![EvoIRType::Bits(1); predicates.len()],
+            blocks: vec![Block {
+                id: 0,
+                args: vec![],
+                insts: vec![
+                    Inst::Const(zero.clone(), 0),
+                    Inst::Const(one.clone(), 1),
+                    Inst::Const(minimum.clone(), 0x80),
+                    Inst::Const(minus_one.clone(), 0xff),
+                    Inst::Const(minus_one_count.clone(), 0xff),
+                    Inst::Const(width_count.clone(), 8),
+                    Inst::Const(six.clone(), 6),
+                    Inst::Const(seven.clone(), 7),
+                    Inst::DivisorNonZero(predicates[0].clone(), zero),
+                    Inst::DivisorNonZero(predicates[1].clone(), one.clone()),
+                    Inst::SignedDivRemNoOverflow(
+                        predicates[2].clone(),
+                        minimum.clone(),
+                        minus_one.clone(),
+                    ),
+                    Inst::SignedDivRemNoOverflow(predicates[3].clone(), minimum, one.clone()),
+                    Inst::ShiftCountDefined {
+                        result: predicates[4].clone(),
+                        shifted: one.clone(),
+                        amount: minus_one_count,
+                        amount_signed: true,
+                    },
+                    Inst::ShiftCountDefined {
+                        result: predicates[5].clone(),
+                        shifted: one.clone(),
+                        amount: width_count.clone(),
+                        amount_signed: false,
+                    },
+                    Inst::ShiftCountDefined {
+                        result: predicates[6].clone(),
+                        shifted: one.clone(),
+                        amount: six.clone(),
+                        amount_signed: true,
+                    },
+                    Inst::SignedShlDefined {
+                        result: predicates[7].clone(),
+                        shifted: minus_one,
+                        amount: one.clone(),
+                        amount_signed: true,
+                    },
+                    Inst::SignedShlDefined {
+                        result: predicates[8].clone(),
+                        shifted: one.clone(),
+                        amount: seven,
+                        amount_signed: true,
+                    },
+                    Inst::SignedShlDefined {
+                        result: predicates[9].clone(),
+                        shifted: one.clone(),
+                        amount: six,
+                        amount_signed: true,
+                    },
+                    Inst::SignedShlDefined {
+                        result: predicates[10].clone(),
+                        shifted: one,
+                        amount: width_count,
+                        amount_signed: true,
+                    },
+                ],
+                terminator: Inst::Ret(predicates.clone()),
+            }],
+        };
+        let outcome = eval_function(&predicate_function, &[], InterpreterLimits::new(20))
+            .expect("separated UB predicates execute without host panics");
+        assert_eq!(
+            outcome.return_values,
+            [false, true, false, true, false, false, true, false, false, true, false]
+                .into_iter()
+                .map(|value| RuntimeValue::bits(1, u64::from(value)))
+                .collect::<Vec<_>>()
+        );
+
+        let mut mixed_shift_width = predicate_function;
+        let Inst::Const(amount, _) = &mut mixed_shift_width.blocks[0].insts[4] else {
+            panic!("fixture shift amount");
+        };
+        amount.ty = EvoIRType::Bits(16);
+        let Inst::ShiftCountDefined { amount, .. } = &mut mixed_shift_width.blocks[0].insts[12]
+        else {
+            panic!("fixture shift predicate");
+        };
+        amount.ty = EvoIRType::Bits(16);
+        validate_ssa(&mixed_shift_width)
+            .expect("shifted value and promoted amount may have different widths");
+
+        let shifted = bits(50, 64);
+        let negative_narrow_count = bits(51, 1);
+        let sixty_two = bits(52, 8);
+        let sixty_three = bits(53, 8);
+        let mixed_predicates: Vec<Value> = (54..=58).map(|id| bits(id, 1)).collect();
+        let shifted_result = bits(59, 64);
+        let mixed_width_shifts = Function {
+            name: "mixed_width_shifts".to_owned(),
+            params: vec![],
+            ret_tys: vec![
+                EvoIRType::Bits(64),
+                EvoIRType::Bits(1),
+                EvoIRType::Bits(1),
+                EvoIRType::Bits(1),
+                EvoIRType::Bits(1),
+                EvoIRType::Bits(1),
+            ],
+            blocks: vec![Block {
+                id: 0,
+                args: vec![],
+                insts: vec![
+                    Inst::Const(shifted.clone(), 1),
+                    Inst::Const(negative_narrow_count.clone(), 1),
+                    Inst::Const(sixty_two.clone(), 62),
+                    Inst::Const(sixty_three.clone(), 63),
+                    Inst::ShiftCountDefined {
+                        result: mixed_predicates[0].clone(),
+                        shifted: shifted.clone(),
+                        amount: negative_narrow_count.clone(),
+                        amount_signed: true,
+                    },
+                    Inst::ShiftCountDefined {
+                        result: mixed_predicates[1].clone(),
+                        shifted: shifted.clone(),
+                        amount: sixty_three.clone(),
+                        amount_signed: false,
+                    },
+                    Inst::SignedShlDefined {
+                        result: mixed_predicates[2].clone(),
+                        shifted: shifted.clone(),
+                        amount: negative_narrow_count,
+                        amount_signed: true,
+                    },
+                    Inst::SignedShlDefined {
+                        result: mixed_predicates[3].clone(),
+                        shifted: shifted.clone(),
+                        amount: sixty_two.clone(),
+                        amount_signed: true,
+                    },
+                    Inst::SignedShlDefined {
+                        result: mixed_predicates[4].clone(),
+                        shifted: shifted.clone(),
+                        amount: sixty_three,
+                        amount_signed: true,
+                    },
+                    Inst::Shl(shifted_result.clone(), shifted, sixty_two),
+                ],
+                terminator: Inst::Ret(
+                    std::iter::once(shifted_result.clone())
+                        .chain(mixed_predicates.iter().cloned())
+                        .collect(),
+                ),
+            }],
+        };
+        let outcome = eval_function(&mixed_width_shifts, &[], InterpreterLimits::new(11))
+            .expect("mixed-width shift predicates and operation execute");
+        assert_eq!(
+            outcome.return_values,
+            vec![
+                RuntimeValue::bits(64, 1_u64 << 62),
+                RuntimeValue::bits(1, 0),
+                RuntimeValue::bits(1, 1),
+                RuntimeValue::bits(1, 0),
+                RuntimeValue::bits(1, 1),
+                RuntimeValue::bits(1, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn ub_assume_preserves_each_typed_integer_diagnostic() {
+        let zero = bits(0, 8);
+        let division_condition = bits(1, 1);
+        let remainder_condition = bits(2, 1);
+        let minimum = bits(3, 8);
+        let minus_one = bits(4, 8);
+        let overflow_condition = bits(5, 1);
+        let shifted_wide = bits(6, 64);
+        let negative_narrow_count = bits(7, 1);
+        let count_condition = bits(8, 1);
+        let shifted_narrow = bits(9, 8);
+        let seven = bits(10, 8);
+        let signed_shift_condition = bits(11, 1);
+        let cases = vec![
+            (
+                vec![
+                    Inst::Const(zero.clone(), 0),
+                    Inst::DivisorNonZero(division_condition.clone(), zero.clone()),
+                ],
+                division_condition,
+                UbReason::DivisionByZero,
+                "division_by_zero",
+                "E3002",
+                "integer-division-by-zero",
+            ),
+            (
+                vec![
+                    Inst::Const(zero.clone(), 0),
+                    Inst::DivisorNonZero(remainder_condition.clone(), zero),
+                ],
+                remainder_condition,
+                UbReason::RemainderByZero,
+                "remainder_by_zero",
+                "E3003",
+                "integer-remainder-by-zero",
+            ),
+            (
+                vec![
+                    Inst::Const(minimum.clone(), 0x80),
+                    Inst::Const(minus_one.clone(), 0xff),
+                    Inst::SignedDivRemNoOverflow(overflow_condition.clone(), minimum, minus_one),
+                ],
+                overflow_condition,
+                UbReason::SignedOverflow,
+                "signed_overflow",
+                "E3004",
+                "signed-integer-overflow",
+            ),
+            (
+                vec![
+                    Inst::Const(shifted_wide.clone(), 1),
+                    Inst::Const(negative_narrow_count.clone(), 1),
+                    Inst::ShiftCountDefined {
+                        result: count_condition.clone(),
+                        shifted: shifted_wide,
+                        amount: negative_narrow_count,
+                        amount_signed: true,
+                    },
+                ],
+                count_condition,
+                UbReason::InvalidShiftCount,
+                "invalid_shift_count",
+                "E3005",
+                "invalid-shift-count",
+            ),
+            (
+                vec![
+                    Inst::Const(shifted_narrow.clone(), 1),
+                    Inst::Const(seven.clone(), 7),
+                    Inst::SignedShlDefined {
+                        result: signed_shift_condition.clone(),
+                        shifted: shifted_narrow,
+                        amount: seven,
+                        amount_signed: true,
+                    },
+                ],
+                signed_shift_condition,
+                UbReason::InvalidSignedLeftShift,
+                "invalid_signed_left_shift",
+                "E3006",
+                "invalid-signed-left-shift",
+            ),
+        ];
+
+        for (
+            mut instructions,
+            condition,
+            reason,
+            expected_mnemonic,
+            expected_diagnostic,
+            expected_message,
+        ) in cases
+        {
+            assert_eq!(reason.mnemonic(), expected_mnemonic);
+            instructions.push(Inst::UbAssume(condition, reason));
+            let budget = instructions.len() as u64 + 1;
+            let function = Function {
+                name: "typed_ub".to_owned(),
+                params: vec![],
+                ret_tys: vec![],
+                blocks: vec![Block {
+                    id: 0,
+                    args: vec![],
+                    insts: instructions,
+                    terminator: Inst::Ret(vec![]),
+                }],
+            };
+            let error = eval_function(&function, &[], InterpreterLimits::new(budget))
+                .expect_err("a false typed UB obligation must fail");
+            assert_eq!(error.code(), expected_diagnostic);
+            assert_eq!(error.message(), expected_message);
+            let InterpreterError::UndefinedBehavior {
+                block,
+                diagnostic,
+                message,
+            } = error
+            else {
+                panic!("unexpected typed UB failure: {error:?}");
+            };
+            assert_eq!(block, 0);
+            assert_eq!(diagnostic, expected_diagnostic);
+            assert_eq!(message, expected_message);
+        }
+    }
+
+    #[test]
+    fn uninitialized_is_an_ordinary_typed_definition_with_no_operands() {
+        let result = bits(70, 32);
+        let instruction = Inst::Uninitialized(result.clone());
+        assert_eq!(inst_results(&instruction), vec![&result]);
+        assert!(inst_uses(&instruction).is_empty());
+
+        let function = Function {
+            name: "uninitialized_scalar".to_owned(),
+            params: vec![],
+            ret_tys: vec![EvoIRType::Bits(32)],
+            blocks: vec![Block {
+                id: 37,
+                args: vec![],
+                insts: vec![instruction],
+                terminator: Inst::Ret(vec![result]),
+            }],
+        };
+        validate_ssa(&function).expect("ordinary typed uninitialized values are valid SSA");
+
+        let pointer = value(71, EvoIRType::Ptr(AddressSpace::Stack));
+        let pointer_function = Function {
+            name: "uninitialized_pointer".to_owned(),
+            params: vec![],
+            ret_tys: vec![],
+            blocks: vec![Block {
+                id: 0,
+                args: vec![],
+                insts: vec![Inst::Uninitialized(pointer)],
+                terminator: Inst::Ret(vec![]),
+            }],
+        };
+        validate_ssa(&pointer_function)
+            .expect("an ordinary pointer is a supported uninitialized value type");
+
+        for forbidden in [
+            EvoIRType::Mem(Region::Stack),
+            EvoIRType::World,
+            EvoIRType::Tuple(vec![
+                EvoIRType::Bits(32),
+                EvoIRType::Tuple(vec![EvoIRType::Mem(Region::Heap)]),
+            ]),
+        ] {
+            let invalid = Function {
+                name: "uninitialized_effect_token".to_owned(),
+                params: vec![],
+                ret_tys: vec![],
+                blocks: vec![Block {
+                    id: 0,
+                    args: vec![],
+                    insts: vec![Inst::Uninitialized(value(80, forbidden))],
+                    terminator: Inst::Ret(vec![]),
+                }],
+            };
+            let error = validate_ssa(&invalid)
+                .expect_err("effect tokens cannot masquerade as uninitialized ordinary data");
+            assert!(
+                error.contains("uninitialized result")
+                    && error.contains("memory/world effect token"),
+                "unexpected validator error: {error}"
+            );
+        }
+
+        let invalid_void = Function {
+            name: "uninitialized_void".to_owned(),
+            params: vec![],
+            ret_tys: vec![],
+            blocks: vec![Block {
+                id: 0,
+                args: vec![],
+                insts: vec![Inst::Uninitialized(value(90, EvoIRType::Void))],
+                terminator: Inst::Ret(vec![]),
+            }],
+        };
+        reject(&invalid_void, "void is not an SSA value type");
+    }
+
+    #[test]
+    fn uninitialized_propagates_across_block_arguments_without_being_read() {
+        let poison = bits(100, 32);
+        let carried = bits(101, 32);
+        let replacement = bits(102, 32);
+        let function = Function {
+            name: "propagate_uninitialized".to_owned(),
+            params: vec![],
+            ret_tys: vec![EvoIRType::Bits(32)],
+            blocks: vec![
+                Block {
+                    id: 0,
+                    args: vec![],
+                    insts: vec![Inst::Uninitialized(poison.clone())],
+                    terminator: Inst::Br(1, vec![poison]),
+                },
+                Block {
+                    id: 1,
+                    args: vec![argument("carried", carried)],
+                    insts: vec![Inst::Const(replacement.clone(), 7)],
+                    terminator: Inst::Ret(vec![replacement]),
+                },
+            ],
+        };
+
+        let outcome = interpret_function(&function, &[], InterpreterLimits::new(4))
+            .expect("copying poison through a block argument is not a semantic read");
+        assert_eq!(outcome.return_values, vec![RuntimeValue::bits(32, 7)]);
+        assert_eq!(outcome.steps, 4);
+
+        let module_outcome = interpret_module(
+            &Module {
+                functions: vec![function.clone()],
+            },
+            "propagate_uninitialized",
+            &[],
+            InterpreterLimits::new(4),
+        )
+        .expect("module block-argument transfer preserves poison without reading it");
+        assert_eq!(
+            module_outcome.return_values,
+            vec![RuntimeValue::bits(32, 7)]
+        );
+        assert_eq!(module_outcome.steps, 4);
+
+        let mut consumed = function;
+        consumed.name = "consume_propagated_uninitialized".to_owned();
+        let carried = consumed.blocks[1].args[0].value.clone();
+        consumed.blocks[1].terminator = Inst::Ret(vec![carried]);
+        assert_eq!(
+            interpret_function(&consumed, &[], InterpreterLimits::new(4)),
+            Err(InterpreterError::UninitializedRead { block: 1 })
+        );
+        assert_eq!(
+            interpret_module(
+                &Module {
+                    functions: vec![consumed],
+                },
+                "consume_propagated_uninitialized",
+                &[],
+                InterpreterLimits::new(4),
+            ),
+            Err(InterpreterError::UninitializedRead { block: 1 })
+        );
+    }
+
+    #[test]
+    fn loop_carried_uninitialized_value_can_be_definitely_assigned_before_read() {
+        let initial_x = bits(110, 32);
+        let initial_i = bits(111, 32);
+        let header_x = bits(112, 32);
+        let header_i = bits(113, 32);
+        let limit = bits(114, 32);
+        let condition = bits(115, 1);
+        let body_x = bits(116, 32);
+        let body_i = bits(117, 32);
+        let assigned_x = bits(118, 32);
+        let one = bits(119, 32);
+        let next_i = bits(120, 32);
+        let exit_x = bits(121, 32);
+        let function = Function {
+            name: "definite_assignment_loop".to_owned(),
+            params: vec![],
+            ret_tys: vec![EvoIRType::Bits(32)],
+            blocks: vec![
+                Block {
+                    id: 0,
+                    args: vec![],
+                    insts: vec![
+                        Inst::Uninitialized(initial_x.clone()),
+                        Inst::Const(initial_i.clone(), 0),
+                    ],
+                    terminator: Inst::Br(1, vec![initial_x, initial_i]),
+                },
+                Block {
+                    id: 1,
+                    args: vec![
+                        argument("x", header_x.clone()),
+                        argument("i", header_i.clone()),
+                    ],
+                    insts: vec![
+                        Inst::Const(limit.clone(), 1),
+                        Inst::ICmp(condition.clone(), CmpOp::ULt, header_i.clone(), limit),
+                    ],
+                    terminator: Inst::CondBr(
+                        condition,
+                        2,
+                        vec![header_x.clone(), header_i],
+                        3,
+                        vec![header_x],
+                    ),
+                },
+                Block {
+                    id: 2,
+                    args: vec![argument("x", body_x), argument("i", body_i.clone())],
+                    insts: vec![
+                        Inst::Const(assigned_x.clone(), 7),
+                        Inst::Const(one.clone(), 1),
+                        Inst::Add(next_i.clone(), body_i, one),
+                    ],
+                    terminator: Inst::Br(1, vec![assigned_x, next_i]),
+                },
+                Block {
+                    id: 3,
+                    args: vec![argument("x", exit_x.clone())],
+                    insts: vec![],
+                    terminator: Inst::Ret(vec![exit_x]),
+                },
+            ],
+        };
+
+        let outcome = interpret_function(&function, &[], InterpreterLimits::new(14))
+            .expect("the loop assigns x before the only semantic read at return");
+        assert_eq!(outcome.return_values, vec![RuntimeValue::bits(32, 7)]);
+        assert_eq!(outcome.steps, 14);
+
+        let module_outcome = interpret_module(
+            &Module {
+                functions: vec![function],
+            },
+            "definite_assignment_loop",
+            &[],
+            InterpreterLimits::new(14),
+        )
+        .expect("module loop execution overwrites poison before the return read");
+        assert_eq!(
+            module_outcome.return_values,
+            vec![RuntimeValue::bits(32, 7)]
+        );
+        assert_eq!(module_outcome.steps, 14);
+    }
+
+    #[test]
+    fn uninitialized_return_traps_with_e3001_in_function_and_module_interpreters() {
+        let result = bits(100, 32);
+        let function = Function {
+            name: "uninitialized_read".to_owned(),
+            params: vec![],
+            ret_tys: vec![EvoIRType::Bits(32)],
+            blocks: vec![Block {
+                id: 37,
+                args: vec![],
+                insts: vec![Inst::Uninitialized(result.clone())],
+                terminator: Inst::Ret(vec![result]),
+            }],
+        };
+
+        assert!(matches!(
+            interpret_function(&function, &[], InterpreterLimits::new(1)),
+            Err(InterpreterError::StepBudgetExceeded {
+                budget: 1,
+                steps: 1,
+                block: 37,
+            })
+        ));
+        let function_error = interpret_function(&function, &[], InterpreterLimits::new(2))
+            .expect_err("returning an uninitialized ordinary result is a semantic read");
+        assert_eq!(
+            function_error,
+            InterpreterError::UninitializedRead { block: 37 }
+        );
+        assert_eq!(function_error.code(), "E3001");
+        assert_eq!(function_error.message(), "read-of-uninitialized-object");
+
+        let module = Module {
+            functions: vec![function],
+        };
+        assert!(matches!(
+            interpret_module(
+                &module,
+                "uninitialized_read",
+                &[],
+                InterpreterLimits::new(1),
+            ),
+            Err(InterpreterError::StepBudgetExceeded {
+                budget: 1,
+                steps: 1,
+                block: 37,
+            })
+        ));
+        let module_error = interpret_module(
+            &module,
+            "uninitialized_read",
+            &[],
+            InterpreterLimits::new(2),
+        )
+        .expect_err("module execution must preserve the typed uninitialized-read trap");
+        assert_eq!(
+            module_error,
+            InterpreterError::UninitializedRead { block: 37 }
+        );
+        assert_eq!(module_error.code(), "E3001");
+        assert_eq!(module_error.message(), "read-of-uninitialized-object");
+    }
+
+    #[test]
+    fn arithmetic_comparison_cast_condition_and_call_consume_uninitialized_values() {
+        let poison = bits(130, 32);
+        let one = bits(131, 32);
+        let arithmetic_result = bits(132, 32);
+        let comparison_result = bits(133, 1);
+        let cast_result = bits(134, 64);
+        let zext_source = bits(135, 8);
+        let zext_result = bits(136, 32);
+        let trunc_source = bits(137, 32);
+        let trunc_result = bits(138, 8);
+        let shifted_poison = bits(139, 32);
+        let shift_amount = bits(140, 32);
+        let shift_predicate = bits(141, 1);
+        let cases = vec![
+            (
+                Function {
+                    name: "uninitialized_arithmetic".to_owned(),
+                    params: vec![],
+                    ret_tys: vec![EvoIRType::Bits(32)],
+                    blocks: vec![Block {
+                        id: 0,
+                        args: vec![],
+                        insts: vec![
+                            Inst::Uninitialized(poison.clone()),
+                            Inst::Const(one.clone(), 1),
+                            Inst::Add(arithmetic_result.clone(), poison.clone(), one.clone()),
+                        ],
+                        terminator: Inst::Ret(vec![arithmetic_result]),
+                    }],
+                },
+                3,
+            ),
+            (
+                Function {
+                    name: "uninitialized_comparison".to_owned(),
+                    params: vec![],
+                    ret_tys: vec![EvoIRType::Bits(1)],
+                    blocks: vec![Block {
+                        id: 0,
+                        args: vec![],
+                        insts: vec![
+                            Inst::Uninitialized(poison.clone()),
+                            Inst::Const(one.clone(), 1),
+                            Inst::ICmp(comparison_result.clone(), CmpOp::Eq, poison.clone(), one),
+                        ],
+                        terminator: Inst::Ret(vec![comparison_result]),
+                    }],
+                },
+                3,
+            ),
+            (
+                Function {
+                    name: "uninitialized_cast".to_owned(),
+                    params: vec![],
+                    ret_tys: vec![EvoIRType::Bits(64)],
+                    blocks: vec![Block {
+                        id: 0,
+                        args: vec![],
+                        insts: vec![
+                            Inst::Uninitialized(poison.clone()),
+                            Inst::SExt(cast_result.clone(), poison, EvoIRType::Bits(64)),
+                        ],
+                        terminator: Inst::Ret(vec![cast_result]),
+                    }],
+                },
+                2,
+            ),
+            (
+                Function {
+                    name: "uninitialized_zero_extend".to_owned(),
+                    params: vec![],
+                    ret_tys: vec![EvoIRType::Bits(32)],
+                    blocks: vec![Block {
+                        id: 0,
+                        args: vec![],
+                        insts: vec![
+                            Inst::Uninitialized(zext_source.clone()),
+                            Inst::ZExt(zext_result.clone(), zext_source, EvoIRType::Bits(32)),
+                        ],
+                        terminator: Inst::Ret(vec![zext_result]),
+                    }],
+                },
+                2,
+            ),
+            (
+                Function {
+                    name: "uninitialized_truncate".to_owned(),
+                    params: vec![],
+                    ret_tys: vec![EvoIRType::Bits(8)],
+                    blocks: vec![Block {
+                        id: 0,
+                        args: vec![],
+                        insts: vec![
+                            Inst::Uninitialized(trunc_source.clone()),
+                            Inst::Trunc(trunc_result.clone(), trunc_source, EvoIRType::Bits(8)),
+                        ],
+                        terminator: Inst::Ret(vec![trunc_result]),
+                    }],
+                },
+                2,
+            ),
+            (
+                Function {
+                    name: "uninitialized_shifted_predicate_operand".to_owned(),
+                    params: vec![],
+                    ret_tys: vec![EvoIRType::Bits(1)],
+                    blocks: vec![Block {
+                        id: 0,
+                        args: vec![],
+                        insts: vec![
+                            Inst::Uninitialized(shifted_poison.clone()),
+                            Inst::Const(shift_amount.clone(), 1),
+                            Inst::ShiftCountDefined {
+                                result: shift_predicate.clone(),
+                                shifted: shifted_poison,
+                                amount: shift_amount,
+                                amount_signed: false,
+                            },
+                        ],
+                        terminator: Inst::Ret(vec![shift_predicate]),
+                    }],
+                },
+                3,
+            ),
+        ];
+        for (function, consumer_step) in &cases {
+            assert!(matches!(
+                interpret_function(function, &[], InterpreterLimits::new(consumer_step - 1),),
+                Err(InterpreterError::StepBudgetExceeded { .. })
+            ));
+            let error = interpret_function(function, &[], InterpreterLimits::new(*consumer_step))
+                .expect_err("semantic instruction operands must reject uninitialized values");
+            assert_eq!(error, InterpreterError::UninitializedRead { block: 0 });
+            assert_eq!(error.code(), "E3001");
+            assert_eq!(error.message(), "read-of-uninitialized-object");
+        }
+
+        let poison_condition = bits(150, 1);
+        let condition_function = Function {
+            name: "uninitialized_condition".to_owned(),
+            params: vec![],
+            ret_tys: vec![],
+            blocks: vec![
+                Block {
+                    id: 0,
+                    args: vec![],
+                    insts: vec![Inst::Uninitialized(poison_condition.clone())],
+                    terminator: Inst::CondBr(poison_condition, 1, vec![], 2, vec![]),
+                },
+                Block {
+                    id: 1,
+                    args: vec![],
+                    insts: vec![],
+                    terminator: Inst::Ret(vec![]),
+                },
+                Block {
+                    id: 2,
+                    args: vec![],
+                    insts: vec![],
+                    terminator: Inst::Ret(vec![]),
+                },
+            ],
+        };
+        assert!(matches!(
+            interpret_function(&condition_function, &[], InterpreterLimits::new(1)),
+            Err(InterpreterError::StepBudgetExceeded { .. })
+        ));
+        assert_eq!(
+            interpret_function(&condition_function, &[], InterpreterLimits::new(2)),
+            Err(InterpreterError::UninitializedRead { block: 0 })
+        );
+
+        let mut call_module = direct_call_module();
+        let main = call_module
+            .functions
+            .iter_mut()
+            .find(|function| function.name == "main")
+            .expect("fixture main");
+        let argument = match &main.blocks[0].insts[0] {
+            Inst::Const(argument, _) => argument.clone(),
+            _ => panic!("fixture ordinary call argument"),
+        };
+        main.blocks[0].insts[0] = Inst::Uninitialized(argument);
+        let entry_args = [
+            RuntimeValue::new(EvoIRType::Mem(Region::All), 10),
+            RuntimeValue::new(EvoIRType::World, 20),
+        ];
+        assert!(matches!(
+            interpret_module(&call_module, "main", &entry_args, InterpreterLimits::new(1),),
+            Err(InterpreterError::StepBudgetExceeded { .. })
+        ));
+        let error = interpret_module(&call_module, "main", &entry_args, InterpreterLimits::new(2))
+            .expect_err("an ordinary call argument semantically consumes its value");
+        assert_eq!(error, InterpreterError::UninitializedRead { block: 0 });
+        assert_eq!(error.code(), "E3001");
+        assert_eq!(error.message(), "read-of-uninitialized-object");
+
+        let mut callee_return_module = direct_call_module();
+        let callee = callee_return_module
+            .functions
+            .iter_mut()
+            .find(|function| function.name == "identity")
+            .expect("fixture callee");
+        let poison_result = bits(6, 32);
+        let memory = callee.blocks[0].args[1].value.clone();
+        let world = callee.blocks[0].args[2].value.clone();
+        callee.blocks[0].id = 9;
+        callee.blocks[0].insts = vec![Inst::Uninitialized(poison_result.clone())];
+        callee.blocks[0].terminator = Inst::Ret(vec![poison_result, memory, world]);
+        assert!(matches!(
+            interpret_module(
+                &callee_return_module,
+                "main",
+                &entry_args,
+                InterpreterLimits::new(3),
+            ),
+            Err(InterpreterError::StepBudgetExceeded { .. })
+        ));
+        let error = interpret_module(
+            &callee_return_module,
+            "main",
+            &entry_args,
+            InterpreterLimits::new(4),
+        )
+        .expect_err("callee ordinary returns consume poison before caller binding");
+        assert_eq!(error, InterpreterError::UninitializedRead { block: 9 });
+        assert_eq!(error.code(), "E3001");
+        assert_eq!(error.message(), "read-of-uninitialized-object");
+    }
+
+    #[test]
+    fn scalar_fallthrough_trap_is_a_typed_zero_operand_terminator() {
+        let reason = TrapReason::ScalarFunctionFellOffEnd;
+        assert_eq!(reason.diagnostic(), "E3007");
+        assert_eq!(reason.message(), "scalar-function-fell-off-end");
+
+        let trap = Inst::Trap(reason);
+        assert!(inst_results(&trap).is_empty());
+        assert!(inst_uses(&trap).is_empty());
+        assert!(is_terminator(&trap));
+
+        let function = Function {
+            name: "fallthrough".to_owned(),
+            params: vec![],
+            ret_tys: vec![EvoIRType::Bits(32)],
+            blocks: vec![Block {
+                id: 7,
+                args: vec![],
+                insts: vec![],
+                terminator: trap.clone(),
+            }],
+        };
+        validate_ssa(&function).expect("a typed trap is a valid CFG sink without a fake return");
+
+        let mut misplaced = function;
+        misplaced.blocks[0].insts.push(trap);
+        reject(&misplaced, "terminator appears in instruction");
+    }
+
+    #[test]
+    fn scalar_fallthrough_traps_only_on_the_executed_path() {
+        let condition = bits(160, 1);
+        let safe_value = bits(161, 32);
+        let returned = bits(162, 32);
+        let function = Function {
+            name: "conditional_fallthrough".to_owned(),
+            params: vec![FunctionParam {
+                name: "take_safe_return".to_owned(),
+                ty: EvoIRType::Bits(1),
+            }],
+            ret_tys: vec![EvoIRType::Bits(32)],
+            blocks: vec![
+                Block {
+                    id: 0,
+                    args: vec![argument("take_safe_return", condition.clone())],
+                    insts: vec![Inst::Const(safe_value.clone(), 7)],
+                    terminator: Inst::CondBr(condition, 1, vec![safe_value], 2, vec![]),
+                },
+                Block {
+                    id: 1,
+                    args: vec![argument("returned", returned.clone())],
+                    insts: vec![],
+                    terminator: Inst::Ret(vec![returned]),
+                },
+                Block {
+                    id: 2,
+                    args: vec![],
+                    insts: vec![],
+                    terminator: Inst::Trap(TrapReason::ScalarFunctionFellOffEnd),
+                },
+            ],
+        };
+        validate_ssa(&function).expect("return and fallthrough paths are both well formed");
+
+        let safe = interpret_function(
+            &function,
+            &[RuntimeValue::bits(1, 1)],
+            InterpreterLimits::new(3),
+        )
+        .expect("an unexecuted fallthrough trap must not poison the function");
+        assert_eq!(safe.return_values, vec![RuntimeValue::bits(32, 7)]);
+        assert_eq!(safe.steps, 3);
+
+        let error = interpret_function(
+            &function,
+            &[RuntimeValue::bits(1, 0)],
+            InterpreterLimits::new(3),
+        )
+        .expect_err("executed scalar fallthrough must fail closed");
+        assert_eq!(error, InterpreterError::MissingReturn { block: 2 });
+        assert_eq!(error.code(), "E3007");
+        assert_eq!(error.message(), "scalar-function-fell-off-end");
+
+        let module_error = interpret_module(
+            &Module {
+                functions: vec![function],
+            },
+            "conditional_fallthrough",
+            &[RuntimeValue::bits(1, 0)],
+            InterpreterLimits::new(3),
+        )
+        .expect_err("module execution must preserve the typed missing-return failure");
+        assert_eq!(module_error, InterpreterError::MissingReturn { block: 2 });
+        assert_eq!(module_error.code(), "E3007");
+        assert_eq!(module_error.message(), "scalar-function-fell-off-end");
+    }
+
+    #[test]
+    fn called_scalar_fallthrough_needs_no_placeholder_return_or_effect_tokens() {
+        let mut module = direct_call_module();
+        let callee = module
+            .functions
+            .iter_mut()
+            .find(|function| function.name == "identity")
+            .expect("fixture callee");
+        callee.blocks[0].id = 9;
+        callee.blocks[0].insts.clear();
+        callee.blocks[0].terminator = Inst::Trap(TrapReason::ScalarFunctionFellOffEnd);
+        validate_module(&module)
+            .expect("a trapping callee needs no fabricated ordinary or token return operands");
+
+        let error = interpret_module(
+            &module,
+            "main",
+            &[
+                RuntimeValue::new(EvoIRType::Mem(Region::All), 10),
+                RuntimeValue::new(EvoIRType::World, 20),
+            ],
+            InterpreterLimits::new(3),
+        )
+        .expect_err("the callee fallthrough trap must fire only after the call executes");
+        assert_eq!(error, InterpreterError::MissingReturn { block: 9 });
+        assert_eq!(error.code(), "E3007");
+        assert_eq!(error.message(), "scalar-function-fell-off-end");
     }
 }

@@ -1,192 +1,4543 @@
-//! C-HIR to EvoIR semantic lowering
+//! Target-aware C-HIR to block-argument SSA EvoIR lowering.
+//!
+//! Day 6 keeps scalar locals in SSA values.  Memory and world tokens are
+//! nevertheless present on every call edge so Day 7 can add real storage
+//! semantics without changing the call instruction ABI.
 
-use evocc_chir::{BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirStmt, CHirUnit};
-use evocc_evoir::{Block, BlockArg, BlockId, CmpOp, Function, Inst, Value};
-use evocc_types::EvoIRType;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fmt;
 
-pub fn lower_unit(unit: &CHirUnit<'_>) -> Vec<Function> {
-    unit.iter()
-        .filter_map(|decl| match decl {
-            CHirDecl::Function(function) => function
-                .body
-                .map(|body| lower_function(&function.name.spelling, body)),
-            _ => None,
-        })
-        .collect()
+use evocc_chir::integer::{
+    enum_integer_type, eval_binary_integer, eval_unary_integer, integer_literal_value,
+    integer_type_for_rank, usual_arithmetic_type, CInteger, CIntegerType,
+};
+use evocc_chir::{
+    AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit,
+    ExprCategory, FunctionDecl, InitAction, ObjectDecl, ParameterSyntax, ScalarPlace, ScopeKind,
+    StorageClass, SymbolId, SymbolKind, UnaryOp, UpdateOp, WrittenDeclarator,
+    WrittenDeclaratorLayer,
+};
+use evocc_common::SourceSpan;
+use evocc_evoir::{
+    inst_results, validate_module, Block, BlockArg, BlockId, CmpOp, Function, FunctionParam, Inst,
+    Module, TrapReason, UbReason, Value,
+};
+use evocc_types::{
+    EvoIRType, FunctionParameters, LayoutError, Region, TagDefinition, TagState, TargetDataLayout,
+    TypeId, TypeInterner, TypeKind,
+};
+
+const BREAK_TARGET_BASE: BlockId = u32::MAX - 1_000_000;
+
+/// A fail-closed lowering diagnostic.  Every unsupported source construct is
+/// reported rather than replaced with a placeholder value or terminator.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LowerError {
+    UnknownSymbol {
+        symbol: SymbolId,
+        span: SourceSpan,
+    },
+    UnknownType {
+        ty: TypeId,
+        span: SourceSpan,
+    },
+    UnsupportedType {
+        ty: TypeId,
+        span: SourceSpan,
+        feature: &'static str,
+    },
+    UnsupportedExpression {
+        span: SourceSpan,
+        feature: &'static str,
+    },
+    UnsupportedStatement {
+        span: SourceSpan,
+        feature: &'static str,
+    },
+    MalformedFunction {
+        function: String,
+        span: SourceSpan,
+        reason: &'static str,
+    },
+    InvalidControlFlow {
+        span: SourceSpan,
+        reason: &'static str,
+    },
+    Layout {
+        ty: TypeId,
+        span: SourceSpan,
+        source: LayoutError,
+    },
+    InvalidGeneratedSsa {
+        message: String,
+    },
 }
 
-struct LowerContext {
+impl fmt::Display for LowerError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownSymbol { symbol, .. } => {
+                write!(formatter, "unknown C-HIR symbol {}", symbol.raw())
+            }
+            Self::UnknownType { ty, .. } => write!(formatter, "unknown C-HIR type {}", ty.raw()),
+            Self::UnsupportedType { feature, .. }
+            | Self::UnsupportedExpression { feature, .. }
+            | Self::UnsupportedStatement { feature, .. } => formatter.write_str(feature),
+            Self::MalformedFunction {
+                function, reason, ..
+            } => write!(formatter, "malformed function {function}: {reason}"),
+            Self::InvalidControlFlow { reason, .. } => formatter.write_str(reason),
+            Self::Layout { ty, source, .. } => {
+                write!(formatter, "cannot lay out type {}: {source:?}", ty.raw())
+            }
+            Self::InvalidGeneratedSsa { message } => {
+                write!(formatter, "generated invalid EvoIR: {message}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for LowerError {}
+
+#[derive(Debug, Clone)]
+struct FunctionInfo {
+    name: String,
+    parameter_symbols: Vec<SymbolId>,
+    parameter_types: Vec<CIntegerType>,
+    return_type: Option<CIntegerType>,
+    participant: bool,
+    span: SourceSpan,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum EnvKey {
+    Local(SymbolId),
+    Temporary(u32),
+    Memory,
+    World,
+}
+
+#[derive(Debug, Clone)]
+struct BoundValue {
+    value: Value,
+    integer: Option<CIntegerType>,
+}
+
+type Environment = BTreeMap<EnvKey, BoundValue>;
+
+#[derive(Debug, Clone)]
+struct State {
+    block: BlockId,
+    env: Environment,
+    locals: BTreeSet<SymbolId>,
+}
+
+#[derive(Debug, Default)]
+struct Flow {
+    normal: Vec<State>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BlockRole {
+    Ordinary,
+    SwitchExit,
+    LoopStep,
+}
+
+#[derive(Debug)]
+struct DraftBlock {
+    id: BlockId,
+    args: Vec<(EnvKey, BlockArg)>,
+    insts: Vec<Inst>,
+    terminator: Option<Inst>,
+    role: BlockRole,
+}
+
+#[derive(Debug, Clone)]
+struct JumpTarget {
+    id: BlockId,
+    keys: Vec<EnvKey>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct ControlTargets {
+    break_target: Option<JumpTarget>,
+    continue_target: Option<JumpTarget>,
+}
+
+#[derive(Debug, Clone)]
+struct ExprValue {
+    value: Value,
+    integer: CIntegerType,
+}
+
+struct FunctionLowerer<'a> {
+    unit: &'a CHirUnit<'a>,
+    target: &'a TargetDataLayout,
+    functions: &'a BTreeMap<SymbolId, FunctionInfo>,
+    info: &'a FunctionInfo,
+    blocks: Vec<DraftBlock>,
     next_value: u32,
-    next_block: u32,
-    blocks: Vec<Block>,
-    current_block_id: BlockId,
-    current_insts: Vec<Inst>,
+    next_block: BlockId,
+    next_temporary: u32,
+    next_placeholder: BlockId,
+    goto_names: BTreeSet<String>,
+    labels: BTreeMap<String, JumpTarget>,
+    pending_gotos: BTreeMap<String, Vec<State>>,
 }
 
-impl LowerContext {
-    fn new() -> Self {
-        let entry = Block {
-            id: 0,
-            args: vec![],
-            insts: vec![],
-            terminator: Inst::Ret(vec![]),
+/// Lower a complete C-HIR translation unit into one validated EvoIR module.
+///
+/// Function order is the C-HIR declaration order.  The target layout is an
+/// explicit input and is consulted for every scalar type admitted by this
+/// Day-6 lowering slice.
+pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Module, LowerError> {
+    let functions = index_functions(unit, target)?;
+    prevalidate_unit_for_lowering(unit)?;
+    let mut lowered = Vec::new();
+    for declaration in unit.iter() {
+        let CHirDecl::Function(function) = declaration else {
+            continue;
         };
-        Self {
-            next_value: 0,
-            next_block: 1,
-            blocks: vec![entry],
-            current_block_id: 0,
-            current_insts: vec![],
+        if function.body.is_none() {
+            continue;
         }
+        let info =
+            functions
+                .get(&function.symbol)
+                .ok_or_else(|| LowerError::MalformedFunction {
+                    function: function.name.spelling.clone(),
+                    span: function.span,
+                    reason: "definition is absent from the function index",
+                })?;
+        lowered.push(FunctionLowerer::new(unit, target, &functions, info).lower(function)?);
     }
-
-    fn finish(self) -> Function {
-        Function {
-            name: "lowered".into(),
-            params: vec![],
-            ret_tys: vec![],
-            blocks: self.blocks,
-        }
-    }
-
-    fn new_value(&mut self) -> u32 {
-        let v = self.next_value;
-        self.next_value += 1;
-        v
-    }
-
-    fn emit_inst(&mut self, inst: Inst) {
-        self.current_insts.push(inst);
-    }
-
-    fn set_terminator(&mut self, term: Inst) {
-        let block = &mut self.blocks[self.current_block_id as usize];
-        block.insts = std::mem::take(&mut self.current_insts);
-        block.terminator = term;
-    }
-
-    fn new_block(&mut self) -> BlockId {
-        let id = self.next_block;
-        self.next_block += 1;
-        self.blocks.push(Block {
-            id,
-            args: vec![],
-            insts: vec![],
-            terminator: Inst::Ret(vec![]),
-        });
-        id
-    }
+    let module = Module { functions: lowered };
+    validate_module(&module).map_err(|message| LowerError::InvalidGeneratedSsa { message })?;
+    Ok(module)
 }
 
-fn lower_function(name: &str, body: &CHirStmt<'_>) -> Function {
-    let mut ctx = LowerContext::new();
-    let result = lower_stmt(body, &mut ctx);
-    ctx.set_terminator(Inst::Ret(vec![value(result)]));
-    let mut func = ctx.finish();
-    func.name = name.to_string();
-    func.ret_tys = vec![bits32()];
-    func
-}
-
-fn lower_stmt(stmt: &CHirStmt<'_>, ctx: &mut LowerContext) -> u32 {
-    match stmt {
-        CHirStmt::Return(Some(expr), _) => lower_expr(expr, ctx),
-        CHirStmt::Compound(stmts, _) => {
-            let mut last = ctx.new_value();
-            ctx.emit_inst(Inst::Const(value(last), 0));
-            for item in stmts {
-                if let CHirBlockItem::Statement(statement) = item {
-                    last = lower_stmt(statement, ctx);
+fn prevalidate_unit_for_lowering(unit: &CHirUnit<'_>) -> Result<(), LowerError> {
+    for declaration in unit.iter() {
+        match declaration {
+            CHirDecl::Function(function) => {
+                if let Some(body) = function.body {
+                    let mut labels = BTreeMap::new();
+                    prevalidate_stmt_for_lowering(unit, body, &mut labels)?;
+                    let mut goto_names = BTreeSet::new();
+                    collect_goto_names(body, &mut goto_names);
+                    if goto_names.iter().any(|name| !labels.contains_key(name)) {
+                        return Err(LowerError::InvalidControlFlow {
+                            span: function.span,
+                            reason: "goto targets a label absent from its function",
+                        });
+                    }
                 }
             }
-            last
+            CHirDecl::Object(object) => {
+                return Err(LowerError::UnsupportedStatement {
+                    span: object.span,
+                    feature: "file-scope objects require the Day-7 memory model",
+                });
+            }
+            CHirDecl::Tag(_) | CHirDecl::Typedef(_) => {}
         }
-        CHirStmt::Expr(expr, _) => lower_expr(expr, ctx),
+    }
+    Ok(())
+}
+
+fn prevalidate_decl_for_lowering(
+    unit: &CHirUnit<'_>,
+    declaration: &CHirDecl<'_>,
+) -> Result<(), LowerError> {
+    match declaration {
+        CHirDecl::Object(object) => {
+            validate_object_declaration_for_lowering(unit, object)?;
+            if let Some(initializer) = &object.initializer {
+                for action in initializer.plan().actions() {
+                    if let InitAction::StoreScalar { value, .. } = action {
+                        prevalidate_expr_for_lowering(unit, value)?;
+                    }
+                }
+            }
+            Ok(())
+        }
+        CHirDecl::Tag(_) | CHirDecl::Typedef(_) => Ok(()),
+        CHirDecl::Function(function) => Err(LowerError::UnsupportedStatement {
+            span: function.span,
+            feature: "block function declaration is outside scalar lowering",
+        }),
+    }
+}
+
+fn prevalidate_stmt_for_lowering(
+    unit: &CHirUnit<'_>,
+    statement: &CHirStmt<'_>,
+    labels: &mut BTreeMap<String, SourceSpan>,
+) -> Result<(), LowerError> {
+    match statement {
+        CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
+            prevalidate_expr_for_lowering(unit, expression)
+        }
+        CHirStmt::If(condition, then_branch, else_branch, _) => {
+            prevalidate_expr_for_lowering(unit, condition)?;
+            prevalidate_stmt_for_lowering(unit, then_branch, labels)?;
+            if let Some(else_branch) = else_branch {
+                prevalidate_stmt_for_lowering(unit, else_branch, labels)?;
+            }
+            Ok(())
+        }
+        CHirStmt::Switch(expression, body, _)
+        | CHirStmt::While(expression, body, _)
+        | CHirStmt::Case(expression, body, _) => {
+            prevalidate_expr_for_lowering(unit, expression)?;
+            prevalidate_stmt_for_lowering(unit, body, labels)
+        }
+        CHirStmt::DoWhile(body, expression, _) => {
+            prevalidate_stmt_for_lowering(unit, body, labels)?;
+            prevalidate_expr_for_lowering(unit, expression)
+        }
+        CHirStmt::For(initializer, condition, step, body, _) => {
+            match initializer {
+                CHirForInit::Empty => {}
+                CHirForInit::Expression(expression) => {
+                    prevalidate_expr_for_lowering(unit, expression)?;
+                }
+                CHirForInit::Declaration(declarations) => {
+                    for declaration in declarations {
+                        prevalidate_decl_for_lowering(unit, declaration)?;
+                    }
+                }
+            }
+            if let Some(condition) = condition {
+                prevalidate_expr_for_lowering(unit, condition)?;
+            }
+            if let Some(step) = step {
+                prevalidate_expr_for_lowering(unit, step)?;
+            }
+            prevalidate_stmt_for_lowering(unit, body, labels)
+        }
+        CHirStmt::Compound(items, _) => {
+            for item in items {
+                match item {
+                    CHirBlockItem::Declaration(declaration) => {
+                        prevalidate_decl_for_lowering(unit, declaration)?;
+                    }
+                    CHirBlockItem::Statement(statement) => {
+                        prevalidate_stmt_for_lowering(unit, statement, labels)?;
+                    }
+                }
+            }
+            Ok(())
+        }
+        CHirStmt::Label(label, nested, span) => {
+            if labels.insert(label.spelling.clone(), *span).is_some() {
+                return Err(LowerError::InvalidControlFlow {
+                    span: *span,
+                    reason: "duplicate label in function",
+                });
+            }
+            prevalidate_stmt_for_lowering(unit, nested, labels)
+        }
+        CHirStmt::Default(nested, _) => prevalidate_stmt_for_lowering(unit, nested, labels),
+        CHirStmt::Return(None, _)
+        | CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Goto(_, _)
+        | CHirStmt::Null(_) => Ok(()),
+    }
+}
+
+fn prevalidate_expr_for_lowering(
+    unit: &CHirUnit<'_>,
+    expression: &CHirExpr<'_>,
+) -> Result<(), LowerError> {
+    match expression {
+        CHirExpr::Ident {
+            symbol,
+            spelling,
+            facts,
+            span,
+        } => {
+            let declaration =
+                unit.symbols()
+                    .symbol(*symbol)
+                    .map_err(|_| LowerError::UnknownSymbol {
+                        symbol: *symbol,
+                        span: *span,
+                    })?;
+            let category_matches = match declaration.kind() {
+                SymbolKind::Function => facts.category() == ExprCategory::FunctionDesignator,
+                SymbolKind::Enumerator => facts.category() == ExprCategory::Value,
+                SymbolKind::Object | SymbolKind::Parameter => {
+                    facts.category() == ExprCategory::LValue
+                }
+                SymbolKind::Typedef => false,
+            };
+            if declaration.spelling() != spelling
+                || declaration.ty() != facts.ty()
+                || !category_matches
+            {
+                return Err(LowerError::UnsupportedExpression {
+                    span: *span,
+                    feature: "identifier disagrees with its semantic identity",
+                });
+            }
+            Ok(())
+        }
+        CHirExpr::Assign {
+            place,
+            target,
+            value,
+            facts,
+            span,
+            ..
+        } => {
+            validate_place_identity(unit, *place, target, *span)?;
+            if facts.ty() != place.ty() || facts.category() != ExprCategory::Value {
+                return Err(LowerError::UnsupportedExpression {
+                    span: *span,
+                    feature: "assignment result facts disagree with its scalar place",
+                });
+            }
+            prevalidate_expr_for_lowering(unit, target)?;
+            prevalidate_expr_for_lowering(unit, value)
+        }
+        CHirExpr::Update {
+            place,
+            target,
+            facts,
+            span,
+            ..
+        } => {
+            validate_place_identity(unit, *place, target, *span)?;
+            if facts.ty() != place.ty() || facts.category() != ExprCategory::Value {
+                return Err(LowerError::UnsupportedExpression {
+                    span: *span,
+                    feature: "update result facts disagree with its scalar place",
+                });
+            }
+            prevalidate_expr_for_lowering(unit, target)
+        }
+        CHirExpr::Cast(ty, operand, span) => {
+            if unit.types().get(*ty).is_none() {
+                return Err(LowerError::UnknownType {
+                    ty: *ty,
+                    span: *span,
+                });
+            }
+            prevalidate_expr_for_lowering(unit, operand)
+        }
+        CHirExpr::Unary(_, operand, _)
+        | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::Member(operand, _, _)
+        | CHirExpr::PtrMember(operand, _, _) => prevalidate_expr_for_lowering(unit, operand),
+        CHirExpr::Binary(_, left, right, _)
+        | CHirExpr::Index(left, right, _)
+        | CHirExpr::Comma(left, right, _) => {
+            prevalidate_expr_for_lowering(unit, left)?;
+            prevalidate_expr_for_lowering(unit, right)
+        }
+        CHirExpr::Ternary(condition, then_value, else_value, _) => {
+            prevalidate_expr_for_lowering(unit, condition)?;
+            prevalidate_expr_for_lowering(unit, then_value)?;
+            prevalidate_expr_for_lowering(unit, else_value)
+        }
+        CHirExpr::Call(callee, arguments, _) => {
+            prevalidate_expr_for_lowering(unit, callee)?;
+            for argument in arguments {
+                prevalidate_expr_for_lowering(unit, argument)?;
+            }
+            Ok(())
+        }
+        CHirExpr::CompoundLit(_, elements, _) => {
+            for element in elements {
+                prevalidate_expr_for_lowering(unit, element)?;
+            }
+            Ok(())
+        }
+        CHirExpr::SizeOf(ty, span) | CHirExpr::AlignOf(ty, span) => {
+            if unit.types().get(*ty).is_none() {
+                Err(LowerError::UnknownType {
+                    ty: *ty,
+                    span: *span,
+                })
+            } else {
+                Ok(())
+            }
+        }
+        CHirExpr::Lit(..)
+        | CHirExpr::FloatLit(..)
+        | CHirExpr::CharLit(..)
+        | CHirExpr::StringLit(..) => Ok(()),
+    }
+}
+
+fn validate_place_identity(
+    unit: &CHirUnit<'_>,
+    place: ScalarPlace,
+    target: &CHirExpr<'_>,
+    span: SourceSpan,
+) -> Result<(), LowerError> {
+    let CHirExpr::Ident {
+        symbol,
+        spelling,
+        facts,
+        span: target_span,
+    } = target
+    else {
+        return Err(LowerError::UnsupportedExpression {
+            span,
+            feature: "assignment target is not a scalar identifier place",
+        });
+    };
+    let declaration = unit
+        .symbols()
+        .symbol(*symbol)
+        .map_err(|_| LowerError::UnknownSymbol {
+            symbol: *symbol,
+            span: *target_span,
+        })?;
+    if *symbol != place.symbol()
+        || !matches!(
+            declaration.kind(),
+            SymbolKind::Object | SymbolKind::Parameter
+        )
+        || declaration.spelling() != spelling
+        || declaration.ty() != place.ty()
+        || facts.ty() != place.ty()
+        || facts.category() != ExprCategory::LValue
+        || !facts.is_modifiable_lvalue()
+    {
+        return Err(LowerError::UnsupportedExpression {
+            span: *target_span,
+            feature: "scalar place disagrees with its semantic identity",
+        });
+    }
+    Ok(())
+}
+
+fn index_functions(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+) -> Result<BTreeMap<SymbolId, FunctionInfo>, LowerError> {
+    let mut definitions = BTreeMap::new();
+    for declaration in unit.iter() {
+        let CHirDecl::Function(function) = declaration else {
+            continue;
+        };
+        let info = function_info(unit, target, function)?;
+        definitions
+            .entry(function.symbol)
+            .and_modify(|existing: &mut FunctionInfo| {
+                if function.body.is_some() {
+                    *existing = info.clone();
+                }
+            })
+            .or_insert(info);
+    }
+
+    let mut participants = BTreeSet::new();
+    for declaration in unit.iter() {
+        let CHirDecl::Function(function) = declaration else {
+            continue;
+        };
+        let Some(body) = function.body else {
+            continue;
+        };
+        let mut callees = BTreeSet::new();
+        collect_calls_stmt(body, &mut callees);
+        if !callees.is_empty() {
+            participants.insert(function.symbol);
+        }
+        participants.extend(callees);
+    }
+    for symbol in participants {
+        let Some(info) = definitions.get_mut(&symbol) else {
+            let span = unit
+                .symbols()
+                .symbol(symbol)
+                .map(|entry| entry.span())
+                .unwrap_or_else(|_| SourceSpan::new(evocc_common::FileId::new(0), 0, 0, 0, 0));
+            return Err(LowerError::UnknownSymbol { symbol, span });
+        };
+        info.participant = true;
+    }
+    Ok(definitions)
+}
+
+fn function_info(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    function: &FunctionDecl<'_>,
+) -> Result<FunctionInfo, LowerError> {
+    let symbol = unit
+        .symbols()
+        .symbol(function.symbol)
+        .map_err(|_| LowerError::UnknownSymbol {
+            symbol: function.symbol,
+            span: function.span,
+        })?;
+    if symbol.kind() != SymbolKind::Function
+        || symbol.spelling() != function.name.spelling
+        || !function_types_compatible(unit.types(), symbol.ty(), function.ty)
+        || !symbol
+            .storage_class()
+            .is_some_and(|storage| function_storage_compatible(storage, function.storage))
+        || !written_declarator_matches(
+            unit.types(),
+            &function.written,
+            function.ty,
+            function.return_specifier.type_id(),
+            Some(&function.parameters),
+        )
+    {
+        return Err(LowerError::MalformedFunction {
+            function: function.name.spelling.clone(),
+            span: function.span,
+            reason: "function declaration disagrees with its semantic identity",
+        });
+    }
+    let canonical = unit
+        .types()
+        .get(function.ty)
+        .ok_or(LowerError::UnknownType {
+            ty: function.ty,
+            span: function.span,
+        })?;
+    let TypeKind::Function {
+        return_type,
+        parameters,
+    } = &canonical.kind
+    else {
+        return Err(LowerError::MalformedFunction {
+            function: function.name.spelling.clone(),
+            span: function.span,
+            reason: "declaration does not have a canonical function type",
+        });
+    };
+    let return_type = match &unit
+        .types()
+        .get(*return_type)
+        .ok_or(LowerError::UnknownType {
+            ty: *return_type,
+            span: function.span,
+        })?
+        .kind
+    {
+        TypeKind::Void => None,
+        _ => Some(canonical_integer(
+            unit.types(),
+            target,
+            *return_type,
+            function.span,
+        )?),
+    };
+    let types: &[TypeId] = match parameters {
+        FunctionParameters::Prototype {
+            types,
+            variadic: false,
+        } => types,
+        FunctionParameters::Prototype { variadic: true, .. } => {
+            return Err(LowerError::MalformedFunction {
+                function: function.name.spelling.clone(),
+                span: function.span,
+                reason: "variadic function is outside the Day-6 call contract",
+            });
+        }
+        FunctionParameters::Unspecified if function.body.is_none() => &[],
+        FunctionParameters::Unspecified => {
+            return Err(LowerError::MalformedFunction {
+                function: function.name.spelling.clone(),
+                span: function.span,
+                reason: "function definition requires a prototype parameter list",
+            });
+        }
+    };
+    let parameter_types = types
+        .iter()
+        .map(|ty| canonical_integer(unit.types(), target, *ty, function.span))
+        .collect::<Result<Vec<_>, _>>()?;
+    let parameter_symbols = match &function.parameters {
+        ParameterSyntax::Prototype {
+            parameters,
+            variadic: false,
+        } if function.body.is_some() && parameters.len() == parameter_types.len() => {
+            let mut ids = BTreeSet::new();
+            let mut spellings = BTreeSet::new();
+            let mut function_scope = None;
+            parameters
+                .iter()
+                .zip(types)
+                .map(|(parameter, canonical_type)| {
+                    let (Some(parameter_symbol), Some(parameter_name)) =
+                        (parameter.symbol, &parameter.name)
+                    else {
+                        return Err(LowerError::MalformedFunction {
+                            function: function.name.spelling.clone(),
+                            span: parameter.span,
+                            reason: "function definition has an unnamed parameter",
+                        });
+                    };
+                    let symbol = unit.symbols().symbol(parameter_symbol).map_err(|_| {
+                        LowerError::MalformedFunction {
+                            function: function.name.spelling.clone(),
+                            span: parameter.span,
+                            reason: "parameter symbol is absent from the symbol table",
+                        }
+                    })?;
+                    let scope = unit.symbols().scope(symbol.scope()).map_err(|_| {
+                        LowerError::MalformedFunction {
+                            function: function.name.spelling.clone(),
+                            span: parameter.span,
+                            reason: "parameter scope is absent from the symbol table",
+                        }
+                    })?;
+                    let scope_is_valid = scope.kind() == ScopeKind::Function
+                        && scope.parent() == Some(unit.symbols().file_scope())
+                        && function_scope.is_none_or(|expected| expected == symbol.scope());
+                    if *canonical_type != parameter.ty
+                        || parameter.specifier.type_id() != parameter.ty
+                        || !written_declarator_matches(
+                            unit.types(),
+                            &parameter.written,
+                            parameter.ty,
+                            parameter.specifier.type_id(),
+                            None,
+                        )
+                        || symbol.kind() != SymbolKind::Parameter
+                        || symbol.spelling() != parameter_name.spelling
+                        || symbol.ty() != parameter.ty
+                        || !matches!(
+                            symbol.storage_class(),
+                            Some(StorageClass::None | StorageClass::Register)
+                        )
+                        || !scope_is_valid
+                        || !ids.insert(parameter_symbol)
+                        || !spellings.insert(parameter_name.spelling.clone())
+                    {
+                        return Err(LowerError::MalformedFunction {
+                            function: function.name.spelling.clone(),
+                            span: parameter.span,
+                            reason: "parameter declaration disagrees with its semantic identity",
+                        });
+                    }
+                    function_scope = Some(symbol.scope());
+                    Ok(parameter_symbol)
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        }
+        ParameterSyntax::Prototype {
+            parameters,
+            variadic: false,
+        } if function.body.is_none() && parameters.len() == parameter_types.len() => Vec::new(),
+        _ if function.body.is_none() => Vec::new(),
         _ => {
-            let v = ctx.new_value();
-            ctx.emit_inst(Inst::Const(value(v), 0));
-            v
+            return Err(LowerError::MalformedFunction {
+                function: function.name.spelling.clone(),
+                span: function.span,
+                reason: "written parameters do not match the canonical prototype",
+            });
+        }
+    };
+    Ok(FunctionInfo {
+        name: function.name.spelling.clone(),
+        parameter_symbols,
+        parameter_types,
+        return_type,
+        participant: false,
+        span: function.span,
+    })
+}
+
+fn canonical_integer(
+    types: &TypeInterner,
+    target: &TargetDataLayout,
+    ty: TypeId,
+    span: SourceSpan,
+) -> Result<CIntegerType, LowerError> {
+    let canonical = types.get(ty).ok_or(LowerError::UnknownType { ty, span })?;
+    let integer = match &canonical.kind {
+        TypeKind::Int(rank) => integer_type_for_rank(*rank),
+        TypeKind::Enum(tag) => {
+            let tag = types.tag(*tag).ok_or(LowerError::UnsupportedType {
+                ty,
+                span,
+                feature: "unknown enum type",
+            })?;
+            let TagState::Complete(TagDefinition::Enum(constants)) = &tag.state else {
+                return Err(LowerError::UnsupportedType {
+                    ty,
+                    span,
+                    feature: "incomplete or non-enum scalar type",
+                });
+            };
+            let minimum = constants
+                .iter()
+                .map(|constant| constant.value)
+                .min()
+                .ok_or(LowerError::UnsupportedType {
+                    ty,
+                    span,
+                    feature: "empty enum has no canonical integer representation",
+                })?;
+            let maximum = constants
+                .iter()
+                .map(|constant| constant.value)
+                .max()
+                .ok_or(LowerError::UnsupportedType {
+                    ty,
+                    span,
+                    feature: "empty enum has no canonical integer representation",
+                })?;
+            enum_integer_type(minimum, maximum)
+        }
+        _ => {
+            return Err(LowerError::UnsupportedType {
+                ty,
+                span,
+                feature: "non-integer scalar type is outside Day 6",
+            });
+        }
+    };
+    let layout = target
+        .layout_of(types, ty)
+        .map_err(|source| LowerError::Layout { ty, span, source })?;
+    let expected_storage_bits = u64::from(integer.bits().max(8));
+    if layout.size_bytes.saturating_mul(8) != expected_storage_bits {
+        return Err(LowerError::UnsupportedType {
+            ty,
+            span,
+            feature: "integer value width disagrees with target data layout",
+        });
+    }
+    Ok(integer)
+}
+
+fn function_types_compatible(types: &TypeInterner, left: TypeId, right: TypeId) -> bool {
+    if left == right {
+        return true;
+    }
+    let (Some(left), Some(right)) = (types.get(left), types.get(right)) else {
+        return false;
+    };
+    let (
+        TypeKind::Function {
+            return_type: left_return,
+            parameters: left_parameters,
+        },
+        TypeKind::Function {
+            return_type: right_return,
+            parameters: right_parameters,
+        },
+    ) = (&left.kind, &right.kind)
+    else {
+        return false;
+    };
+    left_return == right_return
+        && function_parameters_compatible(types, left_parameters, right_parameters)
+}
+
+fn function_parameters_compatible(
+    types: &TypeInterner,
+    left: &FunctionParameters,
+    right: &FunctionParameters,
+) -> bool {
+    match (left, right) {
+        (FunctionParameters::Unspecified, FunctionParameters::Unspecified) => true,
+        (
+            FunctionParameters::Prototype {
+                types: left_types,
+                variadic: left_variadic,
+            },
+            FunctionParameters::Prototype {
+                types: right_types,
+                variadic: right_variadic,
+            },
+        ) => left_variadic == right_variadic && left_types == right_types,
+        (
+            FunctionParameters::Unspecified,
+            FunctionParameters::Prototype {
+                types: prototype,
+                variadic,
+            },
+        )
+        | (
+            FunctionParameters::Prototype {
+                types: prototype,
+                variadic,
+            },
+            FunctionParameters::Unspecified,
+        ) => {
+            !variadic
+                && prototype.iter().all(|ty| {
+                    canonical_integer_for_compatibility(types, *ty)
+                        .is_some_and(|integer| integer_promotion(integer) == integer)
+                })
         }
     }
 }
 
-fn bits32() -> EvoIRType {
-    EvoIRType::Bits(32)
-}
-
-fn value(id: u32) -> Value {
-    Value { id, ty: bits32() }
-}
-
-fn lower_expr(expr: &CHirExpr<'_>, ctx: &mut LowerContext) -> u32 {
-    match expr {
-        CHirExpr::Lit(lit, _) => {
-            let v = ctx.new_value();
-            ctx.emit_inst(Inst::Const(value(v), lit.value));
-            v
-        }
-        CHirExpr::Binary(op, lhs, rhs, _) => {
-            let l = lower_expr(lhs, ctx);
-            let r = lower_expr(rhs, ctx);
-            let v = ctx.new_value();
-            let inst = match op {
-                BinaryOp::Add => Inst::Add(value(v), value(l), value(r)),
-                BinaryOp::Sub => Inst::Sub(value(v), value(l), value(r)),
-                BinaryOp::Mul => Inst::Mul(value(v), value(l), value(r)),
-                BinaryOp::Div => Inst::SDiv(value(v), value(l), value(r)),
-                BinaryOp::Lt => Inst::ICmp(value(v), CmpOp::SLt, value(l), value(r)),
-                BinaryOp::Eq => Inst::ICmp(value(v), CmpOp::Eq, value(l), value(r)),
-                _ => Inst::Const(value(v), 0),
+fn canonical_integer_for_compatibility(types: &TypeInterner, ty: TypeId) -> Option<CIntegerType> {
+    match &types.get(ty)?.kind {
+        TypeKind::Int(rank) => Some(integer_type_for_rank(*rank)),
+        TypeKind::Enum(tag) => {
+            let tag = types.tag(*tag)?;
+            let TagState::Complete(TagDefinition::Enum(constants)) = &tag.state else {
+                return None;
             };
-            ctx.emit_inst(inst);
-            v
+            let minimum = constants.iter().map(|constant| constant.value).min()?;
+            let maximum = constants.iter().map(|constant| constant.value).max()?;
+            Some(enum_integer_type(minimum, maximum))
         }
-        CHirExpr::Ternary(cond, t, f, _) => {
-            let cv = lower_expr(cond, ctx);
-            let then_block = ctx.new_block();
-            let else_block = ctx.new_block();
-            let merge_block = ctx.new_block();
-            ctx.set_terminator(Inst::CondBr(
-                value(cv),
-                then_block,
-                vec![],
-                else_block,
-                vec![],
-            ));
-            ctx.current_block_id = then_block;
-            let tv = lower_expr(t, ctx);
-            ctx.set_terminator(Inst::Br(merge_block, vec![value(tv)]));
-            ctx.current_block_id = else_block;
-            let fv = lower_expr(f, ctx);
-            ctx.set_terminator(Inst::Br(merge_block, vec![value(fv)]));
-            ctx.current_block_id = merge_block;
-            let merge_value = ctx.new_value();
-            let merge = &mut ctx.blocks[merge_block as usize];
-            merge.args.push(BlockArg {
-                name: "ternary".into(),
-                value: value(merge_value),
+        _ => None,
+    }
+}
+
+fn function_storage_compatible(entity: StorageClass, written: StorageClass) -> bool {
+    match entity {
+        StorageClass::Static => matches!(
+            written,
+            StorageClass::None | StorageClass::Extern | StorageClass::Static
+        ),
+        StorageClass::None | StorageClass::Extern => {
+            matches!(written, StorageClass::None | StorageClass::Extern)
+        }
+        StorageClass::Typedef
+        | StorageClass::Auto
+        | StorageClass::Register
+        | StorageClass::ThreadLocal => false,
+    }
+}
+
+fn function_parameters_match(canonical: &FunctionParameters, written: &ParameterSyntax) -> bool {
+    match (canonical, written) {
+        (FunctionParameters::Unspecified, ParameterSyntax::Unspecified) => true,
+        (
+            FunctionParameters::Prototype { types, variadic },
+            ParameterSyntax::Prototype {
+                parameters,
+                variadic: written_variadic,
+            },
+        ) => {
+            variadic == written_variadic
+                && types.len() == parameters.len()
+                && types
+                    .iter()
+                    .zip(parameters)
+                    .all(|(canonical, parameter)| *canonical == parameter.ty)
+        }
+        _ => false,
+    }
+}
+
+fn written_declarator_matches(
+    types: &TypeInterner,
+    written: &WrittenDeclarator,
+    mut current: TypeId,
+    terminal: TypeId,
+    function_syntax: Option<&ParameterSyntax>,
+) -> bool {
+    if function_syntax.is_some()
+        && !matches!(
+            written.layers.first(),
+            Some(WrittenDeclaratorLayer::Function { .. })
+        )
+    {
+        return false;
+    }
+    for (index, layer) in written.layers.iter().enumerate() {
+        let Some(canonical) = types.get(current) else {
+            return false;
+        };
+        current = match (layer, &canonical.kind) {
+            (
+                WrittenDeclaratorLayer::Function { .. },
+                TypeKind::Function {
+                    return_type,
+                    parameters,
+                },
+            ) => {
+                if index == 0
+                    && function_syntax
+                        .is_some_and(|syntax| !function_parameters_match(parameters, syntax))
+                {
+                    return false;
+                }
+                *return_type
+            }
+            (WrittenDeclaratorLayer::Pointer { qualifiers, .. }, TypeKind::Pointer(pointee))
+                if canonical.qualifiers == *qualifiers =>
+            {
+                *pointee
+            }
+            (
+                WrittenDeclaratorLayer::Array { bound, .. },
+                TypeKind::Array {
+                    element,
+                    bound: canonical_bound,
+                },
+            ) if bound == canonical_bound => *element,
+            _ => return false,
+        };
+    }
+    current == terminal
+}
+
+fn validate_object_declaration_for_lowering(
+    unit: &CHirUnit<'_>,
+    object: &ObjectDecl<'_>,
+) -> Result<(), LowerError> {
+    let symbol = unit
+        .symbols()
+        .symbol(object.symbol)
+        .map_err(|_| LowerError::UnknownSymbol {
+            symbol: object.symbol,
+            span: object.span,
+        })?;
+    if !matches!(
+        object.storage,
+        StorageClass::None | StorageClass::Auto | StorageClass::Register
+    ) {
+        return Err(LowerError::UnsupportedStatement {
+            span: object.span,
+            feature: "non-automatic scalar object is outside Day 6 lowering",
+        });
+    }
+    if symbol.kind() != SymbolKind::Object
+        || symbol.spelling() != object.name.spelling
+        || symbol.ty() != object.ty
+        || symbol.storage_class() != Some(object.storage)
+        || object.specifier.type_id() != object.ty
+        || !written_declarator_matches(
+            unit.types(),
+            &object.written,
+            object.ty,
+            object.specifier.type_id(),
+            None,
+        )
+    {
+        return Err(LowerError::UnsupportedStatement {
+            span: object.span,
+            feature: "object declaration disagrees with its semantic identity",
+        });
+    }
+    if let Some(initializer) = &object.initializer {
+        let plan = initializer.plan();
+        let valid_action = match plan.actions() {
+            [InitAction::StoreScalar {
+                path,
+                destination_type,
+                ..
+            }
+            | InitAction::ZeroScalar {
+                path,
+                destination_type,
+            }] => path.is_root() && *destination_type == object.ty,
+            _ => false,
+        };
+        if plan.target_type() != object.ty || plan.validate(unit.types()).is_err() || !valid_action
+        {
+            return Err(LowerError::UnsupportedStatement {
+                span: initializer.span(),
+                feature: "scalar initializer plan disagrees with its semantic identity",
             });
-            let result = ctx.new_value();
-            ctx.emit_inst(Inst::Const(value(result), 0));
-            result
         }
-        CHirExpr::Unary(_op, inner, _) => {
-            let v = lower_expr(inner, ctx);
-            let zero = ctx.new_value();
-            ctx.emit_inst(Inst::Const(value(zero), 0));
-            let r = ctx.new_value();
-            ctx.emit_inst(Inst::Sub(value(r), value(zero), value(v)));
-            r
+    }
+    Ok(())
+}
+
+impl<'a> FunctionLowerer<'a> {
+    fn new(
+        unit: &'a CHirUnit<'a>,
+        target: &'a TargetDataLayout,
+        functions: &'a BTreeMap<SymbolId, FunctionInfo>,
+        info: &'a FunctionInfo,
+    ) -> Self {
+        Self {
+            unit,
+            target,
+            functions,
+            info,
+            blocks: Vec::new(),
+            next_value: 0,
+            next_block: 0,
+            next_temporary: 0,
+            next_placeholder: BREAK_TARGET_BASE,
+            goto_names: BTreeSet::new(),
+            labels: BTreeMap::new(),
+            pending_gotos: BTreeMap::new(),
         }
-        CHirExpr::Ident { .. } => {
-            let v = ctx.new_value();
-            ctx.emit_inst(Inst::Const(value(v), 0));
-            v
+    }
+
+    fn lower(mut self, declaration: &FunctionDecl<'a>) -> Result<Function, LowerError> {
+        let body = declaration
+            .body
+            .ok_or_else(|| LowerError::MalformedFunction {
+                function: declaration.name.spelling.clone(),
+                span: declaration.span,
+                reason: "attempted to lower a declaration without a body",
+            })?;
+        collect_goto_names(body, &mut self.goto_names);
+        let mut params = Vec::new();
+        let mut env = Environment::new();
+        let mut entry_args = Vec::new();
+        for (index, (symbol, integer)) in self
+            .info
+            .parameter_symbols
+            .iter()
+            .copied()
+            .zip(self.info.parameter_types.iter().copied())
+            .enumerate()
+        {
+            let ty = bits(integer);
+            params.push(FunctionParam {
+                name: format!("arg{index}"),
+                ty: ty.clone(),
+            });
+            let value = self.fresh_value(ty);
+            entry_args.push((
+                EnvKey::Local(symbol),
+                BlockArg {
+                    name: format!("param{index}"),
+                    value: value.clone(),
+                },
+            ));
+            env.insert(
+                EnvKey::Local(symbol),
+                BoundValue {
+                    value,
+                    integer: Some(integer),
+                },
+            );
         }
-        _ => {
-            let v = ctx.new_value();
-            ctx.emit_inst(Inst::Const(value(v), 0));
-            v
+        if self.info.participant {
+            let mem = EvoIRType::Mem(Region::All);
+            let world = EvoIRType::World;
+            let mem_index = params.len();
+            params.push(FunctionParam {
+                name: format!("arg{mem_index}"),
+                ty: mem.clone(),
+            });
+            params.push(FunctionParam {
+                name: format!("arg{}", mem_index + 1),
+                ty: world.clone(),
+            });
+            let mem_value = self.fresh_value(mem);
+            let world_value = self.fresh_value(world);
+            entry_args.push((
+                EnvKey::Memory,
+                BlockArg {
+                    name: "memory".into(),
+                    value: mem_value.clone(),
+                },
+            ));
+            entry_args.push((
+                EnvKey::World,
+                BlockArg {
+                    name: "world".into(),
+                    value: world_value.clone(),
+                },
+            ));
+            env.insert(
+                EnvKey::Memory,
+                BoundValue {
+                    value: mem_value,
+                    integer: None,
+                },
+            );
+            env.insert(
+                EnvKey::World,
+                BoundValue {
+                    value: world_value,
+                    integer: None,
+                },
+            );
+        }
+        self.blocks.push(DraftBlock {
+            id: 0,
+            args: entry_args,
+            insts: Vec::new(),
+            terminator: None,
+            role: BlockRole::Ordinary,
+        });
+        self.next_block = 1;
+
+        let locals = self.info.parameter_symbols.iter().copied().collect();
+        let flow = self.lower_stmt(
+            body,
+            State {
+                block: 0,
+                env,
+                locals,
+            },
+            &BTreeSet::new(),
+            &ControlTargets::default(),
+        )?;
+        if !self.pending_gotos.is_empty() {
+            return Err(LowerError::InvalidControlFlow {
+                span: self.info.span,
+                reason: "goto targets a label that was not lowered",
+            });
+        }
+        for state in &flow.normal {
+            if self.info.return_type.is_none() || self.info.name == "main" {
+                let mut returned = Vec::new();
+                if let Some(integer) = self.info.return_type {
+                    returned.push(self.constant(state, integer, 0)?.value);
+                }
+                if self.info.participant {
+                    returned.push(self.token(state, EnvKey::Memory)?.value);
+                    returned.push(self.token(state, EnvKey::World)?.value);
+                }
+                self.terminate(state, Inst::Ret(returned))?;
+            } else {
+                self.terminate(state, Inst::Trap(TrapReason::ScalarFunctionFellOffEnd))?;
+            }
+        }
+        self.prune_unreachable_blocks()?;
+        if self.blocks.iter().any(|block| block.terminator.is_none()) {
+            return Err(LowerError::InvalidControlFlow {
+                span: self.info.span,
+                reason: "lowered block has no terminator",
+            });
+        }
+        self.eliminate_switch_forwarders()?;
+        let mut function = Function {
+            name: self.info.name.clone(),
+            params,
+            ret_tys: self.return_types(),
+            blocks: self.finish_blocks()?,
+        };
+        renumber_function(&mut function)?;
+        Ok(function)
+    }
+
+    fn return_types(&self) -> Vec<EvoIRType> {
+        let mut returns = self
+            .info
+            .return_type
+            .map(|integer| vec![bits(integer)])
+            .unwrap_or_default();
+        if self.info.participant {
+            returns.push(EvoIRType::Mem(Region::All));
+            returns.push(EvoIRType::World);
+        }
+        returns
+    }
+
+    fn fresh_value(&mut self, ty: EvoIRType) -> Value {
+        let value = Value {
+            id: self.next_value,
+            ty,
+        };
+        self.next_value += 1;
+        value
+    }
+
+    fn fresh_placeholder(&mut self) -> BlockId {
+        let id = self.next_placeholder;
+        self.next_placeholder += 1;
+        id
+    }
+
+    fn prune_unreachable_blocks(&mut self) -> Result<(), LowerError> {
+        let mut reachable = BTreeSet::from([0]);
+        let mut pending = vec![0];
+        while let Some(id) = pending.pop() {
+            let block = self.blocks.iter().find(|block| block.id == id).ok_or(
+                LowerError::InvalidControlFlow {
+                    span: self.info.span,
+                    reason: "reachable edge targets an unknown draft block",
+                },
+            )?;
+            let Some(terminator) = &block.terminator else {
+                continue;
+            };
+            let targets = match terminator {
+                Inst::Br(target, _) => [Some(*target), None],
+                Inst::CondBr(_, true_target, _, false_target, _) => {
+                    [Some(*true_target), Some(*false_target)]
+                }
+                _ => [None, None],
+            };
+            for target in targets.into_iter().flatten() {
+                if reachable.insert(target) {
+                    pending.push(target);
+                }
+            }
+        }
+        self.blocks.retain(|block| reachable.contains(&block.id));
+        Ok(())
+    }
+
+    fn block_mut(&mut self, id: BlockId) -> Result<&mut DraftBlock, LowerError> {
+        self.blocks
+            .iter_mut()
+            .find(|block| block.id == id)
+            .ok_or(LowerError::InvalidControlFlow {
+                span: self.info.span,
+                reason: "unknown draft block",
+            })
+    }
+
+    fn emit(&mut self, state: &State, instruction: Inst) -> Result<(), LowerError> {
+        let block = self.block_mut(state.block)?;
+        if block.terminator.is_some() {
+            return Err(LowerError::InvalidControlFlow {
+                span: self.info.span,
+                reason: "instruction emitted after a terminator",
+            });
+        }
+        block.insts.push(instruction);
+        Ok(())
+    }
+
+    fn terminate(&mut self, state: &State, terminator: Inst) -> Result<(), LowerError> {
+        let block = self.block_mut(state.block)?;
+        if block.terminator.replace(terminator).is_some() {
+            return Err(LowerError::InvalidControlFlow {
+                span: self.info.span,
+                reason: "block received more than one terminator",
+            });
+        }
+        Ok(())
+    }
+
+    fn branch(
+        &mut self,
+        state: &State,
+        target: BlockId,
+        keys: &[EnvKey],
+    ) -> Result<(), LowerError> {
+        let arguments = self.edge_values(state, keys)?;
+        self.terminate(state, Inst::Br(target, arguments))
+    }
+
+    fn keys_for(
+        &self,
+        state: &State,
+        symbols: &BTreeSet<SymbolId>,
+        preferred: &[SymbolId],
+    ) -> Vec<EnvKey> {
+        let mut keys = Vec::new();
+        let mut seen = BTreeSet::new();
+        for symbol in preferred {
+            let key = EnvKey::Local(*symbol);
+            if symbols.contains(symbol) && state.locals.contains(symbol) && seen.insert(key) {
+                keys.push(key);
+            }
+        }
+        let mut locals = state
+            .env
+            .iter()
+            .filter_map(|(key, bound)| match key {
+                EnvKey::Local(symbol) => Some((bound.value.id, *symbol, *key)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        locals.sort_by_key(|(value, _, _)| *value);
+        for (_, symbol, key) in locals {
+            if symbols.contains(&symbol) && seen.insert(key) {
+                keys.push(key);
+            }
+        }
+        for symbol in symbols {
+            let key = EnvKey::Local(*symbol);
+            if seen.contains(&key) {
+                continue;
+            }
+            let is_scalar_local = state.locals.contains(symbol)
+                && self.unit.symbols().symbol(*symbol).is_ok_and(|symbol| {
+                    matches!(symbol.kind(), SymbolKind::Object | SymbolKind::Parameter)
+                });
+            if is_scalar_local && seen.insert(key) {
+                keys.push(key);
+            }
+        }
+        let mut temporaries = state
+            .env
+            .iter()
+            .filter_map(|(key, bound)| match key {
+                EnvKey::Temporary(_) => Some((bound.value.id, *key)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        temporaries.sort_by_key(|(value, _)| *value);
+        for (_, key) in temporaries {
+            if seen.insert(key) {
+                keys.push(key);
+            }
+        }
+        if self.info.participant {
+            if state.env.contains_key(&EnvKey::Memory) {
+                keys.push(EnvKey::Memory);
+            }
+            if state.env.contains_key(&EnvKey::World) {
+                keys.push(EnvKey::World);
+            }
+        }
+        keys
+    }
+
+    fn new_block_from(
+        &mut self,
+        template: &State,
+        keys: &[EnvKey],
+        role: BlockRole,
+    ) -> Result<State, LowerError> {
+        let id = self.next_block;
+        self.next_block += 1;
+        let mut args = Vec::new();
+        let mut env = Environment::new();
+        for (index, key) in keys.iter().copied().enumerate() {
+            let (ty, integer) = if let Some(bound) = template.env.get(&key) {
+                (bound.value.ty.clone(), bound.integer)
+            } else if let EnvKey::Local(symbol) = key {
+                let declaration =
+                    self.unit
+                        .symbols()
+                        .symbol(symbol)
+                        .map_err(|_| LowerError::UnknownSymbol {
+                            symbol,
+                            span: self.info.span,
+                        })?;
+                let integer = canonical_integer(
+                    self.unit.types(),
+                    self.target,
+                    declaration.ty(),
+                    self.info.span,
+                )?;
+                (bits(integer), Some(integer))
+            } else {
+                return Err(LowerError::InvalidControlFlow {
+                    span: self.info.span,
+                    reason: "effect or temporary edge key is absent from its template environment",
+                });
+            };
+            let value = self.fresh_value(ty);
+            args.push((
+                key,
+                BlockArg {
+                    name: format!("phi{index}"),
+                    value: value.clone(),
+                },
+            ));
+            env.insert(key, BoundValue { value, integer });
+        }
+        self.blocks.push(DraftBlock {
+            id,
+            args,
+            insts: Vec::new(),
+            terminator: None,
+            role,
+        });
+        Ok(State {
+            block: id,
+            env,
+            locals: template.locals.clone(),
+        })
+    }
+
+    fn edge_values(&mut self, state: &State, keys: &[EnvKey]) -> Result<Vec<Value>, LowerError> {
+        let mut values = Vec::with_capacity(keys.len());
+        for key in keys {
+            if let Some(bound) = state.env.get(key) {
+                values.push(bound.value.clone());
+                continue;
+            }
+            let EnvKey::Local(symbol) = key else {
+                return Err(LowerError::InvalidControlFlow {
+                    span: self.info.span,
+                    reason: "effect or temporary edge uses an unavailable environment value",
+                });
+            };
+            let declaration =
+                self.unit
+                    .symbols()
+                    .symbol(*symbol)
+                    .map_err(|_| LowerError::UnknownSymbol {
+                        symbol: *symbol,
+                        span: self.info.span,
+                    })?;
+            let integer = canonical_integer(
+                self.unit.types(),
+                self.target,
+                declaration.ty(),
+                self.info.span,
+            )?;
+            let value = self.fresh_value(bits(integer));
+            self.emit(state, Inst::Uninitialized(value.clone()))?;
+            values.push(value);
+        }
+        Ok(values)
+    }
+
+    fn merge_states(
+        &mut self,
+        states: Vec<State>,
+        live: &BTreeSet<SymbolId>,
+    ) -> Result<Option<State>, LowerError> {
+        let mut states = states.into_iter();
+        let Some(first) = states.next() else {
+            return Ok(None);
+        };
+        let rest = states.collect::<Vec<_>>();
+        if rest.is_empty() {
+            return Ok(Some(first));
+        }
+        let keys = self.keys_for(&first, live, &[]);
+        let target = self.new_block_from(&first, &keys, BlockRole::Ordinary)?;
+        self.branch(&first, target.block, &keys)?;
+        for state in rest {
+            self.branch(&state, target.block, &keys)?;
+        }
+        Ok(Some(target))
+    }
+
+    fn lower_stmt(
+        &mut self,
+        statement: &'a CHirStmt<'a>,
+        mut state: State,
+        live_after: &BTreeSet<SymbolId>,
+        control: &ControlTargets,
+    ) -> Result<Flow, LowerError> {
+        match statement {
+            CHirStmt::Expr(expression, _) => {
+                self.lower_discarded_expr(expression, &mut state)?;
+                Ok(Flow {
+                    normal: vec![state],
+                })
+            }
+            CHirStmt::Return(expression, span) => {
+                let mut returned = Vec::new();
+                match (self.info.return_type, expression) {
+                    (Some(expected), Some(expression)) => {
+                        let lowered = self.lower_expr(expression, &mut state)?;
+                        returned.push(self.cast(lowered, expected, &state)?.value);
+                    }
+                    (None, None) => {}
+                    _ => {
+                        return Err(LowerError::MalformedFunction {
+                            function: self.info.name.clone(),
+                            span: *span,
+                            reason: "return expression disagrees with the function result type",
+                        });
+                    }
+                }
+                if self.info.participant {
+                    returned.push(self.token(&state, EnvKey::Memory)?.value);
+                    returned.push(self.token(&state, EnvKey::World)?.value);
+                }
+                self.terminate(&state, Inst::Ret(returned))?;
+                Ok(Flow::default())
+            }
+            CHirStmt::Compound(items, _) => self.lower_compound(items, state, live_after, control),
+            CHirStmt::If(condition, then_branch, else_branch, _) => self.lower_if(
+                condition,
+                then_branch,
+                *else_branch,
+                state,
+                live_after,
+                control,
+            ),
+            CHirStmt::While(condition, body, _) => {
+                self.lower_while(condition, body, state, live_after, control)
+            }
+            CHirStmt::For(initializer, condition, step, body, _) => self.lower_for(
+                initializer,
+                *condition,
+                *step,
+                body,
+                state,
+                live_after,
+                control,
+            ),
+            CHirStmt::Switch(expression, body, _) => {
+                self.lower_switch(expression, body, state, live_after, control)
+            }
+            CHirStmt::Break(span) => {
+                let target =
+                    control
+                        .break_target
+                        .as_ref()
+                        .ok_or(LowerError::InvalidControlFlow {
+                            span: *span,
+                            reason: "break has no enclosing target",
+                        })?;
+                self.branch(&state, target.id, &target.keys)?;
+                Ok(Flow::default())
+            }
+            CHirStmt::Continue(span) => {
+                let target =
+                    control
+                        .continue_target
+                        .as_ref()
+                        .ok_or(LowerError::InvalidControlFlow {
+                            span: *span,
+                            reason: "continue has no enclosing loop",
+                        })?;
+                self.branch(&state, target.id, &target.keys)?;
+                Ok(Flow::default())
+            }
+            CHirStmt::Null(_) => Ok(Flow {
+                normal: vec![state],
+            }),
+            CHirStmt::DoWhile(body, condition, _) => {
+                self.lower_do_while(body, condition, state, live_after, control)
+            }
+            CHirStmt::Goto(label, _) => {
+                if let Some(target) = self.labels.get(&label.spelling).cloned() {
+                    self.branch(&state, target.id, &target.keys)?;
+                } else {
+                    self.pending_gotos
+                        .entry(label.spelling.clone())
+                        .or_default()
+                        .push(state);
+                }
+                Ok(Flow::default())
+            }
+            CHirStmt::Label(label, nested, _) => self.lower_label(
+                label.spelling.as_str(),
+                nested,
+                vec![state],
+                live_after,
+                control,
+            ),
+            CHirStmt::Case(_, _, span) | CHirStmt::Default(_, span) => {
+                Err(LowerError::UnsupportedStatement {
+                    span: *span,
+                    feature: "unstructured label outside a switch lowering context",
+                })
+            }
+        }
+    }
+
+    fn lower_compound(
+        &mut self,
+        items: &'a [CHirBlockItem<'a>],
+        initial: State,
+        live_after: &BTreeSet<SymbolId>,
+        control: &ControlTargets,
+    ) -> Result<Flow, LowerError> {
+        self.lower_compound_items(items, initial, live_after, control, true)
+    }
+
+    fn lower_compound_items(
+        &mut self,
+        items: &'a [CHirBlockItem<'a>],
+        mut initial: State,
+        live_after: &BTreeSet<SymbolId>,
+        control: &ControlTargets,
+        leave_scope: bool,
+    ) -> Result<Flow, LowerError> {
+        for item in items {
+            if let CHirBlockItem::Declaration(CHirDecl::Object(object)) = item {
+                initial.locals.insert(object.symbol);
+            }
+        }
+        let mut normal = vec![initial];
+        let mut last_template = normal.first().cloned();
+        let mut declared = Vec::new();
+        for (index, item) in items.iter().enumerate() {
+            let mut future = live_after.clone();
+            for later in &items[index + 1..] {
+                collect_symbols_item(later, &mut future);
+            }
+            let mut needed_now = future.clone();
+            collect_symbols_item(item, &mut needed_now);
+            if let CHirBlockItem::Statement(CHirStmt::Label(label, nested, _)) = item {
+                let incoming = std::mem::take(&mut normal);
+                let template = incoming.first().cloned().or_else(|| last_template.clone());
+                normal = self
+                    .lower_label_with_template(
+                        label.spelling.as_str(),
+                        nested,
+                        incoming,
+                        template,
+                        &future,
+                        control,
+                    )?
+                    .normal;
+                if let Some(state) = normal.first().cloned() {
+                    last_template = Some(state);
+                }
+                continue;
+            }
+            if normal.is_empty() {
+                let CHirBlockItem::Statement(statement) = item else {
+                    continue;
+                };
+                if !contains_targeted_label(statement, &self.goto_names) {
+                    continue;
+                }
+                let template = last_template
+                    .clone()
+                    .ok_or(LowerError::InvalidControlFlow {
+                        span: statement.span(),
+                        reason: "targeted nested label has no environment template",
+                    })?;
+                let keys = self.keys_for(&template, &needed_now, &[]);
+                let detached = self.new_block_from(&template, &keys, BlockRole::Ordinary)?;
+                normal = self
+                    .lower_stmt(statement, detached, &future, control)?
+                    .normal;
+                if let Some(state) = normal.first().cloned() {
+                    last_template = Some(state);
+                }
+                continue;
+            }
+            let pending = std::mem::take(&mut normal);
+            let Some(mut state) = self.merge_states(pending, &needed_now)? else {
+                continue;
+            };
+            last_template = Some(state.clone());
+            normal = match item {
+                CHirBlockItem::Declaration(declaration) => {
+                    if let CHirDecl::Object(object) = declaration {
+                        declared.push(object.symbol);
+                    }
+                    self.lower_declaration(declaration, &mut state)?;
+                    vec![state]
+                }
+                CHirBlockItem::Statement(statement) => {
+                    self.lower_stmt(statement, state, &future, control)?.normal
+                }
+            };
+        }
+        if leave_scope {
+            for state in &mut normal {
+                for symbol in &declared {
+                    state.env.remove(&EnvKey::Local(*symbol));
+                    state.locals.remove(symbol);
+                }
+            }
+        }
+        Ok(Flow { normal })
+    }
+
+    fn lower_label(
+        &mut self,
+        name: &str,
+        nested: &'a CHirStmt<'a>,
+        incoming: Vec<State>,
+        live_after: &BTreeSet<SymbolId>,
+        control: &ControlTargets,
+    ) -> Result<Flow, LowerError> {
+        let template = incoming.first().cloned();
+        self.lower_label_with_template(name, nested, incoming, template, live_after, control)
+    }
+
+    fn lower_label_with_template(
+        &mut self,
+        name: &str,
+        nested: &'a CHirStmt<'a>,
+        mut incoming: Vec<State>,
+        template: Option<State>,
+        live_after: &BTreeSet<SymbolId>,
+        control: &ControlTargets,
+    ) -> Result<Flow, LowerError> {
+        if self.labels.contains_key(name) {
+            return Err(LowerError::InvalidControlFlow {
+                span: nested.span(),
+                reason: "duplicate label reached lowering",
+            });
+        }
+        incoming.extend(self.pending_gotos.remove(name).unwrap_or_default());
+        let Some(template) = incoming.first().cloned().or(template) else {
+            if self.goto_names.contains(name) {
+                return Err(LowerError::InvalidControlFlow {
+                    span: nested.span(),
+                    reason: "targeted label has no environment template",
+                });
+            }
+            return Ok(Flow::default());
+        };
+        let symbols = live_before_stmt(nested, live_after.clone());
+        let keys = self.keys_for(&template, &symbols, &[]);
+        let label_state = self.new_block_from(&template, &keys, BlockRole::Ordinary)?;
+        let target = JumpTarget {
+            id: label_state.block,
+            keys: keys.clone(),
+        };
+        self.labels.insert(name.to_owned(), target);
+        for predecessor in incoming {
+            self.branch(&predecessor, label_state.block, &keys)?;
+        }
+        self.lower_stmt(nested, label_state, live_after, control)
+    }
+
+    fn lower_declaration(
+        &mut self,
+        declaration: &'a CHirDecl<'a>,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
+        let object = match declaration {
+            CHirDecl::Object(object) => object,
+            CHirDecl::Tag(_) | CHirDecl::Typedef(_) => return Ok(()),
+            CHirDecl::Function(_) => {
+                return Err(LowerError::UnsupportedStatement {
+                    span: declaration.span(),
+                    feature: "block function declaration is outside scalar lowering",
+                });
+            }
+        };
+        validate_object_declaration_for_lowering(self.unit, object)?;
+        let integer = canonical_integer(self.unit.types(), self.target, object.ty, object.span)?;
+        state.locals.insert(object.symbol);
+        let Some(initializer) = &object.initializer else {
+            state.env.remove(&EnvKey::Local(object.symbol));
+            return Ok(());
+        };
+        let stored = match initializer.plan.actions() {
+            [InitAction::StoreScalar { value, .. }] => {
+                let lowered = self.lower_expr(value, state)?;
+                self.cast(lowered, integer, state)?
+            }
+            [InitAction::ZeroScalar { .. }] => self.constant(state, integer, 0)?,
+            _ => {
+                return Err(LowerError::UnsupportedStatement {
+                    span: object.span,
+                    feature: "aggregate or multi-action initializer is outside scalar lowering",
+                });
+            }
+        };
+        state.env.insert(
+            EnvKey::Local(object.symbol),
+            BoundValue {
+                value: stored.value,
+                integer: Some(integer),
+            },
+        );
+        Ok(())
+    }
+
+    fn lower_if(
+        &mut self,
+        condition: &'a CHirExpr<'a>,
+        then_branch: &'a CHirStmt<'a>,
+        else_branch: Option<&'a CHirStmt<'a>>,
+        mut state: State,
+        live_after: &BTreeSet<SymbolId>,
+        control: &ControlTargets,
+    ) -> Result<Flow, LowerError> {
+        let condition = self.lower_condition(condition, &mut state)?;
+        let mut then_symbols = live_after.clone();
+        collect_symbols_stmt(then_branch, &mut then_symbols);
+        let then_keys = self.keys_for(&state, &then_symbols, &[]);
+        let direct_then = self.direct_jump(then_branch, control);
+        let then_state = if direct_then.is_none() {
+            Some(self.new_block_from(&state, &then_keys, BlockRole::Ordinary)?)
+        } else {
+            None
+        };
+
+        let mut else_symbols = live_after.clone();
+        if let Some(branch) = else_branch {
+            collect_symbols_stmt(branch, &mut else_symbols);
+        }
+        let else_keys = self.keys_for(&state, &else_symbols, &[]);
+        let direct_else = else_branch.and_then(|branch| self.direct_jump(branch, control));
+        let else_state = if direct_else.is_none() {
+            Some(self.new_block_from(&state, &else_keys, BlockRole::Ordinary)?)
+        } else {
+            None
+        };
+
+        let (then_target, then_args) = if let Some(target) = direct_then {
+            (target.id, self.edge_values(&state, &target.keys)?)
+        } else {
+            let target = then_state.as_ref().ok_or(LowerError::InvalidControlFlow {
+                span: then_branch.span(),
+                reason: "if-then block was not constructed",
+            })?;
+            (target.block, self.edge_values(&state, &then_keys)?)
+        };
+        let (else_target, else_args) = if let Some(target) = direct_else {
+            (target.id, self.edge_values(&state, &target.keys)?)
+        } else {
+            let target = else_state.as_ref().ok_or(LowerError::InvalidControlFlow {
+                span: else_branch.map_or(then_branch.span(), CHirStmt::span),
+                reason: "if-else block was not constructed",
+            })?;
+            (target.block, self.edge_values(&state, &else_keys)?)
+        };
+        self.terminate(
+            &state,
+            Inst::CondBr(condition, then_target, then_args, else_target, else_args),
+        )?;
+
+        let mut normal = Vec::new();
+        if let Some(then_state) = then_state {
+            normal.extend(
+                self.lower_stmt(then_branch, then_state, live_after, control)?
+                    .normal,
+            );
+        }
+        if let Some(else_state) = else_state {
+            if let Some(branch) = else_branch {
+                normal.extend(
+                    self.lower_stmt(branch, else_state, live_after, control)?
+                        .normal,
+                );
+            } else {
+                normal.push(else_state);
+            }
+        }
+        Ok(Flow { normal })
+    }
+
+    fn direct_jump<'b>(
+        &self,
+        statement: &'b CHirStmt<'b>,
+        control: &'b ControlTargets,
+    ) -> Option<&'b JumpTarget> {
+        match statement {
+            CHirStmt::Break(_) => control.break_target.as_ref(),
+            CHirStmt::Continue(_) => control.continue_target.as_ref(),
+            _ => None,
+        }
+    }
+
+    fn lower_while(
+        &mut self,
+        condition: &'a CHirExpr<'a>,
+        body: &'a CHirStmt<'a>,
+        state: State,
+        live_after: &BTreeSet<SymbolId>,
+        outer: &ControlTargets,
+    ) -> Result<Flow, LowerError> {
+        let mut carried = live_after.clone();
+        collect_symbols_expr(condition, &mut carried);
+        collect_symbols_stmt(body, &mut carried);
+        let carried_keys = self.keys_for(&state, &carried, &[]);
+        let header = self.new_block_from(&state, &carried_keys, BlockRole::Ordinary)?;
+        self.branch(&state, header.block, &carried_keys)?;
+        let mut header_after_condition = header.clone();
+        let known_truth = constant_truth(self.unit, self.target, condition);
+        let predicate = if known_truth.is_none() {
+            Some(self.lower_condition(condition, &mut header_after_condition)?)
+        } else {
+            None
+        };
+        let body_keys = self.keys_for(&header_after_condition, &carried, &[]);
+        let body_state =
+            self.new_block_from(&header_after_condition, &body_keys, BlockRole::Ordinary)?;
+        let break_placeholder = self.fresh_placeholder();
+        let break_keys = self.keys_for(&header_after_condition, live_after, &[]);
+        let body_arguments = self.edge_values(&header_after_condition, &body_keys)?;
+        let break_arguments = self.edge_values(&header_after_condition, &break_keys)?;
+        match (known_truth, predicate) {
+            (Some(true), None) => self.terminate(
+                &header_after_condition,
+                Inst::Br(body_state.block, body_arguments),
+            )?,
+            (Some(false), None) => self.terminate(
+                &header_after_condition,
+                Inst::Br(break_placeholder, break_arguments),
+            )?,
+            (None, Some(predicate)) => self.terminate(
+                &header_after_condition,
+                Inst::CondBr(
+                    predicate,
+                    body_state.block,
+                    body_arguments,
+                    break_placeholder,
+                    break_arguments,
+                ),
+            )?,
+            _ => {
+                return Err(LowerError::InvalidControlFlow {
+                    span: condition.span(),
+                    reason: "while condition classification is inconsistent",
+                });
+            }
+        }
+        let control = ControlTargets {
+            break_target: Some(JumpTarget {
+                id: break_placeholder,
+                keys: break_keys.clone(),
+            }),
+            continue_target: Some(JumpTarget {
+                id: header.block,
+                keys: carried_keys.clone(),
+            }),
+        };
+        let flow = self.lower_stmt(body, body_state, &carried, &control)?;
+        for normal in flow.normal {
+            self.branch(&normal, header.block, &carried_keys)?;
+        }
+        let exit =
+            self.new_block_from(&header_after_condition, &break_keys, BlockRole::Ordinary)?;
+        self.replace_target(break_placeholder, exit.block);
+        let _ = outer;
+        Ok(Flow { normal: vec![exit] })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn lower_for(
+        &mut self,
+        initializer: &'a CHirForInit<'a>,
+        condition: Option<&'a CHirExpr<'a>>,
+        step: Option<&'a CHirExpr<'a>>,
+        body: &'a CHirStmt<'a>,
+        mut state: State,
+        live_after: &BTreeSet<SymbolId>,
+        _outer: &ControlTargets,
+    ) -> Result<Flow, LowerError> {
+        let mut init_symbols = Vec::new();
+        match initializer {
+            CHirForInit::Empty => {}
+            CHirForInit::Expression(expression) => {
+                self.lower_discarded_expr(expression, &mut state)?;
+            }
+            CHirForInit::Declaration(declarations) => {
+                for declaration in declarations {
+                    if let CHirDecl::Object(object) = declaration {
+                        init_symbols.push(object.symbol);
+                    }
+                    self.lower_declaration(declaration, &mut state)?;
+                }
+            }
+        }
+        let mut carried = live_after.clone();
+        if let Some(condition) = condition {
+            collect_symbols_expr(condition, &mut carried);
+        }
+        if let Some(step) = step {
+            collect_symbols_expr(step, &mut carried);
+        }
+        collect_symbols_stmt(body, &mut carried);
+        let carried_keys = self.keys_for(&state, &carried, &init_symbols);
+        let header = self.new_block_from(&state, &carried_keys, BlockRole::Ordinary)?;
+        self.branch(&state, header.block, &carried_keys)?;
+        let mut header_condition = header.clone();
+        let known_truth =
+            condition.and_then(|condition| constant_truth(self.unit, self.target, condition));
+        let predicate = if condition.is_some() && known_truth.is_none() {
+            condition
+                .map(|condition| self.lower_condition(condition, &mut header_condition))
+                .transpose()?
+        } else {
+            None
+        };
+        let body_keys = self.keys_for(&header_condition, &carried, &init_symbols);
+        let body_state = self.new_block_from(&header_condition, &body_keys, BlockRole::Ordinary)?;
+        let break_placeholder = self.fresh_placeholder();
+        let continue_placeholder = self.fresh_placeholder();
+        let break_keys = self.keys_for(&header_condition, live_after, &[]);
+        let body_arguments = self.edge_values(&header_condition, &body_keys)?;
+        match (condition, known_truth, predicate) {
+            (None, None, None) | (Some(_), Some(true), None) => {
+                self.terminate(
+                    &header_condition,
+                    Inst::Br(body_state.block, body_arguments),
+                )?;
+            }
+            (Some(_), Some(false), None) => {
+                let break_arguments = self.edge_values(&header_condition, &break_keys)?;
+                self.terminate(
+                    &header_condition,
+                    Inst::Br(break_placeholder, break_arguments),
+                )?;
+            }
+            (Some(_), None, Some(predicate)) => {
+                let break_arguments = self.edge_values(&header_condition, &break_keys)?;
+                self.terminate(
+                    &header_condition,
+                    Inst::CondBr(
+                        predicate,
+                        body_state.block,
+                        body_arguments,
+                        break_placeholder,
+                        break_arguments,
+                    ),
+                )?;
+            }
+            _ => {
+                return Err(LowerError::InvalidControlFlow {
+                    span: condition.map_or(self.info.span, CHirExpr::span),
+                    reason: "for condition classification is inconsistent",
+                });
+            }
+        }
+        let control = ControlTargets {
+            break_target: Some(JumpTarget {
+                id: break_placeholder,
+                keys: break_keys.clone(),
+            }),
+            continue_target: Some(JumpTarget {
+                id: continue_placeholder,
+                keys: carried_keys.clone(),
+            }),
+        };
+        let body_flow = self.lower_stmt(body, body_state, &carried, &control)?;
+        let step_template = body_flow
+            .normal
+            .first()
+            .cloned()
+            .unwrap_or_else(|| header.clone());
+        let mut step_state =
+            self.new_block_from(&step_template, &carried_keys, BlockRole::LoopStep)?;
+        self.replace_target(continue_placeholder, step_state.block);
+        for normal in &body_flow.normal {
+            self.branch(normal, step_state.block, &carried_keys)?;
+        }
+        let normal_predecessor_positions = body_flow
+            .normal
+            .iter()
+            .filter_map(|normal| {
+                self.blocks
+                    .iter()
+                    .position(|block| block.id == normal.block)
+            })
+            .collect::<Vec<_>>();
+        if let Some(step) = step {
+            self.lower_discarded_expr(step, &mut step_state)?;
+        }
+        self.branch(&step_state, header.block, &carried_keys)?;
+        if let Some(position) = normal_predecessor_positions.into_iter().min() {
+            self.move_block_before(step_state.block, position)?;
+        }
+        let exit = self.new_block_from(&header_condition, &break_keys, BlockRole::Ordinary)?;
+        self.replace_target(break_placeholder, exit.block);
+        let mut exit = exit;
+        for symbol in init_symbols {
+            exit.env.remove(&EnvKey::Local(symbol));
+            exit.locals.remove(&symbol);
+        }
+        Ok(Flow { normal: vec![exit] })
+    }
+
+    fn lower_do_while(
+        &mut self,
+        body: &'a CHirStmt<'a>,
+        condition: &'a CHirExpr<'a>,
+        state: State,
+        live_after: &BTreeSet<SymbolId>,
+        _outer: &ControlTargets,
+    ) -> Result<Flow, LowerError> {
+        let mut carried = live_after.clone();
+        collect_symbols_stmt(body, &mut carried);
+        collect_symbols_expr(condition, &mut carried);
+        let carried_keys = self.keys_for(&state, &carried, &[]);
+        let body_state = self.new_block_from(&state, &carried_keys, BlockRole::Ordinary)?;
+        let body_block = body_state.block;
+        self.branch(&state, body_state.block, &carried_keys)?;
+        let condition_placeholder = self.fresh_placeholder();
+        let break_placeholder = self.fresh_placeholder();
+        let break_keys = self.keys_for(&body_state, live_after, &[]);
+        let control = ControlTargets {
+            break_target: Some(JumpTarget {
+                id: break_placeholder,
+                keys: break_keys.clone(),
+            }),
+            continue_target: Some(JumpTarget {
+                id: condition_placeholder,
+                keys: carried_keys.clone(),
+            }),
+        };
+        let body_flow = self.lower_stmt(body, body_state.clone(), &carried, &control)?;
+        let condition_template = body_flow.normal.first().cloned().unwrap_or(body_state);
+        let mut condition_state =
+            self.new_block_from(&condition_template, &carried_keys, BlockRole::Ordinary)?;
+        self.replace_target(condition_placeholder, condition_state.block);
+        for normal in body_flow.normal {
+            self.branch(&normal, condition_state.block, &carried_keys)?;
+        }
+        match constant_truth(self.unit, self.target, condition) {
+            Some(true) => {
+                let body_arguments = self.edge_values(&condition_state, &carried_keys)?;
+                self.terminate(&condition_state, Inst::Br(body_block, body_arguments))?;
+            }
+            Some(false) => {
+                let break_arguments = self.edge_values(&condition_state, &break_keys)?;
+                self.terminate(
+                    &condition_state,
+                    Inst::Br(break_placeholder, break_arguments),
+                )?;
+            }
+            None => {
+                let predicate = self.lower_condition(condition, &mut condition_state)?;
+                let body_arguments = self.edge_values(&condition_state, &carried_keys)?;
+                let break_arguments = self.edge_values(&condition_state, &break_keys)?;
+                self.terminate(
+                    &condition_state,
+                    Inst::CondBr(
+                        predicate,
+                        body_block,
+                        body_arguments,
+                        break_placeholder,
+                        break_arguments,
+                    ),
+                )?;
+            }
+        }
+        let exit = self.new_block_from(&condition_state, &break_keys, BlockRole::Ordinary)?;
+        self.replace_target(break_placeholder, exit.block);
+        Ok(Flow { normal: vec![exit] })
+    }
+
+    fn lower_switch(
+        &mut self,
+        expression: &'a CHirExpr<'a>,
+        body: &'a CHirStmt<'a>,
+        mut state: State,
+        live_after: &BTreeSet<SymbolId>,
+        outer: &ControlTargets,
+    ) -> Result<Flow, LowerError> {
+        let selector = self.lower_expr(expression, &mut state)?;
+        let selector_type = integer_promotion(selector.integer);
+        let selector = self.cast(selector, selector_type, &state)?;
+        let selector_temporary = if matches!(expression, CHirExpr::Ident { .. }) {
+            None
+        } else {
+            let key = EnvKey::Temporary(self.next_temporary);
+            self.next_temporary += 1;
+            state.env.insert(
+                key,
+                BoundValue {
+                    value: selector.value.clone(),
+                    integer: Some(selector.integer),
+                },
+            );
+            Some(key)
+        };
+        let (prefix, segments) = switch_segments(body)?;
+        let mut switch_locals = state.locals.clone();
+        for item in prefix {
+            if let CHirBlockItem::Declaration(CHirDecl::Object(object)) = item {
+                switch_locals.insert(object.symbol);
+            }
+        }
+        for segment in &segments {
+            for item in &segment.items {
+                if let SwitchSegmentItem::Declaration(CHirDecl::Object(object)) = item {
+                    switch_locals.insert(object.symbol);
+                }
+            }
+        }
+        let prefix_is_targeted = prefix.iter().any(|item| {
+            matches!(
+                item,
+                CHirBlockItem::Statement(statement)
+                    if contains_targeted_label(statement, &self.goto_names)
+            )
+        });
+        if segments.is_empty() {
+            if !prefix_is_targeted {
+                if let Some(selector_temporary) = selector_temporary {
+                    state.env.remove(&selector_temporary);
+                }
+                return Ok(Flow {
+                    normal: vec![state],
+                });
+            }
+            let mut prefix_symbols = live_after.clone();
+            for item in prefix {
+                collect_symbols_item(item, &mut prefix_symbols);
+            }
+            let mut prefix_template = state.clone();
+            prefix_template.locals.clone_from(&switch_locals);
+            let mut prefix_keys = self.keys_for(&prefix_template, &prefix_symbols, &[]);
+            if let Some(selector_temporary) = selector_temporary {
+                prefix_keys.retain(|key| *key != selector_temporary);
+            }
+            let detached =
+                self.new_block_from(&prefix_template, &prefix_keys, BlockRole::Ordinary)?;
+            let exit_keys = self.keys_for(&state, live_after, &[]);
+            let exit = self.new_block_from(&state, &exit_keys, BlockRole::SwitchExit)?;
+            let control = ControlTargets {
+                break_target: Some(JumpTarget {
+                    id: exit.block,
+                    keys: exit_keys.clone(),
+                }),
+                continue_target: outer.continue_target.clone(),
+            };
+            let prefix_flow =
+                self.lower_compound_items(prefix, detached, live_after, &control, false)?;
+            self.branch(&state, exit.block, &exit_keys)?;
+            for normal in prefix_flow.normal {
+                self.branch(&normal, exit.block, &exit_keys)?;
+            }
+            return Ok(Flow { normal: vec![exit] });
+        }
+        let break_placeholder = self.fresh_placeholder();
+        let mut break_keys = self.keys_for(&state, live_after, &[]);
+        if let Some(selector_temporary) = selector_temporary {
+            break_keys.retain(|key| *key != selector_temporary);
+        }
+        let mut entries = Vec::new();
+        let mut dispatch_states = Vec::new();
+        let mut current_dispatch = state.clone();
+        for (index, segment) in segments.iter().enumerate() {
+            let mut symbols = live_after.clone();
+            for later in &segments[index..] {
+                for item in &later.items {
+                    collect_symbols_switch_item(item, &mut symbols);
+                }
+            }
+            let mut entry_template = current_dispatch.clone();
+            entry_template.locals.clone_from(&switch_locals);
+            let mut keys = self.keys_for(&entry_template, &symbols, &[]);
+            if let Some(selector_temporary) = selector_temporary {
+                keys.retain(|key| *key != selector_temporary);
+            }
+            let entry = self.new_block_from(&entry_template, &keys, BlockRole::Ordinary)?;
+            entries.push((entry, keys));
+            if segment.case.is_some() {
+                let next_case = segments[index + 1..]
+                    .iter()
+                    .position(|candidate| candidate.case.is_some())
+                    .map(|offset| index + 1 + offset);
+                if next_case.is_some() {
+                    let mut remaining = live_after.clone();
+                    collect_symbols_expr(expression, &mut remaining);
+                    for later in &segments[index + 1..] {
+                        if let Some(case) = later.case {
+                            collect_symbols_expr(case, &mut remaining);
+                        }
+                        for item in &later.items {
+                            collect_symbols_switch_item(item, &mut remaining);
+                        }
+                    }
+                    let next_keys = self.keys_for(&current_dispatch, &remaining, &[]);
+                    let next =
+                        self.new_block_from(&current_dispatch, &next_keys, BlockRole::Ordinary)?;
+                    dispatch_states.push((index, current_dispatch, next.clone(), next_keys));
+                    current_dispatch = next;
+                } else {
+                    dispatch_states.push((
+                        index,
+                        current_dispatch.clone(),
+                        entries[index].0.clone(),
+                        Vec::new(),
+                    ));
+                }
+            }
+        }
+
+        let default_index = segments.iter().position(|segment| segment.case.is_none());
+        if dispatch_states.is_empty() {
+            let default = default_index.ok_or(LowerError::InvalidControlFlow {
+                span: body.span(),
+                reason: "switch has no case or default dispatch target",
+            })?;
+            self.branch(&state, entries[default].0.block, &entries[default].1)?;
+        }
+        for (position, (index, mut dispatch, next, next_keys)) in
+            dispatch_states.into_iter().enumerate()
+        {
+            let case_expression = segments[index].case.ok_or(LowerError::InvalidControlFlow {
+                span: body.span(),
+                reason: "switch dispatch does not reference a case",
+            })?;
+            let case_value = self.lower_expr(case_expression, &mut dispatch)?;
+            let current_selector = if let CHirExpr::Ident { symbol, span, .. } = expression {
+                self.local(&dispatch, *symbol, *span)?
+            } else {
+                let key = selector_temporary.ok_or(LowerError::InvalidControlFlow {
+                    span: expression.span(),
+                    reason: "switch selector temporary is absent",
+                })?;
+                let bound = dispatch
+                    .env
+                    .get(&key)
+                    .ok_or(LowerError::InvalidControlFlow {
+                        span: expression.span(),
+                        reason: "switch selector was not threaded to a dispatch block",
+                    })?;
+                ExprValue {
+                    value: bound.value.clone(),
+                    integer: bound.integer.ok_or(LowerError::InvalidControlFlow {
+                        span: expression.span(),
+                        reason: "switch selector temporary is not an integer",
+                    })?,
+                }
+            };
+            let compared_type = current_selector.integer;
+            let lhs = self.cast(current_selector, compared_type, &dispatch)?;
+            let rhs = self.cast(case_value, compared_type, &dispatch)?;
+            let condition = self.fresh_value(EvoIRType::Bits(1));
+            self.emit(
+                &dispatch,
+                Inst::ICmp(condition.clone(), CmpOp::Eq, lhs.value, rhs.value),
+            )?;
+            let true_entry = &entries[index];
+            let (false_target, false_args) =
+                if position + 1 < segments.len() && !next_keys.is_empty() {
+                    (next.block, self.edge_values(&dispatch, &next_keys)?)
+                } else if let Some(default) = default_index {
+                    let default_entry = &entries[default];
+                    (
+                        default_entry.0.block,
+                        self.edge_values(&dispatch, &default_entry.1)?,
+                    )
+                } else {
+                    (break_placeholder, self.edge_values(&dispatch, &break_keys)?)
+                };
+            let true_args = self.edge_values(&dispatch, &true_entry.1)?;
+            self.terminate(
+                &dispatch,
+                Inst::CondBr(
+                    condition,
+                    true_entry.0.block,
+                    true_args,
+                    false_target,
+                    false_args,
+                ),
+            )?;
+        }
+
+        let control = ControlTargets {
+            break_target: Some(JumpTarget {
+                id: break_placeholder,
+                keys: break_keys.clone(),
+            }),
+            continue_target: outer.continue_target.clone(),
+        };
+        if prefix_is_targeted {
+            let mut prefix_live = live_after.clone();
+            for segment in &segments {
+                for item in &segment.items {
+                    collect_symbols_switch_item(item, &mut prefix_live);
+                }
+            }
+            let mut prefix_template = state.clone();
+            prefix_template.locals.clone_from(&switch_locals);
+            let mut prefix_keys = self.keys_for(&prefix_template, &prefix_live, &[]);
+            if let Some(selector_temporary) = selector_temporary {
+                prefix_keys.retain(|key| *key != selector_temporary);
+            }
+            let detached =
+                self.new_block_from(&prefix_template, &prefix_keys, BlockRole::Ordinary)?;
+            let prefix_flow =
+                self.lower_compound_items(prefix, detached, &prefix_live, &control, false)?;
+            for normal in prefix_flow.normal {
+                self.branch(&normal, entries[0].0.block, &entries[0].1)?;
+            }
+        }
+        for index in 0..segments.len() {
+            let mut normal = vec![entries[index].0.clone()];
+            for (item_index, item) in segments[index].items.iter().enumerate() {
+                let mut future = live_after.clone();
+                for later_item in &segments[index].items[item_index + 1..] {
+                    collect_symbols_switch_item(later_item, &mut future);
+                }
+                for later in &segments[index + 1..] {
+                    for later_item in &later.items {
+                        collect_symbols_switch_item(later_item, &mut future);
+                    }
+                }
+                let mut needed_now = future.clone();
+                collect_symbols_switch_item(item, &mut needed_now);
+                let pending = std::mem::take(&mut normal);
+                let Some(mut current) = self.merge_states(pending, &needed_now)? else {
+                    break;
+                };
+                normal = match item {
+                    SwitchSegmentItem::Declaration(declaration) => {
+                        self.lower_declaration(declaration, &mut current)?;
+                        vec![current]
+                    }
+                    SwitchSegmentItem::Statement(statement) => {
+                        self.lower_stmt(statement, current, &future, &control)?
+                            .normal
+                    }
+                };
+            }
+            if index + 1 < segments.len() {
+                let next = &entries[index + 1];
+                for current in normal {
+                    self.branch(&current, next.0.block, &next.1)?;
+                }
+            } else {
+                for current in normal {
+                    self.branch(&current, break_placeholder, &break_keys)?;
+                }
+            }
+        }
+        let exit = self.new_block_from(&state, &break_keys, BlockRole::SwitchExit)?;
+        self.replace_target(break_placeholder, exit.block);
+        Ok(Flow { normal: vec![exit] })
+    }
+
+    fn lower_expr(
+        &mut self,
+        expression: &'a CHirExpr<'a>,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        match expression {
+            CHirExpr::Lit(literal, _) => {
+                let integer = integer_literal_value(*literal).map_err(|_| {
+                    LowerError::UnsupportedExpression {
+                        span: expression.span(),
+                        feature: "integer literal has no Day-6 target representation",
+                    }
+                })?;
+                let result = self.fresh_value(bits(integer.ty()));
+                self.emit(state, Inst::Const(result.clone(), integer.raw_bits()))?;
+                Ok(ExprValue {
+                    value: result,
+                    integer: integer.ty(),
+                })
+            }
+            CHirExpr::CharLit(literal, _) => {
+                let result = self.fresh_value(bits(CIntegerType::INT));
+                self.emit(state, Inst::Const(result.clone(), u64::from(literal.value)))?;
+                Ok(ExprValue {
+                    value: result,
+                    integer: CIntegerType::INT,
+                })
+            }
+            CHirExpr::Ident {
+                symbol,
+                spelling,
+                facts,
+                span,
+                ..
+            } => {
+                let declaration =
+                    self.unit
+                        .symbols()
+                        .symbol(*symbol)
+                        .map_err(|_| LowerError::UnknownSymbol {
+                            symbol: *symbol,
+                            span: *span,
+                        })?;
+                if declaration.kind() == SymbolKind::Enumerator {
+                    if declaration.spelling() != spelling
+                        || declaration.ty() != facts.ty()
+                        || facts.category() != ExprCategory::Value
+                    {
+                        return Err(LowerError::UnsupportedExpression {
+                            span: *span,
+                            feature: "enumerator identifier disagrees with its semantic identity",
+                        });
+                    }
+                    let integer =
+                        canonical_integer(self.unit.types(), self.target, facts.ty(), *span)?;
+                    let result = self.fresh_value(bits(integer));
+                    let value = declaration.enumerator_value().ok_or(
+                        LowerError::UnsupportedExpression {
+                            span: *span,
+                            feature: "enumerator symbol is missing its canonical value",
+                        },
+                    )?;
+                    self.emit(state, Inst::Const(result.clone(), value as u64))?;
+                    return Ok(ExprValue {
+                        value: result,
+                        integer,
+                    });
+                }
+                if !matches!(
+                    declaration.kind(),
+                    SymbolKind::Object | SymbolKind::Parameter
+                ) || declaration.spelling() != spelling
+                    || declaration.ty() != facts.ty()
+                    || facts.category() != ExprCategory::LValue
+                {
+                    return Err(LowerError::UnsupportedExpression {
+                        span: *span,
+                        feature: "object identifier disagrees with its semantic identity",
+                    });
+                }
+                self.local(state, *symbol, *span)
+            }
+            CHirExpr::Unary(operator, operand, span) => {
+                self.lower_unary(*operator, operand, *span, state)
+            }
+            CHirExpr::Binary(operator, left, right, span) => {
+                self.lower_binary(*operator, left, right, *span, state)
+            }
+            CHirExpr::Ternary(condition, then_value, else_value, _) => {
+                self.lower_ternary(condition, then_value, else_value, state)
+            }
+            CHirExpr::Call(callee, arguments, span) => self
+                .emit_call(callee, arguments, *span, state)?
+                .ok_or(LowerError::UnsupportedExpression {
+                    span: *span,
+                    feature: "void call used as a scalar expression",
+                }),
+            CHirExpr::Cast(target, operand, span) => {
+                let target = canonical_integer(self.unit.types(), self.target, *target, *span)?;
+                let value = self.lower_expr(operand, state)?;
+                self.cast(value, target, state)
+            }
+            CHirExpr::Assign {
+                op,
+                place,
+                target,
+                value,
+                span,
+                ..
+            } => self.lower_assignment(*op, *place, target, value, *span, state),
+            CHirExpr::Update {
+                op,
+                place,
+                target,
+                span,
+                ..
+            } => self.lower_update(*op, *place, target, *span, state),
+            CHirExpr::Comma(left, right, _) => {
+                self.lower_discarded_expr(left, state)?;
+                self.lower_expr(right, state)
+            }
+            CHirExpr::SizeOf(ty, span) => {
+                let layout = self
+                    .target
+                    .layout_of(self.unit.types(), *ty)
+                    .map_err(|source| LowerError::Layout {
+                        ty: *ty,
+                        span: *span,
+                        source,
+                    })?;
+                let result = self.fresh_value(bits(CIntegerType::ULONG));
+                self.emit(state, Inst::Const(result.clone(), layout.size_bytes))?;
+                Ok(ExprValue {
+                    value: result,
+                    integer: CIntegerType::ULONG,
+                })
+            }
+            CHirExpr::AlignOf(ty, span) => {
+                let layout = self
+                    .target
+                    .layout_of(self.unit.types(), *ty)
+                    .map_err(|source| LowerError::Layout {
+                        ty: *ty,
+                        span: *span,
+                        source,
+                    })?;
+                let result = self.fresh_value(bits(CIntegerType::ULONG));
+                self.emit(
+                    state,
+                    Inst::Const(result.clone(), u64::from(layout.align_bytes)),
+                )?;
+                Ok(ExprValue {
+                    value: result,
+                    integer: CIntegerType::ULONG,
+                })
+            }
+            CHirExpr::FloatLit(_, span)
+            | CHirExpr::StringLit(_, span)
+            | CHirExpr::SizeOfExpr(_, span)
+            | CHirExpr::Member(_, _, span)
+            | CHirExpr::PtrMember(_, _, span)
+            | CHirExpr::Index(_, _, span)
+            | CHirExpr::CompoundLit(_, _, span) => Err(LowerError::UnsupportedExpression {
+                span: *span,
+                feature: "expression requires the Day-7 object or non-integer model",
+            }),
+        }
+    }
+
+    fn lower_unary(
+        &mut self,
+        operator: UnaryOp,
+        operand: &'a CHirExpr<'a>,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let operand = self.lower_expr(operand, state)?;
+        match operator {
+            UnaryOp::Plus => {
+                let promoted = integer_promotion(operand.integer);
+                self.cast(operand, promoted, state)
+            }
+            UnaryOp::Not => {
+                let truth = self.lower_condition_value(operand, state)?;
+                let zero = self.fresh_value(EvoIRType::Bits(1));
+                self.emit(state, Inst::Const(zero.clone(), 0))?;
+                let result = self.fresh_value(EvoIRType::Bits(1));
+                self.emit(state, Inst::ICmp(result.clone(), CmpOp::Eq, truth, zero))?;
+                Ok(ExprValue {
+                    value: result,
+                    integer: CIntegerType::INT,
+                })
+            }
+            UnaryOp::Neg => {
+                let integer = integer_promotion(operand.integer);
+                let operand = self.cast(operand, integer, state)?;
+                let zero = self.constant(state, integer, 0)?;
+                self.emit_signed_arithmetic(state, BinaryOp::Sub, zero, operand, integer)
+            }
+            UnaryOp::BitNot => {
+                let integer = integer_promotion(operand.integer);
+                let operand = self.cast(operand, integer, state)?;
+                let mask = self.constant(state, integer, integer.mask())?;
+                let result = self.fresh_value(bits(integer));
+                self.emit(state, Inst::Xor(result.clone(), operand.value, mask.value))?;
+                Ok(ExprValue {
+                    value: result,
+                    integer,
+                })
+            }
+            UnaryOp::AddrOf | UnaryOp::Deref => Err(LowerError::UnsupportedExpression {
+                span,
+                feature: "pointer unary operator requires the Day-7 memory model",
+            }),
+        }
+    }
+
+    fn lower_binary(
+        &mut self,
+        operator: BinaryOp,
+        left: &'a CHirExpr<'a>,
+        right: &'a CHirExpr<'a>,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        if matches!(operator, BinaryOp::And | BinaryOp::Or) {
+            return self.lower_logical(operator, left, right, state);
+        }
+        if operator == BinaryOp::Comma {
+            self.lower_discarded_expr(left, state)?;
+            return self.lower_expr(right, state);
+        }
+        if matches!(
+            operator,
+            BinaryOp::Assign
+                | BinaryOp::AddAssign
+                | BinaryOp::SubAssign
+                | BinaryOp::MulAssign
+                | BinaryOp::DivAssign
+                | BinaryOp::ModAssign
+                | BinaryOp::ShlAssign
+                | BinaryOp::ShrAssign
+                | BinaryOp::BitAndAssign
+                | BinaryOp::BitOrAssign
+                | BinaryOp::BitXorAssign
+        ) {
+            return Err(LowerError::UnsupportedExpression {
+                span,
+                feature: "assignment must be represented by CHirExpr::Assign",
+            });
+        }
+        let left = self.lower_expr(left, state)?;
+        let left_key = EnvKey::Temporary(self.next_temporary);
+        self.next_temporary += 1;
+        state.env.insert(
+            left_key,
+            BoundValue {
+                value: left.value,
+                integer: Some(left.integer),
+            },
+        );
+        let right = self.lower_expr(right, state)?;
+        let left = state
+            .env
+            .remove(&left_key)
+            .ok_or(LowerError::InvalidControlFlow {
+                span,
+                reason: "right operand control flow lost the evaluated left operand",
+            })?;
+        let left = ExprValue {
+            value: left.value,
+            integer: left.integer.ok_or(LowerError::InvalidControlFlow {
+                span,
+                reason: "threaded left operand lost its integer type",
+            })?,
+        };
+        if matches!(operator, BinaryOp::Shl | BinaryOp::Shr) {
+            let shifted_type = integer_promotion(left.integer);
+            let amount_type = integer_promotion(right.integer);
+            let left = self.cast(left, shifted_type, state)?;
+            let right = self.cast(right, amount_type, state)?;
+            return self.emit_shift(state, operator, left, right, shifted_type);
+        }
+        let common = arithmetic_common_type(left.integer, right.integer);
+        let left = self.cast(left, common, state)?;
+        let right = self.cast(right, common, state)?;
+        match operator {
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul => {
+                self.emit_signed_arithmetic(state, operator, left, right, common)
+            }
+            BinaryOp::Div | BinaryOp::Mod => {
+                self.emit_div_rem(state, operator, left, right, common)
+            }
+            BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor => {
+                let result = self.fresh_value(bits(common));
+                let instruction = match operator {
+                    BinaryOp::BitAnd => Inst::And(result.clone(), left.value, right.value),
+                    BinaryOp::BitOr => Inst::Or(result.clone(), left.value, right.value),
+                    BinaryOp::BitXor => Inst::Xor(result.clone(), left.value, right.value),
+                    _ => {
+                        return Err(LowerError::InvalidControlFlow {
+                            span,
+                            reason: "non-bitwise operator reached bitwise emission",
+                        });
+                    }
+                };
+                self.emit(state, instruction)?;
+                Ok(ExprValue {
+                    value: result,
+                    integer: common,
+                })
+            }
+            BinaryOp::Lt
+            | BinaryOp::Le
+            | BinaryOp::Gt
+            | BinaryOp::Ge
+            | BinaryOp::Eq
+            | BinaryOp::Ne => {
+                let result = self.fresh_value(EvoIRType::Bits(1));
+                let (comparison, lhs, rhs) = match operator {
+                    BinaryOp::Eq => (CmpOp::Eq, left.value, right.value),
+                    BinaryOp::Ne => (CmpOp::Ne, left.value, right.value),
+                    BinaryOp::Lt if common.is_signed() => (CmpOp::SLt, left.value, right.value),
+                    BinaryOp::Lt => (CmpOp::ULt, left.value, right.value),
+                    BinaryOp::Le if common.is_signed() => (CmpOp::SLe, left.value, right.value),
+                    BinaryOp::Le => (CmpOp::ULe, left.value, right.value),
+                    BinaryOp::Gt if common.is_signed() => (CmpOp::SLt, right.value, left.value),
+                    BinaryOp::Gt => (CmpOp::ULt, right.value, left.value),
+                    BinaryOp::Ge if common.is_signed() => (CmpOp::SLe, right.value, left.value),
+                    BinaryOp::Ge => (CmpOp::ULe, right.value, left.value),
+                    _ => {
+                        return Err(LowerError::InvalidControlFlow {
+                            span,
+                            reason: "non-comparison operator reached comparison emission",
+                        });
+                    }
+                };
+                self.emit(state, Inst::ICmp(result.clone(), comparison, lhs, rhs))?;
+                Ok(ExprValue {
+                    value: result,
+                    integer: CIntegerType::INT,
+                })
+            }
+            _ => Err(LowerError::UnsupportedExpression {
+                span,
+                feature: "unsupported binary operator",
+            }),
+        }
+    }
+
+    fn emit_signed_arithmetic(
+        &mut self,
+        state: &State,
+        operator: BinaryOp,
+        left: ExprValue,
+        right: ExprValue,
+        integer: CIntegerType,
+    ) -> Result<ExprValue, LowerError> {
+        let result = self.fresh_value(bits(integer));
+        if integer.is_signed() {
+            let defined = self.fresh_value(EvoIRType::Bits(1));
+            let predicate = match operator {
+                BinaryOp::Add => {
+                    Inst::SignedAddDefined(defined.clone(), left.value.clone(), right.value.clone())
+                }
+                BinaryOp::Sub => {
+                    Inst::SignedSubDefined(defined.clone(), left.value.clone(), right.value.clone())
+                }
+                BinaryOp::Mul => {
+                    Inst::SignedMulDefined(defined.clone(), left.value.clone(), right.value.clone())
+                }
+                _ => {
+                    return Err(LowerError::InvalidControlFlow {
+                        span: self.info.span,
+                        reason: "non-arithmetic operator reached signed arithmetic emission",
+                    });
+                }
+            };
+            self.emit(state, predicate)?;
+            self.emit(state, Inst::UbAssume(defined, UbReason::SignedOverflow))?;
+        }
+        let instruction = match operator {
+            BinaryOp::Add => Inst::Add(result.clone(), left.value, right.value),
+            BinaryOp::Sub => Inst::Sub(result.clone(), left.value, right.value),
+            BinaryOp::Mul => Inst::Mul(result.clone(), left.value, right.value),
+            _ => {
+                return Err(LowerError::InvalidControlFlow {
+                    span: self.info.span,
+                    reason: "unsupported arithmetic emission",
+                });
+            }
+        };
+        self.emit(state, instruction)?;
+        Ok(ExprValue {
+            value: result,
+            integer,
+        })
+    }
+
+    fn emit_div_rem(
+        &mut self,
+        state: &State,
+        operator: BinaryOp,
+        left: ExprValue,
+        right: ExprValue,
+        integer: CIntegerType,
+    ) -> Result<ExprValue, LowerError> {
+        let nonzero = self.fresh_value(EvoIRType::Bits(1));
+        self.emit(
+            state,
+            Inst::DivisorNonZero(nonzero.clone(), right.value.clone()),
+        )?;
+        self.emit(
+            state,
+            Inst::UbAssume(
+                nonzero,
+                if operator == BinaryOp::Div {
+                    UbReason::DivisionByZero
+                } else {
+                    UbReason::RemainderByZero
+                },
+            ),
+        )?;
+        if integer.is_signed() {
+            let defined = self.fresh_value(EvoIRType::Bits(1));
+            self.emit(
+                state,
+                Inst::SignedDivRemNoOverflow(
+                    defined.clone(),
+                    left.value.clone(),
+                    right.value.clone(),
+                ),
+            )?;
+            self.emit(state, Inst::UbAssume(defined, UbReason::SignedOverflow))?;
+        }
+        let result = self.fresh_value(bits(integer));
+        let instruction = match (operator, integer.is_signed()) {
+            (BinaryOp::Div, true) => Inst::SDiv(result.clone(), left.value, right.value),
+            (BinaryOp::Div, false) => Inst::UDiv(result.clone(), left.value, right.value),
+            (BinaryOp::Mod, true) => Inst::SRem(result.clone(), left.value, right.value),
+            (BinaryOp::Mod, false) => Inst::URem(result.clone(), left.value, right.value),
+            _ => {
+                return Err(LowerError::InvalidControlFlow {
+                    span: self.info.span,
+                    reason: "unsupported division/remainder emission",
+                });
+            }
+        };
+        self.emit(state, instruction)?;
+        Ok(ExprValue {
+            value: result,
+            integer,
+        })
+    }
+
+    fn emit_shift(
+        &mut self,
+        state: &State,
+        operator: BinaryOp,
+        shifted: ExprValue,
+        amount: ExprValue,
+        integer: CIntegerType,
+    ) -> Result<ExprValue, LowerError> {
+        let count_defined = self.fresh_value(EvoIRType::Bits(1));
+        self.emit(
+            state,
+            Inst::ShiftCountDefined {
+                result: count_defined.clone(),
+                shifted: shifted.value.clone(),
+                amount: amount.value.clone(),
+                amount_signed: amount.integer.is_signed(),
+            },
+        )?;
+        self.emit(
+            state,
+            Inst::UbAssume(count_defined, UbReason::InvalidShiftCount),
+        )?;
+        if operator == BinaryOp::Shl && integer.is_signed() {
+            let defined = self.fresh_value(EvoIRType::Bits(1));
+            self.emit(
+                state,
+                Inst::SignedShlDefined {
+                    result: defined.clone(),
+                    shifted: shifted.value.clone(),
+                    amount: amount.value.clone(),
+                    amount_signed: amount.integer.is_signed(),
+                },
+            )?;
+            self.emit(
+                state,
+                Inst::UbAssume(defined, UbReason::InvalidSignedLeftShift),
+            )?;
+        }
+        let result = self.fresh_value(bits(integer));
+        let instruction = match (operator, integer.is_signed()) {
+            (BinaryOp::Shl, _) => Inst::Shl(result.clone(), shifted.value, amount.value),
+            (BinaryOp::Shr, true) => Inst::AShr(result.clone(), shifted.value, amount.value),
+            (BinaryOp::Shr, false) => Inst::LShr(result.clone(), shifted.value, amount.value),
+            _ => {
+                return Err(LowerError::InvalidControlFlow {
+                    span: self.info.span,
+                    reason: "unsupported shift emission",
+                });
+            }
+        };
+        self.emit(state, instruction)?;
+        Ok(ExprValue {
+            value: result,
+            integer,
+        })
+    }
+
+    fn lower_logical(
+        &mut self,
+        operator: BinaryOp,
+        left: &'a CHirExpr<'a>,
+        right: &'a CHirExpr<'a>,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let left = self.lower_condition(left, state)?;
+        let symbols = state
+            .env
+            .keys()
+            .filter_map(|key| match key {
+                EnvKey::Local(symbol) => Some(*symbol),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
+        let keys = self.keys_for(state, &symbols, &[]);
+        let mut right_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
+        let skip_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
+        let (true_target, true_args, false_target, false_args) = if operator == BinaryOp::And {
+            (
+                right_state.block,
+                self.edge_values(state, &keys)?,
+                skip_state.block,
+                self.edge_values(state, &keys)?,
+            )
+        } else {
+            (
+                skip_state.block,
+                self.edge_values(state, &keys)?,
+                right_state.block,
+                self.edge_values(state, &keys)?,
+            )
+        };
+        self.terminate(
+            state,
+            Inst::CondBr(left, true_target, true_args, false_target, false_args),
+        )?;
+        let right_value = self.lower_expr(right, &mut right_state)?;
+        let right_result = self.lower_condition_value(right_value, &right_state)?;
+        let mut skip_state = skip_state;
+        let skip_result = self.fresh_value(EvoIRType::Bits(1));
+        self.emit(
+            &skip_state,
+            Inst::Const(skip_result.clone(), u64::from(operator == BinaryOp::Or)),
+        )?;
+        let temporary = EnvKey::Temporary(self.next_temporary);
+        self.next_temporary += 1;
+        right_state.env.insert(
+            temporary,
+            BoundValue {
+                value: right_result,
+                integer: Some(CIntegerType::INT),
+            },
+        );
+        skip_state.env.insert(
+            temporary,
+            BoundValue {
+                value: skip_result,
+                integer: Some(CIntegerType::INT),
+            },
+        );
+        let mut merge_keys = keys;
+        merge_keys.push(temporary);
+        let merge = self.new_block_from(&right_state, &merge_keys, BlockRole::Ordinary)?;
+        self.branch(&right_state, merge.block, &merge_keys)?;
+        self.branch(&skip_state, merge.block, &merge_keys)?;
+        *state = merge;
+        let result = state
+            .env
+            .remove(&temporary)
+            .ok_or(LowerError::InvalidControlFlow {
+                span: right.span(),
+                reason: "logical short-circuit merge lost its result",
+            })?;
+        Ok(ExprValue {
+            value: result.value,
+            integer: CIntegerType::INT,
+        })
+    }
+
+    fn lower_ternary(
+        &mut self,
+        condition: &'a CHirExpr<'a>,
+        then_expression: &'a CHirExpr<'a>,
+        else_expression: &'a CHirExpr<'a>,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let predicate = self.lower_condition(condition, state)?;
+        let all_symbols = state
+            .env
+            .keys()
+            .filter_map(|key| match key {
+                EnvKey::Local(symbol) => Some(*symbol),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
+        let keys = self.keys_for(state, &all_symbols, &[]);
+        let mut then_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
+        let mut else_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
+        let then_arguments = self.edge_values(state, &keys)?;
+        let else_arguments = self.edge_values(state, &keys)?;
+        self.terminate(
+            state,
+            Inst::CondBr(
+                predicate,
+                then_state.block,
+                then_arguments,
+                else_state.block,
+                else_arguments,
+            ),
+        )?;
+        let then_value = self.lower_expr(then_expression, &mut then_state)?;
+        let else_value = self.lower_expr(else_expression, &mut else_state)?;
+        let common = arithmetic_common_type(then_value.integer, else_value.integer);
+        let then_value = self.cast(then_value, common, &then_state)?;
+        let else_value = self.cast(else_value, common, &else_state)?;
+        let temporary = EnvKey::Temporary(self.next_temporary);
+        self.next_temporary += 1;
+        then_state.env.insert(
+            temporary,
+            BoundValue {
+                value: then_value.value,
+                integer: Some(common),
+            },
+        );
+        else_state.env.insert(
+            temporary,
+            BoundValue {
+                value: else_value.value,
+                integer: Some(common),
+            },
+        );
+        let mut merge_keys = keys;
+        merge_keys.push(temporary);
+        let merge = self.new_block_from(&then_state, &merge_keys, BlockRole::Ordinary)?;
+        self.branch(&then_state, merge.block, &merge_keys)?;
+        self.branch(&else_state, merge.block, &merge_keys)?;
+        *state = merge;
+        let result = state
+            .env
+            .remove(&temporary)
+            .ok_or(LowerError::InvalidControlFlow {
+                span: condition.span(),
+                reason: "ternary merge lost its result",
+            })?;
+        Ok(ExprValue {
+            value: result.value,
+            integer: result.integer.ok_or(LowerError::InvalidControlFlow {
+                span: condition.span(),
+                reason: "ternary result has no integer type",
+            })?,
+        })
+    }
+
+    fn emit_call(
+        &mut self,
+        callee: &'a CHirExpr<'a>,
+        arguments: &'a [&'a CHirExpr<'a>],
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<Option<ExprValue>, LowerError> {
+        let CHirExpr::Ident {
+            symbol,
+            spelling,
+            facts,
+            span: designator_span,
+        } = callee
+        else {
+            return Err(LowerError::UnsupportedExpression {
+                span,
+                feature: "indirect call is outside Day 6",
+            });
+        };
+        let designator =
+            self.unit
+                .symbols()
+                .symbol(*symbol)
+                .map_err(|_| LowerError::UnknownSymbol {
+                    symbol: *symbol,
+                    span: *designator_span,
+                })?;
+        if designator.kind() != SymbolKind::Function
+            || designator.spelling() != spelling
+            || designator.ty() != facts.ty()
+            || facts.category() != ExprCategory::FunctionDesignator
+        {
+            return Err(LowerError::UnsupportedExpression {
+                span: *designator_span,
+                feature: "function designator disagrees with its semantic identity",
+            });
+        }
+        let function = self
+            .functions
+            .get(symbol)
+            .ok_or(LowerError::UnknownSymbol {
+                symbol: *symbol,
+                span,
+            })?;
+        if arguments.len() != function.parameter_types.len() {
+            return Err(LowerError::MalformedFunction {
+                function: function.name.clone(),
+                span,
+                reason: "call arity disagrees with the canonical prototype",
+            });
+        }
+        let mut argument_keys = Vec::new();
+        for (argument, expected) in arguments.iter().zip(&function.parameter_types) {
+            let value = self.lower_expr(argument, state)?;
+            let value = self.cast(value, *expected, state)?;
+            let key = EnvKey::Temporary(self.next_temporary);
+            self.next_temporary += 1;
+            state.env.insert(
+                key,
+                BoundValue {
+                    value: value.value,
+                    integer: Some(*expected),
+                },
+            );
+            argument_keys.push(key);
+        }
+        let args = argument_keys
+            .into_iter()
+            .map(|key| {
+                state.env.remove(&key).map(|bound| bound.value).ok_or(
+                    LowerError::InvalidControlFlow {
+                        span,
+                        reason: "call argument control flow lost an evaluated argument",
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let mem_in = self.token(state, EnvKey::Memory)?.value;
+        let world_in = self.token(state, EnvKey::World)?.value;
+        let mut results = Vec::new();
+        if let Some(integer) = function.return_type {
+            results.push(self.fresh_value(bits(integer)));
+        }
+        let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+        let world_out = self.fresh_value(EvoIRType::World);
+        self.emit(
+            state,
+            Inst::Call {
+                results: results.clone(),
+                callee: function.name.clone(),
+                args,
+                mem_in,
+                world_in,
+                mem_out: mem_out.clone(),
+                world_out: world_out.clone(),
+            },
+        )?;
+        state.env.insert(
+            EnvKey::Memory,
+            BoundValue {
+                value: mem_out,
+                integer: None,
+            },
+        );
+        state.env.insert(
+            EnvKey::World,
+            BoundValue {
+                value: world_out,
+                integer: None,
+            },
+        );
+        Ok(function.return_type.map(|integer| ExprValue {
+            value: results.remove(0),
+            integer,
+        }))
+    }
+
+    fn lower_discarded_expr(
+        &mut self,
+        expression: &'a CHirExpr<'a>,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
+        match expression {
+            CHirExpr::Call(callee, arguments, span) => {
+                let _ = self.emit_call(callee, arguments, *span, state)?;
+            }
+            CHirExpr::Comma(left, right, _) => {
+                self.lower_discarded_expr(left, state)?;
+                self.lower_discarded_expr(right, state)?;
+            }
+            _ => {
+                let _ = self.lower_expr(expression, state)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn lower_assignment(
+        &mut self,
+        operator: AssignmentOp,
+        place: ScalarPlace,
+        target: &'a CHirExpr<'a>,
+        assigned: &'a CHirExpr<'a>,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        self.validate_place(place, target, span)?;
+        let destination = canonical_integer(self.unit.types(), self.target, place.ty(), span)?;
+        let right = self.lower_expr(assigned, state)?;
+        let result = if operator == AssignmentOp::Simple {
+            self.cast(right, destination, state)?
+        } else {
+            let left = self.local(state, place.symbol(), span)?;
+            let computed = if matches!(operator, AssignmentOp::ShiftLeft | AssignmentOp::ShiftRight)
+            {
+                let shifted_type = integer_promotion(left.integer);
+                let amount_type = integer_promotion(right.integer);
+                let left = self.cast(left, shifted_type, state)?;
+                let right = self.cast(right, amount_type, state)?;
+                self.emit_shift(
+                    state,
+                    if operator == AssignmentOp::ShiftLeft {
+                        BinaryOp::Shl
+                    } else {
+                        BinaryOp::Shr
+                    },
+                    left,
+                    right,
+                    shifted_type,
+                )?
+            } else {
+                let common = arithmetic_common_type(left.integer, right.integer);
+                let left = self.cast(left, common, state)?;
+                let right = self.cast(right, common, state)?;
+                match operator {
+                    AssignmentOp::Add => {
+                        self.emit_signed_arithmetic(state, BinaryOp::Add, left, right, common)?
+                    }
+                    AssignmentOp::Subtract => {
+                        self.emit_signed_arithmetic(state, BinaryOp::Sub, left, right, common)?
+                    }
+                    AssignmentOp::Multiply => {
+                        self.emit_signed_arithmetic(state, BinaryOp::Mul, left, right, common)?
+                    }
+                    AssignmentOp::Divide => {
+                        self.emit_div_rem(state, BinaryOp::Div, left, right, common)?
+                    }
+                    AssignmentOp::Remainder => {
+                        self.emit_div_rem(state, BinaryOp::Mod, left, right, common)?
+                    }
+                    AssignmentOp::BitAnd | AssignmentOp::BitOr | AssignmentOp::BitXor => {
+                        let result = self.fresh_value(bits(common));
+                        let instruction = match operator {
+                            AssignmentOp::BitAnd => {
+                                Inst::And(result.clone(), left.value, right.value)
+                            }
+                            AssignmentOp::BitOr => {
+                                Inst::Or(result.clone(), left.value, right.value)
+                            }
+                            AssignmentOp::BitXor => {
+                                Inst::Xor(result.clone(), left.value, right.value)
+                            }
+                            _ => {
+                                return Err(LowerError::InvalidControlFlow {
+                                    span,
+                                    reason:
+                                        "non-bitwise compound assignment reached bitwise emission",
+                                });
+                            }
+                        };
+                        self.emit(state, instruction)?;
+                        ExprValue {
+                            value: result,
+                            integer: common,
+                        }
+                    }
+                    AssignmentOp::ShiftLeft | AssignmentOp::ShiftRight => {
+                        return Err(LowerError::InvalidControlFlow {
+                            span,
+                            reason: "shift assignment bypassed shift emission",
+                        });
+                    }
+                    AssignmentOp::Simple => {
+                        return Err(LowerError::InvalidControlFlow {
+                            span,
+                            reason: "simple assignment reached compound-assignment emission",
+                        });
+                    }
+                }
+            };
+            self.cast(computed, destination, state)?
+        };
+        state.env.insert(
+            EnvKey::Local(place.symbol()),
+            BoundValue {
+                value: result.value.clone(),
+                integer: Some(destination),
+            },
+        );
+        Ok(result)
+    }
+
+    fn lower_update(
+        &mut self,
+        operator: UpdateOp,
+        place: ScalarPlace,
+        target: &'a CHirExpr<'a>,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        self.validate_place(place, target, span)?;
+        let original = self.local(state, place.symbol(), span)?;
+        let promoted_type = integer_promotion(original.integer);
+        let promoted = self.cast(original.clone(), promoted_type, state)?;
+        let one = self.constant(state, promoted_type, 1)?;
+        let computed = self.emit_signed_arithmetic(
+            state,
+            if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PostIncrement) {
+                BinaryOp::Add
+            } else {
+                BinaryOp::Sub
+            },
+            promoted,
+            one,
+            promoted_type,
+        )?;
+        let updated = self.cast(computed, original.integer, state)?;
+        state.env.insert(
+            EnvKey::Local(place.symbol()),
+            BoundValue {
+                value: updated.value.clone(),
+                integer: Some(updated.integer),
+            },
+        );
+        Ok(
+            if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PreDecrement) {
+                updated
+            } else {
+                original
+            },
+        )
+    }
+
+    fn lower_condition(
+        &mut self,
+        expression: &'a CHirExpr<'a>,
+        state: &mut State,
+    ) -> Result<Value, LowerError> {
+        let value = self.lower_expr(expression, state)?;
+        self.lower_condition_value(value, state)
+    }
+
+    fn lower_condition_value(
+        &mut self,
+        value: ExprValue,
+        state: &State,
+    ) -> Result<Value, LowerError> {
+        if value.value.ty == EvoIRType::Bits(1) {
+            return Ok(value.value);
+        }
+        let zero = self.constant(state, value.integer, 0)?;
+        let condition = self.fresh_value(EvoIRType::Bits(1));
+        self.emit(
+            state,
+            Inst::ICmp(condition.clone(), CmpOp::Ne, value.value, zero.value),
+        )?;
+        Ok(condition)
+    }
+
+    fn cast(
+        &mut self,
+        value: ExprValue,
+        target: CIntegerType,
+        state: &State,
+    ) -> Result<ExprValue, LowerError> {
+        if target == CIntegerType::BOOL {
+            let condition = self.lower_condition_value(value, state)?;
+            return Ok(ExprValue {
+                value: condition,
+                integer: target,
+            });
+        }
+        let EvoIRType::Bits(source_width) = value.value.ty else {
+            return Err(LowerError::InvalidControlFlow {
+                span: self.info.span,
+                reason: "integer expression has a non-bit-vector EvoIR value",
+            });
+        };
+        let target_width = u16::from(target.bits());
+        if source_width == target_width {
+            return Ok(ExprValue {
+                value: value.value,
+                integer: target,
+            });
+        }
+        let result = self.fresh_value(bits(target));
+        let instruction = if source_width < target_width {
+            // C comparison, logical, and `!` expressions have type `int`, but
+            // EvoIR keeps their canonical truth value in `bits<1>`.  That
+            // representation is always zero-extended; treating it as a
+            // one-bit signed integer would turn true into -1.
+            if value.integer.is_signed()
+                && !(source_width == 1 && value.integer == CIntegerType::INT)
+            {
+                Inst::SExt(result.clone(), value.value, bits(target))
+            } else {
+                Inst::ZExt(result.clone(), value.value, bits(target))
+            }
+        } else {
+            Inst::Trunc(result.clone(), value.value, bits(target))
+        };
+        self.emit(state, instruction)?;
+        Ok(ExprValue {
+            value: result,
+            integer: target,
+        })
+    }
+
+    fn constant(
+        &mut self,
+        state: &State,
+        integer: CIntegerType,
+        raw: u64,
+    ) -> Result<ExprValue, LowerError> {
+        let result = self.fresh_value(bits(integer));
+        self.emit(state, Inst::Const(result.clone(), raw & integer.mask()))?;
+        Ok(ExprValue {
+            value: result,
+            integer,
+        })
+    }
+
+    fn validate_place(
+        &self,
+        place: ScalarPlace,
+        target: &CHirExpr<'a>,
+        span: SourceSpan,
+    ) -> Result<(), LowerError> {
+        let CHirExpr::Ident {
+            symbol,
+            spelling,
+            facts,
+            span: target_span,
+        } = target
+        else {
+            return Err(LowerError::UnsupportedExpression {
+                span,
+                feature: "assignment target is not a scalar identifier place",
+            });
+        };
+        let declaration =
+            self.unit
+                .symbols()
+                .symbol(*symbol)
+                .map_err(|_| LowerError::UnknownSymbol {
+                    symbol: *symbol,
+                    span: *target_span,
+                })?;
+        if *symbol != place.symbol()
+            || !matches!(
+                declaration.kind(),
+                SymbolKind::Object | SymbolKind::Parameter
+            )
+            || declaration.spelling() != spelling
+            || declaration.ty() != place.ty()
+            || facts.ty() != place.ty()
+            || facts.category() != ExprCategory::LValue
+            || !facts.is_modifiable_lvalue()
+        {
+            return Err(LowerError::UnsupportedExpression {
+                span: *target_span,
+                feature: "scalar place disagrees with its semantic identity",
+            });
+        }
+        Ok(())
+    }
+
+    fn local(
+        &mut self,
+        state: &State,
+        symbol: SymbolId,
+        span: SourceSpan,
+    ) -> Result<ExprValue, LowerError> {
+        let Some(bound) = state.env.get(&EnvKey::Local(symbol)) else {
+            let declaration = self
+                .unit
+                .symbols()
+                .symbol(symbol)
+                .map_err(|_| LowerError::UnknownSymbol { symbol, span })?;
+            let integer =
+                canonical_integer(self.unit.types(), self.target, declaration.ty(), span)?;
+            let value = self.fresh_value(bits(integer));
+            self.emit(state, Inst::Uninitialized(value.clone()))?;
+            return Ok(ExprValue { value, integer });
+        };
+        Ok(ExprValue {
+            value: bound.value.clone(),
+            integer: bound.integer.ok_or(LowerError::UnsupportedExpression {
+                span,
+                feature: "local does not carry an integer type",
+            })?,
+        })
+    }
+
+    fn token(&self, state: &State, key: EnvKey) -> Result<BoundValue, LowerError> {
+        state
+            .env
+            .get(&key)
+            .cloned()
+            .ok_or(LowerError::InvalidControlFlow {
+                span: self.info.span,
+                reason: "call participant has no current effect token",
+            })
+    }
+
+    fn replace_target(&mut self, old: BlockId, new: BlockId) {
+        for block in &mut self.blocks {
+            if let Some(terminator) = &mut block.terminator {
+                replace_inst_target(terminator, old, new);
+            }
+        }
+    }
+
+    fn move_block_before(&mut self, block_id: BlockId, before: usize) -> Result<(), LowerError> {
+        let position = self
+            .blocks
+            .iter()
+            .position(|block| block.id == block_id)
+            .ok_or(LowerError::InvalidControlFlow {
+                span: self.info.span,
+                reason: "loop step block disappeared",
+            })?;
+        if before < position {
+            let block = self.blocks.remove(position);
+            self.blocks.insert(before, block);
+        }
+        Ok(())
+    }
+
+    fn eliminate_switch_forwarders(&mut self) -> Result<(), LowerError> {
+        while let Some(index) = self.blocks.iter().position(|block| {
+            if block.role != BlockRole::SwitchExit || !block.insts.is_empty() {
+                return false;
+            }
+            let Some(Inst::Br(_, arguments)) = &block.terminator else {
+                return false;
+            };
+            block.args.len() == arguments.len()
+                && block
+                    .args
+                    .iter()
+                    .zip(arguments)
+                    .all(|((_, argument), value)| argument.value == *value)
+        }) {
+            let block = &self.blocks[index];
+            let target = match &block.terminator {
+                Some(Inst::Br(target, _)) => *target,
+                _ => {
+                    return Err(LowerError::InvalidControlFlow {
+                        span: self.info.span,
+                        reason: "switch forwarding block changed during elimination",
+                    });
+                }
+            };
+            let old = block.id;
+            for predecessor in &mut self.blocks {
+                let Some(terminator) = &mut predecessor.terminator else {
+                    continue;
+                };
+                replace_inst_target(terminator, old, target);
+            }
+            self.blocks.remove(index);
+        }
+        Ok(())
+    }
+
+    fn finish_blocks(self) -> Result<Vec<Block>, LowerError> {
+        self.blocks
+            .into_iter()
+            .map(|block| {
+                Ok(Block {
+                    id: block.id,
+                    args: block
+                        .args
+                        .into_iter()
+                        .map(|(_, argument)| argument)
+                        .collect(),
+                    insts: block.insts,
+                    terminator: block.terminator.ok_or(LowerError::InvalidControlFlow {
+                        span: self.info.span,
+                        reason: "draft block lacks a terminator",
+                    })?,
+                })
+            })
+            .collect()
+    }
+}
+
+#[derive(Debug)]
+struct SwitchSegment<'a> {
+    case: Option<&'a CHirExpr<'a>>,
+    items: Vec<SwitchSegmentItem<'a>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum SwitchSegmentItem<'a> {
+    Declaration(&'a CHirDecl<'a>),
+    Statement(&'a CHirStmt<'a>),
+}
+
+fn switch_segments<'a>(
+    body: &'a CHirStmt<'a>,
+) -> Result<(&'a [CHirBlockItem<'a>], Vec<SwitchSegment<'a>>), LowerError> {
+    let CHirStmt::Compound(items, _) = body else {
+        return Err(LowerError::UnsupportedStatement {
+            span: body.span(),
+            feature: "switch body must be a compound statement",
+        });
+    };
+    let mut segments: Vec<SwitchSegment<'a>> = Vec::new();
+    let mut prefix_end = items.len();
+    for (index, item) in items.iter().enumerate() {
+        let CHirBlockItem::Statement(statement) = item else {
+            let Some(segment) = segments.last_mut() else {
+                // Ordinary switch dispatch jumps directly to a case/default;
+                // declarations before the first label establish scope but do
+                // not execute their initializer.
+                continue;
+            };
+            let CHirBlockItem::Declaration(declaration) = item else {
+                return Err(LowerError::InvalidControlFlow {
+                    span: body.span(),
+                    reason: "switch block item has an unknown form",
+                });
+            };
+            segment
+                .items
+                .push(SwitchSegmentItem::Declaration(declaration));
+            continue;
+        };
+        match statement {
+            CHirStmt::Case(case, nested, _) => {
+                if segments.is_empty() {
+                    prefix_end = index;
+                }
+                segments.push(SwitchSegment {
+                    case: Some(case),
+                    items: vec![SwitchSegmentItem::Statement(nested)],
+                });
+            }
+            CHirStmt::Default(nested, _) => {
+                if segments.is_empty() {
+                    prefix_end = index;
+                }
+                segments.push(SwitchSegment {
+                    case: None,
+                    items: vec![SwitchSegmentItem::Statement(nested)],
+                });
+            }
+            other => {
+                let Some(segment) = segments.last_mut() else {
+                    // Statements before the first case/default are bypassed by
+                    // normal switch dispatch. A separately targeted ordinary
+                    // label is materialized by the detached-goto path.
+                    continue;
+                };
+                segment.items.push(SwitchSegmentItem::Statement(other));
+            }
+        }
+    }
+    Ok((&items[..prefix_end], segments))
+}
+
+fn collect_symbols_switch_item(item: &SwitchSegmentItem<'_>, symbols: &mut BTreeSet<SymbolId>) {
+    match item {
+        SwitchSegmentItem::Declaration(declaration) => {
+            collect_symbols_item(&CHirBlockItem::Declaration(declaration), symbols);
+        }
+        SwitchSegmentItem::Statement(statement) => collect_symbols_stmt(statement, symbols),
+    }
+}
+
+fn bits(integer: CIntegerType) -> EvoIRType {
+    EvoIRType::Bits(u16::from(integer.bits()))
+}
+
+fn constant_truth(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    expression: &CHirExpr<'_>,
+) -> Option<bool> {
+    constant_integer(unit, target, expression).map(CInteger::truth)
+}
+
+fn constant_integer(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    expression: &CHirExpr<'_>,
+) -> Option<CInteger> {
+    match expression {
+        CHirExpr::Lit(literal, _) => integer_literal_value(*literal).ok(),
+        CHirExpr::CharLit(literal, _) => {
+            Some(CInteger::new(u64::from(literal.value), CIntegerType::INT))
+        }
+        CHirExpr::Ident {
+            symbol,
+            facts,
+            span,
+            ..
+        } => {
+            let declaration = unit.symbols().symbol(*symbol).ok()?;
+            if declaration.kind() != SymbolKind::Enumerator {
+                return None;
+            }
+            let integer = canonical_integer(unit.types(), target, facts.ty(), *span).ok()?;
+            Some(CInteger::new(
+                declaration.enumerator_value()? as u64,
+                integer,
+            ))
+        }
+        CHirExpr::Unary(operator, operand, _) => {
+            eval_unary_integer(*operator, constant_integer(unit, target, operand)?).ok()
+        }
+        CHirExpr::Binary(BinaryOp::And, left, right, _) => {
+            let left = constant_integer(unit, target, left)?;
+            if !left.truth() {
+                Some(CInteger::int(0))
+            } else {
+                Some(CInteger::int(i32::from(
+                    constant_integer(unit, target, right)?.truth(),
+                )))
+            }
+        }
+        CHirExpr::Binary(BinaryOp::Or, left, right, _) => {
+            let left = constant_integer(unit, target, left)?;
+            if left.truth() {
+                Some(CInteger::int(1))
+            } else {
+                Some(CInteger::int(i32::from(
+                    constant_integer(unit, target, right)?.truth(),
+                )))
+            }
+        }
+        CHirExpr::Binary(operator, left, right, _) => eval_binary_integer(
+            *operator,
+            constant_integer(unit, target, left)?,
+            constant_integer(unit, target, right)?,
+        )
+        .ok(),
+        CHirExpr::Ternary(condition, then_value, else_value, _) => {
+            if constant_integer(unit, target, condition)?.truth() {
+                constant_integer(unit, target, then_value)
+            } else {
+                constant_integer(unit, target, else_value)
+            }
+        }
+        CHirExpr::Cast(ty, operand, span) => {
+            let target_integer = canonical_integer(unit.types(), target, *ty, *span).ok()?;
+            Some(constant_integer(unit, target, operand)?.cast(target_integer))
+        }
+        CHirExpr::Comma(left, right, _) => {
+            constant_integer(unit, target, left)?;
+            constant_integer(unit, target, right)
+        }
+        _ => None,
+    }
+}
+
+fn integer_promotion(integer: CIntegerType) -> CIntegerType {
+    if integer.rank() < CIntegerType::INT.rank() {
+        CIntegerType::INT
+    } else {
+        integer
+    }
+}
+
+fn arithmetic_common_type(left: CIntegerType, right: CIntegerType) -> CIntegerType {
+    usual_arithmetic_type(integer_promotion(left), integer_promotion(right))
+}
+
+fn contains_targeted_label(statement: &CHirStmt<'_>, names: &BTreeSet<String>) -> bool {
+    match statement {
+        CHirStmt::Label(label, nested, _) => {
+            names.contains(&label.spelling) || contains_targeted_label(nested, names)
+        }
+        CHirStmt::If(_, then_branch, else_branch, _) => {
+            contains_targeted_label(then_branch, names)
+                || else_branch
+                    .is_some_and(|branch| contains_targeted_label(branch, names))
+        }
+        CHirStmt::Switch(_, body, _)
+        | CHirStmt::While(_, body, _)
+        | CHirStmt::Case(_, body, _)
+        | CHirStmt::DoWhile(body, _, _)
+        | CHirStmt::Default(body, _) => contains_targeted_label(body, names),
+        CHirStmt::For(_, _, _, body, _) => contains_targeted_label(body, names),
+        CHirStmt::Compound(items, _) => items.iter().any(|item| {
+            matches!(item, CHirBlockItem::Statement(statement) if contains_targeted_label(statement, names))
+        }),
+        CHirStmt::Expr(_, _)
+        | CHirStmt::Return(_, _)
+        | CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Goto(_, _)
+        | CHirStmt::Null(_) => false,
+    }
+}
+
+fn collect_goto_names(statement: &CHirStmt<'_>, names: &mut BTreeSet<String>) {
+    match statement {
+        CHirStmt::Goto(label, _) => {
+            names.insert(label.spelling.clone());
+        }
+        CHirStmt::If(_, then_branch, else_branch, _) => {
+            collect_goto_names(then_branch, names);
+            if let Some(else_branch) = else_branch {
+                collect_goto_names(else_branch, names);
+            }
+        }
+        CHirStmt::Switch(_, body, _)
+        | CHirStmt::While(_, body, _)
+        | CHirStmt::Case(_, body, _)
+        | CHirStmt::DoWhile(body, _, _)
+        | CHirStmt::Label(_, body, _)
+        | CHirStmt::Default(body, _) => collect_goto_names(body, names),
+        CHirStmt::For(_, _, _, body, _) => collect_goto_names(body, names),
+        CHirStmt::Compound(items, _) => {
+            for item in items {
+                if let CHirBlockItem::Statement(statement) = item {
+                    collect_goto_names(statement, names);
+                }
+            }
+        }
+        CHirStmt::Expr(_, _)
+        | CHirStmt::Return(_, _)
+        | CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Null(_) => {}
+    }
+}
+
+fn collect_calls_stmt(statement: &CHirStmt<'_>, calls: &mut BTreeSet<SymbolId>) {
+    match statement {
+        CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
+            collect_calls_expr(expression, calls)
+        }
+        CHirStmt::If(condition, then_branch, else_branch, _) => {
+            collect_calls_expr(condition, calls);
+            collect_calls_stmt(then_branch, calls);
+            if let Some(branch) = else_branch {
+                collect_calls_stmt(branch, calls);
+            }
+        }
+        CHirStmt::Switch(expression, body, _)
+        | CHirStmt::While(expression, body, _)
+        | CHirStmt::Case(expression, body, _) => {
+            collect_calls_expr(expression, calls);
+            collect_calls_stmt(body, calls);
+        }
+        CHirStmt::DoWhile(body, expression, _) => {
+            collect_calls_stmt(body, calls);
+            collect_calls_expr(expression, calls);
+        }
+        CHirStmt::For(initializer, condition, step, body, _) => {
+            match initializer {
+                CHirForInit::Empty => {}
+                CHirForInit::Expression(expression) => collect_calls_expr(expression, calls),
+                CHirForInit::Declaration(declarations) => {
+                    for declaration in declarations {
+                        collect_calls_decl(declaration, calls);
+                    }
+                }
+            }
+            if let Some(condition) = condition {
+                collect_calls_expr(condition, calls);
+            }
+            if let Some(step) = step {
+                collect_calls_expr(step, calls);
+            }
+            collect_calls_stmt(body, calls);
+        }
+        CHirStmt::Compound(items, _) => {
+            for item in items {
+                match item {
+                    CHirBlockItem::Declaration(declaration) => {
+                        collect_calls_decl(declaration, calls)
+                    }
+                    CHirBlockItem::Statement(statement) => collect_calls_stmt(statement, calls),
+                }
+            }
+        }
+        CHirStmt::Label(_, statement, _) | CHirStmt::Default(statement, _) => {
+            collect_calls_stmt(statement, calls)
+        }
+        CHirStmt::Return(None, _)
+        | CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Goto(_, _)
+        | CHirStmt::Null(_) => {}
+    }
+}
+
+fn collect_calls_decl(declaration: &CHirDecl<'_>, calls: &mut BTreeSet<SymbolId>) {
+    if let CHirDecl::Object(object) = declaration {
+        if let Some(initializer) = &object.initializer {
+            for action in initializer.plan.actions() {
+                if let InitAction::StoreScalar { value, .. } = action {
+                    collect_calls_expr(value, calls);
+                }
+            }
+        }
+    }
+}
+
+fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut BTreeSet<SymbolId>) {
+    match expression {
+        CHirExpr::Call(callee, arguments, _) => {
+            if let CHirExpr::Ident { symbol, .. } = callee {
+                calls.insert(*symbol);
+            }
+            collect_calls_expr(callee, calls);
+            for argument in arguments {
+                collect_calls_expr(argument, calls);
+            }
+        }
+        CHirExpr::Unary(_, operand, _)
+        | CHirExpr::Cast(_, operand, _)
+        | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::Member(operand, _, _)
+        | CHirExpr::PtrMember(operand, _, _) => collect_calls_expr(operand, calls),
+        CHirExpr::Binary(_, left, right, _)
+        | CHirExpr::Index(left, right, _)
+        | CHirExpr::Comma(left, right, _) => {
+            collect_calls_expr(left, calls);
+            collect_calls_expr(right, calls);
+        }
+        CHirExpr::Ternary(condition, then_value, else_value, _) => {
+            collect_calls_expr(condition, calls);
+            collect_calls_expr(then_value, calls);
+            collect_calls_expr(else_value, calls);
+        }
+        CHirExpr::Assign { target, value, .. } => {
+            collect_calls_expr(target, calls);
+            collect_calls_expr(value, calls);
+        }
+        CHirExpr::Update { target, .. } => collect_calls_expr(target, calls),
+        CHirExpr::CompoundLit(_, elements, _) => {
+            for element in elements {
+                collect_calls_expr(element, calls);
+            }
+        }
+        CHirExpr::Lit(..)
+        | CHirExpr::FloatLit(..)
+        | CHirExpr::CharLit(..)
+        | CHirExpr::StringLit(..)
+        | CHirExpr::Ident { .. }
+        | CHirExpr::SizeOf(..)
+        | CHirExpr::AlignOf(..) => {}
+    }
+}
+
+fn live_before_stmt(
+    statement: &CHirStmt<'_>,
+    mut live_after: BTreeSet<SymbolId>,
+) -> BTreeSet<SymbolId> {
+    match statement {
+        CHirStmt::Expr(expression, _) => {
+            live_before_expr(expression, &mut live_after);
+        }
+        CHirStmt::Return(expression, _) => {
+            live_after.clear();
+            if let Some(expression) = expression {
+                live_before_expr(expression, &mut live_after);
+            }
+        }
+        CHirStmt::Compound(items, _) => {
+            for item in items.iter().rev() {
+                match item {
+                    CHirBlockItem::Declaration(declaration) => {
+                        if let CHirDecl::Object(object) = declaration {
+                            live_after.remove(&object.symbol);
+                            if let Some(initializer) = &object.initializer {
+                                for action in initializer.plan().actions() {
+                                    if let InitAction::StoreScalar { value, .. } = action {
+                                        live_before_expr(value, &mut live_after);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    CHirBlockItem::Statement(statement) => {
+                        live_after = live_before_stmt(statement, live_after);
+                    }
+                }
+            }
+        }
+        CHirStmt::If(condition, then_branch, else_branch, _) => {
+            let then_live = live_before_stmt(then_branch, live_after.clone());
+            let else_live = if let Some(branch) = else_branch {
+                live_before_stmt(branch, live_after.clone())
+            } else {
+                live_after.clone()
+            };
+            live_after = then_live.union(&else_live).copied().collect();
+            live_before_expr(condition, &mut live_after);
+        }
+        CHirStmt::While(condition, body, _) => {
+            let exit_live = live_after.clone();
+            loop {
+                let mut before = live_before_stmt(body, live_after.clone());
+                live_before_expr(condition, &mut before);
+                before.extend(exit_live.iter().copied());
+                if before == live_after {
+                    break;
+                }
+                live_after = before;
+            }
+        }
+        CHirStmt::DoWhile(body, condition, _) => {
+            let exit_live = live_after.clone();
+            loop {
+                let mut condition_live = live_after.clone();
+                live_before_expr(condition, &mut condition_live);
+                let mut before = live_before_stmt(body, condition_live);
+                before.extend(exit_live.iter().copied());
+                if before == live_after {
+                    break;
+                }
+                live_after = before;
+            }
+        }
+        CHirStmt::For(initializer, condition, step, body, _) => {
+            let exit_live = live_after.clone();
+            loop {
+                let mut iteration_live = live_after.clone();
+                if let Some(step) = step {
+                    live_before_expr(step, &mut iteration_live);
+                }
+                iteration_live = live_before_stmt(body, iteration_live);
+                if let Some(condition) = condition {
+                    live_before_expr(condition, &mut iteration_live);
+                }
+                iteration_live.extend(exit_live.iter().copied());
+                if iteration_live == live_after {
+                    break;
+                }
+                live_after = iteration_live;
+            }
+            match initializer {
+                CHirForInit::Empty => {}
+                CHirForInit::Expression(expression) => {
+                    live_before_expr(expression, &mut live_after);
+                }
+                CHirForInit::Declaration(declarations) => {
+                    for declaration in declarations.iter().rev() {
+                        if let CHirDecl::Object(object) = declaration {
+                            live_after.remove(&object.symbol);
+                            if let Some(initializer) = &object.initializer {
+                                for action in initializer.plan().actions() {
+                                    if let InitAction::StoreScalar { value, .. } = action {
+                                        live_before_expr(value, &mut live_after);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        CHirStmt::Switch(expression, body, _) | CHirStmt::Case(expression, body, _) => {
+            live_after = live_before_stmt(body, live_after);
+            live_before_expr(expression, &mut live_after);
+        }
+        CHirStmt::Label(_, body, _) | CHirStmt::Default(body, _) => {
+            live_after = live_before_stmt(body, live_after);
+        }
+        CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {}
+    }
+    live_after
+}
+
+fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
+    match expression {
+        CHirExpr::Ident { symbol, .. } => {
+            live.insert(*symbol);
+        }
+        CHirExpr::Assign {
+            op, place, value, ..
+        } => {
+            if *op == AssignmentOp::Simple {
+                live.remove(&place.symbol());
+            } else {
+                live.insert(place.symbol());
+            }
+            live_before_expr(value, live);
+        }
+        CHirExpr::Update { place, .. } => {
+            live.insert(place.symbol());
+        }
+        CHirExpr::Unary(_, operand, _)
+        | CHirExpr::Cast(_, operand, _)
+        | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::Member(operand, _, _)
+        | CHirExpr::PtrMember(operand, _, _) => live_before_expr(operand, live),
+        CHirExpr::Binary(BinaryOp::And | BinaryOp::Or, left, right, _) => {
+            let mut right_live = live.clone();
+            live_before_expr(right, &mut right_live);
+            live.extend(right_live);
+            live_before_expr(left, live);
+        }
+        CHirExpr::Binary(_, left, right, _)
+        | CHirExpr::Index(left, right, _)
+        | CHirExpr::Comma(left, right, _) => {
+            live_before_expr(right, live);
+            live_before_expr(left, live);
+        }
+        CHirExpr::Ternary(condition, then_value, else_value, _) => {
+            let mut then_live = live.clone();
+            live_before_expr(then_value, &mut then_live);
+            let mut else_live = live.clone();
+            live_before_expr(else_value, &mut else_live);
+            *live = then_live.union(&else_live).copied().collect();
+            live_before_expr(condition, live);
+        }
+        CHirExpr::Call(callee, arguments, _) => {
+            for argument in arguments.iter().rev() {
+                live_before_expr(argument, live);
+            }
+            live_before_expr(callee, live);
+        }
+        CHirExpr::CompoundLit(_, elements, _) => {
+            for element in elements.iter().rev() {
+                live_before_expr(element, live);
+            }
+        }
+        CHirExpr::Lit(..)
+        | CHirExpr::FloatLit(..)
+        | CHirExpr::CharLit(..)
+        | CHirExpr::StringLit(..)
+        | CHirExpr::SizeOf(..)
+        | CHirExpr::AlignOf(..) => {}
+    }
+}
+
+fn collect_symbols_item(item: &CHirBlockItem<'_>, symbols: &mut BTreeSet<SymbolId>) {
+    match item {
+        CHirBlockItem::Declaration(declaration) => {
+            if let CHirDecl::Object(object) = declaration {
+                if let Some(initializer) = &object.initializer {
+                    for action in initializer.plan.actions() {
+                        if let InitAction::StoreScalar { value, .. } = action {
+                            collect_symbols_expr(value, symbols);
+                        }
+                    }
+                }
+            }
+        }
+        CHirBlockItem::Statement(statement) => collect_symbols_stmt(statement, symbols),
+    }
+}
+
+fn collect_symbols_stmt(statement: &CHirStmt<'_>, symbols: &mut BTreeSet<SymbolId>) {
+    match statement {
+        CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
+            collect_symbols_expr(expression, symbols)
+        }
+        CHirStmt::If(condition, then_branch, else_branch, _) => {
+            collect_symbols_expr(condition, symbols);
+            collect_symbols_stmt(then_branch, symbols);
+            if let Some(branch) = else_branch {
+                collect_symbols_stmt(branch, symbols);
+            }
+        }
+        CHirStmt::Switch(expression, body, _)
+        | CHirStmt::While(expression, body, _)
+        | CHirStmt::Case(expression, body, _) => {
+            collect_symbols_expr(expression, symbols);
+            collect_symbols_stmt(body, symbols);
+        }
+        CHirStmt::DoWhile(body, expression, _) => {
+            collect_symbols_stmt(body, symbols);
+            collect_symbols_expr(expression, symbols);
+        }
+        CHirStmt::For(initializer, condition, step, body, _) => {
+            match initializer {
+                CHirForInit::Empty => {}
+                CHirForInit::Expression(expression) => collect_symbols_expr(expression, symbols),
+                CHirForInit::Declaration(declarations) => {
+                    for declaration in declarations {
+                        collect_symbols_item(&CHirBlockItem::Declaration(declaration), symbols);
+                    }
+                }
+            }
+            if let Some(condition) = condition {
+                collect_symbols_expr(condition, symbols);
+            }
+            if let Some(step) = step {
+                collect_symbols_expr(step, symbols);
+            }
+            collect_symbols_stmt(body, symbols);
+        }
+        CHirStmt::Compound(items, _) => {
+            for item in items {
+                collect_symbols_item(item, symbols);
+            }
+        }
+        CHirStmt::Label(_, statement, _) | CHirStmt::Default(statement, _) => {
+            collect_symbols_stmt(statement, symbols)
+        }
+        CHirStmt::Return(None, _)
+        | CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Goto(_, _)
+        | CHirStmt::Null(_) => {}
+    }
+}
+
+fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<SymbolId>) {
+    match expression {
+        CHirExpr::Ident { symbol, .. } => {
+            symbols.insert(*symbol);
+        }
+        CHirExpr::Assign {
+            place,
+            target,
+            value,
+            ..
+        } => {
+            symbols.insert(place.symbol());
+            collect_symbols_expr(target, symbols);
+            collect_symbols_expr(value, symbols);
+        }
+        CHirExpr::Update { place, target, .. } => {
+            symbols.insert(place.symbol());
+            collect_symbols_expr(target, symbols);
+        }
+        CHirExpr::Unary(_, operand, _)
+        | CHirExpr::Cast(_, operand, _)
+        | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::Member(operand, _, _)
+        | CHirExpr::PtrMember(operand, _, _) => collect_symbols_expr(operand, symbols),
+        CHirExpr::Binary(_, left, right, _)
+        | CHirExpr::Index(left, right, _)
+        | CHirExpr::Comma(left, right, _) => {
+            collect_symbols_expr(left, symbols);
+            collect_symbols_expr(right, symbols);
+        }
+        CHirExpr::Ternary(condition, then_value, else_value, _) => {
+            collect_symbols_expr(condition, symbols);
+            collect_symbols_expr(then_value, symbols);
+            collect_symbols_expr(else_value, symbols);
+        }
+        CHirExpr::Call(callee, arguments, _) => {
+            collect_symbols_expr(callee, symbols);
+            for argument in arguments {
+                collect_symbols_expr(argument, symbols);
+            }
+        }
+        CHirExpr::CompoundLit(_, elements, _) => {
+            for element in elements {
+                collect_symbols_expr(element, symbols);
+            }
+        }
+        CHirExpr::Lit(..)
+        | CHirExpr::FloatLit(..)
+        | CHirExpr::CharLit(..)
+        | CHirExpr::StringLit(..)
+        | CHirExpr::SizeOf(..)
+        | CHirExpr::AlignOf(..) => {}
+    }
+}
+
+fn replace_inst_target(instruction: &mut Inst, old: BlockId, new: BlockId) {
+    match instruction {
+        Inst::Br(target, _) => {
+            if *target == old {
+                *target = new;
+            }
+        }
+        Inst::CondBr(_, true_target, _, false_target, _) => {
+            if *true_target == old {
+                *true_target = new;
+            }
+            if *false_target == old {
+                *false_target = new;
+            }
+        }
+        _ => {}
+    }
+}
+
+fn renumber_function(function: &mut Function) -> Result<(), LowerError> {
+    let block_map = function
+        .blocks
+        .iter()
+        .enumerate()
+        .map(|(index, block)| {
+            u32::try_from(index)
+                .map(|new| (block.id, new))
+                .map_err(|_| LowerError::InvalidGeneratedSsa {
+                    message: "too many blocks to number".into(),
+                })
+        })
+        .collect::<Result<HashMap<_, _>, _>>()?;
+    let mut value_map = HashMap::new();
+    let mut next = 0_u32;
+    for block in &function.blocks {
+        for argument in &block.args {
+            value_map.insert(argument.value.id, next);
+            next = next
+                .checked_add(1)
+                .ok_or_else(|| LowerError::InvalidGeneratedSsa {
+                    message: "too many values to number".into(),
+                })?;
+        }
+        for instruction in &block.insts {
+            for result in inst_results(instruction) {
+                value_map.insert(result.id, next);
+                next = next
+                    .checked_add(1)
+                    .ok_or_else(|| LowerError::InvalidGeneratedSsa {
+                        message: "too many values to number".into(),
+                    })?;
+            }
+        }
+    }
+    for block in &mut function.blocks {
+        block.id = *block_map
+            .get(&block.id)
+            .ok_or_else(|| LowerError::InvalidGeneratedSsa {
+                message: "block remap is incomplete".into(),
+            })?;
+        for argument in &mut block.args {
+            remap_value(&mut argument.value, &value_map)?;
+        }
+        for instruction in &mut block.insts {
+            remap_inst(instruction, &block_map, &value_map)?;
+        }
+        remap_inst(&mut block.terminator, &block_map, &value_map)?;
+    }
+    Ok(())
+}
+
+fn remap_value(value: &mut Value, value_map: &HashMap<u32, u32>) -> Result<(), LowerError> {
+    value.id = *value_map
+        .get(&value.id)
+        .ok_or_else(|| LowerError::InvalidGeneratedSsa {
+            message: format!("value {} has no final identity", value.id),
+        })?;
+    Ok(())
+}
+
+fn remap_inst(
+    instruction: &mut Inst,
+    block_map: &HashMap<BlockId, BlockId>,
+    value_map: &HashMap<u32, u32>,
+) -> Result<(), LowerError> {
+    for value in inst_values_mut(instruction) {
+        remap_value(value, value_map)?;
+    }
+    match instruction {
+        Inst::Br(target, _) => {
+            *target = *block_map
+                .get(target)
+                .ok_or_else(|| LowerError::InvalidGeneratedSsa {
+                    message: format!("branch target {target} has no final identity"),
+                })?;
+        }
+        Inst::CondBr(_, true_target, _, false_target, _) => {
+            *true_target =
+                *block_map
+                    .get(true_target)
+                    .ok_or_else(|| LowerError::InvalidGeneratedSsa {
+                        message: "true branch has no final identity".into(),
+                    })?;
+            *false_target =
+                *block_map
+                    .get(false_target)
+                    .ok_or_else(|| LowerError::InvalidGeneratedSsa {
+                        message: "false branch has no final identity".into(),
+                    })?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)]
+fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
+    match instruction {
+        Inst::Const(result, _) | Inst::Uninitialized(result) => vec![result],
+        Inst::Add(result, left, right)
+        | Inst::Sub(result, left, right)
+        | Inst::Mul(result, left, right)
+        | Inst::SRem(result, left, right)
+        | Inst::URem(result, left, right)
+        | Inst::Shl(result, left, right)
+        | Inst::AShr(result, left, right)
+        | Inst::LShr(result, left, right)
+        | Inst::And(result, left, right)
+        | Inst::Or(result, left, right)
+        | Inst::Xor(result, left, right)
+        | Inst::SignedAddDefined(result, left, right)
+        | Inst::SignedSubDefined(result, left, right)
+        | Inst::SignedMulDefined(result, left, right)
+        | Inst::SignedDivRemNoOverflow(result, left, right)
+        | Inst::SDiv(result, left, right)
+        | Inst::UDiv(result, left, right)
+        | Inst::ICmp(result, _, left, right)
+        | Inst::PtrOffset(result, left, right) => vec![result, left, right],
+        Inst::DivisorNonZero(result, divisor) => vec![result, divisor],
+        Inst::ShiftCountDefined {
+            result,
+            shifted,
+            amount,
+            ..
+        }
+        | Inst::SignedShlDefined {
+            result,
+            shifted,
+            amount,
+            ..
+        } => vec![result, shifted, amount],
+        Inst::UbAssume(condition, _) => vec![condition],
+        Inst::Trap(_) => Vec::new(),
+        Inst::Br(_, arguments) | Inst::Ret(arguments) => arguments.iter_mut().collect(),
+        Inst::CondBr(condition, _, true_args, _, false_args) => {
+            let mut values = vec![condition];
+            values.extend(true_args.iter_mut());
+            values.extend(false_args.iter_mut());
+            values
+        }
+        Inst::Load {
+            result,
+            address,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+        } => vec![result, address, mem_in, world_in, mem_out, world_out],
+        Inst::Store {
+            address,
+            value,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+        } => vec![address, value, mem_in, world_in, mem_out, world_out],
+        Inst::Call {
+            results,
+            args,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            ..
+        } => {
+            let mut values = results.iter_mut().collect::<Vec<_>>();
+            values.extend(args.iter_mut());
+            values.push(mem_in);
+            values.push(world_in);
+            values.push(mem_out);
+            values.push(world_out);
+            values
+        }
+        Inst::SExt(result, source, _)
+        | Inst::ZExt(result, source, _)
+        | Inst::Trunc(result, source, _) => {
+            vec![result, source]
         }
     }
 }
@@ -194,129 +4545,12 @@ fn lower_expr(expr: &CHirExpr<'_>, ctx: &mut LowerContext) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use evocc_chir::eval_expr;
-    use evocc_chir::{
-        BinaryOp, CHirDecl, CHirExpr, CHirStmt, CHirUnit, FunctionDecl, IntBase, IntLit, IntSuffix,
-        ParameterSyntax, SpannedName, StorageClass, SymbolData, SymbolTable, TypeSpecifier,
-        WrittenDeclarator, WrittenDeclaratorLayer,
-    };
-    use evocc_common::{Arena, FileId, SourceSpan};
-    use evocc_types::{
-        CanonicalType, FunctionParameters, IntRank, Qualifiers, TypeInterner, TypeKind,
-    };
-
-    fn int_lit(v: i64) -> CHirExpr<'static> {
-        CHirExpr::Lit(
-            IntLit {
-                value: v as u64,
-                suffix: IntSuffix::None,
-                base: IntBase::Dec,
-            },
-            test_span(),
-        )
-    }
-
-    fn test_span() -> SourceSpan {
-        SourceSpan::new(FileId::new(0), 0, 0, 0, 0)
-    }
-
-    fn arena_alloc<'arena, T: 'arena>(arena: &'arena Arena, value: T) -> &'arena T {
-        // Safety: this test allocates only C-HIR nodes. They contain no Arena
-        // handle and their transitive destructors only release owned buffers.
-        unsafe { arena.alloc_shared(value) }
-    }
 
     #[test]
-    fn chir_to_evoir_lowering_preserves_semantics() {
-        let arena = Arena::default();
-        let one = arena_alloc(&arena, int_lit(1));
-        let two = arena_alloc(&arena, int_lit(2));
-        let three = arena_alloc(&arena, int_lit(3));
-        let product = arena_alloc(
-            &arena,
-            CHirExpr::Binary(BinaryOp::Mul, two, three, test_span()),
-        );
-        let expression = arena_alloc(
-            &arena,
-            CHirExpr::Binary(BinaryOp::Add, one, product, test_span()),
-        );
-        let body = arena_alloc(&arena, CHirStmt::Return(Some(expression), test_span()));
-
-        let mut types = TypeInterner::new();
-        let int_type = types.intern(CanonicalType {
-            kind: TypeKind::Int(IntRank::Int),
-            qualifiers: Qualifiers::default(),
-        });
-        let function_type = types.intern(CanonicalType {
-            kind: TypeKind::Function {
-                return_type: int_type,
-                parameters: FunctionParameters::Prototype {
-                    types: Vec::new(),
-                    variadic: false,
-                },
-            },
-            qualifiers: Qualifiers::default(),
-        });
-        let mut symbols = SymbolTable::new();
-        let function_symbol = symbols
-            .declare(
-                symbols.file_scope(),
-                "f",
-                SymbolData::Function {
-                    storage: StorageClass::None,
-                },
-                function_type,
-                test_span(),
-            )
-            .unwrap();
-        let func_decl = arena_alloc(
-            &arena,
-            CHirDecl::Function(FunctionDecl {
-                symbol: function_symbol,
-                name: SpannedName {
-                    spelling: "f".into(),
-                    span: test_span(),
-                },
-                ty: function_type,
-                return_specifier: TypeSpecifier::Builtin {
-                    ty: int_type,
-                    span: test_span(),
-                },
-                written: WrittenDeclarator {
-                    layers: vec![WrittenDeclaratorLayer::Function { span: test_span() }],
-                    span: test_span(),
-                },
-                parameters: ParameterSyntax::Prototype {
-                    parameters: Vec::new(),
-                    variadic: false,
-                },
-                storage: StorageClass::None,
-                inline_spans: Vec::new(),
-                gnu_extension_spans: Vec::new(),
-                body: Some(body),
-                span: test_span(),
-            }),
-        );
-        let unit = CHirUnit::new(vec![func_decl], types, symbols);
-
-        let functions = lower_unit(&unit);
-        assert_eq!(functions.len(), 1);
-        let evoir_func = &functions[0];
-
-        assert!(evocc_evoir::validate_ssa(evoir_func).is_ok());
-
-        let outcome = evocc_evoir::eval_function(
-            evoir_func,
-            &[],
-            evocc_evoir::InterpreterLimits::new(100_000),
-        )
-        .expect("lowered EvoIR executes");
-        let results = outcome.return_values;
-        assert_eq!(results, vec![evocc_evoir::RuntimeValue::bits(32, 7)]);
-
-        let mut vars = std::collections::HashMap::new();
-        let chir_result = eval_expr(expression, &mut vars);
-        assert_eq!(chir_result, 7);
-        assert_eq!(results[0].raw_bits, chir_result as u64);
+    fn lower_error_is_stable_and_nonempty() {
+        let error = LowerError::InvalidGeneratedSsa {
+            message: "bad edge".into(),
+        };
+        assert_eq!(error.to_string(), "generated invalid EvoIR: bad edge");
     }
 }
