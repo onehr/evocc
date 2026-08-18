@@ -3,6 +3,7 @@
 # tracked exceptions.
 docs/*
 !docs/roadmap.md
+!docs/evoir-spec.md
 !docs/notebook/
 !docs/notebook/**
 lessons.md

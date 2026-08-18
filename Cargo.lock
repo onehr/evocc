@@ -61,6 +61,8 @@ dependencies = [
  "evocc-chir",
  "evocc-common",
  "evocc-evoir",
+ "evocc-lex",
+ "evocc-parser",
  "evocc-types",
 ]
 

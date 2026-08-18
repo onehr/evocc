@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "contractId": "c30.day5.closing-amendment.v1",
+  "status": "DEBT_OPEN",
+  "rulingDate": "2026-08-18",
+  "amends": "tests/contracts/day6-phase0-baseline.json",
+  "reportingRule": "Phase 0 is PARTIAL, not complete, until the listed debt is discharged.",
+  "day5": {
+    "closure": "CLOSED_BY_AMENDMENT",
+    "acceptanceComplete": false,
+    "phase0Complete": false,
+    "day6MayProceed": true,
+    "baselineCommit": "963a56775fc933382d199d6825c1844d3e5426ba"
+  },
+  "goalService": {
+    "status": "BLOCKED",
+    "mustNotBeMarkedCompleteWhileDebtIsOpen": true,
+    "rationale": "The persistent service state must follow measured completion rather than presentation convenience."
+  },
+  "debtTimebox": {
+    "duration": "half-day",
+    "starts": "when the debt work is explicitly resumed",
+    "mayNotExpand": true
+  },
+  "debts": [
+    {
+      "id": "day5-observer-simplification",
+      "status": "OPEN",
+      "requiredOutcome": "Replace the abandoned observer expansion with the minimum independently reviewable observer needed by the three pilot reductions.",
+      "excludedNonAuthorityArtifact": "tests/acceptance/day5-kernel-reductions-observer-selftest.py"
+    },
+    {
+      "id": "day5-three-pilot-reductions",
+      "status": "OPEN",
+      "requiredOutcome": "Complete and verify the three frozen pilot reductions without changing the frozen 46-lane denominator.",
+      "pilotContract": "tests/contracts/day5-kernel-reduction-pilots.json",
+      "failureIds": [
+        "4835fdc46c9b283c1ce2bc1f5070c92874e2c7c506699555e8797689a83faaff",
+        "869b322a04168ffbbac452763bf0081b20c3b69bdea7ffd6fc27bb65c5ff4b5f",
+        "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796"
+      ]
+    }
+  ],
+  "day9EntryCondition": {
+    "hardGate": true,
+    "condition": "All listed debts are complete and their prerequisites are measured before any Day 9 production edit.",
+    "consumer": "Day 9 attribute and typeof telemetry prioritization"
+  },
+  "nonBlockingScope": {
+    "day6": true,
+    "day7": true,
+    "day8": true,
+    "day9": false
+  }
+}

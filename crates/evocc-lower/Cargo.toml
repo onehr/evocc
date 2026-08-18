@@ -10,3 +10,7 @@ evocc-chir = { path = "../evocc-chir" }
 evocc-common = { path = "../evocc-common" }
 evocc-evoir = { path = "../evocc-evoir" }
 evocc-types = { path = "../evocc-types" }
+
+[dev-dependencies]
+evocc-lex = { path = "../evocc-lex" }
+evocc-parser = { path = "../evocc-parser" }
