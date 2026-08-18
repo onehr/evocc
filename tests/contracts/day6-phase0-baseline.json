@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "contractId": "c30.day6.phase0-baseline.v1",
+  "status": "FROZEN",
+  "purpose": "Freeze the honest Day 5 closing state and the metric baseline from which Day 6 C-HIR to block-argument SSA EvoIR work starts.",
+  "baseline": {
+    "resolution": "the first commit whose tree contains this contract byte-for-byte is the Day 5 closing commit and Day 6 regression baseline",
+    "parentCommit": "feb55050d54e61da4e41f4cbc232bce4bd9c9eae",
+    "day5Assessment": "PARTIAL_G4_BLOCKED",
+    "day5AcceptanceComplete": false,
+    "blockedReasons": [
+      "46 frozen kernel lanes still have pending reductions",
+      "only 1 frozen translation unit parses cleanly in both oracle-preprocessed lanes, below the locked 3-TU G4 threshold",
+      "meeting that threshold without pulling Day 9 GNU attributes and typeof into Day 5 is not supported by the frozen evidence"
+    ],
+    "excludedUntrackedPaths": [
+      "tests/acceptance/day5-kernel-reductions-observer-selftest.py"
+    ]
+  },
+  "declaredHarnessTimeboxes": {
+    "phase0EvidenceFreezeMinutes": 30,
+    "testsOnlyEquivalenceRedMinutes": 60,
+    "afterRedPolicy": "No additional harness expansion is authorized unless a later commit declares itself boxed infrastructure before work starts."
+  },
+  "dashboard": {
+    "kernel": {
+      "evidenceDirectory": ".evidence/day5-kernel-reconnaissance/20260817T225959Z-57627",
+      "cohortContract": {
+        "path": "tests/contracts/day5-kernel-cohort.json",
+        "sha256": "09d0e2eaf0734949164a491d30df640bf396ff7586ef495f938f565b8879a306",
+        "translationUnits": 16
+      },
+      "summary": {
+        "path": ".evidence/day5-kernel-reconnaissance/20260817T225959Z-57627/summary.json",
+        "sha256": "5be019759dd930237d696c2456bc783aa6f82eefbf7c11ecec6f98550857781e"
+      },
+      "results": {
+        "path": ".evidence/day5-kernel-reconnaissance/20260817T225959Z-57627/results.jsonl",
+        "sha256": "d65b3f6cf2594ed5053a922a2c671f648c5b3f44378e97ceef5bb98b568727f7",
+        "observedRecords": 48,
+        "requiredRecords": 48
+      },
+      "preprocessedTranslationUnits": {
+        "passed": 0,
+        "total": 16,
+        "measurement": "EvoCPP raw-source lane",
+        "preprocessFailures": 16
+      },
+      "parsedTranslationUnits": {
+        "passedBothOracleInputs": 1,
+        "total": 16,
+        "cleanParserLanes": 2,
+        "totalParserLanes": 32,
+        "parseFailures": 30
+      },
+      "compiledTranslationUnits": {
+        "passed": 0,
+        "total": 16,
+        "status": "NOT_IMPLEMENTED"
+      },
+      "pendingFailedLanes": 46,
+      "acceptanceReady": false
+    },
+    "differentialCleanExecution": {
+      "day5ScalarDefined": {
+        "passed": 256,
+        "total": 256,
+        "mismatches": 0,
+        "measurement": "bash tests/acceptance/day5-scalar-interpreter.sh"
+      },
+      "day5TypedRuntimeRejects": {
+        "passed": 64,
+        "total": 64,
+        "mismatches": 0,
+        "fuelControlsPassed": 1,
+        "measurement": "bash tests/acceptance/day5-scalar-interpreter.sh"
+      },
+      "day6ChirEvoirEquivalence": {
+        "passed": 0,
+        "total": 0,
+        "status": "NOT_MEASURED",
+        "nextGate": "commit a tests-only RED with at least 8 representative programs before any production edit"
+      },
+      "scalarInterpreterContract": {
+        "path": "tests/contracts/day5-scalar-interpreter.json",
+        "sha256": "71a757d161cd562d54992511a202925aeb5768ea5a23d93cfb0aabc332ee69a4"
+      }
+    },
+    "layoutOracle": {
+      "passed": 128,
+      "total": 128,
+      "contract": {
+        "path": "tests/contracts/day5-layout-cases.json",
+        "sha256": "cec3c8968e221d8895ff74f5329b47cac8ce7d9c3b32b6de84576624580f612e"
+      },
+      "evidence": {
+        "path": ".evidence/day5-layout/20260817T150306Z-5472/summary.json",
+        "sha256": "92ff2ee9880540274bd4150d869008ed2ea04fd96eea1da2e9501dffdab7af68"
+      }
+    },
+    "proofValidation": {
+      "reasonedUnionCampaign": {
+        "seeds": 100,
+        "actions": 10000,
+        "faultsRejected": 800,
+        "faultsTotal": 800,
+        "omittedBlocksRejected": 100,
+        "omittedBlocksTotal": 100,
+        "measurement": "cargo test -p evocc-egraph --test reasoned_union_campaign --locked --offline -- --nocapture"
+      },
+      "independentCheckerCampaign": {
+        "seeds": 100,
+        "actions": 10000,
+        "faultControlsRejected": 5,
+        "faultControlsTotal": 5,
+        "measurement": "cargo test -p evocc-egraph --test independent_checker --locked --offline -- --nocapture"
+      },
+      "exhaustiveCampaign": {
+        "alphabet": 5,
+        "maxLength": 6,
+        "sequencesValidated": 19531,
+        "measurement": "cargo test -p evocc-egraph --test independent_checker --locked --offline -- --nocapture"
+      }
+    }
+  },
+  "measuredRegressionGates": [
+    "cargo test --workspace --all-targets --locked --offline",
+    "cargo clippy --workspace --all-targets --locked --offline -- -D warnings",
+    "cargo fmt --all -- --check",
+    "git diff --check"
+  ],
+  "day6CommitDeclarationPolicy": {
+    "required": true,
+    "allowedDeclarations": [
+      "kernel-preprocessed-count",
+      "kernel-parsed-count",
+      "kernel-compiled-count",
+      "differential-clean-execution-count",
+      "proof-validation-rate",
+      "boxed-infrastructure"
+    ],
+    "boxedInfrastructureRequires": [
+      "a timebox declared before edits",
+      "no claim of compiler metric movement",
+      "an explicit stop when the timebox expires"
+    ]
+  },
+  "strictDay6Exclusions": [
+    "Day 7 memory, pointer, provenance, heap, and global-object semantics",
+    "Day 8 persistent EClassId mapping and e-graph integration",
+    "Day 9 attributes, typeof, and statement expressions",
+    "EvoMIR, backend, ABI lowering, Kbuild, and unboxed harness expansion"
+  ]
+}
