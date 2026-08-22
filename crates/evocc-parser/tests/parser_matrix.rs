@@ -224,6 +224,14 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
             update_name(*op),
             canonical_expr(target, types)
         ),
+        CHirExpr::MemoryRead { place, .. } => format!(
+            "memory_read({})",
+            place
+                .source_expressions()
+                .map(|source| canonical_expr(source, types))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
         CHirExpr::MemoryUpdate { op, place, .. } => format!(
             "memory_unary({},{})",
             update_name(*op),

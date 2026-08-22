@@ -186,6 +186,17 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 let child = self.expression(&format!("{path}.operand"), child);
                 format!("{operator}({child})")
             }
+            CHirExpr::MemoryRead { place, .. } => {
+                let sources = place
+                    .source_expressions()
+                    .enumerate()
+                    .map(|(index, source)| {
+                        self.expression(&format!("{path}.place[{index}]"), source)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!("memory_read({sources})")
+            }
             CHirExpr::MemoryUpdate { op, place, .. } => {
                 let operator = update_name(*op);
                 let sources = place

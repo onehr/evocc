@@ -452,6 +452,18 @@ fn prevalidate_expr_for_lowering(
             }
             prevalidate_expr_for_lowering(unit, target)
         }
+        CHirExpr::MemoryRead { place, span, .. } => {
+            place
+                .validate_against(unit.symbols(), unit.types())
+                .map_err(|_| LowerError::UnsupportedExpression {
+                    span: *span,
+                    feature: "memory read place is not authoritative in this C-HIR unit",
+                })?;
+            for source in place.source_expressions() {
+                prevalidate_expr_for_lowering(unit, source)?;
+            }
+            Ok(())
+        }
         CHirExpr::MemoryAssign {
             place,
             value,
@@ -2711,6 +2723,10 @@ impl<'a> FunctionLowerer<'a> {
                 span: *span,
                 feature: "expression requires the Day-7 object or non-integer model",
             }),
+            CHirExpr::MemoryRead { target_span, .. } => Err(LowerError::UnsupportedExpression {
+                span: *target_span,
+                feature: "expression requires the Day-7 object or non-integer model",
+            }),
         }
     }
 
@@ -4103,6 +4119,11 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut BTreeSet<SymbolId>)
             }
             collect_calls_expr(value, calls);
         }
+        CHirExpr::MemoryRead { place, .. } => {
+            for source in place.source_expressions() {
+                collect_calls_expr(source, calls);
+            }
+        }
         CHirExpr::Update { target, .. } => {
             collect_calls_expr(target, calls);
         }
@@ -4273,6 +4294,14 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
                 live.insert(symbol);
             }
         }
+        CHirExpr::MemoryRead { place, .. } => {
+            for source in place.source_expressions().rev() {
+                live_before_expr(source, live);
+            }
+            if let Some(symbol) = place.root_symbol() {
+                live.insert(symbol);
+            }
+        }
         CHirExpr::MemoryUpdate { place, .. } => {
             for source in place.source_expressions().rev() {
                 live_before_expr(source, live);
@@ -4426,6 +4455,14 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
                 collect_symbols_expr(source, symbols);
             }
             collect_symbols_expr(value, symbols);
+        }
+        CHirExpr::MemoryRead { place, .. } => {
+            if let Some(symbol) = place.root_symbol() {
+                symbols.insert(symbol);
+            }
+            for source in place.source_expressions() {
+                collect_symbols_expr(source, symbols);
+            }
         }
         CHirExpr::MemoryUpdate { place, .. } => {
             if let Some(symbol) = place.root_symbol() {

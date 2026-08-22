@@ -1281,12 +1281,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             || self.is_static_address_constant(expression)
     }
 
+    /// Reading storage is never an arithmetic constant expression: C11 6.6
+    /// admits only operands whose value is fixed at translation time.
     fn is_arithmetic_constant_expression(&self, expression: &CHirExpr<'_>) -> bool {
         if self.integer_expression_type(expression).is_ok() {
             return self.eval_integer_constant_expression(expression).is_ok();
         }
         match expression {
             CHirExpr::Lit(_, _) | CHirExpr::FloatLit(_, _) | CHirExpr::CharLit(_, _) => true,
+            CHirExpr::MemoryRead { .. } => false,
             CHirExpr::Ident { symbol, .. } => self
                 .symbols
                 .symbol(*symbol)
@@ -1364,6 +1367,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn eval_real_constant_expression(&self, expression: &CHirExpr<'_>) -> Option<f64> {
         match expression {
             CHirExpr::FloatLit(literal, _) => Some(literal.value),
+            CHirExpr::MemoryRead { .. } => None,
             CHirExpr::Lit(_, _) | CHirExpr::CharLit(_, _) | CHirExpr::Ident { .. } => self
                 .eval_integer_constant_expression(expression)
                 .ok()
@@ -3077,6 +3081,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn eval_integer_constant_expression(&self, expression: &CHirExpr<'_>) -> Result<CInteger, ()> {
         match expression {
             CHirExpr::Lit(literal, _) => integer_literal_value(*literal).map_err(|_| ()),
+            CHirExpr::MemoryRead { .. } => Err(()),
             CHirExpr::CharLit(literal, _) => {
                 Ok(CInteger::int(i32::try_from(literal.value).map_err(|_| ())?))
             }
@@ -3174,6 +3179,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn integer_expression_type(&self, expression: &CHirExpr<'_>) -> Result<CIntegerType, ()> {
         match expression {
             CHirExpr::Lit(literal, _) => Ok(integer_literal_value(*literal).map_err(|_| ())?.ty()),
+            CHirExpr::MemoryRead { .. } => Err(()),
             CHirExpr::CharLit(_, _) => Ok(CIntegerType::INT),
             CHirExpr::Ident { symbol, .. } => {
                 let symbol = self.symbols.symbol(*symbol).map_err(|_| ())?;
@@ -4588,6 +4594,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::Ident { facts, .. } => {
                 (InferredType::Canonical(facts.ty()), facts.category())
             }
+            // The place is authority for the designated subobject's type, and
+            // this node already represents the converted value.
+            CHirExpr::MemoryRead { facts, .. } => {
+                (InferredType::Canonical(facts.ty()), ExprCategory::Value)
+            }
             CHirExpr::Unary(op, operand, _) => {
                 let operand = match op {
                     UnaryOp::AddrOf => self.expression_type(operand)?,
@@ -5982,6 +5993,17 @@ fn integer_expression_layout(ty: CIntegerType) -> Result<TypeLayout, ()> {
 fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHirExpr<'arena> {
     match inner {
         CHirExpr::Lit(literal, _) => CHirExpr::Lit(*literal, paren_span),
+        CHirExpr::MemoryRead {
+            place,
+            target_span,
+            facts,
+            ..
+        } => CHirExpr::MemoryRead {
+            place: place.clone(),
+            target_span: *target_span,
+            facts: *facts,
+            span: paren_span,
+        },
         CHirExpr::FloatLit(literal, _) => CHirExpr::FloatLit(*literal, paren_span),
         CHirExpr::CharLit(literal, _) => CHirExpr::CharLit(*literal, paren_span),
         CHirExpr::StringLit(literal, _) => CHirExpr::StringLit(literal.clone(), paren_span),

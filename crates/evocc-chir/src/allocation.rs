@@ -1238,6 +1238,18 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                 work.push(WorkItem::Expression(value));
                 work.push(WorkItem::Expression(target));
             }
+            CHirExpr::MemoryRead {
+                place, target_span, ..
+            } => {
+                place
+                    .validate_against(self.unit.symbols(), self.unit.types())
+                    .map_err(|_| AllocationSiteManifestError::InvalidMemoryPlace {
+                        span: *target_span,
+                    })?;
+                for source in place.source_expressions().rev() {
+                    work.push(WorkItem::Expression(source));
+                }
+            }
             CHirExpr::MemoryAssign {
                 place,
                 target_span,

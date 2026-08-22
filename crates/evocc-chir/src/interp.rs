@@ -12,8 +12,8 @@ use std::{
 
 use evocc_common::SourceSpan;
 use evocc_memory::{
-    AccessLayout, FrameId, InitialState, MemoryConfig, MemoryFault, MemoryLimits, MemoryState,
-    Pointer, ScopeId as MemoryScopeId, WorldLimits, WorldState,
+    AccessLayout, FrameId, IndexSignedness, InitialState, MemoryConfig, MemoryFault, MemoryLimits,
+    MemoryState, OffsetDirection, Pointer, ScopeId as MemoryScopeId, WorldLimits, WorldState,
 };
 use evocc_types::{
     FunctionParameters, Qualifiers, TagDefinition, TagState, TargetDataLayout, TypeId,
@@ -27,9 +27,9 @@ use crate::{
     },
     AllocationSiteKind, AllocationSiteManifest, AllocationSiteManifestError, AssignmentOp,
     BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, ExprCategory,
-    ExprFacts, FunctionDecl, InitAction, MemoryPlace, ObjectDecl, ParameterSyntax, PlaceRoot,
-    PointerTypeDesc, ScalarPlace, ScopeKind, StorageClass, SymbolId, SymbolKind, UnaryOp, UpdateOp,
-    WrittenDeclarator, WrittenDeclaratorLayer,
+    ExprFacts, FunctionDecl, InitAction, MemoryPlace, ObjectDecl, ParameterSyntax, PlaceProjection,
+    PlaceRoot, PointerTypeDesc, ScalarPlace, ScopeKind, StorageClass, SymbolId, SymbolKind,
+    UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
 };
 
 const DEFAULT_FUEL: u64 = 100_000;
@@ -460,6 +460,15 @@ struct ValidatedFunctionSignature {
 enum MachineTask<'arena> {
     FunctionEnd(FunctionEnd),
     RestoreSlots(Vec<(SymbolId, Slot)>),
+    /// Fold a projected place's root address and subscript values into one
+    /// address, then load the designated subobject.
+    ///
+    /// The subscript values are already on the value stack in source order, so
+    /// each one has been evaluated exactly once by the time this runs.
+    LoadProjectedPlace {
+        place: &'arena MemoryPlace<'arena>,
+        span: SourceSpan,
+    },
     RestoreFuelAnchor(Option<SourceSpan>),
     ExecDeclaration(&'arena CHirDecl<'arena>),
     ExecStatement(&'arena CHirStmt<'arena>),
@@ -1391,6 +1400,23 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     )?);
                     None
                 }
+                MachineTask::LoadProjectedPlace { place, span } => {
+                    let subscripts = place
+                        .projections()
+                        .iter()
+                        .filter(|projection| projection.source_expression().is_some())
+                        .count();
+                    let address =
+                        self.resolve_projected_address(place, subscripts, &mut values, span)?;
+                    let value = self.load_memory_value(
+                        address,
+                        place.value_ty(),
+                        place.access_qualifiers(),
+                        span,
+                    )?;
+                    values.push(value);
+                    None
+                }
                 MachineTask::ApplyIndirectAssignment {
                     operator,
                     pointer_type,
@@ -2238,6 +2264,19 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     allow_root_mutation: false,
                 });
             }
+            CHirExpr::MemoryRead {
+                place,
+                target_span,
+                facts,
+                ..
+            } if self.memory_mode => {
+                self.validate_readable_place(place, *facts, *target_span)?;
+                tasks.push(MachineTask::LoadProjectedPlace {
+                    place,
+                    span: *target_span,
+                });
+                self.schedule_place_operands(place, *target_span, tasks, values)?;
+            }
             CHirExpr::MemoryAssign {
                 op,
                 place,
@@ -2322,6 +2361,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     u64::from(layout.align_bytes),
                     CIntegerType::ULONG,
                 )));
+            }
+            // Reaching this means requirement analysis concluded the program
+            // needs no object memory while its C-HIR designates a subobject.
+            // The two must agree, so this is reported rather than papered over
+            // by silently enabling memory here.
+            CHirExpr::MemoryRead { target_span, .. } => {
+                return Err(InterpreterError::UnsupportedExpression {
+                    feature: "memory read outside the object-memory machine",
+                    span: *target_span,
+                });
             }
             CHirExpr::Assign { .. }
             | CHirExpr::MemoryAssign { .. }
@@ -3217,6 +3266,191 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span,
             }
         })
+    }
+
+    /// Recheck a place against the tables of the unit being executed, and
+    /// confirm the facts recorded at the use site still describe it.
+    ///
+    /// A place is checked data supplied by the parser, so this guards against a
+    /// place transplanted from an unrelated unit whose numeric identities
+    /// happen to overlap, not merely against parser bugs.
+    fn validate_readable_place(
+        &self,
+        place: &MemoryPlace<'arena>,
+        facts: ExprFacts,
+        target_span: SourceSpan,
+    ) -> Result<(), InterpreterError> {
+        place
+            .validate_against(self.unit.symbols(), self.unit.types())
+            .map_err(|_| InterpreterError::UnsupportedExpression {
+                feature: "invalid typed memory place",
+                span: target_span,
+            })?;
+        if facts.ty() != place.value_ty() || facts.category() != ExprCategory::Value {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "memory read disagrees with its place",
+                span: target_span,
+            });
+        }
+        if place.is_bit_field() {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "bit-field memory access",
+                span: target_span,
+            });
+        }
+        Ok(())
+    }
+
+    /// Schedule evaluation of a projected place: its root address first, then
+    /// each subscript expression in source order.
+    ///
+    /// Returns the number of subscript values the completion task must pop.
+    /// Nothing here evaluates a subexpression more than once, which is why the
+    /// designating syntax is not retained alongside the place.
+    fn schedule_place_operands(
+        &mut self,
+        place: &'arena MemoryPlace<'arena>,
+        target_span: SourceSpan,
+        tasks: &mut Vec<MachineTask<'arena>>,
+        values: &mut Vec<CValue>,
+    ) -> Result<usize, InterpreterError> {
+        let subscripts: Vec<&'arena CHirExpr<'arena>> = place
+            .projections()
+            .iter()
+            .filter_map(PlaceProjection::source_expression)
+            .collect();
+        // The task stack is last-in-first-out, so pushing in reverse source
+        // order makes the machine evaluate the root first and then each
+        // subscript left to right.
+        for subscript in subscripts.iter().rev() {
+            tasks.push(MachineTask::EvalExpression {
+                expression: subscript,
+                allow_root_mutation: false,
+            });
+        }
+        match place.root() {
+            PlaceRoot::PointerExpression { pointer, .. } => {
+                tasks.push(MachineTask::EvalExpression {
+                    expression: pointer,
+                    allow_root_mutation: false,
+                });
+            }
+            PlaceRoot::Object { symbol } => {
+                let binding = self.require_memory_binding(*symbol, target_span)?;
+                values.push(CValue::Pointer {
+                    value: binding.address,
+                    ty: PointerTypeDesc::from_addressed_place(place),
+                });
+            }
+        }
+        Ok(subscripts.len())
+    }
+
+    /// Fold a root address and already-evaluated subscript values into the
+    /// address of the designated subobject.
+    ///
+    /// Every step goes through the memory model's checked pointer arithmetic,
+    /// so an out-of-range subscript or an overflowing offset becomes a typed
+    /// diagnostic rather than a wrapped address.
+    fn project_place_address(
+        &self,
+        root: Pointer,
+        place: &MemoryPlace<'_>,
+        subscripts: &[CInteger],
+        span: SourceSpan,
+    ) -> Result<Pointer, InterpreterError> {
+        let mut address = root;
+        let mut consumed = 0;
+        for projection in place.projections() {
+            address = match projection {
+                PlaceProjection::Index(projection) => {
+                    let subscript = subscripts.get(consumed).copied().ok_or(
+                        InterpreterError::UnsupportedExpression {
+                            feature: "missing subscript value for projected place",
+                            span,
+                        },
+                    )?;
+                    consumed += 1;
+                    let element = self.access_layout(projection.element_ty(), span)?;
+                    let signedness = if subscript.ty().is_signed() {
+                        IndexSignedness::Signed
+                    } else {
+                        IndexSignedness::Unsigned
+                    };
+                    address
+                        .checked_scaled_offset(
+                            u128::from(subscript.raw_bits()),
+                            u16::from(subscript.ty().bits()),
+                            signedness,
+                            OffsetDirection::Add,
+                            element.size_bytes,
+                        )
+                        .map_err(|error| self.memory_error(error, span))?
+                }
+                PlaceProjection::Field(projection) => {
+                    let layout = self
+                        .target
+                        .record_layout(self.unit.types(), projection.tag())
+                        .map_err(|_| InterpreterError::UnsupportedType {
+                            ty: projection.field_ty(),
+                            span,
+                        })?;
+                    let field = layout
+                        .fields
+                        .iter()
+                        .find(|field| field.field_index == projection.field_index())
+                        .ok_or(InterpreterError::UnsupportedType {
+                            ty: projection.field_ty(),
+                            span,
+                        })?;
+                    let offset = i64::try_from(field.byte_offset).map_err(|_| {
+                        InterpreterError::UnsupportedType {
+                            ty: projection.field_ty(),
+                            span,
+                        }
+                    })?;
+                    address
+                        .checked_offset(offset)
+                        .map_err(|error| self.memory_error(error, span))?
+                }
+            };
+        }
+        if consumed != subscripts.len() {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "unconsumed subscript value at projected place",
+                span,
+            });
+        }
+        Ok(address)
+    }
+
+    /// Pop a projected place's operands and resolve its final address.
+    ///
+    /// The value stack holds the root address followed by `subscript_count`
+    /// subscript values in source order, so they are popped in reverse and
+    /// restored to source order before folding.
+    fn resolve_projected_address(
+        &self,
+        place: &MemoryPlace<'_>,
+        subscript_count: usize,
+        values: &mut Vec<CValue>,
+        span: SourceSpan,
+    ) -> Result<Pointer, InterpreterError> {
+        let mut subscripts = Vec::with_capacity(subscript_count);
+        for _ in 0..subscript_count {
+            let value = pop_machine_value(values, span)?;
+            subscripts.push(expect_machine_integer(value, span)?);
+        }
+        subscripts.reverse();
+        let (root, actual) = expect_machine_pointer(pop_machine_value(values, span)?, span)?;
+        let expected = PointerTypeDesc::from_addressed_place(place);
+        if actual != expected {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "inconsistent pointer type at projected place",
+                span,
+            });
+        }
+        self.project_place_address(root, place, &subscripts, span)
     }
 
     fn load_memory_value(
@@ -4169,6 +4403,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirExpr::CompoundLit(_, _, _)
             | CHirExpr::Assign { .. }
             | CHirExpr::MemoryAssign { .. }
+            | CHirExpr::MemoryRead { .. }
             | CHirExpr::Update { .. }
             | CHirExpr::MemoryUpdate { .. } => Err(InterpreterError::UnsupportedExpression {
                 feature: "outside scalar Day-5 expression subset",
@@ -4190,6 +4425,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirExpr::Ident { facts, .. }
             | CHirExpr::Assign { facts, .. }
             | CHirExpr::MemoryAssign { facts, .. }
+            | CHirExpr::MemoryRead { facts, .. }
             | CHirExpr::Update { facts, .. }
             | CHirExpr::MemoryUpdate { facts, .. } => self.integer_type(facts.ty(), span),
             CHirExpr::Unary(operator, operand, _) => match operator {
@@ -4715,7 +4951,7 @@ fn push_static_initializer_children<'arena>(
             }
             push(value);
         }
-        CHirExpr::MemoryUpdate { place, .. } => {
+        CHirExpr::MemoryUpdate { place, .. } | CHirExpr::MemoryRead { place, .. } => {
             for source in place.source_expressions() {
                 push(source);
             }
@@ -4866,7 +5102,9 @@ fn collect_expression_symbols<'arena>(
             collect_place_symbols(place, output);
             collect_expression_symbols(value, output);
         }
-        CHirExpr::MemoryUpdate { place, .. } => collect_place_symbols(place, output),
+        CHirExpr::MemoryUpdate { place, .. } | CHirExpr::MemoryRead { place, .. } => {
+            collect_place_symbols(place, output);
+        }
         CHirExpr::Lit(_, _)
         | CHirExpr::FloatLit(_, _)
         | CHirExpr::CharLit(_, _)
@@ -4979,6 +5217,7 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         }
         CHirExpr::Unary(UnaryOp::AddrOf | UnaryOp::Deref, _, _)
         | CHirExpr::MemoryAssign { .. }
+        | CHirExpr::MemoryRead { .. }
         | CHirExpr::MemoryUpdate { .. }
         | CHirExpr::StringLit(_, _)
         | CHirExpr::Member(_, _, _)
@@ -5232,6 +5471,9 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
         CHirExpr::MemoryAssign { place, value, .. } => {
             place.source_expressions().any(expression_contains_call)
                 || expression_contains_call(value)
+        }
+        CHirExpr::MemoryRead { place, .. } => {
+            place.source_expressions().any(expression_contains_call)
         }
         CHirExpr::Update { target, .. } => expression_contains_call(target),
         CHirExpr::MemoryUpdate { place, .. } => {

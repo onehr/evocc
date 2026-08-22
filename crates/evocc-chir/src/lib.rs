@@ -344,6 +344,21 @@ pub enum CHirExpr<'arena> {
         facts: ExprFacts,
         span: SourceSpan,
     },
+    /// The value of an indirect or projected C lvalue, after lvalue conversion.
+    ///
+    /// `place` is the sole evaluation authority and `target_span` is diagnostic
+    /// provenance only. The designating syntax is deliberately not retained:
+    /// a consumer that could walk both the syntax and the place would evaluate
+    /// subscript expressions twice, which C forbids. Contexts that must not
+    /// perform lvalue conversion, such as the operand of `&` or the target of
+    /// an assignment, recover the place from this node instead of re-deriving
+    /// it from syntax.
+    MemoryRead {
+        place: MemoryPlace<'arena>,
+        target_span: SourceSpan,
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
     Update {
         op: UpdateOp,
         place: ScalarPlace,
@@ -390,6 +405,7 @@ impl CHirExpr<'_> {
             | Self::Index(_, _, span)
             | Self::Assign { span, .. }
             | Self::MemoryAssign { span, .. }
+            | Self::MemoryRead { span, .. }
             | Self::Update { span, .. }
             | Self::MemoryUpdate { span, .. }
             | Self::CompoundLit(_, _, span)

@@ -86,7 +86,7 @@ fn assert_expr_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         CHirExpr::Update { target, .. } => {
             assert_expr_owned(arena, target);
         }
-        CHirExpr::MemoryUpdate { place, .. } => {
+        CHirExpr::MemoryUpdate { place, .. } | CHirExpr::MemoryRead { place, .. } => {
             for source in place.source_expressions() {
                 assert_expr_owned(arena, source);
             }

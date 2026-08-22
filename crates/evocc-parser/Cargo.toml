@@ -11,3 +11,6 @@ evocc-types = { path = "../evocc-types" }
 evocc-lex = { path = "../evocc-lex" }
 evocc-cpp = { path = "../evocc-cpp" }
 evocc-chir = { path = "../evocc-chir" }
+
+[dev-dependencies]
+evocc-memory = { path = "../evocc-memory" }
