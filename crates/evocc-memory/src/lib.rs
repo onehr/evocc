@@ -646,6 +646,10 @@ impl MemoryFault {
     #[must_use]
     pub const fn runtime_diagnostic(&self) -> Option<MemoryDiagnostic> {
         let diagnostic = match self {
+            Self::InvalidLifetimeEnd { .. } => MemoryDiagnostic {
+                code: "E3007",
+                message: "invalid-lifetime-end",
+            },
             Self::UninitializedRead { .. } => MemoryDiagnostic {
                 code: "E3001",
                 message: "read-of-uninitialized-object",
@@ -2172,6 +2176,10 @@ mod tests {
         let (memory, static_object) = memory
             .allocate_static(10, BYTE, InitialState::Zeroed)
             .unwrap();
+        let literal_bytes = ByteSequence::try_from_bytes(vec![0]).unwrap();
+        let (memory, string_literal) = memory
+            .allocate_string_literal(11, BYTE, &literal_bytes)
+            .unwrap();
         let (memory, frame, scope) = memory.begin_frame().unwrap();
         let (memory, automatic) = memory
             .allocate_automatic(frame, scope, 20, AccessLayout::new(2, 1))
@@ -2182,14 +2190,25 @@ mod tests {
         );
         let memory = memory.store_integer(automatic, BYTE, 0).unwrap();
         let (memory, foreign_frame, _) = memory.begin_frame().unwrap();
-        assert_fault(
+        let invalid_lifetime_diagnostic = Some(MemoryDiagnostic {
+            code: "E3007",
+            message: "invalid-lifetime-end",
+        });
+        let fault = assert_fault(
             memory.end_object_lifetime(frame, automatic.checked_offset(1).unwrap()),
             MemoryFaultKind::InvalidLifetimeEnd,
         );
-        assert_fault(
+        assert_eq!(fault.runtime_diagnostic(), invalid_lifetime_diagnostic);
+        let fault = assert_fault(
             memory.end_object_lifetime(frame, static_object),
             MemoryFaultKind::InvalidLifetimeEnd,
         );
+        assert_eq!(fault.runtime_diagnostic(), invalid_lifetime_diagnostic);
+        let fault = assert_fault(
+            memory.end_object_lifetime(frame, string_literal),
+            MemoryFaultKind::InvalidLifetimeEnd,
+        );
+        assert_eq!(fault.runtime_diagnostic(), invalid_lifetime_diagnostic);
         assert_fault(
             memory.end_object_lifetime(frame, Pointer::NULL),
             MemoryFaultKind::NullDereference,
@@ -2198,10 +2217,11 @@ mod tests {
             memory.end_object_lifetime(frame, Pointer::base(ObjectId::from_raw(9_999))),
             MemoryFaultKind::UnknownObject,
         );
-        assert_fault(
+        let fault = assert_fault(
             memory.end_object_lifetime(foreign_frame, automatic),
             MemoryFaultKind::InvalidLifetimeEnd,
         );
+        assert_eq!(fault.runtime_diagnostic(), invalid_lifetime_diagnostic);
         assert_fault(
             memory.end_object_lifetime(FrameId(9_999), automatic),
             MemoryFaultKind::UnknownFrame,
@@ -2228,6 +2248,16 @@ mod tests {
         let object = ObjectId::from_raw(1);
         let address = Pointer::base(object);
         let cases = [
+            (
+                MemoryFault::InvalidLifetimeEnd {
+                    address,
+                    reason: InvalidLifetimeEndReason::NonBasePointer,
+                },
+                MemoryDiagnostic {
+                    code: "E3007",
+                    message: "invalid-lifetime-end",
+                },
+            ),
             (
                 MemoryFault::UninitializedRead {
                     address,
