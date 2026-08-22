@@ -35,17 +35,17 @@ const EXPRESSIONS: &[ExpressionCase] = &[
     ExpressionCase {
         id: "expr.postfix.index",
         expression: "items[index]",
-        expected: "index(id(items),id(index))",
+        expected: "memory_read(id(items),id(index))",
     },
     ExpressionCase {
         id: "expr.postfix.member",
         expression: "object.member",
-        expected: "member(id(object),member)",
+        expected: "memory_read()",
     },
     ExpressionCase {
         id: "expr.postfix.pointer_member",
         expression: "pointer->member",
-        expected: "ptr_member(id(pointer),member)",
+        expected: "memory_read(id(pointer))",
     },
     ExpressionCase {
         id: "expr.postfix.increment",
@@ -126,9 +126,14 @@ const EXPRESSIONS: &[ExpressionCase] = &[
     },
 ];
 
+// The postfix probes below are real C, not merely token sequences: subscripting
+// requires a pointer operand and member access requires a record operand, so
+// `items`, `object` and `pointer` are declared with the types those operators
+// actually accept.
 const EXPRESSION_BINDINGS: &str = concat!(
-    "int seed; int callee; int left; int right; int items; int index; ",
-    "int object; int pointer; int counter; int value; int middle; ",
+    "struct Probe { int member; }; ",
+    "int seed; int callee; int left; int right; int *items; int index; ",
+    "struct Probe object; struct Probe *pointer; int counter; int value; int middle; ",
     "int alpha; int beta; int gamma; int delta; int condition; int one; int two; "
 );
 

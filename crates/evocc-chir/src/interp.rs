@@ -28,8 +28,8 @@ use crate::{
     AllocationSiteKind, AllocationSiteManifest, AllocationSiteManifestError, AssignmentOp,
     BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, ExprCategory,
     ExprFacts, FunctionDecl, InitAction, MemoryPlace, ObjectDecl, ParameterSyntax, PlaceProjection,
-    PlaceRoot, PointerTypeDesc, ScalarPlace, ScopeKind, StorageClass, SymbolId, SymbolKind,
-    UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
+    PlaceRoot, PointerTypeDesc, ScalarPlace, ScopeKind, StorageClass, SubobjectPath, SubobjectStep,
+    SymbolId, SymbolKind, UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
 };
 
 const DEFAULT_FUEL: u64 = 100_000;
@@ -460,6 +460,32 @@ struct ValidatedFunctionSignature {
 enum MachineTask<'arena> {
     FunctionEnd(FunctionEnd),
     RestoreSlots(Vec<(SymbolId, Slot)>),
+    /// Step a named scalar object in place, yielding the value the prefix or
+    /// postfix form of the operator produces.
+    ApplyScalarUpdate {
+        operator: UpdateOp,
+        symbol: SymbolId,
+        target_span: SourceSpan,
+        span: SourceSpan,
+    },
+    /// Load, step and store one designated scalar, yielding the value the
+    /// prefix or postfix form of the operator produces.
+    ApplyIndirectUpdate {
+        operator: UpdateOp,
+        value_type: TypeId,
+        qualifiers: Qualifiers,
+        target_span: SourceSpan,
+        span: SourceSpan,
+    },
+    /// Fold a projected place's root address and subscript values into one
+    /// address and leave it on the value stack.
+    ///
+    /// Separating this from the access itself lets the ordinary indirect store
+    /// path consume a projected address unchanged.
+    FoldPlaceAddress {
+        place: &'arena MemoryPlace<'arena>,
+        span: SourceSpan,
+    },
     /// Fold a projected place's root address and subscript values into one
     /// address, then load the designated subobject.
     ///
@@ -526,6 +552,20 @@ enum MachineTask<'arena> {
     FinishMemoryInitializer {
         symbol: SymbolId,
         span: SourceSpan,
+    },
+    /// Apply the remaining actions of one object's initializer plan.
+    ///
+    /// Plans are ordered and may target subobjects, so they are driven one
+    /// action at a time rather than assumed to be a single whole-object store.
+    ContinueMemoryInitializer {
+        declaration: &'arena ObjectDecl<'arena>,
+        index: usize,
+    },
+    /// Store one evaluated initializer value into the subobject its action
+    /// designates.
+    FinishMemorySubobject {
+        declaration: &'arena ObjectDecl<'arena>,
+        index: usize,
     },
     FinishReturnValue(SourceSpan),
     SelectIf {
@@ -1085,8 +1125,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     body,
                     span,
                 } => {
-                    if expect_machine_integer(pop_machine_value(&mut values, span)?, span)?.truth()
-                    {
+                    if machine_truth(pop_machine_value(&mut values, span)?, span)? {
                         tasks.push(MachineTask::WhileCheck { condition, body });
                         tasks.push(MachineTask::ExecStatement(body));
                     }
@@ -1109,8 +1148,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     body,
                     span,
                 } => {
-                    if expect_machine_integer(pop_machine_value(&mut values, span)?, span)?.truth()
-                    {
+                    if machine_truth(pop_machine_value(&mut values, span)?, span)? {
                         tasks.push(MachineTask::DoWhileCondition { condition, body });
                         tasks.push(MachineTask::ExecStatement(body));
                     }
@@ -1150,8 +1188,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     body,
                     span,
                 } => {
-                    if expect_machine_integer(pop_machine_value(&mut values, span)?, span)?.truth()
-                    {
+                    if machine_truth(pop_machine_value(&mut values, span)?, span)? {
                         tasks.push(MachineTask::ForStep {
                             condition,
                             step,
@@ -1209,6 +1246,35 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     self.store_bound_value(symbol, value, span)?;
                     None
                 }
+                MachineTask::ContinueMemoryInitializer { declaration, index } => {
+                    self.continue_memory_initializer(declaration, index, &mut tasks)?;
+                    None
+                }
+                MachineTask::FinishMemorySubobject { declaration, index } => {
+                    let span = declaration
+                        .initializer
+                        .as_ref()
+                        .map_or(declaration.span, crate::ObjectInitializer::span);
+                    let action = declaration
+                        .initializer
+                        .as_ref()
+                        .and_then(|initializer| initializer.plan().actions().get(index))
+                        .ok_or(InterpreterError::InvalidInitializerPlan {
+                            symbol: declaration.symbol,
+                            span,
+                        })?;
+                    let InitAction::StoreScalar { path, span, .. } = action else {
+                        return Err(InterpreterError::InvalidInitializerPlan {
+                            symbol: declaration.symbol,
+                            span,
+                        });
+                    };
+                    let value = pop_machine_value(&mut values, *span)?;
+                    let (address, ty) = self.subobject_address(declaration, path, *span)?;
+                    let value = cast_machine_value(value, self.value_type(ty, *span)?, *span)?;
+                    self.store_memory_value(address, ty, Qualifiers::default(), value, *span)?;
+                    None
+                }
                 MachineTask::FinishReturnValue(span) => {
                     let value = pop_machine_value(&mut values, span)?;
                     let end = self.pop_function_end(&mut tasks, span)?;
@@ -1218,11 +1284,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     then_statement,
                     else_statement,
                 } => {
-                    let condition = expect_machine_integer(
+                    let condition = machine_truth(
                         pop_machine_value(&mut values, then_statement.span())?,
                         then_statement.span(),
                     )?;
-                    if condition.truth() {
+                    if condition {
                         tasks.push(MachineTask::ExecStatement(then_statement));
                     } else if let Some(else_statement) = else_statement {
                         tasks.push(MachineTask::ExecStatement(else_statement));
@@ -1398,6 +1464,68 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         pointer_type.pointee_qualifiers(),
                         span,
                     )?);
+                    None
+                }
+                MachineTask::ApplyScalarUpdate {
+                    operator,
+                    symbol,
+                    target_span,
+                    span,
+                } => {
+                    values.push(CValue::Integer(self.apply_scalar_update(
+                        operator,
+                        symbol,
+                        target_span,
+                        span,
+                    )?));
+                    None
+                }
+                MachineTask::ApplyIndirectUpdate {
+                    operator,
+                    value_type,
+                    qualifiers,
+                    target_span,
+                    span,
+                } => {
+                    let (address, _) =
+                        expect_machine_pointer(pop_machine_value(&mut values, span)?, target_span)?;
+                    let old = expect_machine_integer(
+                        self.load_memory_value(address, value_type, qualifiers, target_span)?,
+                        target_span,
+                    )?;
+                    let binary = match operator {
+                        UpdateOp::PreIncrement | UpdateOp::PostIncrement => BinaryOp::Add,
+                        UpdateOp::PreDecrement | UpdateOp::PostDecrement => BinaryOp::Sub,
+                    };
+                    let stepped = eval_binary_integer(binary, old, CInteger::new(1, old.ty()))
+                        .map_err(|error| self.integer_error(error, span))?;
+                    self.store_memory_value(
+                        address,
+                        value_type,
+                        qualifiers,
+                        CValue::Integer(stepped),
+                        span,
+                    )?;
+                    // A prefix form yields the updated object; a postfix form
+                    // yields the value it held before the update.
+                    values.push(CValue::Integer(match operator {
+                        UpdateOp::PreIncrement | UpdateOp::PreDecrement => stepped,
+                        UpdateOp::PostIncrement | UpdateOp::PostDecrement => old,
+                    }));
+                    None
+                }
+                MachineTask::FoldPlaceAddress { place, span } => {
+                    let subscripts = place
+                        .projections()
+                        .iter()
+                        .filter(|projection| projection.source_expression().is_some())
+                        .count();
+                    let address =
+                        self.resolve_projected_address(place, subscripts, &mut values, span)?;
+                    values.push(CValue::Pointer {
+                        value: address,
+                        ty: PointerTypeDesc::from_addressed_place(place),
+                    });
                     None
                 }
                 MachineTask::LoadProjectedPlace { place, span } => {
@@ -1746,6 +1874,167 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let Some(initializer) = &declaration.initializer else {
             return Ok(());
         };
+        if initializer.plan().actions().is_empty() {
+            return Err(InterpreterError::InvalidInitializerPlan {
+                symbol: declaration.symbol,
+                span: initializer.span(),
+            });
+        }
+        tasks.push(MachineTask::ContinueMemoryInitializer {
+            declaration,
+            index: 0,
+        });
+        Ok(())
+    }
+
+    /// Resolve a designated subobject to a byte offset within its object.
+    ///
+    /// Field offsets come from the target record layout and element offsets
+    /// from the element size, so this is the same address arithmetic a
+    /// projected place performs, driven by constant steps instead of by
+    /// evaluated subscripts.
+    fn subobject_offset(
+        &self,
+        object_ty: TypeId,
+        path: &SubobjectPath,
+        span: SourceSpan,
+    ) -> Result<(i64, TypeId), InterpreterError> {
+        let mut current = object_ty;
+        let mut offset: i64 = 0;
+        for step in path.steps() {
+            match step {
+                SubobjectStep::Field { field_index } => {
+                    let tag = match self.unit.types().get(current).map(|ty| &ty.kind) {
+                        Some(TypeKind::Struct(tag) | TypeKind::Union(tag)) => *tag,
+                        _ => return Err(InterpreterError::UnsupportedType { ty: current, span }),
+                    };
+                    let layout = self
+                        .target
+                        .record_layout(self.unit.types(), tag)
+                        .map_err(|_| InterpreterError::UnsupportedType { ty: current, span })?;
+                    let field = layout
+                        .fields
+                        .iter()
+                        .find(|field| field.field_index == *field_index)
+                        .ok_or(InterpreterError::UnsupportedType { ty: current, span })?;
+                    if field.bit_field.is_some() {
+                        return Err(InterpreterError::UnsupportedExpression {
+                            feature: "bit-field initializer",
+                            span,
+                        });
+                    }
+                    offset =
+                        offset
+                            .checked_add(i64::try_from(field.byte_offset).map_err(|_| {
+                                InterpreterError::UnsupportedType { ty: current, span }
+                            })?)
+                            .ok_or(InterpreterError::UnsupportedType { ty: current, span })?;
+                    current = self
+                        .unit
+                        .types()
+                        .tag(tag)
+                        .and_then(|definition| match &definition.state {
+                            TagState::Complete(
+                                TagDefinition::Struct(fields) | TagDefinition::Union(fields),
+                            ) => fields.get(*field_index).map(|field| field.ty),
+                            _ => None,
+                        })
+                        .ok_or(InterpreterError::UnsupportedType { ty: current, span })?;
+                }
+                SubobjectStep::Index { index } => {
+                    let element = match self.unit.types().get(current).map(|ty| &ty.kind) {
+                        Some(TypeKind::Array { element, .. }) => *element,
+                        _ => return Err(InterpreterError::UnsupportedType { ty: current, span }),
+                    };
+                    let size = i64::try_from(self.access_layout(element, span)?.size_bytes)
+                        .map_err(|_| InterpreterError::UnsupportedType { ty: element, span })?;
+                    let step = i64::try_from(*index)
+                        .ok()
+                        .and_then(|index| index.checked_mul(size))
+                        .ok_or(InterpreterError::UnsupportedType { ty: element, span })?;
+                    offset = offset
+                        .checked_add(step)
+                        .ok_or(InterpreterError::UnsupportedType { ty: element, span })?;
+                    current = element;
+                }
+            }
+        }
+        Ok((offset, current))
+    }
+
+    /// Address of one designated subobject of an already-bound object.
+    fn subobject_address(
+        &self,
+        declaration: &ObjectDecl<'arena>,
+        path: &SubobjectPath,
+        span: SourceSpan,
+    ) -> Result<(Pointer, TypeId), InterpreterError> {
+        let binding = self.require_memory_binding(declaration.symbol, span)?;
+        let (offset, ty) = self.subobject_offset(declaration.ty, path, span)?;
+        let address = binding
+            .address
+            .checked_offset(offset)
+            .map_err(|error| self.memory_error(error, span))?;
+        Ok((address, ty))
+    }
+
+    /// Schedule the next action of an initializer plan, if any remain.
+    fn continue_memory_initializer(
+        &mut self,
+        declaration: &'arena ObjectDecl<'arena>,
+        index: usize,
+        tasks: &mut Vec<MachineTask<'arena>>,
+    ) -> Result<(), InterpreterError> {
+        let Some(initializer) = &declaration.initializer else {
+            return Ok(());
+        };
+        let Some(action) = initializer.plan().actions().get(index) else {
+            return Ok(());
+        };
+        match action {
+            InitAction::StoreScalar {
+                path, span, value, ..
+            } => {
+                // Reject before evaluating, so a rejected destination cannot
+                // run the initializer's side effects first.
+                self.subobject_address(declaration, path, *span)?;
+                tasks.push(MachineTask::ContinueMemoryInitializer {
+                    declaration,
+                    index: index + 1,
+                });
+                tasks.push(MachineTask::FinishMemorySubobject { declaration, index });
+                tasks.push(MachineTask::EvalExpression {
+                    expression: value,
+                    allow_root_mutation: true,
+                });
+                Ok(())
+            }
+            InitAction::ZeroScalar { path, .. } => {
+                let span = initializer.span();
+                let (address, ty) = self.subobject_address(declaration, path, span)?;
+                let value = self.zero_value(ty, span)?;
+                self.store_memory_value(address, ty, Qualifiers::default(), value, span)?;
+                tasks.push(MachineTask::ContinueMemoryInitializer {
+                    declaration,
+                    index: index + 1,
+                });
+                Ok(())
+            }
+            // Writing a string literal into storage needs the lexer's escape
+            // decoding. Reimplementing it here would create a second decoder
+            // that could disagree with the one the source was tokenized with.
+            InitAction::StoreString { span, .. } => Err(InterpreterError::UnsupportedExpression {
+                feature: "string-literal object initializer",
+                span: *span,
+            }),
+        }
+    }
+
+    fn unreachable_initializer_shapes(
+        &mut self,
+        declaration: &'arena ObjectDecl<'arena>,
+        initializer: &crate::ObjectInitializer<'arena>,
+    ) -> Result<(), InterpreterError> {
         let action = initializer.plan().actions().first().ok_or(
             InterpreterError::InvalidInitializerPlan {
                 symbol: declaration.symbol,
@@ -1753,29 +2042,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             },
         )?;
         match action {
-            InitAction::StoreScalar {
-                path,
-                destination_type,
-                value,
-                span,
-            } if path.is_root() && *destination_type == declaration.ty => {
-                tasks.push(MachineTask::FinishMemoryInitializer {
-                    symbol: declaration.symbol,
-                    span: *span,
-                });
-                tasks.push(MachineTask::EvalExpression {
-                    expression: value,
-                    allow_root_mutation: true,
-                });
-                Ok(())
-            }
-            InitAction::ZeroScalar {
-                path,
-                destination_type,
-            } if path.is_root() && *destination_type == declaration.ty => {
-                let value = self.zero_value(declaration.ty, initializer.span())?;
-                self.store_bound_value(declaration.symbol, value, initializer.span())
-            }
             InitAction::StoreScalar { span, .. } | InitAction::StoreString { span, .. } => {
                 Err(InterpreterError::InvalidInitializerPlan {
                     symbol: declaration.symbol,
@@ -2277,6 +2543,52 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 });
                 self.schedule_place_operands(place, *target_span, tasks, values)?;
             }
+            CHirExpr::Update {
+                op,
+                place,
+                target,
+                facts,
+                ..
+            } if allow_root_mutation => {
+                if facts.ty() != place.ty() || facts.category() != ExprCategory::Value {
+                    return Err(InterpreterError::InvalidScalarPlace {
+                        symbol: place.symbol(),
+                        span,
+                    });
+                }
+                let symbol = if self.memory_mode {
+                    self.validate_memory_scalar_place(*place, target, span)?
+                } else {
+                    self.validate_place(*place, target, span)?
+                };
+                tasks.push(MachineTask::ApplyScalarUpdate {
+                    operator: *op,
+                    symbol,
+                    target_span: target.span(),
+                    span,
+                });
+            }
+            CHirExpr::MemoryUpdate {
+                op,
+                place,
+                target_span,
+                facts,
+                ..
+            } if self.memory_mode && allow_root_mutation => {
+                self.validate_mutable_place(place, *facts, *target_span)?;
+                tasks.push(MachineTask::ApplyIndirectUpdate {
+                    operator: *op,
+                    value_type: place.value_ty(),
+                    qualifiers: place.access_qualifiers(),
+                    target_span: *target_span,
+                    span,
+                });
+                tasks.push(MachineTask::FoldPlaceAddress {
+                    place,
+                    span: *target_span,
+                });
+                self.schedule_place_operands(place, *target_span, tasks, values)?;
+            }
             CHirExpr::MemoryAssign {
                 op,
                 place,
@@ -2295,7 +2607,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     || facts.category() != ExprCategory::Value
                     || !place.is_modifiable()
                     || place.is_bit_field()
-                    || !place.projections().is_empty()
                 {
                     return Err(InterpreterError::UnsupportedExpression {
                         feature: "unsupported typed memory place",
@@ -2315,21 +2626,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     expression: value,
                     allow_root_mutation: false,
                 });
-                match place.root() {
-                    PlaceRoot::PointerExpression { pointer, .. } => {
-                        tasks.push(MachineTask::EvalExpression {
-                            expression: pointer,
-                            allow_root_mutation: false,
-                        });
-                    }
-                    PlaceRoot::Object { symbol } => {
-                        let binding = self.require_memory_binding(*symbol, *target_span)?;
-                        values.push(CValue::Pointer {
-                            value: binding.address,
-                            ty: pointer_type,
-                        });
-                    }
-                }
+                tasks.push(MachineTask::FoldPlaceAddress {
+                    place,
+                    span: *target_span,
+                });
+                self.schedule_place_operands(place, *target_span, tasks, values)?;
             }
             CHirExpr::SizeOf(ty, _) => {
                 let layout = self.target.layout_of(self.unit.types(), *ty).map_err(|_| {
@@ -3060,10 +3361,18 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ty: declaration.ty,
                     span: declaration.span,
                 })?;
+        // Aggregates are storage like any other object here: the interpreter
+        // never materialises one as a value, it only ever accesses subobjects
+        // through a place, so admitting them costs nothing in the value model.
         if canonical.qualifiers.is_atomic
             || !matches!(
                 canonical.kind,
-                TypeKind::Int(_) | TypeKind::Enum(_) | TypeKind::Pointer(_)
+                TypeKind::Int(_)
+                    | TypeKind::Enum(_)
+                    | TypeKind::Pointer(_)
+                    | TypeKind::Array { .. }
+                    | TypeKind::Struct(_)
+                    | TypeKind::Union(_)
             )
         {
             return Err(InterpreterError::UnsupportedType {
@@ -3111,12 +3420,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span,
             })?
             .bindings;
-        if bindings
-            .insert(symbol, MemoryBinding { address, ty })
-            .is_some()
-        {
-            return Err(InterpreterError::MalformedObjectDeclaration { symbol, span });
-        }
+        // Re-entering a scope allocates a fresh object at the same site, so a
+        // previous binding is replaced rather than rejected: the memory model
+        // has already issued a new object identity and left the old one as a
+        // tombstone, which is what makes a stale pointer stay dangling instead
+        // of silently addressing the new object. Two declarations of one symbol
+        // within a single scope activation cannot reach here, because the
+        // symbol table rejects them when the unit is built.
+        bindings.insert(symbol, MemoryBinding { address, ty });
         Ok(())
     }
 
@@ -3153,6 +3464,24 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         if let Some(value) = declaration.enumerator_value() {
             let ty = self.integer_type(declaration.ty(), span)?;
             return Ok(CValue::Integer(CInteger::new(value as u64, ty)));
+        }
+        // C11 6.3.2.1p3: an array lvalue used as a value becomes a pointer to
+        // its first element. The array itself is never loaded, so this is the
+        // only way an array-typed identifier can produce one.
+        if let Some(TypeKind::Array { element, .. }) = self
+            .unit
+            .types()
+            .get(declaration.ty())
+            .map(|canonical| &canonical.kind)
+        {
+            let element = *element;
+            let binding = self.require_memory_binding(symbol, span)?;
+            let ty = PointerTypeDesc::to_object(self.unit.types(), element)
+                .ok_or(InterpreterError::UnsupportedType { ty: element, span })?;
+            return Ok(CValue::Pointer {
+                value: binding.address,
+                ty,
+            });
         }
         if !self.memory_mode {
             let slot = self
@@ -3301,6 +3630,24 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         Ok(())
     }
 
+    /// Recheck a place that is about to be written, with the extra conditions
+    /// a store requires beyond a load.
+    fn validate_mutable_place(
+        &self,
+        place: &MemoryPlace<'arena>,
+        facts: ExprFacts,
+        target_span: SourceSpan,
+    ) -> Result<(), InterpreterError> {
+        self.validate_readable_place(place, facts, target_span)?;
+        if !place.is_modifiable() {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "store to an unmodifiable place",
+                span: target_span,
+            });
+        }
+        Ok(())
+    }
+
     /// Schedule evaluation of a projected place: its root address first, then
     /// each subscript expression in source order.
     ///
@@ -3339,11 +3686,26 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 let binding = self.require_memory_binding(*symbol, target_span)?;
                 values.push(CValue::Pointer {
                     value: binding.address,
-                    ty: PointerTypeDesc::from_addressed_place(place),
+                    ty: self.root_pointer_type(place, target_span)?,
                 });
             }
         }
         Ok(subscripts.len())
+    }
+
+    /// Pointer type of a place's root, which is what address folding starts
+    /// from and therefore what the value stack must be carrying.
+    fn root_pointer_type(
+        &self,
+        place: &MemoryPlace<'_>,
+        span: SourceSpan,
+    ) -> Result<PointerTypeDesc, InterpreterError> {
+        place
+            .root_pointer_type(self.unit.symbols(), self.unit.types())
+            .ok_or(InterpreterError::UnsupportedExpression {
+                feature: "place root has no pointer type",
+                span,
+            })
     }
 
     /// Fold a root address and already-evaluated subscript values into the
@@ -3443,7 +3805,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         }
         subscripts.reverse();
         let (root, actual) = expect_machine_pointer(pop_machine_value(values, span)?, span)?;
-        let expected = PointerTypeDesc::from_addressed_place(place);
+        let expected = self.root_pointer_type(place, span)?;
         if actual != expected {
             return Err(InterpreterError::UnsupportedExpression {
                 feature: "inconsistent pointer type at projected place",
@@ -3573,6 +3935,79 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         }
     }
 
+    /// Step a named scalar object by one, in whichever storage model is active.
+    ///
+    /// The task machine runs in both modes, so this cannot assume the scalar
+    /// lives in an interpreter slot; in memory mode the object is a real
+    /// addressable object like any other.
+    fn apply_scalar_update(
+        &mut self,
+        operator: UpdateOp,
+        symbol: SymbolId,
+        target_span: SourceSpan,
+        span: SourceSpan,
+    ) -> Result<CInteger, InterpreterError> {
+        let binary = match operator {
+            UpdateOp::PreIncrement | UpdateOp::PostIncrement => BinaryOp::Add,
+            UpdateOp::PreDecrement | UpdateOp::PostDecrement => BinaryOp::Sub,
+        };
+        let previous = if self.memory_mode {
+            let binding = self.require_memory_binding(symbol, target_span)?;
+            let qualifiers = self
+                .unit
+                .types()
+                .get(binding.ty)
+                .ok_or(InterpreterError::UnsupportedType {
+                    ty: binding.ty,
+                    span: target_span,
+                })?
+                .qualifiers;
+            expect_machine_integer(
+                self.load_memory_value(binding.address, binding.ty, qualifiers, target_span)?,
+                target_span,
+            )?
+        } else {
+            let slot = *self
+                .slots
+                .get(&symbol)
+                .ok_or(InterpreterError::InvalidScalarPlace { symbol, span })?;
+            slot.value
+                .ok_or_else(|| self.uninitialized_read(symbol, target_span))?
+        };
+        let updated = eval_binary_integer(binary, previous, CInteger::int(1))
+            .map_err(|error| self.integer_error(error, span))?
+            .cast(previous.ty());
+        if self.memory_mode {
+            self.store_bound_value(symbol, CValue::Integer(updated), span)?;
+        } else {
+            self.slots
+                .get_mut(&symbol)
+                .ok_or(InterpreterError::InvalidScalarPlace { symbol, span })?
+                .value = Some(updated);
+        }
+        Ok(
+            if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PreDecrement) {
+                updated
+            } else {
+                previous
+            },
+        )
+    }
+
+    fn uninitialized_read(&self, symbol: SymbolId, span: SourceSpan) -> InterpreterError {
+        let spelling = self
+            .unit
+            .symbols()
+            .symbol(symbol)
+            .map(|symbol| symbol.spelling().to_owned())
+            .unwrap_or_else(|_| format!("symbol#{}", symbol.raw()));
+        InterpreterError::ReadOfUninitializedObject {
+            symbol,
+            spelling,
+            span,
+        }
+    }
+
     fn store_bound_value(
         &mut self,
         symbol: SymbolId,
@@ -3679,6 +4114,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         span: SourceSpan,
     ) -> Result<CValue, InterpreterError> {
         if operator == AssignmentOp::Simple {
+            // Simple assignment converts its right operand to the type of the
+            // designated object, which is where a null pointer constant becomes
+            // a null pointer and a narrower integer is truncated.
+            let right = cast_machine_value(right, self.value_type(ty, span)?, span)?;
             return self.store_memory_value(address, ty, qualifiers, right, span);
         }
         let left = expect_machine_integer(
@@ -3822,25 +4261,34 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let plan = initializer.plan();
         if plan.target_type() != declaration.ty
             || plan.validate(self.unit.types()).is_err()
-            || plan.actions().len() != 1
+            || plan.actions().is_empty()
         {
             return Err(InterpreterError::InvalidInitializerPlan {
                 symbol: declaration.symbol,
                 span: initializer.span(),
             });
         }
-        let valid = match &plan.actions()[0] {
+        // Each action must designate a real subobject of this declaration and
+        // agree with that subobject's type. `SubobjectPath` resolution is the
+        // same authority the initializer execution uses, so a plan that passes
+        // here cannot fail to address its destination later.
+        let valid = plan.actions().iter().all(|action| match action {
             InitAction::StoreScalar {
                 path,
                 destination_type,
+                span,
                 ..
-            }
-            | InitAction::ZeroScalar {
+            } => self
+                .subobject_offset(declaration.ty, path, *span)
+                .is_ok_and(|(_, ty)| ty == *destination_type),
+            InitAction::ZeroScalar {
                 path,
                 destination_type,
-            } => path.is_root() && *destination_type == declaration.ty,
+            } => self
+                .subobject_offset(declaration.ty, path, declaration.span)
+                .is_ok_and(|(_, ty)| ty == *destination_type),
             InitAction::StoreString { .. } => false,
-        };
+        });
         if !valid {
             return Err(InterpreterError::InvalidInitializerPlan {
                 symbol: declaration.symbol,
@@ -5503,6 +5951,18 @@ fn pop_machine_value(
     })
 }
 
+/// Truth of a controlling expression.
+///
+/// C11 6.5.13 and the statement forms compare the operand against zero, and a
+/// pointer compares against the null pointer, so a pointer condition is well
+/// formed rather than an integer-only operation.
+fn machine_truth(value: CValue, _span: SourceSpan) -> Result<bool, InterpreterError> {
+    match value {
+        CValue::Integer(value) => Ok(value.truth()),
+        CValue::Pointer { value, .. } => Ok(!value.object().is_null()),
+    }
+}
+
 fn expect_machine_integer(value: CValue, span: SourceSpan) -> Result<CInteger, InterpreterError> {
     match value {
         CValue::Integer(value) => Ok(value),
@@ -5537,6 +5997,16 @@ fn cast_machine_value(
         }
         (CValue::Pointer { value, ty }, ValueType::Pointer(target)) if ty == target => {
             Ok(CValue::Pointer { value, ty: target })
+        }
+        // C11 6.3.2.3p3: a null pointer constant converts to a null pointer of
+        // the destination type. Whether the source really was a *constant* is
+        // settled where the assignment was type checked; only the conversion
+        // itself is executed here.
+        (CValue::Integer(value), ValueType::Pointer(target)) if value.raw_bits() == 0 => {
+            Ok(CValue::Pointer {
+                value: Pointer::NULL,
+                ty: target,
+            })
         }
         (CValue::Integer(_), ValueType::Pointer(_))
         | (CValue::Pointer { .. }, ValueType::Integer(_))

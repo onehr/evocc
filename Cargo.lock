@@ -87,6 +87,7 @@ dependencies = [
  "evocc-common",
  "evocc-cpp",
  "evocc-lex",
+ "evocc-memory",
  "evocc-types",
 ]
 

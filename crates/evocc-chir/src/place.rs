@@ -50,6 +50,18 @@ impl PointerTypeDesc {
     /// Form the result type of address-of from a place whose facts have
     /// already been checked against the symbol/type tables.
     #[must_use]
+    /// Descriptor for a pointer to `pointee`.
+    ///
+    /// Taking an address and array-to-pointer decay both produce a pointer
+    /// value whose type need never have been written in the source, so this
+    /// deliberately does not require the pointer type to have been interned.
+    pub fn to_object(types: &TypeInterner, pointee: TypeId) -> Option<Self> {
+        Some(Self {
+            pointee,
+            pointee_qualifiers: types.get(pointee)?.qualifiers,
+        })
+    }
+
     pub const fn from_addressed_place(place: &MemoryPlace<'_>) -> Self {
         Self {
             pointee: place.value_ty,
@@ -501,6 +513,25 @@ impl<'arena> MemoryPlace<'arena> {
         match self.root {
             PlaceRoot::Object { symbol } => Some(symbol),
             PlaceRoot::PointerExpression { .. } => None,
+        }
+    }
+
+    /// Pointer type designating this place's root, before any projection.
+    ///
+    /// Address folding starts from this type, not from the projected value's
+    /// type, so a consumer checking the root it pushed against the root it
+    /// popped compares like with like.
+    #[must_use]
+    pub fn root_pointer_type(
+        &self,
+        symbols: &SymbolTable,
+        types: &TypeInterner,
+    ) -> Option<PointerTypeDesc> {
+        match &self.root {
+            PlaceRoot::PointerExpression { pointer_type, .. } => Some(*pointer_type),
+            PlaceRoot::Object { symbol } => {
+                PointerTypeDesc::to_object(types, symbols.symbol(*symbol).ok()?.ty())
+            }
         }
     }
 

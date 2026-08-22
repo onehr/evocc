@@ -10,13 +10,13 @@ use evocc_chir::integer::{
 };
 use evocc_chir::{
     AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit,
-    CharLit, CharPrefix, EnumeratorDecl, ExprCategory, ExprFacts, FloatLit, FloatSuffix,
-    FunctionDecl, InitAction, InitPlan, IntBase, IntLit, IntSuffix, MemoryPlace, ObjectDecl,
-    ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceRoot, PointerTypeDesc, RecordMember,
-    ScalarPlace, ScopeId, ScopeKind, SpannedName, StorageClass, StringLit, StringPrefix,
-    SubobjectPath, SubobjectStep, SymbolData, SymbolId, SymbolKind, SymbolTable, SymbolTableError,
-    TagDecl, TagMembers, TypeSpecifier, TypedefDecl, UnaryOp, UpdateOp, WrittenDeclarator,
-    WrittenDeclaratorLayer, WrittenInitializer,
+    CharLit, CharPrefix, EnumeratorDecl, ExprCategory, ExprFacts, FieldProjection, FloatLit,
+    FloatSuffix, FunctionDecl, IndexProjection, InitAction, InitPlan, IntBase, IntLit, IntSuffix,
+    MemoryPlace, ObjectDecl, ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceProjection,
+    PlaceRoot, PointerTypeDesc, RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName,
+    StorageClass, StringLit, StringPrefix, SubobjectPath, SubobjectStep, SymbolData, SymbolId,
+    SymbolKind, SymbolTable, SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl,
+    UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer, WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_lex::{Token, TokenKind, TokenText};
@@ -4339,13 +4339,30 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .dereference_place(pointer, target.span())
                 .map(TypedUpdateTarget::Memory);
         }
+        // A projected scalar lvalue already carries its checked place, so the
+        // target is recovered from it rather than derived a second time.
+        if let CHirExpr::MemoryRead { place, .. } = target {
+            if !place.is_modifiable() {
+                self.report("E2101", "expected-modifiable-lvalue", target.span());
+                return None;
+            }
+            if place.access_qualifiers().is_atomic {
+                self.report(
+                    "E2702",
+                    "not-covered-day7: volatile-or-atomic-update",
+                    target.span(),
+                );
+                return None;
+            }
+            return Some(TypedUpdateTarget::Memory(place.clone()));
+        }
         if matches!(
             target,
             CHirExpr::Member(_, _, _) | CHirExpr::PtrMember(_, _, _) | CHirExpr::Index(_, _, _)
         ) {
             self.report(
-                "E2701",
-                "not-covered-day7: indirect-memory-lvalue",
+                "E2705",
+                "not-covered-day7: aggregate-lvalue-assignment",
                 target.span(),
             );
             return None;
@@ -4363,6 +4380,244 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             symbol: *symbol,
             ty: facts.ty(),
         }))
+    }
+
+    /// Resolve a member name against a record type, yielding the projection
+    /// payload that designates it.
+    ///
+    /// Anonymous members are not searched through: transparent lookup into an
+    /// unnamed struct or union is a separate language feature, and silently
+    /// resolving through one here would designate a different subobject than
+    /// the source names.
+    fn record_member(&self, record_ty: TypeId, name: &str) -> Option<FieldProjection> {
+        let canonical = self.types.get(record_ty)?;
+        let tag = match canonical.kind {
+            TypeKind::Struct(tag) | TypeKind::Union(tag) => tag,
+            _ => return None,
+        };
+        let definition = self.types.tag(tag)?;
+        let fields = match &definition.state {
+            TagState::Complete(TagDefinition::Struct(fields))
+            | TagState::Complete(TagDefinition::Union(fields)) => fields,
+            TagState::Incomplete | TagState::Complete(TagDefinition::Enum(_)) => return None,
+        };
+        let (index, field) = fields
+            .iter()
+            .enumerate()
+            .find(|(_, field)| field.name.as_deref() == Some(name))?;
+        Some(FieldProjection::new(tag, index, field.ty))
+    }
+
+    /// Split a subscript into its pointer-like and integer operands.
+    ///
+    /// C11 6.5.2.1p1 requires one operand to have pointer-to-object type and
+    /// the other integer type, without fixing which is which, so `2[a]` is as
+    /// well formed as `a[2]`.
+    fn subscript_operands<'e>(
+        &self,
+        left: &'e CHirExpr<'arena>,
+        right: &'e CHirExpr<'arena>,
+    ) -> Option<(&'e CHirExpr<'arena>, &'e CHirExpr<'arena>)> {
+        let left_class = self.operand_type_class(self.converted_expression_type(left)?.ty);
+        if matches!(left_class, OperandTypeClass::Pointer(_)) {
+            return Some((left, right));
+        }
+        let right_class = self.operand_type_class(self.converted_expression_type(right)?.ty);
+        if matches!(right_class, OperandTypeClass::Pointer(_)) {
+            return Some((right, left));
+        }
+        None
+    }
+
+    /// The element type a subscript of this base designates.
+    fn subscript_element_type(&self, base: &CHirExpr<'arena>) -> Option<TypeId> {
+        match self.operand_type_class(self.converted_expression_type(base)?.ty) {
+            OperandTypeClass::Pointer(pointer) => Some(pointer.pointee),
+            _ => None,
+        }
+    }
+
+    /// Build the checked place designated by an lvalue expression.
+    ///
+    /// The walk is outside-in over the written syntax and bottoms out at an
+    /// object or at a pointer expression. Returning `None` means the syntax
+    /// does not designate a place this slice can represent; the caller reports
+    /// the diagnostic, because only the caller knows which construct the
+    /// failure belongs to.
+    fn resolve_memory_place(
+        &mut self,
+        expression: &'arena CHirExpr<'arena>,
+    ) -> Option<MemoryPlace<'arena>> {
+        let (root, projections, value_ty) = self.resolve_place_chain(expression)?;
+        MemoryPlace::derive(&self.symbols, &self.types, root, projections, value_ty).ok()
+    }
+
+    fn resolve_place_chain(
+        &mut self,
+        expression: &'arena CHirExpr<'arena>,
+    ) -> Option<(PlaceRoot<'arena>, Vec<PlaceProjection<'arena>>, TypeId)> {
+        match expression {
+            // Already-resolved subobjects carry their own authority, so a
+            // further projection extends that chain instead of re-deriving it
+            // from syntax that is deliberately no longer present.
+            CHirExpr::MemoryRead { place, .. } => Some((
+                place.root().clone(),
+                place.projections().to_vec(),
+                place.value_ty(),
+            )),
+            CHirExpr::Ident { symbol, facts, .. } => {
+                let declaration = self.symbols.symbol(*symbol).ok()?;
+                if !matches!(
+                    declaration.kind(),
+                    SymbolKind::Object | SymbolKind::Parameter
+                ) {
+                    return None;
+                }
+                Some((
+                    PlaceRoot::Object { symbol: *symbol },
+                    Vec::new(),
+                    facts.ty(),
+                ))
+            }
+            CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
+                let pointer_type = self.pointer_root_descriptor(pointer)?;
+                Some((
+                    PlaceRoot::PointerExpression {
+                        pointer,
+                        pointer_type,
+                    },
+                    Vec::new(),
+                    pointer_type.pointee(),
+                ))
+            }
+            CHirExpr::Member(base, name, _) => {
+                let (root, mut projections, base_ty) = self.resolve_place_chain(base)?;
+                let field = self.record_member(base_ty, name)?;
+                let field_ty = field.field_ty();
+                projections.push(PlaceProjection::Field(field));
+                Some((root, projections, field_ty))
+            }
+            CHirExpr::PtrMember(pointer, name, _) => {
+                let pointer_type = self.pointer_root_descriptor(pointer)?;
+                let field = self.record_member(pointer_type.pointee(), name)?;
+                let field_ty = field.field_ty();
+                Some((
+                    PlaceRoot::PointerExpression {
+                        pointer,
+                        pointer_type,
+                    },
+                    vec![PlaceProjection::Field(field)],
+                    field_ty,
+                ))
+            }
+            CHirExpr::Index(left, right, _) => {
+                let (base, index) = self.subscript_operands(left, right)?;
+                let element_ty = self.subscript_element_type(base)?;
+                let promoted = self.promoted_subscript_type(index)?;
+                let projection =
+                    PlaceProjection::Index(IndexProjection::new(index, element_ty, promoted));
+                // An array lvalue is subscripted in place; anything else has
+                // already decayed to a pointer value and becomes the root.
+                if self.designates_array_object(base) {
+                    let (root, mut projections, _) = self.resolve_place_chain(base)?;
+                    projections.push(projection);
+                    Some((root, projections, element_ty))
+                } else {
+                    let pointer_type = self.pointer_root_descriptor(base)?;
+                    Some((
+                        PlaceRoot::PointerExpression {
+                            pointer: base,
+                            pointer_type,
+                        },
+                        vec![projection],
+                        element_ty,
+                    ))
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Does this expression designate an array object, rather than hold a
+    /// pointer value that already decayed from one?
+    fn designates_array_object(&self, expression: &CHirExpr<'arena>) -> bool {
+        let Some(inferred) = self.expression_type(expression) else {
+            return false;
+        };
+        let InferredType::Canonical(ty) = inferred.ty else {
+            return false;
+        };
+        matches!(
+            self.types.get(ty).map(|canonical| &canonical.kind),
+            Some(TypeKind::Array { .. })
+        )
+    }
+
+    /// The canonical pointer descriptor of an expression used as a place root.
+    fn pointer_root_descriptor(&self, expression: &CHirExpr<'arena>) -> Option<PointerTypeDesc> {
+        let InferredType::Canonical(ty) = self.converted_expression_type(expression)?.ty else {
+            return None;
+        };
+        PointerTypeDesc::from_canonical_pointer(&self.types, ty).ok()
+    }
+
+    /// The subscript's type after integer promotion, which is what a backend
+    /// needs to choose a machine width for the scaled offset.
+    fn promoted_subscript_type(&self, index: &CHirExpr<'arena>) -> Option<CIntegerType> {
+        match self.operand_type_class(self.converted_expression_type(index)?.ty) {
+            OperandTypeClass::Integer(integer) => Some(CInteger::new(0, integer).promoted().ty()),
+            _ => None,
+        }
+    }
+
+    /// Convert a projected lvalue to a value where C requires it.
+    ///
+    /// Only loadable scalars are converted here. An aggregate or array place is
+    /// left as written syntax so a following projection can continue the chain;
+    /// if such a node instead reaches a consumer, that consumer reports the
+    /// aggregate boundary it actually hit.
+    fn convert_projected_lvalue(
+        &mut self,
+        expression: &'arena CHirExpr<'arena>,
+    ) -> &'arena CHirExpr<'arena> {
+        let span = expression.span();
+        // A projection that cannot even be typed is ill formed, not merely
+        // outside this slice, so it is reported here rather than left to
+        // surface as a confusing failure in a later stage.
+        let Some(inferred) = self.expression_type(expression) else {
+            self.report("E2102", "invalid-projected-lvalue", span);
+            return expression;
+        };
+        let InferredType::Canonical(value_ty) = inferred.ty else {
+            return expression;
+        };
+        if !self.is_loadable_scalar(value_ty) {
+            return expression;
+        }
+        let Some(place) = self.resolve_memory_place(expression) else {
+            self.report("E2102", "invalid-projected-lvalue", span);
+            return expression;
+        };
+        let facts = ExprFacts::value(place.value_ty());
+        self.alloc_node(CHirExpr::MemoryRead {
+            place,
+            target_span: span,
+            facts,
+            span,
+        })
+    }
+
+    fn is_loadable_scalar(&self, ty: TypeId) -> bool {
+        matches!(
+            self.types.get(ty).map(|canonical| &canonical.kind),
+            Some(
+                TypeKind::Int(_)
+                    | TypeKind::Enum(_)
+                    | TypeKind::Pointer(_)
+                    | TypeKind::Float(_)
+                    | TypeKind::GnuInt128(_)
+            )
+        )
     }
 
     fn dereference_place(
@@ -4707,8 +4962,42 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 InferredType::StringArray(literal.prefix),
                 ExprCategory::LValue,
             ),
-            CHirExpr::Member(_, _, _) | CHirExpr::PtrMember(_, _, _) | CHirExpr::Index(_, _, _) => {
-                return None
+            // A projected lvalue's type comes from the member or element it
+            // designates. Qualifier propagation is deliberately not modelled
+            // here: `MemoryPlace` accumulates it along the whole chain, which
+            // is the authority every consumer already consults.
+            CHirExpr::Member(base, name, _) => {
+                let InferredType::Canonical(base_ty) = self.expression_type(base)?.ty else {
+                    return None;
+                };
+                (
+                    InferredType::Canonical(self.record_member(base_ty, name)?.field_ty()),
+                    ExprCategory::LValue,
+                )
+            }
+            CHirExpr::PtrMember(pointer, name, _) => {
+                let OperandTypeClass::Pointer(pointee) =
+                    self.operand_type_class(self.converted_expression_type(pointer)?.ty)
+                else {
+                    return None;
+                };
+                (
+                    InferredType::Canonical(self.record_member(pointee.pointee, name)?.field_ty()),
+                    ExprCategory::LValue,
+                )
+            }
+            CHirExpr::Index(left, right, _) => {
+                let (base, index) = self.subscript_operands(left, right)?;
+                if !matches!(
+                    self.operand_type_class(self.converted_expression_type(index)?.ty),
+                    OperandTypeClass::Integer(_)
+                ) {
+                    return None;
+                }
+                (
+                    InferredType::Canonical(self.subscript_element_type(base)?),
+                    ExprCategory::LValue,
+                )
             }
         };
         Some(InferredExpressionType {
@@ -5289,7 +5578,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         .unwrap_or_else(|| self.span());
                     self.expect(TokenKind::RBracket)?;
                     let span = self.merge_span(expression.span(), end);
-                    expression = self.alloc_node(CHirExpr::Index(expression, index, span));
+                    let subscript = self.alloc_node(CHirExpr::Index(expression, index, span));
+                    expression = self.convert_projected_lvalue(subscript);
                 }
                 Some(TokenKind::Dot) | Some(TokenKind::Arrow) => {
                     let pointer = self.peek_kind() == Some(TokenKind::Arrow);
@@ -5304,11 +5594,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     }
                     let name = self.token_text(&member).to_owned();
                     let span = self.merge_span(expression.span(), member.span);
-                    expression = if pointer {
+                    let projected = if pointer {
                         self.alloc_node(CHirExpr::PtrMember(expression, name, span))
                     } else {
                         self.alloc_node(CHirExpr::Member(expression, name, span))
                     };
+                    expression = self.convert_projected_lvalue(projected);
                 }
                 Some(TokenKind::PlusPlus) | Some(TokenKind::MinusMinus) => {
                     let token = self.advance().unwrap();

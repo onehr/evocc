@@ -44,13 +44,20 @@ fn parse<'arena>(source: &str, arena: &'arena Arena) -> Result<CHirUnit<'arena>,
     }
 }
 
+/// Execution always starts at `main`, never at whichever definition happens to
+/// come first: a fixture that measures side effects declares its helper above
+/// `main`, and entering the helper would quietly measure nothing.
 fn entry(unit: &CHirUnit<'_>) -> SymbolId {
     unit.iter()
         .find_map(|declaration| match declaration {
-            CHirDecl::Function(function) if function.body.is_some() => Some(function.symbol),
+            CHirDecl::Function(function)
+                if function.body.is_some() && function.name.spelling == "main" =>
+            {
+                Some(function.symbol)
+            }
             _ => None,
         })
-        .expect("the fixture defines exactly one function with a body, named main")
+        .expect("every fixture defines main")
 }
 
 /// Execute `main` and return its value, or the diagnostic code it failed with.

@@ -42,6 +42,10 @@ const DAY7_DEREF: &str = "int f(int *p) { *p = 1; return 0; }\n";
 const DAY7_INDEX: &str = "int f(void) { int a[2]; a[0] = 1; return 0; }\n";
 const DAY7_MEMBER: &str = "struct S { int x; }; int f(void) { struct S s; s.x = 1; return 0; }\n";
 const DAY7_PTR_MEMBER: &str = "struct S { int x; }; int f(struct S *p) { p->x = 1; return 0; }\n";
+const AGGREGATE_MEMBER_ASSIGN: &str = concat!(
+    "struct Inner { int v; }; struct Outer { struct Inner inner; }; ",
+    "int f(void) { struct Outer o; struct Inner other; o.inner = other; return 0; }\n"
+);
 const DAY7_VOLATILE: &str = "int f(void) { volatile int x = 0; x = 1; return 0; }\n";
 const DAY7_ATOMIC: &str = "int f(void) { _Atomic int x = 0; x = 1; return 0; }\n";
 const DAY7_ALIAS: &str = "int f(void) { int x=5; int *p=&x; int *q=p; *q=9; return *p; }\n";
@@ -849,20 +853,31 @@ fn otherwise_valid_pointer_updates_are_an_explicit_day7_boundary() {
     }
 }
 
+/// Subscript and member lvalues are now resolved to checked places, so the
+/// boundary has moved rather than disappeared: what remains unrepresentable is
+/// assigning to an lvalue whose type is an aggregate, because that is an object
+/// copy rather than a scalar store. This pins the boundary where it actually
+/// is, so that a later change moving it again has to say so.
 #[test]
-fn indirect_memory_lvalues_remain_an_explicit_day7_boundary() {
-    let cases = [
-        (DAY7_INDEX, "a[0]", 0),
-        (DAY7_MEMBER, "s.x", 0),
-        (DAY7_PTR_MEMBER, "p->x", 0),
-    ];
-    for (source, target, occurrence) in cases {
-        assert_diagnostic(
-            source,
-            target,
-            occurrence,
-            "E2701",
-            "not-covered-day7: indirect-memory-lvalue",
+fn aggregate_lvalue_assignment_is_still_unrepresentable() {
+    assert_diagnostic(
+        AGGREGATE_MEMBER_ASSIGN,
+        "o.inner",
+        0,
+        "E2705",
+        "not-covered-day7: aggregate-lvalue-assignment",
+    );
+}
+
+/// The forms the boundary used to cover are executable now, and stay that way.
+#[test]
+fn scalar_subscript_and_member_lvalues_are_accepted() {
+    let arena = Arena::default();
+    for source in [DAY7_INDEX, DAY7_MEMBER, DAY7_PTR_MEMBER] {
+        let unit = parse_valid(source, &arena);
+        assert!(
+            !unit.is_empty(),
+            "a scalar projected lvalue must parse: {source:?}"
         );
     }
 }
