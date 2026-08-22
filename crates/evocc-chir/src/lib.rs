@@ -12,11 +12,16 @@
 
 #![doc = concat!("evocc-chir v", env!("CARGO_PKG_VERSION"))]
 
+pub mod allocation;
 pub mod initializer;
 pub mod integer;
 pub mod interp;
 pub mod semantic;
 
+pub use allocation::{
+    AllocationSite, AllocationSiteKind, AllocationSiteManifest, AllocationSiteManifestError,
+    AllocationSiteOrdinal,
+};
 pub use initializer::{
     InitAction, InitPlan, InitPlanError, ObjectInitializer, SubobjectPath, SubobjectStep,
     WrittenInitializer,
