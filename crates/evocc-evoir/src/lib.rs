@@ -6,7 +6,8 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
-use evocc_types::{EvoIRType, Region};
+use evocc_memory::{MemoryConfig, MemoryFault, MemoryLimits, MemoryState, WorldLimits, WorldState};
+use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
 mod text;
 
@@ -1649,6 +1650,14 @@ pub struct InterpreterLimits {
     pub step_budget: u64,
 }
 
+// Keep the two interpreter frontends on the same explicit process-resource
+// policy until that policy gains a shared configuration authority. These are
+// host-safety limits, not properties of the source program or EvoIR module.
+const MAX_MEMORY_OBJECTS: u64 = 65_536;
+const MAX_MEMORY_OBJECT_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_MEMORY_TOTAL_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_VOLATILE_EVENTS: u64 = 1_048_576;
+
 impl InterpreterLimits {
     #[must_use]
     pub const fn new(step_budget: u64) -> Self {
@@ -1690,11 +1699,41 @@ enum InternalValue {
 pub struct InterpreterOutcome {
     pub return_values: Vec<RuntimeValue>,
     pub steps: u64,
+    pub memory: MemoryState,
+    pub world: WorldState,
+}
+
+struct ExecutionState {
+    memory: MemoryState,
+    world: WorldState,
+}
+
+impl ExecutionState {
+    fn for_target(target: &TargetDataLayout) -> Result<Self, InterpreterError> {
+        let config = MemoryConfig::for_target(
+            target,
+            MemoryLimits {
+                max_objects: MAX_MEMORY_OBJECTS,
+                max_object_bytes: MAX_MEMORY_OBJECT_BYTES,
+                max_total_bytes: MAX_MEMORY_TOTAL_BYTES,
+            },
+        )
+        .map_err(|error| InterpreterError::MemorySetup { error })?;
+        let memory =
+            MemoryState::new(config).map_err(|error| InterpreterError::MemorySetup { error })?;
+        let world = WorldState::new(WorldLimits {
+            max_volatile_events: MAX_VOLATILE_EVENTS,
+        });
+        Ok(Self { memory, world })
+    }
 }
 
 /// A defined failure from EvoIR validation or execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InterpreterError {
+    MemorySetup {
+        error: MemoryFault,
+    },
     InvalidModule {
         message: String,
     },
@@ -1775,6 +1814,7 @@ impl InterpreterError {
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
+            Self::MemorySetup { .. } => "E3007",
             Self::UninitializedRead { .. } => "E3001",
             Self::MissingReturn { .. } => "E3007",
             Self::DivisionByZero { .. } => "E3002",
@@ -1790,6 +1830,9 @@ impl InterpreterError {
     #[must_use]
     pub fn message(&self) -> String {
         match self {
+            Self::MemorySetup { error } => {
+                format!("interpreter-memory-setup-failed: {error}")
+            }
             Self::UninitializedRead { .. } => "read-of-uninitialized-object".to_owned(),
             Self::MissingReturn { .. } => "scalar-function-fell-off-end".to_owned(),
             Self::DivisionByZero { .. } => "integer-division-by-zero".to_owned(),
@@ -1807,6 +1850,9 @@ impl InterpreterError {
 impl fmt::Display for InterpreterError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::MemorySetup { error } => {
+                write!(formatter, "EvoIR memory setup failed: {error}")
+            }
             Self::InvalidModule { message } => write!(formatter, "invalid EvoIR module: {message}"),
             Self::InvalidFunction { message } => write!(formatter, "invalid EvoIR: {message}"),
             Self::MissingEntryFunction { name } => {
@@ -1897,6 +1943,30 @@ pub fn interpret_function(
     entry_args: &[RuntimeValue],
     limits: InterpreterLimits,
 ) -> Result<InterpreterOutcome, InterpreterError> {
+    let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+    interpret_function_with_target(func, entry_args, &target, limits)
+}
+
+/// Interpret one function against an explicit target data layout.
+///
+/// This is the authoritative target-aware entry point. It constructs exactly
+/// one memory/world state pair for the complete top-level invocation.
+pub fn interpret_function_with_target(
+    func: &Function,
+    entry_args: &[RuntimeValue],
+    target: &TargetDataLayout,
+    limits: InterpreterLimits,
+) -> Result<InterpreterOutcome, InterpreterError> {
+    let state = ExecutionState::for_target(target)?;
+    interpret_function_in_state(func, entry_args, limits, state)
+}
+
+fn interpret_function_in_state(
+    func: &Function,
+    entry_args: &[RuntimeValue],
+    limits: InterpreterLimits,
+    state: ExecutionState,
+) -> Result<InterpreterOutcome, InterpreterError> {
     validate_ssa(func).map_err(|message| InterpreterError::InvalidFunction { message })?;
     let entry = func
         .blocks
@@ -1977,6 +2047,8 @@ pub fn interpret_function(
                 return Ok(InterpreterOutcome {
                     return_values,
                     steps,
+                    memory: state.memory,
+                    world: state.world,
                 });
             }
             Inst::Trap(TrapReason::ScalarFunctionFellOffEnd) => {
@@ -2041,6 +2113,32 @@ pub fn interpret_module(
     entry_name: &str,
     entry_args: &[RuntimeValue],
     limits: InterpreterLimits,
+) -> Result<InterpreterOutcome, InterpreterError> {
+    let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+    interpret_module_with_target(module, entry_name, entry_args, &target, limits)
+}
+
+/// Interpret one module entry against an explicit target data layout.
+///
+/// The state is created once here. Explicit call frames share the single state
+/// owned by the module execution core; frames never construct or clone it.
+pub fn interpret_module_with_target(
+    module: &Module,
+    entry_name: &str,
+    entry_args: &[RuntimeValue],
+    target: &TargetDataLayout,
+    limits: InterpreterLimits,
+) -> Result<InterpreterOutcome, InterpreterError> {
+    let state = ExecutionState::for_target(target)?;
+    interpret_module_in_state(module, entry_name, entry_args, limits, state)
+}
+
+fn interpret_module_in_state(
+    module: &Module,
+    entry_name: &str,
+    entry_args: &[RuntimeValue],
+    limits: InterpreterLimits,
+    state: ExecutionState,
 ) -> Result<InterpreterOutcome, InterpreterError> {
     validate_module(module).map_err(|message| InterpreterError::InvalidModule { message })?;
     let function_indices: HashMap<&str, usize> = module
@@ -2199,6 +2297,8 @@ pub fn interpret_module(
                         return Ok(InterpreterOutcome {
                             return_values,
                             steps,
+                            memory: state.memory,
+                            world: state.world,
                         });
                     }
                 }
@@ -2879,6 +2979,7 @@ impl IntegerKernel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use evocc_memory::{AccessLayout, InitialState};
     use evocc_types::{AddressSpace, Region};
 
     fn value(id: u32, ty: EvoIRType) -> Value {
@@ -3854,6 +3955,86 @@ mod tests {
             ]
         );
         assert_eq!(outcome.steps, 4);
+    }
+
+    #[test]
+    fn target_aware_function_outcome_owns_one_memory_and_world_state() {
+        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        let outcome = interpret_function_with_target(
+            &threaded_function(),
+            &[],
+            &target,
+            InterpreterLimits::new(5),
+        )
+        .expect("target-aware scalar execution");
+
+        assert_eq!(outcome.return_values, vec![RuntimeValue::bits(32, 42)]);
+        assert_eq!(outcome.steps, 5);
+        assert_eq!(outcome.memory.config().byte_order(), target.byte_order());
+        assert_eq!(
+            outcome.memory.config().pointer_layout(),
+            AccessLayout::from_type_layout(target.pointer_layout())
+        );
+        assert!(outcome.world.volatile_trace().is_empty());
+    }
+
+    #[test]
+    fn direct_call_preserves_the_single_seeded_execution_state_without_reset() {
+        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        let mut state = ExecutionState::for_target(&target).expect("valid execution state");
+        let (memory, seeded_address) = state
+            .memory
+            .allocate_static(91, AccessLayout::new(4, 4), InitialState::Zeroed)
+            .expect("seed static object");
+        state.memory = memory;
+        let expected_memory = state.memory.clone();
+        let expected_world = state.world.clone();
+
+        let outcome = interpret_module_in_state(
+            &direct_call_module(),
+            "main",
+            &[
+                RuntimeValue::new(EvoIRType::Mem(Region::All), 17),
+                RuntimeValue::new(EvoIRType::World, 19),
+            ],
+            InterpreterLimits::new(4),
+            state,
+        )
+        .expect("direct call execution");
+
+        assert_eq!(outcome.memory, expected_memory);
+        assert_eq!(outcome.world, expected_world);
+        assert_eq!(
+            outcome
+                .memory
+                .object_info(seeded_address.object())
+                .expect("callee must not reset the top-level memory")
+                .origin
+                .site,
+            91
+        );
+    }
+
+    #[test]
+    fn direct_call_fuel_failure_returns_no_fabricated_outcome_state() {
+        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        assert!(matches!(
+            interpret_module_with_target(
+                &direct_call_module(),
+                "main",
+                &[
+                    RuntimeValue::new(EvoIRType::Mem(Region::All), 17),
+                    RuntimeValue::new(EvoIRType::World, 19),
+                ],
+                &target,
+                InterpreterLimits::new(3),
+            ),
+            Err(InterpreterError::StepBudgetExceeded {
+                budget: 3,
+                steps: 3,
+                ..
+            })
+        ));
     }
 
     #[test]
