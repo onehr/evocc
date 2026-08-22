@@ -17,6 +17,7 @@ members = [
     "crates/evocc",
     "crates/evocc-common",
     "crates/evocc-types",
+    "crates/evocc-memory",
     "crates/evocc-lex",
     "crates/evocc-cpp",
     "crates/evocc-chir",

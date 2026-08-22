@@ -599,6 +599,13 @@ pub enum EvoIRType {
 // Target data layout
 // ---------------------------------------------------------------------------
 
+/// Byte order used for target object representations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ByteOrder {
+    Little,
+    Big,
+}
+
 /// Knows the size, alignment, and field layout of C types on a concrete
 /// target ABI (Apple AArch64, Linux AAPCS64, x86-64 SysV).
 ///
@@ -817,6 +824,18 @@ impl TargetDataLayout {
         Self { _private: () }
     }
 
+    /// Byte order of scalar and pointer object representations.
+    #[must_use]
+    pub const fn byte_order(&self) -> ByteOrder {
+        ByteOrder::Little
+    }
+
+    /// Layout of an object pointer in the target ABI.
+    #[must_use]
+    pub const fn pointer_layout(&self) -> TypeLayout {
+        TypeLayout::new(8, 8)
+    }
+
     /// Compute the layout of a complete canonical object type.
     pub fn layout_of(&self, types: &TypeInterner, ty: TypeId) -> Result<TypeLayout, LayoutError> {
         LayoutContext::new(self, types).layout_type(ty)
@@ -833,7 +852,7 @@ impl TargetDataLayout {
 }
 
 struct LayoutContext<'a> {
-    _target: &'a TargetDataLayout,
+    target: &'a TargetDataLayout,
     types: &'a TypeInterner,
     active_tags: Vec<TagId>,
 }
@@ -841,7 +860,7 @@ struct LayoutContext<'a> {
 impl<'a> LayoutContext<'a> {
     fn new(target: &'a TargetDataLayout, types: &'a TypeInterner) -> Self {
         Self {
-            _target: target,
+            target,
             types,
             active_tags: Vec::new(),
         }
@@ -861,7 +880,7 @@ impl<'a> LayoutContext<'a> {
             TypeKind::Int(rank) => Ok(integer_layout(rank)),
             TypeKind::Float(kind) => Ok(float_layout(kind)),
             TypeKind::Complex(base) => Ok(complex_layout(base)),
-            TypeKind::Pointer(_) => Ok(TypeLayout::new(8, 8)),
+            TypeKind::Pointer(_) => Ok(self.target.pointer_layout()),
             TypeKind::Array { element, bound } => match bound {
                 ArrayBound::Fixed(count) => {
                     let element = self.layout_type(element)?;
@@ -1470,5 +1489,13 @@ mod tests {
         let a1 = layout.align_of(&t);
         let a2 = layout.align_of(&t);
         assert_eq!(a1, a2, "align_of must be deterministic");
+    }
+
+    #[test]
+    fn aarch64_linux_target_reports_little_endian_byte_order() {
+        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        assert_eq!(target.byte_order(), ByteOrder::Little);
+        assert_eq!(target.pointer_layout(), TypeLayout::new(8, 8));
+        assert_ne!(ByteOrder::Little, ByteOrder::Big);
     }
 }

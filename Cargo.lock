@@ -70,6 +70,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "evocc-memory"
+version = "0.0.0"
+dependencies = [
+ "evocc-types",
+]
+
+[[package]]
 name = "evocc-parser"
 version = "0.0.0"
 dependencies = [
