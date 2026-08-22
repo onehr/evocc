@@ -13,31 +13,32 @@ use evocc_evoir::{
 };
 use evocc_lex::{Lexer, TokenKind};
 use evocc_lower::lower_unit;
+use evocc_memory::{AccessLayout, ObjectOrigin, ObservedValue, VolatileDirection, VolatileEvent};
 use evocc_parser::Parser;
 use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
 const STEP_BUDGET: u64 = 500_000;
 const CASE_WATCHDOG: Duration = Duration::from_secs(2);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum VolatileAccess {
-    Load,
-    Store,
-}
-
-const ORDERED_VOLATILE_IR_ACCESSES: &[VolatileAccess] = &[
-    VolatileAccess::Store,
-    VolatileAccess::Load,
-    VolatileAccess::Store,
-    VolatileAccess::Load,
+const ORDERED_VOLATILE_IR_ACCESSES: &[VolatileDirection] = &[
+    VolatileDirection::Store,
+    VolatileDirection::Load,
+    VolatileDirection::Store,
+    VolatileDirection::Load,
 ];
+
+#[derive(Debug, PartialEq, Eq)]
+struct ExecutionObservation {
+    scalar: i128,
+    volatile_trace: Vec<VolatileEvent>,
+}
 
 #[derive(Clone, Copy)]
 struct Case {
     id: &'static str,
     source: &'static str,
     expected: i128,
-    expected_volatile_ir_accesses: Option<&'static [VolatileAccess]>,
+    expected_volatile_ir_accesses: Option<&'static [VolatileDirection]>,
 }
 
 const CASES: &[Case] = &[
@@ -122,16 +123,20 @@ fn function_symbol(unit: &CHirUnit<'_>, name: &str) -> Result<SymbolId, String> 
         .ok_or_else(|| format!("missing function {name}"))
 }
 
-fn observe_chir(unit: &CHirUnit<'_>) -> Result<i128, String> {
+fn observe_chir(unit: &CHirUnit<'_>) -> Result<ExecutionObservation, String> {
     let main = function_symbol(unit, "main")?;
     let outcome = interpret_scalar_function(unit, main, CHirLimits::new(STEP_BUDGET))
         .map_err(|error| format!("{}: {}", error.code(), error.message()))?;
     let value = outcome
         .return_value
         .ok_or_else(|| "main returned no scalar value".to_owned())?;
-    value
+    let scalar = value
         .mathematical_value(unit.types())
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    Ok(ExecutionObservation {
+        scalar,
+        volatile_trace: outcome.world.volatile_trace().to_vec(),
+    })
 }
 
 fn entry_contract(module: &Module) -> Result<(Vec<RuntimeValue>, Vec<EvoIRType>), String> {
@@ -189,7 +194,7 @@ fn signed_scalar(value: &RuntimeValue) -> Result<i128, String> {
     })
 }
 
-fn observe_evoir(module: &Module) -> Result<i128, String> {
+fn observe_evoir(module: &Module) -> Result<ExecutionObservation, String> {
     let (arguments, declared_results) = entry_contract(module)?;
     let outcome = interpret_module(module, "main", &arguments, EvoIrLimits::new(STEP_BUDGET))
         .map_err(|error| format!("{}: {}", error.code(), error.message()))?;
@@ -206,13 +211,13 @@ fn observe_evoir(module: &Module) -> Result<i128, String> {
         .return_values
         .first()
         .ok_or_else(|| "@main returned no scalar value".to_owned())?;
-    signed_scalar(value)
+    Ok(ExecutionObservation {
+        scalar: signed_scalar(value)?,
+        volatile_trace: outcome.world.volatile_trace().to_vec(),
+    })
 }
 
-fn lowered_volatile_ir_accesses(module: &Module) -> Vec<VolatileAccess> {
-    // This freezes only the lowering order. Day 7 must separately expose and
-    // assert the interpreter's executed volatile trace; rendered text is not
-    // accepted as runtime evidence.
+fn lowered_volatile_ir_accesses(module: &Module) -> Vec<VolatileDirection> {
     render_module(module)
         .lines()
         .filter_map(|line| {
@@ -222,14 +227,41 @@ fn lowered_volatile_ir_accesses(module: &Module) -> Vec<VolatileAccess> {
             if !marked_volatile {
                 None
             } else if line.contains("store") {
-                Some(VolatileAccess::Store)
+                Some(VolatileDirection::Store)
             } else if line.contains("load") {
-                Some(VolatileAccess::Load)
+                Some(VolatileDirection::Load)
             } else {
                 None
             }
         })
         .collect()
+}
+
+fn expected_volatile_trace() -> Vec<VolatileEvent> {
+    let origin = ObjectOrigin {
+        // `port` is the first semantic storage object in this single-function
+        // translation unit's canonical source-ordered allocation manifest.
+        site: 0,
+        instance: 0,
+    };
+    let access = AccessLayout::new(4, 4);
+    [
+        (VolatileDirection::Store, 11_u8),
+        (VolatileDirection::Load, 11_u8),
+        (VolatileDirection::Store, 22_u8),
+        (VolatileDirection::Load, 22_u8),
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(sequence, (direction, value))| VolatileEvent {
+        sequence: sequence as u64,
+        direction,
+        origin,
+        byte_offset: 0,
+        access,
+        value: ObservedValue::RawTargetBits(vec![value, 0, 0, 0]),
+    })
+    .collect()
 }
 
 fn check_case(case: Case, ordinal: usize) -> Vec<String> {
@@ -241,14 +273,30 @@ fn check_case(case: Case, ordinal: usize) -> Vec<String> {
     };
 
     let mut failures = Vec::new();
-    match observe_chir(&unit) {
-        Ok(actual) if actual == case.expected => {}
-        Ok(actual) => failures.push(format!(
-            "C-HIR returned {actual}, expected {}",
-            case.expected
-        )),
-        Err(error) => failures.push(format!("C-HIR failed: {error}")),
-    }
+    let expected_trace = case
+        .expected_volatile_ir_accesses
+        .map_or_else(Vec::new, |_| expected_volatile_trace());
+    let chir = match observe_chir(&unit) {
+        Ok(actual) => {
+            if actual.scalar != case.expected {
+                failures.push(format!(
+                    "C-HIR returned {}, expected {}",
+                    actual.scalar, case.expected
+                ));
+            }
+            if actual.volatile_trace != expected_trace {
+                failures.push(format!(
+                    "C-HIR volatile trace was {:?}, expected {:?}",
+                    actual.volatile_trace, expected_trace
+                ));
+            }
+            Some(actual)
+        }
+        Err(error) => {
+            failures.push(format!("C-HIR failed: {error}"));
+            None
+        }
+    };
 
     let module = match lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()) {
         Ok(module) => module,
@@ -265,13 +313,35 @@ fn check_case(case: Case, ordinal: usize) -> Vec<String> {
     if let Err(error) = validate_module(&module) {
         failures.push(format!("EvoIR validation failed: {error}"));
     }
-    match observe_evoir(&module) {
-        Ok(actual) if actual == case.expected => {}
-        Ok(actual) => failures.push(format!(
-            "EvoIR returned {actual}, expected {}",
-            case.expected
-        )),
-        Err(error) => failures.push(format!("EvoIR failed: {error}")),
+    let evoir = match observe_evoir(&module) {
+        Ok(actual) => {
+            if actual.scalar != case.expected {
+                failures.push(format!(
+                    "EvoIR returned {}, expected {}",
+                    actual.scalar, case.expected
+                ));
+            }
+            if actual.volatile_trace != expected_trace {
+                failures.push(format!(
+                    "EvoIR volatile trace was {:?}, expected {:?}",
+                    actual.volatile_trace, expected_trace
+                ));
+            }
+            Some(actual)
+        }
+        Err(error) => {
+            failures.push(format!("EvoIR failed: {error}"));
+            None
+        }
+    };
+
+    if let (Some(chir), Some(evoir)) = (&chir, &evoir) {
+        if chir.volatile_trace != evoir.volatile_trace {
+            failures.push(format!(
+                "volatile trace mismatch: C-HIR={:?}, EvoIR={:?}",
+                chir.volatile_trace, evoir.volatile_trace
+            ));
+        }
     }
 
     if let Some(expected) = case.expected_volatile_ir_accesses {

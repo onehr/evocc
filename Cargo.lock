@@ -65,6 +65,7 @@ dependencies = [
  "evocc-common",
  "evocc-evoir",
  "evocc-lex",
+ "evocc-memory",
  "evocc-parser",
  "evocc-types",
 ]

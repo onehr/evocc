@@ -867,14 +867,32 @@ fn indirect_memory_lvalues_remain_an_explicit_day7_boundary() {
 }
 
 #[test]
-fn volatile_and_atomic_updates_remain_an_explicit_day7_boundary() {
-    for (source, occurrence) in [(DAY7_VOLATILE, 1), (DAY7_ATOMIC, 1)] {
-        assert_diagnostic(
-            source,
-            "x",
-            occurrence,
-            "E2702",
-            "not-covered-day7: volatile-or-atomic-update",
-        );
-    }
+fn volatile_scalar_update_is_an_explicit_day7_acceptance_red() {
+    let arena = Arena::default();
+    let unit = parse_valid(DAY7_VOLATILE, &arena);
+    let body = items(function(&unit, 0));
+    assert_eq!(body.len(), 3, "volatile body topology");
+
+    let declaration = object(&body[0]);
+    let canonical = unit
+        .types()
+        .get(declaration.ty)
+        .expect("volatile declaration type");
+    assert!(canonical.qualifiers.is_volatile);
+    assert!(!canonical.qualifiers.is_atomic);
+    assert_eq!(
+        span_text(DAY7_VOLATILE, expression(&body[1]).span()),
+        "x = 1"
+    );
+}
+
+#[test]
+fn atomic_update_remains_an_explicit_unsupported_boundary() {
+    assert_diagnostic(
+        DAY7_ATOMIC,
+        "x",
+        1,
+        "E2702",
+        "not-covered-day7: volatile-or-atomic-update",
+    );
 }
