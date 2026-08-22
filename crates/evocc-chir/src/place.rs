@@ -162,7 +162,34 @@ pub struct IndexProjection<'arena> {
     promoted_index: CIntegerType,
 }
 
-impl IndexProjection<'_> {
+impl<'arena> IndexProjection<'arena> {
+    /// Describe one subscript step of a place.
+    ///
+    /// `index` is the subscript expression and is evaluated exactly once, in
+    /// the order [`MemoryPlace::source_expressions`] yields it.
+    ///
+    /// `element_ty` must be the designated element's type; [`MemoryPlace::derive`]
+    /// rechecks it against the array or pointee actually being projected, so a
+    /// wrong value here cannot produce a place with a wrong stride.
+    ///
+    /// `promoted_index` records the subscript's type after integer promotion.
+    /// Integer promotion is value preserving, so this is descriptive metadata
+    /// for backends that must choose a machine width; interpreters compute the
+    /// address from the subscript's own runtime value and therefore cannot be
+    /// misled by it.
+    #[must_use]
+    pub const fn new(
+        index: &'arena CHirExpr<'arena>,
+        element_ty: TypeId,
+        promoted_index: CIntegerType,
+    ) -> Self {
+        Self {
+            index,
+            element_ty,
+            promoted_index,
+        }
+    }
+
     #[must_use]
     pub const fn index(&self) -> &CHirExpr<'_> {
         self.index
@@ -188,6 +215,23 @@ pub struct FieldProjection {
 }
 
 impl FieldProjection {
+    /// Describe one member step of a place.
+    ///
+    /// `tag` is the record being projected and `field_index` is source-order
+    /// member identity, not a target byte offset: offsets belong to the target
+    /// layout service, so the same place stays valid across targets.
+    ///
+    /// [`MemoryPlace::derive`] rechecks the tag, the index bound, the record's
+    /// completeness, and that `field_ty` is the member's declared type.
+    #[must_use]
+    pub const fn new(tag: TagId, field_index: usize, field_ty: TypeId) -> Self {
+        Self {
+            tag,
+            field_index,
+            field_ty,
+        }
+    }
+
     #[must_use]
     pub const fn tag(self) -> TagId {
         self.tag
@@ -978,5 +1022,165 @@ mod tests {
         )
         .unwrap();
         assert!(!place.is_modifiable());
+    }
+
+    /// A subscript place is only meaningful if the element type it claims is
+    /// the array's actual element type, so the checked constructor plus
+    /// `derive` must reject a forged element type instead of silently
+    /// computing a wrong stride.
+    #[test]
+    fn subscript_projection_must_match_the_arrays_element_type() {
+        let mut types = TypeInterner::new();
+        let int = types.intern(CanonicalType {
+            kind: TypeKind::Int(IntRank::Int),
+            qualifiers: Qualifiers::default(),
+        });
+        let long = types.intern(CanonicalType {
+            kind: TypeKind::Int(IntRank::Long),
+            qualifiers: Qualifiers::default(),
+        });
+        let array = types.intern(CanonicalType {
+            kind: TypeKind::Array {
+                element: int,
+                bound: evocc_types::ArrayBound::Fixed(3),
+            },
+            qualifiers: Qualifiers::default(),
+        });
+        let mut symbols = SymbolTable::new();
+        let object = symbols
+            .declare(
+                symbols.file_scope(),
+                "values",
+                SymbolData::Object {
+                    storage: StorageClass::None,
+                },
+                array,
+                span(),
+            )
+            .expect("declare array object");
+        let index = literal_zero();
+
+        let honest = MemoryPlace::derive(
+            &symbols,
+            &types,
+            PlaceRoot::Object { symbol: object },
+            vec![PlaceProjection::Index(IndexProjection::new(
+                &index,
+                int,
+                CIntegerType::INT,
+            ))],
+            int,
+        )
+        .expect("an int element of an int array is a valid subscript place");
+        assert_eq!(honest.value_ty(), int);
+        assert!(honest.is_modifiable());
+
+        let forged = MemoryPlace::derive(
+            &symbols,
+            &types,
+            PlaceRoot::Object { symbol: object },
+            vec![PlaceProjection::Index(IndexProjection::new(
+                &index,
+                long,
+                CIntegerType::INT,
+            ))],
+            long,
+        );
+        assert!(
+            matches!(forged, Err(MemoryPlaceError::ProjectionTypeMismatch { .. })),
+            "a subscript claiming the wrong element type must not produce a place"
+        );
+    }
+
+    /// Const on a member propagates to the projected access even when the
+    /// containing object is unqualified, so the place must report itself
+    /// unmodifiable rather than leaving that check to each consumer.
+    #[test]
+    fn a_const_member_projection_is_not_modifiable() {
+        let mut types = TypeInterner::new();
+        let int = types.intern(CanonicalType {
+            kind: TypeKind::Int(IntRank::Int),
+            qualifiers: Qualifiers::default(),
+        });
+        let const_int = types.intern(CanonicalType {
+            kind: TypeKind::Int(IntRank::Int),
+            qualifiers: Qualifiers {
+                is_const: true,
+                ..Qualifiers::default()
+            },
+        });
+        let tag = types.declare_tag(TagKind::Struct, Some("S".to_owned()));
+        types
+            .complete_tag(
+                tag,
+                TagDefinition::Struct(vec![
+                    RecordField {
+                        name: Some("locked".to_owned()),
+                        ty: const_int,
+                        bit_field: None,
+                    },
+                    RecordField {
+                        name: Some("open".to_owned()),
+                        ty: int,
+                        bit_field: None,
+                    },
+                ]),
+            )
+            .expect("define struct S");
+        let record = types.intern(CanonicalType {
+            kind: TypeKind::Struct(tag),
+            qualifiers: Qualifiers::default(),
+        });
+        let mut symbols = SymbolTable::new();
+        let object = symbols
+            .declare(
+                symbols.file_scope(),
+                "s",
+                SymbolData::Object {
+                    storage: StorageClass::None,
+                },
+                record,
+                span(),
+            )
+            .expect("declare struct object");
+
+        let locked = MemoryPlace::derive(
+            &symbols,
+            &types,
+            PlaceRoot::Object { symbol: object },
+            vec![PlaceProjection::Field(FieldProjection::new(
+                tag, 0, const_int,
+            ))],
+            const_int,
+        )
+        .expect("projecting a const member is legal; assigning to it is not");
+        assert!(!locked.is_modifiable());
+        assert!(locked.access_qualifiers().is_const);
+
+        let open = MemoryPlace::derive(
+            &symbols,
+            &types,
+            PlaceRoot::Object { symbol: object },
+            vec![PlaceProjection::Field(FieldProjection::new(tag, 1, int))],
+            int,
+        )
+        .expect("an unqualified sibling member stays modifiable");
+        assert!(open.is_modifiable());
+        assert!(!open.access_qualifiers().is_const);
+    }
+
+    fn span() -> SourceSpan {
+        SourceSpan::new(FileId::new(1), 0, 1, 1, 1)
+    }
+
+    fn literal_zero() -> CHirExpr<'static> {
+        CHirExpr::Lit(
+            IntLit {
+                value: 0,
+                suffix: IntSuffix::None,
+                base: IntBase::Dec,
+            },
+            span(),
+        )
     }
 }
