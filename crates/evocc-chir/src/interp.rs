@@ -11,7 +11,9 @@ use std::{
 };
 
 use evocc_common::SourceSpan;
-use evocc_memory::{MemoryConfig, MemoryFault, MemoryLimits, MemoryState, WorldLimits, WorldState};
+use evocc_memory::{
+    MemoryConfig, MemoryFault, MemoryLimits, MemoryState, Pointer, WorldLimits, WorldState,
+};
 use evocc_types::{
     FunctionParameters, TagDefinition, TagState, TargetDataLayout, TypeId, TypeInterner, TypeKind,
 };
@@ -352,6 +354,23 @@ struct Slot {
     active: bool,
 }
 
+/// One task-machine value. The call-free scalar fast path deliberately keeps
+/// using `CInteger` directly; this boundary is where Day 7 pointer execution
+/// will attach without changing that path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CValue {
+    Integer(CInteger),
+    Pointer { value: Pointer, ty: TypeId },
+}
+
+/// The value-level part of a function signature accepted by the task machine.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ValueType {
+    Void,
+    Integer(CIntegerType),
+    Pointer(TypeId),
+}
+
 #[derive(Debug)]
 enum Flow {
     Normal,
@@ -365,7 +384,7 @@ enum Flow {
 struct FunctionEnd {
     symbol: SymbolId,
     return_type: TypeId,
-    return_integer: Option<CIntegerType>,
+    return_value_type: ValueType,
     is_main: bool,
     body_span: SourceSpan,
     caller_slots: Option<HashMap<SymbolId, Slot>>,
@@ -377,8 +396,8 @@ struct FunctionEnd {
 #[derive(Debug)]
 struct ValidatedFunctionSignature {
     return_type: TypeId,
-    return_integer: Option<CIntegerType>,
-    parameters: Vec<(SymbolId, CIntegerType)>,
+    return_value_type: ValueType,
+    parameters: Vec<(SymbolId, ValueType)>,
 }
 
 #[derive(Debug)]
@@ -460,16 +479,16 @@ enum MachineTask<'arena> {
     },
     ApplyBinary {
         operator: BinaryOp,
-        left: CInteger,
+        left: CValue,
         span: SourceSpan,
     },
     SelectTernary {
         then_expression: &'arena CHirExpr<'arena>,
         else_expression: &'arena CHirExpr<'arena>,
-        result_type: CIntegerType,
+        result_type: ValueType,
     },
     CastValue {
-        target: CIntegerType,
+        target: ValueType,
         span: SourceSpan,
     },
     ApplyAssignment {
@@ -486,7 +505,7 @@ enum MachineTask<'arena> {
         callee: &'arena CHirExpr<'arena>,
         arguments: &'arena [&'arena CHirExpr<'arena>],
         index: usize,
-        values: Vec<CInteger>,
+        values: Vec<CValue>,
         span: SourceSpan,
         expects_value: bool,
     },
@@ -494,7 +513,7 @@ enum MachineTask<'arena> {
         callee: &'arena CHirExpr<'arena>,
         arguments: &'arena [&'arena CHirExpr<'arena>],
         index: usize,
-        values: Vec<CInteger>,
+        values: Vec<CValue>,
         span: SourceSpan,
         expects_value: bool,
     },
@@ -508,7 +527,7 @@ enum MachineBlockMode {
 
 #[derive(Debug, Clone, Copy)]
 enum FunctionExit {
-    Explicit(Option<CInteger>),
+    Explicit(Option<CValue>),
     FellOffEnd,
 }
 
@@ -807,7 +826,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     body,
                     span,
                 } => {
-                    if pop_machine_value(&mut values, span)?.truth() {
+                    if expect_machine_integer(pop_machine_value(&mut values, span)?, span)?.truth()
+                    {
                         tasks.push(MachineTask::WhileCheck { condition, body });
                         tasks.push(MachineTask::ExecStatement(body));
                     }
@@ -830,7 +850,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     body,
                     span,
                 } => {
-                    if pop_machine_value(&mut values, span)?.truth() {
+                    if expect_machine_integer(pop_machine_value(&mut values, span)?, span)?.truth()
+                    {
                         tasks.push(MachineTask::DoWhileCondition { condition, body });
                         tasks.push(MachineTask::ExecStatement(body));
                     }
@@ -870,7 +891,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     body,
                     span,
                 } => {
-                    if pop_machine_value(&mut values, span)?.truth() {
+                    if expect_machine_integer(pop_machine_value(&mut values, span)?, span)?.truth()
+                    {
                         tasks.push(MachineTask::ForStep {
                             condition,
                             step,
@@ -910,7 +932,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     None
                 }
                 MachineTask::FinishInitializer { symbol, ty, span } => {
-                    let value = pop_machine_value(&mut values, span)?.cast(ty);
+                    let value =
+                        expect_machine_integer(pop_machine_value(&mut values, span)?, span)?
+                            .cast(ty);
                     let slot = self
                         .slots
                         .get_mut(&symbol)
@@ -930,7 +954,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     then_statement,
                     else_statement,
                 } => {
-                    let condition = pop_machine_value(&mut values, then_statement.span())?;
+                    let condition = expect_machine_integer(
+                        pop_machine_value(&mut values, then_statement.span())?,
+                        then_statement.span(),
+                    )?;
                     if condition.truth() {
                         tasks.push(MachineTask::ExecStatement(then_statement));
                     } else if let Some(else_statement) = else_statement {
@@ -955,7 +982,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     expression_span,
                     operand_span,
                 } => {
-                    let operand = pop_machine_value(&mut values, expression_span)?;
+                    let operand = expect_machine_integer(
+                        pop_machine_value(&mut values, expression_span)?,
+                        expression_span,
+                    )?;
                     let value = eval_unary_integer(operator, operand).map_err(|error| {
                         let error_span = if operator == crate::UnaryOp::Neg {
                             unary_operator_span(expression_span, operand_span)
@@ -964,7 +994,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         };
                         self.integer_error(error, error_span)
                     })?;
-                    values.push(value);
+                    values.push(CValue::Integer(value));
                     None
                 }
                 MachineTask::ContinueBinary {
@@ -972,10 +1002,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     right,
                     span,
                 } => {
-                    let left = pop_machine_value(&mut values, span)?;
+                    let left = expect_machine_integer(pop_machine_value(&mut values, span)?, span)?;
                     match operator {
-                        BinaryOp::And if !left.truth() => values.push(CInteger::int(0)),
-                        BinaryOp::Or if left.truth() => values.push(CInteger::int(1)),
+                        BinaryOp::And if !left.truth() => {
+                            values.push(CValue::Integer(CInteger::int(0)));
+                        }
+                        BinaryOp::Or if left.truth() => {
+                            values.push(CValue::Integer(CInteger::int(1)));
+                        }
                         BinaryOp::Comma => {
                             tasks.push(MachineTask::EvalExpression {
                                 expression: right,
@@ -985,7 +1019,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         _ => {
                             tasks.push(MachineTask::ApplyBinary {
                                 operator,
-                                left,
+                                left: CValue::Integer(left),
                                 span,
                             });
                             tasks.push(MachineTask::EvalExpression {
@@ -1001,7 +1035,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     left,
                     span,
                 } => {
-                    let right = pop_machine_value(&mut values, span)?;
+                    let left = expect_machine_integer(left, span)?;
+                    let right =
+                        expect_machine_integer(pop_machine_value(&mut values, span)?, span)?;
                     let value = match operator {
                         BinaryOp::And => CInteger::int(i32::from(right.truth())),
                         BinaryOp::Or => CInteger::int(i32::from(right.truth())),
@@ -1025,7 +1061,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         _ => eval_binary_integer(operator, left, right)
                             .map_err(|error| self.integer_error(error, span))?,
                     };
-                    values.push(value);
+                    values.push(CValue::Integer(value));
                     None
                 }
                 MachineTask::SelectTernary {
@@ -1033,7 +1069,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     else_expression,
                     result_type,
                 } => {
-                    let condition = pop_machine_value(&mut values, then_expression.span())?;
+                    let condition = expect_machine_integer(
+                        pop_machine_value(&mut values, then_expression.span())?,
+                        then_expression.span(),
+                    )?;
                     tasks.push(MachineTask::CastValue {
                         target: result_type,
                         span: then_expression.span(),
@@ -1050,7 +1089,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
                 MachineTask::CastValue { target, span } => {
                     let value = pop_machine_value(&mut values, span)?;
-                    values.push(value.cast(target));
+                    values.push(cast_machine_value(value, target, span)?);
                     None
                 }
                 MachineTask::ApplyAssignment {
@@ -1059,18 +1098,20 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     target_span,
                     span,
                 } => {
-                    let right = pop_machine_value(&mut values, span)?;
-                    values.push(self.apply_assignment_value(
+                    let right =
+                        expect_machine_integer(pop_machine_value(&mut values, span)?, span)?;
+                    values.push(CValue::Integer(self.apply_assignment_value(
                         operator,
                         symbol,
                         right,
                         target_span,
                         span,
-                    )?);
+                    )?));
                     None
                 }
                 MachineTask::SelectSwitch { body, span } => {
-                    let controlling = pop_machine_value(&mut values, span)?;
+                    let controlling =
+                        expect_machine_integer(pop_machine_value(&mut values, span)?, span)?;
                     self.schedule_switch(controlling, body, &mut tasks)?;
                     None
                 }
@@ -1147,7 +1188,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         &mut self,
         statement: &'arena CHirStmt<'arena>,
         tasks: &mut Vec<MachineTask<'arena>>,
-        values: &mut Vec<CInteger>,
+        values: &mut Vec<CValue>,
     ) -> Result<Option<MachineOutcome>, InterpreterError> {
         self.tick(statement.span())?;
         match statement {
@@ -1678,10 +1719,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expression: &'arena CHirExpr<'arena>,
         allow_root_mutation: bool,
         tasks: &mut Vec<MachineTask<'arena>>,
-        values: &mut Vec<CInteger>,
+        values: &mut Vec<CValue>,
     ) -> Result<(), InterpreterError> {
         if !expression_contains_call(expression) {
-            values.push(self.eval_expr(expression, allow_root_mutation)?);
+            values.push(CValue::Integer(
+                self.eval_expr(expression, allow_root_mutation)?,
+            ));
             return Ok(());
         }
 
@@ -1720,7 +1763,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 tasks.push(MachineTask::SelectTernary {
                     then_expression,
                     else_expression,
-                    result_type,
+                    result_type: ValueType::Integer(result_type),
                 });
                 tasks.push(MachineTask::EvalExpression {
                     expression: condition,
@@ -1739,7 +1782,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             CHirExpr::Cast(ty, value, _) => {
                 let target = self.integer_type(*ty, span)?;
-                tasks.push(MachineTask::CastValue { target, span });
+                tasks.push(MachineTask::CastValue {
+                    target: ValueType::Integer(target),
+                    span,
+                });
                 tasks.push(MachineTask::EvalExpression {
                     expression: value,
                     allow_root_mutation: false,
@@ -1817,7 +1863,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     fn start_call(
         &mut self,
         callee: &'arena CHirExpr<'arena>,
-        arguments: Vec<CInteger>,
+        arguments: Vec<CValue>,
         call_span: SourceSpan,
         expects_value: bool,
         tasks: &mut Vec<MachineTask<'arena>>,
@@ -1871,7 +1917,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     fn enter_function(
         &mut self,
         function: SymbolId,
-        arguments: Vec<CInteger>,
+        arguments: Vec<CValue>,
         caller_slots: Option<HashMap<SymbolId, Slot>>,
         caller_fuel_anchor: Option<SourceSpan>,
         call_span: Option<SourceSpan>,
@@ -1882,25 +1928,41 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let declaration = self.function_definition(function)?;
         let signature = self.validate_function_signature(declaration, arguments.len())?;
         let return_type = signature.return_type;
-        let return_integer = signature.return_integer;
-        if call_span.is_some() && caller_expects_value && return_integer.is_none() {
+        let return_value_type = signature.return_value_type;
+        if call_span.is_some() && caller_expects_value && return_value_type == ValueType::Void {
             return Err(InterpreterError::UnsupportedExpression {
                 feature: "void call in scalar expression",
                 span: call_span.unwrap_or(declaration.span),
             });
         }
-        if call_span.is_some() && !caller_expects_value && return_integer.is_some() {
+        if call_span.is_some() && !caller_expects_value && return_value_type != ValueType::Void {
             return Err(InterpreterError::UnsupportedExpression {
                 feature: "non-void call scheduled as a void expression statement",
                 span: call_span.unwrap_or(declaration.span),
             });
         }
-        let parameter_bindings = signature
-            .parameters
-            .into_iter()
-            .zip(arguments)
-            .map(|((symbol, ty), argument)| (symbol, ty, argument.cast(ty)))
-            .collect::<Vec<_>>();
+        let binding_span = call_span.unwrap_or(declaration.span);
+        let mut parameter_bindings = Vec::with_capacity(arguments.len());
+        for ((symbol, ty), argument) in signature.parameters.into_iter().zip(arguments) {
+            let argument = cast_machine_value(argument, ty, binding_span)?;
+            match (ty, argument) {
+                (ValueType::Integer(ty), CValue::Integer(value)) => {
+                    parameter_bindings.push((symbol, ty, value));
+                }
+                (ValueType::Pointer(_), CValue::Pointer { .. }) => {
+                    return Err(InterpreterError::UnsupportedExpression {
+                        feature: "pointer parameter execution before Day 7 memory bindings",
+                        span: binding_span,
+                    });
+                }
+                (ValueType::Void, _) | (_, _) => {
+                    return Err(InterpreterError::UnsupportedFunctionSignature {
+                        symbol: function,
+                        span: declaration.span,
+                    });
+                }
+            }
+        }
 
         let body = declaration
             .body
@@ -1937,7 +1999,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         tasks.push(MachineTask::FunctionEnd(FunctionEnd {
             symbol: function,
             return_type,
-            return_integer,
+            return_value_type,
             is_main,
             body_span,
             caller_slots,
@@ -1951,7 +2013,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
 
     fn validate_root_function(&self, function: SymbolId) -> Result<(), InterpreterError> {
         let declaration = self.function_definition(function)?;
-        self.validate_function_signature(declaration, 0)?;
+        let signature = self.validate_function_signature(declaration, 0)?;
+        if matches!(signature.return_value_type, ValueType::Pointer(_)) {
+            return Err(InterpreterError::UnsupportedFunctionSignature {
+                symbol: function,
+                span: declaration.span,
+            });
+        }
         Ok(())
     }
 
@@ -2002,10 +2070,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span: declaration.span,
             });
         }
-        let return_integer = match self.unit.types().get(*return_type).map(|ty| &ty.kind) {
-            Some(TypeKind::Void) => None,
-            _ => Some(self.integer_type(*return_type, declaration.span)?),
-        };
+        let return_value_type = self.value_type(*return_type, declaration.span)?;
         let parameters = match (canonical_parameters, &declaration.parameters) {
             (FunctionParameters::Unspecified, ParameterSyntax::Unspecified)
                 if argument_count == 0 =>
@@ -2077,7 +2142,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     function_scope = Some(symbol.scope());
                     validated.push((
                         parameter_symbol,
-                        self.integer_type(parameter.ty, parameter.span)?,
+                        self.value_type(parameter.ty, parameter.span)?,
                     ));
                 }
                 validated
@@ -2091,7 +2156,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         };
         Ok(ValidatedFunctionSignature {
             return_type: *return_type,
-            return_integer,
+            return_value_type,
             parameters,
         })
     }
@@ -2222,29 +2287,33 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         &mut self,
         end: FunctionEnd,
         exit: FunctionExit,
-        values: &mut Vec<CInteger>,
+        values: &mut Vec<CValue>,
     ) -> Result<Option<MachineOutcome>, InterpreterError> {
-        let return_value = match (exit, end.return_integer) {
-            (FunctionExit::Explicit(Some(value)), Some(return_integer)) => {
-                Some(value.cast(return_integer))
+        let return_value = match (exit, end.return_value_type) {
+            (FunctionExit::Explicit(Some(value)), ValueType::Integer(return_integer)) => Some(
+                cast_machine_value(value, ValueType::Integer(return_integer), end.body_span)?,
+            ),
+            (FunctionExit::Explicit(Some(value)), ValueType::Pointer(return_type)) => Some(
+                cast_machine_value(value, ValueType::Pointer(return_type), end.body_span)?,
+            ),
+            (FunctionExit::Explicit(None), ValueType::Void)
+            | (FunctionExit::FellOffEnd, ValueType::Void) => None,
+            (FunctionExit::FellOffEnd, ValueType::Integer(return_integer)) if end.is_main => {
+                Some(CValue::Integer(CInteger::int(0).cast(return_integer)))
             }
-            (FunctionExit::Explicit(None), None) | (FunctionExit::FellOffEnd, None) => None,
-            (FunctionExit::FellOffEnd, Some(return_integer)) if end.is_main => {
-                Some(CInteger::int(0).cast(return_integer))
-            }
-            (FunctionExit::Explicit(None), Some(_)) => {
+            (FunctionExit::Explicit(None), ValueType::Integer(_) | ValueType::Pointer(_)) => {
                 return Err(InterpreterError::UnsupportedStatement {
                     feature: "empty return in scalar function",
                     span: end.body_span,
                 });
             }
-            (FunctionExit::Explicit(Some(_)), None) => {
+            (FunctionExit::Explicit(Some(_)), ValueType::Void) => {
                 return Err(InterpreterError::UnsupportedStatement {
                     feature: "value return in void function",
                     span: end.body_span,
                 });
             }
-            (FunctionExit::FellOffEnd, Some(_)) => {
+            (FunctionExit::FellOffEnd, ValueType::Integer(_) | ValueType::Pointer(_)) => {
                 return Err(InterpreterError::MissingReturn {
                     span: end.body_span,
                 });
@@ -2267,12 +2336,20 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             Ok(None)
         } else {
-            Ok(Some(MachineOutcome {
-                return_value: return_value.map(|value| ScalarValue {
+            let return_value = match return_value {
+                Some(CValue::Integer(value)) => Some(ScalarValue {
                     ty: end.return_type,
                     raw_bits: value.raw_bits(),
                 }),
-            }))
+                Some(CValue::Pointer { .. }) => {
+                    return Err(InterpreterError::UnsupportedExpression {
+                        feature: "pointer return from scalar interpreter root",
+                        span: end.body_span,
+                    });
+                }
+                None => None,
+            };
+            Ok(Some(MachineOutcome { return_value }))
         }
     }
 
@@ -2291,6 +2368,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     fn integer_type(&self, ty: TypeId, span: SourceSpan) -> Result<CIntegerType, InterpreterError> {
         canonical_integer_type(self.unit.types(), ty)
             .ok_or(InterpreterError::UnsupportedType { ty, span })
+    }
+
+    fn value_type(&self, ty: TypeId, span: SourceSpan) -> Result<ValueType, InterpreterError> {
+        match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
+            Some(TypeKind::Void) => Ok(ValueType::Void),
+            Some(TypeKind::Pointer(_)) => Ok(ValueType::Pointer(ty)),
+            _ => self.integer_type(ty, span).map(ValueType::Integer),
+        }
     }
 
     fn integer_error(&self, error: IntegerError, span: SourceSpan) -> InterpreterError {
@@ -3487,13 +3572,47 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
 }
 
 fn pop_machine_value(
-    values: &mut Vec<CInteger>,
+    values: &mut Vec<CValue>,
     span: SourceSpan,
-) -> Result<CInteger, InterpreterError> {
+) -> Result<CValue, InterpreterError> {
     values.pop().ok_or(InterpreterError::UnsupportedExpression {
         feature: "malformed interpreter expression continuation",
         span,
     })
+}
+
+fn expect_machine_integer(value: CValue, span: SourceSpan) -> Result<CInteger, InterpreterError> {
+    match value {
+        CValue::Integer(value) => Ok(value),
+        CValue::Pointer { .. } => Err(InterpreterError::UnsupportedExpression {
+            feature: "pointer value in integer task-machine operation",
+            span,
+        }),
+    }
+}
+
+fn cast_machine_value(
+    value: CValue,
+    target: ValueType,
+    span: SourceSpan,
+) -> Result<CValue, InterpreterError> {
+    match (value, target) {
+        (CValue::Integer(value), ValueType::Integer(target)) => {
+            Ok(CValue::Integer(value.cast(target)))
+        }
+        (CValue::Integer(_), ValueType::Pointer(_))
+        | (CValue::Pointer { .. }, ValueType::Integer(_))
+        | (CValue::Pointer { .. }, ValueType::Pointer(_)) => {
+            Err(InterpreterError::UnsupportedExpression {
+                feature: "pointer cast execution before Day 7 memory bindings",
+                span,
+            })
+        }
+        (_, ValueType::Void) => Err(InterpreterError::UnsupportedExpression {
+            feature: "value cast to void in task-machine continuation",
+            span,
+        }),
+    }
 }
 
 fn assignment_binary(operator: AssignmentOp) -> Option<BinaryOp> {
