@@ -452,6 +452,50 @@ fn prevalidate_expr_for_lowering(
             }
             prevalidate_expr_for_lowering(unit, target)
         }
+        CHirExpr::MemoryAssign {
+            place,
+            value,
+            facts,
+            span,
+            ..
+        } => {
+            place
+                .validate_against(unit.symbols(), unit.types())
+                .map_err(|_| LowerError::UnsupportedExpression {
+                    span: *span,
+                    feature: "memory assignment place is not authoritative in this C-HIR unit",
+                })?;
+            if facts.ty() != place.value_ty() || facts.category() != ExprCategory::Value {
+                return Err(LowerError::UnsupportedExpression {
+                    span: *span,
+                    feature: "memory assignment result facts disagree with its place",
+                });
+            }
+            for source in place.source_expressions() {
+                prevalidate_expr_for_lowering(unit, source)?;
+            }
+            prevalidate_expr_for_lowering(unit, value)
+        }
+        CHirExpr::MemoryUpdate {
+            place, facts, span, ..
+        } => {
+            place
+                .validate_against(unit.symbols(), unit.types())
+                .map_err(|_| LowerError::UnsupportedExpression {
+                    span: *span,
+                    feature: "memory update place is not authoritative in this C-HIR unit",
+                })?;
+            if facts.ty() != place.value_ty() || facts.category() != ExprCategory::Value {
+                return Err(LowerError::UnsupportedExpression {
+                    span: *span,
+                    feature: "memory update result facts disagree with its place",
+                });
+            }
+            for source in place.source_expressions() {
+                prevalidate_expr_for_lowering(unit, source)?;
+            }
+            Ok(())
+        }
         CHirExpr::Cast(ty, operand, span) => {
             if unit.types().get(*ty).is_none() {
                 return Err(LowerError::UnknownType {
@@ -2612,6 +2656,12 @@ impl<'a> FunctionLowerer<'a> {
                 span,
                 ..
             } => self.lower_update(*op, *place, target, *span, state),
+            CHirExpr::MemoryAssign { span, .. } | CHirExpr::MemoryUpdate { span, .. } => {
+                Err(LowerError::UnsupportedExpression {
+                    span: *span,
+                    feature: "Day-7 memory-place lowering is not attached",
+                })
+            }
             CHirExpr::Comma(left, right, _) => {
                 self.lower_discarded_expr(left, state)?;
                 self.lower_expr(right, state)
@@ -4047,7 +4097,20 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut BTreeSet<SymbolId>)
             collect_calls_expr(target, calls);
             collect_calls_expr(value, calls);
         }
-        CHirExpr::Update { target, .. } => collect_calls_expr(target, calls),
+        CHirExpr::MemoryAssign { place, value, .. } => {
+            for source in place.source_expressions() {
+                collect_calls_expr(source, calls);
+            }
+            collect_calls_expr(value, calls);
+        }
+        CHirExpr::Update { target, .. } => {
+            collect_calls_expr(target, calls);
+        }
+        CHirExpr::MemoryUpdate { place, .. } => {
+            for source in place.source_expressions() {
+                collect_calls_expr(source, calls);
+            }
+        }
         CHirExpr::CompoundLit(_, elements, _) => {
             for element in elements {
                 collect_calls_expr(element, calls);
@@ -4201,6 +4264,23 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
         CHirExpr::Update { place, .. } => {
             live.insert(place.symbol());
         }
+        CHirExpr::MemoryAssign { place, value, .. } => {
+            live_before_expr(value, live);
+            for source in place.source_expressions().rev() {
+                live_before_expr(source, live);
+            }
+            if let Some(symbol) = place.root_symbol() {
+                live.insert(symbol);
+            }
+        }
+        CHirExpr::MemoryUpdate { place, .. } => {
+            for source in place.source_expressions().rev() {
+                live_before_expr(source, live);
+            }
+            if let Some(symbol) = place.root_symbol() {
+                live.insert(symbol);
+            }
+        }
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::SizeOfExpr(operand, _)
@@ -4337,6 +4417,23 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
         CHirExpr::Update { place, target, .. } => {
             symbols.insert(place.symbol());
             collect_symbols_expr(target, symbols);
+        }
+        CHirExpr::MemoryAssign { place, value, .. } => {
+            if let Some(symbol) = place.root_symbol() {
+                symbols.insert(symbol);
+            }
+            for source in place.source_expressions() {
+                collect_symbols_expr(source, symbols);
+            }
+            collect_symbols_expr(value, symbols);
+        }
+        CHirExpr::MemoryUpdate { place, .. } => {
+            if let Some(symbol) = place.root_symbol() {
+                symbols.insert(symbol);
+            }
+            for source in place.source_expressions() {
+                collect_symbols_expr(source, symbols);
+            }
         }
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)

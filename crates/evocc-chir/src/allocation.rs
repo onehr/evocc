@@ -184,6 +184,9 @@ pub enum AllocationSiteManifestError {
         contender: SymbolId,
         span: SourceSpan,
     },
+    InvalidMemoryPlace {
+        span: SourceSpan,
+    },
 }
 
 impl fmt::Display for AllocationSiteManifestError {
@@ -320,6 +323,9 @@ impl fmt::Display for AllocationSiteManifestError {
                 owner.raw(),
                 contender.raw()
             ),
+            Self::InvalidMemoryPlace { .. } => {
+                formatter.write_str("memory place is not authoritative in this C-HIR unit")
+            }
         }
     }
 }
@@ -1232,8 +1238,36 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                 work.push(WorkItem::Expression(value));
                 work.push(WorkItem::Expression(target));
             }
+            CHirExpr::MemoryAssign {
+                place,
+                target_span,
+                value,
+                ..
+            } => {
+                place
+                    .validate_against(self.unit.symbols(), self.unit.types())
+                    .map_err(|_| AllocationSiteManifestError::InvalidMemoryPlace {
+                        span: *target_span,
+                    })?;
+                work.push(WorkItem::Expression(value));
+                for source in place.source_expressions().rev() {
+                    work.push(WorkItem::Expression(source));
+                }
+            }
             CHirExpr::Update { target, .. } => {
                 work.push(WorkItem::Expression(target));
+            }
+            CHirExpr::MemoryUpdate {
+                place, target_span, ..
+            } => {
+                place
+                    .validate_against(self.unit.symbols(), self.unit.types())
+                    .map_err(|_| AllocationSiteManifestError::InvalidMemoryPlace {
+                        span: *target_span,
+                    })?;
+                for source in place.source_expressions().rev() {
+                    work.push(WorkItem::Expression(source));
+                }
             }
             CHirExpr::CompoundLit(_, expressions, _) => {
                 for expression in expressions.iter().rev().copied() {
@@ -1457,11 +1491,11 @@ fn node_identity<T>(node: &T) -> usize {
 mod tests {
     use super::{AllocationSiteKind, AllocationSiteManifest, AllocationSiteManifestError};
     use crate::{
-        CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, FunctionDecl, InitAction,
-        InitPlan, IntBase, IntLit, IntSuffix, ObjectDecl, ObjectInitializer, ParameterDecl,
-        ParameterSyntax, ScopeKind, SpannedName, StorageClass, StringLit, StringPrefix, SymbolData,
-        SymbolId, SymbolKind, SymbolTable, TypeSpecifier, UnaryOp, WrittenDeclarator,
-        WrittenDeclaratorLayer, WrittenInitializer,
+        AssignmentOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, ExprFacts,
+        FunctionDecl, InitAction, InitPlan, IntBase, IntLit, IntSuffix, MemoryPlace, ObjectDecl,
+        ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceRoot, ScopeKind, SpannedName,
+        StorageClass, StringLit, StringPrefix, SymbolData, SymbolId, SymbolKind, SymbolTable,
+        TypeSpecifier, UnaryOp, WrittenDeclarator, WrittenDeclaratorLayer, WrittenInitializer,
     };
     use evocc_common::{Arena, FileId, SourceSpan};
     use evocc_types::{
@@ -2952,6 +2986,80 @@ mod tests {
                 duplicate_function: second,
                 ..
             }) if first == first_function && second == second_function
+        ));
+    }
+
+    #[test]
+    fn foreign_memory_place_fails_before_allocation_traversal() {
+        let arena = Arena::default();
+        let mut types = TypeInterner::new();
+        let int = int_type(&mut types);
+        let long = long_type(&mut types);
+
+        let mut foreign_symbols = SymbolTable::new();
+        let foreign_file = foreign_symbols.file_scope();
+        let foreign = declare(
+            &mut foreign_symbols,
+            foreign_file,
+            "foreign",
+            SymbolData::Object {
+                storage: StorageClass::None,
+            },
+            long,
+            1,
+        );
+        let foreign_place = MemoryPlace::derive(
+            &foreign_symbols,
+            &types,
+            PlaceRoot::Object { symbol: foreign },
+            Vec::new(),
+            long,
+        )
+        .unwrap();
+
+        let mut symbols = SymbolTable::new();
+        let file = symbols.file_scope();
+        let host = declare(
+            &mut symbols,
+            file,
+            "host",
+            SymbolData::Object {
+                storage: StorageClass::None,
+            },
+            int,
+            10,
+        );
+        assert_eq!(foreign.raw(), host.raw(), "fixture requires colliding IDs");
+
+        let value = integer(&arena, 1, 21);
+        let forged = arena_alloc(
+            &arena,
+            CHirExpr::MemoryAssign {
+                op: AssignmentOp::Simple,
+                place: foreign_place,
+                target_span: span(20),
+                value,
+                facts: ExprFacts::value(long),
+                span: span(20),
+            },
+        );
+        let declaration = arena_alloc(
+            &arena,
+            object(
+                host,
+                "host",
+                int,
+                StorageClass::None,
+                Some(initializer(int, forged)),
+                10,
+            ),
+        );
+        let unit = crate::CHirUnit::new(vec![declaration], types, symbols);
+
+        assert!(matches!(
+            AllocationSiteManifest::derive(&unit),
+            Err(AllocationSiteManifestError::InvalidMemoryPlace { span: actual })
+                if actual == span(20)
         ));
     }
 }

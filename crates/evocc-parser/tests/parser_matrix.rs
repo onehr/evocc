@@ -224,6 +224,15 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
             update_name(*op),
             canonical_expr(target, types)
         ),
+        CHirExpr::MemoryUpdate { op, place, .. } => format!(
+            "memory_unary({},{})",
+            update_name(*op),
+            place
+                .source_expressions()
+                .map(|source| canonical_expr(source, types))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
         CHirExpr::Binary(op, left, right, _) => format!(
             "binary({},{},{})",
             binary_name(*op),
@@ -281,6 +290,21 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
                 canonical_expr(right, types)
             )
         }
+        CHirExpr::MemoryAssign {
+            op,
+            place,
+            value: right,
+            ..
+        } => format!(
+            "memory_{}({},{})",
+            assignment_name(*op),
+            place
+                .source_expressions()
+                .map(|source| canonical_expr(source, types))
+                .collect::<Vec<_>>()
+                .join(","),
+            canonical_expr(right, types)
+        ),
         CHirExpr::CompoundLit(ty, values, _) => format!(
             "compound({},[{}])",
             canonical_type(*ty, types),

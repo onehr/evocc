@@ -186,6 +186,18 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 let child = self.expression(&format!("{path}.operand"), child);
                 format!("{operator}({child})")
             }
+            CHirExpr::MemoryUpdate { op, place, .. } => {
+                let operator = update_name(*op);
+                let sources = place
+                    .source_expressions()
+                    .enumerate()
+                    .map(|(index, source)| {
+                        self.expression(&format!("{path}.place[{index}]"), source)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!("memory_{operator}({sources})")
+            }
             CHirExpr::Binary(operator, left, right, _) => {
                 let operator = binary_name(*operator);
                 let left = self.expression(&format!("{path}.left"), left);
@@ -243,6 +255,24 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 let left = self.expression(&format!("{path}.left"), left);
                 let right = self.expression(&format!("{path}.right"), right);
                 format!("{operator}({left},{right})")
+            }
+            CHirExpr::MemoryAssign {
+                op,
+                place,
+                value: right,
+                ..
+            } => {
+                let operator = assignment_name(*op);
+                let left = place
+                    .source_expressions()
+                    .enumerate()
+                    .map(|(index, source)| {
+                        self.expression(&format!("{path}.place[{index}]"), source)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let right = self.expression(&format!("{path}.right"), right);
+                format!("memory_{operator}({left},{right})")
             }
             CHirExpr::CompoundLit(ty, values, _) => {
                 let values = values

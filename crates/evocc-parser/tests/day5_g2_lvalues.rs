@@ -2,7 +2,8 @@ use std::collections::HashSet;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use evocc_chir::{
-    CHirBlockItem, CHirDecl, CHirExpr, CHirStmt, ExprFacts, FunctionDecl, ObjectDecl, ScalarPlace,
+    CHirBlockItem, CHirDecl, CHirExpr, CHirStmt, ExprFacts, FunctionDecl, IntLit, ObjectDecl,
+    PlaceRoot, ScalarPlace, UnaryOp,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_lex::{Lexer, TokenKind};
@@ -43,6 +44,7 @@ const DAY7_MEMBER: &str = "struct S { int x; }; int f(void) { struct S s; s.x = 
 const DAY7_PTR_MEMBER: &str = "struct S { int x; }; int f(struct S *p) { p->x = 1; return 0; }\n";
 const DAY7_VOLATILE: &str = "int f(void) { volatile int x = 0; x = 1; return 0; }\n";
 const DAY7_ATOMIC: &str = "int f(void) { _Atomic int x = 0; x = 1; return 0; }\n";
+const DAY7_ALIAS: &str = "int f(void) { int x=5; int *p=&x; int *q=p; *q=9; return *p; }\n";
 const DAY7_UNION_ASSIGN: &str = concat!(
     "union U { int x; }; int f(void) { ",
     "union U left; union U right; left = right; return 0; }\n",
@@ -850,7 +852,6 @@ fn otherwise_valid_pointer_updates_are_an_explicit_day7_boundary() {
 #[test]
 fn indirect_memory_lvalues_remain_an_explicit_day7_boundary() {
     let cases = [
-        (DAY7_DEREF, "*p", 1),
         (DAY7_INDEX, "a[0]", 0),
         (DAY7_MEMBER, "s.x", 0),
         (DAY7_PTR_MEMBER, "p->x", 0),
@@ -867,7 +868,63 @@ fn indirect_memory_lvalues_remain_an_explicit_day7_boundary() {
 }
 
 #[test]
-fn volatile_scalar_update_is_an_explicit_day7_acceptance_red() {
+fn dereference_assignment_uses_one_typed_memory_place() {
+    let arena = Arena::default();
+    let unit = parse_valid(DAY7_ALIAS, &arena);
+    let body = items(function(&unit, 0));
+    assert_eq!(body.len(), 5, "alias program body topology");
+
+    let assignment = expression(&body[3]);
+    let CHirExpr::MemoryAssign {
+        place,
+        target_span,
+        value,
+        facts,
+        ..
+    } = assignment
+    else {
+        panic!("expected indirect assignment, got {assignment:?}");
+    };
+    let PlaceRoot::PointerExpression {
+        pointer,
+        pointer_type,
+    } = place.root()
+    else {
+        panic!("dereference must use a pointer-expression root");
+    };
+    let q = object(&body[2]);
+    let CHirExpr::Ident {
+        symbol,
+        span: pointer_span,
+        ..
+    } = pointer
+    else {
+        panic!("memory-place root must retain the original q subnode");
+    };
+    assert_eq!(*symbol, q.symbol);
+    assert_eq!(span_text(DAY7_ALIAS, *pointer_span), "q");
+    assert_eq!(span_text(DAY7_ALIAS, *target_span), "*q");
+    assert_eq!(pointer_span.byte_start, target_span.byte_start + 1);
+    assert_eq!(pointer_span.byte_end, target_span.byte_end);
+    let sources = place.source_expressions().collect::<Vec<_>>();
+    assert_eq!(sources.len(), 1, "pointer root must be evaluated once");
+    assert!(std::ptr::eq(sources[0], *pointer));
+    assert_eq!(pointer_type.pointee(), place.value_ty());
+    assert!(place.projections().is_empty());
+    assert!(place.is_modifiable());
+    assert!(place.is_addressable());
+    assert!(!place.is_bit_field());
+    assert_eq!(facts.ty(), place.value_ty());
+    assert!(matches!(value, CHirExpr::Lit(IntLit { value: 9, .. }, _)));
+
+    let CHirBlockItem::Statement(CHirStmt::Return(Some(returned), _)) = &body[4] else {
+        panic!("expected return statement");
+    };
+    assert!(matches!(returned, CHirExpr::Unary(UnaryOp::Deref, _, _)));
+}
+
+#[test]
+fn volatile_scalar_update_is_an_accepted_day7_contract() {
     let arena = Arena::default();
     let unit = parse_valid(DAY7_VOLATILE, &arena);
     let body = items(function(&unit, 0));

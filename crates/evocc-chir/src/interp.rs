@@ -1828,7 +1828,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     allow_root_mutation: false,
                 });
             }
-            CHirExpr::Assign { .. } | CHirExpr::Update { .. } => {
+            CHirExpr::Assign { .. }
+            | CHirExpr::MemoryAssign { .. }
+            | CHirExpr::Update { .. }
+            | CHirExpr::MemoryUpdate { .. } => {
                 return Err(InterpreterError::UnsupportedExpression {
                     feature: "function call nested in scalar mutation",
                     span,
@@ -3085,7 +3088,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirExpr::Index(_, _, _)
             | CHirExpr::CompoundLit(_, _, _)
             | CHirExpr::Assign { .. }
-            | CHirExpr::Update { .. } => Err(InterpreterError::UnsupportedExpression {
+            | CHirExpr::MemoryAssign { .. }
+            | CHirExpr::Update { .. }
+            | CHirExpr::MemoryUpdate { .. } => Err(InterpreterError::UnsupportedExpression {
                 feature: "outside scalar Day-5 expression subset",
                 span,
             }),
@@ -3104,7 +3109,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirExpr::CharLit(_, _) => Ok(CIntegerType::INT),
             CHirExpr::Ident { facts, .. }
             | CHirExpr::Assign { facts, .. }
-            | CHirExpr::Update { facts, .. } => self.integer_type(facts.ty(), span),
+            | CHirExpr::MemoryAssign { facts, .. }
+            | CHirExpr::Update { facts, .. }
+            | CHirExpr::MemoryUpdate { facts, .. } => self.integer_type(facts.ty(), span),
             CHirExpr::Unary(operator, operand, _) => match operator {
                 crate::UnaryOp::Not => Ok(CIntegerType::INT),
                 crate::UnaryOp::Plus | crate::UnaryOp::Neg | crate::UnaryOp::BitNot => {
@@ -3556,7 +3563,14 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
         CHirExpr::Assign { target, value, .. } => {
             expression_contains_call(target) || expression_contains_call(value)
         }
+        CHirExpr::MemoryAssign { place, value, .. } => {
+            place.source_expressions().any(expression_contains_call)
+                || expression_contains_call(value)
+        }
         CHirExpr::Update { target, .. } => expression_contains_call(target),
+        CHirExpr::MemoryUpdate { place, .. } => {
+            place.source_expressions().any(expression_contains_call)
+        }
         CHirExpr::CompoundLit(_, values, _) => {
             values.iter().any(|value| expression_contains_call(value))
         }

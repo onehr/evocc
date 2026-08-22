@@ -16,6 +16,7 @@ pub mod allocation;
 pub mod initializer;
 pub mod integer;
 pub mod interp;
+pub mod place;
 pub mod semantic;
 
 pub use allocation::{
@@ -25,6 +26,10 @@ pub use allocation::{
 pub use initializer::{
     InitAction, InitPlan, InitPlanError, ObjectInitializer, SubobjectPath, SubobjectStep,
     WrittenInitializer,
+};
+pub use place::{
+    FieldProjection, IndexProjection, MemoryPlace, MemoryPlaceError, PlaceProjection, PlaceRoot,
+    PointerTypeDesc,
 };
 pub use semantic::{
     AssignmentOp, ExprCategory, ExprFacts, ExprFactsError, NotAssignmentOperator, ScalarPlace,
@@ -329,10 +334,29 @@ pub enum CHirExpr<'arena> {
         facts: ExprFacts,
         span: SourceSpan,
     },
+    /// Assignment through an indirect or projected C lvalue. `place` is the
+    /// sole evaluation authority; `target_span` is diagnostic provenance only.
+    MemoryAssign {
+        op: AssignmentOp,
+        place: MemoryPlace<'arena>,
+        target_span: SourceSpan,
+        value: &'arena CHirExpr<'arena>,
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
     Update {
         op: UpdateOp,
         place: ScalarPlace,
         target: &'arena CHirExpr<'arena>,
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
+    /// Prefix/postfix update through an indirect or projected C lvalue.
+    /// `place` is the sole evaluation authority.
+    MemoryUpdate {
+        op: UpdateOp,
+        place: MemoryPlace<'arena>,
+        target_span: SourceSpan,
         facts: ExprFacts,
         span: SourceSpan,
     },
@@ -365,7 +389,9 @@ impl CHirExpr<'_> {
             | Self::PtrMember(_, _, span)
             | Self::Index(_, _, span)
             | Self::Assign { span, .. }
+            | Self::MemoryAssign { span, .. }
             | Self::Update { span, .. }
+            | Self::MemoryUpdate { span, .. }
             | Self::CompoundLit(_, _, span)
             | Self::Comma(_, _, span) => *span,
         }

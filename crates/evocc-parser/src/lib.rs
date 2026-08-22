@@ -11,11 +11,12 @@ use evocc_chir::integer::{
 use evocc_chir::{
     AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit,
     CharLit, CharPrefix, EnumeratorDecl, ExprCategory, ExprFacts, FloatLit, FloatSuffix,
-    FunctionDecl, InitAction, InitPlan, IntBase, IntLit, IntSuffix, ObjectDecl, ObjectInitializer,
-    ParameterDecl, ParameterSyntax, RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName,
-    StorageClass, StringLit, StringPrefix, SubobjectPath, SubobjectStep, SymbolData, SymbolId,
-    SymbolKind, SymbolTable, SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl,
-    UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer, WrittenInitializer,
+    FunctionDecl, InitAction, InitPlan, IntBase, IntLit, IntSuffix, MemoryPlace, ObjectDecl,
+    ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceRoot, PointerTypeDesc, RecordMember,
+    ScalarPlace, ScopeId, ScopeKind, SpannedName, StorageClass, StringLit, StringPrefix,
+    SubobjectPath, SubobjectStep, SymbolData, SymbolId, SymbolKind, SymbolTable, SymbolTableError,
+    TagDecl, TagMembers, TypeSpecifier, TypedefDecl, UnaryOp, UpdateOp, WrittenDeclarator,
+    WrittenDeclaratorLayer, WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_lex::{Token, TokenKind, TokenText};
@@ -94,6 +95,21 @@ enum DeclarationContext {
 struct DirectUpdateTarget {
     symbol: SymbolId,
     ty: TypeId,
+}
+
+#[derive(Debug, Clone)]
+enum TypedUpdateTarget<'arena> {
+    Direct(DirectUpdateTarget),
+    Memory(MemoryPlace<'arena>),
+}
+
+impl TypedUpdateTarget<'_> {
+    fn ty(&self) -> TypeId {
+        match self {
+            Self::Direct(target) => target.ty,
+            Self::Memory(place) => place.value_ty(),
+        }
+    }
 }
 
 /// The pointed-to type of a converted pointer expression. `pointee` carries
@@ -1325,7 +1341,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::Unary(UnaryOp::AddrOf | UnaryOp::Deref, _, _)
             | CHirExpr::Call(_, _, _)
             | CHirExpr::Assign { .. }
+            | CHirExpr::MemoryAssign { .. }
             | CHirExpr::Update { .. }
+            | CHirExpr::MemoryUpdate { .. }
             | CHirExpr::CompoundLit(_, _, _)
             | CHirExpr::Comma(_, _, _)
             | CHirExpr::StringLit(_, _)
@@ -1431,7 +1449,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::StringLit(_, _)
             | CHirExpr::Call(_, _, _)
             | CHirExpr::Assign { .. }
+            | CHirExpr::MemoryAssign { .. }
             | CHirExpr::Update { .. }
+            | CHirExpr::MemoryUpdate { .. }
             | CHirExpr::CompoundLit(_, _, _)
             | CHirExpr::Comma(_, _, _)
             | CHirExpr::Member(_, _, _)
@@ -3140,7 +3160,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::PtrMember(_, _, _)
             | CHirExpr::Index(_, _, _)
             | CHirExpr::Assign { .. }
+            | CHirExpr::MemoryAssign { .. }
             | CHirExpr::Update { .. }
+            | CHirExpr::MemoryUpdate { .. }
             | CHirExpr::CompoundLit(_, _, _)
             | CHirExpr::Comma(_, _, _) => Err(()),
         }
@@ -3235,7 +3257,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::PtrMember(_, _, _)
             | CHirExpr::Index(_, _, _)
             | CHirExpr::Assign { .. }
+            | CHirExpr::MemoryAssign { .. }
             | CHirExpr::Update { .. }
+            | CHirExpr::MemoryUpdate { .. }
             | CHirExpr::CompoundLit(_, _, _)
             | CHirExpr::Comma(_, _, _) => Err(()),
         }
@@ -4250,11 +4274,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.advance();
         // Diagnose the target first, but still consume the complete
         // right-associative RHS so recovery resumes at the statement boundary.
-        let direct_target = self.direct_update_target(target);
+        let typed_target = self.typed_update_target(target);
         let value = self.parse_assignment()?;
-        let direct_target = direct_target?;
+        let typed_target = typed_target?;
         let span = self.merge_span(target.span(), value.span());
-        match self.assignment_constraint(op, direct_target.ty, value) {
+        match self.assignment_constraint(op, typed_target.ty(), value) {
             UpdateConstraint::Scalar => {}
             UpdateConstraint::PointerBoundary => {
                 self.report("E2704", "not-covered-day7: pointer-update", span);
@@ -4273,25 +4297,45 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 return None;
             }
         }
-        let place = self.finish_scalar_update_place(direct_target, target.span())?;
-        let facts = ExprFacts::value(place.ty());
-        Some(self.alloc_node(CHirExpr::Assign {
-            op,
-            place,
-            target,
-            value,
-            facts,
-            span,
-        }))
+        Some(match typed_target {
+            TypedUpdateTarget::Direct(target_identity) => {
+                let place = self.finish_scalar_update_place(target_identity, target.span())?;
+                let facts = ExprFacts::value(place.ty());
+                self.alloc_node(CHirExpr::Assign {
+                    op,
+                    place,
+                    target,
+                    value,
+                    facts,
+                    span,
+                })
+            }
+            TypedUpdateTarget::Memory(place) => {
+                let facts = ExprFacts::value(place.value_ty());
+                self.alloc_node(CHirExpr::MemoryAssign {
+                    op,
+                    place,
+                    target_span: target.span(),
+                    value,
+                    facts,
+                    span,
+                })
+            }
+        })
     }
 
-    fn direct_update_target(&mut self, target: &CHirExpr<'_>) -> Option<DirectUpdateTarget> {
+    fn typed_update_target(
+        &mut self,
+        target: &'arena CHirExpr<'arena>,
+    ) -> Option<TypedUpdateTarget<'arena>> {
+        if let CHirExpr::Unary(UnaryOp::Deref, pointer, _) = target {
+            return self
+                .dereference_place(pointer, target.span())
+                .map(TypedUpdateTarget::Memory);
+        }
         if matches!(
             target,
-            CHirExpr::Member(_, _, _)
-                | CHirExpr::PtrMember(_, _, _)
-                | CHirExpr::Index(_, _, _)
-                | CHirExpr::Unary(UnaryOp::Deref, _, _)
+            CHirExpr::Member(_, _, _) | CHirExpr::PtrMember(_, _, _) | CHirExpr::Index(_, _, _)
         ) {
             self.report(
                 "E2701",
@@ -4309,10 +4353,80 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2101", "expected-modifiable-lvalue", target.span());
             return None;
         }
-        Some(DirectUpdateTarget {
+        Some(TypedUpdateTarget::Direct(DirectUpdateTarget {
             symbol: *symbol,
             ty: facts.ty(),
-        })
+        }))
+    }
+
+    fn dereference_place(
+        &mut self,
+        pointer: &'arena CHirExpr<'arena>,
+        target_span: SourceSpan,
+    ) -> Option<MemoryPlace<'arena>> {
+        let pointer_ty = self
+            .canonical_pointer_expression_type(pointer)
+            .or_else(|| {
+                self.report("E2102", "invalid-update-operands", target_span);
+                None
+            })?;
+        let pointer_type = match PointerTypeDesc::from_canonical_pointer(&self.types, pointer_ty) {
+            Ok(pointer_type) => pointer_type,
+            Err(_) => {
+                self.report("E2102", "invalid-update-operands", target_span);
+                return None;
+            }
+        };
+        let place = match MemoryPlace::derive(
+            &self.symbols,
+            &self.types,
+            PlaceRoot::PointerExpression {
+                pointer,
+                pointer_type,
+            },
+            Vec::new(),
+            pointer_type.pointee(),
+        ) {
+            Ok(place) => place,
+            Err(_) => {
+                self.report("E2102", "invalid-update-operands", target_span);
+                return None;
+            }
+        };
+        if !place.is_modifiable() {
+            self.report("E2101", "expected-modifiable-lvalue", target_span);
+            return None;
+        }
+        if place.access_qualifiers().is_atomic {
+            self.report(
+                "E2702",
+                "not-covered-day7: volatile-or-atomic-update",
+                target_span,
+            );
+            return None;
+        }
+        Some(place)
+    }
+
+    /// Return the canonical pointer type of the bounded expression forms used
+    /// as indirect-place roots in this slice. Composite/derived pointer values
+    /// remain fail-closed until their structural descriptor is attached by the
+    /// full memory expression pass.
+    fn canonical_pointer_expression_type(&self, expression: &CHirExpr<'_>) -> Option<TypeId> {
+        let ty = match expression {
+            CHirExpr::Ident { facts, .. }
+            | CHirExpr::Assign { facts, .. }
+            | CHirExpr::MemoryAssign { facts, .. }
+            | CHirExpr::Update { facts, .. }
+            | CHirExpr::MemoryUpdate { facts, .. } => facts.ty(),
+            CHirExpr::Cast(ty, _, _) => *ty,
+            _ => return None,
+        };
+        matches!(
+            self.types.get(ty).map(|ty| &ty.kind),
+            Some(TypeKind::Pointer(_))
+        )
+        .then_some(ty)
     }
 
     fn finish_scalar_update_place(
@@ -4324,7 +4438,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .types
             .get(target.ty)
             .expect("identifier facts only reference interned types");
-        if canonical.qualifiers.is_volatile || canonical.qualifiers.is_atomic {
+        if canonical.qualifiers.is_atomic {
             self.report(
                 "E2702",
                 "not-covered-day7: volatile-or-atomic-update",
@@ -4567,7 +4681,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 InferredType::Integer(CIntegerType::ULONG),
                 ExprCategory::Value,
             ),
-            CHirExpr::Assign { facts, .. } | CHirExpr::Update { facts, .. } => {
+            CHirExpr::Assign { facts, .. }
+            | CHirExpr::MemoryAssign { facts, .. }
+            | CHirExpr::Update { facts, .. }
+            | CHirExpr::MemoryUpdate { facts, .. } => {
                 (InferredType::Canonical(facts.ty()), facts.category())
             }
             CHirExpr::CompoundLit(ty, _, _) => (InferredType::Canonical(*ty), ExprCategory::LValue),
@@ -5006,14 +5123,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         ) {
             let token = self.advance().expect("peeked prefix update");
             let target = self.parse_unary()?;
-            let direct_target = self.direct_update_target(target)?;
+            let typed_target = self.typed_update_target(target)?;
             let op = if token.kind == TokenKind::PlusPlus {
                 UpdateOp::PreIncrement
             } else {
                 UpdateOp::PreDecrement
             };
             let span = self.merge_span(token.span, target.span());
-            match self.update_constraint(direct_target.ty) {
+            match self.update_constraint(typed_target.ty()) {
                 UpdateConstraint::Scalar => {}
                 UpdateConstraint::PointerBoundary => {
                     self.report("E2704", "not-covered-day7: pointer-update", span);
@@ -5024,14 +5141,28 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     return None;
                 }
             }
-            let place = self.finish_scalar_update_place(direct_target, target.span())?;
-            return Some(self.alloc_node(CHirExpr::Update {
-                op,
-                place,
-                target,
-                facts: ExprFacts::value(place.ty()),
-                span,
-            }));
+            return Some(match typed_target {
+                TypedUpdateTarget::Direct(target_identity) => {
+                    let place = self.finish_scalar_update_place(target_identity, target.span())?;
+                    self.alloc_node(CHirExpr::Update {
+                        op,
+                        place,
+                        target,
+                        facts: ExprFacts::value(place.ty()),
+                        span,
+                    })
+                }
+                TypedUpdateTarget::Memory(place) => {
+                    let facts = ExprFacts::value(place.value_ty());
+                    self.alloc_node(CHirExpr::MemoryUpdate {
+                        op,
+                        place,
+                        target_span: target.span(),
+                        facts,
+                        span,
+                    })
+                }
+            });
         }
 
         let unary = match self.peek_kind() {
@@ -5171,14 +5302,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 Some(TokenKind::PlusPlus) | Some(TokenKind::MinusMinus) => {
                     let token = self.advance().unwrap();
                     let target = expression;
-                    let direct_target = self.direct_update_target(target)?;
+                    let typed_target = self.typed_update_target(target)?;
                     let op = if token.kind == TokenKind::PlusPlus {
                         UpdateOp::PostIncrement
                     } else {
                         UpdateOp::PostDecrement
                     };
                     let span = self.merge_span(target.span(), token.span);
-                    match self.update_constraint(direct_target.ty) {
+                    match self.update_constraint(typed_target.ty()) {
                         UpdateConstraint::Scalar => {}
                         UpdateConstraint::PointerBoundary => {
                             self.report("E2704", "not-covered-day7: pointer-update", span);
@@ -5189,14 +5320,29 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                             return None;
                         }
                     }
-                    let place = self.finish_scalar_update_place(direct_target, target.span())?;
-                    expression = self.alloc_node(CHirExpr::Update {
-                        op,
-                        place,
-                        target,
-                        facts: ExprFacts::value(place.ty()),
-                        span,
-                    });
+                    expression = match typed_target {
+                        TypedUpdateTarget::Direct(target_identity) => {
+                            let place =
+                                self.finish_scalar_update_place(target_identity, target.span())?;
+                            self.alloc_node(CHirExpr::Update {
+                                op,
+                                place,
+                                target,
+                                facts: ExprFacts::value(place.ty()),
+                                span,
+                            })
+                        }
+                        TypedUpdateTarget::Memory(place) => {
+                            let facts = ExprFacts::value(place.value_ty());
+                            self.alloc_node(CHirExpr::MemoryUpdate {
+                                op,
+                                place,
+                                target_span: target.span(),
+                                facts,
+                                span,
+                            })
+                        }
+                    };
                 }
                 _ => break,
             }
@@ -5882,6 +6028,21 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
             facts: *facts,
             span: paren_span,
         },
+        CHirExpr::MemoryAssign {
+            op,
+            place,
+            target_span,
+            value,
+            facts,
+            ..
+        } => CHirExpr::MemoryAssign {
+            op: *op,
+            place: place.clone(),
+            target_span: *target_span,
+            value,
+            facts: *facts,
+            span: paren_span,
+        },
         CHirExpr::Update {
             op,
             place,
@@ -5892,6 +6053,19 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
             op: *op,
             place: *place,
             target,
+            facts: *facts,
+            span: paren_span,
+        },
+        CHirExpr::MemoryUpdate {
+            op,
+            place,
+            target_span,
+            facts,
+            ..
+        } => CHirExpr::MemoryUpdate {
+            op: *op,
+            place: place.clone(),
+            target_span: *target_span,
             facts: *facts,
             span: paren_span,
         },

@@ -167,7 +167,14 @@ fn assert_expression_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         | CHirExpr::SizeOfExpr(child, _)
         | CHirExpr::Member(child, _, _)
         | CHirExpr::PtrMember(child, _, _) => assert_expression_owned(arena, child),
-        CHirExpr::Update { target, .. } => assert_expression_owned(arena, target),
+        CHirExpr::Update { target, .. } => {
+            assert_expression_owned(arena, target);
+        }
+        CHirExpr::MemoryUpdate { place, .. } => {
+            for source in place.source_expressions() {
+                assert_expression_owned(arena, source);
+            }
+        }
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
         | CHirExpr::Comma(left, right, _) => {
@@ -176,6 +183,12 @@ fn assert_expression_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         }
         CHirExpr::Assign { target, value, .. } => {
             assert_expression_owned(arena, target);
+            assert_expression_owned(arena, value);
+        }
+        CHirExpr::MemoryAssign { place, value, .. } => {
+            for source in place.source_expressions() {
+                assert_expression_owned(arena, source);
+            }
             assert_expression_owned(arena, value);
         }
         CHirExpr::Ternary(condition, when_true, when_false, _) => {
