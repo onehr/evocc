@@ -11,6 +11,7 @@ use std::{
 };
 
 use evocc_common::SourceSpan;
+use evocc_memory::{MemoryConfig, MemoryFault, MemoryLimits, MemoryState, WorldLimits, WorldState};
 use evocc_types::{
     FunctionParameters, TagDefinition, TagState, TargetDataLayout, TypeId, TypeInterner, TypeKind,
 };
@@ -26,6 +27,10 @@ use crate::{
 };
 
 const DEFAULT_FUEL: u64 = 100_000;
+const MAX_MEMORY_OBJECTS: u64 = 65_536;
+const MAX_MEMORY_OBJECT_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_MEMORY_TOTAL_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_VOLATILE_EVENTS: u64 = 1_048_576;
 
 /// Deterministic execution limits for one interpreter invocation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -85,10 +90,14 @@ impl fmt::Display for ScalarValueError {
 impl std::error::Error for ScalarValueError {}
 
 /// Successful execution and its deterministic budget witness.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterpretOutcome {
     pub return_value: Option<ScalarValue>,
     pub steps: u64,
+    /// Final immutable object-memory snapshot for this invocation.
+    pub memory: MemoryState,
+    /// Final externally observable volatile-event snapshot for this invocation.
+    pub world: WorldState,
 }
 
 /// A fail-closed scalar interpreter error.
@@ -175,6 +184,9 @@ pub enum InterpreterError {
         consumed: u64,
         span: SourceSpan,
     },
+    MemorySetup {
+        error: MemoryFault,
+    },
 }
 
 impl InterpreterError {
@@ -203,6 +215,7 @@ impl InterpreterError {
                 ..
             } => "E3006",
             Self::FuelExhausted { .. } => "E3008",
+            Self::MemorySetup { .. } => "E3007",
             Self::UnknownFunction { .. }
             | Self::FunctionHasNoBody { .. }
             | Self::UnsupportedFunctionSignature { .. }
@@ -254,6 +267,9 @@ impl InterpreterError {
                 ..
             } => "invalid-signed-left-shift".to_owned(),
             Self::FuelExhausted { .. } => "interpreter-fuel-exhausted".to_owned(),
+            Self::MemorySetup { error } => {
+                format!("interpreter-memory-setup-failed: {error}")
+            }
             Self::UnknownFunction { symbol } => {
                 format!("unknown-interpreter-function: {}", symbol.raw())
             }
@@ -297,7 +313,7 @@ impl InterpreterError {
     #[must_use]
     pub const fn span(&self) -> Option<SourceSpan> {
         match self {
-            Self::UnknownFunction { .. } => None,
+            Self::UnknownFunction { .. } | Self::MemorySetup { .. } => None,
             Self::FunctionHasNoBody { span, .. }
             | Self::UnsupportedFunctionSignature { span, .. }
             | Self::UnsupportedType { span, .. }
@@ -496,14 +512,33 @@ enum FunctionExit {
     FellOffEnd,
 }
 
-/// Interpret one zero-parameter scalar C-HIR function under a deterministic
-/// target-fixed budget.
+#[derive(Debug)]
+struct MachineOutcome {
+    return_value: Option<ScalarValue>,
+}
+
+/// Interpret one zero-parameter scalar C-HIR function using the current GNU
+/// AArch64 compatibility target and a deterministic budget.
+///
+/// New target-aware callers should use [`interpret_scalar_function_with_target`].
 pub fn interpret_scalar_function(
     unit: &CHirUnit<'_>,
     function: SymbolId,
     limits: InterpreterLimits,
 ) -> Result<InterpretOutcome, InterpreterError> {
-    let interpreter = Interpreter::new(unit, limits);
+    let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+    interpret_scalar_function_with_target(unit, function, &target, limits)
+}
+
+/// Interpret one zero-parameter scalar C-HIR function against an explicit
+/// target data layout. This is the authoritative target-aware entry point.
+pub fn interpret_scalar_function_with_target(
+    unit: &CHirUnit<'_>,
+    function: SymbolId,
+    target: &TargetDataLayout,
+    limits: InterpreterLimits,
+) -> Result<InterpretOutcome, InterpreterError> {
+    let interpreter = Interpreter::new(unit, target, limits)?;
     interpreter.validate_root_function(function)?;
     if function_has_call(unit, function) || function_has_goto(unit, function) {
         interpreter.run_with_calls(function)
@@ -514,21 +549,43 @@ pub fn interpret_scalar_function(
 
 struct Interpreter<'unit, 'arena> {
     unit: &'unit CHirUnit<'arena>,
+    target: TargetDataLayout,
     slots: HashMap<SymbolId, Slot>,
+    memory: MemoryState,
+    world: WorldState,
     fuel_limit: u64,
     consumed: u64,
     fuel_anchor: Option<SourceSpan>,
 }
 
 impl<'unit, 'arena> Interpreter<'unit, 'arena> {
-    fn new(unit: &'unit CHirUnit<'arena>, limits: InterpreterLimits) -> Self {
-        Self {
+    fn new(
+        unit: &'unit CHirUnit<'arena>,
+        target: &TargetDataLayout,
+        limits: InterpreterLimits,
+    ) -> Result<Self, InterpreterError> {
+        let memory_limits = MemoryLimits {
+            max_objects: MAX_MEMORY_OBJECTS,
+            max_object_bytes: MAX_MEMORY_OBJECT_BYTES,
+            max_total_bytes: MAX_MEMORY_TOTAL_BYTES,
+        };
+        let config = MemoryConfig::for_target(target, memory_limits)
+            .map_err(|error| InterpreterError::MemorySetup { error })?;
+        let memory =
+            MemoryState::new(config).map_err(|error| InterpreterError::MemorySetup { error })?;
+        let world = WorldState::new(WorldLimits {
+            max_volatile_events: MAX_VOLATILE_EVENTS,
+        });
+        Ok(Self {
             unit,
+            target: *target,
             slots: HashMap::new(),
+            memory,
+            world,
             fuel_limit: limits.fuel(),
             consumed: 0,
             fuel_anchor: None,
-        }
+        })
     }
 
     fn run(mut self, function: SymbolId) -> Result<InterpretOutcome, InterpreterError> {
@@ -659,6 +716,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         Ok(InterpretOutcome {
             return_value,
             steps: self.consumed,
+            memory: self.memory,
+            world: self.world,
         })
     }
 
@@ -1069,7 +1128,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
             };
             if let Some(outcome) = outcome {
-                return Ok(outcome);
+                return Ok(InterpretOutcome {
+                    return_value: outcome.return_value,
+                    steps: self.consumed,
+                    memory: self.memory,
+                    world: self.world,
+                });
             }
         }
 
@@ -1084,7 +1148,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         statement: &'arena CHirStmt<'arena>,
         tasks: &mut Vec<MachineTask<'arena>>,
         values: &mut Vec<CInteger>,
-    ) -> Result<Option<InterpretOutcome>, InterpreterError> {
+    ) -> Result<Option<MachineOutcome>, InterpreterError> {
         self.tick(statement.span())?;
         match statement {
             CHirStmt::Expr(expression, _) => {
@@ -2159,7 +2223,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         end: FunctionEnd,
         exit: FunctionExit,
         values: &mut Vec<CInteger>,
-    ) -> Result<Option<InterpretOutcome>, InterpreterError> {
+    ) -> Result<Option<MachineOutcome>, InterpreterError> {
         let return_value = match (exit, end.return_integer) {
             (FunctionExit::Explicit(Some(value)), Some(return_integer)) => {
                 Some(value.cast(return_integer))
@@ -2203,12 +2267,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             Ok(None)
         } else {
-            Ok(Some(InterpretOutcome {
+            Ok(Some(MachineOutcome {
                 return_value: return_value.map(|value| ScalarValue {
                     ty: end.return_type,
                     raw_bits: value.raw_bits(),
                 }),
-                steps: self.consumed,
             }))
         }
     }
@@ -2867,12 +2930,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 Ok(self.eval_expr(value, false)?.cast(target))
             }
             CHirExpr::SizeOf(ty, _) => {
-                let layout = TargetDataLayout::aarch64_unknown_linux_gnu()
-                    .layout_of(self.unit.types(), *ty)
-                    .map_err(|_| InterpreterError::UnsupportedExpression {
+                let layout = self.target.layout_of(self.unit.types(), *ty).map_err(|_| {
+                    InterpreterError::UnsupportedExpression {
                         feature: "sizeof incomplete or unsupported type",
                         span,
-                    })?;
+                    }
+                })?;
                 Ok(CInteger::new(layout.size_bytes, CIntegerType::ULONG))
             }
             CHirExpr::SizeOfExpr(operand, _) => {
@@ -2883,12 +2946,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 ))
             }
             CHirExpr::AlignOf(ty, _) => {
-                let layout = TargetDataLayout::aarch64_unknown_linux_gnu()
-                    .layout_of(self.unit.types(), *ty)
-                    .map_err(|_| InterpreterError::UnsupportedExpression {
+                let layout = self.target.layout_of(self.unit.types(), *ty).map_err(|_| {
+                    InterpreterError::UnsupportedExpression {
                         feature: "alignof incomplete or unsupported type",
                         span,
-                    })?;
+                    }
+                })?;
                 Ok(CInteger::new(
                     u64::from(layout.align_bytes),
                     CIntegerType::ULONG,
@@ -3741,4 +3804,212 @@ fn validate_function_gotos(
         | CHirStmt::Null(_) => {}
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        IntBase, IntLit, IntSuffix, SpannedName, TypeSpecifier, WrittenDeclarator,
+        WrittenDeclaratorLayer,
+    };
+    use evocc_common::{Arena, FileId};
+    use evocc_memory::{AccessLayout, MemoryFault, ObjectId};
+    use evocc_types::{CanonicalType, IntRank, Qualifiers};
+
+    fn span(start: u32, end: u32) -> SourceSpan {
+        SourceSpan::new(FileId::new(701), start, end, 1, start + 1)
+    }
+
+    fn alloc<'arena, T: 'arena>(arena: &'arena Arena, value: T) -> &'arena T {
+        // Safety: these C-HIR nodes contain no Arena handle and their
+        // destructors only release owned source-fact buffers.
+        unsafe { arena.alloc_shared(value) }
+    }
+
+    fn scalar_program(arena: &Arena, use_task_machine: bool) -> (CHirUnit<'_>, SymbolId, TypeId) {
+        let mut types = TypeInterner::new();
+        let int = types.intern(CanonicalType {
+            kind: TypeKind::Int(IntRank::Int),
+            qualifiers: Qualifiers::default(),
+        });
+        let function_ty = types.intern(CanonicalType {
+            kind: TypeKind::Function {
+                return_type: int,
+                parameters: FunctionParameters::Prototype {
+                    types: Vec::new(),
+                    variadic: false,
+                },
+            },
+            qualifiers: Qualifiers::default(),
+        });
+        let mut symbols = crate::SymbolTable::new();
+        let function = symbols
+            .declare(
+                symbols.file_scope(),
+                "main",
+                crate::SymbolData::Function {
+                    storage: StorageClass::None,
+                },
+                function_ty,
+                span(0, 4),
+            )
+            .expect("declare test main");
+
+        let value = alloc(
+            arena,
+            CHirExpr::Lit(
+                IntLit {
+                    value: 7,
+                    suffix: IntSuffix::None,
+                    base: IntBase::Dec,
+                },
+                span(20, 21),
+            ),
+        );
+        let returned = alloc(arena, CHirStmt::Return(Some(value), span(13, 22)));
+        let items = if use_task_machine {
+            let name = SpannedName {
+                spelling: "done".to_owned(),
+                span: span(7, 11),
+            };
+            vec![
+                CHirBlockItem::Statement(alloc(arena, CHirStmt::Goto(name.clone(), span(5, 12)))),
+                CHirBlockItem::Statement(alloc(
+                    arena,
+                    CHirStmt::Label(name, returned, span(13, 22)),
+                )),
+            ]
+        } else {
+            vec![CHirBlockItem::Statement(returned)]
+        };
+        let body = alloc(arena, CHirStmt::Compound(items, span(4, 23)));
+        let declaration = alloc(
+            arena,
+            CHirDecl::Function(FunctionDecl {
+                symbol: function,
+                name: SpannedName {
+                    spelling: "main".to_owned(),
+                    span: span(0, 4),
+                },
+                ty: function_ty,
+                return_specifier: TypeSpecifier::Builtin {
+                    ty: int,
+                    span: span(0, 3),
+                },
+                written: WrittenDeclarator {
+                    layers: vec![WrittenDeclaratorLayer::Function { span: span(3, 5) }],
+                    span: span(0, 5),
+                },
+                parameters: ParameterSyntax::Prototype {
+                    parameters: Vec::new(),
+                    variadic: false,
+                },
+                storage: StorageClass::None,
+                inline_spans: Vec::new(),
+                gnu_extension_spans: Vec::new(),
+                body: Some(body),
+                span: span(0, 23),
+            }),
+        );
+        (
+            CHirUnit::new(vec![declaration], types, symbols),
+            function,
+            int,
+        )
+    }
+
+    fn assert_empty_execution_state(outcome: &InterpretOutcome) {
+        assert!(outcome.world.volatile_trace().is_empty());
+        assert_eq!(
+            outcome.memory.config().limits(),
+            MemoryLimits {
+                max_objects: MAX_MEMORY_OBJECTS,
+                max_object_bytes: MAX_MEMORY_OBJECT_BYTES,
+                max_total_bytes: MAX_MEMORY_TOTAL_BYTES,
+            }
+        );
+        assert_eq!(
+            outcome.world.limits(),
+            WorldLimits {
+                max_volatile_events: MAX_VOLATILE_EVENTS,
+            }
+        );
+        assert!(matches!(
+            outcome.memory.object_info(ObjectId::from_raw(1)),
+            Err(MemoryFault::UnknownObject { .. })
+        ));
+    }
+
+    #[test]
+    fn call_free_scalar_execution_keeps_value_and_returns_empty_states() {
+        let arena = Arena::default();
+        let (unit, function, int) = scalar_program(&arena, false);
+
+        let outcome =
+            interpret_scalar_function(&unit, function, InterpreterLimits::default()).unwrap();
+
+        assert_eq!(
+            outcome.return_value,
+            Some(ScalarValue {
+                ty: int,
+                raw_bits: 7,
+            })
+        );
+        assert!(outcome.steps > 0);
+        assert_empty_execution_state(&outcome);
+    }
+
+    #[test]
+    fn task_machine_uses_target_aware_states_and_is_deterministic() {
+        let arena = Arena::default();
+        let (unit, function, int) = scalar_program(&arena, true);
+        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+
+        let first = interpret_scalar_function_with_target(
+            &unit,
+            function,
+            &target,
+            InterpreterLimits::default(),
+        )
+        .unwrap();
+        let second = interpret_scalar_function_with_target(
+            &unit,
+            function,
+            &target,
+            InterpreterLimits::default(),
+        )
+        .unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(
+            first.return_value,
+            Some(ScalarValue {
+                ty: int,
+                raw_bits: 7,
+            })
+        );
+        assert_eq!(first.memory.config().byte_order(), target.byte_order());
+        assert_eq!(
+            first.memory.config().pointer_layout().size_bytes,
+            target.pointer_layout().size_bytes
+        );
+        assert_empty_execution_state(&first);
+    }
+
+    #[test]
+    fn invalid_target_memory_setup_fails_closed_without_a_source_span() {
+        let error = InterpreterError::MemorySetup {
+            error: MemoryFault::InvalidPointerLayout {
+                layout: AccessLayout::new(0, 1),
+            },
+        };
+
+        assert_eq!(error.code(), "E3007");
+        assert_eq!(
+            error.message(),
+            "interpreter-memory-setup-failed: memory fault: InvalidPointerLayout"
+        );
+        assert_eq!(error.span(), None);
+    }
 }

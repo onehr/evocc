@@ -21,6 +21,7 @@ name = "evocc-chir"
 version = "0.0.0"
 dependencies = [
  "evocc-common",
+ "evocc-memory",
  "evocc-types",
 ]
 
