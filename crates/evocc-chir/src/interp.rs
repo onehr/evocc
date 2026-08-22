@@ -12,10 +12,12 @@ use std::{
 
 use evocc_common::SourceSpan;
 use evocc_memory::{
-    MemoryConfig, MemoryFault, MemoryLimits, MemoryState, Pointer, WorldLimits, WorldState,
+    AccessLayout, FrameId, InitialState, MemoryConfig, MemoryFault, MemoryLimits, MemoryState,
+    Pointer, ScopeId as MemoryScopeId, WorldLimits, WorldState,
 };
 use evocc_types::{
-    FunctionParameters, TagDefinition, TagState, TargetDataLayout, TypeId, TypeInterner, TypeKind,
+    FunctionParameters, Qualifiers, TagDefinition, TagState, TargetDataLayout, TypeId,
+    TypeInterner, TypeKind,
 };
 
 use crate::{
@@ -23,9 +25,11 @@ use crate::{
         enum_integer_type, eval_binary_integer, eval_unary_integer, integer_literal_value,
         integer_type_for_rank, usual_arithmetic_type, CInteger, CIntegerType, IntegerError,
     },
-    AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit,
-    ExprCategory, FunctionDecl, InitAction, ObjectDecl, ParameterSyntax, ScalarPlace, ScopeKind,
-    StorageClass, SymbolId, SymbolKind, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
+    AllocationSiteKind, AllocationSiteManifest, AllocationSiteManifestError, AssignmentOp,
+    BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, ExprCategory,
+    ExprFacts, FunctionDecl, InitAction, MemoryPlace, ObjectDecl, ParameterSyntax, PlaceRoot,
+    PointerTypeDesc, ScalarPlace, ScopeKind, StorageClass, SymbolId, SymbolKind, UnaryOp, UpdateOp,
+    WrittenDeclarator, WrittenDeclaratorLayer,
 };
 
 const DEFAULT_FUEL: u64 = 100_000;
@@ -33,6 +37,18 @@ const MAX_MEMORY_OBJECTS: u64 = 65_536;
 const MAX_MEMORY_OBJECT_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_MEMORY_TOTAL_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_VOLATILE_EVENTS: u64 = 1_048_576;
+/// Deepest static-initializer expression the recursive evaluator may descend.
+///
+/// Static initializers are the one remaining path that reaches `eval_expr`
+/// directly instead of the iterative task machine, so this bound is what keeps
+/// a hostile constant expression from aborting the process on a host stack
+/// overflow. It is calibrated against measurement, not taste: on a 2 MiB debug
+/// test thread this evaluator survives depth 224 and overflows by depth 240, so
+/// the limit keeps roughly a 3.5x margin for release builds, other targets, and
+/// future growth of the evaluator's stack frame. Raising it is only safe once
+/// static initializers are evaluated through the task machine like every other
+/// expression; do not raise it on the strength of one platform passing.
+const MAX_STATIC_INITIALIZER_DEPTH: usize = 64;
 
 /// Deterministic execution limits for one interpreter invocation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -189,6 +205,14 @@ pub enum InterpreterError {
     MemorySetup {
         error: MemoryFault,
     },
+    Memory {
+        error: MemoryFault,
+        span: SourceSpan,
+    },
+    InvalidAllocationManifest {
+        error: AllocationSiteManifestError,
+    },
+    MissingAllocationManifest,
 }
 
 impl InterpreterError {
@@ -217,7 +241,13 @@ impl InterpreterError {
                 ..
             } => "E3006",
             Self::FuelExhausted { .. } => "E3008",
-            Self::MemorySetup { .. } => "E3007",
+            Self::Memory { error, .. } => match error.runtime_diagnostic() {
+                Some(diagnostic) => diagnostic.code,
+                None => "E3007",
+            },
+            Self::MemorySetup { .. }
+            | Self::InvalidAllocationManifest { .. }
+            | Self::MissingAllocationManifest => "E3007",
             Self::UnknownFunction { .. }
             | Self::FunctionHasNoBody { .. }
             | Self::UnsupportedFunctionSignature { .. }
@@ -272,6 +302,14 @@ impl InterpreterError {
             Self::MemorySetup { error } => {
                 format!("interpreter-memory-setup-failed: {error}")
             }
+            Self::Memory { error, .. } => error.runtime_diagnostic().map_or_else(
+                || format!("interpreter-memory-failed: {error}"),
+                |diagnostic| diagnostic.message.to_owned(),
+            ),
+            Self::InvalidAllocationManifest { error } => {
+                format!("invalid-allocation-site-manifest: {error}")
+            }
+            Self::MissingAllocationManifest => "missing-allocation-site-manifest".to_owned(),
             Self::UnknownFunction { symbol } => {
                 format!("unknown-interpreter-function: {}", symbol.raw())
             }
@@ -315,7 +353,10 @@ impl InterpreterError {
     #[must_use]
     pub const fn span(&self) -> Option<SourceSpan> {
         match self {
-            Self::UnknownFunction { .. } | Self::MemorySetup { .. } => None,
+            Self::UnknownFunction { .. }
+            | Self::MemorySetup { .. }
+            | Self::InvalidAllocationManifest { .. }
+            | Self::MissingAllocationManifest => None,
             Self::FunctionHasNoBody { span, .. }
             | Self::UnsupportedFunctionSignature { span, .. }
             | Self::UnsupportedType { span, .. }
@@ -334,7 +375,8 @@ impl InterpreterError {
             | Self::UnknownLabel { span, .. }
             | Self::DuplicateLabel { span, .. }
             | Self::MissingReturn { span }
-            | Self::FuelExhausted { span, .. } => Some(*span),
+            | Self::FuelExhausted { span, .. }
+            | Self::Memory { span, .. } => Some(*span),
         }
     }
 }
@@ -360,7 +402,7 @@ struct Slot {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CValue {
     Integer(CInteger),
-    Pointer { value: Pointer, ty: TypeId },
+    Pointer { value: Pointer, ty: PointerTypeDesc },
 }
 
 /// The value-level part of a function signature accepted by the task machine.
@@ -368,7 +410,20 @@ enum CValue {
 enum ValueType {
     Void,
     Integer(CIntegerType),
-    Pointer(TypeId),
+    Pointer(PointerTypeDesc),
+}
+
+#[derive(Debug, Clone, Copy)]
+struct MemoryBinding {
+    address: Pointer,
+    ty: TypeId,
+}
+
+#[derive(Debug)]
+struct MemoryFrame {
+    id: FrameId,
+    root_scope: MemoryScopeId,
+    bindings: HashMap<SymbolId, MemoryBinding>,
 }
 
 #[derive(Debug)]
@@ -388,6 +443,7 @@ struct FunctionEnd {
     is_main: bool,
     body_span: SourceSpan,
     caller_slots: Option<HashMap<SymbolId, Slot>>,
+    caller_memory_frame: Option<MemoryFrame>,
     caller_fuel_anchor: Option<SourceSpan>,
     caller_expects_value: bool,
     value_base: usize,
@@ -458,6 +514,10 @@ enum MachineTask<'arena> {
         ty: CIntegerType,
         span: SourceSpan,
     },
+    FinishMemoryInitializer {
+        symbol: SymbolId,
+        span: SourceSpan,
+    },
     FinishReturnValue(SourceSpan),
     SelectIf {
         then_statement: &'arena CHirStmt<'arena>,
@@ -494,6 +554,18 @@ enum MachineTask<'arena> {
     ApplyAssignment {
         operator: AssignmentOp,
         symbol: SymbolId,
+        target_span: SourceSpan,
+        span: SourceSpan,
+    },
+    LoadDereference {
+        pointer_type: PointerTypeDesc,
+        span: SourceSpan,
+    },
+    ApplyIndirectAssignment {
+        operator: AssignmentOp,
+        pointer_type: PointerTypeDesc,
+        value_type: TypeId,
+        qualifiers: Qualifiers,
         target_span: SourceSpan,
         span: SourceSpan,
     },
@@ -557,9 +629,21 @@ pub fn interpret_scalar_function_with_target(
     target: &TargetDataLayout,
     limits: InterpreterLimits,
 ) -> Result<InterpretOutcome, InterpreterError> {
-    let interpreter = Interpreter::new(unit, target, limits)?;
+    let requirements = reachable_memory_requirements(unit, function);
+    let memory_mode = requirements.requires_memory;
+    let mut interpreter = Interpreter::new(unit, target, limits, memory_mode)?;
+    // The requested function is validated before any whole-unit work, so a
+    // malformed signature is reported as such instead of surfacing incidentally
+    // as an allocation-manifest error from an unrelated part of the unit.
     interpreter.validate_root_function(function)?;
-    if function_has_call(unit, function) || function_has_goto(unit, function) {
+    if memory_mode {
+        interpreter.derive_allocation_manifest()?;
+        interpreter.initialize_static_objects(&requirements.static_objects)?;
+    }
+    if interpreter.memory_mode
+        || function_has_call(unit, function)
+        || function_has_goto(unit, function)
+    {
         interpreter.run_with_calls(function)
     } else {
         interpreter.run(function)
@@ -570,6 +654,10 @@ struct Interpreter<'unit, 'arena> {
     unit: &'unit CHirUnit<'arena>,
     target: TargetDataLayout,
     slots: HashMap<SymbolId, Slot>,
+    manifest: Option<AllocationSiteManifest<'arena>>,
+    static_bindings: HashMap<SymbolId, MemoryBinding>,
+    memory_frame: Option<MemoryFrame>,
+    memory_mode: bool,
     memory: MemoryState,
     world: WorldState,
     fuel_limit: u64,
@@ -582,6 +670,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         unit: &'unit CHirUnit<'arena>,
         target: &TargetDataLayout,
         limits: InterpreterLimits,
+        memory_mode: bool,
     ) -> Result<Self, InterpreterError> {
         let memory_limits = MemoryLimits {
             max_objects: MAX_MEMORY_OBJECTS,
@@ -599,12 +688,173 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             unit,
             target: *target,
             slots: HashMap::new(),
+            manifest: None,
+            static_bindings: HashMap::new(),
+            memory_frame: None,
+            memory_mode,
             memory,
             world,
             fuel_limit: limits.fuel(),
             consumed: 0,
             fuel_anchor: None,
         })
+    }
+
+    /// Derive the canonical allocation-site manifest for the whole unit.
+    ///
+    /// This is whole-unit work, so it runs only after the requested function has
+    /// been validated; otherwise a defect anywhere in the unit would mask the
+    /// diagnostic that actually describes the function under execution.
+    fn derive_allocation_manifest(&mut self) -> Result<(), InterpreterError> {
+        let manifest = AllocationSiteManifest::derive(self.unit)
+            .map_err(|error| InterpreterError::InvalidAllocationManifest { error })?;
+        self.manifest = Some(manifest);
+        Ok(())
+    }
+
+    /// Reject a static initializer whose expression tree is deeper than the
+    /// recursive evaluator can safely descend.
+    ///
+    /// This walk is itself iterative, so the guard can never be the thing that
+    /// overflows the host stack it exists to protect. Depth is measured in
+    /// expression nodes along one root-to-leaf path.
+    fn guard_static_initializer_evaluation(
+        &self,
+        value: &'arena CHirExpr<'arena>,
+    ) -> Result<(), InterpreterError> {
+        let mut pending: Vec<(&'arena CHirExpr<'arena>, usize)> = vec![(value, 1)];
+        while let Some((expression, depth)) = pending.pop() {
+            if depth > MAX_STATIC_INITIALIZER_DEPTH {
+                return Err(InterpreterError::UnsupportedExpression {
+                    feature: "deeply-nested-static-initializer",
+                    span: expression.span(),
+                });
+            }
+            push_static_initializer_children(expression, depth, &mut pending);
+        }
+        Ok(())
+    }
+
+    fn initialize_static_objects(
+        &mut self,
+        required: &BTreeSet<SymbolId>,
+    ) -> Result<(), InterpreterError> {
+        let mut plans = Vec::new();
+        let manifest = self
+            .manifest
+            .as_ref()
+            .ok_or(InterpreterError::MissingAllocationManifest)?;
+        for site in manifest.sites() {
+            let AllocationSiteKind::Object(symbol) = site.kind() else {
+                continue;
+            };
+            if !required.contains(&symbol) {
+                continue;
+            }
+            if !has_static_storage_duration(self.unit, symbol) {
+                continue;
+            }
+            let object = find_storage_object_declaration(self.unit, symbol).ok_or(
+                InterpreterError::MalformedObjectDeclaration {
+                    symbol,
+                    span: site.anchor(),
+                },
+            )?;
+            plans.push((object, site.ordinal().raw()));
+        }
+
+        for (declaration, site) in &plans {
+            let layout = self
+                .target
+                .layout_of(self.unit.types(), declaration.ty)
+                .map_err(|_| InterpreterError::UnsupportedType {
+                    ty: declaration.ty,
+                    span: declaration.span,
+                })?;
+            let (memory, address) = self
+                .memory
+                .allocate_static(
+                    *site,
+                    AccessLayout::from_type_layout(layout),
+                    InitialState::Zeroed,
+                )
+                .map_err(|error| self.memory_error(error, declaration.span))?;
+            self.memory = memory;
+            if self
+                .static_bindings
+                .insert(
+                    declaration.symbol,
+                    MemoryBinding {
+                        address,
+                        ty: declaration.ty,
+                    },
+                )
+                .is_some()
+            {
+                return Err(InterpreterError::MalformedObjectDeclaration {
+                    symbol: declaration.symbol,
+                    span: declaration.span,
+                });
+            }
+        }
+
+        for (declaration, _) in plans {
+            let Some(initializer) = &declaration.initializer else {
+                continue;
+            };
+            self.validate_initializer_plan(&declaration)?;
+            let action = initializer.plan().actions().first().ok_or(
+                InterpreterError::InvalidInitializerPlan {
+                    symbol: declaration.symbol,
+                    span: initializer.span(),
+                },
+            )?;
+            match action {
+                InitAction::StoreScalar {
+                    path,
+                    destination_type,
+                    value,
+                    span,
+                } if path.is_root() && *destination_type == declaration.ty => {
+                    let integer_type = self.integer_type(declaration.ty, *span)?;
+                    self.guard_static_initializer_evaluation(value)?;
+                    let value = self.eval_expr(value, false)?.cast(integer_type);
+                    let binding = self
+                        .static_bindings
+                        .get(&declaration.symbol)
+                        .copied()
+                        .ok_or(InterpreterError::MalformedObjectDeclaration {
+                            symbol: declaration.symbol,
+                            span: declaration.span,
+                        })?;
+                    self.memory = self
+                        .memory
+                        .store_integer(
+                            binding.address,
+                            self.access_layout(binding.ty, *span)?,
+                            u128::from(value.raw_bits()),
+                        )
+                        .map_err(|error| self.memory_error(error, *span))?;
+                }
+                InitAction::ZeroScalar {
+                    path,
+                    destination_type,
+                } if path.is_root() && *destination_type == declaration.ty => {}
+                InitAction::StoreScalar { span, .. } | InitAction::StoreString { span, .. } => {
+                    return Err(InterpreterError::InvalidInitializerPlan {
+                        symbol: declaration.symbol,
+                        span: *span,
+                    });
+                }
+                InitAction::ZeroScalar { .. } => {
+                    return Err(InterpreterError::InvalidInitializerPlan {
+                        symbol: declaration.symbol,
+                        span: initializer.span(),
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 
     fn run(mut self, function: SymbolId) -> Result<InterpretOutcome, InterpreterError> {
@@ -945,6 +1195,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     slot.value = Some(value);
                     None
                 }
+                MachineTask::FinishMemoryInitializer { symbol, span } => {
+                    let value = pop_machine_value(&mut values, span)?;
+                    self.store_bound_value(symbol, value, span)?;
+                    None
+                }
                 MachineTask::FinishReturnValue(span) => {
                     let value = pop_machine_value(&mut values, span)?;
                     let end = self.pop_function_end(&mut tasks, span)?;
@@ -1098,15 +1353,70 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     target_span,
                     span,
                 } => {
-                    let right =
-                        expect_machine_integer(pop_machine_value(&mut values, span)?, span)?;
-                    values.push(CValue::Integer(self.apply_assignment_value(
+                    let right = pop_machine_value(&mut values, span)?;
+                    if self.memory_mode {
+                        values.push(self.apply_bound_assignment(
+                            operator,
+                            symbol,
+                            right,
+                            target_span,
+                            span,
+                        )?);
+                    } else {
+                        let right = expect_machine_integer(right, span)?;
+                        values.push(CValue::Integer(self.apply_assignment_value(
+                            operator,
+                            symbol,
+                            right,
+                            target_span,
+                            span,
+                        )?));
+                    }
+                    None
+                }
+                MachineTask::LoadDereference { pointer_type, span } => {
+                    let (address, actual_type) =
+                        expect_machine_pointer(pop_machine_value(&mut values, span)?, span)?;
+                    if actual_type != pointer_type {
+                        return Err(InterpreterError::UnsupportedExpression {
+                            feature: "inconsistent pointer type at dereference",
+                            span,
+                        });
+                    }
+                    values.push(self.load_memory_value(
+                        address,
+                        pointer_type.pointee(),
+                        pointer_type.pointee_qualifiers(),
+                        span,
+                    )?);
+                    None
+                }
+                MachineTask::ApplyIndirectAssignment {
+                    operator,
+                    pointer_type,
+                    value_type,
+                    qualifiers,
+                    target_span,
+                    span,
+                } => {
+                    let right = pop_machine_value(&mut values, span)?;
+                    let (address, actual_type) =
+                        expect_machine_pointer(pop_machine_value(&mut values, span)?, target_span)?;
+                    if actual_type != pointer_type || pointer_type.pointee() != value_type {
+                        return Err(InterpreterError::UnsupportedExpression {
+                            feature: "inconsistent pointer type at memory assignment",
+                            span: target_span,
+                        });
+                    }
+                    values.push(self.apply_memory_assignment(
                         operator,
-                        symbol,
+                        address,
+                        value_type,
+                        qualifiers,
                         right,
                         target_span,
                         span,
-                    )?));
+                    )?);
                     None
                 }
                 MachineTask::SelectSwitch { body, span } => {
@@ -1316,6 +1626,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 });
             }
         };
+        if self.memory_mode {
+            return self.schedule_memory_declaration(declaration, tasks);
+        }
         let ty = self.validate_object_declaration(declaration)?;
         self.validate_initializer_plan(declaration)?;
         let slot = self.slots.get_mut(&declaration.symbol).ok_or(
@@ -1334,7 +1647,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let Some(initializer) = &declaration.initializer else {
             return Ok(());
         };
-        match &initializer.plan().actions()[0] {
+        let action = initializer.plan().actions().first().ok_or(
+            InterpreterError::InvalidInitializerPlan {
+                symbol: declaration.symbol,
+                span: initializer.span(),
+            },
+        )?;
+        match action {
             InitAction::StoreScalar {
                 path,
                 destination_type,
@@ -1364,6 +1683,72 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 )?;
                 slot.value = Some(CInteger::new(0, ty));
                 Ok(())
+            }
+            InitAction::StoreScalar { span, .. } | InitAction::StoreString { span, .. } => {
+                Err(InterpreterError::InvalidInitializerPlan {
+                    symbol: declaration.symbol,
+                    span: *span,
+                })
+            }
+            InitAction::ZeroScalar { .. } => Err(InterpreterError::InvalidInitializerPlan {
+                symbol: declaration.symbol,
+                span: initializer.span(),
+            }),
+        }
+    }
+
+    fn schedule_memory_declaration(
+        &mut self,
+        declaration: &'arena ObjectDecl<'arena>,
+        tasks: &mut Vec<MachineTask<'arena>>,
+    ) -> Result<(), InterpreterError> {
+        self.validate_memory_object_declaration(declaration)?;
+        self.validate_initializer_plan(declaration)?;
+        if matches!(
+            declaration.storage,
+            StorageClass::Static | StorageClass::Extern
+        ) {
+            if self.memory_binding(declaration.symbol).is_none() {
+                return Err(InterpreterError::MalformedObjectDeclaration {
+                    symbol: declaration.symbol,
+                    span: declaration.span,
+                });
+            }
+            return Ok(());
+        }
+        self.allocate_automatic_object(declaration.symbol, declaration.ty, declaration.span)?;
+        let Some(initializer) = &declaration.initializer else {
+            return Ok(());
+        };
+        let action = initializer.plan().actions().first().ok_or(
+            InterpreterError::InvalidInitializerPlan {
+                symbol: declaration.symbol,
+                span: initializer.span(),
+            },
+        )?;
+        match action {
+            InitAction::StoreScalar {
+                path,
+                destination_type,
+                value,
+                span,
+            } if path.is_root() && *destination_type == declaration.ty => {
+                tasks.push(MachineTask::FinishMemoryInitializer {
+                    symbol: declaration.symbol,
+                    span: *span,
+                });
+                tasks.push(MachineTask::EvalExpression {
+                    expression: value,
+                    allow_root_mutation: true,
+                });
+                Ok(())
+            }
+            InitAction::ZeroScalar {
+                path,
+                destination_type,
+            } if path.is_root() && *destination_type == declaration.ty => {
+                let value = self.zero_value(declaration.ty, initializer.span())?;
+                self.store_bound_value(declaration.symbol, value, initializer.span())
             }
             InitAction::StoreScalar { span, .. } | InitAction::StoreString { span, .. } => {
                 Err(InterpreterError::InvalidInitializerPlan {
@@ -1721,7 +2106,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         tasks: &mut Vec<MachineTask<'arena>>,
         values: &mut Vec<CValue>,
     ) -> Result<(), InterpreterError> {
-        if !expression_contains_call(expression) {
+        if !self.memory_mode && !expression_contains_call(expression) {
             values.push(CValue::Integer(
                 self.eval_expr(expression, allow_root_mutation)?,
             ));
@@ -1731,6 +2116,30 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let span = expression.span();
         self.tick(span)?;
         match expression {
+            CHirExpr::Lit(literal, _) => values.push(CValue::Integer(
+                integer_literal_value(*literal).map_err(|error| self.integer_error(error, span))?,
+            )),
+            CHirExpr::CharLit(literal, _) => values.push(CValue::Integer(CInteger::new(
+                u64::from(literal.value),
+                CIntegerType::INT,
+            ))),
+            CHirExpr::Ident {
+                symbol,
+                spelling,
+                facts,
+                span,
+            } => values.push(self.load_identifier(*symbol, spelling, *facts, *span)?),
+            CHirExpr::Unary(UnaryOp::AddrOf, operand, _) if self.memory_mode => {
+                values.push(self.address_of_expression(operand, span)?);
+            }
+            CHirExpr::Unary(UnaryOp::Deref, operand, _) if self.memory_mode => {
+                let pointer_type = self.pointer_type_of_expression(operand)?;
+                tasks.push(MachineTask::LoadDereference { pointer_type, span });
+                tasks.push(MachineTask::EvalExpression {
+                    expression: operand,
+                    allow_root_mutation: false,
+                });
+            }
             CHirExpr::Unary(operator, operand, _) => {
                 tasks.push(MachineTask::ApplyUnary {
                     operator: *operator,
@@ -1781,11 +2190,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 });
             }
             CHirExpr::Cast(ty, value, _) => {
-                let target = self.integer_type(*ty, span)?;
-                tasks.push(MachineTask::CastValue {
-                    target: ValueType::Integer(target),
-                    span,
-                });
+                let target = self.value_type(*ty, span)?;
+                tasks.push(MachineTask::CastValue { target, span });
                 tasks.push(MachineTask::EvalExpression {
                     expression: value,
                     allow_root_mutation: false,
@@ -1816,7 +2222,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         span,
                     });
                 }
-                let symbol = self.validate_place(*place, target, span)?;
+                let symbol = if self.memory_mode {
+                    self.validate_memory_scalar_place(*place, target, span)?
+                } else {
+                    self.validate_place(*place, target, span)?
+                };
                 tasks.push(MachineTask::ApplyAssignment {
                     operator: *op,
                     symbol,
@@ -1827,6 +2237,91 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     expression: value,
                     allow_root_mutation: false,
                 });
+            }
+            CHirExpr::MemoryAssign {
+                op,
+                place,
+                target_span,
+                value,
+                facts,
+                ..
+            } if self.memory_mode && allow_root_mutation => {
+                place
+                    .validate_against(self.unit.symbols(), self.unit.types())
+                    .map_err(|_| InterpreterError::UnsupportedExpression {
+                        feature: "invalid typed memory place",
+                        span: *target_span,
+                    })?;
+                if facts.ty() != place.value_ty()
+                    || facts.category() != ExprCategory::Value
+                    || !place.is_modifiable()
+                    || place.is_bit_field()
+                    || !place.projections().is_empty()
+                {
+                    return Err(InterpreterError::UnsupportedExpression {
+                        feature: "unsupported typed memory place",
+                        span: *target_span,
+                    });
+                }
+                let pointer_type = PointerTypeDesc::from_addressed_place(place);
+                tasks.push(MachineTask::ApplyIndirectAssignment {
+                    operator: *op,
+                    pointer_type,
+                    value_type: place.value_ty(),
+                    qualifiers: place.access_qualifiers(),
+                    target_span: *target_span,
+                    span,
+                });
+                tasks.push(MachineTask::EvalExpression {
+                    expression: value,
+                    allow_root_mutation: false,
+                });
+                match place.root() {
+                    PlaceRoot::PointerExpression { pointer, .. } => {
+                        tasks.push(MachineTask::EvalExpression {
+                            expression: pointer,
+                            allow_root_mutation: false,
+                        });
+                    }
+                    PlaceRoot::Object { symbol } => {
+                        let binding = self.require_memory_binding(*symbol, *target_span)?;
+                        values.push(CValue::Pointer {
+                            value: binding.address,
+                            ty: pointer_type,
+                        });
+                    }
+                }
+            }
+            CHirExpr::SizeOf(ty, _) => {
+                let layout = self.target.layout_of(self.unit.types(), *ty).map_err(|_| {
+                    InterpreterError::UnsupportedExpression {
+                        feature: "sizeof incomplete or unsupported type",
+                        span,
+                    }
+                })?;
+                values.push(CValue::Integer(CInteger::new(
+                    layout.size_bytes,
+                    CIntegerType::ULONG,
+                )));
+            }
+            CHirExpr::SizeOfExpr(operand, _) => {
+                let operand_type = self.infer_integer_type(operand)?;
+                values.push(CValue::Integer(CInteger::new(
+                    integer_storage_size(operand_type),
+                    CIntegerType::ULONG,
+                )));
+            }
+            CHirExpr::AlignOf(ty, _) => {
+                let layout = self.target.layout_of(self.unit.types(), *ty).map_err(|_| {
+                    InterpreterError::UnsupportedExpression {
+                        feature: "alignof incomplete or unsupported type",
+                        span,
+                    }
+                })?;
+                values.push(CValue::Integer(CInteger::new(
+                    u64::from(layout.align_bytes),
+                    CIntegerType::ULONG,
+                )));
             }
             CHirExpr::Assign { .. }
             | CHirExpr::MemoryAssign { .. }
@@ -1846,16 +2341,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span,
                 });
             }
-            CHirExpr::Lit(_, _)
-            | CHirExpr::FloatLit(_, _)
-            | CHirExpr::CharLit(_, _)
-            | CHirExpr::StringLit(_, _)
-            | CHirExpr::Ident { .. }
-            | CHirExpr::SizeOf(_, _)
-            | CHirExpr::SizeOfExpr(_, _)
-            | CHirExpr::AlignOf(_, _) => {
+            CHirExpr::FloatLit(_, _) | CHirExpr::StringLit(_, _) => {
                 return Err(InterpreterError::UnsupportedExpression {
-                    feature: "inconsistent call-bearing expression",
+                    feature: "outside executable Day-7 scalar memory subset",
                     span,
                 });
             }
@@ -1950,13 +2438,20 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             let argument = cast_machine_value(argument, ty, binding_span)?;
             match (ty, argument) {
                 (ValueType::Integer(ty), CValue::Integer(value)) => {
-                    parameter_bindings.push((symbol, ty, value));
+                    parameter_bindings.push((
+                        symbol,
+                        ValueType::Integer(ty),
+                        CValue::Integer(value),
+                    ));
                 }
-                (ValueType::Pointer(_), CValue::Pointer { .. }) => {
-                    return Err(InterpreterError::UnsupportedExpression {
-                        feature: "pointer parameter execution before Day 7 memory bindings",
-                        span: binding_span,
-                    });
+                (ValueType::Pointer(pointer_type), CValue::Pointer { value, ty })
+                    if pointer_type == ty =>
+                {
+                    parameter_bindings.push((
+                        symbol,
+                        ValueType::Pointer(pointer_type),
+                        CValue::Pointer { value, ty },
+                    ));
                 }
                 (ValueType::Void, _) | (_, _) => {
                     return Err(InterpreterError::UnsupportedFunctionSignature {
@@ -1977,26 +2472,61 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let is_main = declaration.name.spelling == "main";
 
         self.slots = HashMap::new();
-        for (symbol, ty, value) in parameter_bindings {
-            if self
-                .slots
-                .insert(
-                    symbol,
-                    Slot {
-                        ty,
-                        value: Some(value),
-                        active: true,
-                    },
-                )
-                .is_some()
-            {
-                return Err(InterpreterError::UnsupportedFunctionSignature {
-                    symbol: function,
-                    span: declaration.span,
-                });
+        let caller_memory_frame = if self.memory_mode {
+            let caller = self.memory_frame.take();
+            let (memory, frame, root_scope) = self
+                .memory
+                .begin_frame()
+                .map_err(|error| self.memory_error(error, binding_span))?;
+            self.memory = memory;
+            self.memory_frame = Some(MemoryFrame {
+                id: frame,
+                root_scope,
+                bindings: HashMap::new(),
+            });
+            for (symbol, _, value) in parameter_bindings {
+                let ty = self
+                    .unit
+                    .symbols()
+                    .symbol(symbol)
+                    .map_err(|_| InterpreterError::UnsupportedFunctionSignature {
+                        symbol: function,
+                        span: declaration.span,
+                    })?
+                    .ty();
+                self.allocate_automatic_object(symbol, ty, binding_span)?;
+                self.store_bound_value(symbol, value, binding_span)?;
             }
-        }
-        self.predeclare_stmt(body)?;
+            caller
+        } else {
+            for (symbol, ty, value) in parameter_bindings {
+                let (ValueType::Integer(ty), CValue::Integer(value)) = (ty, value) else {
+                    return Err(InterpreterError::UnsupportedFunctionSignature {
+                        symbol: function,
+                        span: declaration.span,
+                    });
+                };
+                if self
+                    .slots
+                    .insert(
+                        symbol,
+                        Slot {
+                            ty,
+                            value: Some(value),
+                            active: true,
+                        },
+                    )
+                    .is_some()
+                {
+                    return Err(InterpreterError::UnsupportedFunctionSignature {
+                        symbol: function,
+                        span: declaration.span,
+                    });
+                }
+            }
+            self.predeclare_stmt(body)?;
+            None
+        };
         validate_function_control_flow(body)?;
 
         tasks.push(MachineTask::FunctionEnd(FunctionEnd {
@@ -2006,6 +2536,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             is_main,
             body_span,
             caller_slots,
+            caller_memory_frame,
             caller_fuel_anchor,
             caller_expects_value,
             value_base,
@@ -2323,6 +2854,21 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
         };
 
+        if self.memory_mode {
+            let frame = self
+                .memory_frame
+                .take()
+                .ok_or(InterpreterError::UnsupportedStatement {
+                    feature: "missing interpreter memory frame at function exit",
+                    span: end.body_span,
+                })?;
+            self.memory = self
+                .memory
+                .end_frame(frame.id)
+                .map_err(|error| self.memory_error(error, end.body_span))?;
+            self.memory_frame = end.caller_memory_frame;
+        }
+
         values.truncate(end.value_base);
         if let Some(caller_slots) = end.caller_slots {
             self.slots = caller_slots;
@@ -2376,13 +2922,544 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     fn value_type(&self, ty: TypeId, span: SourceSpan) -> Result<ValueType, InterpreterError> {
         match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
             Some(TypeKind::Void) => Ok(ValueType::Void),
-            Some(TypeKind::Pointer(_)) => Ok(ValueType::Pointer(ty)),
+            Some(TypeKind::Pointer(_)) => {
+                PointerTypeDesc::from_canonical_pointer(self.unit.types(), ty)
+                    .map(ValueType::Pointer)
+                    .map_err(|_| InterpreterError::UnsupportedType { ty, span })
+            }
             _ => self.integer_type(ty, span).map(ValueType::Integer),
         }
     }
 
     fn integer_error(&self, error: IntegerError, span: SourceSpan) -> InterpreterError {
         InterpreterError::Integer { error, span }
+    }
+
+    fn memory_error(&self, error: MemoryFault, span: SourceSpan) -> InterpreterError {
+        InterpreterError::Memory { error, span }
+    }
+
+    fn access_layout(
+        &self,
+        ty: TypeId,
+        span: SourceSpan,
+    ) -> Result<AccessLayout, InterpreterError> {
+        self.target
+            .layout_of(self.unit.types(), ty)
+            .map(AccessLayout::from_type_layout)
+            .map_err(|_| InterpreterError::UnsupportedType { ty, span })
+    }
+
+    fn memory_binding(&self, symbol: SymbolId) -> Option<MemoryBinding> {
+        self.memory_frame
+            .as_ref()
+            .and_then(|frame| frame.bindings.get(&symbol).copied())
+            .or_else(|| self.static_bindings.get(&symbol).copied())
+    }
+
+    fn require_memory_binding(
+        &self,
+        symbol: SymbolId,
+        span: SourceSpan,
+    ) -> Result<MemoryBinding, InterpreterError> {
+        self.memory_binding(symbol)
+            .ok_or(InterpreterError::OutOfScopeObject {
+                symbol,
+                spelling: self.unit.symbols().symbol(symbol).map_or_else(
+                    |_| format!("symbol#{}", symbol.raw()),
+                    |symbol| symbol.spelling().to_owned(),
+                ),
+                span,
+            })
+    }
+
+    fn validate_memory_object_declaration(
+        &self,
+        declaration: &ObjectDecl<'arena>,
+    ) -> Result<(), InterpreterError> {
+        let symbol = self
+            .unit
+            .symbols()
+            .symbol(declaration.symbol)
+            .map_err(|_| InterpreterError::MalformedObjectDeclaration {
+                symbol: declaration.symbol,
+                span: declaration.span,
+            })?;
+        if symbol.kind() != SymbolKind::Object
+            || symbol.spelling() != declaration.name.spelling
+            || symbol.ty() != declaration.ty
+            || symbol.storage_class() != Some(declaration.storage)
+            || !matches!(
+                declaration.storage,
+                StorageClass::None
+                    | StorageClass::Auto
+                    | StorageClass::Register
+                    | StorageClass::Static
+                    | StorageClass::Extern
+            )
+        {
+            return Err(InterpreterError::MalformedObjectDeclaration {
+                symbol: declaration.symbol,
+                span: declaration.span,
+            });
+        }
+        let canonical =
+            self.unit
+                .types()
+                .get(declaration.ty)
+                .ok_or(InterpreterError::UnsupportedType {
+                    ty: declaration.ty,
+                    span: declaration.span,
+                })?;
+        if canonical.qualifiers.is_atomic
+            || !matches!(
+                canonical.kind,
+                TypeKind::Int(_) | TypeKind::Enum(_) | TypeKind::Pointer(_)
+            )
+        {
+            return Err(InterpreterError::UnsupportedType {
+                ty: declaration.ty,
+                span: declaration.span,
+            });
+        }
+        self.access_layout(declaration.ty, declaration.span)?;
+        Ok(())
+    }
+
+    fn allocate_automatic_object(
+        &mut self,
+        symbol: SymbolId,
+        ty: TypeId,
+        span: SourceSpan,
+    ) -> Result<(), InterpreterError> {
+        let site = self
+            .manifest
+            .as_ref()
+            .ok_or(InterpreterError::MissingAllocationManifest)?
+            .object_site(symbol)
+            .ok_or(InterpreterError::MalformedObjectDeclaration { symbol, span })?
+            .ordinal()
+            .raw();
+        let layout = self.access_layout(ty, span)?;
+        let (frame, scope) = self
+            .memory_frame
+            .as_ref()
+            .map(|frame| (frame.id, frame.root_scope))
+            .ok_or(InterpreterError::UnsupportedStatement {
+                feature: "automatic object without an interpreter memory frame",
+                span,
+            })?;
+        let (memory, address) = self
+            .memory
+            .allocate_automatic(frame, scope, site, layout)
+            .map_err(|error| self.memory_error(error, span))?;
+        self.memory = memory;
+        let bindings = &mut self
+            .memory_frame
+            .as_mut()
+            .ok_or(InterpreterError::UnsupportedStatement {
+                feature: "automatic object without an interpreter memory frame",
+                span,
+            })?
+            .bindings;
+        if bindings
+            .insert(symbol, MemoryBinding { address, ty })
+            .is_some()
+        {
+            return Err(InterpreterError::MalformedObjectDeclaration { symbol, span });
+        }
+        Ok(())
+    }
+
+    fn zero_value(&self, ty: TypeId, span: SourceSpan) -> Result<CValue, InterpreterError> {
+        match self.value_type(ty, span)? {
+            ValueType::Integer(integer) => Ok(CValue::Integer(CInteger::new(0, integer))),
+            ValueType::Pointer(pointer) => Ok(CValue::Pointer {
+                value: Pointer::NULL,
+                ty: pointer,
+            }),
+            ValueType::Void => Err(InterpreterError::UnsupportedType { ty, span }),
+        }
+    }
+
+    fn load_identifier(
+        &mut self,
+        symbol: SymbolId,
+        spelling: &str,
+        facts: ExprFacts,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        let declaration = self.unit.symbols().symbol(symbol).map_err(|_| {
+            InterpreterError::UnsupportedExpression {
+                feature: "unknown identifier",
+                span,
+            }
+        })?;
+        if declaration.spelling() != spelling || declaration.ty() != facts.ty() {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "inconsistent identifier facts",
+                span,
+            });
+        }
+        if let Some(value) = declaration.enumerator_value() {
+            let ty = self.integer_type(declaration.ty(), span)?;
+            return Ok(CValue::Integer(CInteger::new(value as u64, ty)));
+        }
+        if !self.memory_mode {
+            let slot = self
+                .slots
+                .get(&symbol)
+                .ok_or(InterpreterError::UnsupportedExpression {
+                    feature: "identifier without automatic scalar slot",
+                    span,
+                })?;
+            if !slot.active {
+                return Err(InterpreterError::OutOfScopeObject {
+                    symbol,
+                    spelling: spelling.to_owned(),
+                    span,
+                });
+            }
+            return slot.value.map(CValue::Integer).ok_or_else(|| {
+                InterpreterError::ReadOfUninitializedObject {
+                    symbol,
+                    spelling: spelling.to_owned(),
+                    span,
+                }
+            });
+        }
+        let binding = self.require_memory_binding(symbol, span)?;
+        let qualifiers = self
+            .unit
+            .types()
+            .get(binding.ty)
+            .ok_or(InterpreterError::UnsupportedType {
+                ty: binding.ty,
+                span,
+            })?
+            .qualifiers;
+        self.load_memory_value(binding.address, binding.ty, qualifiers, span)
+    }
+
+    fn address_of_expression(
+        &self,
+        expression: &CHirExpr<'arena>,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        let CHirExpr::Ident {
+            symbol,
+            spelling,
+            facts,
+            span: operand_span,
+        } = expression
+        else {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "address-of outside direct object subset",
+                span,
+            });
+        };
+        let declaration = self.unit.symbols().symbol(*symbol).map_err(|_| {
+            InterpreterError::UnsupportedExpression {
+                feature: "unknown address-of object",
+                span: *operand_span,
+            }
+        })?;
+        if declaration.spelling() != spelling
+            || declaration.ty() != facts.ty()
+            || facts.category() != ExprCategory::LValue
+            || !facts.is_addressable()
+        {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "inconsistent address-of object",
+                span: *operand_span,
+            });
+        }
+        let place = MemoryPlace::derive(
+            self.unit.symbols(),
+            self.unit.types(),
+            PlaceRoot::Object { symbol: *symbol },
+            Vec::new(),
+            facts.ty(),
+        )
+        .map_err(|_| InterpreterError::UnsupportedExpression {
+            feature: "invalid address-of place",
+            span: *operand_span,
+        })?;
+        let binding = self.require_memory_binding(*symbol, *operand_span)?;
+        Ok(CValue::Pointer {
+            value: binding.address,
+            ty: PointerTypeDesc::from_addressed_place(&place),
+        })
+    }
+
+    fn pointer_type_of_expression(
+        &self,
+        expression: &CHirExpr<'arena>,
+    ) -> Result<PointerTypeDesc, InterpreterError> {
+        let span = expression.span();
+        let ty = match expression {
+            CHirExpr::Ident { facts, .. }
+            | CHirExpr::Assign { facts, .. }
+            | CHirExpr::MemoryAssign { facts, .. }
+            | CHirExpr::Update { facts, .. }
+            | CHirExpr::MemoryUpdate { facts, .. } => facts.ty(),
+            CHirExpr::Cast(ty, _, _) => *ty,
+            _ => {
+                return Err(InterpreterError::UnsupportedExpression {
+                    feature: "pointer expression type unavailable",
+                    span,
+                });
+            }
+        };
+        PointerTypeDesc::from_canonical_pointer(self.unit.types(), ty).map_err(|_| {
+            InterpreterError::UnsupportedExpression {
+                feature: "invalid pointer expression type",
+                span,
+            }
+        })
+    }
+
+    fn load_memory_value(
+        &mut self,
+        address: Pointer,
+        ty: TypeId,
+        qualifiers: Qualifiers,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        if qualifiers.is_atomic {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "atomic memory access",
+                span,
+            });
+        }
+        let layout = self.access_layout(ty, span)?;
+        match self.value_type(ty, span)? {
+            ValueType::Integer(integer_type) => {
+                let raw = if qualifiers.is_volatile {
+                    let (raw, world) = self
+                        .memory
+                        .volatile_load_integer(&self.world, address, layout)
+                        .map_err(|error| self.memory_error(error, span))?;
+                    self.world = world;
+                    raw
+                } else {
+                    self.memory
+                        .load_integer(address, layout)
+                        .map_err(|error| self.memory_error(error, span))?
+                };
+                let raw = u64::try_from(raw)
+                    .map_err(|_| InterpreterError::UnsupportedType { ty, span })?;
+                Ok(CValue::Integer(CInteger::new(raw, integer_type)))
+            }
+            ValueType::Pointer(pointer_type) => {
+                let value = if qualifiers.is_volatile {
+                    let (value, world) = self
+                        .memory
+                        .volatile_load_pointer(&self.world, address, layout)
+                        .map_err(|error| self.memory_error(error, span))?;
+                    self.world = world;
+                    value
+                } else {
+                    self.memory
+                        .load_pointer(address, layout)
+                        .map_err(|error| self.memory_error(error, span))?
+                };
+                Ok(CValue::Pointer {
+                    value,
+                    ty: pointer_type,
+                })
+            }
+            ValueType::Void => Err(InterpreterError::UnsupportedType { ty, span }),
+        }
+    }
+
+    fn store_memory_value(
+        &mut self,
+        address: Pointer,
+        ty: TypeId,
+        qualifiers: Qualifiers,
+        value: CValue,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        if qualifiers.is_atomic {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "atomic memory access",
+                span,
+            });
+        }
+        let layout = self.access_layout(ty, span)?;
+        match (self.value_type(ty, span)?, value) {
+            (ValueType::Integer(integer_type), CValue::Integer(value)) => {
+                let value = value.cast(integer_type);
+                if qualifiers.is_volatile {
+                    let (memory, world) = self
+                        .memory
+                        .volatile_store_integer(
+                            &self.world,
+                            address,
+                            layout,
+                            u128::from(value.raw_bits()),
+                        )
+                        .map_err(|error| self.memory_error(error, span))?;
+                    self.memory = memory;
+                    self.world = world;
+                } else {
+                    self.memory = self
+                        .memory
+                        .store_integer(address, layout, u128::from(value.raw_bits()))
+                        .map_err(|error| self.memory_error(error, span))?;
+                }
+                Ok(CValue::Integer(value))
+            }
+            (ValueType::Pointer(expected), CValue::Pointer { value, ty: actual })
+                if expected == actual =>
+            {
+                if qualifiers.is_volatile {
+                    let (memory, world) = self
+                        .memory
+                        .volatile_store_pointer(&self.world, address, layout, value)
+                        .map_err(|error| self.memory_error(error, span))?;
+                    self.memory = memory;
+                    self.world = world;
+                } else {
+                    self.memory = self
+                        .memory
+                        .store_pointer(address, layout, value)
+                        .map_err(|error| self.memory_error(error, span))?;
+                }
+                Ok(CValue::Pointer {
+                    value,
+                    ty: expected,
+                })
+            }
+            _ => Err(InterpreterError::UnsupportedExpression {
+                feature: "incompatible memory store value",
+                span,
+            }),
+        }
+    }
+
+    fn store_bound_value(
+        &mut self,
+        symbol: SymbolId,
+        value: CValue,
+        span: SourceSpan,
+    ) -> Result<(), InterpreterError> {
+        let binding = self.require_memory_binding(symbol, span)?;
+        let qualifiers = self
+            .unit
+            .types()
+            .get(binding.ty)
+            .ok_or(InterpreterError::UnsupportedType {
+                ty: binding.ty,
+                span,
+            })?
+            .qualifiers;
+        self.store_memory_value(binding.address, binding.ty, qualifiers, value, span)?;
+        Ok(())
+    }
+
+    fn validate_memory_scalar_place(
+        &self,
+        place: ScalarPlace,
+        target: &CHirExpr<'arena>,
+        span: SourceSpan,
+    ) -> Result<SymbolId, InterpreterError> {
+        let CHirExpr::Ident {
+            symbol,
+            spelling,
+            facts,
+            span: target_span,
+        } = target
+        else {
+            return Err(InterpreterError::InvalidScalarPlace {
+                symbol: place.symbol(),
+                span,
+            });
+        };
+        let declaration = self.unit.symbols().symbol(*symbol).map_err(|_| {
+            InterpreterError::InvalidScalarPlace {
+                symbol: place.symbol(),
+                span: *target_span,
+            }
+        })?;
+        let binding = self.require_memory_binding(*symbol, *target_span)?;
+        if *symbol != place.symbol()
+            || !matches!(
+                declaration.kind(),
+                SymbolKind::Object | SymbolKind::Parameter
+            )
+            || declaration.spelling() != spelling
+            || declaration.ty() != place.ty()
+            || binding.ty != place.ty()
+            || facts.ty() != place.ty()
+            || facts.category() != ExprCategory::LValue
+            || !facts.is_modifiable_lvalue()
+        {
+            return Err(InterpreterError::InvalidScalarPlace {
+                symbol: place.symbol(),
+                span: *target_span,
+            });
+        }
+        Ok(*symbol)
+    }
+
+    fn apply_bound_assignment(
+        &mut self,
+        operator: AssignmentOp,
+        symbol: SymbolId,
+        right: CValue,
+        target_span: SourceSpan,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        let binding = self.require_memory_binding(symbol, target_span)?;
+        let qualifiers = self
+            .unit
+            .types()
+            .get(binding.ty)
+            .ok_or(InterpreterError::UnsupportedType {
+                ty: binding.ty,
+                span,
+            })?
+            .qualifiers;
+        self.apply_memory_assignment(
+            operator,
+            binding.address,
+            binding.ty,
+            qualifiers,
+            right,
+            target_span,
+            span,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn apply_memory_assignment(
+        &mut self,
+        operator: AssignmentOp,
+        address: Pointer,
+        ty: TypeId,
+        qualifiers: Qualifiers,
+        right: CValue,
+        target_span: SourceSpan,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        if operator == AssignmentOp::Simple {
+            return self.store_memory_value(address, ty, qualifiers, right, span);
+        }
+        let left = expect_machine_integer(
+            self.load_memory_value(address, ty, qualifiers, target_span)?,
+            target_span,
+        )?;
+        let right = expect_machine_integer(right, span)?;
+        let binary =
+            assignment_binary(operator).ok_or(InterpreterError::UnsupportedExpression {
+                feature: "invalid compound assignment operator",
+                span,
+            })?;
+        let result = eval_binary_integer(binary, left, right)
+            .map_err(|error| self.integer_error(error, span))?;
+        self.store_memory_value(address, ty, qualifiers, CValue::Integer(result), span)
     }
 
     fn predeclare_stmt(
@@ -2546,6 +3623,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         declaration: &'arena CHirDecl<'arena>,
         saved: &mut Vec<(SymbolId, Slot)>,
     ) -> Result<(), InterpreterError> {
+        if self.memory_mode {
+            return Ok(());
+        }
         let CHirDecl::Object(declaration) = declaration else {
             return Ok(());
         };
@@ -3432,6 +4512,592 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 }
 
+/// Memory obligations of everything reachable from one entry function.
+///
+/// Reachability is transitive: a global touched only by a callee still forces
+/// memory mode and still has to be allocated before execution starts.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct MemoryRequirements {
+    /// Some reachable body needs the object-memory machine.
+    requires_memory: bool,
+    /// Every object symbol named by a reachable body, closed over the
+    /// initializers of the objects already collected. `initialize_static_objects`
+    /// keeps exactly the subset with static storage duration.
+    static_objects: BTreeSet<SymbolId>,
+}
+
+/// Symbols named by one traversal, before they are classified.
+#[derive(Debug, Default)]
+struct ReferencedSymbols {
+    named: Vec<SymbolId>,
+}
+
+impl ReferencedSymbols {
+    fn record(&mut self, symbol: SymbolId) {
+        self.named.push(symbol);
+    }
+}
+
+/// Does this symbol name an object that lives for the whole execution?
+///
+/// This is the single authority shared by requirement discovery and static
+/// allocation, so the two can never disagree about which objects exist before
+/// the entry function starts.
+fn has_static_storage_duration(unit: &CHirUnit<'_>, symbol: SymbolId) -> bool {
+    let Ok(declaration) = unit.symbols().symbol(symbol) else {
+        return false;
+    };
+    if declaration.kind() != SymbolKind::Object {
+        return false;
+    }
+    let file_scope = unit
+        .symbols()
+        .scope(declaration.scope())
+        .is_ok_and(|scope| scope.kind() == ScopeKind::File);
+    file_scope || declaration.storage_class() == Some(StorageClass::Static)
+}
+
+fn reachable_memory_requirements(unit: &CHirUnit<'_>, entry: SymbolId) -> MemoryRequirements {
+    let mut requires_memory = false;
+    let mut visited_functions: BTreeSet<SymbolId> = BTreeSet::new();
+    let mut static_objects: BTreeSet<SymbolId> = BTreeSet::new();
+    let mut pending_functions: Vec<SymbolId> = vec![entry];
+    let mut pending_objects: Vec<SymbolId> = Vec::new();
+
+    while !pending_functions.is_empty() || !pending_objects.is_empty() {
+        while let Some(function) = pending_functions.pop() {
+            if !visited_functions.insert(function) {
+                continue;
+            }
+            let Some(body) = reachable_function_body(unit, function) else {
+                continue;
+            };
+            if statement_requires_memory(unit, body) {
+                requires_memory = true;
+            }
+            let mut referenced = ReferencedSymbols::default();
+            collect_statement_symbols(body, &mut referenced);
+            classify_referenced_symbols(
+                unit,
+                referenced,
+                &mut pending_functions,
+                &mut static_objects,
+                &mut pending_objects,
+            );
+        }
+
+        while let Some(object) = pending_objects.pop() {
+            let Some(declaration) = find_storage_object_declaration(unit, object) else {
+                continue;
+            };
+            let Some(initializer) = &declaration.initializer else {
+                continue;
+            };
+            let mut referenced = ReferencedSymbols::default();
+            for action in initializer.plan().actions() {
+                if let InitAction::StoreScalar { value, .. } = action {
+                    collect_expression_symbols(value, &mut referenced);
+                }
+            }
+            classify_referenced_symbols(
+                unit,
+                referenced,
+                &mut pending_functions,
+                &mut static_objects,
+                &mut pending_objects,
+            );
+        }
+    }
+
+    // Allocating a static object and running without the memory machine are
+    // contradictory, so the two outputs are reconciled here rather than left to
+    // agree by accident. A `static` local is exactly the case a purely
+    // syntactic scan misses.
+    let requires_memory = requires_memory
+        || static_objects
+            .iter()
+            .any(|symbol| has_static_storage_duration(unit, *symbol));
+
+    MemoryRequirements {
+        requires_memory,
+        static_objects,
+    }
+}
+
+/// Route each named symbol to the worklist that owns it. Unknown symbols are
+/// dropped here; every consumer re-resolves them and fails closed on its own.
+fn classify_referenced_symbols(
+    unit: &CHirUnit<'_>,
+    referenced: ReferencedSymbols,
+    pending_functions: &mut Vec<SymbolId>,
+    static_objects: &mut BTreeSet<SymbolId>,
+    pending_objects: &mut Vec<SymbolId>,
+) {
+    for symbol in referenced.named {
+        let Ok(declaration) = unit.symbols().symbol(symbol) else {
+            continue;
+        };
+        match declaration.kind() {
+            SymbolKind::Function => pending_functions.push(symbol),
+            SymbolKind::Object => {
+                if static_objects.insert(symbol) {
+                    pending_objects.push(symbol);
+                }
+            }
+            SymbolKind::Parameter | SymbolKind::Typedef | SymbolKind::Enumerator => {}
+        }
+    }
+}
+
+fn reachable_function_body<'arena>(
+    unit: &CHirUnit<'arena>,
+    function: SymbolId,
+) -> Option<&'arena CHirStmt<'arena>> {
+    unit.iter().find_map(|declaration| match declaration {
+        CHirDecl::Function(FunctionDecl { symbol, body, .. }) if *symbol == function => *body,
+        CHirDecl::Function(_) | CHirDecl::Object(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) => {
+            None
+        }
+    })
+}
+
+/// Push every immediate subexpression of a static initializer, one level deeper.
+///
+/// Static initializers are constant expressions, so the lvalue-bearing
+/// `MemoryAssign`/`MemoryUpdate` forms cannot appear; they are still walked so
+/// this helper stays total over `CHirExpr`.
+fn push_static_initializer_children<'arena>(
+    expression: &'arena CHirExpr<'arena>,
+    depth: usize,
+    pending: &mut Vec<(&'arena CHirExpr<'arena>, usize)>,
+) {
+    let child_depth = depth.saturating_add(1);
+    let mut push = |child: &'arena CHirExpr<'arena>| pending.push((child, child_depth));
+    match expression {
+        CHirExpr::Unary(_, operand, _)
+        | CHirExpr::Cast(_, operand, _)
+        | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::Member(operand, _, _)
+        | CHirExpr::PtrMember(operand, _, _)
+        | CHirExpr::Update {
+            target: operand, ..
+        } => push(operand),
+        CHirExpr::Binary(_, left, right, _)
+        | CHirExpr::Index(left, right, _)
+        | CHirExpr::Comma(left, right, _)
+        | CHirExpr::Assign {
+            target: left,
+            value: right,
+            ..
+        } => {
+            push(left);
+            push(right);
+        }
+        CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
+            push(condition);
+            push(then_expression);
+            push(else_expression);
+        }
+        CHirExpr::Call(callee, arguments, _) => {
+            push(callee);
+            for argument in arguments {
+                push(argument);
+            }
+        }
+        CHirExpr::CompoundLit(_, elements, _) => {
+            for element in elements {
+                push(element);
+            }
+        }
+        CHirExpr::MemoryAssign { place, value, .. } => {
+            for source in place.source_expressions() {
+                push(source);
+            }
+            push(value);
+        }
+        CHirExpr::MemoryUpdate { place, .. } => {
+            for source in place.source_expressions() {
+                push(source);
+            }
+        }
+        CHirExpr::Ident { .. }
+        | CHirExpr::Lit(_, _)
+        | CHirExpr::FloatLit(_, _)
+        | CHirExpr::CharLit(_, _)
+        | CHirExpr::StringLit(_, _)
+        | CHirExpr::SizeOf(_, _)
+        | CHirExpr::AlignOf(_, _) => {}
+    }
+}
+
+fn collect_declaration_symbols<'arena>(
+    declaration: &'arena CHirDecl<'arena>,
+    output: &mut ReferencedSymbols,
+) {
+    match declaration {
+        CHirDecl::Object(object) => {
+            output.record(object.symbol);
+            if let Some(initializer) = &object.initializer {
+                for action in initializer.plan().actions() {
+                    if let InitAction::StoreScalar { value, .. } = action {
+                        collect_expression_symbols(value, output);
+                    }
+                }
+            }
+        }
+        CHirDecl::Function(function) => {
+            output.record(function.symbol);
+            if let Some(body) = function.body {
+                collect_statement_symbols(body, output);
+            }
+        }
+        CHirDecl::Tag(_) | CHirDecl::Typedef(_) => {}
+    }
+}
+
+fn collect_statement_symbols<'arena>(
+    statement: &'arena CHirStmt<'arena>,
+    output: &mut ReferencedSymbols,
+) {
+    match statement {
+        CHirStmt::Expr(expression, _) => collect_expression_symbols(expression, output),
+        CHirStmt::Return(expression, _) => {
+            if let Some(expression) = expression {
+                collect_expression_symbols(expression, output);
+            }
+        }
+        CHirStmt::If(condition, then_statement, else_statement, _) => {
+            collect_expression_symbols(condition, output);
+            collect_statement_symbols(then_statement, output);
+            if let Some(else_statement) = else_statement {
+                collect_statement_symbols(else_statement, output);
+            }
+        }
+        CHirStmt::Switch(expression, body, _) | CHirStmt::While(expression, body, _) => {
+            collect_expression_symbols(expression, output);
+            collect_statement_symbols(body, output);
+        }
+        CHirStmt::DoWhile(body, expression, _) => {
+            collect_statement_symbols(body, output);
+            collect_expression_symbols(expression, output);
+        }
+        CHirStmt::For(initializer, condition, step, body, _) => {
+            match initializer {
+                CHirForInit::Empty => {}
+                CHirForInit::Expression(expression) => {
+                    collect_expression_symbols(expression, output);
+                }
+                CHirForInit::Declaration(declarations) => {
+                    for declaration in declarations {
+                        collect_declaration_symbols(declaration, output);
+                    }
+                }
+            }
+            if let Some(condition) = condition {
+                collect_expression_symbols(condition, output);
+            }
+            if let Some(step) = step {
+                collect_expression_symbols(step, output);
+            }
+            collect_statement_symbols(body, output);
+        }
+        CHirStmt::Compound(items, _) => {
+            for item in items {
+                match item {
+                    CHirBlockItem::Declaration(declaration) => {
+                        collect_declaration_symbols(declaration, output);
+                    }
+                    CHirBlockItem::Statement(statement) => {
+                        collect_statement_symbols(statement, output);
+                    }
+                }
+            }
+        }
+        CHirStmt::Label(_, child, _) | CHirStmt::Default(child, _) => {
+            collect_statement_symbols(child, output);
+        }
+        CHirStmt::Case(expression, child, _) => {
+            collect_expression_symbols(expression, output);
+            collect_statement_symbols(child, output);
+        }
+        CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {}
+    }
+}
+
+fn collect_expression_symbols<'arena>(
+    expression: &'arena CHirExpr<'arena>,
+    output: &mut ReferencedSymbols,
+) {
+    match expression {
+        CHirExpr::Ident { symbol, .. } => output.record(*symbol),
+        CHirExpr::Unary(_, operand, _)
+        | CHirExpr::Cast(_, operand, _)
+        | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::Member(operand, _, _)
+        | CHirExpr::PtrMember(operand, _, _) => collect_expression_symbols(operand, output),
+        CHirExpr::Binary(_, left, right, _)
+        | CHirExpr::Index(left, right, _)
+        | CHirExpr::Comma(left, right, _) => {
+            collect_expression_symbols(left, output);
+            collect_expression_symbols(right, output);
+        }
+        CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
+            collect_expression_symbols(condition, output);
+            collect_expression_symbols(then_expression, output);
+            collect_expression_symbols(else_expression, output);
+        }
+        CHirExpr::Call(callee, arguments, _) => {
+            collect_expression_symbols(callee, output);
+            for argument in arguments {
+                collect_expression_symbols(argument, output);
+            }
+        }
+        CHirExpr::CompoundLit(_, elements, _) => {
+            for element in elements {
+                collect_expression_symbols(element, output);
+            }
+        }
+        CHirExpr::Assign { target, value, .. } => {
+            collect_expression_symbols(target, output);
+            collect_expression_symbols(value, output);
+        }
+        CHirExpr::Update { target, .. } => collect_expression_symbols(target, output),
+        CHirExpr::MemoryAssign { place, value, .. } => {
+            collect_place_symbols(place, output);
+            collect_expression_symbols(value, output);
+        }
+        CHirExpr::MemoryUpdate { place, .. } => collect_place_symbols(place, output),
+        CHirExpr::Lit(_, _)
+        | CHirExpr::FloatLit(_, _)
+        | CHirExpr::CharLit(_, _)
+        | CHirExpr::StringLit(_, _)
+        | CHirExpr::SizeOf(_, _)
+        | CHirExpr::AlignOf(_, _) => {}
+    }
+}
+
+fn collect_place_symbols<'arena>(place: &MemoryPlace<'arena>, output: &mut ReferencedSymbols) {
+    if let PlaceRoot::Object { symbol } = place.root() {
+        output.record(*symbol);
+    }
+    for expression in place.source_expressions() {
+        collect_expression_symbols(expression, output);
+    }
+}
+
+fn statement_requires_memory(unit: &CHirUnit<'_>, statement: &CHirStmt<'_>) -> bool {
+    match statement {
+        CHirStmt::Expr(expression, _) => expression_requires_memory(unit, expression),
+        CHirStmt::If(condition, then_statement, else_statement, _) => {
+            expression_requires_memory(unit, condition)
+                || statement_requires_memory(unit, then_statement)
+                || else_statement
+                    .is_some_and(|statement| statement_requires_memory(unit, statement))
+        }
+        CHirStmt::Switch(expression, body, _) | CHirStmt::While(expression, body, _) => {
+            expression_requires_memory(unit, expression) || statement_requires_memory(unit, body)
+        }
+        CHirStmt::DoWhile(body, condition, _) => {
+            statement_requires_memory(unit, body) || expression_requires_memory(unit, condition)
+        }
+        CHirStmt::For(initializer, condition, step, body, _) => {
+            let initializer_requires_memory = match initializer {
+                CHirForInit::Empty => false,
+                CHirForInit::Expression(expression) => expression_requires_memory(unit, expression),
+                CHirForInit::Declaration(declarations) => declarations
+                    .iter()
+                    .any(|declaration| declaration_requires_memory(unit, declaration)),
+            };
+            initializer_requires_memory
+                || condition.is_some_and(|expression| expression_requires_memory(unit, expression))
+                || step.is_some_and(|expression| expression_requires_memory(unit, expression))
+                || statement_requires_memory(unit, body)
+        }
+        CHirStmt::Return(expression, _) => {
+            expression.is_some_and(|expression| expression_requires_memory(unit, expression))
+        }
+        CHirStmt::Compound(items, _) => items.iter().any(|item| match item {
+            CHirBlockItem::Declaration(declaration) => {
+                declaration_requires_memory(unit, declaration)
+            }
+            CHirBlockItem::Statement(statement) => statement_requires_memory(unit, statement),
+        }),
+        CHirStmt::Label(_, child, _)
+        | CHirStmt::Case(_, child, _)
+        | CHirStmt::Default(child, _) => statement_requires_memory(unit, child),
+        CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {
+            false
+        }
+    }
+}
+
+fn declaration_requires_memory(unit: &CHirUnit<'_>, declaration: &CHirDecl<'_>) -> bool {
+    let CHirDecl::Object(declaration) = declaration else {
+        return false;
+    };
+    type_requires_memory(unit.types(), declaration.ty)
+        || declaration.initializer.as_ref().is_some_and(|initializer| {
+            initializer
+                .plan()
+                .actions()
+                .iter()
+                .any(|action| match action {
+                    InitAction::StoreScalar { value, .. } => {
+                        expression_requires_memory(unit, value)
+                    }
+                    InitAction::StoreString { .. } => true,
+                    InitAction::ZeroScalar { .. } => false,
+                })
+        })
+}
+
+fn type_requires_memory(types: &TypeInterner, ty: TypeId) -> bool {
+    types.get(ty).is_none_or(|canonical| {
+        canonical.qualifiers.is_volatile
+            || canonical.qualifiers.is_atomic
+            || !matches!(canonical.kind, TypeKind::Int(_) | TypeKind::Enum(_))
+    })
+}
+
+fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) -> bool {
+    match expression {
+        // A file-scope *object* has static storage and therefore lives in
+        // memory. A parameter can never legitimately be declared at file scope,
+        // so it is left to the signature validator instead of silently forcing
+        // memory mode and masking that diagnostic.
+        CHirExpr::Ident { symbol, facts, .. } => {
+            unit.symbols()
+                .symbol(*symbol)
+                .ok()
+                .is_some_and(|declaration| {
+                    matches!(
+                        declaration.kind(),
+                        SymbolKind::Object | SymbolKind::Parameter
+                    ) && (has_static_storage_duration(unit, *symbol)
+                        || type_requires_memory(unit.types(), facts.ty()))
+                })
+        }
+        CHirExpr::Unary(UnaryOp::AddrOf | UnaryOp::Deref, _, _)
+        | CHirExpr::MemoryAssign { .. }
+        | CHirExpr::MemoryUpdate { .. }
+        | CHirExpr::StringLit(_, _)
+        | CHirExpr::Member(_, _, _)
+        | CHirExpr::PtrMember(_, _, _)
+        | CHirExpr::Index(_, _, _)
+        | CHirExpr::CompoundLit(_, _, _) => true,
+        CHirExpr::Unary(_, operand, _)
+        | CHirExpr::Cast(_, operand, _)
+        | CHirExpr::SizeOfExpr(operand, _) => expression_requires_memory(unit, operand),
+        CHirExpr::Binary(_, left, right, _) | CHirExpr::Comma(left, right, _) => {
+            expression_requires_memory(unit, left) || expression_requires_memory(unit, right)
+        }
+        CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
+            expression_requires_memory(unit, condition)
+                || expression_requires_memory(unit, then_expression)
+                || expression_requires_memory(unit, else_expression)
+        }
+        CHirExpr::Call(callee, arguments, _) => {
+            expression_requires_memory(unit, callee)
+                || arguments
+                    .iter()
+                    .any(|argument| expression_requires_memory(unit, argument))
+        }
+        CHirExpr::Assign { target, value, .. } => {
+            expression_requires_memory(unit, target) || expression_requires_memory(unit, value)
+        }
+        CHirExpr::Update { target, .. } => expression_requires_memory(unit, target),
+        CHirExpr::Lit(_, _)
+        | CHirExpr::FloatLit(_, _)
+        | CHirExpr::CharLit(_, _)
+        | CHirExpr::SizeOf(_, _)
+        | CHirExpr::AlignOf(_, _) => false,
+    }
+}
+
+fn find_storage_object_declaration<'arena>(
+    unit: &CHirUnit<'arena>,
+    symbol: SymbolId,
+) -> Option<ObjectDecl<'arena>> {
+    let mut declarations = Vec::new();
+    for declaration in unit.iter() {
+        collect_object_declarations(declaration, symbol, &mut declarations);
+    }
+    declarations
+        .iter()
+        .find(|declaration| declaration.initializer.is_some())
+        .or_else(|| {
+            declarations
+                .iter()
+                .find(|declaration| declaration.storage != StorageClass::Extern)
+        })
+        .cloned()
+}
+
+fn collect_object_declarations<'arena>(
+    declaration: &'arena CHirDecl<'arena>,
+    symbol: SymbolId,
+    output: &mut Vec<ObjectDecl<'arena>>,
+) {
+    match declaration {
+        CHirDecl::Object(object) if object.symbol == symbol => output.push(object.clone()),
+        CHirDecl::Function(function) => {
+            if let Some(body) = function.body {
+                collect_statement_object_declarations(body, symbol, output);
+            }
+        }
+        CHirDecl::Object(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) => {}
+    }
+}
+
+fn collect_statement_object_declarations<'arena>(
+    statement: &'arena CHirStmt<'arena>,
+    symbol: SymbolId,
+    output: &mut Vec<ObjectDecl<'arena>>,
+) {
+    match statement {
+        CHirStmt::If(_, then_statement, else_statement, _) => {
+            collect_statement_object_declarations(then_statement, symbol, output);
+            if let Some(else_statement) = else_statement {
+                collect_statement_object_declarations(else_statement, symbol, output);
+            }
+        }
+        CHirStmt::Switch(_, body, _)
+        | CHirStmt::While(_, body, _)
+        | CHirStmt::DoWhile(body, _, _)
+        | CHirStmt::Label(_, body, _)
+        | CHirStmt::Case(_, body, _)
+        | CHirStmt::Default(body, _) => {
+            collect_statement_object_declarations(body, symbol, output);
+        }
+        CHirStmt::For(initializer, _, _, body, _) => {
+            if let CHirForInit::Declaration(declarations) = initializer {
+                for declaration in declarations {
+                    collect_object_declarations(declaration, symbol, output);
+                }
+            }
+            collect_statement_object_declarations(body, symbol, output);
+        }
+        CHirStmt::Compound(items, _) => {
+            for item in items {
+                match item {
+                    CHirBlockItem::Declaration(declaration) => {
+                        collect_object_declarations(declaration, symbol, output);
+                    }
+                    CHirBlockItem::Statement(statement) => {
+                        collect_statement_object_declarations(statement, symbol, output);
+                    }
+                }
+            }
+        }
+        CHirStmt::Expr(_, _)
+        | CHirStmt::Return(_, _)
+        | CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Goto(_, _)
+        | CHirStmt::Null(_) => {}
+    }
+}
+
 fn function_has_call(unit: &CHirUnit<'_>, function: SymbolId) -> bool {
     unit.iter().any(|declaration| {
         matches!(
@@ -3605,6 +5271,19 @@ fn expect_machine_integer(value: CValue, span: SourceSpan) -> Result<CInteger, I
     }
 }
 
+fn expect_machine_pointer(
+    value: CValue,
+    span: SourceSpan,
+) -> Result<(Pointer, PointerTypeDesc), InterpreterError> {
+    match value {
+        CValue::Pointer { value, ty } => Ok((value, ty)),
+        CValue::Integer(_) => Err(InterpreterError::UnsupportedExpression {
+            feature: "integer value in pointer task-machine operation",
+            span,
+        }),
+    }
+}
+
 fn cast_machine_value(
     value: CValue,
     target: ValueType,
@@ -3613,6 +5292,9 @@ fn cast_machine_value(
     match (value, target) {
         (CValue::Integer(value), ValueType::Integer(target)) => {
             Ok(CValue::Integer(value.cast(target)))
+        }
+        (CValue::Pointer { value, ty }, ValueType::Pointer(target)) if ty == target => {
+            Ok(CValue::Pointer { value, ty: target })
         }
         (CValue::Integer(_), ValueType::Pointer(_))
         | (CValue::Pointer { .. }, ValueType::Integer(_))
@@ -4144,5 +5826,426 @@ mod tests {
             "interpreter-memory-setup-failed: memory fault: InvalidPointerLayout"
         );
         assert_eq!(error.span(), None);
+    }
+
+    /// Build `int counter; int bump(void) { return counter; } int main(void) { return bump(); }`.
+    ///
+    /// Only `bump` touches the global, so a non-transitive scan of `main` alone
+    /// would wrongly conclude that this program needs no memory.
+    fn transitive_global_program(arena: &Arena) -> (CHirUnit<'_>, SymbolId, SymbolId, SymbolId) {
+        let mut types = TypeInterner::new();
+        let int = types.intern(CanonicalType {
+            kind: TypeKind::Int(IntRank::Int),
+            qualifiers: Qualifiers::default(),
+        });
+        let function_ty = types.intern(CanonicalType {
+            kind: TypeKind::Function {
+                return_type: int,
+                parameters: FunctionParameters::Prototype {
+                    types: Vec::new(),
+                    variadic: false,
+                },
+            },
+            qualifiers: Qualifiers::default(),
+        });
+        let mut symbols = crate::SymbolTable::new();
+        let counter = symbols
+            .declare(
+                symbols.file_scope(),
+                "counter",
+                crate::SymbolData::Object {
+                    storage: StorageClass::None,
+                },
+                int,
+                span(0, 7),
+            )
+            .expect("declare counter");
+        let bump = symbols
+            .declare(
+                symbols.file_scope(),
+                "bump",
+                crate::SymbolData::Function {
+                    storage: StorageClass::None,
+                },
+                function_ty,
+                span(10, 14),
+            )
+            .expect("declare bump");
+        let main = symbols
+            .declare(
+                symbols.file_scope(),
+                "main",
+                crate::SymbolData::Function {
+                    storage: StorageClass::None,
+                },
+                function_ty,
+                span(30, 34),
+            )
+            .expect("declare main");
+        symbols
+            .create_scope(
+                symbols.file_scope(),
+                ScopeKind::Function,
+                Some(span(10, 29)),
+            )
+            .expect("create bump function scope");
+        symbols
+            .create_scope(
+                symbols.file_scope(),
+                ScopeKind::Function,
+                Some(span(30, 48)),
+            )
+            .expect("create main function scope");
+
+        let object = alloc(
+            arena,
+            CHirDecl::Object(ObjectDecl {
+                symbol: counter,
+                name: SpannedName {
+                    spelling: "counter".to_owned(),
+                    span: span(0, 7),
+                },
+                ty: int,
+                specifier: TypeSpecifier::Builtin {
+                    ty: int,
+                    span: span(0, 3),
+                },
+                written: WrittenDeclarator {
+                    layers: Vec::new(),
+                    span: span(0, 7),
+                },
+                storage: StorageClass::None,
+                initializer: None,
+                gnu_extension_spans: Vec::new(),
+                span: span(0, 8),
+            }),
+        );
+
+        let read_counter = alloc(
+            arena,
+            CHirExpr::Ident {
+                symbol: counter,
+                spelling: "counter".to_owned(),
+                facts: ExprFacts::lvalue(int, true, true).expect("modifiable global lvalue"),
+                span: span(20, 27),
+            },
+        );
+        let bump_body = alloc(
+            arena,
+            CHirStmt::Compound(
+                vec![CHirBlockItem::Statement(alloc(
+                    arena,
+                    CHirStmt::Return(Some(read_counter), span(18, 28)),
+                ))],
+                span(16, 29),
+            ),
+        );
+        let bump_decl = alloc(
+            arena,
+            CHirDecl::Function(test_function_decl(
+                bump,
+                "bump",
+                int,
+                function_ty,
+                Some(bump_body),
+                span(10, 29),
+            )),
+        );
+
+        let callee = alloc(
+            arena,
+            CHirExpr::Ident {
+                symbol: bump,
+                spelling: "bump".to_owned(),
+                facts: ExprFacts::function_designator(function_ty),
+                span: span(40, 44),
+            },
+        );
+        let call = alloc(arena, CHirExpr::Call(callee, Vec::new(), span(40, 46)));
+        let main_body = alloc(
+            arena,
+            CHirStmt::Compound(
+                vec![CHirBlockItem::Statement(alloc(
+                    arena,
+                    CHirStmt::Return(Some(call), span(38, 47)),
+                ))],
+                span(36, 48),
+            ),
+        );
+        let main_decl = alloc(
+            arena,
+            CHirDecl::Function(test_function_decl(
+                main,
+                "main",
+                int,
+                function_ty,
+                Some(main_body),
+                span(30, 48),
+            )),
+        );
+
+        (
+            CHirUnit::new(vec![object, bump_decl, main_decl], types, symbols),
+            main,
+            bump,
+            counter,
+        )
+    }
+
+    fn test_function_decl<'arena>(
+        symbol: SymbolId,
+        spelling: &str,
+        result: TypeId,
+        function_ty: TypeId,
+        body: Option<&'arena CHirStmt<'arena>>,
+        at: SourceSpan,
+    ) -> FunctionDecl<'arena> {
+        FunctionDecl {
+            symbol,
+            name: SpannedName {
+                spelling: spelling.to_owned(),
+                span: at,
+            },
+            ty: function_ty,
+            return_specifier: TypeSpecifier::Builtin {
+                ty: result,
+                span: at,
+            },
+            written: WrittenDeclarator {
+                layers: vec![WrittenDeclaratorLayer::Function { span: at }],
+                span: at,
+            },
+            parameters: ParameterSyntax::Prototype {
+                parameters: Vec::new(),
+                variadic: false,
+            },
+            storage: StorageClass::None,
+            inline_spans: Vec::new(),
+            gnu_extension_spans: Vec::new(),
+            body,
+            span: at,
+        }
+    }
+
+    #[test]
+    fn reachable_memory_requirements_follow_transitive_calls() {
+        let arena = Arena::new(64 * 1024);
+        let (unit, main, _bump, counter) = transitive_global_program(&arena);
+
+        let requirements = reachable_memory_requirements(&unit, main);
+
+        assert!(
+            requirements.requires_memory,
+            "a global read behind one call level still requires memory"
+        );
+        assert!(
+            requirements.static_objects.contains(&counter),
+            "the transitively referenced global must be scheduled for allocation"
+        );
+    }
+
+    #[test]
+    fn unreachable_globals_are_not_scheduled_for_allocation() {
+        let arena = Arena::new(64 * 1024);
+        let (unit, _main, bump, counter) = transitive_global_program(&arena);
+
+        // Entering at `bump` still reaches `counter`; entering nowhere else must not
+        // invent objects, so the manifest stays exactly one object wide.
+        let requirements = reachable_memory_requirements(&unit, bump);
+
+        assert!(requirements.requires_memory);
+        assert_eq!(
+            requirements
+                .static_objects
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![counter]
+        );
+    }
+
+    #[test]
+    fn deeply_nested_static_initializer_fails_closed_without_overflowing_the_host() {
+        let arena = Arena::new(64 * 1024);
+        let (unit, main) =
+            deep_static_initializer_program(&arena, MAX_STATIC_INITIALIZER_DEPTH + 8);
+
+        let error = interpret_scalar_function_with_target(
+            &unit,
+            main,
+            &TargetDataLayout::aarch64_unknown_linux_gnu(),
+            InterpreterLimits::default(),
+        )
+        .expect_err("an over-deep static initializer must be rejected, not evaluated");
+
+        assert!(
+            matches!(
+                error,
+                InterpreterError::UnsupportedExpression {
+                    feature: "deeply-nested-static-initializer",
+                    ..
+                }
+            ),
+            "expected a typed depth rejection, got {error:?}"
+        );
+    }
+
+    #[test]
+    fn a_static_initializer_within_the_depth_limit_still_evaluates() {
+        let arena = Arena::new(64 * 1024);
+        // One literal plus `depth - 1` negations keeps the deepest path exactly
+        // at the limit, so the guard must stay silent and the value must be real.
+        let negations = MAX_STATIC_INITIALIZER_DEPTH - 1;
+        let (unit, main) = deep_static_initializer_program(&arena, negations);
+
+        let outcome = interpret_scalar_function_with_target(
+            &unit,
+            main,
+            &TargetDataLayout::aarch64_unknown_linux_gnu(),
+            InterpreterLimits::new(1_000_000),
+        )
+        .expect("an initializer at the depth limit must still be evaluated");
+
+        let value = outcome
+            .return_value
+            .expect("main returns the initialized global")
+            .mathematical_value(unit.types())
+            .expect("the global is a plain int");
+        // An even number of negations leaves the literal 1 unchanged.
+        assert_eq!(value, if negations.is_multiple_of(2) { 1 } else { -1 });
+    }
+
+    /// Build `int deep = -(-(-...1...)); int main(void) { return deep; }` with
+    /// `depth` nested negations.
+    fn deep_static_initializer_program(arena: &Arena, depth: usize) -> (CHirUnit<'_>, SymbolId) {
+        let mut types = TypeInterner::new();
+        let int = types.intern(CanonicalType {
+            kind: TypeKind::Int(IntRank::Int),
+            qualifiers: Qualifiers::default(),
+        });
+        let function_ty = types.intern(CanonicalType {
+            kind: TypeKind::Function {
+                return_type: int,
+                parameters: FunctionParameters::Prototype {
+                    types: Vec::new(),
+                    variadic: false,
+                },
+            },
+            qualifiers: Qualifiers::default(),
+        });
+        let mut symbols = crate::SymbolTable::new();
+        let deep = symbols
+            .declare(
+                symbols.file_scope(),
+                "deep",
+                crate::SymbolData::Object {
+                    storage: StorageClass::None,
+                },
+                int,
+                span(0, 4),
+            )
+            .expect("declare deep");
+        let main = symbols
+            .declare(
+                symbols.file_scope(),
+                "main",
+                crate::SymbolData::Function {
+                    storage: StorageClass::None,
+                },
+                function_ty,
+                span(30, 34),
+            )
+            .expect("declare main");
+        symbols
+            .create_scope(
+                symbols.file_scope(),
+                ScopeKind::Function,
+                Some(span(30, 46)),
+            )
+            .expect("create main function scope");
+
+        let mut value: &CHirExpr<'_> = alloc(
+            arena,
+            CHirExpr::Lit(
+                IntLit {
+                    value: 1,
+                    suffix: IntSuffix::None,
+                    base: IntBase::Dec,
+                },
+                span(10, 11),
+            ),
+        );
+        for _ in 0..depth {
+            value = alloc(arena, CHirExpr::Unary(UnaryOp::Neg, value, span(10, 11)));
+        }
+
+        let plan = crate::InitPlan::new(
+            int,
+            vec![crate::InitAction::store_scalar(
+                crate::SubobjectPath::root(),
+                int,
+                value,
+                span(10, 11),
+            )],
+        );
+        let object = alloc(
+            arena,
+            CHirDecl::Object(ObjectDecl {
+                symbol: deep,
+                name: SpannedName {
+                    spelling: "deep".to_owned(),
+                    span: span(0, 4),
+                },
+                ty: int,
+                specifier: TypeSpecifier::Builtin {
+                    ty: int,
+                    span: span(0, 3),
+                },
+                written: WrittenDeclarator {
+                    layers: Vec::new(),
+                    span: span(0, 4),
+                },
+                storage: StorageClass::None,
+                initializer: Some(crate::ObjectInitializer::new(
+                    crate::WrittenInitializer::Expression(value),
+                    plan,
+                )),
+                gnu_extension_spans: Vec::new(),
+                span: span(0, 12),
+            }),
+        );
+
+        let read_deep = alloc(
+            arena,
+            CHirExpr::Ident {
+                symbol: deep,
+                spelling: "deep".to_owned(),
+                facts: ExprFacts::lvalue(int, true, true).expect("modifiable global lvalue"),
+                span: span(40, 44),
+            },
+        );
+        let main_body = alloc(
+            arena,
+            CHirStmt::Compound(
+                vec![CHirBlockItem::Statement(alloc(
+                    arena,
+                    CHirStmt::Return(Some(read_deep), span(38, 45)),
+                ))],
+                span(36, 46),
+            ),
+        );
+        let main_decl = alloc(
+            arena,
+            CHirDecl::Function(test_function_decl(
+                main,
+                "main",
+                int,
+                function_ty,
+                Some(main_body),
+                span(30, 46),
+            )),
+        );
+
+        (CHirUnit::new(vec![object, main_decl], types, symbols), main)
     }
 }
