@@ -6,7 +6,11 @@
   "purpose": "Freeze the pre-execution authority for the persistent-equality and proof-boundary stage: which work must ship, which properties the tests must establish, and which process rules govern the commits that get there. It contains no measured outcome and must never be result-shaped after execution. Planning documents are working notes and are not version controlled; anything binding lives here or in the specification, so a reviewer working from a fresh clone sees the whole authority.",
   "baseline": {
     "commit": "957afe6",
-    "workspaceTests": 656,
+    "testCounts": {
+      "note": "The two commands report different denominators: --all-targets adds example targets and drops doctests. A receipt names the command beside the number.",
+      "cargo test --workspace": 656,
+      "cargo test --workspace --all-targets --locked --offline": 655
+    },
     "clippyDenyWarnings": "clean",
     "formatCheck": "clean"
   },
@@ -90,14 +94,16 @@
     ]
   },
   "processRules": {
-    "singleRedCheckpoint": "The tests-only checkpoint is the one commit permitted to leave the workspace red, and its failures must come from the capabilities this stage declares missing, not from a compilation error, a malformed fixture, or an unrelated defect.",
-    "greenAfterwards": "Every implementation commit after that checkpoint restores full green and holds it.",
+    "supersededRule": "An earlier form of this contract required one red checkpoint carrying every declared missing capability, every later commit fully green, and a first production commit that was a behaviour-preserving re-layering. Those cannot all hold: a re-layering that changes no behaviour cannot turn syntax, proof, function-pointer, storage and effect failures green. The rule below replaces it.",
+    "redWindow": "The tests-only checkpoint opens a red window. Its failures must come from the capabilities this stage declares missing, not from a compilation error, a malformed fixture, or an unrelated defect. Tests for Rust items that do not exist yet are written against textual or command-line fixtures, so a missing capability fails as a wrong answer rather than as a build failure.",
+    "monotoneClosure": "While the window is open, no commit adds a failing test that was not declared, and each implementation commit reduces the declared set. The count is reported per commit, so the window narrows visibly rather than by assertion.",
+    "windowCloses": "The final implementation commit of the stage restores full green. The window does not span stages.",
     "noTestSuppression": "No commit disables, deletes or ignores a test to move forward.",
-    "formatMigration": "Certificate formats change mid-stage; each step migrates the existing corpus in the same commit that changes the format.",
-    "firstProductionCommit": "A mechanical re-layering that moves the optimizer to its own crate with no behavioural change, so later format work happens in the right crate from the start."
+    "formatMigration": "Certificate and textual formats change mid-stage; each step migrates the existing corpus in the same commit that changes the format.",
+    "firstProductionCommit": "A mechanical re-layering that moves the optimizer to its own crate with no behavioural change, so later format work happens in the right crate from the start. It closes the layering item of the declared set and no other."
   },
   "acceptance": {
-    "measuredOnly": "Every reported figure is measured and labelled with what it counts. No predicted numbers.",
+    "measuredOnly": "Every reported figure is measured, labelled with what it counts, and accompanied by the exact command that produced it. No predicted numbers, and no bare test total without its command.",
     "countingChange": "Under a reviewed registry a replay counts rule instances rather than per-candidate manufactured rules, so a number differing from the previous stage is expected and is not by itself a regression.",
     "required": [
       "the existing scalar corpus validates through the standalone binary under the reviewed registry",
