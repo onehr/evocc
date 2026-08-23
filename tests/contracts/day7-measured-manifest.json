@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 1,
+  "contractId": "c30.day7.measured-manifest.v1",
+  "status": "MEASURED",
+  "recordedAt": "2026-08-23",
+  "resolution": "The first commit whose tree contains this manifest byte-for-byte freezes the measured Day 7 G1-G4 implementation state. Ignored live evidence is bound by the hashes below and is not silently treated as clone-portable evidence.",
+  "baseline": {
+    "day6FreezeCommit": "c878a397ccfa9b414e1c104585ab58729d688f04",
+    "day6Receipt": "tests/contracts/day6-acceptance-receipt.json"
+  },
+  "implementation": {
+    "commit": "f557c764ddcbad45b38934b888638a602ba8ffab",
+    "tree": "38455a5db78f34aa8231733f7df0921900ed0f13",
+    "commitChain": [
+      {
+        "gate": "g1-chir-object-memory",
+        "commit": "cd2af2a561751f4e972ee926fd5c680f481ed55b"
+      },
+      {
+        "gate": "tests-only-evoir-object-memory-red",
+        "commit": "4c2deb8a938cd228023d65bdee13f3c104eafd0a"
+      },
+      {
+        "gate": "g2-evoir-memory-and-lowering",
+        "commit": "ea5295970c55a8b81a25a48115b2a97b1b5bf904"
+      },
+      {
+        "gate": "g3-memory-differential",
+        "commit": "7c3e86bd00aec12190609f5acc9eac945ebe85f5"
+      },
+      {
+        "gate": "g4-scalar-egraph-proof-roundtrip",
+        "commit": "f557c764ddcbad45b38934b888638a602ba8ffab"
+      }
+    ]
+  },
+  "dashboard": {
+    "kernel": {
+      "preprocessedTranslationUnits": {
+        "passed": 0,
+        "total": 16,
+        "unchangedFromDay6": true
+      },
+      "parsedTranslationUnits": {
+        "passedBothOracleInputs": 1,
+        "total": 16,
+        "unchangedFromDay6": true
+      },
+      "compiledTranslationUnits": {
+        "passed": 0,
+        "total": 16,
+        "status": "NOT_IMPLEMENTED",
+        "unchangedFromDay6": true
+      }
+    },
+    "memoryDifferential": {
+      "representativePrograms": {
+        "chirAndEvoirPassed": 6,
+        "total": 6,
+        "skips": 0
+      },
+      "deterministicDefined": {
+        "chirPassed": 128,
+        "evoirPassed": 128,
+        "gcc14Passed": 128,
+        "clang19Passed": 128,
+        "total": 128,
+        "oracleConflicts": 0,
+        "mismatches": 0,
+        "skips": 0
+      },
+      "deterministicTypedInvalid": {
+        "chirPassed": 64,
+        "evoirPassed": 64,
+        "total": 64,
+        "nativeOracleExecutions": 0,
+        "mismatches": 0,
+        "skips": 0,
+        "diagnosticDenominator": {
+          "E3001": 16,
+          "E3009": 16,
+          "E3010": 16,
+          "E3011": 16
+        }
+      },
+      "corpusIntegrity": {
+        "programs": 192,
+        "byteUniquePrograms": 192,
+        "caseIdsUnique": 192,
+        "manifestSha256": "de83fa7a37de1f7ee3e3e3617b99f5137c037c67ecd97015c47376b744f9e217"
+      }
+    },
+    "scalarEquality": {
+      "deterministicPrograms": {
+        "executedBeforeAndAfter": 128,
+        "optimized": 128,
+        "total": 128,
+        "mismatches": 0,
+        "skips": 0
+      },
+      "mergeReceipts": {
+        "replayedByEvoccProof": 1280,
+        "total": 1280,
+        "rate": "100%"
+      },
+      "budgetPolicy": {
+        "nodeLimitExplicit": true,
+        "epochLimitExplicit": true,
+        "exhaustionFallsBackToOriginal": true,
+        "optimizationRequiredForCorrectness": false
+      },
+      "effectBoundary": {
+        "memOrWorldNodesAdmitted": 0,
+        "rejectionDiagnostic": "E4001"
+      }
+    },
+    "driverCapabilities": {
+      "implemented": [
+        "eq-scalar-optimize",
+        "-Oeq-scalar"
+      ],
+      "broadEqProbe": {
+        "probe": "-Oeq",
+        "exitCode": 69,
+        "status": "NOT_IMPLEMENTED"
+      },
+      "broadEqsatProbe": {
+        "probe": "eqsat-optimize",
+        "exitCode": 69,
+        "status": "NOT_IMPLEMENTED"
+      }
+    }
+  },
+  "g3OracleEvidence": {
+    "path": ".evidence/memory-differential/20260823T082835Z-48272",
+    "gitTracked": false,
+    "runId": "20260823T082835Z-48272",
+    "status": "ORACLE_CONSENSUS",
+    "frozenImageDigest": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+    "compilerIdentities": {
+      "gcc14": {
+        "path": "/usr/bin/gcc-14",
+        "sha256": "fb051a6c58961fb6aec758acf50d7d0375eecff740d0706388092829e3fb7a41",
+        "version": "gcc-14 (Debian 14.2.0-19) 14.2.0"
+      },
+      "clang19": {
+        "path": "/usr/bin/clang-19",
+        "sha256": "8bba5d733f54ada0cc50ba7646a87ddc798d5de73f67e397cdefada07297bb65",
+        "version": "Debian clang version 19.1.7 (3+b1)"
+      }
+    },
+    "evidenceHashes": {
+      "summary.json": "adbae4aaafd87350c744614382a19e43d7cee079a66a41f4e09cc01b47794236",
+      "oracle-summary.json": "4077fd1910f6fa89e4b90c4163808b3ad4643c07b60c5c9771fe2c76e9c278b9",
+      "oracle-consensus.tsv": "6c8fac06e52d1fbe1c088f3ea029cc9cf43121e0793f8d95f4c7350ea96586d0",
+      "oracle-identity.stdout": "4825ab4210914664cf0484d85aa4828c7e311fc13082d23598a7940a60a3c679",
+      "comparator-selftest.json": "48162f4c755d1c9a594dee59b7a66b4a2ae6e414e4d7f5113111f394a9c6b4f9",
+      "lane-input-audit.json": "7d6624b8c0f5a7953e98688cd6f612b4c9a65d1aae7683dff2b5f32e81bfdf17",
+      "materialization.json": "37ef4632a32e7163ecfc38fe69a035c8aa495a6a82eaeaaa5a7a1e245be1b004",
+      "images-after.json": "22c686217dce514565c841c0ac1d026391f2c70f3fb68f896e58ec172baa52d5",
+      "alias-after.json": "f3871d27e5ee5cc0cbdaf351dcad86230735f7dc7a04df4d07cd8b9f1585bcd3"
+    }
+  },
+  "artifactManifest": [
+    {
+      "path": "crates/evocc-memory/src/lib.rs",
+      "sha256": "bd811613ae1da0e78f70f349851f1e84f0a076da8823f21935f966a6aad8ebaf"
+    },
+    {
+      "path": "crates/evocc-chir/src/interp.rs",
+      "sha256": "20f6d61be75002864e80b6fce3dd8b78623989b88b1ae9da29e51c02749672ab"
+    },
+    {
+      "path": "crates/evocc-evoir/src/lib.rs",
+      "sha256": "8c5cc74f0225db75725e4d62dc28bbe004ca4c6f436f302df711a1311abac96d"
+    },
+    {
+      "path": "crates/evocc-evoir/src/text.rs",
+      "sha256": "16af1a8956a029a522e92ec782b8c6653e00e17a039c66a87e3735e4cf01aeed"
+    },
+    {
+      "path": "crates/evocc-evoir/src/scalar_eq.rs",
+      "sha256": "3b69ba5f874f742c23e42098564761f6741ac02e26e36fd68c1a2e4d539d706b"
+    },
+    {
+      "path": "crates/evocc-lower/src/lib.rs",
+      "sha256": "2339e27c0386fe86bb33fd3424db3454c7287226cf49ab8677d97df2d95ae31a"
+    },
+    {
+      "path": "tests/acceptance/day7-memory-corpus.py",
+      "sha256": "03d7c65f674aa05efbbaf82560129f3837e79a23db2c1486092977d2f44d667e"
+    },
+    {
+      "path": "tests/acceptance/day7-memory-oracles.py",
+      "sha256": "6c373aa9c5c27d2b663ab345a225b74cf246360876785d2d79e75008a4d0804e"
+    },
+    {
+      "path": "tests/acceptance/day7-memory-differential.sh",
+      "sha256": "d66135ddb09ad1abca71df33744cbdaec8af8a18b7d0a7daf404418a3ce61ca1"
+    },
+    {
+      "path": "crates/evocc-lower/tests/day7_memory_equivalence_red.rs",
+      "sha256": "400f6129728b9f4d487d04c0f4ff62357ae814a729c3f8bbc7891f712628d069"
+    },
+    {
+      "path": "crates/evocc-lower/tests/day7_g4_scalar_eq.rs",
+      "sha256": "cb260346e2d165dc9423792bf93367e760bdde42b71eb7b368568676887cf0ab"
+    },
+    {
+      "path": "crates/evocc-evoir/tests/scalar_eq_bridge.rs",
+      "sha256": "26ebc1aabdd72f24eb97a183f363ddd4388f49b095c5fc31f7425576cb40a47b"
+    },
+    {
+      "path": "crates/evocc/src/main.rs",
+      "sha256": "c9dd1970555bc32766963c728c16a6b885b8a168926b7345f7c392b61f22b169"
+    },
+    {
+      "path": "crates/evocc/tests/day7_scalar_eq_cli.rs",
+      "sha256": "b4a152300981127037ca25009644436582efd20c3cd38cef69ccbf377b107b39"
+    },
+    {
+      "path": "docs/evoir-spec.md",
+      "sha256": "65cc31c99765da1f50fbcc76cf1056f52f70b35653aa2b26be21e1d26b71c562"
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "9052830911c70bb0c05df4e9a7108bf1c816fbdf1a1721090c8834dd4b1e665e"
+    }
+  ],
+  "measuredGates": [
+    {
+      "command": "cargo test --workspace --all-targets --locked --offline",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo clippy --workspace --all-targets --locked --offline -- -D warnings",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "result": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "day5Debt": {
+    "status": "OPEN",
+    "measurementStatus": "NOT_MEASURED",
+    "day7NonBlockingByAmendment": true,
+    "day9EntryBlocked": true,
+    "closingAmendment": {
+      "path": "tests/contracts/day5-closing-amendment.json",
+      "sha256": "a7116f1e7b2f4e13877f2344a9d9f1e295f38a58734ecff6c08bdb94582a9a33"
+    },
+    "pilotContract": {
+      "path": "tests/contracts/day5-kernel-reduction-pilots.json",
+      "sha256": "c7350d232e8010eff8e53247992b97aaf761c7859976a1d4592298f14d9a4181"
+    },
+    "observerAuthority": "ABSENT",
+    "liveMeasurementPermitted": false,
+    "observerCandidatesFound": 0,
+    "pilotSelftest": {
+      "exitCode": 1,
+      "productionBoundary": "observer-authority-absent",
+      "pilots": 3,
+      "deletionAtoms": 19,
+      "oracleRunsNotExecuted": 46,
+      "subjectRunsNotExecuted": 28,
+      "obligationManifestSha256": "39af1ba905884d739789c996ede7b24ba08c07d3be39b77a643363334d9ec2a1"
+    }
+  },
+  "strictExclusionsPreserved": [
+    "region splitting and alias analysis",
+    "store forwarding, store bypass, and redundant-load rewrites",
+    "persistent EClassId semantics across allocations",
+    "attributes, typeof, and statement expressions",
+    "backend and ABI lowering"
+  ]
+}
