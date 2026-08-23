@@ -34,6 +34,21 @@
       }
     ]
   },
+  "boxedInfrastructure": {
+    "declaredTimeboxMinutes": 20,
+    "dashboardMetricMovement": "NONE",
+    "reason": "Make the required macOS no-local clone replay preserve a closed clean environment without weakening exact authority stderr checks.",
+    "commits": [
+      {
+        "commit": "fda518b77b5a943c517a6a5418046d454371da2e",
+        "change": "Preserve required host user and locale facts while keeping clone HOME, CARGO_HOME, target, and TMPDIR lane-private."
+      },
+      {
+        "commit": "5384dc6e3f9e7c5a78f949440ecf7ad42bdf5056",
+        "change": "Prime the macOS system Python launcher separately; authoritative corpus invocations still require exact empty stderr."
+      }
+    ]
+  },
   "dashboard": {
     "kernel": {
       "preprocessedTranslationUnits": {
@@ -200,7 +215,11 @@
     },
     {
       "path": "crates/evocc-lower/tests/day7_memory_equivalence_red.rs",
-      "sha256": "400f6129728b9f4d487d04c0f4ff62357ae814a729c3f8bbc7891f712628d069"
+      "sha256": "3bc218a15cd907764186ea38f52b6d1e627ccf77745abb4d5bca8a9371c7188a"
+    },
+    {
+      "path": "crates/evocc-lower/tests/day6_g3_differential.rs",
+      "sha256": "b1fdfeb77ef916e791896fb536a6f12b9366de3a086040e4f66dd76770381d11"
     },
     {
       "path": "crates/evocc-lower/tests/day7_g4_scalar_eq.rs",
@@ -217,6 +236,10 @@
     {
       "path": "crates/evocc/tests/day7_scalar_eq_cli.rs",
       "sha256": "b4a152300981127037ca25009644436582efd20c3cd38cef69ccbf377b107b39"
+    },
+    {
+      "path": "tests/acceptance/workspace-fresh-clone-replay.sh",
+      "sha256": "23e93eb74674ed7a94c7abf8e2ba5bd8142220613daa61e7f2b7c08c8e82ac09"
     },
     {
       "path": "docs/evoir-spec.md",
