@@ -489,6 +489,7 @@ fn observe_evoir(functions: &[Function]) -> Result<EvoExecutionObservation, Stri
         })
         .collect::<Result<Vec<_>, _>>()?;
     let module = Module {
+        globals: vec![],
         functions: functions.to_vec(),
     };
     let (sender, receiver) = mpsc::sync_channel(1);
@@ -789,6 +790,7 @@ fn render_inst(inst: &Inst) -> String {
             world_in,
             mem_out,
             world_out,
+            ..
         } => format!(
             "({}, {}, {}) = load {}, {}, {} : {}",
             value(result),
@@ -806,6 +808,7 @@ fn render_inst(inst: &Inst) -> String {
             world_in,
             mem_out,
             world_out,
+            ..
         } => format!(
             "({}, {}) = store {}, {}, {}, {}",
             value(mem_out),
@@ -815,12 +818,27 @@ fn render_inst(inst: &Inst) -> String {
             value(address),
             value(stored)
         ),
-        Inst::PtrOffset(result, base, offset) => format!(
-            "{} = ptr.offset {}, {}",
+        Inst::PtrOffset {
+            result,
+            base,
+            index,
+            direction,
+            signedness,
+            scale,
+        } => format!(
+            "{} = ptr.offset.{direction:?}.{signedness:?} {}, {} [scale={scale}]",
             value(result),
             value(base),
-            value(offset)
+            value(index)
         ),
+        Inst::PtrNull(result) => format!("{} = ptr.null", value(result)),
+        Inst::GlobalAddr { result, symbol } => {
+            format!("{} = global_addr @{symbol}", value(result))
+        }
+        Inst::Alloca { .. }
+        | Inst::LifetimeEnd { .. }
+        | Inst::PointerValid { .. }
+        | Inst::AccessInBounds { .. } => "<day7-memory>".to_owned(),
         Inst::Call {
             results,
             callee,

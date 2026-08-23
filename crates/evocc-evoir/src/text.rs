@@ -2,7 +2,9 @@
 
 use evocc_types::{AddressSpace, EvoIRType, Region};
 
-use crate::{BlockId, CmpOp, Function, Inst, Module, Value};
+use evocc_memory::{IndexSignedness, OffsetDirection};
+
+use crate::{BlockId, CmpOp, Function, GlobalStorage, Inst, Module, Value};
 
 /// Render a module in the canonical human-readable syntax from specification
 /// Section 9.
@@ -12,12 +14,47 @@ use crate::{BlockId, CmpOp, Function, Inst, Module, Value};
 /// regardless of its numeric identifier.
 #[must_use]
 pub fn render_module(module: &Module) -> String {
-    module
+    let globals = module
+        .globals
+        .iter()
+        .map(|global| {
+            let bytes = global
+                .bytes
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>();
+            let initialized = global
+                .initialized
+                .iter()
+                .map(|bit| if *bit { '1' } else { '0' })
+                .collect::<String>();
+            format!(
+                "global @{} origin={} storage={} size={} align={} bytes={} initialized={}",
+                global.symbol,
+                global.origin,
+                match global.storage {
+                    GlobalStorage::Static => "static",
+                    GlobalStorage::StringLiteral => "string_literal",
+                },
+                global.layout.size_bytes,
+                global.layout.align_bytes,
+                bytes,
+                initialized
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let functions = module
         .functions
         .iter()
         .map(render_function)
         .collect::<Vec<_>>()
-        .join("\n\n")
+        .join("\n\n");
+    match (globals.is_empty(), functions.is_empty()) {
+        (false, false) => format!("{globals}\n\n{functions}"),
+        (false, true) => globals,
+        (true, _) => functions,
+    }
 }
 
 fn render_type(ty: &EvoIRType) -> String {
@@ -183,6 +220,72 @@ impl FunctionRenderer {
             Inst::Ret(returned) if returned.is_empty() => "ret".to_owned(),
             Inst::Ret(returned) => format!("ret {}", render_values(returned)),
             Inst::Trap(reason) => format!("trap.{}", reason.mnemonic()),
+            Inst::PtrNull(result) => format!(
+                "{} = ptr.null : {}",
+                render_value(result),
+                render_type(&result.ty)
+            ),
+            Inst::GlobalAddr { result, symbol } => format!(
+                "{} = global_addr @{symbol} : {}",
+                render_value(result),
+                render_type(&result.ty)
+            ),
+            Inst::Alloca {
+                result,
+                mem_in,
+                world_in,
+                mem_out,
+                world_out,
+                origin,
+                layout,
+            } => format!(
+                "({}, {}, {}) = alloca {}, {} [origin={}, size={}, align={}]",
+                render_value(result),
+                render_value(mem_out),
+                render_value(world_out),
+                render_value(mem_in),
+                render_value(world_in),
+                origin,
+                layout.size_bytes,
+                layout.align_bytes
+            ),
+            Inst::LifetimeEnd {
+                mem_in,
+                world_in,
+                pointer,
+                mem_out,
+                world_out,
+            } => format!(
+                "({}, {}) = lifetime.end {}, {}, {}",
+                render_value(mem_out),
+                render_value(world_out),
+                render_value(mem_in),
+                render_value(world_in),
+                render_value(pointer)
+            ),
+            Inst::PointerValid {
+                mem_in,
+                pointer,
+                mem_out,
+            } => format!(
+                "{} = pointer_valid {}, {}",
+                render_value(mem_out),
+                render_value(mem_in),
+                render_value(pointer)
+            ),
+            Inst::AccessInBounds {
+                mem_in,
+                pointer,
+                mem_out,
+                layout,
+            } => format!(
+                "{} = access_in_bounds {}, {} [size={}, align={}]",
+                render_value(mem_out),
+                render_value(mem_in),
+                render_value(pointer),
+                layout.size_bytes,
+                layout.align_bytes
+            ),
             Inst::Load {
                 result,
                 address,
@@ -190,11 +293,13 @@ impl FunctionRenderer {
                 world_in,
                 mem_out,
                 world_out,
+                volatile,
             } => format!(
-                "({}, {}, {}) = load {}, {}, {} : {}",
+                "({}, {}, {}) = load{} {}, {}, {} : {}",
                 render_value(result),
                 render_value(mem_out),
                 render_value(world_out),
+                if *volatile { " volatile" } else { "" },
                 render_value(mem_in),
                 render_value(world_in),
                 render_value(address),
@@ -207,20 +312,38 @@ impl FunctionRenderer {
                 world_in,
                 mem_out,
                 world_out,
+                volatile,
             } => format!(
-                "({}, {}) = store {}, {}, {}, {}",
+                "({}, {}) = store{} {}, {}, {}, {}",
                 render_value(mem_out),
                 render_value(world_out),
+                if *volatile { " volatile" } else { "" },
                 render_value(mem_in),
                 render_value(world_in),
                 render_value(address),
                 render_value(value)
             ),
-            Inst::PtrOffset(result, base, offset) => format!(
-                "{} = ptr.offset {}, {}",
+            Inst::PtrOffset {
+                result,
+                base,
+                index,
+                direction,
+                signedness,
+                scale,
+            } => format!(
+                "{} = ptr.offset.{}.{} {}, {} [scale={}]",
                 render_value(result),
+                match direction {
+                    OffsetDirection::Add => "add",
+                    OffsetDirection::Subtract => "sub",
+                },
+                match signedness {
+                    IndexSignedness::Signed => "signed",
+                    IndexSignedness::Unsigned => "unsigned",
+                },
                 render_value(base),
-                render_value(offset)
+                render_value(index),
+                scale
             ),
             Inst::Call {
                 results,
@@ -341,9 +464,12 @@ fn render_function(function: &Function) -> String {
 mod tests {
     use evocc_types::{AddressSpace, EvoIRType, Region};
 
-    use crate::{Block, CmpOp, Function, Inst, Module, TrapReason, UbReason, Value};
+    use crate::{
+        AccessLayout, Block, CmpOp, Function, GlobalObject, GlobalStorage, Inst, Module,
+        TrapReason, UbReason, Value,
+    };
 
-    use super::{render_module, render_type, FunctionRenderer};
+    use super::{render_module, render_type, FunctionRenderer, IndexSignedness, OffsetDirection};
 
     fn value(id: u32, ty: EvoIRType) -> Value {
         Value { id, ty }
@@ -352,6 +478,7 @@ mod tests {
     #[test]
     fn first_block_is_entry_and_trap_uses_section_9_mnemonic() {
         let module = Module {
+            globals: vec![],
             functions: vec![Function {
                 name: "stopped".to_owned(),
                 params: Vec::new(),
@@ -373,6 +500,25 @@ mod tests {
                 "    trap.scalar_function_fell_off_end\n",
                 "}",
             )
+        );
+    }
+
+    #[test]
+    fn module_global_has_exact_section_9_text() {
+        let module = Module {
+            globals: vec![GlobalObject {
+                symbol: "bytes".to_owned(),
+                origin: 7,
+                storage: GlobalStorage::StringLiteral,
+                layout: AccessLayout::new(3, 1),
+                bytes: vec![0x45, 0x56, 0],
+                initialized: vec![true, true, true],
+            }],
+            functions: vec![],
+        };
+        assert_eq!(
+            render_module(&module),
+            "global @bytes origin=7 storage=string_literal size=3 align=1 bytes=455600 initialized=111"
         );
     }
 
@@ -566,6 +712,53 @@ mod tests {
                 Inst::Trap(TrapReason::ScalarFunctionFellOffEnd),
                 "trap.scalar_function_fell_off_end",
             ),
+            (Inst::PtrNull(pointer(0)), "%v0 = ptr.null : ptr<generic>"),
+            (
+                Inst::GlobalAddr {
+                    result: pointer(0),
+                    symbol: "counter".to_owned(),
+                },
+                "%v0 = global_addr @counter : ptr<generic>",
+            ),
+            (
+                Inst::Alloca {
+                    result: pointer(0),
+                    mem_in: memory(1),
+                    world_in: world(2),
+                    mem_out: memory(3),
+                    world_out: world(4),
+                    origin: 9,
+                    layout: AccessLayout::new(4, 4),
+                },
+                "(%v0, %v3, %v4) = alloca %v1, %v2 [origin=9, size=4, align=4]",
+            ),
+            (
+                Inst::LifetimeEnd {
+                    mem_in: memory(1),
+                    world_in: world(2),
+                    pointer: pointer(0),
+                    mem_out: memory(3),
+                    world_out: world(4),
+                },
+                "(%v3, %v4) = lifetime.end %v1, %v2, %v0",
+            ),
+            (
+                Inst::PointerValid {
+                    mem_in: memory(1),
+                    pointer: pointer(0),
+                    mem_out: memory(2),
+                },
+                "%v2 = pointer_valid %v1, %v0",
+            ),
+            (
+                Inst::AccessInBounds {
+                    mem_in: memory(1),
+                    pointer: pointer(0),
+                    mem_out: memory(2),
+                    layout: AccessLayout::new(4, 4),
+                },
+                "%v2 = access_in_bounds %v1, %v0 [size=4, align=4]",
+            ),
             (
                 Inst::Load {
                     result: bits(0),
@@ -574,6 +767,7 @@ mod tests {
                     world_in: world(3),
                     mem_out: memory(4),
                     world_out: world(5),
+                    volatile: false,
                 },
                 "(%v0, %v4, %v5) = load %v2, %v3, %v1 : bits<32>",
             ),
@@ -585,12 +779,44 @@ mod tests {
                     world_in: world(3),
                     mem_out: memory(4),
                     world_out: world(5),
+                    volatile: false,
                 },
                 "(%v4, %v5) = store %v2, %v3, %v1, %v0",
             ),
             (
-                Inst::PtrOffset(pointer(0), pointer(1), bits(2)),
-                "%v0 = ptr.offset %v1, %v2",
+                Inst::Load {
+                    result: bits(0),
+                    address: pointer(1),
+                    mem_in: memory(2),
+                    world_in: world(3),
+                    mem_out: memory(4),
+                    world_out: world(5),
+                    volatile: true,
+                },
+                "(%v0, %v4, %v5) = load volatile %v2, %v3, %v1 : bits<32>",
+            ),
+            (
+                Inst::Store {
+                    address: pointer(1),
+                    value: bits(0),
+                    mem_in: memory(2),
+                    world_in: world(3),
+                    mem_out: memory(4),
+                    world_out: world(5),
+                    volatile: true,
+                },
+                "(%v4, %v5) = store volatile %v2, %v3, %v1, %v0",
+            ),
+            (
+                Inst::PtrOffset {
+                    result: pointer(0),
+                    base: pointer(1),
+                    index: bits(2),
+                    direction: OffsetDirection::Add,
+                    signedness: IndexSignedness::Unsigned,
+                    scale: 1,
+                },
+                "%v0 = ptr.offset.add.unsigned %v1, %v2 [scale=1]",
             ),
             (
                 Inst::Call {

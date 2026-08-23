@@ -258,6 +258,13 @@ pub enum ObjectLifetime {
     Ended(LifetimeEnd),
 }
 
+impl ObjectLifetime {
+    #[must_use]
+    pub const fn is_alive(self) -> bool {
+        matches!(self, Self::Alive)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ObjectInfo {
     pub id: ObjectId,
@@ -751,6 +758,11 @@ impl MemoryState {
     #[must_use]
     pub fn fork(&self) -> Self {
         self.clone()
+    }
+
+    /// Iterate over stable object metadata in ascending `ObjectId` order.
+    pub fn objects(&self) -> impl Iterator<Item = ObjectInfo> + '_ {
+        self.objects.values().map(|record| record.info)
     }
 
     #[must_use]

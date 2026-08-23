@@ -501,3 +501,24 @@ fn chir_invalid_memory_programs_report_exact_typed_diagnostics() {
         );
     }
 }
+
+#[test]
+fn invalid_memory_programs_match_in_both_interpreters() {
+    for (ordinal, case) in INVALID_CHIR_CASES.iter().copied().enumerate() {
+        let arena = Arena::default();
+        let unit = parse(case.source, FileId::new(7_301 + ordinal as u32), &arena)
+            .unwrap_or_else(|error| panic!("{}: {error}", case.id));
+        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        let module = lower_unit(&unit, &target)
+            .unwrap_or_else(|error| panic!("{} lowering: {}", case.id, error.message()));
+        let (arguments, _) = entry_contract(&module).expect(case.id);
+        let error = interpret_module(&module, "main", &arguments, EvoIrLimits::new(STEP_BUDGET))
+            .expect_err(case.id);
+        assert_eq!(
+            (error.code(), error.message()),
+            (case.expected_code, case.expected_message.to_owned()),
+            "{}",
+            case.id
+        );
+    }
+}

@@ -214,7 +214,10 @@ fn broad_evoir_and_unrelated_capability_probes_remain_not_implemented() {
 #[test]
 fn malformed_lowering_and_runtime_failures_are_diagnostics_not_panics() {
     let malformed = TempSource::new("malformed", "int +;\n");
-    let lowering = TempSource::new("lowering", "int main(void) { int x = 1; return *(&x); }\n");
+    let lowering = TempSource::new(
+        "lowering",
+        "int main(void) { int x = 1; return (int)&x; }\n",
+    );
     let runtime = TempSource::new(
         "runtime",
         "int main(void) { int left = 7; int zero = 0; return left / zero; }\n",
@@ -258,7 +261,7 @@ fn malformed_lowering_and_runtime_failures_are_diagnostics_not_panics() {
                 "{stderr}"
             ),
             "lowering" => assert!(
-                stderr.contains("pointer unary operator requires the Day-7 memory model"),
+                stderr.contains("integer expression has a non-bit-vector EvoIR value"),
                 "{stderr}"
             ),
             "runtime" => assert!(

@@ -6,7 +6,11 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
-use evocc_memory::{MemoryConfig, MemoryFault, MemoryLimits, MemoryState, WorldLimits, WorldState};
+pub use evocc_memory::{AccessLayout, IndexSignedness, OffsetDirection};
+use evocc_memory::{
+    ByteSequence, FrameId, InitialState, MemoryConfig, MemoryFault, MemoryLimits, MemoryState,
+    Pointer, ScopeId, WorldLimits, WorldState,
+};
 use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
 mod text;
@@ -246,6 +250,47 @@ pub enum Inst {
     /// trap has no ordinary results or effect-token operands.
     Trap(TrapReason),
 
+    /// Construct the canonical null pointer.
+    PtrNull(Value),
+
+    /// Return the stable address of one module global.
+    GlobalAddr { result: Value, symbol: String },
+
+    /// Allocate one fresh automatic object in the current invocation.
+    Alloca {
+        result: Value,
+        mem_in: Value,
+        world_in: Value,
+        mem_out: Value,
+        world_out: Value,
+        origin: u64,
+        layout: AccessLayout,
+    },
+
+    /// Explicitly end one automatic object's lifetime.
+    LifetimeEnd {
+        mem_in: Value,
+        world_in: Value,
+        pointer: Value,
+        mem_out: Value,
+        world_out: Value,
+    },
+
+    /// Validate provenance, lifetime, and the closed pointer range.
+    PointerValid {
+        mem_in: Value,
+        pointer: Value,
+        mem_out: Value,
+    },
+
+    /// Validate a complete aligned non-empty memory access.
+    AccessInBounds {
+        mem_in: Value,
+        pointer: Value,
+        mem_out: Value,
+        layout: AccessLayout,
+    },
+
     /// Load through `address`, consuming and producing explicit effect tokens.
     /// The loaded type is owned by `result`.
     Load {
@@ -255,6 +300,7 @@ pub enum Inst {
         world_in: Value,
         mem_out: Value,
         world_out: Value,
+        volatile: bool,
     },
 
     /// Store `value` through `address`, consuming and producing effect tokens.
@@ -265,10 +311,18 @@ pub enum Inst {
         world_in: Value,
         mem_out: Value,
         world_out: Value,
+        volatile: bool,
     },
 
-    /// `PtrOffset(result, base, offset)`: pointer arithmetic.
-    PtrOffset(Value, Value, Value),
+    /// Target-scaled, provenance-preserving pointer arithmetic.
+    PtrOffset {
+        result: Value,
+        base: Value,
+        index: Value,
+        direction: OffsetDirection,
+        signedness: IndexSignedness,
+        scale: u64,
+    },
 
     /// Call `callee`. Ordinary `args` and `results` exclude the separately
     /// threaded memory and world tokens.
@@ -321,10 +375,11 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
         | Inst::SDiv(v, ..)
         | Inst::UDiv(v, ..)
         | Inst::ICmp(v, ..)
-        | Inst::PtrOffset(v, ..)
+        | Inst::PtrNull(v)
         | Inst::SExt(v, ..)
         | Inst::ZExt(v, ..)
         | Inst::Trunc(v, ..) => vec![v],
+        Inst::GlobalAddr { result, .. } | Inst::PtrOffset { result, .. } => vec![result],
         Inst::ShiftCountDefined { result, .. } | Inst::SignedShlDefined { result, .. } => {
             vec![result]
         }
@@ -337,6 +392,16 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
         Inst::Store {
             mem_out, world_out, ..
         } => vec![mem_out, world_out],
+        Inst::Alloca {
+            result,
+            mem_out,
+            world_out,
+            ..
+        } => vec![result, mem_out, world_out],
+        Inst::LifetimeEnd {
+            mem_out, world_out, ..
+        } => vec![mem_out, world_out],
+        Inst::PointerValid { mem_out, .. } | Inst::AccessInBounds { mem_out, .. } => vec![mem_out],
         Inst::Call {
             results,
             mem_out,
@@ -358,7 +423,11 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
 #[must_use]
 pub fn inst_uses(inst: &Inst) -> Vec<&Value> {
     match inst {
-        Inst::Const(..) | Inst::Uninitialized(..) | Inst::Trap(..) => vec![],
+        Inst::Const(..)
+        | Inst::Uninitialized(..)
+        | Inst::Trap(..)
+        | Inst::PtrNull(..)
+        | Inst::GlobalAddr { .. } => vec![],
 
         Inst::Add(_, lhs, rhs)
         | Inst::Sub(_, lhs, rhs)
@@ -412,7 +481,22 @@ pub fn inst_uses(inst: &Inst) -> Vec<&Value> {
             world_in,
             ..
         } => vec![address, value, mem_in, world_in],
-        Inst::PtrOffset(_, base, offset) => vec![base, offset],
+        Inst::Alloca {
+            mem_in, world_in, ..
+        } => vec![mem_in, world_in],
+        Inst::LifetimeEnd {
+            mem_in,
+            world_in,
+            pointer,
+            ..
+        } => vec![mem_in, world_in, pointer],
+        Inst::PointerValid {
+            mem_in, pointer, ..
+        }
+        | Inst::AccessInBounds {
+            mem_in, pointer, ..
+        } => vec![mem_in, pointer],
+        Inst::PtrOffset { base, index, .. } => vec![base, index],
         Inst::Call {
             args,
             mem_in,
@@ -459,7 +543,26 @@ pub struct Function {
 /// A collection of mutually callable EvoIR functions.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Module {
+    pub globals: Vec<GlobalObject>,
     pub functions: Vec<Function>,
+}
+
+/// Static-storage category encoded by the textual module-global table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GlobalStorage {
+    Static,
+    StringLiteral,
+}
+
+/// One eagerly allocated module object and its byte initialization state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GlobalObject {
+    pub symbol: String,
+    pub origin: u64,
+    pub storage: GlobalStorage,
+    pub layout: AccessLayout,
+    pub bytes: Vec<u8>,
+    pub initialized: Vec<bool>,
 }
 
 // ---------------------------------------------------------------------------
@@ -537,6 +640,7 @@ pub fn validate_ssa(func: &Function) -> Result<(), String> {
             .map(|arg| (arg.value.id, arg.value.ty.clone()))
             .collect();
         let mut effects = EffectState::from_block_args(block)?;
+        let mut access_guards: HashMap<u32, (u32, AccessLayout)> = HashMap::new();
 
         for (index, inst) in block.insts.iter().enumerate() {
             if is_terminator(inst) {
@@ -566,6 +670,13 @@ pub fn validate_ssa(func: &Function) -> Result<(), String> {
                 require_local_value(&local, used, block.id, "instruction")?;
             }
             validate_instruction_types(inst, block.id)?;
+            validate_memory_contract(
+                inst,
+                block.insts.get(index + 1),
+                block.id,
+                &effects,
+                &mut access_guards,
+            )?;
             effects.advance(inst, block.id)?;
             for result in inst_results(inst) {
                 register_definition(
@@ -639,6 +750,111 @@ pub fn validate_ssa(func: &Function) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_memory_contract(
+    inst: &Inst,
+    next: Option<&Inst>,
+    block: BlockId,
+    effects: &EffectState,
+    access_guards: &mut HashMap<u32, (u32, AccessLayout)>,
+) -> Result<(), String> {
+    match inst {
+        Inst::PtrOffset { result, .. } => {
+            let Some(Inst::PointerValid {
+                mem_in, pointer, ..
+            }) = next
+            else {
+                return Err(format!(
+                    "ptr.offset result v{} in block {block} must be immediately followed by pointer_valid",
+                    result.id
+                ));
+            };
+            if pointer.id != result.id || effects.mem[region_index(Region::All)] != Some(mem_in.id)
+            {
+                return Err(format!(
+                    "ptr.offset result v{} in block {block} has a mismatched pointer_valid obligation",
+                    result.id
+                ));
+            }
+        }
+        Inst::AccessInBounds {
+            pointer,
+            mem_out,
+            layout,
+            ..
+        } => {
+            access_guards.insert(mem_out.id, (pointer.id, *layout));
+        }
+        Inst::Load {
+            result,
+            address,
+            mem_in,
+            ..
+        } => validate_matching_access_guard(
+            access_guards,
+            mem_in,
+            address,
+            evoir_access_layout(&result.ty)?,
+            "load",
+            block,
+        )?,
+        Inst::Store {
+            address,
+            value,
+            mem_in,
+            ..
+        } => validate_matching_access_guard(
+            access_guards,
+            mem_in,
+            address,
+            evoir_access_layout(&value.ty)?,
+            "store",
+            block,
+        )?,
+        _ => {}
+    }
+    Ok(())
+}
+
+fn validate_matching_access_guard(
+    access_guards: &HashMap<u32, (u32, AccessLayout)>,
+    mem_in: &Value,
+    address: &Value,
+    expected: Option<AccessLayout>,
+    operation: &str,
+    block: BlockId,
+) -> Result<(), String> {
+    match access_guards.get(&mem_in.id) {
+        Some((pointer, layout))
+            if *pointer == address.id && expected.is_none_or(|expected| *layout == expected) =>
+        {
+            Ok(())
+        }
+        _ => Err(format!(
+            "{operation} in block {block} must consume a matching access_in_bounds token for v{} with {expected:?}",
+            address.id
+        )),
+    }
+}
+
+fn evoir_access_layout(ty: &EvoIRType) -> Result<Option<AccessLayout>, String> {
+    let size = match ty {
+        EvoIRType::Bits(width) if *width > 0 => u64::from(width.div_ceil(8)),
+        EvoIRType::F32 => 4,
+        EvoIRType::F64 => 8,
+        // Pointer size/alignment is target data, so target-independent module
+        // validation checks only pointer identity. Lowering and interpretation
+        // use the explicit guard layout produced from TargetDataLayout.
+        EvoIRType::Ptr(_) => return Ok(None),
+        _ => {
+            return Err(format!(
+                "Day 7 memory type {ty:?} has no scalar access layout"
+            ))
+        }
+    };
+    let align = u32::try_from(size.min(8)).map_err(|_| "invalid access alignment".to_owned())?;
+    Ok(Some(AccessLayout::new(size, align)))
+}
+
 /// Validate every function and all inter-function call signatures.
 pub fn validate_module(module: &Module) -> Result<(), String> {
     let mut functions = HashMap::new();
@@ -650,6 +866,40 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
             .map_err(|message| format!("function '{}': {message}", function.name))?;
     }
 
+    let mut globals = HashMap::new();
+    let mut origins = HashSet::new();
+    for global in &module.globals {
+        validate_layout(global.layout, "module global", 0)?;
+        let size = usize::try_from(global.layout.size_bytes)
+            .map_err(|_| format!("global '{}' size exceeds host limits", global.symbol))?;
+        if global.bytes.len() != size || global.initialized.len() != size {
+            return Err(format!(
+                "global '{}' bytes/initialized lengths must equal size {}",
+                global.symbol, global.layout.size_bytes
+            ));
+        }
+        if global.storage == GlobalStorage::StringLiteral
+            && global.initialized.iter().any(|bit| !*bit)
+        {
+            return Err(format!(
+                "string-literal global '{}' must be fully initialized",
+                global.symbol
+            ));
+        }
+        if functions.contains_key(global.symbol.as_str()) {
+            return Err(format!(
+                "symbol '{}' is both a function and global",
+                global.symbol
+            ));
+        }
+        if globals.insert(global.symbol.as_str(), global).is_some() {
+            return Err(format!("duplicate global symbol '{}'", global.symbol));
+        }
+        if !origins.insert(global.origin) {
+            return Err(format!("duplicate allocation origin {}", global.origin));
+        }
+    }
+
     let mut effect_participants = HashSet::new();
     for function in &module.functions {
         for block in &function.blocks {
@@ -659,7 +909,12 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                         effect_participants.insert(function.name.as_str());
                         effect_participants.insert(callee.as_str());
                     }
-                    Inst::Load { .. } | Inst::Store { .. } => {
+                    Inst::Load { .. }
+                    | Inst::Store { .. }
+                    | Inst::Alloca { .. }
+                    | Inst::LifetimeEnd { .. }
+                    | Inst::PointerValid { .. }
+                    | Inst::AccessInBounds { .. } => {
                         effect_participants.insert(function.name.as_str());
                     }
                     _ => {}
@@ -677,6 +932,24 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
     for caller in &module.functions {
         for block in &caller.blocks {
             for (index, instruction) in block.insts.iter().enumerate() {
+                match instruction {
+                    Inst::GlobalAddr { symbol, .. } if !globals.contains_key(symbol.as_str()) => {
+                        return Err(format!(
+                            "function '{}' block {} instruction {} refers to missing global '{}'",
+                            caller.name, block.id, index, symbol
+                        ));
+                    }
+                    Inst::GlobalAddr { symbol, .. } if functions.contains_key(symbol.as_str()) => {
+                        return Err(format!(
+                            "function '{}' block {} instruction {} uses function '{}' as global",
+                            caller.name, block.id, index, symbol
+                        ));
+                    }
+                    Inst::Alloca { origin, .. } if !origins.insert(*origin) => {
+                        return Err(format!("duplicate allocation origin {origin}"));
+                    }
+                    _ => {}
+                }
                 let Inst::Call {
                     results,
                     callee,
@@ -1154,6 +1427,20 @@ impl EffectState {
                 world_out,
                 ..
             }
+            | Inst::Alloca {
+                mem_in,
+                world_in,
+                mem_out,
+                world_out,
+                ..
+            }
+            | Inst::LifetimeEnd {
+                mem_in,
+                world_in,
+                mem_out,
+                world_out,
+                ..
+            }
             | Inst::Call {
                 mem_in,
                 world_in,
@@ -1161,6 +1448,29 @@ impl EffectState {
                 world_out,
                 ..
             } => Some((mem_in, world_in, mem_out, world_out)),
+            Inst::PointerValid {
+                mem_in, mem_out, ..
+            }
+            | Inst::AccessInBounds {
+                mem_in, mem_out, ..
+            } => {
+                if mem_in.ty != EvoIRType::Mem(Region::All)
+                    || mem_out.ty != EvoIRType::Mem(Region::All)
+                {
+                    return Err(format!(
+                        "memory guard in block {block} must thread mem<all>"
+                    ));
+                }
+                let current = self.mem[region_index(Region::All)];
+                if current != Some(mem_in.id) {
+                    return Err(format!(
+                        "memory guard in block {block} consumes stale mem<all> token v{}",
+                        mem_in.id
+                    ));
+                }
+                self.mem[region_index(Region::All)] = Some(mem_out.id);
+                return Ok(());
+            }
             _ => None,
         };
         let Some((mem_in, world_in, mem_out, world_out)) = tokens else {
@@ -1260,7 +1570,7 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
                 ))
             }
         }
-        Inst::ICmp(result, _, lhs, rhs) => {
+        Inst::ICmp(result, operation, lhs, rhs) => {
             if result.ty != EvoIRType::Bits(1) {
                 return Err(format!(
                     "icmp result in block {} has type {:?}, expected bits<1>",
@@ -1273,7 +1583,55 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
                     block, lhs.ty, rhs.ty
                 ));
             }
-            expect_bits(&lhs.ty, "icmp operand", block)
+            match &lhs.ty {
+                EvoIRType::Ptr(_) if matches!(operation, CmpOp::Eq | CmpOp::Ne) => Ok(()),
+                _ => expect_bits(&lhs.ty, "icmp operand", block),
+            }
+        }
+        Inst::PtrNull(result) => expect_pointer(&result.ty, "null-pointer result", block),
+        Inst::GlobalAddr { result, .. } => {
+            expect_pointer(&result.ty, "global-address result", block)
+        }
+        Inst::Alloca {
+            result,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            layout,
+            ..
+        } => {
+            expect_pointer(&result.ty, "alloca result", block)?;
+            validate_layout(*layout, "alloca", block)?;
+            expect_day7_effect_tokens(mem_in, world_in, mem_out, world_out, "alloca", block)
+        }
+        Inst::LifetimeEnd {
+            mem_in,
+            world_in,
+            pointer,
+            mem_out,
+            world_out,
+        } => {
+            expect_pointer(&pointer.ty, "lifetime.end pointer", block)?;
+            expect_day7_effect_tokens(mem_in, world_in, mem_out, world_out, "lifetime.end", block)
+        }
+        Inst::PointerValid {
+            mem_in,
+            pointer,
+            mem_out,
+        } => {
+            expect_pointer(&pointer.ty, "pointer_valid pointer", block)?;
+            expect_day7_memory_tokens(mem_in, mem_out, "pointer_valid", block)
+        }
+        Inst::AccessInBounds {
+            mem_in,
+            pointer,
+            mem_out,
+            layout,
+        } => {
+            expect_pointer(&pointer.ty, "access_in_bounds pointer", block)?;
+            validate_layout(*layout, "access_in_bounds", block)?;
+            expect_day7_memory_tokens(mem_in, mem_out, "access_in_bounds", block)
         }
         Inst::Load {
             result,
@@ -1282,10 +1640,11 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             world_in,
             mem_out,
             world_out,
+            ..
         } => {
             expect_pointer(&address.ty, "load address", block)?;
             expect_data_type(&result.ty, "load result", block)?;
-            expect_effect_tokens(mem_in, world_in, mem_out, world_out, "load", block)
+            expect_day7_effect_tokens(mem_in, world_in, mem_out, world_out, "load", block)
         }
         Inst::Store {
             address,
@@ -1294,10 +1653,11 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             world_in,
             mem_out,
             world_out,
+            ..
         } => {
             expect_pointer(&address.ty, "store address", block)?;
             expect_data_type(&value.ty, "stored value", block)?;
-            expect_effect_tokens(mem_in, world_in, mem_out, world_out, "store", block)
+            expect_day7_effect_tokens(mem_in, world_in, mem_out, world_out, "store", block)
         }
         Inst::Call {
             results,
@@ -1316,7 +1676,13 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             }
             expect_effect_tokens(mem_in, world_in, mem_out, world_out, "call", block)
         }
-        Inst::PtrOffset(result, base, offset) => {
+        Inst::PtrOffset {
+            result,
+            base,
+            index,
+            scale,
+            ..
+        } => {
             expect_pointer(&result.ty, "pointer-offset result", block)?;
             expect_pointer(&base.ty, "pointer-offset base", block)?;
             if result.ty != base.ty {
@@ -1325,7 +1691,12 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
                     block, result.ty, base.ty
                 ));
             }
-            expect_bits(&offset.ty, "pointer-offset index", block)
+            if *scale == 0 {
+                return Err(format!(
+                    "pointer-offset scale in block {block} must be positive"
+                ));
+            }
+            expect_bits(&index.ty, "pointer-offset index", block)
         }
         Inst::SExt(result, source, target) => {
             validate_conversion(result, source, target, Conversion::SignExtend, block)
@@ -1341,6 +1712,40 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             block
         )),
     }
+}
+
+fn validate_layout(layout: AccessLayout, operation: &str, block: BlockId) -> Result<(), String> {
+    if layout.size_bytes == 0 || layout.align_bytes == 0 || !layout.align_bytes.is_power_of_two() {
+        return Err(format!(
+            "{operation} in block {block} has invalid size/alignment {layout:?}"
+        ));
+    }
+    Ok(())
+}
+
+fn expect_day7_memory_tokens(
+    mem_in: &Value,
+    mem_out: &Value,
+    operation: &str,
+    block: BlockId,
+) -> Result<(), String> {
+    if mem_in.ty == EvoIRType::Mem(Region::All) && mem_out.ty == EvoIRType::Mem(Region::All) {
+        Ok(())
+    } else {
+        Err(format!("{operation} in block {block} must thread mem<all>"))
+    }
+}
+
+fn expect_day7_effect_tokens(
+    mem_in: &Value,
+    world_in: &Value,
+    mem_out: &Value,
+    world_out: &Value,
+    operation: &str,
+    block: BlockId,
+) -> Result<(), String> {
+    expect_effect_tokens(mem_in, world_in, mem_out, world_out, operation, block)?;
+    expect_day7_memory_tokens(mem_in, mem_out, operation, block)
 }
 
 fn expect_same_bits(
@@ -1690,7 +2095,8 @@ impl RuntimeValue {
 /// interpreter is executing validated EvoIR.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InternalValue {
-    Initialized(u64),
+    Bits(u64),
+    Pointer(Pointer),
     Uninitialized,
 }
 
@@ -1706,6 +2112,9 @@ pub struct InterpreterOutcome {
 struct ExecutionState {
     memory: MemoryState,
     world: WorldState,
+    globals: HashMap<String, Pointer>,
+    access_guards: HashMap<u64, (Pointer, AccessLayout)>,
+    next_token: u64,
 }
 
 impl ExecutionState {
@@ -1724,7 +2133,23 @@ impl ExecutionState {
         let world = WorldState::new(WorldLimits {
             max_volatile_events: MAX_VOLATILE_EVENTS,
         });
-        Ok(Self { memory, world })
+        Ok(Self {
+            memory,
+            world,
+            globals: HashMap::new(),
+            access_guards: HashMap::new(),
+            next_token: 1,
+        })
+    }
+
+    fn fresh_token(&mut self) -> Result<u64, InterpreterError> {
+        let token = self.next_token;
+        self.next_token = token
+            .checked_add(1)
+            .ok_or_else(|| InterpreterError::InvalidModule {
+                message: "runtime effect-token identity exhausted".to_owned(),
+            })?;
+        Ok(token)
     }
 }
 
@@ -1732,6 +2157,10 @@ impl ExecutionState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InterpreterError {
     MemorySetup {
+        error: MemoryFault,
+    },
+    MemoryAccess {
+        block: BlockId,
         error: MemoryFault,
     },
     InvalidModule {
@@ -1815,6 +2244,10 @@ impl InterpreterError {
     pub const fn code(&self) -> &'static str {
         match self {
             Self::MemorySetup { .. } => "E3007",
+            Self::MemoryAccess { error, .. } => match error.runtime_diagnostic() {
+                Some(diagnostic) => diagnostic.code,
+                None => "E3007",
+            },
             Self::UninitializedRead { .. } => "E3001",
             Self::MissingReturn { .. } => "E3007",
             Self::DivisionByZero { .. } => "E3002",
@@ -1833,6 +2266,10 @@ impl InterpreterError {
             Self::MemorySetup { error } => {
                 format!("interpreter-memory-setup-failed: {error}")
             }
+            Self::MemoryAccess { error, .. } => error.runtime_diagnostic().map_or_else(
+                || format!("interpreter-memory-failed: {error}"),
+                |diagnostic| diagnostic.message.to_owned(),
+            ),
             Self::UninitializedRead { .. } => "read-of-uninitialized-object".to_owned(),
             Self::MissingReturn { .. } => "scalar-function-fell-off-end".to_owned(),
             Self::DivisionByZero { .. } => "integer-division-by-zero".to_owned(),
@@ -1852,6 +2289,12 @@ impl fmt::Display for InterpreterError {
         match self {
             Self::MemorySetup { error } => {
                 write!(formatter, "EvoIR memory setup failed: {error}")
+            }
+            Self::MemoryAccess { block, error } => {
+                write!(
+                    formatter,
+                    "EvoIR memory access failed in block {block}: {error}"
+                )
             }
             Self::InvalidModule { message } => write!(formatter, "invalid EvoIR module: {message}"),
             Self::InvalidFunction { message } => write!(formatter, "invalid EvoIR: {message}"),
@@ -1965,7 +2408,7 @@ fn interpret_function_in_state(
     func: &Function,
     entry_args: &[RuntimeValue],
     limits: InterpreterLimits,
-    state: ExecutionState,
+    mut state: ExecutionState,
 ) -> Result<InterpreterOutcome, InterpreterError> {
     validate_ssa(func).map_err(|message| InterpreterError::InvalidFunction { message })?;
     let entry = func
@@ -1994,6 +2437,7 @@ fn interpret_function_in_state(
         .collect::<Result<Vec<_>, _>>()?;
     let mut program_counter = entry.id;
     let mut steps = 0;
+    let (memory_frame, memory_scope) = begin_function_memory(&mut state, func, entry.id)?;
 
     loop {
         let block =
@@ -2015,7 +2459,14 @@ fn interpret_function_in_state(
 
         for inst in &block.insts {
             charge_step(&mut steps, limits, block.id)?;
-            execute_instruction(inst, block.id, &mut values)?;
+            execute_instruction(
+                inst,
+                block.id,
+                &mut values,
+                &mut state,
+                memory_frame,
+                memory_scope,
+            )?;
         }
 
         charge_step(&mut steps, limits, block.id)?;
@@ -2035,15 +2486,20 @@ fn interpret_function_in_state(
                 }
             }
             Inst::Ret(returned) => {
-                let raw_values = read_values(returned, block.id, &values)?;
-                let return_values = raw_values
-                    .into_iter()
-                    .zip(returned)
-                    .map(|(raw_bits, value)| RuntimeValue {
-                        ty: value.ty.clone(),
-                        raw_bits,
-                    })
-                    .collect();
+                let internal = copy_values(returned, block.id, &values)?;
+                if let Some(memory_frame) = memory_frame {
+                    state.memory = state.memory.end_frame(memory_frame).map_err(|error| {
+                        InterpreterError::MemoryAccess {
+                            block: block.id,
+                            error,
+                        }
+                    })?;
+                }
+                let return_values = public_return_values(
+                    internal,
+                    returned.iter().map(|value| value.ty.clone()).collect(),
+                    block.id,
+                )?;
                 return Ok(InterpreterOutcome {
                     return_values,
                     steps,
@@ -2078,6 +2534,8 @@ struct ModuleFrame {
     next_instruction: usize,
     entered: bool,
     return_binding: Option<CallReturnBinding>,
+    memory_frame: Option<FrameId>,
+    memory_scope: Option<ScopeId>,
 }
 
 impl ModuleFrame {
@@ -2086,6 +2544,8 @@ impl ModuleFrame {
         block: BlockId,
         incoming: Vec<InternalValue>,
         return_binding: Option<CallReturnBinding>,
+        memory_frame: Option<FrameId>,
+        memory_scope: Option<ScopeId>,
     ) -> Self {
         Self {
             function_index,
@@ -2095,8 +2555,34 @@ impl ModuleFrame {
             next_instruction: 0,
             entered: false,
             return_binding,
+            memory_frame,
+            memory_scope,
         }
     }
+}
+
+fn function_uses_automatic_memory(function: &Function) -> bool {
+    function.blocks.iter().any(|block| {
+        block.insts.iter().any(|instruction| {
+            matches!(instruction, Inst::Alloca { .. } | Inst::LifetimeEnd { .. })
+        })
+    })
+}
+
+fn begin_function_memory(
+    state: &mut ExecutionState,
+    function: &Function,
+    block: BlockId,
+) -> Result<(Option<FrameId>, Option<ScopeId>), InterpreterError> {
+    if !function_uses_automatic_memory(function) {
+        return Ok((None, None));
+    }
+    let (memory, frame, scope) = state
+        .memory
+        .begin_frame()
+        .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+    state.memory = memory;
+    Ok((Some(frame), Some(scope)))
 }
 
 enum FrameAction {
@@ -2138,9 +2624,10 @@ fn interpret_module_in_state(
     entry_name: &str,
     entry_args: &[RuntimeValue],
     limits: InterpreterLimits,
-    state: ExecutionState,
+    mut state: ExecutionState,
 ) -> Result<InterpreterOutcome, InterpreterError> {
     validate_module(module).map_err(|message| InterpreterError::InvalidModule { message })?;
+    initialize_globals(module, &mut state)?;
     let function_indices: HashMap<&str, usize> = module
         .functions
         .iter()
@@ -2174,11 +2661,15 @@ fn interpret_module_in_state(
             normalize_runtime_input(value, &argument.value.ty, index, entry_block.id)
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let (entry_frame, entry_scope) =
+        begin_function_memory(&mut state, entry_function, entry_block.id)?;
     let mut frames = vec![ModuleFrame::new(
         entry_index,
         entry_block.id,
         incoming,
         None,
+        entry_frame,
+        entry_scope,
     )];
     let mut steps = 0;
 
@@ -2210,21 +2701,18 @@ fn interpret_module_in_state(
                     world_out,
                 } = instruction
                 {
-                    let mut call_arguments: Vec<InternalValue> =
-                        read_values(&args, block_id, &frames[frame_index].values)?
-                            .into_iter()
-                            .map(InternalValue::Initialized)
-                            .collect();
-                    call_arguments.push(InternalValue::Initialized(read_value(
+                    let mut call_arguments =
+                        read_call_values(&args, block_id, &frames[frame_index].values)?;
+                    call_arguments.push(read_internal(
                         &frames[frame_index].values,
                         &mem_in,
                         block_id,
-                    )?));
-                    call_arguments.push(InternalValue::Initialized(read_value(
+                    )?);
+                    call_arguments.push(read_internal(
                         &frames[frame_index].values,
                         &world_in,
                         block_id,
-                    )?));
+                    )?);
                     let callee_index =
                         function_indices
                             .get(callee.as_str())
@@ -2239,6 +2727,11 @@ fn interpret_module_in_state(
                             .ok_or_else(|| InterpreterError::InvalidModule {
                                 message: format!("callee '{callee}' has no entry block"),
                             })?;
+                    let (memory_frame, memory_scope) = begin_function_memory(
+                        &mut state,
+                        &module.functions[callee_index],
+                        block_id,
+                    )?;
                     frames.push(ModuleFrame::new(
                         callee_index,
                         callee_entry.id,
@@ -2248,9 +2741,20 @@ fn interpret_module_in_state(
                             mem_out,
                             world_out,
                         }),
+                        memory_frame,
+                        memory_scope,
                     ));
                 } else {
-                    execute_instruction(&instruction, block_id, &mut frames[frame_index].values)?;
+                    let memory_frame = frames[frame_index].memory_frame;
+                    let memory_scope = frames[frame_index].memory_scope;
+                    execute_instruction(
+                        &instruction,
+                        block_id,
+                        &mut frames[frame_index].values,
+                        &mut state,
+                        memory_frame,
+                        memory_scope,
+                    )?;
                 }
             }
             FrameAction::Terminator(terminator) => match terminator {
@@ -2275,8 +2779,14 @@ fn interpret_module_in_state(
                     set_module_frame_block(&mut frames[frame_index], target, incoming);
                 }
                 Inst::Ret(returned) => {
-                    let returned_raw =
-                        read_values(&returned, block_id, &frames[frame_index].values)?;
+                    let returned_values =
+                        copy_values(&returned, block_id, &frames[frame_index].values)?;
+                    if returned_values
+                        .iter()
+                        .any(|value| matches!(value, InternalValue::Uninitialized))
+                    {
+                        return Err(InterpreterError::UninitializedRead { block: block_id });
+                    }
                     let returned_types = module.functions[frames[frame_index].function_index]
                         .ret_tys
                         .clone();
@@ -2286,14 +2796,19 @@ fn interpret_module_in_state(
                             .ok_or_else(|| InterpreterError::InvalidModule {
                                 message: "return observed with no active frame".to_owned(),
                             })?;
+                    if let Some(memory_frame) = completed.memory_frame {
+                        state.memory = state.memory.end_frame(memory_frame).map_err(|error| {
+                            InterpreterError::MemoryAccess {
+                                block: block_id,
+                                error,
+                            }
+                        })?;
+                    }
                     if let Some(binding) = completed.return_binding {
-                        bind_call_return(&mut frames, binding, returned_raw)?;
+                        bind_call_return(&mut frames, binding, returned_values)?;
                     } else {
-                        let return_values = returned_raw
-                            .into_iter()
-                            .zip(returned_types)
-                            .map(|(raw_bits, ty)| RuntimeValue { ty, raw_bits })
-                            .collect();
+                        let return_values =
+                            public_return_values(returned_values, returned_types, block_id)?;
                         return Ok(InterpreterOutcome {
                             return_values,
                             steps,
@@ -2370,7 +2885,7 @@ fn set_module_frame_block(frame: &mut ModuleFrame, block: BlockId, incoming: Vec
 fn bind_call_return(
     frames: &mut [ModuleFrame],
     binding: CallReturnBinding,
-    returned: Vec<u64>,
+    returned: Vec<InternalValue>,
 ) -> Result<(), InterpreterError> {
     let expected = binding.results.len() + 2;
     if returned.len() != expected {
@@ -2386,20 +2901,35 @@ fn bind_call_return(
         .ok_or_else(|| InterpreterError::InvalidModule {
             message: "callee return has no caller frame".to_owned(),
         })?;
-    for (result, raw_bits) in binding.results.iter().zip(&returned) {
-        caller
-            .values
-            .insert(result.id, InternalValue::Initialized(*raw_bits));
+    for (result, value) in binding.results.iter().zip(&returned) {
+        caller.values.insert(result.id, *value);
     }
-    caller.values.insert(
-        binding.mem_out.id,
-        InternalValue::Initialized(returned[binding.results.len()]),
-    );
-    caller.values.insert(
-        binding.world_out.id,
-        InternalValue::Initialized(returned[binding.results.len() + 1]),
-    );
+    caller
+        .values
+        .insert(binding.mem_out.id, returned[binding.results.len()]);
+    caller
+        .values
+        .insert(binding.world_out.id, returned[binding.results.len() + 1]);
     Ok(())
+}
+
+fn public_return_values(
+    values: Vec<InternalValue>,
+    types: Vec<EvoIRType>,
+    block: BlockId,
+) -> Result<Vec<RuntimeValue>, InterpreterError> {
+    values
+        .into_iter()
+        .zip(types)
+        .enumerate()
+        .map(|(index, (value, ty))| match value {
+            InternalValue::Bits(raw_bits) => Ok(RuntimeValue { ty, raw_bits }),
+            InternalValue::Pointer(_) => {
+                Err(InterpreterError::UnsupportedRuntimeType { index, ty })
+            }
+            InternalValue::Uninitialized => Err(InterpreterError::UninitializedRead { block }),
+        })
+        .collect()
 }
 
 /// Explicit compatibility spelling for [`interpret_function`].
@@ -2428,13 +2958,20 @@ fn charge_step(
 }
 
 fn write_value(values: &mut HashMap<u32, InternalValue>, result: &Value, raw_bits: u64) {
-    values.insert(result.id, InternalValue::Initialized(raw_bits));
+    values.insert(result.id, InternalValue::Bits(raw_bits));
+}
+
+fn write_internal(values: &mut HashMap<u32, InternalValue>, result: &Value, value: InternalValue) {
+    values.insert(result.id, value);
 }
 
 fn execute_instruction(
     inst: &Inst,
     block: BlockId,
     values: &mut HashMap<u32, InternalValue>,
+    state: &mut ExecutionState,
+    memory_frame: Option<FrameId>,
+    memory_scope: Option<ScopeId>,
 ) -> Result<(), InterpreterError> {
     match inst {
         Inst::Const(result, immediate) => {
@@ -2620,6 +3157,21 @@ fn execute_instruction(
             write_value(values, result, quotient);
         }
         Inst::ICmp(result, operation, lhs, rhs) => {
+            if matches!(lhs.ty, EvoIRType::Ptr(_)) {
+                let left = read_pointer(values, lhs, block)?;
+                let right = read_pointer(values, rhs, block)?;
+                let comparison = match operation {
+                    CmpOp::Eq => left == right,
+                    CmpOp::Ne => left != right,
+                    _ => {
+                        return Err(InterpreterError::InvalidFunction {
+                            message: format!("block {block} uses ordered comparison on pointers"),
+                        });
+                    }
+                };
+                write_value(values, result, u64::from(comparison));
+                return Ok(());
+            }
             let kernel = IntegerKernel::for_value(lhs, block)?;
             let left = read_value(values, lhs, block)?;
             let right = read_value(values, rhs, block)?;
@@ -2653,17 +3205,210 @@ fn execute_instruction(
                 target_kernel.normalize(source_kernel.normalize(raw)),
             );
         }
-        Inst::Load { .. } => {
-            return Err(InterpreterError::UnsupportedInstruction {
-                block,
-                operation: "load",
-            });
+        Inst::PtrNull(result) => {
+            write_internal(values, result, InternalValue::Pointer(Pointer::NULL))
         }
-        Inst::Store { .. } => {
-            return Err(InterpreterError::UnsupportedInstruction {
-                block,
-                operation: "store",
-            });
+        Inst::GlobalAddr { result, symbol } => {
+            let pointer = state.globals.get(symbol).copied().ok_or_else(|| {
+                InterpreterError::InvalidModule {
+                    message: format!("global_addr refers to missing global '{symbol}'"),
+                }
+            })?;
+            write_internal(values, result, InternalValue::Pointer(pointer));
+        }
+        Inst::Alloca {
+            result,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            origin,
+            layout,
+        } => {
+            let _ = read_value(values, mem_in, block)?;
+            let _ = read_value(values, world_in, block)?;
+            let memory_frame = memory_frame.ok_or_else(|| InterpreterError::InvalidModule {
+                message: format!("alloca in block {block} lacks a function memory frame"),
+            })?;
+            let memory_scope = memory_scope.ok_or_else(|| InterpreterError::InvalidModule {
+                message: format!("alloca in block {block} lacks a function memory scope"),
+            })?;
+            let (memory, pointer) = state
+                .memory
+                .allocate_automatic(memory_frame, memory_scope, *origin, *layout)
+                .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+            state.memory = memory;
+            let memory_token = state.fresh_token()?;
+            let world_token = state.fresh_token()?;
+            write_internal(values, result, InternalValue::Pointer(pointer));
+            write_value(values, mem_out, memory_token);
+            write_value(values, world_out, world_token);
+        }
+        Inst::LifetimeEnd {
+            mem_in,
+            world_in,
+            pointer,
+            mem_out,
+            world_out,
+        } => {
+            let _ = read_value(values, mem_in, block)?;
+            let _ = read_value(values, world_in, block)?;
+            let memory_frame = memory_frame.ok_or_else(|| InterpreterError::InvalidModule {
+                message: format!("lifetime.end in block {block} lacks a function memory frame"),
+            })?;
+            let pointer = read_pointer(values, pointer, block)?;
+            state.memory = state
+                .memory
+                .end_object_lifetime(memory_frame, pointer)
+                .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+            let memory_token = state.fresh_token()?;
+            let world_token = state.fresh_token()?;
+            write_value(values, mem_out, memory_token);
+            write_value(values, world_out, world_token);
+        }
+        Inst::PointerValid {
+            mem_in,
+            pointer,
+            mem_out,
+        } => {
+            let _ = read_value(values, mem_in, block)?;
+            let pointer = read_pointer(values, pointer, block)?;
+            state
+                .memory
+                .check_pointer(pointer)
+                .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+            let memory_token = state.fresh_token()?;
+            write_value(values, mem_out, memory_token);
+        }
+        Inst::AccessInBounds {
+            mem_in,
+            pointer,
+            mem_out,
+            layout,
+        } => {
+            let _ = read_value(values, mem_in, block)?;
+            let pointer = read_pointer(values, pointer, block)?;
+            state
+                .memory
+                .check_access(pointer, *layout)
+                .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+            let memory_token = state.fresh_token()?;
+            state.access_guards.insert(memory_token, (pointer, *layout));
+            write_value(values, mem_out, memory_token);
+        }
+        Inst::Load {
+            result,
+            address,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            volatile,
+        } => {
+            let memory_token = read_value(values, mem_in, block)?;
+            let _ = read_value(values, world_in, block)?;
+            let address = read_pointer(values, address, block)?;
+            let layout = matching_guard(state, memory_token, address, block)?;
+            let loaded = match &result.ty {
+                EvoIRType::Bits(_) => {
+                    let raw = if *volatile {
+                        let (raw, world) = state
+                            .memory
+                            .volatile_load_integer(&state.world, address, layout)
+                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                        state.world = world;
+                        raw
+                    } else {
+                        state
+                            .memory
+                            .load_integer(address, layout)
+                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?
+                    };
+                    let raw = u64::try_from(raw)
+                        .map_err(|_| InterpreterError::UnsupportedBitWidth { block, width: 128 })?;
+                    InternalValue::Bits(raw)
+                }
+                EvoIRType::Ptr(_) => {
+                    let pointer = if *volatile {
+                        let (pointer, world) = state
+                            .memory
+                            .volatile_load_pointer(&state.world, address, layout)
+                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                        state.world = world;
+                        pointer
+                    } else {
+                        state
+                            .memory
+                            .load_pointer(address, layout)
+                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?
+                    };
+                    InternalValue::Pointer(pointer)
+                }
+                _ => {
+                    return Err(InterpreterError::UnsupportedInstruction {
+                        block,
+                        operation: "load type",
+                    });
+                }
+            };
+            let next_memory_token = state.fresh_token()?;
+            let next_world_token = state.fresh_token()?;
+            write_internal(values, result, loaded);
+            write_value(values, mem_out, next_memory_token);
+            write_value(values, world_out, next_world_token);
+        }
+        Inst::Store {
+            address,
+            value,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            volatile,
+        } => {
+            let memory_token = read_value(values, mem_in, block)?;
+            let _ = read_value(values, world_in, block)?;
+            let address = read_pointer(values, address, block)?;
+            let layout = matching_guard(state, memory_token, address, block)?;
+            match read_internal(values, value, block)? {
+                InternalValue::Bits(raw) => {
+                    if *volatile {
+                        let (memory, world) = state
+                            .memory
+                            .volatile_store_integer(&state.world, address, layout, u128::from(raw))
+                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                        state.memory = memory;
+                        state.world = world;
+                    } else {
+                        state.memory = state
+                            .memory
+                            .store_integer(address, layout, u128::from(raw))
+                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                    }
+                }
+                InternalValue::Pointer(pointer) => {
+                    if *volatile {
+                        let (memory, world) = state
+                            .memory
+                            .volatile_store_pointer(&state.world, address, layout, pointer)
+                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                        state.memory = memory;
+                        state.world = world;
+                    } else {
+                        state.memory = state
+                            .memory
+                            .store_pointer(address, layout, pointer)
+                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                    }
+                }
+                InternalValue::Uninitialized => {
+                    return Err(InterpreterError::UninitializedRead { block });
+                }
+            }
+            let next_memory_token = state.fresh_token()?;
+            let next_world_token = state.fresh_token()?;
+            write_value(values, mem_out, next_memory_token);
+            write_value(values, world_out, next_world_token);
         }
         Inst::Call { .. } => {
             return Err(InterpreterError::UnsupportedInstruction {
@@ -2671,11 +3416,25 @@ fn execute_instruction(
                 operation: "call",
             });
         }
-        Inst::PtrOffset(..) => {
-            return Err(InterpreterError::UnsupportedInstruction {
-                block,
-                operation: "pointer offset",
-            });
+        Inst::PtrOffset {
+            result,
+            base,
+            index,
+            direction,
+            signedness,
+            scale,
+        } => {
+            let base = read_pointer(values, base, block)?;
+            let raw = read_value(values, index, block)?;
+            let EvoIRType::Bits(width) = index.ty else {
+                return Err(InterpreterError::InvalidFunction {
+                    message: format!("pointer offset index in block {block} is not bits"),
+                });
+            };
+            let pointer = base
+                .checked_scaled_offset(u128::from(raw), width, *signedness, *direction, *scale)
+                .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+            write_internal(values, result, InternalValue::Pointer(pointer));
         }
         Inst::Br(..) | Inst::CondBr(..) | Inst::Ret(..) | Inst::Trap(..) => {
             return Err(InterpreterError::InvalidFunction {
@@ -2698,9 +3457,122 @@ fn read_value(
             block,
             value: value.id,
         })? {
-        InternalValue::Initialized(raw_bits) => Ok(raw_bits),
+        InternalValue::Bits(raw_bits) => Ok(raw_bits),
+        InternalValue::Pointer(_) => Err(InterpreterError::InvalidFunction {
+            message: format!(
+                "block {block} consumes pointer v{} as integer bits",
+                value.id
+            ),
+        }),
         InternalValue::Uninitialized => Err(InterpreterError::UninitializedRead { block }),
     }
+}
+
+fn read_internal(
+    values: &HashMap<u32, InternalValue>,
+    value: &Value,
+    block: BlockId,
+) -> Result<InternalValue, InterpreterError> {
+    values
+        .get(&value.id)
+        .copied()
+        .ok_or(InterpreterError::MissingValue {
+            block,
+            value: value.id,
+        })
+}
+
+fn read_pointer(
+    values: &HashMap<u32, InternalValue>,
+    value: &Value,
+    block: BlockId,
+) -> Result<Pointer, InterpreterError> {
+    match read_internal(values, value, block)? {
+        InternalValue::Pointer(pointer) => Ok(pointer),
+        InternalValue::Uninitialized => Err(InterpreterError::UninitializedRead { block }),
+        InternalValue::Bits(_) => Err(InterpreterError::InvalidFunction {
+            message: format!(
+                "block {block} consumes non-pointer v{} as pointer",
+                value.id
+            ),
+        }),
+    }
+}
+
+fn matching_guard(
+    state: &ExecutionState,
+    memory_token: u64,
+    pointer: Pointer,
+    block: BlockId,
+) -> Result<AccessLayout, InterpreterError> {
+    let (guarded_pointer, layout) =
+        state
+            .access_guards
+            .get(&memory_token)
+            .copied()
+            .ok_or_else(|| InterpreterError::InvalidModule {
+                message: format!(
+                    "block {block} load/store consumes memory token without access_in_bounds"
+                ),
+            })?;
+    if guarded_pointer != pointer {
+        return Err(InterpreterError::InvalidModule {
+            message: format!("block {block} load/store pointer does not match its access guard"),
+        });
+    }
+    Ok(layout)
+}
+
+fn initialize_globals(module: &Module, state: &mut ExecutionState) -> Result<(), InterpreterError> {
+    for global in &module.globals {
+        let (memory, pointer) = match global.storage {
+            GlobalStorage::StringLiteral => {
+                let bytes = ByteSequence::try_from_bytes(global.bytes.clone())
+                    .map_err(|error| InterpreterError::MemorySetup { error })?;
+                state
+                    .memory
+                    .allocate_string_literal(global.origin, global.layout, &bytes)
+                    .map_err(|error| InterpreterError::MemorySetup { error })?
+            }
+            GlobalStorage::Static => state
+                .memory
+                .allocate_static(global.origin, global.layout, InitialState::Uninitialized)
+                .map_err(|error| InterpreterError::MemorySetup { error })?,
+        };
+        state.memory = memory;
+        if global.storage == GlobalStorage::Static {
+            let mut start = 0_usize;
+            while start < global.initialized.len() {
+                if !global.initialized[start] {
+                    start += 1;
+                    continue;
+                }
+                let mut end = start + 1;
+                while end < global.initialized.len() && global.initialized[end] {
+                    end += 1;
+                }
+                let offset = i64::try_from(start).map_err(|_| InterpreterError::InvalidModule {
+                    message: format!("global '{}' offset exceeds i64", global.symbol),
+                })?;
+                let address = pointer
+                    .checked_offset(offset)
+                    .map_err(|error| InterpreterError::MemorySetup { error })?;
+                let size =
+                    u64::try_from(end - start).map_err(|_| InterpreterError::InvalidModule {
+                        message: format!("global '{}' range exceeds u64", global.symbol),
+                    })?;
+                let bytes = ByteSequence::try_from_bytes(global.bytes[start..end].to_vec())
+                    .map_err(|error| InterpreterError::MemorySetup { error })?;
+                state.memory = state
+                    .memory
+                    .store_bytes(address, AccessLayout::new(size, 1), &bytes)
+                    .map_err(|error| InterpreterError::MemorySetup { error })?;
+                start = end;
+            }
+        }
+        state.globals.insert(global.symbol.clone(), pointer);
+    }
+    Ok(())
 }
 
 fn copy_values(
@@ -2722,14 +3594,17 @@ fn copy_values(
         .collect()
 }
 
-fn read_values(
+fn read_call_values(
     arguments: &[Value],
     block: BlockId,
     values: &HashMap<u32, InternalValue>,
-) -> Result<Vec<u64>, InterpreterError> {
+) -> Result<Vec<InternalValue>, InterpreterError> {
     arguments
         .iter()
-        .map(|argument| read_value(values, argument, block))
+        .map(|argument| match read_internal(values, argument, block)? {
+            InternalValue::Uninitialized => Err(InterpreterError::UninitializedRead { block }),
+            value => Ok(value),
+        })
         .collect()
 }
 
@@ -2749,10 +3624,10 @@ fn normalize_runtime_input(
         });
     }
     match expected {
-        EvoIRType::Bits(_) => Ok(InternalValue::Initialized(
+        EvoIRType::Bits(_) => Ok(InternalValue::Bits(
             IntegerKernel::for_type(expected, block)?.normalize(value.raw_bits),
         )),
-        EvoIRType::Mem(_) | EvoIRType::World => Ok(InternalValue::Initialized(value.raw_bits)),
+        EvoIRType::Mem(_) | EvoIRType::World => Ok(InternalValue::Bits(value.raw_bits)),
         _ => Err(InterpreterError::UnsupportedRuntimeType {
             index,
             ty: expected.clone(),
@@ -3701,6 +4576,7 @@ mod tests {
             }],
         };
         Module {
+            globals: vec![],
             functions: vec![
                 identity_callee("identity", EvoIRType::Bits(32), Region::All),
                 main,
@@ -3810,6 +4686,7 @@ mod tests {
         };
         *callee = "countdown".to_owned();
         Module {
+            globals: vec![],
             functions: vec![countdown, main],
         }
     }
@@ -4657,6 +5534,7 @@ mod tests {
 
         let module_outcome = interpret_module(
             &Module {
+                globals: vec![],
                 functions: vec![function.clone()],
             },
             "propagate_uninitialized",
@@ -4681,6 +5559,7 @@ mod tests {
         assert_eq!(
             interpret_module(
                 &Module {
+                    globals: vec![],
                     functions: vec![consumed],
                 },
                 "consume_propagated_uninitialized",
@@ -4763,6 +5642,7 @@ mod tests {
 
         let module_outcome = interpret_module(
             &Module {
+                globals: vec![],
                 functions: vec![function],
             },
             "definite_assignment_loop",
@@ -4810,6 +5690,7 @@ mod tests {
         assert_eq!(function_error.message(), "read-of-uninitialized-object");
 
         let module = Module {
+            globals: vec![],
             functions: vec![function],
         };
         assert!(matches!(
@@ -5156,6 +6037,7 @@ mod tests {
 
         let module_error = interpret_module(
             &Module {
+                globals: vec![],
                 functions: vec![function],
             },
             "conditional_fallthrough",

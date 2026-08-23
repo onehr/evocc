@@ -12,19 +12,21 @@ use evocc_chir::integer::{
     integer_type_for_rank, usual_arithmetic_type, CInteger, CIntegerType,
 };
 use evocc_chir::{
-    AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit,
-    ExprCategory, FunctionDecl, InitAction, ObjectDecl, ParameterSyntax, ScalarPlace, ScopeKind,
-    StorageClass, SymbolId, SymbolKind, UnaryOp, UpdateOp, WrittenDeclarator,
+    AllocationSiteManifest, AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit,
+    CHirStmt, CHirUnit, ExprCategory, FunctionDecl, InitAction, MemoryPlace, ObjectDecl,
+    ParameterSyntax, PlaceProjection, PlaceRoot, ScalarPlace, ScopeKind, StorageClass,
+    SubobjectPath, SubobjectStep, SymbolId, SymbolKind, UnaryOp, UpdateOp, WrittenDeclarator,
     WrittenDeclaratorLayer,
 };
 use evocc_common::SourceSpan;
 use evocc_evoir::{
-    inst_results, validate_module, Block, BlockArg, BlockId, CmpOp, Function, FunctionParam, Inst,
-    Module, TrapReason, UbReason, Value,
+    inst_results, validate_module, AccessLayout, Block, BlockArg, BlockId, CmpOp, Function,
+    FunctionParam, GlobalObject, GlobalStorage, IndexSignedness, Inst, Module, OffsetDirection,
+    TrapReason, UbReason, Value,
 };
 use evocc_types::{
-    EvoIRType, FunctionParameters, LayoutError, Region, TagDefinition, TagState, TargetDataLayout,
-    TypeId, TypeInterner, TypeKind,
+    AddressSpace, ArrayBound, EvoIRType, FunctionParameters, LayoutError, Region, TagDefinition,
+    TagState, TargetDataLayout, TypeId, TypeInterner, TypeKind,
 };
 
 const BREAK_TARGET_BASE: BlockId = u32::MAX - 1_000_000;
@@ -145,6 +147,7 @@ struct FunctionInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum EnvKey {
     Local(SymbolId),
+    Address(SymbolId),
     Temporary(u32),
     Memory,
     World,
@@ -209,6 +212,8 @@ struct FunctionLowerer<'a> {
     target: &'a TargetDataLayout,
     functions: &'a BTreeMap<SymbolId, FunctionInfo>,
     info: &'a FunctionInfo,
+    memory_symbols: &'a BTreeSet<SymbolId>,
+    allocation_origins: &'a BTreeMap<SymbolId, u64>,
     blocks: Vec<DraftBlock>,
     next_value: u32,
     next_block: BlockId,
@@ -225,8 +230,41 @@ struct FunctionLowerer<'a> {
 /// explicit input and is consulted for every scalar type admitted by this
 /// Day-6 lowering slice.
 pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Module, LowerError> {
-    let functions = index_functions(unit, target)?;
+    let memory_symbols = collect_memory_symbols(unit);
+    let manifest =
+        AllocationSiteManifest::derive(unit).map_err(|_| LowerError::InvalidGeneratedSsa {
+            message: "cannot derive the authoritative allocation-site manifest".to_owned(),
+        })?;
+    let allocation_origins = manifest
+        .sites()
+        .iter()
+        .filter_map(|site| {
+            site.kind()
+                .object_symbol()
+                .map(|symbol| (symbol, site.ordinal().raw()))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let memory_profile = !memory_symbols.is_empty()
+        || manifest.sites().iter().any(|site| {
+            site.kind().object_symbol().is_some_and(|symbol| {
+                unit.symbols()
+                    .symbol(symbol)
+                    .ok()
+                    .and_then(|entry| unit.types().get(entry.ty()))
+                    .is_some_and(|ty| {
+                        matches!(
+                            ty.kind,
+                            TypeKind::Pointer(_)
+                                | TypeKind::Array { .. }
+                                | TypeKind::Struct(_)
+                                | TypeKind::Union(_)
+                        ) || ty.qualifiers.is_volatile
+                    })
+            })
+        });
+    let functions = index_functions(unit, target, memory_profile)?;
     prevalidate_unit_for_lowering(unit)?;
+    let globals = lower_globals(unit, target, &memory_symbols, &allocation_origins)?;
     let mut lowered = Vec::new();
     for declaration in unit.iter() {
         let CHirDecl::Function(function) = declaration else {
@@ -243,11 +281,472 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
                     span: function.span,
                     reason: "definition is absent from the function index",
                 })?;
-        lowered.push(FunctionLowerer::new(unit, target, &functions, info).lower(function)?);
+        lowered.push(
+            FunctionLowerer::new(
+                unit,
+                target,
+                &functions,
+                info,
+                &memory_symbols,
+                &allocation_origins,
+            )
+            .lower(function)?,
+        );
     }
-    let module = Module { functions: lowered };
+    let module = Module {
+        globals,
+        functions: lowered,
+    };
     validate_module(&module).map_err(|message| LowerError::InvalidGeneratedSsa { message })?;
     Ok(module)
+}
+
+fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
+    fn declaration(unit: &CHirUnit<'_>, declaration: &CHirDecl<'_>, out: &mut BTreeSet<SymbolId>) {
+        if let CHirDecl::Object(object) = declaration {
+            let is_aggregate = matches!(
+                unit.types().get(object.ty).map(|ty| &ty.kind),
+                Some(TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_))
+            );
+            let is_qualified_memory = unit
+                .types()
+                .get(object.ty)
+                .is_some_and(|ty| ty.qualifiers.is_volatile || ty.qualifiers.is_atomic);
+            let is_file = unit
+                .symbols()
+                .symbol(object.symbol)
+                .is_ok_and(|symbol| symbol.scope() == unit.symbols().file_scope());
+            if is_aggregate || is_file || is_qualified_memory {
+                out.insert(object.symbol);
+            }
+            if let Some(initializer) = &object.initializer {
+                for action in initializer.plan().actions() {
+                    if let InitAction::StoreScalar { value, .. } = action {
+                        expression(unit, value, out);
+                    }
+                }
+            }
+        }
+    }
+
+    fn place(unit: &CHirUnit<'_>, place: &MemoryPlace<'_>, out: &mut BTreeSet<SymbolId>) {
+        if let Some(symbol) = place.root_symbol() {
+            out.insert(symbol);
+        }
+        for source in place.source_expressions() {
+            expression(unit, source, out);
+        }
+    }
+
+    fn expression(unit: &CHirUnit<'_>, expr: &CHirExpr<'_>, out: &mut BTreeSet<SymbolId>) {
+        match expr {
+            CHirExpr::Ident { symbol, .. } => {
+                if unit
+                    .symbols()
+                    .symbol(*symbol)
+                    .is_ok_and(|entry| entry.scope() == unit.symbols().file_scope())
+                {
+                    out.insert(*symbol);
+                }
+            }
+            CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => {
+                if let CHirExpr::Ident { symbol, .. } = operand {
+                    out.insert(*symbol);
+                }
+                expression(unit, operand, out);
+            }
+            CHirExpr::Unary(_, operand, _)
+            | CHirExpr::Cast(_, operand, _)
+            | CHirExpr::SizeOfExpr(operand, _)
+            | CHirExpr::Member(operand, _, _)
+            | CHirExpr::PtrMember(operand, _, _) => expression(unit, operand, out),
+            CHirExpr::Binary(_, left, right, _)
+            | CHirExpr::Index(left, right, _)
+            | CHirExpr::Comma(left, right, _) => {
+                expression(unit, left, out);
+                expression(unit, right, out);
+            }
+            CHirExpr::Ternary(condition, left, right, _) => {
+                expression(unit, condition, out);
+                expression(unit, left, out);
+                expression(unit, right, out);
+            }
+            CHirExpr::Call(callee, arguments, _) => {
+                expression(unit, callee, out);
+                for argument in arguments {
+                    expression(unit, argument, out);
+                }
+            }
+            CHirExpr::Assign { target, value, .. } => {
+                expression(unit, target, out);
+                expression(unit, value, out);
+            }
+            CHirExpr::Update { target, .. } => expression(unit, target, out),
+            CHirExpr::MemoryRead { place: memory, .. }
+            | CHirExpr::MemoryUpdate { place: memory, .. } => place(unit, memory, out),
+            CHirExpr::MemoryAssign {
+                place: memory,
+                value,
+                ..
+            } => {
+                place(unit, memory, out);
+                expression(unit, value, out);
+            }
+            CHirExpr::CompoundLit(_, elements, _) => {
+                for element in elements {
+                    expression(unit, element, out);
+                }
+            }
+            CHirExpr::Lit(..)
+            | CHirExpr::FloatLit(..)
+            | CHirExpr::CharLit(..)
+            | CHirExpr::StringLit(..)
+            | CHirExpr::SizeOf(..)
+            | CHirExpr::AlignOf(..) => {}
+        }
+    }
+
+    fn statement(unit: &CHirUnit<'_>, stmt: &CHirStmt<'_>, out: &mut BTreeSet<SymbolId>) {
+        match stmt {
+            CHirStmt::Expr(expr, _) | CHirStmt::Return(Some(expr), _) => {
+                expression(unit, expr, out)
+            }
+            CHirStmt::If(condition, left, right, _) => {
+                expression(unit, condition, out);
+                statement(unit, left, out);
+                if let Some(right) = right {
+                    statement(unit, right, out);
+                }
+            }
+            CHirStmt::Switch(expr, body, _)
+            | CHirStmt::While(expr, body, _)
+            | CHirStmt::Case(expr, body, _) => {
+                expression(unit, expr, out);
+                statement(unit, body, out);
+            }
+            CHirStmt::DoWhile(body, expr, _) => {
+                statement(unit, body, out);
+                expression(unit, expr, out);
+            }
+            CHirStmt::For(initializer, condition, step, body, _) => {
+                match initializer {
+                    CHirForInit::Empty => {}
+                    CHirForInit::Expression(expr) => expression(unit, expr, out),
+                    CHirForInit::Declaration(declarations) => {
+                        for item in declarations {
+                            declaration(unit, item, out);
+                        }
+                    }
+                }
+                if let Some(expr) = condition {
+                    expression(unit, expr, out);
+                }
+                if let Some(expr) = step {
+                    expression(unit, expr, out);
+                }
+                statement(unit, body, out);
+            }
+            CHirStmt::Compound(items, _) => {
+                for item in items {
+                    match item {
+                        CHirBlockItem::Declaration(item) => declaration(unit, item, out),
+                        CHirBlockItem::Statement(item) => statement(unit, item, out),
+                    }
+                }
+            }
+            CHirStmt::Label(_, body, _) | CHirStmt::Default(body, _) => statement(unit, body, out),
+            CHirStmt::Return(None, _)
+            | CHirStmt::Break(_)
+            | CHirStmt::Continue(_)
+            | CHirStmt::Goto(_, _)
+            | CHirStmt::Null(_) => {}
+        }
+    }
+
+    let mut symbols = BTreeSet::new();
+    for declaration_node in unit.iter() {
+        declaration(unit, declaration_node, &mut symbols);
+        if let CHirDecl::Function(function) = declaration_node {
+            if let Some(body) = function.body {
+                statement(unit, body, &mut symbols);
+            }
+        }
+    }
+    symbols
+}
+
+fn lower_globals(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    memory_symbols: &BTreeSet<SymbolId>,
+    origins: &BTreeMap<SymbolId, u64>,
+) -> Result<Vec<GlobalObject>, LowerError> {
+    let mut declarations = BTreeMap::<SymbolId, &ObjectDecl<'_>>::new();
+    for declaration in unit.iter() {
+        let CHirDecl::Object(object) = declaration else {
+            continue;
+        };
+        if !memory_symbols.contains(&object.symbol) {
+            continue;
+        }
+        declarations
+            .entry(object.symbol)
+            .and_modify(|selected| {
+                if object.initializer.is_some() {
+                    *selected = object;
+                }
+            })
+            .or_insert(object);
+    }
+    declarations
+        .into_values()
+        .map(|object| {
+            let symbol =
+                unit.symbols()
+                    .symbol(object.symbol)
+                    .map_err(|_| LowerError::UnknownSymbol {
+                        symbol: object.symbol,
+                        span: object.span,
+                    })?;
+            let layout = target
+                .layout_of(unit.types(), object.ty)
+                .map_err(|source| LowerError::Layout {
+                    ty: object.ty,
+                    span: object.span,
+                    source,
+                })?;
+            let size =
+                usize::try_from(layout.size_bytes).map_err(|_| LowerError::UnsupportedType {
+                    ty: object.ty,
+                    span: object.span,
+                    feature: "global object exceeds host representation",
+                })?;
+            let mut bytes = vec![0_u8; size];
+            if let Some(initializer) = &object.initializer {
+                for action in initializer.plan().actions() {
+                    apply_static_initializer(unit, target, object.ty, action, &mut bytes)?;
+                }
+            }
+            Ok(GlobalObject {
+                symbol: symbol.spelling().to_owned(),
+                origin: *origins
+                    .get(&object.symbol)
+                    .ok_or(LowerError::InvalidGeneratedSsa {
+                        message: format!("global {} has no allocation origin", object.symbol.raw()),
+                    })?,
+                storage: GlobalStorage::Static,
+                layout: AccessLayout::new(layout.size_bytes, layout.align_bytes),
+                bytes,
+                initialized: vec![true; size],
+            })
+        })
+        .collect()
+}
+
+fn apply_static_initializer(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    object_ty: TypeId,
+    action: &InitAction<'_>,
+    bytes: &mut [u8],
+) -> Result<(), LowerError> {
+    let span = action
+        .span()
+        .unwrap_or_else(|| SourceSpan::new(evocc_common::FileId::new(0), 0, 0, 1, 1));
+    let (offset, _) = subobject_offset(unit, target, object_ty, action.path(), span)?;
+    let offset = usize::try_from(offset).map_err(|_| LowerError::UnsupportedStatement {
+        span,
+        feature: "negative static initializer offset",
+    })?;
+    let destination = action.destination_type();
+    let layout = target
+        .layout_of(unit.types(), destination)
+        .map_err(|source| LowerError::Layout {
+            ty: destination,
+            span,
+            source,
+        })?;
+    let end = offset
+        .checked_add(usize::try_from(layout.size_bytes).map_err(|_| {
+            LowerError::UnsupportedType {
+                ty: destination,
+                span,
+                feature: "initializer destination exceeds host representation",
+            }
+        })?)
+        .ok_or(LowerError::UnsupportedStatement {
+            span,
+            feature: "initializer range overflow",
+        })?;
+    let target_bytes = bytes
+        .get_mut(offset..end)
+        .ok_or(LowerError::UnsupportedStatement {
+            span,
+            feature: "initializer range lies outside global object",
+        })?;
+    match action {
+        InitAction::ZeroScalar { .. } => target_bytes.fill(0),
+        InitAction::StoreString { literal, .. } => {
+            let mut decoded = literal
+                .decoded_units()
+                .ok_or(LowerError::UnsupportedStatement {
+                    span,
+                    feature: "invalid string initializer",
+                })?
+                .into_iter()
+                .map(u8::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| LowerError::UnsupportedStatement {
+                    span,
+                    feature: "wide string initializer is unsupported",
+                })?;
+            decoded.resize(target_bytes.len(), 0);
+            target_bytes.copy_from_slice(&decoded[..target_bytes.len()]);
+        }
+        InitAction::StoreScalar { value, .. } => {
+            let raw =
+                constant_integer_expression(value).ok_or(LowerError::UnsupportedExpression {
+                    span,
+                    feature: "global initializer is not an admitted integer constant",
+                })?;
+            let byte_len = target_bytes.len();
+            for (index, byte) in target_bytes.iter_mut().enumerate() {
+                let shift = match target.byte_order() {
+                    evocc_types::ByteOrder::Little => index * 8,
+                    evocc_types::ByteOrder::Big => (byte_len - index - 1) * 8,
+                };
+                *byte = raw
+                    .checked_shr(u32::try_from(shift).unwrap_or(u32::MAX))
+                    .unwrap_or(0) as u8;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn constant_integer_expression(expression: &CHirExpr<'_>) -> Option<u64> {
+    match expression {
+        CHirExpr::Lit(literal, _) => Some(literal.value),
+        CHirExpr::CharLit(literal, _) => Some(u64::from(literal.value)),
+        CHirExpr::Cast(_, operand, _) => constant_integer_expression(operand),
+        CHirExpr::Unary(UnaryOp::Neg, operand, _) => {
+            Some(0_u64.wrapping_sub(constant_integer_expression(operand)?))
+        }
+        CHirExpr::Unary(UnaryOp::Plus, operand, _) => constant_integer_expression(operand),
+        _ => None,
+    }
+}
+
+fn subobject_offset(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    object_ty: TypeId,
+    path: &SubobjectPath,
+    span: SourceSpan,
+) -> Result<(i64, TypeId), LowerError> {
+    let mut current = object_ty;
+    let mut offset = 0_i64;
+    for step in path.steps() {
+        match step {
+            SubobjectStep::Field { field_index } => {
+                let tag = match unit.types().get(current).map(|ty| &ty.kind) {
+                    Some(TypeKind::Struct(tag) | TypeKind::Union(tag)) => *tag,
+                    _ => {
+                        return Err(LowerError::UnsupportedType {
+                            ty: current,
+                            span,
+                            feature: "initializer field path crosses a non-record",
+                        });
+                    }
+                };
+                let layout = target.record_layout(unit.types(), tag).map_err(|source| {
+                    LowerError::Layout {
+                        ty: current,
+                        span,
+                        source,
+                    }
+                })?;
+                let field = layout
+                    .fields
+                    .iter()
+                    .find(|field| field.field_index == *field_index)
+                    .ok_or(LowerError::UnsupportedType {
+                        ty: current,
+                        span,
+                        feature: "initializer field path has no target field",
+                    })?;
+                if field.bit_field.is_some() {
+                    return Err(LowerError::UnsupportedExpression {
+                        span,
+                        feature: "bit-field initializer is outside Day 7",
+                    });
+                }
+                offset = offset
+                    .checked_add(i64::try_from(field.byte_offset).map_err(|_| {
+                        LowerError::UnsupportedType {
+                            ty: current,
+                            span,
+                            feature: "record field offset exceeds i64",
+                        }
+                    })?)
+                    .ok_or(LowerError::UnsupportedType {
+                        ty: current,
+                        span,
+                        feature: "record field offset overflow",
+                    })?;
+                current = unit
+                    .types()
+                    .tag(tag)
+                    .and_then(|definition| match &definition.state {
+                        TagState::Complete(
+                            TagDefinition::Struct(fields) | TagDefinition::Union(fields),
+                        ) => fields.get(*field_index).map(|field| field.ty),
+                        _ => None,
+                    })
+                    .ok_or(LowerError::UnsupportedType {
+                        ty: current,
+                        span,
+                        feature: "initializer field type is unavailable",
+                    })?;
+            }
+            SubobjectStep::Index { index } => {
+                let element = match unit.types().get(current).map(|ty| &ty.kind) {
+                    Some(TypeKind::Array { element, .. }) => *element,
+                    _ => {
+                        return Err(LowerError::UnsupportedType {
+                            ty: current,
+                            span,
+                            feature: "initializer index path crosses a non-array",
+                        });
+                    }
+                };
+                let layout = target.layout_of(unit.types(), element).map_err(|source| {
+                    LowerError::Layout {
+                        ty: element,
+                        span,
+                        source,
+                    }
+                })?;
+                let delta = index
+                    .checked_mul(layout.size_bytes)
+                    .and_then(|value| i64::try_from(value).ok())
+                    .ok_or(LowerError::UnsupportedType {
+                        ty: element,
+                        span,
+                        feature: "initializer array offset overflow",
+                    })?;
+                offset = offset
+                    .checked_add(delta)
+                    .ok_or(LowerError::UnsupportedType {
+                        ty: element,
+                        span,
+                        feature: "initializer array offset overflow",
+                    })?;
+                current = element;
+            }
+        }
+    }
+    Ok((offset, current))
 }
 
 fn prevalidate_unit_for_lowering(unit: &CHirUnit<'_>) -> Result<(), LowerError> {
@@ -268,10 +767,7 @@ fn prevalidate_unit_for_lowering(unit: &CHirUnit<'_>) -> Result<(), LowerError> 
                 }
             }
             CHirDecl::Object(object) => {
-                return Err(LowerError::UnsupportedStatement {
-                    span: object.span,
-                    feature: "file-scope objects require the Day-7 memory model",
-                });
+                validate_object_declaration_for_lowering(unit, object)?;
             }
             CHirDecl::Tag(_) | CHirDecl::Typedef(_) => {}
         }
@@ -609,6 +1105,7 @@ fn validate_place_identity(
 fn index_functions(
     unit: &CHirUnit<'_>,
     target: &TargetDataLayout,
+    memory_participant: bool,
 ) -> Result<BTreeMap<SymbolId, FunctionInfo>, LowerError> {
     let mut definitions = BTreeMap::new();
     for declaration in unit.iter() {
@@ -651,6 +1148,11 @@ fn index_functions(
             return Err(LowerError::UnknownSymbol { symbol, span });
         };
         info.participant = true;
+    }
+    if memory_participant {
+        for info in definitions.values_mut() {
+            info.participant = true;
+        }
     }
     Ok(definitions)
 }
@@ -1086,7 +1588,11 @@ fn validate_object_declaration_for_lowering(
         })?;
     if !matches!(
         object.storage,
-        StorageClass::None | StorageClass::Auto | StorageClass::Register
+        StorageClass::None
+            | StorageClass::Auto
+            | StorageClass::Register
+            | StorageClass::Extern
+            | StorageClass::Static
     ) {
         return Err(LowerError::UnsupportedStatement {
             span: object.span,
@@ -1097,7 +1603,6 @@ fn validate_object_declaration_for_lowering(
         || symbol.spelling() != object.name.spelling
         || symbol.ty() != object.ty
         || symbol.storage_class() != Some(object.storage)
-        || object.specifier.type_id() != object.ty
         || !written_declarator_matches(
             unit.types(),
             &object.written,
@@ -1113,23 +1618,10 @@ fn validate_object_declaration_for_lowering(
     }
     if let Some(initializer) = &object.initializer {
         let plan = initializer.plan();
-        let valid_action = match plan.actions() {
-            [InitAction::StoreScalar {
-                path,
-                destination_type,
-                ..
-            }
-            | InitAction::ZeroScalar {
-                path,
-                destination_type,
-            }] => path.is_root() && *destination_type == object.ty,
-            _ => false,
-        };
-        if plan.target_type() != object.ty || plan.validate(unit.types()).is_err() || !valid_action
-        {
+        if plan.target_type() != object.ty || plan.validate(unit.types()).is_err() {
             return Err(LowerError::UnsupportedStatement {
                 span: initializer.span(),
-                feature: "scalar initializer plan disagrees with its semantic identity",
+                feature: "initializer plan disagrees with its semantic identity",
             });
         }
     }
@@ -1142,12 +1634,16 @@ impl<'a> FunctionLowerer<'a> {
         target: &'a TargetDataLayout,
         functions: &'a BTreeMap<SymbolId, FunctionInfo>,
         info: &'a FunctionInfo,
+        memory_symbols: &'a BTreeSet<SymbolId>,
+        allocation_origins: &'a BTreeMap<SymbolId, u64>,
     ) -> Self {
         Self {
             unit,
             target,
             functions,
             info,
+            memory_symbols,
+            allocation_origins,
             blocks: Vec::new(),
             next_value: 0,
             next_block: 0,
@@ -1412,7 +1908,11 @@ impl<'a> FunctionLowerer<'a> {
         let mut keys = Vec::new();
         let mut seen = BTreeSet::new();
         for symbol in preferred {
-            let key = EnvKey::Local(*symbol);
+            let key = if self.memory_symbols.contains(symbol) {
+                EnvKey::Address(*symbol)
+            } else {
+                EnvKey::Local(*symbol)
+            };
             if symbols.contains(symbol) && state.locals.contains(symbol) && seen.insert(key) {
                 keys.push(key);
             }
@@ -1421,18 +1921,25 @@ impl<'a> FunctionLowerer<'a> {
             .env
             .iter()
             .filter_map(|(key, bound)| match key {
-                EnvKey::Local(symbol) => Some((bound.value.id, *symbol, *key)),
+                EnvKey::Local(symbol) | EnvKey::Address(symbol) => {
+                    Some((bound.value.id, *symbol, *key))
+                }
                 _ => None,
             })
             .collect::<Vec<_>>();
         locals.sort_by_key(|(value, _, _)| *value);
         for (_, symbol, key) in locals {
-            if symbols.contains(&symbol) && seen.insert(key) {
+            if (symbols.contains(&symbol) || matches!(key, EnvKey::Address(_))) && seen.insert(key)
+            {
                 keys.push(key);
             }
         }
         for symbol in symbols {
-            let key = EnvKey::Local(*symbol);
+            let key = if self.memory_symbols.contains(symbol) {
+                EnvKey::Address(*symbol)
+            } else {
+                EnvKey::Local(*symbol)
+            };
             if seen.contains(&key) {
                 continue;
             }
@@ -1498,6 +2005,8 @@ impl<'a> FunctionLowerer<'a> {
                     self.info.span,
                 )?;
                 (bits(integer), Some(integer))
+            } else if let EnvKey::Address(_) = key {
+                (EvoIRType::Ptr(AddressSpace::Generic), None)
             } else {
                 return Err(LowerError::InvalidControlFlow {
                     span: self.info.span,
@@ -1796,8 +2305,14 @@ impl<'a> FunctionLowerer<'a> {
         }
         if leave_scope {
             for state in &mut normal {
-                for symbol in &declared {
+                for symbol in declared.iter().rev() {
+                    if self.memory_symbols.contains(symbol)
+                        && state.env.contains_key(&EnvKey::Address(*symbol))
+                    {
+                        self.end_object_lifetime(*symbol, state)?;
+                    }
                     state.env.remove(&EnvKey::Local(*symbol));
+                    state.env.remove(&EnvKey::Address(*symbol));
                     state.locals.remove(symbol);
                 }
             }
@@ -1872,7 +2387,10 @@ impl<'a> FunctionLowerer<'a> {
             }
         };
         validate_object_declaration_for_lowering(self.unit, object)?;
-        let integer = canonical_integer(self.unit.types(), self.target, object.ty, object.span)?;
+        if self.memory_symbols.contains(&object.symbol) {
+            return self.lower_memory_declaration(object, state);
+        }
+        let (_, integer) = self.c_value_type(object.ty, object.span)?;
         state.locals.insert(object.symbol);
         let Some(initializer) = &object.initializer else {
             state.env.remove(&EnvKey::Local(object.symbol));
@@ -1881,9 +2399,23 @@ impl<'a> FunctionLowerer<'a> {
         let stored = match initializer.plan.actions() {
             [InitAction::StoreScalar { value, .. }] => {
                 let lowered = self.lower_expr(value, state)?;
-                self.cast(lowered, integer, state)?
+                self.coerce_to_object_type(lowered, Some(value), object.ty, object.span, state)?
             }
-            [InitAction::ZeroScalar { .. }] => self.constant(state, integer, 0)?,
+            [InitAction::ZeroScalar { .. }] => {
+                if matches!(
+                    self.unit.types().get(object.ty).map(|ty| &ty.kind),
+                    Some(TypeKind::Pointer(_))
+                ) {
+                    let pointer = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+                    self.emit(state, Inst::PtrNull(pointer.clone()))?;
+                    ExprValue {
+                        value: pointer,
+                        integer,
+                    }
+                } else {
+                    self.constant(state, integer, 0)?
+                }
+            }
             _ => {
                 return Err(LowerError::UnsupportedStatement {
                     span: object.span,
@@ -1898,6 +2430,556 @@ impl<'a> FunctionLowerer<'a> {
                 integer: Some(integer),
             },
         );
+        Ok(())
+    }
+
+    fn c_value_type(
+        &self,
+        ty: TypeId,
+        span: SourceSpan,
+    ) -> Result<(EvoIRType, CIntegerType), LowerError> {
+        match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
+            Some(TypeKind::Pointer(_)) => {
+                Ok((EvoIRType::Ptr(AddressSpace::Generic), CIntegerType::ULONG))
+            }
+            Some(TypeKind::Int(_) | TypeKind::Enum(_)) => {
+                let integer = canonical_integer(self.unit.types(), self.target, ty, span)?;
+                Ok((bits(integer), integer))
+            }
+            _ => Err(LowerError::UnsupportedType {
+                ty,
+                span,
+                feature: "object subvalue is neither an integer nor pointer",
+            }),
+        }
+    }
+
+    fn access_layout(&self, ty: TypeId, span: SourceSpan) -> Result<AccessLayout, LowerError> {
+        let layout = self
+            .target
+            .layout_of(self.unit.types(), ty)
+            .map_err(|source| LowerError::Layout { ty, span, source })?;
+        Ok(AccessLayout::new(layout.size_bytes, layout.align_bytes))
+    }
+
+    fn replace_effect_tokens(&self, state: &mut State, memory: Value, world: Option<Value>) {
+        state.env.insert(
+            EnvKey::Memory,
+            BoundValue {
+                value: memory,
+                integer: None,
+            },
+        );
+        if let Some(world) = world {
+            state.env.insert(
+                EnvKey::World,
+                BoundValue {
+                    value: world,
+                    integer: None,
+                },
+            );
+        }
+    }
+
+    fn object_address(
+        &mut self,
+        symbol: SymbolId,
+        span: SourceSpan,
+        state: &State,
+    ) -> Result<Value, LowerError> {
+        if let Some(address) = state.env.get(&EnvKey::Address(symbol)) {
+            return Ok(address.value.clone());
+        }
+        let declaration = self
+            .unit
+            .symbols()
+            .symbol(symbol)
+            .map_err(|_| LowerError::UnknownSymbol { symbol, span })?;
+        if declaration.scope() != self.unit.symbols().file_scope() {
+            return Err(LowerError::InvalidGeneratedSsa {
+                message: format!(
+                    "automatic memory object '{}' ({}) has no live address binding",
+                    declaration.spelling(),
+                    symbol.raw()
+                ),
+            });
+        }
+        let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+        self.emit(
+            state,
+            Inst::GlobalAddr {
+                result: address.clone(),
+                symbol: declaration.spelling().to_owned(),
+            },
+        )?;
+        Ok(address)
+    }
+
+    fn offset_address(
+        &mut self,
+        base: Value,
+        index: ExprValue,
+        signedness: IndexSignedness,
+        scale: u64,
+        state: &mut State,
+    ) -> Result<Value, LowerError> {
+        let result = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+        self.emit(
+            state,
+            Inst::PtrOffset {
+                result: result.clone(),
+                base,
+                index: index.value,
+                direction: OffsetDirection::Add,
+                signedness,
+                scale,
+            },
+        )?;
+        let mem_in = self.token(state, EnvKey::Memory)?.value;
+        let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+        self.emit(
+            state,
+            Inst::PointerValid {
+                mem_in,
+                pointer: result.clone(),
+                mem_out: mem_out.clone(),
+            },
+        )?;
+        self.replace_effect_tokens(state, mem_out, None);
+        Ok(result)
+    }
+
+    fn constant_offset_address(
+        &mut self,
+        base: Value,
+        offset: u64,
+        state: &mut State,
+    ) -> Result<Value, LowerError> {
+        if offset == 0 {
+            return Ok(base);
+        }
+        let raw = self.fresh_value(EvoIRType::Bits(64));
+        self.emit(state, Inst::Const(raw.clone(), offset))?;
+        self.offset_address(
+            base,
+            ExprValue {
+                value: raw,
+                integer: CIntegerType::ULONG,
+            },
+            IndexSignedness::Unsigned,
+            1,
+            state,
+        )
+    }
+
+    fn lower_place_address(
+        &mut self,
+        place: &'a MemoryPlace<'a>,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<Value, LowerError> {
+        let mut address = match place.root() {
+            PlaceRoot::Object { symbol } => self.object_address(*symbol, span, state)?,
+            PlaceRoot::PointerExpression { pointer, .. } => {
+                let lowered = self.lower_expr(pointer, state)?;
+                if !matches!(lowered.value.ty, EvoIRType::Ptr(_)) {
+                    return Err(LowerError::UnsupportedExpression {
+                        span,
+                        feature: "memory place pointer root did not lower to a pointer",
+                    });
+                }
+                lowered.value
+            }
+        };
+        for projection in place.projections() {
+            match projection {
+                PlaceProjection::Index(projection) => {
+                    let index = self.lower_expr(projection.index(), state)?;
+                    let promoted = self.cast(index, projection.promoted_index(), state)?;
+                    let layout = self.access_layout(projection.element_ty(), span)?;
+                    address = self.offset_address(
+                        address,
+                        promoted,
+                        if projection.promoted_index().is_signed() {
+                            IndexSignedness::Signed
+                        } else {
+                            IndexSignedness::Unsigned
+                        },
+                        layout.size_bytes,
+                        state,
+                    )?;
+                }
+                PlaceProjection::Field(projection) => {
+                    let layout = self
+                        .target
+                        .record_layout(self.unit.types(), projection.tag())
+                        .map_err(|source| LowerError::Layout {
+                            ty: projection.field_ty(),
+                            span,
+                            source,
+                        })?;
+                    let field = layout
+                        .fields
+                        .iter()
+                        .find(|field| field.field_index == projection.field_index())
+                        .ok_or(LowerError::UnsupportedExpression {
+                            span,
+                            feature: "record projection has no target field layout",
+                        })?;
+                    address = self.constant_offset_address(address, field.byte_offset, state)?;
+                }
+            }
+        }
+        Ok(address)
+    }
+
+    fn emit_memory_load(
+        &mut self,
+        address: Value,
+        ty: TypeId,
+        volatile: bool,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let (result_ty, integer) = self.c_value_type(ty, span)?;
+        let layout = self.access_layout(ty, span)?;
+        let mem_in = self.token(state, EnvKey::Memory)?.value;
+        let guarded = self.fresh_value(EvoIRType::Mem(Region::All));
+        self.emit(
+            state,
+            Inst::AccessInBounds {
+                mem_in,
+                pointer: address.clone(),
+                mem_out: guarded.clone(),
+                layout,
+            },
+        )?;
+        self.replace_effect_tokens(state, guarded.clone(), None);
+        let world_in = self.token(state, EnvKey::World)?.value;
+        let result = self.fresh_value(result_ty);
+        let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+        let world_out = self.fresh_value(EvoIRType::World);
+        self.emit(
+            state,
+            Inst::Load {
+                result: result.clone(),
+                address,
+                mem_in: guarded,
+                world_in,
+                mem_out: mem_out.clone(),
+                world_out: world_out.clone(),
+                volatile,
+            },
+        )?;
+        self.replace_effect_tokens(state, mem_out, Some(world_out));
+        Ok(ExprValue {
+            value: result,
+            integer,
+        })
+    }
+
+    fn emit_memory_store(
+        &mut self,
+        address: Value,
+        value: ExprValue,
+        ty: TypeId,
+        volatile: bool,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let layout = self.access_layout(ty, span)?;
+        let mem_in = self.token(state, EnvKey::Memory)?.value;
+        let guarded = self.fresh_value(EvoIRType::Mem(Region::All));
+        self.emit(
+            state,
+            Inst::AccessInBounds {
+                mem_in,
+                pointer: address.clone(),
+                mem_out: guarded.clone(),
+                layout,
+            },
+        )?;
+        self.replace_effect_tokens(state, guarded.clone(), None);
+        let world_in = self.token(state, EnvKey::World)?.value;
+        let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+        let world_out = self.fresh_value(EvoIRType::World);
+        self.emit(
+            state,
+            Inst::Store {
+                address,
+                value: value.value.clone(),
+                mem_in: guarded,
+                world_in,
+                mem_out: mem_out.clone(),
+                world_out: world_out.clone(),
+                volatile,
+            },
+        )?;
+        self.replace_effect_tokens(state, mem_out, Some(world_out));
+        Ok(value)
+    }
+
+    fn coerce_to_object_type(
+        &mut self,
+        value: ExprValue,
+        source: Option<&CHirExpr<'_>>,
+        ty: TypeId,
+        span: SourceSpan,
+        state: &State,
+    ) -> Result<ExprValue, LowerError> {
+        match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
+            Some(TypeKind::Pointer(_)) => {
+                if matches!(value.value.ty, EvoIRType::Ptr(_)) {
+                    return Ok(value);
+                }
+                if source.is_some_and(|source| {
+                    constant_integer(self.unit, self.target, source)
+                        .is_some_and(|constant| !constant.truth())
+                }) {
+                    let pointer = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+                    self.emit(state, Inst::PtrNull(pointer.clone()))?;
+                    return Ok(ExprValue {
+                        value: pointer,
+                        integer: CIntegerType::ULONG,
+                    });
+                }
+                Err(LowerError::UnsupportedExpression {
+                    span,
+                    feature: "integer-to-pointer conversion is not a null pointer constant",
+                })
+            }
+            Some(TypeKind::Int(_) | TypeKind::Enum(_)) => {
+                let integer = canonical_integer(self.unit.types(), self.target, ty, span)?;
+                self.cast(value, integer, state)
+            }
+            _ => Err(LowerError::UnsupportedType {
+                ty,
+                span,
+                feature: "initializer/store destination is not scalar",
+            }),
+        }
+    }
+
+    fn lower_memory_declaration(
+        &mut self,
+        object: &'a ObjectDecl<'a>,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
+        let layout = self.access_layout(object.ty, object.span)?;
+        let origin = *self.allocation_origins.get(&object.symbol).ok_or(
+            LowerError::InvalidGeneratedSsa {
+                message: format!(
+                    "automatic object {} has no allocation origin",
+                    object.symbol.raw()
+                ),
+            },
+        )?;
+        let mem_in = self.token(state, EnvKey::Memory)?.value;
+        let world_in = self.token(state, EnvKey::World)?.value;
+        let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+        let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+        let world_out = self.fresh_value(EvoIRType::World);
+        self.emit(
+            state,
+            Inst::Alloca {
+                result: address.clone(),
+                mem_in,
+                world_in,
+                mem_out: mem_out.clone(),
+                world_out: world_out.clone(),
+                origin,
+                layout,
+            },
+        )?;
+        self.replace_effect_tokens(state, mem_out, Some(world_out));
+        state.env.insert(
+            EnvKey::Address(object.symbol),
+            BoundValue {
+                value: address.clone(),
+                integer: None,
+            },
+        );
+        state.locals.insert(object.symbol);
+
+        let Some(initializer) = &object.initializer else {
+            return Ok(());
+        };
+        for action in initializer.plan().actions() {
+            let action_span = action.span().unwrap_or(object.span);
+            let (offset, actual_ty) = subobject_offset(
+                self.unit,
+                self.target,
+                object.ty,
+                action.path(),
+                action_span,
+            )?;
+            if actual_ty != action.destination_type() {
+                return Err(LowerError::UnsupportedStatement {
+                    span: action_span,
+                    feature: "initializer destination type does not match subobject path",
+                });
+            }
+            let action_address = self.constant_offset_address(
+                address.clone(),
+                u64::try_from(offset).map_err(|_| LowerError::UnsupportedStatement {
+                    span: action_span,
+                    feature: "initializer has a negative object offset",
+                })?,
+                state,
+            )?;
+            match action {
+                InitAction::StoreScalar {
+                    destination_type,
+                    value,
+                    ..
+                } => {
+                    let lowered = self.lower_expr(value, state)?;
+                    let lowered = self.coerce_to_object_type(
+                        lowered,
+                        Some(value),
+                        *destination_type,
+                        action_span,
+                        state,
+                    )?;
+                    let volatile = self
+                        .unit
+                        .types()
+                        .get(*destination_type)
+                        .is_some_and(|ty| ty.qualifiers.is_volatile);
+                    self.emit_memory_store(
+                        action_address,
+                        lowered,
+                        *destination_type,
+                        volatile,
+                        action_span,
+                        state,
+                    )?;
+                }
+                InitAction::ZeroScalar {
+                    destination_type, ..
+                } => {
+                    let zero = match self.unit.types().get(*destination_type).map(|ty| &ty.kind) {
+                        Some(TypeKind::Pointer(_)) => {
+                            let pointer = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+                            self.emit(state, Inst::PtrNull(pointer.clone()))?;
+                            ExprValue {
+                                value: pointer,
+                                integer: CIntegerType::ULONG,
+                            }
+                        }
+                        _ => {
+                            let integer = canonical_integer(
+                                self.unit.types(),
+                                self.target,
+                                *destination_type,
+                                action_span,
+                            )?;
+                            self.constant(state, integer, 0)?
+                        }
+                    };
+                    self.emit_memory_store(
+                        action_address,
+                        zero,
+                        *destination_type,
+                        false,
+                        action_span,
+                        state,
+                    )?;
+                }
+                InitAction::StoreString {
+                    destination_type,
+                    literal,
+                    ..
+                } => {
+                    let (element, count) =
+                        match self.unit.types().get(*destination_type).map(|ty| &ty.kind) {
+                            Some(TypeKind::Array {
+                                element,
+                                bound: ArrayBound::Fixed(count),
+                            }) => (*element, *count),
+                            _ => {
+                                return Err(LowerError::UnsupportedStatement {
+                                    span: action_span,
+                                    feature: "string initializer destination is not a fixed array",
+                                });
+                            }
+                        };
+                    let mut units = literal
+                        .decoded_units()
+                        .ok_or(LowerError::UnsupportedStatement {
+                            span: action_span,
+                            feature: "string initializer decoding failed",
+                        })?
+                        .into_iter()
+                        .map(u8::try_from)
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(|_| LowerError::UnsupportedStatement {
+                            span: action_span,
+                            feature: "wide string unit is outside Day 7",
+                        })?;
+                    let count =
+                        usize::try_from(count).map_err(|_| LowerError::UnsupportedType {
+                            ty: *destination_type,
+                            span: action_span,
+                            feature: "string destination length exceeds host representation",
+                        })?;
+                    units.resize(count, 0);
+                    let element_layout = self.access_layout(element, action_span)?;
+                    for (index, byte) in units.into_iter().take(count).enumerate() {
+                        let address = self.constant_offset_address(
+                            action_address.clone(),
+                            u64::try_from(index)
+                                .ok()
+                                .and_then(|index| index.checked_mul(element_layout.size_bytes))
+                                .ok_or(LowerError::UnsupportedType {
+                                    ty: element,
+                                    span: action_span,
+                                    feature: "string element offset overflow",
+                                })?,
+                            state,
+                        )?;
+                        let integer = canonical_integer(
+                            self.unit.types(),
+                            self.target,
+                            element,
+                            action_span,
+                        )?;
+                        let value = self.constant(state, integer, u64::from(byte))?;
+                        self.emit_memory_store(address, value, element, false, action_span, state)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn end_object_lifetime(
+        &mut self,
+        symbol: SymbolId,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
+        let pointer = state
+            .env
+            .get(&EnvKey::Address(symbol))
+            .map(|bound| bound.value.clone())
+            .ok_or(LowerError::InvalidGeneratedSsa {
+                message: format!("lifetime end has no address for object {}", symbol.raw()),
+            })?;
+        let mem_in = self.token(state, EnvKey::Memory)?.value;
+        let world_in = self.token(state, EnvKey::World)?.value;
+        let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+        let world_out = self.fresh_value(EvoIRType::World);
+        self.emit(
+            state,
+            Inst::LifetimeEnd {
+                mem_in,
+                world_in,
+                pointer,
+                mem_out: mem_out.clone(),
+                world_out: world_out.clone(),
+            },
+        )?;
+        self.replace_effect_tokens(state, mem_out, Some(world_out));
         Ok(())
     }
 
@@ -2631,6 +3713,24 @@ impl<'a> FunctionLowerer<'a> {
                         feature: "object identifier disagrees with its semantic identity",
                     });
                 }
+                if self.memory_symbols.contains(symbol) {
+                    let address = self.object_address(*symbol, *span, state)?;
+                    if matches!(
+                        self.unit.types().get(facts.ty()).map(|ty| &ty.kind),
+                        Some(TypeKind::Array { .. })
+                    ) {
+                        return Ok(ExprValue {
+                            value: address,
+                            integer: CIntegerType::ULONG,
+                        });
+                    }
+                    let volatile = self
+                        .unit
+                        .types()
+                        .get(facts.ty())
+                        .is_some_and(|ty| ty.qualifiers.is_volatile);
+                    return self.emit_memory_load(address, facts.ty(), volatile, *span, state);
+                }
                 self.local(state, *symbol, *span)
             }
             CHirExpr::Unary(operator, operand, span) => {
@@ -2649,6 +3749,13 @@ impl<'a> FunctionLowerer<'a> {
                     feature: "void call used as a scalar expression",
                 }),
             CHirExpr::Cast(target, operand, span) => {
+                if matches!(
+                    self.unit.types().get(*target).map(|ty| &ty.kind),
+                    Some(TypeKind::Pointer(_))
+                ) {
+                    let value = self.lower_expr(operand, state)?;
+                    return self.coerce_to_object_type(value, Some(operand), *target, *span, state);
+                }
                 let target = canonical_integer(self.unit.types(), self.target, *target, *span)?;
                 let value = self.lower_expr(operand, state)?;
                 self.cast(value, target, state)
@@ -2668,12 +3775,21 @@ impl<'a> FunctionLowerer<'a> {
                 span,
                 ..
             } => self.lower_update(*op, *place, target, *span, state),
-            CHirExpr::MemoryAssign { span, .. } | CHirExpr::MemoryUpdate { span, .. } => {
-                Err(LowerError::UnsupportedExpression {
-                    span: *span,
-                    feature: "Day-7 memory-place lowering is not attached",
-                })
-            }
+            CHirExpr::MemoryAssign {
+                op,
+                place,
+                target_span,
+                value,
+                span,
+                ..
+            } => self.lower_memory_assignment(*op, place, *target_span, value, *span, state),
+            CHirExpr::MemoryUpdate {
+                op,
+                place,
+                target_span,
+                span,
+                ..
+            } => self.lower_memory_update(*op, place, *target_span, *span, state),
             CHirExpr::Comma(left, right, _) => {
                 self.lower_discarded_expr(left, state)?;
                 self.lower_expr(right, state)
@@ -2723,10 +3839,18 @@ impl<'a> FunctionLowerer<'a> {
                 span: *span,
                 feature: "expression requires the Day-7 object or non-integer model",
             }),
-            CHirExpr::MemoryRead { target_span, .. } => Err(LowerError::UnsupportedExpression {
-                span: *target_span,
-                feature: "expression requires the Day-7 object or non-integer model",
-            }),
+            CHirExpr::MemoryRead {
+                place, target_span, ..
+            } => {
+                let address = self.lower_place_address(place, *target_span, state)?;
+                self.emit_memory_load(
+                    address,
+                    place.value_ty(),
+                    place.access_qualifiers().is_volatile,
+                    *target_span,
+                    state,
+                )
+            }
         }
     }
 
@@ -2737,6 +3861,50 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        if operator == UnaryOp::AddrOf {
+            let address = match operand {
+                CHirExpr::Ident { symbol, .. } => self.object_address(*symbol, span, state)?,
+                CHirExpr::MemoryRead { place, .. } => {
+                    self.lower_place_address(place, span, state)?
+                }
+                CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
+                    let pointer = self.lower_expr(pointer, state)?;
+                    if !matches!(pointer.value.ty, EvoIRType::Ptr(_)) {
+                        return Err(LowerError::UnsupportedExpression {
+                            span,
+                            feature: "address-of dereference operand is not a pointer",
+                        });
+                    }
+                    pointer.value
+                }
+                _ => {
+                    return Err(LowerError::UnsupportedExpression {
+                        span,
+                        feature: "address-of operand has no authoritative memory place",
+                    });
+                }
+            };
+            return Ok(ExprValue {
+                value: address,
+                integer: CIntegerType::ULONG,
+            });
+        }
+        if operator == UnaryOp::Deref {
+            let pointer = self.lower_expr(operand, state)?;
+            if !matches!(pointer.value.ty, EvoIRType::Ptr(_)) {
+                return Err(LowerError::UnsupportedExpression {
+                    span,
+                    feature: "dereference operand did not lower to a pointer",
+                });
+            }
+            let pointee = self.pointer_pointee_type(operand, span)?;
+            let volatile = self
+                .unit
+                .types()
+                .get(pointee)
+                .is_some_and(|ty| ty.qualifiers.is_volatile);
+            return self.emit_memory_load(pointer.value, pointee, volatile, span, state);
+        }
         let operand = self.lower_expr(operand, state)?;
         match operator {
             UnaryOp::Plus => {
@@ -2771,9 +3939,35 @@ impl<'a> FunctionLowerer<'a> {
                     integer,
                 })
             }
-            UnaryOp::AddrOf | UnaryOp::Deref => Err(LowerError::UnsupportedExpression {
+            UnaryOp::AddrOf | UnaryOp::Deref => unreachable!("handled before operand conversion"),
+        }
+    }
+
+    fn pointer_pointee_type(
+        &self,
+        expression: &CHirExpr<'_>,
+        span: SourceSpan,
+    ) -> Result<TypeId, LowerError> {
+        let ty = match expression {
+            CHirExpr::Ident { facts, .. }
+            | CHirExpr::Assign { facts, .. }
+            | CHirExpr::MemoryAssign { facts, .. }
+            | CHirExpr::Update { facts, .. }
+            | CHirExpr::MemoryUpdate { facts, .. } => facts.ty(),
+            CHirExpr::Cast(ty, _, _) => *ty,
+            _ => {
+                return Err(LowerError::UnsupportedExpression {
+                    span,
+                    feature: "pointer expression type is unavailable",
+                });
+            }
+        };
+        match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
+            Some(TypeKind::Pointer(pointee)) => Ok(*pointee),
+            _ => Err(LowerError::UnsupportedType {
+                ty,
                 span,
-                feature: "pointer unary operator requires the Day-7 memory model",
+                feature: "expression does not have canonical pointer type",
             }),
         }
     }
@@ -3375,6 +4569,57 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         self.validate_place(place, target, span)?;
+        if self.memory_symbols.contains(&place.symbol()) {
+            let address = self.object_address(place.symbol(), span, state)?;
+            let volatile = self
+                .unit
+                .types()
+                .get(place.ty())
+                .is_some_and(|ty| ty.qualifiers.is_volatile);
+            let original = if operator == AssignmentOp::Simple {
+                None
+            } else {
+                Some(self.emit_memory_load(address.clone(), place.ty(), volatile, span, state)?)
+            };
+            let right = self.lower_expr(assigned, state)?;
+            let result = if operator == AssignmentOp::Simple {
+                self.coerce_to_object_type(right, Some(assigned), place.ty(), span, state)?
+            } else {
+                let destination =
+                    canonical_integer(self.unit.types(), self.target, place.ty(), span)?;
+                self.compute_compound_assignment(
+                    operator,
+                    original.expect("compound assignment loaded its object"),
+                    right,
+                    destination,
+                    span,
+                    state,
+                )?
+            };
+            return self.emit_memory_store(address, result, place.ty(), volatile, span, state);
+        }
+        if matches!(
+            self.unit.types().get(place.ty()).map(|ty| &ty.kind),
+            Some(TypeKind::Pointer(_))
+        ) {
+            if operator != AssignmentOp::Simple {
+                return Err(LowerError::UnsupportedExpression {
+                    span,
+                    feature: "compound pointer assignment is outside Day 7",
+                });
+            }
+            let right = self.lower_expr(assigned, state)?;
+            let result =
+                self.coerce_to_object_type(right, Some(assigned), place.ty(), span, state)?;
+            state.env.insert(
+                EnvKey::Local(place.symbol()),
+                BoundValue {
+                    value: result.value.clone(),
+                    integer: Some(CIntegerType::ULONG),
+                },
+            );
+            return Ok(result);
+        }
         let destination = canonical_integer(self.unit.types(), self.target, place.ty(), span)?;
         let right = self.lower_expr(assigned, state)?;
         let result = if operator == AssignmentOp::Simple {
@@ -3511,6 +4756,179 @@ impl<'a> FunctionLowerer<'a> {
         )
     }
 
+    fn compute_compound_assignment(
+        &mut self,
+        operator: AssignmentOp,
+        left: ExprValue,
+        right: ExprValue,
+        destination: CIntegerType,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let computed = if matches!(operator, AssignmentOp::ShiftLeft | AssignmentOp::ShiftRight) {
+            let shifted_type = integer_promotion(left.integer);
+            let amount_type = integer_promotion(right.integer);
+            let left = self.cast(left, shifted_type, state)?;
+            let right = self.cast(right, amount_type, state)?;
+            self.emit_shift(
+                state,
+                if operator == AssignmentOp::ShiftLeft {
+                    BinaryOp::Shl
+                } else {
+                    BinaryOp::Shr
+                },
+                left,
+                right,
+                shifted_type,
+            )?
+        } else {
+            let common = arithmetic_common_type(left.integer, right.integer);
+            let left = self.cast(left, common, state)?;
+            let right = self.cast(right, common, state)?;
+            match operator {
+                AssignmentOp::Add => {
+                    self.emit_signed_arithmetic(state, BinaryOp::Add, left, right, common)?
+                }
+                AssignmentOp::Subtract => {
+                    self.emit_signed_arithmetic(state, BinaryOp::Sub, left, right, common)?
+                }
+                AssignmentOp::Multiply => {
+                    self.emit_signed_arithmetic(state, BinaryOp::Mul, left, right, common)?
+                }
+                AssignmentOp::Divide => {
+                    self.emit_div_rem(state, BinaryOp::Div, left, right, common)?
+                }
+                AssignmentOp::Remainder => {
+                    self.emit_div_rem(state, BinaryOp::Mod, left, right, common)?
+                }
+                AssignmentOp::BitAnd | AssignmentOp::BitOr | AssignmentOp::BitXor => {
+                    let result = self.fresh_value(bits(common));
+                    let instruction = match operator {
+                        AssignmentOp::BitAnd => Inst::And(result.clone(), left.value, right.value),
+                        AssignmentOp::BitOr => Inst::Or(result.clone(), left.value, right.value),
+                        AssignmentOp::BitXor => Inst::Xor(result.clone(), left.value, right.value),
+                        _ => unreachable!(),
+                    };
+                    self.emit(state, instruction)?;
+                    ExprValue {
+                        value: result,
+                        integer: common,
+                    }
+                }
+                AssignmentOp::Simple | AssignmentOp::ShiftLeft | AssignmentOp::ShiftRight => {
+                    return Err(LowerError::InvalidControlFlow {
+                        span,
+                        reason: "invalid assignment operator reached compound computation",
+                    });
+                }
+            }
+        };
+        self.cast(computed, destination, state)
+    }
+
+    fn lower_memory_assignment(
+        &mut self,
+        operator: AssignmentOp,
+        place: &'a MemoryPlace<'a>,
+        target_span: SourceSpan,
+        assigned: &'a CHirExpr<'a>,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let address = self.lower_place_address(place, target_span, state)?;
+        let volatile = place.access_qualifiers().is_volatile;
+        let original = if operator == AssignmentOp::Simple {
+            None
+        } else {
+            Some(self.emit_memory_load(
+                address.clone(),
+                place.value_ty(),
+                volatile,
+                target_span,
+                state,
+            )?)
+        };
+        let right = self.lower_expr(assigned, state)?;
+        let result = if operator == AssignmentOp::Simple {
+            self.coerce_to_object_type(right, Some(assigned), place.value_ty(), span, state)?
+        } else {
+            let destination =
+                canonical_integer(self.unit.types(), self.target, place.value_ty(), span)?;
+            self.compute_compound_assignment(
+                operator,
+                original.expect("memory compound assignment loaded its left value"),
+                right,
+                destination,
+                span,
+                state,
+            )?
+        };
+        self.emit_memory_store(
+            address,
+            result,
+            place.value_ty(),
+            volatile,
+            target_span,
+            state,
+        )
+    }
+
+    fn lower_memory_update(
+        &mut self,
+        operator: UpdateOp,
+        place: &'a MemoryPlace<'a>,
+        target_span: SourceSpan,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let address = self.lower_place_address(place, target_span, state)?;
+        let original = self.emit_memory_load(
+            address.clone(),
+            place.value_ty(),
+            place.access_qualifiers().is_volatile,
+            target_span,
+            state,
+        )?;
+        if matches!(original.value.ty, EvoIRType::Ptr(_)) {
+            return Err(LowerError::UnsupportedExpression {
+                span,
+                feature: "pointer update is outside Day 7",
+            });
+        }
+        let promoted_type = integer_promotion(original.integer);
+        let promoted = self.cast(original.clone(), promoted_type, state)?;
+        let one = self.constant(state, promoted_type, 1)?;
+        let computed = self.emit_signed_arithmetic(
+            state,
+            if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PostIncrement) {
+                BinaryOp::Add
+            } else {
+                BinaryOp::Sub
+            },
+            promoted,
+            one,
+            promoted_type,
+        )?;
+        let destination =
+            canonical_integer(self.unit.types(), self.target, place.value_ty(), span)?;
+        let updated = self.cast(computed, destination, state)?;
+        self.emit_memory_store(
+            address,
+            updated.clone(),
+            place.value_ty(),
+            place.access_qualifiers().is_volatile,
+            target_span,
+            state,
+        )?;
+        Ok(
+            if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PreDecrement) {
+                updated
+            } else {
+                original
+            },
+        )
+    }
+
     fn lower_condition(
         &mut self,
         expression: &'a CHirExpr<'a>,
@@ -3527,6 +4945,16 @@ impl<'a> FunctionLowerer<'a> {
     ) -> Result<Value, LowerError> {
         if value.value.ty == EvoIRType::Bits(1) {
             return Ok(value.value);
+        }
+        if matches!(value.value.ty, EvoIRType::Ptr(_)) {
+            let null = self.fresh_value(value.value.ty.clone());
+            self.emit(state, Inst::PtrNull(null.clone()))?;
+            let condition = self.fresh_value(EvoIRType::Bits(1));
+            self.emit(
+                state,
+                Inst::ICmp(condition.clone(), CmpOp::Ne, value.value, null),
+            )?;
+            return Ok(condition);
         }
         let zero = self.constant(state, value.integer, 0)?;
         let condition = self.fresh_value(EvoIRType::Bits(1));
@@ -3657,9 +5085,8 @@ impl<'a> FunctionLowerer<'a> {
                 .symbols()
                 .symbol(symbol)
                 .map_err(|_| LowerError::UnknownSymbol { symbol, span })?;
-            let integer =
-                canonical_integer(self.unit.types(), self.target, declaration.ty(), span)?;
-            let value = self.fresh_value(bits(integer));
+            let (ty, integer) = self.c_value_type(declaration.ty(), span)?;
+            let value = self.fresh_value(ty);
             self.emit(state, Inst::Uninitialized(value.clone()))?;
             return Ok(ExprValue { value, integer });
         };
@@ -4644,8 +6071,40 @@ fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
         | Inst::SignedDivRemNoOverflow(result, left, right)
         | Inst::SDiv(result, left, right)
         | Inst::UDiv(result, left, right)
-        | Inst::ICmp(result, _, left, right)
-        | Inst::PtrOffset(result, left, right) => vec![result, left, right],
+        | Inst::ICmp(result, _, left, right) => vec![result, left, right],
+        Inst::PtrOffset {
+            result,
+            base,
+            index,
+            ..
+        } => vec![result, base, index],
+        Inst::PtrNull(result) | Inst::GlobalAddr { result, .. } => vec![result],
+        Inst::Alloca {
+            result,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            ..
+        } => vec![result, mem_in, world_in, mem_out, world_out],
+        Inst::LifetimeEnd {
+            mem_in,
+            world_in,
+            pointer,
+            mem_out,
+            world_out,
+        } => vec![mem_in, world_in, pointer, mem_out, world_out],
+        Inst::PointerValid {
+            mem_in,
+            pointer,
+            mem_out,
+        }
+        | Inst::AccessInBounds {
+            mem_in,
+            pointer,
+            mem_out,
+            ..
+        } => vec![mem_in, pointer, mem_out],
         Inst::DivisorNonZero(result, divisor) => vec![result, divisor],
         Inst::ShiftCountDefined {
             result,
@@ -4675,6 +6134,7 @@ fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
             world_in,
             mem_out,
             world_out,
+            ..
         } => vec![result, address, mem_in, world_in, mem_out, world_out],
         Inst::Store {
             address,
@@ -4683,6 +6143,7 @@ fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
             world_in,
             mem_out,
             world_out,
+            ..
         } => vec![address, value, mem_in, world_in, mem_out, world_out],
         Inst::Call {
             results,
