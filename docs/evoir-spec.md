@@ -21,6 +21,7 @@
 8. [Persistent Equality Database](#8-persistent-equality-database)
 9. [Textual Syntax](#9-textual-syntax)
 10. [Cross-IR Contracts](#10-cross-ir-contracts)
+11. [Proof Checking Interface](#11-proof-checking-interface)
 
 ---
 
@@ -39,8 +40,20 @@ Type ::=
   | world            -- global ordering token for volatile/IO effects
   | vec<N, Type>     -- packed SIMD vector of N elements
   | tuple<Type...>   -- heterogeneous product type (zero or more elements)
+  | fnptr<Sig>       -- pointer to a function of exactly this signature
   | void             -- absence of a value
 ```
+
+```text
+Sig ::= "(" TypeList ")" "->" "(" TypeList ")"
+```
+
+A `fnptr` carries its signature in the type rather than at the call site, so a
+callee's parameter and return types are known from the pointer alone. That is
+what lets an indirect call be validated without resolving a symbol. Two `fnptr`
+types are equal exactly when their signatures are identical, including the
+trailing `mem<R>` and `world` positions Section 2.1 requires of every effect
+participant.
 
 ```text
 AddressSpace ::=
@@ -672,9 +685,33 @@ behind a forwarded memory token.
 receives the memory and world tokens and returns updated tokens. The types
 of arguments and return values are derived from the callee's declaration.
 
-**Call effects.** Day 7 applies the conservative memory/world effect summary in
-Section 10.1.7 to every call. Attribute-refined summaries are outside this
-profile.
+```text
+%f = func_addr @symbol : fnptr<Sig>
+(%ret_vals..., %m1, %w1) = call %f(args..., %m0, %w0)
+```
+
+**Semantics.** `func_addr` yields the address of a named function as a value of
+the pointed-to signature. It is pure, consumes no tokens, and produces an
+ordinary pointer value that may be stored, loaded, passed and returned.
+
+An indirect `call` names its callee by value rather than by symbol. Validation
+checks arguments and results against the pointer's signature; there is no symbol
+to resolve and no declaration to consult.
+
+**Diagnostics.** Calling through a null function pointer reports `E3015`.
+Calling through a pointer whose provenance does not name a function reports
+`E3016`, regardless of the address it holds. A signature mismatch at an indirect
+call site is rejected by module validation rather than deferred to runtime,
+because the signature is present in the type.
+
+**Provenance.** A function pointer carries the provenance of the function it
+names and preserves it across stores and loads exactly as Section 5.3 requires
+of object pointers, so a pointer copied through memory names the same function
+as the original.
+
+**Call effects.** A direct call takes the effect summary derived in Section 4.6
+for its callee. An indirect call takes the top summary of Section 4.6, because
+the callee is not known statically.
 
 ---
 
@@ -787,6 +824,65 @@ are likewise ineligible. P0 therefore cannot erase, advance, or delay an
 `E3001` by applying an identity such as `x & 0` or an identity comparison to a
 poison-dependent value.
 
+### 4.6 Function Effect Summaries
+
+Section 4.1 gives the shape of an effect summary. This section says where a
+function's summary lives, how it is derived, and how a reader knows it is the
+summary the module actually implies rather than one an earlier pass left behind.
+
+**Storage.** A summary is a property of a function and is carried in the
+function header, not recomputed at each call site. Call sites read it; they do
+not own it.
+
+```text
+func @name(...) -> (...) cc = target_default
+    effects { reads=R, writes=W, volatile=B, atomic=B, io=B, may_trap=B, may_unwind=B }
+{
+```
+
+`R` and `W` are region sets rendered in the Section 1.4 spelling, sorted by the
+region order `all, unknown, global, stack, heap, escaped`, comma-separated with
+one following space, and written `{}` when empty. Each boolean is `true` or
+`false`. The clause is rendered on its own line, indented four spaces, between
+the calling convention and the opening brace, and is present on every function
+including those whose summary is empty; an absent clause is malformed rather
+than defaulted, because a default would be indistinguishable from an omission.
+
+**Derivation.** A summary is the least fixed point over the call graph:
+
+1. Every function starts at the empty summary.
+2. Each function's summary is the join of its own instructions' effects, per
+   Section 4.2, with the summaries of every function it calls directly.
+3. Repeat until no summary changes.
+
+The join is componentwise: union for region sets, logical or for each boolean.
+The lattice is finite and every step is monotone, so the least fixed point
+exists and is unique, and an implementation may use any iteration order.
+
+A strongly connected component therefore reaches **one** summary shared by all
+its members: recursion cannot be given a smaller summary than the cycle it
+participates in. A volatile access anywhere in a function's callee closure makes
+every transitive caller volatile, which is what keeps a caller from being
+reordered across a volatile access it cannot see.
+
+An indirect call contributes the **top** summary, which reads and writes `all`
+and sets every boolean, because the callee is not known statically. A function
+containing an indirect call therefore has at least the top summary, and so does
+everything that calls it.
+
+**Validation.** The validator recomputes the fixed point from the module and
+compares it to the recorded summaries. A summary weaker than the recomputed one
+is rejected; a summary stronger than it is also rejected, because a summary that
+overstates its effects is still not the summary this module implies and would
+silently suppress legal reordering elsewhere. A recorded summary is therefore
+either exactly right or invalid.
+
+This matters because summaries are the one part of the effect model a
+transformation can invalidate without touching: inlining a callee, or replacing
+a direct call with an indirect one, changes what a caller does while leaving its
+recorded clause untouched. Recomputation on validation is what makes a stale
+summary a rejection rather than a silent licence to reorder.
+
 ---
 
 ## 5. Memory Model
@@ -831,6 +927,15 @@ pointer therefore remains deterministically dangling and can never become a
 pointer to a later allocation. Static and string-literal objects are allocated
 once during module initialization and live for the whole execution.
 String-literal objects are read-only; an attempted store reports `E3014`.
+
+A function-scoped object declared with static storage duration is **not** an
+automatic object of its frame. It has one module-global identity, one allocation
+site, and one initialization performed before the entry function runs; it is
+never allocated or initialized per activation. Two activations of a recursive
+function therefore observe the same object, and a value stored by one is visible
+to the next. It is distinguished from a file-scope object only by which names
+can refer to it, which is a front-end property with no representation here: at
+this level it is a module global whose symbol is not externally visible.
 
 `ObjectId` is an interpreter-local provenance identity and is not compared
 across different IR executions. `ObjectOrigin` is the cross-IR observation
@@ -1238,83 +1343,389 @@ After a constructive compiler transformation (e.g., lowering a call to an
 inline body), only the affected regions are resaturated rather than rebuilding
 the entire e-graph from scratch.
 
+### 8.5 Eligible Regions
+
+Section 8's P0 profile says which rules may fire. This section says what they
+may fire on, in enough detail that two implementations reach the same answer.
+That matters because the checker derives eligibility for itself: a producer and
+a checker sharing this judgment would agree on an ineligible region and accept
+the rewrite built on it, whereas disagreeing about a *parse* only costs a
+rejection. Independence is spent here and nowhere else.
+
+**Granularity.** A region is one instruction together with its operand leaves.
+It is not a maximal connected expression and not a basic block. Each candidate
+instruction forms its own region, whose root is that instruction's result and
+whose leaves are the values it names. A larger granularity is a later profile
+and requires its own revision.
+
+**Operator allowlist.** Exactly these instruction forms may be a region root:
+
+```text
+const, add, sub, mul, and, or, xor,
+icmp.eq, icmp.ne, icmp.slt, icmp.sle, icmp.ult, icmp.ule
+```
+
+Everything else is ineligible, including division and remainder, every shift,
+every extension and truncation, every UB predicate, `ub.assume`, all pointer and
+memory forms, `call`, and all terminators. An instruction absent from this list
+is ineligible even if some future analysis would prove it total: the list is the
+authority, not the reasoning behind it.
+
+**Poison and effect exclusion.** A value is *tainted* when it is the result of
+`uninitialized`, or when any operand it names is tainted. Taint is computed
+before regions are formed, by one forward pass over each function in the order
+of Section 8.6, repeated until no value changes state. The order of that
+iteration does not affect the result, because taint is monotone and the pass
+only ever adds; the fixed point is therefore unique and an implementation may
+choose any iteration order that reaches it. A region is ineligible when its root
+or any leaf is tainted, carries `mem<R>`, carries `world`, is a pointer, is a
+guard result, or may trap.
+
+Taint is a property of the value, not of the expression extracted afterwards. An
+implementation that re-derived it from an extracted region could reach a
+different answer, so it is computed once, before formation.
+
+### 8.6 Traversal Order
+
+Every enumeration this section governs is deterministic, because a seed
+manifest and a region identity are compared byte for byte between a producer and
+a checker that never share a data structure.
+
+- Functions in module definition order.
+- Blocks in function definition order.
+- Instructions in block order, terminator last.
+- Operands in the order Section 9.3 renders them.
+
+No enumeration is ordered by a hash, by an address, by an identifier's numeric
+value, or by iteration over an unordered container.
+
+### 8.7 Seed Manifest and Region Identity
+
+A **seed** is a leaf of a region: a value the region names but does not define.
+
+```text
+Seed {
+    value,        -- the function-local value identifier
+    ty,           -- the value's type, in Section 9 spelling
+    origin,       -- "input" for a block argument or parameter,
+                  -- "definition" for a value defined earlier in the function
+}
+```
+
+The **seed manifest** of a region lists its seeds in first-mention order under
+Section 8.6, deduplicated by value with the first mention retained. It is not
+sorted by name or by identifier, because first-mention order is derivable from
+the module alone while a sort would have to agree on a collation.
+
+A **region identity** is the tuple
+
+```text
+(function name, block label, instruction index within the block)
+```
+
+rendered as `function/block/index`, with the index counting non-terminator
+instructions from zero. It does not contain the value identifier of the root:
+identifiers are stable within one rendering but the identity must survive an
+extraction that renumbers them.
+
+The checker recomputes the complete set of eligible regions and every seed
+manifest from `before.evo`. It does not read the receipt's enumeration except to
+compare against its own, and a disagreement in membership, order, or content is
+a rejection.
+
+### 8.8 Reassembling the After-Module
+
+Extraction replaces the root instruction of each accepted region. Everything
+outside the accepted regions is unchanged, so the after-module is derived
+mechanically rather than described by the producer:
+
+1. Start from the parsed `before.evo`.
+2. For each accepted region, in Section 8.6 order, replace the root instruction
+   with the extracted instruction sequence. A rejected or unattempted region
+   contributes nothing.
+3. Renumber values so that the result satisfies Section 2.4, assigning new
+   identifiers in Section 8.6 order.
+4. Render the result under Section 9.4.
+
+The checker performs these steps itself and compares its rendering to
+`after.evo` in full canonical bytes. Comparing an extracted root, or an output
+commitment carried inside the certificate, is not sufficient: both are claims
+about a part, and a producer that changed something outside every accepted
+region would satisfy either while shipping a different program.
+
+### 8.9 Equality State
+
+Equality becomes compiler state rather than a per-pass structure. The state owns
+the e-graph, the map from `(function, value)` to `EClassId`, and the proof
+history.
+
+```text
+EqualityState {
+    identity,     -- stable for the lifetime of one compilation
+    revision,     -- monotonically increasing; every committed mutation advances it
+    graph,
+    value_to_class,
+    proofs,
+}
+```
+
+Value identifiers are function-local, so the map is keyed by the pair. A bare
+value identifier is not a key and must not be used as one.
+
+**Transactions.** `ingest_module`, `saturate_scalar` and `extract_module` are
+separate operations. Each runs within a transaction that either commits, which
+advances the revision, or rolls back to the revision it entered at. Budget
+exhaustion, a proof failure, a validation failure and an extraction failure all
+roll back.
+
+Rollback restores the state *and* the module together. A failure that returned
+the original module while leaving unions in the database would be invisible in
+the returned program and permanent in the state, and it would remain invisible
+until some later phase asked what was known. Code that reverts only the module
+is correct while the map dies with the call and wrong the moment it does not, so
+this is a property of the transaction rather than of any caller.
+
+**Accumulation.** A representation is added to an existing class. A class that
+has been optimized retains the representation it started with alongside the one
+extraction chose, and a later phase adding a target-specific form joins the same
+class rather than creating a new one. An implementation that replaced the
+original would be indistinguishable at the point most tests look, and would
+differ only when a later phase asked what else was equal, which is exactly when
+the difference matters.
+
+**Justification.** Every union carries a receipt. Replaying the accumulated
+history against the trusted registry re-derives exactly the partition the state
+holds; a partition containing a union the history does not justify is invalid
+regardless of how it arose.
+
 ---
 
 ## 9. Textual Syntax
 
-### 9.1 Grammar
+### 9.1 Purpose and Canonical Status
 
-The EvoIR textual syntax is a human-readable format used in:
+The EvoIR textual syntax is the module interchange format. It is used by test
+fixtures, by `evo-run`, by `--emit=evoir`, and by the proof checker, which reads
+a producer's rendering rather than sharing the producer's in-memory module.
 
-- Test fixtures
-- `evo-run` interpreter input
-- `--emit=evoir` compiler output
-- Debugging and inspection
+That last use makes the format load-bearing rather than a debugging
+convenience. Two obligations follow, and Sections 9.4 and 9.5 discharge them:
+
+- **Canonical.** One module has exactly one rendering, byte for byte. A
+  renderer that emits a semantically equal but textually different form is
+  non-conforming, because digests are taken over these bytes.
+- **Total.** Every field of every construct appears in the rendering. A field a
+  renderer omits and a parser does not expect round-trips perfectly while both
+  drop it, which would let a checker see a module that is not the one that was
+  compiled. Completeness is therefore measured against the enumeration in this
+  section, never against a renderer's own output.
+
+### 9.2 Lexical Structure
 
 ```text
-global @name origin=O storage=KIND size=N align=A bytes=HEX initialized=BITS
-
-func @name(%param1: Type1, ..., %paramN: TypeN, %mem: mem<R>, %w: world)
-    -> (RetType1, ..., RetTypeK, mem<R>, world)
-    cc = calling_convention
-{
-^block_label(%arg1: Type1, ...):
-    %value = op.type_args operand1, ..., operandN
-    %value = uninitialized.type
-    %null = ptr.null : ptr<generic>
-    %global = global_addr @name : ptr<generic>
-    (%ptr, %mem1, %world1) = alloca %mem0, %world0 [origin=O, size=N, align=A]
-    (%mem1, %world1) = lifetime.end %mem0, %world0, %ptr
-    %mem1 = pointer_valid %mem0, %ptr
-    %mem2 = access_in_bounds %mem1, %ptr [size=N, align=A]
-    (%value, %mem3, %world1) = load [volatile] %mem2, %world0, %ptr : Type
-    (%mem3, %world1) = store [volatile] %mem2, %world0, %ptr, %value
-    ub.assume.<reason> %condition
-    terminator
-
-^block_label2(%arg1: Type1, ...):
-    ...
-}
-
-<reason> := division_by_zero | remainder_by_zero | signed_overflow
-          | invalid_shift_count | invalid_signed_left_shift
+value_name    := "%v" digit+
+param_name    := "%arg" digit+
+block_label   := "^entry" | "^b" digit+
+symbol        := "@" ident
+ident         := (letter | "_") (letter | digit | "_")*
+letter        := "A".."Z" | "a".."z"
+digit         := "0".."9"
+integer       := digit+
+hex_byte      := hex_digit hex_digit
+hex_digit     := "0".."9" | "a".."f"
+bit           := "0" | "1"
 ```
 
-### 9.2 Lexical Rules
+Integer literals in instruction operands are unsigned decimal. Hexadecimal and
+binary spellings are accepted by human-authored fixtures but are **not** part of
+the canonical form: a renderer emits decimal, so a digest is unambiguous.
 
-- Lines starting with `^` are block labels
-- `%name` is a value reference or definition
-- `%name = op args` is an instruction definition
-- `%name = uninitialized.bits<N>` defines transportable scalar poison; it does
-  not trap until semantically consumed
-- A global's `KIND` is exactly `static` or `string_literal`; its `HEX` is
-  exactly two lowercase hexadecimal digits per byte and
-  `BITS` is exactly one `0` or `1` per byte; both lengths equal `size=N`, with
-  `N` in `1..=i64::MAX`, and `align=A` is a target-layout-representable positive
-  power of two. Every global and every `alloca` instruction site has one
-  module-unique `origin=O`; `O` is the stable source-site ordinal used by
-  cross-IR observations
-- `@name` is a module symbol; `call` resolves a function and `global_addr`
-  resolves a global object, and using the wrong symbol kind is invalid
-- `ptr.null`, `global_addr`, `alloca`, `lifetime.end`, `pointer_valid`, and
-  `access_in_bounds` have the exact Day 7 forms above
-- `ptr.offset` has exact direction and index-signedness suffixes plus a
-  positive `scale`; a bare `ptr.offset` is malformed
-- The optional literal `volatile` appears only immediately after `load` or
-  `store`; separate `vload`/`vstore` mnemonics are not valid syntax
-- Every load/store memory operand is the output of a matching
-  `access_in_bounds` for that pointer and target-derived size/alignment
-- `ub.assume.<reason> %condition` is a typed UB obligation; the reason suffix
-  is mandatory and `%condition` has type `bits<1>`
-- `trap.scalar_function_fell_off_end` is a zero-operand CFG terminator that
-  reports `E3007 scalar-function-fell-off-end`; it carries no placeholder
-  return value or effect token
-- Types are delimited by angle brackets and parentheses: `bits<32>`, `ptr<generic>`, `mem<all>`, `tuple<...>`
-- Comments start with `;` and continue to end of line
-- Block comments are not supported in textual syntax
-- Whitespace separates tokens; indentation is not significant
+`%v` numbering is the function-local `Value.id`. `%arg` numbering is the
+positional index of a formal parameter and is independent of `%v` numbering;
+the two namespaces never collide because their prefixes differ. Block labels are
+positional: the first block of a function is `^entry` regardless of its numeric
+identity, and every other block is `^b` followed by its identifier.
 
-### 9.3 Complete Example
+A comment begins with `;` and runs to the end of the line. Comments are legal in
+authored fixtures and are **absent from canonical output**. Block comments do
+not exist.
+
+### 9.3 Grammar
+
+```text
+module          := global* function*
+
+global          := "global " symbol " origin=" integer
+                   " storage=" storage_kind
+                   " size=" integer " align=" integer
+                   " bytes=" hex_byte+ " initialized=" bit+ newline
+storage_kind    := "static" | "string_literal"
+
+function        := "func " symbol "(" param_list ")"
+                   " -> (" type_list ")"
+                   " cc = " ident newline
+                   indent effects_clause newline
+                   "{" newline
+                   block+
+                   "}" newline
+effects_clause  := "effects { reads=" region_set ", writes=" region_set
+                   ", volatile=" bool ", atomic=" bool ", io=" bool
+                   ", may_trap=" bool ", may_unwind=" bool " }"
+region_set      := "{}" | "{" region ("," " " region)* "}"
+region          := "all" | "unknown" | "global" | "stack" | "heap" | "escaped"
+bool            := "true" | "false"
+param_list      := ε | param ("," " " param)*
+param           := param_name ": " type
+type_list       := ε | type ("," " " type)*
+
+block           := block_label "(" block_arg_list "):" newline
+                   instruction*
+                   terminator
+block_arg_list  := ε | block_arg ("," " " block_arg)*
+block_arg       := value_name ": " type
+
+instruction     := indent inst_body newline
+terminator      := indent term_body newline
+indent          := "    "
+```
+
+Every instruction form, exhaustively. `N` is a bit width, `T` a type, `S` a
+positive scale, `O` an origin ordinal.
+
+```text
+inst_body :=
+    value_name " = const." type " " integer
+  | value_name " = uninitialized." type
+  | value_name " = " arith_op "." type " " value_name ", " value_name
+  | value_name " = icmp." cmp_op " " value_name ", " value_name
+  | value_name " = " cast_op "." type " " value_name
+  | value_name " = " ub_predicate " " value_name ", " value_name
+  | "ub.assume." ub_reason " " value_name
+  | value_name " = ptr.null : " type
+  | value_name " = global_addr " symbol " : " type
+  | value_name " = func_addr " symbol " : " type
+  | "(" value_name ", " value_name ", " value_name ") = alloca "
+        value_name ", " value_name
+        " [origin=" integer ", size=" integer ", align=" integer "]"
+  | "(" value_name ", " value_name ") = lifetime.end "
+        value_name ", " value_name ", " value_name
+  | value_name " = pointer_valid " value_name ", " value_name
+  | value_name " = access_in_bounds " value_name ", " value_name
+        " [size=" integer ", align=" integer "]"
+  | "(" value_name ", " value_name ", " value_name ") = load" volatile_marker
+        " " value_name ", " value_name ", " value_name " : " type
+  | "(" value_name ", " value_name ") = store" volatile_marker
+        " " value_name ", " value_name ", " value_name ", " value_name
+  | value_name " = ptr.offset." direction "." index_signedness " "
+        value_name ", " value_name " [scale=" integer "]"
+  | "(" result_list ") = call " callee "(" arg_list ")"
+
+term_body :=
+    "br " block_label "(" arg_list ")"
+  | "cond_br " value_name ", " block_label "(" arg_list ")"
+        ", " block_label "(" arg_list ")"
+  | "ret " value_name ("," " " value_name)*
+  | "trap." trap_reason
+
+arith_op         := "add" | "sub" | "mul" | "sdiv" | "udiv" | "srem" | "urem"
+                  | "shl" | "ashr" | "lshr" | "and" | "or" | "xor"
+cmp_op           := "eq" | "ne" | "slt" | "sle" | "ult" | "ule"
+cast_op          := "sext" | "zext" | "trunc"
+ub_predicate     := "signed_add_defined" | "signed_sub_defined"
+                  | "signed_mul_defined" | "divisor_nonzero"
+                  | "signed_div_rem_no_overflow" | "shift_count_defined"
+                  | "signed_shl_defined"
+ub_reason        := "division_by_zero" | "remainder_by_zero" | "signed_overflow"
+                  | "invalid_shift_count" | "invalid_signed_left_shift"
+trap_reason      := "scalar_function_fell_off_end"
+volatile_marker  := ε | " volatile"
+direction        := "add" | "sub"
+index_signedness := "signed" | "unsigned"
+result_list      := value_name ("," " " value_name)*
+arg_list         := ε | value_name ("," " " value_name)*
+callee           := symbol | value_name
+```
+
+Types follow Appendix B, rendered without internal padding other than the
+single space after a comma in `vec<N, T>` and `tuple<...>`.
+
+### 9.4 Canonical Byte Form
+
+A conforming renderer emits exactly these bytes. Nothing here is stylistic:
+each rule removes a degree of freedom that would otherwise make two renderings
+of one module disagree on their digest.
+
+| Position | Rule |
+|---|---|
+| Line ending | `\n`. Never `\r\n`. |
+| Final byte | `\n`. The last function's closing brace is followed by exactly one newline and nothing else. |
+| Global order | Source-site origin ordinal, ascending. |
+| Function order | Module definition order, which lowering fixes from source order. |
+| Between globals | Exactly one newline; globals form one block with no blank lines inside it. |
+| Globals to functions | Exactly one blank line, and only when at least one global exists. |
+| Between functions | Exactly one blank line. |
+| Instruction indent | Exactly four spaces. Never a tab. |
+| Block label indent | None. Column zero. |
+| Effects clause | Present on every function, indented four spaces on its own line between the calling convention and the opening brace. An absent clause is malformed, never an empty default. |
+| Closing brace | Column zero, on its own line. |
+| Separator | `", "` between operands, results, parameters and arguments. Exactly one space, never zero and never two. |
+| Attribute lists | `" [k=v, k=v]"`, one space before the bracket, `", "` between entries, no space inside the brackets. |
+| Empty argument list | `"()"` with nothing between the parentheses. |
+| Trailing whitespace | Never, on any line. |
+| Blank line inside a function | Never. |
+| Comments | Never in canonical output. |
+| Integer literals | Unsigned decimal, no leading zeros other than `0` itself, no sign, no underscores. |
+| Hex bytes | Lowercase, exactly two digits per byte, no separators. |
+
+Canonical output contains no comments and no blank lines other than the
+separators named above, so a digest over these bytes is a digest over the
+module and nothing else.
+
+### 9.5 Parser Rejection Rules
+
+A parser rejects rather than repairs. Rejection is part of the format: a parser
+that accepts more than this section allows can read a file a conforming
+producer could not have written, and any agreement reached with such a file is
+meaningless.
+
+Rejected as **malformed**, meaning the bytes are not a module at all:
+
+- Any deviation from Section 9.3's productions, including a missing or extra
+  separator, an unexpected token, or an unterminated construct.
+- A tab anywhere, an indent that is not exactly four spaces, trailing
+  whitespace on any line, or a `\r`.
+- A `%v`, `%arg`, `^b`, or `@` prefix not followed by its required form.
+- An integer literal that is not unsigned decimal, or that does not fit the
+  width its context requires.
+- A `bytes=` run whose length is not exactly `2 * size`, an `initialized=` run
+  whose length is not exactly `size`, or either containing a character outside
+  its alphabet.
+- An attribute list whose keys are absent, duplicated, or out of the order
+  Section 9.3 fixes.
+- A bare `ptr.offset` without both suffixes, or a `vload` or `vstore` mnemonic,
+  neither of which exists.
+- A `volatile` marker anywhere other than immediately after `load` or `store`.
+- Any byte after the final newline.
+
+Rejected as **well-formed but invalid**, meaning the bytes parse and the module
+they describe is not a legal module. These are the checks Section 2.4, Section
+10.4 and the effect model already require, applied to a parsed module:
+
+- A value used without a definition, or defined twice.
+- A block argument arity or type mismatch on any edge.
+- A memory or world token consumed twice, or a token whose producer does not
+  dominate its consumer.
+- A load or store whose memory operand is not the output of a matching
+  `access_in_bounds` for that pointer and that size and alignment.
+- A `global_addr` naming a symbol that is absent or is not a global, or a
+  `call` naming a symbol that is absent or is not a function.
+- A `size`, `align`, `scale` or width outside the range its definition allows.
+
+The two categories carry distinct exit statuses in Section 11.3, because a file
+that cannot be read and a module that must not be trusted are different
+findings and are acted on differently.
+
+### 9.6 Complete Example
 
 ```text
 func @sum(%p: ptr<generic>, %n: bits<64>, %m: mem<all>, %w: world)
@@ -1345,7 +1756,7 @@ func @sum(%p: ptr<generic>, %n: bits<64>, %m: mem<all>, %w: world)
 }
 ```
 
-### 9.4 UB-Assume Example
+### 9.7 UB-Assume Example
 
 ```text
 func @checked_add(%x: bits<32>, %y: bits<32>, %m: mem<all>, %w: world)
@@ -1360,7 +1771,7 @@ func @checked_add(%x: bits<32>, %y: bits<32>, %m: mem<all>, %w: world)
 }
 ```
 
-### 9.5 Call Example
+### 9.8 Call Example
 
 ```text
 func @caller(%a: bits<32>, %m0: mem<all>, %w0: world)
@@ -1373,7 +1784,7 @@ func @caller(%a: bits<32>, %m0: mem<all>, %w0: world)
 }
 ```
 
-### 9.6 Syntax Restrictions
+### 9.9 Syntax Restrictions
 
 - Value names (`%name`) are local to a function. They are not visible across
   function boundaries.
@@ -1682,6 +2093,119 @@ produce a placeholder value.
 
 ---
 
+## 11. Proof Checking Interface
+
+### 11.1 Names
+
+Three different names for one component were in circulation while this was being
+designed. They are fixed here so that no implementation chooses them:
+
+| Role | Name |
+|---|---|
+| Cargo package | `evocc-proofcheck` |
+| Installed binary | `evo-proofcheck` |
+| Argument interface | `evo-proofcheck before.evo after.evo proof.evp` |
+| Capability probe | `evo-proofcheck --probe` |
+
+The compiler driver does **not** answer a `proofcheck` capability probe of its
+own. A driver probe would suggest the driver can discharge the check, and the
+value of the check is that it runs somewhere the driver's code cannot reach.
+
+### 11.2 Interface
+
+The checker reads three files and takes nothing from its environment:
+
+```text
+before.evo    the canonical rendering of the module as it entered optimization
+after.evo     the canonical rendering of the module as it left
+proof.evp     the certificate
+```
+
+It performs, in order:
+
+1. Parse `before.evo` and `after.evo` under Section 9, rejecting either under
+   Section 9.5 rather than repairing it.
+2. Verify the certificate's input digest against `before.evo`'s bytes.
+3. Recompute the eligible regions and every seed manifest from the parsed
+   `before.evo`, per Sections 8.5 through 8.7, using its own implementation.
+   Compare against the certificate's enumeration; disagreement is a rejection.
+4. Replay every merge against the trusted registry of Section 11.5, recomputing
+   constant folds rather than accepting claimed results.
+5. Verify that each extracted root belongs to its original root's e-class.
+6. Reassemble the after-module per Section 8.8 and compare its canonical
+   rendering to `after.evo` byte for byte.
+
+Every step must pass. A certificate whose merges replay but whose reassembly
+differs is invalid, as is one that names an unrelated root or output.
+
+### 11.3 Exit Statuses
+
+```text
+0    valid
+2    malformed input        -- the bytes are not a module or not a certificate
+3    well-formed but invalid -- it parses and the claim does not hold
+```
+
+The two failure statuses are distinct because they are acted on differently: a
+malformed file is a producer or transport defect, while a well-formed invalid
+one is a claim that was checked and refused. Collapsing them would hide the
+second inside the first during a campaign, which is precisely when the
+difference matters. Any other status is itself a defect; the checker does not
+exit non-zero for reasons outside this table.
+
+### 11.4 Dependency Boundary
+
+This is a normative constraint, not a convention, and is enforced by a test that
+reads the dependency closure.
+
+```text
+evocc-evoir        IR types, Section 9 parser and renderer, validator, interpreter
+                   must not depend on the e-graph
+
+evocc-eqopt        the optimizer and the equality state
+                   depends on evocc-evoir, the e-graph, and the proof crate
+
+evocc-proofcheck   depends on evocc-evoir and the proof crate only
+                   must not depend on evocc-eqopt or on the e-graph
+```
+
+An IR crate that depends on the e-graph places the optimizer in the transitive
+closure of everything that reads IR, including the checker, which would dissolve
+the boundary while every direct dependency still looked correct.
+
+### 11.5 What Is Shared and What Is Not
+
+The boundary is deliberately partial, and the line is drawn by which direction a
+shared defect pushes the verdict.
+
+**Shared: the Section 9 parser.** A parser defect makes the checker's view
+differ from the producer's, so reassembly disagrees and the certificate is
+*rejected*. Sharing fails safe, and duplicating a parser the interpreter needs
+anyway would add a second thing to drift.
+
+**Not shared: eligibility and seed derivation.** A common defect here makes both
+sides agree that an ineligible region was eligible, and the certificate is
+*accepted*. Sharing fails dangerous. The checker implements Sections 8.5 through
+8.7 for itself.
+
+**Not shared: the rule registry.** The trusted P0 rules live in the checker.
+Rules are stated with variable patterns and explicit constant side conditions,
+so a rewrite is accepted only when it instantiates a registered rule. A
+certificate commits to the registry and cannot extend it; a certificate that
+supplies the rules it is checked against establishes only that its recorded
+merges follow from its own recorded claims.
+
+**Residual risk, recorded rather than implied.** The certificate format
+definition remains shared between producer and checker, so a defect in that
+definition is invisible to both. Eliminating it would require a second
+implementation of the format. It is bounded instead by a mutation campaign whose
+property is that **no mutant of the optimizer produces a semantically different
+module together with an accepted certificate** — not that every mutant is
+rejected, since a mutant that merely disables a rewrite emits a valid empty
+certificate and should pass.
+
+---
+
 ## Appendix A: Instruction Quick Reference
 
 | Category | Instruction | Result | Operands | May Trap |
@@ -1726,7 +2250,9 @@ produce a placeholder value.
 | | `cond_br %c, ^t(targs), ^e(eargs)` | — | condition, blocks, values | n/a |
 | | `ret values...` | — | return values | n/a |
 | | `trap.scalar_function_fell_off_end` | — | — | yes |
+| Pointer | `func_addr @symbol` | `fnptr<Sig>` | symbol | no |
 | Calls | `call @callee(args..., %m, %w)` | ret values, `mem`, `world` | callee, args, memory, world | depends |
+| | `call %fptr(args..., %m, %w)` | ret values, `mem`, `world` | callee value, args, memory, world | depends |
 | UB | `ub.assume.<reason> %cond` | — | `%cond` : `bits<1>` | yes |
 | Scalar poison | `uninitialized.bits<N>` | `bits<N>` | — | on consumption |
 
@@ -1742,7 +2268,10 @@ Type       := "bits" "<" Integer ">"
             | "world"
             | "vec" "<" Integer "," Type ">"
             | "tuple" "<" TypeList ">"
+            | "fnptr" "<" Signature ">"
             | "void"
+
+Signature  := "(" TypeList ")" "->" "(" TypeList ")"
 
 TypeList   := ε
             | Type ("," Type)*
@@ -1760,6 +2289,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.8 | 2026-08-24 | Makes the textual form load-bearing rather than a debugging convenience: Section 9 becomes a real grammar with a canonical byte form and explicit rejection rules, because a proof checker reads a producer's rendering instead of sharing its module. Freezes what two implementations need to agree without sharing code: P0 region granularity, the operator allowlist, poison taint and its fixed point, traversal order, seed manifest content and order, region identity, and the mechanical reassembly of an after-module. Adds `fnptr<Sig>`, `func_addr`, the indirect callee form and its `E3015`/`E3016` diagnostics; gives function effect summaries a stored form, a least-fixed-point derivation over the call graph, and a validator that recomputes and refuses a stale or overstated one; gives a static local one module-global identity initialized once; and defines equality state with a revision counter and transactions that roll the module and the database back together. Section 11 fixes the checker's package, binary, argument and probe names, its exit statuses, and the crate dependency boundary, and records which components are shared because a common defect there causes a rejection and which are implemented twice because a common defect there would cause an acceptance. Defers proof minimisation, alias-dependent rewrites, region splitting beyond one instruction, and attribute-derived effect summaries. |
 | 1.7 | 2026-08-22 | Defines the Day 7 `(ObjectId, signed byte_offset)` provenance model, immutable initialized/lifetime-aware `mem<all>` snapshots, module globals and automatic objects, state-preserving pointer/access guards with exact `E3001`/`E3009`–`E3014` diagnostics, and observable volatile world traces. It freezes executable pointer/memory syntax while deferring pointer-valued static relocations, pointer/integer conversions, region splitting, alias-dependent memory rewrites, atomics, heap-library semantics, and backend lowering. |
 | 1.6 | 2026-08-18 | Makes `--emit=evoir` the canonical driver spelling, binds it to the exhaustive Section 9 renderer, names the first stored block `^entry` independently of numeric block identity, and corrects the complete example to use the supported `icmp.ult` comparison. |
 | 1.5 | 2026-08-18 | Defines transportable Day 6 scalar `uninitialized.bits<N>` poison with consume-time `E3001`, distinct from Day 7 memory initializedness; adds the zero-operand `trap.scalar_function_fell_off_end` terminator and exact `E3007` behavior without placeholder returns or effect tokens. |
