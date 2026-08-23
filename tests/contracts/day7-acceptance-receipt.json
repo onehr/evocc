@@ -90,9 +90,12 @@
         "skips": 0
       },
       "proofReceipts": {
-        "independentlyReplayedByEvoccProof": 1280,
+        "consistencyReplaysAgainstProducerSuppliedRules": 1280,
         "total": 1280,
-        "rate": "100%"
+        "rate": "100%",
+        "authority": "ProducerSupplied",
+        "establishes": "Recorded merges follow from the rules recorded in the same certificate.",
+        "doesNotEstablish": "That those rules are sound. The producer manufactures one exact rule per candidate and replays against it, so no external authority has been applied."
       },
       "effectNodesAdmittedToEgraph": 0,
       "budgetExhaustionFallsBackToOriginal": true,
@@ -106,6 +109,18 @@
           "eqsat-optimize",
           "-Oeq"
         ]
+      },
+      "correction": {
+        "supersedes": "proofReceipts.independentlyReplayedByEvoccProof",
+        "reason": "evocc-proof documents that a certificate cannot authorize its own rules. Three call sites passed certificate.rules as the trusted authority, one of them this gate's own test, so the replay measured internal consistency and the word 'independently' did not hold. The count is unchanged and was not in question.",
+        "evidence": [
+          "crates/evocc-evoir/src/scalar_eq.rs: production optimizer",
+          "crates/evocc-lower/tests/day7_g4_scalar_eq.rs: this gate's measurement",
+          "crates/evocc-evoir/tests/scalar_eq_bridge.rs",
+          "crates/evocc-egraph/tests/reasoned_union_campaign.rs: the correct shape, for contrast"
+        ],
+        "boundToTest": "crates/evocc-evoir/tests/proof_authority.rs asserts the reported authority, so this field cannot silently disagree with the code again.",
+        "remediation": "An external authority requires reviewed rules with variable patterns. Those cannot be stated while certificate constants are dynamic operator identities carrying neither width nor payload, so the typed operator vocabulary is a prerequisite and is scheduled before any equality state is made persistent."
       }
     }
   },
@@ -226,10 +241,6 @@
   },
   "artifacts": [
     {
-      "path": "docs/superpowers/plans/2026-08-23-evoir-object-memory.md",
-      "sha256": "37451cdea36eef4dd3d8880220043be1191790f9418ae853bad8c978738751dd"
-    },
-    {
       "path": "tests/contracts/day7-measured-manifest.json",
       "sha256": "8eda3df8df044f46ee6fe8985d00e69b7e6f571dc01d965f82a576c2baee674f"
     },
@@ -244,5 +255,11 @@
     "persistent EClassId semantics across allocations",
     "attributes, typeof, and statement expressions",
     "backend and ABI lowering"
-  ]
+  ],
+  "artifactBindingCorrection": {
+    "removed": [
+      "docs/superpowers/plans/2026-08-23-evoir-object-memory.md"
+    ],
+    "reason": "A receipt binds contracts and evidence, both of which must exist in a fresh clone for the binding to mean anything. The removed entries are working documents excluded by .gitignore, so their digests were unverifiable in the isolated clone lanes this receipt also records. The digests matched at the time of removal; the entries were unverifiable, not wrong."
+  }
 }

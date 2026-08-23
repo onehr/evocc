@@ -2,8 +2,8 @@ use std::collections::BTreeSet;
 
 use evocc_common::{Arena, FileId};
 use evocc_evoir::{
-    interpret_module, optimize_scalar_module, validate_module, InterpreterLimits, RuntimeValue,
-    ScalarEqBudget,
+    interpret_module, optimize_scalar_module, validate_module, InterpreterLimits, ProofAuthority,
+    RuntimeValue, ScalarEqBudget,
 };
 use evocc_lex::{Lexer, TokenKind};
 use evocc_lower::lower_unit;
@@ -117,6 +117,10 @@ fn deterministic_scalar_p0_corpus_is_clean_before_and_after_with_full_proof_repl
         let mut case_replays = 0;
         for receipt in &outcome.report.receipts {
             receipts += 1;
+            // Replaying against the certificate's own rules checks that the
+            // recorded merges follow from the recorded rules. It does not check
+            // that those rules are sound, so this loop measures consistency and
+            // the assertion below states which authority produced that number.
             let context = match ProofContext::new(receipt.certificate.rules.clone()) {
                 Ok(context) => context,
                 Err(error) => {
@@ -133,6 +137,12 @@ fn deterministic_scalar_p0_corpus_is_clean_before_and_after_with_full_proof_repl
                 Err(error) => failures.push(format!("{id}: replay: {error}")),
             }
         }
+        assert_eq!(
+            outcome.report.proof_authority,
+            ProofAuthority::ProducerSupplied,
+            "{id}: the measured replay count must be reported under the authority that \
+             actually produced it"
+        );
         if case_replays == outcome.report.receipts.len() {
             executions_clean += 1;
         }
@@ -150,6 +160,7 @@ fn deterministic_scalar_p0_corpus_is_clean_before_and_after_with_full_proof_repl
     );
     println!(
         "Day-7 G4 measured: executions={executions_clean}/{PROGRAMS}, \
-         optimized={optimized_programs}/{PROGRAMS}, proof={receipts_replayed}/{receipts}"
+         optimized={optimized_programs}/{PROGRAMS}, \
+         consistencyReplays={receipts_replayed}/{receipts}, authority=ProducerSupplied"
     );
 }

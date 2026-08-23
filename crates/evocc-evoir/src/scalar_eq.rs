@@ -148,8 +148,38 @@ pub struct ScalarMergeReceipt {
 }
 
 /// Measured optimization facts. No predicted denominator appears here.
+/// Which authority a certificate was replayed against.
+///
+/// A replay establishes soundness only when the rules come from an authority the
+/// producer could not choose. Recording which of the two actually happened keeps
+/// a frozen receipt bound to a measured property rather than to an adjective, so
+/// the day the authority changes, the number it reports changes with it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ProofAuthority {
+    /// The certificate supplied the rules it was then checked against.
+    ///
+    /// The replay establishes that the recorded merges follow from the recorded
+    /// rules, and nothing about whether those rules are themselves sound. This
+    /// still catches an e-graph whose certificate is internally incoherent, which
+    /// is why it is worth running, but it is not a proof of the rewrite.
+    ///
+    /// The scalar bridge is in this state for a concrete reason rather than an
+    /// oversight in the check: it manufactures one exact rule per candidate whose
+    /// patterns name concrete e-classes instead of variables. Checking such a
+    /// rewrite against a general reviewed rule such as `add(?x, 0) -> ?x` needs a
+    /// certificate in which a constant carries its width and payload; constants
+    /// are currently dynamic operator identities carrying neither, so the general
+    /// rule cannot be stated, let alone matched.
+    #[default]
+    ProducerSupplied,
+    /// The rules came from a reviewed registry that a producer cannot extend.
+    Reviewed { registry: &'static str },
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ScalarEqReport {
+    /// The authority every receipt in this report was replayed against.
+    pub proof_authority: ProofAuthority,
     pub regions_admitted: usize,
     pub graph_nodes: usize,
     pub epochs: usize,
@@ -311,6 +341,11 @@ pub fn optimize_scalar_module(module: &Module, budget: ScalarEqBudget) -> Scalar
                     rewritten.push(inst);
                     continue;
                 };
+                // The authority is recorded next to the line that chooses it, so
+                // the field cannot drift away from what was actually checked.
+                // Passing the certificate's own rules is what makes this a
+                // consistency check rather than a proof; see `ProofAuthority`.
+                report.proof_authority = ProofAuthority::ProducerSupplied;
                 let context = match ProofContext::new(receipt.certificate.rules.clone()) {
                     Ok(context) => context,
                     Err(_) => {
