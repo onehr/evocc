@@ -5,6 +5,17 @@ set -o pipefail
 
 export LC_ALL=C
 
+REPLAY_USER="${USER:-}"
+REPLAY_LOGNAME="${LOGNAME:-$REPLAY_USER}"
+REPLAY_SHELL="${SHELL:-/bin/sh}"
+REPLAY_LANG="${LANG:-en_US.UTF-8}"
+REPLAY_COMMAND_MODE="${COMMAND_MODE:-unix2003}"
+
+if [ -z "$REPLAY_USER" ] || [ -z "$REPLAY_LOGNAME" ]; then
+  printf 'fresh-clone host user identity is unavailable\n' >&2
+  exit 2
+fi
+
 if [ "$#" -ne 2 ]; then
   printf 'usage: %s PROJECT_ROOT OUTPUT_DIR\n' "$0" >&2
   exit 2
@@ -63,7 +74,8 @@ OVERALL_OK=1
 for lane in one two; do
   lane_root="$SCRATCH/$lane"
   clone_dir="$lane_root/repository"
-  mkdir -p "$lane_root/home" "$lane_root/cargo-home" "$lane_root/target"
+  mkdir -p "$lane_root/home" "$lane_root/cargo-home" "$lane_root/target" \
+    "$lane_root/tmp"
 
   "$TIMEOUT" 60 "$GIT" clone --quiet --no-local --no-hardlinks \
     "$PROJECT_ROOT" "$clone_dir" \
@@ -86,6 +98,9 @@ for lane in one two; do
       /usr/bin/env -i "$common_env" \
         HOME="$lane_root/home" CARGO_HOME="$lane_root/cargo-home" \
         CARGO_TARGET_DIR="$lane_root/target" CARGO_NET_OFFLINE=true \
+        USER="$REPLAY_USER" LOGNAME="$REPLAY_LOGNAME" \
+        SHELL="$REPLAY_SHELL" TMPDIR="$lane_root/tmp" \
+        LANG="$REPLAY_LANG" COMMAND_MODE="$REPLAY_COMMAND_MODE" \
         RUSTC="$RUSTC" LC_ALL=C TZ=UTC \
         "$TIMEOUT" 300 "$CARGO" test --workspace --all-targets --locked --offline
     ) >"$OUTPUT_DIR/$lane-test.stdout" 2>"$OUTPUT_DIR/$lane-test.stderr"
@@ -96,6 +111,9 @@ for lane in one two; do
       /usr/bin/env -i "$common_env" \
         HOME="$lane_root/home" CARGO_HOME="$lane_root/cargo-home" \
         CARGO_TARGET_DIR="$lane_root/target" CARGO_NET_OFFLINE=true \
+        USER="$REPLAY_USER" LOGNAME="$REPLAY_LOGNAME" \
+        SHELL="$REPLAY_SHELL" TMPDIR="$lane_root/tmp" \
+        LANG="$REPLAY_LANG" COMMAND_MODE="$REPLAY_COMMAND_MODE" \
         RUSTC="$RUSTC" LC_ALL=C TZ=UTC \
         "$TIMEOUT" 300 "$CARGO" clippy --workspace --all-targets \
           --locked --offline -- -D warnings
@@ -107,6 +125,9 @@ for lane in one two; do
       /usr/bin/env -i "$common_env" \
         HOME="$lane_root/home" CARGO_HOME="$lane_root/cargo-home" \
         CARGO_TARGET_DIR="$lane_root/target" CARGO_NET_OFFLINE=true \
+        USER="$REPLAY_USER" LOGNAME="$REPLAY_LOGNAME" \
+        SHELL="$REPLAY_SHELL" TMPDIR="$lane_root/tmp" \
+        LANG="$REPLAY_LANG" COMMAND_MODE="$REPLAY_COMMAND_MODE" \
         RUSTC="$RUSTC" LC_ALL=C TZ=UTC \
         "$TIMEOUT" 120 "$CARGO" fmt --all -- --check
     ) >"$OUTPUT_DIR/$lane-fmt.stdout" 2>"$OUTPUT_DIR/$lane-fmt.stderr"
