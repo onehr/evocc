@@ -41,6 +41,14 @@ struct Case {
     expected_volatile_ir_accesses: Option<&'static [VolatileDirection]>,
 }
 
+#[derive(Clone, Copy)]
+struct InvalidCHirCase {
+    id: &'static str,
+    source: &'static str,
+    expected_code: &'static str,
+    expected_message: &'static str,
+}
+
 const CASES: &[Case] = &[
     Case {
         id: "linked_list_build_and_traverse",
@@ -77,6 +85,54 @@ const CASES: &[Case] = &[
         source: "int main(void) { volatile int port; port = 11; int first = port; port = 22; int second = port; return first * 100 + second; }\n",
         expected: 1_122,
         expected_volatile_ir_accesses: Some(ORDERED_VOLATILE_IR_ACCESSES),
+    },
+];
+
+const STRING_UNIT_CASES: &[Case] = &[
+    Case {
+        id: "string_fragment_hex_boundary",
+        source: "int main(void) { char value[3] = \"\\x1\" \"2\"; return value[0] * 100 + value[1]; }\n",
+        expected: 150,
+        expected_volatile_ir_accesses: None,
+    },
+    Case {
+        id: "string_ordinary_escapes",
+        source: "int main(void) { char value[5] = \"\\n\\t\\\\\\\"\"; return value[0] + value[1] + value[2] + value[3] + value[4]; }\n",
+        expected: 145,
+        expected_volatile_ir_accesses: None,
+    },
+    Case {
+        id: "string_embedded_and_terminating_zero",
+        source: "int main(void) { char value[4] = \"A\\0B\"; return value[0] == 'A' && value[1] == 0 && value[2] == 'B' && value[3] == 0; }\n",
+        expected: 1,
+        expected_volatile_ir_accesses: None,
+    },
+];
+
+const INVALID_CHIR_CASES: &[InvalidCHirCase] = &[
+    InvalidCHirCase {
+        id: "uninitialized_read",
+        source: "int main(void) { int value; int *pointer = &value; return *pointer; }\n",
+        expected_code: "E3001",
+        expected_message: "read-of-uninitialized-object",
+    },
+    InvalidCHirCase {
+        id: "null_pointer_access",
+        source: "int main(void) { int *pointer = 0; return *pointer; }\n",
+        expected_code: "E3009",
+        expected_message: "null-pointer-access",
+    },
+    InvalidCHirCase {
+        id: "out_of_bounds_access",
+        source: "int main(void) { int value[1] = {7}; return value[1]; }\n",
+        expected_code: "E3011",
+        expected_message: "out-of-bounds-memory-access",
+    },
+    InvalidCHirCase {
+        id: "dangling_pointer_access",
+        source: "int main(void) { int *pointer; { int value = 7; pointer = &value; } return *pointer; }\n",
+        expected_code: "E3010",
+        expected_message: "dangling-pointer-access",
     },
 ];
 
@@ -408,4 +464,40 @@ fn parsed_c_memory_programs_are_equivalent_in_both_interpreters() {
         failures.len(),
         failures.join("\n")
     );
+}
+
+#[test]
+fn chir_string_initializers_use_one_fragment_aware_code_unit_authority() {
+    assert_eq!(STRING_UNIT_CASES.len(), 3, "string RED denominator changed");
+    for (ordinal, case) in STRING_UNIT_CASES.iter().copied().enumerate() {
+        let arena = Arena::default();
+        let unit = parse(case.source, FileId::new(7_101 + ordinal as u32), &arena)
+            .unwrap_or_else(|error| panic!("{}: {error}", case.id));
+        let actual = observe_chir(&unit).unwrap_or_else(|error| panic!("{}: {error}", case.id));
+        assert_eq!(actual.scalar, case.expected, "{}", case.id);
+        assert!(actual.volatile_trace.is_empty(), "{}", case.id);
+    }
+}
+
+#[test]
+fn chir_invalid_memory_programs_report_exact_typed_diagnostics() {
+    assert_eq!(
+        INVALID_CHIR_CASES.len(),
+        4,
+        "invalid RED denominator changed"
+    );
+    for (ordinal, case) in INVALID_CHIR_CASES.iter().copied().enumerate() {
+        let arena = Arena::default();
+        let unit = parse(case.source, FileId::new(7_201 + ordinal as u32), &arena)
+            .unwrap_or_else(|error| panic!("{}: {error}", case.id));
+        let main = function_symbol(&unit, "main").unwrap();
+        let error = interpret_scalar_function(&unit, main, CHirLimits::new(STEP_BUDGET))
+            .expect_err(case.id);
+        assert_eq!(
+            (error.code(), error.message()),
+            (case.expected_code, case.expected_message.to_owned()),
+            "{}",
+            case.id
+        );
+    }
 }

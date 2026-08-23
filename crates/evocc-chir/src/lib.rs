@@ -124,15 +124,28 @@ impl StringLit {
     /// escape spelling remains distinguishable from directly encoded text.
     #[must_use]
     pub fn explicit_unit_count(&self) -> Option<u64> {
+        u64::try_from(self.decoded_units()?.len()).ok()
+    }
+
+    /// Decode the explicit execution code units of this literal sequence.
+    ///
+    /// The terminating zero is deliberately excluded because C omits it when
+    /// an exactly-sized destination array has no remaining element. Fragment
+    /// boundaries are retained while decoding, so `"\\x1" "2"` cannot be
+    /// confused with `"\\x12"`.
+    #[must_use]
+    pub fn decoded_units(&self) -> Option<Vec<u32>> {
         if self.fragments.is_empty() {
-            return count_c_string_units(&self.value, self.prefix);
+            return decode_c_string_units(&self.value, self.prefix);
         }
         if self.fragments.concat() != self.value {
             return None;
         }
-        self.fragments.iter().try_fold(0_u64, |total, fragment| {
-            total.checked_add(count_c_string_units(fragment, self.prefix)?)
-        })
+        let mut units = Vec::new();
+        for fragment in &self.fragments {
+            units.extend(decode_c_string_units(fragment, self.prefix)?);
+        }
+        Some(units)
     }
 }
 
@@ -147,22 +160,17 @@ pub enum StringPrefix {
     U8,
 }
 
-fn count_c_string_units(contents: &str, prefix: StringPrefix) -> Option<u64> {
+fn decode_c_string_units(contents: &str, prefix: StringPrefix) -> Option<Vec<u32>> {
     let mut chars = contents.chars().peekable();
-    let mut units = 0_u64;
+    let mut units = Vec::new();
     while let Some(character) = chars.next() {
         if character != '\\' {
-            let width = match prefix {
-                StringPrefix::None | StringPrefix::U8 => character.len_utf8(),
-                StringPrefix::U16 => character.len_utf16(),
-                StringPrefix::L | StringPrefix::U => 1,
-            };
-            units = units.checked_add(u64::try_from(width).ok()?)?;
+            push_encoded_character(&mut units, character, prefix);
             continue;
         }
 
         let escaped = chars.next()?;
-        match escaped {
+        let numeric = match escaped {
             '\n' => continue,
             '\r' => {
                 if chars.peek() == Some(&'\n') {
@@ -171,14 +179,17 @@ fn count_c_string_units(contents: &str, prefix: StringPrefix) -> Option<u64> {
                 continue;
             }
             'x' => {
-                let mut digits = 0;
-                while chars.peek().is_some_and(|next| next.is_ascii_hexdigit()) {
+                let mut value = 0_u32;
+                let mut digits = 0_u32;
+                while let Some(digit) = chars.peek().and_then(|next| next.to_digit(16)) {
+                    value = value.checked_mul(16)?.checked_add(digit)?;
                     chars.next();
                     digits += 1;
                 }
                 if digits == 0 {
                     return None;
                 }
+                value
             }
             'u' => {
                 let mut value = 0_u32;
@@ -191,12 +202,7 @@ fn count_c_string_units(contents: &str, prefix: StringPrefix) -> Option<u64> {
                     return None;
                 }
                 let character = char::from_u32(value)?;
-                let width = match prefix {
-                    StringPrefix::None | StringPrefix::U8 => character.len_utf8(),
-                    StringPrefix::U16 => character.len_utf16(),
-                    StringPrefix::L | StringPrefix::U => 1,
-                };
-                units = units.checked_add(u64::try_from(width).ok()?)?;
+                push_encoded_character(&mut units, character, prefix);
                 continue;
             }
             'U' => {
@@ -210,27 +216,77 @@ fn count_c_string_units(contents: &str, prefix: StringPrefix) -> Option<u64> {
                     return None;
                 }
                 let character = char::from_u32(value)?;
-                let width = match prefix {
-                    StringPrefix::None | StringPrefix::U8 => character.len_utf8(),
-                    StringPrefix::U16 => character.len_utf16(),
-                    StringPrefix::L | StringPrefix::U => 1,
-                };
-                units = units.checked_add(u64::try_from(width).ok()?)?;
+                push_encoded_character(&mut units, character, prefix);
                 continue;
             }
-            '0'..='7' => {
+            first @ '0'..='7' => {
+                let mut value = first.to_digit(8)?;
                 for _ in 0..2 {
-                    if !chars.peek().is_some_and(|next| matches!(next, '0'..='7')) {
+                    let Some(digit) = chars.peek().and_then(|next| next.to_digit(8)) else {
                         break;
-                    }
+                    };
+                    value = value.checked_mul(8)?.checked_add(digit)?;
                     chars.next();
                 }
+                value
             }
-            _ => {}
-        }
-        units = units.checked_add(1)?;
+            'a' => 7,
+            'b' => 8,
+            'e' => 27,
+            'f' => 12,
+            'n' => 10,
+            'r' => 13,
+            't' => 9,
+            'v' => 11,
+            '\\' => u32::from(b'\\'),
+            '\'' => u32::from(b'\''),
+            '"' => u32::from(b'"'),
+            '?' => u32::from(b'?'),
+            other => {
+                push_encoded_character(&mut units, other, prefix);
+                continue;
+            }
+        };
+        push_numeric_unit(&mut units, numeric, prefix)?;
     }
     Some(units)
+}
+
+fn push_encoded_character(output: &mut Vec<u32>, character: char, prefix: StringPrefix) {
+    match prefix {
+        StringPrefix::None | StringPrefix::U8 => {
+            let mut bytes = [0_u8; 4];
+            output.extend(
+                character
+                    .encode_utf8(&mut bytes)
+                    .as_bytes()
+                    .iter()
+                    .copied()
+                    .map(u32::from),
+            );
+        }
+        StringPrefix::U16 => output.extend(
+            character
+                .encode_utf16(&mut [0_u16; 2])
+                .iter()
+                .copied()
+                .map(u32::from),
+        ),
+        StringPrefix::L | StringPrefix::U => output.push(u32::from(character)),
+    }
+}
+
+fn push_numeric_unit(output: &mut Vec<u32>, value: u32, prefix: StringPrefix) -> Option<()> {
+    let maximum = match prefix {
+        StringPrefix::None | StringPrefix::U8 => u32::from(u8::MAX),
+        StringPrefix::U16 => u32::from(u16::MAX),
+        StringPrefix::L | StringPrefix::U => u32::MAX,
+    };
+    if value > maximum {
+        return None;
+    }
+    output.push(value);
+    Some(())
 }
 
 // ---------------------------------------------------------------------------

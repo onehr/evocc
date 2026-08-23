@@ -12,8 +12,9 @@ use std::{
 
 use evocc_common::SourceSpan;
 use evocc_memory::{
-    AccessLayout, FrameId, IndexSignedness, InitialState, MemoryConfig, MemoryFault, MemoryLimits,
-    MemoryState, OffsetDirection, Pointer, ScopeId as MemoryScopeId, WorldLimits, WorldState,
+    AccessLayout, ByteSequence, FrameId, IndexSignedness, InitialState, MemoryConfig, MemoryFault,
+    MemoryLimits, MemoryState, OffsetDirection, Pointer, ScopeId as MemoryScopeId, WorldLimits,
+    WorldState,
 };
 use evocc_types::{
     FunctionParameters, Qualifiers, TagDefinition, TagState, TargetDataLayout, TypeId,
@@ -423,7 +424,16 @@ struct MemoryBinding {
 struct MemoryFrame {
     id: FrameId,
     root_scope: MemoryScopeId,
+    current_scope: MemoryScopeId,
     bindings: HashMap<SymbolId, MemoryBinding>,
+}
+
+#[derive(Debug)]
+struct MemoryScopeExit {
+    scope: MemoryScopeId,
+    parent: MemoryScopeId,
+    bindings: HashMap<SymbolId, MemoryBinding>,
+    span: SourceSpan,
 }
 
 #[derive(Debug)]
@@ -460,6 +470,7 @@ struct ValidatedFunctionSignature {
 enum MachineTask<'arena> {
     FunctionEnd(FunctionEnd),
     RestoreSlots(Vec<(SymbolId, Slot)>),
+    ExitMemoryScope(MemoryScopeExit),
     /// Step a named scalar object in place, yielding the value the prefix or
     /// postfix form of the operator produces.
     ApplyScalarUpdate {
@@ -1057,6 +1068,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
                 MachineTask::RestoreSlots(saved) => {
                     self.restore_slots(saved);
+                    None
+                }
+                MachineTask::ExitMemoryScope(exit) => {
+                    self.exit_memory_scope(exit)?;
                     None
                 }
                 MachineTask::RestoreFuelAnchor(previous) => {
@@ -1675,6 +1690,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirStmt::Compound(items, _) => {
                 let saved = self.activate_block_items(items)?;
                 tasks.push(MachineTask::RestoreSlots(saved));
+                if let Some(exit) = self.enter_memory_scope(statement.span())? {
+                    tasks.push(MachineTask::ExitMemoryScope(exit));
+                }
                 tasks.push(MachineTask::CompoundContinue { items, index: 0 });
                 Ok(None)
             }
@@ -1716,6 +1734,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 if let CHirForInit::Declaration(declarations) = initializer {
                     let saved = self.activate_for_declarations(declarations)?;
                     tasks.push(MachineTask::RestoreSlots(saved));
+                    if let Some(exit) = self.enter_memory_scope(*span)? {
+                        tasks.push(MachineTask::ExitMemoryScope(exit));
+                    }
                 }
                 tasks.push(MachineTask::ForCheck {
                     condition: *condition,
@@ -2020,13 +2041,58 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 });
                 Ok(())
             }
-            // Writing a string literal into storage needs the lexer's escape
-            // decoding. Reimplementing it here would create a second decoder
-            // that could disagree with the one the source was tokenized with.
-            InitAction::StoreString { span, .. } => Err(InterpreterError::UnsupportedExpression {
-                feature: "string-literal object initializer",
-                span: *span,
-            }),
+            InitAction::StoreString {
+                path,
+                destination_type,
+                literal,
+                span,
+            } => {
+                let (address, actual_type) = self.subobject_address(declaration, path, *span)?;
+                if actual_type != *destination_type {
+                    return Err(InterpreterError::InvalidInitializerPlan {
+                        symbol: declaration.symbol,
+                        span: *span,
+                    });
+                }
+                let layout = self.access_layout(*destination_type, *span)?;
+                let mut bytes = literal
+                    .decoded_units()
+                    .ok_or(InterpreterError::InvalidInitializerPlan {
+                        symbol: declaration.symbol,
+                        span: *span,
+                    })?
+                    .into_iter()
+                    .map(u8::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|_| InterpreterError::InvalidInitializerPlan {
+                        symbol: declaration.symbol,
+                        span: *span,
+                    })?;
+                let destination_len = usize::try_from(layout.size_bytes).map_err(|_| {
+                    InterpreterError::UnsupportedType {
+                        ty: *destination_type,
+                        span: *span,
+                    }
+                })?;
+                if bytes.len() > destination_len {
+                    return Err(InterpreterError::InvalidInitializerPlan {
+                        symbol: declaration.symbol,
+                        span: *span,
+                    });
+                }
+                bytes.resize(destination_len, 0);
+                let value = ByteSequence::try_from_bytes(bytes)
+                    .map_err(|error| self.memory_error(error, *span))?;
+                self.memory = self
+                    .memory
+                    .store_bytes(address, layout, &value)
+                    .map_err(|error| self.memory_error(error, *span))?;
+                tasks.push(MachineTask::ContinueMemoryInitializer {
+                    declaration,
+                    index: index + 1,
+                });
+                Ok(())
+            }
         }
     }
 
@@ -2084,6 +2150,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         };
         let saved = self.activate_block_items(items)?;
         tasks.push(MachineTask::RestoreSlots(saved));
+        if let Some(exit) = self.enter_memory_scope(body.span())? {
+            tasks.push(MachineTask::ExitMemoryScope(exit));
+        }
         let controlling = controlling.promoted();
         let mut selected = None;
         let mut default = None;
@@ -2119,6 +2188,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             match task {
                 MachineTask::FunctionEnd(end) => return Ok(end),
                 MachineTask::RestoreSlots(saved) => self.restore_slots(saved),
+                MachineTask::ExitMemoryScope(exit) => self.exit_memory_scope(exit)?,
                 MachineTask::RestoreFuelAnchor(previous) => self.fuel_anchor = previous,
                 _ => {}
             }
@@ -2141,6 +2211,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 | MachineTask::ForStep { .. }
                 | MachineTask::SwitchContinue { .. } => return Ok(()),
                 MachineTask::RestoreSlots(saved) => self.restore_slots(saved),
+                MachineTask::ExitMemoryScope(exit) => self.exit_memory_scope(exit)?,
                 MachineTask::RestoreFuelAnchor(previous) => self.fuel_anchor = previous,
                 MachineTask::FunctionEnd(end) => {
                     tasks.push(MachineTask::FunctionEnd(end));
@@ -2169,6 +2240,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     return Ok(());
                 }
                 MachineTask::RestoreSlots(saved) => self.restore_slots(saved),
+                MachineTask::ExitMemoryScope(exit) => self.exit_memory_scope(exit)?,
                 MachineTask::RestoreFuelAnchor(previous) => self.fuel_anchor = previous,
                 MachineTask::FunctionEnd(end) => {
                     tasks.push(MachineTask::FunctionEnd(end));
@@ -2212,6 +2284,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     }
                 }
                 MachineTask::RestoreSlots(saved) => self.restore_slots(saved),
+                MachineTask::ExitMemoryScope(exit) => self.exit_memory_scope(exit)?,
                 MachineTask::RestoreFuelAnchor(previous) => self.fuel_anchor = previous,
                 MachineTask::FunctionEnd(end) => {
                     let body = self.function_definition(end.symbol)?.body.ok_or(
@@ -2285,6 +2358,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirStmt::Compound(items, _) => {
                 let saved = self.activate_block_items(items)?;
                 tasks.push(MachineTask::RestoreSlots(saved));
+                if let Some(exit) = self.enter_memory_scope(statement.span())? {
+                    tasks.push(MachineTask::ExitMemoryScope(exit));
+                }
                 self.schedule_goto_in_active_items(
                     items,
                     spelling,
@@ -2310,6 +2386,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 };
                 let saved = self.activate_block_items(items)?;
                 tasks.push(MachineTask::RestoreSlots(saved));
+                if let Some(exit) = self.enter_memory_scope(body.span())? {
+                    tasks.push(MachineTask::ExitMemoryScope(exit));
+                }
                 self.schedule_goto_in_active_items(items, spelling, MachineBlockMode::Switch, tasks)
             }
             CHirStmt::While(condition, body, loop_span) => {
@@ -2330,6 +2409,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 if let CHirForInit::Declaration(declarations) = initializer {
                     let saved = self.activate_for_declarations(declarations)?;
                     tasks.push(MachineTask::RestoreSlots(saved));
+                    if let Some(exit) = self.enter_memory_scope(*loop_span)? {
+                        tasks.push(MachineTask::ExitMemoryScope(exit));
+                    }
                 }
                 tasks.push(MachineTask::ForStep {
                     condition: *condition,
@@ -2832,6 +2914,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             self.memory_frame = Some(MemoryFrame {
                 id: frame,
                 root_scope,
+                current_scope: root_scope,
                 bindings: HashMap::new(),
             });
             for (symbol, _, value) in parameter_bindings {
@@ -3323,6 +3406,66 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             })
     }
 
+    fn enter_memory_scope(
+        &mut self,
+        span: SourceSpan,
+    ) -> Result<Option<MemoryScopeExit>, InterpreterError> {
+        if !self.memory_mode {
+            return Ok(None);
+        }
+        let frame = self
+            .memory_frame
+            .as_ref()
+            .ok_or(InterpreterError::UnsupportedStatement {
+                feature: "lexical scope without an interpreter memory frame",
+                span,
+            })?;
+        let parent = frame.current_scope;
+        let bindings = frame.bindings.clone();
+        let (memory, scope) = self
+            .memory
+            .begin_scope(parent)
+            .map_err(|error| self.memory_error(error, span))?;
+        self.memory = memory;
+        self.memory_frame
+            .as_mut()
+            .expect("memory frame checked immediately before scope creation")
+            .current_scope = scope;
+        Ok(Some(MemoryScopeExit {
+            scope,
+            parent,
+            bindings,
+            span,
+        }))
+    }
+
+    fn exit_memory_scope(&mut self, exit: MemoryScopeExit) -> Result<(), InterpreterError> {
+        let frame = self
+            .memory_frame
+            .as_ref()
+            .ok_or(InterpreterError::UnsupportedStatement {
+                feature: "lexical scope exit without an interpreter memory frame",
+                span: exit.span,
+            })?;
+        if frame.current_scope != exit.scope {
+            return Err(InterpreterError::UnsupportedStatement {
+                feature: "non-LIFO interpreter memory scope exit",
+                span: exit.span,
+            });
+        }
+        self.memory = self
+            .memory
+            .end_scope(exit.scope)
+            .map_err(|error| self.memory_error(error, exit.span))?;
+        let frame = self
+            .memory_frame
+            .as_mut()
+            .expect("memory frame checked immediately before scope exit");
+        frame.current_scope = exit.parent;
+        frame.bindings = exit.bindings;
+        Ok(())
+    }
+
     fn validate_memory_object_declaration(
         &self,
         declaration: &ObjectDecl<'arena>,
@@ -3402,7 +3545,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let (frame, scope) = self
             .memory_frame
             .as_ref()
-            .map(|frame| (frame.id, frame.root_scope))
+            .map(|frame| (frame.id, frame.current_scope))
             .ok_or(InterpreterError::UnsupportedStatement {
                 feature: "automatic object without an interpreter memory frame",
                 span,
@@ -4287,7 +4430,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             } => self
                 .subobject_offset(declaration.ty, path, declaration.span)
                 .is_ok_and(|(_, ty)| ty == *destination_type),
-            InitAction::StoreString { .. } => false,
+            InitAction::StoreString {
+                path,
+                destination_type,
+                literal,
+                span,
+            } => {
+                literal.decoded_units().is_some()
+                    && self
+                        .subobject_offset(declaration.ty, path, *span)
+                        .is_ok_and(|(_, ty)| ty == *destination_type)
+            }
         });
         if !valid {
             return Err(InterpreterError::InvalidInitializerPlan {
