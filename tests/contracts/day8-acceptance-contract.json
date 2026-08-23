@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "contractId": "c30.day8.acceptance.v1",
+  "contractState": "locked",
+  "measurementStatus": "NOT_MEASURED",
+  "purpose": "Freeze the pre-execution authority for the persistent-equality and proof-boundary stage: which work must ship, which properties the tests must establish, and which process rules govern the commits that get there. It contains no measured outcome and must never be result-shaped after execution. Planning documents are working notes and are not version controlled; anything binding lives here or in the specification, so a reviewer working from a fresh clone sees the whole authority.",
+  "baseline": {
+    "commit": "957afe6",
+    "workspaceTests": 656,
+    "clippyDenyWarnings": "clean",
+    "formatCheck": "clean"
+  },
+  "requiredWork": {
+    "source": "docs/roadmap.md day 8 critical work column",
+    "items": [
+      "call effects",
+      "static storage",
+      "function pointers",
+      "proof checker v0",
+      "first persistent EClassId mapping"
+    ],
+    "gateIsNecessaryNotSufficient": "The acceptance gate names only the proof checker. The critical work column names five items, so completing the gate does not close the stage."
+  },
+  "semanticsFrozenElsewhere": {
+    "document": "docs/evoir-spec.md",
+    "revision": "1.8",
+    "mustFreeze": [
+      "canonical section 9 byte grammar, including token rules, ordering, whitespace, trailing newline, and parser reject rules",
+      "P0 eligibility: region granularity, operator allowlist, poison taint traversal and fixed-point order, function/block/instruction traversal order",
+      "seed manifest fields, sort order and identity; region identity construction",
+      "reassembly of multiple extracted regions into a complete after-module",
+      "the checker's Cargo package name, binary name, argument interface, probe spelling, and whether the driver answers a probe of its own",
+      "exit statuses distinguishing malformed input from well-formed-but-invalid",
+      "the crate dependency boundary as a normative constraint rather than a convention",
+      "EqualityState identity, revision counter, transaction and rollback semantics",
+      "static locals: one module-global identity, initialized once, never per frame",
+      "function pointers: signature-carrying pointer type, address-of-function, direct and indirect callee forms, null and mismatch diagnostics, provenance across a memory round trip",
+      "EffectSummary: IR storage, fixed-point derivation, textual form, and the validator rule that recomputes it and refuses a stale or forged one"
+    ],
+    "reviewProtocol": "One revision, reviewed as two checklists over the single document: proof format and eligibility, then storage, calls and effects. Both must be approved before the tests-only checkpoint lands."
+  },
+  "crateBoundary": {
+    "rationale": "The IR crate currently depends on the e-graph crate and re-exports the optimizer, so any checker linking the IR would pull the optimizer in transitively and dissolve the boundary it exists to establish. Left uncorrected, persistent equality state would land inside the IR crate and make a per-pass inversion permanent.",
+    "required": [
+      "the IR crate does not depend on the e-graph crate",
+      "the optimizer and equality state live in their own crate",
+      "the checker depends on the IR crate and the proof crate only, and never on the optimizer or the e-graph"
+    ],
+    "enforcedBy": "a test reading cargo metadata, so a later dependency fails rather than passing quietly"
+  },
+  "requiredTestProperties": {
+    "independenceOfTheChecker": {
+      "sharedByDesign": "The section 9 parser is shared with the producer. A parser defect makes the two views disagree, so a certificate is rejected; sharing it fails safe and avoids duplicating a parser the interpreter needs anyway.",
+      "independentByRequirement": "Eligibility and seed derivation are implemented separately by the checker. A shared defect there would make both sides agree on an ineligible region and accept it; sharing fails dangerous.",
+      "structural": "The checker's dependency closure excludes the optimizer and the e-graph.",
+      "behavioural": "No mutant of the optimizer produces a semantically different module together with an accepted certificate. The property is not that every mutant is rejected: a mutant that merely disables a rewrite emits a valid empty certificate.",
+      "residualRisk": "The certificate format definition and the section 9 parser remain shared. The mutation campaign bounds the first; specification-anchored completeness bounds the second. Neither is reduced to zero."
+    },
+    "syntaxCompleteness": {
+      "problem": "A renderer and parser that agree on omitting a field round-trip perfectly while both drop it. A checker reading such output would see an eligible region where none exists and accept. Round-trip tests compare an implementation against itself.",
+      "required": [
+        "a tracked manifest enumerates every Module, Function, Block, Inst, type and EffectSummary variant and every serialized field",
+        "each is exercised with a non-default sentinel, so a dropped field changes the rendered bytes",
+        "the receipt reports covered over total",
+        "adding a variant or field fails to compile against an exhaustive match rather than quietly lowering coverage"
+      ]
+    },
+    "proofBinding": [
+      "the checker reads before.evo, after.evo and the proof as three separate files",
+      "eligibility and the seed manifest are recomputed from before.evo, not taken from the certificate",
+      "the reconstructed after-module is compared to after.evo in full canonical bytes, not by extracted root or output commitment alone",
+      "altering the input module, the seed manifest, the region identity or the reconstructed output invalidates an otherwise valid proof",
+      "a certificate cannot extend the rule registry it is checked against",
+      "constant folds are recomputed by the checker rather than accepted as claimed"
+    ],
+    "equalityState": [
+      "the class of a value is readable after the producing call returns",
+      "after x+0 reduces to x, the class contains both representations; a test asserting only the extracted value passes on a destructive optimizer and establishes nothing",
+      "optimizing twice leaves class identities unchanged and adds no duplicate node",
+      "every union carries a receipt, and replaying the accumulated history re-derives exactly the partition the state holds, asserted after two passes rather than one",
+      "on budget, proof, validation or extraction failure the module and the database roll back together, observed on the database rather than only on the returned module"
+    ],
+    "storageCallsAndEffects": [
+      "a static local retains its value across calls, is initialized exactly once, and is shared by two recursive activations",
+      "an array of function pointers dispatches by index; a pointer stored to memory and loaded back is callable and keeps its identity",
+      "a null callee and a signature mismatch are typed diagnostics; recursion through a pointer terminates under the step budget",
+      "a direct call's effect summary is the least fixed point over its strongly connected component",
+      "a volatile access anywhere in the callee closure makes every transitive caller volatile",
+      "an unknown indirect callee takes the specification's top summary, and the validator refuses a stale summary"
+    ]
+  },
+  "processRules": {
+    "singleRedCheckpoint": "The tests-only checkpoint is the one commit permitted to leave the workspace red, and its failures must come from the capabilities this stage declares missing, not from a compilation error, a malformed fixture, or an unrelated defect.",
+    "greenAfterwards": "Every implementation commit after that checkpoint restores full green and holds it.",
+    "noTestSuppression": "No commit disables, deletes or ignores a test to move forward.",
+    "formatMigration": "Certificate formats change mid-stage; each step migrates the existing corpus in the same commit that changes the format.",
+    "firstProductionCommit": "A mechanical re-layering that moves the optimizer to its own crate with no behavioural change, so later format work happens in the right crate from the start."
+  },
+  "acceptance": {
+    "measuredOnly": "Every reported figure is measured and labelled with what it counts. No predicted numbers.",
+    "countingChange": "Under a reviewed registry a replay counts rule instances rather than per-candidate manufactured rules, so a number differing from the previous stage is expected and is not by itself a regression.",
+    "required": [
+      "the existing scalar corpus validates through the standalone binary under the reviewed registry",
+      "zero skips and zero mismatches across persistent-state, storage, function-pointer and typed-invalid cases",
+      "the checker probe reports implemented; the broad equality, optimization and code generation probes still report unimplemented",
+      "full regression, Clippy with warnings denied, format check, diff check, and two isolated offline clone replays"
+    ],
+    "receiptPath": "tests/contracts/day8-acceptance-receipt.json",
+    "historyIsNotRewritten": "The previous stage's receipt records what was true when it was frozen, including its correction. This stage writes a new receipt that may cite it and never amends it."
+  },
+  "outOfScope": [
+    "alias analysis and every alias-dependent rewrite",
+    "region splitting",
+    "memory rewrites in the e-graph",
+    "attributes, typeof and statement expressions",
+    "EvoMIR and all backend work",
+    "attribute-derived effect summaries, which wait for attributes so that a second source of effect truth is not built before the first"
+  ],
+  "prerequisitesCarriedOutside": {
+    "observerAndPilotReductionDebt": "Runs in an isolated worktree under its own timebox, is not counted in this stage's metrics, and shares no commit with IR changes. The GNU extension work stays blocked until it is discharged.",
+    "testNamingDebt": "Forty test files carry a stage marker in their name and seven still say red while passing. This contradicts the project naming rule, grows with every stage, and is mechanical to clear."
+  }
+}
