@@ -4,8 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 pub use evocc_proof::{
-    Binding, MergeReceipt, NodeId, Pattern, PatternChild, ProofCertificate, ProofEvent, RuleId,
-    RuleSnapshot, UnionReason,
+    Binding, MergeReceipt, NodeId, Pattern, PatternChild, ProofCertificate, ProofContext,
+    ProofEvent, ReplayReport, RuleId, RuleSnapshot, UnionReason,
 };
 
 // ---------------------------------------------------------------------------

@@ -23,7 +23,8 @@ use evocc_chir::{
 use evocc_common::{Arena, FileId};
 use evocc_cpp::Preprocessor;
 use evocc_evoir::{
-    interpret_module, render_module, InterpreterLimits as EvoIrLimits, Module, RuntimeValue,
+    interpret_module, optimize_scalar_module, render_module, InterpreterLimits as EvoIrLimits,
+    Module, RuntimeValue, ScalarEqBudget,
 };
 use evocc_lex::{Lexer, TokenKind};
 use evocc_lower::lower_unit;
@@ -61,6 +62,7 @@ struct DriverOptions {
     macro_prefix_maps: Vec<(String, String)>,
     definitions: Vec<String>,
     standard_includes: bool,
+    optimize_scalar_evoir: bool,
 }
 
 const SUPPORTED_TARGET: &str = "aarch64-unknown-linux-gnu";
@@ -78,6 +80,7 @@ const CAPABILITIES: &[&str] = &[
     "evoir-emit",
     "evoir-interpret",
     "eqsat-optimize",
+    "eq-scalar-optimize",
 ];
 
 const FLAG_MAP: &[(&str, &str)] = &[
@@ -88,6 +91,7 @@ const FLAG_MAP: &[(&str, &str)] = &[
     ("--emit=evoir", "evoir-emit"),
     ("--interpret-evoir", "evoir-interpret"),
     ("-Oeq", "eqsat-optimize"),
+    ("-Oeq-scalar", "eq-scalar-optimize"),
 ];
 
 const IMPLEMENTED_EVOIR_PROBES: &[&str] = &[
@@ -95,6 +99,8 @@ const IMPLEMENTED_EVOIR_PROBES: &[&str] = &[
     "evoir-interpret",
     "--emit=evoir",
     "--interpret-evoir",
+    "eq-scalar-optimize",
+    "-Oeq-scalar",
 ];
 
 const NOT_IMPLEMENTED_EXIT: u8 = 69;
@@ -171,6 +177,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut macro_prefix_maps = Vec::new();
     let mut definitions = Vec::new();
     let mut standard_includes = true;
+    let mut optimize_scalar_evoir = false;
     let mut index = 0;
 
     while index < args.len() {
@@ -181,6 +188,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "--interpret-c-hir" => set_mode(&mut mode, DriverMode::InterpretCHir)?,
             "--emit=evoir" => set_mode(&mut mode, DriverMode::EmitEvoIr)?,
             "--interpret-evoir" => set_mode(&mut mode, DriverMode::InterpretEvoIr)?,
+            "-Oeq-scalar" => optimize_scalar_evoir = true,
             "--target" => {
                 index += 1;
                 let value = args
@@ -243,11 +251,16 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         index += 1;
     }
 
-    Ok(DriverOptions {
-        mode: mode.ok_or_else(|| {
+    let mode = mode.ok_or_else(|| {
             "exactly one of -E, --parse-only, --interpret-c-hir, --emit=evoir, or --interpret-evoir is required"
                 .to_string()
-        })?,
+        })?;
+    if optimize_scalar_evoir && !matches!(mode, DriverMode::EmitEvoIr | DriverMode::InterpretEvoIr)
+    {
+        return Err("-Oeq-scalar requires --emit=evoir or --interpret-evoir".to_owned());
+    }
+    Ok(DriverOptions {
+        mode,
         target: target.unwrap_or(DriverTarget::Aarch64UnknownLinuxGnu),
         input: input.ok_or_else(|| "an input file is required".to_string())?,
         include_paths,
@@ -255,6 +268,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         macro_prefix_maps,
         definitions,
         standard_includes,
+        optimize_scalar_evoir,
     })
 }
 
@@ -545,6 +559,11 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                     );
                     return ExitCode::from(1);
                 }
+            };
+            let module = if options.optimize_scalar_evoir {
+                optimize_scalar_module(&module, ScalarEqBudget::default()).module
+            } else {
+                module
             };
             match action {
                 ParsedAction::EmitEvoIr => emit_evoir(&module),

@@ -15,3 +15,4 @@ evocc-types = { path = "../evocc-types" }
 evocc-lex = { path = "../evocc-lex" }
 evocc-memory = { path = "../evocc-memory" }
 evocc-parser = { path = "../evocc-parser" }
+evocc-proof = { path = "../evocc-proof" }

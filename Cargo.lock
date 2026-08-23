@@ -48,7 +48,9 @@ dependencies = [
 name = "evocc-evoir"
 version = "0.0.0"
 dependencies = [
+ "evocc-egraph",
  "evocc-memory",
+ "evocc-proof",
  "evocc-types",
 ]
 
@@ -69,6 +71,7 @@ dependencies = [
  "evocc-lex",
  "evocc-memory",
  "evocc-parser",
+ "evocc-proof",
  "evocc-types",
 ]
 

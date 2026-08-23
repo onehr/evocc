@@ -13,8 +13,10 @@ use evocc_memory::{
 };
 use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
+mod scalar_eq;
 mod text;
 
+pub use scalar_eq::*;
 pub use text::render_module;
 
 // ---------------------------------------------------------------------------
