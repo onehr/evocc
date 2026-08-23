@@ -1347,12 +1347,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     right,
                     span,
                 } => {
-                    let left = expect_machine_integer(pop_machine_value(&mut values, span)?, span)?;
+                    let left = pop_machine_value(&mut values, span)?;
                     match operator {
-                        BinaryOp::And if !left.truth() => {
+                        BinaryOp::And if !machine_truth(left, span)? => {
                             values.push(CValue::Integer(CInteger::int(0)));
                         }
-                        BinaryOp::Or if left.truth() => {
+                        BinaryOp::Or if machine_truth(left, span)? => {
                             values.push(CValue::Integer(CInteger::int(1)));
                         }
                         BinaryOp::Comma => {
@@ -1364,7 +1364,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         _ => {
                             tasks.push(MachineTask::ApplyBinary {
                                 operator,
-                                left: CValue::Integer(left),
+                                left,
                                 span,
                             });
                             tasks.push(MachineTask::EvalExpression {
@@ -1380,33 +1380,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     left,
                     span,
                 } => {
-                    let left = expect_machine_integer(left, span)?;
-                    let right =
-                        expect_machine_integer(pop_machine_value(&mut values, span)?, span)?;
-                    let value = match operator {
-                        BinaryOp::And => CInteger::int(i32::from(right.truth())),
-                        BinaryOp::Or => CInteger::int(i32::from(right.truth())),
-                        BinaryOp::Comma => right,
-                        BinaryOp::Assign
-                        | BinaryOp::AddAssign
-                        | BinaryOp::SubAssign
-                        | BinaryOp::MulAssign
-                        | BinaryOp::DivAssign
-                        | BinaryOp::ModAssign
-                        | BinaryOp::ShlAssign
-                        | BinaryOp::ShrAssign
-                        | BinaryOp::BitAndAssign
-                        | BinaryOp::BitOrAssign
-                        | BinaryOp::BitXorAssign => {
-                            return Err(InterpreterError::UnsupportedExpression {
-                                feature: "unlowered assignment binary operator",
-                                span,
-                            });
-                        }
-                        _ => eval_binary_integer(operator, left, right)
-                            .map_err(|error| self.integer_error(error, span))?,
-                    };
-                    values.push(CValue::Integer(value));
+                    let right = pop_machine_value(&mut values, span)?;
+                    values.push(self.apply_machine_binary(operator, left, right, span)?);
                     None
                 }
                 MachineTask::SelectTernary {
@@ -4243,6 +4218,135 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             target_span,
             span,
         )
+    }
+
+    fn apply_machine_binary(
+        &self,
+        operator: BinaryOp,
+        left: CValue,
+        right: CValue,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        if matches!(operator, BinaryOp::And | BinaryOp::Or) {
+            return Ok(CValue::Integer(CInteger::int(i32::from(machine_truth(
+                right, span,
+            )?))));
+        }
+        if operator == BinaryOp::Comma {
+            return Ok(right);
+        }
+        if matches!(
+            operator,
+            BinaryOp::Assign
+                | BinaryOp::AddAssign
+                | BinaryOp::SubAssign
+                | BinaryOp::MulAssign
+                | BinaryOp::DivAssign
+                | BinaryOp::ModAssign
+                | BinaryOp::ShlAssign
+                | BinaryOp::ShrAssign
+                | BinaryOp::BitAndAssign
+                | BinaryOp::BitOrAssign
+                | BinaryOp::BitXorAssign
+        ) {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "unlowered assignment binary operator",
+                span,
+            });
+        }
+        match (left, right) {
+            (CValue::Integer(left), CValue::Integer(right)) => {
+                eval_binary_integer(operator, left, right)
+                    .map(CValue::Integer)
+                    .map_err(|error| self.integer_error(error, span))
+            }
+            (CValue::Pointer { value, ty }, CValue::Integer(index))
+                if matches!(operator, BinaryOp::Add | BinaryOp::Sub) =>
+            {
+                self.offset_pointer_value(
+                    value,
+                    ty,
+                    index,
+                    if operator == BinaryOp::Add {
+                        OffsetDirection::Add
+                    } else {
+                        OffsetDirection::Subtract
+                    },
+                    span,
+                )
+            }
+            (CValue::Integer(index), CValue::Pointer { value, ty })
+                if operator == BinaryOp::Add =>
+            {
+                self.offset_pointer_value(value, ty, index, OffsetDirection::Add, span)
+            }
+            (
+                CValue::Pointer {
+                    value: left,
+                    ty: left_ty,
+                },
+                CValue::Pointer {
+                    value: right,
+                    ty: right_ty,
+                },
+            ) if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) && left_ty == right_ty => {
+                let equal = left == right;
+                Ok(CValue::Integer(CInteger::int(i32::from(
+                    if operator == BinaryOp::Eq {
+                        equal
+                    } else {
+                        !equal
+                    },
+                ))))
+            }
+            (CValue::Pointer { value, .. }, CValue::Integer(zero))
+            | (CValue::Integer(zero), CValue::Pointer { value, .. })
+                if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) && zero.raw_bits() == 0 =>
+            {
+                let equal = value == Pointer::NULL;
+                Ok(CValue::Integer(CInteger::int(i32::from(
+                    if operator == BinaryOp::Eq {
+                        equal
+                    } else {
+                        !equal
+                    },
+                ))))
+            }
+            _ => Err(InterpreterError::UnsupportedExpression {
+                feature: "unsupported pointer binary operation",
+                span,
+            }),
+        }
+    }
+
+    fn offset_pointer_value(
+        &self,
+        pointer: Pointer,
+        pointer_type: PointerTypeDesc,
+        index: CInteger,
+        direction: OffsetDirection,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        let index = index.promoted();
+        let layout = self.access_layout(pointer_type.pointee(), span)?;
+        let signedness = if index.ty().is_signed() {
+            IndexSignedness::Signed
+        } else {
+            IndexSignedness::Unsigned
+        };
+        let value = pointer
+            .checked_scaled_offset(
+                u128::from(index.raw_bits()),
+                u16::from(index.ty().bits()),
+                signedness,
+                direction,
+                layout.size_bytes,
+            )
+            .map_err(|error| self.memory_error(error, span))?;
+        Ok(CValue::Pointer {
+            value,
+            ty: pointer_type,
+        })
     }
 
     #[allow(clippy::too_many_arguments)]

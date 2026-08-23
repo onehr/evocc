@@ -2519,6 +2519,7 @@ impl<'a> FunctionLowerer<'a> {
         &mut self,
         base: Value,
         index: ExprValue,
+        direction: OffsetDirection,
         signedness: IndexSignedness,
         scale: u64,
         state: &mut State,
@@ -2530,7 +2531,7 @@ impl<'a> FunctionLowerer<'a> {
                 result: result.clone(),
                 base,
                 index: index.value,
-                direction: OffsetDirection::Add,
+                direction,
                 signedness,
                 scale,
             },
@@ -2566,6 +2567,7 @@ impl<'a> FunctionLowerer<'a> {
                 value: raw,
                 integer: CIntegerType::ULONG,
             },
+            OffsetDirection::Add,
             IndexSignedness::Unsigned,
             1,
             state,
@@ -2600,6 +2602,7 @@ impl<'a> FunctionLowerer<'a> {
                     address = self.offset_address(
                         address,
                         promoted,
+                        OffsetDirection::Add,
                         if projection.promoted_index().is_signed() {
                             IndexSignedness::Signed
                         } else {
@@ -4006,6 +4009,8 @@ impl<'a> FunctionLowerer<'a> {
                 feature: "assignment must be represented by CHirExpr::Assign",
             });
         }
+        let left_expression = left;
+        let right_expression = right;
         let left = self.lower_expr(left, state)?;
         let left_key = EnvKey::Temporary(self.next_temporary);
         self.next_temporary += 1;
@@ -4031,6 +4036,18 @@ impl<'a> FunctionLowerer<'a> {
                 reason: "threaded left operand lost its integer type",
             })?,
         };
+        if matches!(left.value.ty, EvoIRType::Ptr(_)) || matches!(right.value.ty, EvoIRType::Ptr(_))
+        {
+            return self.lower_pointer_binary(
+                operator,
+                left_expression,
+                right_expression,
+                left,
+                right,
+                span,
+                state,
+            );
+        }
         if matches!(operator, BinaryOp::Shl | BinaryOp::Shr) {
             let shifted_type = integer_promotion(left.integer);
             let amount_type = integer_promotion(right.integer);
@@ -4103,6 +4120,119 @@ impl<'a> FunctionLowerer<'a> {
                 feature: "unsupported binary operator",
             }),
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn lower_pointer_binary(
+        &mut self,
+        operator: BinaryOp,
+        left_expression: &'a CHirExpr<'a>,
+        right_expression: &'a CHirExpr<'a>,
+        left: ExprValue,
+        right: ExprValue,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let left_pointer = matches!(left.value.ty, EvoIRType::Ptr(_));
+        let right_pointer = matches!(right.value.ty, EvoIRType::Ptr(_));
+        if matches!(operator, BinaryOp::Add | BinaryOp::Sub) && left_pointer && !right_pointer {
+            let pointee = self.pointer_pointee_type(left_expression, span)?;
+            let layout = self.access_layout(pointee, span)?;
+            let promoted_type = integer_promotion(right.integer);
+            let index = self.cast(right, promoted_type, state)?;
+            let value = self.offset_address(
+                left.value,
+                index,
+                if operator == BinaryOp::Add {
+                    OffsetDirection::Add
+                } else {
+                    OffsetDirection::Subtract
+                },
+                if promoted_type.is_signed() {
+                    IndexSignedness::Signed
+                } else {
+                    IndexSignedness::Unsigned
+                },
+                layout.size_bytes,
+                state,
+            )?;
+            return Ok(ExprValue {
+                value,
+                integer: CIntegerType::ULONG,
+            });
+        }
+        if operator == BinaryOp::Add && !left_pointer && right_pointer {
+            let pointee = self.pointer_pointee_type(right_expression, span)?;
+            let layout = self.access_layout(pointee, span)?;
+            let promoted_type = integer_promotion(left.integer);
+            let index = self.cast(left, promoted_type, state)?;
+            let value = self.offset_address(
+                right.value,
+                index,
+                OffsetDirection::Add,
+                if promoted_type.is_signed() {
+                    IndexSignedness::Signed
+                } else {
+                    IndexSignedness::Unsigned
+                },
+                layout.size_bytes,
+                state,
+            )?;
+            return Ok(ExprValue {
+                value,
+                integer: CIntegerType::ULONG,
+            });
+        }
+        if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) {
+            let (left, right) = match (left_pointer, right_pointer) {
+                (true, true) => (left.value, right.value),
+                (true, false)
+                    if constant_integer(self.unit, self.target, right_expression)
+                        .is_some_and(|value| !value.truth()) =>
+                {
+                    let null = self.fresh_value(left.value.ty.clone());
+                    self.emit(state, Inst::PtrNull(null.clone()))?;
+                    (left.value, null)
+                }
+                (false, true)
+                    if constant_integer(self.unit, self.target, left_expression)
+                        .is_some_and(|value| !value.truth()) =>
+                {
+                    let null = self.fresh_value(right.value.ty.clone());
+                    self.emit(state, Inst::PtrNull(null.clone()))?;
+                    (null, right.value)
+                }
+                _ => {
+                    return Err(LowerError::UnsupportedExpression {
+                        span,
+                        feature:
+                            "pointer comparison requires a compatible pointer or null constant",
+                    });
+                }
+            };
+            let result = self.fresh_value(EvoIRType::Bits(1));
+            self.emit(
+                state,
+                Inst::ICmp(
+                    result.clone(),
+                    if operator == BinaryOp::Eq {
+                        CmpOp::Eq
+                    } else {
+                        CmpOp::Ne
+                    },
+                    left,
+                    right,
+                ),
+            )?;
+            return Ok(ExprValue {
+                value: result,
+                integer: CIntegerType::INT,
+            });
+        }
+        Err(LowerError::UnsupportedExpression {
+            span,
+            feature: "unsupported pointer binary operation",
+        })
     }
 
     fn emit_signed_arithmetic(

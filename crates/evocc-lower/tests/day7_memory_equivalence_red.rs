@@ -1,5 +1,7 @@
 use std::collections::BTreeSet;
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::path::PathBuf;
+use std::process::Command;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -19,6 +21,11 @@ use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
 const STEP_BUDGET: u64 = 500_000;
 const CASE_WATCHDOG: Duration = Duration::from_secs(2);
+const DAY7_DEFINED: usize = 128;
+const DAY7_INVALID: usize = 64;
+const DAY7_CORPUS_MANIFEST_SHA256: &str =
+    "de83fa7a37de1f7ee3e3e3617b99f5137c037c67ecd97015c47376b744f9e217";
+const MAX_CORPUS_FRAME_BYTES: usize = 1 << 20;
 
 const ORDERED_VOLATILE_IR_ACCESSES: &[VolatileDirection] = &[
     VolatileDirection::Store,
@@ -437,6 +444,274 @@ fn check_case_bounded(case: Case, ordinal: usize) -> Vec<String> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum GeneratedExpectation {
+    Value(i128),
+    DiagnosticCode(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GeneratedCase {
+    id: String,
+    source: String,
+    expected: GeneratedExpectation,
+}
+
+struct Frames<'a> {
+    bytes: &'a [u8],
+    offset: usize,
+}
+
+impl<'a> Frames<'a> {
+    const fn new(bytes: &'a [u8]) -> Self {
+        Self { bytes, offset: 0 }
+    }
+
+    fn next(&mut self) -> Result<&'a [u8], String> {
+        let length_end = self
+            .offset
+            .checked_add(8)
+            .ok_or_else(|| "corpus frame offset overflow".to_owned())?;
+        let encoded = self
+            .bytes
+            .get(self.offset..length_end)
+            .ok_or_else(|| "truncated corpus frame length".to_owned())?;
+        let length = usize::try_from(u64::from_be_bytes(
+            encoded
+                .try_into()
+                .map_err(|_| "invalid corpus frame length".to_owned())?,
+        ))
+        .map_err(|_| "corpus frame length does not fit usize".to_owned())?;
+        if length > MAX_CORPUS_FRAME_BYTES {
+            return Err(format!("corpus frame exceeds limit: {length}"));
+        }
+        let payload_end = length_end
+            .checked_add(length)
+            .ok_or_else(|| "corpus payload offset overflow".to_owned())?;
+        let payload = self
+            .bytes
+            .get(length_end..payload_end)
+            .ok_or_else(|| "truncated corpus frame payload".to_owned())?;
+        self.offset = payload_end;
+        Ok(payload)
+    }
+
+    fn finish(self) -> Result<(), String> {
+        if self.offset == self.bytes.len() {
+            Ok(())
+        } else {
+            Err(format!(
+                "{} trailing corpus protocol bytes",
+                self.bytes.len() - self.offset
+            ))
+        }
+    }
+}
+
+fn corpus_utf8<'a>(frames: &mut Frames<'a>, field: &str) -> Result<&'a str, String> {
+    std::str::from_utf8(frames.next()?)
+        .map_err(|error| format!("corpus {field} is not UTF-8: {error}"))
+}
+
+fn day7_corpus_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("tests/acceptance/day7-memory-corpus.py")
+}
+
+fn load_generated_corpus() -> Result<Vec<GeneratedCase>, String> {
+    let authority = day7_corpus_path();
+    if !authority.is_file() {
+        return Err(format!(
+            "Day-7 memory corpus authority is missing: {}",
+            authority.display()
+        ));
+    }
+    let output = Command::new("/usr/bin/python3")
+        .arg("-I")
+        .arg(&authority)
+        .arg("export-framed")
+        .output()
+        .map_err(|error| format!("failed to execute Day-7 corpus authority: {error}"))?;
+    if !output.status.success() || !output.stderr.is_empty() {
+        return Err(format!(
+            "Day-7 corpus authority failed with {:?}: {}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    let mut stream = Frames::new(&output.stdout);
+    if stream.next()? != b"evocc-day7-memory-corpus-v1" {
+        return Err("unexpected Day-7 corpus protocol magic".to_owned());
+    }
+    let manifest_sha256 = corpus_utf8(&mut stream, "manifest SHA-256")?;
+    if manifest_sha256 != DAY7_CORPUS_MANIFEST_SHA256 {
+        return Err(format!(
+            "Day-7 corpus manifest changed: expected {DAY7_CORPUS_MANIFEST_SHA256}, got {manifest_sha256}"
+        ));
+    }
+    let count = corpus_utf8(&mut stream, "record count")?
+        .parse::<usize>()
+        .map_err(|error| format!("invalid corpus record count: {error}"))?;
+    let mut cases = Vec::with_capacity(count);
+    for ordinal in 0..count {
+        let mut record = Frames::new(stream.next()?);
+        let kind = corpus_utf8(&mut record, "kind")?;
+        let id = corpus_utf8(&mut record, "ID")?.to_owned();
+        let source = corpus_utf8(&mut record, "source")?.to_owned();
+        let expected = corpus_utf8(&mut record, "expectation")?;
+        record
+            .finish()
+            .map_err(|error| format!("record {ordinal} ({id}): {error}"))?;
+        let expected = match kind {
+            "defined" => GeneratedExpectation::Value(
+                expected
+                    .parse::<i128>()
+                    .map_err(|error| format!("record {id} has invalid value: {error}"))?,
+            ),
+            "invalid" => GeneratedExpectation::DiagnosticCode(expected.to_owned()),
+            other => return Err(format!("record {id} has unknown kind {other:?}")),
+        };
+        cases.push(GeneratedCase {
+            id,
+            source,
+            expected,
+        });
+    }
+    stream.finish()?;
+
+    let defined = cases
+        .iter()
+        .filter(|case| matches!(case.expected, GeneratedExpectation::Value(_)))
+        .count();
+    let invalid = cases.len() - defined;
+    if defined != DAY7_DEFINED || invalid != DAY7_INVALID {
+        return Err(format!(
+            "Day-7 corpus denominator changed: defined={defined}, invalid={invalid}"
+        ));
+    }
+    let unique_ids = cases.iter().map(|case| &case.id).collect::<BTreeSet<_>>();
+    let unique_sources = cases
+        .iter()
+        .map(|case| case.source.as_bytes())
+        .collect::<BTreeSet<_>>();
+    if unique_ids.len() != cases.len() || unique_sources.len() != cases.len() {
+        return Err("Day-7 corpus IDs or source bytes are not unique".to_owned());
+    }
+    Ok(cases)
+}
+
+fn check_generated_case(case: &GeneratedCase, ordinal: usize) -> Vec<String> {
+    let arena = Arena::default();
+    let unit = match parse(&case.source, FileId::new(7_500 + ordinal as u32), &arena) {
+        Ok(unit) => unit,
+        Err(error) => return vec![error],
+    };
+    let main = match function_symbol(&unit, "main") {
+        Ok(main) => main,
+        Err(error) => return vec![error],
+    };
+    let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+    let module = match lower_unit(&unit, &target) {
+        Ok(module) => module,
+        Err(error) => {
+            return vec![format!(
+                "lowering failed: {}: {}",
+                error.code(),
+                error.message()
+            )];
+        }
+    };
+    if let Err(error) = validate_module(&module) {
+        return vec![format!("EvoIR validation failed: {error}")];
+    }
+
+    let mut failures = Vec::new();
+    match &case.expected {
+        GeneratedExpectation::Value(expected) => {
+            let chir = observe_chir(&unit);
+            let evoir = observe_evoir(&module);
+            match (&chir, &evoir) {
+                (Ok(chir), Ok(evoir)) => {
+                    if chir.scalar != *expected {
+                        failures.push(format!(
+                            "C-HIR returned {}, expected {expected}",
+                            chir.scalar
+                        ));
+                    }
+                    if evoir.scalar != *expected {
+                        failures.push(format!(
+                            "EvoIR returned {}, expected {expected}",
+                            evoir.scalar
+                        ));
+                    }
+                    if chir != evoir {
+                        failures.push(format!(
+                            "interpreter observation mismatch: C-HIR={chir:?}, EvoIR={evoir:?}"
+                        ));
+                    }
+                }
+                (chir, evoir) => failures.push(format!(
+                    "defined execution failed: C-HIR={chir:?}, EvoIR={evoir:?}"
+                )),
+            }
+        }
+        GeneratedExpectation::DiagnosticCode(expected_code) => {
+            let chir = interpret_scalar_function(&unit, main, CHirLimits::new(STEP_BUDGET));
+            let (arguments, _) = match entry_contract(&module) {
+                Ok(contract) => contract,
+                Err(error) => return vec![error],
+            };
+            let evoir =
+                interpret_module(&module, "main", &arguments, EvoIrLimits::new(STEP_BUDGET));
+            match (chir, evoir) {
+                (Err(chir), Err(evoir)) => {
+                    if chir.code() != expected_code {
+                        failures.push(format!(
+                            "C-HIR diagnostic {}, expected {expected_code}",
+                            chir.code()
+                        ));
+                    }
+                    if evoir.code() != expected_code {
+                        failures.push(format!(
+                            "EvoIR diagnostic {}, expected {expected_code}",
+                            evoir.code()
+                        ));
+                    }
+                    if chir.code() != evoir.code() {
+                        failures.push(format!(
+                            "diagnostic mismatch: C-HIR={}, EvoIR={}",
+                            chir.code(),
+                            evoir.code()
+                        ));
+                    }
+                }
+                (chir, evoir) => failures.push(format!(
+                    "invalid execution did not fail in both interpreters: C-HIR={chir:?}, EvoIR={evoir:?}"
+                )),
+            }
+        }
+    }
+    failures
+}
+
+fn check_generated_case_bounded(case: GeneratedCase, ordinal: usize) -> Vec<String> {
+    let (sender, receiver) = mpsc::sync_channel(1);
+    thread::spawn(move || {
+        let result = catch_unwind(AssertUnwindSafe(|| check_generated_case(&case, ordinal)))
+            .map_err(panic_payload);
+        let _ = sender.send(result);
+    });
+    match receiver.recv_timeout(CASE_WATCHDOG) {
+        Ok(Ok(failures)) => failures,
+        Ok(Err(error)) => vec![format!("pipeline panicked: {error}")],
+        Err(_) => vec![format!(
+            "pipeline exceeded {CASE_WATCHDOG:?} wall-clock watchdog"
+        )],
+    }
+}
+
 #[test]
 fn parsed_c_memory_programs_are_equivalent_in_both_interpreters() {
     let mut failures = Vec::new();
@@ -521,4 +796,34 @@ fn invalid_memory_programs_match_in_both_interpreters() {
             case.id
         );
     }
+}
+
+#[test]
+fn generated_day7_memory_corpus_is_differentially_clean_without_skips() {
+    let cases = load_generated_corpus()
+        .unwrap_or_else(|error| panic!("Day-7 memory corpus load failed: {error}"));
+    let mut failures = Vec::new();
+    let mut defined_passed = 0;
+    let mut invalid_passed = 0;
+    for (ordinal, case) in cases.into_iter().enumerate() {
+        let case_failures = check_generated_case_bounded(case.clone(), ordinal);
+        if case_failures.is_empty() {
+            match case.expected {
+                GeneratedExpectation::Value(_) => defined_passed += 1,
+                GeneratedExpectation::DiagnosticCode(_) => invalid_passed += 1,
+            }
+        } else {
+            failures.extend(
+                case_failures
+                    .into_iter()
+                    .map(|failure| format!("{}: {failure}", case.id)),
+            );
+        }
+    }
+    assert!(
+        failures.is_empty() && defined_passed == DAY7_DEFINED && invalid_passed == DAY7_INVALID,
+        "Day-7 G3 internal differential gate failed: defined={defined_passed}/{DAY7_DEFINED}, \
+         invalid={invalid_passed}/{DAY7_INVALID}, skipped=0; failures:\n{}",
+        failures.join("\n")
+    );
 }
