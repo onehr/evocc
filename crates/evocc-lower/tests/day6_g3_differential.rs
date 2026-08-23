@@ -149,6 +149,27 @@ fn day5_authority_path() -> PathBuf {
         .join("tests/acceptance/day5-scalar-interpreter.py")
 }
 
+fn prime_system_python_launcher() -> Result<(), String> {
+    // A fresh macOS HOME can make the Xcode-provided /usr/bin/python3 emit
+    // one-time launcher diagnostics before Python starts. Keep that host
+    // bootstrap outside the authority invocation; the real invocation below
+    // still requires exact empty stderr.
+    let output = Command::new("/usr/bin/python3")
+        .arg("-I")
+        .arg("-c")
+        .arg("")
+        .output()
+        .map_err(|error| format!("failed to prime isolated system Python: {error}"))?;
+    if !output.status.success() || !output.stdout.is_empty() {
+        return Err(format!(
+            "isolated system Python preflight failed with {:?}: {}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(())
+}
+
 fn load_day5_corpus() -> Result<Vec<CorpusCase>, String> {
     let authority = day5_authority_path();
     if !authority.is_file() {
@@ -157,6 +178,7 @@ fn load_day5_corpus() -> Result<Vec<CorpusCase>, String> {
             authority.display()
         ));
     }
+    prime_system_python_launcher()?;
     let output = Command::new("/usr/bin/python3")
         .arg("-I")
         .arg("-c")
