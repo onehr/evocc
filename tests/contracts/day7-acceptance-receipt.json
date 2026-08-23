@@ -1,0 +1,248 @@
+{
+  "schemaVersion": 1,
+  "contractId": "c30.day7.acceptance-receipt.v1",
+  "status": "ACCEPTED_G1_G4_DAY9_BLOCKED",
+  "recordedAt": "2026-08-23",
+  "resolution": "The first commit whose tree contains this receipt byte-for-byte is the Day 7 G1-G4 acceptance freeze commit. The implementation commit and tree below are the exact bytes replayed in two independent --no-local clones before this receipt was written. The inherited Day 5 observer debt is not represented as complete and continues to block Day 9.",
+  "baseline": {
+    "day6FreezeCommit": "c878a397ccfa9b414e1c104585ab58729d688f04",
+    "day7MeasuredManifest": {
+      "path": "tests/contracts/day7-measured-manifest.json",
+      "sha256": "8eda3df8df044f46ee6fe8985d00e69b7e6f571dc01d965f82a576c2baee674f"
+    }
+  },
+  "replayedImplementation": {
+    "commit": "bb5420e206796eaed2b64c925fe29a95bbb151fa",
+    "tree": "67b3f2a04a67f7dda1fbceae77b6a19b6f2bd34c"
+  },
+  "acceptance": {
+    "g1": {
+      "status": "PASS",
+      "sharedObjectModel": true,
+      "chirRepresentativePrograms": {
+        "passed": 6,
+        "total": 6,
+        "skips": 0
+      },
+      "typedInvalidMemoryDiagnostics": [
+        "E3001",
+        "E3009",
+        "E3010",
+        "E3011",
+        "E3013",
+        "E3014"
+      ]
+    },
+    "g2": {
+      "status": "PASS",
+      "implementedInstructions": [
+        "ptr.null",
+        "ptr.offset",
+        "global_addr",
+        "alloca",
+        "lifetime.end",
+        "pointer_valid",
+        "access_in_bounds",
+        "load",
+        "store",
+        "load volatile",
+        "store volatile"
+      ],
+      "memoryToken": "mem<all>",
+      "volatileToken": "world",
+      "tokenLinearityValidated": true,
+      "goldenTextAndExecutionAssertions": true
+    },
+    "g3": {
+      "status": "PASS",
+      "defined": {
+        "chir": 128,
+        "evoir": 128,
+        "gcc14": 128,
+        "clang19": 128,
+        "total": 128,
+        "oracleConflicts": 0,
+        "mismatches": 0,
+        "skips": 0
+      },
+      "typedInvalid": {
+        "chir": 64,
+        "evoir": 64,
+        "total": 64,
+        "mismatches": 0,
+        "skips": 0,
+        "nativeExecutionProhibitedAndObserved": 0
+      },
+      "corpus": {
+        "programs": 192,
+        "byteUniquePrograms": 192,
+        "manifestSha256": "de83fa7a37de1f7ee3e3e3617b99f5137c037c67ecd97015c47376b744f9e217"
+      },
+      "oracleConsensusSha256": "6c8fac06e52d1fbe1c088f3ea029cc9cf43121e0793f8d95f4c7350ea96586d0"
+    },
+    "g4": {
+      "status": "PASS",
+      "programs": {
+        "beforeAfterExecutionMatched": 128,
+        "optimized": 128,
+        "total": 128,
+        "mismatches": 0,
+        "skips": 0
+      },
+      "proofReceipts": {
+        "independentlyReplayedByEvoccProof": 1280,
+        "total": 1280,
+        "rate": "100%"
+      },
+      "effectNodesAdmittedToEgraph": 0,
+      "budgetExhaustionFallsBackToOriginal": true,
+      "optimizationRequiredForCorrectness": false,
+      "capability": {
+        "implemented": [
+          "eq-scalar-optimize",
+          "-Oeq-scalar"
+        ],
+        "broadProbesStillExit69": [
+          "eqsat-optimize",
+          "-Oeq"
+        ]
+      }
+    }
+  },
+  "dashboard": {
+    "kernel": {
+      "preprocessed": "0/16 unchanged",
+      "parsedBothOracleInputs": "1/16 unchanged",
+      "compiled": "0/16 NOT_IMPLEMENTED unchanged"
+    },
+    "differentialCleanExecution": {
+      "day6Regression": "577/577",
+      "day7Memory": "192/192",
+      "day7NativeDefinedOracle": "128/128",
+      "mismatches": 0,
+      "skips": 0
+    },
+    "proofValidation": {
+      "day7ScalarMergeReceipts": "1280/1280",
+      "rate": "100%"
+    }
+  },
+  "measuredGates": [
+    {
+      "command": "cargo test --workspace --all-targets --locked --offline",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo clippy --workspace --all-targets --locked --offline -- -D warnings",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "result": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "isolatedCloneReplay": {
+    "evidencePath": ".evidence/day7-fresh-clone/20260823T092000Z",
+    "gitTracked": false,
+    "receiptSha256": "00802ac969e8330e0c9c401022eeb20c854755305313ba54a496c6de9d981c95",
+    "overall": "PASS",
+    "lanes": [
+      {
+        "id": "one",
+        "creation": "git clone --no-local --no-hardlinks",
+        "commit": "bb5420e206796eaed2b64c925fe29a95bbb151fa",
+        "tree": "67b3f2a04a67f7dda1fbceae77b6a19b6f2bd34c",
+        "workspaceTestsRc": 0,
+        "clippyDenyWarningsRc": 0,
+        "formatCheckRc": 0,
+        "workingTreeClean": true,
+        "cargoHomeFresh": true,
+        "targetFresh": true,
+        "offline": true
+      },
+      {
+        "id": "two",
+        "creation": "git clone --no-local --no-hardlinks",
+        "commit": "bb5420e206796eaed2b64c925fe29a95bbb151fa",
+        "tree": "67b3f2a04a67f7dda1fbceae77b6a19b6f2bd34c",
+        "workspaceTestsRc": 0,
+        "clippyDenyWarningsRc": 0,
+        "formatCheckRc": 0,
+        "workingTreeClean": true,
+        "cargoHomeFresh": true,
+        "targetFresh": true,
+        "offline": true
+      }
+    ]
+  },
+  "failedAttemptLedger": [
+    {
+      "sourceCommit": "264f466926efb39c7ebbec3e2821b03deb7de770",
+      "receiptSha256": "fbff5601635b66e10c82b3ade21ddee299c6461f1c7e0ec0980c5f3e33e2496c",
+      "result": "FAIL",
+      "scope": "both lanes",
+      "failure": "Day 6 corpus authority process inherited one-time macOS system Python confstr and Xcode launcher diagnostics on stderr"
+    },
+    {
+      "sourceCommit": "fda518b77b5a943c517a6a5418046d454371da2e",
+      "receiptSha256": "cac49168a30ab8d8b1ddbdd077033109713b071df95c30bb4f4483b6b5375a1a",
+      "result": "FAIL",
+      "scope": "both lanes",
+      "failure": "clean environment closure removed confstr noise but one-time Xcode launcher diagnostics remained"
+    }
+  ],
+  "boxedInfrastructure": {
+    "declaredTimeboxMinutes": 20,
+    "timeboxMet": true,
+    "dashboardMetricMovement": "NONE",
+    "authorityStderrRuleRelaxed": false,
+    "harness": {
+      "path": "tests/acceptance/workspace-fresh-clone-replay.sh",
+      "sha256": "23e93eb74674ed7a94c7abf8e2ba5bd8142220613daa61e7f2b7c08c8e82ac09"
+    }
+  },
+  "day5Debt": {
+    "status": "OPEN",
+    "measurementStatus": "NOT_MEASURED",
+    "observerAuthority": "ABSENT",
+    "observerCandidatesFound": 0,
+    "livePilotMeasurementPermitted": false,
+    "day7NonBlockingByClosingAmendment": true,
+    "day9EntryBlocked": true,
+    "pilotSelftest": {
+      "exitCode": 1,
+      "productionBoundary": "observer-authority-absent",
+      "pilots": 3,
+      "deletionAtoms": 19,
+      "oracleRunsNotExecuted": 46,
+      "subjectRunsNotExecuted": 28,
+      "obligationManifestSha256": "39af1ba905884d739789c996ede7b24ba08c07d3be39b77a643363334d9ec2a1"
+    },
+    "reportingRule": "Do not claim the Day 5 observer simplification or three pilot reductions complete; do not start Day 9 until an independently reviewable externally pinned observer authority exists and the pilots are measured."
+  },
+  "artifacts": [
+    {
+      "path": "docs/superpowers/plans/2026-08-23-evoir-object-memory.md",
+      "sha256": "37451cdea36eef4dd3d8880220043be1191790f9418ae853bad8c978738751dd"
+    },
+    {
+      "path": "tests/contracts/day7-measured-manifest.json",
+      "sha256": "8eda3df8df044f46ee6fe8985d00e69b7e6f571dc01d965f82a576c2baee674f"
+    },
+    {
+      "path": "tests/acceptance/workspace-fresh-clone-replay.sh",
+      "sha256": "23e93eb74674ed7a94c7abf8e2ba5bd8142220613daa61e7f2b7c08c8e82ac09"
+    }
+  ],
+  "strictExclusionsPreserved": [
+    "region splitting and alias analysis",
+    "store forwarding, store bypass, and redundant-load rewrites",
+    "persistent EClassId semantics across allocations",
+    "attributes, typeof, and statement expressions",
+    "backend and ABI lowering"
+  ]
+}
