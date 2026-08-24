@@ -346,11 +346,10 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
     fn expression(unit: &CHirUnit<'_>, expr: &CHirExpr<'_>, out: &mut BTreeSet<SymbolId>) {
         match expr {
             CHirExpr::Ident { symbol, .. } => {
-                if unit
-                    .symbols()
-                    .symbol(*symbol)
-                    .is_ok_and(|entry| entry.scope() == unit.symbols().file_scope())
-                {
+                if unit.symbols().symbol(*symbol).is_ok_and(|entry| {
+                    entry.kind() == SymbolKind::Object
+                        && entry.scope() == unit.symbols().file_scope()
+                }) {
                     out.insert(*symbol);
                 }
             }
@@ -1195,12 +1194,12 @@ fn index_functions(
         let Some(body) = function.body else {
             continue;
         };
-        let mut callees = BTreeSet::new();
-        collect_calls_stmt(body, &mut callees);
-        if !callees.is_empty() {
+        let mut calls = CallSites::default();
+        collect_calls_stmt(body, &mut calls);
+        if calls.any {
             participants.insert(function.symbol);
         }
-        participants.extend(callees);
+        participants.extend(calls.direct);
     }
     for symbol in participants {
         let Some(info) = definitions.get_mut(&symbol) else {
@@ -4818,42 +4817,40 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<Option<ExprValue>, LowerError> {
-        let direct = if let CHirExpr::Ident {
-            symbol,
-            spelling,
-            facts,
-            span: designator_span,
-        } = callee
-        {
-            let designator =
-                self.unit
-                    .symbols()
-                    .symbol(*symbol)
-                    .map_err(|_| LowerError::UnknownSymbol {
-                        symbol: *symbol,
-                        span: *designator_span,
+        let direct =
+            match callee {
+                CHirExpr::Ident {
+                    symbol,
+                    spelling,
+                    facts,
+                    span: designator_span,
+                } if facts.category() == ExprCategory::FunctionDesignator => {
+                    let designator = self.unit.symbols().symbol(*symbol).map_err(|_| {
+                        LowerError::UnknownSymbol {
+                            symbol: *symbol,
+                            span: *designator_span,
+                        }
                     })?;
-            if designator.kind() != SymbolKind::Function
-                || designator.spelling() != spelling
-                || designator.ty() != facts.ty()
-                || facts.category() != ExprCategory::FunctionDesignator
-            {
-                return Err(LowerError::UnsupportedExpression {
-                    span: *designator_span,
-                    feature: "function designator disagrees with its semantic identity",
-                });
-            }
-            Some(
-                self.functions
-                    .get(symbol)
-                    .ok_or(LowerError::UnknownSymbol {
-                        symbol: *symbol,
-                        span,
-                    })?,
-            )
-        } else {
-            None
-        };
+                    if designator.kind() != SymbolKind::Function
+                        || designator.spelling() != spelling
+                        || designator.ty() != facts.ty()
+                    {
+                        return Err(LowerError::UnsupportedExpression {
+                            span: *designator_span,
+                            feature: "function designator disagrees with its semantic identity",
+                        });
+                    }
+                    Some(
+                        self.functions
+                            .get(symbol)
+                            .ok_or(LowerError::UnknownSymbol {
+                                symbol: *symbol,
+                                span,
+                            })?,
+                    )
+                }
+                _ => None,
+            };
         let function_ty = self.call_designator_function_type(callee).ok_or(
             LowerError::UnsupportedExpression {
                 span: callee.span(),
@@ -5882,7 +5879,13 @@ fn collect_goto_names(statement: &CHirStmt<'_>, names: &mut BTreeSet<String>) {
     }
 }
 
-fn collect_calls_stmt(statement: &CHirStmt<'_>, calls: &mut BTreeSet<SymbolId>) {
+#[derive(Default)]
+struct CallSites {
+    direct: BTreeSet<SymbolId>,
+    any: bool,
+}
+
+fn collect_calls_stmt(statement: &CHirStmt<'_>, calls: &mut CallSites) {
     match statement {
         CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
             collect_calls_expr(expression, calls)
@@ -5943,7 +5946,7 @@ fn collect_calls_stmt(statement: &CHirStmt<'_>, calls: &mut BTreeSet<SymbolId>) 
     }
 }
 
-fn collect_calls_decl(declaration: &CHirDecl<'_>, calls: &mut BTreeSet<SymbolId>) {
+fn collect_calls_decl(declaration: &CHirDecl<'_>, calls: &mut CallSites) {
     if let CHirDecl::Object(object) = declaration {
         if let Some(initializer) = &object.initializer {
             for action in initializer.plan.actions() {
@@ -5955,11 +5958,14 @@ fn collect_calls_decl(declaration: &CHirDecl<'_>, calls: &mut BTreeSet<SymbolId>
     }
 }
 
-fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut BTreeSet<SymbolId>) {
+fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
     match expression {
         CHirExpr::Call(callee, arguments, _) => {
-            if let CHirExpr::Ident { symbol, .. } = callee {
-                calls.insert(*symbol);
+            calls.any = true;
+            if let CHirExpr::Ident { symbol, facts, .. } = callee {
+                if facts.category() == ExprCategory::FunctionDesignator {
+                    calls.direct.insert(*symbol);
+                }
             }
             collect_calls_expr(callee, calls);
             for argument in arguments {
