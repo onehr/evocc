@@ -1919,6 +1919,7 @@ fn main() {
         name: "block_arg_identity".to_owned(),
         params: Vec::new(),
         ret_tys: vec![bits32.clone()],
+        effects: Default::default(),
         blocks: vec![
             Block {
                 id: 0,

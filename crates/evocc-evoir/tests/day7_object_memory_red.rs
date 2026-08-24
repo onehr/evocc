@@ -11,7 +11,7 @@ fn value(id: u32, ty: EvoIRType) -> Value {
 fn token_function(name: &str, insts: Vec<Inst>, returned: Vec<Value>) -> Function {
     let mem = value(0, EvoIRType::Mem(Region::All));
     let world = value(1, EvoIRType::World);
-    Function {
+    let function = Function {
         name: name.to_owned(),
         params: vec![
             FunctionParam {
@@ -24,6 +24,7 @@ fn token_function(name: &str, insts: Vec<Inst>, returned: Vec<Value>) -> Functio
             },
         ],
         ret_tys: returned.iter().map(|value| value.ty.clone()).collect(),
+        effects: Default::default(),
         blocks: vec![Block {
             id: 0,
             args: vec![
@@ -39,7 +40,13 @@ fn token_function(name: &str, insts: Vec<Inst>, returned: Vec<Value>) -> Functio
             insts,
             terminator: Inst::Ret(returned),
         }],
-    }
+    };
+    let mut module = Module {
+        globals: vec![],
+        functions: vec![function],
+    };
+    module.recompute_effect_summaries();
+    module.functions.pop().expect("one function")
 }
 
 fn entry_tokens() -> Vec<RuntimeValue> {

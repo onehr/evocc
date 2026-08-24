@@ -1,7 +1,5 @@
 //! Canonical EvoIR Section 9 text rendering.
 
-use std::collections::HashMap;
-
 use evocc_types::{AddressSpace, EvoIRType, Region};
 
 use evocc_memory::{IndexSignedness, OffsetDirection};
@@ -85,166 +83,13 @@ pub fn render_module(module: &Module) -> String {
         rendered.push('\n');
     }
 
-    let summaries = derive_effect_summaries(module);
     for (index, function) in module.functions.iter().enumerate() {
         if index != 0 {
             rendered.push('\n');
         }
-        rendered.push_str(&render_function(function, summaries[index]));
+        rendered.push_str(&render_function(function));
     }
     rendered
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-struct RenderedEffectSummary {
-    reads_all: bool,
-    writes_all: bool,
-    volatile: bool,
-    atomic: bool,
-    io: bool,
-    may_trap: bool,
-    may_unwind: bool,
-}
-
-impl RenderedEffectSummary {
-    const fn top() -> Self {
-        Self {
-            reads_all: true,
-            writes_all: true,
-            volatile: true,
-            atomic: true,
-            io: true,
-            may_trap: true,
-            may_unwind: true,
-        }
-    }
-
-    fn join(&mut self, other: Self) {
-        self.reads_all |= other.reads_all;
-        self.writes_all |= other.writes_all;
-        self.volatile |= other.volatile;
-        self.atomic |= other.atomic;
-        self.io |= other.io;
-        self.may_trap |= other.may_trap;
-        self.may_unwind |= other.may_unwind;
-    }
-}
-
-fn derive_effect_summaries(module: &Module) -> Vec<RenderedEffectSummary> {
-    let positions = module
-        .functions
-        .iter()
-        .enumerate()
-        .map(|(index, function)| (function.name.as_str(), index))
-        .collect::<HashMap<_, _>>();
-    let local = module
-        .functions
-        .iter()
-        .map(local_effect_summary)
-        .collect::<Vec<_>>();
-    let mut summaries = local.clone();
-    loop {
-        let previous = summaries.clone();
-        for (index, function) in module.functions.iter().enumerate() {
-            let mut summary = local[index];
-            for inst in function.blocks.iter().flat_map(|block| &block.insts) {
-                if let Inst::Call { callee, .. } = inst {
-                    summary.join(
-                        positions
-                            .get(callee.as_str())
-                            .map_or(RenderedEffectSummary::top(), |callee| previous[*callee]),
-                    );
-                } else if matches!(inst, Inst::IndirectCall { .. }) {
-                    summary.join(RenderedEffectSummary::top());
-                }
-            }
-            summaries[index] = summary;
-        }
-        if summaries == previous {
-            return summaries;
-        }
-    }
-}
-
-fn local_effect_summary(function: &Function) -> RenderedEffectSummary {
-    let mut summary = RenderedEffectSummary::default();
-    for inst in function
-        .blocks
-        .iter()
-        .flat_map(|block| block.insts.iter().chain(std::iter::once(&block.terminator)))
-    {
-        summary.join(inst_effect_summary(inst));
-    }
-    summary
-}
-
-#[allow(clippy::too_many_lines)]
-fn inst_effect_summary(inst: &Inst) -> RenderedEffectSummary {
-    match inst {
-        Inst::SDiv(..)
-        | Inst::UDiv(..)
-        | Inst::SRem(..)
-        | Inst::URem(..)
-        | Inst::UbAssume(..)
-        | Inst::PtrOffset { .. }
-        | Inst::Trap(..) => RenderedEffectSummary {
-            may_trap: true,
-            ..RenderedEffectSummary::default()
-        },
-        Inst::Alloca { .. } | Inst::LifetimeEnd { .. } => RenderedEffectSummary {
-            reads_all: true,
-            writes_all: true,
-            may_trap: true,
-            ..RenderedEffectSummary::default()
-        },
-        Inst::PointerValid { .. } | Inst::AccessInBounds { .. } => RenderedEffectSummary {
-            reads_all: true,
-            may_trap: true,
-            ..RenderedEffectSummary::default()
-        },
-        Inst::Load { volatile, .. } => RenderedEffectSummary {
-            reads_all: true,
-            volatile: *volatile,
-            may_trap: true,
-            ..RenderedEffectSummary::default()
-        },
-        Inst::Store { volatile, .. } => RenderedEffectSummary {
-            writes_all: true,
-            volatile: *volatile,
-            may_trap: true,
-            ..RenderedEffectSummary::default()
-        },
-        Inst::IndirectCall { .. } => RenderedEffectSummary::top(),
-        Inst::Const(..)
-        | Inst::Uninitialized(..)
-        | Inst::Add(..)
-        | Inst::Sub(..)
-        | Inst::Mul(..)
-        | Inst::Shl(..)
-        | Inst::AShr(..)
-        | Inst::LShr(..)
-        | Inst::And(..)
-        | Inst::Or(..)
-        | Inst::Xor(..)
-        | Inst::SignedAddDefined(..)
-        | Inst::SignedSubDefined(..)
-        | Inst::SignedMulDefined(..)
-        | Inst::DivisorNonZero(..)
-        | Inst::SignedDivRemNoOverflow(..)
-        | Inst::ShiftCountDefined { .. }
-        | Inst::SignedShlDefined { .. }
-        | Inst::ICmp(..)
-        | Inst::Br(..)
-        | Inst::CondBr(..)
-        | Inst::Ret(..)
-        | Inst::PtrNull(..)
-        | Inst::GlobalAddr { .. }
-        | Inst::FuncAddr { .. }
-        | Inst::Call { .. }
-        | Inst::SExt(..)
-        | Inst::ZExt(..)
-        | Inst::Trunc(..) => RenderedEffectSummary::default(),
-    }
 }
 
 fn render_type(ty: &EvoIRType) -> String {
@@ -631,7 +476,7 @@ impl FunctionRenderer {
     }
 }
 
-fn render_function(function: &Function, effects: RenderedEffectSummary) -> String {
+fn render_function(function: &Function) -> String {
     let mut rendered = String::new();
     let calling_convention = "target_default";
     let parameters = function
@@ -653,13 +498,13 @@ fn render_function(function: &Function, effects: RenderedEffectSummary) -> Strin
     ));
     rendered.push_str(&format!(
         "    effects {{ reads={}, writes={}, volatile={}, atomic={}, io={}, may_trap={}, may_unwind={} }}\n{{\n",
-        if effects.reads_all { "{all}" } else { "{}" },
-        if effects.writes_all { "{all}" } else { "{}" },
-        effects.volatile,
-        effects.atomic,
-        effects.io,
-        effects.may_trap,
-        effects.may_unwind,
+        if function.effects.reads_all { "{all}" } else { "{}" },
+        if function.effects.writes_all { "{all}" } else { "{}" },
+        function.effects.volatile,
+        function.effects.atomic,
+        function.effects.io,
+        function.effects.may_trap,
+        function.effects.may_unwind,
     ));
 
     let entry = function.blocks.first().map_or(0, |block| block.id);
@@ -720,6 +565,10 @@ mod tests {
                 name: "stopped".to_owned(),
                 params: Vec::new(),
                 ret_tys: vec![EvoIRType::Bits(32)],
+                effects: crate::EffectSummary {
+                    may_trap: true,
+                    ..crate::EffectSummary::default()
+                },
                 blocks: vec![Block {
                     id: 17,
                     args: Vec::new(),

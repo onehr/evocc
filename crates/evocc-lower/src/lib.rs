@@ -293,10 +293,11 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
             .lower(function)?,
         );
     }
-    let module = Module {
+    let mut module = Module {
         globals,
         functions: lowered,
     };
+    module.recompute_effect_summaries();
     validate_module(&module).map_err(|message| LowerError::InvalidGeneratedSsa { message })?;
     Ok(module)
 }
@@ -1855,6 +1856,7 @@ impl<'a> FunctionLowerer<'a> {
             name: self.info.name.clone(),
             params,
             ret_tys: self.return_types(),
+            effects: Default::default(),
             blocks: self.finish_blocks()?,
         };
         renumber_function(&mut function)?;

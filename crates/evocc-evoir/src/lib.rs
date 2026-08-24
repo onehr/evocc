@@ -567,12 +567,55 @@ pub struct Block {
     pub terminator: Inst,
 }
 
+/// The exact observable effects implied by one function and its direct callees.
+///
+/// Day 8 has a single memory region, so the two region sets are represented by
+/// their `all` membership. The remaining components follow specification
+/// Section 4.6 and participate in the same componentwise join.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct EffectSummary {
+    pub reads_all: bool,
+    pub writes_all: bool,
+    pub volatile: bool,
+    pub atomic: bool,
+    pub io: bool,
+    pub may_trap: bool,
+    pub may_unwind: bool,
+}
+
+impl EffectSummary {
+    /// The conservative summary assigned to an indirect call.
+    #[must_use]
+    pub const fn top() -> Self {
+        Self {
+            reads_all: true,
+            writes_all: true,
+            volatile: true,
+            atomic: true,
+            io: true,
+            may_trap: true,
+            may_unwind: true,
+        }
+    }
+
+    fn join(&mut self, other: Self) {
+        self.reads_all |= other.reads_all;
+        self.writes_all |= other.writes_all;
+        self.volatile |= other.volatile;
+        self.atomic |= other.atomic;
+        self.io |= other.io;
+        self.may_trap |= other.may_trap;
+        self.may_unwind |= other.may_unwind;
+    }
+}
+
 /// A function in EvoIR.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
     pub name: String,
     pub params: Vec<FunctionParam>,
     pub ret_tys: Vec<EvoIRType>,
+    pub effects: EffectSummary,
     pub blocks: Vec<Block>,
 }
 
@@ -581,6 +624,137 @@ pub struct Function {
 pub struct Module {
     pub globals: Vec<GlobalObject>,
     pub functions: Vec<Function>,
+}
+
+impl Module {
+    /// Replace every stored summary with the least fixed point implied by this
+    /// module's instructions and direct-call graph.
+    pub fn recompute_effect_summaries(&mut self) {
+        let summaries = derive_effect_summaries(self);
+        for (function, summary) in self.functions.iter_mut().zip(summaries) {
+            function.effects = summary;
+        }
+    }
+}
+
+/// Compute the least fixed point of Section 4.6 without trusting any recorded
+/// summary already present in the module.
+#[must_use]
+pub fn derive_effect_summaries(module: &Module) -> Vec<EffectSummary> {
+    let positions = module
+        .functions
+        .iter()
+        .enumerate()
+        .map(|(index, function)| (function.name.as_str(), index))
+        .collect::<HashMap<_, _>>();
+    let local = module
+        .functions
+        .iter()
+        .map(local_effect_summary)
+        .collect::<Vec<_>>();
+    let mut summaries = local.clone();
+    loop {
+        let previous = summaries.clone();
+        for (index, function) in module.functions.iter().enumerate() {
+            let mut summary = local[index];
+            for inst in function.blocks.iter().flat_map(|block| &block.insts) {
+                match inst {
+                    Inst::Call { callee, .. } => summary.join(
+                        positions
+                            .get(callee.as_str())
+                            .map_or(EffectSummary::top(), |callee| previous[*callee]),
+                    ),
+                    Inst::IndirectCall { .. } => summary.join(EffectSummary::top()),
+                    _ => {}
+                }
+            }
+            summaries[index] = summary;
+        }
+        if summaries == previous {
+            return summaries;
+        }
+    }
+}
+
+fn local_effect_summary(function: &Function) -> EffectSummary {
+    let mut summary = EffectSummary::default();
+    for inst in function
+        .blocks
+        .iter()
+        .flat_map(|block| block.insts.iter().chain(std::iter::once(&block.terminator)))
+    {
+        summary.join(inst_effect_summary(inst));
+    }
+    summary
+}
+
+#[allow(clippy::too_many_lines)]
+fn inst_effect_summary(inst: &Inst) -> EffectSummary {
+    match inst {
+        Inst::SDiv(..)
+        | Inst::UDiv(..)
+        | Inst::SRem(..)
+        | Inst::URem(..)
+        | Inst::UbAssume(..)
+        | Inst::PtrOffset { .. }
+        | Inst::Trap(..) => EffectSummary {
+            may_trap: true,
+            ..EffectSummary::default()
+        },
+        Inst::Alloca { .. } | Inst::LifetimeEnd { .. } => EffectSummary {
+            reads_all: true,
+            writes_all: true,
+            may_trap: true,
+            ..EffectSummary::default()
+        },
+        Inst::PointerValid { .. } | Inst::AccessInBounds { .. } => EffectSummary {
+            reads_all: true,
+            may_trap: true,
+            ..EffectSummary::default()
+        },
+        Inst::Load { volatile, .. } => EffectSummary {
+            reads_all: true,
+            volatile: *volatile,
+            may_trap: true,
+            ..EffectSummary::default()
+        },
+        Inst::Store { volatile, .. } => EffectSummary {
+            writes_all: true,
+            volatile: *volatile,
+            may_trap: true,
+            ..EffectSummary::default()
+        },
+        Inst::IndirectCall { .. } => EffectSummary::top(),
+        Inst::Const(..)
+        | Inst::Uninitialized(..)
+        | Inst::Add(..)
+        | Inst::Sub(..)
+        | Inst::Mul(..)
+        | Inst::Shl(..)
+        | Inst::AShr(..)
+        | Inst::LShr(..)
+        | Inst::And(..)
+        | Inst::Or(..)
+        | Inst::Xor(..)
+        | Inst::SignedAddDefined(..)
+        | Inst::SignedSubDefined(..)
+        | Inst::SignedMulDefined(..)
+        | Inst::DivisorNonZero(..)
+        | Inst::SignedDivRemNoOverflow(..)
+        | Inst::ShiftCountDefined { .. }
+        | Inst::SignedShlDefined { .. }
+        | Inst::ICmp(..)
+        | Inst::Br(..)
+        | Inst::CondBr(..)
+        | Inst::Ret(..)
+        | Inst::PtrNull(..)
+        | Inst::GlobalAddr { .. }
+        | Inst::FuncAddr { .. }
+        | Inst::Call { .. }
+        | Inst::SExt(..)
+        | Inst::ZExt(..)
+        | Inst::Trunc(..) => EffectSummary::default(),
+    }
 }
 
 /// Source category encoded by the textual module-global table.
@@ -1065,6 +1239,14 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                     world_out,
                 )?;
             }
+        }
+    }
+    for (function, expected) in module.functions.iter().zip(derive_effect_summaries(module)) {
+        if function.effects != expected {
+            return Err(format!(
+                "function '{}' recorded effect summary {:?}, expected exact Section 4.6 summary {:?}",
+                function.name, function.effects, expected
+            ));
         }
     }
     Ok(())
@@ -4330,6 +4512,7 @@ mod tests {
             name: "threaded".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
+            effects: Default::default(),
             blocks: vec![
                 Block {
                     id: 0,
@@ -4376,6 +4559,7 @@ mod tests {
                 },
             ],
             ret_tys: vec![mem_global, mem_stack, world],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![
@@ -4409,6 +4593,7 @@ mod tests {
                 ty: EvoIRType::Bits(32),
             }],
             ret_tys: vec![EvoIRType::Bits(32)],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![argument("x", input.clone())],
@@ -4465,6 +4650,7 @@ mod tests {
                 ty: pointer_type.clone(),
             }],
             ret_tys: vec![pointer_type.clone()],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![argument("pointer", pointer.clone())],
@@ -4539,6 +4725,7 @@ mod tests {
             name: "bad_condition".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
+            effects: Default::default(),
             blocks: vec![
                 Block {
                     id: 0,
@@ -4599,6 +4786,7 @@ mod tests {
             name: "deep_result".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![],
@@ -4709,6 +4897,7 @@ mod tests {
             name: "loop_sum".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
+            effects: Default::default(),
             blocks: vec![
                 Block {
                     id: 0,
@@ -4791,6 +4980,7 @@ mod tests {
                 },
             ],
             ret_tys: vec![EvoIRType::Bits(32), EvoIRType::Bits(32)],
+            effects: Default::default(),
             blocks: vec![
                 Block {
                     id: 0,
@@ -4846,6 +5036,7 @@ mod tests {
             name: "raw".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(64)],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![],
@@ -4873,6 +5064,7 @@ mod tests {
             name: "division".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![],
@@ -4953,6 +5145,7 @@ mod tests {
                 },
             ],
             ret_tys: vec![ordinary_ty, memory_ty, EvoIRType::World],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![
@@ -4987,6 +5180,7 @@ mod tests {
                 },
             ],
             ret_tys: vec![EvoIRType::Bits(32), memory_ty.clone(), EvoIRType::World],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![
@@ -5008,13 +5202,15 @@ mod tests {
                 terminator: Inst::Ret(vec![result, memory_out, world_out]),
             }],
         };
-        Module {
+        let mut module = Module {
             globals: vec![],
             functions: vec![
                 identity_callee("identity", EvoIRType::Bits(32), Region::All),
                 main,
             ],
-        }
+        };
+        module.recompute_effect_summaries();
+        module
     }
 
     fn indirect_call_module(null: bool) -> Module {
@@ -5051,6 +5247,7 @@ mod tests {
                 },
             ],
             ret_tys: vec![EvoIRType::Bits(32), memory_ty.clone(), EvoIRType::World],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![
@@ -5073,13 +5270,15 @@ mod tests {
                 terminator: Inst::Ret(vec![result, memory_out, world_out]),
             }],
         };
-        Module {
+        let mut module = Module {
             globals: vec![],
             functions: vec![
                 identity_callee("identity", EvoIRType::Bits(32), Region::All),
                 main,
             ],
-        }
+        };
+        module.recompute_effect_summaries();
+        module
     }
 
     fn recursive_countdown_module() -> Module {
@@ -5117,6 +5316,7 @@ mod tests {
                 },
             ],
             ret_tys: vec![EvoIRType::Bits(32), memory_ty.clone(), EvoIRType::World],
+            effects: Default::default(),
             blocks: vec![
                 Block {
                     id: 0,
@@ -5183,10 +5383,12 @@ mod tests {
             panic!("fixture call");
         };
         *callee = "countdown".to_owned();
-        Module {
+        let mut module = Module {
             globals: vec![],
             functions: vec![countdown, main],
-        }
+        };
+        module.recompute_effect_summaries();
+        module
     }
 
     #[test]
@@ -5307,6 +5509,33 @@ mod tests {
         assert!(validate_module(&wrong_region)
             .expect_err("memory region mismatch must fail")
             .contains("memory token"));
+    }
+
+    #[test]
+    fn module_validation_requires_the_exact_recorded_effect_fixed_point() {
+        let mut module = direct_call_module();
+        module.recompute_effect_summaries();
+        validate_module(&module).expect("freshly derived summaries are exact");
+
+        module.functions[0].effects.may_trap = true;
+        let error = validate_module(&module).expect_err("an over-strong summary must fail");
+        assert!(error.contains("recorded effect summary"), "{error}");
+
+        module.recompute_effect_summaries();
+        module.functions[0].blocks[0].terminator = Inst::Trap(TrapReason::ScalarFunctionFellOffEnd);
+        let error = validate_module(&module).expect_err("a stale weak summary must fail");
+        assert!(error.contains("recorded effect summary"), "{error}");
+    }
+
+    #[test]
+    fn recursive_effect_derivation_reaches_the_least_shared_fixed_point() {
+        let mut module = recursive_countdown_module();
+        module.functions[0].blocks[1].terminator = Inst::Trap(TrapReason::ScalarFunctionFellOffEnd);
+        module.recompute_effect_summaries();
+
+        assert!(module.functions[0].effects.may_trap);
+        assert!(module.functions[1].effects.may_trap);
+        validate_module(&module).expect("the recursive least fixed point validates");
     }
 
     #[test]
@@ -5483,6 +5712,7 @@ mod tests {
             name: "defined_add".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(8)],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![],
@@ -5544,6 +5774,7 @@ mod tests {
             name: "overflow".to_owned(),
             params: vec![],
             ret_tys: vec![],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![],
@@ -5572,6 +5803,7 @@ mod tests {
             name: "predicates".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(1), EvoIRType::Bits(1)],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![],
@@ -5614,6 +5846,7 @@ mod tests {
             name: "extended_integer_ops".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(8); 9],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![],
@@ -5668,6 +5901,7 @@ mod tests {
             name: "separated_predicates".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(1); predicates.len()],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![],
@@ -5774,6 +6008,7 @@ mod tests {
                 EvoIRType::Bits(1),
                 EvoIRType::Bits(1),
             ],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![],
@@ -5937,6 +6172,7 @@ mod tests {
                 name: "typed_ub".to_owned(),
                 params: vec![],
                 ret_tys: vec![],
+                effects: Default::default(),
                 blocks: vec![Block {
                     id: 0,
                     args: vec![],
@@ -5973,6 +6209,7 @@ mod tests {
             name: "uninitialized_scalar".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 37,
                 args: vec![],
@@ -5987,6 +6224,7 @@ mod tests {
             name: "uninitialized_pointer".to_owned(),
             params: vec![],
             ret_tys: vec![],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![],
@@ -6009,6 +6247,7 @@ mod tests {
                 name: "uninitialized_effect_token".to_owned(),
                 params: vec![],
                 ret_tys: vec![],
+                effects: Default::default(),
                 blocks: vec![Block {
                     id: 0,
                     args: vec![],
@@ -6029,6 +6268,7 @@ mod tests {
             name: "uninitialized_void".to_owned(),
             params: vec![],
             ret_tys: vec![],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![],
@@ -6048,6 +6288,7 @@ mod tests {
             name: "propagate_uninitialized".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
+            effects: Default::default(),
             blocks: vec![
                 Block {
                     id: 0,
@@ -6125,6 +6366,7 @@ mod tests {
             name: "definite_assignment_loop".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
+            effects: Default::default(),
             blocks: vec![
                 Block {
                     id: 0,
@@ -6201,6 +6443,7 @@ mod tests {
             name: "uninitialized_read".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 37,
                 args: vec![],
@@ -6278,6 +6521,7 @@ mod tests {
                     name: "uninitialized_arithmetic".to_owned(),
                     params: vec![],
                     ret_tys: vec![EvoIRType::Bits(32)],
+                    effects: Default::default(),
                     blocks: vec![Block {
                         id: 0,
                         args: vec![],
@@ -6296,6 +6540,7 @@ mod tests {
                     name: "uninitialized_comparison".to_owned(),
                     params: vec![],
                     ret_tys: vec![EvoIRType::Bits(1)],
+                    effects: Default::default(),
                     blocks: vec![Block {
                         id: 0,
                         args: vec![],
@@ -6314,6 +6559,7 @@ mod tests {
                     name: "uninitialized_cast".to_owned(),
                     params: vec![],
                     ret_tys: vec![EvoIRType::Bits(64)],
+                    effects: Default::default(),
                     blocks: vec![Block {
                         id: 0,
                         args: vec![],
@@ -6331,6 +6577,7 @@ mod tests {
                     name: "uninitialized_zero_extend".to_owned(),
                     params: vec![],
                     ret_tys: vec![EvoIRType::Bits(32)],
+                    effects: Default::default(),
                     blocks: vec![Block {
                         id: 0,
                         args: vec![],
@@ -6348,6 +6595,7 @@ mod tests {
                     name: "uninitialized_truncate".to_owned(),
                     params: vec![],
                     ret_tys: vec![EvoIRType::Bits(8)],
+                    effects: Default::default(),
                     blocks: vec![Block {
                         id: 0,
                         args: vec![],
@@ -6365,6 +6613,7 @@ mod tests {
                     name: "uninitialized_shifted_predicate_operand".to_owned(),
                     params: vec![],
                     ret_tys: vec![EvoIRType::Bits(1)],
+                    effects: Default::default(),
                     blocks: vec![Block {
                         id: 0,
                         args: vec![],
@@ -6401,6 +6650,7 @@ mod tests {
             name: "uninitialized_condition".to_owned(),
             params: vec![],
             ret_tys: vec![],
+            effects: Default::default(),
             blocks: vec![
                 Block {
                     id: 0,
@@ -6504,6 +6754,7 @@ mod tests {
             name: "fallthrough".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 7,
                 args: vec![],
@@ -6530,6 +6781,10 @@ mod tests {
                 ty: EvoIRType::Bits(1),
             }],
             ret_tys: vec![EvoIRType::Bits(32)],
+            effects: EffectSummary {
+                may_trap: true,
+                ..EffectSummary::default()
+            },
             blocks: vec![
                 Block {
                     id: 0,
@@ -6598,6 +6853,7 @@ mod tests {
         callee.blocks[0].id = 9;
         callee.blocks[0].insts.clear();
         callee.blocks[0].terminator = Inst::Trap(TrapReason::ScalarFunctionFellOffEnd);
+        module.recompute_effect_summaries();
         validate_module(&module)
             .expect("a trapping callee needs no fabricated ordinary or token return operands");
 

@@ -29,6 +29,7 @@ fn identity_module() -> Module {
                 ty: EvoIRType::Bits(32),
             }],
             ret_tys: vec![EvoIRType::Bits(32)],
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![BlockArg {

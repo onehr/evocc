@@ -30,6 +30,7 @@ fn module(insts: Vec<Inst>, returns: Vec<Value>, return_types: Vec<EvoIRType>) -
                 ty: EvoIRType::Bits(32),
             }],
             ret_tys: return_types,
+            effects: Default::default(),
             blocks: vec![Block {
                 id: 0,
                 args: vec![BlockArg {
