@@ -1,5 +1,9 @@
 //! Proof-carrying compiler: justifications and independent proof checker
 
+mod evp1;
+
+pub use evp1::*;
+
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt;
 

@@ -2,7 +2,10 @@ use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
 
-use evocc_proof::sha256_hex;
+use evocc_proof::{
+    parse_evp1, sha256_hex, EvpCertificate, EvpEffectClass, EvpEvent, EvpExtractionChoice,
+    EvpNodeSource, EvpProofRef, EvpRegion, EvpSeedOrigin,
+};
 
 const REGISTRY_NAME: &str = "p0.scalar.v1";
 const REGISTRY_SHA256: &str = "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9";
@@ -32,25 +35,28 @@ fn main() -> ExitCode {
     if evocc_evoir::parse_section9_module(&after).is_err() {
         return ExitCode::from(2);
     }
-    let certificate = match Certificate::parse(&proof) {
+    let certificate = match parse_evp1(&proof) {
         Ok(certificate) => certificate,
-        Err(ParseOutcome::Malformed) => return ExitCode::from(2),
-        Err(ParseOutcome::UnsupportedRegion) => return ExitCode::from(3),
+        Err(_) => return ExitCode::from(2),
     };
 
-    if certificate.input != sha256_hex(&before) {
+    if certificate.registry_name != REGISTRY_NAME
+        || certificate.registry_digest != REGISTRY_SHA256
+        || certificate.input_digest != sha256_hex(&before)
+    {
         return ExitCode::from(3);
     }
-    let reassembled = match certificate.claim {
-        Claim::Zero => before.clone(),
-        Claim::AddZeroRhs(claim) => {
+    let reassembled = match claim(&certificate) {
+        Ok(Claim::Zero) => before.clone(),
+        Ok(Claim::AddZeroRhs(claim)) => {
             match reassemble_reviewed_add_zero(&before, &before_module, claim) {
                 Some(module) => module,
                 None => return ExitCode::from(3),
             }
         }
+        Err(()) => return ExitCode::from(3),
     };
-    if certificate.output != sha256_hex(&reassembled) || reassembled != after {
+    if certificate.output_digest != sha256_hex(&reassembled) || reassembled != after {
         return ExitCode::from(3);
     }
     ExitCode::SUCCESS
@@ -58,12 +64,6 @@ fn main() -> ExitCode {
 
 fn read(path: &impl AsRef<Path>) -> Result<Vec<u8>, ()> {
     fs::read(path).map_err(|_| ())
-}
-
-struct Certificate<'a> {
-    input: &'a str,
-    output: &'a str,
-    claim: Claim,
 }
 
 enum Claim {
@@ -79,127 +79,73 @@ struct AddZeroRhs {
     seed: u32,
 }
 
-enum ParseOutcome {
-    Malformed,
-    UnsupportedRegion,
-}
-
-impl<'a> Certificate<'a> {
-    fn parse(bytes: &'a [u8]) -> Result<Self, ParseOutcome> {
-        let text = std::str::from_utf8(bytes).map_err(|_| ParseOutcome::Malformed)?;
-        if !text.ends_with('\n') || text.ends_with("\n\n") || text.contains('\r') {
-            return Err(ParseOutcome::Malformed);
-        }
-        let lines = text.lines().collect::<Vec<_>>();
-        if lines.first() != Some(&"evp1") {
-            return Err(ParseOutcome::Malformed);
-        }
-        if lines.len() != 4 && lines.len() != 14 {
-            return Err(ParseOutcome::Malformed);
-        }
-        let registry = lines[1]
-            .strip_prefix("registry ")
-            .and_then(|line| line.split_once(' '))
-            .ok_or(ParseOutcome::Malformed)?;
-        if registry != (REGISTRY_NAME, REGISTRY_SHA256) {
-            return Err(ParseOutcome::UnsupportedRegion);
-        }
-        let input = lines[2]
-            .strip_prefix("input ")
-            .ok_or(ParseOutcome::Malformed)?;
-        let output_index = lines.len() - 1;
-        let output = lines[output_index]
-            .strip_prefix("output ")
-            .ok_or(ParseOutcome::Malformed)?;
-        if !is_digest(input) || !is_digest(output) {
-            return Err(ParseOutcome::Malformed);
-        }
-        let claim = if lines.len() == 4 {
-            Claim::Zero
-        } else {
-            Claim::AddZeroRhs(parse_add_zero_claim(&lines[3..13])?)
-        };
-        Ok(Self {
-            input,
-            output,
-            claim,
-        })
+fn claim(certificate: &EvpCertificate) -> Result<Claim, ()> {
+    match certificate.regions.as_slice() {
+        [] => Ok(Claim::Zero),
+        [region] => Ok(Claim::AddZeroRhs(parse_add_zero_claim(region)?)),
+        _ => Err(()),
     }
 }
 
-fn parse_add_zero_claim(lines: &[&str]) -> Result<AddZeroRhs, ParseOutcome> {
-    if lines.len() != 10 {
-        return Err(ParseOutcome::Malformed);
-    }
-    let region = lines[0].split(' ').collect::<Vec<_>>();
-    if region.len() != 8
-        || region[0] != "region"
-        || region[2] != "root"
-        || region[4..] != ["witnesses", "2", "seeds", "1"]
+fn parse_add_zero_claim(region: &EvpRegion) -> Result<AddZeroRhs, ()> {
+    let function = &region.id.function;
+    let block = &region.id.block;
+    let root_index = usize::try_from(region.id.instruction).map_err(|_| ())?;
+    if region.witnesses.len() != 2
+        || region.witnesses[0].function != *function
+        || region.witnesses[0].block != *block
+        || region.witnesses[0].instruction != 0
+        || region.witnesses[1] != region.id
+        || region.seeds.len() != 1
+        || region.seeds[0].sort != "bits<32>"
+        || region.seeds[0].origin != EvpSeedOrigin::Input
+        || region.seeds[0].class != 0
+        || region.events.len() != 3
+        || region.extractions.len() != 1
+        || region.extractions[0].class != 0
+        || region.extractions[0].choice != EvpExtractionChoice::Seed(0)
+        || region.root_class != 0
     {
-        return Err(ParseOutcome::Malformed);
+        return Err(());
     }
-    let (function, block, root_index) = parse_region_identity(region[1])?;
-    let root = parse_value_id(region[3])?;
-    if lines[1] != format!("witness 0 {function}/{block}/0")
-        || lines[2] != format!("witness 1 {function}/{block}/{root_index}")
+    let [EvpEvent::Node(constant), EvpEvent::Node(add), EvpEvent::Rewrite(rewrite)] =
+        region.events.as_slice()
+    else {
+        return Err(());
+    };
+    if constant.node != 0
+        || constant.owner != 1
+        || constant.source != EvpNodeSource::Before
+        || constant.operation != "const"
+        || constant.sort != "bits<32>"
+        || constant.effect != EvpEffectClass::Pure
+        || constant.attributes != [("value".to_owned(), 0)]
+        || !constant.children.is_empty()
+        || add.node != 1
+        || add.owner != 2
+        || add.source != EvpNodeSource::Before
+        || add.operation != "add"
+        || add.sort != "bits<32>"
+        || add.effect != EvpEffectClass::Pure
+        || !add.attributes.is_empty()
+        || add.children != [0, 1]
+        || rewrite.rule != "p0_001_add_zero_rhs"
+        || rewrite.lhs_pre != 2
+        || rewrite.rhs_pre != 0
+        || rewrite.result != 0
+        || rewrite.lhs != EvpProofRef::Node(1)
+        || rewrite.rhs != EvpProofRef::Class(0)
+        || rewrite.bindings != [("x".to_owned(), 0)]
     {
-        return Err(ParseOutcome::UnsupportedRegion);
-    }
-    let seed = lines[3].split(' ').collect::<Vec<_>>();
-    if seed.len() != 6
-        || seed[0] != "seed"
-        || seed[1] != "0"
-        || seed[3] != "bits<32>"
-        || seed[4] != "input"
-        || seed[5] != "c0"
-    {
-        return Err(ParseOutcome::UnsupportedRegion);
-    }
-    let seed = parse_value_id(seed[2])?;
-    if lines[4]
-        != "node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-"
-        || lines[5]
-            != "node 1 n1 c2 source=before op=add sort=bits<32> effect=pure attrs=- children=c0,c1"
-        || lines[6] != "rewrite 2 p0_001_add_zero_rhs c2 c0 c0 node:n1 class:c0 bind ?x:c0"
-        || lines[7] != "extract 0 c0 seed:0"
-        || lines[8] != "root c0"
-        || lines[9] != "endregion"
-    {
-        return Err(ParseOutcome::UnsupportedRegion);
+        return Err(());
     }
     Ok(AddZeroRhs {
-        function: function.to_owned(),
-        block: block.to_owned(),
+        function: function.clone(),
+        block: block.clone(),
         root_index,
-        root,
-        seed,
+        root: region.root_value,
+        seed: region.seeds[0].value,
     })
-}
-
-fn parse_region_identity(text: &str) -> Result<(&str, &str, usize), ParseOutcome> {
-    let (prefix, index) = text.rsplit_once('/').ok_or(ParseOutcome::Malformed)?;
-    let (function, block) = prefix.split_once('/').ok_or(ParseOutcome::Malformed)?;
-    if function.is_empty()
-        || block.is_empty()
-        || prefix.matches('/').count() != 1
-        || (index.len() > 1 && index.starts_with('0'))
-    {
-        return Err(ParseOutcome::Malformed);
-    }
-    let index = index.parse().map_err(|_| ParseOutcome::Malformed)?;
-    Ok((function, block, index))
-}
-
-fn parse_value_id(text: &str) -> Result<u32, ParseOutcome> {
-    let digits = text.strip_prefix("%v").ok_or(ParseOutcome::Malformed)?;
-    if digits.is_empty()
-        || (digits.len() > 1 && digits.starts_with('0'))
-        || !digits.bytes().all(|byte| byte.is_ascii_digit())
-    {
-        return Err(ParseOutcome::Malformed);
-    }
-    digits.parse().map_err(|_| ParseOutcome::Malformed)
 }
 
 fn reassemble_reviewed_add_zero(
@@ -294,11 +240,4 @@ fn replace_value_token(line: &str, from: u32, to: u32) -> String {
     }
     output.push_str(remaining);
     output
-}
-
-fn is_digest(text: &str) -> bool {
-    text.len() == 64
-        && text
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
