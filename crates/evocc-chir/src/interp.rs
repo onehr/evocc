@@ -13,8 +13,8 @@ use std::{
 use evocc_common::SourceSpan;
 use evocc_memory::{
     AccessLayout, ByteSequence, FrameId, IndexSignedness, InitialState, MemoryConfig, MemoryFault,
-    MemoryLimits, MemoryState, OffsetDirection, Pointer, ScopeId as MemoryScopeId, WorldLimits,
-    WorldState,
+    MemoryLimits, MemoryState, OffsetDirection, Pointer, PointerValue, ScopeId as MemoryScopeId,
+    WorldLimits, WorldState,
 };
 use evocc_types::{
     FunctionParameters, Qualifiers, TagDefinition, TagState, TargetDataLayout, TypeId,
@@ -214,6 +214,12 @@ pub enum InterpreterError {
         error: AllocationSiteManifestError,
     },
     MissingAllocationManifest,
+    CallThroughNullFunctionPointer {
+        span: SourceSpan,
+    },
+    CallThroughNonFunctionPointer {
+        span: SourceSpan,
+    },
 }
 
 impl InterpreterError {
@@ -242,6 +248,8 @@ impl InterpreterError {
                 ..
             } => "E3006",
             Self::FuelExhausted { .. } => "E3008",
+            Self::CallThroughNullFunctionPointer { .. } => "E3015",
+            Self::CallThroughNonFunctionPointer { .. } => "E3016",
             Self::Memory { error, .. } => match error.runtime_diagnostic() {
                 Some(diagnostic) => diagnostic.code,
                 None => "E3007",
@@ -300,6 +308,12 @@ impl InterpreterError {
                 ..
             } => "invalid-signed-left-shift".to_owned(),
             Self::FuelExhausted { .. } => "interpreter-fuel-exhausted".to_owned(),
+            Self::CallThroughNullFunctionPointer { .. } => {
+                "call-through-null-function-pointer".to_owned()
+            }
+            Self::CallThroughNonFunctionPointer { .. } => {
+                "call-through-non-function-pointer".to_owned()
+            }
             Self::MemorySetup { error } => {
                 format!("interpreter-memory-setup-failed: {error}")
             }
@@ -377,7 +391,9 @@ impl InterpreterError {
             | Self::DuplicateLabel { span, .. }
             | Self::MissingReturn { span }
             | Self::FuelExhausted { span, .. }
-            | Self::Memory { span, .. } => Some(*span),
+            | Self::Memory { span, .. }
+            | Self::CallThroughNullFunctionPointer { span }
+            | Self::CallThroughNonFunctionPointer { span } => Some(*span),
         }
     }
 }
@@ -403,7 +419,14 @@ struct Slot {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CValue {
     Integer(CInteger),
-    Pointer { value: Pointer, ty: PointerTypeDesc },
+    Pointer {
+        value: Pointer,
+        ty: PointerTypeDesc,
+    },
+    FunctionPointer {
+        value: PointerValue,
+        ty: PointerTypeDesc,
+    },
 }
 
 /// The value-level part of a function signature accepted by the task machine.
@@ -648,6 +671,12 @@ enum MachineTask<'arena> {
         values: Vec<CValue>,
         span: SourceSpan,
         expects_value: bool,
+    },
+    StartIndirectCall {
+        arguments: Vec<CValue>,
+        span: SourceSpan,
+        expects_value: bool,
+        value_base: usize,
     },
 }
 
@@ -1578,14 +1607,39 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     expects_value,
                 } => {
                     if index == arguments.len() {
-                        self.start_call(
+                        if matches!(
                             callee,
-                            arguments_so_far,
-                            span,
-                            expects_value,
-                            &mut tasks,
-                            values.len(),
-                        )?;
+                            CHirExpr::Ident {
+                                facts,
+                                ..
+                            } if facts.category() == ExprCategory::FunctionDesignator
+                        ) {
+                            self.start_call(
+                                callee,
+                                arguments_so_far,
+                                span,
+                                expects_value,
+                                &mut tasks,
+                                values.len(),
+                            )?;
+                        } else {
+                            if self.call_designator_function_type(callee).is_none() {
+                                return Err(InterpreterError::UnsupportedExpression {
+                                    feature: "indirect scalar function call",
+                                    span: callee.span(),
+                                });
+                            }
+                            tasks.push(MachineTask::StartIndirectCall {
+                                arguments: arguments_so_far,
+                                span,
+                                expects_value,
+                                value_base: values.len(),
+                            });
+                            tasks.push(MachineTask::EvalExpression {
+                                expression: callee,
+                                allow_root_mutation: false,
+                            });
+                        }
                     } else {
                         tasks.push(MachineTask::CollectCallArgument {
                             callee,
@@ -1619,6 +1673,23 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         span,
                         expects_value,
                     });
+                    None
+                }
+                MachineTask::StartIndirectCall {
+                    arguments,
+                    span,
+                    expects_value,
+                    value_base,
+                } => {
+                    let callee = pop_machine_value(&mut values, span)?;
+                    self.start_indirect_call(
+                        callee,
+                        arguments,
+                        span,
+                        expects_value,
+                        &mut tasks,
+                        value_base,
+                    )?;
                     None
                 }
             };
@@ -2409,11 +2480,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn call_designator_returns_void(&self, callee: &CHirExpr<'arena>) -> bool {
-        let CHirExpr::Ident { facts, .. } = callee else {
+        let Some(function_type) = self.call_designator_function_type(callee) else {
             return false;
         };
         let Some(TypeKind::Function { return_type, .. }) =
-            self.unit.types().get(facts.ty()).map(|ty| &ty.kind)
+            self.unit.types().get(function_type).map(|ty| &ty.kind)
         else {
             return false;
         };
@@ -2421,6 +2492,37 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             self.unit.types().get(*return_type).map(|ty| &ty.kind),
             Some(TypeKind::Void)
         )
+    }
+
+    fn call_designator_function_type(&self, callee: &CHirExpr<'arena>) -> Option<TypeId> {
+        let candidate = match callee {
+            CHirExpr::Ident { facts, .. }
+            | CHirExpr::MemoryRead { facts, .. }
+            | CHirExpr::Assign { facts, .. }
+            | CHirExpr::MemoryAssign { facts, .. }
+            | CHirExpr::Update { facts, .. }
+            | CHirExpr::MemoryUpdate { facts, .. } => facts.ty(),
+            CHirExpr::Cast(ty, _, _) => *ty,
+            CHirExpr::Unary(UnaryOp::Deref, operand, _) => {
+                return self
+                    .pointer_type_of_expression(operand)
+                    .ok()
+                    .map(PointerTypeDesc::pointee);
+            }
+            _ => return None,
+        };
+        match self.unit.types().get(candidate).map(|ty| &ty.kind) {
+            Some(TypeKind::Function { .. }) => Some(candidate),
+            Some(TypeKind::Pointer(pointee))
+                if matches!(
+                    self.unit.types().get(*pointee).map(|ty| &ty.kind),
+                    Some(TypeKind::Function { .. })
+                ) =>
+            {
+                Some(*pointee)
+            }
+            _ => None,
+        }
     }
 
     fn schedule_discarded_expression(
@@ -2811,6 +2913,75 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         )
     }
 
+    fn start_indirect_call(
+        &mut self,
+        callee: CValue,
+        arguments: Vec<CValue>,
+        call_span: SourceSpan,
+        expects_value: bool,
+        tasks: &mut Vec<MachineTask<'arena>>,
+        value_base: usize,
+    ) -> Result<(), InterpreterError> {
+        let CValue::FunctionPointer { value, ty } = callee else {
+            return Err(InterpreterError::CallThroughNonFunctionPointer { span: call_span });
+        };
+        if !matches!(
+            self.unit.types().get(ty.pointee()).map(|ty| &ty.kind),
+            Some(TypeKind::Function { .. })
+        ) {
+            return Err(InterpreterError::CallThroughNonFunctionPointer { span: call_span });
+        }
+        let identity = match value {
+            PointerValue::Null => {
+                return Err(InterpreterError::CallThroughNullFunctionPointer { span: call_span });
+            }
+            PointerValue::Object(_) => {
+                return Err(InterpreterError::CallThroughNonFunctionPointer { span: call_span });
+            }
+            PointerValue::Function(identity) => identity,
+        };
+        let symbol = self
+            .function_symbol(identity)
+            .ok_or(InterpreterError::CallThroughNonFunctionPointer { span: call_span })?;
+        let caller_slots = std::mem::take(&mut self.slots);
+        let caller_fuel_anchor = self.fuel_anchor.take();
+        self.enter_function(
+            symbol,
+            arguments,
+            Some(caller_slots),
+            caller_fuel_anchor,
+            Some(call_span),
+            expects_value,
+            value_base,
+            tasks,
+        )
+    }
+
+    fn function_identity(&self, symbol: SymbolId) -> Option<u64> {
+        self.unit
+            .iter()
+            .filter_map(|declaration| match declaration {
+                CHirDecl::Function(function) if function.body.is_some() => Some(function.symbol),
+                _ => None,
+            })
+            .position(|candidate| candidate == symbol)
+            .and_then(|index| u64::try_from(index).ok())
+            .and_then(|index| index.checked_add(1))
+    }
+
+    fn function_symbol(&self, identity: u64) -> Option<SymbolId> {
+        let index = identity
+            .checked_sub(1)
+            .and_then(|index| usize::try_from(index).ok())?;
+        self.unit
+            .iter()
+            .filter_map(|declaration| match declaration {
+                CHirDecl::Function(function) if function.body.is_some() => Some(function.symbol),
+                _ => None,
+            })
+            .nth(index)
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn enter_function(
         &mut self,
@@ -2858,6 +3029,18 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         symbol,
                         ValueType::Pointer(pointer_type),
                         CValue::Pointer { value, ty },
+                    ));
+                }
+                (ValueType::Pointer(pointer_type), CValue::FunctionPointer { value, ty })
+                    if pointer_type == ty =>
+                {
+                    parameter_bindings.push((
+                        symbol,
+                        ValueType::Pointer(pointer_type),
+                        CValue::FunctionPointer {
+                            value,
+                            ty: pointer_type,
+                        },
                     ));
                 }
                 (ValueType::Void, _) | (_, _) => {
@@ -3298,7 +3481,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ty: end.return_type,
                     raw_bits: value.raw_bits(),
                 }),
-                Some(CValue::Pointer { .. }) => {
+                Some(CValue::Pointer { .. } | CValue::FunctionPointer { .. }) => {
                     return Err(InterpreterError::UnsupportedExpression {
                         feature: "pointer return from scalar interpreter root",
                         span: end.body_span,
@@ -3552,6 +3735,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     fn zero_value(&self, ty: TypeId, span: SourceSpan) -> Result<CValue, InterpreterError> {
         match self.value_type(ty, span)? {
             ValueType::Integer(integer) => Ok(CValue::Integer(CInteger::new(0, integer))),
+            ValueType::Pointer(pointer)
+                if matches!(
+                    self.unit.types().get(pointer.pointee()).map(|ty| &ty.kind),
+                    Some(TypeKind::Function { .. })
+                ) =>
+            {
+                Ok(CValue::FunctionPointer {
+                    value: PointerValue::Null,
+                    ty: pointer,
+                })
+            }
             ValueType::Pointer(pointer) => Ok(CValue::Pointer {
                 value: Pointer::NULL,
                 ty: pointer,
@@ -3582,6 +3776,31 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         if let Some(value) = declaration.enumerator_value() {
             let ty = self.integer_type(declaration.ty(), span)?;
             return Ok(CValue::Integer(CInteger::new(value as u64, ty)));
+        }
+        if declaration.kind() == SymbolKind::Function
+            && facts.category() == ExprCategory::FunctionDesignator
+            && matches!(
+                self.unit.types().get(facts.ty()).map(|ty| &ty.kind),
+                Some(TypeKind::Function { .. })
+            )
+        {
+            let identity =
+                self.function_identity(symbol)
+                    .ok_or(InterpreterError::UnsupportedExpression {
+                        feature: "function designator has no definition identity",
+                        span,
+                    })?;
+            let ty = PointerTypeDesc::to_object(self.unit.types(), facts.ty()).ok_or(
+                InterpreterError::UnsupportedType {
+                    ty: facts.ty(),
+                    span,
+                },
+            )?;
+            return Ok(CValue::FunctionPointer {
+                value: PointerValue::function(identity)
+                    .map_err(|error| self.memory_error(error, span))?,
+                ty,
+            });
         }
         // C11 6.3.2.1p3: an array lvalue used as a value becomes a pointer to
         // its first element. The array itself is never loaded, so this is the
@@ -3966,6 +4185,31 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 Ok(CValue::Integer(CInteger::new(raw, integer_type)))
             }
             ValueType::Pointer(pointer_type) => {
+                let is_function = matches!(
+                    self.unit
+                        .types()
+                        .get(pointer_type.pointee())
+                        .map(|ty| &ty.kind),
+                    Some(TypeKind::Function { .. })
+                );
+                if is_function {
+                    let value = if qualifiers.is_volatile {
+                        let (value, world) = self
+                            .memory
+                            .volatile_load_pointer_value(&self.world, address, layout)
+                            .map_err(|error| self.memory_error(error, span))?;
+                        self.world = world;
+                        value
+                    } else {
+                        self.memory
+                            .load_pointer_value(address, layout)
+                            .map_err(|error| self.memory_error(error, span))?
+                    };
+                    return Ok(CValue::FunctionPointer {
+                        value,
+                        ty: pointer_type,
+                    });
+                }
                 let value = if qualifiers.is_volatile {
                     let (value, world) = self
                         .memory
@@ -4042,6 +4286,31 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         .map_err(|error| self.memory_error(error, span))?;
                 }
                 Ok(CValue::Pointer {
+                    value,
+                    ty: expected,
+                })
+            }
+            (ValueType::Pointer(expected), CValue::FunctionPointer { value, ty: actual })
+                if expected == actual
+                    && matches!(
+                        self.unit.types().get(expected.pointee()).map(|ty| &ty.kind),
+                        Some(TypeKind::Function { .. })
+                    ) =>
+            {
+                if qualifiers.is_volatile {
+                    let (memory, world) = self
+                        .memory
+                        .volatile_store_pointer_value(&self.world, address, layout, value)
+                        .map_err(|error| self.memory_error(error, span))?;
+                    self.memory = memory;
+                    self.world = world;
+                } else {
+                    self.memory = self
+                        .memory
+                        .store_pointer_value(address, layout, value)
+                        .map_err(|error| self.memory_error(error, span))?;
+                }
+                Ok(CValue::FunctionPointer {
                     value,
                     ty: expected,
                 })
@@ -5204,14 +5473,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             CHirExpr::Cast(ty, _, _) => self.integer_type(*ty, span),
             CHirExpr::Call(callee, _, _) => {
-                let CHirExpr::Ident { facts, .. } = callee else {
-                    return Err(InterpreterError::UnsupportedExpression {
+                let function_type = self.call_designator_function_type(callee).ok_or(
+                    InterpreterError::UnsupportedExpression {
                         feature: "indirect scalar function call",
                         span: callee.span(),
-                    });
-                };
+                    },
+                )?;
                 let Some(TypeKind::Function { return_type, .. }) =
-                    self.unit.types().get(facts.ty()).map(|ty| &ty.kind)
+                    self.unit.types().get(function_type).map(|ty| &ty.kind)
                 else {
                     return Err(InterpreterError::UnsupportedExpression {
                         feature: "inconsistent function designator",
@@ -6217,16 +6486,19 @@ fn machine_truth(value: CValue, _span: SourceSpan) -> Result<bool, InterpreterEr
     match value {
         CValue::Integer(value) => Ok(value.truth()),
         CValue::Pointer { value, .. } => Ok(!value.object().is_null()),
+        CValue::FunctionPointer { value, .. } => Ok(value != PointerValue::Null),
     }
 }
 
 fn expect_machine_integer(value: CValue, span: SourceSpan) -> Result<CInteger, InterpreterError> {
     match value {
         CValue::Integer(value) => Ok(value),
-        CValue::Pointer { .. } => Err(InterpreterError::UnsupportedExpression {
-            feature: "pointer value in integer task-machine operation",
-            span,
-        }),
+        CValue::Pointer { .. } | CValue::FunctionPointer { .. } => {
+            Err(InterpreterError::UnsupportedExpression {
+                feature: "pointer value in integer task-machine operation",
+                span,
+            })
+        }
     }
 }
 
@@ -6236,10 +6508,12 @@ fn expect_machine_pointer(
 ) -> Result<(Pointer, PointerTypeDesc), InterpreterError> {
     match value {
         CValue::Pointer { value, ty } => Ok((value, ty)),
-        CValue::Integer(_) => Err(InterpreterError::UnsupportedExpression {
-            feature: "integer value in pointer task-machine operation",
-            span,
-        }),
+        CValue::Integer(_) | CValue::FunctionPointer { .. } => {
+            Err(InterpreterError::UnsupportedExpression {
+                feature: "integer value in pointer task-machine operation",
+                span,
+            })
+        }
     }
 }
 
@@ -6255,6 +6529,9 @@ fn cast_machine_value(
         (CValue::Pointer { value, ty }, ValueType::Pointer(target)) if ty == target => {
             Ok(CValue::Pointer { value, ty: target })
         }
+        (CValue::FunctionPointer { value, ty }, ValueType::Pointer(target)) if ty == target => {
+            Ok(CValue::FunctionPointer { value, ty: target })
+        }
         // C11 6.3.2.3p3: a null pointer constant converts to a null pointer of
         // the destination type. Whether the source really was a *constant* is
         // settled where the assignment was type checked; only the conversion
@@ -6267,7 +6544,9 @@ fn cast_machine_value(
         }
         (CValue::Integer(_), ValueType::Pointer(_))
         | (CValue::Pointer { .. }, ValueType::Integer(_))
-        | (CValue::Pointer { .. }, ValueType::Pointer(_)) => {
+        | (CValue::Pointer { .. }, ValueType::Pointer(_))
+        | (CValue::FunctionPointer { .. }, ValueType::Integer(_))
+        | (CValue::FunctionPointer { .. }, ValueType::Pointer(_)) => {
             Err(InterpreterError::UnsupportedExpression {
                 feature: "pointer cast execution before Day 7 memory bindings",
                 span,
