@@ -15,7 +15,7 @@ use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
 mod text;
 
-pub use text::render_module;
+pub use text::{render_module, validate_section9_bytes};
 
 // ---------------------------------------------------------------------------
 // Core data types

@@ -8,6 +8,38 @@ use evocc_memory::{IndexSignedness, OffsetDirection};
 
 use crate::{BlockId, CmpOp, Function, GlobalKind, GlobalVisibility, Inst, Module, Value};
 
+/// Enforce the Section 9 byte envelope before semantic parsing.
+///
+/// The empty module is the sole zero-byte form. Non-empty modules are ASCII,
+/// LF-terminated, contain no comments or trailing whitespace, and begin with a
+/// module item. The parser/checker builds on this shared fail-safe lexical gate;
+/// passing it alone is not a claim that an instruction stream is well formed.
+pub fn validate_section9_bytes(bytes: &[u8]) -> Result<(), String> {
+    if bytes.is_empty() {
+        return Ok(());
+    }
+    let text = std::str::from_utf8(bytes).map_err(|_| "EvoIR text is not UTF-8".to_owned())?;
+    if !text.is_ascii() {
+        return Err("EvoIR text is not ASCII".to_owned());
+    }
+    if !text.ends_with('\n') || text.ends_with("\n\n") {
+        return Err("EvoIR text must end in exactly one newline".to_owned());
+    }
+    if text.contains(['\r', '\t', '\0', ';']) {
+        return Err("EvoIR text contains a forbidden byte".to_owned());
+    }
+    for line in text.lines() {
+        if line.ends_with(' ') {
+            return Err("EvoIR text contains trailing whitespace".to_owned());
+        }
+    }
+    let first = text.lines().next().unwrap_or_default();
+    if !first.starts_with("global @") && !first.starts_with("func @") {
+        return Err("EvoIR text does not begin with a module item".to_owned());
+    }
+    Ok(())
+}
+
 /// Render a module in the canonical human-readable syntax from specification
 /// Section 9.
 ///

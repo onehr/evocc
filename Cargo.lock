@@ -109,5 +109,13 @@ name = "evocc-proof"
 version = "0.0.0"
 
 [[package]]
+name = "evocc-proofcheck"
+version = "0.0.0"
+dependencies = [
+ "evocc-evoir",
+ "evocc-proof",
+]
+
+[[package]]
 name = "evocc-types"
 version = "0.0.0"
