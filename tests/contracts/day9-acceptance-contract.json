@@ -85,5 +85,16 @@
       "full regression, Clippy with warnings denied, format check, diff check, two isolated offline clone replays"
     ],
     "receiptPath": "tests/contracts/day9-acceptance-receipt.json"
+  },
+  "rulings": {
+    "rulingDate": "2026-08-25",
+    "attributeSemantics": {
+      "decision": "Every attribute is preserved losslessly in C-HIR. Only `packed` and `aligned` are applied, to the target data layout. Every other attribute is recorded as preserved-not-applied, by name, in the receipt.",
+      "why": "packed and aligned change object layout, the kernel uses both pervasively, and the layout service and its oracle corpus already exist to validate them. The remaining attributes carry backend, linkage or effect semantics that belong to later stages."
+    },
+    "cohort": {
+      "decision": "The sixteen-TU cohort frozen on 2026-08-17 is unchanged for this stage.",
+      "why": "Comparability with the baseline outranks representativeness. Changing the cohort to move a percentage is the failure the freeze exists to prevent."
+    }
   }
 }
