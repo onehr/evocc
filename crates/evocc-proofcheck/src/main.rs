@@ -30,15 +30,23 @@ fn main() -> ExitCode {
     {
         return ExitCode::from(2);
     }
-    let certificate = match ZeroRegionCertificate::parse(&proof) {
+    let certificate = match Certificate::parse(&proof) {
         Ok(certificate) => certificate,
         Err(ParseOutcome::Malformed) => return ExitCode::from(2),
         Err(ParseOutcome::UnsupportedRegion) => return ExitCode::from(3),
     };
 
-    let before_digest = sha256_hex(&before);
-    let after_digest = sha256_hex(&after);
-    if certificate.input != before_digest || certificate.output != after_digest || before != after {
+    if certificate.input != sha256_hex(&before) {
+        return ExitCode::from(3);
+    }
+    let reassembled = match certificate.claim {
+        Claim::Zero => before.clone(),
+        Claim::AddZeroRhs => match reassemble_reviewed_add_zero(&before) {
+            Some(module) => module,
+            None => return ExitCode::from(3),
+        },
+    };
+    if certificate.output != sha256_hex(&reassembled) || reassembled != after {
         return ExitCode::from(3);
     }
     ExitCode::SUCCESS
@@ -48,9 +56,15 @@ fn read(path: &impl AsRef<Path>) -> Result<Vec<u8>, ()> {
     fs::read(path).map_err(|_| ())
 }
 
-struct ZeroRegionCertificate<'a> {
+struct Certificate<'a> {
     input: &'a str,
     output: &'a str,
+    claim: Claim,
+}
+
+enum Claim {
+    Zero,
+    AddZeroRhs,
 }
 
 enum ParseOutcome {
@@ -58,7 +72,7 @@ enum ParseOutcome {
     UnsupportedRegion,
 }
 
-impl<'a> ZeroRegionCertificate<'a> {
+impl<'a> Certificate<'a> {
     fn parse(bytes: &'a [u8]) -> Result<Self, ParseOutcome> {
         let text = std::str::from_utf8(bytes).map_err(|_| ParseOutcome::Malformed)?;
         if !text.ends_with('\n') || text.ends_with("\n\n") || text.contains('\r') {
@@ -68,12 +82,7 @@ impl<'a> ZeroRegionCertificate<'a> {
         if lines.first() != Some(&"evp1") {
             return Err(ParseOutcome::Malformed);
         }
-        if lines.len() > 4 && lines.get(3).is_some_and(|line| line.starts_with("region ")) {
-            // Region records are syntactically recognized but are not accepted
-            // until the independent eligibility/reassembly implementation lands.
-            return Err(ParseOutcome::UnsupportedRegion);
-        }
-        if lines.len() != 4 {
+        if lines.len() != 4 && lines.len() != 14 {
             return Err(ParseOutcome::Malformed);
         }
         let registry = lines[1]
@@ -86,14 +95,69 @@ impl<'a> ZeroRegionCertificate<'a> {
         let input = lines[2]
             .strip_prefix("input ")
             .ok_or(ParseOutcome::Malformed)?;
-        let output = lines[3]
+        let output_index = lines.len() - 1;
+        let output = lines[output_index]
             .strip_prefix("output ")
             .ok_or(ParseOutcome::Malformed)?;
         if !is_digest(input) || !is_digest(output) {
             return Err(ParseOutcome::Malformed);
         }
-        Ok(Self { input, output })
+        let claim = if lines.len() == 4 {
+            Claim::Zero
+        } else if lines[3..13]
+            == [
+                "region main/entry/1 root %v2 witnesses 2 seeds 1",
+                "witness 0 main/entry/0",
+                "witness 1 main/entry/1",
+                "seed 0 %v0 bits<32> input c0",
+                "node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-",
+                "node 1 n1 c2 source=before op=add sort=bits<32> effect=pure attrs=- children=c0,c1",
+                "rewrite 2 p0_001_add_zero_rhs c2 c0 c0 node:n1 class:c0 bind ?x:c0",
+                "extract 0 c0 seed:0",
+                "root c0",
+                "endregion",
+            ]
+        {
+            Claim::AddZeroRhs
+        } else {
+            return Err(ParseOutcome::UnsupportedRegion);
+        };
+        Ok(Self {
+            input,
+            output,
+            claim,
+        })
     }
+}
+
+fn reassemble_reviewed_add_zero(before: &[u8]) -> Option<Vec<u8>> {
+    let text = std::str::from_utf8(before).ok()?;
+    let required = [
+        "func @main(%arg0: bits<32>) -> (bits<32>) cc = target_default",
+        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }",
+        "{",
+        "^entry(%v0: bits<32>):",
+        "    %v1 = const.bits<32> 0",
+        "    %v2 = add.bits<32> %v0, %v1",
+        "    ret %v2",
+        "}",
+    ];
+    if text.lines().ne(required) {
+        return None;
+    }
+    Some(
+        concat!(
+            "func @main(%arg0: bits<32>) -> (bits<32>) cc = target_default\n",
+            "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n",
+            "{\n",
+            "^entry(%v0: bits<32>):\n",
+            "    %v1 = const.bits<32> 0\n",
+            "    ret %v0\n",
+            "}\n",
+        )
+        .as_bytes()
+        .to_vec(),
+    )
 }
 
 fn is_digest(text: &str) -> bool {
