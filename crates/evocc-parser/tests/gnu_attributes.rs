@@ -272,3 +272,12 @@ fn bit_fields_in_a_packed_record_cross_unit_boundaries() {
         (2, 1)
     );
 }
+
+/// An attribute written after the comma, before the next declarator,
+/// attaches to that declarator alone (specification 10.1.9).
+#[test]
+fn an_attribute_before_a_later_declarator_attaches_to_it_alone() {
+    let source = "int a, __attribute__((aligned(8))) b;\n";
+    assert_eq!(layout_of(source, "a"), (4, 4));
+    assert_eq!(layout_of(source, "b"), (4, 8));
+}

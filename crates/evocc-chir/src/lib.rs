@@ -653,6 +653,8 @@ pub enum AttributePlacement {
     DeclarationSpecifiers,
     /// Immediately after a declarator: attaches to that declarator alone.
     AfterDeclarator,
+    /// Written immediately before a declarator that follows a comma.
+    BeforeDeclarator,
     /// After `struct`, `union` or `enum`: attaches to the tag type.
     TagKeyword,
     /// After a tag definition's closing brace: attaches to the tag type.
@@ -677,6 +679,7 @@ impl AttributePlacement {
         match self {
             Self::DeclarationSpecifiers => "declaration-specifiers",
             Self::AfterDeclarator => "after-declarator",
+            Self::BeforeDeclarator => "before-declarator",
             Self::TagKeyword => "tag-keyword",
             Self::TagClosingBrace => "tag-closing-brace",
             Self::Member => "member",

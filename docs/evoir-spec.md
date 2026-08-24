@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9** | **Authoritative reference** | **2026-08-25**
+**Revision 1.9.1** | **Authoritative reference** | **2026-08-25**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2568,6 +2568,7 @@ accepts them, and each position fixes what the attribute attaches to:
 |---|---|
 | among the declaration specifiers | every declarator of that declaration |
 | immediately after a declarator | that declarator alone |
+| immediately before a declarator that follows a comma in a declarator list | that declarator alone |
 | after `struct`, `union` or `enum` keyword, or after the closing brace | the tag type |
 | after a member declarator | that member |
 | after a parameter declarator | that parameter |
@@ -3276,6 +3277,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.1 | 2026-08-25 | Records two corrections from the sealed layout oracle and the kernel cohort. `aligned(N)` on a typedef or type name sets the alignment exactly and may lower it, while on records and members it only raises; the frozen attributed layout corpus is the authority. Adds the tenth attribute position, immediately before a declarator that follows a comma in a declarator list, attaching to that declarator alone; declarator lists are admitted in every declaration position including record members, where each declarator carries its own bit width (a constant expression) and attributes. |
 | 1.9 | 2026-08-25 | Freezes the GNU extension profile the kernel cohort needs. Attributes are read in every GNU position, attached by position, and preserved losslessly; only `aligned` and `packed` are applied, to layout, with every rule checked against the frozen GCC-14 and Clang-19 oracles, and every other attribute is recorded by name as preserved-not-applied. Defines `typeof` as an unevaluated front-end type, statement expressions as a lowering pattern over block arguments with block lifetimes, designated initializers including GNU ranges as `SubobjectPath` actions with later-wins overriding, and compound literals as manifest allocation sites. Adds the known-bits lattice with constant value as its bottom, a fixed weak transfer table, meet-on-union with contradiction as an invalid union, and a two-tier bounded scheduler with per-rule match fuel and a stop rule. Certificate format `evp2` carries budget, epoch markers and rewrite premises; premises are recomputed by the checker, budgets are verified against consumption, and `evp1` remains readable for premise-free certificates. Introduces `E2903`–`E2906`. Defers every other attribute semantic, variably modified types, integer-range and non-zero lattices, and any memory rewrite. |
 | 1.8.2 | 2026-08-24 | Records implementation alignment for the complete Section 9 function, global, `func_addr`, and indirect-call shapes; empties the pending and superseded shape manifests without changing their machine-readable contract. Clarifies that shape comparison is an audit hint while whole-module round-trip and the independent field-sentinel manifest carry syntax completeness. |
 | 1.8.1 | 2026-08-24 | Clarifies the Day 8 P0 extractor after the first standalone-corpus replay exposed an ambiguity: cost is region-relative newly emitted instruction count with the existing zero-cost `const` convention; selecting a non-root `source=before` witness reuses its earlier same-block SSA value, emits nothing and terminates extraction closure, while the replacement root remains structural and non-constant derived nodes are emitted. Records the mandatory root exclusion, the no-register-pressure scope, and the existing cross-block prohibition so a false-green zero-rewrite implementation cannot satisfy the corpus gate. |

@@ -1061,3 +1061,77 @@ fn same_scope_tag_kind_conflicts_and_duplicate_definitions_fail_closed() {
         assert_eq!(diagnostic.span, span);
     }
 }
+
+/// The kernel's `struct list_head` declares two members with one specifier.
+/// Every declarator in a member list is its own member, with its own
+/// derived type, bit width and per-declarator attributes.
+#[test]
+fn a_member_declarator_list_yields_one_member_per_declarator() {
+    let arena = Arena::default();
+    let source = "struct list_head { struct list_head *next, *prev; } lh;\n\
+                  struct flags { unsigned a : 3, b : 5, c; int *p, q[4], __attribute__((aligned(8))) r; } fl;\n";
+    let unit = parse(source, &arena);
+    let tags: Vec<(TagId, Vec<String>)> = unit
+        .declarations()
+        .iter()
+        .filter_map(|decl| match decl {
+            CHirDecl::Tag(tag) => match &tag.members {
+                TagMembers::Struct(members) => Some((
+                    tag.tag,
+                    members
+                        .iter()
+                        .map(|m| {
+                            m.name
+                                .as_ref()
+                                .map_or(String::new(), |n| n.spelling.clone())
+                        })
+                        .collect(),
+                )),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    let names: Vec<&[String]> = tags.iter().map(|(_, names)| names.as_slice()).collect();
+    assert_eq!(
+        names,
+        [
+            &["next".to_string(), "prev".to_string()][..],
+            &[
+                "a".into(),
+                "b".into(),
+                "c".into(),
+                "p".into(),
+                "q".into(),
+                "r".into()
+            ][..],
+        ]
+    );
+    let types = unit.types();
+    let layout_of = |object: &str| {
+        let scope = unit.symbols().file_scope();
+        let symbol = unit
+            .symbols()
+            .resolve(scope, object)
+            .expect("symbol table is live")
+            .unwrap_or_else(|| panic!("{object} is declared"));
+        let ty = unit.symbols().symbol(symbol).expect("declared").ty();
+        let layout = evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu()
+            .layout_of(types, ty)
+            .unwrap_or_else(|e| panic!("layout of {object}: {e:?}"));
+        (layout.size_bytes, layout.align_bytes)
+    };
+    assert_eq!(layout_of("lh"), (16, 8));
+    // a,b share one unsigned unit (4), c (4), p (8 at 8), q (16 at 16), r aligned 8 (4 at 32) -> 40
+    assert_eq!(layout_of("fl"), (40, 8));
+    let fields = match &types.tag(tags[1].0).expect("flags tag").state {
+        TagState::Complete(TagDefinition::Struct(fields)) => fields,
+        other => panic!("struct flags has fields, got {other:?}"),
+    };
+    assert_eq!(
+        fields[5].layout.aligned,
+        Some(8),
+        "aligned attaches to `r` only"
+    );
+    assert_eq!(fields[3].layout.aligned, None);
+}

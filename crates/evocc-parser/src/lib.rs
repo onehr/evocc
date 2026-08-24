@@ -1155,11 +1155,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             if !self.match_kind(TokenKind::Comma) {
                 break;
             }
+            let mut next_attributes = specifier_attributes.clone();
+            next_attributes
+                .extend(self.parse_attribute_specifiers(AttributePlacement::BeforeDeclarator));
             let Some(next) = self.parse_declarator(false) else {
                 self.report("E1001", "expected-declaration", self.span());
                 return None;
             };
-            let mut next_attributes = specifier_attributes.clone();
             next_attributes
                 .extend(self.parse_attribute_specifiers(AttributePlacement::AfterDeclarator));
             let mut next_type = self.apply_declarator(specifier.surface.type_id(), &next.derived);
@@ -3240,44 +3242,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut canonical = Vec::new();
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
             let start = self.span();
-            let mut member_attributes =
+            let specifier_attributes =
                 self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers);
             let Some(specifier) = self.parse_type_specifier() else {
                 self.report("E1001", "expected-declaration", self.span());
                 self.advance();
                 continue;
             };
-            let declarator = if matches!(
-                self.peek_kind(),
-                Some(TokenKind::Colon | TokenKind::Semicolon | TokenKind::Attribute)
-            ) {
-                None
-            } else {
-                self.parse_declarator(false)
-            };
-            let ty = declarator
-                .as_ref()
-                .map_or(specifier.surface.type_id(), |decl| {
-                    self.apply_declarator(specifier.surface.type_id(), &decl.derived)
-                });
-            member_attributes.extend(self.parse_attribute_specifiers(AttributePlacement::Member));
-            let bit_width = if self.match_kind(TokenKind::Colon) {
-                Some(self.parse_expression()?)
-            } else {
-                None
-            };
-            member_attributes.extend(self.parse_attribute_specifiers(AttributePlacement::Member));
-            let member_layout = self.member_layout_attributes(&mut member_attributes);
-            let fallback = declarator
-                .as_ref()
-                .map_or(specifier.surface.span(), |decl| decl.span);
-            let semi = self.expect(TokenKind::Semicolon);
-            let end = semi.as_ref().map_or(fallback, |token| token.span);
-            let span = self.merge_span(start, end);
-            if let Some(event) = specifier.tag_event {
-                let declaration = self.finish_tag_event(event, span, Vec::new());
-                self.side_declarations.push(declaration);
-            }
             let is_anonymous_aggregate = matches!(
                 &specifier.surface,
                 TypeSpecifier::Tag {
@@ -3286,40 +3257,102 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     ..
                 }
             );
-            if declarator.is_none() && bit_width.is_none() && !is_anonymous_aggregate {
-                continue;
-            }
-            let name = declarator.as_ref().map(|decl| decl.name.clone());
-            let canonical_bit_field = bit_width.and_then(|width| {
-                self.validate_bit_field(
+            // One specifier may introduce several declarators (`int *p, q;`);
+            // each becomes its own member with its own bit width and
+            // attributes, while specifier-position attributes apply to all.
+            let mut declaration_end;
+            let mut first = true;
+            loop {
+                let mut member_attributes = specifier_attributes.clone();
+                if !first {
+                    member_attributes.extend(
+                        self.parse_attribute_specifiers(AttributePlacement::BeforeDeclarator),
+                    );
+                }
+                first = false;
+                let declarator = if matches!(
+                    self.peek_kind(),
+                    Some(TokenKind::Colon | TokenKind::Semicolon | TokenKind::Attribute)
+                ) {
+                    None
+                } else {
+                    self.parse_declarator(false)
+                };
+                let ty = declarator
+                    .as_ref()
+                    .map_or(specifier.surface.type_id(), |decl| {
+                        self.apply_declarator(specifier.surface.type_id(), &decl.derived)
+                    });
+                member_attributes
+                    .extend(self.parse_attribute_specifiers(AttributePlacement::Member));
+                // A bit width is a constant expression, so it stops before a
+                // comma that introduces the next declarator.
+                let bit_width = if self.match_kind(TokenKind::Colon) {
+                    Some(self.parse_conditional()?)
+                } else {
+                    None
+                };
+                member_attributes
+                    .extend(self.parse_attribute_specifiers(AttributePlacement::Member));
+                let member_layout = self.member_layout_attributes(&mut member_attributes);
+                let fallback = declarator
+                    .as_ref()
+                    .map_or(specifier.surface.span(), |decl| decl.span);
+                let more = self.match_kind(TokenKind::Comma);
+                let end = if more {
+                    fallback
+                } else {
+                    let semi = self.expect(TokenKind::Semicolon);
+                    semi.as_ref().map_or(fallback, |token| token.span)
+                };
+                declaration_end = end;
+                let span = self.merge_span(start, end);
+                if declarator.is_none() && bit_width.is_none() && !is_anonymous_aggregate {
+                    if more {
+                        continue;
+                    }
+                    break;
+                }
+                let name = declarator.as_ref().map(|decl| decl.name.clone());
+                let canonical_bit_field = bit_width.and_then(|width| {
+                    self.validate_bit_field(
+                        ty,
+                        name.as_ref().map(|name| name.spelling.as_str()),
+                        specifier.surface.span(),
+                        width,
+                    )
+                });
+                let written = declarator.as_ref().map_or(
+                    WrittenDeclarator {
+                        layers: Vec::new(),
+                        span: specifier.surface.span(),
+                    },
+                    |decl| self.written_declarator(decl),
+                );
+                canonical.push(RecordField {
+                    layout: member_layout,
+                    name: name.as_ref().map(|name| name.spelling.clone()),
                     ty,
-                    name.as_ref().map(|name| name.spelling.as_str()),
-                    specifier.surface.span(),
-                    width,
-                )
-            });
-            let written = declarator.as_ref().map_or(
-                WrittenDeclarator {
-                    layers: Vec::new(),
-                    span: specifier.surface.span(),
-                },
-                |decl| self.written_declarator(decl),
-            );
-            canonical.push(RecordField {
-                layout: member_layout,
-                name: name.as_ref().map(|name| name.spelling.clone()),
-                ty,
-                bit_field: canonical_bit_field,
-            });
-            members.push(RecordMember {
-                name,
-                ty,
-                specifier: specifier.surface,
-                written,
-                attributes: member_attributes,
-                bit_width,
-                span,
-            });
+                    bit_field: canonical_bit_field,
+                });
+                members.push(RecordMember {
+                    name,
+                    ty,
+                    specifier: specifier.surface.clone(),
+                    written,
+                    attributes: member_attributes,
+                    bit_width,
+                    span,
+                });
+                if !more {
+                    break;
+                }
+            }
+            if let Some(event) = specifier.tag_event {
+                let span = self.merge_span(start, declaration_end);
+                let declaration = self.finish_tag_event(event, span, Vec::new());
+                self.side_declarations.push(declaration);
+            }
         }
         self.validate_record_member_types(kind, containing_tag, &canonical, &members);
         Some(match kind {
