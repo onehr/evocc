@@ -217,6 +217,7 @@ PHASE2_PILOT_FAILURE_IDS = [
     "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796",
 ]
 OBSERVER_AUTHORITY_KEYS = {
+    "actorTopology",
     "absenceBehavior",
     "attestationTrust",
     "authorityState",
@@ -226,9 +227,11 @@ OBSERVER_AUTHORITY_KEYS = {
     "measurementStatus",
     "oracleInputRunCount",
     "oracleRunCount",
+    "protocolDeltaFromV1",
     "protocolId",
     "provisional",
     "requiredExecutionBoundary",
+    "returnCodeAuthority",
     "schemaVersion",
     "subjectRunCount",
 }
@@ -1923,9 +1926,9 @@ def audit_pilot_contract(
         pilot_contract_path, "pilot contract"
     )
     contract = exact_keys(contract_value, PILOT_CONTRACT_KEYS, "pilot contract")
-    require(contract["schemaVersion"] == 3, "pilot contract schemaVersion drift")
+    require(contract["schemaVersion"] == 4, "pilot contract schemaVersion drift")
     require(
-        contract["contractId"] == "c30.day5.kernel-reduction-pilots.v3",
+        contract["contractId"] == "c30.day5.kernel-reduction-pilots.v4",
         "pilot contractId drift",
     )
     require(contract["contractState"] == "locked", "pilot contract is not locked")
@@ -2302,43 +2305,87 @@ def audit_pilot_contract(
         OBSERVER_AUTHORITY_KEYS,
         "pilot observer authority",
     )
-    require(observer["schemaVersion"] == 1, "pilot observer schemaVersion drift")
+    require(observer["schemaVersion"] == 2, "pilot observer schemaVersion drift")
     require(
-        observer["authorityState"] == "ABSENT"
-        and observer["measurementStatus"] == "NOT_MEASURED"
-        and observer["provisional"] is True
-        and observer["liveMeasurementPermitted"] is False,
-        "pilot absent observer sentinel drift",
+        observer["measurementStatus"] == "NOT_MEASURED",
+        "pilot observer authority was result-shaped",
     )
     require(
-        observer["protocolId"] == "c30.day5.phase2-external-observer.v1"
+        observer["protocolId"] == "c30.day5.phase2-external-observer.v2"
         and observer["attestationTrust"] == "externally-pinned-sha256"
-        and observer["checkpoints"] == ["plan", "pre-cleanup", "post-cleanup"]
+        and observer["checkpoints"] == ["plan", "post-execution-seal"]
         and observer["requiredExecutionBoundary"]
         == [
-            "subject",
+            "subject-runner",
             "oracle-input-closure",
             "oracle-before",
-            "oracle-start",
             "oracle-after",
             "cleanup",
+            "receipt-replay",
         ]
         and observer["oracleRunCount"] == 46
         and observer["oracleInputRunCount"] == 44
         and observer["subjectRunCount"] == 28,
         "pilot observer protocol/denominator authority drift",
     )
+    require(
+        observer["actorTopology"]
+        == {
+            "corpusExecutionCount": 1,
+            "observerRole": "parent-reviewer-and-sealer",
+            "userEntryPoint": "observer",
+            "verifierRole": "single-execution-child",
+        }
+        and observer["protocolDeltaFromV1"]
+        == {
+            "dropped": [
+                "ready-ack-file-handshake",
+                "observer-duplicated-cleanup",
+            ],
+            "retained": [
+                "pre-execution-plan",
+                "raw-stdout-stderr-and-status",
+                "oracle-input-closure",
+                "oracle-before-and-after-descriptors",
+                "cleanup-evidence",
+                "externally-pinned-observer-identity",
+                "independent-replay",
+            ],
+        }
+        and observer["returnCodeAuthority"]
+        == {
+            "oracle": "container-after.status.exitCode",
+            "subject": "observer-runner OS process status",
+        },
+        "pilot observer v2 topology/delta/return-code authority drift",
+    )
     executable = exact_keys(
         observer["executable"],
         {"bytes", "path", "sha256"},
-        "pilot observer executable sentinel",
+        "pilot observer executable authority",
     )
-    require(
-        executable == {"bytes": 0, "path": None, "sha256": digest(b"")}
-        and "Reject before subject or container execution"
-        in require_string(observer["absenceBehavior"], "observer absenceBehavior"),
-        "pilot observer executable ABSENT sentinel drift",
-    )
+    if observer["authorityState"] == "ABSENT":
+        require(
+            observer["provisional"] is True
+            and observer["liveMeasurementPermitted"] is False
+            and executable == {"bytes": 0, "path": None, "sha256": digest(b"")}
+            and "Reject before subject or container execution"
+            in require_string(observer["absenceBehavior"], "observer absenceBehavior"),
+            "pilot observer executable ABSENT sentinel drift",
+        )
+    else:
+        path_value = require_string(executable["path"], "observer executable path")
+        observer_path = confined_path(ROOT, path_value, "observer executable")
+        require(
+            observer["authorityState"] == "PINNED"
+            and observer["provisional"] is False
+            and observer["liveMeasurementPermitted"] is True
+            and executable["bytes"] == observer_path.stat().st_size
+            and executable["sha256"] == digest(observer_path.read_bytes())
+            and executable["bytes"] > 0
+            and executable["sha256"] != digest(b""),
+            "pilot live observer executable authority drift",
+        )
     verdict = exact_keys(
         contract["verdictSemantics"],
         {
@@ -2378,10 +2425,13 @@ def audit_pilot_contract(
             "observerOracleInputRunCount",
             "observerOracleRunCount",
             "observerSubjectRunCount",
+            "producerReceiptRole",
             "rawDescriptorArtifactsInClosure",
             "replayRequiresTrustedReceiptIndexSha256",
             "resultAndReceiptBindPilotContractSha256",
             "schemaVersion",
+            "sealedReceiptRole",
+            "trustedIndexBindings",
         },
         "pilot receiptAuthority",
     )
@@ -2400,10 +2450,22 @@ def audit_pilot_contract(
             "observerOracleInputRunCount": 44,
             "observerOracleRunCount": 46,
             "observerSubjectRunCount": 28,
+            "producerReceiptRole": "untrusted single-execution input to observer sealing",
             "rawDescriptorArtifactsInClosure": True,
             "replayRequiresTrustedReceiptIndexSha256": True,
             "resultAndReceiptBindPilotContractSha256": True,
-            "schemaVersion": 3,
+            "schemaVersion": 4,
+            "sealedReceiptRole": "observer-evidence-bearing receipt bound by the trusted external index",
+            "trustedIndexBindings": [
+                "receiptSha256",
+                "observerExecutableSha256",
+                "observerAttestationSha256",
+                "pilotContractSha256",
+                "policySha256",
+                "overlayClosureSha256",
+                "oracleRunOrderSha256",
+                "subjectRunOrderSha256",
+            ],
         },
         "pilot receipt authority drift",
     )
