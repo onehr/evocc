@@ -583,6 +583,12 @@ pub enum EvoIRType {
     F64,
     /// Typed pointer into one address space.
     Ptr(AddressSpace),
+    /// Pointer to one complete lowered function interface. The final
+    /// `mem<...>` and `world` entries are part of the signature identity.
+    FnPtr {
+        params: Vec<EvoIRType>,
+        results: Vec<EvoIRType>,
+    },
     /// Packed SIMD vector: N elements of element type.
     Vec(u16, Box<EvoIRType>),
     /// An abstract memory snapshot for one region.

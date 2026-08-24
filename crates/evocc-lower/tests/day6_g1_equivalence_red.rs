@@ -600,6 +600,19 @@ fn render_type(ty: &EvoIRType) -> String {
                 AddressSpace::ThreadLocal => "threadlocal",
             }
         ),
+        EvoIRType::FnPtr { params, results } => format!(
+            "fnptr<({})->({})>",
+            params
+                .iter()
+                .map(render_type)
+                .collect::<Vec<_>>()
+                .join(", "),
+            results
+                .iter()
+                .map(render_type)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         EvoIRType::Vec(count, element) => format!("vec<{count}, {}>", render_type(element)),
         EvoIRType::Mem(region) => format!(
             "mem<{}>",
@@ -877,6 +890,9 @@ fn render_inst(inst: &Inst) -> String {
         Inst::GlobalAddr { result, symbol } => {
             format!("{} = global_addr @{symbol}", value(result))
         }
+        Inst::FuncAddr { result, symbol } => {
+            format!("{} = func_addr @{symbol}", value(result))
+        }
         Inst::Alloca { .. }
         | Inst::LifetimeEnd { .. }
         | Inst::PointerValid { .. }
@@ -899,6 +915,28 @@ fn render_inst(inst: &Inst) -> String {
             format!(
                 "({}) = call @{callee}({})",
                 rendered_results.join(", "),
+                rendered_args.join(", ")
+            )
+        }
+        Inst::IndirectCall {
+            results,
+            callee,
+            args,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+        } => {
+            let mut rendered_results = results.iter().map(value).collect::<Vec<_>>();
+            rendered_results.push(value(mem_out));
+            rendered_results.push(value(world_out));
+            let mut rendered_args = args.iter().map(value).collect::<Vec<_>>();
+            rendered_args.push(value(mem_in));
+            rendered_args.push(value(world_in));
+            format!(
+                "({}) = call {}({})",
+                rendered_results.join(", "),
+                value(callee),
                 rendered_args.join(", ")
             )
         }

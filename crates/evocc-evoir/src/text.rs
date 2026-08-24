@@ -154,6 +154,8 @@ fn derive_effect_summaries(module: &Module) -> Vec<RenderedEffectSummary> {
                             .get(callee.as_str())
                             .map_or(RenderedEffectSummary::top(), |callee| previous[*callee]),
                     );
+                } else if matches!(inst, Inst::IndirectCall { .. }) {
+                    summary.join(RenderedEffectSummary::top());
                 }
             }
             summaries[index] = summary;
@@ -212,6 +214,7 @@ fn inst_effect_summary(inst: &Inst) -> RenderedEffectSummary {
             may_trap: true,
             ..RenderedEffectSummary::default()
         },
+        Inst::IndirectCall { .. } => RenderedEffectSummary::top(),
         Inst::Const(..)
         | Inst::Uninitialized(..)
         | Inst::Add(..)
@@ -236,6 +239,7 @@ fn inst_effect_summary(inst: &Inst) -> RenderedEffectSummary {
         | Inst::Ret(..)
         | Inst::PtrNull(..)
         | Inst::GlobalAddr { .. }
+        | Inst::FuncAddr { .. }
         | Inst::Call { .. }
         | Inst::SExt(..)
         | Inst::ZExt(..)
@@ -256,6 +260,19 @@ fn render_type(ty: &EvoIRType) -> String {
                 AddressSpace::Stack => "stack",
                 AddressSpace::ThreadLocal => "threadlocal",
             }
+        ),
+        EvoIRType::FnPtr { params, results } => format!(
+            "fnptr<({})->({})>",
+            params
+                .iter()
+                .map(render_type)
+                .collect::<Vec<_>>()
+                .join(", "),
+            results
+                .iter()
+                .map(render_type)
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
         EvoIRType::Vec(count, element) => format!("vec<{count}, {}>", render_type(element)),
         EvoIRType::Mem(region) => format!(
@@ -416,6 +433,11 @@ impl FunctionRenderer {
                 render_value(result),
                 render_type(&result.ty)
             ),
+            Inst::FuncAddr { result, symbol } => format!(
+                "{} = func_addr @{symbol} : {}",
+                render_value(result),
+                render_type(&result.ty)
+            ),
             Inst::Alloca {
                 result,
                 mem_in,
@@ -549,6 +571,28 @@ impl FunctionRenderer {
                 format!(
                     "({}) = call @{callee}({})",
                     rendered_results.join(", "),
+                    rendered_args.join(", ")
+                )
+            }
+            Inst::IndirectCall {
+                results,
+                callee,
+                args,
+                mem_in,
+                world_in,
+                mem_out,
+                world_out,
+            } => {
+                let mut rendered_results = results.iter().map(render_value).collect::<Vec<_>>();
+                rendered_results.push(render_value(mem_out));
+                rendered_results.push(render_value(world_out));
+                let mut rendered_args = args.iter().map(render_value).collect::<Vec<_>>();
+                rendered_args.push(render_value(mem_in));
+                rendered_args.push(render_value(world_in));
+                format!(
+                    "({}) = call {}({})",
+                    rendered_results.join(", "),
+                    render_value(callee),
                     rendered_args.join(", ")
                 )
             }
@@ -732,6 +776,21 @@ mod tests {
                 "ptr<threadlocal>",
             ),
             (
+                EvoIRType::FnPtr {
+                    params: vec![
+                        EvoIRType::Bits(32),
+                        EvoIRType::Mem(Region::All),
+                        EvoIRType::World,
+                    ],
+                    results: vec![
+                        EvoIRType::Bits(32),
+                        EvoIRType::Mem(Region::All),
+                        EvoIRType::World,
+                    ],
+                },
+                "fnptr<(bits<32>, mem<all>, world)->(bits<32>, mem<all>, world)>",
+            ),
+            (
                 EvoIRType::Vec(4, Box::new(EvoIRType::Bits(8))),
                 "vec<4, bits<8>>",
             ),
@@ -755,6 +814,23 @@ mod tests {
         let bits = |id| value(id, EvoIRType::Bits(32));
         let pred = |id| value(id, EvoIRType::Bits(1));
         let pointer = |id| value(id, EvoIRType::Ptr(AddressSpace::Generic));
+        let function_pointer = |id| {
+            value(
+                id,
+                EvoIRType::FnPtr {
+                    params: vec![
+                        EvoIRType::Bits(32),
+                        EvoIRType::Mem(Region::All),
+                        EvoIRType::World,
+                    ],
+                    results: vec![
+                        EvoIRType::Bits(32),
+                        EvoIRType::Mem(Region::All),
+                        EvoIRType::World,
+                    ],
+                },
+            )
+        };
         let memory = |id| value(id, EvoIRType::Mem(Region::All));
         let world = |id| value(id, EvoIRType::World);
         let renderer = FunctionRenderer { entry: 17 };
@@ -917,6 +993,13 @@ mod tests {
                 "%v0 = global_addr @counter : ptr<generic>",
             ),
             (
+                Inst::FuncAddr {
+                    result: function_pointer(0),
+                    symbol: "callee".to_owned(),
+                },
+                "%v0 = func_addr @callee : fnptr<(bits<32>, mem<all>, world)->(bits<32>, mem<all>, world)>",
+            ),
+            (
                 Inst::Alloca {
                     result: pointer(0),
                     mem_in: memory(1),
@@ -1025,6 +1108,18 @@ mod tests {
                     world_out: world(5),
                 },
                 "(%v0, %v4, %v5) = call @callee(%v1, %v2, %v3)",
+            ),
+            (
+                Inst::IndirectCall {
+                    results: vec![bits(0)],
+                    callee: function_pointer(6),
+                    args: vec![bits(1)],
+                    mem_in: memory(2),
+                    world_in: world(3),
+                    mem_out: memory(4),
+                    world_out: world(5),
+                },
+                "(%v0, %v4, %v5) = call %v6(%v1, %v2, %v3)",
             ),
             (
                 Inst::SExt(bits(0), bits(1), EvoIRType::Bits(32)),

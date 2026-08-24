@@ -74,7 +74,8 @@ pub fn ingest_scalar_inst(inst: &Inst) -> Result<ScalarOperator, ScalarBridgeErr
         | Inst::AccessInBounds { .. }
         | Inst::Load { .. }
         | Inst::Store { .. }
-        | Inst::Call { .. } => {
+        | Inst::Call { .. }
+        | Inst::IndirectCall { .. } => {
             return Err(ScalarBridgeError {
                 code: "E4001",
                 message: "effect-bearing-instruction-is-not-scalar-egraph-eligible",
@@ -778,7 +779,8 @@ fn remap_inst_uses(inst: &mut Inst, aliases: &HashMap<u32, Value>) {
         | Inst::Uninitialized(..)
         | Inst::Trap(..)
         | Inst::PtrNull(..)
-        | Inst::GlobalAddr { .. } => {}
+        | Inst::GlobalAddr { .. }
+        | Inst::FuncAddr { .. } => {}
         Inst::Add(_, left, right)
         | Inst::Sub(_, left, right)
         | Inst::Mul(_, left, right)
@@ -878,6 +880,20 @@ fn remap_inst_uses(inst: &mut Inst, aliases: &HashMap<u32, Value>) {
             world_in,
             ..
         } => {
+            for argument in args {
+                remap(argument, aliases);
+            }
+            remap(mem_in, aliases);
+            remap(world_in, aliases);
+        }
+        Inst::IndirectCall {
+            callee,
+            args,
+            mem_in,
+            world_in,
+            ..
+        } => {
+            remap(callee, aliases);
             for argument in args {
                 remap(argument, aliases);
             }

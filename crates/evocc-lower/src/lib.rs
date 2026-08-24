@@ -2474,7 +2474,7 @@ impl<'a> FunctionLowerer<'a> {
                     self.unit.types().get(object.ty).map(|ty| &ty.kind),
                     Some(TypeKind::Pointer(_))
                 ) {
-                    let pointer = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+                    let pointer = self.fresh_value(self.c_value_type(object.ty, object.span)?.0);
                     self.emit(state, Inst::PtrNull(pointer.clone()))?;
                     ExprValue {
                         value: pointer,
@@ -2507,6 +2507,14 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
     ) -> Result<(EvoIRType, CIntegerType), LowerError> {
         match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
+            Some(TypeKind::Pointer(pointee))
+                if matches!(
+                    self.unit.types().get(*pointee).map(|ty| &ty.kind),
+                    Some(TypeKind::Function { .. })
+                ) =>
+            {
+                Ok((self.fnptr_type(*pointee, span)?, CIntegerType::ULONG))
+            }
             Some(TypeKind::Pointer(_)) => {
                 Ok((EvoIRType::Ptr(AddressSpace::Generic), CIntegerType::ULONG))
             }
@@ -2520,6 +2528,148 @@ impl<'a> FunctionLowerer<'a> {
                 feature: "object subvalue is neither an integer nor pointer",
             }),
         }
+    }
+
+    fn fnptr_type(&self, function_ty: TypeId, span: SourceSpan) -> Result<EvoIRType, LowerError> {
+        let TypeKind::Function {
+            return_type,
+            parameters,
+        } = &self
+            .unit
+            .types()
+            .get(function_ty)
+            .ok_or(LowerError::UnknownType {
+                ty: function_ty,
+                span,
+            })?
+            .kind
+        else {
+            return Err(LowerError::UnsupportedType {
+                ty: function_ty,
+                span,
+                feature: "fnptr pointee is not a function",
+            });
+        };
+        let parameter_types = match parameters {
+            FunctionParameters::Prototype {
+                types,
+                variadic: false,
+            } => types,
+            _ => {
+                return Err(LowerError::UnsupportedType {
+                    ty: function_ty,
+                    span,
+                    feature: "fnptr requires a non-variadic prototype",
+                });
+            }
+        };
+        let mut params = parameter_types
+            .iter()
+            .map(|ty| canonical_integer(self.unit.types(), self.target, *ty, span).map(bits))
+            .collect::<Result<Vec<_>, _>>()?;
+        params.push(EvoIRType::Mem(Region::All));
+        params.push(EvoIRType::World);
+        let mut results = match self.unit.types().get(*return_type).map(|ty| &ty.kind) {
+            Some(TypeKind::Void) => Vec::new(),
+            Some(_) => vec![bits(canonical_integer(
+                self.unit.types(),
+                self.target,
+                *return_type,
+                span,
+            )?)],
+            None => {
+                return Err(LowerError::UnknownType {
+                    ty: *return_type,
+                    span,
+                });
+            }
+        };
+        results.push(EvoIRType::Mem(Region::All));
+        results.push(EvoIRType::World);
+        Ok(EvoIRType::FnPtr { params, results })
+    }
+
+    fn call_designator_function_type(&self, callee: &CHirExpr<'_>) -> Option<TypeId> {
+        let candidate = match callee {
+            CHirExpr::Ident { facts, .. }
+            | CHirExpr::MemoryRead { facts, .. }
+            | CHirExpr::Assign { facts, .. }
+            | CHirExpr::MemoryAssign { facts, .. }
+            | CHirExpr::Update { facts, .. }
+            | CHirExpr::MemoryUpdate { facts, .. } => facts.ty(),
+            CHirExpr::Cast(ty, _, _) => *ty,
+            _ => return None,
+        };
+        match self.unit.types().get(candidate).map(|ty| &ty.kind) {
+            Some(TypeKind::Function { .. }) => Some(candidate),
+            Some(TypeKind::Pointer(pointee))
+                if matches!(
+                    self.unit.types().get(*pointee).map(|ty| &ty.kind),
+                    Some(TypeKind::Function { .. })
+                ) =>
+            {
+                Some(*pointee)
+            }
+            _ => None,
+        }
+    }
+
+    fn scalar_call_signature(
+        &self,
+        function_ty: TypeId,
+        span: SourceSpan,
+    ) -> Result<(Vec<CIntegerType>, Option<CIntegerType>), LowerError> {
+        let TypeKind::Function {
+            return_type,
+            parameters,
+        } = &self
+            .unit
+            .types()
+            .get(function_ty)
+            .ok_or(LowerError::UnknownType {
+                ty: function_ty,
+                span,
+            })?
+            .kind
+        else {
+            return Err(LowerError::UnsupportedType {
+                ty: function_ty,
+                span,
+                feature: "call designator does not name a function type",
+            });
+        };
+        let parameter_types = match parameters {
+            FunctionParameters::Prototype {
+                types,
+                variadic: false,
+            } => types
+                .iter()
+                .map(|ty| canonical_integer(self.unit.types(), self.target, *ty, span))
+                .collect::<Result<Vec<_>, _>>()?,
+            _ => {
+                return Err(LowerError::UnsupportedType {
+                    ty: function_ty,
+                    span,
+                    feature: "call requires a non-variadic prototype",
+                });
+            }
+        };
+        let return_type = match self.unit.types().get(*return_type).map(|ty| &ty.kind) {
+            Some(TypeKind::Void) => None,
+            Some(_) => Some(canonical_integer(
+                self.unit.types(),
+                self.target,
+                *return_type,
+                span,
+            )?),
+            None => {
+                return Err(LowerError::UnknownType {
+                    ty: *return_type,
+                    span,
+                });
+            }
+        };
+        Ok((parameter_types, return_type))
     }
 
     fn access_layout(&self, ty: TypeId, span: SourceSpan) -> Result<AccessLayout, LowerError> {
@@ -2800,14 +2950,15 @@ impl<'a> FunctionLowerer<'a> {
     ) -> Result<ExprValue, LowerError> {
         match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
             Some(TypeKind::Pointer(_)) => {
-                if matches!(value.value.ty, EvoIRType::Ptr(_)) {
+                let expected = self.c_value_type(ty, span)?.0;
+                if value.value.ty == expected {
                     return Ok(value);
                 }
                 if source.is_some_and(|source| {
                     constant_integer(self.unit, self.target, source)
                         .is_some_and(|constant| !constant.truth())
                 }) {
-                    let pointer = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+                    let pointer = self.fresh_value(expected);
                     self.emit(state, Inst::PtrNull(pointer.clone()))?;
                     return Ok(ExprValue {
                         value: pointer,
@@ -2950,7 +3101,8 @@ impl<'a> FunctionLowerer<'a> {
                 } => {
                     let zero = match self.unit.types().get(*destination_type).map(|ty| &ty.kind) {
                         Some(TypeKind::Pointer(_)) => {
-                            let pointer = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+                            let pointer = self
+                                .fresh_value(self.c_value_type(*destination_type, action_span)?.0);
                             self.emit(state, Inst::PtrNull(pointer.clone()))?;
                             ExprValue {
                                 value: pointer,
@@ -3789,6 +3941,24 @@ impl<'a> FunctionLowerer<'a> {
                     return Ok(ExprValue {
                         value: result,
                         integer,
+                    });
+                }
+                if declaration.kind() == SymbolKind::Function
+                    && declaration.spelling() == spelling
+                    && declaration.ty() == facts.ty()
+                    && facts.category() == ExprCategory::FunctionDesignator
+                {
+                    let result = self.fresh_value(self.fnptr_type(facts.ty(), *span)?);
+                    self.emit(
+                        state,
+                        Inst::FuncAddr {
+                            result: result.clone(),
+                            symbol: spelling.clone(),
+                        },
+                    )?;
+                    return Ok(ExprValue {
+                        value: result,
+                        integer: CIntegerType::ULONG,
                     });
                 }
                 if !matches!(
@@ -4646,52 +4816,91 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<Option<ExprValue>, LowerError> {
-        let CHirExpr::Ident {
+        let direct = if let CHirExpr::Ident {
             symbol,
             spelling,
             facts,
             span: designator_span,
         } = callee
-        else {
-            return Err(LowerError::UnsupportedExpression {
-                span,
-                feature: "indirect call is outside Day 6",
-            });
-        };
-        let designator =
-            self.unit
-                .symbols()
-                .symbol(*symbol)
-                .map_err(|_| LowerError::UnknownSymbol {
-                    symbol: *symbol,
-                    span: *designator_span,
-                })?;
-        if designator.kind() != SymbolKind::Function
-            || designator.spelling() != spelling
-            || designator.ty() != facts.ty()
-            || facts.category() != ExprCategory::FunctionDesignator
         {
-            return Err(LowerError::UnsupportedExpression {
-                span: *designator_span,
-                feature: "function designator disagrees with its semantic identity",
-            });
-        }
-        let function = self
-            .functions
-            .get(symbol)
-            .ok_or(LowerError::UnknownSymbol {
-                symbol: *symbol,
-                span,
-            })?;
-        if arguments.len() != function.parameter_types.len() {
+            let designator =
+                self.unit
+                    .symbols()
+                    .symbol(*symbol)
+                    .map_err(|_| LowerError::UnknownSymbol {
+                        symbol: *symbol,
+                        span: *designator_span,
+                    })?;
+            if designator.kind() != SymbolKind::Function
+                || designator.spelling() != spelling
+                || designator.ty() != facts.ty()
+                || facts.category() != ExprCategory::FunctionDesignator
+            {
+                return Err(LowerError::UnsupportedExpression {
+                    span: *designator_span,
+                    feature: "function designator disagrees with its semantic identity",
+                });
+            }
+            Some(
+                self.functions
+                    .get(symbol)
+                    .ok_or(LowerError::UnknownSymbol {
+                        symbol: *symbol,
+                        span,
+                    })?,
+            )
+        } else {
+            None
+        };
+        let function_ty = self.call_designator_function_type(callee).ok_or(
+            LowerError::UnsupportedExpression {
+                span: callee.span(),
+                feature: "indirect call designator has no function signature",
+            },
+        )?;
+        let (parameter_types, return_type, direct_name) = if let Some(function) = direct {
+            (
+                function.parameter_types.clone(),
+                function.return_type,
+                Some(function.name.clone()),
+            )
+        } else {
+            let (parameters, returned) = self.scalar_call_signature(function_ty, span)?;
+            (parameters, returned, None)
+        };
+        if arguments.len() != parameter_types.len() {
             return Err(LowerError::MalformedFunction {
-                function: function.name.clone(),
+                function: direct_name
+                    .clone()
+                    .unwrap_or_else(|| "<indirect>".to_owned()),
                 span,
                 reason: "call arity disagrees with the canonical prototype",
             });
         }
+        let callee_key = if direct_name.is_none() {
+            let lowered = self.lower_expr(callee, state)?;
+            let expected = self.fnptr_type(function_ty, span)?;
+            if lowered.value.ty != expected {
+                return Err(LowerError::UnsupportedExpression {
+                    span: callee.span(),
+                    feature: "indirect callee value disagrees with its fnptr signature",
+                });
+            }
+            let key = EnvKey::Temporary(self.next_temporary);
+            self.next_temporary += 1;
+            state.env.insert(
+                key,
+                BoundValue {
+                    value: lowered.value,
+                    integer: None,
+                },
+            );
+            Some(key)
+        } else {
+            None
+        };
         let mut argument_keys = Vec::new();
-        for (argument, expected) in arguments.iter().zip(&function.parameter_types) {
+        for (argument, expected) in arguments.iter().zip(&parameter_types) {
             let value = self.lower_expr(argument, state)?;
             let value = self.cast(value, *expected, state)?;
             let key = EnvKey::Temporary(self.next_temporary);
@@ -4719,23 +4928,41 @@ impl<'a> FunctionLowerer<'a> {
         let mem_in = self.token(state, EnvKey::Memory)?.value;
         let world_in = self.token(state, EnvKey::World)?.value;
         let mut results = Vec::new();
-        if let Some(integer) = function.return_type {
+        if let Some(integer) = return_type {
             results.push(self.fresh_value(bits(integer)));
         }
         let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
         let world_out = self.fresh_value(EvoIRType::World);
-        self.emit(
-            state,
+        let call = if let Some(callee) = direct_name {
             Inst::Call {
                 results: results.clone(),
-                callee: function.name.clone(),
+                callee,
                 args,
                 mem_in,
                 world_in,
                 mem_out: mem_out.clone(),
                 world_out: world_out.clone(),
-            },
-        )?;
+            }
+        } else {
+            let callee = state
+                .env
+                .remove(&callee_key.expect("indirect call inserted its callee temporary"))
+                .ok_or(LowerError::InvalidControlFlow {
+                    span,
+                    reason: "indirect call control flow lost its callee",
+                })?
+                .value;
+            Inst::IndirectCall {
+                results: results.clone(),
+                callee,
+                args,
+                mem_in,
+                world_in,
+                mem_out: mem_out.clone(),
+                world_out: world_out.clone(),
+            }
+        };
+        self.emit(state, call)?;
         state.env.insert(
             EnvKey::Memory,
             BoundValue {
@@ -4750,7 +4977,7 @@ impl<'a> FunctionLowerer<'a> {
                 integer: None,
             },
         );
-        Ok(function.return_type.map(|integer| ExprValue {
+        Ok(return_type.map(|integer| ExprValue {
             value: results.remove(0),
             integer,
         }))
@@ -6295,7 +6522,9 @@ fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
             index,
             ..
         } => vec![result, base, index],
-        Inst::PtrNull(result) | Inst::GlobalAddr { result, .. } => vec![result],
+        Inst::PtrNull(result) | Inst::GlobalAddr { result, .. } | Inst::FuncAddr { result, .. } => {
+            vec![result]
+        }
         Inst::Alloca {
             result,
             mem_in,
@@ -6372,6 +6601,24 @@ fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
             ..
         } => {
             let mut values = results.iter_mut().collect::<Vec<_>>();
+            values.extend(args.iter_mut());
+            values.push(mem_in);
+            values.push(world_in);
+            values.push(mem_out);
+            values.push(world_out);
+            values
+        }
+        Inst::IndirectCall {
+            results,
+            callee,
+            args,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+        } => {
+            let mut values = results.iter_mut().collect::<Vec<_>>();
+            values.push(callee);
             values.extend(args.iter_mut());
             values.push(mem_in);
             values.push(world_in);

@@ -9,7 +9,7 @@ use std::fmt;
 pub use evocc_memory::{AccessLayout, IndexSignedness, OffsetDirection};
 use evocc_memory::{
     ByteSequence, FrameId, InitialState, MemoryConfig, MemoryFault, MemoryLimits, MemoryState,
-    Pointer, ScopeId, WorldLimits, WorldState,
+    Pointer, PointerValue, ScopeId, WorldLimits, WorldState,
 };
 use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
@@ -256,6 +256,9 @@ pub enum Inst {
     /// Return the stable address of one module global.
     GlobalAddr { result: Value, symbol: String },
 
+    /// Return one function's stable provenance with its complete signature.
+    FuncAddr { result: Value, symbol: String },
+
     /// Allocate one fresh automatic object in the current invocation.
     Alloca {
         result: Value,
@@ -336,6 +339,17 @@ pub enum Inst {
         world_out: Value,
     },
 
+    /// Call through a signature-carrying function pointer.
+    IndirectCall {
+        results: Vec<Value>,
+        callee: Value,
+        args: Vec<Value>,
+        mem_in: Value,
+        world_in: Value,
+        mem_out: Value,
+        world_out: Value,
+    },
+
     /// `SExt(result, src, target_ty)`: sign-extend `src` to `target_ty`.
     SExt(Value, Value, EvoIRType),
 
@@ -379,7 +393,9 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
         | Inst::SExt(v, ..)
         | Inst::ZExt(v, ..)
         | Inst::Trunc(v, ..) => vec![v],
-        Inst::GlobalAddr { result, .. } | Inst::PtrOffset { result, .. } => vec![result],
+        Inst::GlobalAddr { result, .. }
+        | Inst::FuncAddr { result, .. }
+        | Inst::PtrOffset { result, .. } => vec![result],
         Inst::ShiftCountDefined { result, .. } | Inst::SignedShlDefined { result, .. } => {
             vec![result]
         }
@@ -407,6 +423,12 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
             mem_out,
             world_out,
             ..
+        }
+        | Inst::IndirectCall {
+            results,
+            mem_out,
+            world_out,
+            ..
         } => {
             let mut definitions: Vec<&Value> = results.iter().collect();
             definitions.push(mem_out);
@@ -427,7 +449,8 @@ pub fn inst_uses(inst: &Inst) -> Vec<&Value> {
         | Inst::Uninitialized(..)
         | Inst::Trap(..)
         | Inst::PtrNull(..)
-        | Inst::GlobalAddr { .. } => vec![],
+        | Inst::GlobalAddr { .. }
+        | Inst::FuncAddr { .. } => vec![],
 
         Inst::Add(_, lhs, rhs)
         | Inst::Sub(_, lhs, rhs)
@@ -504,6 +527,19 @@ pub fn inst_uses(inst: &Inst) -> Vec<&Value> {
             ..
         } => {
             let mut uses: Vec<&Value> = args.iter().collect();
+            uses.push(mem_in);
+            uses.push(world_in);
+            uses
+        }
+        Inst::IndirectCall {
+            callee,
+            args,
+            mem_in,
+            world_in,
+            ..
+        } => {
+            let mut uses: Vec<&Value> = vec![callee];
+            uses.extend(args);
             uses.push(mem_in);
             uses.push(world_in);
             uses
@@ -853,7 +889,7 @@ fn evoir_access_layout(ty: &EvoIRType) -> Result<Option<AccessLayout>, String> {
         // Pointer size/alignment is target data, so target-independent module
         // validation checks only pointer identity. Lowering and interpretation
         // use the explicit guard layout produced from TargetDataLayout.
-        EvoIRType::Ptr(_) => return Ok(None),
+        EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => return Ok(None),
         _ => {
             return Err(format!(
                 "Day 7 memory type {ty:?} has no scalar access layout"
@@ -944,6 +980,12 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                         effect_participants.insert(function.name.as_str());
                         effect_participants.insert(callee.as_str());
                     }
+                    Inst::IndirectCall { .. } => {
+                        effect_participants.insert(function.name.as_str());
+                    }
+                    Inst::FuncAddr { symbol, .. } => {
+                        effect_participants.insert(symbol.as_str());
+                    }
                     Inst::Load { .. }
                     | Inst::Store { .. }
                     | Inst::Alloca { .. }
@@ -980,6 +1022,21 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                             caller.name, block.id, index, symbol
                         ));
                     }
+                    Inst::FuncAddr { result, symbol } => {
+                        let target = functions.get(symbol.as_str()).ok_or_else(|| {
+                            format!(
+                                "function '{}' block {} instruction {} refers to missing function '{}'",
+                                caller.name, block.id, index, symbol
+                            )
+                        })?;
+                        let expected = function_pointer_type(target)?;
+                        if result.ty != expected {
+                            return Err(format!(
+                                "function '{}' block {} instruction {} func_addr type {:?} disagrees with '{}' signature {:?}",
+                                caller.name, block.id, index, result.ty, symbol, expected
+                            ));
+                        }
+                    }
                     Inst::Alloca { origin, .. } if !origins.insert(*origin) => {
                         return Err(format!("duplicate allocation origin {origin}"));
                     }
@@ -1011,6 +1068,18 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn function_pointer_type(function: &Function) -> Result<EvoIRType, String> {
+    callable_signature(function)?;
+    Ok(EvoIRType::FnPtr {
+        params: function
+            .params
+            .iter()
+            .map(|parameter| parameter.ty.clone())
+            .collect(),
+        results: function.ret_tys.clone(),
+    })
 }
 
 struct CallableSignature<'a> {
@@ -1482,6 +1551,13 @@ impl EffectState {
                 mem_out,
                 world_out,
                 ..
+            }
+            | Inst::IndirectCall {
+                mem_in,
+                world_in,
+                mem_out,
+                world_out,
+                ..
             } => Some((mem_in, world_in, mem_out, world_out)),
             Inst::PointerValid {
                 mem_in, mem_out, ..
@@ -1619,14 +1695,25 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
                 ));
             }
             match &lhs.ty {
-                EvoIRType::Ptr(_) if matches!(operation, CmpOp::Eq | CmpOp::Ne) => Ok(()),
+                EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
+                    if matches!(operation, CmpOp::Eq | CmpOp::Ne) =>
+                {
+                    Ok(())
+                }
                 _ => expect_bits(&lhs.ty, "icmp operand", block),
             }
         }
-        Inst::PtrNull(result) => expect_pointer(&result.ty, "null-pointer result", block),
+        Inst::PtrNull(result) => expect_pointer_value(&result.ty, "null-pointer result", block),
         Inst::GlobalAddr { result, .. } => {
             expect_pointer(&result.ty, "global-address result", block)
         }
+        Inst::FuncAddr { result, .. } => match result.ty {
+            EvoIRType::FnPtr { .. } => Ok(()),
+            _ => Err(format!(
+                "function-address result in block {block} has type {:?}, expected fnptr<Sig>",
+                result.ty
+            )),
+        },
         Inst::Alloca {
             result,
             mem_in,
@@ -1710,6 +1797,44 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
                 expect_data_type(&result.ty, "call result", block)?;
             }
             expect_effect_tokens(mem_in, world_in, mem_out, world_out, "call", block)
+        }
+        Inst::IndirectCall {
+            results,
+            callee,
+            args,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+        } => {
+            let EvoIRType::FnPtr {
+                params,
+                results: returns,
+            } = &callee.ty
+            else {
+                return Err(format!(
+                    "indirect call callee in block {block} has type {:?}, expected fnptr<Sig>",
+                    callee.ty
+                ));
+            };
+            let mut actual_params = args
+                .iter()
+                .map(|value| value.ty.clone())
+                .collect::<Vec<_>>();
+            actual_params.push(mem_in.ty.clone());
+            actual_params.push(world_in.ty.clone());
+            let mut actual_returns = results
+                .iter()
+                .map(|value| value.ty.clone())
+                .collect::<Vec<_>>();
+            actual_returns.push(mem_out.ty.clone());
+            actual_returns.push(world_out.ty.clone());
+            if actual_params != *params || actual_returns != *returns {
+                return Err(format!(
+                    "E3017: indirect-call-signature-mismatch in block {block}"
+                ));
+            }
+            expect_effect_tokens(mem_in, world_in, mem_out, world_out, "indirect call", block)
         }
         Inst::PtrOffset {
             result,
@@ -1891,6 +2016,17 @@ fn expect_pointer(ty: &EvoIRType, role: &str, block: BlockId) -> Result<(), Stri
     }
 }
 
+fn expect_pointer_value(ty: &EvoIRType, role: &str, block: BlockId) -> Result<(), String> {
+    if matches!(ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }) {
+        Ok(())
+    } else {
+        Err(format!(
+            "{} in block {} has type {:?}, expected pointer or fnptr",
+            role, block, ty
+        ))
+    }
+}
+
 fn expect_data_type(ty: &EvoIRType, role: &str, block: BlockId) -> Result<(), String> {
     ensure_value_type(ty, &format!("{role} in block {block}"))?;
     if contains_effect_token(ty)? {
@@ -1934,6 +2070,39 @@ pub fn validate_type_well_formed(ty: &EvoIRType) -> Result<(), String> {
             EvoIRType::Tuple(elements) => {
                 pending.extend(elements.iter().map(|element| (element, depth + 1)));
             }
+            EvoIRType::FnPtr { params, results } => {
+                if params.len() < 2 || results.len() < 2 {
+                    return Err("fnptr signature lacks trailing mem<R>, world interface".to_owned());
+                }
+                let parameter_split = params.len() - 2;
+                let result_split = results.len() - 2;
+                let region = match (&params[parameter_split], &params[parameter_split + 1]) {
+                    (EvoIRType::Mem(region), EvoIRType::World) => *region,
+                    _ => return Err("fnptr parameters must end with mem<R>, world".to_owned()),
+                };
+                if !matches!(
+                    (&results[result_split], &results[result_split + 1]),
+                    (EvoIRType::Mem(output), EvoIRType::World) if *output == region
+                ) {
+                    return Err("fnptr results must end with the same mem<R>, world".to_owned());
+                }
+                if params[..parameter_split]
+                    .iter()
+                    .chain(&results[..result_split])
+                    .any(|ty| matches!(ty, EvoIRType::Mem(_) | EvoIRType::World | EvoIRType::Void))
+                {
+                    return Err(
+                        "fnptr ordinary parameters/results cannot be effect tokens or void"
+                            .to_owned(),
+                    );
+                }
+                pending.extend(
+                    params
+                        .iter()
+                        .chain(results)
+                        .map(|element| (element, depth + 1)),
+                );
+            }
             _ => {}
         }
     }
@@ -1961,6 +2130,7 @@ pub fn validate_value_type(ty: &EvoIRType) -> Result<(), String> {
                 pending.extend(elements.iter().map(|element| (element, depth + 1)));
             }
             EvoIRType::Vec(_, element) => pending.push((element, depth + 1)),
+            EvoIRType::FnPtr { .. } => {}
             _ => {}
         }
     }
@@ -2132,6 +2302,7 @@ impl RuntimeValue {
 enum InternalValue {
     Bits(u64),
     Pointer(Pointer),
+    FunctionPointer(PointerValue),
     Uninitialized,
 }
 
@@ -2148,6 +2319,7 @@ struct ExecutionState {
     memory: MemoryState,
     world: WorldState,
     globals: HashMap<String, Pointer>,
+    functions: HashMap<String, u64>,
     access_guards: HashMap<u64, (Pointer, AccessLayout)>,
     next_token: u64,
 }
@@ -2172,6 +2344,7 @@ impl ExecutionState {
             memory,
             world,
             globals: HashMap::new(),
+            functions: HashMap::new(),
             access_guards: HashMap::new(),
             next_token: 1,
         })
@@ -2271,6 +2444,15 @@ pub enum InterpreterError {
         block: BlockId,
         operation: &'static str,
     },
+    CallThroughNullFunctionPointer {
+        block: BlockId,
+    },
+    CallThroughNonFunctionPointer {
+        block: BlockId,
+    },
+    IndirectCallDynamicSignatureMismatch {
+        block: BlockId,
+    },
 }
 
 impl InterpreterError {
@@ -2290,6 +2472,9 @@ impl InterpreterError {
             Self::SignedDivisionOverflow { .. } | Self::SignedRemainderOverflow { .. } => "E3004",
             Self::UndefinedBehavior { diagnostic, .. } => diagnostic,
             Self::StepBudgetExceeded { .. } => "E3008",
+            Self::CallThroughNullFunctionPointer { .. } => "E3015",
+            Self::CallThroughNonFunctionPointer { .. } => "E3016",
+            Self::IndirectCallDynamicSignatureMismatch { .. } => "E3019",
             _ => "E3007",
         }
     }
@@ -2314,6 +2499,15 @@ impl InterpreterError {
             }
             Self::UndefinedBehavior { message, .. } => (*message).to_owned(),
             Self::StepBudgetExceeded { .. } => "interpreter-fuel-exhausted".to_owned(),
+            Self::CallThroughNullFunctionPointer { .. } => {
+                "call-through-null-function-pointer".to_owned()
+            }
+            Self::CallThroughNonFunctionPointer { .. } => {
+                "call-through-non-function-pointer".to_owned()
+            }
+            Self::IndirectCallDynamicSignatureMismatch { .. } => {
+                "indirect-call-dynamic-signature-mismatch".to_owned()
+            }
             _ => self.to_string(),
         }
     }
@@ -2404,6 +2598,18 @@ impl fmt::Display for InterpreterError {
             Self::UnsupportedInstruction { block, operation } => write!(
                 formatter,
                 "EvoIR interpreter does not support {operation} in block {block}"
+            ),
+            Self::CallThroughNullFunctionPointer { block } => write!(
+                formatter,
+                "E3015: call-through-null-function-pointer in block {block}"
+            ),
+            Self::CallThroughNonFunctionPointer { block } => write!(
+                formatter,
+                "E3016: call-through-non-function-pointer in block {block}"
+            ),
+            Self::IndirectCallDynamicSignatureMismatch { block } => write!(
+                formatter,
+                "E3019: indirect-call-dynamic-signature-mismatch in block {block}"
             ),
         }
     }
@@ -2669,6 +2875,20 @@ fn interpret_module_in_state(
         .enumerate()
         .map(|(index, function)| (function.name.as_str(), index))
         .collect();
+    state.functions = module
+        .functions
+        .iter()
+        .enumerate()
+        .map(|(index, function)| {
+            let identity = u64::try_from(index)
+                .ok()
+                .and_then(|index| index.checked_add(1))
+                .ok_or_else(|| InterpreterError::InvalidModule {
+                    message: "function provenance identity exhausted".to_owned(),
+                })?;
+            Ok((function.name.clone(), identity))
+        })
+        .collect::<Result<_, _>>()?;
     let entry_index = function_indices.get(entry_name).copied().ok_or_else(|| {
         InterpreterError::MissingEntryFunction {
             name: entry_name.to_owned(),
@@ -2761,6 +2981,92 @@ fn interpret_module_in_state(
                             .first()
                             .ok_or_else(|| InterpreterError::InvalidModule {
                                 message: format!("callee '{callee}' has no entry block"),
+                            })?;
+                    let (memory_frame, memory_scope) = begin_function_memory(
+                        &mut state,
+                        &module.functions[callee_index],
+                        block_id,
+                    )?;
+                    frames.push(ModuleFrame::new(
+                        callee_index,
+                        callee_entry.id,
+                        call_arguments,
+                        Some(CallReturnBinding {
+                            results,
+                            mem_out,
+                            world_out,
+                        }),
+                        memory_frame,
+                        memory_scope,
+                    ));
+                } else if let Inst::IndirectCall {
+                    results,
+                    callee,
+                    args,
+                    mem_in,
+                    world_in,
+                    mem_out,
+                    world_out,
+                } = instruction
+                {
+                    let identity =
+                        match read_internal(&frames[frame_index].values, &callee, block_id)? {
+                            InternalValue::FunctionPointer(PointerValue::Function(identity)) => {
+                                identity
+                            }
+                            InternalValue::FunctionPointer(PointerValue::Null) => {
+                                return Err(InterpreterError::CallThroughNullFunctionPointer {
+                                    block: block_id,
+                                });
+                            }
+                            InternalValue::FunctionPointer(PointerValue::Object(_))
+                            | InternalValue::Pointer(_)
+                            | InternalValue::Bits(_) => {
+                                return Err(InterpreterError::CallThroughNonFunctionPointer {
+                                    block: block_id,
+                                });
+                            }
+                            InternalValue::Uninitialized => {
+                                return Err(InterpreterError::UninitializedRead {
+                                    block: block_id,
+                                });
+                            }
+                        };
+                    let callee_index = identity
+                        .checked_sub(1)
+                        .and_then(|identity| usize::try_from(identity).ok())
+                        .filter(|index| *index < module.functions.len())
+                        .ok_or(InterpreterError::CallThroughNonFunctionPointer {
+                            block: block_id,
+                        })?;
+                    let dynamic_type = function_pointer_type(&module.functions[callee_index])
+                        .map_err(|message| InterpreterError::InvalidModule { message })?;
+                    if dynamic_type != callee.ty {
+                        return Err(InterpreterError::IndirectCallDynamicSignatureMismatch {
+                            block: block_id,
+                        });
+                    }
+                    let mut call_arguments =
+                        read_call_values(&args, block_id, &frames[frame_index].values)?;
+                    call_arguments.push(read_internal(
+                        &frames[frame_index].values,
+                        &mem_in,
+                        block_id,
+                    )?);
+                    call_arguments.push(read_internal(
+                        &frames[frame_index].values,
+                        &world_in,
+                        block_id,
+                    )?);
+                    let callee_entry =
+                        module.functions[callee_index]
+                            .blocks
+                            .first()
+                            .ok_or_else(|| InterpreterError::InvalidModule {
+                                message: format!(
+                                    "indirect callee '{}' has no entry block",
+                                    module.functions[callee_index].name
+                                ),
                             })?;
                     let (memory_frame, memory_scope) = begin_function_memory(
                         &mut state,
@@ -2959,7 +3265,7 @@ fn public_return_values(
         .enumerate()
         .map(|(index, (value, ty))| match value {
             InternalValue::Bits(raw_bits) => Ok(RuntimeValue { ty, raw_bits }),
-            InternalValue::Pointer(_) => {
+            InternalValue::Pointer(_) | InternalValue::FunctionPointer(_) => {
                 Err(InterpreterError::UnsupportedRuntimeType { index, ty })
             }
             InternalValue::Uninitialized => Err(InterpreterError::UninitializedRead { block }),
@@ -3207,6 +3513,23 @@ fn execute_instruction(
                 write_value(values, result, u64::from(comparison));
                 return Ok(());
             }
+            if matches!(lhs.ty, EvoIRType::FnPtr { .. }) {
+                let left = read_function_pointer(values, lhs, block)?;
+                let right = read_function_pointer(values, rhs, block)?;
+                let comparison = match operation {
+                    CmpOp::Eq => left == right,
+                    CmpOp::Ne => left != right,
+                    _ => {
+                        return Err(InterpreterError::InvalidFunction {
+                            message: format!(
+                                "block {block} uses ordered comparison on function pointers"
+                            ),
+                        });
+                    }
+                };
+                write_value(values, result, u64::from(comparison));
+                return Ok(());
+            }
             let kernel = IntegerKernel::for_value(lhs, block)?;
             let left = read_value(values, lhs, block)?;
             let right = read_value(values, rhs, block)?;
@@ -3240,9 +3563,14 @@ fn execute_instruction(
                 target_kernel.normalize(source_kernel.normalize(raw)),
             );
         }
-        Inst::PtrNull(result) => {
-            write_internal(values, result, InternalValue::Pointer(Pointer::NULL))
-        }
+        Inst::PtrNull(result) => match result.ty {
+            EvoIRType::FnPtr { .. } => write_internal(
+                values,
+                result,
+                InternalValue::FunctionPointer(PointerValue::Null),
+            ),
+            _ => write_internal(values, result, InternalValue::Pointer(Pointer::NULL)),
+        },
         Inst::GlobalAddr { result, symbol } => {
             let pointer = state.globals.get(symbol).copied().ok_or_else(|| {
                 InterpreterError::InvalidModule {
@@ -3250,6 +3578,21 @@ fn execute_instruction(
                 }
             })?;
             write_internal(values, result, InternalValue::Pointer(pointer));
+        }
+        Inst::FuncAddr { result, symbol } => {
+            let identity = state.functions.get(symbol).copied().ok_or_else(|| {
+                InterpreterError::InvalidModule {
+                    message: format!("func_addr refers to missing function '{symbol}'"),
+                }
+            })?;
+            write_internal(
+                values,
+                result,
+                InternalValue::FunctionPointer(
+                    PointerValue::function(identity)
+                        .map_err(|error| InterpreterError::MemoryAccess { block, error })?,
+                ),
+            );
         }
         Inst::Alloca {
             result,
@@ -3379,6 +3722,22 @@ fn execute_instruction(
                     };
                     InternalValue::Pointer(pointer)
                 }
+                EvoIRType::FnPtr { .. } => {
+                    let pointer = if *volatile {
+                        let (pointer, world) = state
+                            .memory
+                            .volatile_load_pointer_value(&state.world, address, layout)
+                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                        state.world = world;
+                        pointer
+                    } else {
+                        state
+                            .memory
+                            .load_pointer_value(address, layout)
+                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?
+                    };
+                    InternalValue::FunctionPointer(pointer)
+                }
                 _ => {
                     return Err(InterpreterError::UnsupportedInstruction {
                         block,
@@ -3436,6 +3795,22 @@ fn execute_instruction(
                             .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
                     }
                 }
+                InternalValue::FunctionPointer(pointer) => {
+                    if *volatile {
+                        let (memory, world) = state
+                            .memory
+                            .volatile_store_pointer_value(&state.world, address, layout, pointer)
+                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                        state.memory = memory;
+                        state.world = world;
+                    } else {
+                        state.memory =
+                            state
+                                .memory
+                                .store_pointer_value(address, layout, pointer)
+                                .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                    }
+                }
                 InternalValue::Uninitialized => {
                     return Err(InterpreterError::UninitializedRead { block });
                 }
@@ -3445,7 +3820,7 @@ fn execute_instruction(
             write_value(values, mem_out, next_memory_token);
             write_value(values, world_out, next_world_token);
         }
-        Inst::Call { .. } => {
+        Inst::Call { .. } | Inst::IndirectCall { .. } => {
             return Err(InterpreterError::UnsupportedInstruction {
                 block,
                 operation: "call",
@@ -3493,12 +3868,14 @@ fn read_value(
             value: value.id,
         })? {
         InternalValue::Bits(raw_bits) => Ok(raw_bits),
-        InternalValue::Pointer(_) => Err(InterpreterError::InvalidFunction {
-            message: format!(
-                "block {block} consumes pointer v{} as integer bits",
-                value.id
-            ),
-        }),
+        InternalValue::Pointer(_) | InternalValue::FunctionPointer(_) => {
+            Err(InterpreterError::InvalidFunction {
+                message: format!(
+                    "block {block} consumes pointer v{} as integer bits",
+                    value.id
+                ),
+            })
+        }
         InternalValue::Uninitialized => Err(InterpreterError::UninitializedRead { block }),
     }
 }
@@ -3525,12 +3902,33 @@ fn read_pointer(
     match read_internal(values, value, block)? {
         InternalValue::Pointer(pointer) => Ok(pointer),
         InternalValue::Uninitialized => Err(InterpreterError::UninitializedRead { block }),
-        InternalValue::Bits(_) => Err(InterpreterError::InvalidFunction {
-            message: format!(
-                "block {block} consumes non-pointer v{} as pointer",
-                value.id
-            ),
-        }),
+        InternalValue::Bits(_) | InternalValue::FunctionPointer(_) => {
+            Err(InterpreterError::InvalidFunction {
+                message: format!(
+                    "block {block} consumes non-pointer v{} as pointer",
+                    value.id
+                ),
+            })
+        }
+    }
+}
+
+fn read_function_pointer(
+    values: &HashMap<u32, InternalValue>,
+    value: &Value,
+    block: BlockId,
+) -> Result<PointerValue, InterpreterError> {
+    match read_internal(values, value, block)? {
+        InternalValue::FunctionPointer(pointer) => Ok(pointer),
+        InternalValue::Uninitialized => Err(InterpreterError::UninitializedRead { block }),
+        InternalValue::Bits(_) | InternalValue::Pointer(_) => {
+            Err(InterpreterError::InvalidFunction {
+                message: format!(
+                    "block {block} consumes non-function-pointer v{} as fnptr",
+                    value.id
+                ),
+            })
+        }
     }
 }
 
@@ -4619,6 +5017,71 @@ mod tests {
         }
     }
 
+    fn indirect_call_module(null: bool) -> Module {
+        let memory_ty = EvoIRType::Mem(Region::All);
+        let signature = EvoIRType::FnPtr {
+            params: vec![EvoIRType::Bits(32), memory_ty.clone(), EvoIRType::World],
+            results: vec![EvoIRType::Bits(32), memory_ty.clone(), EvoIRType::World],
+        };
+        let memory_in = value(0, memory_ty.clone());
+        let world_in = value(1, EvoIRType::World);
+        let callee = value(2, signature);
+        let argument_value = bits(3, 32);
+        let result = bits(4, 32);
+        let memory_out = value(5, memory_ty.clone());
+        let world_out = value(6, EvoIRType::World);
+        let address = if null {
+            Inst::PtrNull(callee.clone())
+        } else {
+            Inst::FuncAddr {
+                result: callee.clone(),
+                symbol: "identity".to_owned(),
+            }
+        };
+        let main = Function {
+            name: "main".to_owned(),
+            params: vec![
+                FunctionParam {
+                    name: "memory".to_owned(),
+                    ty: memory_ty.clone(),
+                },
+                FunctionParam {
+                    name: "world".to_owned(),
+                    ty: EvoIRType::World,
+                },
+            ],
+            ret_tys: vec![EvoIRType::Bits(32), memory_ty.clone(), EvoIRType::World],
+            blocks: vec![Block {
+                id: 0,
+                args: vec![
+                    argument("memory", memory_in.clone()),
+                    argument("world", world_in.clone()),
+                ],
+                insts: vec![
+                    address,
+                    Inst::Const(argument_value.clone(), 41),
+                    Inst::IndirectCall {
+                        results: vec![result.clone()],
+                        callee,
+                        args: vec![argument_value],
+                        mem_in: memory_in,
+                        world_in,
+                        mem_out: memory_out.clone(),
+                        world_out: world_out.clone(),
+                    },
+                ],
+                terminator: Inst::Ret(vec![result, memory_out, world_out]),
+            }],
+        };
+        Module {
+            globals: vec![],
+            functions: vec![
+                identity_callee("identity", EvoIRType::Bits(32), Region::All),
+                main,
+            ],
+        }
+    }
+
     fn recursive_countdown_module() -> Module {
         let memory_ty = EvoIRType::Mem(Region::All);
         let n = bits(0, 32);
@@ -4867,6 +5330,45 @@ mod tests {
             ]
         );
         assert_eq!(outcome.steps, 4);
+    }
+
+    #[test]
+    fn indirect_calls_validate_execute_and_report_null_provenance() {
+        let arguments = [
+            RuntimeValue::new(EvoIRType::Mem(Region::All), 17),
+            RuntimeValue::new(EvoIRType::World, 19),
+        ];
+        let module = indirect_call_module(false);
+        validate_module(&module).expect("func_addr and indirect signature are valid");
+        let outcome = interpret_module(&module, "main", &arguments, InterpreterLimits::new(5))
+            .expect("indirect call execution");
+        assert_eq!(outcome.return_values[0], RuntimeValue::bits(32, 41));
+        assert_eq!(outcome.steps, 5);
+
+        let error = interpret_module(
+            &indirect_call_module(true),
+            "main",
+            &arguments,
+            InterpreterLimits::new(3),
+        )
+        .expect_err("null fnptr must fail at the call");
+        assert_eq!(error.code(), "E3015");
+        assert_eq!(error.message(), "call-through-null-function-pointer");
+
+        let mut mismatched = indirect_call_module(true);
+        let [Inst::PtrNull(defined), _, Inst::IndirectCall { callee, .. }] =
+            mismatched.functions[1].blocks[0].insts.as_mut_slice()
+        else {
+            panic!("fixture indirect call");
+        };
+        let EvoIRType::FnPtr { params, .. } = &mut defined.ty else {
+            panic!("fixture fnptr type");
+        };
+        params[0] = EvoIRType::Bits(64);
+        callee.ty = defined.ty.clone();
+        assert!(validate_module(&mismatched)
+            .expect_err("indirect signature mismatch must fail")
+            .contains("E3017"));
     }
 
     #[test]
