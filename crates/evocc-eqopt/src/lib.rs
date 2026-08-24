@@ -4,8 +4,10 @@
 //! optimizer-independent authority for IR types, validation, text and
 //! interpretation.
 
+mod evp1;
 mod persistent;
 mod scalar_eq;
 
+pub use evp1::*;
 pub use persistent::*;
 pub use scalar_eq::*;

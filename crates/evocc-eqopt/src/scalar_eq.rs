@@ -211,9 +211,9 @@ pub(crate) enum Replacement {
 }
 
 #[derive(Debug, Clone)]
-struct RewriteOpportunity {
-    rule: ScalarRewrite,
-    replacement: Replacement,
+pub(crate) struct RewriteOpportunity {
+    pub(crate) rule: ScalarRewrite,
+    pub(crate) replacement: Replacement,
 }
 
 /// One semantically checked rewrite selected by the transient optimizer.
@@ -563,7 +563,7 @@ fn extract_cheapest(
         .map(|(_, _, replacement)| replacement)
 }
 
-fn rewrite_opportunity(
+pub(crate) fn rewrite_opportunity(
     inst: &Inst,
     facts: &HashMap<u32, ScalarFact>,
 ) -> Option<RewriteOpportunity> {
@@ -676,7 +676,7 @@ fn signed_value(raw: u64, width: u16) -> i128 {
     }
 }
 
-fn record_fact(inst: &Inst, facts: &mut HashMap<u32, ScalarFact>) {
+pub(crate) fn record_fact(inst: &Inst, facts: &mut HashMap<u32, ScalarFact>) {
     match inst {
         Inst::Const(result, raw) => {
             facts.insert(
@@ -756,7 +756,7 @@ pub(crate) fn operator_id(operator: ScalarOperator) -> OpId {
     }
 }
 
-fn resolve_alias(value: &Value, aliases: &HashMap<u32, Value>) -> Value {
+pub(crate) fn resolve_alias(value: &Value, aliases: &HashMap<u32, Value>) -> Value {
     let mut value = value.clone();
     let mut visited = HashSet::new();
     while visited.insert(value.id) {
@@ -773,7 +773,7 @@ fn remap(value: &mut Value, aliases: &HashMap<u32, Value>) {
 }
 
 #[allow(clippy::too_many_lines)]
-fn remap_inst_uses(inst: &mut Inst, aliases: &HashMap<u32, Value>) {
+pub(crate) fn remap_inst_uses(inst: &mut Inst, aliases: &HashMap<u32, Value>) {
     match inst {
         Inst::Const(..)
         | Inst::Uninitialized(..)
