@@ -113,6 +113,8 @@ int main(void) { return identity(external_counter + hidden_counter) + zero(); }
 #[test]
 fn day8_storage_calls_effects_contract_is_semantically_equal() {
     let mut failures = Vec::new();
+    let mut defined_cases = 0usize;
+    let mut invalid_cases = 0usize;
 
     let static_source = SourceFile::new(
         "static-local",
@@ -122,11 +124,37 @@ int main(void) { return bump() * 10 + bump(); }
 "#,
     );
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        defined_cases += 1;
         let output = evocc(&[TARGET, mode, static_source.path()]);
         if output.status.code() != Some(0) || output.stdout != b"12\n" || !output.stderr.is_empty()
         {
             failures.push(format!(
                 "static local via {mode}: status={:?}, stdout={:?}, stderr={}",
+                output.status.code(),
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+    let recursive_static_source = SourceFile::new(
+        "recursive-static-local",
+        r#"
+int encode_depth(int depth) {
+    static int activations = 0;
+    activations += 1;
+    if (depth == 0) return activations;
+    return encode_depth(depth - 1) * 10 + activations;
+}
+int main(void) { return encode_depth(2); }
+"#,
+    );
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        defined_cases += 1;
+        let output = evocc(&[TARGET, mode, recursive_static_source.path()]);
+        if output.status.code() != Some(0) || output.stdout != b"333\n" || !output.stderr.is_empty()
+        {
+            failures.push(format!(
+                "static local shared by recursive activations via {mode}: status={:?}, stdout={:?}, stderr={}",
                 output.status.code(),
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
@@ -145,6 +173,7 @@ int main(void) {
 "#,
     );
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        defined_cases += 1;
         let output = evocc(&[TARGET, mode, fnptr_source.path()]);
         if output.status.code() != Some(0) || output.stdout != b"42\n" || !output.stderr.is_empty()
         {
@@ -153,6 +182,54 @@ int main(void) {
                 output.status.code(),
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+    let recursive_fnptr_source = SourceFile::new(
+        "recursive-fnptr",
+        r#"
+int countdown(int value) {
+    int (*next)(int) = countdown;
+    if (value == 0) return 0;
+    return next(value - 1) + 1;
+}
+int main(void) { return countdown(7); }
+"#,
+    );
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        defined_cases += 1;
+        let output = evocc(&[TARGET, mode, recursive_fnptr_source.path()]);
+        if output.status.code() != Some(0) || output.stdout != b"7\n" || !output.stderr.is_empty() {
+            failures.push(format!(
+                "recursive function pointer via {mode}: status={:?}, stdout={:?}, stderr={}",
+                output.status.code(),
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+    let null_fnptr_source = SourceFile::new(
+        "null-fnptr",
+        r#"
+int main(void) {
+    int (*callee)(int) = 0;
+    return callee(41);
+}
+"#,
+    );
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        invalid_cases += 1;
+        let output = evocc(&[TARGET, mode, null_fnptr_source.path()]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if output.status.code() == Some(0)
+            || !output.stdout.is_empty()
+            || !stderr.contains("E3015")
+            || !stderr.contains("call-through-null-function-pointer")
+        {
+            failures.push(format!(
+                "null function pointer via {mode}: status={:?}, stdout={:?}, stderr={stderr}",
+                output.status.code(),
+                String::from_utf8_lossy(&output.stdout),
             ));
         }
     }
@@ -189,5 +266,8 @@ int main(void) { return middle(); }
         assert_eq!(render_module(&parsed).as_bytes(), output.stdout);
     }
 
+    eprintln!(
+        "day8StorageCallsEffects definedInterpreterRuns={defined_cases}, invalidInterpreterRuns={invalid_cases}"
+    );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
