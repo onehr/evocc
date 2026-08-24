@@ -68,6 +68,39 @@ pub struct Pointer {
     byte_offset: i64,
 }
 
+/// Out-of-band provenance carried by one complete pointer object
+/// representation.
+///
+/// Object pointers keep their allocation and byte offset in [`Pointer`]. A
+/// function pointer has no byte offset; its non-zero identity is assigned by
+/// the translation-unit interpreter in declaration order. `Null` is shared by
+/// both static pointer kinds and is interpreted according to the load result
+/// type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum PointerValue {
+    Null,
+    Object(Pointer),
+    Function(u64),
+}
+
+impl PointerValue {
+    #[must_use]
+    pub const fn object(pointer: Pointer) -> Self {
+        if pointer.object.is_null() {
+            Self::Null
+        } else {
+            Self::Object(pointer)
+        }
+    }
+
+    pub fn function(identity: u64) -> Result<Self, MemoryFault> {
+        if identity == 0 {
+            return Err(MemoryFault::InvalidFunctionIdentity { identity });
+        }
+        Ok(Self::Function(identity))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OffsetDirection {
     Add,
@@ -362,7 +395,7 @@ pub struct ByteSequence {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct PointerFragment {
-    pointer: Pointer,
+    pointer: PointerValue,
     slot_size: u64,
     byte_index: u64,
 }
@@ -415,6 +448,9 @@ pub enum ObservedPointer {
         origin: ObjectOrigin,
         byte_offset: i64,
     },
+    Function {
+        identity: u64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -446,6 +482,7 @@ pub enum MemoryFaultKind {
     InvalidAlignment,
     InvalidAccessSize,
     InvalidPointerLayout,
+    InvalidFunctionIdentity,
     ObjectLimitExceeded,
     ObjectTooLarge,
     TotalBytesLimitExceeded,
@@ -493,6 +530,9 @@ pub enum MemoryFault {
     },
     InvalidPointerLayout {
         layout: AccessLayout,
+    },
+    InvalidFunctionIdentity {
+        identity: u64,
     },
     ObjectLimitExceeded {
         max_objects: u64,
@@ -609,6 +649,7 @@ impl MemoryFault {
             Self::InvalidAlignment { .. } => MemoryFaultKind::InvalidAlignment,
             Self::InvalidAccessSize { .. } => MemoryFaultKind::InvalidAccessSize,
             Self::InvalidPointerLayout { .. } => MemoryFaultKind::InvalidPointerLayout,
+            Self::InvalidFunctionIdentity { .. } => MemoryFaultKind::InvalidFunctionIdentity,
             Self::ObjectLimitExceeded { .. } => MemoryFaultKind::ObjectLimitExceeded,
             Self::ObjectTooLarge { .. } => MemoryFaultKind::ObjectTooLarge,
             Self::TotalBytesLimitExceeded { .. } => MemoryFaultKind::TotalBytesLimitExceeded,
@@ -1229,9 +1270,13 @@ impl MemoryState {
         address: Pointer,
         access: AccessLayout,
     ) -> Result<Pointer, MemoryFault> {
-        self.require_pointer_layout(access)?;
-        let representation = self.load_bytes(address, access)?;
-        self.decode_pointer(address, access, &representation)
+        match self.load_pointer_value(address, access)? {
+            PointerValue::Null => Ok(Pointer::NULL),
+            PointerValue::Object(pointer) => Ok(pointer),
+            PointerValue::Function(_) => {
+                Err(MemoryFault::InvalidPointerRepresentation { address, access })
+            }
+        }
     }
 
     pub fn store_pointer(
@@ -1240,10 +1285,32 @@ impl MemoryState {
         access: AccessLayout,
         value: Pointer,
     ) -> Result<Self, MemoryFault> {
+        self.store_pointer_value(address, access, PointerValue::object(value))
+    }
+
+    /// Load one complete pointer representation without discarding its
+    /// out-of-band object/function/null provenance.
+    pub fn load_pointer_value(
+        &self,
+        address: Pointer,
+        access: AccessLayout,
+    ) -> Result<PointerValue, MemoryFault> {
+        self.require_pointer_layout(access)?;
+        let representation = self.load_bytes(address, access)?;
+        self.decode_pointer_value(address, access, &representation)
+    }
+
+    /// Store one complete pointer representation with its provenance.
+    pub fn store_pointer_value(
+        &self,
+        address: Pointer,
+        access: AccessLayout,
+        value: PointerValue,
+    ) -> Result<Self, MemoryFault> {
         self.require_pointer_layout(access)?;
         self.checked_store_range(address, access)?;
-        self.check_storable_pointer(value)?;
-        let representation = self.encode_pointer(value)?;
+        self.check_storable_pointer_value(value)?;
+        let representation = self.encode_pointer_value(value)?;
         self.store_bytes(address, access, &representation)
     }
 
@@ -1312,13 +1379,14 @@ impl MemoryState {
         address: Pointer,
         access: AccessLayout,
     ) -> Result<(Pointer, WorldState), MemoryFault> {
-        self.require_pointer_layout(access)?;
-        let representation = self.load_bytes(address, access)?;
-        let pointer = self.decode_pointer(address, access, &representation)?;
-        let observed = ObservedValue::Pointer(self.observe_pointer(pointer)?);
-        let next_world =
-            self.append_world(world, VolatileDirection::Load, address, access, observed)?;
-        Ok((pointer, next_world))
+        let (value, next_world) = self.volatile_load_pointer_value(world, address, access)?;
+        match value {
+            PointerValue::Null => Ok((Pointer::NULL, next_world)),
+            PointerValue::Object(pointer) => Ok((pointer, next_world)),
+            PointerValue::Function(_) => {
+                Err(MemoryFault::InvalidPointerRepresentation { address, access })
+            }
+        }
     }
 
     pub fn volatile_store_pointer(
@@ -1328,12 +1396,37 @@ impl MemoryState {
         access: AccessLayout,
         value: Pointer,
     ) -> Result<(Self, WorldState), MemoryFault> {
+        self.volatile_store_pointer_value(world, address, access, PointerValue::object(value))
+    }
+
+    pub fn volatile_load_pointer_value(
+        &self,
+        world: &WorldState,
+        address: Pointer,
+        access: AccessLayout,
+    ) -> Result<(PointerValue, WorldState), MemoryFault> {
+        self.require_pointer_layout(access)?;
+        let representation = self.load_bytes(address, access)?;
+        let pointer = self.decode_pointer_value(address, access, &representation)?;
+        let observed = ObservedValue::Pointer(self.observe_pointer_value(pointer)?);
+        let next_world =
+            self.append_world(world, VolatileDirection::Load, address, access, observed)?;
+        Ok((pointer, next_world))
+    }
+
+    pub fn volatile_store_pointer_value(
+        &self,
+        world: &WorldState,
+        address: Pointer,
+        access: AccessLayout,
+        value: PointerValue,
+    ) -> Result<(Self, WorldState), MemoryFault> {
         self.require_pointer_layout(access)?;
         self.checked_store_range(address, access)?;
-        self.check_storable_pointer(value)?;
-        let representation = self.encode_pointer(value)?;
+        self.check_storable_pointer_value(value)?;
+        let representation = self.encode_pointer_value(value)?;
         let next_memory = self.store_bytes(address, access, &representation)?;
-        let observed = ObservedValue::Pointer(self.observe_pointer(value)?);
+        let observed = ObservedValue::Pointer(self.observe_pointer_value(value)?);
         let next_world =
             self.append_world(world, VolatileDirection::Store, address, access, observed)?;
         Ok((next_memory, next_world))
@@ -1498,8 +1591,19 @@ impl MemoryState {
         Ok(())
     }
 
-    fn encode_pointer(&self, pointer: Pointer) -> Result<ByteSequence, MemoryFault> {
-        let abstract_bits = match self.observe_pointer(pointer)? {
+    fn check_storable_pointer_value(&self, pointer: PointerValue) -> Result<(), MemoryFault> {
+        match pointer {
+            PointerValue::Null => Ok(()),
+            PointerValue::Object(pointer) => self.check_storable_pointer(pointer),
+            PointerValue::Function(identity) if identity != 0 => Ok(()),
+            PointerValue::Function(identity) => {
+                Err(MemoryFault::InvalidFunctionIdentity { identity })
+            }
+        }
+    }
+
+    fn encode_pointer_value(&self, pointer: PointerValue) -> Result<ByteSequence, MemoryFault> {
+        let abstract_bits = match self.observe_pointer_value(pointer)? {
             ObservedPointer::Null => 0,
             ObservedPointer::Object {
                 origin,
@@ -1508,6 +1612,9 @@ impl MemoryState {
                 u128::from(origin.site)
                     ^ u128::from(origin.instance).rotate_left(43)
                     ^ u128::from(byte_offset as u64).rotate_left(79)
+            }
+            ObservedPointer::Function { identity } => {
+                u128::from(identity).rotate_left(17) ^ 0xf17e_c710_5eed_u128
             }
         };
         let mut representation = encode_integer(
@@ -1528,12 +1635,12 @@ impl MemoryState {
         Ok(representation)
     }
 
-    fn decode_pointer(
+    fn decode_pointer_value(
         &self,
         address: Pointer,
         access: AccessLayout,
         representation: &ByteSequence,
-    ) -> Result<Pointer, MemoryFault> {
+    ) -> Result<PointerValue, MemoryFault> {
         let first = representation
             .pointer_fragments
             .first()
@@ -1554,24 +1661,32 @@ impl MemoryState {
                 }
             }
         }
-        self.check_storable_pointer(first.pointer)?;
+        self.check_storable_pointer_value(first.pointer)?;
         Ok(first.pointer)
     }
 
-    fn observe_pointer(&self, pointer: Pointer) -> Result<ObservedPointer, MemoryFault> {
-        if pointer == Pointer::NULL {
-            return Ok(ObservedPointer::Null);
+    fn observe_pointer_value(&self, pointer: PointerValue) -> Result<ObservedPointer, MemoryFault> {
+        match pointer {
+            PointerValue::Null => Ok(ObservedPointer::Null),
+            PointerValue::Function(identity) if identity != 0 => {
+                Ok(ObservedPointer::Function { identity })
+            }
+            PointerValue::Function(identity) => {
+                Err(MemoryFault::InvalidFunctionIdentity { identity })
+            }
+            PointerValue::Object(pointer) => {
+                let object =
+                    self.objects
+                        .get(&pointer.object)
+                        .ok_or(MemoryFault::UnknownObject {
+                            object: pointer.object,
+                        })?;
+                Ok(ObservedPointer::Object {
+                    origin: object.info.origin,
+                    byte_offset: pointer.byte_offset,
+                })
+            }
         }
-        let object = self
-            .objects
-            .get(&pointer.object)
-            .ok_or(MemoryFault::UnknownObject {
-                object: pointer.object,
-            })?;
-        Ok(ObservedPointer::Object {
-            origin: object.info.origin,
-            byte_offset: pointer.byte_offset,
-        })
     }
 
     fn append_world(
@@ -2107,6 +2222,37 @@ mod tests {
             .store_bytes(destination, PTR, &representation)
             .unwrap();
         assert_eq!(memory.load_pointer(destination, PTR).unwrap(), target);
+    }
+
+    #[test]
+    fn function_pointer_provenance_round_trips_and_survives_byte_copy() {
+        let memory = little_memory();
+        let (memory, source) = memory
+            .allocate_static(10, PTR, InitialState::Uninitialized)
+            .unwrap();
+        let (memory, destination) = memory
+            .allocate_static(20, PTR, InitialState::Uninitialized)
+            .unwrap();
+        let function = PointerValue::function(7).unwrap();
+        let memory = memory.store_pointer_value(source, PTR, function).unwrap();
+        assert_eq!(memory.load_pointer_value(source, PTR).unwrap(), function);
+
+        let bytes = memory.load_bytes(source, PTR).unwrap();
+        let memory = memory.store_bytes(destination, PTR, &bytes).unwrap();
+        assert_eq!(
+            memory.load_pointer_value(destination, PTR).unwrap(),
+            function
+        );
+        assert_fault(
+            memory.load_pointer(destination, PTR),
+            MemoryFaultKind::InvalidPointerRepresentation,
+        );
+
+        let memory = memory.store_integer(destination, BYTE, 0).unwrap();
+        assert_fault(
+            memory.load_pointer_value(destination, PTR),
+            MemoryFaultKind::InvalidPointerRepresentation,
+        );
     }
 
     #[test]
