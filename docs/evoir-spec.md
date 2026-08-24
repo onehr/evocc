@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.8.1** | **Authoritative reference** | **2026-08-24**
+**Revision 1.8.2** | **Authoritative reference** | **2026-08-24**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2045,45 +2045,24 @@ form could not represent a legal module.
 
 #### 9.3.2 Shapes Not Yet Emitted
 
-A revision leads its implementation. These forms are specified above and the
-current renderer does not emit them; each is implementation work, tracked here
-so that the gap is declared rather than discovered. An undeclared gap and an
-oversight are indistinguishable from outside.
+A revision may lead its implementation. Any such shapes are listed in this
+block so the gap is declared rather than discovered. Revision 1.8.2 has no
+pending instruction, global, function-header, or effects-clause shape.
 
 ```text
-func @<>(<>) -> (<>) cc = <>
-    effects { reads=<>, writes=<>, volatile=<>, atomic=<>, io=<>, may_trap=<>, may_unwind=<> }
-{
-<> = func_addr @<> : <>
-(<>) = call <>(<>)
-global @<> origin=<> kind=<> visibility=<> size=<> align=<> bytes=<> initialized=<>
 ```
 
-The function header is listed because Section 9.4 makes the effects clause
-mandatory, which the current renderer predates. `func_addr` and the indirect
-callee are new in this revision. The empty `ret` is **not** listed here: the
-renderer already emits it, and an earlier draft wrongly declared it pending
-because the tool that produced that list skipped format strings containing no
-placeholder.
+The empty `ret`, mandatory effects clause, `func_addr`, indirect callee, full
+global attributes, positional `%arg` binders and parenthesized empty block
+argument list are all emitted. Whole-module syntax tests, rather than the shape
+audit, carry the latter two rules.
 
-The current renderer also emits `^entry:` for a block with no arguments and
-uses stored source parameter names in function headers. Both are superseded by
-the canonical rules above. They are declared here rather than in the shape
-table because the audit hint deliberately does not scan block headers or
-parameter-field semantics; whole-module syntax tests carry these migrations.
-
-The form each replaces is **superseded**: it is what the renderer emits today
-and is not valid under this revision. A conforming parser rejects it, so the
-renderer must be updated before any checker built from this specification can
-read its output.
+The form each replaces is **superseded**. There are no superseded renderer forms
+remaining in Revision 1.8.2; this empty block remains machine-readable so the
+audit fails if an obsolete form is reintroduced without being declared.
 
 ```text
-func @<>(<>) -> (<>) cc = target_default {
-global @<> origin=<> storage=<> size=<> align=<> bytes=<> initialized=<>
 ```
-
-The superseded entry names `target_default` because that is the only calling
-convention the current renderer emits; the specified form leaves it open.
 
 ### 9.4 Canonical Byte Form
 
@@ -3007,6 +2986,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.8.2 | 2026-08-24 | Records implementation alignment for the complete Section 9 function, global, `func_addr`, and indirect-call shapes; empties the pending and superseded shape manifests without changing their machine-readable contract. Clarifies that shape comparison is an audit hint while whole-module round-trip and the independent field-sentinel manifest carry syntax completeness. |
 | 1.8.1 | 2026-08-24 | Clarifies the Day 8 P0 extractor after the first standalone-corpus replay exposed an ambiguity: cost is region-relative newly emitted instruction count with the existing zero-cost `const` convention; selecting a non-root `source=before` witness reuses its earlier same-block SSA value, emits nothing and terminates extraction closure, while the replacement root remains structural and non-constant derived nodes are emitted. Records the mandatory root exclusion, the no-register-pressure scope, and the existing cross-block prohibition so a false-green zero-rewrite implementation cannot satisfy the corpus gate. |
 | 1.8 | 2026-08-24 | Makes the textual form load-bearing rather than a debugging convenience: Section 9 becomes a byte grammar with explicit separators, rejection rules, canonical empty-list/positional-binder spellings, complete effects/global forms and deterministic rendering. Freezes independently derived P0 eligibility as one replacement root plus a same-block witness closure, poison/effect fixed points, traversal order, witness/seed manifests, optional accepted-region subsequences and mechanical reassembly. EVP1 carries exact variable bindings, constant payloads, before/derived node origin, complete deterministic merge receipts, explicit extraction wiring and a reviewed `p0.scalar.v1` registry whose digest covers side conditions; constants cost zero so identity comparisons are real strict improvements, certificate IDs are local snapshots, and history-only persistent nodes cannot become unrecorded premises. Adds `fnptr<Sig>`, `func_addr`, indirect calls and `E3015`–`E3017`/`E3019`; gives function pointers explicit Function/Null provenance; assigns `E3018` uniquely to invalid lifetime end; distinguishes file, function-static and string-literal globals so generated identities and visibility are validator-checkable; and makes Section 4.6 the sole call-effect authority with exact validator recomputation. Defines canonical persistent-state identity, revision behavior and one joint outer optimization transaction, fixes the checker interface and crate boundary, and records which components are shared by fail-safe direction. Defers proof minimisation, alias-dependent rewrites, CFG region splitting and attribute-derived summaries. |
 | 1.7 | 2026-08-22 | Defines the Day 7 `(ObjectId, signed byte_offset)` provenance model, immutable initialized/lifetime-aware `mem<all>` snapshots, module globals and automatic objects, state-preserving pointer/access guards with exact `E3001`/`E3009`–`E3014` diagnostics, and observable volatile world traces. It freezes executable pointer/memory syntax while deferring pointer-valued static relocations, pointer/integer conversions, region splitting, alias-dependent memory rewrites, atomics, heap-library semantics, and backend lowering. |

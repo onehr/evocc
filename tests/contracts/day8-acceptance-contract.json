@@ -27,10 +27,10 @@
   },
   "semanticsFrozenElsewhere": {
     "document": "docs/evoir-spec.md",
-    "revision": "1.8.1",
-    "authoritativeSha256": "998337ec92ff3f89591a1b61b7005e45f769747662454a98956cbc6bdc258d54",
-    "reviewStatus": "PASS_BOTH_CHECKLISTS_AND_APPROVED_COST_ERRATUM",
-    "reviewRule": "The specification became authoritative Revision 1.8 only after proof-format/eligibility and storage/calls/effects both passed. Revision 1.8.1 is the approved extraction-cost erratum over the exact bytes named above; its optimized-count guard lands before any production implementation of that ruling.",
+    "revision": "1.8.2",
+    "authoritativeSha256": "619cc4804833185e2327236616f11f4a627e422d6e841f3c3d35a00a28dad701",
+    "reviewStatus": "PASS_BOTH_CHECKLISTS_APPROVED_COST_ERRATUM_AND_SECTION9_ALIGNMENT",
+    "reviewRule": "The specification became authoritative Revision 1.8 only after proof-format/eligibility and storage/calls/effects both passed. Revision 1.8.1 is the approved extraction-cost erratum; Revision 1.8.2 records that the already-reviewed Section 9 shapes are now all emitted and changes no semantic rule.",
     "mustFreeze": [
       "canonical section 9 byte grammar, including token rules, ordering, whitespace, trailing newline, and parser reject rules",
       "P0 eligibility: one replacement root plus its deterministic same-block witness closure, exact operator and width allowlist, poison taint traversal and fixed-point order, function/block/instruction traversal order",

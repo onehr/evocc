@@ -18,10 +18,10 @@ by one hole.
 
 Does not cover: block headers, the closing brace, blank-line placement,
 inter-item separators, operand *types*, field ordering inside attribute lists, or
-whether a parser built from Section 9.3 accepts these bytes. Those are properties
-of whole modules, and only a round-trip over real modules establishes them. That
-test does not exist yet; until it does, nothing here should be read as evidence
-that the textual format is completely specified.
+whether a parser built from Section 9.3 accepts these bytes. Whole-module
+round-trip tests cover parser/renderer agreement; the independently maintained
+field-sentinel manifest covers omission. Neither property is established by this
+shape audit.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ SPEC = ROOT / "docs/evoir-spec.md"
 HOLE = "<>"
 PLACEHOLDER = re.compile(r"\{[^{}]*\}")
 STRING = re.compile(r'"((?:[^"\\]|\\.)*)"')
-MNEMONIC = ("br", "ret", "cond_br", "trap.", "ub.assume.", "global @")
+MNEMONIC = ("br", "ret", "cond_br", "trap.", "ub.assume.")
 
 
 def production_code(source: str) -> str:
@@ -67,7 +67,18 @@ def is_form(literal: str) -> bool:
     returns nothing, and a version of this tool that required a placeholder
     missed it.
     """
-    text = unescape(PLACEHOLDER.sub(HOLE, literal))
+    return is_rendered_form(unescape(PLACEHOLDER.sub(HOLE, literal)))
+
+
+def is_rendered_form(text: str) -> bool:
+    """Whether already-normalized renderer text is one canonical shape line."""
+    # Validation uses the fixed prefix `global @` when checking an already
+    # rendered line. It is not itself a renderer form: the canonical global
+    # form always carries the complete attribute sequence.
+    if text.startswith("global @"):
+        return " origin=" in text
+    if text.startswith("effects {") or text == "{":
+        return True
     if " = " in text:
         return True
     return any(text == m or text.startswith(m if not m[-1].isalnum() else m + " ")
@@ -75,11 +86,13 @@ def is_form(literal: str) -> bool:
 
 
 def renderer_shapes(source: str) -> set[str]:
-    return {
-        collapse(unescape(PLACEHOLDER.sub(HOLE, literal)))
-        for literal in STRING.findall(source)
-        if is_form(literal)
-    }
+    shapes = set()
+    for literal in STRING.findall(source):
+        rendered = unescape(PLACEHOLDER.sub(HOLE, literal))
+        for line in rendered.splitlines():
+            if is_rendered_form(line):
+                shapes.add(collapse(line.strip()))
+    return shapes
 
 
 def spec_block(marker: str) -> set[str]:
