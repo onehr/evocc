@@ -56,6 +56,30 @@ fn certificate(input: &str, output: &str) -> String {
     format!("evp1\nregistry p0.scalar.v1 {REGISTRY_SHA256}\ninput {input}\noutput {output}\n")
 }
 
+fn add_zero_certificate(input: &str, output: &str) -> String {
+    format!(
+        concat!(
+            "evp1\n",
+            "registry p0.scalar.v1 {REGISTRY_SHA256}\n",
+            "input {input}\n",
+            "region main/entry/1 root %v2 witnesses 2 seeds 1\n",
+            "witness 0 main/entry/0\n",
+            "witness 1 main/entry/1\n",
+            "seed 0 %v0 bits<32> input c0\n",
+            "node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-\n",
+            "node 1 n1 c2 source=before op=add sort=bits<32> effect=pure attrs=- children=c0,c1\n",
+            "rewrite 2 p0_001_add_zero_rhs c2 c0 c0 node:n1 class:c0 bind ?x:c0\n",
+            "extract 0 c0 seed:0\n",
+            "root c0\n",
+            "endregion\n",
+            "output {output}\n",
+        ),
+        REGISTRY_SHA256 = REGISTRY_SHA256,
+        input = input,
+        output = output,
+    )
+}
+
 fn assert_status(output: &Output, expected: i32, label: &str) {
     assert_eq!(
         output.status.code(),
@@ -103,4 +127,44 @@ fn day8_proof_format_eligibility_and_binding_contract() {
 
     inputs.write(b"", b"", "evp0\n");
     assert_status(&inputs.run(), 2, "unknown proof version is malformed");
+}
+
+#[test]
+fn nonempty_reviewed_rewrite_is_replayed_and_reassembled() {
+    let before = concat!(
+        "func @main(%arg0: bits<32>) -> (bits<32>) cc = target_default\n",
+        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n",
+        "{\n",
+        "^entry(%v0: bits<32>):\n",
+        "    %v1 = const.bits<32> 0\n",
+        "    %v2 = add.bits<32> %v0, %v1\n",
+        "    ret %v2\n",
+        "}\n",
+    );
+    let after = concat!(
+        "func @main(%arg0: bits<32>) -> (bits<32>) cc = target_default\n",
+        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n",
+        "{\n",
+        "^entry(%v0: bits<32>):\n",
+        "    %v1 = const.bits<32> 0\n",
+        "    ret %v0\n",
+        "}\n",
+    );
+    let input_digest = evocc_proof::sha256_hex(before.as_bytes());
+    let output_digest = evocc_proof::sha256_hex(after.as_bytes());
+    let inputs = Inputs::new();
+    inputs.write(
+        before.as_bytes(),
+        after.as_bytes(),
+        &add_zero_certificate(&input_digest, &output_digest),
+    );
+    assert_status(&inputs.run(), 0, "reviewed add-zero proof");
+
+    let mutated = after.replace("ret %v0", "ret %v1");
+    inputs.write(
+        before.as_bytes(),
+        mutated.as_bytes(),
+        &add_zero_certificate(&input_digest, &output_digest),
+    );
+    assert_status(&inputs.run(), 3, "after-module mutation");
 }
