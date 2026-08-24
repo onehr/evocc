@@ -1,122 +1,32 @@
 {
-  "schemaVersion": 1,
-  "contractId": "c30.day9.acceptance.v1",
-  "contractState": "locked",
-  "measurementStatus": "NOT_MEASURED",
-  "purpose": "Freeze the pre-execution authority for the GNU extension stage before any of it is measured. Contains no measured outcome and must not be result-shaped after execution.",
-  "baseline": {
-    "commit": "24abd71",
-    "day9EntryCondition": "SATISFIED per tests/contracts/day5-debt-discharge-receipt.json",
-    "kernelTelemetry": {
-      "lastRun": "20260817T225959Z-57627",
-      "staleBy": "three stages of compiler change; must be refreshed before prioritisation",
-      "dualOracleCleanParse": "1/16",
-      "rawPreprocess": "0/16"
-    }
-  },
-  "requiredWork": {
-    "source": "docs/roadmap.md day 9 critical work column",
-    "items": [
-      "GNU statement expressions",
-      "typeof and __typeof__",
-      "__attribute__ syntax, preserved on every declaration it can attach to",
-      "designated initializers",
-      "compound literals",
-      "e-class analysis lattices: constant value and known bits",
-      "bounded tiered rewrite scheduler with match fuel and no-progress stop"
-    ],
-    "orderingRule": "Front-end items are implemented in the order refreshed kernel telemetry ranks them, not in the order listed. The list is scope, not sequence."
-  },
-  "fixedOrder": [
-    "1. Refresh telemetry: re-run reconnaissance at the baseline commit with the frozen 16-TU cohort unchanged, seal it with the pinned observer, and classify every failed lane by root construct. First diagnostics truncate at the first error, so classification uses the reduced reproducers and further reductions within the window, not the first diagnostic alone.",
-    "2. Route: each failure is assigned to exactly one of {this stage, preprocessing hardening, other}. The E0104 unknown-compiler lanes are preprocessing hardening and do not enter this stage.",
-    "3. Specification revision 1.9, docs-only, reviewed before any test encodes it.",
-    "4. Tests-only red window: kernel-derived parser fixtures for the lanes routed here; synthetic semantic fixtures per construct, differential across both interpreters; lattice and scheduler fixtures.",
-    "5. Implementation in telemetry order. Each construct closes its own declared red set.",
-    "6. Publication: the parse and preprocess percentages are produced by a tracked script from observer-sealed evidence, per lane, with the command beside each number."
+  "contractId": "c30.day9.v2",
+  "state": "locked, not measured",
+  "whatAContractIs": "One page. It freezes a claim before it is measured so the measurement cannot be reshaped to fit, and gives a fresh clone a fixed target. Anything that does not let someone say 'you are wrong, here is the evidence' does not belong in it. Receipts carry command, number, and the digest of evidence that was actually replayed; nothing else.",
+  "baseline": "eca1704; workspace 683 green; kernel telemetry 4c07c56: 30 parse lanes stop on two __attribute__ lines, 16 preprocess lanes are E0104 (Day 16)",
+  "scope": [
+    "A attributes: parse in every GNU position, attach by position, preserve losslessly; apply only aligned and packed, to layout, checked against the GCC/Clang layout oracle",
+    "B publication: a tracked script runs reconnaissance under the pinned observer and writes per-lane counts with the command beside each number; refuses to write on any lane regression",
+    "C typeof, statement expressions, designated initializers, compound literals",
+    "D known-bits lattice, two-tier bounded scheduler, certificate evp2 with premises recomputed by the checker"
   ],
-  "semanticsFrozenElsewhere": {
-    "document": "docs/evoir-spec.md",
-    "revision": "1.9",
-    "mustFreeze": [
-      "C-HIR representation of an attribute list: name, arguments as written, source span, attachment point; preserved losslessly regardless of whether a semantic is applied",
-      "which attributes have a semantic in this stage and what it is; every other attribute is preserved and recorded as not applied, by name, in the receipt",
-      "typeof of a type and of an expression; an expression operand is not evaluated unless its type is variably modified, which this stage rejects",
-      "statement expression: value is the last expression statement, a trailing declaration or non-expression statement yields void, block-scoped objects end at the closing brace, lowering to EvoIR block structure",
-      "designated initializer paths as SubobjectPath steps, later designators overriding earlier ones, and the diagnostic for a designator outside the object",
-      "compound literal: an object with an allocation site in the shared manifest, automatic in block scope and static at file scope",
-      "analysis lattices: constant value and known bits, their join, and that facts only ever narrow within one saturation transaction",
-      "scheduler tiers, match fuel, epoch budget, and the no-new-best stop rule, all recorded in the certificate so a checker can confirm the budget was respected"
-    ]
-  },
-  "requiredTestProperties": {
-    "kernelDerived": "Every lane routed to this stage has a fixture reduced from the real translation unit, sealed by the observer, that fails at the baseline and passes when its construct lands.",
-    "noSilentAcceptance": "A construct this stage does not implement is rejected with a named diagnostic, never parsed as something else. An attribute that is preserved but not applied is visible in the C-HIR dump.",
-    "differential": "Every semantic fixture executes identically in the C-HIR and EvoIR interpreters; statement-expression sequencing and designated-initializer overriding are checked by observable side effects, not by final value alone.",
-    "lattices": "A known-bits fact that enables a fold is exercised by a program whose fold is impossible without it; facts never widen within a transaction.",
-    "scheduler": "Budget exhaustion returns the byte-identical input; the no-progress stop fires on a corpus where saturation would not; the certificate records epochs and fuel consumed.",
-    "dashboardMonotone": "Dual-oracle clean parse and raw preprocess counts do not regress against the refreshed telemetry. A construct that fixes one lane must not break another."
-  },
-  "gate": {
-    "roadmapGate": "Kernel parse and preprocess percentage is published automatically.",
-    "form": "Process gate: the publication exists, is reproducible from sealed evidence, and names its command. It is deliberately not a predicted percentage; the previous stage that froze an outcome number before its telemetry existed could not be closed.",
-    "cohort": "The 16-TU cohort is unchanged. Changing it to move a percentage is the failure the cohort freeze exists to prevent; representativeness is a later stage's question."
-  },
-  "outOfScope": [
-    "E0104 unknown-compiler and all header or predefined-macro hardening",
-    "inline assembly and asm goto",
-    "attribute semantics beyond the frozen list",
-    "variably modified types under typeof",
-    "integer range and non-zero lattices",
-    "any memory or alias-dependent rewrite"
-  ],
-  "processRules": {
-    "redWindow": "One tests-only checkpoint opens the window; failures come from declared missing constructs, never from a build error or malformed fixture; no commit widens the declared set; each implementation commit narrows it; the final one closes it.",
-    "noTestSuppression": "No commit disables, deletes or ignores a test.",
-    "telemetryFirst": "No production edit before step 1 and step 2 are complete and sealed.",
-    "timebox": "Telemetry refresh and routing: half a day. Specification: one day beyond review. Implementation: three days. Overrun is reported, not absorbed."
-  },
-  "acceptance": {
-    "measuredOnly": "Every figure is measured, labelled with what it counts, and accompanied by its command.",
-    "required": [
-      "every lane routed to this stage is green, or is named as still failing with its root cause",
-      "publication script produces the dashboard from sealed evidence and is tracked",
-      "dual-oracle clean parse and raw preprocess counts are at or above the refreshed telemetry",
-      "full regression, Clippy with warnings denied, format check, diff check, two isolated offline clone replays"
-    ],
-    "receiptPath": "tests/contracts/day9-acceptance-receipt.json"
-  },
+  "gate": "Kernel parse/preprocess counts published by the script from sealed evidence. Process gate; no predicted number. Counts must be >= 1/16 dual-oracle parse and 0/16 raw preprocess.",
+  "order": "A, B, then re-run reconnaissance; C and D in the order the refreshed first-error sites rank them. The list is scope, not sequence.",
   "rulings": {
-    "rulingDate": "2026-08-25",
-    "attributeSemantics": {
-      "decision": "Every attribute is preserved losslessly in C-HIR. Only `packed` and `aligned` are applied, to the target data layout. Every other attribute is recorded as preserved-not-applied, by name, in the receipt.",
-      "why": "packed and aligned change object layout, the kernel uses both pervasively, and the layout service and its oracle corpus already exist to validate them. The remaining attributes carry backend, linkage or effect semantics that belong to later stages."
-    },
-    "cohort": {
-      "decision": "The sixteen-TU cohort frozen on 2026-08-17 is unchanged for this stage.",
-      "why": "Comparability with the baseline outranks representativeness. Changing the cohort to move a percentage is the failure the freeze exists to prevent."
-    }
+    "attributeSemantics": "preserve all; apply aligned and packed only; list the rest by name in the receipt",
+    "cohort": "the frozen 16 units, unchanged"
   },
-  "reviewChecklists": {
-    "status": "PENDING",
-    "rule": "Both checklists must report PASS before the tests-only checkpoint lands. A checklist item is answered by citing the section that settles it, or by naming what the section leaves open.",
-    "frontEndConstructs": [
-      "10.1.9: does the placement table cover every position the cohort's headers use, and is attachment unambiguous for a specifier-position attribute in a multi-declarator declaration?",
-      "10.1.9: are the aligned/packed rules exactly GCC-14 and Clang-19 behaviour on AArch64, including packed+aligned(N) and aligned on a typedef of __int128, and does the layout corpus gain a case for each rule?",
-      "10.1.9: is the preserved-not-applied list something the receipt can actually produce from C-HIR, by name, with counts?",
-      "10.1.10: is 'type before lvalue conversion, unevaluated' sufficient for every typeof the cohort uses?",
-      "10.1.11: does the join-block lowering interact correctly with break/continue/return leaving the expression and with object lifetimes at the closing brace?",
-      "10.1.12: does later-wins overriding match GCC for overlapping designators, and is the range form's expansion bounded?",
-      "10.1.13: is one allocation site per occurrence consistent with the shared manifest's ordering rule when a literal appears inside a loop?",
-      "6.3: E2902 retired, E2903-E2906 present with one message each, none duplicated."
-    ],
-    "latticesSchedulerCertificate": [
-      "8.10: is the order/meet/top definition internally consistent, and is 'contradiction on a known bit invalidates the union' enforced by producer and checker alike?",
-      "8.10: can each transfer in the table be recomputed by a checker from the region's nodes alone, with no search and no shared code?",
-      "8.11: are tier order, fuel max(256, 8n), node and epoch ceilings, and the stop rule each independently verifiable from the certificate, and is it stated which stop reasons are not verified?",
-      "11.3: does evp2 remain a strict superset of evp1, and does a checker reject an evp1 certificate that uses a Tier B rule?",
-      "11.3: are epoch markers well defined per region, and is the budget check precise about what consumption it compares to which bound?",
-      "11.3: is the premise well-formedness rule sufficient for a reader to reject a malformed fact without semantic knowledge?"
-    ]
-  }
+  "processRules": [
+    "One tests-only commit opens a red window; its failures come from declared missing constructs, never from a build error. No commit widens the declared set; each implementation commit narrows it; the last closes it.",
+    "No commit disables, deletes or ignores a test.",
+    "Format changes migrate the existing corpus in the same commit.",
+    "Review of specification revision 1.9 is one round, PASS or FAIL per section, due within one working day of request. If it does not arrive, the red window opens and review findings land as amendments to it."
+  ],
+  "outOfScope": "E0104 and predefined macros; inline asm; attribute semantics beyond aligned/packed; variably modified types; range and non-zero lattices; memory rewrites",
+  "acceptance": [
+    "every lane routed here green, or named as still failing with its root cause",
+    "publication script tracked; dashboard receipt from sealed evidence",
+    "preserved-not-applied attributes listed by name",
+    "workspace, clippy -D warnings, fmt, diff-check green; one isolated offline clone replay"
+  ],
+  "receipt": "tests/contracts/day9-acceptance-receipt.json: per item above, the command and the number"
 }
