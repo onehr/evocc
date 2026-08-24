@@ -32,16 +32,27 @@ layering_contract() {
 }
 
 run_gate layering layering_contract
+run_gate grammar-shapes \
+  python3 tools/check-textual-grammar.py
 run_gate syntax \
-  cargo test -p evocc --offline --test day8_contract_red \
+  cargo test -p evocc --locked --offline --test day8_contract_red \
   day8_section9_contract_is_canonical_and_complete -- --exact
+run_gate syntax-field-completeness \
+  cargo test -p evocc-evoir --locked --offline --test section9_completeness
 run_gate persistent-state \
-  cargo test -p evocc-eqopt --offline --test day8_persistent_state_contract
+  cargo test -p evocc-eqopt --locked --offline --test day8_persistent_state_contract
 run_gate proof-boundary \
-  cargo test -p evocc-proofcheck --offline --test day8_proof_contract
+  cargo test -p evocc-proofcheck --locked --offline --test day8_proof_contract
+run_gate proof-corpus \
+  cargo test -p evocc-proofcheck --locked --offline --test day8_corpus_replay
 run_gate storage-calls-effects \
-  cargo test -p evocc --offline --test day8_contract_red \
+  cargo test -p evocc --locked --offline --test day8_contract_red \
   day8_storage_calls_effects_contract_is_semantically_equal -- --exact
+run_gate indirect-diagnostics \
+  cargo test -p evocc-evoir --locked --offline --test day8_indirect_diagnostics
+run_gate capability-boundary \
+  cargo test -p evocc --locked --offline --test day7_scalar_eq_cli \
+  exact_scalar_eq_probes_are_green_while_broad_and_near_miss_probes_stay_red -- --exact
 
 printf 'DAY8_RED_SUMMARY %d/%d gates pass\n' "$passed" "$total"
 test "$passed" -eq "$total"
