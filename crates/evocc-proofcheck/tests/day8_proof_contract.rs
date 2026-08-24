@@ -203,9 +203,9 @@ fn reviewed_replay_is_derived_from_module_identity_not_one_hardcoded_fixture() {
         "func @renamed(%arg0: bits<32>) -> (bits<32>) cc = target_default\n",
         "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n",
         "{\n",
-        "^entry(%v7: bits<32>):\n",
-        "    %v8 = const.bits<32> 0\n",
-        "    ret %v7\n",
+        "^entry(%v0: bits<32>):\n",
+        "    %v1 = const.bits<32> 0\n",
+        "    ret %v0\n",
         "}\n",
     );
     let input = evocc_proof::sha256_hex(before.as_bytes());
