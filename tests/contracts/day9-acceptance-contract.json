@@ -28,5 +28,7 @@
     "preserved-not-applied attributes listed by name",
     "workspace, clippy -D warnings, fmt, diff-check green; one isolated offline clone replay"
   ],
-  "receipt": "tests/contracts/day9-acceptance-receipt.json: per item above, the command and the number"
+  "receipt": "tests/contracts/day9-acceptance-receipt.json: per item above, the command and the number",
+  "cutLine": "A and B only, ruled 2026-08-25. C and D are deferred scope, not partial work; their red sets are not opened.",
+  "reviewRequested": "2026-08-25, revision 1.9 sections 10.1.9 and 8.10-8.11/11.3; one round; findings land as amendments"
 }
