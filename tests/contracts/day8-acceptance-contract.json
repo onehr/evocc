@@ -28,20 +28,48 @@
   "semanticsFrozenElsewhere": {
     "document": "docs/evoir-spec.md",
     "revision": "1.8",
+    "authoritativeSha256": "b493c676a9035a7c8016b1d96e667a919c2297af4849ab5d62139acd01055edc",
+    "reviewStatus": "PASS_BOTH_CHECKLISTS",
+    "reviewRule": "The specification became authoritative Revision 1.8 only after proof-format/eligibility and storage/calls/effects both passed against the exact bytes named above.",
     "mustFreeze": [
       "canonical section 9 byte grammar, including token rules, ordering, whitespace, trailing newline, and parser reject rules",
-      "P0 eligibility: region granularity, operator allowlist, poison taint traversal and fixed-point order, function/block/instruction traversal order",
-      "seed manifest fields, sort order and identity; region identity construction",
+      "P0 eligibility: one replacement root plus its deterministic same-block witness closure, exact operator and width allowlist, poison taint traversal and fixed-point order, function/block/instruction traversal order",
+      "witness and seed manifest fields, sort order and identity; region identity construction; an accepted-region certificate is an optional duplicate-free subsequence rather than a claim that optimization is mandatory",
       "reassembly of multiple extracted regions into a complete after-module",
       "the checker's Cargo package name, binary name, argument interface, probe spelling, and whether the driver answers a probe of its own",
+      "EVP1 node payloads, before/derived provenance, complete merge receipts, extraction wiring, zero-cost constants so identity-comparison rewrites are strict improvements, and the exact reviewed registry bytes including side conditions and digest",
       "exit statuses distinguishing malformed input from well-formed-but-invalid",
       "the crate dependency boundary as a normative constraint rather than a convention",
-      "EqualityState identity, revision counter, transaction and rollback semantics",
-      "static locals: one module-global identity, initialized once, never per frame",
-      "function pointers: signature-carrying pointer type, address-of-function, direct and indirect callee forms, null and mismatch diagnostics, provenance across a memory round trip",
-      "EffectSummary: IR storage, fixed-point derivation, textual form, and the validator rule that recomputes it and refuses a stale or forged one"
+      "EqualityState identity from the first canonical module and frozen target-layout digest, revision counter, one outer optimization transaction and joint rollback semantics",
+      "static locals: one lexically valid collision-free module-global identity, initialized once, never per frame; the global kind distinguishes file, function-static and string-literal objects so the validator can enforce generated names",
+      "function pointers: signature-carrying pointer type, address-of-function, direct and indirect callee forms, distinct null/non-function/static-call-site/dynamic-target diagnostics, provenance across a memory round trip",
+      "EffectSummary: IR storage, fixed-point derivation, textual form, and the validator rule that recomputes it and refuses a stale or forged one; every typed runtime diagnostic has one unique code and exact message"
     ],
-    "reviewProtocol": "One revision, reviewed as two checklists over the single document: proof format and eligibility, then storage, calls and effects. Both must be approved before the tests-only checkpoint lands."
+    "reviewProtocol": "One revision, reviewed as two checklists over the single document: proof format and eligibility, then storage, calls and effects. Both must be approved before the tests-only checkpoint lands.",
+    "reviewEvidence": {
+      "proofFormatAndEligibility": {
+        "status": "PASS",
+        "checked": [
+          "eligibility and poison/effect fixed points are independently derivable and deterministically ordered",
+          "witness/seed manifests, optional region subsequences and reassembly bind the complete after-module",
+          "EVP1 carries replayable nodes, exact ?variable bindings, rewrites, congruence and extraction",
+          "p0.scalar.v1 is 27 canonical lines with SHA-256 ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9",
+          "constant cost makes all advertised identity rewrites reachable and current-transaction proofs cannot depend on history-only nodes",
+          "persistent identity, revision and outer transaction rollback are unambiguous"
+        ]
+      },
+      "storageCallsAndEffects": {
+        "status": "PASS",
+        "checked": [
+          "global kind, generated spelling, visibility, initialization and lifetime distinguish all three static-duration cases",
+          "object and function pointers have distinct static types with Null, Object and Function runtime provenance",
+          "direct/indirect call validation, memory round trips and four distinct invalid-call diagnostics are reachable and non-conflating",
+          "function summaries have one storage form, least-fixed-point derivation, indirect-call top and exact validator recomputation",
+          "the diagnostic authority contains 18 unique codes and the textual grammar carries every new field"
+        ]
+      },
+      "implementationGapIsNotReviewFailure": "The current renderer still emits exactly two declared superseded forms (old function header and old global without kind/visibility). That is expected implementation RED for the next checkpoint; it is not evidence against the now-frozen contract."
+    }
   },
   "crateBoundary": {
     "rationale": "The IR crate currently depends on the e-graph crate and re-exports the optimizer, so any checker linking the IR would pull the optimizer in transitively and dissolve the boundary it exists to establish. Left uncorrected, persistent equality state would land inside the IR crate and make a per-pass inversion permanent.",
@@ -51,6 +79,12 @@
       "the checker depends on the IR crate and the proof crate only, and never on the optimizer or the e-graph"
     ],
     "enforcedBy": "a test reading cargo metadata, so a later dependency fails rather than passing quietly"
+  },
+  "reviewedRegistry": {
+    "name": "p0.scalar.v1",
+    "canonicalBytesAuthority": "docs/evoir-spec.md section 11.6",
+    "sha256": "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9",
+    "digestCovers": "rule ids, lhs, rhs, side conditions, order and final newline"
   },
   "requiredTestProperties": {
     "independenceOfTheChecker": {
@@ -75,19 +109,22 @@
       "the reconstructed after-module is compared to after.evo in full canonical bytes, not by extracted root or output commitment alone",
       "altering the input module, the seed manifest, the region identity or the reconstructed output invalidates an otherwise valid proof",
       "a certificate cannot extend the rule registry it is checked against",
-      "constant folds are recomputed by the checker rather than accepted as claimed"
+      "constant folds are recomputed by the checker rather than accepted as claimed",
+      "an EVP1 transaction uses only current before-module witness nodes and transaction-derived nodes; history-only persistent representations cannot become an unrecorded proof premise"
     ],
     "equalityState": [
       "the class of a value is readable after the producing call returns",
       "after x+0 reduces to x, the class contains both representations; a test asserting only the extracted value passes on a destructive optimizer and establishes nothing",
       "optimizing twice leaves class identities unchanged and adds no duplicate node",
+      "identity comparisons have a measured strict cost improvement because constants cost zero while non-constant operator nodes cost one plus their children",
       "every union carries a receipt, and replaying the accumulated history re-derives exactly the partition the state holds, asserted after two passes rather than one",
-      "on budget, proof, validation or extraction failure the module and the database roll back together, observed on the database rather than only on the returned module"
+      "on budget, proof, validation or extraction failure the module and the database roll back together, observed on the database rather than only on the returned module",
+      "ingest, saturation and extraction do not publish intermediate commits inside one driver optimization; the revision advances exactly once on a mutating success and not at all on a no-op or failure"
     ],
     "storageCallsAndEffects": [
       "a static local retains its value across calls, is initialized exactly once, and is shared by two recursive activations",
       "an array of function pointers dispatches by index; a pointer stored to memory and loaded back is callable and keeps its identity",
-      "a null callee and a signature mismatch are typed diagnostics; recursion through a pointer terminates under the step budget",
+      "a null callee, non-function provenance, a static call-site signature mismatch and a runtime selected-target signature mismatch are distinct typed diagnostics; recursion through a pointer terminates under the step budget",
       "a direct call's effect summary is the least fixed point over its strongly connected component",
       "a volatile access anywhere in the callee closure makes every transitive caller volatile",
       "an unknown indirect callee takes the specification's top summary, and the validator refuses a stale summary"

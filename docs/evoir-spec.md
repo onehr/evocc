@@ -96,18 +96,19 @@ or triples the rule surface.
 
 ### 1.3 Pointer Types
 
-A pointer is a typed reference into one address space. In the Day 7 abstract
-machine its runtime identity is exactly:
+A pointer is a typed reference to either an object or a function. In the Day 8
+abstract machine its runtime identity is exactly:
 
 ```text
 Pointer {
-    object: ObjectId,
+    provenance: Object(ObjectId) | Function(Symbol) | Null,
     byte_offset: signed 64-bit byte offset,
 }
 ```
 
-`ObjectId(0)` is the canonical null provenance and never names an object.
-Every non-null `ObjectId` names one storage instance, is allocated
+`Null` has offset zero. `Function` also has offset zero and can be consumed only
+by call/comparison or transported as a value; it is never an access address.
+Every `Object(ObjectId)` names one storage instance, is allocated
 monotonically, and is never reused after that object's lifetime ends. The
 signed byte offset is kept separate from provenance; checked addition overflow
 reports `E3011`, and no host address or Rust pointer participates in the
@@ -188,7 +189,7 @@ return values from calls. A `tuple<>` (empty tuple) is equivalent to `void`.
 
 An EvoIR module contains an ordered global-object table followed by an ordered
 function table. A global object binds one unique symbol, stable source-origin
-site, and storage kind (`static` or `string_literal`) to a fixed size and
+site, and global kind (`file`, `function_static`, or `string_literal`) to a fixed size and
 alignment, initial bytes, and a byte-for-byte initializedness bitmap. Module
 interpretation allocates every global exactly once before entering the
 requested function; `global_addr` then returns that object's stable
@@ -215,11 +216,11 @@ arguments are the SSA definitions that the CFG may use. A call binds actual
 arguments to the entry block arguments positionally.
 
 ```text
-func @name(%p1: T1, ..., %pN: TN, %m: mem<R>, %w: world)
-    -> (R1, ..., RK, mem<R>, world)
-    cc = target_default
+func @name(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
 {
-    ; blocks
+^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
+    ret %v0, %v1, %v2
 }
 ```
 
@@ -241,11 +242,10 @@ A basic block has:
 - Exactly one **terminator instruction**
 
 ```text
-^block_name(%arg1: T1, ..., %argN: TN):
-    inst1
-    inst2
-    ...
-    terminator
+^b1(%v0: bits<32>):
+    %v1 = const.bits<32> 1
+    %v2 = add.bits<32> %v0, %v1
+    ret %v2
 ```
 
 ### 2.3 Block Arguments (Phi-Equivalent)
@@ -254,7 +254,7 @@ Block arguments are the phi-equivalent in block-argument SSA. They are bound
 at block entry by the predecessor's terminator:
 
 ```text
-^entry:
+^entry():
     %v = const.bits<32> 42
     br ^loop(%v, %v)
 
@@ -332,11 +332,11 @@ where:
 | Field | Description |
 |---|---|
 | `N` | Bit width (positive integer) |
-| `<integer>` | Integer literal in decimal (`42`), hex (`0x2A`), or binary (`0b101010`). Ranges from `0` to `2^N - 1`. |
+| `<integer>` | Canonical unsigned decimal literal in the inclusive range `0` to `2^N - 1`. Hexadecimal, binary, signs, separators and leading zeroes are not spellings in Section 9. |
 
 **Semantics.** Produces a `bits<N>` value with the given bit pattern. The
-integer literal is interpreted as an unsigned value and truncated or
-zero-extended to `N` bits as needed.
+integer literal is interpreted as an unsigned value of exactly that width. An
+out-of-range literal is malformed; a parser never truncates or extends it.
 
 ### 3.3 Integer Arithmetic
 
@@ -466,12 +466,15 @@ instruction with the typed invalid-count assumption.
 
 | Field | Description |
 |---|---|
-| `%a`, `%b` | `bits<N>` operands of the same bit width. |
+| `%a`, `%b` | For `eq`/`ne`, identical `bits<N>`, `ptr<AS>`, or `fnptr<Sig>` types. For ordered comparisons, `bits<N>` operands of the same width. |
 
 **Semantics.** Integer comparison producing a `bits<1>` value: `1` if the
 condition is true, `0` otherwise.
 
-`eq` / `ne`: bitwise equality / inequality.
+`eq` / `ne`: bitwise equality / inequality for integers. Pointer equality
+compares the complete provenance and byte offset from Section 1.3; function
+pointers therefore compare equal exactly when both are null or both name the
+same function symbol. No ordered pointer comparison exists in this profile.
 `slt` / `sle`: signed two's-complement less-than / less-or-equal.
 `ult` / `ule`: unsigned less-than / less-or-equal.
 
@@ -526,8 +529,9 @@ are preserved. Requires `N <= W`; `N == W` is the identity conversion.
 Its result type is written in the instruction, so `%f = ptr.null : fnptr<Sig>`
 constructs a null function pointer of that signature and is the only way to
 obtain one. Without it `E3015` would name a condition no module could reach.
-`global_addr` returns the stable provenance of the named global object and is
-pure. `alloca` allocates a fresh automatic object in the current function and
+`ptr.null` is valid only for a `ptr<AS>` or `fnptr<Sig>` result.
+`global_addr` returns the stable provenance of the named global object, has
+result type `ptr<generic>` in this profile, and is pure. `alloca` allocates a fresh automatic object in the current function and
 scope, returning a new `mem<all>` snapshot and forwarding the unchanged
 abstract world state through a fresh token identity. Every dynamic execution
 of `alloca`, including recursive calls and loop re-entry, receives a fresh
@@ -544,11 +548,12 @@ automatic object owned by the current frame. Validation rejects a statically
 known non-base, static/string-literal, or foreign-frame operand. Runtime
 checking remains fail closed: null reports `E3009`, an unknown object reports
 `E3013`, an already-ended object reports `E3010`, and a live non-base,
-non-automatic, or foreign-frame object reports `E3007 invalid-lifetime-end`.
+non-automatic, or foreign-frame object reports `E3018`.
 
-`ptr.offset.<direction>.<signedness>` computes a pointer with the same
-`ObjectId` as `%base`. A null base reports `E3009` immediately and produces no
-noncanonical `(ObjectId(0), nonzero_offset)` value. Otherwise it decodes
+`ptr.offset.<direction>.<signedness>` computes a pointer with the same object
+provenance as `%base`. Its operand type must be `ptr<AS>`; validation rejects a
+`fnptr` operand. A null base reports `E3009` immediately and produces no
+noncanonical `(Null, nonzero_offset)` value. Otherwise it decodes
 `%index` according to the mnemonic, computes
 `index * S` in unbounded mathematical arithmetic, then adds or subtracts that
 delta according to `direction`. The final byte offset must fit signed 64-bit;
@@ -569,7 +574,7 @@ reports the exact memory diagnostic in Section 6.1.
 Neither guard consumes or produces `world`.
 
 `icmp.eq` and `icmp.ne` accept two values of the same pointer type and compare
-both `ObjectId` and byte offset. Ordered pointer comparisons and subtraction
+both provenance and byte offset. Ordered pointer comparisons and subtraction
 between pointers are outside the Day 7 profile.
 
 The validator requires every Day 7 memory guard and memory operation to use
@@ -616,7 +621,7 @@ lifetime, bounds, and alignment classification from Section 6.1.
 identical to `%m0` except that the value at address `%ptr` has been replaced
 with `%val` and the written bytes are initialized, plus the explicitly
 threaded `%w1`. Storing and later loading a pointer preserves its complete
-`ObjectId` provenance; a partial non-pointer overwrite of its object
+provenance and offset; a partial non-pointer overwrite of its object
 representation makes a later pointer load fail with `E3013`.
 
 For an ordinary access, `%w1` denotes the unchanged world state through a
@@ -695,23 +700,40 @@ of arguments and return values are derived from the callee's declaration.
 ```
 
 **Semantics.** `func_addr` yields the address of a named function as a value of
-the pointed-to signature. It is pure, consumes no tokens, and produces an
-ordinary pointer value that may be stored, loaded, passed and returned.
+the pointed-to signature. Validation requires the symbol to name a function and
+the written `Sig` to equal that function's complete lowered signature. It is
+pure, consumes no tokens, and produces an ordinary pointer value that may be
+stored, loaded, passed and returned.
 
 An indirect `call` names its callee by value rather than by symbol. Validation
 checks arguments and results against the pointer's signature; there is no symbol
 to resolve and no declaration to consult.
 
-**Diagnostics.** Calling through a null function pointer reports `E3015`.
-Calling through a pointer whose provenance does not name a function reports
-`E3016`, regardless of the address it holds. A signature mismatch at an indirect
-call site is rejected by module validation rather than deferred to runtime,
-because the signature is present in the type.
+Revision 1.8 admits only `cc = target_default` for every function. Module
+validation rejects another calling-convention identifier. Under that single-CC
+profile the parameter/result `Sig` is complete; a later profile adding another
+calling convention must add it to `fnptr` identity before admitting such a
+module.
+
+**Diagnostics.** Module validation compares the indirect call's argument and
+result types to the callee value's `fnptr<Sig>` and reports `E3017` on a
+mismatch. At runtime, null provenance reports `E3015`; object or otherwise
+non-function provenance reports `E3016`. Function provenance names a concrete
+module symbol, whose actual signature is compared to the value's static `Sig`;
+a mismatch reports `E3019`. The dynamic check is necessary because a function
+pointer loaded from memory may select different symbols by array index, which a
+module validator cannot predict.
 
 **Provenance.** A function pointer carries the provenance of the function it
 names and preserves it across stores and loads exactly as Section 5.3 requires
 of object pointers, so a pointer copied through memory names the same function
 as the original.
+
+Its object-representation size and alignment come from the target data layout's
+function-pointer layout, never from the host. For the frozen AArch64 LP64 target
+both are eight bytes/eight-byte alignment. This equality with the object-pointer
+layout is a target fact, not permission for a `ptr<AS>`/`fnptr<Sig>` conversion;
+those types remain distinct and no such conversion exists in this profile.
 
 **Call effects.** A direct call takes the effect summary derived in Section 4.6
 for its callee. An indirect call takes the top summary of Section 4.6, because
@@ -752,7 +774,7 @@ EffectSummary {
 | `shl`, `lshr`, `ashr` | `{}` | `{}` | false | false | false | false | false |
 | `icmp.*` | `{}` | `{}` | false | false | false | false | false |
 | `sext`, `zext`, `trunc` | `{}` | `{}` | false | false | false | false | false |
-| `ptr.null`, `global_addr` | `{}` | `{}` | false | false | false | false | false |
+| `ptr.null`, `global_addr`, `func_addr` | `{}` | `{}` | false | false | false | false | false |
 | `ptr.offset.*.*` | `{}` | `{}` | false | false | false | true | false |
 | `alloca`, `lifetime.end` | `{All}` | `{All}` | false | false | false | true | false |
 | `pointer_valid`, `access_in_bounds` | `{All}` | `{}` | false | false | false | true | false |
@@ -793,10 +815,11 @@ local `ObjectId`, but cross-IR equality never compares it. The C-HIR and EvoIR
 interpreters must expose the canonical origin-based trace in their outcomes;
 equal scalar returns with unequal volatile traces are not semantically
 equivalent.
-Bit-vector event values use exact target-width raw bits. Pointer event values
-are canonicalized to `(ObjectOrigin, byte_offset)` rather than local ObjectId
-object-representation bits, so valid provenance observations remain comparable
-between the two interpreters.
+Bit-vector event values use exact target-width raw bits. Object-pointer event
+values are canonicalized to `(ObjectOrigin, byte_offset)` rather than local
+ObjectId bits; function-pointer values use `Function(Symbol)`, and null uses
+`Null`. Valid provenance observations therefore remain comparable between the
+two interpreters without exposing interpreter-local identities.
 
 ### 4.4 Reordering Rules
 
@@ -924,8 +947,9 @@ ObjectId -> Object {
 }
 ```
 
-Allocation returns the next positive `ObjectId`; zero is permanently reserved
-for null and no identifier is reused. Ending a scope or frame lifetime
+Allocation returns the next positive `ObjectId`; zero is never allocated and no
+identifier is reused. Null is represented by the distinct `Null` provenance,
+not by an object-table entry. Ending a scope or frame lifetime
 marks its objects dead in a new snapshot but retains their tombstones. A stale
 pointer therefore remains deterministically dangling and can never become a
 pointer to a later allocation. Static and string-literal objects are allocated
@@ -939,32 +963,49 @@ never allocated or initialized per activation. Two activations of a recursive
 function therefore observe the same object, and a value stored by one is visible
 to the next.
 
-**Symbol construction.** Its module symbol is derived, not chosen:
+**Symbol construction.** A function-scoped static's module symbol is derived,
+not chosen:
 
 ```text
-symbol := enclosing_function_name "." local_name "." site_ordinal
+symbol := "__evocc.static." decimal(site_ordinal)
 ```
 
 `site_ordinal` is the object's allocation-site ordinal from the shared manifest.
-The name alone is insufficient: two blocks in one function may each declare a
-static `count`, and both are distinct objects. Deriving the symbol makes it
-reproducible across runs and across implementations, which a generated or
-counter-based name would not be, and the ordinal is already the cross-IR
-observation identity, so nothing new has to be agreed.
+It must equal the global's `origin` field. A local name alone is insufficient:
+two blocks in one function may each declare a static `count`, and both are
+distinct objects. The unique source-site ordinal already is the cross-IR
+observation identity, so using it alone makes the symbol reproducible and lets a
+module validator verify the spelling without hidden source names or counters.
+
+String-literal objects use the corresponding generated spelling
+`__evocc.string.<site_ordinal>`. A file object retains its linked source symbol.
+The global's explicit `kind` is what makes these cases distinguishable to a
+validator; neither visibility nor `storage=static` could tell a file-scope
+static from a function-scoped static.
 
 **Linkage.** A global carries a visibility field distinguishing a symbol other
 translation units may reference from one they may not:
 
 ```text
-global @name origin=O storage=KIND visibility=VIS size=N align=A bytes=HEX initialized=BITS
+global @name origin=O kind=KIND visibility=VIS size=N align=A bytes=HEX initialized=BITS
+KIND := "file" | "function_static" | "string_literal"
 VIS := "external" | "internal"
 ```
 
-A function-scoped static is always `internal`. A file-scope object without
-`static` is `external`. This is a property of the object rather than of the name
-that reached it, so it is recorded here rather than left to the front end: a
-linker and a checker both need it, and neither can recover it from the symbol
-text.
+A `function_static` or `string_literal` global is always `internal`. A `file`
+global is `internal` for a file-scope object declared `static` and `external`
+for a definition without `static`. A `function_static` symbol must equal
+`__evocc.static.<origin>` and a `string_literal` symbol must equal
+`__evocc.string.<origin>`; a `file` symbol is a source C identifier and therefore
+contains no dot. These are validation rules, not renderer conventions. This is
+a property of the object rather than of the name that reached it, so it is
+recorded here rather than left to the front end: a linker and a checker both
+need it, and neither can recover it from the symbol text.
+
+The dots are part of the generated symbol. Section 9.2 permits dots after the
+first character of an identifier; source C identifiers in this profile cannot
+contain a dot, so the `__evocc.` generated namespace cannot collide with a
+source symbol.
 
 `ObjectId` is an interpreter-local provenance identity and is not compared
 across different IR executions. `ObjectOrigin` is the cross-IR observation
@@ -987,7 +1028,7 @@ branching with an uninitialized object does not report a diagnostic.
 Integer object representations use the target's explicit byte order and never
 the host's native byte order. Pointer values are stored as target-width object
 representations plus out-of-band provenance fragments. Copying every byte of a
-pointer representation preserves the complete `(ObjectId, byte_offset)`;
+pointer representation preserves the complete `(provenance, byte_offset)`;
 overwriting only part of that representation invalidates pointer
 reconstruction and a later pointer load reports `E3013`.
 
@@ -1016,7 +1057,7 @@ backend provenance erasure are outside Day 7.
 
 Memory faults use this deterministic precedence:
 
-1. `ObjectId(0)` is a null access.
+1. `Null` provenance is a null access.
 2. An absent or forged `ObjectId` in the pointer used as the access address is
    invalid provenance.
 3. A tombstoned object is a dangling access.
@@ -1104,12 +1145,13 @@ each code's meaning and deliberately does not repeat the text.
 | Diagnostic | Meaning |
 |---|---|
 | `E3001` | At least one loaded byte is uninitialized. |
-| `E3009` | The accessed pointer has `ObjectId(0)`. |
+| `E3009` | The accessed pointer has `Null` provenance. |
 | `E3010` | The named object's lifetime has ended. |
 | `E3011` | Pointer formation or the complete access range is outside its object, or checked offset arithmetic overflowed. |
 | `E3012` | The byte offset does not satisfy the access alignment. |
 | `E3013` | The provenance is absent/forged or stored pointer bytes lack one complete provenance representation. |
 | `E3014` | A store targets string-literal storage. |
+| `E3018` | `lifetime.end` names a live base pointer that is not an automatic object owned by the current frame. |
 
 Both interpreters use the deterministic classification order from Section 5.4
 and delegate code/message selection to the shared typed memory-fault authority;
@@ -1131,21 +1173,21 @@ source-independent `1:1` location until a source map is specified.
 | Invalid signed left shift | signed `x << y` is not representable | `signed_shl_defined.<signedness>(x, y)` → `ub.assume.invalid_signed_left_shift` → `shl` |
 | Pointer arithmetic validity | result must name a live object at an offset in `[0,size]` | `ptr.offset.*.*` → `pointer_valid` |
 | Memory access validity | complete positive-width range and alignment must be valid in the current snapshot | `access_in_bounds` → matching `load`/`store` |
-| Null pointer access | pointer has `ObjectId(0)` | memory guard or direct fail-closed access reports `E3009` |
+| Null pointer access | pointer has `Null` provenance | memory guard or direct fail-closed access reports `E3009` |
 | Dangling pointer access | pointer names a tombstoned object | memory guard or direct fail-closed access reports `E3010` |
 | Out-of-bounds access | pointer/range lies outside its object | memory guard or direct fail-closed access reports `E3011` |
 | Misaligned access | offset violates the target-required alignment | memory guard or direct fail-closed access reports `E3012` |
 | Write to string-literal storage | store targets a read-only object | `store` reports `E3014` |
 | Use of uninitialized scalar SSA value | consume a value defined by `uninitialized.bits<N>` | Day 6 interpreter reports `E3001` at the consuming instruction or terminator |
 | Read from uninitialized memory storage | any requested initializedness bit is false | `load` reports `E3001` at the load, never allocation or token transport |
-| Invalid pointer representation/provenance | pointer bytes or ObjectId are not valid | pointer load/guard/access reports `E3013` |
+| Invalid pointer representation/provenance | pointer bytes or provenance are not valid | pointer load/guard/access reports `E3013` |
 | Strict aliasing/effective type | access through incompatible effective type | deferred with alias analysis beyond Day 7 |
 
 `uninitialized.bits<N>` defines an ordinary poison value with a real SSA
 identity. Branch operands and block arguments may copy that poison without
 trapping, which lets definite assignment on a later path overwrite it. Any
 semantic consumption—arithmetic, comparison, conversion, branch condition,
-ordinary call argument, or return—reports `E3001 read-of-uninitialized-object`.
+ordinary call argument, or return—reports `E3001`.
 It is not a zero value and it must never be silently replaced by one. Memory
 initializedness uses the separate per-byte object bitmap and follows the same
 consume-time rule: transporting a pointer or memory token does not trap; the
@@ -1176,11 +1218,13 @@ twice would let a reader think two conditions are the same finding.
 | `E3015` | `call-through-null-function-pointer` | runtime |
 | `E3016` | `call-through-non-function-pointer` | runtime |
 | `E3017` | `indirect-call-signature-mismatch` | module validation |
+| `E3018` | `invalid-lifetime-end` | runtime |
+| `E3019` | `function-pointer-target-signature-mismatch` | runtime |
 
-`E3017` is the only entry detected by validation rather than at runtime, because
-a callee pointer's signature is present in its type and a mismatch is therefore
-visible without executing anything. The separation is deliberate: a module defect
-and a program's behaviour are different findings and are acted on differently.
+`E3017` compares a call site to its pointer type; `E3019` compares the runtime
+symbol selected by that value to the same type. The separation is deliberate:
+a malformed call site and a program-selected incompatible target are different
+findings and are acted on differently.
 
 ### 6.4 UB and Optimization
 
@@ -1289,31 +1333,54 @@ respects:
 
 ## 8. Persistent Equality Database
 
-**Day 7 P0 profile.** Persistent `ValueId`/`EClassId` identity begins after
-Day 7. The first bridge uses one deterministic, ephemeral e-graph per eligible
-pure scalar region and discards it after extraction. Its operator authority
-binds every operator, constant payload, bit width, arity, and pure/no-trap
-effect class; distinct input values and distinct constants can never hash-cons
-merely because they share a nullary opcode.
+**Day 8 P0 profile.** The Day 7 baseline used one deterministic, ephemeral
+e-graph per candidate and discarded it after extraction. Revision 1.8 replaces
+that lifetime with the persistent state in Section 8.9 while retaining the
+small P0 semantic surface. Its operator authority binds every operator,
+constant payload, bit width, arity, and pure/no-trap effect class; distinct
+input values and distinct constants can never hash-cons merely because they
+share a nullary opcode.
 
 The P0 rules are limited to typed constant folding, `x + 0`, `x * 1`,
 `x & 0`, `x | 0`, double arithmetic negation encoded exactly as
-`sub.bits<N>(0, sub.bits<N>(0, x)) -> x`, and identity comparisons encoded as
-`icmp.eq(x, x) -> const.bits<1> 1` and
-`icmp.ne(x, x) -> const.bits<1> 0`. Each pattern requires identical operand
-types and the poison/effect exclusions below. A deterministic
+`sub.bits<N>(0, sub.bits<N>(0, x)) -> x`, and the six identity comparisons:
+`eq`, `sle`, and `ule` produce one; `ne`, `slt`, and `ult` produce zero. Section
+11.6 is the exact rule authority. Each pattern requires identical operand types
+and the poison/effect exclusions below. A deterministic
 greedy extractor accepts only a strict cost improvement and prefers the
-original on ties. Explicit node and epoch budgets bound every run. Budget,
+original on ties. "Original" for a final class means its smallest `source=before`
+`NodeId`; if that class has no before node, equal-cost alternatives use the
+smallest `NodeId`. Costs are solved by initializing seeds and `const` nodes to
+zero and repeatedly visiting other nodes in `NodeId` order, assigning
+`1 + sum(child_costs)` only when every child
+has a finite cost, until no choice changes. A class reachable from the root but
+left without a finite choice makes extraction fail and triggers baseline
+fallback rather than recursion or a placeholder. Explicit node and epoch budgets bound every run. Budget,
 matching, extraction, validation, or proof failure returns the byte-identical
 original EvoIR and continues compilation; equality saturation is never needed
 for correctness.
 
+The driver profile fixes `max_nodes = 100000` and `max_epochs = 1024` for one
+`saturate_scalar` transaction. The node bound counts the complete persistent
+graph after each proposed insertion, not merely nodes newly allocated by this
+call. One epoch is one traversal of registry rules in Section 11.6 order over
+canonical root e-classes in numeric order and nodes in insertion order. Within
+one left-hand node, substitutions are ordered lexicographically by the vector
+of bound canonical e-class IDs after variables are sorted by name; a builder
+that can reuse several existing nodes chooses the smallest `NodeId`.
+Congruence rebuilding visits dirty canonical classes numerically and their
+parent nodes in insertion order. Hash-table iteration is never observable. A
+fixed-point epoch that creates no node or union terminates successfully and
+still counts as one. Reaching either bound before fixed point rolls the whole
+transaction back and returns the unchanged module. Tests may inject smaller
+bounds, but the bound and fallback semantics do not change.
+
 Every accepted merge is present in a complete proof certificate whose trusted
-operator/rule authority, canonical input-module digest, exact input seed
-manifest, region identity, extracted output, and full event prefix are bound
-by the receipt. `evocc-proof` receives the canonical input module, verifies its
-digest, and independently recomputes the complete eligible region and seed
-manifest from that module rather than trusting the receipt's enumeration. It
+operator/rule authority, canonical input-module digest, exact witness and seed
+manifests, region identity, extracted output, and full event
+stream are bound by the receipt. `evo-proofcheck` receives the canonical input
+module, verifies its digest, and independently recomputes eligibility and both
+manifests for every named region rather than trusting the certificate. It
 replays every merge, verifies that the extracted root belongs to the original
 root e-class, reconstructs the extracted region, and compares its canonical
 bytes and output commitment to the receipt. A merge-valid certificate that
@@ -1323,12 +1390,25 @@ another may-trap/effectful instruction, or scalar poison is rejected before
 insertion. Poison dependence is computed before region formation and is not
 re-derived from the extracted expression.
 
+EVP1 is a standalone proof of one `before.evo` to `after.evo` transaction.
+For P0 matching and extraction, the active node set is therefore exactly the
+current before-module witness nodes plus nodes derived in that transaction.
+Nodes retained only from an earlier transaction remain queryable in persistent
+classes and their receipts remain in persistent history, but they are not P0
+match, proof, or extraction candidates for a later EVP1 file. Admitting such a
+history-only node without serializing its earlier derivation would make the
+second certificate impossible for an independent checker to replay. A future
+certificate revision may carry cumulative history; EVP1 does not.
+
 The exact driver capability is `-Oeq-scalar`, and only
 `-Oeq-scalar --probe` becomes implemented with this bridge. The broader
 `-Oeq --probe` remains exit 69 `NOT_IMPLEMENTED`.
 
-Sections 8.1 through 8.4 describe the later persistent architecture. They are
-not authorization to introduce persistent `EClassId` mappings in Day 7.
+Revision 1.8 activates persistence for the eligible EvoIR scalar values in this
+P0 profile. The C-HIR and target-representation arrows in Sections 8.1 through
+8.4 remain architectural consumers, not authorization to implement target
+lowering, backend nodes, pointer/object nodes, or any out-of-scope rewrite in
+Day 8.
 
 ### 8.1 Architecture
 
@@ -1432,11 +1512,22 @@ a checker sharing this judgment would agree on an ineligible region and accept
 the rewrite built on it, whereas disagreeing about a *parse* only costs a
 rejection. Independence is spent here and nowhere else.
 
-**Granularity.** A region is one instruction together with its operand leaves.
-It is not a maximal connected expression and not a basic block. Each candidate
-instruction forms its own region, whose root is that instruction's result and
-whose leaves are the values it names. A larger granularity is a later profile
-and requires its own revision.
+**Granularity.** A region has exactly one **replacement root**, but its proof
+context includes a deterministic **witness closure**. Starting at one candidate
+instruction, recursively follow an operand only when its definition is an
+earlier instruction in the same block and that instruction is itself on the
+operator allowlist below. The closure contains the root and every instruction
+reached that way. Stop at a block argument, a definition in another block, or a
+definition whose instruction is not allowlisted; that value is a seed.
+
+Only the replacement root is changed during reassembly. Witness instructions
+remain where they were, even when they become dead, and two regions may have
+overlapping witness closures. This is still one-root local replacement, not
+region splitting. The closure is necessary rather than optional: without the
+earlier `const` node, `x + 0` cannot be matched, and without the inner `sub`
+node, double negation cannot be proved. Calling those definitions opaque leaves
+would make the advertised P0 registry unreachable while its tests appeared to
+exercise it.
 
 **Operator allowlist.** Exactly these instruction forms may be a region root:
 
@@ -1450,6 +1541,11 @@ every extension and truncation, every UB predicate, `ub.assume`, all pointer and
 memory forms, `call`, and all terminators. An instruction absent from this list
 is ineligible even if some future analysis would prove it total: the list is the
 authority, not the reasoning behind it.
+
+Every root and witness result in this profile has type `bits<N>` with
+`1 <= N <= 64`. Comparisons may consume one common `bits<N>` sort and produce
+`bits<1>`. Wider scalar equality is a later registry revision; silently
+truncating a wider constant to the host's integer width is invalid.
 
 **Poison and effect exclusion.** A value is *tainted* when it is the result of
 `uninitialized`, when any operand it names is tainted, or when it is a block
@@ -1465,9 +1561,21 @@ Taint is computed before regions are formed, by repeated forward passes over eac
 function in the order of Section 8.6, until no value changes state. The order of that
 iteration does not affect the result, because taint is monotone and the pass
 only ever adds; the fixed point is therefore unique and an implementation may
-choose any iteration order that reaches it. A region is ineligible when its root
-or any leaf is tainted, carries `mem<R>`, carries `world`, is a pointer, is a
-guard result, or may trap.
+choose any iteration order that reaches it. A region is ineligible when its root,
+any witness, or any seed is tainted, carries `mem<R>`, carries `world`, is a
+pointer, is a guard result, may trap, or transitively depends on one of those
+excluded values.
+
+"Transitively depends" is a second monotone fixed point, not an implementation
+guess. A value starts excluded when its type is `mem<R>`, `world`, any pointer
+type, or when its defining instruction is absent from the allowlist, may trap,
+or carries any non-pure effect. Exclusion propagates from every operand to its
+result and across block edges positionally to block arguments. Entry block
+arguments of ordinary `bits<N>` type start unexcluded. Iterate forward passes in
+Section 8.6 order until no bit changes. Thus a scalar returned by a call is an
+opaque but excluded seed, while a scalar block argument reached only from total
+pure arithmetic remains a legal opaque seed. Producer and checker must compute
+this fixed point separately.
 
 Taint is a property of the value, not of the expression extracted afterwards. An
 implementation that re-derived it from an extracted region could reach a
@@ -1483,27 +1591,37 @@ a checker that never share a data structure.
 - Blocks in function definition order.
 - Instructions in block order, terminator last.
 - Operands in the order Section 9.3 renders them.
+- Witness instructions in their original instruction order, restricted to the
+  closure; never in recursive-discovery order.
 
 No enumeration is ordered by a hash, by an address, by an identifier's numeric
 value, or by iteration over an unordered container.
 
 ### 8.7 Seed Manifest and Region Identity
 
-A **seed** is a leaf of a region: a value the region names but does not define.
+A **seed** is a leaf of the witness closure: a value a witness instruction names
+but no instruction in that closure defines.
 
 ```text
 Seed {
     value,        -- the function-local value identifier
     ty,           -- the value's type, in Section 9 spelling
-    origin,       -- "input" for a block argument or parameter,
+    origin,       -- "input" for a block argument,
                   -- "definition" for a value defined earlier in the function
 }
 ```
 
-The **seed manifest** of a region lists its seeds in first-mention order under
-Section 8.6, deduplicated by value with the first mention retained. It is not
-sorted by name or by identifier, because first-mention order is derivable from
-the module alone while a sort would have to agree on a collation.
+The **seed manifest** of a region scans witness instructions in their original
+instruction order and each instruction's operands in textual order. It lists
+the encountered seeds, deduplicated by value with the first mention retained.
+It is not sorted by name or identifier. This order and the witness closure are
+both independently recomputed from `before.evo`.
+
+The **witness manifest** is the closure's instruction identities in original
+instruction order. Each identity uses the same
+`function/block/instruction-index` spelling as a region identity. A checker
+recomputes the exact witness and seed manifests; the certificate cannot add an
+instruction, hide one, or reinterpret a seed as a constant node.
 
 A **region identity** is the tuple
 
@@ -1512,14 +1630,21 @@ A **region identity** is the tuple
 ```
 
 rendered as `function/block/index`, with the index counting non-terminator
-instructions from zero. It does not contain the value identifier of the root:
-identifiers are stable within one rendering but the identity must survive an
-extraction that renumbers them.
+instructions from zero. `function` omits the leading `@`, and `block` omits the
+leading `^`; both remaining components must be `ident` values. It does not
+contain the value identifier of the root. The identity is interpreted against
+`before.evo` only; the checker derives the after-module rather than trying to
+find the same instruction index after deletions and insertions. Omitting the
+value name keeps region binding independent of the subsequent value
+renumbering.
 
-The checker recomputes the complete set of eligible regions and every seed
-manifest from `before.evo`. It does not read the receipt's enumeration except to
-compare against its own, and a disagreement in membership, order, or content is
-a rejection.
+Optimization is optional. The checker recomputes the complete ordered set of
+eligible regions and both manifests from `before.evo`, but the certificate may
+name any duplicate-free subsequence of that set. Every named region must match
+the independently derived identity and manifests exactly. An omitted eligible
+region means "not optimized", not an invalid proof; otherwise a budget fallback
+or an optimizer that deliberately performs no rewrites could never emit the
+required valid empty certificate.
 
 ### 8.8 Reassembling the After-Module
 
@@ -1528,9 +1653,11 @@ outside the accepted regions is unchanged, so the after-module is derived
 mechanically rather than described by the producer:
 
 1. Start from the parsed `before.evo`.
-2. For each accepted region, in Section 8.6 order, replace the root instruction
-   with the extracted instruction sequence, in place. A rejected or unattempted
-   region contributes nothing.
+2. Derive every accepted replacement against the unchanged `before.evo`, then
+   apply those replacements in Section 8.6 order. A reference to an earlier root
+   is resolved through that root's replacement map. This dependency is acyclic
+   because witness closure follows only earlier definitions. A rejected,
+   omitted, or unattempted region contributes nothing.
 3. Renumber values in Section 8.6 order, then render under Section 9.4.
 
 Replacement is defined for the cases a reassembler actually meets:
@@ -1542,7 +1669,7 @@ Replacement is defined for the cases a reassembler actually meets:
 | A root replaced by an existing value, so the region is deleted | The root instruction is removed and every use of its result is rewritten to that value. The value must be a seed of the region or defined earlier in the same block; anything else is invalid, because it would move a definition across a control-flow edge. |
 | A multi-result instruction | It is never a region root, since Section 8.5 admits only single-result forms. A multi-result instruction may appear as a seed, and its results are seeds individually. |
 | A block argument used as a seed | It is never rewritten. Rewriting one would change an edge, which is outside a region. |
-| Two accepted regions where one's root is the other's seed | Both are replaced. The seed relation is read from `before.evo`, so a replacement never changes which regions were eligible or what their seeds were. |
+| Two accepted regions where one's root occurs in the other's witness closure | Both roots are replaced. Every closure and seed relation is read from `before.evo`, so one replacement never changes which regions were eligible or what another proof meant. |
 
 **Renumbering.** Formal parameters are **not** renumbered. Section 2.1 makes them
 non-SSA call-interface binders in the `%arg` namespace, positional and
@@ -1556,7 +1683,7 @@ and must not be, since deleting a root leaves a gap that any preserving scheme
 would have to fill by a rule of its own.
 
 Block identity is unchanged. Blocks are neither added, removed, reordered, nor
-relabelled, because Section 8.5 keeps every region inside one instruction.
+relabelled, because Section 8.5 permits one replacement root and no CFG change.
 
 The checker performs these steps itself and compares its rendering to
 `after.evo` in full canonical bytes. Comparing an extracted root, or an output
@@ -1572,7 +1699,7 @@ history.
 
 ```text
 EqualityState {
-    identity,     -- stable for the lifetime of one compilation
+    identity,     -- (translation-unit identity, target-layout digest)
     revision,     -- monotonically increasing; every committed mutation advances it
     graph,
     value_to_class,
@@ -1583,11 +1710,50 @@ EqualityState {
 Value identifiers are function-local, so the map is keyed by the pair. A bare
 value identifier is not a key and must not be used as one.
 
+The state is created for exactly one translation unit and target layout. The
+translation-unit identity is the lowercase SHA-256 of the canonical Section 9
+bytes first accepted by `ingest_module`; it remains the identity after legal
+extraction changes those bytes. The target-layout identity is the SHA-256 of
+the ASCII string `aarch64-unknown-linux-gnu/evoir-layout-v1` followed by one LF
+byte, namely
+`4f12297e5b4b84815a07e990a1e67102e2a33e87efd72a25d5efca3b4dde07e8`.
+Changing any layout rule requires a new version string before a state can be
+reused. Reuse with another identity is rejected before mutation. `EClassId` is an append-only
+arena handle and is never recycled; union chooses the numerically smaller
+canonical root but does not rewrite or reuse either handle. `class_of` resolves
+the mapped handle through union-find before returning it.
+
+`ingest_module` is deterministic and idempotent. It visits functions, blocks,
+instructions and results in Section 8.6 order, reuses every already-mapped
+`(function, ValueId)`, and inserts only missing representations. Ingesting the
+same module twice adds no node, union, proof event or revision. A conflicting
+type or definition for an existing key rejects the transaction rather than
+silently rebinding it.
+
+An opaque scalar input is represented by an `input` node whose immutable
+identity is `(function, ValueId, type)`; it is not a shared nullary opcode.
+Distinct inputs therefore start in distinct classes. EVP1 does not serialize
+that implementation node: its seed record creates the corresponding local leaf
+class directly, which is why two different seeds can never collapse merely
+because both have zero children.
+
+Extraction returns an explicit before-to-after value map. Unchanged values that
+are renumbered transfer their existing handles; a new extracted value maps to
+the selected root class; a deleted root loses its current-value key but its
+class, original node and proof history remain in the database. The map update
+and module replacement commit atomically. This is how equality persists while
+Section 8.8 is free to renumber textual `%v` identities.
+
 **Transactions.** `ingest_module`, `saturate_scalar` and `extract_module` are
-separate operations. Each runs within a transaction that either commits, which
-advances the revision, or rolls back to the revision it entered at. Budget
-exhaustion, a proof failure, a validation failure and an extraction failure all
-roll back.
+separate phase operations, but one driver optimization wraps all three in one
+outer transaction. Phase boundaries may create internal savepoints; they do not
+publish a commit or advance the revision. Only after proof replay, extraction,
+full-module reassembly and module validation all pass does the outer transaction
+atomically publish both module and state. A successful top-level transaction
+that made at least one mutation advances the revision exactly once; an
+idempotent no-op does not. Budget exhaustion, a proof failure, a validation
+failure and an extraction failure all roll the outer transaction back to the
+module, graph, maps, proof history and revision it entered with.
 
 Rollback restores the state *and* the module together. A failure that returned
 the original module while leaving unions in the database would be invisible in
@@ -1631,20 +1797,31 @@ convenience. Two obligations follow, and Sections 9.4 and 9.5 discharge them:
   compiled. Completeness is therefore measured against the enumeration in this
   section, never against a renderer's own output.
 
+Revision 1.8 has one implicit target authority:
+`aarch64-unknown-linux-gnu` with the frozen AArch64 LP64 `TargetDataLayout`.
+No other target may claim conformance to these bytes. A later multi-target
+profile must add a target/layout identity to the module grammar before it can
+reuse this interchange format; taking a target from the environment is never an
+allowed interpretation.
+
 ### 9.2 Lexical Structure
 
 ```text
-value_name    := "%v" digit+
-param_name    := "%arg" digit+
-block_label   := "^entry" | "^b" digit+
+value_name    := "%v" index
+param_name    := "%arg" index
+block_label   := "^entry" | "^b" index
 symbol        := "@" ident
-ident         := (letter | "_") (letter | digit | "_")*
+ident         := (letter | "_") (letter | digit | "_" | ".")*
 letter        := "A".."Z" | "a".."z"
 digit         := "0".."9"
-integer       := digit+
+nonzero_digit := "1".."9"
+integer       := index
+positive_int  := nonzero_digit digit*
+index         := "0" | nonzero_digit digit*
 hex_byte      := hex_digit hex_digit
 hex_digit     := "0".."9" | "a".."f"
 bit           := "0" | "1"
+newline       := the single byte "\n"
 ```
 
 Integer literals in instruction operands are unsigned decimal. Hexadecimal and
@@ -1668,22 +1845,40 @@ digested.
 ### 9.3 Grammar
 
 ```text
-module          := global* function*
+module          := ε
+                 | global_seq
+                 | function_seq
+                 | global_seq newline function_seq
+global_seq      := global+
+function_seq    := function (newline function)*
 
 global          := "global " symbol " origin=" integer
-                   " storage=" storage_kind " visibility=" visibility
+                   " kind=" global_kind " visibility=" visibility
                    " size=" integer " align=" integer
                    " bytes=" hex_byte+ " initialized=" bit+ newline
-storage_kind    := "static" | "string_literal"
+global_kind     := "file" | "function_static" | "string_literal"
 visibility      := "external" | "internal"
+
+type            := "bits<" positive_int ">"
+                 | "f32" | "f64"
+                 | "ptr<" address_space ">"
+                 | "mem<" region ">"
+                 | "world"
+                 | "vec<" positive_int ", " type ">"
+                 | "tuple<" type_list ">"
+                 | "fnptr<" signature ">"
+                 | "void"
+signature       := "(" type_list ")->(" type_list ")"
+address_space   := "generic" | "global" | "stack" | "threadlocal"
 
 function        := "func " symbol "(" param_list ")"
                    " -> (" type_list ")"
                    " cc = " ident newline
                    indent effects_clause newline
                    "{" newline
-                   block+
+                   block_seq
                    "}" newline
+block_seq       := block (newline block)*
 effects_clause  := "effects { reads=" region_set ", writes=" region_set
                    ", volatile=" bool ", atomic=" bool ", io=" bool
                    ", may_trap=" bool ", may_unwind=" bool " }"
@@ -1766,8 +1961,13 @@ arg_list         := ε | value_name ("," " " value_name)*
 callee           := symbol | value_name
 ```
 
-Types follow Appendix B, rendered without internal padding other than the
-single space after a comma in `vec<N, T>` and `tuple<...>`.
+The productions above are the canonical type spelling. In particular commas in
+`vec`, `tuple`, and function-pointer type lists carry exactly one following
+space, while the signature arrow in `fnptr<(args)->(results)>` carries none.
+An empty block argument list is still rendered as `()`, so `^entry():` is
+canonical and `^entry:` is malformed. Empty branch argument lists follow the
+same rule. Formal-parameter spellings are positional `%arg0`, `%arg1`, ...;
+source parameter names are not serialized.
 
 #### 9.3.1 Canonical Shapes
 
@@ -1808,7 +2008,7 @@ cond_br <>, <>, <>
 ret
 ret <>
 trap.<>
-global @<> origin=<> storage=<> visibility=<> size=<> align=<> bytes=<> initialized=<>
+global @<> origin=<> kind=<> visibility=<> size=<> align=<> bytes=<> initialized=<>
 func @<>(<>) -> (<>) cc = <>
     effects { reads=<>, writes=<>, volatile=<>, atomic=<>, io=<>, may_trap=<>, may_unwind=<> }
 {
@@ -1832,7 +2032,7 @@ func @<>(<>) -> (<>) cc = <>
 {
 <> = func_addr @<> : <>
 (<>) = call <>(<>)
-global @<> origin=<> storage=<> visibility=<> size=<> align=<> bytes=<> initialized=<>
+global @<> origin=<> kind=<> visibility=<> size=<> align=<> bytes=<> initialized=<>
 ```
 
 The function header is listed because Section 9.4 makes the effects clause
@@ -1841,6 +2041,12 @@ callee are new in this revision. The empty `ret` is **not** listed here: the
 renderer already emits it, and an earlier draft wrongly declared it pending
 because the tool that produced that list skipped format strings containing no
 placeholder.
+
+The current renderer also emits `^entry:` for a block with no arguments and
+uses stored source parameter names in function headers. Both are superseded by
+the canonical rules above. They are declared here rather than in the shape
+table because the audit hint deliberately does not scan block headers or
+parameter-field semantics; whole-module syntax tests carry these migrations.
 
 The form each replaces is **superseded**: it is what the renderer emits today
 and is not valid under this revision. A conforming parser rejects it, so the
@@ -1904,6 +2110,8 @@ Rejected as **malformed**, meaning the bytes are not a module at all:
 - A tab anywhere, an indent that is not exactly four spaces, trailing
   whitespace on any line, or a `\r`.
 - A `%v`, `%arg`, `^b`, or `@` prefix not followed by its required form.
+- A function whose formal binders are not exactly `%arg0`, `%arg1`, ... in
+  positional order.
 - An integer literal that is not unsigned decimal, or that does not fit the
   width its context requires.
 - A `bytes=` run whose length is not exactly `2 * size`, an `initialized=` run
@@ -1914,6 +2122,8 @@ Rejected as **malformed**, meaning the bytes are not a module at all:
 - A bare `ptr.offset` without both suffixes, or a `vload` or `vstore` mnemonic,
   neither of which exists.
 - A `volatile` marker anywhere other than immediately after `load` or `store`.
+- An effect region set with a duplicate or whose members are not in the
+  canonical order `all, unknown, global, stack, heap, escaped`.
 - Any byte after the final newline.
 
 Rejected as **well-formed but invalid**, meaning the bytes parse and the module
@@ -1928,6 +2138,14 @@ they describe is not a legal module. These are the checks Section 2.4, Section
   `access_in_bounds` for that pointer and that size and alignment.
 - A `global_addr` naming a symbol that is absent or is not a global, or a
   `call` naming a symbol that is absent or is not a function.
+- A duplicate symbol across either the global or function tables; a
+  `function_static` or `string_literal` whose symbol is not the
+  origin-derived spelling; a generated object that is external; or a `file`
+  object whose source symbol contains a dot.
+- A `ptr.null` whose result is not an object- or function-pointer type, a
+  `global_addr` whose result is not `ptr<generic>`, or a `func_addr` whose
+  symbol/signature pair does not name an exact function definition.
+- A function whose calling convention is not `target_default` in this profile.
 - A `size`, `align`, `scale` or width outside the range its definition allows.
 
 The two categories carry distinct exit statuses in Section 11.4, because a file
@@ -1972,7 +2190,7 @@ to, and are numbered in the `%v` namespace like every other value.
 
 ```text
 func @checked_add(%arg0: bits<32>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: bits<32>, %v2: mem<all>, %v3: world):
     %v4 = signed_add_defined %v0, %v1
@@ -1982,9 +2200,10 @@ func @checked_add(%arg0: bits<32>, %arg1: bits<32>, %arg2: mem<all>, %arg3: worl
 }
 ```
 
-The summary records no trap. `add` is total, and `ub.assume` states an
-obligation rather than performing a checked operation, so nothing in this
-function can trap.
+The summary records a possible trap. `add` is total, but `ub.assume` is an
+executable obligation in both trusted interpreters: a false condition reports
+the reason's typed runtime diagnostic. Treating it as effect-free would permit
+moving or deleting the point at which the invalid execution is observed.
 
 ### 9.8 Call Example
 
@@ -2038,7 +2257,8 @@ Every C-HIR expression lowers to an EvoIR value of the corresponding
 | `int`, `unsigned int`, `_Bool`, `char`, etc. | `bits<N>` where `N` is the target width in bits |
 | `float` | `f32` |
 | `double` | `f64` |
-| `T*` | `ptr<generic>` in the Day 7 profile; storage duration remains object metadata |
+| pointer to object `T*` | `ptr<generic>` in the Day 7 profile; storage duration remains object metadata |
+| pointer to function | `fnptr<Sig>`, where `Sig` is the complete lowered parameter/result interface including trailing tokens |
 | `void` (in return position) | `void` (empty return type) |
 
 The mapping is mediated by the target data-layout service. The current pinned
@@ -2192,29 +2412,13 @@ summary, and a function's summary is the least fixed point over its call graph;
 an indirect call contributes the top summary because its callee is not known
 statically.
 
-An earlier revision stated here that every call reads and writes `All`. That is
-deleted rather than kept beside Section 4.6, because it is not what Section 4.6's
-derivation yields for a callee that touches no memory, and a specification with
-two answers has none. What remains true of the old text is only this: the
-volatile bit is true when
-the callee or any transitive callee contains a volatile access. Recursive SCCs
-are solved together. Every call still consumes and produces `world`, even when
-this bit is false. Calls without a same-TU body remain typed unsupported in
-this profile.
-
-The Day 7 conservative effect summary for every call is:
-
-```text
-EffectSummary {
-    reads: {All},
-    writes: {All},
-    volatile: transitive_contains_volatile,
-    atomic: false,
-    io: false,
-    may_trap: true,
-    may_unwind: true,
-}
-```
+The superseded Day 7 rule made every call read and write `All`. It is not an
+alternative rule in this revision: a direct same-TU call uses the exact fixed
+point from Section 4.6, while an indirect call alone contributes top. The
+volatile bit is true when the callee or any transitive callee contains a
+volatile access; recursive SCCs are solved together. Every call still consumes
+and produces `world`, even when that bit is false. Calls without a same-TU body
+remain typed unsupported in this profile.
 
 #### 10.1.8 Loop and Branch Lowering
 
@@ -2224,18 +2428,18 @@ C control flow lowers to EvoIR block-argument SSA:
 ; while (cond) { body; }
 ; after;
 
-^entry:
+^entry():
     br ^loop_cond()
 
-^loop_cond:
+^loop_cond():
     %c = ... cond ...
-    cond_br %c, ^body, ^after
+    cond_br %c, ^body(), ^after()
 
-^body:
+^body():
     ... body ...
-    br ^loop_cond
+    br ^loop_cond()
 
-^after:
+^after():
     ...
 ```
 
@@ -2295,10 +2499,13 @@ function-local validator must enforce:
     `pointer_valid` on that exact pointer and the current memory token before
     any other use of the pointer
 
-Module validation additionally checks each call's ordinary argument and return
-types against the callee declaration, and requires every global and every
-`alloca` instruction site to have one pairwise-distinct origin ordinal. The
-function-local validator still
+Module validation additionally checks each direct call's ordinary argument and
+return types against the callee declaration; each indirect call against its
+`fnptr<Sig>`; every `func_addr` symbol and written signature against the named
+definition; every stored function effect summary against the Section 4.6 fixed
+point; symbol uniqueness across functions and globals, kind-specific generated spelling and
+visibility; and every global and `alloca` site's pairwise-distinct origin
+ordinal. The function-local validator still
 checks local use-def, ordinary-value versus effect-token positions, and exact
 `mem<R>`/`world` threading without guessing a callee signature. Day 6 lowering
 uses the conservative `mem<all>` region.
@@ -2337,10 +2544,16 @@ designed. They are fixed here so that no implementation chooses them:
 The compiler driver does **not** answer a `proofcheck` capability probe of its
 own. A driver probe would suggest the driver can discharge the check, and the
 value of the check is that it runs somewhere the driver's code cannot reach.
+`evo-proofcheck --probe` exits zero with empty stdout and stderr, matching the
+repository's exact-capability convention. The driver's broad `proof --probe`,
+`eqsat --probe`, `-Oeq --probe`, and unrelated broad probes remain exit 69 with
+`NOT_IMPLEMENTED`.
 
 ### 11.2 Interface
 
-The checker reads three files and takes nothing from its environment:
+The checker reads three files and takes nothing from its environment. It uses
+the one frozen target authority in Section 9.1; no target flag or host default
+can change the meaning of these bytes:
 
 ```text
 before.evo    the canonical rendering of the module as it entered optimization
@@ -2353,12 +2566,16 @@ It performs, in order:
 1. Parse `before.evo` and `after.evo` under Section 9, rejecting either under
    Section 9.5 rather than repairing it.
 2. Verify the certificate's input digest against `before.evo`'s bytes.
-3. Recompute the eligible regions and every seed manifest from the parsed
-   `before.evo`, per Sections 8.5 through 8.7, using its own implementation.
-   Compare against the certificate's enumeration; disagreement is a rejection.
+3. Recompute the ordered eligible regions and their witness and seed manifests
+   from parsed `before.evo`, per Sections 8.5 through 8.7, using its own
+   implementation. Verify that the certificate names a duplicate-free
+   subsequence and that every named manifest is exact; an omitted eligible
+   region is a permitted decision not to optimize it.
 4. Replay every merge against the trusted registry of Section 11.6, recomputing
    constant folds rather than accepting claimed results.
-5. Verify that each extracted root belongs to its original root's e-class.
+5. Recompute the greedy cost and tie-breaking choices, compare the complete
+   extraction map, and verify that its root is the final class of the original
+   root node.
 6. Reassemble the after-module per Section 8.8 and compare its canonical
    rendering to `after.evo` byte for byte.
 
@@ -2392,34 +2609,49 @@ registry_line   := "registry " ident " " digest newline
 input_line      := "input " digest newline
 output_line     := "output " digest newline
 
-region_block    := region_line seed_line* event_line* extract_line+ region_end
-region_line     := "region " region_id " seeds " integer newline
-seed_line       := "seed " integer " " value_name " " packed_type " "
+region_block    := region_line witness_line* seed_line* event_line*
+                   extract_line+ root_line region_end
+region_line     := "region " region_id " root " value_name
+                   " witnesses " evp_int " seeds " evp_int newline
+witness_line    := "witness " evp_int " " region_id newline
+seed_line       := "seed " evp_int " " value_name " " packed_type " "
                    seed_origin " " eclass newline
 event_line      := insert_line | rewrite_line | congruence_line
 region_end      := "endregion" newline
 
-insert_line     := "node " node_id " " eclass " " op_id " " sort " "
-                   effect_class " children " children newline
-rewrite_line    := "rewrite " integer " " rule_id " " eclass " " eclass
-                   " bind " bindings newline
-congruence_line := "congruence " integer " " eclass " " eclass " " node_id " "
-                   node_id newline
-extract_line    := "extract " integer " " node_id newline
+insert_line     := "node " evp_int " " node_id " " eclass
+                   " source=" node_source " op=" op_id " sort=" sort
+                   " effect=" effect_class " attrs=" attributes
+                   " children=" children newline
+rewrite_line    := "rewrite " evp_int " " rule_id " " eclass " " eclass " "
+                   eclass " " proof_ref " " proof_ref " bind " bindings newline
+congruence_line := "congruence " evp_int " " eclass " " eclass " " eclass " "
+                   node_id " " node_id newline
+extract_line    := "extract " evp_int " " eclass " " extraction newline
+root_line       := "root " eclass newline
 
 children        := "-" | eclass ("," eclass)*
 bindings        := "-" | binding ("," binding)*
-binding         := ident ":" eclass
-op_id           := ident
+binding         := variable ":" eclass
+variable        := "?" ident
+attributes      := "-" | attribute ("," attribute)*
+attribute       := ident "=" evp_int
+extraction      := "seed:" evp_int | "node:" node_id
+proof_ref       := "class:" eclass | "node:" node_id
+node_source     := "before" | "derived"
+op_id           := "const" | "add" | "sub" | "mul" | "and" | "or" | "xor"
+                 | "icmp.eq" | "icmp.ne" | "icmp.slt" | "icmp.sle"
+                 | "icmp.ult" | "icmp.ule"
 sort            := packed_type
 effect_class    := "pure" | "guard" | "effectful"
-node_id         := "n" integer
-eclass          := "c" integer
-region_id       := ident "/" ident "/" integer
+node_id         := "n" evp_int
+eclass          := "c" evp_int
+region_id       := ident "/" ident "/" evp_int
 seed_origin     := "input" | "definition"
 rule_id         := ident
 digest          := 64 * hex_digit
 packed_type     := a Section 9 type with every space removed
+evp_int         := "0" | nonzero_digit digit*
 ```
 
 **What each record carries and why.**
@@ -2428,46 +2660,111 @@ packed_type     := a Section 9 type with every space removed
 |---|---|---|
 | `registry` | Registry name and digest | The authority the rules came from. A reader without that exact registry rejects; a certificate cannot introduce one. |
 | `input` | Digest of `before.evo` | Binds the claim to one module. |
-| `region` | Identity per Section 8.7 and seed count | Lets a reader match its own recomputation against the claim. |
+| `region` | Identity, root value, witness count and seed count | Lets a reader match its own recomputation against the claim. |
+| `witness` | Position and instruction identity from the witness closure | Prevents the producer from hiding or adding semantic context around the one replaced root. |
 | `seed` | Position, value, type, origin, and the class the seed was inserted into | Without the class, later events cannot be tied to the module's values. |
-| `node` | Node identity, owner class, operator, sort, effect class, children | The e-node as inserted. Sort and width distinguish two constants that share an opcode; the effect class is checked against Section 8.5 before the node is admitted. |
-| `rewrite` | Sequence number, rule, the two classes joined, and the substitution | A rule with variable patterns is meaningless without the bindings it was instantiated under. Bindings are in strictly ascending variable-name order, and a reader that finds them otherwise rejects rather than sorting them. |
-| `congruence` | Sequence number, the two classes joined, and the two nodes that became congruent | Congruence closure joins classes without any rule firing; a format carrying only rewrites could not reproduce the resulting partition. |
-| `extract` | Position and the chosen node | An extraction may be several instructions, so it is a sequence with explicit positions rather than one node. |
+| `node` | Event number, node identity, fresh owner class, source, operator, sort, effect class, canonical attributes, and child classes | The complete e-node as inserted. In particular `const` requires `value=RAW`; sort alone cannot distinguish zero from one. |
+| `rewrite` | Event number, rule, `lhs_pre`, `rhs_pre`, deterministic result, left and right proof references, and the substitution | A rule with variable patterns is meaningless without its matched node/class and bindings; a RHS variable legitimately names a class rather than inventing a leaf node. |
+| `congruence` | Event number, `lhs_pre`, `rhs_pre`, deterministic result, and the two congruent nodes | Congruence closure joins classes without any rule firing; a format carrying only rewrites cannot reproduce the partition. |
+| `extract` | Position, final e-class, and its chosen seed or node | The explicit e-class-to-representation map removes ambiguity about which child representation a selected parent uses. |
+| `root` | Final canonical class of the original root | Binds the extracted subgraph back to the value the region is permitted to replace. |
 | `output` | Digest of the reassembled after-module | Binds the claim to a result. |
 
-**Ordering.** Region blocks appear in Section 8.6 order. Seeds appear in manifest
-order, counting from zero. Events appear in application order, with `rewrite` and
-`congruence` sharing one sequence numbering per region so their interleaving is
-recorded. Extraction entries count from zero. Ordering is part of the format: two
-certificates differing only in record order are different files and at most one
-matches a recomputation.
+**Ordering and identities.** Region blocks are a duplicate-free subsequence of
+Section 8.6 order. Witnesses and seeds appear in manifest order, counting from
+zero. Every node, rewrite, and congruence record is one event; their shared event
+numbering starts at zero and is consecutive, so insert/union interleaving is
+replayable. Node IDs are `n0`, `n1`, ... in insertion order.
 
-**Zero regions.** A module with no eligible region produces a certificate with a
-header and an `output` line and no region blocks. This is valid and asserts that
-nothing was optimized; it is not an empty file, and a reader that required at
-least one region could not accept a correct compilation.
+Seed e-classes are `c0`, `c1`, ... in seed order. With `S` seeds, node `nI`
+owns fresh class `c(S+I)`. Every node event allocates that class even if an equivalent node already exists; equality with an
+existing node requires a later congruence event. A union's endpoints must be the
+two distinct canonical roots immediately before that event and its result must
+be their numerically smaller ID. Child and binding classes are resolved through
+the partition at the event where they are consumed. Attribute keys and binding
+names are strictly ascending; a reader rejects rather than normalizes them.
+
+Node and e-class identifiers in EVP1 are certificate-local and restart in every
+region block. They are not the persistent `EClassId` handles of Section 8.9.
+The producer snapshots the relevant persistent subgraph into this canonical
+local numbering; proof validity can never depend on two implementations having
+allocated the same persistent handle. The persistent state's own append-only
+history still uses its stable handles and must independently replay to the
+partition it stores.
+
+The operator table is exact. `const` has zero children and the single attribute
+`value=RAW`, where `RAW` is unsigned decimal, has no leading zero except `0`, and
+fits its `bits<N>` sort. Arithmetic and bitwise nodes have two children of their
+result sort and `attrs=-`. Comparison nodes have two children of one common
+`bits<N>` sort, result sort `bits<1>`, and `attrs=-`. Every P0 node has
+`effect=pure`; `guard` and `effectful` are parseable so a mutation is classified
+as well-formed-but-invalid rather than malformed, but neither is admissible.
+
+For a rewrite, each proof reference must belong to its corresponding pre-merge
+endpoint. `class:cI` is permitted only when that side of the instantiated rule
+is a bare variable bound to `cI`; an operator pattern or builder requires
+`node:nI`. The binding names and classes must be exactly the complete variable
+set of the named rule, with no omission or extra binding; `bindings=-` is
+therefore parseable but invalid for every rule in `p0.scalar.v1`. The checker
+matches the complete nested left pattern and independently
+constructs or identifies the right side under the recorded substitution. For a
+congruence event, the two nodes must have identical operator, sort, effect class,
+attributes and arity, and every pair of corresponding child classes must already
+have the same canonical root before the event.
+
+All `source=before` nodes form the exact witness manifest and precede every
+`source=derived` node. A before node's operator, sort, attributes and children
+must equal the independently parsed witness instruction. The `I`th before node
+corresponds to witness `I`, and its owner class is the initial class of that
+instruction's single result. Every derived node must
+be named by a later rewrite as its right-hand `node:` proof reference; unused derived nodes are
+invalid. This prevents an event stream from manufacturing an unproved
+representation and relying on extraction to select it.
+
+Extraction entries count from zero and are topological: every selected node's
+child, after canonicalizing its e-class, has exactly one earlier extraction
+entry. A `seed:I` choice must belong to that final class; a `node:nI` choice must
+name a node whose owner belongs to it. No final class occurs twice. Starting at
+`root`, the selected child closure must equal the complete set of extraction
+entries, so unrelated choices cannot be smuggled into reconstruction. Seeds emit
+no instruction; selected nodes emit in extraction order at the original root's
+position. The root class must be the final class of the original root node.
+
+The greedy cost is zero for a seed or `const` node and one plus the sum of
+selected child costs for every other node; repeated child positions are counted
+repeatedly. Giving constants zero cost is semantic, not cosmetic: otherwise
+`icmp.eq x, x` and its `true` replacement both cost one, making every identity
+comparison rule in the reviewed registry unreachable under strict improvement.
+A region block is
+valid only when the extracted root has strictly lower cost than the original
+witness root. Ties retain the original and therefore produce no region block.
+
+**Zero regions.** Any compilation that accepts no rewrite produces a certificate
+with a header and an `output` line and no region blocks, whether or not eligible
+candidates existed. This is valid only when reassembly is byte-identical to
+`before.evo`. It is not an empty file: budgets and optimization policy may always
+choose the baseline representation, because optimization is never required for
+correctness.
 
 **Digests.** SHA-256, lowercase hexadecimal. The input digest covers `before.evo`
-in full including its final newline. The output digest covers the reassembled
+in full, including its final newline when the module is nonempty. The output digest covers the reassembled
 module rendered under Section 9.4, not the bytes of `after.evo`; a reader whose
 output digest matches while those bytes differ has found a producer that rendered
 non-canonically, which is a distinct finding from an unsound rewrite.
 
-The registry digest covers the registry's canonical serialization: each rule on
-one line as `rule_id lhs rhs`, patterns written as `op(child,child)` with a
-variable as `?name` and an exact class as `c` followed by its number, rules in
-ascending `rule_id` order, `\n` terminated with a final newline. Without a fixed
-serialization, two implementations holding the same rules would compute different
-digests and never agree.
+The registry digest covers the exact canonical bytes in Section 11.6, including
+every condition and the final newline. A serialization that omitted conditions
+would let a producer and checker attach different meanings to the same digest.
 
 **Rejection.** Anything not derivable from the grammar is malformed: an unknown
 version, a field count that does not match its record, a digest that is not
 exactly sixty-four lowercase hexadecimal characters, a sequence number out of
-order, a seed count disagreeing with the seed lines that follow, bindings out of
-ascending order, a region block without `endregion`, a trailing blank line, or any
-byte after the final newline. A certificate that parses and whose claims do not
-hold is invalid. Section 11.4 gives each its own exit status.
+order, a witness or seed count disagreeing with the lines that follow, attributes
+or bindings out of ascending order, a region block without `root` and
+`endregion`, a trailing blank line, or any byte after the final newline. A
+certificate that parses but violates identity allocation, node shape, replay,
+extraction, registry, digest, or module binding is well-formed but invalid.
+Section 11.4 gives each category its own exit status.
 
 ### 11.4 Exit Statuses
 
@@ -2496,7 +2793,7 @@ evocc-evoir        IR types, Section 9 parser and renderer, validator, interpret
 evocc-eqopt        the optimizer and the equality state
                    depends on evocc-evoir, the e-graph, and the proof crate
 
-evocc-proofcheck   depends on evocc-evoir and the proof crate only
+evocc-proofcheck   depends on evocc-evoir and evocc-proof only
                    must not depend on evocc-eqopt or on the e-graph
 ```
 
@@ -2525,6 +2822,65 @@ so a rewrite is accepted only when it instantiates a registered rule. A
 certificate commits to the registry and cannot extend it; a certificate that
 supplies the rules it is checked against establishes only that its recorded
 merges follow from its own recorded claims.
+
+**Reviewed registry `p0.scalar.v1`.** This registry is normative. Its digest is
+`ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9`, the
+SHA-256 of the bytes in the following code block
+starting at the first `p0_` and including the newline after the last rule:
+
+```text
+p0_001_add_zero_rhs add(?x,const_like(?x,0)) => ?x when true
+p0_002_add_zero_lhs add(const_like(?x,0),?x) => ?x when true
+p0_003_mul_one_rhs mul(?x,const_like(?x,1)) => ?x when true
+p0_004_mul_one_lhs mul(const_like(?x,1),?x) => ?x when true
+p0_005_and_zero_rhs and(?x,const_like(?x,0)) => const_like(?x,0) when true
+p0_006_and_zero_lhs and(const_like(?x,0),?x) => const_like(?x,0) when true
+p0_007_or_zero_rhs or(?x,const_like(?x,0)) => ?x when true
+p0_008_or_zero_lhs or(const_like(?x,0),?x) => ?x when true
+p0_009_double_neg sub(const_like(?x,0),sub(const_like(?x,0),?x)) => ?x when true
+p0_010_icmp_eq_self icmp.eq(?x,?x) => bool(1) when true
+p0_011_icmp_ne_self icmp.ne(?x,?x) => bool(0) when true
+p0_012_icmp_slt_self icmp.slt(?x,?x) => bool(0) when true
+p0_013_icmp_sle_self icmp.sle(?x,?x) => bool(1) when true
+p0_014_icmp_ult_self icmp.ult(?x,?x) => bool(0) when true
+p0_015_icmp_ule_self icmp.ule(?x,?x) => bool(1) when true
+p0_100_fold_add add(?a,?b) => fold.add(?a,?b) when all_const
+p0_101_fold_sub sub(?a,?b) => fold.sub(?a,?b) when all_const
+p0_102_fold_mul mul(?a,?b) => fold.mul(?a,?b) when all_const
+p0_103_fold_and and(?a,?b) => fold.and(?a,?b) when all_const
+p0_104_fold_or or(?a,?b) => fold.or(?a,?b) when all_const
+p0_105_fold_xor xor(?a,?b) => fold.xor(?a,?b) when all_const
+p0_106_fold_icmp_eq icmp.eq(?a,?b) => fold.icmp.eq(?a,?b) when all_const
+p0_107_fold_icmp_ne icmp.ne(?a,?b) => fold.icmp.ne(?a,?b) when all_const
+p0_108_fold_icmp_slt icmp.slt(?a,?b) => fold.icmp.slt(?a,?b) when all_const
+p0_109_fold_icmp_sle icmp.sle(?a,?b) => fold.icmp.sle(?a,?b) when all_const
+p0_110_fold_icmp_ult icmp.ult(?a,?b) => fold.icmp.ult(?a,?b) when all_const
+p0_111_fold_icmp_ule icmp.ule(?a,?b) => fold.icmp.ule(?a,?b) when all_const
+```
+
+EVP1 accepts no other registry name or digest. The producer and checker each
+implement these rules from this specification; the checker does not import the
+producer's registry table, and the certificate carries only the fixed name and
+digest rather than rule definitions.
+
+Variables bind e-classes and repeated variables require the same canonical
+class. `const_like(?x,K)` matches or constructs a `const` node with the same
+`bits<N>` sort as `?x` and raw value `K mod 2^N`; `bool(K)` constructs
+`const.bits<1> K`. `all_const` succeeds only when every bound operand class has
+one unambiguous constant value of the required common sort. A class containing
+distinct constant payloads is invalid rather than a choice for the checker.
+
+On a left-hand side `const_like` only matches a node already present in the
+before witness closure. On a right-hand side it may identify such a node or a
+`source=derived` node whose payload the checker recomputes. `bool` and `fold.*`
+are right-hand builders and therefore require a `node:` proof reference.
+
+`fold.add`, `fold.sub`, and `fold.mul` compute modulo `2^N`; the bitwise folds
+operate on the exact `N` raw bits. Equality and unsigned comparisons use those
+raw values. Signed comparisons decode each raw operand as an `N`-bit two's
+complement integer. Comparison builders return `bits<1>`. The checker performs
+this calculation itself and compares the resulting derived node's sort and
+`value` attribute; the certificate never supplies a trusted fold result.
 
 **Residual risk, recorded rather than implied.** The certificate format
 definition remains shared between producer and checker, so a defect in that
@@ -2568,7 +2924,7 @@ certificate and should pass.
 | Extension | `sext.bits<N>` | `bits<N>` | `%a` : `bits<W>` (W <= N) | no |
 | | `zext.bits<N>` | `bits<N>` | `%a` : `bits<W>` (W <= N) | no |
 | | `trunc.bits<N>` | `bits<N>` | `%a` : `bits<W>` (W >= N) | no |
-| Pointer | `ptr.null` | `ptr<generic>` | — | no |
+| Pointer | `ptr.null` | `ptr<AS>` or `fnptr<Sig>` | — | no |
 | | `global_addr` | `ptr<generic>` | global symbol | no |
 | | `ptr.offset.<direction>.<signedness>` | `ptr<AS>` | `%base` : `ptr<AS>`, `%index` : `bits<N>`, positive scale | yes |
 | Memory | `alloca` | `ptr<generic>`, `mem<all>`, `world` | `%m`, `%w`, size, align | yes |
@@ -2597,7 +2953,7 @@ Type       := "bits" "<" Integer ">"
             | "ptr" "<" AddressSpace ">"
             | "mem" "<" Region ">"
             | "world"
-            | "vec" "<" Integer "," Type ">"
+            | "vec" "<" Integer "," " " Type ">"
             | "tuple" "<" TypeList ">"
             | "fnptr" "<" Signature ">"
             | "void"
@@ -2605,7 +2961,7 @@ Type       := "bits" "<" Integer ">"
 Signature  := "(" TypeList ")" "->" "(" TypeList ")"
 
 TypeList   := ε
-            | Type ("," Type)*
+            | Type ("," " " Type)*
 
 AddressSpace := "generic" | "global" | "stack" | "threadlocal"
 
@@ -2620,7 +2976,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
-| 1.8 | 2026-08-24 | Makes the textual form load-bearing rather than a debugging convenience: Section 9 becomes a real grammar with a canonical byte form and explicit rejection rules, because a proof checker reads a producer's rendering instead of sharing its module. Freezes what two implementations need to agree without sharing code: P0 region granularity, the operator allowlist, poison taint and its fixed point, traversal order, seed manifest content and order, region identity, and the mechanical reassembly of an after-module. Adds `fnptr<Sig>`, `func_addr`, the indirect callee form and its `E3015`/`E3016` diagnostics; gives function effect summaries a stored form, a least-fixed-point derivation over the call graph, and a validator that recomputes and refuses a stale or overstated one; gives a static local one module-global identity initialized once; and defines equality state with a revision counter and transactions that roll the module and the database back together. Section 11 fixes the checker's package, binary, argument and probe names, its exit statuses, and the crate dependency boundary, and records which components are shared because a common defect there causes a rejection and which are implemented twice because a common defect there would cause an acceptance. Defers proof minimisation, alias-dependent rewrites, region splitting beyond one instruction, and attribute-derived effect summaries. |
+| 1.8 | 2026-08-24 | Makes the textual form load-bearing rather than a debugging convenience: Section 9 becomes a byte grammar with explicit separators, rejection rules, canonical empty-list/positional-binder spellings, complete effects/global forms and deterministic rendering. Freezes independently derived P0 eligibility as one replacement root plus a same-block witness closure, poison/effect fixed points, traversal order, witness/seed manifests, optional accepted-region subsequences and mechanical reassembly. EVP1 carries exact variable bindings, constant payloads, before/derived node origin, complete deterministic merge receipts, explicit extraction wiring and a reviewed `p0.scalar.v1` registry whose digest covers side conditions; constants cost zero so identity comparisons are real strict improvements, certificate IDs are local snapshots, and history-only persistent nodes cannot become unrecorded premises. Adds `fnptr<Sig>`, `func_addr`, indirect calls and `E3015`–`E3017`/`E3019`; gives function pointers explicit Function/Null provenance; assigns `E3018` uniquely to invalid lifetime end; distinguishes file, function-static and string-literal globals so generated identities and visibility are validator-checkable; and makes Section 4.6 the sole call-effect authority with exact validator recomputation. Defines canonical persistent-state identity, revision behavior and one joint outer optimization transaction, fixes the checker interface and crate boundary, and records which components are shared by fail-safe direction. Defers proof minimisation, alias-dependent rewrites, CFG region splitting and attribute-derived summaries. |
 | 1.7 | 2026-08-22 | Defines the Day 7 `(ObjectId, signed byte_offset)` provenance model, immutable initialized/lifetime-aware `mem<all>` snapshots, module globals and automatic objects, state-preserving pointer/access guards with exact `E3001`/`E3009`–`E3014` diagnostics, and observable volatile world traces. It freezes executable pointer/memory syntax while deferring pointer-valued static relocations, pointer/integer conversions, region splitting, alias-dependent memory rewrites, atomics, heap-library semantics, and backend lowering. |
 | 1.6 | 2026-08-18 | Makes `--emit=evoir` the canonical driver spelling, binds it to the exhaustive Section 9 renderer, names the first stored block `^entry` independently of numeric block identity, and corrects the complete example to use the supported `icmp.ult` comparison. |
 | 1.5 | 2026-08-18 | Defines transportable Day 6 scalar `uninitialized.bits<N>` poison with consume-time `E3001`, distinct from Day 7 memory initializedness; adds the zero-operand `trap.scalar_function_fell_off_end` terminator and exact `E3007` behavior without placeholder returns or effect tokens. |
