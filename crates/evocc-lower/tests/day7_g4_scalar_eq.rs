@@ -1,10 +1,8 @@
 use std::collections::BTreeSet;
 
 use evocc_common::{Arena, FileId};
-use evocc_evoir::{
-    interpret_module, optimize_scalar_module, validate_module, InterpreterLimits, ProofAuthority,
-    RuntimeValue, ScalarEqBudget,
-};
+use evocc_eqopt::{optimize_scalar_module, ProofAuthority, ScalarEqBudget};
+use evocc_evoir::{interpret_module, validate_module, InterpreterLimits, RuntimeValue};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_lower::lower_unit;
 use evocc_parser::Parser;

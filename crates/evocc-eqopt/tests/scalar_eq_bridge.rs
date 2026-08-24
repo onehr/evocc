@@ -1,7 +1,7 @@
+use evocc_eqopt::{ingest_scalar_inst, optimize_scalar_module, ScalarEqBudget, ScalarOperator};
 use evocc_evoir::{
-    ingest_scalar_inst, interpret_module, optimize_scalar_module, validate_module, Block, BlockArg,
-    CmpOp, Function, FunctionParam, Inst, InterpreterLimits, Module, RuntimeValue, ScalarEqBudget,
-    ScalarOperator, Value,
+    interpret_module, validate_module, Block, BlockArg, CmpOp, Function, FunctionParam, Inst,
+    InterpreterLimits, Module, RuntimeValue, Value,
 };
 use evocc_proof::ProofContext;
 use evocc_types::EvoIRType;

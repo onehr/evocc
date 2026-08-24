@@ -22,9 +22,9 @@ use evocc_chir::{
 };
 use evocc_common::{Arena, FileId};
 use evocc_cpp::Preprocessor;
+use evocc_eqopt::{optimize_scalar_module, ScalarEqBudget};
 use evocc_evoir::{
-    interpret_module, optimize_scalar_module, render_module, InterpreterLimits as EvoIrLimits,
-    Module, RuntimeValue, ScalarEqBudget,
+    interpret_module, render_module, InterpreterLimits as EvoIrLimits, Module, RuntimeValue,
 };
 use evocc_lex::{Lexer, TokenKind};
 use evocc_lower::lower_unit;

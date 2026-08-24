@@ -6,9 +6,5 @@ license.workspace = true
 description = "EvoIR: typed block-argument SSA for optimization"
 
 [dependencies]
-evocc-egraph = { path = "../evocc-egraph" }
 evocc-memory = { path = "../evocc-memory" }
 evocc-types = { path = "../evocc-types" }
-
-[dev-dependencies]
-evocc-proof = { path = "../evocc-proof" }

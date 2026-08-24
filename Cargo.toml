@@ -22,6 +22,7 @@ members = [
     "crates/evocc-cpp",
     "crates/evocc-chir",
     "crates/evocc-evoir",
+    "crates/evocc-eqopt",
     "crates/evocc-egraph",
     "crates/evocc-proof",
     "crates/evocc-parser",

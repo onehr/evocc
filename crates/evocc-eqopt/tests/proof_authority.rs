@@ -6,10 +6,8 @@
 //! receipt reports is bound to a measured property rather than to an adjective
 //! someone wrote by hand.
 
-use evocc_evoir::{
-    optimize_scalar_module, Block, BlockArg, Function, FunctionParam, Inst, Module, ProofAuthority,
-    ScalarEqBudget, Value,
-};
+use evocc_eqopt::{optimize_scalar_module, ProofAuthority, ScalarEqBudget};
+use evocc_evoir::{Block, BlockArg, Function, FunctionParam, Inst, Module, Value};
 use evocc_proof::ProofContext;
 use evocc_types::EvoIRType;
 

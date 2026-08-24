@@ -9,6 +9,7 @@ dependencies = [
  "evocc-chir",
  "evocc-common",
  "evocc-cpp",
+ "evocc-eqopt",
  "evocc-evoir",
  "evocc-lex",
  "evocc-lower",
@@ -45,12 +46,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "evocc-evoir"
+name = "evocc-eqopt"
 version = "0.0.0"
 dependencies = [
  "evocc-egraph",
- "evocc-memory",
+ "evocc-evoir",
  "evocc-proof",
+ "evocc-types",
+]
+
+[[package]]
+name = "evocc-evoir"
+version = "0.0.0"
+dependencies = [
+ "evocc-memory",
  "evocc-types",
 ]
 
@@ -67,6 +76,7 @@ version = "0.0.0"
 dependencies = [
  "evocc-chir",
  "evocc-common",
+ "evocc-eqopt",
  "evocc-evoir",
  "evocc-lex",
  "evocc-memory",

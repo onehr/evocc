@@ -8,7 +8,7 @@ use evocc_egraph::{
 };
 use evocc_types::EvoIRType;
 
-use crate::{CmpOp, Inst, Module, Value};
+use evocc_evoir::{CmpOp, Inst, Module, Value};
 
 const OP_ADD: OpId = 1;
 const OP_SUB: OpId = 2;
