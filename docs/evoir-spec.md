@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.8.2** | **Authoritative reference** | **2026-08-24**
+**Revision 1.9** | **Authoritative reference** | **2026-08-25**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1799,6 +1799,97 @@ history against the trusted registry re-derives exactly the partition the state
 holds; a partition containing a union the history does not justify is invalid
 regardless of how it arose.
 
+### 8.10 Analysis Lattices
+
+An e-class carries facts as well as nodes. Two are defined in this profile;
+both are needed to state a rewrite whose legality depends on a value's bits
+rather than its syntax, which is the whole of the roadmap's known-bits tier.
+
+```text
+KnownBits<N> = { mask: bits<N>, value: bits<N> }   -- bit i known iff mask[i]=1,
+                                                  -- and then equal to value[i]
+ConstValue<N> = KnownBits<N> with mask all ones
+```
+
+`ConstValue` is not a separate lattice; it is the bottom of `KnownBits`. This
+keeps one join and one transfer function per operator instead of two of each.
+
+**Order.** `a ⊑ b` when every bit known in `b` is known in `a` with the same
+value. The top is nothing known. Facts only ever move down within one
+saturation transaction: a class's fact after any step is at or below its fact
+before.
+
+**Merge.** When two classes are unioned, the merged class's fact is the meet of
+the two: every bit known in either is known in the result. If the two disagree
+on a bit both know, the union is **invalid** — two values with a differing
+known bit cannot be equal — and the transaction rolls back under Section 8.9.
+That check is part of what makes a union sound, so it is performed by the
+checker as well as the producer.
+
+**Transfer.** For a node with known-bits inputs, exactly these transfers are
+defined; anything not listed transfers to top.
+
+| Operator | Result |
+|---|---|
+| `const` | fully known |
+| `and` | known where either input is known zero, or both are known one |
+| `or` | known where either input is known one, or both are known zero |
+| `xor` | known where both inputs are known |
+| `add`, `sub` | the trailing run of bits that is known in both inputs, computed by ordinary carry propagation until the first unknown bit |
+| `mul` | the trailing known-zero run is the sum of the inputs' trailing known-zero runs; nothing else |
+| `icmp.*` | fully known when the comparison is decidable from the known bits of both operands, top otherwise |
+
+The transfers are deliberately weak. Each is a statement a checker can
+recompute from the region's nodes with no search; a stronger analysis that
+needed one would move the judgment into shared code, which Section 11.6
+reserves for cases that fail safe.
+
+**Use.** A rewrite may name a fact as a premise. A constant fold's premise is
+the operand's `ConstValue`; a known-bits identity such as `and(x, m) -> x` when
+every bit of `m` known one covers every bit of `x` known nonzero has the two
+facts as premises. Premises appear in the certificate and are recomputed by the
+checker under Section 11.3.
+
+### 8.11 Bounded Scheduler
+
+Saturation is never run to a fixed point in production. The scheduler is bounded
+in four independent ways and every bound is recorded, so a checker confirms that
+a certificate's producer stayed within them rather than trusting that it did.
+
+**Tiers.** Rules belong to one of two tiers and an epoch runs the tiers in
+order:
+
+```text
+Tier A   canonical reductions          x+0, x*1, x&0, x|0, double negation,
+                                       identity comparisons
+Tier B   fact-driven rules             constant folding, known-bits identities
+```
+
+Tier B depends on facts that Tier A's reductions may sharpen, which is why the
+order is fixed rather than left to the implementation.
+
+**Match fuel.** Each rule may fire at most `max(256, 8 × n)` times per epoch,
+where `n` is the number of nodes the region held when the transaction began.
+Fuel is per rule per epoch, so one prolific rule cannot starve the rest.
+
+**Epochs and nodes.** The node and epoch ceilings of the P0 profile stand:
+`max_nodes = 100000`, `max_epochs = 1024`, the node bound counted over the
+complete persistent graph after each proposed insertion.
+
+**Stop rule.** Saturation stops at the first of: no rule fired in an epoch
+(*saturated*); no root's best extraction became strictly cheaper in two
+consecutive epochs (*no-new-best*); the epoch, node or fuel bound was reached
+(*epochs*, *nodes*, *fuel*). Hitting a bound is a successful stop, not a
+failure: extraction proceeds from the current graph, and Section 8's rule that
+saturation is never needed for correctness is what makes that safe.
+
+**Record.** The certificate carries the bounds, the amounts consumed, the stop
+reason, and an epoch marker before each epoch's events. The checker verifies
+that consumed does not exceed bound, that the epoch markers agree with the
+declared epoch count, and that an exhaustion reason is consistent with the
+recorded consumption. It does not re-run the scheduler; a schedule is a choice,
+and what is verified is that the choice stayed inside the declared box.
+
 ---
 
 ## 9. Textual Syntax
@@ -2450,6 +2541,155 @@ C control flow lowers to EvoIR block-argument SSA:
 constructs all lower to combinations of `br`, `cond_br`, and appropriate
 block structure.
 
+#### 10.1.9 GNU Attributes
+
+The kernel's language is GNU C11, and refreshed reconnaissance shows every parse
+failure in the frozen cohort stopping on an `__attribute__`. This section fixes
+how attributes are read, where they attach, which are given a meaning, and how
+the rest are carried without one.
+
+**Syntax.** An attribute specifier is `__attribute__` `((` attribute-list `))`,
+where each attribute is a name, optionally followed by a parenthesised argument
+list of expressions or identifiers. Names are accepted with or without the
+double-underscore spelling; `__unused__` and `unused` are one attribute.
+Arguments are kept as written: an expression argument is parsed and retained, an
+identifier argument is retained as a name. An argument list that does not parse
+reports `E2903`.
+
+**Placement.** Attribute specifiers are accepted in every position GNU C
+accepts them, and each position fixes what the attribute attaches to:
+
+| Position | Attaches to |
+|---|---|
+| among the declaration specifiers | every declarator of that declaration |
+| immediately after a declarator | that declarator alone |
+| after `struct`, `union` or `enum` keyword, or after the closing brace | the tag type |
+| after a member declarator | that member |
+| after a parameter declarator | that parameter |
+| after a function declarator, before the body | that function |
+| after a label | that label |
+| after an enumerator | that enumerator |
+| in a type name | the type being named |
+
+An attribute in a position not in this table is malformed and reports `E2903`.
+
+**Representation.** C-HIR carries every attribute losslessly on the entity it
+attaches to: name as written, arguments as written, source span, and the
+attachment position from the table above. Preservation does not depend on
+whether the attribute is understood. A C-HIR dump shows every attribute present
+in the source, so a reviewer can confirm nothing was dropped on the way in.
+
+**Applied semantics.** Exactly two attributes have a meaning in this profile,
+and both act on layout:
+
+- `aligned(N)` raises alignment. `N` is an integer constant expression that is
+  a power of two representable by the target layout; otherwise `E2903`. On a
+  type or typedef it produces a type whose alignment is the greater of its
+  natural alignment and `N`. On an object it sets the object's alignment
+  likewise. On a member it sets that member's alignment, which moves its offset
+  and may raise the containing record's alignment. `aligned` with no argument
+  means the target's largest fundamental alignment, sixteen bytes on AArch64.
+  `aligned` never lowers an alignment; a smaller `N` than the natural alignment
+  has no effect.
+- `packed` removes padding. On a record it gives every member alignment one,
+  makes the size the sum of member sizes, and gives the record alignment one
+  unless `aligned` on the same record says otherwise. On a member it gives that
+  member alignment one. Bit-fields in a packed record pack to bit granularity
+  across storage-unit boundaries.
+
+These live in the interned type, not in a side table: two record types that
+differ only in `packed` are different types with different layouts, and a
+`typedef` under `aligned(16)` is a distinct type from its target. The layout
+service applies them, and every rule above is checked against the frozen GCC-14
+and Clang-19 oracles through the existing layout corpus, which this stage
+extends with attributed cases. An oracle disagreement is `ORACLE_CONFLICT` and
+is never resolved by choosing one.
+
+**Everything else** is preserved and not applied. The receipt lists, by name,
+every attribute the cohort presented that this profile did not apply, so the
+size of that set is measured rather than assumed. In particular `section`,
+`noreturn`, `unused`, `always_inline`, `gnu_inline`, `no_instrument_function`,
+`cold`, `pure`, `const` and `weak` are preserved without effect here; they carry
+linkage, effect or backend semantics that belong to later stages, and applying
+a partial reading now would create a second source of truth for each.
+
+**Diagnostics introduced.** The front end owns codes in the `E29xx` range.
+
+| Code | Message | Condition |
+|---|---|---|
+| `E2903` | `malformed-attribute` | argument list does not parse, position not in the table, `aligned` argument not a representable power of two |
+| `E2904` | `not-covered: variably-modified-typeof` | `typeof` of a variably modified type |
+| `E2905` | `statement-expression-outside-function` | `({ ... })` at file scope or in a constant expression |
+| `E2906` | `designator-outside-object` | designator names a member the type lacks or an index beyond a fixed bound |
+
+#### 10.1.10 `typeof`
+
+`typeof(type-name)` and `typeof(expression)` denote a type. `__typeof__` is the
+same construct. The result of `typeof(expression)` is the type of the expression
+before lvalue conversion: an array-typed lvalue yields the array type, not a
+pointer, and qualifiers are retained. The operand expression is not evaluated,
+so `typeof(i++)` names `int` and leaves `i` unchanged; the one case in which C
+would evaluate it, a variably modified type, is rejected with `E2904` because
+this profile has no variable-length objects.
+
+`typeof` produces a type and is fully resolved by the front end; nothing of it
+survives into EvoIR.
+
+#### 10.1.11 Statement Expressions
+
+`({ compound-statement })` is an expression whose value is that of its last
+statement when that statement is an expression statement, and `void` otherwise.
+The value undergoes lvalue conversion: a statement expression is never an
+lvalue and its type is never an array or function type.
+
+Objects declared inside end their lifetime at the closing brace, exactly as for
+any block, so a pointer to one that escapes is dangling under Section 5.2.
+`break`, `continue`, `goto` and `return` may leave a statement expression;
+jumping into one is malformed. At file scope, or anywhere a constant expression
+is required, it reports `E2905`.
+
+Lowering places the compound statement's blocks into the enclosing function's
+control-flow graph as ordinary blocks. When the statement expression contains no
+control flow, its value is simply the last instruction's result. When it does,
+lowering creates a join block whose single block argument carries the value, and
+every path that reaches the closing brace passes its value on that edge. Nothing
+new is added to EvoIR: the construct is entirely a lowering pattern over
+Section 2.3 block arguments, which is why it belongs in this contract rather
+than in the instruction set.
+
+#### 10.1.12 Designated Initializers
+
+A designator list `.member`, `[index]`, or any chain of them, names a subobject
+as a `SubobjectPath` of `Field` and `Index` steps, in the same vocabulary as
+every other initializer action. The GNU range form `[a ... b]` expands to one
+`Index` step per value in the closed range and is otherwise identical.
+
+After a designated subobject, positional initialization continues from the
+subobject that follows it, as it would after an undesignated one. When two
+actions name overlapping paths, the later one wins and the earlier is dropped
+from the plan; the written form still records both, so the dump shows what the
+source said. A designator naming a member the type does not have, or an index at
+or beyond a fixed bound, reports `E2906` at the designator.
+
+Nothing changes below the plan: lowering consumes `InitAction`s exactly as
+before, so an initializer that arrives through designators is
+indistinguishable, in EvoIR, from one written positionally.
+
+#### 10.1.13 Compound Literals
+
+`(type-name){ initializer-list }` denotes an object of that type, initialized
+by the list, and is an lvalue whose address may be taken. In a block it has
+automatic storage and the lifetime of the enclosing block; at file scope it has
+static storage. Each occurrence is its own allocation site in the shared
+manifest of Section 10.1.3, in source order with every other site, so both
+interpreters and the lowering agree on its `ObjectOrigin`.
+
+Lowering is the existing object path: an `alloca` plus the initializer plan for
+a block-scope literal, a module global with initial bytes for a file-scope one.
+A file-scope literal of `const`-qualified type is a read-only object, and a
+store through it reports `E3014` like a string literal; an unqualified one is
+writable.
+
 ### 10.2 EvoIR to EvoMIR Extraction Contract
 
 After EqSat optimization and extraction, the chosen EvoIR representations
@@ -2606,8 +2846,11 @@ when comparing against a rendered module.
 
 ```text
 certificate     := header region_block* output_line
-header          := version_line registry_line input_line
-version_line    := "evp1" newline
+header          := version_line registry_line input_line budget_line?
+version_line    := "evp1" newline | "evp2" newline
+budget_line     := "budget nodes=" evp_int "/" evp_int " epochs=" evp_int "/" evp_int
+                   " fuel=" evp_int " stop=" stop_reason newline
+stop_reason     := "saturated" | "no-new-best" | "epochs" | "nodes" | "fuel"
 registry_line   := "registry " ident " " digest newline
 input_line      := "input " digest newline
 output_line     := "output " digest newline
@@ -2619,7 +2862,8 @@ region_line     := "region " region_id " root " value_name
 witness_line    := "witness " evp_int " " region_id newline
 seed_line       := "seed " evp_int " " value_name " " packed_type " "
                    seed_origin " " eclass newline
-event_line      := insert_line | rewrite_line | congruence_line
+event_line      := insert_line | rewrite_line | congruence_line | epoch_line
+epoch_line      := "epoch " evp_int newline
 region_end      := "endregion" newline
 
 insert_line     := "node " evp_int " " node_id " " eclass
@@ -2627,7 +2871,10 @@ insert_line     := "node " evp_int " " node_id " " eclass
                    " effect=" effect_class " attrs=" attributes
                    " children=" children newline
 rewrite_line    := "rewrite " evp_int " " rule_id " " eclass " " eclass " "
-                   eclass " " proof_ref " " proof_ref " bind " bindings newline
+                   eclass " " proof_ref " " proof_ref " bind " bindings
+                   premises? newline
+premises        := " premises " premise ("," premise)*
+premise         := eclass ":" hex_digit+ ":" hex_digit+   -- class, known mask, known value
 congruence_line := "congruence " evp_int " " eclass " " eclass " " eclass " "
                    node_id " " node_id newline
 extract_line    := "extract " evp_int " " eclass " " extraction newline
@@ -2748,6 +2995,28 @@ comparison rule in the reviewed registry unreachable under strict improvement.
 A region block is
 valid only when the extracted root has strictly lower cost than the original
 witness root. Ties retain the original and therefore produce no region block.
+
+**Versions.** `evp1` is the previous revision's format and remains readable:
+it carries no budget line, no epoch markers and no premises, so a checker
+validates it without a scheduler claim and admits only rules that need no
+premise. `evp2` adds the three. A reader that does not implement a version
+rejects it as malformed rather than guessing. A Tier B rewrite requires `evp2`,
+because a fact-driven rewrite without its premise is not a claim a checker can
+verify.
+
+**Premises.** Each premise names a class and the known-bits fact the rule relied
+on. The checker recomputes the fact from the region's nodes with its own
+implementation of the Section 8.10 transfers and refuses the rewrite if the
+recorded premise is not at or below the recomputed fact. Facts are recomputed
+rather than trusted for the reason Section 11.6 gives: a shared analysis that
+was wrong would make producer and checker agree on an unsound rewrite.
+
+**Budget.** The budget line records each bound, the amount consumed, and the
+stop reason. The checker verifies consumed does not exceed bound, that the
+number of epoch markers equals the recorded epoch count, and that a stop reason
+of `epochs`, `nodes` or `fuel` coincides with that quantity having reached its
+bound. It does not verify `saturated` or `no-new-best`, which would require
+re-running the scheduler; those are telemetry.
 
 **Zero regions.** Any compilation that accepts no rewrite produces a certificate
 with a header and an `output` line and no region blocks, whether or not eligible
@@ -2986,6 +3255,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9 | 2026-08-25 | Freezes the GNU extension profile the kernel cohort needs. Attributes are read in every GNU position, attached by position, and preserved losslessly; only `aligned` and `packed` are applied, to layout, with every rule checked against the frozen GCC-14 and Clang-19 oracles, and every other attribute is recorded by name as preserved-not-applied. Defines `typeof` as an unevaluated front-end type, statement expressions as a lowering pattern over block arguments with block lifetimes, designated initializers including GNU ranges as `SubobjectPath` actions with later-wins overriding, and compound literals as manifest allocation sites. Adds the known-bits lattice with constant value as its bottom, a fixed weak transfer table, meet-on-union with contradiction as an invalid union, and a two-tier bounded scheduler with per-rule match fuel and a stop rule. Certificate format `evp2` carries budget, epoch markers and rewrite premises; premises are recomputed by the checker, budgets are verified against consumption, and `evp1` remains readable for premise-free certificates. Introduces `E2903`–`E2906`. Defers every other attribute semantic, variably modified types, integer-range and non-zero lattices, and any memory rewrite. |
 | 1.8.2 | 2026-08-24 | Records implementation alignment for the complete Section 9 function, global, `func_addr`, and indirect-call shapes; empties the pending and superseded shape manifests without changing their machine-readable contract. Clarifies that shape comparison is an audit hint while whole-module round-trip and the independent field-sentinel manifest carry syntax completeness. |
 | 1.8.1 | 2026-08-24 | Clarifies the Day 8 P0 extractor after the first standalone-corpus replay exposed an ambiguity: cost is region-relative newly emitted instruction count with the existing zero-cost `const` convention; selecting a non-root `source=before` witness reuses its earlier same-block SSA value, emits nothing and terminates extraction closure, while the replacement root remains structural and non-constant derived nodes are emitted. Records the mandatory root exclusion, the no-register-pressure scope, and the existing cross-block prohibition so a false-green zero-rewrite implementation cannot satisfy the corpus gate. |
 | 1.8 | 2026-08-24 | Makes the textual form load-bearing rather than a debugging convenience: Section 9 becomes a byte grammar with explicit separators, rejection rules, canonical empty-list/positional-binder spellings, complete effects/global forms and deterministic rendering. Freezes independently derived P0 eligibility as one replacement root plus a same-block witness closure, poison/effect fixed points, traversal order, witness/seed manifests, optional accepted-region subsequences and mechanical reassembly. EVP1 carries exact variable bindings, constant payloads, before/derived node origin, complete deterministic merge receipts, explicit extraction wiring and a reviewed `p0.scalar.v1` registry whose digest covers side conditions; constants cost zero so identity comparisons are real strict improvements, certificate IDs are local snapshots, and history-only persistent nodes cannot become unrecorded premises. Adds `fnptr<Sig>`, `func_addr`, indirect calls and `E3015`–`E3017`/`E3019`; gives function pointers explicit Function/Null provenance; assigns `E3018` uniquely to invalid lifetime end; distinguishes file, function-static and string-literal globals so generated identities and visibility are validator-checkable; and makes Section 4.6 the sole call-effect authority with exact validator recomputation. Defines canonical persistent-state identity, revision behavior and one joint outer optimization transaction, fixes the checker interface and crate boundary, and records which components are shared by fail-safe direction. Defers proof minimisation, alias-dependent rewrites, CFG region splitting and attribute-derived summaries. |
