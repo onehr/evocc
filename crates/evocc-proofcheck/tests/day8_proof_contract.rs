@@ -160,6 +160,24 @@ fn nonempty_reviewed_rewrite_is_replayed_and_reassembled() {
     );
     assert_status(&inputs.run(), 0, "reviewed add-zero proof");
 
+    let hidden_witness = add_zero_certificate(&input_digest, &output_digest)
+        .replace("witness 0 main/entry/0", "witness 0 main/entry/1");
+    inputs.write(before.as_bytes(), after.as_bytes(), &hidden_witness);
+    assert_status(
+        &inputs.run(),
+        3,
+        "certificate cannot redefine the independently derived witness closure",
+    );
+
+    let forged_seed =
+        add_zero_certificate(&input_digest, &output_digest).replace("seed 0 %v0", "seed 0 %v1");
+    inputs.write(before.as_bytes(), after.as_bytes(), &forged_seed);
+    assert_status(
+        &inputs.run(),
+        3,
+        "certificate cannot redefine the independently derived seed manifest",
+    );
+
     let mutated = after.replace("ret %v0", "ret %v1");
     inputs.write(
         before.as_bytes(),

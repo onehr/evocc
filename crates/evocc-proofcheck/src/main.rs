@@ -7,6 +7,10 @@ use evocc_proof::{
     EvpNodeSource, EvpProofRef, EvpRegion, EvpSeedOrigin,
 };
 
+mod eligibility;
+
+use eligibility::derive_eligible_regions;
+
 const REGISTRY_NAME: &str = "p0.scalar.v1";
 const REGISTRY_SHA256: &str = "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9";
 
@@ -46,7 +50,8 @@ fn main() -> ExitCode {
     {
         return ExitCode::from(3);
     }
-    let reassembled = match claim(&certificate) {
+    let eligible = derive_eligible_regions(&before_module);
+    let reassembled = match claim(&certificate, &eligible) {
         Ok(Claim::Zero) => before.clone(),
         Ok(Claim::AddZeroRhs(claim)) => {
             match reassemble_reviewed_add_zero(&before, &before_module, claim) {
@@ -79,10 +84,25 @@ struct AddZeroRhs {
     seed: u32,
 }
 
-fn claim(certificate: &EvpCertificate) -> Result<Claim, ()> {
+fn claim(
+    certificate: &EvpCertificate,
+    eligible: &[eligibility::EligibleRegion],
+) -> Result<Claim, ()> {
     match certificate.regions.as_slice() {
         [] => Ok(Claim::Zero),
-        [region] => Ok(Claim::AddZeroRhs(parse_add_zero_claim(region)?)),
+        [region] => {
+            let derived = eligible
+                .iter()
+                .find(|candidate| candidate.id == region.id)
+                .ok_or(())?;
+            if derived.root_value != region.root_value
+                || derived.witnesses != region.witnesses
+                || derived.seeds != region.seeds
+            {
+                return Err(());
+            }
+            Ok(Claim::AddZeroRhs(parse_add_zero_claim(region)?))
+        }
         _ => Err(()),
     }
 }
