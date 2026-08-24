@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use evocc_evoir::{parse_section9_module, render_module};
+
 const TARGET: &str = "--target=aarch64-unknown-linux-gnu";
 static NEXT_SOURCE: AtomicU64 = AtomicU64::new(0);
 
@@ -60,6 +62,8 @@ int main(void) { return identity(external_counter + hidden_counter) + zero(); }
 "#,
     );
     let text = successful_stdout(&[TARGET, "--emit=evoir", source.path()]);
+    let parsed = parse_section9_module(text.as_bytes()).expect("CLI output is canonical Section 9");
+    assert_eq!(render_module(&parsed), text);
     let lines = text.lines().collect::<Vec<_>>();
 
     let globals = lines
@@ -129,7 +133,6 @@ int main(void) { return bump() * 10 + bump(); }
             ));
         }
     }
-
     let fnptr_source = SourceFile::new(
         "fnptr-array",
         r#"
@@ -153,6 +156,10 @@ int main(void) {
             ));
         }
     }
+    let emitted = successful_stdout(&[TARGET, "--emit=evoir", fnptr_source.path()]);
+    let parsed = parse_section9_module(emitted.as_bytes())
+        .expect("lowered function-pointer module is canonical Section 9");
+    assert_eq!(render_module(&parsed), emitted);
 
     let effects_source = SourceFile::new(
         "effects",
@@ -176,6 +183,10 @@ int main(void) { return middle(); }
             text.matches(transitive).count(),
             String::from_utf8_lossy(&output.stderr)
         ));
+    } else {
+        let parsed = parse_section9_module(&output.stdout)
+            .expect("lowered transitive-effects module is canonical Section 9");
+        assert_eq!(render_module(&parsed).as_bytes(), output.stdout);
     }
 
     assert!(failures.is_empty(), "{}", failures.join("\n"));

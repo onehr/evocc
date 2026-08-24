@@ -11,11 +11,14 @@ use evocc_memory::{
     ByteSequence, FrameId, InitialState, MemoryConfig, MemoryFault, MemoryLimits, MemoryState,
     Pointer, PointerValue, ScopeId, WorldLimits, WorldState,
 };
-use evocc_types::{EvoIRType, Region, TargetDataLayout};
+pub use evocc_types::EvoIRType;
+use evocc_types::{Region, TargetDataLayout};
 
 mod text;
+mod text_parse;
 
 pub use text::{render_module, validate_section9_bytes};
+pub use text_parse::parse_section9_module;
 
 // ---------------------------------------------------------------------------
 // Core data types
@@ -5569,6 +5572,10 @@ mod tests {
         ];
         let module = indirect_call_module(false);
         validate_module(&module).expect("func_addr and indirect signature are valid");
+        let text = render_module(&module);
+        let parsed = parse_section9_module(text.as_bytes())
+            .expect("function pointer text parses through the shared Section 9 reader");
+        assert_eq!(render_module(&parsed), text);
         let outcome = interpret_module(&module, "main", &arguments, InterpreterLimits::new(5))
             .expect("indirect call execution");
         assert_eq!(outcome.return_values[0], RuntimeValue::bits(32, 41));
@@ -5684,6 +5691,10 @@ mod tests {
     fn module_interpreter_recurses_with_one_shared_step_budget() {
         let module = recursive_countdown_module();
         validate_module(&module).expect("recursive module validates");
+        let text = render_module(&module);
+        let parsed = parse_section9_module(text.as_bytes())
+            .expect("direct-call CFG text parses through the shared Section 9 reader");
+        assert_eq!(render_module(&parsed), text);
         let arguments = [
             RuntimeValue::new(EvoIRType::Mem(Region::All), 23),
             RuntimeValue::new(EvoIRType::World, 29),

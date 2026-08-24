@@ -1,6 +1,7 @@
 use evocc_evoir::{
-    interpret_module, AccessLayout, Block, BlockArg, Function, FunctionParam, GlobalKind,
-    GlobalObject, GlobalVisibility, Inst, InterpreterLimits, Module, RuntimeValue, Value,
+    interpret_module, parse_section9_module, render_module, AccessLayout, Block, BlockArg,
+    Function, FunctionParam, GlobalKind, GlobalObject, GlobalVisibility, Inst, InterpreterLimits,
+    Module, RuntimeValue, Value,
 };
 use evocc_types::{AddressSpace, EvoIRType, Region};
 
@@ -122,11 +123,15 @@ fn automatic_store_load_roundtrip_executes_real_memory() {
         ],
         vec![loaded, mem3, world3],
     );
+    let module = Module {
+        globals: vec![],
+        functions: vec![function],
+    };
+    let text = render_module(&module);
+    let parsed = parse_section9_module(text.as_bytes()).expect("canonical automatic-memory text");
+    assert_eq!(render_module(&parsed), text);
     let outcome = interpret_module(
-        &Module {
-            globals: vec![],
-            functions: vec![function],
-        },
+        &module,
         "main",
         &entry_tokens(),
         InterpreterLimits::new(100),
@@ -189,6 +194,9 @@ fn initialized_global_and_volatile_trace_are_observable() {
         }],
         functions: vec![function],
     };
+    let text = render_module(&module);
+    let parsed = parse_section9_module(text.as_bytes()).expect("canonical global-memory text");
+    assert_eq!(render_module(&parsed), text);
     let outcome = interpret_module(
         &module,
         "main",

@@ -168,3 +168,56 @@ fn nonempty_reviewed_rewrite_is_replayed_and_reassembled() {
     );
     assert_status(&inputs.run(), 3, "after-module mutation");
 }
+
+#[test]
+fn reviewed_replay_is_derived_from_module_identity_not_one_hardcoded_fixture() {
+    let before = concat!(
+        "func @renamed(%arg0: bits<32>) -> (bits<32>) cc = target_default\n",
+        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n",
+        "{\n",
+        "^entry(%v7: bits<32>):\n",
+        "    %v8 = const.bits<32> 0\n",
+        "    %v9 = add.bits<32> %v7, %v8\n",
+        "    ret %v9\n",
+        "}\n",
+    );
+    let after = concat!(
+        "func @renamed(%arg0: bits<32>) -> (bits<32>) cc = target_default\n",
+        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n",
+        "{\n",
+        "^entry(%v7: bits<32>):\n",
+        "    %v8 = const.bits<32> 0\n",
+        "    ret %v7\n",
+        "}\n",
+    );
+    let input = evocc_proof::sha256_hex(before.as_bytes());
+    let output = evocc_proof::sha256_hex(after.as_bytes());
+    let proof = format!(
+        concat!(
+            "evp1\n",
+            "registry p0.scalar.v1 {REGISTRY_SHA256}\n",
+            "input {input}\n",
+            "region renamed/entry/1 root %v9 witnesses 2 seeds 1\n",
+            "witness 0 renamed/entry/0\n",
+            "witness 1 renamed/entry/1\n",
+            "seed 0 %v7 bits<32> input c0\n",
+            "node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-\n",
+            "node 1 n1 c2 source=before op=add sort=bits<32> effect=pure attrs=- children=c0,c1\n",
+            "rewrite 2 p0_001_add_zero_rhs c2 c0 c0 node:n1 class:c0 bind ?x:c0\n",
+            "extract 0 c0 seed:0\n",
+            "root c0\n",
+            "endregion\n",
+            "output {output}\n",
+        ),
+        REGISTRY_SHA256 = REGISTRY_SHA256,
+        input = input,
+        output = output,
+    );
+    let inputs = Inputs::new();
+    inputs.write(before.as_bytes(), after.as_bytes(), &proof);
+    assert_status(
+        &inputs.run(),
+        0,
+        "reviewed replay with independent symbol and value identities",
+    );
+}
