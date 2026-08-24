@@ -302,3 +302,56 @@ fn aligned_accepts_an_integer_constant_expression() {
         (4, 8)
     );
 }
+
+/// Inside a record, an attribute written between the specifiers and the
+/// first declarator sits among the declaration specifiers, as it does at
+/// file scope (`__u64 __attribute__((aligned(8))) excl_prog_hash;`).
+#[test]
+fn a_member_attribute_after_the_specifiers_applies_to_the_member() {
+    assert_eq!(
+        layout_of(
+            "struct s { char c; int __attribute__((aligned(8))) n; } v;\n",
+            "v"
+        ),
+        (16, 8)
+    );
+    assert_eq!(
+        layout_of(
+            "struct s { char c; int __attribute__((aligned(8))) n, m; } v;\n",
+            "v"
+        ),
+        (24, 8)
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Position x context matrix: every attribute position the specification
+// names, in every declaration context, parses and reaches the C-HIR dump.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn every_attribute_position_parses_in_every_declaration_context() {
+    let a = "__attribute__((unused))";
+    let sources = [
+        // file scope: before specifiers, after specifiers, before a later declarator, after declarators
+        format!("{a} int f0;\n"),
+        format!("int {a} f1;\n"),
+        format!("int f2, {a} f3;\n"),
+        format!("int f4 {a}, f5 {a};\n"),
+        // block scope
+        format!("void g(void) {{ {a} int b0; int {a} b1; int b2, {a} b3; int b4 {a}, b5 {a}; }}\n"),
+        // record members
+        format!("struct m {{ {a} int m0; int {a} m1; int m2, {a} m3; int m4 {a}, m5 {a}; }};\n"),
+        // bit-field members, attribute after the width
+        format!("struct w {{ int w0 : 3 {a}, w1 : 2 {a}; }};\n"),
+        // parameters
+        format!("void p({a} int p0, int {a} p1, int p2 {a});\n"),
+        // enumerators and tags
+        format!("enum {a} e {{ E0 {a}, E1 {a} = 2 }} {a};\n"),
+        // function definition, before the body
+        format!("void d(void) {a} {{ }}\n"),
+    ];
+    for source in &sources {
+        accepts(source);
+    }
+}

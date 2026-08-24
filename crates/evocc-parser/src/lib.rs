@@ -3272,13 +3272,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut canonical = Vec::new();
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
             let start = self.span();
-            let specifier_attributes =
+            let mut specifier_attributes =
                 self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers);
             let Some(specifier) = self.parse_type_specifier() else {
                 self.report("E1001", "expected-declaration", self.span());
                 self.advance();
                 continue;
             };
+            // `__u64 __attribute__((aligned(8))) name;`: attributes between the
+            // specifiers and the first declarator sit among the specifiers.
+            specifier_attributes
+                .extend(self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers));
             let is_anonymous_aggregate = matches!(
                 &specifier.surface,
                 TypeSpecifier::Tag {
@@ -4199,6 +4203,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     token.span,
                 );
             }
+            // Attributes among a parameter's specifiers, before or after the
+            // type, sit in the declaration-specifiers position.
+            let mut specifier_attributes =
+                self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers);
             let Some(specifier) = self.parse_type_specifier() else {
                 self.report("E1001", "expected-declaration", self.span());
                 break;
@@ -4211,6 +4219,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     token.span,
                 );
             }
+            specifier_attributes
+                .extend(self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers));
             let start = specifier.surface.span();
             let (name, derived, written, end) =
                 if matches!(self.peek_kind(), Some(TokenKind::Comma | TokenKind::RParen)) {
@@ -4293,8 +4303,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.side_declarations.push(declaration);
             }
             let declared_name = name.as_ref().map(|name| name.spelling.clone());
-            let mut parameter_attributes =
-                self.parse_attribute_specifiers(AttributePlacement::Parameter);
+            let mut parameter_attributes = specifier_attributes;
+            parameter_attributes
+                .extend(self.parse_attribute_specifiers(AttributePlacement::Parameter));
             let ty = self.apply_attributes_to_type(ty, &mut parameter_attributes);
             params.push(ParameterDecl {
                 attributes: parameter_attributes,
@@ -4694,7 +4705,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         matches!(
             token.kind,
-            TokenKind::Auto
+            TokenKind::Attribute
+                | TokenKind::Auto
                 | TokenKind::Extern
                 | TokenKind::GnuExtension
                 | TokenKind::Register
