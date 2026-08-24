@@ -89,12 +89,21 @@ fn main() {
     fs::create_dir_all(root).unwrap();
     let mut unique = BTreeSet::new();
     let mut regions = 0;
+    let mut optimized = 0;
     for ordinal in 0..PROGRAMS {
         let (source, expected) = source(ordinal);
         assert!(unique.insert(source.clone()));
-        regions += write_case(root, ordinal, &source, expected);
+        let case_regions = write_case(root, ordinal, &source, expected);
+        if case_regions != 0 {
+            optimized += 1;
+        }
+        regions += case_regions;
     }
-    fs::write(root.join("measurement.txt"), format!("programs={PROGRAMS}\nregions={regions}\n")).unwrap();
+    fs::write(
+        root.join("measurement.txt"),
+        format!("programs={PROGRAMS}\noptimized={optimized}\nregions={regions}\n"),
+    )
+    .unwrap();
 }
 "#;
 
@@ -196,7 +205,10 @@ fn deterministic_128_program_corpus_replays_in_the_standalone_checker() {
     build_corpus(&corpus);
     let measurement =
         fs::read_to_string(corpus.root.join("measurement.txt")).expect("read producer measurement");
-    assert_eq!(measurement, "programs=128\nregions=1024\n");
+    assert_eq!(
+        measurement, "programs=128\noptimized=128\nregions=1024\n",
+        "the reviewed ruling must not turn optimization into a false-green no-op"
+    );
 
     let mut accepted = 0;
     for ordinal in 0..PROGRAMS {
@@ -211,6 +223,6 @@ fn deterministic_128_program_corpus_replays_in_the_standalone_checker() {
 
     assert_eq!(accepted, PROGRAMS, "the gate forbids skips");
     println!(
-        "Day-8 reviewed proof corpus measured: accepted={accepted}/{PROGRAMS}, regions=1024, skipped=0"
+        "Day-8 reviewed proof corpus measured: accepted={accepted}/{PROGRAMS}, optimized=128/128, regions=1024, skipped=0"
     );
 }

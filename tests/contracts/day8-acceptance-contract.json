@@ -27,10 +27,10 @@
   },
   "semanticsFrozenElsewhere": {
     "document": "docs/evoir-spec.md",
-    "revision": "1.8",
-    "authoritativeSha256": "b493c676a9035a7c8016b1d96e667a919c2297af4849ab5d62139acd01055edc",
-    "reviewStatus": "PASS_BOTH_CHECKLISTS",
-    "reviewRule": "The specification became authoritative Revision 1.8 only after proof-format/eligibility and storage/calls/effects both passed against the exact bytes named above.",
+    "revision": "1.8.1",
+    "authoritativeSha256": "998337ec92ff3f89591a1b61b7005e45f769747662454a98956cbc6bdc258d54",
+    "reviewStatus": "PASS_BOTH_CHECKLISTS_AND_APPROVED_COST_ERRATUM",
+    "reviewRule": "The specification became authoritative Revision 1.8 only after proof-format/eligibility and storage/calls/effects both passed. Revision 1.8.1 is the approved extraction-cost erratum over the exact bytes named above; its optimized-count guard lands before any production implementation of that ruling.",
     "mustFreeze": [
       "canonical section 9 byte grammar, including token rules, ordering, whitespace, trailing newline, and parser reject rules",
       "P0 eligibility: one replacement root plus its deterministic same-block witness closure, exact operator and width allowlist, poison taint traversal and fixed-point order, function/block/instruction traversal order",
@@ -56,7 +56,12 @@
           "p0.scalar.v1 is 27 canonical lines with SHA-256 ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9",
           "constant cost makes all advertised identity rewrites reachable and current-transaction proofs cannot depend on history-only nodes",
           "persistent identity, revision and outer transaction rollback are unambiguous"
-        ]
+        ],
+        "revision1_8_1CostErratum": {
+          "status": "PASS",
+          "ruling": "Cost is region-relative newly emitted instruction count with const remaining zero: a non-root source=before witness is a terminal zero-cost reuse, the replacement root is not, and non-constant source=derived nodes emit structurally.",
+          "mandatoryGuard": "The 128-program corpus must continue to optimize 128 programs, and the receipt records both optimized-program and rule-instance counts so an all-no-op false green is impossible."
+        }
       },
       "storageCallsAndEffects": {
         "status": "PASS",
@@ -142,6 +147,12 @@
   "acceptance": {
     "measuredOnly": "Every reported figure is measured, labelled with what it counts, and accompanied by the exact command that produced it. No predicted numbers, and no bare test total without its command.",
     "countingChange": "Under a reviewed registry a replay counts rule instances rather than per-candidate manufactured rules, so a number differing from the previous stage is expected and is not by itself a regression.",
+    "optimizationLivenessGuard": {
+      "corpusPrograms": 128,
+      "minimumOptimizedPrograms": 128,
+      "preErratumMeasuredRuleInstances": 1024,
+      "rule": "The corpus gate fails if optimized programs decline or if rule instances become zero. The Day 8 receipt records the post-implementation actual counts; it does not infer them from a passing exit status."
+    },
     "required": [
       "the existing scalar corpus validates through the standalone binary under the reviewed registry",
       "zero skips and zero mismatches across persistent-state, storage, function-pointer and typed-invalid cases",

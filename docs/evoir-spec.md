@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.8** | **Authoritative reference** | **2026-08-24**
+**Revision 1.8.1** | **Authoritative reference** | **2026-08-24**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1350,12 +1350,36 @@ and the poison/effect exclusions below. A deterministic
 greedy extractor accepts only a strict cost improvement and prefers the
 original on ties. "Original" for a final class means its smallest `source=before`
 `NodeId`; if that class has no before node, equal-cost alternatives use the
-smallest `NodeId`. Costs are solved by initializing seeds and `const` nodes to
-zero and repeatedly visiting other nodes in `NodeId` order, assigning
-`1 + sum(child_costs)` only when every child
-has a finite cost, until no choice changes. A class reachable from the root but
-left without a finite choice makes extraction fail and triggers baseline
-fallback rather than recursion or a placeholder. Explicit node and epoch budgets bound every run. Budget,
+smallest `NodeId`.
+
+For the Day 8 P0 profile, cost is the number of instructions that a choice newly
+emits into the rewritten module, with the existing semantic convention that a
+`const` node costs zero. The rules are region-relative and ordered by the first
+matching case:
+
+- a seed costs zero;
+- a `const` node costs zero;
+- a `source=before` witness other than the replacement root costs zero. Its
+  instruction already exists earlier in the same block and Section 8.5 leaves
+  it in place, so selecting it emits only a reference and does not expand its
+  child extraction closure;
+- the replacement root's own `source=before` node costs one plus its selected
+  child costs; and
+- any non-constant `source=derived` node costs one plus its selected child
+  costs.
+
+The replacement-root exclusion in the third rule is mandatory: assigning zero
+to the original root would make every target tie the original under strict
+improvement and would silently disable all P0 optimization. Costs are solved by
+repeatedly visiting nodes in `NodeId` order and assigning a finite cost only
+when every child required by the applicable rule has a finite cost, until no
+choice changes. A class reachable from the root but left without a finite choice
+makes extraction fail and triggers baseline fallback rather than recursion or a
+placeholder. This is deliberately an instruction-count-only P0 model: it does
+not estimate register pressure, and a later multi-objective model must revise
+the cost authority rather than reinterpret these zero-cost cases. Cross-block
+reuse remains excluded by Section 8.5. Explicit node and epoch budgets bound
+every run. Budget,
 matching, extraction, validation, or proof failure returns the byte-identical
 original EvoIR and continues compilation; equality saturation is never needed
 for correctness.
@@ -2721,18 +2745,25 @@ be named by a later rewrite as its right-hand `node:` proof reference; unused de
 invalid. This prevents an event stream from manufacturing an unproved
 representation and relying on extraction to select it.
 
-Extraction entries count from zero and are topological: every selected node's
+Extraction entries count from zero and are topological. A selected
+`source=before` witness that is not the replacement root is a terminal reuse:
+its instruction remains at its earlier position, it emits no instruction at the
+root, and its children have no extraction entries. Every other selected node's
 child, after canonicalizing its e-class, has exactly one earlier extraction
 entry. A `seed:I` choice must belong to that final class; a `node:nI` choice must
 name a node whose owner belongs to it. No final class occurs twice. Starting at
-`root`, the selected child closure must equal the complete set of extraction
-entries, so unrelated choices cannot be smuggled into reconstruction. Seeds emit
-no instruction; selected nodes emit in extraction order at the original root's
-position. The root class must be the final class of the original root node.
+`root`, the selected child closure under those terminal-reuse rules must equal
+the complete set of extraction entries, so unrelated choices cannot be
+smuggled into reconstruction. Seeds and terminal before-witness reuses emit no
+instruction; the replacement root's selected `source=before` node and selected
+`source=derived` nodes emit in extraction order at the original root's position.
+The root class must be the final class of the original root node.
 
-The greedy cost is zero for a seed or `const` node and one plus the sum of
-selected child costs for every other node; repeated child positions are counted
-repeatedly. Giving constants zero cost is semantic, not cosmetic: otherwise
+The checker recomputes the region-relative cost from Section 8. A seed, a
+`const` node, or a non-root before-witness reuse costs zero. The replacement
+root's non-constant before node and every non-constant derived node cost one plus
+the sum of selected child costs; repeated child positions are counted repeatedly.
+Giving constants zero cost is semantic, not cosmetic: otherwise
 `icmp.eq x, x` and its `true` replacement both cost one, making every identity
 comparison rule in the reviewed registry unreachable under strict improvement.
 A region block is
@@ -2976,6 +3007,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.8.1 | 2026-08-24 | Clarifies the Day 8 P0 extractor after the first standalone-corpus replay exposed an ambiguity: cost is region-relative newly emitted instruction count with the existing zero-cost `const` convention; selecting a non-root `source=before` witness reuses its earlier same-block SSA value, emits nothing and terminates extraction closure, while the replacement root remains structural and non-constant derived nodes are emitted. Records the mandatory root exclusion, the no-register-pressure scope, and the existing cross-block prohibition so a false-green zero-rewrite implementation cannot satisfy the corpus gate. |
 | 1.8 | 2026-08-24 | Makes the textual form load-bearing rather than a debugging convenience: Section 9 becomes a byte grammar with explicit separators, rejection rules, canonical empty-list/positional-binder spellings, complete effects/global forms and deterministic rendering. Freezes independently derived P0 eligibility as one replacement root plus a same-block witness closure, poison/effect fixed points, traversal order, witness/seed manifests, optional accepted-region subsequences and mechanical reassembly. EVP1 carries exact variable bindings, constant payloads, before/derived node origin, complete deterministic merge receipts, explicit extraction wiring and a reviewed `p0.scalar.v1` registry whose digest covers side conditions; constants cost zero so identity comparisons are real strict improvements, certificate IDs are local snapshots, and history-only persistent nodes cannot become unrecorded premises. Adds `fnptr<Sig>`, `func_addr`, indirect calls and `E3015`–`E3017`/`E3019`; gives function pointers explicit Function/Null provenance; assigns `E3018` uniquely to invalid lifetime end; distinguishes file, function-static and string-literal globals so generated identities and visibility are validator-checkable; and makes Section 4.6 the sole call-effect authority with exact validator recomputation. Defines canonical persistent-state identity, revision behavior and one joint outer optimization transaction, fixes the checker interface and crate boundary, and records which components are shared by fail-safe direction. Defers proof minimisation, alias-dependent rewrites, CFG region splitting and attribute-derived summaries. |
 | 1.7 | 2026-08-22 | Defines the Day 7 `(ObjectId, signed byte_offset)` provenance model, immutable initialized/lifetime-aware `mem<all>` snapshots, module globals and automatic objects, state-preserving pointer/access guards with exact `E3001`/`E3009`–`E3014` diagnostics, and observable volatile world traces. It freezes executable pointer/memory syntax while deferring pointer-valued static relocations, pointer/integer conversions, region splitting, alias-dependent memory rewrites, atomics, heap-library semantics, and backend lowering. |
 | 1.6 | 2026-08-18 | Makes `--emit=evoir` the canonical driver spelling, binds it to the exhaustive Section 9 renderer, names the first stored block `^entry` independently of numeric block identity, and corrects the complete example to use the supported `icmp.ult` comparison. |
