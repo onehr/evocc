@@ -889,11 +889,8 @@ def audit_pilot_contract(
     )
     require(observer["schemaVersion"] == 2, "observer schemaVersion drift")
     require(
-        observer["authorityState"] == "ABSENT"
-        and observer["measurementStatus"] == "NOT_MEASURED"
-        and observer["provisional"] is True
-        and observer["liveMeasurementPermitted"] is False,
-        "absent observer sentinel drift",
+        observer["measurementStatus"] == "NOT_MEASURED",
+        "observer authority was result-shaped",
     )
     require(
         observer["protocolId"] == "c30.day5.phase2-external-observer.v2"
@@ -944,21 +941,37 @@ def audit_pilot_contract(
         },
         "observer v2 topology/delta/return-code authority drift",
     )
-    require(
-        exact_keys(
-            observer["executable"],
-            OBSERVER_IDENTITY_KEYS,
-            "observer executable sentinel",
-        )
-        == {
-            "bytes": 0,
-            "path": None,
-            "sha256": hashlib.sha256(b"").hexdigest(),
-        }
-        and "Reject before subject or container execution"
-        in observer["absenceBehavior"],
-        "observer executable ABSENT sentinel drift",
+    executable = exact_keys(
+        observer["executable"],
+        OBSERVER_IDENTITY_KEYS,
+        "observer executable authority",
     )
+    if observer["authorityState"] == "ABSENT":
+        require(
+            observer["provisional"] is True
+            and observer["liveMeasurementPermitted"] is False
+            and executable
+            == {
+                "bytes": 0,
+                "path": None,
+                "sha256": hashlib.sha256(b"").hexdigest(),
+            }
+            and "Reject before subject or container execution"
+            in observer["absenceBehavior"],
+            "observer executable ABSENT sentinel drift",
+        )
+    else:
+        require(
+            observer["authorityState"] == "PINNED"
+            and observer["provisional"] is False
+            and observer["liveMeasurementPermitted"] is True
+            and executable["path"] == OBSERVER.relative_to(ROOT).as_posix()
+            and executable["bytes"] == OBSERVER.stat().st_size
+            and executable["sha256"] == digest(OBSERVER.read_bytes())
+            and executable["bytes"] > 0
+            and executable["sha256"] != hashlib.sha256(b"").hexdigest(),
+            "live observer executable authority drift",
+        )
     require(
         contract["verdictSemantics"]
         == {
