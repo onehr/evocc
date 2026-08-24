@@ -1,0 +1,167 @@
+{
+  "receiptId": "c30.day9.v2",
+  "contract": {
+    "path": "tests/contracts/day9-acceptance-contract.json",
+    "sha256": "688eadfb79af8e1758cdca891c4d432b8d7b0bec03dea426ad54287f1ab8d65e"
+  },
+  "cutLine": "A and B only (ruled 2026-08-25); C and D deferred, their red sets not opened",
+  "redWindow": {
+    "opened": "ca8127d (tests only)",
+    "closed": "eae3e42",
+    "implementationCommits": [
+      "4a9efc1",
+      "adce449",
+      "ed8302b",
+      "eae3e42",
+      "a15872e"
+    ]
+  },
+  "subjectCommit": "a15872e",
+  "gate": {
+    "claim": ">= 1/16 dual-oracle parse, 0/16 raw preprocess, published by the script from sealed evidence",
+    "measured": {
+      "dualOracleCleanParseTus": "1/16",
+      "rawPreprocessClean": "0/16",
+      "regressionsAgainstPrevious": 0
+    },
+    "command": "python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260824T181349Z-70989/results.jsonl",
+    "dashboardReceipt": {
+      "path": "tests/contracts/kernel-dashboard-receipt.json",
+      "sha256": "69832638a921c27fbd4980aa24a18ccd93046da56b745a5b635599d7cfb0dc5e",
+      "subjectCommit": "eae3e42",
+      "publishedFromRun": "20260824T184441Z-28691"
+    },
+    "result": "PASS"
+  },
+  "lanes": {
+    "clean": {
+      "count": 2,
+      "units": [
+        "lib-bitrev (gcc-preprocessed-parser, clang-preprocessed-parser)"
+      ]
+    },
+    "stillFailing": [
+      {
+        "count": 30,
+        "lanes": "15 units x {gcc,clang}-preprocessed-parser",
+        "firstError": "E1003 expected-expression at `typeof(_Generic(...))` (init-init-task line 439 col 27 and the same construct in the other 14 units)",
+        "rootCause": "typeof and _Generic are task C, deferred by the cut line"
+      },
+      {
+        "count": 16,
+        "lanes": "16 units x evocpp-raw",
+        "firstError": "E0104 error-directive: \"Unknown compiler\"",
+        "rootCause": "predefined macros, Day 16, out of scope"
+      }
+    ],
+    "publicationsThisWindow": [
+      {
+        "commit": "4a9efc1",
+        "run": "20260824T171601Z-36959",
+        "parseLanesStoppedOn": "struct list_head *next, *prev; (member declarator list)"
+      },
+      {
+        "commit": "adce449",
+        "run": "20260824T174927Z-22061",
+        "parseLanesStoppedOn": "} __attribute__((aligned(sizeof(void *)))); (aligned argument as constant expression)"
+      },
+      {
+        "commit": "ed8302b",
+        "run": "20260824T181349Z-70989",
+        "parseLanesStoppedOn": "28 at typeof(_Generic(...)), 2 at __u64 __attribute__((aligned(8))) excl_prog_hash;"
+      },
+      {
+        "commit": "eae3e42",
+        "run": "20260824T184441Z-28691",
+        "parseLanesStoppedOn": "30 at typeof(_Generic(...))"
+      }
+    ]
+  },
+  "attributes": {
+    "preservedNotApplied": {
+      "names": [
+        "gnu_inline",
+        "no_instrument_function",
+        "unused"
+      ],
+      "command": "target/release/evocc --emit=c-hir <the two kernel lines>",
+      "output": "preserved-not-applied: gnu_inline x1 / no_instrument_function x1 / unused x1; applied: aligned x1"
+    },
+    "applied": [
+      "aligned",
+      "packed"
+    ],
+    "layoutOracle": {
+      "manifest": "tests/contracts/layout-attributed-cases.json",
+      "sha256": "a5fdd7d922a92739bed26200d00bbef6c420866bbadd879dc8ef76226d4caf88",
+      "consensus": "GCC-14 == Clang-19 on 14/14",
+      "subject": "14/14 identical, mismatchCount 0",
+      "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject"
+    },
+    "frozenLayoutCorpus": {
+      "subject": "128/128, mismatchCount 0",
+      "command": "bash tests/acceptance/day5-layout-conformance.sh --subject"
+    },
+    "specificationCorrections": [
+      "10.1.9: aligned(N) on a typedef or type name sets alignment exactly and may lower it (oracle: typedef int t __attribute__((aligned(1))) has alignment 1); records and members only raise",
+      "10.1.9: tenth position, immediately before a declarator that follows a comma; revision 1.9.1"
+    ]
+  },
+  "tests": {
+    "workspace": {
+      "passed": 712,
+      "failed": 0,
+      "command": "cargo test --workspace --no-fail-fast"
+    },
+    "suites": {
+      "crates/evocc-parser/tests/gnu_attributes.rs": {
+        "passed": 26,
+        "command": "cargo test -p evocc-parser --test gnu_attributes"
+      },
+      "crates/evocc-parser/tests/day4_aggregate_chir.rs": {
+        "passed": 9,
+        "command": "cargo test -p evocc-parser --test day4_aggregate_chir"
+      },
+      "crates/evocc/tests/chir_attribute_inventory.rs": {
+        "passed": 2,
+        "command": "cargo test -p evocc --test chir_attribute_inventory"
+      },
+      "crates/evocc-parser/tests/day5_gnu_int128.rs": {
+        "passed": 6,
+        "command": "cargo test -p evocc-parser --test day5_gnu_int128"
+      }
+    },
+    "clippy": {
+      "warnings": 0,
+      "command": "cargo clippy --workspace --all-targets -- -D warnings"
+    },
+    "fmt": {
+      "result": "clean",
+      "command": "cargo fmt --all -- --check"
+    },
+    "ruff": {
+      "result": "clean",
+      "command": "ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py"
+    },
+    "publisherSelfTest": {
+      "result": "PASS",
+      "command": "python3 tests/acceptance/publish-kernel-dashboard.py --self-test"
+    }
+  },
+  "offlineCloneReplay": {
+    "commit": "a15872e",
+    "command": "git clone --no-hardlinks file://<repo> <scratch>/replay-a15872e && CARGO_NET_OFFLINE=true cargo test --workspace --no-fail-fast; cargo clippy --workspace --all-targets -- -D warnings; cargo fmt --all -- --check; python3 tests/acceptance/publish-kernel-dashboard.py --self-test",
+    "measured": {
+      "passed": 712,
+      "failed": 0,
+      "clippy": 0,
+      "fmt": "clean",
+      "selfTest": "PASS"
+    }
+  },
+  "processDeviations": [
+    "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (adce449), aligned arguments as constant expressions (ed8302b), attribute positions in members, block scope and parameters (eae3e42).",
+    "The first real publication reused a stale capture after the observer refused to overwrite it, producing a receipt whose subject commit did not match its run; the publisher now captures per commit and takes the run directory from its own capture (a15872e). The receipt in the tree is from the corrected publisher.",
+    "Two RED expectations were corrected by the oracle before implementation: aligned on a typedef may lower alignment (4,1 not 4,4) and a lone packed member gives (8,2) not (8,4)."
+  ]
+}
