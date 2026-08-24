@@ -236,6 +236,8 @@ impl AppliedRewrite {
     pub(crate) fn is_reviewed_instance(&self) -> bool {
         rewrite_opportunity(&self.instruction, &self.facts).is_some_and(|opportunity| {
             opportunity.rule == self.rule && opportunity.replacement == self.replacement
+        }) || constant_fold(&self.instruction, &self.facts).is_some_and(|opportunity| {
+            opportunity.rule == self.rule && opportunity.replacement == self.replacement
         })
     }
 }
@@ -631,7 +633,10 @@ fn constant(rule: ScalarRewrite, raw: u64) -> Option<RewriteOpportunity> {
     })
 }
 
-fn constant_fold(inst: &Inst, facts: &HashMap<u32, ScalarFact>) -> Option<RewriteOpportunity> {
+pub(crate) fn constant_fold(
+    inst: &Inst,
+    facts: &HashMap<u32, ScalarFact>,
+) -> Option<RewriteOpportunity> {
     let operands = scalar_operands(inst);
     let raw = operands
         .iter()

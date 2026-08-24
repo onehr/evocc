@@ -22,7 +22,7 @@ use evocc_chir::{
 };
 use evocc_common::{Arena, FileId};
 use evocc_cpp::Preprocessor;
-use evocc_eqopt::{optimize_scalar_module, ScalarEqBudget};
+use evocc_eqopt::{optimize_scalar_module_certified_persistent, EqualityState, ScalarEqBudget};
 use evocc_evoir::{
     interpret_module, render_module, InterpreterLimits as EvoIrLimits, Module, RuntimeValue,
 };
@@ -561,7 +561,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                 }
             };
             let module = if options.optimize_scalar_evoir {
-                optimize_scalar_module(&module, ScalarEqBudget::default()).module
+                optimize_scalar_evoir(module)
             } else {
                 module
             };
@@ -574,6 +574,17 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
             }
         }
     }
+}
+
+fn optimize_scalar_evoir(module: evocc_evoir::Module) -> evocc_evoir::Module {
+    let Ok(mut equality) = EqualityState::for_module(&module) else {
+        return module;
+    };
+    if equality.ingest_module(&module).is_err() {
+        return module;
+    }
+    optimize_scalar_module_certified_persistent(&module, &mut equality, ScalarEqBudget::default())
+        .module
 }
 
 fn interpret_chir(

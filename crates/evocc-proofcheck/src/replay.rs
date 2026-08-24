@@ -582,12 +582,7 @@ fn identity_comparison(
     if lhs.operation != operation || replay.find(*left) != x || replay.find(*right) != x {
         return Err(());
     }
-    validate_const(
-        rhs.ok_or(())?,
-        "bits<1>",
-        value,
-        Some(EvpNodeSource::Derived),
-    )
+    validate_const(rhs.ok_or(())?, "bits<1>", value, None)
 }
 
 #[derive(Clone, Copy)]
@@ -651,12 +646,7 @@ fn fold(
     } else {
         &lhs.sort
     };
-    validate_const(
-        rhs.ok_or(())?,
-        result_sort,
-        result,
-        Some(EvpNodeSource::Derived),
-    )
+    validate_const(rhs.ok_or(())?, result_sort, result, None)
 }
 
 fn class_constant(replay: &Replay<'_>, class: u32, sort: &str) -> Result<u64, ()> {

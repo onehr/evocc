@@ -7,9 +7,10 @@ use evocc_egraph::{
     ProofContext, RuleSnapshot,
 };
 use evocc_evoir::{inst_results, render_module, validate_module, Inst, Module, Value};
-use evocc_proof::sha256;
+use evocc_proof::{parse_evp1, render_evp1, sha256, sha256_hex};
 use evocc_types::EvoIRType;
 
+use crate::evp1::{optimize_scalar_module_with_evp1_transaction, CertifiedScalarEqOutcome};
 use crate::scalar_eq::{
     ingest_scalar_inst, mask_raw, operator_id, optimize_scalar_module_with_events, scalar_operands,
     scalar_result, AppliedRewrite, Replacement, ScalarOperator,
@@ -437,6 +438,104 @@ impl EqualityState {
             .collect::<std::collections::HashSet<_>>();
         self.values.retain(|key, _| current.contains(key));
     }
+
+    fn remap_current_values(
+        &mut self,
+        value_remap: &HashMap<(String, u32), u32>,
+    ) -> Result<(), String> {
+        let old = std::mem::take(&mut self.values);
+        let mut remapped = HashMap::new();
+        for ((function, value), binding) in old {
+            let Some(new_value) = value_remap.get(&(function.clone(), value)) else {
+                continue;
+            };
+            let key = (function, *new_value);
+            if remapped.insert(key.clone(), binding).is_some() {
+                return Err(format!(
+                    "certified value remap assigns @{} %v{} more than once",
+                    key.0, key.1
+                ));
+            }
+        }
+        self.values = remapped;
+        Ok(())
+    }
+}
+
+/// Commit one certified scalar optimization and its persistent equality
+/// mutation as a single outer transaction. Any disagreement rolls both back.
+#[must_use]
+pub fn optimize_scalar_module_certified_persistent(
+    module: &Module,
+    state: &mut EqualityState,
+    budget: ScalarEqBudget,
+) -> CertifiedScalarEqOutcome {
+    let transaction = optimize_scalar_module_with_evp1_transaction(module, budget);
+    let mut outcome = transaction.outcome;
+    if outcome.report.fell_back {
+        return outcome;
+    }
+    if outcome.certificate.regions.len() != transaction.events.len()
+        || outcome.report.optimized_values != transaction.events.len()
+    {
+        return certified_persistent_fallback(module, outcome);
+    }
+    let proof = render_evp1(&outcome.certificate);
+    if parse_evp1(proof.as_bytes()).as_ref() != Ok(&outcome.certificate) {
+        return certified_persistent_fallback(module, outcome);
+    }
+    if transaction.events.is_empty() {
+        return outcome;
+    }
+    if !state.ingested {
+        return certified_persistent_fallback(module, outcome);
+    }
+
+    let mut staged = state.clone();
+    let mut changed = false;
+    for event in transaction.events {
+        match staged.apply(event) {
+            Ok(applied) => changed |= applied,
+            Err(_) => return certified_persistent_fallback(module, outcome),
+        }
+    }
+    staged.graph.rebuild();
+    if staged
+        .remap_current_values(&transaction.value_remap)
+        .is_err()
+        || staged.verify_history().is_err()
+    {
+        return certified_persistent_fallback(module, outcome);
+    }
+    if changed {
+        staged.revision = staged.revision.saturating_add(1);
+        *state = staged;
+    }
+    outcome.report.proof_authority = ProofAuthority::Reviewed {
+        registry: REVIEWED_REGISTRY,
+    };
+    outcome
+}
+
+fn certified_persistent_fallback(
+    module: &Module,
+    mut outcome: CertifiedScalarEqOutcome,
+) -> CertifiedScalarEqOutcome {
+    let input = render_module(module);
+    let digest = sha256_hex(input.as_bytes());
+    outcome.module = module.clone();
+    outcome.certificate.input_digest = digest.clone();
+    outcome.certificate.regions.clear();
+    outcome.certificate.output_digest = digest;
+    outcome.report.proof_replay_failed = true;
+    outcome.report.fell_back = true;
+    outcome.report.regions_admitted = 0;
+    outcome.report.graph_nodes = 0;
+    outcome.report.epochs = 0;
+    outcome.report.merges = 0;
+    outcome.report.optimized_values = 0;
+    outcome.report.receipts.clear();
+    outcome
 }
 
 /// Optimize against a compilation-lifetime equality database. Any budget,

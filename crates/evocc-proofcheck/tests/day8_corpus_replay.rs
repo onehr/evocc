@@ -15,7 +15,7 @@ use evocc_evoir::{InterpreterLimits, interpret_module, render_module, validate_m
 use evocc_lex::{Lexer, TokenKind};
 use evocc_lower::lower_unit;
 use evocc_parser::Parser;
-use evocc_proof::render_evp1;
+use evocc_proof::{EvpEvent, render_evp1};
 use evocc_types::TargetDataLayout;
 
 const PROGRAMS: usize = 128;
@@ -48,7 +48,7 @@ fn lower(source: &str, ordinal: usize) -> evocc_evoir::Module {
     lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap()
 }
 
-fn write_case(root: &Path, ordinal: usize, source: &str, expected: u64) -> usize {
+fn write_case(root: &Path, ordinal: usize, source: &str, expected: u64) -> (usize, usize) {
     let before = lower(source, ordinal);
     validate_module(&before).unwrap();
     let before_result = interpret_module(
@@ -80,7 +80,14 @@ fn write_case(root: &Path, ordinal: usize, source: &str, expected: u64) -> usize
     fs::write(root.join(format!("{stem}.before.evo")), render_module(&before)).unwrap();
     fs::write(root.join(format!("{stem}.after.evo")), render_module(&outcome.module)).unwrap();
     fs::write(root.join(format!("{stem}.proof.evp")), render_evp1(&outcome.certificate)).unwrap();
-    outcome.certificate.regions.len()
+    let rule_instances = outcome
+        .certificate
+        .regions
+        .iter()
+        .flat_map(|region| &region.events)
+        .filter(|event| matches!(event, EvpEvent::Rewrite(_)))
+        .count();
+    (outcome.certificate.regions.len(), rule_instances)
 }
 
 fn main() {
@@ -89,19 +96,23 @@ fn main() {
     fs::create_dir_all(root).unwrap();
     let mut unique = BTreeSet::new();
     let mut regions = 0;
+    let mut rule_instances = 0;
     let mut optimized = 0;
     for ordinal in 0..PROGRAMS {
         let (source, expected) = source(ordinal);
         assert!(unique.insert(source.clone()));
-        let case_regions = write_case(root, ordinal, &source, expected);
+        let (case_regions, case_rule_instances) = write_case(root, ordinal, &source, expected);
         if case_regions != 0 {
             optimized += 1;
         }
         regions += case_regions;
+        rule_instances += case_rule_instances;
     }
     fs::write(
         root.join("measurement.txt"),
-        format!("programs={PROGRAMS}\noptimized={optimized}\nregions={regions}\n"),
+        format!(
+            "programs={PROGRAMS}\noptimized={optimized}\nregions={regions}\nruleInstances={rule_instances}\n"
+        ),
     )
     .unwrap();
 }
@@ -205,10 +216,21 @@ fn deterministic_128_program_corpus_replays_in_the_standalone_checker() {
     build_corpus(&corpus);
     let measurement =
         fs::read_to_string(corpus.root.join("measurement.txt")).expect("read producer measurement");
+    let measured = measurement
+        .lines()
+        .map(|line| {
+            let (name, value) = line.split_once('=').expect("measurement key=value");
+            (name, value.parse::<usize>().expect("measurement integer"))
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+    assert_eq!(measured.get("programs"), Some(&PROGRAMS));
     assert_eq!(
-        measurement, "programs=128\noptimized=128\nregions=1024\n",
+        measured.get("optimized"),
+        Some(&PROGRAMS),
         "the reviewed ruling must not turn optimization into a false-green no-op"
     );
+    assert!(measured["regions"] > 0);
+    assert!(measured["ruleInstances"] >= measured["regions"]);
 
     let mut accepted = 0;
     for ordinal in 0..PROGRAMS {
@@ -223,6 +245,7 @@ fn deterministic_128_program_corpus_replays_in_the_standalone_checker() {
 
     assert_eq!(accepted, PROGRAMS, "the gate forbids skips");
     println!(
-        "Day-8 reviewed proof corpus measured: accepted={accepted}/{PROGRAMS}, optimized=128/128, regions=1024, skipped=0"
+        "Day-8 reviewed proof corpus measured: accepted={accepted}/{PROGRAMS}, optimized={}/{PROGRAMS}, regions={}, ruleInstances={}, skipped=0",
+        measured["optimized"], measured["regions"], measured["ruleInstances"]
     );
 }

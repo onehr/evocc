@@ -11,20 +11,27 @@ use evocc_proof::{
 use evocc_types::EvoIRType;
 
 use crate::scalar_eq::{
-    ingest_scalar_inst, mask_raw, optimize_scalar_module_with_events, record_fact, remap_inst_uses,
-    resolve_alias, rewrite_opportunity, scalar_operands, Replacement, RewriteOpportunity,
-    ScalarFact,
+    constant_fold, ingest_scalar_inst, mask_raw, optimize_scalar_module_with_events,
+    remap_inst_uses, resolve_alias, scalar_operands, AppliedRewrite, Replacement,
+    RewriteOpportunity, ScalarFact,
 };
 use crate::{ProofAuthority, ScalarEqBudget, ScalarEqReport, ScalarRewrite};
 
 const REGISTRY_NAME: &str = "p0.scalar.v1";
 const REGISTRY_SHA256: &str = "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9";
+pub(crate) type ValueRemap = HashMap<(String, u32), u32>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CertifiedScalarEqOutcome {
     pub module: Module,
     pub certificate: EvpCertificate,
     pub report: ScalarEqReport,
+}
+
+pub(crate) struct CertifiedScalarEqTransaction {
+    pub(crate) outcome: CertifiedScalarEqOutcome,
+    pub(crate) events: Vec<AppliedRewrite>,
+    pub(crate) value_remap: ValueRemap,
 }
 
 /// Optimize only regions that can carry a self-contained current-transaction
@@ -35,8 +42,16 @@ pub fn optimize_scalar_module_with_evp1(
     module: &Module,
     budget: ScalarEqBudget,
 ) -> CertifiedScalarEqOutcome {
+    optimize_scalar_module_with_evp1_transaction(module, budget).outcome
+}
+
+pub(crate) fn optimize_scalar_module_with_evp1_transaction(
+    module: &Module,
+    budget: ScalarEqBudget,
+) -> CertifiedScalarEqTransaction {
     let input = render_module(module);
-    let mut report = optimize_scalar_module_with_events(module, budget).0.report;
+    let (transient, applied) = optimize_scalar_module_with_events(module, budget);
+    let mut report = transient.report;
     report.receipts.clear();
     report.merges = 0;
     report.optimized_values = 0;
@@ -44,60 +59,66 @@ pub fn optimize_scalar_module_with_evp1(
         registry: REGISTRY_NAME,
     };
     if report.fell_back {
-        return zero(module, input, report);
+        return zero_transaction(module, input, report);
     }
 
     let mut regions = Vec::new();
     let mut accepted = Vec::new();
+    let mut events = Vec::new();
     let mut proof_nodes = 0_usize;
     for (function_index, function) in module.functions.iter().enumerate() {
         for (block_index, block) in function.blocks.iter().enumerate() {
-            let mut facts = HashMap::new();
             for (instruction_index, instruction) in block.insts.iter().enumerate() {
-                let opportunity = rewrite_opportunity(instruction, &facts);
-                if let Some(opportunity) = opportunity {
-                    if let Some(region) = build_region(
-                        module,
-                        function_index,
-                        block_index,
-                        instruction_index,
-                        instruction,
-                        &facts,
-                        &opportunity,
-                    ) {
-                        let new_nodes = region
-                            .events
-                            .iter()
-                            .filter(|event| matches!(event, EvpEvent::Node(_)))
-                            .count();
-                        if regions.len() >= budget.max_epochs
-                            || proof_nodes.saturating_add(new_nodes) > budget.max_nodes
-                        {
-                            report.budget_exhausted = true;
-                            report.fell_back = true;
-                            return zero(module, input, report);
-                        }
-                        proof_nodes += new_nodes;
-                        accepted.push(Accepted {
-                            function: function_index,
-                            block: block_index,
-                            instruction: instruction_index,
-                            root: inst_results(instruction)[0].id,
-                            replacement: opportunity.replacement.clone(),
-                        });
-                        regions.push(region);
-                    }
+                let Some(root_event) = applied.iter().find(|event| {
+                    event.function == function.name
+                        && event.block == block.id
+                        && inst_results(instruction)
+                            .first()
+                            .is_some_and(|result| result.id == event.result.id)
+                }) else {
+                    continue;
+                };
+                let Some((region, normalized_event, output_replacement)) = build_region(
+                    module,
+                    function_index,
+                    block_index,
+                    instruction_index,
+                    &applied,
+                    root_event,
+                ) else {
+                    continue;
+                };
+                let new_nodes = region
+                    .events
+                    .iter()
+                    .filter(|event| matches!(event, EvpEvent::Node(_)))
+                    .count();
+                if regions.len() >= budget.max_epochs
+                    || proof_nodes.saturating_add(new_nodes) > budget.max_nodes
+                {
+                    report.budget_exhausted = true;
+                    report.fell_back = true;
+                    return zero_transaction(module, input, report);
                 }
-                record_fact(instruction, &mut facts);
+                proof_nodes += new_nodes;
+                accepted.push(Accepted {
+                    function: function_index,
+                    block: block_index,
+                    instruction: instruction_index,
+                    root: normalized_event.result.id,
+                    replacement: output_replacement,
+                });
+                events.push(normalized_event);
+                regions.push(region);
             }
         }
     }
-    let output = match apply(module, &accepted) {
+    let (output, value_remap) = match apply(module, &accepted) {
         Ok(output) => output,
         Err(()) => {
             report.proof_replay_failed = true;
             report.fell_back = true;
-            return zero(module, input, report);
+            return zero_transaction(module, input, report);
         }
     };
     let output_text = render_module(&output);
@@ -106,16 +127,32 @@ pub fn optimize_scalar_module_with_evp1(
     report.epochs = regions.len();
     report.merges = regions.len();
     report.optimized_values = regions.len();
-    CertifiedScalarEqOutcome {
-        module: output,
-        certificate: EvpCertificate {
-            registry_name: REGISTRY_NAME.to_owned(),
-            registry_digest: REGISTRY_SHA256.to_owned(),
-            input_digest: sha256_hex(input.as_bytes()),
-            regions,
-            output_digest: sha256_hex(output_text.as_bytes()),
+    CertifiedScalarEqTransaction {
+        outcome: CertifiedScalarEqOutcome {
+            module: output,
+            certificate: EvpCertificate {
+                registry_name: REGISTRY_NAME.to_owned(),
+                registry_digest: REGISTRY_SHA256.to_owned(),
+                input_digest: sha256_hex(input.as_bytes()),
+                regions,
+                output_digest: sha256_hex(output_text.as_bytes()),
+            },
+            report,
         },
-        report,
+        events,
+        value_remap,
+    }
+}
+
+fn zero_transaction(
+    module: &Module,
+    input: String,
+    report: ScalarEqReport,
+) -> CertifiedScalarEqTransaction {
+    CertifiedScalarEqTransaction {
+        outcome: zero(module, input, report),
+        events: Vec::new(),
+        value_remap: HashMap::new(),
     }
 }
 
@@ -144,19 +181,18 @@ struct Accepted {
     replacement: Replacement,
 }
 
-#[allow(clippy::too_many_arguments)]
 fn build_region(
     module: &Module,
     function_index: usize,
     block_index: usize,
     instruction_index: usize,
-    instruction: &Inst,
-    facts: &HashMap<u32, ScalarFact>,
-    opportunity: &RewriteOpportunity,
-) -> Option<EvpRegion> {
-    ingest_scalar_inst(instruction).ok()?;
+    applied: &[AppliedRewrite],
+    root_event: &AppliedRewrite,
+) -> Option<(EvpRegion, AppliedRewrite, Replacement)> {
     let function = &module.functions[function_index];
     let block = &function.blocks[block_index];
+    let instruction = &block.insts[instruction_index];
+    ingest_scalar_inst(instruction).ok()?;
     let definitions = block
         .insts
         .iter()
@@ -207,70 +243,142 @@ fn build_region(
         .iter()
         .map(|seed| (seed.value, seed.class))
         .collect::<HashMap<_, _>>();
+    let mut value_nodes = HashMap::new();
+    let mut node_values = HashMap::new();
     let mut nodes = Vec::new();
     for index in &witness_indices {
         let instruction = &block.insts[*index];
         let node_id = u32::try_from(nodes.len()).ok()?;
         let owner = u32::try_from(seeds.len() + nodes.len()).ok()?;
         let node = before_node(instruction, node_id, owner, &value_classes)?;
-        value_classes.insert(inst_results(instruction)[0].id, owner);
+        let result = inst_results(instruction)[0];
+        value_classes.insert(result.id, owner);
+        value_nodes.insert(result.id, node_id);
+        node_values.insert(node_id, result.clone());
         nodes.push(node);
     }
-    let root_node = witness_indices
-        .iter()
-        .position(|index| *index == instruction_index)? as u32;
-    let lhs = nodes[root_node as usize].owner;
-    let (rule, binding_values) = exact_rule(instruction, facts, opportunity)?;
-    let bindings = binding_values
-        .iter()
-        .map(|(name, value)| Some(((*name).to_owned(), *value_classes.get(&value.id)?)))
-        .collect::<Option<Vec<_>>>()?;
-    let (rhs, rhs_ref, selected) = match &opportunity.replacement {
-        Replacement::Alias(value) => {
-            let rhs = *value_classes.get(&value.id)?;
-            (
-                rhs,
-                EvpProofRef::Class(rhs),
-                SelectedSource::Value(value.id),
-            )
-        }
-        Replacement::Constant(raw) => {
-            let result = inst_results(instruction)[0];
-            let node = u32::try_from(nodes.len()).ok()?;
-            let owner = u32::try_from(seeds.len() + nodes.len()).ok()?;
-            nodes.push(EvpNode {
-                node,
-                owner,
-                source: EvpNodeSource::Derived,
-                operation: "const".to_owned(),
-                sort: packed_type(&result.ty)?,
-                effect: EvpEffectClass::Pure,
-                attributes: vec![("value".to_owned(), mask_raw(*raw, &result.ty))],
-                children: Vec::new(),
-            });
-            (owner, EvpProofRef::Node(node), SelectedSource::Node(node))
-        }
-    };
-    if lhs == rhs {
-        return None;
-    }
-    let result = lhs.min(rhs);
+    let root_node = *value_nodes.get(&root_event.result.id)?;
+    let replacement_root = nodes.get(root_node as usize)?.owner;
+    let mut classes = LocalClasses::new(seeds.len() + nodes.len())?;
     let mut events = nodes
         .iter()
         .cloned()
         .map(EvpEvent::Node)
         .collect::<Vec<_>>();
-    events.push(EvpEvent::Rewrite(EvpRewrite {
-        rule: rule.to_owned(),
-        lhs_pre: lhs,
-        rhs_pre: rhs,
-        result,
-        lhs: EvpProofRef::Node(root_node),
-        rhs: rhs_ref,
-        bindings,
-    }));
-    let extractions =
-        extraction_manifest(&nodes, &seeds, &value_classes, selected, lhs, rhs, result)?;
+    let mut selected = None;
+    let mut normalized_root = None;
+    let mut output_replacement = None;
+    for event in applied.iter().filter(|event| {
+        event.function == function.name
+            && event.block == block.id
+            && definitions
+                .get(&event.result.id)
+                .is_some_and(|index| closure.contains(index))
+    }) {
+        let node_id = *value_nodes.get(&event.result.id)?;
+        let lhs = classes.find(nodes.get(node_id as usize)?.owner)?;
+        let opportunity = normalize_opportunity(event, &nodes, &value_classes, &classes)?;
+        let normalized_event = AppliedRewrite {
+            function: event.function.clone(),
+            block: event.block,
+            result: event.result.clone(),
+            instruction: event.instruction.clone(),
+            facts: event.facts.clone(),
+            rule: opportunity.rule,
+            replacement: opportunity.replacement.clone(),
+        };
+        let (rule, binding_values) = exact_rule(&event.instruction, &event.facts, &opportunity)?;
+        let bindings = binding_values
+            .iter()
+            .map(|(name, value)| {
+                Some((
+                    (*name).to_owned(),
+                    classes.find(*value_classes.get(&value.id)?)?,
+                ))
+            })
+            .collect::<Option<Vec<_>>>()?;
+        let (rhs, rhs_ref, event_selected, event_output) = match &opportunity.replacement {
+            Replacement::Alias(value) => {
+                let rhs = classes.find(*value_classes.get(&value.id)?)?;
+                (
+                    rhs,
+                    EvpProofRef::Class(rhs),
+                    SelectedSource::Value(value.id),
+                    Replacement::Alias(value.clone()),
+                )
+            }
+            Replacement::Constant(raw) => {
+                let sort = packed_type(&event.result.ty)?;
+                let raw = mask_raw(*raw, &event.result.ty);
+                if let Some(existing) = nodes.iter().find(|node| {
+                    node.operation == "const"
+                        && node.sort == sort
+                        && matches!(node.attributes.as_slice(), [(name, value)] if name == "value" && *value == raw)
+                }) {
+                    let output = node_values
+                        .get(&existing.node)
+                        .cloned()
+                        .map(Replacement::Alias)
+                        .unwrap_or(Replacement::Constant(raw));
+                    (
+                        classes.find(existing.owner)?,
+                        EvpProofRef::Node(existing.node),
+                        SelectedSource::Node(existing.node),
+                        output,
+                    )
+                } else {
+                    let node = u32::try_from(nodes.len()).ok()?;
+                    let owner = classes.push()?;
+                    let derived = EvpNode {
+                        node,
+                        owner,
+                        source: EvpNodeSource::Derived,
+                        operation: "const".to_owned(),
+                        sort,
+                        effect: EvpEffectClass::Pure,
+                        attributes: vec![("value".to_owned(), raw)],
+                        children: Vec::new(),
+                    };
+                    nodes.push(derived.clone());
+                    events.push(EvpEvent::Node(derived));
+                    (
+                        owner,
+                        EvpProofRef::Node(node),
+                        SelectedSource::Node(node),
+                        Replacement::Constant(raw),
+                    )
+                }
+            }
+        };
+        if lhs == rhs {
+            return None;
+        }
+        let result = lhs.min(rhs);
+        events.push(EvpEvent::Rewrite(EvpRewrite {
+            rule: rule.to_owned(),
+            lhs_pre: lhs,
+            rhs_pre: rhs,
+            result,
+            lhs: EvpProofRef::Node(node_id),
+            rhs: rhs_ref,
+            bindings,
+        }));
+        classes.union(lhs, rhs)?;
+        if event.result.id == root_event.result.id {
+            selected = Some(event_selected);
+            normalized_root = Some(normalized_event);
+            output_replacement = Some(event_output);
+        }
+    }
+    let root_class = classes.find(replacement_root)?;
+    let extractions = extraction_manifest(
+        &nodes,
+        &seeds,
+        &value_classes,
+        selected?,
+        replacement_root,
+        &classes,
+    )?;
     let block_label = if block_index == 0 {
         "entry".to_owned()
     } else {
@@ -281,15 +389,129 @@ fn build_region(
         block: block_label.clone(),
         instruction: u64::try_from(index).expect("usize always fits u64 on supported targets"),
     };
-    Some(EvpRegion {
-        id: region_id(instruction_index),
-        root_value: inst_results(instruction)[0].id,
-        witnesses: witness_indices.into_iter().map(region_id).collect(),
-        seeds,
-        events,
-        extractions,
-        root_class: result,
-    })
+    Some((
+        EvpRegion {
+            id: region_id(instruction_index),
+            root_value: inst_results(instruction)[0].id,
+            witnesses: witness_indices.into_iter().map(region_id).collect(),
+            seeds,
+            events,
+            extractions,
+            root_class,
+        },
+        normalized_root?,
+        output_replacement?,
+    ))
+}
+
+struct LocalClasses {
+    parent: Vec<u32>,
+}
+
+impl LocalClasses {
+    fn new(count: usize) -> Option<Self> {
+        Some(Self {
+            parent: (0..count)
+                .map(|class| u32::try_from(class).ok())
+                .collect::<Option<Vec<_>>>()?,
+        })
+    }
+
+    fn push(&mut self) -> Option<u32> {
+        let class = u32::try_from(self.parent.len()).ok()?;
+        self.parent.push(class);
+        Some(class)
+    }
+
+    fn find(&self, mut class: u32) -> Option<u32> {
+        loop {
+            let parent = *self.parent.get(class as usize)?;
+            if parent == class {
+                return Some(class);
+            }
+            class = parent;
+        }
+    }
+
+    fn union(&mut self, left: u32, right: u32) -> Option<()> {
+        let left = self.find(left)?;
+        let right = self.find(right)?;
+        if left == right {
+            return None;
+        }
+        let root = left.min(right);
+        let other = left.max(right);
+        *self.parent.get_mut(other as usize)? = root;
+        Some(())
+    }
+}
+
+fn normalize_opportunity(
+    event: &AppliedRewrite,
+    nodes: &[EvpNode],
+    value_classes: &HashMap<u32, u32>,
+    classes: &LocalClasses,
+) -> Option<RewriteOpportunity> {
+    let original = RewriteOpportunity {
+        rule: event.rule,
+        replacement: event.replacement.clone(),
+    };
+    let required_before_constants = match (&event.instruction, event.rule, &event.replacement) {
+        (Inst::Add(_, left, right), ScalarRewrite::AddZero, Replacement::Alias(value))
+        | (Inst::Or(_, left, right), ScalarRewrite::OrZero, Replacement::Alias(value)) => {
+            if value == left {
+                vec![(right, 0)]
+            } else if value == right {
+                vec![(left, 0)]
+            } else {
+                return None;
+            }
+        }
+        (Inst::Mul(_, left, right), ScalarRewrite::MulOne, Replacement::Alias(value)) => {
+            if value == left {
+                vec![(right, 1)]
+            } else if value == right {
+                vec![(left, 1)]
+            } else {
+                return None;
+            }
+        }
+        (Inst::And(_, left, right), ScalarRewrite::AndZero, Replacement::Constant(0)) => {
+            let mut values = Vec::new();
+            if is_constant(left, &event.facts, 0) {
+                values.push((left, 0));
+            }
+            if is_constant(right, &event.facts, 0) {
+                values.push((right, 0));
+            }
+            values
+        }
+        _ => return Some(original),
+    };
+    if required_before_constants.into_iter().any(|(value, raw)| {
+        class_has_before_constant(value, raw, nodes, value_classes, classes).unwrap_or(false)
+    }) {
+        Some(original)
+    } else {
+        constant_fold(&event.instruction, &event.facts)
+    }
+}
+
+fn class_has_before_constant(
+    value: &Value,
+    raw: u64,
+    nodes: &[EvpNode],
+    value_classes: &HashMap<u32, u32>,
+    classes: &LocalClasses,
+) -> Option<bool> {
+    let class = classes.find(*value_classes.get(&value.id)?)?;
+    let raw = mask_raw(raw, &value.ty);
+    Some(nodes.iter().any(|node| {
+        node.source == EvpNodeSource::Before
+            && node.operation == "const"
+            && classes.find(node.owner) == Some(class)
+            && matches!(node.attributes.as_slice(), [(name, value)] if name == "value" && *value == raw)
+    }))
 }
 
 fn collect_closure(
@@ -428,9 +650,8 @@ fn extraction_manifest(
     seeds: &[EvpSeed],
     values: &HashMap<u32, u32>,
     selected: SelectedSource,
-    lhs: u32,
-    rhs: u32,
-    result: u32,
+    replacement_root: u32,
+    classes: &LocalClasses,
 ) -> Option<Vec<EvpExtraction>> {
     let (class, choice) = match selected {
         SelectedSource::Value(value) => {
@@ -450,10 +671,8 @@ fn extraction_manifest(
     let mut builder = ExtractionManifestBuilder {
         nodes,
         seeds,
-        replacement_root: lhs,
-        lhs,
-        rhs,
-        result,
+        replacement_root,
+        classes,
         seen: HashSet::new(),
         output: Vec::new(),
     };
@@ -465,24 +684,14 @@ struct ExtractionManifestBuilder<'a> {
     nodes: &'a [EvpNode],
     seeds: &'a [EvpSeed],
     replacement_root: u32,
-    lhs: u32,
-    rhs: u32,
-    result: u32,
+    classes: &'a LocalClasses,
     seen: HashSet<u32>,
     output: Vec<EvpExtraction>,
 }
 
 impl ExtractionManifestBuilder<'_> {
-    fn canonical(&self, class: u32) -> u32 {
-        if class == self.lhs || class == self.rhs {
-            self.result
-        } else {
-            class
-        }
-    }
-
     fn append(&mut self, class: u32, choice: EvpExtractionChoice) -> Option<()> {
-        let final_class = self.canonical(class);
+        let final_class = self.classes.find(class)?;
         if self.seen.contains(&final_class) {
             return Some(());
         }
@@ -514,8 +723,9 @@ impl ExtractionManifestBuilder<'_> {
     }
 }
 
-fn apply(module: &Module, accepted: &[Accepted]) -> Result<Module, ()> {
+fn apply(module: &Module, accepted: &[Accepted]) -> Result<(Module, ValueRemap), ()> {
     let mut output = module.clone();
+    let mut value_remap = HashMap::new();
     for (function_index, function) in output.functions.iter_mut().enumerate() {
         let mut aliases = HashMap::new();
         for (block_index, block) in function.blocks.iter_mut().enumerate() {
@@ -552,13 +762,16 @@ fn apply(module: &Module, accepted: &[Accepted]) -> Result<Module, ()> {
             block.insts = rewritten;
             remap_inst_uses(&mut block.terminator, &aliases);
         }
-        renumber(function)?;
+        let identities = renumber(function)?;
+        for (old, new) in identities {
+            value_remap.insert((function.name.clone(), old), new);
+        }
     }
     validate_module(&output).map_err(|_| ())?;
-    Ok(output)
+    Ok((output, value_remap))
 }
 
-fn renumber(function: &mut evocc_evoir::Function) -> Result<(), ()> {
+fn renumber(function: &mut evocc_evoir::Function) -> Result<HashMap<u32, u32>, ()> {
     let mut identities = HashMap::new();
     let mut next = 0_u32;
     for block in &function.blocks {
@@ -586,7 +799,7 @@ fn renumber(function: &mut evocc_evoir::Function) -> Result<(), ()> {
         }
         remap_all(&mut block.terminator, &identities)?;
     }
-    Ok(())
+    Ok(identities)
 }
 
 fn remap_value(value: &mut Value, identities: &HashMap<u32, u32>) -> Result<(), ()> {

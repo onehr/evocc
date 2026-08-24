@@ -29,10 +29,12 @@ edition = "2021"
 [dependencies]
 evocc-eqopt = {{ path = {:?} }}
 evocc-evoir = {{ path = {:?} }}
+evocc-proof = {{ path = {:?} }}
 evocc-types = {{ path = {:?} }}
 "#,
             eqopt,
             crates.join("evocc-evoir"),
+            crates.join("evocc-proof"),
             crates.join("evocc-types")
         );
         fs::write(root.join("Cargo.toml"), manifest).expect("write state client manifest");
@@ -49,9 +51,10 @@ impl Drop for ClientProject {
 
 const CLIENT: &str = r#"
 use evocc_eqopt::{
-    optimize_scalar_module_persistent, EqualityState, ProofAuthority, ScalarEqBudget,
+    optimize_scalar_module_certified_persistent, EqualityState, ProofAuthority, ScalarEqBudget,
 };
 use evocc_evoir::{Block, BlockArg, Function, FunctionParam, Inst, Module, Value};
+use evocc_proof::{parse_evp1, render_evp1};
 use evocc_types::EvoIRType;
 
 fn bits(id: u32) -> Value {
@@ -93,7 +96,7 @@ fn main() {
     assert_eq!(state.revision(), 1);
     let root_class = state.class_of("main", 2).expect("root class");
 
-    let first = optimize_scalar_module_persistent(
+    let first = optimize_scalar_module_certified_persistent(
         &input,
         &mut state,
         ScalarEqBudget::new(100_000, 1_024),
@@ -104,6 +107,9 @@ fn main() {
         ProofAuthority::Reviewed { registry: "p0.scalar.v1" }
     ));
     assert_ne!(first.module, input);
+    assert_eq!(first.certificate.regions.len(), 1);
+    let proof = render_evp1(&first.certificate);
+    assert_eq!(parse_evp1(proof.as_bytes()).unwrap(), first.certificate);
     assert_eq!(state.revision(), 2);
     assert!(state.class_node_count(root_class) >= 2);
     state.verify_history().expect("one-pass history replays");
@@ -111,24 +117,43 @@ fn main() {
     let extracted_class = state.class_of("main", 0).expect("transferred mapping");
     assert_eq!(extracted_class, state.canonical_class(root_class));
     let after_first = state.audit();
-    let second = optimize_scalar_module_persistent(
+    let second = optimize_scalar_module_certified_persistent(
         &first.module,
         &mut state,
         ScalarEqBudget::new(100_000, 1_024),
     );
     assert_eq!(second.module, first.module);
+    assert!(second.certificate.regions.is_empty());
     assert_eq!(state.audit(), after_first);
     state.verify_history().expect("two-pass history replays");
 
+    let mut unseeded = EqualityState::for_module(&input).expect("bind unseeded identity");
+    let before_unseeded = unseeded.audit();
+    let refused = optimize_scalar_module_certified_persistent(
+        &input,
+        &mut unseeded,
+        ScalarEqBudget::new(100_000, 1_024),
+    );
+    assert!(refused.report.fell_back);
+    assert!(refused.report.proof_replay_failed);
+    assert_eq!(refused.module, input);
+    assert!(refused.certificate.regions.is_empty());
+    assert_eq!(unseeded.audit(), before_unseeded);
+
     let mut fallback = EqualityState::for_module(&input).expect("bind fallback identity");
     let before_failure = fallback.audit();
-    let outcome = optimize_scalar_module_persistent(
+    let outcome = optimize_scalar_module_certified_persistent(
         &input,
         &mut fallback,
         ScalarEqBudget::new(0, 0),
     );
     assert!(outcome.report.fell_back);
     assert_eq!(outcome.module, input);
+    assert!(outcome.certificate.regions.is_empty());
+    assert_eq!(
+        outcome.certificate.input_digest,
+        outcome.certificate.output_digest
+    );
     assert_eq!(fallback.audit(), before_failure);
     assert_eq!(fallback.revision(), 0);
 }
