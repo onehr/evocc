@@ -1,9 +1,9 @@
 {
-  "schemaVersion": 3,
-  "contractId": "c30.day5.kernel-reduction-pilots.v3",
+  "schemaVersion": 4,
+  "contractId": "c30.day5.kernel-reduction-pilots.v4",
   "contractState": "locked",
   "measurementStatus": "NOT_MEASURED",
-  "purpose": "Freeze the exact pre-execution authority for three representative real Day-5 kernel reduction pilots. This contract contains no measured outcome, receipt hash, oracle result, or expected diagnostic output and must never be result-shaped after execution. The mandatory external observer authority is deliberately ABSENT, so live measurement is prohibited until a separately reviewed observer executable identity replaces the zero-byte sentinel.",
+  "purpose": "Freeze the exact pre-execution authority for three representative real Day-5 kernel reduction pilots. This contract contains no measured outcome, receipt hash, oracle result, or expected diagnostic output and must never be result-shaped after execution. Revision 4 replaces the unfinished v1 ready/ack protocol with one observer-parent/verifier-child execution and an externally pinned post-run receipt index. The mandatory external observer authority remains deliberately ABSENT, so live measurement is prohibited until a separately reviewed observer executable identity replaces the zero-byte sentinel.",
   "parentAuthority": {
     "policyId": "c30.day5.kernel-reduction-policy.v1",
     "policyPath": "tests/contracts/day5-kernel-reduction-policy.json",
@@ -290,30 +290,54 @@
     }
   },
   "observerAuthority": {
-    "schemaVersion": 1,
+    "schemaVersion": 2,
     "authorityState": "ABSENT",
     "measurementStatus": "NOT_MEASURED",
     "provisional": true,
     "liveMeasurementPermitted": false,
-    "protocolId": "c30.day5.phase2-external-observer.v1",
+    "protocolId": "c30.day5.phase2-external-observer.v2",
     "executable": {
       "path": null,
       "bytes": 0,
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     "attestationTrust": "externally-pinned-sha256",
+    "actorTopology": {
+      "userEntryPoint": "observer",
+      "observerRole": "parent-reviewer-and-sealer",
+      "verifierRole": "single-execution-child",
+      "corpusExecutionCount": 1
+    },
+    "protocolDeltaFromV1": {
+      "dropped": [
+        "ready-ack-file-handshake",
+        "observer-duplicated-cleanup"
+      ],
+      "retained": [
+        "pre-execution-plan",
+        "raw-stdout-stderr-and-status",
+        "oracle-input-closure",
+        "oracle-before-and-after-descriptors",
+        "cleanup-evidence",
+        "externally-pinned-observer-identity",
+        "independent-replay"
+      ]
+    },
+    "returnCodeAuthority": {
+      "oracle": "container-after.status.exitCode",
+      "subject": "observer-runner OS process status"
+    },
     "requiredExecutionBoundary": [
-      "subject",
+      "subject-runner",
       "oracle-input-closure",
       "oracle-before",
-      "oracle-start",
       "oracle-after",
-      "cleanup"
+      "cleanup",
+      "receipt-replay"
     ],
     "checkpoints": [
       "plan",
-      "pre-cleanup",
-      "post-cleanup"
+      "post-execution-seal"
     ],
     "oracleRunCount": 46,
     "oracleInputRunCount": 44,
@@ -329,11 +353,23 @@
     "remainingFailures": 43
   },
   "receiptAuthority": {
-    "schemaVersion": 3,
+    "schemaVersion": 4,
     "creation": "atomic-no-overwrite-with-no-replace-primitive",
     "replayRequiresTrustedReceiptIndexSha256": true,
     "resultAndReceiptBindPilotContractSha256": true,
     "measuredReceiptIndex": "separate-externally-pinned-post-run-authority",
+    "producerReceiptRole": "untrusted single-execution input to observer sealing",
+    "sealedReceiptRole": "observer-evidence-bearing receipt bound by the trusted external index",
+    "trustedIndexBindings": [
+      "receiptSha256",
+      "observerExecutableSha256",
+      "observerAttestationSha256",
+      "pilotContractSha256",
+      "policySha256",
+      "overlayClosureSha256",
+      "oracleRunOrderSha256",
+      "subjectRunOrderSha256"
+    ],
     "externalReceiptIndexRequired": true,
     "observerEvidenceRequired": true,
     "executionEvidenceRequired": true,

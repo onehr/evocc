@@ -32,6 +32,7 @@ ROOT = Path(__file__).resolve().parents[2]
 POLICY = ROOT / "tests/contracts/day5-kernel-reduction-policy.json"
 PILOT_CONTRACT = ROOT / "tests/contracts/day5-kernel-reduction-pilots.json"
 VERIFIER = ROOT / "tests/acceptance/day5-kernel-reductions.py"
+OBSERVER = ROOT / "tests/acceptance/day5-kernel-reductions-observer.py"
 RUN_ID = "20260817T225959Z-57627"
 EVIDENCE = ROOT / ".evidence/day5-kernel-reconnaissance" / RUN_ID
 MANIFEST_SHA256 = "39af1ba905884d739789c996ede7b24ba08c07d3be39b77a643363334d9ec2a1"
@@ -652,9 +653,9 @@ def audit_pilot_contract(
         PILOT_CONTRACT_KEYS,
         "pilot contract",
     )
-    require(contract["schemaVersion"] == 3, "pilot contract schemaVersion drift")
+    require(contract["schemaVersion"] == 4, "pilot contract schemaVersion drift")
     require(
-        contract["contractId"] == "c30.day5.kernel-reduction-pilots.v3",
+        contract["contractId"] == "c30.day5.kernel-reduction-pilots.v4",
         "pilot contract ID drift",
     )
     require(contract["contractState"] == "locked", "pilot contract is not locked")
@@ -866,6 +867,7 @@ def audit_pilot_contract(
     observer = exact_keys(
         contract["observerAuthority"],
         {
+            "actorTopology",
             "absenceBehavior",
             "attestationTrust",
             "authorityState",
@@ -875,15 +877,17 @@ def audit_pilot_contract(
             "measurementStatus",
             "oracleInputRunCount",
             "oracleRunCount",
+            "protocolDeltaFromV1",
             "protocolId",
             "provisional",
             "requiredExecutionBoundary",
+            "returnCodeAuthority",
             "schemaVersion",
             "subjectRunCount",
         },
         "pilot observer authority",
     )
-    require(observer["schemaVersion"] == 1, "observer schemaVersion drift")
+    require(observer["schemaVersion"] == 2, "observer schemaVersion drift")
     require(
         observer["authorityState"] == "ABSENT"
         and observer["measurementStatus"] == "NOT_MEASURED"
@@ -892,22 +896,53 @@ def audit_pilot_contract(
         "absent observer sentinel drift",
     )
     require(
-        observer["protocolId"] == "c30.day5.phase2-external-observer.v1"
+        observer["protocolId"] == "c30.day5.phase2-external-observer.v2"
         and observer["attestationTrust"] == "externally-pinned-sha256"
-        and observer["checkpoints"] == ["plan", "pre-cleanup", "post-cleanup"]
+        and observer["checkpoints"] == ["plan", "post-execution-seal"]
         and observer["requiredExecutionBoundary"]
         == [
-            "subject",
+            "subject-runner",
             "oracle-input-closure",
             "oracle-before",
-            "oracle-start",
             "oracle-after",
             "cleanup",
+            "receipt-replay",
         ]
         and observer["oracleRunCount"] == 46
         and observer["oracleInputRunCount"] == 44
         and observer["subjectRunCount"] == 28,
         "observer protocol/denominator authority drift",
+    )
+    require(
+        observer["actorTopology"]
+        == {
+            "corpusExecutionCount": 1,
+            "observerRole": "parent-reviewer-and-sealer",
+            "userEntryPoint": "observer",
+            "verifierRole": "single-execution-child",
+        }
+        and observer["protocolDeltaFromV1"]
+        == {
+            "dropped": [
+                "ready-ack-file-handshake",
+                "observer-duplicated-cleanup",
+            ],
+            "retained": [
+                "pre-execution-plan",
+                "raw-stdout-stderr-and-status",
+                "oracle-input-closure",
+                "oracle-before-and-after-descriptors",
+                "cleanup-evidence",
+                "externally-pinned-observer-identity",
+                "independent-replay",
+            ],
+        }
+        and observer["returnCodeAuthority"]
+        == {
+            "oracle": "container-after.status.exitCode",
+            "subject": "observer-runner OS process status",
+        },
+        "observer v2 topology/delta/return-code authority drift",
     )
     require(
         exact_keys(
@@ -951,10 +986,22 @@ def audit_pilot_contract(
             "observerOracleInputRunCount": 44,
             "observerOracleRunCount": 46,
             "observerSubjectRunCount": 28,
+            "producerReceiptRole": "untrusted single-execution input to observer sealing",
             "rawDescriptorArtifactsInClosure": True,
             "replayRequiresTrustedReceiptIndexSha256": True,
             "resultAndReceiptBindPilotContractSha256": True,
-            "schemaVersion": 3,
+            "schemaVersion": 4,
+            "sealedReceiptRole": "observer-evidence-bearing receipt bound by the trusted external index",
+            "trustedIndexBindings": [
+                "receiptSha256",
+                "observerExecutableSha256",
+                "observerAttestationSha256",
+                "pilotContractSha256",
+                "policySha256",
+                "overlayClosureSha256",
+                "oracleRunOrderSha256",
+                "subjectRunOrderSha256",
+            ],
         },
         "pilot receipt authority drift",
     )
@@ -1588,6 +1635,36 @@ def verify_command(
     return run_verifier(*args)
 
 
+def observer_command(
+    overlay: Path, receipt: Path, receipt_index: Path
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(OBSERVER),
+            "run",
+            "--pilot-contract",
+            str(PILOT_CONTRACT),
+            "--policy",
+            str(POLICY),
+            "--evidence",
+            str(EVIDENCE),
+            "--overlay",
+            str(overlay),
+            "--receipt-dir",
+            str(receipt),
+            "--receipt-index",
+            str(receipt_index),
+        ],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=1800,
+        check=False,
+    )
+
+
 def replay_command(
     overlay: Path, receipt: Path, expected_sha256: str | None
 ) -> subprocess.CompletedProcess[str]:
@@ -1652,6 +1729,37 @@ def parse_success(
         f"{label} JSON is noncanonical",
     )
     return exact_keys(value, RESULT_KEYS, f"{label} result")
+
+
+def validate_receipt_index(
+    path: Path,
+    receipt_sha256: str,
+    receipt: dict[str, Any],
+    overlay: Path,
+) -> tuple[dict[str, Any], str]:
+    require(path.is_file() and not path.is_symlink(), "trusted receipt index is absent")
+    data = path.read_bytes()
+    value = exact_keys(
+        json.loads(data), RECEIPT_INDEX_KEYS, "trusted receipt index"
+    )
+    require(canonical(value) == data, "trusted receipt index is noncanonical")
+    require(value["schemaVersion"] == 1, "trusted receipt index schema drift")
+    require(
+        value["receiptSha256"] == receipt_sha256
+        and value["pilotContractSha256"] == digest(PILOT_CONTRACT.read_bytes())
+        and value["policySha256"] == digest(POLICY.read_bytes())
+        and value["overlayClosureSha256"] == regular_closure(overlay)["sha256"]
+        and value["oracleRunOrderSha256"]
+        == receipt["observerEvidence"]["oracleRunOrderSha256"]
+        and value["subjectRunOrderSha256"]
+        == receipt["observerEvidence"]["subjectRunOrderSha256"]
+        and value["observerExecutableSha256"]
+        == receipt["observerEvidence"]["observerIdentity"]["sha256"]
+        and value["observerAttestationSha256"]
+        == receipt["observerEvidence"]["attestationSha256"],
+        "trusted receipt index binding drift",
+    )
+    return value, digest(data)
 
 
 def require_rejected(
@@ -2215,7 +2323,7 @@ def validate_observer_evidence(
     evidence = exact_keys(value, OBSERVER_EVIDENCE_KEYS, "observerEvidence")
     require(evidence["schemaVersion"] == 1, "observer evidence schemaVersion drift")
     require(
-        evidence["protocolId"] == "c30.day5.phase2-external-observer.v1",
+        evidence["protocolId"] == "c30.day5.phase2-external-observer.v2",
         "observer protocol drift",
     )
     identity = exact_keys(
@@ -2283,7 +2391,7 @@ def validate_observer_evidence(
             "overlayClosureSha256": regular_closure(overlay)["sha256"],
             "pilotContractSha256": digest(PILOT_CONTRACT.read_bytes()),
             "policySha256": digest(POLICY.read_bytes()),
-            "protocolId": "c30.day5.phase2-external-observer.v1",
+            "protocolId": "c30.day5.phase2-external-observer.v2",
             "schemaVersion": 1,
             "subjectExecutionRoot": subject_execution_root,
             "subjectExecutionRootSha256": digest(canonical(subject_execution_root)),
@@ -3734,7 +3842,9 @@ def main() -> int:
                 )
                 return 1
             mechanism_controls = mechanism_fault_controls(root)
-            executed = verify_command(overlay, receipt_root)
+            receipt_index = root / "receipt-index.json"
+            require(OBSERVER.is_file(), f"production observer absent: {OBSERVER}")
+            executed = observer_command(overlay, receipt_root, receipt_index)
             if (
                 executed.returncode == 2
                 and "invalid choice: 'verify-pilots'" in executed.stderr
@@ -3751,6 +3861,9 @@ def main() -> int:
             receipt, receipt_sha256 = validate_receipt(
                 receipt_root, overlay, policy, models
             )
+            _, receipt_index_sha256 = validate_receipt_index(
+                receipt_index, receipt_sha256, receipt, overlay
+            )
             validate_result(
                 executed_result,
                 "executed",
@@ -3761,7 +3874,12 @@ def main() -> int:
 
             before_replay = snapshot(receipt_root)
             replayed = parse_success(
-                replay_command(overlay, receipt_root, receipt_sha256),
+                trusted_replay_command(
+                    overlay,
+                    receipt_root,
+                    receipt_index,
+                    receipt_index_sha256,
+                ),
                 "pilot receipt replay",
             )
             require(
@@ -3776,16 +3894,41 @@ def main() -> int:
                 receipt_sha256,
             )
 
+            missing_index = root / "missing-receipt-index.json"
+            require_rejected(
+                trusted_replay_command(
+                    overlay,
+                    receipt_root,
+                    missing_index,
+                    "0" * 64,
+                ),
+                "missing trusted receipt index",
+            )
+            index_mutant = root / "receipt-index-mutant.json"
+            index_value = copy.deepcopy(load(receipt_index, "trusted receipt index"))
+            index_value["receiptSha256"] = "0" * 64
+            store(index_mutant, index_value)
+            require_rejected(
+                trusted_replay_command(
+                    overlay,
+                    receipt_root,
+                    index_mutant,
+                    digest(index_mutant.read_bytes()),
+                ),
+                "trusted receipt index binding mutant",
+            )
+
             no_overwrite_snapshot = snapshot(receipt_root)
             require_rejected(
-                verify_command(overlay, receipt_root), "receipt no-overwrite control"
+                observer_command(overlay, receipt_root, receipt_index),
+                "receipt no-overwrite control",
             )
             require(
                 snapshot(receipt_root) == no_overwrite_snapshot,
                 "no-overwrite rejection modified the existing receipt",
             )
 
-            controls = 1 + mechanism_controls
+            controls = 3 + mechanism_controls
             controls += semantic_receipt_mutants(root, overlay, receipt_root)
             controls += overlay_input_mutants(
                 root, overlay, receipt_root, receipt_sha256
@@ -3796,8 +3939,9 @@ def main() -> int:
 
             nonminimal = nonminimal_overlay(root, overlay)
             nonminimal_receipt = root / "nonminimal-receipt"
+            nonminimal_index = root / "nonminimal-receipt-index.json"
             require_rejected(
-                verify_command(nonminimal, nonminimal_receipt),
+                observer_command(nonminimal, nonminimal_receipt, nonminimal_index),
                 "nonminimal removable-line candidate",
                 nonminimal_receipt,
             )
