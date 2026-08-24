@@ -1,22 +1,27 @@
 #!/usr/bin/env python3
-"""Compare the renderer's canonical output shapes against the specification grammar.
+"""Audit hint: compare the renderer's instruction shapes against Section 9.3.1.
 
-The renderer is the authority for what canonical EvoIR looks like, so every shape
-it can emit must have a production in Section 9.3.
+**This is not a completeness gate and must not be cited as one.** An earlier
+version of this tool was, and it was wrong twice over: it skipped format strings
+containing no placeholder, so a form the renderer genuinely emits was reported as
+not yet implemented, and it printed a success line while a known incompatibility
+stood. A check that manufactures confidence is worse than no check.
 
-An earlier check compared instruction *names* and passed while the grammar gave a
-unary predicate a binary form. A name appearing somewhere in the grammar says
-nothing about its arity, its fields, or the literal text between its operands.
-This compares shapes instead: each renderer format string and each grammar
-production is reduced to a skeleton in which every operand becomes one hole, and
-the two sets are compared.
+Governance runs the other way from what that version assumed. The specification
+is authoritative; the renderer is an implementation that must conform to it. This
+tool reports where the two disagree, and every disagreement is a defect in the
+renderer unless the specification has declared the gap.
 
-Establishes: every form the renderer can emit is described by some production,
-with the same arity and the same literal text between operands.
+Covers: instruction and global format strings in the renderer's non-test code,
+compared by shape, where a shape is the literal text with each operand replaced
+by one hole.
 
-Does not establish: that a parser built from the grammar accepts exactly those
-bytes. Only a round-trip over real modules shows that, and it belongs in the test
-suite rather than in a static check.
+Does not cover: block headers, the closing brace, blank-line placement,
+inter-item separators, operand *types*, field ordering inside attribute lists, or
+whether a parser built from Section 9.3 accepts these bytes. Those are properties
+of whole modules, and only a round-trip over real modules establishes them. That
+test does not exist yet; until it does, nothing here should be read as evidence
+that the textual format is completely specified.
 """
 
 from __future__ import annotations
@@ -31,127 +36,93 @@ SPEC = ROOT / "docs/evoir-spec.md"
 
 HOLE = "<>"
 PLACEHOLDER = re.compile(r"\{[^{}]*\}")
-QUOTED = re.compile(r'"([^"]*)"')
-MNEMONIC_PREFIX = ("br ", "ret ", "cond_br ", "trap.", "ub.assume.")
+STRING = re.compile(r'"((?:[^"\\]|\\.)*)"')
+MNEMONIC = ("br", "ret", "cond_br", "trap.", "ub.assume.", "global @")
 
 
-def renderer_shapes() -> set[str]:
-    source = RENDERER.read_text()
-    shapes = set()
-    for literal in re.findall(r'"((?:[^"\\]|\\.)*)"', source):
-        has_hole = PLACEHOLDER.search(literal) is not None
-        looks_like_form = "=" in literal or literal.startswith(MNEMONIC_PREFIX)
-        if not looks_like_form:
-            continue
-        if not has_hole:
-            # An already-rendered example from the renderer's own tests. It is
-            # covered by the format string that produced it.
-            continue
-        shapes.add(collapse(unescape(PLACEHOLDER.sub(HOLE, literal))))
-    return shapes
+def production_code(source: str) -> str:
+    """The renderer without its test module.
 
-
-def grammar_skeletons() -> set[str]:
-    """The normative shape table of Section 9.3.1.
-
-    A table rather than the EBNF: extracting shapes from productions means
-    reimplementing an EBNF reader, and a checker that has to be trusted to parse
-    the grammar correctly is a second thing that can be wrong.
+    Test modules contain already-rendered examples, which are outputs of the
+    format strings rather than additional forms, and would otherwise be counted
+    as shapes in their own right.
     """
-    spec = SPEC.read_text()
-    body = spec[spec.index("#### 9.3.1 Canonical Shapes"):spec.index("### 9.4 Canonical Byte Form")]
-    block = body[body.index("```text") + len("```text"):]
-    block = block[:block.index("```")]
-    return {collapse(line.strip()) for line in block.splitlines() if line.strip()}
+    marker = "#[cfg(test)]"
+    return source[: source.index(marker)] if marker in source else source
 
 
 def unescape(shape: str) -> str:
-    """Undo Rust format-string escaping so a shape is the text that is emitted.
-
-    A doubled brace renders as one brace, and a trailing newline escape is the
-    line ending Section 9.4 governs rather than part of the shape.
-    """
-    shape = shape.replace("{{", "{").replace("}}", "}")
-    shape = shape.replace("\\n", "\n")
-    return shape.strip()
+    """Undo Rust format-string escaping so a shape is the text emitted."""
+    return shape.replace("{{", "{").replace("}}", "}").replace("\\n", "\n").strip()
 
 
 def collapse(shape: str) -> str:
-    """One nonterminal matches one placeholder, so runs of holes fold to one."""
     return re.sub(f"(?:{re.escape(HOLE)})+", HOLE, shape)
 
 
-def superseded_shapes() -> set[str]:
-    """Forms the renderer still emits that this revision has replaced.
+def is_form(literal: str) -> bool:
+    """A rendered instruction or global, as opposed to a fragment or a field name.
 
-    Reported rather than failed: the specification leads, and the renderer has
-    not caught up. It is not silently accepted, because a parser built from the
-    specification cannot read these bytes.
+    Fixed strings count. The renderer emits a bare `ret` for a function that
+    returns nothing, and a version of this tool that required a placeholder
+    missed it.
     """
+    text = unescape(PLACEHOLDER.sub(HOLE, literal))
+    if " = " in text:
+        return True
+    return any(text == m or text.startswith(m if not m[-1].isalnum() else m + " ")
+               for m in MNEMONIC)
+
+
+def renderer_shapes(source: str) -> set[str]:
+    return {
+        collapse(unescape(PLACEHOLDER.sub(HOLE, literal)))
+        for literal in STRING.findall(source)
+        if is_form(literal)
+    }
+
+
+def spec_block(marker: str) -> set[str]:
     spec = SPEC.read_text()
-    marker = "The form each replaces is **superseded**"
     if marker not in spec:
         return set()
     body = spec[spec.index(marker):]
     block = body[body.index("```text") + len("```text"):]
-    block = block[:block.index("```")]
-    return {collapse(line.strip()) for line in block.splitlines() if line.strip()}
-
-
-def pending_shapes() -> set[str]:
-    """Forms the specification requires that the renderer does not emit yet.
-
-    A revision leads its implementation, so this gap is normal. Declaring it
-    keeps it visible: an undeclared gap is indistinguishable from an oversight.
-    """
-    spec = SPEC.read_text()
-    marker = "#### 9.3.2 Shapes Not Yet Emitted"
-    if marker not in spec:
-        return set()
-    body = spec[spec.index(marker):]
-    block = body[body.index("```text") + len("```text"):]
-    block = block[:block.index("```")]
-    return {collapse(line.strip()) for line in block.splitlines() if line.strip()}
+    return {collapse(line.strip())
+            for line in block[: block.index("```")].splitlines() if line.strip()}
 
 
 def main() -> int:
-    shapes = renderer_shapes()
-    specified = grammar_skeletons()
-    pending = pending_shapes()
+    source = production_code(RENDERER.read_text())
+    emitted = renderer_shapes(source)
+    specified = spec_block("#### 9.3.1 Canonical Shapes")
+    pending = spec_block("#### 9.3.2 Shapes Not Yet Emitted")
+    superseded = spec_block("The form each replaces is **superseded**")
 
-    # A renderer form the specification does not describe is the dangerous
-    # direction: a checker built from the specification could not read it.
-    superseded = superseded_shapes()
-    undescribed = sorted(s for s in shapes if s not in specified and s not in superseded)
-    still_emitted = sorted(s for s in shapes if s in superseded)
-    # A specified form the renderer does not emit is implementation work, and is
-    # a failure only when it was not declared.
-    unimplemented = sorted(s for s in specified if s not in shapes)
-    undeclared = [s for s in unimplemented if s not in pending]
+    undescribed = sorted(s for s in emitted if s not in specified | superseded)
+    still_emitted = sorted(s for s in emitted if s in superseded)
+    undeclared_gap = sorted(s for s in specified if s not in emitted and s not in pending)
+    wrongly_pending = sorted(s for s in emitted if s in pending)
 
-    print(f"renderer shapes:     {len(shapes)}")
-    print(f"specified shapes:    {len(specified)}")
-    print(f"declared as pending: {len(pending)}")
-    if still_emitted:
-        print(f"\nsuperseded forms the renderer still emits ({len(still_emitted)}), "
-              f"which a conforming parser rejects:")
-        for shape in still_emitted:
-            print("  " + shape)
+    print(f"renderer shapes:  {len(emitted)}")
+    print(f"specified shapes: {len(specified)}")
 
-    status = 0
-    if undescribed:
-        print(f"\nrenderer emits forms the specification does not describe ({len(undescribed)}):")
-        for shape in undescribed:
-            print("  " + shape)
-        status = 1
-    if undeclared:
-        print(f"\nspecified forms the renderer does not emit, undeclared ({len(undeclared)}):")
-        for shape in undeclared:
-            print("  " + shape)
-        status = 1
-    if status == 0:
-        print("\nevery renderer form is described; every gap is declared")
-    return status
+    findings = 0
+    for title, items in (
+        ("renderer emits forms the specification does not describe", undescribed),
+        ("renderer still emits superseded forms a conforming parser rejects", still_emitted),
+        ("specified forms the renderer does not emit and that are not declared", undeclared_gap),
+        ("forms declared as not yet emitted that the renderer already emits", wrongly_pending),
+    ):
+        if items:
+            findings += len(items)
+            print(f"\n{title} ({len(items)}):")
+            for shape in items:
+                print("  " + shape)
+
+    print(f"\n{findings} disagreement(s) between renderer and specification")
+    print("this tool covers instruction shapes only; see its docstring for what it does not check")
+    return 1 if findings else 0
 
 
 if __name__ == "__main__":

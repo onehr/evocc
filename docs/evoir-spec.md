@@ -177,7 +177,7 @@ return values from calls. A `tuple<>` (empty tuple) is equivalent to `void`.
 | `world` | always well-formed |
 | `vec<N, T>` | `N > 0`, `T` is well-formed, `T != void`, `T` is not `mem<_>` or `world` |
 | `tuple<T...>` | every `T_i` is well-formed |
-| `fnptr<Sig>` | every parameter and result type in `Sig` is well-formed; `Sig` ends with the `mem<R>`, `world` pair Section 2.1 requires of an effect participant |
+| `fnptr<Sig>` | every parameter and result type is well-formed and is not `void`; `mem<R>` and `world` appear exactly once each, as the final two parameters and the final two results, in that order; no other position carries `mem<_>` or `world`; no type nested inside a parameter or result carries either |
 | `void` | always well-formed |
 
 ---
@@ -937,9 +937,34 @@ automatic object of its frame. It has one module-global identity, one allocation
 site, and one initialization performed before the entry function runs; it is
 never allocated or initialized per activation. Two activations of a recursive
 function therefore observe the same object, and a value stored by one is visible
-to the next. It is distinguished from a file-scope object only by which names
-can refer to it, which is a front-end property with no representation here: at
-this level it is a module global whose symbol is not externally visible.
+to the next.
+
+**Symbol construction.** Its module symbol is derived, not chosen:
+
+```text
+symbol := enclosing_function_name "." local_name "." site_ordinal
+```
+
+`site_ordinal` is the object's allocation-site ordinal from the shared manifest.
+The name alone is insufficient: two blocks in one function may each declare a
+static `count`, and both are distinct objects. Deriving the symbol makes it
+reproducible across runs and across implementations, which a generated or
+counter-based name would not be, and the ordinal is already the cross-IR
+observation identity, so nothing new has to be agreed.
+
+**Linkage.** A global carries a visibility field distinguishing a symbol other
+translation units may reference from one they may not:
+
+```text
+global @name origin=O storage=KIND visibility=VIS size=N align=A bytes=HEX initialized=BITS
+VIS := "external" | "internal"
+```
+
+A function-scoped static is always `internal`. A file-scope object without
+`static` is `external`. This is a property of the object rather than of the name
+that reached it, so it is recorded here rather than left to the front end: a
+linker and a checker both need it, and neither can recover it from the symbol
+text.
 
 `ObjectId` is an interpreter-local provenance identity and is not compared
 across different IR executions. `ObjectOrigin` is the cross-IR observation
@@ -1049,15 +1074,17 @@ selected by `<reason>`, and the compiler may assume the condition is true for
 all reachable executions. The reason is semantic metadata, not an inference
 from the condition's `bits<1>` type.
 
-The Day 6 integer reasons are fixed as follows:
+Each reason suffix selects one diagnostic. The messages are in Section 6.3,
+which is the single authority for them; this table maps reasons to codes and
+deliberately does not repeat the text.
 
-| Reason suffix | Diagnostic | Runtime message |
-|---|---|---|
-| `division_by_zero` | `E3002` | `integer-division-by-zero` |
-| `remainder_by_zero` | `E3003` | `integer-remainder-by-zero` |
-| `signed_overflow` | `E3004` | `signed-integer-overflow` |
-| `invalid_shift_count` | `E3005` | `invalid-shift-count` |
-| `invalid_signed_left_shift` | `E3006` | `invalid-signed-left-shift` |
+| Reason suffix | Diagnostic |
+|---|---|
+| `division_by_zero` | `E3002` |
+| `remainder_by_zero` | `E3003` |
+| `signed_overflow` | `E3004` |
+| `invalid_shift_count` | `E3005` |
+| `invalid_signed_left_shift` | `E3006` |
 
 For operands of type `bits<N>`, `signed_add_defined`,
 `signed_sub_defined`, and `signed_mul_defined` each have type
@@ -1071,15 +1098,18 @@ representation. The state-aware `pointer_valid` and `access_in_bounds` guards
 in Section 3.7 instead inspect the named immutable snapshot, preserve it under
 a fresh `mem<all>` identity, and report the exact fault below.
 
-| Diagnostic | Runtime message | Meaning |
-|---|---|---|
-| `E3001` | `read-of-uninitialized-object` | At least one loaded byte is uninitialized. |
-| `E3009` | `null-pointer-access` | The accessed pointer has `ObjectId(0)`. |
-| `E3010` | `dangling-pointer-access` | The named object's lifetime has ended. |
-| `E3011` | `out-of-bounds-memory-access` | Pointer formation or the complete access range is outside its object, or checked offset arithmetic overflowed. |
-| `E3012` | `misaligned-memory-access` | The byte offset does not satisfy the access alignment. |
-| `E3013` | `invalid-pointer-representation` | The provenance is absent/forged or stored pointer bytes lack one complete provenance representation. |
-| `E3014` | `write-to-read-only-object` | A store targets string-literal storage. |
+Messages are in Section 6.3, which is their single authority; this table gives
+each code's meaning and deliberately does not repeat the text.
+
+| Diagnostic | Meaning |
+|---|---|
+| `E3001` | At least one loaded byte is uninitialized. |
+| `E3009` | The accessed pointer has `ObjectId(0)`. |
+| `E3010` | The named object's lifetime has ended. |
+| `E3011` | Pointer formation or the complete access range is outside its object, or checked offset arithmetic overflowed. |
+| `E3012` | The byte offset does not satisfy the access alignment. |
+| `E3013` | The provenance is absent/forged or stored pointer bytes lack one complete provenance representation. |
+| `E3014` | A store targets string-literal storage. |
 
 Both interpreters use the deterministic classification order from Section 5.4
 and delegate code/message selection to the shared typed memory-fault authority;
@@ -1121,7 +1151,38 @@ initializedness uses the separate per-byte object bitmap and follows the same
 consume-time rule: transporting a pointer or memory token does not trap; the
 executed load does.
 
-### 6.3 UB and Optimization
+### 6.3 Diagnostic Authority
+
+Every diagnostic this specification names appears here with its exact message.
+A code introduced in one section and never listed here has no message, so two
+implementations would print different text for one condition; a code listed
+twice would let a reader think two conditions are the same finding.
+
+| Code | Message | Detected |
+|---|---|---|
+| `E3001` | `read-of-uninitialized-object` | runtime |
+| `E3002` | `integer-division-by-zero` | runtime |
+| `E3003` | `integer-remainder-by-zero` | runtime |
+| `E3004` | `signed-integer-overflow` | runtime |
+| `E3005` | `invalid-shift-count` | runtime |
+| `E3006` | `invalid-signed-left-shift` | runtime |
+| `E3007` | `scalar-function-fell-off-end` | runtime |
+| `E3009` | `null-pointer-access` | runtime |
+| `E3010` | `dangling-pointer-access` | runtime |
+| `E3011` | `out-of-bounds-memory-access` | runtime |
+| `E3012` | `misaligned-memory-access` | runtime |
+| `E3013` | `invalid-pointer-representation` | runtime |
+| `E3014` | `write-to-read-only-object` | runtime |
+| `E3015` | `call-through-null-function-pointer` | runtime |
+| `E3016` | `call-through-non-function-pointer` | runtime |
+| `E3017` | `indirect-call-signature-mismatch` | module validation |
+
+`E3017` is the only entry detected by validation rather than at runtime, because
+a callee pointer's signature is present in its type and a mismatch is therefore
+visible without executing anything. The separation is deliberate: a module defect
+and a program's behaviour are different findings and are acted on differently.
+
+### 6.4 UB and Optimization
 
 A `ub.assume.<reason> %ok` instruction creates a fact `ok == true` that is available
 in all dominated blocks. The EqSat engine uses this fact:
@@ -1139,7 +1200,7 @@ two's-complement overflow — their overflow behavior may differ even though
 the `add.bits` results are equal. The UB assumption makes them semantically
 equivalent.
 
-### 6.4 Propagation Rules
+### 6.5 Propagation Rules
 
 UB facts propagate forward. An `ub.assume.<reason> %ok` in block `B` creates a fact
 that holds in every block dominated by `B` along paths where `%ok` was true.
@@ -1483,9 +1544,13 @@ Replacement is defined for the cases a reassembler actually meets:
 | A block argument used as a seed | It is never rewritten. Rewriting one would change an edge, which is outside a region. |
 | Two accepted regions where one's root is the other's seed | Both are replaced. The seed relation is read from `before.evo`, so a replacement never changes which regions were eligible or what their seeds were. |
 
-**Renumbering.** Values are assigned consecutive identifiers from zero in
-Section 8.6 order over the rewritten module: parameters first in declaration
-order, then, for each block in order, its arguments in order, then each
+**Renumbering.** Formal parameters are **not** renumbered. Section 2.1 makes them
+non-SSA call-interface binders in the `%arg` namespace, positional and
+independent of value identity, so a renumbering that assigned them `%v`
+identifiers would conflate two namespaces the specification keeps apart.
+
+Values are assigned consecutive identifiers from zero in Section 8.6 order over
+the rewritten module: for each block in order, its arguments in order, then each
 instruction's results in order. Identifiers from `before.evo` are not preserved
 and must not be, since deleting a root leaves a gap that any preserving scheme
 would have to fill by a rule of its own.
@@ -1606,10 +1671,11 @@ digested.
 module          := global* function*
 
 global          := "global " symbol " origin=" integer
-                   " storage=" storage_kind
+                   " storage=" storage_kind " visibility=" visibility
                    " size=" integer " align=" integer
                    " bytes=" hex_byte+ " initialized=" bit+ newline
 storage_kind    := "static" | "string_literal"
+visibility      := "external" | "internal"
 
 function        := "func " symbol "(" param_list ")"
                    " -> (" type_list ")"
@@ -1742,7 +1808,7 @@ cond_br <>, <>, <>
 ret
 ret <>
 trap.<>
-global @<> origin=<> storage=<> size=<> align=<> bytes=<> initialized=<>
+global @<> origin=<> storage=<> visibility=<> size=<> align=<> bytes=<> initialized=<>
 func @<>(<>) -> (<>) cc = <>
     effects { reads=<>, writes=<>, volatile=<>, atomic=<>, io=<>, may_trap=<>, may_unwind=<> }
 {
@@ -1766,12 +1832,15 @@ func @<>(<>) -> (<>) cc = <>
 {
 <> = func_addr @<> : <>
 (<>) = call <>(<>)
-ret
+global @<> origin=<> storage=<> visibility=<> size=<> align=<> bytes=<> initialized=<>
 ```
 
 The function header is listed because Section 9.4 makes the effects clause
-mandatory, which the current renderer predates. `func_addr`, the indirect
-callee and the empty `ret` are new in this revision.
+mandatory, which the current renderer predates. `func_addr` and the indirect
+callee are new in this revision. The empty `ret` is **not** listed here: the
+renderer already emits it, and an earlier draft wrongly declared it pending
+because the tool that produced that list skipped format strings containing no
+placeholder.
 
 The form each replaces is **superseded**: it is what the renderer emits today
 and is not valid under this revision. A conforming parser rejects it, so the
@@ -1780,6 +1849,7 @@ read its output.
 
 ```text
 func @<>(<>) -> (<>) cc = target_default {
+global @<> origin=<> storage=<> size=<> align=<> bytes=<> initialized=<>
 ```
 
 The superseded entry names `target_default` because that is the only calling
@@ -1810,7 +1880,8 @@ of one module disagree on their digest.
 | Attribute lists | `" [k=v, k=v]"`, one space before the bracket, `", "` between entries, no space inside the brackets. |
 | Empty argument list | `"()"` with nothing between the parentheses. |
 | Trailing whitespace | Never, on any line. |
-| Blank line inside a function | Never. |
+| Between blocks | Exactly one blank line. |
+| Blank line elsewhere in a function | Never: not after the header, not before the closing brace, not between instructions. |
 | Comments | Never in canonical output. |
 | Integer literals | Unsigned decimal, no leading zeros other than `0` itself, no sign, no underscores. |
 | Hex bytes | Lowercase, exactly two digits per byte, no separators. |
@@ -1866,61 +1937,70 @@ findings and are acted on differently.
 ### 9.6 Complete Example
 
 ```text
-func @sum(%p: ptr<generic>, %n: bits<64>, %m: mem<all>, %w: world)
-    -> (bits<32>, mem<all>, world)
-    cc = target_default
+func @sum(%arg0: ptr<generic>, %arg1: bits<64>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={all}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
 {
-^entry(%p_entry: ptr<generic>, %n_entry: bits<64>, %m_entry: mem<all>, %w_entry: world):
-    %zero = const.bits<64> 0
-    %acc  = const.bits<32> 0
-    br ^loop(%p_entry, %n_entry, %zero, %acc, %m_entry, %w_entry)
+^entry(%v0: ptr<generic>, %v1: bits<64>, %v2: mem<all>, %v3: world):
+    %v4 = const.bits<64> 0
+    %v5 = const.bits<32> 0
+    br ^b1(%v0, %v1, %v4, %v5, %v2, %v3)
 
-^loop(%p_loop: ptr<generic>, %n_loop: bits<64>, %i_loop: bits<64>, %acc_loop: bits<32>, %m_loop: mem<all>, %w_loop: world):
-    %more = icmp.ult %i_loop, %n_loop
-    cond_br %more, ^body(%p_loop, %n_loop, %i_loop, %acc_loop, %m_loop, %w_loop), ^exit(%acc_loop, %m_loop, %w_loop)
+^b1(%v6: ptr<generic>, %v7: bits<64>, %v8: bits<64>, %v9: bits<32>, %v10: mem<all>, %v11: world):
+    %v12 = icmp.ult %v8, %v7
+    cond_br %v12, ^b2(%v6, %v7, %v8, %v9, %v10, %v11), ^b3(%v9, %v10, %v11)
 
-^body(%p_body: ptr<generic>, %n_body: bits<64>, %i_body: bits<64>, %acc_body: bits<32>, %m_body: mem<all>, %w_body: world):
-    %addr = ptr.offset.add.unsigned %p_body, %i_body [scale=4]
-    %m_pointer = pointer_valid %m_body, %addr
-    %m_access = access_in_bounds %m_pointer, %addr [size=4, align=4]
-    (%x, %m_loaded, %w_loaded) = load %m_access, %w_body, %addr : bits<32>
-    %acc1 = add.bits<32> %acc_body, %x
-    %one  = const.bits<64> 1
-    %i1   = add.bits<64> %i_body, %one
-    br ^loop(%p_body, %n_body, %i1, %acc1, %m_loaded, %w_loaded)
+^b2(%v13: ptr<generic>, %v14: bits<64>, %v15: bits<64>, %v16: bits<32>, %v17: mem<all>, %v18: world):
+    %v19 = ptr.offset.add.unsigned %v13, %v15 [scale=4]
+    %v20 = pointer_valid %v17, %v19
+    %v21 = access_in_bounds %v20, %v19 [size=4, align=4]
+    (%v22, %v23, %v24) = load %v21, %v18, %v19 : bits<32>
+    %v25 = add.bits<32> %v16, %v22
+    %v26 = const.bits<64> 1
+    %v27 = add.bits<64> %v15, %v26
+    br ^b1(%v13, %v14, %v27, %v25, %v23, %v24)
 
-^exit(%r_exit: bits<32>, %m_exit: mem<all>, %w_exit: world):
-    ret %r_exit, %m_exit, %w_exit
+^b3(%v28: bits<32>, %v29: mem<all>, %v30: world):
+    ret %v28, %v29, %v30
 }
 ```
+
+Formal parameters use the `%arg` namespace and are positional call-interface
+binders. The entry block's arguments are the SSA values those binders are bound
+to, and are numbered in the `%v` namespace like every other value.
 
 ### 9.7 UB-Assume Example
 
 ```text
-func @checked_add(%x: bits<32>, %y: bits<32>, %m: mem<all>, %w: world)
-    -> (bits<32>, mem<all>, world)
-    cc = target_default
+func @checked_add(%arg0: bits<32>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
 {
-^entry(%x_entry: bits<32>, %y_entry: bits<32>, %m_entry: mem<all>, %w_entry: world):
-    %ok = signed_add_defined %x_entry, %y_entry
-    ub.assume.signed_overflow %ok
-    %z = add.bits<32> %x_entry, %y_entry
-    ret %z, %m_entry, %w_entry
+^entry(%v0: bits<32>, %v1: bits<32>, %v2: mem<all>, %v3: world):
+    %v4 = signed_add_defined %v0, %v1
+    ub.assume.signed_overflow %v4
+    %v5 = add.bits<32> %v0, %v1
+    ret %v5, %v2, %v3
 }
 ```
+
+The summary records no trap. `add` is total, and `ub.assume` states an
+obligation rather than performing a checked operation, so nothing in this
+function can trap.
 
 ### 9.8 Call Example
 
 ```text
-func @caller(%a: bits<32>, %m0: mem<all>, %w0: world)
-    -> (bits<32>, mem<all>, world)
-    cc = target_default
+func @caller(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=true }
 {
-^entry(%a_entry: bits<32>, %m_entry: mem<all>, %w_entry: world):
-    (%result, %m1, %w1) = call @callee(%a_entry, %m_entry, %w_entry)
-    ret %result, %m1, %w1
+^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
+    (%v3, %v4, %v5) = call @callee(%v0, %v1, %v2)
+    ret %v3, %v4, %v5
 }
 ```
+
+The caller's summary is the join of its own instructions with `@callee`'s, per
+Section 4.6. It is shown here as the top summary because `@callee` is not
+defined in this fragment; a real module derives it from the callee's body.
 
 ### 9.9 Syntax Restrictions
 
@@ -2107,15 +2187,16 @@ C function calls lower to EvoIR `call` instructions. Attributes, `typeof`, and
 statement expressions remain outside this profile, so no attribute refines a
 summary.
 
-**Precedence.** Section 4.6 is the authority for how a summary is derived and
-validated. The contract below describes what that derivation yields for a
-translation unit whose calls are all direct and whose callees carry no
-attributes, which is the case this profile covers. Where the two appear to
-differ, Section 4.6 governs; a module containing an indirect call takes the top
-summary from Section 4.6 and is not described here at all.
+**Effects.** Section 4.6 is the only authority. A call's summary is the callee's
+summary, and a function's summary is the least fixed point over its call graph;
+an indirect call contributes the top summary because its callee is not known
+statically.
 
-Reads/writes remain `All`; the volatile bit
-is the least fixed point over the direct same-TU call graph and is true when
+An earlier revision stated here that every call reads and writes `All`. That is
+deleted rather than kept beside Section 4.6, because it is not what Section 4.6's
+derivation yields for a callee that touches no memory, and a specification with
+two answers has none. What remains true of the old text is only this: the
+volatile bit is true when
 the callee or any transitive callee contains a volatile access. Recursive SCCs
 are solved together. Every call still consumes and produces `world`, even when
 this bit is false. Calls without a same-TU body remain typed unsupported in
@@ -2275,7 +2356,7 @@ It performs, in order:
 3. Recompute the eligible regions and every seed manifest from the parsed
    `before.evo`, per Sections 8.5 through 8.7, using its own implementation.
    Compare against the certificate's enumeration; disagreement is a rejection.
-4. Replay every merge against the trusted registry of Section 11.5, recomputing
+4. Replay every merge against the trusted registry of Section 11.6, recomputing
    constant folds rather than accepting claimed results.
 5. Verify that each extracted root belongs to its original root's e-class.
 6. Reassemble the after-module per Section 8.8 and compare its canonical
@@ -2286,80 +2367,107 @@ differs is invalid, as is one that names an unrelated root or output.
 
 ### 11.3 Certificate Format
 
-`proof.evp` is an interchange format with its own grammar, not a serialization
-of any implementation's data structure. A format defined by whatever a producer's
-type happens to contain cannot be validated by a second implementation, and
-malformed and invalid become indistinguishable: a reader that fails to decode a
-field cannot say whether the bytes were wrong or the claim was.
+`proof.evp` is an interchange format with its own grammar, not a serialization of
+any implementation's type. A format defined by whatever a producer's struct
+happens to hold cannot be validated by a second implementation, and malformed
+becomes indistinguishable from invalid: a reader that fails to decode a field
+cannot say whether the bytes were wrong or the claim was.
 
-It is line oriented, one record per line, `\n` terminated, ending with a final
-newline. Fields within a record are separated by a single space. No field
-contains a space, so a reader splits without quoting rules.
+It must nonetheless carry every fact a replay needs. An earlier draft named a
+node by its opcode alone, which cannot express a replay at all: without node
+identity, owner class, children, and the substitution a rule was applied under,
+there is nothing to re-derive.
+
+**Structure.** Line oriented, one record per line, `\n` terminated, ending with a
+final newline. Fields are separated by a single space. No field contains a space:
+types are written in the Section 9 spelling with every internal space removed, so
+`vec<2, bits<32>>` appears as `vec<2,bits<32>>` and a reader restores the spacing
+when comparing against a rendered module.
 
 ```text
-certificate     := version_line registry_line input_line region_block+ output_line
+certificate     := header region_block* output_line
+header          := version_line registry_line input_line
 version_line    := "evp1" newline
 registry_line   := "registry " ident " " digest newline
 input_line      := "input " digest newline
 output_line     := "output " digest newline
 
-region_block    := region_line seed_line* merge_line* extract_line
-region_line     := "region " region_id " " integer newline
-seed_line       := "seed " integer " " value_name " " type " " seed_origin newline
-merge_line      := "merge " integer " " rule_id " " node_ref " " node_ref newline
-extract_line    := "extract " node_ref newline
+region_block    := region_line seed_line* event_line* extract_line+ region_end
+region_line     := "region " region_id " seeds " integer newline
+seed_line       := "seed " integer " " value_name " " packed_type " "
+                   seed_origin " " eclass newline
+event_line      := insert_line | rewrite_line | congruence_line
+region_end      := "endregion" newline
 
-node_ref        := node_kind ":" node_payload
-node_kind       := "op" | "const" | "input"
-node_payload    := ident | integer ":" type | integer
+insert_line     := "node " node_id " " eclass " " op_id " " sort " "
+                   effect_class " children " children newline
+rewrite_line    := "rewrite " integer " " rule_id " " eclass " " eclass
+                   " bind " bindings newline
+congruence_line := "congruence " integer " " eclass " " eclass " " node_id " "
+                   node_id newline
+extract_line    := "extract " integer " " node_id newline
 
+children        := "-" | eclass ("," eclass)*
+bindings        := "-" | binding ("," binding)*
+binding         := ident ":" eclass
+op_id           := ident
+sort            := packed_type
+effect_class    := "pure" | "guard" | "effectful"
+node_id         := "n" integer
+eclass          := "c" integer
 region_id       := ident "/" ident "/" integer
 seed_origin     := "input" | "definition"
 rule_id         := ident
 digest          := 64 * hex_digit
-ident           := (letter | digit | "_" | ".")+
+packed_type     := a Section 9 type with every space removed
 ```
 
-**Field meanings.**
+**What each record carries and why.**
 
-| Record | Meaning |
-|---|---|
-| `evp1` | Format version. A reader that does not implement the version rejects as malformed rather than guessing. |
-| `registry` | The rule registry the certificate was checked against, by name and digest. A reader that does not hold that exact registry rejects; a certificate cannot introduce one. |
-| `input` | Digest of `before.evo`'s canonical bytes. |
-| `region` | A region identity per Section 8.7 and its seed count. |
-| `seed` | Position, value, type and origin, in the manifest order Section 8.7 fixes. |
-| `merge` | Sequence number within the region, the rule instantiated, and the two nodes joined. |
-| `extract` | The node the extractor chose as the region's replacement. |
-| `output` | Digest of the reassembled after-module's canonical bytes. |
+| Record | Content | Why a replay needs it |
+|---|---|---|
+| `registry` | Registry name and digest | The authority the rules came from. A reader without that exact registry rejects; a certificate cannot introduce one. |
+| `input` | Digest of `before.evo` | Binds the claim to one module. |
+| `region` | Identity per Section 8.7 and seed count | Lets a reader match its own recomputation against the claim. |
+| `seed` | Position, value, type, origin, and the class the seed was inserted into | Without the class, later events cannot be tied to the module's values. |
+| `node` | Node identity, owner class, operator, sort, effect class, children | The e-node as inserted. Sort and width distinguish two constants that share an opcode; the effect class is checked against Section 8.5 before the node is admitted. |
+| `rewrite` | Sequence number, rule, the two classes joined, and the substitution | A rule with variable patterns is meaningless without the bindings it was instantiated under. Bindings are in strictly ascending variable-name order, and a reader that finds them otherwise rejects rather than sorting them. |
+| `congruence` | Sequence number, the two classes joined, and the two nodes that became congruent | Congruence closure joins classes without any rule firing; a format carrying only rewrites could not reproduce the resulting partition. |
+| `extract` | Position and the chosen node | An extraction may be several instructions, so it is a sequence with explicit positions rather than one node. |
+| `output` | Digest of the reassembled after-module | Binds the claim to a result. |
 
-**Ordering.** Region blocks appear in Section 8.6 order. Seeds appear in
-manifest order with `integer` counting from zero. Merges appear in application
-order with `integer` counting from zero within the region. Ordering is part of
-the format: two certificates differing only in record order are different files,
-and only one of them can match a recomputation.
+**Ordering.** Region blocks appear in Section 8.6 order. Seeds appear in manifest
+order, counting from zero. Events appear in application order, with `rewrite` and
+`congruence` sharing one sequence numbering per region so their interleaving is
+recorded. Extraction entries count from zero. Ordering is part of the format: two
+certificates differing only in record order are different files and at most one
+matches a recomputation.
 
-**Digests.** SHA-256 over the exact bytes named, lowercase hexadecimal. The
-input digest covers `before.evo` in full, including its final newline. The
-output digest covers the reassembled module rendered under Section 9.4, not the
-bytes of `after.evo`, so a reader that computes a matching output digest and
-then finds those bytes differ from `after.evo` has found a producer that
-rendered non-canonically.
+**Zero regions.** A module with no eligible region produces a certificate with a
+header and an `output` line and no region blocks. This is valid and asserts that
+nothing was optimized; it is not an empty file, and a reader that required at
+least one region could not accept a correct compilation.
 
-**Node payloads.** `op:add` names an operator by its Section 8.5 spelling.
-`const:0:bits<32>` carries a constant's value and type, so a checker recomputes
-folds rather than accepting them, and two constants of different widths are
-never the same node. `input:3` names the seed at that manifest position. A
-nullary opcode alone is never a node identity: an input and a constant that
-shared one would let a rewrite move between them unnoticed.
+**Digests.** SHA-256, lowercase hexadecimal. The input digest covers `before.evo`
+in full including its final newline. The output digest covers the reassembled
+module rendered under Section 9.4, not the bytes of `after.evo`; a reader whose
+output digest matches while those bytes differ has found a producer that rendered
+non-canonically, which is a distinct finding from an unsound rewrite.
 
-**Rejection.** Anything not derivable from the grammar is malformed, including
-an unknown version, a field count that does not match its record, a digest that
-is not exactly sixty-four lowercase hexadecimal characters, a sequence number
-out of order, a seed count disagreeing with the seed lines that follow, a
-trailing blank line, or any byte after the final newline. A certificate that
-parses and whose claims do not hold is invalid. Section 11.4 gives each its own
-exit status.
+The registry digest covers the registry's canonical serialization: each rule on
+one line as `rule_id lhs rhs`, patterns written as `op(child,child)` with a
+variable as `?name` and an exact class as `c` followed by its number, rules in
+ascending `rule_id` order, `\n` terminated with a final newline. Without a fixed
+serialization, two implementations holding the same rules would compute different
+digests and never agree.
+
+**Rejection.** Anything not derivable from the grammar is malformed: an unknown
+version, a field count that does not match its record, a digest that is not
+exactly sixty-four lowercase hexadecimal characters, a sequence number out of
+order, a seed count disagreeing with the seed lines that follow, bindings out of
+ascending order, a region block without `endregion`, a trailing blank line, or any
+byte after the final newline. A certificate that parses and whose claims do not
+hold is invalid. Section 11.4 gives each its own exit status.
 
 ### 11.4 Exit Statuses
 

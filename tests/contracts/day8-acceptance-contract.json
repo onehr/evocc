@@ -125,5 +125,14 @@
   "prerequisitesCarriedOutside": {
     "observerAndPilotReductionDebt": "Runs in an isolated worktree under its own timebox, is not counted in this stage's metrics, and shares no commit with IR changes. The GNU extension work stays blocked until it is discharged.",
     "testNamingDebt": "Forty test files carry a stage marker in their name and seven still say red while passing. This contradicts the project naming rule, grows with every stage, and is mechanical to clear."
+  },
+  "commitClassification": {
+    "category": "specification, contract and harness; no production edit",
+    "note": "Earlier commits in this stage were reported as documents only. That was inaccurate once an executable audit tool entered the tree: a tool is not production code, but it is not a document either, and reporting it as one hides work from the timebox.",
+    "boxedInfrastructure": [
+      "tools/check-textual-grammar.py"
+    ],
+    "timeboxDeclared": "Specification and contract work for this stage is bounded at one working day beyond the reviews it takes. Harness work inside it is bounded at two hours; the audit tool is the whole of it so far.",
+    "productionFreeze": "In force until both review checklists report PASS. No crate under crates/ has been modified in this stage."
   }
 }
