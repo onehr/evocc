@@ -96,5 +96,27 @@
       "decision": "The sixteen-TU cohort frozen on 2026-08-17 is unchanged for this stage.",
       "why": "Comparability with the baseline outranks representativeness. Changing the cohort to move a percentage is the failure the freeze exists to prevent."
     }
+  },
+  "reviewChecklists": {
+    "status": "PENDING",
+    "rule": "Both checklists must report PASS before the tests-only checkpoint lands. A checklist item is answered by citing the section that settles it, or by naming what the section leaves open.",
+    "frontEndConstructs": [
+      "10.1.9: does the placement table cover every position the cohort's headers use, and is attachment unambiguous for a specifier-position attribute in a multi-declarator declaration?",
+      "10.1.9: are the aligned/packed rules exactly GCC-14 and Clang-19 behaviour on AArch64, including packed+aligned(N) and aligned on a typedef of __int128, and does the layout corpus gain a case for each rule?",
+      "10.1.9: is the preserved-not-applied list something the receipt can actually produce from C-HIR, by name, with counts?",
+      "10.1.10: is 'type before lvalue conversion, unevaluated' sufficient for every typeof the cohort uses?",
+      "10.1.11: does the join-block lowering interact correctly with break/continue/return leaving the expression and with object lifetimes at the closing brace?",
+      "10.1.12: does later-wins overriding match GCC for overlapping designators, and is the range form's expansion bounded?",
+      "10.1.13: is one allocation site per occurrence consistent with the shared manifest's ordering rule when a literal appears inside a loop?",
+      "6.3: E2902 retired, E2903-E2906 present with one message each, none duplicated."
+    ],
+    "latticesSchedulerCertificate": [
+      "8.10: is the order/meet/top definition internally consistent, and is 'contradiction on a known bit invalidates the union' enforced by producer and checker alike?",
+      "8.10: can each transfer in the table be recomputed by a checker from the region's nodes alone, with no search and no shared code?",
+      "8.11: are tier order, fuel max(256, 8n), node and epoch ceilings, and the stop rule each independently verifiable from the certificate, and is it stated which stop reasons are not verified?",
+      "11.3: does evp2 remain a strict superset of evp1, and does a checker reject an evp1 certificate that uses a Tier B rule?",
+      "11.3: are epoch markers well defined per region, and is the budget check precise about what consumption it compares to which bound?",
+      "11.3: is the premise well-formedness rule sufficient for a reader to reject a malformed fact without semantic knowledge?"
+    ]
   }
 }

@@ -1218,6 +1218,11 @@ twice would let a reader think two conditions are the same finding.
 | `E3015` | `call-through-null-function-pointer` | runtime |
 | `E3016` | `call-through-non-function-pointer` | runtime |
 | `E3017` | `indirect-call-signature-mismatch` | module validation |
+| `E2902` | `not-covered: compound-literal` | front end — **retired by revision 1.9**; emitting it after compound literals land is a defect |
+| `E2903` | `malformed-attribute` | front end |
+| `E2904` | `not-covered: variably-modified-typeof` | front end |
+| `E2905` | `statement-expression-outside-function` | front end |
+| `E2906` | `designator-outside-object` | front end |
 | `E3018` | `invalid-lifetime-end` | runtime |
 | `E3019` | `function-pointer-target-signature-mismatch` | runtime |
 
@@ -1885,8 +1890,8 @@ saturation is never needed for correctness is what makes that safe.
 
 **Record.** The certificate carries the bounds, the amounts consumed, the stop
 reason, and an epoch marker before each epoch's events. The checker verifies
-that consumed does not exceed bound, that the epoch markers agree with the
-declared epoch count, and that an exhaustion reason is consistent with the
+that consumed does not exceed bound, that no epoch marker exceeds the declared
+epoch count, and that an exhaustion reason is consistent with the
 recorded consumption. It does not re-run the scheduler; a schedule is a choice,
 and what is verified is that the choice stayed inside the declared box.
 
@@ -2613,14 +2618,17 @@ size of that set is measured rather than assumed. In particular `section`,
 linkage, effect or backend semantics that belong to later stages, and applying
 a partial reading now would create a second source of truth for each.
 
-**Diagnostics introduced.** The front end owns codes in the `E29xx` range.
+**Diagnostics introduced.** Messages live in Section 6.3, the single authority;
+this table gives conditions only. `E2902`, which rejected compound literals as
+not covered, is retired by this revision: Section 10.1.13 covers them, and a
+front end that still emits it is defective.
 
-| Code | Message | Condition |
-|---|---|---|
-| `E2903` | `malformed-attribute` | argument list does not parse, position not in the table, `aligned` argument not a representable power of two |
-| `E2904` | `not-covered: variably-modified-typeof` | `typeof` of a variably modified type |
-| `E2905` | `statement-expression-outside-function` | `({ ... })` at file scope or in a constant expression |
-| `E2906` | `designator-outside-object` | designator names a member the type lacks or an index beyond a fixed bound |
+| Code | Condition |
+|---|---|
+| `E2903` | argument list does not parse, position not in the table, or `aligned` argument not a representable power of two |
+| `E2904` | `typeof` of a variably modified type |
+| `E2905` | `({ ... })` at file scope or where a constant expression is required |
+| `E2906` | designator names a member the type lacks or an index at or beyond a fixed bound |
 
 #### 10.1.10 `typeof`
 
@@ -3005,17 +3013,26 @@ because a fact-driven rewrite without its premise is not a claim a checker can
 verify.
 
 **Premises.** Each premise names a class and the known-bits fact the rule relied
-on. The checker recomputes the fact from the region's nodes with its own
+on. Mask and value have the same digit count, which is the class's width in
+bits rounded up to a whole hexadecimal digit; a premise whose two fields differ
+in length, or whose value has a one where the mask has a zero, is malformed. The checker recomputes the fact from the region's nodes with its own
 implementation of the Section 8.10 transfers and refuses the rewrite if the
 recorded premise is not at or below the recomputed fact. Facts are recomputed
 rather than trusted for the reason Section 11.6 gives: a shared analysis that
 was wrong would make producer and checker agree on an unsound rewrite.
 
+**Epoch markers.** The scheduler runs per transaction and a certificate is
+organised per region, so markers are written per region: within a region block,
+an `epoch k` line precedes the events that epoch produced for that region, and
+`k` is strictly increasing within the block. A region touched in no epoch has no
+markers. The checker verifies monotonicity within each block and that no `k`
+exceeds the recorded epoch count; it does not require every epoch to appear in
+every region, since most epochs touch few regions.
+
 **Budget.** The budget line records each bound, the amount consumed, and the
-stop reason. The checker verifies consumed does not exceed bound, that the
-number of epoch markers equals the recorded epoch count, and that a stop reason
-of `epochs`, `nodes` or `fuel` coincides with that quantity having reached its
-bound. It does not verify `saturated` or `no-new-best`, which would require
+stop reason. The checker verifies consumed does not exceed bound, that no epoch
+marker exceeds the recorded epoch count, and that a stop reason of `epochs`,
+`nodes` or `fuel` coincides with that quantity having reached its bound. It does not verify `saturated` or `no-new-best`, which would require
 re-running the scheduler; those are telemetry.
 
 **Zero regions.** Any compilation that accepts no rewrite produces a certificate
