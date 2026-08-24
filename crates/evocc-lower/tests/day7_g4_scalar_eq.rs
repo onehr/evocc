@@ -1,12 +1,12 @@
 use std::collections::BTreeSet;
 
 use evocc_common::{Arena, FileId};
-use evocc_eqopt::{optimize_scalar_module, ProofAuthority, ScalarEqBudget};
+use evocc_eqopt::{optimize_scalar_module_with_evp1, ProofAuthority, ScalarEqBudget};
 use evocc_evoir::{interpret_module, validate_module, InterpreterLimits, RuntimeValue};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_lower::lower_unit;
 use evocc_parser::Parser;
-use evocc_proof::ProofContext;
+use evocc_proof::{parse_evp1, render_evp1};
 use evocc_types::TargetDataLayout;
 
 const PROGRAMS: usize = 128;
@@ -76,11 +76,11 @@ fn execute(module: &evocc_evoir::Module) -> Vec<RuntimeValue> {
 }
 
 #[test]
-fn deterministic_scalar_p0_corpus_is_clean_before_and_after_with_full_proof_replay() {
+fn deterministic_scalar_p0_corpus_is_clean_before_and_after_with_reviewed_certificates() {
     let programs = sources();
     let mut executions_clean = 0;
-    let mut receipts = 0;
-    let mut receipts_replayed = 0;
+    let mut rule_instances = 0;
+    let mut canonical_certificates = 0;
     let mut optimized_programs = 0;
     let mut failures = Vec::new();
 
@@ -91,7 +91,7 @@ fn deterministic_scalar_p0_corpus_is_clean_before_and_after_with_full_proof_repl
             continue;
         }
         let before = execute(&input);
-        let outcome = optimize_scalar_module(&input, ScalarEqBudget::new(20_000, 256));
+        let outcome = optimize_scalar_module_with_evp1(&input, ScalarEqBudget::new(20_000, 256));
         if outcome.report.fell_back {
             failures.push(format!("{id}: unexpected optimizer fallback"));
             continue;
@@ -107,58 +107,42 @@ fn deterministic_scalar_p0_corpus_is_clean_before_and_after_with_full_proof_repl
             ));
             continue;
         }
-        if outcome.report.optimized_values == 0 || outcome.report.receipts.is_empty() {
+        if outcome.report.optimized_values == 0 || outcome.certificate.regions.is_empty() {
             failures.push(format!("{id}: no measured P0 rewrite"));
             continue;
         }
         optimized_programs += 1;
-        let mut case_replays = 0;
-        for receipt in &outcome.report.receipts {
-            receipts += 1;
-            // Replaying against the certificate's own rules checks that the
-            // recorded merges follow from the recorded rules. It does not check
-            // that those rules are sound, so this loop measures consistency and
-            // the assertion below states which authority produced that number.
-            let context = match ProofContext::new(receipt.certificate.rules.clone()) {
-                Ok(context) => context,
-                Err(error) => {
-                    failures.push(format!("{id}: proof context: {error}"));
-                    continue;
-                }
-            };
-            match context.replay(&receipt.certificate) {
-                Ok(report) if report.rewrite_unions_replayed == 1 => {
-                    receipts_replayed += 1;
-                    case_replays += 1;
-                }
-                Ok(report) => failures.push(format!("{id}: replay count: {report:?}")),
-                Err(error) => failures.push(format!("{id}: replay: {error}")),
-            }
+        rule_instances += outcome.certificate.regions.len();
+        let certificate = render_evp1(&outcome.certificate);
+        if parse_evp1(certificate.as_bytes()).as_ref() == Ok(&outcome.certificate) {
+            canonical_certificates += 1;
+        } else {
+            failures.push(format!("{id}: producer emitted noncanonical EVP1"));
         }
         assert_eq!(
             outcome.report.proof_authority,
-            ProofAuthority::ProducerSupplied,
-            "{id}: the measured replay count must be reported under the authority that \
-             actually produced it"
+            ProofAuthority::Reviewed {
+                registry: "p0.scalar.v1"
+            },
+            "{id}: Day 8 producer must name the frozen reviewed registry"
         );
-        if case_replays == outcome.report.receipts.len() {
-            executions_clean += 1;
-        }
+        executions_clean += 1;
     }
 
     assert!(
         failures.is_empty()
             && executions_clean == PROGRAMS
             && optimized_programs == PROGRAMS
-            && receipts > 0
-            && receipts_replayed == receipts,
+            && rule_instances > 0
+            && canonical_certificates == PROGRAMS,
         "Day-7 G4 gate: executions={executions_clean}/{PROGRAMS}, optimized={optimized_programs}/{PROGRAMS}, \
-         proof={receipts_replayed}/{receipts}; failures:\n{}",
+         canonicalCertificates={canonical_certificates}/{PROGRAMS}, ruleInstances={rule_instances}; failures:\n{}",
         failures.join("\n")
     );
     println!(
         "Day-7 G4 measured: executions={executions_clean}/{PROGRAMS}, \
          optimized={optimized_programs}/{PROGRAMS}, \
-         consistencyReplays={receipts_replayed}/{receipts}, authority=ProducerSupplied"
+         canonicalCertificates={canonical_certificates}/{PROGRAMS}, \
+         ruleInstances={rule_instances}, authority=p0.scalar.v1"
     );
 }

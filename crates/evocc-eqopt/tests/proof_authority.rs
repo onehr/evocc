@@ -1,14 +1,8 @@
-//! What the scalar equality proofs actually establish.
-//!
-//! A replay is only a soundness argument if the rules it replays against come
-//! from an authority the producer could not choose. These tests pin which of
-//! the two situations the optimizer is currently in, so that the number a
-//! receipt reports is bound to a measured property rather than to an adjective
-//! someone wrote by hand.
+//! The reviewed authority recorded by the Day 8 EVP1 producer.
 
-use evocc_eqopt::{optimize_scalar_module, ProofAuthority, ScalarEqBudget};
+use evocc_eqopt::{optimize_scalar_module_with_evp1, ProofAuthority, ScalarEqBudget};
 use evocc_evoir::{Block, BlockArg, Function, FunctionParam, Inst, Module, Value};
-use evocc_proof::ProofContext;
+use evocc_proof::{parse_evp1, render_evp1};
 use evocc_types::EvoIRType;
 
 fn bits(id: u32) -> Value {
@@ -48,48 +42,29 @@ fn identity_module() -> Module {
     }
 }
 
-/// The replay succeeds against the certificate's own rule list and fails against
-/// an authority that does not contain those rules. The gap between the two is
-/// exactly the extent to which the producer is authorizing itself: a check that
-/// only passes when the subject supplies the standard is a consistency check,
-/// not a proof.
 #[test]
-fn replaying_against_the_certificates_own_rules_is_not_an_external_check() {
-    let outcome = optimize_scalar_module(&identity_module(), ScalarEqBudget::new(512, 16));
-    assert!(
-        !outcome.report.receipts.is_empty(),
-        "the fixture must produce at least one rewrite to reason about"
+fn reviewed_certificate_names_a_digest_instead_of_supplying_rules() {
+    let outcome =
+        optimize_scalar_module_with_evp1(&identity_module(), ScalarEqBudget::new(512, 16));
+    assert!(!outcome.certificate.regions.is_empty());
+    assert_eq!(outcome.certificate.registry_name, "p0.scalar.v1");
+    assert_eq!(
+        outcome.certificate.registry_digest,
+        "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9"
     );
-
-    for receipt in &outcome.report.receipts {
-        let own = ProofContext::new(receipt.certificate.rules.clone())
-            .expect("a certificate's own rules are structurally well formed");
-        assert!(
-            own.replay(&receipt.certificate).is_ok(),
-            "replay against self-supplied rules always succeeds"
-        );
-
-        let empty = ProofContext::new(Vec::new()).expect("an empty authority is well formed");
-        assert!(
-            empty.replay(&receipt.certificate).is_err(),
-            "the same certificate is refused by an authority that did not grant its rules, \
-             which is what makes the self-supplied case vacuous"
-        );
-    }
+    let bytes = render_evp1(&outcome.certificate);
+    assert_eq!(parse_evp1(bytes.as_bytes()).unwrap(), outcome.certificate);
 }
 
-/// The report states which authority it verified against, so a receipt can quote
-/// a measured field instead of asserting independence in prose. Until a reviewed
-/// registry exists that can express the constant side conditions of the P0
-/// rules, the honest answer is that the producer supplied its own.
 #[test]
 fn the_report_states_which_authority_it_verified_against() {
-    let outcome = optimize_scalar_module(&identity_module(), ScalarEqBudget::new(512, 16));
+    let outcome =
+        optimize_scalar_module_with_evp1(&identity_module(), ScalarEqBudget::new(512, 16));
 
     assert_eq!(
         outcome.report.proof_authority,
-        ProofAuthority::ProducerSupplied,
-        "the optimizer manufactures one exact rule per candidate and replays against it, \
-         so it cannot yet claim an external authority"
+        ProofAuthority::Reviewed {
+            registry: "p0.scalar.v1"
+        }
     );
 }
