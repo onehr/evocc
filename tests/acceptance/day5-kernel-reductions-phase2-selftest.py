@@ -33,10 +33,13 @@ POLICY = ROOT / "tests/contracts/day5-kernel-reduction-policy.json"
 PILOT_CONTRACT = ROOT / "tests/contracts/day5-kernel-reduction-pilots.json"
 VERIFIER = ROOT / "tests/acceptance/day5-kernel-reductions.py"
 OBSERVER = ROOT / "tests/acceptance/day5-kernel-reductions-observer.py"
+PILOT_FIXTURE = ROOT / "tests/fixtures/day5-kernel-reductions/overlay"
+PILOT_FIXTURE_SHA256 = "9542905417979f248a892857e2425adba64b08c4985fb0b8bd9902b373ca9f98"
 RUN_ID = "20260817T225959Z-57627"
 EVIDENCE = ROOT / ".evidence/day5-kernel-reconnaissance" / RUN_ID
 MANIFEST_SHA256 = "39af1ba905884d739789c996ede7b24ba08c07d3be39b77a643363334d9ec2a1"
 FAILURE_PREFIX = "day5-kernel-reductions: FAIL: "
+OBSERVER_FAILURE_PREFIX = "day5-kernel-reductions-observer: FAIL: "
 
 RAW_FAILURE_ID = "ccbede45994dd90ca75222cc689f1e1aad41ba42f5c009ca27710e10a860c796"
 E1001_FAILURE_ID = "869b322a04168ffbbac452763bf0081b20c3b69bdea7ffd6fc27bb65c5ff4b5f"
@@ -213,6 +216,7 @@ ALLOWED_ENVIRONMENT_KEYS = {
     "TMPDIR",
     "TZ",
 }
+ORACLE_ENVIRONMENT_KEYS = ALLOWED_ENVIRONMENT_KEYS | {"DEBIAN_FRONTEND", "PATH"}
 STABLE_REPLAY_FIELDS = {
     "argvSha256",
     "candidateDigest",
@@ -256,6 +260,7 @@ OBSERVER_ORACLE_RUN_KEYS = {
     "mountSourceSha256",
     "observedInputClosureSha256",
     "purpose",
+    "processStatusSha256",
     "runId",
     "timedOut",
 }
@@ -398,6 +403,8 @@ RUN_EVIDENCE_KEYS = {
     "imageBefore",
     "inputClosureSha256",
     "purpose",
+    "processStatus",
+    "processStatusSha256",
     "runId",
 }
 CLEANUP_EVIDENCE_KEYS = {
@@ -854,7 +861,7 @@ def audit_pilot_contract(
         "pilot Apple Container descriptor authority drift",
     )
     require(
-        "after.status.exitCode" in descriptor_authority["afterExitStatus"]
+        "observer-runner process status" in descriptor_authority["afterExitStatus"]
         and "no unlisted variables" in descriptor_authority["initProcess"]
         and "descriptor source equals" in descriptor_authority["mounts"],
         "pilot descriptor semantic binding authority drift",
@@ -911,6 +918,7 @@ def audit_pilot_contract(
         and observer["requiredExecutionBoundary"]
         == [
             "subject-runner",
+            "oracle-runner",
             "oracle-input-closure",
             "oracle-before",
             "oracle-after",
@@ -948,7 +956,7 @@ def audit_pilot_contract(
         }
         and observer["returnCodeAuthority"]
         == {
-            "oracle": "container-after.status.exitCode",
+            "oracle": "observer-runner OS process status for container start --attach",
             "subject": "observer-runner OS process status",
         },
         "observer v2 topology/delta/return-code authority drift",
@@ -1794,7 +1802,7 @@ def require_rejected(
     require(
         "PILOT_VERIFIED" not in result.stdout, f"{label} emitted a false pilot verdict"
     )
-    if not result.stderr.startswith(FAILURE_PREFIX):
+    if not result.stderr.startswith((FAILURE_PREFIX, OBSERVER_FAILURE_PREFIX)):
         require(
             "usage:" in result.stderr,
             f"{label} lacks a contract or argparse failure: {result.stderr.strip()}",
@@ -1860,13 +1868,23 @@ def validate_result(
     )
 
 
-def validate_environment(value: Any, label: str) -> dict[str, str]:
-    environment = exact_keys(value, ALLOWED_ENVIRONMENT_KEYS, f"{label} environment")
+def validate_environment(
+    value: Any, label: str, *, oracle: bool = False
+) -> dict[str, str]:
+    expected_keys = ORACLE_ENVIRONMENT_KEYS if oracle else ALLOWED_ENVIRONMENT_KEYS
+    environment = exact_keys(value, expected_keys, f"{label} environment")
     for name, item in environment.items():
         require(isinstance(item, str), f"{label} environment {name} is not text")
     require(environment["LANG"] == "C", f"{label} LANG drift")
     require(environment["LC_ALL"] == "C", f"{label} LC_ALL drift")
     require(environment["TZ"] == "UTC", f"{label} TZ drift")
+    if oracle:
+        require(
+            environment["DEBIAN_FRONTEND"] == "noninteractive"
+            and environment["PATH"]
+            == "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            f"{label} pinned image environment drift",
+        )
     return environment
 
 
@@ -1984,7 +2002,6 @@ def validate_container_descriptor_pair(
     command: list[str],
     environment: dict[str, str],
     has_inputs: bool,
-    expected_exit_code: int,
 ) -> None:
     label = f"execution run {run['runId']}"
     require(before.get("id") == run["containerName"], f"{label} before ID drift")
@@ -2090,11 +2107,8 @@ def validate_container_descriptor_pair(
     require(
         after_status.get("state") == "stopped"
         and isinstance(after_status.get("startedDate"), str)
-        and bool(after_status["startedDate"])
-        and isinstance(after_status.get("exitCode"), int)
-        and not isinstance(after_status["exitCode"], bool)
-        and after_status["exitCode"] == expected_exit_code,
-        f"{label} after state/exitCode does not bind the recorded result",
+        and bool(after_status["startedDate"]),
+        f"{label} after state does not prove execution",
     )
 
 
@@ -2243,6 +2257,33 @@ def validate_execution_evidence(
             receipt_root, before_artifact, f"{run_id} containerBefore"
         )
         after = artifact_json(receipt_root, after_artifact, f"{run_id} containerAfter")
+        status_artifact = check_artifact(
+            receipt_root,
+            run["processStatus"],
+            f"{run_id} processStatus",
+            seen_artifacts,
+        )
+        status = exact_keys(
+            artifact_json(receipt_root, status_artifact, f"{run_id} processStatus"),
+            PROCESS_STATUS_KEYS,
+            f"{run_id} processStatus",
+        )
+        require(
+            run["processStatusSha256"] == status_artifact["sha256"]
+            and status["argvSha256"]
+            == digest(
+                canonical(
+                    [
+                        container_cli["path"],
+                        "start",
+                        "--attach",
+                        run["containerName"],
+                    ]
+                )
+            )
+            and status["timedOut"] is False,
+            f"{run_id} observer-runner process status drift",
+        )
         validate_cleanup_evidence(
             receipt_root,
             run["cleanup"],
@@ -2250,7 +2291,12 @@ def validate_execution_evidence(
             seen_artifacts,
             CLEANUP_EVIDENCE_KEYS,
         )
-        run_by_id[run_id] = {"after": after, "before": before, "value": run}
+        run_by_id[run_id] = {
+            "after": after,
+            "before": before,
+            "processStatus": status,
+            "value": run,
+        }
     identities = exact_keys(
         evidence["compilerIdentities"], {"gcc", "clang"}, "compiler identities"
     )
@@ -2283,7 +2329,7 @@ def validate_execution_evidence(
             f"{family} identity command hash drift",
         )
         environment = validate_environment(
-            identity["environment"], f"{family} identity"
+            identity["environment"], f"{family} identity", oracle=True
         )
         stdout = check_artifact(
             receipt_root,
@@ -2315,6 +2361,12 @@ def validate_execution_evidence(
         )
         run_info = run_by_id[f"identity:{family}"]
         run = run_info["value"]
+        require(
+            run_info["processStatus"]["returnCode"] == 0
+            and run_info["processStatus"]["stdoutSha256"] == identity["stdoutSha256"]
+            and run_info["processStatus"]["stderrSha256"] == identity["stderrSha256"],
+            f"{family} identity observer-runner status drift",
+        )
         validate_container_descriptor_pair(
             run_info["before"],
             run_info["after"],
@@ -2324,7 +2376,6 @@ def validate_execution_evidence(
             command,
             environment,
             False,
-            0,
         )
     validate_cleanup_evidence(
         receipt_root,
@@ -2492,7 +2543,10 @@ def validate_observer_evidence(
         require(
             isinstance(run["exitCode"], int)
             and not isinstance(run["exitCode"], bool)
-            and run["timedOut"] is False,
+            and run["timedOut"] is False
+            and run["processStatusSha256"]
+            == execution_run["value"]["processStatusSha256"]
+            and run["exitCode"] == execution_run["processStatus"]["returnCode"],
             f"observer outcome drift: {run_id}",
         )
         before = check_artifact(
@@ -2851,7 +2905,7 @@ def validate_oracle_receipt(
         receipt["commandSha256"] == digest(canonical(command)),
         f"{label} command hash drift",
     )
-    environment = validate_environment(receipt["environment"], label)
+    environment = validate_environment(receipt["environment"], label, oracle=True)
     serialized_authority = canonical(
         {"command": command, "environment": environment}
     ).decode("utf-8")
@@ -2880,6 +2934,13 @@ def validate_oracle_receipt(
     require(
         run["inputClosureSha256"] == receipt["inputClosureSha256"],
         f"{label} execution input closure drift",
+    )
+    require(
+        run_info["processStatus"]["returnCode"] == receipt["returnCode"]
+        and run_info["processStatus"]["timedOut"] == receipt["timedOut"]
+        and run_info["processStatus"]["stdoutSha256"] == receipt["stdoutSha256"]
+        and run_info["processStatus"]["stderrSha256"] == receipt["stderrSha256"],
+        f"{label} disagrees with observer-runner process status",
     )
     observer_run = execution_evidence["observerRuns"].get(expected_run_id)
     require(isinstance(observer_run, dict), f"{label} observer descriptor absent")
@@ -2911,7 +2972,6 @@ def validate_oracle_receipt(
         command,
         environment,
         True,
-        receipt["returnCode"],
     )
     validate_container_descriptor_pair(
         observer_run["_beforeDescriptorValue"],
@@ -2925,7 +2985,6 @@ def validate_oracle_receipt(
         command,
         environment,
         True,
-        receipt["returnCode"],
     )
     return receipt
 
@@ -3015,7 +3074,6 @@ def validate_receipt(
             identity["command"],
             identity["environment"],
             False,
-            0,
         )
     receipt_records = receipt["records"]
     require(
@@ -3269,8 +3327,16 @@ def rewrite_json_artifact(
     action: Callable[[dict[str, Any]], None],
 ) -> None:
     path = artifact_path(receipt_root, artifact)
-    value = load(path, f"mutant artifact {artifact['path']}")
-    action(value)
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise TestFailure(f"cannot load mutant artifact {artifact['path']}: {error}")
+    target = value
+    if isinstance(value, list):
+        require(len(value) == 1, "mutant descriptor artifact is not singular")
+        target = value[0]
+    require(isinstance(target, dict), "mutant descriptor artifact is not an object")
+    action(target)
     store(path, value)
     artifact.update(descriptor(path, artifact["path"]))
 
@@ -3839,6 +3905,13 @@ def main() -> int:
         with tempfile.TemporaryDirectory(prefix="c30-day5-phase2-pilots-") as directory:
             root = Path(directory)
             overlay, models = build_pilot_overlay(root, policy, records)
+            require(
+                PILOT_FIXTURE.is_dir()
+                and regular_closure(PILOT_FIXTURE) == regular_closure(overlay)
+                and regular_closure(PILOT_FIXTURE)["sha256"]
+                == PILOT_FIXTURE_SHA256,
+                "checked-in pilot fixture differs from deterministic reductions",
+            )
             audit_contract_atoms(pilot_contract, models)
             expected_denominators = {
                 failure_id: len(expected_atoms(models[failure_id]))

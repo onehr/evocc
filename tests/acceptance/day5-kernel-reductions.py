@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import argparse
 import copy
+import ctypes
+import errno
 import hashlib
 import json
 import os
@@ -288,6 +290,116 @@ PILOT_RECEIPT_KEYS = {
     "schemaVersion",
     "sourceEvidenceRunId",
 }
+SEALED_PILOT_RECEIPT_KEYS = PILOT_RECEIPT_KEYS | {"observerEvidence"}
+OBSERVER_IDENTITY_KEYS = {"bytes", "path", "sha256"}
+OBSERVER_ORACLE_RUN_KEYS = {
+    "afterDescriptor",
+    "beforeDescriptor",
+    "cleanupTargetIndex",
+    "commandSha256",
+    "containerName",
+    "environmentSha256",
+    "exitCode",
+    "expectedInputClosureSha256",
+    "family",
+    "mountSource",
+    "mountSourceSha256",
+    "observedInputClosureSha256",
+    "purpose",
+    "processStatusSha256",
+    "runId",
+    "timedOut",
+}
+OBSERVER_SUBJECT_RUN_KEYS = {
+    "argvSha256",
+    "environmentSha256",
+    "expectedInputClosureSha256",
+    "inputRoot",
+    "inputRootSha256",
+    "observedInputClosureSha256",
+    "processStatusSha256",
+    "returnCode",
+    "runId",
+    "stderrSha256",
+    "stdoutSha256",
+    "subjectSha256",
+    "timedOut",
+}
+OBSERVER_CLEANUP_LEDGER_KEYS = {
+    "aliasAbsent",
+    "allAbsent",
+    "attempts",
+    "containerInventory",
+    "containerInventoryReturnCode",
+    "containerNamesAbsent",
+    "imageInventory",
+    "imageInventoryReturnCode",
+    "plannedAlias",
+    "plannedContainerNames",
+}
+OBSERVER_CLEANUP_ATTEMPT_KEYS = {
+    "deleteAttempted",
+    "deleteReturnCode",
+    "error",
+    "stopAttempted",
+    "stopReturnCode",
+    "target",
+    "targetKind",
+}
+OBSERVER_EVIDENCE_KEYS = {
+    "attestation",
+    "attestationSha256",
+    "cleanupLedger",
+    "observerIdentity",
+    "oracleRunOrderSha256",
+    "oracleRuns",
+    "plan",
+    "planSha256",
+    "protocolId",
+    "schemaVersion",
+    "subjectRunOrderSha256",
+    "subjectRuns",
+}
+OBSERVER_ATTESTATION_KEYS = {
+    "cleanupLedger",
+    "observerIdentity",
+    "oracleRunOrderSha256",
+    "oracleRuns",
+    "planSha256",
+    "protocolId",
+    "schemaVersion",
+    "subjectRunOrderSha256",
+    "subjectRuns",
+}
+OBSERVER_PLAN_KEYS = {
+    "containerCliSha256",
+    "expectedImage",
+    "observerExecutableSha256",
+    "oracleInputRoot",
+    "oracleInputRootSha256",
+    "oracleRunIds",
+    "oracleRunOrderSha256",
+    "overlayClosureSha256",
+    "pilotContractSha256",
+    "policySha256",
+    "protocolId",
+    "schemaVersion",
+    "subjectExecutionRoot",
+    "subjectExecutionRootSha256",
+    "subjectRunIds",
+    "subjectRunOrderSha256",
+}
+RECEIPT_INDEX_KEYS = {
+    "observerAttestationSha256",
+    "observerExecutableSha256",
+    "oracleRunOrderSha256",
+    "overlayClosureSha256",
+    "pilotContractSha256",
+    "policySha256",
+    "receiptSha256",
+    "schemaVersion",
+    "subjectRunOrderSha256",
+}
 PILOT_RECEIPT_RECORD_KEYS = {
     "candidate",
     "causalAnchorSha256",
@@ -308,12 +420,22 @@ SUBJECT_RECEIPT_KEYS = {
     "inputClosureSha256",
     "normalizedObservation",
     "privateDirectory",
+    "processStatus",
+    "processStatusSha256",
     "returnCode",
     "stderr",
     "stderrSha256",
     "stdout",
     "stdoutSha256",
     "subjectSha256",
+    "timedOut",
+}
+PROCESS_STATUS_KEYS = {
+    "argvSha256",
+    "environmentSha256",
+    "returnCode",
+    "stderrSha256",
+    "stdoutSha256",
     "timedOut",
 }
 ORACLE_RECEIPT_KEYS = {
@@ -362,15 +484,18 @@ RUN_EVIDENCE_KEYS = {
     "imageBefore",
     "inputClosureSha256",
     "purpose",
+    "processStatus",
+    "processStatusSha256",
     "runId",
 }
 CLEANUP_EVIDENCE_KEYS = {
     "deleteReturnCode",
     "deleteStderr",
     "deleteStdout",
-    "postDeleteInspectReturnCode",
-    "postDeleteInspectStderr",
-    "postDeleteInspectStdout",
+    "postDeleteInventoryReturnCode",
+    "postDeleteInventoryStderr",
+    "postDeleteInventoryStdout",
+    "targetAbsent",
 }
 MINIMALITY_RECEIPT_KEYS = {
     "atomOrderSha256",
@@ -2261,7 +2386,7 @@ def audit_pilot_contract(
     for name in ("image", "initProcess", "mounts", "afterExitStatus"):
         require_string(descriptor_authority[name], f"oracleEvidenceAuthority.{name}")
     require(
-        "after.status.exitCode" in descriptor_authority["afterExitStatus"]
+        "observer-runner process status" in descriptor_authority["afterExitStatus"]
         and "no unlisted variables" in descriptor_authority["initProcess"]
         and "descriptor source equals" in descriptor_authority["mounts"],
         "pilot oracle descriptor semantic binding drift",
@@ -2317,6 +2442,7 @@ def audit_pilot_contract(
         and observer["requiredExecutionBoundary"]
         == [
             "subject-runner",
+            "oracle-runner",
             "oracle-input-closure",
             "oracle-before",
             "oracle-after",
@@ -2354,7 +2480,7 @@ def audit_pilot_contract(
         }
         and observer["returnCodeAuthority"]
         == {
-            "oracle": "container-after.status.exitCode",
+            "oracle": "observer-runner OS process status for container start --attach",
             "subject": "observer-runner OS process status",
         },
         "pilot observer v2 topology/delta/return-code authority drift",
@@ -3336,6 +3462,49 @@ def file_closure(root: Path, *, excluded: set[str] | None = None) -> dict[str, A
     }
 
 
+def publish_receipt_no_replace(staging: Path, destination: Path) -> None:
+    """Atomically publish a directory without replacing any destination entry."""
+
+    require_plain_root(staging, "receipt staging root")
+    require(
+        destination.parent.is_dir() and not destination.parent.is_symlink(),
+        "receipt destination parent is not a plain directory",
+    )
+    source_bytes = os.fsencode(str(staging.absolute()))
+    destination_bytes = os.fsencode(str(destination.absolute()))
+    libc = ctypes.CDLL(None, use_errno=True)
+    if sys.platform == "darwin":
+        primitive = libc.renameatx_np
+        primitive.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        primitive.restype = ctypes.c_int
+        result = primitive(-2, source_bytes, -2, destination_bytes, 0x00000004)
+    elif sys.platform.startswith("linux"):
+        primitive = libc.renameat2
+        primitive.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        primitive.restype = ctypes.c_int
+        result = primitive(-100, source_bytes, -100, destination_bytes, 0x1)
+    else:
+        raise ContractError("atomic no-replace publication is unsupported")
+    if result != 0:
+        error_number = ctypes.get_errno()
+        message = os.strerror(error_number) if error_number else "unknown error"
+        if error_number in {errno.EEXIST, errno.ENOTEMPTY}:
+            raise ContractError("pilot receipt destination already exists")
+        raise ContractError(f"cannot atomically publish pilot receipt: {message}")
+
+
 def closure_sha256(files: dict[str, bytes]) -> str:
     return digest(
         b"".join(
@@ -3782,6 +3951,66 @@ def captured_process(
         return 124, True
 
 
+def captured_subject_process(
+    observer_path: Path,
+    argv: list[str],
+    environment: dict[str, str],
+    stdout_path: Path,
+    stderr_path: Path,
+    status_path: Path,
+    timeout: int,
+) -> dict[str, Any]:
+    capture_argv = [
+        sys.executable,
+        str(observer_path),
+        "capture",
+        "--stdout",
+        str(stdout_path),
+        "--stderr",
+        str(stderr_path),
+        "--status",
+        str(status_path),
+        "--timeout",
+        str(timeout),
+    ]
+    for name, value in sorted(environment.items()):
+        capture_argv.extend(("--environment", f"{name}={value}"))
+    capture_argv.extend(("--", *argv))
+    completed = subprocess.run(
+        capture_argv,
+        env=environment,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout + 10,
+        check=False,
+    )
+    require(
+        completed.returncode == 0,
+        "observer subject runner failed: "
+        + completed.stderr.decode("utf-8", errors="replace").strip(),
+    )
+    require(
+        completed.stdout == b"" and completed.stderr == b"",
+        "observer subject runner wrote an unexpected stream",
+    )
+    status = exact_keys(
+        load_json(status_path, "observer subject process status"),
+        PROCESS_STATUS_KEYS,
+        "observer subject process status",
+    )
+    require(
+        status["argvSha256"] == digest(canonical(argv))
+        and status["environmentSha256"] == digest(canonical(environment))
+        and status["stdoutSha256"] == digest(stdout_path.read_bytes())
+        and status["stderrSha256"] == digest(stderr_path.read_bytes())
+        and is_int(status["returnCode"])
+        and isinstance(status["timedOut"], bool),
+        "observer subject process status binding drift",
+    )
+    return status
+
+
 def receipt_artifact(receipt_root: Path, path: Path) -> dict[str, Any]:
     relative = path.relative_to(receipt_root).as_posix()
     return descriptor(path, relative)
@@ -3956,6 +4185,7 @@ def raw_subject_argv(
 
 def run_subject_receipt(
     audited: dict[str, Any],
+    observer_path: Path,
     model: dict[str, Any],
     variant: dict[str, Any],
     receipt_root: Path,
@@ -4002,9 +4232,18 @@ def run_subject_receipt(
         argv = raw_subject_argv(audited, model, inputs, subject_path)
     stdout_path = receipt_root / f"{artifact_prefix}.stdout"
     stderr_path = receipt_root / f"{artifact_prefix}.stderr"
-    return_code, timed_out = captured_process(
-        argv, environment, stdout_path, stderr_path, timeout
+    status_path = receipt_root / f"{artifact_prefix}.process-status.json"
+    process_status = captured_subject_process(
+        observer_path,
+        argv,
+        environment,
+        stdout_path,
+        stderr_path,
+        status_path,
+        timeout,
     )
+    return_code = process_status["returnCode"]
+    timed_out = process_status["timedOut"]
     normalized, anchor_sha256 = normalized_subject_observation(
         audited,
         model,
@@ -4016,6 +4255,7 @@ def run_subject_receipt(
     )
     stdout = receipt_artifact(receipt_root, stdout_path)
     stderr = receipt_artifact(receipt_root, stderr_path)
+    process_status_artifact = receipt_artifact(receipt_root, status_path)
     return {
         "argv": argv,
         "argvSha256": digest(canonical(argv)),
@@ -4031,6 +4271,8 @@ def run_subject_receipt(
             "resetBeforeExecution": True,
             "tmpdir": str(temporary),
         },
+        "processStatus": process_status_artifact,
+        "processStatusSha256": process_status_artifact["sha256"],
         "returnCode": return_code,
         "stderr": stderr,
         "stderrSha256": stderr["sha256"],
@@ -4045,10 +4287,19 @@ def run_subject_receipt(
 
 def execute_subject_checkpoint(
     audited: dict[str, Any],
+    pilot_authority: dict[str, Any],
     pilot_overlay: dict[str, Any],
     receipt_root: Path,
     execution_root: Path,
 ) -> dict[str, Any]:
+    observer_path = confined_path(
+        ROOT,
+        require_string(
+            pilot_authority["observerAuthority"]["executable"]["path"],
+            "live observer executable path",
+        ),
+        "live observer executable",
+    )
     source_artifacts = audited["policy"]["sourceEvidence"]["authorityArtifacts"]
     build_environment = load_json(
         confined_path(
@@ -4075,6 +4326,7 @@ def execute_subject_checkpoint(
         "argvSha256",
         "candidateDigest",
         "environmentSha256",
+        "processStatusSha256",
         "returnCode",
         "stderrSha256",
         "stdoutSha256",
@@ -4099,6 +4351,7 @@ def execute_subject_checkpoint(
         replays = [
             run_subject_receipt(
                 audited,
+                observer_path,
                 model,
                 baseline,
                 receipt_root,
@@ -4145,6 +4398,7 @@ def execute_subject_checkpoint(
         for index, atom in enumerate(model["atoms"]):
             observation = run_subject_receipt(
                 audited,
+                observer_path,
                 model,
                 atom["variant"],
                 receipt_root,
@@ -4445,11 +4699,10 @@ def validate_container_pair(
     effective_environment = environment_items(
         process.get("environment"), f"container environment {name}"
     )
-    for key, value in environment.items():
-        require(
-            effective_environment.get(key) == value,
-            f"container environment drift: {name}:{key}",
-        )
+    require(
+        effective_environment == environment,
+        f"container environment is not exact: {name}",
+    )
     mounts = configuration.get("mounts")
     require(isinstance(mounts, list), f"container mounts absent: {name}")
     by_destination: dict[str, dict[str, Any]] = {}
@@ -4566,13 +4819,18 @@ def evidenced_container_process(
         f"{prefix}/container-before.json",
         f"{run_id} container before",
     )
-    return_code, timed_out = captured_process(
+    status_path = receipt_root / f"{prefix}/start.process-status.json"
+    process_status = captured_subject_process(
+        authority["observerPath"],
         [container_bin, "start", "--attach", name],
-        None,
+        dict(os.environ),
         stdout_path,
         stderr_path,
+        status_path,
         timeout,
     )
+    return_code = process_status["returnCode"]
+    timed_out = process_status["timedOut"]
     if timed_out:
         stopped = control_process([container_bin, "stop", name])
         if stopped.returncode != 0:
@@ -4613,6 +4871,8 @@ def evidenced_container_process(
             "imageBefore": image_before,
             "inputClosureSha256": input_closure_sha256,
             "purpose": purpose,
+            "processStatus": receipt_artifact(receipt_root, status_path),
+            "processStatusSha256": digest(status_path.read_bytes()),
             "runId": run_id,
         }
     )
@@ -4620,7 +4880,10 @@ def evidenced_container_process(
 
 
 def prepare_oracle_authority(
-    audited: dict[str, Any], execution_root: Path, receipt_root: Path
+    audited: dict[str, Any],
+    pilot_authority: dict[str, Any],
+    execution_root: Path,
+    receipt_root: Path,
 ) -> dict[str, Any]:
     artifacts = audited["policy"]["sourceEvidence"]["authorityArtifacts"]
     build_environment = load_json(
@@ -4712,6 +4975,14 @@ def prepare_oracle_authority(
         },
         "expectedImage": expected_image,
         "invocation": 0,
+        "observerPath": confined_path(
+            ROOT,
+            require_string(
+                pilot_authority["observerAuthority"]["executable"]["path"],
+                "oracle observer executable path",
+            ),
+            "oracle observer executable",
+        ),
         "preflight": {
             "alias": alias,
             "aliasImage": alias_image,
@@ -4756,21 +5027,34 @@ def cleanup_run_evidence(
         [container_bin, "delete", name], receipt_root, f"{prefix}/delete"
     )
     require(delete_code == 0, f"cannot delete retained pilot container: {name}")
-    inspect_code, inspect_stdout, inspect_stderr = captured_control_evidence(
-        [container_bin, "inspect", name], receipt_root, f"{prefix}/post-delete-inspect"
+    inventory_code, inventory_stdout, inventory_stderr = captured_control_evidence(
+        [container_bin, "list", "--all", "--format", "json"],
+        receipt_root,
+        f"{prefix}/post-delete-inventory",
     )
+    inventory_path = confined_path(
+        receipt_root,
+        inventory_stdout["path"],
+        f"post-delete container inventory {name}",
+    )
+    inventory = decode_json(inventory_path.read_bytes(), "post-delete container inventory")
     require(
-        inspect_code != 0,
-        f"deleted pilot container remains inspectable: {name}",
+        inventory_code == 0 and isinstance(inventory, list),
+        f"cannot obtain post-delete container inventory: {name}",
     )
+    target_absent = all(
+        not isinstance(value, dict) or value.get("id") != name for value in inventory
+    )
+    require(target_absent, f"deleted pilot container remains in inventory: {name}")
     authority["retainedNames"].remove(name)
     return {
         "deleteReturnCode": delete_code,
         "deleteStderr": delete_stderr,
         "deleteStdout": delete_stdout,
-        "postDeleteInspectReturnCode": inspect_code,
-        "postDeleteInspectStderr": inspect_stderr,
-        "postDeleteInspectStdout": inspect_stdout,
+        "postDeleteInventoryReturnCode": inventory_code,
+        "postDeleteInventoryStderr": inventory_stderr,
+        "postDeleteInventoryStdout": inventory_stdout,
+        "targetAbsent": target_absent,
     }
 
 
@@ -4784,32 +5068,151 @@ def cleanup_alias_evidence(
         [container_bin, "image", "delete", alias], receipt_root, f"{prefix}/delete"
     )
     require(delete_code == 0, "cannot delete pilot image alias")
-    inspect_code, inspect_stdout, inspect_stderr = captured_control_evidence(
-        [container_bin, "image", "inspect", alias],
+    inventory_code, inventory_stdout, inventory_stderr = captured_control_evidence(
+        [container_bin, "image", "list", "--format", "json", "--verbose"],
         receipt_root,
-        f"{prefix}/post-delete-inspect",
+        f"{prefix}/post-delete-inventory",
     )
-    require(inspect_code != 0, "deleted pilot image alias remains inspectable")
+    inventory_path = confined_path(
+        receipt_root,
+        inventory_stdout["path"],
+        "post-delete image inventory",
+    )
+    inventory = decode_json(inventory_path.read_bytes(), "post-delete image inventory")
+    require(
+        inventory_code == 0 and isinstance(inventory, list),
+        "cannot obtain post-delete image inventory",
+    )
+    canonical_alias = alias if "/" in alias.split(":", 1)[0] else f"docker.io/library/{alias}"
+    target_absent = all(
+        not isinstance(value, dict)
+        or not isinstance(value.get("configuration"), dict)
+        or value["configuration"].get("name") not in {alias, canonical_alias}
+        for value in inventory
+    )
+    require(target_absent, "deleted pilot image alias remains in inventory")
     authority["aliasLive"] = False
     return {
         "deleteReturnCode": delete_code,
         "deleteStderr": delete_stderr,
         "deleteStdout": delete_stdout,
-        "postDeleteInspectReturnCode": inspect_code,
-        "postDeleteInspectStderr": inspect_stderr,
-        "postDeleteInspectStdout": inspect_stdout,
+        "postDeleteInventoryReturnCode": inventory_code,
+        "postDeleteInventoryStderr": inventory_stderr,
+        "postDeleteInventoryStdout": inventory_stdout,
+        "targetAbsent": target_absent,
+    }
+
+
+def cleanup_registered_oracle_resources(
+    authority: dict[str, Any],
+    *,
+    runner: Any = control_process,
+) -> dict[str, Any]:
+    """Attempt every registered cleanup target even after individual failures."""
+
+    container_bin = authority["containerBin"]
+    planned_names = list(authority.get("retainedNames", []))
+    alias = authority["alias"]
+    attempts: list[dict[str, Any]] = []
+
+    def invoke(argv: list[str]) -> tuple[int | None, bytes, str | None]:
+        try:
+            completed = runner(argv)
+            return completed.returncode, completed.stdout or b"", None
+        except Exception as error:  # cleanup must continue through every target
+            return None, b"", str(error)
+
+    for name in planned_names:
+        delete_code, _stdout, error = invoke([container_bin, "delete", name])
+        stop_attempted = delete_code != 0
+        stop_code: int | None = None
+        if stop_attempted:
+            stop_code, _stdout, stop_error = invoke([container_bin, "stop", name])
+            error = error or stop_error
+            retry_code, _stdout, retry_error = invoke(
+                [container_bin, "delete", "--force", name]
+            )
+            error = error or retry_error
+            if retry_code == 0:
+                delete_code = 0
+        attempts.append(
+            {
+                "deleteAttempted": True,
+                "deleteReturnCode": delete_code,
+                "error": error,
+                "stopAttempted": stop_attempted,
+                "stopReturnCode": stop_code,
+                "target": name,
+                "targetKind": "container",
+            }
+        )
+
+    alias_code: int | None = None
+    alias_error: str | None = None
+    if authority.get("aliasLive"):
+        alias_code, _stdout, alias_error = invoke(
+            [container_bin, "image", "delete", alias]
+        )
+    attempts.append(
+        {
+            "deleteAttempted": bool(authority.get("aliasLive")),
+            "deleteReturnCode": alias_code,
+            "error": alias_error,
+            "stopAttempted": False,
+            "stopReturnCode": None,
+            "target": alias,
+            "targetKind": "image-alias",
+        }
+    )
+
+    container_code, container_stdout, container_error = invoke(
+        [container_bin, "list", "--all", "--format", "json"]
+    )
+    image_code, image_stdout, image_error = invoke(
+        [container_bin, "image", "list", "--format", "json", "--verbose"]
+    )
+    try:
+        containers = decode_json(container_stdout, "cleanup container inventory")
+    except ContractError:
+        containers = None
+    try:
+        images = decode_json(image_stdout, "cleanup image inventory")
+    except ContractError:
+        images = None
+    container_names_absent = isinstance(containers, list) and all(
+        not isinstance(item, dict) or item.get("id") not in set(planned_names)
+        for item in containers
+    )
+    canonical_alias = alias if "/" in alias.split(":", 1)[0] else f"docker.io/library/{alias}"
+    alias_absent = isinstance(images, list) and all(
+        not isinstance(item, dict)
+        or not isinstance(item.get("configuration"), dict)
+        or item["configuration"].get("name") not in {alias, canonical_alias}
+        for item in images
+    )
+    return {
+        "aliasAbsent": alias_absent,
+        "allAbsent": bool(
+            container_code == 0
+            and image_code == 0
+            and container_names_absent
+            and alias_absent
+        ),
+        "attempts": attempts,
+        "containerInventory": container_stdout,
+        "containerInventoryReturnCode": container_code,
+        "containerNamesAbsent": container_names_absent,
+        "imageInventory": image_stdout,
+        "imageInventoryReturnCode": image_code,
+        "plannedAlias": alias,
+        "plannedContainerNames": planned_names,
     }
 
 
 def best_effort_oracle_cleanup(authority: dict[str, Any]) -> None:
-    container_bin = authority["containerBin"]
-    for name in list(authority["retainedNames"]):
-        control_process([container_bin, "stop", name])
-        control_process([container_bin, "delete", "--force", name])
-        authority["retainedNames"].remove(name)
-    if authority.get("aliasLive"):
-        control_process([container_bin, "image", "delete", authority["alias"]])
-        authority["aliasLive"] = False
+    cleanup_registered_oracle_resources(authority)
+    authority["retainedNames"].clear()
+    authority["aliasLive"] = False
 
 
 def observer_checkpoint(
@@ -4868,9 +5271,11 @@ def observer_checkpoint(
 
 def oracle_environment(source_date_epoch: str) -> dict[str, str]:
     return {
+        "DEBIAN_FRONTEND": "noninteractive",
         "HOME": "/tmp/c30-pilot-home",
         "LANG": "C",
         "LC_ALL": "C",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "SOURCE_DATE_EPOCH": source_date_epoch,
         "TMPDIR": "/tmp/c30-pilot-tmp",
         "TZ": "UTC",
@@ -5148,7 +5553,9 @@ def execute_oracle_checkpoint(
     )
     authority: dict[str, Any] | None = None
     try:
-        authority = prepare_oracle_authority(audited, execution_root, receipt_root)
+        authority = prepare_oracle_authority(
+            audited, pilot_authority, execution_root, receipt_root
+        )
         identities = verify_compiler_identities(audited, authority, receipt_root)
         for failure_id, model in sorted(pilot_overlay["models"].items()):
             baseline = subject_values[failure_id]["baseline"]
@@ -5387,6 +5794,7 @@ def verify_pilots_phase2(
     receipt_dir: Path,
     observer_ready_file: Path | None = None,
     observer_ack_file: Path | None = None,
+    execution_root: Path | None = None,
 ) -> dict[str, Any]:
     require(not receipt_dir.exists(), "pilot receipt directory already exists")
     require(
@@ -5397,45 +5805,60 @@ def verify_pilots_phase2(
         policy_path, pilot_contract_path, evidence, overlay
     )
     receipt_dir.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(
-        prefix=".day5-pilot-receipt-staging-", dir=receipt_dir.parent
-    ) as receipt_staging, tempfile.TemporaryDirectory(
-        prefix="c30-day5-pilot-execution-"
-    ) as execution_staging:
+    receipt: dict[str, Any]
+
+    def execute(receipt_staging: Path, execution_staging: Path) -> dict[str, Any]:
         observations = execute_subject_checkpoint(
             audited,
+            pilot_authority,
             pilot_overlay,
-            Path(receipt_staging),
-            Path(execution_staging),
+            receipt_staging,
+            execution_staging,
         )
         oracle_values = execute_oracle_checkpoint(
             audited,
             pilot_authority,
             pilot_overlay,
             observations,
-            Path(receipt_staging),
-            Path(execution_staging),
+            receipt_staging,
+            execution_staging,
             observer_ready_file,
             observer_ack_file,
         )
-        receipt = assemble_pilot_receipt(
+        return assemble_pilot_receipt(
             audited,
             pilot_authority,
             pilot_overlay,
             oracle_values["observations"],
             oracle_values["executionEvidence"],
-            Path(receipt_staging),
+            receipt_staging,
         )
+
+    with tempfile.TemporaryDirectory(
+        prefix=".day5-pilot-receipt-staging-", dir=receipt_dir.parent
+    ) as receipt_staging_value:
+        receipt_staging = Path(receipt_staging_value)
+        if execution_root is None:
+            with tempfile.TemporaryDirectory(
+                prefix="c30-day5-pilot-execution-"
+            ) as execution_staging_value:
+                receipt = execute(receipt_staging, Path(execution_staging_value))
+        else:
+            require(execution_root.is_absolute(), "pilot execution root is not absolute")
+            require(not execution_root.exists(), "pilot execution root already exists")
+            execution_root.parent.mkdir(parents=True, exist_ok=True)
+            execution_root.mkdir()
+            receipt = execute(receipt_staging, execution_root)
         receipt_bytes = canonical(receipt)
         receipt_sha256 = digest(receipt_bytes)
-        receipt_path = Path(receipt_staging) / "receipt.json"
+        receipt_path = receipt_staging / "receipt.json"
         receipt_path.write_bytes(receipt_bytes)
         require(receipt_path.stat().st_nlink == 1, "pilot receipt is hard-linked")
         require(
             not receipt_dir.exists(),
             "pilot receipt directory appeared during execution",
         )
-        os.rename(receipt_staging, receipt_dir)
+        publish_receipt_no_replace(receipt_staging, receipt_dir)
     return pilot_result(audited, pilot_authority, receipt, receipt_sha256, "executed")
 
 
@@ -5518,15 +5941,15 @@ def validate_receipt_cleanup(
     cleanup = exact_keys(value, CLEANUP_EVIDENCE_KEYS, label)
     require(cleanup["deleteReturnCode"] == 0, f"{label} delete failed")
     require(
-        is_int(cleanup["postDeleteInspectReturnCode"])
-        and cleanup["postDeleteInspectReturnCode"] != 0,
-        f"{label} post-delete inspection did not prove absence",
+        cleanup["postDeleteInventoryReturnCode"] == 0
+        and cleanup["targetAbsent"] is True,
+        f"{label} post-delete inventory did not prove absence",
     )
     for name in (
         "deleteStdout",
         "deleteStderr",
-        "postDeleteInspectStdout",
-        "postDeleteInspectStderr",
+        "postDeleteInventoryStdout",
+        "postDeleteInventoryStderr",
     ):
         validate_receipt_artifact(receipt_root, cleanup[name], f"{label}.{name}", seen)
 
@@ -5670,6 +6093,27 @@ def validate_execution_evidence_receipt(
         after_artifact = validate_receipt_artifact(
             receipt_root, run["containerAfter"], f"{run_id}.containerAfter", seen
         )
+        process_status_artifact = validate_receipt_artifact(
+            receipt_root, run["processStatus"], f"{run_id}.processStatus", seen
+        )
+        require(
+            run["processStatusSha256"] == process_status_artifact["sha256"],
+            f"{run_id} process status hash drift",
+        )
+        process_status = exact_keys(
+            receipt_artifact_json(
+                receipt_root, process_status_artifact, f"{run_id}.processStatus"
+            ),
+            PROCESS_STATUS_KEYS,
+            f"{run_id}.processStatus",
+        )
+        require(
+            process_status["argvSha256"]
+            == digest(canonical([evidence["containerCli"]["path"], "start", "--attach", name]))
+            and is_int(process_status["returnCode"])
+            and process_status["timedOut"] is False,
+            f"{run_id} observer-runner process status drift",
+        )
         validate_receipt_cleanup(
             receipt_root, run["cleanup"], f"{run_id}.cleanup", seen
         )
@@ -5680,6 +6124,7 @@ def validate_execution_evidence_receipt(
             "before": receipt_artifact_json(
                 receipt_root, before_artifact, f"{run_id}.containerBefore"
             ),
+            "processStatus": process_status,
             "value": run,
         }
     identities = exact_keys(
@@ -5752,6 +6197,13 @@ def validate_execution_evidence_receipt(
             f"receipt {family} measured identity drift",
         )
         run = run_map[f"identity:{family}"]
+        require(
+            run["processStatus"]["returnCode"] == 0
+            and run["processStatus"]["timedOut"] is False
+            and run["processStatus"]["stdoutSha256"] == identity["stdoutSha256"]
+            and run["processStatus"]["stderrSha256"] == identity["stderrSha256"],
+            f"receipt {family} identity observer-runner status drift",
+        )
         validate_container_pair(
             run["before"],
             run["after"],
@@ -5765,7 +6217,7 @@ def validate_execution_evidence_receipt(
     validate_receipt_cleanup(
         receipt_root, evidence["aliasCleanup"], "receipt alias cleanup", seen
     )
-    return {"alias": alias, "runs": run_map}
+    return {"alias": alias, "identities": identities, "runs": run_map}
 
 
 def validate_subject_receipt_value(
@@ -5850,8 +6302,39 @@ def validate_subject_receipt_value(
         and receipt["stderrSha256"] == stderr["sha256"],
         f"{label} stream hash drift",
     )
+    process_status_artifact = validate_receipt_artifact(
+        receipt_root,
+        receipt["processStatus"],
+        f"{label}.processStatus",
+        seen,
+    )
+    require(
+        receipt["processStatusSha256"] == process_status_artifact["sha256"],
+        f"{label} process status hash drift",
+    )
+    process_status = exact_keys(
+        receipt_artifact_json(
+            receipt_root,
+            process_status_artifact,
+            f"{label}.processStatus",
+        ),
+        PROCESS_STATUS_KEYS,
+        f"{label}.processStatus",
+    )
     require(is_int(receipt["returnCode"]), f"{label} returnCode is not an integer")
     require(receipt["timedOut"] is False, f"{label} timed out")
+    require(
+        process_status
+        == {
+            "argvSha256": receipt["argvSha256"],
+            "environmentSha256": receipt["environmentSha256"],
+            "returnCode": receipt["returnCode"],
+            "stderrSha256": receipt["stderrSha256"],
+            "stdoutSha256": receipt["stdoutSha256"],
+            "timedOut": receipt["timedOut"],
+        },
+        f"{label} disagrees with observer-runner process status",
+    )
     if baseline:
         require(
             receipt["normalizedObservation"] == signature(model["record"])
@@ -5981,6 +6464,15 @@ def validate_oracle_receipt_value(
         run["value"]["inputClosureSha256"] == input_closure,
         f"{label} execution descriptor input closure drift",
     )
+    require(
+        run["processStatus"]["returnCode"] == receipt["returnCode"]
+        and run["processStatus"]["timedOut"] == receipt["timedOut"]
+        and run["processStatus"]["stdoutSha256"] == receipt["stdoutSha256"]
+        and run["processStatus"]["stderrSha256"] == receipt["stderrSha256"]
+        and run["value"]["processStatusSha256"]
+        == run["value"]["processStatus"]["sha256"],
+        f"{label} disagrees with oracle observer-runner status",
+    )
     validate_container_pair(
         run["before"],
         run["after"],
@@ -5992,6 +6484,397 @@ def validate_oracle_receipt_value(
         True,
     )
     return receipt
+
+
+def expected_subject_run_ids(pilot_overlay: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    for failure_id, model in sorted(pilot_overlay["models"].items()):
+        values.extend(
+            f"subject:baseline:{failure_id}:{index:03d}" for index in range(3)
+        )
+        values.extend(
+            f"subject:atom:{failure_id}:{index:03d}"
+            for index, _ in enumerate(model["atoms"])
+        )
+    require(len(values) == 28, "receipt subject denominator drift")
+    return values
+
+
+def expected_observer_oracle_root(root: Path, run_id: str) -> Path | None:
+    parts = run_id.split(":")
+    if parts[0] == "identity" and len(parts) == 2:
+        return None
+    if parts[0] == "baseline" and len(parts) == 3:
+        return root / "artifacts" / parts[1] / "baseline" / "oracle" / parts[2]
+    if parts[0] == "atom" and len(parts) == 4:
+        return (
+            root
+            / "artifacts"
+            / parts[1]
+            / "atoms"
+            / parts[2]
+            / "oracle"
+            / parts[3]
+        )
+    raise ContractError(f"invalid observer oracle runId: {run_id}")
+
+
+def expected_observer_subject_root(root: Path, run_id: str) -> Path:
+    parts = run_id.split(":")
+    require(
+        len(parts) == 4 and parts[0] == "subject",
+        f"invalid observer subject runId: {run_id}",
+    )
+    if parts[1] == "baseline":
+        return root / parts[2] / "baseline-private" / "inputs"
+    require(parts[1] == "atom", f"invalid observer subject kind: {run_id}")
+    return root / parts[2] / f"atom-{parts[3]}" / "inputs"
+
+
+def observer_mount_source(descriptor_value: dict[str, Any], label: str) -> str | None:
+    configuration = descriptor_value.get("configuration")
+    require(isinstance(configuration, dict), f"{label} configuration absent")
+    mounts = configuration.get("mounts")
+    require(isinstance(mounts, list), f"{label} mounts absent")
+    sources = [
+        item.get("source")
+        for item in mounts
+        if isinstance(item, dict) and item.get("destination") == "/inputs"
+    ]
+    require(len(sources) <= 1, f"{label} duplicates /inputs")
+    if not sources:
+        return None
+    source = sources[0]
+    require(isinstance(source, str), f"{label} /inputs source is not text")
+    return source
+
+
+def validate_observer_evidence_receipt(
+    audited: dict[str, Any],
+    pilot_authority: dict[str, Any],
+    pilot_overlay: dict[str, Any],
+    receipt_root: Path,
+    value: Any,
+    execution_evidence: dict[str, Any],
+    seen: set[str],
+) -> dict[str, Any]:
+    evidence = exact_keys(value, OBSERVER_EVIDENCE_KEYS, "receipt observerEvidence")
+    require(
+        evidence["schemaVersion"] == 1
+        and evidence["protocolId"] == "c30.day5.phase2-external-observer.v2",
+        "observer evidence protocol drift",
+    )
+    identity = exact_keys(
+        evidence["observerIdentity"], OBSERVER_IDENTITY_KEYS, "observer identity"
+    )
+    require(
+        identity == pilot_authority["observerAuthority"]["executable"]
+        and identity["bytes"] > 0
+        and identity["sha256"] != digest(b""),
+        "observer identity is not the pinned executable",
+    )
+    plan_artifact = validate_receipt_artifact(
+        receipt_root, evidence["plan"], "observer plan", seen
+    )
+    attestation_artifact = validate_receipt_artifact(
+        receipt_root, evidence["attestation"], "observer attestation", seen
+    )
+    require(
+        evidence["planSha256"] == plan_artifact["sha256"]
+        and evidence["attestationSha256"] == attestation_artifact["sha256"],
+        "observer plan/attestation hash drift",
+    )
+    plan = exact_keys(
+        receipt_artifact_json(receipt_root, plan_artifact, "observer plan"),
+        OBSERVER_PLAN_KEYS,
+        "observer plan",
+    )
+    subject_root_text = plan["subjectExecutionRoot"]
+    oracle_root_text = plan["oracleInputRoot"]
+    require(
+        isinstance(subject_root_text, str)
+        and isinstance(oracle_root_text, str)
+        and Path(subject_root_text).is_absolute()
+        and Path(oracle_root_text).is_absolute()
+        and Path(oracle_root_text) == Path(subject_root_text) / "oracle-inputs"
+        and ".." not in Path(subject_root_text).parts
+        and ".." not in Path(oracle_root_text).parts,
+        "observer plan materialization roots drift",
+    )
+    oracle_ids = expected_execution_run_ids(pilot_overlay)
+    subject_ids = expected_subject_run_ids(pilot_overlay)
+    execution = audited["policy"]["sourceEvidence"]["executionAuthority"]
+    expected_plan = {
+        "containerCliSha256": execution["containerCliSha256"],
+        "expectedImage": execution["sealedImageId"],
+        "observerExecutableSha256": identity["sha256"],
+        "oracleInputRoot": oracle_root_text,
+        "oracleInputRootSha256": digest(canonical(oracle_root_text)),
+        "oracleRunIds": oracle_ids,
+        "oracleRunOrderSha256": digest(canonical(oracle_ids)),
+        "overlayClosureSha256": pilot_overlay["closureSha256"],
+        "pilotContractSha256": pilot_authority["sha256"],
+        "policySha256": audited["policySha256"],
+        "protocolId": "c30.day5.phase2-external-observer.v2",
+        "schemaVersion": 1,
+        "subjectExecutionRoot": subject_root_text,
+        "subjectExecutionRootSha256": digest(canonical(subject_root_text)),
+        "subjectRunIds": subject_ids,
+        "subjectRunOrderSha256": digest(canonical(subject_ids)),
+    }
+    require(plan == expected_plan, "observer pre-execution plan drift")
+    attestation = exact_keys(
+        receipt_artifact_json(
+            receipt_root, attestation_artifact, "observer attestation"
+        ),
+        OBSERVER_ATTESTATION_KEYS,
+        "observer attestation",
+    )
+    require(
+        attestation
+        == {name: evidence[name] for name in sorted(OBSERVER_ATTESTATION_KEYS)},
+        "observer attestation disagrees with receipt",
+    )
+
+    oracle_values = evidence["oracleRuns"]
+    require(
+        isinstance(oracle_values, list)
+        and len(oracle_values) == 46
+        and [item.get("runId") for item in oracle_values if isinstance(item, dict)]
+        == oracle_ids
+        and evidence["oracleRunOrderSha256"] == digest(canonical(oracle_ids)),
+        "observer oracle order drift",
+    )
+    observer_runs: dict[str, dict[str, Any]] = {}
+    for index, run_value in enumerate(oracle_values):
+        run = exact_keys(
+            run_value, OBSERVER_ORACLE_RUN_KEYS, f"observer oracleRuns[{index}]"
+        )
+        run_id = run["runId"]
+        execution_run = execution_evidence["runs"].get(run_id)
+        require(isinstance(execution_run, dict), f"observer run is unplanned: {run_id}")
+        value_run = execution_run["value"]
+        expected_root = expected_observer_oracle_root(Path(oracle_root_text), run_id)
+        expected_closure = value_run["inputClosureSha256"]
+        require(
+            run["containerName"] == value_run["containerName"]
+            and run["purpose"] == value_run["purpose"]
+            and run["family"] == value_run["family"]
+            and run["cleanupTargetIndex"] == index
+            and run["expectedInputClosureSha256"] == expected_closure
+            and run["observedInputClosureSha256"] == expected_closure
+            and run["timedOut"] is False,
+            f"observer run authority drift: {run_id}",
+        )
+        if expected_root is None:
+            require(
+                run["mountSource"] is None and run["mountSourceSha256"] is None,
+                f"observer identity run has inputs: {run_id}",
+            )
+        else:
+            root_text = expected_root.as_posix()
+            require(
+                run["mountSource"] == root_text
+                and run["mountSourceSha256"] == digest(canonical(root_text)),
+                f"observer materialized mount drift: {run_id}",
+            )
+        before_artifact = validate_receipt_artifact(
+            receipt_root,
+            run["beforeDescriptor"],
+            f"observer {run_id} before",
+            seen,
+        )
+        after_artifact = validate_receipt_artifact(
+            receipt_root,
+            run["afterDescriptor"],
+            f"observer {run_id} after",
+            seen,
+        )
+        before = receipt_artifact_json(
+            receipt_root, before_artifact, f"observer {run_id} before"
+        )
+        after = receipt_artifact_json(
+            receipt_root, after_artifact, f"observer {run_id} after"
+        )
+        require(
+            before == execution_run["before"]
+            and after == execution_run["after"]
+            and before.get("id") == run["containerName"]
+            and after.get("id") == run["containerName"]
+            and observer_mount_source(before, f"observer {run_id} before")
+            == run["mountSource"]
+            and observer_mount_source(after, f"observer {run_id} after")
+            == run["mountSource"]
+            and run["processStatusSha256"] == value_run["processStatusSha256"]
+            and run["exitCode"]
+            == execution_run["processStatus"]["returnCode"],
+            f"observer raw descriptor drift: {run_id}",
+        )
+        observer_runs[run_id] = run
+
+    for family in ("gcc", "clang"):
+        identity_receipt = execution_evidence["identities"][family]
+        observed = observer_runs[f"identity:{family}"]
+        require(
+            observed["commandSha256"] == identity_receipt["commandSha256"]
+            and observed["environmentSha256"]
+            == digest(canonical(identity_receipt["environment"]))
+            and observed["exitCode"] == 0,
+            f"observer compiler identity binding drift: {family}",
+        )
+
+    subject_values = evidence["subjectRuns"]
+    require(
+        isinstance(subject_values, list)
+        and len(subject_values) == 28
+        and [item.get("runId") for item in subject_values if isinstance(item, dict)]
+        == subject_ids
+        and evidence["subjectRunOrderSha256"] == digest(canonical(subject_ids)),
+        "observer subject order drift",
+    )
+    observer_subjects: dict[str, dict[str, Any]] = {}
+    for index, run_value in enumerate(subject_values):
+        run = exact_keys(
+            run_value, OBSERVER_SUBJECT_RUN_KEYS, f"observer subjectRuns[{index}]"
+        )
+        run_id = run["runId"]
+        expected_root = expected_observer_subject_root(Path(subject_root_text), run_id)
+        require(
+            run["inputRoot"] == expected_root.as_posix()
+            and run["inputRootSha256"] == digest(canonical(run["inputRoot"]))
+            and run["subjectSha256"] == execution["subjectSha256"]
+            and run["expectedInputClosureSha256"]
+            == run["observedInputClosureSha256"]
+            and is_int(run["returnCode"])
+            and run["timedOut"] is False,
+            f"observer subject authority drift: {run_id}",
+        )
+        observer_subjects[run_id] = run
+
+    cleanup = exact_keys(
+        evidence["cleanupLedger"],
+        OBSERVER_CLEANUP_LEDGER_KEYS,
+        "observer cleanup ledger",
+    )
+    planned_names = [
+        execution_evidence["runs"][run_id]["value"]["containerName"]
+        for run_id in oracle_ids
+    ]
+    require(
+        cleanup["plannedContainerNames"] == planned_names
+        and cleanup["plannedAlias"] == execution_evidence["alias"]
+        and cleanup["containerInventoryReturnCode"] == 0
+        and cleanup["imageInventoryReturnCode"] == 0
+        and cleanup["containerNamesAbsent"] is True
+        and cleanup["aliasAbsent"] is True
+        and cleanup["allAbsent"] is True,
+        "observer cleanup ledger drift",
+    )
+    attempts = cleanup["attempts"]
+    expected_targets = [*planned_names, execution_evidence["alias"]]
+    require(
+        isinstance(attempts, list)
+        and len(attempts) == 47
+        and [item.get("target") for item in attempts if isinstance(item, dict)]
+        == expected_targets,
+        "observer cleanup attempt order drift",
+    )
+    for index, attempt_value in enumerate(attempts):
+        attempt = exact_keys(
+            attempt_value,
+            OBSERVER_CLEANUP_ATTEMPT_KEYS,
+            f"observer cleanup attempts[{index}]",
+        )
+        require(
+            attempt["deleteAttempted"] is True
+            and attempt["deleteReturnCode"] == 0
+            and attempt["error"] is None
+            and attempt["stopAttempted"] is False
+            and attempt["stopReturnCode"] is None
+            and attempt["targetKind"]
+            == ("container" if index < 46 else "image-alias"),
+            f"observer cleanup attempt drift: {attempt['target']}",
+        )
+    container_inventory = validate_receipt_artifact(
+        receipt_root,
+        cleanup["containerInventory"],
+        "observer container inventory",
+        seen,
+    )
+    image_inventory = validate_receipt_artifact(
+        receipt_root,
+        cleanup["imageInventory"],
+        "observer image inventory",
+        seen,
+    )
+    containers = decode_json(
+        confined_path(
+            receipt_root, container_inventory["path"], "observer container inventory"
+        ).read_bytes(),
+        "observer container inventory",
+    )
+    images = decode_json(
+        confined_path(
+            receipt_root, image_inventory["path"], "observer image inventory"
+        ).read_bytes(),
+        "observer image inventory",
+    )
+    require(isinstance(containers, list), "observer container inventory is not a list")
+    require(isinstance(images, list), "observer image inventory is not a list")
+    require(
+        all(
+            not isinstance(item, dict) or item.get("id") not in set(planned_names)
+            for item in containers
+        ),
+        "observer container inventory contains planned residue",
+    )
+    alias = execution_evidence["alias"]
+    canonical_alias = alias if "/" in alias.split(":", 1)[0] else f"docker.io/library/{alias}"
+    require(
+        all(
+            not isinstance(item, dict)
+            or not isinstance(item.get("configuration"), dict)
+            or item["configuration"].get("name") not in {alias, canonical_alias}
+            for item in images
+        ),
+        "observer image inventory contains alias residue",
+    )
+    return {"oracleRuns": observer_runs, "subjectRuns": observer_subjects}
+
+
+def validate_observer_subject_binding(
+    observer: dict[str, Any], receipt: dict[str, Any], label: str
+) -> None:
+    input_root = (Path(receipt["privateDirectory"]["home"]).parent / "inputs").as_posix()
+    require(
+        observer["subjectSha256"] == receipt["subjectSha256"]
+        and observer["argvSha256"] == receipt["argvSha256"]
+        and observer["environmentSha256"] == receipt["environmentSha256"]
+        and observer["expectedInputClosureSha256"] == receipt["inputClosureSha256"]
+        and observer["observedInputClosureSha256"] == receipt["inputClosureSha256"]
+        and observer["inputRoot"] == input_root
+        and observer["returnCode"] == receipt["returnCode"]
+        and observer["timedOut"] == receipt["timedOut"]
+        and observer["stdoutSha256"] == receipt["stdoutSha256"]
+        and observer["stderrSha256"] == receipt["stderrSha256"]
+        and observer["processStatusSha256"] == receipt["processStatusSha256"],
+        f"{label} disagrees with observer subject evidence",
+    )
+
+
+def validate_observer_oracle_binding(
+    observer: dict[str, Any], receipt: dict[str, Any], label: str
+) -> None:
+    require(
+        observer["commandSha256"] == receipt["commandSha256"]
+        and observer["environmentSha256"]
+        == digest(canonical(receipt["environment"]))
+        and observer["expectedInputClosureSha256"] == receipt["inputClosureSha256"]
+        and observer["observedInputClosureSha256"] == receipt["inputClosureSha256"]
+        and observer["exitCode"] == receipt["returnCode"]
+        and observer["timedOut"] == receipt["timedOut"],
+        f"{label} disagrees with observer oracle evidence",
+    )
 
 
 def validate_pilot_receipt(
@@ -6013,9 +6896,9 @@ def validate_pilot_receipt(
     )
     receipt_value = decode_json(receipt_bytes, "pilot receipt")
     require(isinstance(receipt_value, dict), "pilot receipt root is not an object")
-    receipt = exact_keys(receipt_value, PILOT_RECEIPT_KEYS, "pilot receipt")
+    receipt = exact_keys(receipt_value, SEALED_PILOT_RECEIPT_KEYS, "pilot receipt")
     require(canonical(receipt) == receipt_bytes, "pilot receipt is not canonical JSON")
-    require(receipt["schemaVersion"] == 2, "pilot receipt schemaVersion drift")
+    require(receipt["schemaVersion"] == 3, "pilot receipt schemaVersion drift")
     require(
         receipt["policyId"] == audited["policy"]["policyId"]
         and receipt["policySha256"] == audited["policySha256"]
@@ -6045,6 +6928,15 @@ def validate_pilot_receipt(
         receipt["executionEvidence"],
         seen,
     )
+    observer_evidence = validate_observer_evidence_receipt(
+        audited,
+        pilot_authority,
+        pilot_overlay,
+        receipt_root,
+        receipt["observerEvidence"],
+        execution_evidence,
+        seen,
+    )
     records = receipt["records"]
     require(
         isinstance(records, list) and len(records) == len(pilot_authority["pilotIds"]),
@@ -6059,6 +6951,7 @@ def validate_pilot_receipt(
         "argvSha256",
         "candidateDigest",
         "environmentSha256",
+        "processStatusSha256",
         "returnCode",
         "stderrSha256",
         "stdoutSha256",
@@ -6117,6 +7010,14 @@ def validate_pilot_receipt(
             == replays[2]["privateDirectory"],
             f"pilot subject replay instability: {failure_id}",
         )
+        for index, replay in enumerate(replays):
+            validate_observer_subject_binding(
+                observer_evidence["subjectRuns"][
+                    f"subject:baseline:{failure_id}:{index:03d}"
+                ],
+                replay,
+                f"{failure_id} subject replay {index}",
+            )
         references = exact_keys(
             record["referenceAcceptance"],
             {"gcc", "clang"},
@@ -6139,6 +7040,12 @@ def validate_pilot_receipt(
             )
             for family in ("gcc", "clang")
         }
+        for family, oracle in baseline_oracles.items():
+            validate_observer_oracle_binding(
+                observer_evidence["oracleRuns"][f"baseline:{failure_id}:{family}"],
+                oracle,
+                f"{failure_id} baseline {family}",
+            )
         require(
             baseline_oracles["gcc"]["compilerSha256"]
             != baseline_oracles["clang"]["compilerSha256"],
@@ -6194,6 +7101,13 @@ def validate_pilot_receipt(
                 seen,
                 baseline=False,
             )
+            validate_observer_subject_binding(
+                observer_evidence["subjectRuns"][
+                    f"subject:atom:{failure_id}:{atom_index:03d}"
+                ],
+                subject,
+                f"{failure_id} atom {atom_index} subject",
+            )
             atom_references = exact_keys(
                 atom["referenceAcceptance"],
                 {"gcc", "clang"},
@@ -6216,6 +7130,14 @@ def validate_pilot_receipt(
                 )
                 for family in ("gcc", "clang")
             }
+            for family, oracle in oracle_values.items():
+                validate_observer_oracle_binding(
+                    observer_evidence["oracleRuns"][
+                        f"atom:{failure_id}:{atom_index:03d}:{family}"
+                    ],
+                    oracle,
+                    f"{failure_id} atom {atom_index} {family}",
+                )
             subject_matches = (
                 subject["normalizedObservation"] == signature(source_record)
                 and subject["causalAnchorSha256"] == model["anchorSha256"]
@@ -6248,8 +7170,35 @@ def replay_pilot_receipt_phase2(
     evidence: Path,
     overlay: Path,
     receipt_dir: Path,
-    expected_receipt_sha256: str,
+    expected_receipt_sha256: str | None,
+    receipt_index: Path | None,
+    expected_receipt_index_sha256: str | None,
 ) -> dict[str, Any]:
+    require(
+        (receipt_index is None) == (expected_receipt_index_sha256 is None),
+        "receipt index and its expected SHA-256 must be supplied together",
+    )
+    index: dict[str, Any] | None = None
+    if receipt_index is not None and expected_receipt_index_sha256 is not None:
+        require_hash(expected_receipt_index_sha256, "expected receipt index SHA-256")
+        require(
+            receipt_index.is_file() and not receipt_index.is_symlink(),
+            "trusted receipt index is absent",
+        )
+        index_bytes = receipt_index.read_bytes()
+        require(
+            digest(index_bytes) == expected_receipt_index_sha256,
+            "trusted receipt index does not match caller expected SHA-256",
+        )
+        index_value = decode_json(index_bytes, "trusted receipt index")
+        index = exact_keys(index_value, RECEIPT_INDEX_KEYS, "trusted receipt index")
+        require(canonical(index) == index_bytes, "trusted receipt index is noncanonical")
+        require(index["schemaVersion"] == 1, "trusted receipt index schema drift")
+        expected_receipt_sha256 = index["receiptSha256"]
+    require(
+        expected_receipt_sha256 is not None,
+        "expected pilot receipt SHA-256 or trusted receipt index is required",
+    )
     require_hash(expected_receipt_sha256, "expected pilot receipt SHA-256")
     audited, pilot_authority, pilot_overlay = prepare_pilot_scope(
         policy_path, pilot_contract_path, evidence, overlay
@@ -6260,6 +7209,23 @@ def replay_pilot_receipt_phase2(
         pilot_overlay,
         receipt_dir,
         expected_receipt_sha256,
+    )
+    require(index is not None, "trusted receipt index is required for replay")
+    observer = receipt["observerEvidence"]
+    require(
+        index
+        == {
+            "observerAttestationSha256": observer["attestationSha256"],
+            "observerExecutableSha256": observer["observerIdentity"]["sha256"],
+            "oracleRunOrderSha256": observer["oracleRunOrderSha256"],
+            "overlayClosureSha256": pilot_overlay["closureSha256"],
+            "pilotContractSha256": pilot_authority["sha256"],
+            "policySha256": audited["policySha256"],
+            "receiptSha256": receipt_sha256,
+            "schemaVersion": 1,
+            "subjectRunOrderSha256": observer["subjectRunOrderSha256"],
+        },
+        "trusted receipt index binding drift",
     )
     return pilot_result(
         audited, pilot_authority, receipt, receipt_sha256, "receipt-replay"
@@ -7115,6 +8081,7 @@ def parser() -> argparse.ArgumentParser:
     pilots.add_argument("--receipt-dir", type=Path, required=True)
     pilots.add_argument("--observer-ready-file", type=Path)
     pilots.add_argument("--observer-ack-file", type=Path)
+    pilots.add_argument("--execution-root", type=Path)
     replay = subparsers.add_parser(
         "replay-pilot-receipt", help="independently audit an immutable pilot receipt"
     )
@@ -7123,7 +8090,9 @@ def parser() -> argparse.ArgumentParser:
     replay.add_argument("--evidence", type=Path, required=True)
     replay.add_argument("--overlay", type=Path, required=True)
     replay.add_argument("--receipt-dir", type=Path, required=True)
-    replay.add_argument("--expected-receipt-sha256", required=True)
+    replay.add_argument("--expected-receipt-sha256")
+    replay.add_argument("--receipt-index", type=Path)
+    replay.add_argument("--expected-receipt-index-sha256")
     return value
 
 
@@ -7175,6 +8144,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.receipt_dir,
                 observer_ready,
                 observer_ack,
+                args.execution_root,
             )
             print(
                 json.dumps(
@@ -7190,6 +8160,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.overlay,
                 args.receipt_dir,
                 args.expected_receipt_sha256,
+                args.receipt_index,
+                args.expected_receipt_index_sha256,
             )
             print(
                 json.dumps(

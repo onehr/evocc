@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "contractId": "c30.day5.debt-discharge-receipt.v1",
+  "status": "DEBT_DISCHARGED_DAY9_ENTRY_OPEN",
+  "recordedAt": "2026-08-24",
+  "supersedes": {
+    "path": "tests/contracts/day5-closing-amendment.json",
+    "sha256": "a7116f1e7b2f4e13877f2344a9d9f1e295f38a58734ecff6c08bdb94582a9a33",
+    "scope": "The DEBT_OPEN status and Day 9 entry block are discharged; the historical Day 5 CLOSED_BY_AMENDMENT ruling and its original acceptance scope remain unchanged."
+  },
+  "debts": [
+    {
+      "id": "day5-observer-simplification",
+      "status": "COMPLETE",
+      "outcome": "One externally pinned observer is the user entry point, launches exactly one verifier corpus, owns both subject and oracle process-status capture, independently reviews the resulting raw evidence, seals the receipt, and publishes a separately trusted receipt index."
+    },
+    {
+      "id": "day5-three-pilot-reductions",
+      "status": "COMPLETE",
+      "outcome": "All three frozen candidates reproduce their source failures, pass exact GCC-14 and Clang-19 baseline acceptance, and reject every one of the 19 deletion atoms as non-interesting without changing the frozen 46-source-failure denominator."
+    }
+  ],
+  "authority": {
+    "observer": {
+      "path": "tests/acceptance/day5-kernel-reductions-observer.py",
+      "bytes": 41627,
+      "sha256": "ad0716e72c9131177b82e309f939df52bcfaa56d67c6a9ef23a1639e41a90cc7",
+      "protocolId": "c30.day5.phase2-external-observer.v2"
+    },
+    "verifier": {
+      "path": "tests/acceptance/day5-kernel-reductions.py",
+      "sha256": "f7d89a5066c2cd76ff1a674f4b905696fa01c2ea7ec993bfb3f738310e13313c"
+    },
+    "pilotContract": {
+      "path": "tests/contracts/day5-kernel-reduction-pilots.json",
+      "sha256": "20dff3eb76eb2a2f3911d49e8bb34d350972812422df2e1b7a1acae3b1d7c3b2"
+    },
+    "policy": {
+      "path": "tests/contracts/day5-kernel-reduction-policy.json",
+      "sha256": "ce4687d43a75c5cf22e94ae983304a4b88544a517c27e241ae51e34b27398d83"
+    },
+    "fixture": {
+      "path": "tests/fixtures/day5-kernel-reductions/overlay",
+      "regularClosureSha256": "9542905417979f248a892857e2425adba64b08c4985fb0b8bd9902b373ca9f98"
+    }
+  },
+  "measurement": {
+    "sourceEvidenceRunId": "20260817T225959Z-57627",
+    "sourceFailures": 46,
+    "verifiedPilots": 3,
+    "remainingFailures": 43,
+    "pilotAcceptanceValid": true,
+    "globalVerdict": "INCOMPLETE",
+    "globalAcceptanceValid": false,
+    "deletionAtoms": {
+      "tested": 19,
+      "removable": 0
+    },
+    "subjectRuns": 28,
+    "oracleRuns": {
+      "compilerIdentity": 2,
+      "baselineAcceptance": 6,
+      "minimalityDeletion": 38,
+      "total": 46
+    },
+    "cleanupTargets": 47,
+    "cleanupAllAbsent": true,
+    "selftest": {
+      "command": "python3 tests/acceptance/day5-kernel-reductions-phase2-selftest.py",
+      "passed": 37,
+      "failed": 0
+    }
+  },
+  "sealedEvidence": {
+    "path": ".evidence/day5-kernel-reductions/20260824T122522Z",
+    "gitTracked": false,
+    "receiptSha256": "7519e56de45b8cc4182245180993b97c639e8ef5fae2b366b9664031b8ad7507",
+    "receiptIndexSha256": "e62fbb9e29920b53a067d701f4ff276dd76af98b88c31687742325a42059aa40",
+    "observerAttestationSha256": "44d8cbe084a3dc57e4ca9db4a7278ade72e0a3e58916b39bf70407ec888b5061",
+    "independentReplay": {
+      "status": "PASS",
+      "mode": "receipt-replay"
+    }
+  },
+  "runtimeAuthorityCorrection": {
+    "pinnedAppleContainerVersion": "1.2.2",
+    "finding": "The pinned runtime propagates the guest exit code through the OS status of container start --attach but omits status.exitCode from container inspect, both in the frozen reconnaissance descriptor and in a measured exit-7 probe.",
+    "frozenDescriptor": {
+      "path": ".evidence/day5-kernel-reconnaissance/20260817T225959Z-57627/oracle-gcc/container-after.inspect.json",
+      "sha256": "5f180648c435cb0981d17b1c52e64f43c47107561053d3583f1adb119e0c379c"
+    },
+    "authority": "observer-runner OS process status for container start --attach",
+    "descriptorRole": "Prove exact configuration and a stopped state with nonempty startedDate; do not invent a missing exitCode field."
+  },
+  "phase0": {
+    "status": "COMPLETE_BY_DISCHARGE",
+    "goalServiceMayNowBeUpdated": true
+  },
+  "day9EntryCondition": {
+    "status": "SATISFIED",
+    "productionMayStart": true,
+    "telemetryPriorityMustBeRefreshedBeforeImplementation": true
+  }
+}
