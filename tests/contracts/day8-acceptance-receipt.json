@@ -1,0 +1,266 @@
+{
+  "schemaVersion": 1,
+  "contractId": "c30.day8.acceptance-receipt.v1",
+  "status": "ACCEPTED_DAY8_DAY9_BLOCKED",
+  "recordedAt": "2026-08-24",
+  "resolution": "The first commit whose tree contains this receipt byte-for-byte is the Day 8 acceptance freeze commit. The implementation commit and tree below are the exact bytes replayed in two independent --no-local clones before this receipt was written. The inherited Day 5 observer and pilot-reduction debt remains OPEN and continues to block Day 9.",
+  "baseline": {
+    "day7FreezeCommit": "1165a95839fbf6e96b1953b9018ff5936144856a",
+    "day8ContractBaseline": "957afe6bc84eb1a6607dfae4d690a8d85b028666",
+    "acceptanceContract": {
+      "path": "tests/contracts/day8-acceptance-contract.json",
+      "sha256": "2b52361f28adbf6f3c50bac0f7cb49d75787d79ef55bb51d5a5d7c5da08690ef"
+    }
+  },
+  "replayedImplementation": {
+    "commit": "1800d4fbc3e0f52693da94afd04f4533df7dd352",
+    "tree": "088a8327bd8bd3d72e6f118850f60c84d4e5d73c"
+  },
+  "specification": {
+    "path": "docs/evoir-spec.md",
+    "revision": "1.8.2",
+    "sha256": "619cc4804833185e2327236616f11f4a627e422d6e841f3c3d35a00a28dad701",
+    "reviewedRegistry": "p0.scalar.v1",
+    "reviewedRegistrySha256": "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9"
+  },
+  "acceptance": {
+    "persistentEqualityState": {
+      "status": "PASS",
+      "stateSurvivesProducingCall": true,
+      "rootClassRetainsBeforeAndExtractedRepresentations": true,
+      "firstCertifiedOptimizationRegions": 1,
+      "revisionSequence": [
+        0,
+        1,
+        2
+      ],
+      "secondPassIsDuplicateFreeNoOp": true,
+      "historyReplayAfterOneAndTwoPasses": true,
+      "unseededStateJointRollback": true,
+      "zeroBudgetJointRollback": true,
+      "driverUsesCertifiedPersistentTransaction": true
+    },
+    "standaloneProofBoundary": {
+      "status": "PASS",
+      "binary": "evo-proofcheck",
+      "probeExitCode": 0,
+      "checkerDependencyClosureExcludes": [
+        "evocc-eqopt",
+        "evocc-egraph"
+      ],
+      "corpus": {
+        "deterministicByteUniqueCPrograms": 128,
+        "beforeAfterExecutionMatched": 128,
+        "optimizedPrograms": 128,
+        "acceptedCertificates": 128,
+        "total": 128,
+        "regions": 1280,
+        "reviewedRuleInstances": 3456,
+        "reviewedRuleInstancesReplayed": 3456,
+        "proofValidationRate": "100%",
+        "mismatches": 0,
+        "skips": 0
+      },
+      "mutationCampaign": {
+        "semanticCorruptionsRejected": 5,
+        "semanticCorruptionsTotal": 5,
+        "disabledRewriteAccepted": 1,
+        "disabledRewriteTotal": 1
+      },
+      "fullAfterModuleBinding": true,
+      "eligibilityAndSeedsIndependentlyDerived": true,
+      "constantFoldsIndependentlyRecomputed": true,
+      "historyOnlyProofPremisesRejectedByConstruction": true
+    },
+    "section9": {
+      "status": "PASS",
+      "rendererShapesCovered": 31,
+      "specifiedShapes": 31,
+      "shapeDisagreements": 0,
+      "fieldSentinelsCovered": 93,
+      "fieldSentinelsTotal": 93,
+      "manifestPath": "tests/contracts/day8-section9-coverage.txt",
+      "manifestSha256": "a3f1111d9b9d9577f976d0d00362b5972cea09b2853378756c601c066e31fd00",
+      "wholeModuleCanonicalRoundTrip": true,
+      "exhaustiveMatchesCompileFailOnNewVariantOrField": true,
+      "parameterAndBlockArgumentSourceNamesIntentionallyOmitted": true
+    },
+    "storageCallsAndEffects": {
+      "status": "PASS",
+      "definedCPrograms": 4,
+      "definedInterpreterRuns": 8,
+      "definedMismatches": 0,
+      "invalidCPrograms": 1,
+      "invalidInterpreterRuns": 2,
+      "invalidMismatches": 0,
+      "recursiveStaticActivationsShareOneObject": true,
+      "functionPointerArrayMemoryRoundTrip": true,
+      "functionPointerRecursionTerminatesUnderBudget": true,
+      "indirectDiagnosticCodes": {
+        "null": "E3015",
+        "nonFunctionProvenance": "E3016",
+        "staticSignatureMismatch": "E3017",
+        "dynamicSelectedTargetMismatch": "E3019",
+        "distinctAndReachable": "4/4"
+      },
+      "directRecursiveEffectFixedPoint": true,
+      "transitiveVolatileCallers": "3/3",
+      "unknownIndirectEffectSummaryTop": "1/1",
+      "staleAndOverstrongEffectSummariesRejected": true
+    },
+    "capabilityBoundary": {
+      "implementedExit0": [
+        "evoir-emit",
+        "evoir-interpret",
+        "eq-scalar-optimize",
+        "-Oeq-scalar",
+        "evo-proofcheck --probe"
+      ],
+      "remainExit69": [
+        "evoir",
+        "eqsat",
+        "eqsat-optimize",
+        "-Oeq",
+        "codegen"
+      ]
+    }
+  },
+  "dashboard": {
+    "kernel": {
+      "preprocessed": "0/16 unchanged",
+      "parsedBothOracleInputs": "1/16 unchanged",
+      "compiled": "0/16 NOT_IMPLEMENTED unchanged"
+    },
+    "differentialCleanExecution": {
+      "day6Regression": "577/577 unchanged",
+      "day7Memory": "192/192 unchanged",
+      "day8ScalarBeforeAfter": "128/128",
+      "day8StorageAndFunctionPointerInterpreterRuns": "8/8",
+      "day8TypedInvalidInterpreterRuns": "2/2",
+      "mismatches": 0,
+      "skips": 0
+    },
+    "proofValidation": {
+      "reviewedStandaloneRuleInstances": "3456/3456",
+      "acceptedPrograms": "128/128",
+      "rate": "100%",
+      "supersedesDay7ProducerSuppliedAuthority": true
+    }
+  },
+  "measuredGates": [
+    {
+      "command": "cargo test --workspace --all-targets --locked --offline",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$'",
+      "result": "682"
+    },
+    {
+      "command": "cargo clippy --workspace --all-targets --locked --offline -- -D warnings",
+      "result": "PASS"
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "result": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    },
+    {
+      "command": "bash tests/acceptance/day8-red.sh",
+      "result": "10/10 PASS"
+    },
+    {
+      "command": "cargo test -p evocc-proofcheck --test day8_corpus_replay --locked --offline -- --nocapture",
+      "result": "accepted=128/128 optimized=128/128 regions=1280 ruleInstances=3456 skipped=0"
+    },
+    {
+      "command": "cargo test -p evocc-proofcheck --test day8_proof_contract optimizer_output_mutation_campaign_exercises_the_independent_boundary --locked --offline -- --exact --nocapture",
+      "result": "semanticCorruptionsRejected=5/5 disabledRewriteAccepted=1/1"
+    },
+    {
+      "command": "cargo test -p evocc-evoir --test section9_completeness --locked --offline -- --nocapture",
+      "result": "section9FieldCoverage=93/93"
+    }
+  ],
+  "isolatedCloneReplay": {
+    "evidencePath": ".evidence/day8-fresh-clone/20260824T000000Z",
+    "gitTracked": false,
+    "receiptSha256": "ece3a7265afe7fd7a7dc60e73a866aa4ef5473adddd27f8abea0e3e5b2de5d31",
+    "overall": "PASS",
+    "lanes": [
+      {
+        "id": "one",
+        "creation": "git clone --no-local --no-hardlinks",
+        "commit": "1800d4fbc3e0f52693da94afd04f4533df7dd352",
+        "tree": "088a8327bd8bd3d72e6f118850f60c84d4e5d73c",
+        "workspaceTestCount": 682,
+        "workspaceTestsRc": 0,
+        "clippyDenyWarningsRc": 0,
+        "formatCheckRc": 0,
+        "workingTreeClean": true,
+        "cargoHomeFresh": true,
+        "targetFresh": true,
+        "offline": true
+      },
+      {
+        "id": "two",
+        "creation": "git clone --no-local --no-hardlinks",
+        "commit": "1800d4fbc3e0f52693da94afd04f4533df7dd352",
+        "tree": "088a8327bd8bd3d72e6f118850f60c84d4e5d73c",
+        "workspaceTestCount": 682,
+        "workspaceTestsRc": 0,
+        "clippyDenyWarningsRc": 0,
+        "formatCheckRc": 0,
+        "workingTreeClean": true,
+        "cargoHomeFresh": true,
+        "targetFresh": true,
+        "offline": true
+      }
+    ]
+  },
+  "failedAttemptLedger": [
+    {
+      "testsOnlyCommit": "9b3d9a4",
+      "result": "EXPECTED_RED",
+      "failures": 2,
+      "failure": "EvoIR lowering classified local function-pointer identifier callees as direct function symbols, so recursive and null fnptr programs failed with E3101 unknown-symbol/designator errors.",
+      "closedBy": "b4ac286"
+    }
+  ],
+  "boxedInfrastructure": {
+    "declaredTimeboxMinutes": 120,
+    "exactElapsedMinutes": "NOT_METERED",
+    "scopeStayedWithinDeclaredItems": true,
+    "dashboardMetricMovement": "proof validation advanced to 3456/3456 reviewed standalone rule instances; kernel metrics unchanged",
+    "artifacts": [
+      {
+        "path": "tools/check-textual-grammar.py",
+        "sha256": "89f7efda6fad6c924e5e7565b98be764a5f15816c5fc02077bd1db00eeeb9b0e"
+      },
+      {
+        "path": "tests/acceptance/day8-red.sh",
+        "sha256": "0292edb8a575df5b7e73e0f34017544beca8de84acbaa4228b257a81467d6b85"
+      }
+    ]
+  },
+  "day5Debt": {
+    "status": "OPEN",
+    "measurementStatus": "NOT_MEASURED",
+    "observerAuthority": "ABSENT",
+    "observerSimplificationComplete": false,
+    "pilotReductionsComplete": 0,
+    "pilotReductionsTotal": 3,
+    "day8NonBlockingByClosingAmendment": true,
+    "day9EntryBlocked": true,
+    "reportingRule": "Do not claim the Day 5 observer simplification or three pilot reductions complete; do not start Day 9 until an independently reviewable externally pinned observer authority exists and the pilots are measured."
+  },
+  "strictExclusionsPreserved": [
+    "region splitting and alias analysis",
+    "memory rewrites including store forwarding, store bypass and redundant-load elimination",
+    "attributes, typeof and statement expressions",
+    "EvoMIR, backend, ABI and code generation"
+  ]
+}
