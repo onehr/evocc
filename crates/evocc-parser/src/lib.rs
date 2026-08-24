@@ -2634,7 +2634,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let mut arguments = Vec::new();
                 if self.peek_kind() == Some(TokenKind::LParen) {
                     let open = self.advance().expect("peeked argument list");
-                    match self.parse_attribute_arguments(open.span) {
+                    let parsed = if name == "aligned" && self.peek_kind() != Some(TokenKind::RParen)
+                    {
+                        self.parse_integer_constant_argument(open.span)
+                    } else {
+                        self.parse_attribute_arguments(open.span)
+                    };
+                    match parsed {
                         Some((parsed, close)) => {
                             arguments = parsed;
                             span = self.merge_span(name_token.span, close);
@@ -2729,11 +2735,44 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
+    /// Read one argument as an integer constant expression in place, so type
+    /// names and `sizeof` resolve in the surrounding scope; the source text is
+    /// kept alongside the value.
+    fn parse_integer_constant_argument(
+        &mut self,
+        open: SourceSpan,
+    ) -> Option<(Vec<AttributeArgument>, SourceSpan)> {
+        if matches!(self.peek_kind(), Some(TokenKind::Comma) | None) {
+            // `aligned(,)`: an argument slot with nothing in it is a malformed
+            // attribute, reported as such rather than as a missing expression.
+            self.report("E2903", "malformed-attribute", self.span());
+            return None;
+        }
+        let expression = self.parse_conditional()?;
+        let span = expression.span();
+        let mut argument = self.attribute_argument(span, span);
+        argument.integer = self
+            .eval_integer_constant_expression(expression)
+            .ok()
+            .and_then(|value| u64::try_from(value.mathematical_value()).ok());
+        if argument.integer.is_none() {
+            self.report("E2903", "malformed-attribute", argument.span);
+            return None;
+        }
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2903", "malformed-attribute", open);
+            return None;
+        }
+        let close = self.advance().expect("peeked close").span;
+        Some((vec![argument], close))
+    }
+
     fn attribute_argument(&self, start: SourceSpan, end: SourceSpan) -> AttributeArgument {
         let text = self.source[start.byte_start as usize..end.byte_end as usize].to_owned();
         AttributeArgument {
             text,
             span: self.merge_span(start, end),
+            integer: None,
         }
     }
 
@@ -2748,26 +2787,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         const GNU_MAXIMUM_ALIGNMENT: u64 = 1 << 28;
         match attribute.arguments.as_slice() {
             [] => Some(LARGEST_FUNDAMENTAL_ALIGNMENT),
-            [argument] => {
-                let value = argument.text.trim();
-                let parsed = value.strip_prefix("0x").map_or_else(
-                    || value.parse::<u64>().ok(),
-                    |hex| u64::from_str_radix(hex, 16).ok(),
-                );
-                match parsed {
-                    Some(bytes)
-                        if bytes != 0
-                            && bytes.is_power_of_two()
-                            && bytes <= GNU_MAXIMUM_ALIGNMENT =>
-                    {
-                        u32::try_from(bytes).ok()
-                    }
-                    _ => {
-                        self.report("E2903", "malformed-attribute", argument.span);
-                        None
-                    }
+            [argument] => match argument.integer {
+                Some(bytes)
+                    if bytes != 0 && bytes.is_power_of_two() && bytes <= GNU_MAXIMUM_ALIGNMENT =>
+                {
+                    u32::try_from(bytes).ok()
                 }
-            }
+                _ => {
+                    self.report("E2903", "malformed-attribute", argument.span);
+                    None
+                }
+            },
             [_, second, ..] => {
                 self.report("E2903", "malformed-attribute", second.span);
                 None

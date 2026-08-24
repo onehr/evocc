@@ -281,3 +281,24 @@ fn an_attribute_before_a_later_declarator_attaches_to_it_alone() {
     assert_eq!(layout_of(source, "a"), (4, 4));
     assert_eq!(layout_of(source, "b"), (4, 8));
 }
+
+/// The kernel writes `aligned(sizeof(void *))`: the argument is an integer
+/// constant expression, not only a literal.
+#[test]
+fn aligned_accepts_an_integer_constant_expression() {
+    assert_eq!(
+        layout_of(
+            "struct s { char c; } __attribute__((aligned(sizeof(void *)))) v;\n",
+            "v"
+        ),
+        (8, 8)
+    );
+    assert_eq!(
+        layout_of("int __attribute__((aligned(1 << 4))) w;\n", "w"),
+        (4, 16)
+    );
+    assert_eq!(
+        layout_of("int __attribute__((aligned((2 + 2) * 2))) x;\n", "x"),
+        (4, 8)
+    );
+}

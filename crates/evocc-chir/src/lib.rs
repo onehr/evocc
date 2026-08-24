@@ -697,6 +697,9 @@ impl AttributePlacement {
 pub struct AttributeArgument {
     pub text: String,
     pub span: SourceSpan,
+    /// The value when the argument was read as an integer constant
+    /// expression (`aligned(sizeof(void *))`); `None` for every other argument.
+    pub integer: Option<u64>,
 }
 
 /// The meaning this profile gave an attribute. Only two attributes have one;
