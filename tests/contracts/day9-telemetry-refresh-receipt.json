@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "c30.day9.telemetry-refresh.v1",
+  "status": "MEASURED",
+  "purpose": "Refreshed kernel reconnaissance at the GNU-extension baseline, sealed by the pinned observer, and the routing of every failed lane to the stage that owns its root cause. Contains measured figures only.",
+  "subjectCommit": "24abd71",
+  "cohort": {
+    "contract": "tests/contracts/day5-kernel-cohort.json",
+    "sha256": "09d0e2eaf0734949164a491d30df640bf396ff7586ef495f938f565b8879a306",
+    "translationUnits": 16,
+    "lanes": 48,
+    "unchanged": true
+  },
+  "observer": {
+    "path": "tests/acceptance/day5-kernel-reductions-observer.py",
+    "sha256": "ad0716e72c9131177b82e309f939df52bcfaa56d67c6a9ef23a1639e41a90cc7",
+    "mode": "capture as parent process of the reconnaissance harness"
+  },
+  "capture": {
+    "argvSha256": "190ed4534769857eaf4a908f2e8caef283906e72a4f3ef63dba8153b982babfe",
+    "environmentSha256": "f5d93d7ea12a0707b477658ce0ba994bac6833f4305e4a77b1b9de2a8f93cf40",
+    "returnCode": 0,
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdoutSha256": "c5f6dcd45ee7584f169fd431496450230cfa232da4b475a5c5308d40c3cb311d",
+    "timedOut": false
+  },
+  "reconnaissanceRun": {
+    "id": "20260824T142407Z-85097",
+    "evidenceRoot": ".evidence/day5-kernel-reconnaissance/20260824T142407Z-85097",
+    "summarySha256": "dd4a35faf18b8e38bd8d1c0653d7db3b04c10d5cfa7ce368e387c7f83c578aa6",
+    "command": "python3 tests/acceptance/day5-kernel-reconnaissance.py --timeout 120 --parser-timeout 10 --parser-jobs 4"
+  },
+  "dashboard": {
+    "observed": "48/48",
+    "dualOracleCleanParseTus": "1/16",
+    "cleanParserLanes": "2/32",
+    "rawPreprocessClean": "0/16",
+    "classification": {
+      "driver": 0,
+      "layout": 0,
+      "lex": 0,
+      "out-of-Day5": 0,
+      "parse": 30,
+      "preprocess": 16,
+      "sema": 0
+    }
+  },
+  "baselineComparison": {
+    "baselineRun": "20260817T225959Z-57627",
+    "laneRegressions": [],
+    "distributionIdentical": true
+  },
+  "routing": {
+    "tool": "tools/route-kernel-failures.py",
+    "toolSha256": "179c48c2867b9a0aba55102ba1c0fcba6aa7031f9850f6637fd3278b2ed590bb",
+    "byRoute": {
+      "preprocess-hardening": 16,
+      "unclassified": 26,
+      "gnu-extensions": 4,
+      "clean": 2
+    },
+    "tiers": {
+      "reduced": "4 lanes: two translation units whose reproducers were reduced and verified under the pilot contract; both reduce to __attribute__.",
+      "firstErrorSiteIdenticalToReducedPilot": "26 lanes: the emitted line at the first diagnostic is byte-identical to a reduced pilot's failing line. Routed to gnu-extensions on that basis; not independently reduced.",
+      "preprocessHardening": "16 lanes: EvoCPP predefines neither __clang__ nor __GNUC__, so compiler_types.h reaches #error. Owned by the preprocessing hardening stage."
+    },
+    "firstErrorSites": [
+      {
+        "count": 18,
+        "line": "static inline __attribute__((__gnu_inline__)) __attribute__((__unused__)) __attribute__((__no_i"
+      },
+      {
+        "count": 8,
+        "line": "typedef __signed__ __int128 __s128 __attribute__((aligned(16)));"
+      }
+    ],
+    "caveat": "Every parse-lane figure is to the first diagnostic only. What each unit fails on after __attribute__ is accepted is unknown until attributes land and reconnaissance is re-run; this receipt does not predict it."
+  },
+  "artifacts": [
+    {
+      "path": ".evidence/day9-telemetry-refresh/reconnaissance.status",
+      "sha256": "9989c495a9dd0e243571cc21ec93706edb465c5785592ba4e34ec429ab2c674b"
+    },
+    {
+      "path": ".evidence/day9-telemetry-refresh/routing.json",
+      "sha256": "caae48f7a4b551aa983260e4bb0f408b771bc4e90970bafc33860cb678125bf7"
+    },
+    {
+      "path": ".evidence/day9-telemetry-refresh/line-evidence.json",
+      "sha256": "db8096260c018a2badbf221c2763bf3e477168d9d4304069ce66e838c38c132f"
+    },
+    {
+      "path": ".evidence/day9-telemetry-refresh/pilot-reductions.json",
+      "sha256": "f477fd36b04bc7b5c639f38cdca56a60a3d9d905a5096892a02acc18ab7afa61"
+    }
+  ]
+}
