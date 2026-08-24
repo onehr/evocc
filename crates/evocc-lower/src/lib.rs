@@ -21,8 +21,8 @@ use evocc_chir::{
 use evocc_common::SourceSpan;
 use evocc_evoir::{
     inst_results, validate_module, AccessLayout, Block, BlockArg, BlockId, CmpOp, Function,
-    FunctionParam, GlobalObject, GlobalStorage, IndexSignedness, Inst, Module, OffsetDirection,
-    TrapReason, UbReason, Value,
+    FunctionParam, GlobalKind, GlobalObject, GlobalVisibility, IndexSignedness, Inst, Module,
+    OffsetDirection, TrapReason, UbReason, Value,
 };
 use evocc_types::{
     AddressSpace, ArrayBound, EvoIRType, FunctionParameters, LayoutError, Region, TagDefinition,
@@ -534,7 +534,12 @@ fn lower_globals(
                     .ok_or(LowerError::InvalidGeneratedSsa {
                         message: format!("global {} has no allocation origin", object.symbol.raw()),
                     })?,
-                storage: GlobalStorage::Static,
+                kind: GlobalKind::File,
+                visibility: if object.storage == StorageClass::Static {
+                    GlobalVisibility::Internal
+                } else {
+                    GlobalVisibility::External
+                },
                 layout: AccessLayout::new(layout.size_bytes, layout.align_bytes),
                 bytes,
                 initialized: vec![true; size],

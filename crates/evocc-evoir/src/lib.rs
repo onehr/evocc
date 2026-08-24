@@ -547,11 +547,19 @@ pub struct Module {
     pub functions: Vec<Function>,
 }
 
-/// Static-storage category encoded by the textual module-global table.
+/// Source category encoded by the textual module-global table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum GlobalStorage {
-    Static,
+pub enum GlobalKind {
+    File,
+    FunctionStatic,
     StringLiteral,
+}
+
+/// Link visibility of one module global.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GlobalVisibility {
+    External,
+    Internal,
 }
 
 /// One eagerly allocated module object and its byte initialization state.
@@ -559,7 +567,8 @@ pub enum GlobalStorage {
 pub struct GlobalObject {
     pub symbol: String,
     pub origin: u64,
-    pub storage: GlobalStorage,
+    pub kind: GlobalKind,
+    pub visibility: GlobalVisibility,
     pub layout: AccessLayout,
     pub bytes: Vec<u8>,
     pub initialized: Vec<bool>,
@@ -878,13 +887,39 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                 global.symbol, global.layout.size_bytes
             ));
         }
-        if global.storage == GlobalStorage::StringLiteral
-            && global.initialized.iter().any(|bit| !*bit)
-        {
+        if global.kind == GlobalKind::StringLiteral && global.initialized.iter().any(|bit| !*bit) {
             return Err(format!(
                 "string-literal global '{}' must be fully initialized",
                 global.symbol
             ));
+        }
+        match global.kind {
+            GlobalKind::File => {
+                if global.symbol.contains('.') {
+                    return Err(format!(
+                        "file global '{}' must use a source C identifier",
+                        global.symbol
+                    ));
+                }
+            }
+            GlobalKind::FunctionStatic => {
+                let expected = format!("__evocc.static.{}", global.origin);
+                if global.symbol != expected || global.visibility != GlobalVisibility::Internal {
+                    return Err(format!(
+                        "function-static global '{}' must be internal symbol '{expected}'",
+                        global.symbol
+                    ));
+                }
+            }
+            GlobalKind::StringLiteral => {
+                let expected = format!("__evocc.string.{}", global.origin);
+                if global.symbol != expected || global.visibility != GlobalVisibility::Internal {
+                    return Err(format!(
+                        "string-literal global '{}' must be internal symbol '{expected}'",
+                        global.symbol
+                    ));
+                }
+            }
         }
         if functions.contains_key(global.symbol.as_str()) {
             return Err(format!(
@@ -3525,8 +3560,8 @@ fn matching_guard(
 
 fn initialize_globals(module: &Module, state: &mut ExecutionState) -> Result<(), InterpreterError> {
     for global in &module.globals {
-        let (memory, pointer) = match global.storage {
-            GlobalStorage::StringLiteral => {
+        let (memory, pointer) = match global.kind {
+            GlobalKind::StringLiteral => {
                 let bytes = ByteSequence::try_from_bytes(global.bytes.clone())
                     .map_err(|error| InterpreterError::MemorySetup { error })?;
                 state
@@ -3534,13 +3569,13 @@ fn initialize_globals(module: &Module, state: &mut ExecutionState) -> Result<(),
                     .allocate_string_literal(global.origin, global.layout, &bytes)
                     .map_err(|error| InterpreterError::MemorySetup { error })?
             }
-            GlobalStorage::Static => state
+            GlobalKind::File | GlobalKind::FunctionStatic => state
                 .memory
                 .allocate_static(global.origin, global.layout, InitialState::Uninitialized)
                 .map_err(|error| InterpreterError::MemorySetup { error })?,
         };
         state.memory = memory;
-        if global.storage == GlobalStorage::Static {
+        if global.kind != GlobalKind::StringLiteral {
             let mut start = 0_usize;
             while start < global.initialized.len() {
                 if !global.initialized[start] {

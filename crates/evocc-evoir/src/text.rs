@@ -1,10 +1,12 @@
 //! Canonical EvoIR Section 9 text rendering.
 
+use std::collections::HashMap;
+
 use evocc_types::{AddressSpace, EvoIRType, Region};
 
 use evocc_memory::{IndexSignedness, OffsetDirection};
 
-use crate::{BlockId, CmpOp, Function, GlobalStorage, Inst, Module, Value};
+use crate::{BlockId, CmpOp, Function, GlobalKind, GlobalVisibility, Inst, Module, Value};
 
 /// Render a module in the canonical human-readable syntax from specification
 /// Section 9.
@@ -14,46 +16,198 @@ use crate::{BlockId, CmpOp, Function, GlobalStorage, Inst, Module, Value};
 /// regardless of its numeric identifier.
 #[must_use]
 pub fn render_module(module: &Module) -> String {
-    let globals = module
-        .globals
-        .iter()
-        .map(|global| {
-            let bytes = global
-                .bytes
-                .iter()
-                .map(|byte| format!("{byte:02x}"))
-                .collect::<String>();
-            let initialized = global
-                .initialized
-                .iter()
-                .map(|bit| if *bit { '1' } else { '0' })
-                .collect::<String>();
-            format!(
-                "global @{} origin={} storage={} size={} align={} bytes={} initialized={}",
-                global.symbol,
-                global.origin,
-                match global.storage {
-                    GlobalStorage::Static => "static",
-                    GlobalStorage::StringLiteral => "string_literal",
-                },
-                global.layout.size_bytes,
-                global.layout.align_bytes,
-                bytes,
-                initialized
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    let functions = module
+    let mut rendered = String::new();
+    let mut globals = module.globals.iter().collect::<Vec<_>>();
+    globals.sort_by_key(|global| global.origin);
+    for global in &globals {
+        let bytes = global
+            .bytes
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        let initialized = global
+            .initialized
+            .iter()
+            .map(|bit| if *bit { '1' } else { '0' })
+            .collect::<String>();
+        rendered.push_str(&format!(
+            "global @{} origin={} kind={} visibility={} size={} align={} bytes={} initialized={}\n",
+            global.symbol,
+            global.origin,
+            match global.kind {
+                GlobalKind::File => "file",
+                GlobalKind::FunctionStatic => "function_static",
+                GlobalKind::StringLiteral => "string_literal",
+            },
+            match global.visibility {
+                GlobalVisibility::External => "external",
+                GlobalVisibility::Internal => "internal",
+            },
+            global.layout.size_bytes,
+            global.layout.align_bytes,
+            bytes,
+            initialized
+        ));
+    }
+    if !globals.is_empty() && !module.functions.is_empty() {
+        rendered.push('\n');
+    }
+
+    let summaries = derive_effect_summaries(module);
+    for (index, function) in module.functions.iter().enumerate() {
+        if index != 0 {
+            rendered.push('\n');
+        }
+        rendered.push_str(&render_function(function, summaries[index]));
+    }
+    rendered
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct RenderedEffectSummary {
+    reads_all: bool,
+    writes_all: bool,
+    volatile: bool,
+    atomic: bool,
+    io: bool,
+    may_trap: bool,
+    may_unwind: bool,
+}
+
+impl RenderedEffectSummary {
+    const fn top() -> Self {
+        Self {
+            reads_all: true,
+            writes_all: true,
+            volatile: true,
+            atomic: true,
+            io: true,
+            may_trap: true,
+            may_unwind: true,
+        }
+    }
+
+    fn join(&mut self, other: Self) {
+        self.reads_all |= other.reads_all;
+        self.writes_all |= other.writes_all;
+        self.volatile |= other.volatile;
+        self.atomic |= other.atomic;
+        self.io |= other.io;
+        self.may_trap |= other.may_trap;
+        self.may_unwind |= other.may_unwind;
+    }
+}
+
+fn derive_effect_summaries(module: &Module) -> Vec<RenderedEffectSummary> {
+    let positions = module
         .functions
         .iter()
-        .map(render_function)
-        .collect::<Vec<_>>()
-        .join("\n\n");
-    match (globals.is_empty(), functions.is_empty()) {
-        (false, false) => format!("{globals}\n\n{functions}"),
-        (false, true) => globals,
-        (true, _) => functions,
+        .enumerate()
+        .map(|(index, function)| (function.name.as_str(), index))
+        .collect::<HashMap<_, _>>();
+    let local = module
+        .functions
+        .iter()
+        .map(local_effect_summary)
+        .collect::<Vec<_>>();
+    let mut summaries = local.clone();
+    loop {
+        let previous = summaries.clone();
+        for (index, function) in module.functions.iter().enumerate() {
+            let mut summary = local[index];
+            for inst in function.blocks.iter().flat_map(|block| &block.insts) {
+                if let Inst::Call { callee, .. } = inst {
+                    summary.join(
+                        positions
+                            .get(callee.as_str())
+                            .map_or(RenderedEffectSummary::top(), |callee| previous[*callee]),
+                    );
+                }
+            }
+            summaries[index] = summary;
+        }
+        if summaries == previous {
+            return summaries;
+        }
+    }
+}
+
+fn local_effect_summary(function: &Function) -> RenderedEffectSummary {
+    let mut summary = RenderedEffectSummary::default();
+    for inst in function
+        .blocks
+        .iter()
+        .flat_map(|block| block.insts.iter().chain(std::iter::once(&block.terminator)))
+    {
+        summary.join(inst_effect_summary(inst));
+    }
+    summary
+}
+
+#[allow(clippy::too_many_lines)]
+fn inst_effect_summary(inst: &Inst) -> RenderedEffectSummary {
+    match inst {
+        Inst::SDiv(..)
+        | Inst::UDiv(..)
+        | Inst::SRem(..)
+        | Inst::URem(..)
+        | Inst::UbAssume(..)
+        | Inst::PtrOffset { .. }
+        | Inst::Trap(..) => RenderedEffectSummary {
+            may_trap: true,
+            ..RenderedEffectSummary::default()
+        },
+        Inst::Alloca { .. } | Inst::LifetimeEnd { .. } => RenderedEffectSummary {
+            reads_all: true,
+            writes_all: true,
+            may_trap: true,
+            ..RenderedEffectSummary::default()
+        },
+        Inst::PointerValid { .. } | Inst::AccessInBounds { .. } => RenderedEffectSummary {
+            reads_all: true,
+            may_trap: true,
+            ..RenderedEffectSummary::default()
+        },
+        Inst::Load { volatile, .. } => RenderedEffectSummary {
+            reads_all: true,
+            volatile: *volatile,
+            may_trap: true,
+            ..RenderedEffectSummary::default()
+        },
+        Inst::Store { volatile, .. } => RenderedEffectSummary {
+            writes_all: true,
+            volatile: *volatile,
+            may_trap: true,
+            ..RenderedEffectSummary::default()
+        },
+        Inst::Const(..)
+        | Inst::Uninitialized(..)
+        | Inst::Add(..)
+        | Inst::Sub(..)
+        | Inst::Mul(..)
+        | Inst::Shl(..)
+        | Inst::AShr(..)
+        | Inst::LShr(..)
+        | Inst::And(..)
+        | Inst::Or(..)
+        | Inst::Xor(..)
+        | Inst::SignedAddDefined(..)
+        | Inst::SignedSubDefined(..)
+        | Inst::SignedMulDefined(..)
+        | Inst::DivisorNonZero(..)
+        | Inst::SignedDivRemNoOverflow(..)
+        | Inst::ShiftCountDefined { .. }
+        | Inst::SignedShlDefined { .. }
+        | Inst::ICmp(..)
+        | Inst::Br(..)
+        | Inst::CondBr(..)
+        | Inst::Ret(..)
+        | Inst::PtrNull(..)
+        | Inst::GlobalAddr { .. }
+        | Inst::Call { .. }
+        | Inst::SExt(..)
+        | Inst::ZExt(..)
+        | Inst::Trunc(..) => RenderedEffectSummary::default(),
     }
 }
 
@@ -401,12 +555,14 @@ impl FunctionRenderer {
     }
 }
 
-fn render_function(function: &Function) -> String {
+fn render_function(function: &Function, effects: RenderedEffectSummary) -> String {
     let mut rendered = String::new();
+    let calling_convention = "target_default";
     let parameters = function
         .params
         .iter()
-        .map(|parameter| format!("%{}: {}", parameter.name, render_type(&parameter.ty)))
+        .enumerate()
+        .map(|(index, parameter)| format!("%arg{index}: {}", render_type(&parameter.ty)))
         .collect::<Vec<_>>()
         .join(", ");
     let returns = function
@@ -416,8 +572,18 @@ fn render_function(function: &Function) -> String {
         .collect::<Vec<_>>()
         .join(", ");
     rendered.push_str(&format!(
-        "func @{}({parameters}) -> ({returns}) cc = target_default {{\n",
-        function.name
+        "func @{}({parameters}) -> ({returns}) cc = {calling_convention}\n",
+        function.name,
+    ));
+    rendered.push_str(&format!(
+        "    effects {{ reads={}, writes={}, volatile={}, atomic={}, io={}, may_trap={}, may_unwind={} }}\n{{\n",
+        if effects.reads_all { "{all}" } else { "{}" },
+        if effects.writes_all { "{all}" } else { "{}" },
+        effects.volatile,
+        effects.atomic,
+        effects.io,
+        effects.may_trap,
+        effects.may_unwind,
     ));
 
     let entry = function.blocks.first().map_or(0, |block| block.id);
@@ -438,15 +604,10 @@ fn render_function(function: &Function) -> String {
             })
             .collect::<Vec<_>>()
             .join(", ");
-        if arguments.is_empty() {
-            rendered.push_str(&renderer.block_name(block.id));
-            rendered.push_str(":\n");
-        } else {
-            rendered.push_str(&format!(
-                "{}({arguments}):\n",
-                renderer.block_name(block.id)
-            ));
-        }
+        rendered.push_str(&format!(
+            "{}({arguments}):\n",
+            renderer.block_name(block.id)
+        ));
         for instruction in &block.insts {
             rendered.push_str("    ");
             rendered.push_str(&renderer.instruction(instruction));
@@ -456,7 +617,7 @@ fn render_function(function: &Function) -> String {
         rendered.push_str(&renderer.instruction(&block.terminator));
         rendered.push('\n');
     }
-    rendered.push('}');
+    rendered.push_str("}\n");
     rendered
 }
 
@@ -465,8 +626,8 @@ mod tests {
     use evocc_types::{AddressSpace, EvoIRType, Region};
 
     use crate::{
-        AccessLayout, Block, CmpOp, Function, GlobalObject, GlobalStorage, Inst, Module,
-        TrapReason, UbReason, Value,
+        AccessLayout, Block, CmpOp, Function, GlobalKind, GlobalObject, GlobalVisibility, Inst,
+        Module, TrapReason, UbReason, Value,
     };
 
     use super::{render_module, render_type, FunctionRenderer, IndexSignedness, OffsetDirection};
@@ -495,10 +656,12 @@ mod tests {
         assert_eq!(
             render_module(&module),
             concat!(
-                "func @stopped() -> (bits<32>) cc = target_default {\n",
-                "^entry:\n",
+                "func @stopped() -> (bits<32>) cc = target_default\n",
+                "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }\n",
+                "{\n",
+                "^entry():\n",
                 "    trap.scalar_function_fell_off_end\n",
-                "}",
+                "}\n",
             )
         );
     }
@@ -507,9 +670,10 @@ mod tests {
     fn module_global_has_exact_section_9_text() {
         let module = Module {
             globals: vec![GlobalObject {
-                symbol: "bytes".to_owned(),
+                symbol: "__evocc.string.7".to_owned(),
                 origin: 7,
-                storage: GlobalStorage::StringLiteral,
+                kind: GlobalKind::StringLiteral,
+                visibility: GlobalVisibility::Internal,
                 layout: AccessLayout::new(3, 1),
                 bytes: vec![0x45, 0x56, 0],
                 initialized: vec![true, true, true],
@@ -518,7 +682,7 @@ mod tests {
         };
         assert_eq!(
             render_module(&module),
-            "global @bytes origin=7 storage=string_literal size=3 align=1 bytes=455600 initialized=111"
+            "global @__evocc.string.7 origin=7 kind=string_literal visibility=internal size=3 align=1 bytes=455600 initialized=111\n"
         );
     }
 

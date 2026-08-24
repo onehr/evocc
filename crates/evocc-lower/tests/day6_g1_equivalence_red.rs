@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Write as _;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
@@ -26,55 +26,66 @@ const CASES: &[Case] = &[
         id: "literal",
         source: "int main(void) { return 42; }\n",
         expected: 42,
-        golden_evoir: r#"func @main() -> (bits<32>) cc = target_default {
-^entry:
+        golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+{
+^entry():
     %v0 = const.bits<32> 42
     ret %v0
-}"#,
+}
+"#,
     },
     Case {
         id: "ternary",
         source: "int main(void) { return 1 ? 7 : 9; }\n",
         expected: 7,
-        golden_evoir: r#"func @main() -> (bits<32>) cc = target_default {
-^entry:
+        golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+{
+^entry():
     %v0 = const.bits<32> 1
     %v1 = const.bits<32> 0
     %v2 = icmp.ne %v0, %v1
     cond_br %v2, ^b1(), ^b2()
 
-^b1:
+^b1():
     %v3 = const.bits<32> 7
     br ^b3(%v3)
 
-^b2:
+^b2():
     %v4 = const.bits<32> 9
     br ^b3(%v4)
 
 ^b3(%v5: bits<32>):
     ret %v5
-}"#,
+}
+"#,
     },
     Case {
         id: "compound_assignment",
         source: "int main(void) { int x = 3; x += 4; return x; }\n",
         expected: 7,
-        golden_evoir: r#"func @main() -> (bits<32>) cc = target_default {
-^entry:
+        golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry():
     %v0 = const.bits<32> 3
     %v1 = const.bits<32> 4
     %v2 = signed_add_defined %v0, %v1
     ub.assume.signed_overflow %v2
     %v3 = add.bits<32> %v0, %v1
     ret %v3
-}"#,
+}
+"#,
     },
     Case {
         id: "iterative_fib",
         source: "int main(void) { int n = 8; int a = 0; int b = 1; while (n > 0) { int next = a + b; a = b; b = next; n -= 1; } return a; }\n",
         expected: 21,
-        golden_evoir: r#"func @main() -> (bits<32>) cc = target_default {
-^entry:
+        golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry():
     %v0 = const.bits<32> 8
     %v1 = const.bits<32> 0
     %v2 = const.bits<32> 1
@@ -97,14 +108,17 @@ const CASES: &[Case] = &[
 
 ^b3(%v16: bits<32>):
     ret %v16
-}"#,
+}
+"#,
     },
     Case {
         id: "nested_if_switch",
         source: "int main(void) { int x = 2; int r = 0; if (x == 2) { switch (x) { case 1: r = 3; break; case 2: r = 10; default: r += 5; break; } } else { r = 99; } return r; }\n",
         expected: 15,
-        golden_evoir: r#"func @main() -> (bits<32>) cc = target_default {
-^entry:
+        golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry():
     %v0 = const.bits<32> 2
     %v1 = const.bits<32> 0
     %v2 = const.bits<32> 2
@@ -142,14 +156,17 @@ const CASES: &[Case] = &[
 
 ^b7(%v22: bits<32>):
     ret %v22
-}"#,
+}
+"#,
     },
     Case {
         id: "for_continue_break",
         source: "int main(void) { int sum = 0; for (int i = 0; i < 10; i++) { if (i == 2) continue; if (i == 7) break; sum += i; } return sum; }\n",
         expected: 19,
-        golden_evoir: r#"func @main() -> (bits<32>) cc = target_default {
-^entry:
+        golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry():
     %v0 = const.bits<32> 0
     %v1 = const.bits<32> 0
     br ^b1(%v1, %v0)
@@ -184,13 +201,16 @@ const CASES: &[Case] = &[
 
 ^b6(%v23: bits<32>):
     ret %v23
-}"#,
+}
+"#,
     },
     Case {
         id: "pure_call",
         source: "int add1(int x) { return x + 1; } int main(void) { return add1(41); }\n",
         expected: 42,
-        golden_evoir: r#"func @add1(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default {
+        golden_evoir: r#"func @add1(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<32> 1
     %v4 = signed_add_defined %v0, %v3
@@ -199,18 +219,23 @@ const CASES: &[Case] = &[
     ret %v5, %v1, %v2
 }
 
-func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default {
+func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = const.bits<32> 41
     (%v3, %v4, %v5) = call @add1(%v2, %v0, %v1)
     ret %v3, %v4, %v5
-}"#,
+}
+"#,
     },
     Case {
         id: "recursive_fib",
         source: "int fib(int n) { if (n < 2) return n; return fib(n - 1) + fib(n - 2); } int main(void) { return fib(8); }\n",
         expected: 21,
-        golden_evoir: r#"func @fib(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default {
+        golden_evoir: r#"func @fib(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<32> 2
     %v4 = icmp.slt %v0, %v3
@@ -236,12 +261,15 @@ func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = ta
     ret %v24, %v21, %v22
 }
 
-func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default {
+func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = const.bits<32> 8
     (%v3, %v4, %v5) = call @fib(%v2, %v0, %v1)
     ret %v3, %v4, %v5
-}"#,
+}
+"#,
     },
 ];
 
@@ -256,8 +284,10 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
             id: "logical_short_circuit_side_effects",
             source: "int main(void) { int x = 7; int a = 0 && (x = 99); int b = 1 || (x = 88); return x * 100 + a * 10 + b; }\n",
             expected: 701,
-            golden_evoir: r#"func @main() -> (bits<32>) cc = target_default {
-^entry:
+            golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry():
     %v0 = const.bits<32> 7
     %v1 = const.bits<32> 0
     %v2 = const.bits<32> 0
@@ -308,7 +338,8 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
     ub.assume.signed_overflow %v36
     %v37 = add.bits<32> %v35, %v27
     ret %v37
-}"#,
+}
+"#,
         },
         expected_evoir_steps: None,
     },
@@ -317,8 +348,10 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
             id: "do_while_continue_break",
             source: "int main(void) { int i = 0; int sum = 0; do { i++; if (i == 2) continue; if (i == 5) break; sum += i; } while (i < 8); return sum * 10 + i; }\n",
             expected: 85,
-            golden_evoir: r#"func @main() -> (bits<32>) cc = target_default {
-^entry:
+            golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry():
     %v0 = const.bits<32> 0
     %v1 = const.bits<32> 0
     br ^b1(%v0, %v1)
@@ -357,7 +390,8 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
     ub.assume.signed_overflow %v26
     %v27 = add.bits<32> %v25, %v21
     ret %v27
-}"#,
+}
+"#,
         },
         expected_evoir_steps: None,
     },
@@ -366,8 +400,10 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
             id: "forward_and_backward_goto",
             source: "int main(void) { int x = 0; goto start; again: x += 3; start: x += 1; if (x < 5) goto again; return x; }\n",
             expected: 5,
-            golden_evoir: r#"func @main() -> (bits<32>) cc = target_default {
-^entry:
+            golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry():
     %v0 = const.bits<32> 0
     br ^b2(%v0)
 
@@ -392,7 +428,8 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
 
 ^b4(%v12: bits<32>):
     ret %v12
-}"#,
+}
+"#,
         },
         expected_evoir_steps: None,
     },
@@ -401,7 +438,9 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
             id: "void_helper_expression_statement",
             source: "void touch(int x) { x += 1; return; } int main(void) { touch(41); return 42; }\n",
             expected: 42,
-            golden_evoir: r#"func @touch(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (mem<all>, world) cc = target_default {
+            golden_evoir: r#"func @touch(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<32> 1
     %v4 = signed_add_defined %v0, %v3
@@ -410,13 +449,16 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
     ret %v1, %v2
 }
 
-func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default {
+func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = const.bits<32> 41
     (%v3, %v4) = call @touch(%v2, %v0, %v1)
     %v5 = const.bits<32> 42
     ret %v5, %v3, %v4
-}"#,
+}
+"#,
         },
         expected_evoir_steps: Some(9),
     },
@@ -881,12 +923,128 @@ fn render_inst(inst: &Inst) -> String {
     }
 }
 
-fn render_function(function: &Function) -> String {
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct IndependentEffectSummary {
+    reads_all: bool,
+    writes_all: bool,
+    volatile: bool,
+    atomic: bool,
+    io: bool,
+    may_trap: bool,
+    may_unwind: bool,
+}
+
+impl IndependentEffectSummary {
+    const fn top() -> Self {
+        Self {
+            reads_all: true,
+            writes_all: true,
+            volatile: true,
+            atomic: true,
+            io: true,
+            may_trap: true,
+            may_unwind: true,
+        }
+    }
+
+    fn join(&mut self, other: Self) {
+        self.reads_all |= other.reads_all;
+        self.writes_all |= other.writes_all;
+        self.volatile |= other.volatile;
+        self.atomic |= other.atomic;
+        self.io |= other.io;
+        self.may_trap |= other.may_trap;
+        self.may_unwind |= other.may_unwind;
+    }
+}
+
+fn independent_local_effects(function: &Function) -> IndependentEffectSummary {
+    let mut summary = IndependentEffectSummary::default();
+    for inst in function
+        .blocks
+        .iter()
+        .flat_map(|block| block.insts.iter().chain(std::iter::once(&block.terminator)))
+    {
+        let local = match inst {
+            Inst::SDiv(..)
+            | Inst::UDiv(..)
+            | Inst::SRem(..)
+            | Inst::URem(..)
+            | Inst::UbAssume(..)
+            | Inst::PtrOffset { .. }
+            | Inst::Trap(..) => IndependentEffectSummary {
+                may_trap: true,
+                ..IndependentEffectSummary::default()
+            },
+            Inst::Alloca { .. } | Inst::LifetimeEnd { .. } => IndependentEffectSummary {
+                reads_all: true,
+                writes_all: true,
+                may_trap: true,
+                ..IndependentEffectSummary::default()
+            },
+            Inst::PointerValid { .. } | Inst::AccessInBounds { .. } => IndependentEffectSummary {
+                reads_all: true,
+                may_trap: true,
+                ..IndependentEffectSummary::default()
+            },
+            Inst::Load { volatile, .. } => IndependentEffectSummary {
+                reads_all: true,
+                volatile: *volatile,
+                may_trap: true,
+                ..IndependentEffectSummary::default()
+            },
+            Inst::Store { volatile, .. } => IndependentEffectSummary {
+                writes_all: true,
+                volatile: *volatile,
+                may_trap: true,
+                ..IndependentEffectSummary::default()
+            },
+            _ => IndependentEffectSummary::default(),
+        };
+        summary.join(local);
+    }
+    summary
+}
+
+fn independent_effects(functions: &[Function]) -> Vec<IndependentEffectSummary> {
+    let positions = functions
+        .iter()
+        .enumerate()
+        .map(|(index, function)| (function.name.as_str(), index))
+        .collect::<HashMap<_, _>>();
+    let local = functions
+        .iter()
+        .map(independent_local_effects)
+        .collect::<Vec<_>>();
+    let mut summaries = local.clone();
+    loop {
+        let previous = summaries.clone();
+        for (index, function) in functions.iter().enumerate() {
+            let mut summary = local[index];
+            for inst in function.blocks.iter().flat_map(|block| &block.insts) {
+                if let Inst::Call { callee, .. } = inst {
+                    summary.join(
+                        positions
+                            .get(callee.as_str())
+                            .map_or(IndependentEffectSummary::top(), |callee| previous[*callee]),
+                    );
+                }
+            }
+            summaries[index] = summary;
+        }
+        if summaries == previous {
+            return summaries;
+        }
+    }
+}
+
+fn render_function(function: &Function, effects: IndependentEffectSummary) -> String {
     let mut rendered = String::new();
     let parameters = function
         .params
         .iter()
-        .map(|parameter| format!("%{}: {}", parameter.name, render_type(&parameter.ty)))
+        .enumerate()
+        .map(|(index, parameter)| format!("%arg{index}: {}", render_type(&parameter.ty)))
         .collect::<Vec<_>>()
         .join(", ");
     let returns = function
@@ -897,10 +1055,23 @@ fn render_function(function: &Function) -> String {
         .join(", ");
     writeln!(
         rendered,
-        "func @{}({parameters}) -> ({returns}) cc = target_default {{",
+        "func @{}({parameters}) -> ({returns}) cc = target_default",
         function.name
     )
     .unwrap();
+    writeln!(
+        rendered,
+        "    effects {{ reads={}, writes={}, volatile={}, atomic={}, io={}, may_trap={}, may_unwind={} }}",
+        if effects.reads_all { "{all}" } else { "{}" },
+        if effects.writes_all { "{all}" } else { "{}" },
+        effects.volatile,
+        effects.atomic,
+        effects.io,
+        effects.may_trap,
+        effects.may_unwind,
+    )
+    .unwrap();
+    rendered.push_str("{\n");
     for (block_index, block) in function.blocks.iter().enumerate() {
         if block_index != 0 {
             rendered.push('\n');
@@ -917,26 +1088,24 @@ fn render_function(function: &Function) -> String {
             })
             .collect::<Vec<_>>()
             .join(", ");
-        if arguments.is_empty() {
-            writeln!(rendered, "{}:", block_name(block.id)).unwrap();
-        } else {
-            writeln!(rendered, "{}({arguments}):", block_name(block.id)).unwrap();
-        }
+        writeln!(rendered, "{}({arguments}):", block_name(block.id)).unwrap();
         for instruction in &block.insts {
             writeln!(rendered, "    {}", render_inst(instruction)).unwrap();
         }
         writeln!(rendered, "    {}", render_inst(&block.terminator)).unwrap();
     }
-    rendered.push('}');
+    rendered.push_str("}\n");
     rendered
 }
 
 fn render_unit(functions: &[Function]) -> String {
+    let summaries = independent_effects(functions);
     functions
         .iter()
-        .map(render_function)
+        .zip(summaries)
+        .map(|(function, effects)| render_function(function, effects))
         .collect::<Vec<_>>()
-        .join("\n\n")
+        .join("\n")
 }
 
 fn parenthesized_count(line: &str) -> usize {
@@ -1017,7 +1186,7 @@ fn parse_golden_blocks(function: &str) -> Result<Vec<GoldenBlock<'_>>, String> {
     let mut current: Option<GoldenBlock<'_>> = None;
     for line in function.lines().skip(1) {
         let line = line.trim();
-        if line.is_empty() || line == "{" || line == "}" {
+        if line.is_empty() || line == "{" || line == "}" || line.starts_with("effects { ") {
             continue;
         }
         if line.starts_with('^') {

@@ -1,6 +1,6 @@
 use evocc_evoir::{
-    interpret_module, AccessLayout, Block, BlockArg, Function, FunctionParam, GlobalObject,
-    GlobalStorage, Inst, InterpreterLimits, Module, RuntimeValue, Value,
+    interpret_module, AccessLayout, Block, BlockArg, Function, FunctionParam, GlobalKind,
+    GlobalObject, GlobalVisibility, Inst, InterpreterLimits, Module, RuntimeValue, Value,
 };
 use evocc_types::{AddressSpace, EvoIRType, Region};
 
@@ -174,7 +174,8 @@ fn initialized_global_and_volatile_trace_are_observable() {
         globals: vec![GlobalObject {
             symbol: "counter".to_owned(),
             origin: 20,
-            storage: GlobalStorage::Static,
+            kind: GlobalKind::File,
+            visibility: GlobalVisibility::External,
             layout,
             bytes: 7_u32.to_le_bytes().to_vec(),
             initialized: vec![true; 4],

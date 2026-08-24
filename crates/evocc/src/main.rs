@@ -646,7 +646,7 @@ fn interpret_chir(
 
 fn emit_evoir(module: &Module) -> ExitCode {
     let mut stdout = std::io::stdout().lock();
-    if writeln!(stdout, "{}", render_module(module)).is_err() {
+    if write!(stdout, "{}", render_module(module)).is_err() {
         return ExitCode::from(1);
     }
     ExitCode::SUCCESS
