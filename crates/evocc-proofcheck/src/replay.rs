@@ -225,23 +225,29 @@ impl<'a> Replay<'a> {
                     if self.find(node.owner) != class {
                         return Err(());
                     }
-                    let mut cost = usize::from(node.operation != "const");
-                    for child in &node.children {
-                        let child = self.find(*child);
-                        let Some(child_cost) = costs.get(&child) else {
-                            return Err(());
-                        };
-                        cost = cost.checked_add(*child_cost).ok_or(())?;
-                    }
-                    node.children = node
-                        .children
-                        .iter()
-                        .map(|child| self.find(*child))
-                        .collect();
-                    let selected = if node.source == EvpNodeSource::Before {
-                        Selected::Existing(self.before_values.get(&node.node).ok_or(())?.clone())
+                    let before_value = (node.source == EvpNodeSource::Before)
+                        .then(|| self.before_values.get(&node.node).cloned())
+                        .flatten();
+                    let terminal_before_reuse = before_value
+                        .as_ref()
+                        .is_some_and(|value| value.id != self.region.root_value);
+                    let (selected, cost) = if terminal_before_reuse {
+                        (Selected::Existing(before_value.ok_or(())?), 0_usize)
                     } else {
-                        Selected::Node(node)
+                        let mut cost = usize::from(node.operation != "const");
+                        for child in &node.children {
+                            let child = self.find(*child);
+                            let Some(child_cost) = costs.get(&child) else {
+                                return Err(());
+                            };
+                            cost = cost.checked_add(*child_cost).ok_or(())?;
+                        }
+                        node.children = node
+                            .children
+                            .iter()
+                            .map(|child| self.find(*child))
+                            .collect();
+                        (Selected::Node(node), cost)
                     };
                     (selected, cost)
                 }
@@ -269,7 +275,7 @@ impl<'a> Replay<'a> {
         if reachable.len() != selections.len() {
             return Err(());
         }
-        let original_cost = witness_cost(root_node, &self.nodes, &self)?;
+        let original_cost = original_root_cost(root_node, &self.nodes)?;
         if costs[&root_class] >= original_cost {
             return Err(());
         }
@@ -817,27 +823,12 @@ fn extraction_closure(
     Ok(reached)
 }
 
-fn witness_cost(node: u32, nodes: &[EvpNode], _replay: &Replay<'_>) -> Result<usize, ()> {
-    fn cost(class: u32, nodes: &[EvpNode], memo: &mut HashMap<u32, usize>) -> Result<usize, ()> {
-        if let Some(cost) = memo.get(&class) {
-            return Ok(*cost);
-        }
-        let Some(node) = nodes
-            .iter()
-            .find(|node| node.source == EvpNodeSource::Before && node.owner == class)
-        else {
-            memo.insert(class, 0);
-            return Ok(0);
-        };
-        let mut value = usize::from(node.operation != "const");
-        for child in &node.children {
-            value = value.checked_add(cost(*child, nodes, memo)?).ok_or(())?;
-        }
-        memo.insert(class, value);
-        Ok(value)
+fn original_root_cost(node: u32, nodes: &[EvpNode]) -> Result<usize, ()> {
+    let root = nodes.get(node as usize).ok_or(())?;
+    if root.source != EvpNodeSource::Before {
+        return Err(());
     }
-    let owner = nodes.get(node as usize).ok_or(())?.owner;
-    cost(owner, nodes, &mut HashMap::new())
+    Ok(usize::from(root.operation != "const"))
 }
 
 fn find_instruction<'a>(module: &'a Module, id: &evocc_proof::EvpRegionId) -> Option<&'a Inst> {

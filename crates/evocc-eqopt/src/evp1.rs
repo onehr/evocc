@@ -432,13 +432,6 @@ fn extraction_manifest(
     rhs: u32,
     result: u32,
 ) -> Option<Vec<EvpExtraction>> {
-    let canonical = |class: u32| {
-        if class == lhs || class == rhs {
-            result
-        } else {
-            class
-        }
-    };
     let (class, choice) = match selected {
         SelectedSource::Value(value) => {
             let class = *values.get(&value)?;
@@ -454,53 +447,71 @@ fn extraction_manifest(
             (node.owner, EvpExtractionChoice::Node(node.node))
         }
     };
-    let mut output = Vec::new();
-    let mut seen = HashSet::new();
-    append_extraction(
-        class,
-        choice,
+    let mut builder = ExtractionManifestBuilder {
         nodes,
         seeds,
-        &canonical,
-        &mut seen,
-        &mut output,
-    )?;
-    Some(output)
+        replacement_root: lhs,
+        lhs,
+        rhs,
+        result,
+        seen: HashSet::new(),
+        output: Vec::new(),
+    };
+    builder.append(class, choice)?;
+    Some(builder.output)
 }
 
-fn append_extraction(
-    class: u32,
-    choice: EvpExtractionChoice,
-    nodes: &[EvpNode],
-    seeds: &[EvpSeed],
-    canonical: &impl Fn(u32) -> u32,
-    seen: &mut HashSet<u32>,
-    output: &mut Vec<EvpExtraction>,
-) -> Option<()> {
-    let final_class = canonical(class);
-    if seen.contains(&final_class) {
-        return Some(());
-    }
-    if let EvpExtractionChoice::Node(node_id) = choice {
-        let node = nodes.get(node_id as usize)?;
-        for child in &node.children {
-            let child_node = nodes.iter().find(|node| node.owner == *child);
-            let child_choice = if let Some(node) = child_node {
-                EvpExtractionChoice::Node(node.node)
-            } else {
-                let seed = seeds.iter().position(|seed| seed.class == *child)?;
-                EvpExtractionChoice::Seed(seed as u32)
-            };
-            append_extraction(*child, child_choice, nodes, seeds, canonical, seen, output)?;
+struct ExtractionManifestBuilder<'a> {
+    nodes: &'a [EvpNode],
+    seeds: &'a [EvpSeed],
+    replacement_root: u32,
+    lhs: u32,
+    rhs: u32,
+    result: u32,
+    seen: HashSet<u32>,
+    output: Vec<EvpExtraction>,
+}
+
+impl ExtractionManifestBuilder<'_> {
+    fn canonical(&self, class: u32) -> u32 {
+        if class == self.lhs || class == self.rhs {
+            self.result
+        } else {
+            class
         }
     }
-    if seen.insert(final_class) {
-        output.push(EvpExtraction {
-            class: final_class,
-            choice,
-        });
+
+    fn append(&mut self, class: u32, choice: EvpExtractionChoice) -> Option<()> {
+        let final_class = self.canonical(class);
+        if self.seen.contains(&final_class) {
+            return Some(());
+        }
+        if let EvpExtractionChoice::Node(node_id) = choice {
+            let children = {
+                let node = self.nodes.get(node_id as usize)?;
+                let terminal_before_reuse =
+                    node.source == EvpNodeSource::Before && node.owner != self.replacement_root;
+                (!terminal_before_reuse).then(|| node.children.clone())
+            };
+            for child in children.into_iter().flatten() {
+                let child_node = self.nodes.iter().find(|node| node.owner == child);
+                let child_choice = if let Some(node) = child_node {
+                    EvpExtractionChoice::Node(node.node)
+                } else {
+                    let seed = self.seeds.iter().position(|seed| seed.class == child)?;
+                    EvpExtractionChoice::Seed(seed as u32)
+                };
+                self.append(child, child_choice)?;
+            }
+        }
+        if self.seen.insert(final_class) {
+            self.output.push(EvpExtraction {
+                class: final_class,
+                choice,
+            });
+        }
+        Some(())
     }
-    Some(())
 }
 
 fn apply(module: &Module, accepted: &[Accepted]) -> Result<Module, ()> {
