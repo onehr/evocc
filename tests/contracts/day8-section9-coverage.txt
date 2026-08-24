@@ -1,0 +1,96 @@
+# Day 8 Section 9 field-completeness manifest.
+# Format: exhaustive-schema-key|non-default canonical-byte sentinel
+# The Rust test must enumerate exactly this key set and find every sentinel.
+AccessLayout(size_bytes,align_bytes)|global @sentinel_file origin=7001 kind=file visibility=external size=3 align=4 bytes=a1b2c3 initialized=101
+AddressSpace.Generic|func @sentinel_function(%arg0: bits<37>, %arg1: f32, %arg2: f64, %arg3: ptr<generic>, %arg4: ptr<global>, %arg5: ptr<stack>, %arg6: ptr<threadlocal>, %arg7: fnptr<(bits<13>, mem<all>, world)->(bits<17>, mem<escaped>, world)>, %arg8: vec<7, f32>, %arg9: mem<all>, %arg10: mem<unknown>, %arg11: mem<global>, %arg12: mem<stack>, %arg13: mem<heap>, %arg14: mem<escaped>, %arg15: world, %arg16: tuple<bits<5>, f64>, %arg17: void) -> (f64, mem<escaped>) cc = target_default
+AddressSpace.Global|ptr<global>
+AddressSpace.Stack|ptr<stack>
+AddressSpace.ThreadLocal|ptr<threadlocal>
+Block(id,args,insts,terminator)|^b4242(%v901: tuple<bits<7>>):
+BlockArg(name[omitted],value)|^entry(%v900: bits<19>):
+CmpOp.Eq|%v1230 = icmp.eq %v1231, %v1232
+CmpOp.Ne|%v1233 = icmp.ne %v1234, %v1235
+CmpOp.SLe|%v1239 = icmp.sle %v1240, %v1241
+CmpOp.SLt|%v1236 = icmp.slt %v1237, %v1238
+CmpOp.ULe|%v1245 = icmp.ule %v1246, %v1247
+CmpOp.ULt|%v1242 = icmp.ult %v1243, %v1244
+EffectSummary(reads_all,writes_all,volatile,atomic,io,may_trap,may_unwind)|effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }
+EvoIRType.Bits(width)|bits<37>
+EvoIRType.F32|%arg1: f32
+EvoIRType.F64|%arg2: f64
+EvoIRType.FnPtr(params,results)|fnptr<(bits<13>, mem<all>, world)->(bits<17>, mem<escaped>, world)>
+EvoIRType.Mem(region)|%arg10: mem<unknown>
+EvoIRType.Ptr(address_space)|%arg6: ptr<threadlocal>
+EvoIRType.Tuple(elements)|tuple<bits<5>, f64>
+EvoIRType.Vec(count,element)|vec<7, f32>
+EvoIRType.Void|%arg17: void
+EvoIRType.World|%arg15: world
+Function(name,params,ret_tys,effects,blocks)|func @sentinel_function(%arg0: bits<37>, %arg1: f32, %arg2: f64, %arg3: ptr<generic>, %arg4: ptr<global>, %arg5: ptr<stack>, %arg6: ptr<threadlocal>, %arg7: fnptr<(bits<13>, mem<all>, world)->(bits<17>, mem<escaped>, world)>, %arg8: vec<7, f32>, %arg9: mem<all>, %arg10: mem<unknown>, %arg11: mem<global>, %arg12: mem<stack>, %arg13: mem<heap>, %arg14: mem<escaped>, %arg15: world, %arg16: tuple<bits<5>, f64>, %arg17: void) -> (f64, mem<escaped>) cc = target_default
+FunctionParam(name[omitted],ty)|%arg17: void
+GlobalKind.File|kind=file
+GlobalKind.FunctionStatic|kind=function_static
+GlobalKind.StringLiteral|kind=string_literal
+GlobalObject(symbol,origin,kind,visibility,layout,bytes,initialized)|global @__evocc.static.sentinel.7002 origin=7002 kind=function_static visibility=internal size=2 align=8 bytes=d4e5 initialized=01
+GlobalVisibility.External|visibility=external
+GlobalVisibility.Internal|visibility=internal
+IndexSignedness.Signed|%v1370 = ptr.offset.sub.signed %v1371, %v1372 [scale=61]
+IndexSignedness.Unsigned|%v1373 = ptr.offset.add.unsigned %v1374, %v1375 [scale=67]
+Inst.AShr(result,lhs,rhs)|%v1080 = ashr.bits<37> %v1081, %v1082
+Inst.AccessInBounds(mem_in,pointer,mem_out,layout)|%v1342 = access_in_bounds %v1340, %v1341 [size=59, align=32]
+Inst.Add(result,lhs,rhs)|%v1020 = add.bits<37> %v1021, %v1022
+Inst.Alloca(result,mem_in,world_in,mem_out,world_out,origin,layout)|(%v1310, %v1313, %v1314) = alloca %v1311, %v1312 [origin=1313131, size=53, align=16]
+Inst.And(result,lhs,rhs)|%v1100 = and.bits<37> %v1101, %v1102
+Inst.Br(target,args)|br ^b4242(%v1250, %v1251)
+Inst.Call(results,callee,args,mem_in,world_in,mem_out,world_out)|(%v1380, %v1381, %v1386, %v1387) = call @sentinel_direct_callee(%v1382, %v1383, %v1384, %v1385)
+Inst.CondBr(condition,true_target,true_args,false_target,false_args)|cond_br %v1260, ^b4242(%v1261), ^b4343(%v1262)
+Inst.Const(result,immediate)|%v1000 = const.bits<37> 987654321
+Inst.DivisorNonZero(result,divisor)|%v1160 = divisor_nonzero %v1161
+Inst.FuncAddr(result,symbol)|%v1300 = func_addr @sentinel_function_target : fnptr<(bits<37>, mem<all>, world)->(bits<37>, mem<all>, world)>
+Inst.GlobalAddr(result,symbol)|%v1290 = global_addr @sentinel_global_target : ptr<global>
+Inst.ICmp(result,operation,lhs,rhs)|%v1230 = icmp.eq %v1231, %v1232
+Inst.IndirectCall(results,callee,args,mem_in,world_in,mem_out,world_out)|(%v1390, %v1391, %v1397, %v1398) = call %v1392(%v1393, %v1394, %v1395, %v1396)
+Inst.LShr(result,lhs,rhs)|%v1090 = lshr.bits<37> %v1091, %v1092
+Inst.LifetimeEnd(mem_in,world_in,pointer,mem_out,world_out)|(%v1323, %v1324) = lifetime.end %v1320, %v1321, %v1322
+Inst.Load(result,address,mem_in,world_in,mem_out,world_out,volatile)|(%v1350, %v1354, %v1355) = load volatile %v1352, %v1353, %v1351 : bits<37>
+Inst.Mul(result,lhs,rhs)|%v1040 = mul.bits<37> %v1041, %v1042
+Inst.Or(result,lhs,rhs)|%v1110 = or.bits<37> %v1111, %v1112
+Inst.PointerValid(mem_in,pointer,mem_out)|%v1332 = pointer_valid %v1330, %v1331
+Inst.PtrNull(result)|%v1280 = ptr.null : ptr<stack>
+Inst.PtrOffset(result,base,index,direction,signedness,scale)|%v1370 = ptr.offset.sub.signed %v1371, %v1372 [scale=61]
+Inst.Ret(values)|ret %v1270, %v1271, %v1272
+Inst.SDiv(result,lhs,rhs)|%v1210 = sdiv.bits<37> %v1211, %v1212
+Inst.SExt(result,source,target_ty)|%v1400 = sext.bits<37> %v1401
+Inst.SRem(result,lhs,rhs)|%v1050 = srem.bits<37> %v1051, %v1052
+Inst.ShiftCountDefined(result,shifted,amount,amount_signed)|%v1180 = shift_count_defined.signed %v1181, %v1182
+Inst.Shl(result,lhs,rhs)|%v1070 = shl.bits<37> %v1071, %v1072
+Inst.SignedAddDefined(result,lhs,rhs)|%v1130 = signed_add_defined %v1131, %v1132
+Inst.SignedDivRemNoOverflow(result,dividend,divisor)|%v1170 = signed_div_rem_no_overflow %v1171, %v1172
+Inst.SignedMulDefined(result,lhs,rhs)|%v1150 = signed_mul_defined %v1151, %v1152
+Inst.SignedShlDefined(result,shifted,amount,amount_signed)|%v1190 = signed_shl_defined.signed %v1191, %v1192
+Inst.SignedSubDefined(result,lhs,rhs)|%v1140 = signed_sub_defined %v1141, %v1142
+Inst.Store(address,value,mem_in,world_in,mem_out,world_out,volatile)|(%v1364, %v1365) = store volatile %v1362, %v1363, %v1360, %v1361
+Inst.Sub(result,lhs,rhs)|%v1030 = sub.bits<37> %v1031, %v1032
+Inst.Trap(reason)|trap.scalar_function_fell_off_end
+Inst.Trunc(result,source,target_ty)|%v1420 = trunc.bits<9> %v1421
+Inst.UDiv(result,lhs,rhs)|%v1220 = udiv.bits<37> %v1221, %v1222
+Inst.URem(result,lhs,rhs)|%v1060 = urem.bits<37> %v1061, %v1062
+Inst.UbAssume(condition,reason)|ub.assume.invalid_signed_left_shift %v1200
+Inst.Uninitialized(result)|%v1010 = uninitialized.bits<29>
+Inst.Xor(result,lhs,rhs)|%v1120 = xor.bits<37> %v1121, %v1122
+Inst.ZExt(result,source,target_ty)|%v1410 = zext.bits<37> %v1411
+Module(globals,functions)|global @sentinel_file origin=7001 kind=file visibility=external size=3 align=4 bytes=a1b2c3 initialized=101
+OffsetDirection.Add|%v1373 = ptr.offset.add.unsigned %v1374, %v1375 [scale=67]
+OffsetDirection.Subtract|%v1370 = ptr.offset.sub.signed %v1371, %v1372 [scale=61]
+Region.All|%arg9: mem<all>
+Region.Escaped|%arg14: mem<escaped>
+Region.Global|%arg11: mem<global>
+Region.Heap|%arg13: mem<heap>
+Region.Stack|%arg12: mem<stack>
+Region.Unknown|%arg10: mem<unknown>
+TrapReason.ScalarFunctionFellOffEnd|trap.scalar_function_fell_off_end
+UbReason.DivisionByZero|ub.assume.division_by_zero %v1201
+UbReason.InvalidShiftCount|ub.assume.invalid_shift_count %v1204
+UbReason.InvalidSignedLeftShift|ub.assume.invalid_signed_left_shift %v1200
+UbReason.RemainderByZero|ub.assume.remainder_by_zero %v1202
+UbReason.SignedOverflow|ub.assume.signed_overflow %v1203
+Value(id,ty)|%v1000 = const.bits<37> 987654321
