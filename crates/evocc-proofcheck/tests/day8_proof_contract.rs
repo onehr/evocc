@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use evocc_proof::{parse_evp1, render_evp1, sha256_hex, EvpCertificate, EvpEvent, EvpNodeSource};
+
 const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 const REGISTRY_SHA256: &str = "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9";
 static NEXT_DIR: AtomicU64 = AtomicU64::new(0);
@@ -334,4 +336,108 @@ fn real_producer_multi_region_evp1_is_accepted_by_the_standalone_checker() {
     fs::write(&inputs.after, after.replace("ret %v0, %v4", "ret %v1, %v4"))
         .expect("mutate after-module outside certificate result");
     assert_status(&inputs.run(), 3, "mutated real producer after-module");
+}
+
+fn write_certificate(inputs: &Inputs, before: &[u8], after: &[u8], proof: &EvpCertificate) {
+    inputs.write(before, after, &render_evp1(proof));
+}
+
+#[test]
+fn optimizer_output_mutation_campaign_exercises_the_independent_boundary() {
+    let inputs = Inputs::new();
+    run_real_producer(&inputs);
+    assert_status(&inputs.run(), 0, "mutation campaign baseline");
+    let before = fs::read(&inputs.before).expect("read producer before-module");
+    let after = fs::read(&inputs.after).expect("read producer after-module");
+    let proof_bytes = fs::read(&inputs.proof).expect("read producer proof");
+    let baseline = parse_evp1(&proof_bytes).expect("parse real producer proof");
+    let mut killed = 0;
+
+    let mutated_after = String::from_utf8(after.clone())
+        .unwrap()
+        .replace("ret %v0, %v4", "ret %v1, %v4")
+        .into_bytes();
+    assert_ne!(mutated_after, after);
+    let mut resigned = baseline.clone();
+    resigned.output_digest = sha256_hex(&mutated_after);
+    write_certificate(&inputs, &before, &mutated_after, &resigned);
+    assert_status(
+        &inputs.run(),
+        3,
+        "semantic output mutation with a recomputed producer digest",
+    );
+    killed += 1;
+
+    let mut wrong_rule = baseline.clone();
+    let rewrite = wrong_rule
+        .regions
+        .iter_mut()
+        .flat_map(|region| &mut region.events)
+        .find_map(|event| match event {
+            EvpEvent::Rewrite(rewrite) => Some(rewrite),
+            _ => None,
+        })
+        .expect("producer emitted a rewrite");
+    rewrite.rule = "p0_003_mul_one_rhs".to_owned();
+    write_certificate(&inputs, &before, &after, &wrong_rule);
+    assert_status(&inputs.run(), 3, "producer-selected wrong reviewed rule");
+    killed += 1;
+
+    let mut wrong_constant = baseline.clone();
+    let attribute = wrong_constant
+        .regions
+        .iter_mut()
+        .flat_map(|region| &mut region.events)
+        .find_map(|event| match event {
+            EvpEvent::Node(node) if node.source == EvpNodeSource::Derived => {
+                node.attributes.first_mut()
+            }
+            _ => None,
+        })
+        .expect("producer emitted a derived constant");
+    attribute.1 = attribute.1.wrapping_add(1);
+    write_certificate(&inputs, &before, &after, &wrong_constant);
+    assert_status(&inputs.run(), 3, "producer-computed wrong fold payload");
+    killed += 1;
+
+    let mut wrong_binding = baseline.clone();
+    let binding = wrong_binding
+        .regions
+        .iter_mut()
+        .flat_map(|region| &mut region.events)
+        .find_map(|event| match event {
+            EvpEvent::Rewrite(rewrite) => rewrite.bindings.first_mut(),
+            _ => None,
+        })
+        .expect("producer emitted a rewrite binding");
+    binding.1 = binding.1.wrapping_add(1);
+    write_certificate(&inputs, &before, &after, &wrong_binding);
+    assert_status(&inputs.run(), 3, "producer-computed wrong substitution");
+    killed += 1;
+
+    let mut hidden_witness = baseline.clone();
+    hidden_witness.regions[0].witnesses.remove(0);
+    write_certificate(&inputs, &before, &after, &hidden_witness);
+    assert_status(&inputs.run(), 3, "producer hid one eligibility witness");
+    killed += 1;
+
+    let digest = sha256_hex(&before);
+    let disabled = EvpCertificate {
+        registry_name: baseline.registry_name,
+        registry_digest: baseline.registry_digest,
+        input_digest: digest.clone(),
+        regions: Vec::new(),
+        output_digest: digest,
+    };
+    write_certificate(&inputs, &before, &before, &disabled);
+    assert_status(
+        &inputs.run(),
+        0,
+        "a producer mutant that only disables rewrites remains correct",
+    );
+
+    assert_eq!(killed, 5);
+    println!(
+        "Day-8 proof-boundary mutation measured: semanticCorruptionsRejected={killed}/5, disabledRewriteAccepted=1/1"
+    );
 }
