@@ -316,7 +316,11 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                 .symbols()
                 .symbol(object.symbol)
                 .is_ok_and(|symbol| symbol.scope() == unit.symbols().file_scope());
-            if is_aggregate || is_file || is_qualified_memory {
+            if is_aggregate
+                || is_file
+                || is_qualified_memory
+                || object.storage == StorageClass::Static
+            {
                 out.insert(object.symbol);
             }
             if let Some(initializer) = &object.initializer {
@@ -481,22 +485,66 @@ fn lower_globals(
     memory_symbols: &BTreeSet<SymbolId>,
     origins: &BTreeMap<SymbolId, u64>,
 ) -> Result<Vec<GlobalObject>, LowerError> {
+    fn collect_nested<'a>(
+        statement: &'a CHirStmt<'a>,
+        out: &mut BTreeMap<SymbolId, &'a ObjectDecl<'a>>,
+    ) {
+        match statement {
+            CHirStmt::Compound(items, _) => {
+                for item in items {
+                    match item {
+                        CHirBlockItem::Declaration(CHirDecl::Object(object)) => {
+                            if object.storage == StorageClass::Static {
+                                out.insert(object.symbol, object);
+                            }
+                        }
+                        CHirBlockItem::Declaration(_) => {}
+                        CHirBlockItem::Statement(statement) => collect_nested(statement, out),
+                    }
+                }
+            }
+            CHirStmt::If(_, left, right, _) => {
+                collect_nested(left, out);
+                if let Some(right) = right {
+                    collect_nested(right, out);
+                }
+            }
+            CHirStmt::Switch(_, body, _)
+            | CHirStmt::While(_, body, _)
+            | CHirStmt::DoWhile(body, _, _)
+            | CHirStmt::For(_, _, _, body, _)
+            | CHirStmt::Case(_, body, _)
+            | CHirStmt::Default(body, _)
+            | CHirStmt::Label(_, body, _) => collect_nested(body, out),
+            CHirStmt::Expr(..)
+            | CHirStmt::Return(..)
+            | CHirStmt::Break(_)
+            | CHirStmt::Continue(_)
+            | CHirStmt::Goto(..)
+            | CHirStmt::Null(_) => {}
+        }
+    }
+
     let mut declarations = BTreeMap::<SymbolId, &ObjectDecl<'_>>::new();
     for declaration in unit.iter() {
-        let CHirDecl::Object(object) = declaration else {
-            continue;
-        };
-        if !memory_symbols.contains(&object.symbol) {
-            continue;
-        }
-        declarations
-            .entry(object.symbol)
-            .and_modify(|selected| {
-                if object.initializer.is_some() {
-                    *selected = object;
+        match declaration {
+            CHirDecl::Object(object) if memory_symbols.contains(&object.symbol) => {
+                declarations
+                    .entry(object.symbol)
+                    .and_modify(|selected| {
+                        if object.initializer.is_some() {
+                            *selected = object;
+                        }
+                    })
+                    .or_insert(object);
+            }
+            CHirDecl::Function(function) => {
+                if let Some(body) = function.body {
+                    collect_nested(body, &mut declarations);
                 }
-            })
-            .or_insert(object);
+            }
+            _ => {}
+        }
     }
     declarations
         .into_values()
@@ -527,18 +575,28 @@ fn lower_globals(
                     apply_static_initializer(unit, target, object.ty, action, &mut bytes)?;
                 }
             }
+            let origin = *origins
+                .get(&object.symbol)
+                .ok_or(LowerError::InvalidGeneratedSsa {
+                    message: format!("global {} has no allocation origin", object.symbol.raw()),
+                })?;
+            let file_scope = symbol.scope() == unit.symbols().file_scope();
             Ok(GlobalObject {
-                symbol: symbol.spelling().to_owned(),
-                origin: *origins
-                    .get(&object.symbol)
-                    .ok_or(LowerError::InvalidGeneratedSsa {
-                        message: format!("global {} has no allocation origin", object.symbol.raw()),
-                    })?,
-                kind: GlobalKind::File,
-                visibility: if object.storage == StorageClass::Static {
-                    GlobalVisibility::Internal
+                symbol: if file_scope {
+                    symbol.spelling().to_owned()
                 } else {
+                    format!("__evocc.static.{origin}")
+                },
+                origin,
+                kind: if file_scope {
+                    GlobalKind::File
+                } else {
+                    GlobalKind::FunctionStatic
+                },
+                visibility: if file_scope && object.storage != StorageClass::Static {
                     GlobalVisibility::External
+                } else {
+                    GlobalVisibility::Internal
                 },
                 layout: AccessLayout::new(layout.size_bytes, layout.align_bytes),
                 bytes,
@@ -2313,6 +2371,11 @@ impl<'a> FunctionLowerer<'a> {
                 for symbol in declared.iter().rev() {
                     if self.memory_symbols.contains(symbol)
                         && state.env.contains_key(&EnvKey::Address(*symbol))
+                        && self
+                            .unit
+                            .symbols()
+                            .symbol(*symbol)
+                            .is_ok_and(|entry| entry.storage_class() != Some(StorageClass::Static))
                     {
                         self.end_object_lifetime(*symbol, state)?;
                     }
@@ -2782,6 +2845,25 @@ impl<'a> FunctionLowerer<'a> {
                 ),
             },
         )?;
+        if object.storage == StorageClass::Static {
+            let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+            self.emit(
+                state,
+                Inst::GlobalAddr {
+                    result: address.clone(),
+                    symbol: format!("__evocc.static.{origin}"),
+                },
+            )?;
+            state.env.insert(
+                EnvKey::Address(object.symbol),
+                BoundValue {
+                    value: address,
+                    integer: None,
+                },
+            );
+            state.locals.insert(object.symbol);
+            return Ok(());
+        }
         let mem_in = self.token(state, EnvKey::Memory)?.value;
         let world_in = self.token(state, EnvKey::World)?.value;
         let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
