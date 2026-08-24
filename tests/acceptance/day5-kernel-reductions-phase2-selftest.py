@@ -145,6 +145,8 @@ SUBJECT_RECEIPT_KEYS = {
     "inputClosureSha256",
     "normalizedObservation",
     "privateDirectory",
+    "processStatus",
+    "processStatusSha256",
     "returnCode",
     "stderr",
     "stderrSha256",
@@ -180,6 +182,14 @@ PRIVATE_DIRECTORY_KEYS = {
     "resetBeforeExecution",
     "tmpdir",
 }
+PROCESS_STATUS_KEYS = {
+    "argvSha256",
+    "environmentSha256",
+    "returnCode",
+    "stderrSha256",
+    "stdoutSha256",
+    "timedOut",
+}
 MINIMALITY_KEYS = {
     "atomOrderSha256",
     "atoms",
@@ -207,6 +217,7 @@ STABLE_REPLAY_FIELDS = {
     "argvSha256",
     "candidateDigest",
     "environmentSha256",
+    "processStatusSha256",
     "returnCode",
     "stderrSha256",
     "stdoutSha256",
@@ -255,6 +266,7 @@ OBSERVER_SUBJECT_RUN_KEYS = {
     "inputRoot",
     "inputRootSha256",
     "observedInputClosureSha256",
+    "processStatusSha256",
     "returnCode",
     "runId",
     "stderrSha256",
@@ -2547,6 +2559,7 @@ def validate_observer_evidence(
             "observedInputClosureSha256",
             "stdoutSha256",
             "stderrSha256",
+            "processStatusSha256",
         ):
             require_hash(run[name], f"observer subject {run['runId']} {name}")
         observer_subjects[run["runId"]] = run
@@ -2708,10 +2721,37 @@ def validate_subject_receipt(
     )
     require(receipt["stdoutSha256"] == stdout["sha256"], f"{label} stdout hash drift")
     require(receipt["stderrSha256"] == stderr["sha256"], f"{label} stderr hash drift")
+    process_status_artifact = check_artifact(
+        receipt_root,
+        receipt["processStatus"],
+        f"{label} observer process status",
+        seen_artifacts,
+    )
+    require(
+        receipt["processStatusSha256"] == process_status_artifact["sha256"],
+        f"{label} process status hash drift",
+    )
+    process_status = exact_keys(
+        artifact_json(receipt_root, process_status_artifact, f"{label} process status"),
+        PROCESS_STATUS_KEYS,
+        f"{label} process status",
+    )
     require(
         isinstance(receipt["returnCode"], int), f"{label} return code is not integer"
     )
     require(receipt["timedOut"] is False, f"{label} timed out")
+    require(
+        process_status
+        == {
+            "argvSha256": receipt["argvSha256"],
+            "environmentSha256": receipt["environmentSha256"],
+            "returnCode": receipt["returnCode"],
+            "stderrSha256": receipt["stderrSha256"],
+            "stdoutSha256": receipt["stdoutSha256"],
+            "timedOut": receipt["timedOut"],
+        },
+        f"{label} receipt disagrees with observer-runner process status",
+    )
     require(
         observer_run["subjectSha256"] == receipt["subjectSha256"]
         and observer_run["argvSha256"] == receipt["argvSha256"]
@@ -2721,7 +2761,8 @@ def validate_subject_receipt(
         and observer_run["returnCode"] == receipt["returnCode"]
         and observer_run["timedOut"] == receipt["timedOut"]
         and observer_run["stdoutSha256"] == receipt["stdoutSha256"]
-        and observer_run["stderrSha256"] == receipt["stderrSha256"],
+        and observer_run["stderrSha256"] == receipt["stderrSha256"]
+        and observer_run["processStatusSha256"] == receipt["processStatusSha256"],
         f"{label} disagrees with external observer evidence",
     )
     normalized = receipt["normalizedObservation"]
