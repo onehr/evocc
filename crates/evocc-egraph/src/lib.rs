@@ -61,6 +61,7 @@ pub struct EgraphSnapshot {
 // ===========================================================================
 
 /// Disjoint-set (union-find) forest for tracking e-class equivalence.
+#[derive(Clone)]
 pub struct UnionFind {
     parent: Vec<EClassId>,
 }
@@ -114,6 +115,7 @@ impl Default for UnionFind {
 // ===========================================================================
 
 /// An e-node: `(op children…)` where each child is an `EClassId`.
+#[derive(Clone)]
 pub struct ENode {
     pub op: OpId,
     pub children: Vec<EClassId>,
@@ -133,6 +135,7 @@ impl ENode {
 
 /// Hash-consing table mapping a canonical `(op, children)` form to the
 /// e-class that represents it.
+#[derive(Clone)]
 pub struct HashCons {
     map: HashMap<(OpId, Vec<EClassId>), EClassId>,
 }
@@ -169,6 +172,7 @@ impl Default for HashCons {
 
 /// An equivalence class holding the e-nodes that belong to it and a
 /// reverse-parent index for efficient rebuilds.
+#[derive(Clone)]
 pub struct EClass {
     pub id: EClassId,
     /// Every e-node whose canonical form maps to this class.
@@ -184,6 +188,7 @@ pub struct EClass {
 
 /// The e-graph: union-find, hash-cons table, arena for e-nodes and
 /// e-classes, a dirty-worklist, and reverse enode→eclass pointers.
+#[derive(Clone)]
 pub struct Egraph {
     uf: UnionFind,
     hashcons: HashCons,

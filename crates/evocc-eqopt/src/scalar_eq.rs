@@ -197,14 +197,14 @@ pub struct ScalarEqOutcome {
     pub report: ScalarEqReport,
 }
 
-#[derive(Debug, Clone)]
-enum ScalarFact {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ScalarFact {
     Constant { raw: u64, ty: EvoIRType },
     Negation { operand: Value },
 }
 
-#[derive(Debug, Clone)]
-enum Replacement {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Replacement {
     Alias(Value),
     Constant(u64),
 }
@@ -213,6 +213,30 @@ enum Replacement {
 struct RewriteOpportunity {
     rule: ScalarRewrite,
     replacement: Replacement,
+}
+
+/// One semantically checked rewrite selected by the transient optimizer.
+///
+/// The persistent layer deliberately receives the original instruction and
+/// its complete scalar-fact environment rather than trusting the producer's
+/// rule label. It re-derives the opportunity before mutating EqualityState.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AppliedRewrite {
+    pub(crate) function: String,
+    pub(crate) block: u32,
+    pub(crate) result: Value,
+    pub(crate) instruction: Inst,
+    pub(crate) facts: HashMap<u32, ScalarFact>,
+    pub(crate) rule: ScalarRewrite,
+    pub(crate) replacement: Replacement,
+}
+
+impl AppliedRewrite {
+    pub(crate) fn is_reviewed_instance(&self) -> bool {
+        rewrite_opportunity(&self.instruction, &self.facts).is_some_and(|opportunity| {
+            opportunity.rule == self.rule && opportunity.replacement == self.replacement
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -298,9 +322,17 @@ impl CandidateGraph {
 /// proof failure returns the original module byte-for-byte.
 #[must_use]
 pub fn optimize_scalar_module(module: &Module, budget: ScalarEqBudget) -> ScalarEqOutcome {
+    optimize_scalar_module_with_events(module, budget).0
+}
+
+pub(crate) fn optimize_scalar_module_with_events(
+    module: &Module,
+    budget: ScalarEqBudget,
+) -> (ScalarEqOutcome, Vec<AppliedRewrite>) {
     let original = module.clone();
     let mut optimized = module.clone();
     let mut report = ScalarEqReport::default();
+    let mut applied = Vec::new();
 
     for function in &mut optimized.functions {
         for block in &mut function.blocks {
@@ -331,10 +363,13 @@ pub fn optimize_scalar_module(module: &Module, budget: ScalarEqBudget) -> Scalar
                     report.receipts.clear();
                     report.merges = 0;
                     report.optimized_values = 0;
-                    return ScalarEqOutcome {
-                        module: original,
-                        report,
-                    };
+                    return (
+                        ScalarEqOutcome {
+                            module: original,
+                            report,
+                        },
+                        Vec::new(),
+                    );
                 }
                 let Some(receipt) = bridge.receipt else {
                     record_fact(&inst, &mut facts);
@@ -352,40 +387,60 @@ pub fn optimize_scalar_module(module: &Module, budget: ScalarEqBudget) -> Scalar
                         report.proof_replay_failed = true;
                         report.fell_back = true;
                         report.receipts.clear();
-                        return ScalarEqOutcome {
-                            module: original,
-                            report,
-                        };
+                        return (
+                            ScalarEqOutcome {
+                                module: original,
+                                report,
+                            },
+                            Vec::new(),
+                        );
                     }
                 };
                 if context.replay(&receipt.certificate).is_err() {
                     report.proof_replay_failed = true;
                     report.fell_back = true;
                     report.receipts.clear();
-                    return ScalarEqOutcome {
-                        module: original,
-                        report,
-                    };
+                    return (
+                        ScalarEqOutcome {
+                            module: original,
+                            report,
+                        },
+                        Vec::new(),
+                    );
                 }
                 let Some(result) = scalar_result(&inst).cloned() else {
                     rewritten.push(inst);
                     continue;
                 };
-                match bridge.extracted {
+                let actual_replacement = match bridge.extracted {
                     Some(Replacement::Alias(value)) => {
-                        aliases.insert(result.id, resolve_alias(&value, &aliases));
+                        let replacement = resolve_alias(&value, &aliases);
+                        aliases.insert(result.id, replacement.clone());
+                        Replacement::Alias(replacement)
                     }
                     Some(Replacement::Constant(raw)) => {
-                        let replacement = Inst::Const(result, raw);
+                        let replacement = Inst::Const(result.clone(), raw);
                         record_fact(&replacement, &mut facts);
                         rewritten.push(replacement);
+                        Replacement::Constant(raw)
                     }
                     None => {
                         record_fact(&inst, &mut facts);
                         rewritten.push(inst);
                         continue;
                     }
-                }
+                };
+                applied.push(AppliedRewrite {
+                    function: function.name.clone(),
+                    block: block.id,
+                    result: result.clone(),
+                    instruction: inst,
+                    facts: facts.clone(),
+                    rule: opportunity
+                        .expect("receipt requires a rewrite opportunity")
+                        .rule,
+                    replacement: actual_replacement,
+                });
                 report.epochs += 1;
                 report.merges += 1;
                 report.optimized_values += 1;
@@ -396,10 +451,13 @@ pub fn optimize_scalar_module(module: &Module, budget: ScalarEqBudget) -> Scalar
         }
     }
 
-    ScalarEqOutcome {
-        module: optimized,
-        report,
-    }
+    (
+        ScalarEqOutcome {
+            module: optimized,
+            report,
+        },
+        applied,
+    )
 }
 
 struct BridgeOutcome {
@@ -651,7 +709,7 @@ fn constant_raw(value: &Value, facts: &HashMap<u32, ScalarFact>) -> Option<u64> 
     }
 }
 
-fn scalar_result(inst: &Inst) -> Option<&Value> {
+pub(crate) fn scalar_result(inst: &Inst) -> Option<&Value> {
     match inst {
         Inst::Const(result, ..)
         | Inst::Add(result, ..)
@@ -665,7 +723,7 @@ fn scalar_result(inst: &Inst) -> Option<&Value> {
     }
 }
 
-fn scalar_operands(inst: &Inst) -> Vec<&Value> {
+pub(crate) fn scalar_operands(inst: &Inst) -> Vec<&Value> {
     match inst {
         Inst::Const(..) => Vec::new(),
         Inst::Add(_, left, right)
@@ -679,7 +737,7 @@ fn scalar_operands(inst: &Inst) -> Vec<&Value> {
     }
 }
 
-fn operator_id(operator: ScalarOperator) -> OpId {
+pub(crate) fn operator_id(operator: ScalarOperator) -> OpId {
     match operator {
         ScalarOperator::Const => unreachable!("constants are operand leaves"),
         ScalarOperator::Add => OP_ADD,
@@ -839,7 +897,7 @@ fn bit_width(ty: &EvoIRType) -> u16 {
     }
 }
 
-fn mask_raw(raw: u64, ty: &EvoIRType) -> u64 {
+pub(crate) fn mask_raw(raw: u64, ty: &EvoIRType) -> u64 {
     mask_to_width(raw, bit_width(ty))
 }
 
