@@ -36,6 +36,7 @@ enum DriverMode {
     Preprocess,
     ParseOnly,
     InterpretCHir,
+    EmitCHir,
     EmitEvoIr,
     InterpretEvoIr,
 }
@@ -44,6 +45,7 @@ enum DriverMode {
 enum ParsedAction {
     Validate,
     InterpretCHir,
+    EmitCHir,
     EmitEvoIr,
     InterpretEvoIr,
 }
@@ -163,6 +165,7 @@ fn main() -> ExitCode {
         DriverMode::Preprocess => run_preprocess(&options),
         DriverMode::ParseOnly => run_parsed(&options, ParsedAction::Validate),
         DriverMode::InterpretCHir => run_parsed(&options, ParsedAction::InterpretCHir),
+        DriverMode::EmitCHir => run_parsed(&options, ParsedAction::EmitCHir),
         DriverMode::EmitEvoIr => run_parsed(&options, ParsedAction::EmitEvoIr),
         DriverMode::InterpretEvoIr => run_parsed(&options, ParsedAction::InterpretEvoIr),
     }
@@ -186,6 +189,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "-E" => set_mode(&mut mode, DriverMode::Preprocess)?,
             "--parse-only" => set_mode(&mut mode, DriverMode::ParseOnly)?,
             "--interpret-c-hir" => set_mode(&mut mode, DriverMode::InterpretCHir)?,
+            "--emit=c-hir" => set_mode(&mut mode, DriverMode::EmitCHir)?,
             "--emit=evoir" => set_mode(&mut mode, DriverMode::EmitEvoIr)?,
             "--interpret-evoir" => set_mode(&mut mode, DriverMode::InterpretEvoIr)?,
             "-Oeq-scalar" => optimize_scalar_evoir = true,
@@ -539,6 +543,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     match action {
         ParsedAction::Validate => ExitCode::SUCCESS,
         ParsedAction::InterpretCHir => interpret_chir(options, &pp, &unit),
+        ParsedAction::EmitCHir => emit_chir(&unit),
         ParsedAction::EmitEvoIr | ParsedAction::InterpretEvoIr => {
             let target = match options.target {
                 DriverTarget::Aarch64UnknownLinuxGnu => {
@@ -568,7 +573,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
             match action {
                 ParsedAction::EmitEvoIr => emit_evoir(&module),
                 ParsedAction::InterpretEvoIr => interpret_evoir(options, &module),
-                ParsedAction::Validate | ParsedAction::InterpretCHir => {
+                ParsedAction::Validate | ParsedAction::InterpretCHir | ParsedAction::EmitCHir => {
                     unreachable!("matched EvoIR action")
                 }
             }
@@ -650,6 +655,15 @@ fn interpret_chir(
     };
     let mut stdout = std::io::stdout().lock();
     if writeln!(stdout, "{mathematical}").is_err() {
+        return ExitCode::from(1);
+    }
+    ExitCode::SUCCESS
+}
+
+/// `--emit=c-hir`: the declaration and attribute summary of Section 10.1.9.
+fn emit_chir(unit: &evocc_chir::CHirUnit<'_>) -> ExitCode {
+    let mut stdout = std::io::stdout().lock();
+    if write!(stdout, "{}", evocc_chir::render_unit_summary(unit)).is_err() {
         return ExitCode::from(1);
     }
     ExitCode::SUCCESS

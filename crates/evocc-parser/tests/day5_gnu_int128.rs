@@ -294,20 +294,34 @@ fn gnu_int128_rejects_duplicate_contradictory_and_non_type_uses() {
     }
 }
 
+/// The `types.h` line that stopped every parse lane in the kernel cohort. It
+/// used to pin the boundary at `__attribute__`; the boundary has moved, so the
+/// test now pins what replaced it: the line parses, the typedef exists, and
+/// `aligned(16)` reaches the layout service. A boundary test that only asserted
+/// "still rejected" would have had to be deleted here, which is why it did not.
 #[test]
-fn exact_kernel_typedef_advances_to_the_day9_attribute_boundary() {
+fn exact_kernel_typedef_parses_and_applies_its_alignment() {
     let source = SourceFile::new(
         FileId::new(5_708),
         "/virtual/day5/linux-types-line-17.c".into(),
         "typedef __signed__ __int128 __s128 __attribute__((aligned(16)));\n".into(),
     );
     let arena = Arena::default();
-    let (_unit, diagnostic) = parse(&arena, &source);
-    let diagnostic = diagnostic.expect("Day 9 attribute syntax remains outside Day 5");
-    assert_eq!(diagnostic.code, "E1002");
-    assert_eq!(diagnostic.message, "expected-token: ;");
-    assert_eq!(written(&source, diagnostic.span), "__attribute__");
-    assert_eq!(diagnostic.span, SourceSpan::new(source.id, 35, 48, 1, 36),);
+    let (unit, diagnostic) = parse(&arena, &source);
+    assert!(
+        diagnostic.is_none(),
+        "kernel typedef must parse, got {diagnostic:?}"
+    );
+    let symbol = unit
+        .symbols()
+        .resolve(unit.symbols().file_scope(), "__s128")
+        .expect("symbol table is live")
+        .expect("__s128 is declared");
+    let ty = unit.symbols().symbol(symbol).expect("declared").ty();
+    let layout = TargetDataLayout::aarch64_unknown_linux_gnu()
+        .layout_of(unit.types(), ty)
+        .expect("__s128 has a layout");
+    assert_eq!((layout.size_bytes, layout.align_bytes), (16, 16));
 }
 
 #[test]

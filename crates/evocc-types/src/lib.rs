@@ -113,6 +113,24 @@ pub struct Qualifiers {
     pub is_volatile: bool,
     pub is_restrict: bool,
     pub is_atomic: bool,
+    /// GNU `aligned(N)` on this type: the alignment is raised to at least `N`
+    /// bytes. Part of type identity, so `int` and `int aligned(8)` intern as
+    /// distinct types, but not part of type *compatibility*: callers comparing
+    /// types for assignment or redeclaration use [`Qualifiers::compatibility`],
+    /// which drops it, because GNU C treats the two as compatible.
+    pub aligned: Option<u32>,
+}
+
+impl Qualifiers {
+    /// The qualifiers that participate in C type compatibility. Alignment is
+    /// a layout property and is deliberately excluded.
+    #[must_use]
+    pub const fn compatibility(self) -> Self {
+        Self {
+            aligned: None,
+            ..self
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -251,10 +269,33 @@ pub enum TagKind {
     Enum,
 }
 
+/// Layout attributes a GNU C source can attach to one record member.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct FieldLayoutAttributes {
+    /// `aligned(N)`: the member's alignment is at least `N`, which may raise
+    /// the record's alignment.
+    pub aligned: Option<u32>,
+    /// `packed`: the member is placed at alignment one regardless of its type.
+    pub packed: bool,
+}
+
+/// Layout attributes a GNU C source can attach to a whole record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct TagLayoutAttributes {
+    /// `packed`: every member is placed at alignment one and the record's
+    /// alignment is one unless `aligned` says otherwise.
+    pub packed: bool,
+    /// `aligned(N)`: the record's alignment is at least `N`, and its size is
+    /// rounded up to a multiple of it.
+    pub aligned: Option<u32>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RecordField {
     pub name: Option<String>,
     pub ty: TypeId,
+    /// GNU `aligned` and `packed` written on this member.
+    pub layout: FieldLayoutAttributes,
     /// Bit-field width after integer constant-expression evaluation.
     ///
     /// `None` is an ordinary record member. `Some(0)` represents an unnamed
@@ -314,6 +355,8 @@ pub struct Tag {
     pub kind: TagKind,
     pub name: Option<String>,
     pub state: TagState,
+    /// GNU `packed` and `aligned` written on the tag itself.
+    pub layout: TagLayoutAttributes,
 }
 
 /// Why a canonical type key could not be interned.
@@ -451,8 +494,24 @@ impl TypeInterner {
             kind,
             name,
             state: TagState::Incomplete,
+            layout: TagLayoutAttributes::default(),
         });
         id
+    }
+
+    /// Record GNU `packed`/`aligned` on a tag. Later attributes join earlier
+    /// ones rather than replacing them, since a source may write the same tag's
+    /// attributes both after the keyword and after the closing brace.
+    pub fn set_tag_layout(&mut self, id: TagId, layout: TagLayoutAttributes) -> bool {
+        let Some(tag) = self.tags.get_mut(id.raw() as usize) else {
+            return false;
+        };
+        tag.layout.packed |= layout.packed;
+        tag.layout.aligned = match (tag.layout.aligned, layout.aligned) {
+            (Some(a), Some(b)) => Some(a.max(b)),
+            (a, b) => a.or(b),
+        };
+        true
     }
 
     #[must_use]
@@ -873,12 +932,23 @@ impl<'a> LayoutContext<'a> {
     }
 
     fn layout_type(&mut self, ty: TypeId) -> Result<TypeLayout, LayoutError> {
-        let kind = self
-            .types
-            .get(ty)
-            .ok_or(LayoutError::UnknownType(ty))?
-            .kind
-            .clone();
+        let canonical = self.types.get(ty).ok_or(LayoutError::UnknownType(ty))?;
+        let kind = canonical.kind.clone();
+        let raised = canonical.qualifiers.aligned;
+        let natural = self.layout_kind(ty, kind)?;
+        // `aligned(N)` on a typedef or type name sets the alignment exactly,
+        // lowering it if `N` is smaller: sealed GCC-14 and Clang-19 both give
+        // `typedef int t __attribute__((aligned(1)))` alignment one. The size
+        // of a non-record type is unchanged (`char aligned(4)` has sizeof 1).
+        // Records round their size inside `layout_record`, where an attribute on
+        // the tag can only raise; members likewise, in `member_layout`.
+        Ok(match raised {
+            Some(align) => TypeLayout::new(natural.size_bytes, align),
+            None => natural,
+        })
+    }
+
+    fn layout_kind(&mut self, ty: TypeId, kind: TypeKind) -> Result<TypeLayout, LayoutError> {
         match kind {
             TypeKind::Void | TypeKind::Function { .. } => Err(LayoutError::NonObjectType(ty)),
             TypeKind::BuiltinVaList => Err(LayoutError::UnsupportedBuiltinType(ty)),
@@ -963,10 +1033,11 @@ impl<'a> LayoutContext<'a> {
             return Err(LayoutError::RecursiveByValue(tag_id));
         }
 
+        let attributes = tag.layout;
         self.active_tags.push(tag_id);
         let result = match definition {
-            TagDefinition::Struct(fields) => self.layout_struct(tag_id, &fields),
-            TagDefinition::Union(fields) => self.layout_union(tag_id, &fields),
+            TagDefinition::Struct(fields) => self.layout_struct(tag_id, &fields, attributes),
+            TagDefinition::Union(fields) => self.layout_union(tag_id, &fields, attributes),
             TagDefinition::Enum(_) => unreachable!("tag kind checked above"),
         };
         let popped = self.active_tags.pop();
@@ -978,6 +1049,7 @@ impl<'a> LayoutContext<'a> {
         &mut self,
         tag: TagId,
         fields: &[RecordField],
+        attributes: TagLayoutAttributes,
     ) -> Result<RecordLayout, LayoutError> {
         let mut cursor_bits = 0_u64;
         let mut occupied_end_bytes = 0_u64;
@@ -989,9 +1061,17 @@ impl<'a> LayoutContext<'a> {
         for (field_index, field) in fields.iter().enumerate() {
             if let Some(spec) = field.bit_field {
                 let (base_layout, type_bits) = self.bit_field_base(tag, field_index, field.ty)?;
+                let packed = attributes.packed || field.layout.packed;
                 // AAPCS64 10.1.8: the container type contributes to aggregate
                 // alignment even for anonymous and zero-width bit-fields.
-                record_align = record_align.max(base_layout.align_bytes);
+                // `packed` removes that contribution: the bit-field then packs
+                // to bit granularity and imposes no alignment of its own.
+                if !packed {
+                    record_align = record_align.max(base_layout.align_bytes);
+                }
+                if let Some(align) = field.layout.aligned {
+                    record_align = record_align.max(align);
+                }
                 if spec.width_bits == 0 && field.name.is_some() {
                     return Err(LayoutError::NamedZeroWidthBitField { tag, field_index });
                 }
@@ -1010,6 +1090,8 @@ impl<'a> LayoutContext<'a> {
                     .ok_or(LayoutError::ArithmeticOverflow)?;
                 let start_bits = if spec.width_bits == 0 {
                     checked_align_up(cursor_bits, unit_bits)?
+                } else if packed {
+                    cursor_bits
                 } else {
                     let container_start = (cursor_bits / unit_bits) * unit_bits;
                     let container_end = container_start
@@ -1027,11 +1109,28 @@ impl<'a> LayoutContext<'a> {
                 let end_bits = start_bits
                     .checked_add(u64::from(spec.width_bits))
                     .ok_or(LayoutError::ArithmeticOverflow)?;
-                let storage_bits = (start_bits / unit_bits) * unit_bits;
+                // A packed bit-field's storage unit is the smallest byte span
+                // covering its bits, not its declared type's unit: the record
+                // may be narrower than that type (GCC and Clang give three
+                // packed fields of 3+6+7 bits a two-byte record), so a unit of
+                // the type's width would read past the object.
+                let (storage_bits, storage_size_bytes) = if packed && spec.width_bits != 0 {
+                    let first = (start_bits / 8) * 8;
+                    let last = checked_align_up(end_bits, 8)?;
+                    (
+                        first,
+                        u32::try_from((last - first) / 8)
+                            .map_err(|_| LayoutError::ArithmeticOverflow)?,
+                    )
+                } else {
+                    (
+                        (start_bits / unit_bits) * unit_bits,
+                        u32::try_from(base_layout.size_bytes)
+                            .map_err(|_| LayoutError::ArithmeticOverflow)?,
+                    )
+                };
                 let relative_bit_offset = start_bits - storage_bits;
                 let bit_offset = u16::try_from(relative_bit_offset)
-                    .map_err(|_| LayoutError::ArithmeticOverflow)?;
-                let storage_size_bytes = u32::try_from(base_layout.size_bytes)
                     .map_err(|_| LayoutError::ArithmeticOverflow)?;
 
                 cursor_bits = end_bits;
@@ -1082,7 +1181,8 @@ impl<'a> LayoutContext<'a> {
                 continue;
             }
 
-            let field_layout = self.layout_type(field.ty)?;
+            let natural = self.layout_type(field.ty)?;
+            let field_layout = member_layout(natural, attributes, field.layout);
             let cursor_bytes = bits_to_bytes(cursor_bits)?;
             let offset = checked_align_up(cursor_bytes, u64::from(field_layout.align_bytes))?;
             let end = offset
@@ -1099,6 +1199,9 @@ impl<'a> LayoutContext<'a> {
             });
         }
 
+        if let Some(align) = attributes.aligned {
+            record_align = record_align.max(align);
+        }
         let unrounded_size = bits_to_bytes(cursor_bits)?;
         let size_bytes = checked_align_up(unrounded_size, u64::from(record_align))?;
         let tail_base = flexible_position.unwrap_or(occupied_end_bytes);
@@ -1118,6 +1221,7 @@ impl<'a> LayoutContext<'a> {
         &mut self,
         tag: TagId,
         fields: &[RecordField],
+        attributes: TagLayoutAttributes,
     ) -> Result<RecordLayout, LayoutError> {
         let mut member_extent = 0_u64;
         let mut record_align = 1_u32;
@@ -1126,7 +1230,12 @@ impl<'a> LayoutContext<'a> {
         for (field_index, field) in fields.iter().enumerate() {
             if let Some(spec) = field.bit_field {
                 let (base_layout, type_bits) = self.bit_field_base(tag, field_index, field.ty)?;
-                record_align = record_align.max(base_layout.align_bytes);
+                if !(attributes.packed || field.layout.packed) {
+                    record_align = record_align.max(base_layout.align_bytes);
+                }
+                if let Some(align) = field.layout.aligned {
+                    record_align = record_align.max(align);
+                }
                 if spec.width_bits == 0 && field.name.is_some() {
                     return Err(LayoutError::NamedZeroWidthBitField { tag, field_index });
                 }
@@ -1159,7 +1268,8 @@ impl<'a> LayoutContext<'a> {
             if self.unbounded_array_element(field.ty)?.is_some() {
                 return Err(LayoutError::FlexibleArrayInUnion { tag, field_index });
             }
-            let field_layout = self.layout_type(field.ty)?;
+            let natural = self.layout_type(field.ty)?;
+            let field_layout = member_layout(natural, attributes, field.layout);
             member_extent = member_extent.max(field_layout.size_bytes);
             record_align = record_align.max(field_layout.align_bytes);
             layouts.push(RecordFieldLayout {
@@ -1170,6 +1280,9 @@ impl<'a> LayoutContext<'a> {
             });
         }
 
+        if let Some(align) = attributes.aligned {
+            record_align = record_align.max(align);
+        }
         let size_bytes = checked_align_up(member_extent, u64::from(record_align))?;
         Ok(RecordLayout {
             size_bytes,
@@ -1258,6 +1371,28 @@ fn complex_layout(base: ComplexBase) -> TypeLayout {
         ComplexBase::CF64 => TypeLayout::new(16, 8),
         ComplexBase::CF128 => TypeLayout::new(32, 16),
     }
+}
+
+/// The alignment a member is placed at, after the record's and the member's
+/// own GNU layout attributes.
+///
+/// `packed` on either lowers the member to alignment one; `aligned(N)` on the
+/// member then raises it to at least `N`. Order matters only for the
+/// combination, where GNU C gives `aligned` the last word. Size is never
+/// changed by either.
+fn member_layout(
+    natural: TypeLayout,
+    record: TagLayoutAttributes,
+    field: FieldLayoutAttributes,
+) -> TypeLayout {
+    let mut align = natural.align_bytes;
+    if record.packed || field.packed {
+        align = 1;
+    }
+    if let Some(raised) = field.aligned {
+        align = align.max(raised);
+    }
+    TypeLayout::new(natural.size_bytes, align)
 }
 
 fn checked_align_up(value: u64, alignment: u64) -> Result<u64, LayoutError> {
@@ -1394,6 +1529,7 @@ mod tests {
             types.complete_tag(
                 structure,
                 TagDefinition::Struct(vec![RecordField {
+                    layout: Default::default(),
                     name: Some("field".into()),
                     ty: unknown_type,
                     bit_field: None,

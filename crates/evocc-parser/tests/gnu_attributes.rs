@@ -18,7 +18,11 @@ use evocc_parser::Parser;
 use evocc_types::TargetDataLayout;
 
 fn parse<'a>(source: &str, arena: &'a Arena) -> Result<CHirUnit<'a>, String> {
-    let file = SourceFile::new(FileId::new(9_201), "gnu-attributes.c".to_owned(), source.to_owned());
+    let file = SourceFile::new(
+        FileId::new(9_201),
+        "gnu-attributes.c".to_owned(),
+        source.to_owned(),
+    );
     let mut lexer = Lexer::new(file.id, &file.contents);
     let mut tokens = Vec::new();
     while let Some(token) = lexer.next() {
@@ -46,14 +50,18 @@ fn rejects(source: &str, code: &str) {
     let arena = Arena::default();
     match parse(source, &arena) {
         Ok(_) => panic!("must reject with {code}, but parsed\n  source: {source}"),
-        Err(e) => assert!(e.starts_with(&format!("{code}:")), "expected {code}, got {e}\n  source: {source}"),
+        Err(e) => assert!(
+            e.starts_with(&format!("{code}:")),
+            "expected {code}, got {e}\n  source: {source}"
+        ),
     }
 }
 
 /// Size and alignment of the typedef named `name` after parsing `source`.
 fn layout_of(source: &str, name: &str) -> (u64, u32) {
     let arena = Arena::default();
-    let unit = parse(source, &arena).unwrap_or_else(|e| panic!("must parse, got {e}\n  source: {source}"));
+    let unit =
+        parse(source, &arena).unwrap_or_else(|e| panic!("must parse, got {e}\n  source: {source}"));
     let symbol = unit
         .symbols()
         .resolve(unit.symbols().file_scope(), name)
@@ -151,14 +159,26 @@ fn specifier_position_attaches_to_every_declarator() {
         })
         .collect();
     assert_eq!(typedefs, vec!["a".to_owned(), "b".to_owned()]);
-    assert_eq!(layout_of("typedef int __attribute__((aligned(8))) a, b;\n", "a").1, 8);
-    assert_eq!(layout_of("typedef int __attribute__((aligned(8))) a, b;\n", "b").1, 8);
+    assert_eq!(
+        layout_of("typedef int __attribute__((aligned(8))) a, b;\n", "a").1,
+        8
+    );
+    assert_eq!(
+        layout_of("typedef int __attribute__((aligned(8))) a, b;\n", "b").1,
+        8
+    );
 }
 
 #[test]
 fn double_underscore_spelling_is_the_same_attribute() {
-    assert_eq!(layout_of("typedef int __attribute__((__aligned__(8))) t;\n", "t").1, 8);
-    assert_eq!(layout_of("typedef int __attribute__((aligned(8))) t;\n", "t").1, 8);
+    assert_eq!(
+        layout_of("typedef int __attribute__((__aligned__(8))) t;\n", "t").1,
+        8
+    );
+    assert_eq!(
+        layout_of("typedef int __attribute__((aligned(8))) t;\n", "t").1,
+        8
+    );
 }
 
 #[test]
@@ -179,39 +199,68 @@ fn aligned_argument_must_be_a_representable_power_of_two() {
 
 #[test]
 fn aligned_raises_a_typedef_and_makes_a_distinct_type() {
-    assert_eq!(layout_of("typedef __int128 t __attribute__((aligned(16)));\n", "t"), (16, 16));
-    assert_eq!(layout_of("typedef char t __attribute__((aligned(4)));\n", "t"), (1, 4));
+    assert_eq!(
+        layout_of("typedef __int128 t __attribute__((aligned(16)));\n", "t"),
+        (16, 16)
+    );
+    assert_eq!(
+        layout_of("typedef char t __attribute__((aligned(4)));\n", "t"),
+        (1, 4)
+    );
 }
 
 #[test]
-fn aligned_never_lowers_an_alignment() {
-    assert_eq!(layout_of("typedef int t __attribute__((aligned(1)));\n", "t"), (4, 4));
+fn aligned_on_a_typedef_sets_the_alignment_exactly_even_lower() {
+    // Sealed GCC-14 and Clang-19 both report alignment 1 here. An earlier
+    // draft of this test expected 4 on the belief that aligned never lowers;
+    // that is true of records and members, not of typedefs.
+    assert_eq!(
+        layout_of("typedef int t __attribute__((aligned(1)));\n", "t"),
+        (4, 1)
+    );
 }
 
 #[test]
 fn bare_aligned_is_the_largest_fundamental_alignment() {
-    assert_eq!(layout_of("typedef char t __attribute__((aligned));\n", "t"), (1, 16));
+    assert_eq!(
+        layout_of("typedef char t __attribute__((aligned));\n", "t"),
+        (1, 16)
+    );
 }
 
 #[test]
 fn packed_record_has_no_padding_and_alignment_one() {
-    assert_eq!(layout_of("typedef struct { char c; int i; } __attribute__((packed)) t;\n", "t"), (5, 1));
+    assert_eq!(
+        layout_of(
+            "typedef struct { char c; int i; } __attribute__((packed)) t;\n",
+            "t"
+        ),
+        (5, 1)
+    );
 }
 
 #[test]
 fn packed_with_aligned_takes_the_given_alignment() {
     assert_eq!(
-        layout_of("typedef struct { char c; int i; } __attribute__((packed, aligned(4))) t;\n", "t"),
+        layout_of(
+            "typedef struct { char c; int i; } __attribute__((packed, aligned(4))) t;\n",
+            "t"
+        ),
         (8, 4)
     );
 }
 
 #[test]
 fn packed_member_alone_moves_only_that_member() {
-    // c at 0, i at 1 (packed), s at 5 -> rounded to 6 for short alignment; size 8, align 4.
+    // c at 0; i packed at 1..5; s aligned to 2 at 6..8. The packed member no
+    // longer contributes its type's alignment, so the record aligns to `short`:
+    // size 8, align 2. The oracle run confirms this figure.
     assert_eq!(
-        layout_of("typedef struct { char c; int i __attribute__((packed)); short s; } t;\n", "t"),
-        (8, 4)
+        layout_of(
+            "typedef struct { char c; int i __attribute__((packed)); short s; } t;\n",
+            "t"
+        ),
+        (8, 2)
     );
 }
 

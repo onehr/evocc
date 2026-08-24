@@ -9,21 +9,23 @@ use evocc_chir::integer::{
     CInteger, CIntegerType,
 };
 use evocc_chir::{
-    AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit,
-    CharLit, CharPrefix, EnumeratorDecl, ExprCategory, ExprFacts, FieldProjection, FloatLit,
-    FloatSuffix, FunctionDecl, IndexProjection, InitAction, InitPlan, IntBase, IntLit, IntSuffix,
-    MemoryPlace, ObjectDecl, ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceProjection,
-    PlaceRoot, PointerTypeDesc, RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName,
-    StorageClass, StringLit, StringPrefix, SubobjectPath, SubobjectStep, SymbolData, SymbolId,
-    SymbolKind, SymbolTable, SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl,
-    UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer, WrittenInitializer,
+    AppliedAttribute, AssignmentOp, Attribute, AttributeArgument, AttributePlacement, BinaryOp,
+    CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, CharLit, CharPrefix,
+    EnumeratorDecl, ExprCategory, ExprFacts, FieldProjection, FloatLit, FloatSuffix, FunctionDecl,
+    IndexProjection, InitAction, InitPlan, IntBase, IntLit, IntSuffix, MemoryPlace, ObjectDecl,
+    ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceProjection, PlaceRoot, PointerTypeDesc,
+    RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName, StorageClass, StringLit,
+    StringPrefix, SubobjectPath, SubobjectStep, SymbolData, SymbolId, SymbolKind, SymbolTable,
+    SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl, UnaryOp, UpdateOp,
+    WrittenDeclarator, WrittenDeclaratorLayer, WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_lex::{Token, TokenKind, TokenText};
 use evocc_types::{
-    ArrayBound, BitFieldSpec, CanonicalType, ComplexBase, EnumConstant, FloatKind,
-    FunctionParameters, GnuInt128Signedness, IntRank, Qualifiers, RecordField, TagDefinition,
-    TagId, TagKind, TagState, TargetDataLayout, TypeId, TypeInterner, TypeKind, TypeLayout,
+    ArrayBound, BitFieldSpec, CanonicalType, ComplexBase, EnumConstant, FieldLayoutAttributes,
+    FloatKind, FunctionParameters, GnuInt128Signedness, IntRank, Qualifiers, RecordField,
+    TagDefinition, TagId, TagKind, TagLayoutAttributes, TagState, TargetDataLayout, TypeId,
+    TypeInterner, TypeKind, TypeLayout,
 };
 
 #[derive(Debug, Clone)]
@@ -82,6 +84,7 @@ struct PendingTag<'arena> {
     name: Option<SpannedName>,
     members: TagMembers<'arena>,
     specifier_span: SourceSpan,
+    attributes: Vec<Attribute>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -220,6 +223,8 @@ pub struct Parser<'src, 'arena> {
     external_entities: HashMap<String, SymbolId>,
     side_declarations: Vec<&'arena CHirDecl<'arena>>,
     loop_depth: usize,
+    /// Attributes on labels and type names, which have no declaration node.
+    detached_attributes: Vec<Attribute>,
     switch_depth: usize,
 }
 
@@ -267,6 +272,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             external_entities: HashMap::new(),
             side_declarations: Vec::new(),
             loop_depth: 0,
+            detached_attributes: Vec::new(),
             switch_depth: 0,
         }
     }
@@ -308,11 +314,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.advance();
             }
         }
-        CHirUnit::new(
+        let mut unit = CHirUnit::new(
             decls,
             std::mem::take(&mut self.types),
             std::mem::take(&mut self.symbols),
-        )
+        );
+        unit.set_detached_attributes(std::mem::take(&mut self.detached_attributes));
+        unit
     }
 
     pub fn had_error(&self) -> bool {
@@ -685,7 +693,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         let left_type = self.types.get(left)?.clone();
         let right_type = self.types.get(right)?.clone();
-        if !ignore_top_qualifiers && left_type.qualifiers != right_type.qualifiers {
+        if !ignore_top_qualifiers
+            && left_type.qualifiers.compatibility() != right_type.qualifiers.compatibility()
+        {
             return None;
         }
         let qualifiers = if ignore_top_qualifiers {
@@ -925,12 +935,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         let mut storage = None;
         let mut inline_spans = Vec::new();
-        self.parse_declaration_modifiers(&mut storage, &mut inline_spans);
+        let mut attributes = Vec::new();
+        self.parse_declaration_modifiers(&mut storage, &mut inline_spans, &mut attributes);
         let Some(specifier) = self.parse_declaration_type_specifier(&mut inline_spans) else {
             self.report("E1001", "expected-declaration", self.span());
             return None;
         };
-        self.parse_declaration_modifiers(&mut storage, &mut inline_spans);
+        self.parse_declaration_modifiers(&mut storage, &mut inline_spans, &mut attributes);
         let storage = storage.unwrap_or(StorageClass::None);
 
         if self.peek_kind() == Some(TokenKind::Semicolon) {
@@ -957,7 +968,23 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E1001", "expected-declaration", self.span());
             return None;
         };
+        // Attributes after the declarator attach to it alone. When a function
+        // body follows they are in function-definition position; the same
+        // tokens, a different row of the placement table.
+        let trailing_placement = if self
+            .tokens
+            .iter()
+            .skip(self.pos)
+            .find(|token| token.kind != TokenKind::Attribute)
+            .is_some_and(|_| self.declarator_is_followed_by_body())
+        {
+            AttributePlacement::FunctionDefinition
+        } else {
+            AttributePlacement::AfterDeclarator
+        };
+        attributes.extend(self.parse_attribute_specifiers(trailing_placement));
         let mut full_type = self.apply_declarator(specifier.surface.type_id(), &declarator.derived);
+        full_type = self.apply_attributes_to_type(full_type, &mut attributes);
         let written = self.written_declarator(&declarator);
 
         if (context != DeclarationContext::File && storage == StorageClass::ThreadLocal)
@@ -1045,6 +1072,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 storage,
                 inline_spans,
                 gnu_extension_spans,
+                attributes,
                 body,
                 span: declaration_span,
             })));
@@ -1056,40 +1084,107 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         } else {
             SymbolData::Object { storage }
         };
-        // An ordinary identifier's scope begins immediately after its
-        // declarator, so self-references in an initializer resolve to this
-        // declaration rather than an outer shadowed name.
-        let has_initializer = self.peek_kind() == Some(TokenKind::Assign);
-        let symbol = self.declare_symbol(&declarator.name, symbol_data, full_type);
-        full_type = self
-            .symbols
-            .symbol(symbol)
-            .expect("declared symbols belong to the parser symbol table")
-            .ty();
-        if has_initializer && storage != StorageClass::Typedef {
-            self.mark_definition(symbol, &declarator.name);
+
+        // C11 6.7: one declaration may carry several init-declarators. Each
+        // gets its own symbol and initializer in sequence, so a later
+        // initializer can refer to an earlier name, and every one receives the
+        // attributes written among the specifiers. Attributes written after a
+        // particular declarator belong to it alone.
+        struct Pending<'arena> {
+            declarator: ParsedDeclarator,
+            full_type: TypeId,
+            symbol: SymbolId,
+            initializer: Option<ObjectInitializer<'arena>>,
+            written: WrittenDeclarator,
+            attributes: Vec<Attribute>,
         }
-        let initializer = if self.match_kind(TokenKind::Assign) {
-            let written = self.parse_written_initializer()?;
-            if storage == StorageClass::Typedef
-                || (storage == StorageClass::Extern && context != DeclarationContext::File)
-            {
-                self.report("E2202", "invalid-initializer-type", written.span());
+        let specifier_attributes: Vec<Attribute> = attributes
+            .iter()
+            .filter(|attribute| attribute.placement == AttributePlacement::DeclarationSpecifiers)
+            .cloned()
+            .collect();
+        let mut pending: Vec<Pending<'arena>> = Vec::new();
+        let mut declarator = declarator;
+        let mut written = written;
+        loop {
+            // An ordinary identifier's scope begins immediately after its
+            // declarator, so self-references in an initializer resolve to this
+            // declaration rather than an outer shadowed name.
+            let has_initializer = self.peek_kind() == Some(TokenKind::Assign);
+            let symbol = self.declare_symbol(&declarator.name, symbol_data, full_type);
+            full_type = self
+                .symbols
+                .symbol(symbol)
+                .expect("declared symbols belong to the parser symbol table")
+                .ty();
+            if has_initializer && storage != StorageClass::Typedef {
+                self.mark_definition(symbol, &declarator.name);
+            }
+            let initializer = if self.match_kind(TokenKind::Assign) {
+                let written_initializer = self.parse_written_initializer()?;
+                if storage == StorageClass::Typedef
+                    || (storage == StorageClass::Extern && context != DeclarationContext::File)
+                {
+                    self.report(
+                        "E2202",
+                        "invalid-initializer-type",
+                        written_initializer.span(),
+                    );
+                    return None;
+                }
+                full_type = self.infer_initializer_target_type(full_type, &written_initializer)?;
+                self.symbols
+                    .update_symbol_type(symbol, full_type)
+                    .expect("declared symbols belong to the parser symbol table");
+                let plan = self.normalize_initializer_plan(full_type, &written_initializer)?;
+                if self.initializer_has_static_storage(context, storage) {
+                    self.validate_static_initializer_plan(&plan)?;
+                }
+                Some(ObjectInitializer::new(written_initializer, plan))
+            } else {
+                None
+            };
+            pending.push(Pending {
+                declarator,
+                full_type,
+                symbol,
+                initializer,
+                written,
+                attributes,
+            });
+            if !self.match_kind(TokenKind::Comma) {
+                break;
+            }
+            let Some(next) = self.parse_declarator(false) else {
+                self.report("E1001", "expected-declaration", self.span());
+                return None;
+            };
+            let mut next_attributes = specifier_attributes.clone();
+            next_attributes
+                .extend(self.parse_attribute_specifiers(AttributePlacement::AfterDeclarator));
+            let mut next_type = self.apply_declarator(specifier.surface.type_id(), &next.derived);
+            next_type = self.apply_attributes_to_type(next_type, &mut next_attributes);
+            if matches!(
+                self.types.get(next_type).map(|ty| &ty.kind),
+                Some(TypeKind::Function { .. })
+            ) {
+                // A function declarator inside an init-declarator list is legal
+                // C but has no consumer in this profile; refuse it plainly
+                // rather than mis-declaring it as an object.
+                self.report("E1002", "expected-token: ;", next.name.span);
                 return None;
             }
-            full_type = self.infer_initializer_target_type(full_type, &written)?;
-            self.symbols
-                .update_symbol_type(symbol, full_type)
-                .expect("declared symbols belong to the parser symbol table");
-            let plan = self.normalize_initializer_plan(full_type, &written)?;
-            if self.initializer_has_static_storage(context, storage) {
-                self.validate_static_initializer_plan(&plan)?;
-            }
-            Some(ObjectInitializer::new(written, plan))
-        } else {
-            None
-        };
-        let end_span = self.declaration_end(declarator.name.span);
+            written = self.written_declarator(&next);
+            declarator = next;
+            full_type = next_type;
+            attributes = next_attributes;
+        }
+
+        let last_name_span = pending
+            .last()
+            .map(|entry| entry.declarator.name.span)
+            .expect("at least one declarator was parsed");
+        let end_span = self.declaration_end(last_name_span);
         let declaration_span = self.merge_span(start_span, end_span);
         if let Some(span) = inline_spans.first().copied() {
             self.report("E1401", "inline-specifier-on-non-function", span);
@@ -1103,30 +1198,34 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 gnu_extension_spans.clone(),
             ));
         }
-        let declaration = if storage == StorageClass::Typedef {
-            CHirDecl::Typedef(TypedefDecl {
-                symbol,
-                name: declarator.name,
-                ty: full_type,
-                specifier: specifier.surface,
-                written,
-                gnu_extension_spans,
-                span: declaration_span,
-            })
-        } else {
-            CHirDecl::Object(ObjectDecl {
-                symbol,
-                name: declarator.name,
-                ty: full_type,
-                specifier: specifier.surface,
-                written,
-                storage,
-                initializer,
-                gnu_extension_spans,
-                span: declaration_span,
-            })
-        };
-        declarations.push(self.alloc_node(declaration));
+        for entry in pending {
+            let declaration = if storage == StorageClass::Typedef {
+                CHirDecl::Typedef(TypedefDecl {
+                    symbol: entry.symbol,
+                    name: entry.declarator.name,
+                    ty: entry.full_type,
+                    specifier: specifier.surface.clone(),
+                    written: entry.written,
+                    gnu_extension_spans: gnu_extension_spans.clone(),
+                    attributes: entry.attributes,
+                    span: declaration_span,
+                })
+            } else {
+                CHirDecl::Object(ObjectDecl {
+                    symbol: entry.symbol,
+                    name: entry.declarator.name,
+                    ty: entry.full_type,
+                    specifier: specifier.surface.clone(),
+                    written: entry.written,
+                    storage,
+                    initializer: entry.initializer,
+                    gnu_extension_spans: gnu_extension_spans.clone(),
+                    attributes: entry.attributes,
+                    span: declaration_span,
+                })
+            };
+            declarations.push(self.alloc_node(declaration));
+        }
         Some(declarations)
     }
 
@@ -2409,6 +2508,36 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         body
     }
 
+    /// Does a function body follow the current position once any attribute
+    /// specifiers are skipped? Decides the placement label of those attributes
+    /// without consuming them.
+    fn declarator_is_followed_by_body(&self) -> bool {
+        let mut index = self.pos;
+        while self.tokens.get(index).map(|token| token.kind) == Some(TokenKind::Attribute) {
+            // skip `__attribute__ ( ( ... ) )` by balancing parentheses
+            index += 1;
+            let mut depth = 0_usize;
+            let mut seen_open = false;
+            while let Some(token) = self.tokens.get(index) {
+                match token.kind {
+                    TokenKind::LParen => {
+                        depth += 1;
+                        seen_open = true;
+                    }
+                    TokenKind::RParen => {
+                        depth = depth.saturating_sub(1);
+                    }
+                    _ => {}
+                }
+                index += 1;
+                if seen_open && depth == 0 {
+                    break;
+                }
+            }
+        }
+        self.tokens.get(index).map(|token| token.kind) == Some(TokenKind::LBrace)
+    }
+
     fn declaration_end(&mut self, fallback: SourceSpan) -> SourceSpan {
         if self.peek_kind() == Some(TokenKind::Semicolon) {
             return self.advance().expect("peeked semicolon").span;
@@ -2436,6 +2565,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             span: declaration_span,
             specifier_span: event.specifier_span,
             gnu_extension_spans,
+            attributes: event.attributes,
         }))
     }
 
@@ -2455,12 +2585,318 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         storage
     }
 
+    // ── GNU attributes ───────────────────────────────────────────────────
+
+    /// Consume every `__attribute__((...))` specifier at the cursor.
+    ///
+    /// Each attribute is kept as written, with arguments as text, and is
+    /// labelled with the placement the caller is parsing, since placement is
+    /// what decides attachment. Nothing is applied here; callers that own a
+    /// type, tag or member apply `aligned` and `packed` and leave `applied`
+    /// set so the dump and the inventory can tell the two apart.
+    fn parse_attribute_specifiers(&mut self, placement: AttributePlacement) -> Vec<Attribute> {
+        let mut attributes = Vec::new();
+        while self.peek_kind() == Some(TokenKind::Attribute) {
+            let keyword = self.advance().expect("peeked attribute keyword");
+            // `expect` reports its own diagnostic, and the first diagnostic is
+            // the one a reader sees, so the delimiters are checked by hand to
+            // keep the report on the attribute rather than on a stray token.
+            for _ in 0..2 {
+                if self.peek_kind() != Some(TokenKind::LParen) {
+                    self.report("E2903", "malformed-attribute", keyword.span);
+                    return attributes;
+                }
+                self.advance();
+            }
+            loop {
+                // GNU permits empty entries: `__attribute__(())` and `,,`.
+                if self.match_kind(TokenKind::Comma) {
+                    continue;
+                }
+                if self.peek_kind() == Some(TokenKind::RParen) {
+                    break;
+                }
+                let Some(name_token) = self.advance() else {
+                    self.report("E2903", "malformed-attribute", keyword.span);
+                    return attributes;
+                };
+                // Attribute names may be keywords (`const`, `noreturn`), so any
+                // single token is accepted as a name and read by its text.
+                if matches!(name_token.kind, TokenKind::LParen | TokenKind::Comma) {
+                    self.report("E2903", "malformed-attribute", name_token.span);
+                    return attributes;
+                }
+                let written = self.token_text(&name_token).to_owned();
+                let name = Attribute::canonical_name(&written);
+                let mut span = name_token.span;
+                let mut arguments = Vec::new();
+                if self.peek_kind() == Some(TokenKind::LParen) {
+                    let open = self.advance().expect("peeked argument list");
+                    match self.parse_attribute_arguments(open.span) {
+                        Some((parsed, close)) => {
+                            arguments = parsed;
+                            span = self.merge_span(name_token.span, close);
+                        }
+                        None => return attributes,
+                    }
+                }
+                attributes.push(Attribute {
+                    name,
+                    written,
+                    arguments,
+                    placement,
+                    span,
+                    applied: None,
+                });
+                if !self.match_kind(TokenKind::Comma) {
+                    break;
+                }
+            }
+            for _ in 0..2 {
+                if self.peek_kind() != Some(TokenKind::RParen) {
+                    self.report("E2903", "malformed-attribute", keyword.span);
+                    return attributes;
+                }
+                self.advance();
+            }
+        }
+        attributes
+    }
+
+    /// Read a comma-separated argument list up to its closing parenthesis,
+    /// keeping each argument as the exact source text it spans. Nested
+    /// parentheses are balanced so `format(printf, 1, 2)` and
+    /// `aligned(sizeof(long))` are one argument each where they should be.
+    fn parse_attribute_arguments(
+        &mut self,
+        open: SourceSpan,
+    ) -> Option<(Vec<AttributeArgument>, SourceSpan)> {
+        let mut arguments = Vec::new();
+        let mut depth = 0_usize;
+        let mut first: Option<SourceSpan> = None;
+        let mut last: Option<SourceSpan> = None;
+        loop {
+            let Some(kind) = self.peek_kind() else {
+                self.report("E2903", "malformed-attribute", open);
+                return None;
+            };
+            match kind {
+                TokenKind::RParen if depth == 0 => {
+                    let close = self.advance().expect("peeked close").span;
+                    if let (Some(start), Some(end)) = (first, last) {
+                        arguments.push(self.attribute_argument(start, end));
+                    } else if !arguments.is_empty() {
+                        // `aligned(4,)` -- a trailing separator with nothing after it.
+                        self.report("E2903", "malformed-attribute", close);
+                        return None;
+                    }
+                    return Some((arguments, close));
+                }
+                TokenKind::Comma if depth == 0 => {
+                    let comma = self.advance().expect("peeked comma").span;
+                    match (first, last) {
+                        (Some(start), Some(end)) => {
+                            arguments.push(self.attribute_argument(start, end))
+                        }
+                        _ => {
+                            self.report("E2903", "malformed-attribute", comma);
+                            return None;
+                        }
+                    }
+                    first = None;
+                    last = None;
+                }
+                TokenKind::Semicolon | TokenKind::LBrace | TokenKind::RBrace => {
+                    // An argument list cannot contain these; the list was never
+                    // closed. Report at the opening parenthesis, where the
+                    // reader will look.
+                    self.report("E2903", "malformed-attribute", open);
+                    return None;
+                }
+                _ => {
+                    let token = self.advance().expect("peeked argument token");
+                    match token.kind {
+                        TokenKind::LParen => depth += 1,
+                        TokenKind::RParen => depth -= 1,
+                        _ => {}
+                    }
+                    first.get_or_insert(token.span);
+                    last = Some(token.span);
+                }
+            }
+        }
+    }
+
+    fn attribute_argument(&self, start: SourceSpan, end: SourceSpan) -> AttributeArgument {
+        let text = self.source[start.byte_start as usize..end.byte_end as usize].to_owned();
+        AttributeArgument {
+            text,
+            span: self.merge_span(start, end),
+        }
+    }
+
+    /// Resolve `aligned` to bytes, or report why it cannot be.
+    ///
+    /// GNU C bounds the argument to a power of two no larger than 2^28; the
+    /// target layout represents any power of two up to that, so the two
+    /// limits coincide here. Bare `aligned` is the largest fundamental
+    /// alignment, sixteen bytes on AArch64.
+    fn aligned_bytes(&mut self, attribute: &Attribute) -> Option<u32> {
+        const LARGEST_FUNDAMENTAL_ALIGNMENT: u32 = 16;
+        const GNU_MAXIMUM_ALIGNMENT: u64 = 1 << 28;
+        match attribute.arguments.as_slice() {
+            [] => Some(LARGEST_FUNDAMENTAL_ALIGNMENT),
+            [argument] => {
+                let value = argument.text.trim();
+                let parsed = value.strip_prefix("0x").map_or_else(
+                    || value.parse::<u64>().ok(),
+                    |hex| u64::from_str_radix(hex, 16).ok(),
+                );
+                match parsed {
+                    Some(bytes)
+                        if bytes != 0
+                            && bytes.is_power_of_two()
+                            && bytes <= GNU_MAXIMUM_ALIGNMENT =>
+                    {
+                        u32::try_from(bytes).ok()
+                    }
+                    _ => {
+                        self.report("E2903", "malformed-attribute", argument.span);
+                        None
+                    }
+                }
+            }
+            [_, second, ..] => {
+                self.report("E2903", "malformed-attribute", second.span);
+                None
+            }
+        }
+    }
+
+    /// Apply `aligned` to a type, yielding the (possibly re-interned) type and
+    /// marking the attribute applied. `packed` on a record type is forwarded to
+    /// the tag; on anything else it is preserved without effect, which is what
+    /// GNU C does too.
+    fn apply_attributes_to_type(&mut self, ty: TypeId, attributes: &mut [Attribute]) -> TypeId {
+        let mut ty = ty;
+        for attribute in attributes.iter_mut() {
+            match attribute.name.as_str() {
+                "aligned" => {
+                    let Some(bytes) = self.aligned_bytes(attribute) else {
+                        continue;
+                    };
+                    attribute.applied = Some(AppliedAttribute::Aligned(bytes));
+                    let canonical = self
+                        .types
+                        .get(ty)
+                        .expect("attributed types are interned")
+                        .clone();
+                    let raised = canonical
+                        .qualifiers
+                        .aligned
+                        .map_or(bytes, |current| current.max(bytes));
+                    let qualifiers = Qualifiers {
+                        aligned: Some(raised),
+                        ..canonical.qualifiers
+                    };
+                    ty = self.intern(canonical.kind, qualifiers);
+                }
+                "packed" => {
+                    if !attribute.arguments.is_empty() {
+                        self.report("E2903", "malformed-attribute", attribute.span);
+                        continue;
+                    }
+                    let tag = match self.types.get(ty).map(|canonical| &canonical.kind) {
+                        Some(TypeKind::Struct(tag) | TypeKind::Union(tag)) => Some(*tag),
+                        _ => None,
+                    };
+                    if let Some(tag) = tag {
+                        self.types.set_tag_layout(
+                            tag,
+                            TagLayoutAttributes {
+                                packed: true,
+                                aligned: None,
+                            },
+                        );
+                        attribute.applied = Some(AppliedAttribute::Packed);
+                    }
+                }
+                _ => {}
+            }
+        }
+        ty
+    }
+
+    /// Apply `packed` and `aligned` written on a tag itself.
+    fn apply_attributes_to_tag(&mut self, tag: TagId, attributes: &mut [Attribute]) {
+        for attribute in attributes.iter_mut() {
+            match attribute.name.as_str() {
+                "packed" => {
+                    if !attribute.arguments.is_empty() {
+                        self.report("E2903", "malformed-attribute", attribute.span);
+                        continue;
+                    }
+                    self.types.set_tag_layout(
+                        tag,
+                        TagLayoutAttributes {
+                            packed: true,
+                            aligned: None,
+                        },
+                    );
+                    attribute.applied = Some(AppliedAttribute::Packed);
+                }
+                "aligned" => {
+                    if let Some(bytes) = self.aligned_bytes(attribute) {
+                        self.types.set_tag_layout(
+                            tag,
+                            TagLayoutAttributes {
+                                packed: false,
+                                aligned: Some(bytes),
+                            },
+                        );
+                        attribute.applied = Some(AppliedAttribute::Aligned(bytes));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// The layout attributes a member carries, with `applied` marked.
+    fn member_layout_attributes(&mut self, attributes: &mut [Attribute]) -> FieldLayoutAttributes {
+        let mut layout = FieldLayoutAttributes::default();
+        for attribute in attributes.iter_mut() {
+            match attribute.name.as_str() {
+                "packed" => {
+                    layout.packed = true;
+                    attribute.applied = Some(AppliedAttribute::Packed);
+                }
+                "aligned" => {
+                    if let Some(bytes) = self.aligned_bytes(attribute) {
+                        layout.aligned =
+                            Some(layout.aligned.map_or(bytes, |current| current.max(bytes)));
+                        attribute.applied = Some(AppliedAttribute::Aligned(bytes));
+                    }
+                }
+                _ => {}
+            }
+        }
+        layout
+    }
+
     fn parse_declaration_modifiers(
         &mut self,
         storage: &mut Option<StorageClass>,
         inline_spans: &mut Vec<SourceSpan>,
+        attributes: &mut Vec<Attribute>,
     ) {
         loop {
+            if self.peek_kind() == Some(TokenKind::Attribute) {
+                attributes.extend(
+                    self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers),
+                );
+                continue;
+            }
             if self.peek_kind() == Some(TokenKind::Inline) {
                 inline_spans.push(self.advance().expect("peeked inline specifier").span);
                 continue;
@@ -2644,6 +3080,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         qualifiers: Qualifiers,
         keyword_span: SourceSpan,
     ) -> Option<ParsedSpecifier<'arena>> {
+        let mut tag_attributes = self.parse_attribute_specifiers(AttributePlacement::TagKeyword);
         let name = if self.peek_kind() == Some(TokenKind::Identifier) {
             let token = self.advance().expect("peeked identifier");
             Some(SpannedName {
@@ -2734,6 +3171,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 TagKind::Enum => self.parse_enum_members()?,
             };
             let close = self.expect(TokenKind::RBrace);
+            tag_attributes
+                .extend(self.parse_attribute_specifiers(AttributePlacement::TagClosingBrace));
+            self.apply_attributes_to_tag(tag, &mut tag_attributes);
             let end = close
                 .as_ref()
                 .map_or_else(|| self.span(), |token| token.span);
@@ -2762,6 +3202,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     name,
                     members,
                     specifier_span,
+                    attributes: tag_attributes,
                 }),
             })
         } else {
@@ -2775,13 +3216,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     name: name.clone(),
                     span: specifier_span,
                 },
-                tag_event: (fresh || is_pure_forward).then_some(PendingTag {
-                    tag,
-                    scope: declaration_scope,
-                    name,
-                    members: TagMembers::Incomplete,
-                    specifier_span,
-                }),
+                tag_event: {
+                    self.apply_attributes_to_tag(tag, &mut tag_attributes);
+                    (fresh || is_pure_forward).then_some(PendingTag {
+                        tag,
+                        scope: declaration_scope,
+                        name,
+                        members: TagMembers::Incomplete,
+                        attributes: tag_attributes.clone(),
+                        specifier_span,
+                    })
+                },
             })
         }
     }
@@ -2795,6 +3240,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut canonical = Vec::new();
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
             let start = self.span();
+            let mut member_attributes =
+                self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers);
             let Some(specifier) = self.parse_type_specifier() else {
                 self.report("E1001", "expected-declaration", self.span());
                 self.advance();
@@ -2802,7 +3249,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             };
             let declarator = if matches!(
                 self.peek_kind(),
-                Some(TokenKind::Colon | TokenKind::Semicolon)
+                Some(TokenKind::Colon | TokenKind::Semicolon | TokenKind::Attribute)
             ) {
                 None
             } else {
@@ -2813,11 +3260,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .map_or(specifier.surface.type_id(), |decl| {
                     self.apply_declarator(specifier.surface.type_id(), &decl.derived)
                 });
+            member_attributes.extend(self.parse_attribute_specifiers(AttributePlacement::Member));
             let bit_width = if self.match_kind(TokenKind::Colon) {
                 Some(self.parse_expression()?)
             } else {
                 None
             };
+            member_attributes.extend(self.parse_attribute_specifiers(AttributePlacement::Member));
+            let member_layout = self.member_layout_attributes(&mut member_attributes);
             let fallback = declarator
                 .as_ref()
                 .map_or(specifier.surface.span(), |decl| decl.span);
@@ -2856,6 +3306,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 |decl| self.written_declarator(decl),
             );
             canonical.push(RecordField {
+                layout: member_layout,
                 name: name.as_ref().map(|name| name.spelling.clone()),
                 ty,
                 bit_field: canonical_bit_field,
@@ -2865,6 +3316,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 ty,
                 specifier: specifier.surface,
                 written,
+                attributes: member_attributes,
                 bit_width,
                 span,
             });
@@ -3283,6 +3735,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 spelling: self.token_text(&token).to_owned(),
                 span: token.span,
             };
+            let enumerator_attributes =
+                self.parse_attribute_specifiers(AttributePlacement::Enumerator);
             let written_value = if self.match_kind(TokenKind::Assign) {
                 Some(self.parse_assignment()?)
             } else {
@@ -3333,6 +3787,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 name,
                 value,
                 written_value,
+                attributes: enumerator_attributes,
                 span,
             });
             next_value = mathematical_value.checked_add(1);
@@ -3385,7 +3840,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             });
         }
         derived.extend(pointers);
+        let mut type_attributes = self.parse_attribute_specifiers(AttributePlacement::TypeName);
         let ty = self.apply_declarator(specifier.surface.type_id(), &derived);
+        let ty = self.apply_attributes_to_type(ty, &mut type_attributes);
+        self.detached_attributes.extend(type_attributes);
         Some((ty, specifier.tag_event))
     }
 
@@ -3772,7 +4230,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.side_declarations.push(declaration);
             }
             let declared_name = name.as_ref().map(|name| name.spelling.clone());
+            let mut parameter_attributes =
+                self.parse_attribute_specifiers(AttributePlacement::Parameter);
+            let ty = self.apply_attributes_to_type(ty, &mut parameter_attributes);
             params.push(ParameterDecl {
+                attributes: parameter_attributes,
                 symbol: None,
                 name,
                 ty,
@@ -4088,6 +4550,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             span: token.span,
         };
         self.expect(TokenKind::Colon)?;
+        // `label: __attribute__((unused));` -- the attribute has no node to
+        // live on, so it is preserved on the unit with its placement.
+        let label_attributes = self.parse_attribute_specifiers(AttributePlacement::Label);
+        self.detached_attributes.extend(label_attributes);
         let nested = self.parse_statement()?;
         let span = self.merge_span(token.span, nested.span());
         Some(self.alloc_node(CHirStmt::Label(label, nested, span)))
@@ -5324,7 +5790,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         source: InferredPointerType,
     ) -> bool {
         self.pointer_types_compatible(target, source)
-            && qualifiers_include(target.qualifiers, source.qualifiers)
+            && qualifiers_include(
+                target.qualifiers.compatibility(),
+                source.qualifiers.compatibility(),
+            )
     }
 
     fn pointer_types_compatible(
@@ -5775,6 +6244,10 @@ fn merge_qualifiers(left: Qualifiers, right: Qualifiers) -> Qualifiers {
         is_volatile: left.is_volatile || right.is_volatile,
         is_restrict: left.is_restrict || right.is_restrict,
         is_atomic: left.is_atomic || right.is_atomic,
+        aligned: match (left.aligned, right.aligned) {
+            (Some(a), Some(b)) => Some(a.max(b)),
+            (a, b) => a.or(b),
+        },
     }
 }
 

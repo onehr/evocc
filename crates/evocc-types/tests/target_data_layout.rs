@@ -13,6 +13,7 @@ fn plain(kind: TypeKind) -> CanonicalType {
 
 fn field(name: Option<&str>, ty: evocc_types::TypeId) -> RecordField {
     RecordField {
+        layout: Default::default(),
         name: name.map(str::to_owned),
         ty,
         bit_field: None,
@@ -21,6 +22,7 @@ fn field(name: Option<&str>, ty: evocc_types::TypeId) -> RecordField {
 
 fn bits(name: Option<&str>, ty: evocc_types::TypeId, width_bits: u16) -> RecordField {
     RecordField {
+        layout: Default::default(),
         name: name.map(str::to_owned),
         ty,
         bit_field: Some(BitFieldSpec { width_bits }),

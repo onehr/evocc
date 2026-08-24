@@ -1622,6 +1622,7 @@ mod tests {
         at: u32,
     ) -> CHirDecl<'arena> {
         CHirDecl::Object(ObjectDecl {
+            attributes: Vec::new(),
             symbol,
             name: name(spelling, at),
             ty,
@@ -1641,6 +1642,7 @@ mod tests {
         at: u32,
     ) -> ParameterDecl {
         ParameterDecl {
+            attributes: Vec::new(),
             symbol,
             name: spelling.map(|spelling| name(spelling, at)),
             ty,
@@ -1659,6 +1661,7 @@ mod tests {
         at: u32,
     ) -> CHirDecl<'arena> {
         CHirDecl::Function(FunctionDecl {
+            attributes: Vec::new(),
             symbol,
             name: name(spelling, at),
             ty,

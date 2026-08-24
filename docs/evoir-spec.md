@@ -2594,8 +2594,12 @@ and both act on layout:
   likewise. On a member it sets that member's alignment, which moves its offset
   and may raise the containing record's alignment. `aligned` with no argument
   means the target's largest fundamental alignment, sixteen bytes on AArch64.
-  `aligned` never lowers an alignment; a smaller `N` than the natural alignment
-  has no effect.
+  On a typedef or a type name, `aligned(N)` sets the alignment to exactly `N`,
+  which may lower it: `typedef int t __attribute__((aligned(1)))` has alignment
+  one under both GCC-14 and Clang-19, as the sealed oracle run of the
+  attributed layout corpus records. On a record, a member or an object it can
+  only raise; lowering there requires `packed`. An earlier draft said it never
+  lowers; the oracle said otherwise and the oracle governs.
 - `packed` removes padding. On a record it gives every member alignment one,
   makes the size the sum of member sizes, and gives the record alignment one
   unless `aligned` on the same record says otherwise. On a member it gives that

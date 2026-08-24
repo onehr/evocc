@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -23,6 +24,19 @@ EXPECTED_COUNTS = {
     "bit-field": 28,
 }
 EXPECTED_TOTAL = 128
+
+# A second, independent case set for GNU layout attributes. Selected by
+# environment so the frozen 128-case Day 5 manifest is never touched: the two
+# sets are different contracts with different denominators, and a reader of
+# either receipt should be able to tell which one produced a number.
+ATTRIBUTED_COUNTS = {"attributed": 14}
+ATTRIBUTED_TOTAL = 14
+CASE_SET = os.environ.get("C30_LAYOUT_CASE_SET", "day5")
+if CASE_SET == "attributed":
+    EXPECTED_COUNTS = ATTRIBUTED_COUNTS
+    EXPECTED_TOTAL = ATTRIBUTED_TOTAL
+elif CASE_SET != "day5":
+    raise SystemExit(f"unknown C30_LAYOUT_CASE_SET: {CASE_SET}")
 BINDING_POLICY_VERSION = "apple-container-run-unique-alias-v1"
 
 ORACLES = {
@@ -57,6 +71,68 @@ def sha256_bytes(data: bytes) -> str:
 
 
 def build_cases() -> list[dict[str, Any]]:
+    if CASE_SET == "attributed":
+        return build_attributed_cases()
+    return build_day5_cases()
+
+
+def build_attributed_cases() -> list[dict[str, Any]]:
+    """GNU `aligned` and `packed`, one case per rule of specification 10.1.9.
+
+    Every expectation the implementation's tests carry for these constructs is
+    a claim until this set has been measured against GCC-14 and Clang-19; the
+    measured consensus, not the test, is the authority if they disagree.
+    """
+    cases: list[dict[str, Any]] = []
+
+    def add(
+        case_id: str,
+        declaration: str,
+        offsets: tuple[tuple[str, str], ...] = (),
+        assignments: tuple[str, ...] = (),
+    ) -> None:
+        ordinal = len(cases) + 1
+        number = f"{ordinal:03d}"
+        type_name = f"case_{number}_t"
+        source = declaration.replace("$T", type_name).strip() + "\n"
+        cases.append(
+            {
+                "ordinal": ordinal,
+                "id": case_id,
+                "category": "attributed",
+                "typeName": type_name,
+                "source": source,
+                "sourceSha256": sha256_bytes(source.encode("utf-8")),
+                "offsets": [
+                    {"label": label, "expression": expression.replace("$T", type_name)}
+                    for label, expression in offsets
+                ],
+                "storageAssignments": list(assignments),
+            }
+        )
+
+    add("attr.aligned-int128-16", "typedef __int128 $T __attribute__((aligned(16)));")
+    add("attr.aligned-char-4", "typedef char $T __attribute__((aligned(4)));")
+    add("attr.aligned-int-1-no-lower", "typedef int $T __attribute__((aligned(1)));")
+    add("attr.aligned-bare", "typedef char $T __attribute__((aligned));")
+    add("attr.aligned-typedef-of-struct", "struct attr_s5 { char c; }; typedef struct attr_s5 $T __attribute__((aligned(8)));")
+    add("attr.packed-struct", "typedef struct { char c; int i; } __attribute__((packed)) $T;", (("c", "offsetof($T, c)"), ("i", "offsetof($T, i)")))
+    add("attr.packed-aligned-4", "typedef struct { char c; int i; } __attribute__((packed, aligned(4))) $T;", (("c", "offsetof($T, c)"), ("i", "offsetof($T, i)")))
+    add("attr.packed-member-alone", "typedef struct { char c; int i __attribute__((packed)); short s; } $T;", (("c", "offsetof($T, c)"), ("i", "offsetof($T, i)"), ("s", "offsetof($T, s)")))
+    add("attr.aligned-member", "typedef struct { int a __attribute__((aligned(8))); char b; } $T;", (("a", "offsetof($T, a)"), ("b", "offsetof($T, b)")))
+    add(
+        "attr.packed-bit-fields",
+        "typedef struct { unsigned a : 3; unsigned b : 6; unsigned c : 7; } __attribute__((packed)) $T;",
+        assignments=("value.a = 5u;", "value.b = 33u;", "value.c = 100u;"),
+    )
+    add("attr.packed-union", "typedef union { char c; int i; } __attribute__((packed)) $T;", (("c", "offsetof($T, c)"), ("i", "offsetof($T, i)")))
+    add("attr.aligned-after-keyword", "typedef struct __attribute__((aligned(16))) { char c; } $T;", (("c", "offsetof($T, c)"),))
+    add("attr.packed-after-keyword", "typedef struct __attribute__((packed)) { short s; char c; int i; } $T;", (("s", "offsetof($T, s)"), ("c", "offsetof($T, c)"), ("i", "offsetof($T, i)")))
+    add("attr.aligned-struct-tag-rounds-size", "typedef struct { char c; } __attribute__((aligned(4))) $T;", (("c", "offsetof($T, c)"),))
+    return cases
+
+
+def build_day5_cases() -> list[dict[str, Any]]:
     cases: list[dict[str, Any]] = []
 
     def add(

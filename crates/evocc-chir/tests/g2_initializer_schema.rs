@@ -66,11 +66,13 @@ fn normalized_plan_resolves_paths_and_preserves_action_order() {
             tag,
             TagDefinition::Struct(vec![
                 RecordField {
+                    layout: Default::default(),
                     name: Some("count".to_owned()),
                     ty: int,
                     bit_field: None,
                 },
                 RecordField {
+                    layout: Default::default(),
                     name: Some("name".to_owned()),
                     ty: char_array,
                     bit_field: None,
@@ -268,11 +270,13 @@ fn validation_rejects_union_sibling_writes_and_unsupported_wide_strings() {
             tag,
             TagDefinition::Union(vec![
                 RecordField {
+                    layout: Default::default(),
                     name: Some("left".to_owned()),
                     ty: int,
                     bit_field: None,
                 },
                 RecordField {
+                    layout: Default::default(),
                     name: Some("right".to_owned()),
                     ty: int,
                     bit_field: None,

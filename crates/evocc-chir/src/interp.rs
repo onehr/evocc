@@ -6316,6 +6316,7 @@ fn function_has_call(unit: &CHirUnit<'_>, function: SymbolId) -> bool {
         matches!(
             declaration,
             CHirDecl::Function(FunctionDecl {
+                attributes: _,
                 symbol,
                 body: Some(body),
                 ..
@@ -6329,6 +6330,7 @@ fn function_has_goto(unit: &CHirUnit<'_>, function: SymbolId) -> bool {
         matches!(
             declaration,
             CHirDecl::Function(FunctionDecl {
+                attributes: _,
                 symbol,
                 body: Some(body),
                 ..
@@ -6950,6 +6952,7 @@ mod tests {
         let declaration = alloc(
             arena,
             CHirDecl::Function(FunctionDecl {
+                attributes: Vec::new(),
                 symbol: function,
                 name: SpannedName {
                     spelling: "main".to_owned(),
@@ -7148,6 +7151,7 @@ mod tests {
         let object = alloc(
             arena,
             CHirDecl::Object(ObjectDecl {
+                attributes: Vec::new(),
                 symbol: counter,
                 name: SpannedName {
                     spelling: "counter".to_owned(),
@@ -7249,6 +7253,7 @@ mod tests {
         at: SourceSpan,
     ) -> FunctionDecl<'arena> {
         FunctionDecl {
+            attributes: Vec::new(),
             symbol,
             name: SpannedName {
                 spelling: spelling.to_owned(),
@@ -7439,6 +7444,7 @@ mod tests {
         let object = alloc(
             arena,
             CHirDecl::Object(ObjectDecl {
+                attributes: Vec::new(),
                 symbol: deep,
                 name: SpannedName {
                     spelling: "deep".to_owned(),

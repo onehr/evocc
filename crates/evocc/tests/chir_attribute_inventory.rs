@@ -6,12 +6,17 @@
 
 use std::io::Write;
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn evocc(args: &[&str], source: &str) -> (i32, String, String) {
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
     let dir = std::env::temp_dir().join(format!("evocc-attr-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("input.c");
-    std::fs::File::create(&path).unwrap().write_all(source.as_bytes()).unwrap();
+    let path = dir.join(format!("input-{}.c", NEXT.fetch_add(1, Ordering::Relaxed)));
+    std::fs::File::create(&path)
+        .unwrap()
+        .write_all(source.as_bytes())
+        .unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_evocc"))
         .args(args)
         .arg(&path)
@@ -48,6 +53,9 @@ fn dump_reports_applied_and_preserved_not_applied_by_name() {
     assert_eq!(code, 0, "stderr: {stderr}");
     assert!(stdout.contains("applied: aligned"), "{stdout}");
     for name in ["gnu_inline", "unused", "no_instrument_function"] {
-        assert!(stdout.contains(&format!("preserved-not-applied: {name}")), "{stdout}");
+        assert!(
+            stdout.contains(&format!("preserved-not-applied: {name}")),
+            "{stdout}"
+        );
     }
 }

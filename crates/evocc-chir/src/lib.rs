@@ -645,6 +645,115 @@ pub struct WrittenDeclarator {
     pub span: SourceSpan,
 }
 
+/// Where an attribute specifier appeared, which fixes what it attaches to
+/// (specification 10.1.9, placement table).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AttributePlacement {
+    /// Among the declaration specifiers: attaches to every declarator.
+    DeclarationSpecifiers,
+    /// Immediately after a declarator: attaches to that declarator alone.
+    AfterDeclarator,
+    /// After `struct`, `union` or `enum`: attaches to the tag type.
+    TagKeyword,
+    /// After a tag definition's closing brace: attaches to the tag type.
+    TagClosingBrace,
+    /// After a member declarator.
+    Member,
+    /// After a parameter declarator.
+    Parameter,
+    /// After a function declarator, before its body.
+    FunctionDefinition,
+    /// After a label.
+    Label,
+    /// After an enumerator.
+    Enumerator,
+    /// In a type name.
+    TypeName,
+}
+
+impl AttributePlacement {
+    #[must_use]
+    pub const fn spelling(self) -> &'static str {
+        match self {
+            Self::DeclarationSpecifiers => "declaration-specifiers",
+            Self::AfterDeclarator => "after-declarator",
+            Self::TagKeyword => "tag-keyword",
+            Self::TagClosingBrace => "tag-closing-brace",
+            Self::Member => "member",
+            Self::Parameter => "parameter",
+            Self::FunctionDefinition => "function-definition",
+            Self::Label => "label",
+            Self::Enumerator => "enumerator",
+            Self::TypeName => "type-name",
+        }
+    }
+}
+
+/// One attribute argument, kept exactly as written.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttributeArgument {
+    pub text: String,
+    pub span: SourceSpan,
+}
+
+/// The meaning this profile gave an attribute. Only two attributes have one;
+/// every other attribute is preserved with `None` here and is listed by name
+/// as not applied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AppliedAttribute {
+    /// `aligned(N)` or bare `aligned`, resolved to bytes.
+    Aligned(u32),
+    /// `packed`.
+    Packed,
+}
+
+/// A GNU `__attribute__` entry, preserved losslessly whether or not it was
+/// understood. `name` is canonical (`__unused__` and `unused` both give
+/// `unused`); `written` is the spelling in the source.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Attribute {
+    pub name: String,
+    pub written: String,
+    pub arguments: Vec<AttributeArgument>,
+    pub placement: AttributePlacement,
+    pub span: SourceSpan,
+    pub applied: Option<AppliedAttribute>,
+}
+
+impl Attribute {
+    /// Strip one leading and one trailing `__`, which GNU C treats as the
+    /// same attribute name. Any other spelling is returned unchanged.
+    #[must_use]
+    pub fn canonical_name(written: &str) -> String {
+        written
+            .strip_prefix("__")
+            .and_then(|inner| inner.strip_suffix("__"))
+            .unwrap_or(written)
+            .to_owned()
+    }
+}
+
+/// Every attribute in a unit, grouped by whether the profile applied it.
+///
+/// Produced from C-HIR rather than by hand so the receipt's
+/// preserved-not-applied list is a measurement.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AttributeInventory {
+    pub applied: std::collections::BTreeMap<String, usize>,
+    pub preserved_not_applied: std::collections::BTreeMap<String, usize>,
+}
+
+impl AttributeInventory {
+    fn record(&mut self, attribute: &Attribute) {
+        let bucket = if attribute.applied.is_some() {
+            &mut self.applied
+        } else {
+            &mut self.preserved_not_applied
+        };
+        *bucket.entry(attribute.name.clone()).or_insert(0) += 1;
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ParameterDecl {
     /// Named parameters have an ordinary-identifier binding. Unnamed
@@ -654,6 +763,8 @@ pub struct ParameterDecl {
     pub ty: TypeId,
     pub specifier: TypeSpecifier,
     pub written: WrittenDeclarator,
+    /// GNU attributes attached here, in source order.
+    pub attributes: Vec<Attribute>,
     pub span: SourceSpan,
 }
 
@@ -673,6 +784,8 @@ pub struct RecordMember<'arena> {
     pub specifier: TypeSpecifier,
     pub written: WrittenDeclarator,
     pub bit_width: Option<&'arena CHirExpr<'arena>>,
+    /// GNU attributes attached here, in source order.
+    pub attributes: Vec<Attribute>,
     pub span: SourceSpan,
 }
 
@@ -682,6 +795,8 @@ pub struct EnumeratorDecl<'arena> {
     pub name: SpannedName,
     pub value: i64,
     pub written_value: Option<&'arena CHirExpr<'arena>>,
+    /// GNU attributes attached here, in source order.
+    pub attributes: Vec<Attribute>,
     pub span: SourceSpan,
 }
 
@@ -707,6 +822,8 @@ pub struct TagDecl<'arena> {
     /// Every declaration-prefix GNU `__extension__` marker, in source order.
     /// These spans are provenance only and have no semantic effect.
     pub gnu_extension_spans: Vec<SourceSpan>,
+    /// GNU attributes attached here, in source order.
+    pub attributes: Vec<Attribute>,
 }
 
 #[derive(Debug, Clone)]
@@ -720,6 +837,8 @@ pub struct ObjectDecl<'arena> {
     pub initializer: Option<ObjectInitializer<'arena>>,
     /// Every declaration-prefix GNU `__extension__` marker, in source order.
     pub gnu_extension_spans: Vec<SourceSpan>,
+    /// GNU attributes attached here, in source order.
+    pub attributes: Vec<Attribute>,
     pub span: SourceSpan,
 }
 
@@ -742,6 +861,8 @@ pub struct FunctionDecl<'arena> {
     pub inline_spans: Vec<SourceSpan>,
     /// Every declaration-prefix GNU `__extension__` marker, in source order.
     pub gnu_extension_spans: Vec<SourceSpan>,
+    /// GNU attributes attached here, in source order.
+    pub attributes: Vec<Attribute>,
     pub body: Option<&'arena CHirStmt<'arena>>,
     pub span: SourceSpan,
 }
@@ -755,6 +876,8 @@ pub struct TypedefDecl {
     pub written: WrittenDeclarator,
     /// Every declaration-prefix GNU `__extension__` marker, in source order.
     pub gnu_extension_spans: Vec<SourceSpan>,
+    /// GNU attributes attached here, in source order.
+    pub attributes: Vec<Attribute>,
     pub span: SourceSpan,
 }
 
@@ -787,6 +910,7 @@ pub struct CHirUnit<'arena> {
     declarations: Vec<&'arena CHirDecl<'arena>>,
     types: TypeInterner,
     symbols: SymbolTable,
+    detached_attributes: Vec<Attribute>,
 }
 
 impl<'arena> CHirUnit<'arena> {
@@ -800,7 +924,14 @@ impl<'arena> CHirUnit<'arena> {
             declarations,
             types,
             symbols,
+            detached_attributes: Vec::new(),
         }
+    }
+
+    /// Attach the attributes that had no declaration node: labels and type
+    /// names. Called once by the parser after the unit is assembled.
+    pub fn set_detached_attributes(&mut self, attributes: Vec<Attribute>) {
+        self.detached_attributes = attributes;
     }
 
     #[must_use]
@@ -828,6 +959,27 @@ impl<'arena> CHirUnit<'arena> {
         self.declarations.is_empty()
     }
 
+    /// Attributes whose placement has no declaration node to live on: labels
+    /// and type names. They are preserved here with their placement and span
+    /// so the unit still shows every attribute the source had.
+    #[must_use]
+    pub fn detached_attributes(&self) -> &[Attribute] {
+        &self.detached_attributes
+    }
+
+    /// Every attribute in the unit, grouped by applied versus preserved.
+    #[must_use]
+    pub fn attribute_inventory(&self) -> AttributeInventory {
+        let mut inventory = AttributeInventory::default();
+        for declaration in self.iter() {
+            inventory_of_declaration(declaration, &mut inventory);
+        }
+        for attribute in &self.detached_attributes {
+            inventory.record(attribute);
+        }
+        inventory
+    }
+
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &'arena CHirDecl<'arena>> + '_ {
         self.declarations.iter().copied()
     }
@@ -853,6 +1005,151 @@ impl<'unit, 'arena> IntoIterator for &'unit CHirUnit<'arena> {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+fn inventory_of_declaration(declaration: &CHirDecl<'_>, inventory: &mut AttributeInventory) {
+    match declaration {
+        CHirDecl::Function(function) => {
+            for attribute in &function.attributes {
+                inventory.record(attribute);
+            }
+            if let ParameterSyntax::Prototype { parameters, .. } = &function.parameters {
+                for parameter in parameters {
+                    for attribute in &parameter.attributes {
+                        inventory.record(attribute);
+                    }
+                }
+            }
+        }
+        CHirDecl::Object(object) => {
+            for attribute in &object.attributes {
+                inventory.record(attribute);
+            }
+        }
+        CHirDecl::Typedef(typedef) => {
+            for attribute in &typedef.attributes {
+                inventory.record(attribute);
+            }
+        }
+        CHirDecl::Tag(tag) => {
+            for attribute in &tag.attributes {
+                inventory.record(attribute);
+            }
+            match &tag.members {
+                TagMembers::Struct(members) | TagMembers::Union(members) => {
+                    for member in members {
+                        for attribute in &member.attributes {
+                            inventory.record(attribute);
+                        }
+                    }
+                }
+                TagMembers::Enum(enumerators) => {
+                    for enumerator in enumerators {
+                        for attribute in &enumerator.attributes {
+                            inventory.record(attribute);
+                        }
+                    }
+                }
+                TagMembers::Incomplete => {}
+            }
+        }
+    }
+}
+
+/// A line-oriented summary of a unit for `--emit=c-hir`.
+///
+/// One line per declaration, one indented line per attribute naming its
+/// canonical name, arguments as written, placement and whether the profile
+/// applied it, then an inventory block. The point is that a reviewer can
+/// confirm from this text alone that no attribute was dropped on the way in.
+#[must_use]
+pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
+    use std::fmt::Write as _;
+    let mut out = String::new();
+    let attribute_lines = |out: &mut String, attributes: &[Attribute]| {
+        for attribute in attributes {
+            let arguments = attribute
+                .arguments
+                .iter()
+                .map(|argument| argument.text.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let applied = match attribute.applied {
+                Some(AppliedAttribute::Aligned(bytes)) => format!("applied aligned={bytes}"),
+                Some(AppliedAttribute::Packed) => "applied packed".to_owned(),
+                None => "preserved-not-applied".to_owned(),
+            };
+            let _ = writeln!(
+                out,
+                "  attribute {}({arguments}) placement={} {applied}",
+                attribute.name,
+                attribute.placement.spelling()
+            );
+        }
+    };
+    for declaration in unit.iter() {
+        match declaration {
+            CHirDecl::Function(function) => {
+                let _ = writeln!(out, "function {}", function.name.spelling);
+                attribute_lines(&mut out, &function.attributes);
+                if let ParameterSyntax::Prototype { parameters, .. } = &function.parameters {
+                    for parameter in parameters {
+                        if let Some(name) = &parameter.name {
+                            let _ = writeln!(out, "  parameter {}", name.spelling);
+                        }
+                        attribute_lines(&mut out, &parameter.attributes);
+                    }
+                }
+            }
+            CHirDecl::Object(object) => {
+                let _ = writeln!(out, "object {}", object.name.spelling);
+                attribute_lines(&mut out, &object.attributes);
+            }
+            CHirDecl::Typedef(typedef) => {
+                let _ = writeln!(out, "typedef {}", typedef.name.spelling);
+                attribute_lines(&mut out, &typedef.attributes);
+            }
+            CHirDecl::Tag(tag) => {
+                let name = tag
+                    .name
+                    .as_ref()
+                    .map_or("<anonymous>", |name| name.spelling.as_str());
+                let _ = writeln!(out, "tag {name}");
+                attribute_lines(&mut out, &tag.attributes);
+                match &tag.members {
+                    TagMembers::Struct(members) | TagMembers::Union(members) => {
+                        for member in members {
+                            let name = member
+                                .name
+                                .as_ref()
+                                .map_or("<anonymous>", |name| name.spelling.as_str());
+                            let _ = writeln!(out, "  member {name}");
+                            attribute_lines(&mut out, &member.attributes);
+                        }
+                    }
+                    TagMembers::Enum(enumerators) => {
+                        for enumerator in enumerators {
+                            let _ = writeln!(out, "  enumerator {}", enumerator.name.spelling);
+                            attribute_lines(&mut out, &enumerator.attributes);
+                        }
+                    }
+                    TagMembers::Incomplete => {}
+                }
+            }
+        }
+    }
+    for attribute in unit.detached_attributes() {
+        let _ = writeln!(out, "detached");
+        attribute_lines(&mut out, std::slice::from_ref(attribute));
+    }
+    let inventory = unit.attribute_inventory();
+    for (name, count) in &inventory.applied {
+        let _ = writeln!(out, "applied: {name} x{count}");
+    }
+    for (name, count) in &inventory.preserved_not_applied {
+        let _ = writeln!(out, "preserved-not-applied: {name} x{count}");
+    }
+    out
+}
 
 #[cfg(test)]
 mod tests {
@@ -972,6 +1269,7 @@ mod tests {
             )
         });
         CHirDecl::Object(ObjectDecl {
+            attributes: Vec::new(),
             symbol: test_symbol(
                 name_spelling,
                 ty,
@@ -1142,6 +1440,7 @@ mod tests {
             arena_decl(
                 &arena,
                 CHirDecl::Function(FunctionDecl {
+                    attributes: Vec::new(),
                     symbol: test_symbol(
                         "f",
                         function_id,
@@ -1167,6 +1466,7 @@ mod tests {
             arena_decl(
                 &arena,
                 CHirDecl::Tag(TagDecl {
+                    attributes: Vec::new(),
                     tag: tag_id,
                     scope: SymbolTable::new().file_scope(),
                     name: Some(name("S")),
@@ -1179,6 +1479,7 @@ mod tests {
             arena_decl(
                 &arena,
                 CHirDecl::Typedef(TypedefDecl {
+                    attributes: Vec::new(),
                     symbol: test_symbol("T", int_id, SymbolData::Typedef),
                     name: name("T"),
                     ty: int_id,

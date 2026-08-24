@@ -1,0 +1,384 @@
+{
+  "schemaVersion": 1,
+  "contractState": "frozen",
+  "target": "aarch64-unknown-linux-gnu",
+  "dialect": "gnu11",
+  "caseCount": 14,
+  "categoryCounts": {
+    "attributed": 14
+  },
+  "observationSchema": [
+    "id",
+    "sizeof",
+    "_Alignof",
+    "offsetof[]",
+    "storageHex"
+  ],
+  "compilerFlags": [
+    "-std=gnu11",
+    "-O0",
+    "-g0",
+    "-pipe",
+    "-fno-short-enums",
+    "-fno-common",
+    "-Wall",
+    "-Wextra",
+    "-Werror"
+  ],
+  "oracles": {
+    "imageId": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+    "gcc": {
+      "path": "/usr/bin/gcc-14",
+      "version": "gcc-14 (Debian 14.2.0-19) 14.2.0",
+      "sha256": "fb051a6c58961fb6aec758acf50d7d0375eecff740d0706388092829e3fb7a41"
+    },
+    "clang": {
+      "path": "/usr/bin/clang-19",
+      "version": "Debian clang version 19.1.7 (3+b1)",
+      "sha256": "8bba5d733f54ada0cc50ba7646a87ddc798d5de73f67e397cdefada07297bb65"
+    }
+  },
+  "oracleEvidence": {
+    "observerSourceSha256": "540c8460612c9886c28bfe0cb7bcc4ac2d434208021f0a979c877f2fda857d09",
+    "consensusSha256": "79a9c8c5a123fed6e40344b5e31e2692bedda5d7cfdc03de4316a8cb77461c05",
+    "imageId": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+    "gcc": {
+      "path": "/usr/bin/gcc-14",
+      "version": "gcc-14 (Debian 14.2.0-19) 14.2.0",
+      "sha256": "fb051a6c58961fb6aec758acf50d7d0375eecff740d0706388092829e3fb7a41"
+    },
+    "clang": {
+      "path": "/usr/bin/clang-19",
+      "version": "Debian clang version 19.1.7 (3+b1)",
+      "sha256": "8bba5d733f54ada0cc50ba7646a87ddc798d5de73f67e397cdefada07297bb65"
+    },
+    "bindingPolicyVersion": "apple-container-run-unique-alias-v1",
+    "digestAddressableLocalExecution": false
+  },
+  "cases": [
+    {
+      "ordinal": 1,
+      "id": "attr.aligned-int128-16",
+      "category": "attributed",
+      "typeName": "case_001_t",
+      "source": "typedef __int128 case_001_t __attribute__((aligned(16)));\n",
+      "sourceSha256": "cc08cc506cb123784b648c09f0bdbfc6cd7784e1df630721f0da6a101af18586",
+      "offsets": [],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 16,
+        "align": 16,
+        "offsets": [],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 2,
+      "id": "attr.aligned-char-4",
+      "category": "attributed",
+      "typeName": "case_002_t",
+      "source": "typedef char case_002_t __attribute__((aligned(4)));\n",
+      "sourceSha256": "b2aaf4a0cdd5ba08ad46a3a182e59742888ca0e7e4e614335149da177da03ddd",
+      "offsets": [],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 1,
+        "align": 4,
+        "offsets": [],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 3,
+      "id": "attr.aligned-int-1-no-lower",
+      "category": "attributed",
+      "typeName": "case_003_t",
+      "source": "typedef int case_003_t __attribute__((aligned(1)));\n",
+      "sourceSha256": "c226daa9455ce1c964afb08e10f7f82c39536d46d1052e2862775f49d304b1ce",
+      "offsets": [],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 4,
+        "align": 1,
+        "offsets": [],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 4,
+      "id": "attr.aligned-bare",
+      "category": "attributed",
+      "typeName": "case_004_t",
+      "source": "typedef char case_004_t __attribute__((aligned));\n",
+      "sourceSha256": "62d227b33e7c50c040a305b40f8dfb61a5f0044a202f9c9efddeaa0057a078ff",
+      "offsets": [],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 1,
+        "align": 16,
+        "offsets": [],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 5,
+      "id": "attr.aligned-typedef-of-struct",
+      "category": "attributed",
+      "typeName": "case_005_t",
+      "source": "struct attr_s5 { char c; }; typedef struct attr_s5 case_005_t __attribute__((aligned(8)));\n",
+      "sourceSha256": "f650bc1ae48dad1b525f6db0b36412ab6d220d1de549dc069e2c1d887704cd02",
+      "offsets": [],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 1,
+        "align": 8,
+        "offsets": [],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 6,
+      "id": "attr.packed-struct",
+      "category": "attributed",
+      "typeName": "case_006_t",
+      "source": "typedef struct { char c; int i; } __attribute__((packed)) case_006_t;\n",
+      "sourceSha256": "a174ebba3da41a74a85036868b5c5c4e853e31f08ea938ba652143246139b692",
+      "offsets": [
+        {
+          "label": "c",
+          "expression": "offsetof(case_006_t, c)"
+        },
+        {
+          "label": "i",
+          "expression": "offsetof(case_006_t, i)"
+        }
+      ],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 5,
+        "align": 1,
+        "offsets": [
+          0,
+          1
+        ],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 7,
+      "id": "attr.packed-aligned-4",
+      "category": "attributed",
+      "typeName": "case_007_t",
+      "source": "typedef struct { char c; int i; } __attribute__((packed, aligned(4))) case_007_t;\n",
+      "sourceSha256": "1f6791eeb5ca8b10898aeda059e2d00986a07d5ada812a2ad8fd0b85aaf398ba",
+      "offsets": [
+        {
+          "label": "c",
+          "expression": "offsetof(case_007_t, c)"
+        },
+        {
+          "label": "i",
+          "expression": "offsetof(case_007_t, i)"
+        }
+      ],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 8,
+        "align": 4,
+        "offsets": [
+          0,
+          1
+        ],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 8,
+      "id": "attr.packed-member-alone",
+      "category": "attributed",
+      "typeName": "case_008_t",
+      "source": "typedef struct { char c; int i __attribute__((packed)); short s; } case_008_t;\n",
+      "sourceSha256": "b03422124b7a869ed94d87a9f807c1fa47cf79b2ec6bfa4125edb8b302e40347",
+      "offsets": [
+        {
+          "label": "c",
+          "expression": "offsetof(case_008_t, c)"
+        },
+        {
+          "label": "i",
+          "expression": "offsetof(case_008_t, i)"
+        },
+        {
+          "label": "s",
+          "expression": "offsetof(case_008_t, s)"
+        }
+      ],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 8,
+        "align": 2,
+        "offsets": [
+          0,
+          1,
+          6
+        ],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 9,
+      "id": "attr.aligned-member",
+      "category": "attributed",
+      "typeName": "case_009_t",
+      "source": "typedef struct { int a __attribute__((aligned(8))); char b; } case_009_t;\n",
+      "sourceSha256": "9684a37eb9e67e969d8e294d268d980c93c724af8f06a281ebd024f42e4d615a",
+      "offsets": [
+        {
+          "label": "a",
+          "expression": "offsetof(case_009_t, a)"
+        },
+        {
+          "label": "b",
+          "expression": "offsetof(case_009_t, b)"
+        }
+      ],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 8,
+        "align": 8,
+        "offsets": [
+          0,
+          4
+        ],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 10,
+      "id": "attr.packed-bit-fields",
+      "category": "attributed",
+      "typeName": "case_010_t",
+      "source": "typedef struct { unsigned a : 3; unsigned b : 6; unsigned c : 7; } __attribute__((packed)) case_010_t;\n",
+      "sourceSha256": "b91990a233256609b430d75dfec68a9256345771a3d4192394d4580a9abb61d8",
+      "offsets": [],
+      "storageAssignments": [
+        "value.a = 5u;",
+        "value.b = 33u;",
+        "value.c = 100u;"
+      ],
+      "oracleConsensus": {
+        "size": 2,
+        "align": 1,
+        "offsets": [],
+        "storageHex": "0dc9"
+      }
+    },
+    {
+      "ordinal": 11,
+      "id": "attr.packed-union",
+      "category": "attributed",
+      "typeName": "case_011_t",
+      "source": "typedef union { char c; int i; } __attribute__((packed)) case_011_t;\n",
+      "sourceSha256": "d43a5e66c3c7596818dd5493390319f8b764e657695b61bf4fdc0d09983117f1",
+      "offsets": [
+        {
+          "label": "c",
+          "expression": "offsetof(case_011_t, c)"
+        },
+        {
+          "label": "i",
+          "expression": "offsetof(case_011_t, i)"
+        }
+      ],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 4,
+        "align": 1,
+        "offsets": [
+          0,
+          0
+        ],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 12,
+      "id": "attr.aligned-after-keyword",
+      "category": "attributed",
+      "typeName": "case_012_t",
+      "source": "typedef struct __attribute__((aligned(16))) { char c; } case_012_t;\n",
+      "sourceSha256": "757e962b817236b57a560b60caaf7dcf19eb22153fe645e00bc70d0e99601dc3",
+      "offsets": [
+        {
+          "label": "c",
+          "expression": "offsetof(case_012_t, c)"
+        }
+      ],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 16,
+        "align": 16,
+        "offsets": [
+          0
+        ],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 13,
+      "id": "attr.packed-after-keyword",
+      "category": "attributed",
+      "typeName": "case_013_t",
+      "source": "typedef struct __attribute__((packed)) { short s; char c; int i; } case_013_t;\n",
+      "sourceSha256": "4e1514d31a85a15126b32cd284d5d35b81adeab83c90b81b3a8b7b7191b49fe7",
+      "offsets": [
+        {
+          "label": "s",
+          "expression": "offsetof(case_013_t, s)"
+        },
+        {
+          "label": "c",
+          "expression": "offsetof(case_013_t, c)"
+        },
+        {
+          "label": "i",
+          "expression": "offsetof(case_013_t, i)"
+        }
+      ],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 7,
+        "align": 1,
+        "offsets": [
+          0,
+          2,
+          3
+        ],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 14,
+      "id": "attr.aligned-struct-tag-rounds-size",
+      "category": "attributed",
+      "typeName": "case_014_t",
+      "source": "typedef struct { char c; } __attribute__((aligned(4))) case_014_t;\n",
+      "sourceSha256": "59d211ae35b31ea3d5647ae12508135b5d7a5f9c9494856cf6c1e497f719a973",
+      "offsets": [
+        {
+          "label": "c",
+          "expression": "offsetof(case_014_t, c)"
+        }
+      ],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 4,
+        "align": 4,
+        "offsets": [
+          0
+        ],
+        "storageHex": null
+      }
+    }
+  ]
+}

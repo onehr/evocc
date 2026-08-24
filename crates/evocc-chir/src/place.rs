@@ -737,6 +737,12 @@ fn merge_qualifiers(left: Qualifiers, right: Qualifiers) -> Qualifiers {
         is_volatile: left.is_volatile || right.is_volatile,
         is_restrict: left.is_restrict || right.is_restrict,
         is_atomic: left.is_atomic || right.is_atomic,
+        // Alignment is a lower bound on both sides, so the merged access keeps
+        // the stricter one.
+        aligned: match (left.aligned, right.aligned) {
+            (Some(a), Some(b)) => Some(a.max(b)),
+            (a, b) => a.or(b),
+        },
     }
 }
 
@@ -1011,6 +1017,7 @@ mod tests {
             .complete_tag(
                 inner_tag,
                 TagDefinition::Struct(vec![RecordField {
+                    layout: Default::default(),
                     name: Some("frozen".to_owned()),
                     ty: const_int,
                     bit_field: None,
@@ -1026,6 +1033,7 @@ mod tests {
             .complete_tag(
                 outer_tag,
                 TagDefinition::Struct(vec![RecordField {
+                    layout: Default::default(),
                     name: Some("inner".to_owned()),
                     ty: inner,
                     bit_field: None,
@@ -1146,11 +1154,13 @@ mod tests {
                 tag,
                 TagDefinition::Struct(vec![
                     RecordField {
+                        layout: Default::default(),
                         name: Some("locked".to_owned()),
                         ty: const_int,
                         bit_field: None,
                     },
                     RecordField {
+                        layout: Default::default(),
                         name: Some("open".to_owned()),
                         ty: int,
                         bit_field: None,

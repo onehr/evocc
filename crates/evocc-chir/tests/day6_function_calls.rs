@@ -202,6 +202,7 @@ fn object_declaration<'arena>(
     alloc(
         arena,
         CHirDecl::Object(ObjectDecl {
+            attributes: Vec::new(),
             symbol,
             name: SpannedName {
                 spelling: name.to_owned(),
@@ -223,6 +224,7 @@ fn object_declaration<'arena>(
 
 fn parameter(symbol: SymbolId, spelling: &str, ty: TypeId, at: SourceSpan) -> ParameterDecl {
     ParameterDecl {
+        attributes: Vec::new(),
         symbol: Some(symbol),
         name: Some(SpannedName {
             spelling: spelling.to_owned(),
@@ -649,6 +651,7 @@ fn program_with_options(
         alloc(
             arena,
             CHirDecl::Function(FunctionDecl {
+                attributes: Vec::new(),
                 symbol,
                 name: SpannedName {
                     spelling: spelling.to_owned(),
@@ -693,6 +696,7 @@ fn program_with_options(
                 ParameterSyntax::Prototype {
                     parameters: vec![
                         ParameterDecl {
+                            attributes: Vec::new(),
                             symbol: None,
                             name: None,
                             ty: left_ty,
@@ -707,6 +711,7 @@ fn program_with_options(
                             span: span(0, 1),
                         },
                         ParameterDecl {
+                            attributes: Vec::new(),
                             symbol: None,
                             name: None,
                             ty: uint,
@@ -729,6 +734,7 @@ fn program_with_options(
         declarations.push(alloc(
             arena,
             CHirDecl::Function(FunctionDecl {
+                attributes: Vec::new(),
                 symbol: add,
                 name: SpannedName {
                     spelling: "add".to_owned(),
@@ -868,6 +874,7 @@ fn malformed_call_free_signature_program(arena: &Arena) -> CompositionProgram<'_
     let declaration = alloc(
         arena,
         CHirDecl::Function(FunctionDecl {
+            attributes: Vec::new(),
             symbol: main,
             name: SpannedName {
                 spelling: "main".to_owned(),
@@ -1040,6 +1047,7 @@ fn composition_program_with_signature(
     let declaration = alloc(
         arena,
         CHirDecl::Object(ObjectDecl {
+            attributes: Vec::new(),
             symbol: x,
             name: SpannedName {
                 spelling: "x".to_owned(),
@@ -1506,6 +1514,7 @@ fn composition_program_with_signature(
         alloc(
             arena,
             CHirDecl::Function(FunctionDecl {
+                attributes: Vec::new(),
                 symbol,
                 name: SpannedName {
                     spelling: name.to_owned(),
@@ -1565,6 +1574,7 @@ fn function_declaration<'arena>(
     alloc(
         arena,
         CHirDecl::Function(FunctionDecl {
+            attributes: Vec::new(),
             symbol,
             name: SpannedName {
                 spelling: name.to_owned(),

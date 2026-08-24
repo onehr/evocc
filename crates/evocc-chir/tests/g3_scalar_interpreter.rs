@@ -211,6 +211,7 @@ impl<'arena> Fixture<'arena> {
         let declaration = alloc(
             self.arena,
             CHirDecl::Object(ObjectDecl {
+                attributes: Vec::new(),
                 symbol,
                 name: SpannedName {
                     spelling: name.to_owned(),
@@ -242,6 +243,7 @@ impl<'arena> Fixture<'arena> {
         let function = alloc(
             self.arena,
             CHirDecl::Function(FunctionDecl {
+                attributes: Vec::new(),
                 symbol: self.function_symbol,
                 name: SpannedName {
                     spelling: "main".to_owned(),

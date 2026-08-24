@@ -202,6 +202,7 @@ fn nominal_tags_keep_identity_when_completed_and_allow_recursion() {
         .complete_tag(
             structure,
             TagDefinition::Struct(vec![RecordField {
+                layout: Default::default(),
                 name: Some("next".into()),
                 ty: recursive_pointer,
                 bit_field: None,
@@ -216,6 +217,7 @@ fn nominal_tags_keep_identity_when_completed_and_allow_recursion() {
         .complete_tag(
             union,
             TagDefinition::Union(vec![RecordField {
+                layout: Default::default(),
                 name: Some("word".into()),
                 ty: int,
                 bit_field: None,

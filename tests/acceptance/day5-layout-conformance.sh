@@ -13,7 +13,7 @@ umask 022
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
-MANIFEST="$PROJECT_ROOT/tests/contracts/day5-layout-cases.json"
+MANIFEST="${C30_LAYOUT_MANIFEST:-$PROJECT_ROOT/tests/contracts/day5-layout-cases.json}"
 CORPUS="$SCRIPT_DIR/day5-layout-corpus.py"
 SUBJECT_OBSERVER="$SCRIPT_DIR/day5-layout-subject.py"
 BUILD_ENV="$PROJECT_ROOT/contracts/build-environment.json"
@@ -29,7 +29,7 @@ TIMEOUT_BIN="${C30_TIMEOUT:-/opt/homebrew/Cellar/coreutils/9.11/bin/gtimeout}"
 ORACLE_TAG="evo-flight-lab:sealed"
 
 usage() {
-  printf 'usage: %s --oracles-only | --subject\n' "$0" >&2
+  printf 'usage: %s --oracles-only | --measure | --subject\n' "$0" >&2
   exit 2
 }
 
@@ -37,6 +37,13 @@ usage() {
 mode="$1"
 case "$mode" in
   --oracles-only)
+    [ "$#" -eq 1 ] || usage
+    ;;
+  --measure)
+    # First measurement of an unmeasured manifest: run both oracles and write
+    # their consensus without comparing against a frozen hash, because none
+    # exists yet. The consensus is then frozen into the manifest by the corpus
+    # tool, and every later run uses --oracles-only against that hash.
     [ "$#" -eq 1 ] || usage
     ;;
   --subject)
@@ -100,14 +107,20 @@ verify_container_identity() {
 cp "$MANIFEST" "$RUN_DIR/case-manifest.json"
 sha256_file "$RUN_DIR/case-manifest.json" >"$RUN_DIR/case-manifest.sha256"
 
-PYTHONDONTWRITEBYTECODE=1 "$PYTHON" "$CORPUS" validate-manifest "$MANIFEST" \
+unmeasured_flag=''
+[ "$mode" = --measure ] && unmeasured_flag='--allow-unmeasured'
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON" "$CORPUS" validate-manifest "$MANIFEST" $unmeasured_flag \
   >"$RUN_DIR/manifest-validation.json" 2>"$RUN_DIR/manifest-validation.stderr" || exit 1
-PYTHONDONTWRITEBYTECODE=1 "$PYTHON" "$CORPUS" emit-c "$MANIFEST" \
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON" "$CORPUS" emit-c "$MANIFEST" $unmeasured_flag \
   >"$RUN_DIR/layout-observer.c" 2>"$RUN_DIR/layout-observer.stderr" || exit 1
 sha256_file "$RUN_DIR/layout-observer.c" >"$RUN_DIR/layout-observer.sha256"
-PYTHONDONTWRITEBYTECODE=1 "$PYTHON" "$CORPUS" self-test "$MANIFEST" \
-  >"$RUN_DIR/oracle-conflict-selftest.json" \
-  2>"$RUN_DIR/oracle-conflict-selftest.stderr" || exit 1
+if [ "$mode" != --measure ]; then
+  # The conflict self-test perturbs a frozen consensus; an unmeasured
+  # manifest has none to perturb, so it runs only once one exists.
+  PYTHONDONTWRITEBYTECODE=1 "$PYTHON" "$CORPUS" self-test "$MANIFEST" \
+    >"$RUN_DIR/oracle-conflict-selftest.json" \
+    2>"$RUN_DIR/oracle-conflict-selftest.stderr" || exit 1
+fi
 
 "$JQ" -e --slurpfile manifest "$MANIFEST" '
   .buildImage.executionReference == $manifest[0].oracles.imageId and
@@ -130,10 +143,12 @@ clang_version="$("$JQ" -r '.oracles.clang.version' "$MANIFEST")"
 expected_observer_sha="$("$JQ" -r '.oracleEvidence.observerSourceSha256' "$MANIFEST")"
 expected_consensus_sha="$("$JQ" -r '.oracleEvidence.consensusSha256' "$MANIFEST")"
 binding_policy_version="$("$JQ" -r '.oracleEvidence.bindingPolicyVersion' "$MANIFEST")"
-[ "$(sha256_file "$RUN_DIR/layout-observer.c")" = "$expected_observer_sha" ] || {
-  printf 'generated layout observer differs from frozen oracle evidence\n' >&2
-  exit 1
-}
+if [ "$mode" != --measure ]; then
+  [ "$(sha256_file "$RUN_DIR/layout-observer.c")" = "$expected_observer_sha" ] || {
+    printf 'generated layout observer differs from frozen oracle evidence\n' >&2
+    exit 1
+  }
+fi
 
 "$CONTAINER_BIN" image list --format json --verbose >"$RUN_DIR/images-before.json" \
   2>"$RUN_DIR/images-before.stderr" || exit 1
@@ -247,14 +262,14 @@ run_lane() {
 run_lane gcc "$oracle_gcc" || exit 1
 run_lane clang "$oracle_clang" || exit 1
 
-PYTHONDONTWRITEBYTECODE=1 "$PYTHON" "$CORPUS" verify-observations \
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON" "$CORPUS" verify-observations $unmeasured_flag \
   "$MANIFEST" "$RUN_DIR/gcc.observations.tsv" \
   >"$RUN_DIR/gcc-validation.json" 2>"$RUN_DIR/gcc-validation.stderr" || exit 1
-PYTHONDONTWRITEBYTECODE=1 "$PYTHON" "$CORPUS" verify-observations \
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON" "$CORPUS" verify-observations $unmeasured_flag \
   "$MANIFEST" "$RUN_DIR/clang.observations.tsv" \
   >"$RUN_DIR/clang-validation.json" 2>"$RUN_DIR/clang-validation.stderr" || exit 1
 
-PYTHONDONTWRITEBYTECODE=1 "$PYTHON" "$CORPUS" compare-oracles \
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON" "$CORPUS" compare-oracles $unmeasured_flag \
   "$MANIFEST" "$RUN_DIR/gcc.observations.tsv" "$RUN_DIR/clang.observations.tsv" \
   >"$RUN_DIR/oracle-summary.json" 2>"$RUN_DIR/oracle-summary.stderr"
 oracle_rc=$?
@@ -264,10 +279,12 @@ oracle_rc=$?
 }
 cp "$RUN_DIR/gcc.observations.tsv" "$RUN_DIR/oracle-consensus.tsv"
 sha256_file "$RUN_DIR/oracle-consensus.tsv" >"$RUN_DIR/oracle-consensus.sha256"
-[ "$(sha256_file "$RUN_DIR/oracle-consensus.tsv")" = "$expected_consensus_sha" ] || {
-  printf 'live oracle consensus differs from frozen oracle evidence hash\n' >&2
-  exit 1
-}
+if [ "$mode" != --measure ]; then
+  [ "$(sha256_file "$RUN_DIR/oracle-consensus.tsv")" = "$expected_consensus_sha" ] || {
+    printf 'live oracle consensus differs from frozen oracle evidence hash\n' >&2
+    exit 1
+  }
+fi
 
 "$CONTAINER_BIN" image list --format json --verbose >"$RUN_DIR/alias-after-run.json" \
   2>"$RUN_DIR/alias-after-run.stderr" || exit 1
