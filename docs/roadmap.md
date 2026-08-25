@@ -1488,7 +1488,68 @@ gantt
     Release and flight review             :e3, 2026-09-08, 1d
 ```
 
-The actual day-by-day campaign should be much more explicit.
+## Launch logic (re-plan of 2026-08-25)
+
+Rulings: the mandatory Day-30 deliverable stays **a QEMU boot of the pinned Linux kernel** (`6.18.44`,
+`ARCH=arm64 virtconfig`, EvoCC-built `/init` prints the marker). Dates are not constraints; the order
+below is. The day table that follows is kept as a scope inventory and is no longer the schedule.
+
+**How to read it.** Work backwards from the boot. Each stage names what must already be true, the work,
+and one gate written as *number, command, threshold, oracle*. A stage is done when its gate is green on
+sealed evidence; nothing else counts. Stages with no arrow between them may run in parallel when a
+second executor exists; with one executor, run them in the listed order.
+
+```text
+                 F: front end            B: backend               K: kernel lab
+F1 parse cohort 16/16 ──┐         B1 EvoMIR + RA            K1 flight lab (VM, Kbuild, QEMU, initramfs)
+F2 preprocess 16/16 ────┤         B2 Mac scalar ABI              │
+                        │         B3 spills, globals, fnptr      │
+                        │         B4 aggregates, varargs         │
+                        │         B5 MAC FLIGHT GATE (Csmith)    │
+                        │         B6 Linux ELF/ABI               │
+                        │         B7 LINUX USERSPACE GATE        │
+                        └────────────┬───────────────────────────┘
+                     F3 full-config parse N/N, preprocess N/N   (Kbuild-driven telemetry replaces the cohort)
+                     C1 kernel codegen: asm, asm goto, atomics, sections, relocations
+                     C2 KERNEL OBJECT GATE: TUs compiling N/N, vmlinux links (baseline extraction)
+                     G1 BASELINE BOOT: marker printed under QEMU
+                                     │
+   S: semantics and equality         │
+   S1 STANDING SEMANTIC GATE: random EvoIR differential + proof replay, before any rewrite family ships
+   S2 lattices + scheduler with deterministic budgets (iterations/nodes, never wall clock)
+   S3 memory rewrites with proof facts
+                                     │
+                     G2 EQSAT BOOT: same image built twice byte-identical, every optimized TU proof-checked
+                     H  hardening; x86 userspace; x86 kernel is stretch
+```
+
+| Stage | Requires | Gate: number / command / threshold / oracle |
+|---|---|---|
+| F1 | spec 10.1.9-10.1.14 | dual-oracle clean parse / `publish-kernel-dashboard.py` / 16 of 16 / GCC-14+Clang-19 preprocessed input |
+| F2 | F1 | raw preprocess clean / same script / 16 of 16 / `evocpp -E` equals oracle `-E` modulo line markers |
+| B1-B4 | Day 6-8 semantics (done) | native suite pass count / `evocc --target arm64-apple-darwin` + run / 100 percent of suite / program output |
+| B5 | B4 | Csmith clean executions / Csmith harness (to build) / thousands, zero mismatches / GCC-14 built reference |
+| B6-B7 | B5 | libc-free programs run on ARM64 Linux / `evocc --target aarch64-linux-gnu` / 100 percent of suite / program output |
+| K1 | none | one command boots a GCC-built kernel and initramfs under QEMU and prints the marker / boot log |
+| F3 | F2, K1 | TUs parsing and preprocessing / Kbuild `-E`/`--parse-only` sweep / N of N / dashboard |
+| C1 | B7, F3 | assembler accepts every emitted `.s` / Kbuild `-S` sweep / N of N / platform assembler |
+| C2 | C1 | objects compiling and link / Kbuild `-c` + link / N of N, `vmlinux` present / linker |
+| G1 | C2, K1 | boot marker / QEMU command in this document / marker printed / boot log archived |
+| S1 | Day 8 proof checker (done) | mismatches on random EvoIR / generator + differential (to build) / 0 of 1000+; proof replay 100 percent / two interpreters + `evo-proofcheck` |
+| S2, S3 | S1 | same gate re-run per rewrite family / 0 mismatches, budgets deterministic / same |
+| G2 | G1, S3 | image hash equal on two builds / full rebuild twice / equal, proofs 100 percent / sha256 |
+
+Standing rules, replacing the day-indexed abort table:
+1. A rewrite family enters the ruleset only after S1 is green for it; S1 never expires.
+2. EqSat budgets are counted in iterations and nodes. A wall-clock cap may exist only as a crash guard and must be recorded when it fires.
+3. Any gate red: fix or fall back (baseline extraction, disable the rule family), never skip the gate.
+4. Every gate re-publishes the dashboard; the dashboard is the only place a number may be claimed.
+5. Order inside a stream follows measured first-error telemetry; order between streams follows this table.
+
+Why S sits after G1 with one executor: baseline boot needs none of S, and D1 makes boot mandatory. With a
+second executor S runs from now in parallel; that is the first thing a second executor should take.
+
+The actual day-by-day campaign below is kept as a scope inventory; it is superseded as a schedule by the launch logic above.
 
 | Day | Critical work | Acceptance gate | Contingency |
 |---|---|---|---|
