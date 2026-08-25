@@ -1,0 +1,79 @@
+{
+  "baseline": "69b6402de342199782f91464370f30184003a9da",
+  "authority": [
+    "docs/evoir-spec.md revision 1.9.4 sections 10.1.9 and 10.1.14",
+    "tests/contracts/day9-acceptance-contract.json scope E"
+  ],
+  "commands": [
+    "cargo test -p evocc-parser --test gnu_pointer_attributes --no-fail-fast",
+    "cargo test -p evocc-parser --test kernel_builtins --no-fail-fast",
+    "cargo test -p evocc-lower --test front_end_resolved_forms --no-fail-fast"
+  ],
+  "summary": {
+    "failed": 12,
+    "passed": 0,
+    "buildErrors": 0
+  },
+  "failures": [
+    {
+      "test": "aligned_on_a_pointer_declarator_is_preserved_but_never_applied",
+      "diagnostic": "E1001: expected-declaration",
+      "declaredReason": "pointer-declarator attribute"
+    },
+    {
+      "test": "exact_err_ptr_declaration_retains_the_pointer_attribute",
+      "diagnostic": "E1001: expected-declaration",
+      "declaredReason": "pointer-declarator attribute"
+    },
+    {
+      "test": "malformed_pointer_attribute_reports_the_attribute_diagnostic",
+      "diagnostic": "E1001: expected-declaration",
+      "declaredReason": "pointer-declarator attribute"
+    },
+    {
+      "test": "nested_declarator_retains_one_unambiguous_pointer_attachment",
+      "diagnostic": "E1001: expected-declaration",
+      "declaredReason": "pointer-declarator attribute"
+    },
+    {
+      "test": "gnu_alignof_accepts_types_and_unevaluated_expressions",
+      "diagnostic": "E2001: undeclared-identifier: __alignof__",
+      "declaredReason": "__alignof__"
+    },
+    {
+      "test": "builtin_expect_returns_long_and_evaluates_only_its_first_operand",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_expect",
+      "declaredReason": "__builtin_expect"
+    },
+    {
+      "test": "builtin_constant_p_uses_the_frozen_conservative_predicate_without_evaluation",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_constant_p",
+      "declaredReason": "__builtin_constant_p"
+    },
+    {
+      "test": "builtin_constant_p_is_an_integer_constant_expression_in_all_frozen_contexts",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_constant_p",
+      "declaredReason": "__builtin_constant_p"
+    },
+    {
+      "test": "exact_kernel_builtin_lines_parse_and_leave_source_fidelity_records",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_expect",
+      "declaredReason": "__builtin_expect"
+    },
+    {
+      "test": "builtin_wrong_arity_has_one_diagnostic_authority",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_expect",
+      "declaredReason": "__builtin_expect"
+    },
+    {
+      "test": "builtin_names_are_not_ordinary_values",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_expect",
+      "declaredReason": "__builtin_expect"
+    },
+    {
+      "test": "front_end_resolved_forms_leave_byte_identical_evoir (pair 3)",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_expect",
+      "declaredReason": "__builtin_expect"
+    }
+  ]
+}

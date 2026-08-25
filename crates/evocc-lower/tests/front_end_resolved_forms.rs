@@ -49,6 +49,18 @@ fn front_end_resolved_forms_leave_byte_identical_evoir() {
             "long f(void) { long x = 7; long *p = &x; return *(const volatile typeof(_Generic(*p, long: (long)0, default: *p)) *)p; }\n",
             "long f(void) { long x = 7; long *p = &x; return *(const volatile long *)p; }\n",
         ),
+        (
+            "long f(int i) { return __builtin_expect(i + 1, i++); }\n",
+            "long f(int i) { return (long)(i + 1); }\n",
+        ),
+        (
+            "int f(int i) { return __builtin_constant_p(i) + __builtin_constant_p(7); }\n",
+            "int f(int i) { return 0 + 1; }\n",
+        ),
+        (
+            "unsigned long f(void) { int i = 0; return __alignof__(i++); }\n",
+            "unsigned long f(void) { int i = 0; return (unsigned long)4; }\n",
+        ),
     ];
 
     for (ordinal, (written, spelled_out)) in pairs.into_iter().enumerate() {
