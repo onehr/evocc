@@ -128,6 +128,43 @@ impl MacroMap {
         self.expand_macro(name, args)
     }
 
+    /// Report which arguments must be macro-expanded before substitution.
+    /// Parameters used only by `#` or `##` remain unexpanded, as required by
+    /// the preprocessing translation phases.
+    fn argument_prescan_mask(&self, name: &str, arg_count: usize) -> Option<Vec<bool>> {
+        let macro_def = self.get(name)?;
+        if !macro_def.is_function
+            || arg_count < macro_def.params.len()
+            || (!macro_def.variadic && arg_count > macro_def.params.len())
+        {
+            return None;
+        }
+
+        let mut mask = vec![false; arg_count];
+        for (index, token) in macro_def.body.iter().enumerate() {
+            if token.kind != TokenKind::Identifier
+                || parameter_is_quoted_or_pasted(&macro_def.body, index)
+            {
+                continue;
+            }
+            let spelling = token_text(token);
+            if let Some(parameter_index) = macro_def
+                .params
+                .iter()
+                .position(|parameter| parameter == &spelling)
+            {
+                if let Some(entry) = mask.get_mut(parameter_index) {
+                    *entry = true;
+                }
+            } else if spelling == "__VA_ARGS__" && macro_def.variadic {
+                for entry in mask.iter_mut().skip(macro_def.params.len()) {
+                    *entry = true;
+                }
+            }
+        }
+        Some(mask)
+    }
+
     /// Expand any identifier token that refers to an object-like macro.
     /// Used to macro-expand argument tokens before `##` pasting.
     fn expand_arg_token(&self, tok: &Token) -> Vec<Token> {
@@ -156,6 +193,17 @@ impl MacroMap {
     /// Unified expansion: object-like or function-like with variadic support,
     /// including `#` stringification and `##` token pasting.
     pub fn expand_macro(&self, name: &str, args: &[Vec<Token>]) -> Option<Vec<Token>> {
+        self.expand_macro_with_prescanned_args(name, args, args)
+    }
+
+    /// Expand a macro using raw arguments for `#`/`##` occurrences and
+    /// prescanned arguments for ordinary parameter substitution.
+    fn expand_macro_with_prescanned_args(
+        &self,
+        name: &str,
+        args: &[Vec<Token>],
+        prescanned_args: &[Vec<Token>],
+    ) -> Option<Vec<Token>> {
         let m = self.get(name)?;
         if !m.is_function {
             // Object-like: ignore args
@@ -244,7 +292,13 @@ impl MacroMap {
 
             // Identifier — possible parameter reference
             if tok.kind == TokenKind::Identifier {
-                if let Some(arg) = self.resolve_arg(tok, m, args) {
+                let selected_args =
+                    if pending_paste.is_some() || parameter_is_followed_by_paste(body, i) {
+                        args
+                    } else {
+                        prescanned_args
+                    };
+                if let Some(arg) = self.resolve_arg(tok, m, selected_args) {
                     if arg.is_empty() {
                         // Empty expansion: if preceded by ##, drop ## and the
                         // other token too; otherwise just skip.
@@ -317,6 +371,35 @@ impl MacroMap {
         }
         None
     }
+}
+
+fn is_hash_token(token: &Token) -> bool {
+    token.kind == TokenKind::Hash || token.kind == TokenKind::HashHash
+}
+
+fn hash_token_is_paste(body: &[Token], index: usize) -> bool {
+    let Some(token) = body.get(index) else {
+        return false;
+    };
+    is_hash_token(token)
+        && (token_text(token).len() >= 2
+            || index
+                .checked_sub(1)
+                .and_then(|previous| body.get(previous))
+                .is_some_and(is_hash_token)
+            || body.get(index + 1).is_some_and(is_hash_token))
+}
+
+fn parameter_is_followed_by_paste(body: &[Token], index: usize) -> bool {
+    hash_token_is_paste(body, index + 1)
+}
+
+fn parameter_is_quoted_or_pasted(body: &[Token], index: usize) -> bool {
+    index
+        .checked_sub(1)
+        .and_then(|previous| body.get(previous))
+        .is_some_and(is_hash_token)
+        || parameter_is_followed_by_paste(body, index)
 }
 
 // ---------------------------------------------------------------------------
@@ -413,6 +496,7 @@ pub struct Preprocessor {
     source_paths: HashMap<FileId, String>,
     reserved_file_ids: HashSet<FileId>,
     next_file_id: u32,
+    counter: u32,
     /// Current source file path for __FILE__ expansion.
     pub current_file: String,
 }
@@ -442,6 +526,7 @@ impl Preprocessor {
             source_paths: HashMap::new(),
             reserved_file_ids: HashSet::new(),
             next_file_id: 1,
+            counter: 0,
             current_file: String::new(),
         };
         preprocessor.install_predefined_profile(profile)?;
@@ -571,6 +656,7 @@ impl Preprocessor {
         self.errors.clear();
         self.include_guard_seen = false;
         self.pragma_once_files.clear();
+        self.counter = 0;
         self.register_entry_source(&tokens);
         let mut expanding: HashSet<String> = HashSet::new();
         let entry_span = tokens
@@ -988,11 +1074,18 @@ impl Preprocessor {
                     }
                 }
             } else if self.cond_active() {
-                // Predefined context-dependent macros: __FILE__, __LINE__,
-                // __DATE__. These are expanded inline rather than through
-                // the macro table because their values change at each use.
+                // Predefined context-dependent macros are expanded inline
+                // rather than through the macro table because their values
+                // change at each use.
                 if tok.kind == TokenKind::Identifier {
                     let name = token_lexeme(tok, source).to_string();
+                    if name == "__COUNTER__" {
+                        let value = self.counter;
+                        self.counter = self.counter.wrapping_add(1);
+                        output.push(make_int_token(i64::from(value)));
+                        i += 1;
+                        continue;
+                    }
                     if name == "__FILE__" {
                         let displayed_file = self.mapped_file_name();
                         let file_str = make_string_token(&displayed_file);
@@ -1070,7 +1163,36 @@ impl Preprocessor {
                             }
                             i = j; // advance past ')' and arguments
 
-                            if let Some(body) = self.macros.expand_macro(&name, &args) {
+                            let Some(prescan_mask) =
+                                self.macros.argument_prescan_mask(&name, args.len())
+                            else {
+                                output.push(tok.clone());
+                                i = saved_i + 1;
+                                continue;
+                            };
+                            let mut prescanned_args = Vec::with_capacity(args.len());
+                            for (argument, needs_prescan) in
+                                args.iter().zip(prescan_mask)
+                            {
+                                if needs_prescan {
+                                    let processed = self.process_impl(
+                                        TokenStream::new(argument.clone()),
+                                        source,
+                                        expanding,
+                                        false,
+                                        0,
+                                    );
+                                    prescanned_args.push(processed.into_vec());
+                                } else {
+                                    prescanned_args.push(argument.clone());
+                                }
+                            }
+
+                            if let Some(body) = self.macros.expand_macro_with_prescanned_args(
+                                &name,
+                                &args,
+                                &prescanned_args,
+                            ) {
                                 expanding.insert(name.clone());
                                 let sub_stream = TokenStream::new(body);
                                 let processed =
