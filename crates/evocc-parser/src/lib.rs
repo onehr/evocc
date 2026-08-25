@@ -9,16 +9,16 @@ use evocc_chir::integer::{
     CInteger, CIntegerType,
 };
 use evocc_chir::{
-    builtin_constant_p, AppliedAttribute, AssignmentOp, Attribute, AttributeArgument,
-    AttributePlacement, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt,
-    CHirUnit, CharLit, CharPrefix, CheckedArithmeticOp, EnumeratorDecl, ExprCategory, ExprFacts,
-    FieldProjection, FloatLit, FloatSuffix, FrontEndBuiltinRecord, FunctionDecl,
-    GenericSelectionRecord, IndexProjection, InitAction, InitPlan, IntBase, IntLit, IntSuffix,
-    MemoryPlace, ObjectDecl, ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceProjection,
-    PlaceRoot, PointerTypeDesc, RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName,
-    StorageClass, StringLit, StringPrefix, SubobjectPath, SubobjectStep, SymbolData, SymbolId,
-    SymbolKind, SymbolTable, SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl,
-    TypeofOperand, UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
+    builtin_constant_p, AppliedAttribute, AsmOperand, AsmStmt, AssignmentOp, Attribute,
+    AttributeArgument, AttributePlacement, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr,
+    CHirForInit, CHirStmt, CHirUnit, CharLit, CharPrefix, CheckedArithmeticOp, EnumeratorDecl,
+    ExprCategory, ExprFacts, FieldProjection, FloatLit, FloatSuffix, FrontEndBuiltinRecord,
+    FunctionDecl, GenericSelectionRecord, IndexProjection, InitAction, InitPlan, IntBase, IntLit,
+    IntSuffix, MemoryPlace, ObjectDecl, ObjectInitializer, ParameterDecl, ParameterSyntax,
+    PlaceProjection, PlaceRoot, PointerTypeDesc, RecordMember, ScalarPlace, ScopeId, ScopeKind,
+    SpannedName, StorageClass, StringLit, StringPrefix, SubobjectPath, SubobjectStep, SymbolData,
+    SymbolId, SymbolKind, SymbolTable, SymbolTableError, TagDecl, TagMembers, TypeSpecifier,
+    TypedefDecl, TypeofOperand, UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
     WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
@@ -266,6 +266,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__builtin_add_overflow") => TokenKind::BuiltinAddOverflow,
                     Some("__builtin_sub_overflow") => TokenKind::BuiltinSubOverflow,
                     Some("__builtin_mul_overflow") => TokenKind::BuiltinMulOverflow,
+                    Some("asm" | "__asm__") => TokenKind::Asm,
+                    Some("__volatile__") => TokenKind::Volatile,
                     _ => TokenKind::Identifier,
                 };
             }
@@ -916,6 +918,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.parse_static_assert_declaration()?;
             return Some(Vec::new());
         }
+        if self.peek_kind() == Some(TokenKind::Asm) {
+            let mut assembly = self.parse_asm_construct()?;
+            let semicolon = self.expect(TokenKind::Semicolon)?;
+            assembly.span = self.merge_span(assembly.span, semicolon.span);
+            return Some(vec![self.alloc_node(CHirDecl::Asm(assembly))]);
+        }
         self.parse_declaration(DeclarationContext::File)
     }
 
@@ -1001,6 +1009,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E1001", "expected-declaration", self.span());
             return None;
         };
+        let (asm_label, asm_label_span) = self.parse_optional_asm_label()?;
         // Attributes after the declarator attach to it alone. When a function
         // body follows they are in function-definition position; the same
         // tokens, a different row of the placement table.
@@ -1055,6 +1064,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.current_scope = parameter_scope;
                 self.bind_parameters(&mut parameters);
                 let body = self.parse_function_body();
+                self.validate_asm_goto_labels(body)?;
                 self.current_scope = outer_scope;
                 if context != DeclarationContext::File {
                     self.report("E1205", "nested-function-definition", open);
@@ -1103,6 +1113,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 written,
                 parameters,
                 storage,
+                asm_label,
+                asm_label_span,
                 inline_spans,
                 gnu_extension_spans,
                 attributes,
@@ -1130,6 +1142,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             initializer: Option<ObjectInitializer<'arena>>,
             written: WrittenDeclarator,
             attributes: Vec<Attribute>,
+            asm_label: Option<String>,
+            asm_label_span: Option<SourceSpan>,
         }
         let specifier_attributes: Vec<Attribute> = attributes
             .iter()
@@ -1139,6 +1153,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut pending: Vec<Pending<'arena>> = Vec::new();
         let mut declarator = declarator;
         let mut written = written;
+        let mut asm_label = asm_label;
+        let mut asm_label_span = asm_label_span;
         loop {
             // An ordinary identifier's scope begins immediately after its
             // declarator, so self-references in an initializer resolve to this
@@ -1184,6 +1200,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 initializer,
                 written,
                 attributes,
+                asm_label,
+                asm_label_span,
             });
             if !self.match_kind(TokenKind::Comma) {
                 break;
@@ -1195,6 +1213,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E1001", "expected-declaration", self.span());
                 return None;
             };
+            let (next_asm_label, next_asm_label_span) = self.parse_optional_asm_label()?;
             next_attributes
                 .extend(self.parse_attribute_specifiers(AttributePlacement::AfterDeclarator));
             let mut next_type = self.apply_declarator(specifier.surface.type_id(), &next.derived);
@@ -1213,6 +1232,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             declarator = next;
             full_type = next_type;
             attributes = next_attributes;
+            asm_label = next_asm_label;
+            asm_label_span = next_asm_label_span;
         }
 
         let last_name_span = pending
@@ -1254,6 +1275,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     written: entry.written,
                     storage,
                     initializer: entry.initializer,
+                    asm_label: entry.asm_label,
+                    asm_label_span: entry.asm_label_span,
                     gnu_extension_spans: gnu_extension_spans.clone(),
                     attributes: entry.attributes,
                     span: declaration_span,
@@ -2543,6 +2566,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.loop_depth = outer_loop_depth;
         self.switch_depth = outer_switch_depth;
         body
+    }
+
+    fn validate_asm_goto_labels(&mut self, body: &CHirStmt<'_>) -> Option<()> {
+        let mut defined = HashSet::new();
+        let mut referenced = Vec::new();
+        collect_asm_goto_labels(body, &mut defined, &mut referenced);
+        if let Some(label) = referenced
+            .into_iter()
+            .find(|label| !defined.contains(&label.spelling))
+        {
+            self.report("E2914", "malformed-asm", label.span);
+            return None;
+        }
+        Some(())
     }
 
     /// Does a function body follow the current position once any attribute
@@ -4548,10 +4585,208 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
+    fn parse_optional_asm_label(&mut self) -> Option<(Option<String>, Option<SourceSpan>)> {
+        if self.peek_kind() != Some(TokenKind::Asm) {
+            return Some((None, None));
+        }
+        let keyword = self.advance().expect("peeked asm declarator label");
+        self.expect(TokenKind::LParen)?;
+        let (label, _) = self.parse_asm_string()?;
+        let close = self.expect(TokenKind::RParen)?;
+        Some((Some(label), Some(self.merge_span(keyword.span, close.span))))
+    }
+
+    fn parse_asm_construct(&mut self) -> Option<AsmStmt<'arena>> {
+        let keyword = self.advance().expect("peeked GNU asm");
+        let mut volatile_span = None;
+        let mut inline_span = None;
+        let mut goto_span = None;
+        loop {
+            let destination = match self.peek_kind() {
+                Some(TokenKind::Volatile) => &mut volatile_span,
+                Some(TokenKind::Inline) => &mut inline_span,
+                Some(TokenKind::Goto) => &mut goto_span,
+                _ => break,
+            };
+            let qualifier = self.advance().expect("peeked asm qualifier");
+            if destination.replace(qualifier.span).is_some() {
+                self.report("E2914", "malformed-asm", qualifier.span);
+                return None;
+            }
+        }
+
+        self.expect(TokenKind::LParen)?;
+        let (template, template_span) = self.parse_asm_string()?;
+        let mut outputs = Vec::new();
+        let mut inputs = Vec::new();
+        let mut clobbers = Vec::new();
+        let mut clobber_spans = Vec::new();
+        let mut labels = Vec::new();
+
+        if self.match_kind(TokenKind::Colon) {
+            outputs = self.parse_asm_operands(true)?;
+            if self.match_kind(TokenKind::Colon) {
+                inputs = self.parse_asm_operands(false)?;
+                if self.match_kind(TokenKind::Colon) {
+                    while !matches!(self.peek_kind(), Some(TokenKind::Colon | TokenKind::RParen)) {
+                        let (clobber, span) = self.parse_asm_string()?;
+                        clobbers.push(clobber);
+                        clobber_spans.push(span);
+                        if !self.match_kind(TokenKind::Comma) {
+                            break;
+                        }
+                    }
+                    if self.match_kind(TokenKind::Colon) {
+                        if goto_span.is_none() {
+                            self.report("E2914", "malformed-asm", self.span());
+                            return None;
+                        }
+                        while self.peek_kind() != Some(TokenKind::RParen) {
+                            let token = self.expect(TokenKind::Identifier)?;
+                            labels.push(SpannedName {
+                                spelling: self.token_text(&token).to_owned(),
+                                span: token.span,
+                            });
+                            if !self.match_kind(TokenKind::Comma) {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if self.peek_kind() == Some(TokenKind::Colon) {
+            self.report("E2914", "malformed-asm", self.span());
+            return None;
+        }
+        let close = self.expect(TokenKind::RParen)?;
+
+        let known_names = outputs
+            .iter()
+            .chain(&inputs)
+            .filter_map(|operand| operand.symbolic.as_deref())
+            .chain(labels.iter().map(|label| label.spelling.as_str()))
+            .collect::<HashSet<_>>();
+        if asm_template_symbolic_names(&template)
+            .into_iter()
+            .any(|name| !known_names.contains(name))
+        {
+            self.report("E2914", "malformed-asm", template_span);
+            return None;
+        }
+
+        Some(AsmStmt {
+            template,
+            template_span,
+            outputs,
+            inputs,
+            clobbers,
+            clobber_spans,
+            labels,
+            volatile: volatile_span.is_some(),
+            volatile_span,
+            inline: inline_span.is_some(),
+            inline_span,
+            is_goto: goto_span.is_some(),
+            goto_span,
+            span: self.merge_span(keyword.span, close.span),
+        })
+    }
+
+    fn parse_asm_operands(&mut self, outputs: bool) -> Option<Vec<AsmOperand<'arena>>> {
+        let mut operands = Vec::new();
+        while !matches!(self.peek_kind(), Some(TokenKind::Colon | TokenKind::RParen)) {
+            let start = self.span();
+            let (symbolic, symbolic_span) = if self.match_kind(TokenKind::LBracket) {
+                let name = self.expect(TokenKind::Identifier)?;
+                self.expect(TokenKind::RBracket)?;
+                (Some(self.token_text(&name).to_owned()), Some(name.span))
+            } else {
+                (None, None)
+            };
+            let (constraint, constraint_span) = self.parse_asm_string()?;
+            self.expect(TokenKind::LParen)?;
+            let expression = self.parse_expression()?;
+            let close = self.expect(TokenKind::RParen)?;
+            let span = self.merge_span(start, close.span);
+            if outputs && !self.is_modifiable_asm_output(expression) {
+                self.report("E2914", "malformed-asm", expression.span());
+                return None;
+            }
+            operands.push(AsmOperand {
+                symbolic,
+                symbolic_span,
+                constraint,
+                constraint_span,
+                expression,
+                span,
+            });
+            if !self.match_kind(TokenKind::Comma) {
+                break;
+            }
+        }
+        Some(operands)
+    }
+
+    fn parse_asm_string(&mut self) -> Option<(String, SourceSpan)> {
+        let first = self.expect(TokenKind::StringLiteral)?;
+        let Some(mut literal) = parse_string_literal(self.token_text(&first)) else {
+            self.report("E1006", "invalid-string-literal", first.span);
+            return None;
+        };
+        let mut end = first.span;
+        while self.peek_kind() == Some(TokenKind::StringLiteral) {
+            let next = self.advance().expect("peeked adjacent asm string literal");
+            let Some(fragment) = parse_string_literal(self.token_text(&next)) else {
+                self.report("E1006", "invalid-string-literal", next.span);
+                return None;
+            };
+            let Some(prefix) = concatenate_string_prefix(literal.prefix, fragment.prefix) else {
+                self.report("E1006", "incompatible-string-literal-prefixes", next.span);
+                return None;
+            };
+            literal.prefix = prefix;
+            literal.value.push_str(&fragment.value);
+            literal.fragments.extend(fragment.fragments);
+            end = next.span;
+        }
+        let span = self.merge_span(first.span, end);
+        if literal.explicit_unit_count().is_none() {
+            self.report("E1006", "invalid-string-literal", span);
+            return None;
+        }
+        Some((literal.value, span))
+    }
+
+    fn is_modifiable_asm_output(&self, expression: &CHirExpr<'_>) -> bool {
+        let Some(inferred) = self.expression_type(expression) else {
+            return false;
+        };
+        if inferred.category != ExprCategory::LValue {
+            return false;
+        }
+        let InferredType::Canonical(ty) = inferred.ty else {
+            return false;
+        };
+        self.types.get(ty).is_some_and(|canonical| {
+            !canonical.qualifiers.is_const
+                && !matches!(
+                    canonical.kind,
+                    TypeKind::Array { .. } | TypeKind::Function { .. }
+                )
+        })
+    }
+
     // ── statements ─────────────────────────────────────────────────────
 
     fn parse_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
         match self.peek_kind()? {
+            TokenKind::Asm => {
+                let mut assembly = self.parse_asm_construct()?;
+                let semicolon = self.expect(TokenKind::Semicolon)?;
+                assembly.span = self.merge_span(assembly.span, semicolon.span);
+                Some(self.alloc_node(CHirStmt::Asm(assembly)))
+            }
             TokenKind::If => self.parse_if_statement(),
             TokenKind::Switch => self.parse_switch_statement(),
             TokenKind::While => self.parse_while_statement(),
@@ -7040,6 +7275,85 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::BuiltinMulOverflow
             | TokenKind::Generic
     )
+}
+
+/// Return symbolic references in a GNU asm template.
+///
+/// Besides `%[name]`, GCC permits a one-letter modifier such as `%l[name]`
+/// for goto labels. `%%` is a quoted percent and cannot start a reference.
+fn asm_template_symbolic_names(template: &str) -> Vec<&str> {
+    let bytes = template.as_bytes();
+    let mut names = Vec::new();
+    let mut index = 0_usize;
+    while index < bytes.len() {
+        if bytes[index] != b'%' || index + 1 >= bytes.len() {
+            index += 1;
+            continue;
+        }
+        if bytes[index + 1] == b'%' {
+            index += 2;
+            continue;
+        }
+        let mut open = index + 1;
+        if bytes[open].is_ascii_alphabetic()
+            && bytes.get(open + 1).is_some_and(|byte| *byte == b'[')
+        {
+            open += 1;
+        }
+        if bytes[open] != b'[' {
+            index += 1;
+            continue;
+        }
+        let name_start = open + 1;
+        let Some(relative_end) = bytes[name_start..].iter().position(|byte| *byte == b']') else {
+            break;
+        };
+        let name_end = name_start + relative_end;
+        if let Some(name) = template.get(name_start..name_end) {
+            names.push(name);
+        }
+        index = name_end + 1;
+    }
+    names
+}
+
+fn collect_asm_goto_labels(
+    statement: &CHirStmt<'_>,
+    defined: &mut HashSet<String>,
+    referenced: &mut Vec<SpannedName>,
+) {
+    match statement {
+        CHirStmt::Asm(assembly) => referenced.extend(assembly.labels.iter().cloned()),
+        CHirStmt::If(_, then_statement, else_statement, _) => {
+            collect_asm_goto_labels(then_statement, defined, referenced);
+            if let Some(else_statement) = else_statement {
+                collect_asm_goto_labels(else_statement, defined, referenced);
+            }
+        }
+        CHirStmt::Switch(_, body, _)
+        | CHirStmt::While(_, body, _)
+        | CHirStmt::DoWhile(body, _, _)
+        | CHirStmt::For(_, _, _, body, _)
+        | CHirStmt::Case(_, body, _)
+        | CHirStmt::Default(body, _) => collect_asm_goto_labels(body, defined, referenced),
+        CHirStmt::Compound(items, _) => {
+            for item in items {
+                if let CHirBlockItem::Statement(statement) = item {
+                    collect_asm_goto_labels(statement, defined, referenced);
+                }
+            }
+        }
+        CHirStmt::Label(label, body, _) => {
+            defined.insert(label.spelling.clone());
+            collect_asm_goto_labels(body, defined, referenced);
+        }
+        CHirStmt::Expr(_, _)
+        | CHirStmt::Return(_, _)
+        | CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Goto(_, _)
+        | CHirStmt::Null(_) => {}
+    }
 }
 
 fn is_builtin_type_word(kind: TokenKind) -> bool {

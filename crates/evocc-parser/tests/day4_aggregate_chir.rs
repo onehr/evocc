@@ -136,6 +136,11 @@ fn assert_expr_owned(arena: &Arena, expression: &CHirExpr<'_>) {
 fn assert_stmt_owned(arena: &Arena, statement: &CHirStmt<'_>) {
     assert!(arena.contains(statement), "statement escaped caller Arena");
     match statement {
+        CHirStmt::Asm(assembly) => {
+            for operand in assembly.outputs.iter().chain(&assembly.inputs) {
+                assert_expr_owned(arena, operand.expression);
+            }
+        }
         CHirStmt::Expr(expression, _) => assert_expr_owned(arena, expression),
         CHirStmt::If(condition, then_branch, else_branch, _) => {
             assert_expr_owned(arena, condition);
@@ -202,6 +207,11 @@ fn assert_decl_owned(arena: &Arena, declaration: &CHirDecl<'_>) {
         "declaration escaped caller Arena"
     );
     match declaration {
+        CHirDecl::Asm(assembly) => {
+            for operand in assembly.outputs.iter().chain(&assembly.inputs) {
+                assert_expr_owned(arena, operand.expression);
+            }
+        }
         CHirDecl::Object(object) => {
             if let Some(initializer) = object.initializer.as_ref() {
                 assert_expr_owned(

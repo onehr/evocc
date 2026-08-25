@@ -380,6 +380,7 @@ fn declaration_symbol(declaration: &CHirDecl<'_>) -> SymbolId {
         CHirDecl::Object(declaration) => declaration.symbol,
         CHirDecl::Function(declaration) => declaration.symbol,
         CHirDecl::Typedef(declaration) => declaration.symbol,
+        CHirDecl::Asm(other) => panic!("asm declaration has no ordinary SymbolId: {other:?}"),
         CHirDecl::Tag(other) => panic!("tag declaration has no ordinary SymbolId: {other:?}"),
     }
 }
@@ -2182,6 +2183,9 @@ fn conflicting_redeclarations_are_exact_e2002_and_leave_no_ghost_event() {
                     declaration.ty,
                     "binding type rollback: {source:?}"
                 );
+            }
+            CHirDecl::Asm(_) => {
+                panic!("invalid ordinary redeclaration fixture began with asm")
             }
             CHirDecl::Tag(_) => panic!("invalid ordinary redeclaration fixture began with a tag"),
         }

@@ -320,6 +320,16 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
     fn statement(&mut self, path: &str, statement: &CHirStmt<'arena>) -> String {
         self.record(path, statement.span());
         match statement {
+            CHirStmt::Asm(assembly) => {
+                for (index, operand) in assembly.outputs.iter().chain(&assembly.inputs).enumerate()
+                {
+                    let _ = self.expression(
+                        &format!("{path}.operand[{index}].expression"),
+                        operand.expression,
+                    );
+                }
+                format!("asm({})", assembly.template)
+            }
             CHirStmt::Expr(expression, _) => {
                 format!(
                     "expr({})",
@@ -491,6 +501,16 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
     fn declaration(&mut self, path: &str, declaration: &CHirDecl<'arena>) -> String {
         self.record(path, declaration.span());
         match declaration {
+            CHirDecl::Asm(assembly) => {
+                for (index, operand) in assembly.outputs.iter().chain(&assembly.inputs).enumerate()
+                {
+                    let _ = self.expression(
+                        &format!("{path}.operand[{index}].expression"),
+                        operand.expression,
+                    );
+                }
+                format!("asm({})", assembly.template)
+            }
             CHirDecl::Tag(tag) => {
                 if let Some(name) = &tag.name {
                     self.name(&format!("{path}.name"), name);

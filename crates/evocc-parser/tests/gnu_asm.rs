@@ -1,6 +1,6 @@
 //! GNU asm front-end contract (specification 10.1.16).
 
-use evocc_chir::{render_unit_summary, CHirUnit};
+use evocc_chir::{render_unit_summary, CHirBlockItem, CHirDecl, CHirStmt, CHirUnit};
 use evocc_common::{Arena, FileId, SourceFile};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::Parser;
@@ -111,6 +111,29 @@ fn asm_reaches_chir_losslessly() {
         &arena,
     )
     .expect("extended asm must parse");
+    let CHirDecl::Function(function) = unit.declarations()[0] else {
+        panic!("fixture must contain a function")
+    };
+    let CHirStmt::Compound(items, _) = function.body.expect("function body") else {
+        panic!("function body must be compound")
+    };
+    let CHirBlockItem::Statement(CHirStmt::Asm(assembly)) = &items[0] else {
+        panic!("fixture statement must remain asm")
+    };
+    assert_eq!(assembly.template, "mov %[o], %[i]");
+    assert!(assembly.volatile);
+    assert!(!assembly.inline);
+    assert!(!assembly.is_goto);
+    assert_eq!(assembly.outputs.len(), 1);
+    assert_eq!(assembly.outputs[0].symbolic.as_deref(), Some("o"));
+    assert_eq!(assembly.outputs[0].constraint, "=r");
+    assert_eq!(assembly.inputs.len(), 1);
+    assert_eq!(assembly.inputs[0].symbolic.as_deref(), Some("i"));
+    assert_eq!(assembly.inputs[0].constraint, "r");
+    assert_eq!(assembly.clobbers, ["memory"]);
+    assert!(assembly.labels.is_empty());
+    assert!(assembly.span.byte_start <= assembly.template_span.byte_start);
+    assert!(assembly.span.byte_end >= assembly.clobber_spans[0].byte_end);
     let summary = render_unit_summary(&unit);
     for needle in [
         "asm volatile",
@@ -121,6 +144,30 @@ fn asm_reaches_chir_losslessly() {
     ] {
         assert!(summary.contains(needle), "{needle} missing in:\n{summary}");
     }
+}
+
+#[test]
+fn file_asm_and_declarator_labels_remain_in_chir() {
+    let arena = Arena::default();
+    let unit = parse(
+        "asm(\"a\" \"b\"); int x asm(\"real_x\"); int f(void) asm(\"real_f\");\n",
+        &arena,
+    )
+    .expect("file forms must parse");
+    let CHirDecl::Asm(assembly) = unit.declarations()[0] else {
+        panic!("first declaration must remain file-scope asm")
+    };
+    assert_eq!(assembly.template, "ab");
+    let CHirDecl::Object(object) = unit.declarations()[1] else {
+        panic!("second declaration must be an object")
+    };
+    assert_eq!(object.asm_label.as_deref(), Some("real_x"));
+    assert!(object.asm_label_span.is_some());
+    let CHirDecl::Function(function) = unit.declarations()[2] else {
+        panic!("third declaration must be a function")
+    };
+    assert_eq!(function.asm_label.as_deref(), Some("real_f"));
+    assert!(function.asm_label_span.is_some());
 }
 
 #[test]

@@ -1009,6 +1009,11 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
         }
 
         match declaration {
+            CHirDecl::Asm(assembly) => {
+                for operand in assembly.outputs.iter().chain(&assembly.inputs).rev() {
+                    work.push(WorkItem::Expression(operand.expression));
+                }
+            }
             CHirDecl::Object(object) => {
                 self.validate_object_declaration(object, file_scope, current_function)?;
                 let strength = if file_scope {
@@ -1094,6 +1099,11 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
         }
 
         match statement {
+            CHirStmt::Asm(assembly) => {
+                for operand in assembly.outputs.iter().chain(&assembly.inputs).rev() {
+                    work.push(WorkItem::Expression(operand.expression));
+                }
+            }
             CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
                 work.push(WorkItem::Expression(expression));
             }
@@ -1637,6 +1647,8 @@ mod tests {
             written: written(at),
             storage,
             initializer,
+            asm_label: None,
+            asm_label_span: None,
             gnu_extension_spans: Vec::new(),
             span: span(at),
         })
@@ -1682,6 +1694,8 @@ mod tests {
                 variadic: false,
             },
             storage: StorageClass::None,
+            asm_label: None,
+            asm_label_span: None,
             inline_spans: Vec::new(),
             gnu_extension_spans: Vec::new(),
             body,

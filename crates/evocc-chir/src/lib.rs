@@ -509,8 +509,43 @@ pub enum CHirForInit<'arena> {
     Declaration(Vec<&'arena CHirDecl<'arena>>),
 }
 
+/// One input or output operand retained from GNU extended `asm`.
+#[derive(Debug, Clone)]
+pub struct AsmOperand<'arena> {
+    pub symbolic: Option<String>,
+    pub symbolic_span: Option<SourceSpan>,
+    pub constraint: String,
+    pub constraint_span: SourceSpan,
+    pub expression: &'arena CHirExpr<'arena>,
+    pub span: SourceSpan,
+}
+
+/// A front-end-complete GNU `asm` construct.
+///
+/// Boolean qualifier facts are paired with their exact source spans. The
+/// spans also recover source order without making that order semantically
+/// significant.
+#[derive(Debug, Clone)]
+pub struct AsmStmt<'arena> {
+    pub template: String,
+    pub template_span: SourceSpan,
+    pub outputs: Vec<AsmOperand<'arena>>,
+    pub inputs: Vec<AsmOperand<'arena>>,
+    pub clobbers: Vec<String>,
+    pub clobber_spans: Vec<SourceSpan>,
+    pub labels: Vec<SpannedName>,
+    pub volatile: bool,
+    pub volatile_span: Option<SourceSpan>,
+    pub inline: bool,
+    pub inline_span: Option<SourceSpan>,
+    pub is_goto: bool,
+    pub goto_span: Option<SourceSpan>,
+    pub span: SourceSpan,
+}
+
 #[derive(Debug, Clone)]
 pub enum CHirStmt<'arena> {
+    Asm(AsmStmt<'arena>),
     Expr(&'arena CHirExpr<'arena>, SourceSpan),
     If(
         &'arena CHirExpr<'arena>,
@@ -559,6 +594,7 @@ impl CHirStmt<'_> {
     #[must_use]
     pub fn span(&self) -> SourceSpan {
         match self {
+            Self::Asm(statement) => statement.span,
             Self::Expr(_, span)
             | Self::If(_, _, _, span)
             | Self::Switch(_, _, span)
@@ -884,6 +920,9 @@ pub struct ObjectDecl<'arena> {
     pub written: WrittenDeclarator,
     pub storage: StorageClass,
     pub initializer: Option<ObjectInitializer<'arena>>,
+    /// GNU assembler name attached after this declarator, if present.
+    pub asm_label: Option<String>,
+    pub asm_label_span: Option<SourceSpan>,
     /// Every declaration-prefix GNU `__extension__` marker, in source order.
     pub gnu_extension_spans: Vec<SourceSpan>,
     /// GNU attributes attached here, in source order.
@@ -901,6 +940,9 @@ pub struct FunctionDecl<'arena> {
     pub written: WrittenDeclarator,
     pub parameters: ParameterSyntax,
     pub storage: StorageClass,
+    /// GNU assembler name attached after this declarator, if present.
+    pub asm_label: Option<String>,
+    pub asm_label_span: Option<SourceSpan>,
     /// Every written C11 `inline` function specifier, in source order.
     ///
     /// An empty vector means the declaration is not inline; retaining every
@@ -932,6 +974,7 @@ pub struct TypedefDecl {
 
 #[derive(Debug, Clone)]
 pub enum CHirDecl<'arena> {
+    Asm(AsmStmt<'arena>),
     Object(ObjectDecl<'arena>),
     Function(FunctionDecl<'arena>),
     Tag(TagDecl<'arena>),
@@ -969,6 +1012,7 @@ impl CHirDecl<'_> {
     #[must_use]
     pub fn span(&self) -> SourceSpan {
         match self {
+            Self::Asm(declaration) => declaration.span,
             Self::Object(declaration) => declaration.span,
             Self::Function(declaration) => declaration.span,
             Self::Tag(declaration) => declaration.span,
@@ -1106,6 +1150,7 @@ impl<'unit, 'arena> IntoIterator for &'unit CHirUnit<'arena> {
 
 fn inventory_of_declaration(declaration: &CHirDecl<'_>, inventory: &mut AttributeInventory) {
     match declaration {
+        CHirDecl::Asm(_) => {}
         CHirDecl::Function(function) => {
             inventory_of_written(&function.written, inventory);
             for attribute in &function.attributes {
@@ -1177,6 +1222,62 @@ fn inventory_of_written(written: &WrittenDeclarator, inventory: &mut AttributeIn
 #[must_use]
 pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
     use std::fmt::Write as _;
+
+    fn render_assembly(assembly: &AsmStmt<'_>, out: &mut String) {
+        let mut qualifiers = [
+            assembly
+                .volatile_span
+                .map(|span| (span.byte_start, "volatile")),
+            assembly.inline_span.map(|span| (span.byte_start, "inline")),
+            assembly.goto_span.map(|span| (span.byte_start, "goto")),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+        qualifiers.sort_unstable_by_key(|qualifier| qualifier.0);
+        let qualifier_text = qualifiers
+            .iter()
+            .map(|(_, spelling)| *spelling)
+            .collect::<Vec<_>>()
+            .join(" ");
+        if qualifier_text.is_empty() {
+            let _ = writeln!(out, "asm {:?}", assembly.template);
+        } else {
+            let _ = writeln!(out, "asm {qualifier_text} {:?}", assembly.template);
+        }
+        for operand in &assembly.outputs {
+            let symbolic = operand
+                .symbolic
+                .as_ref()
+                .map_or_else(String::new, |name| format!("[{name}] "));
+            let _ = writeln!(
+                out,
+                "  output {symbolic}{:?} expression={}..{}",
+                operand.constraint,
+                operand.expression.span().byte_start,
+                operand.expression.span().byte_end
+            );
+        }
+        for operand in &assembly.inputs {
+            let symbolic = operand
+                .symbolic
+                .as_ref()
+                .map_or_else(String::new, |name| format!("[{name}] "));
+            let _ = writeln!(
+                out,
+                "  input {symbolic}{:?} expression={}..{}",
+                operand.constraint,
+                operand.expression.span().byte_start,
+                operand.expression.span().byte_end
+            );
+        }
+        for clobber in &assembly.clobbers {
+            let _ = writeln!(out, "  clobber {clobber:?}");
+        }
+        for label in &assembly.labels {
+            let _ = writeln!(out, "  label {}", label.spelling);
+        }
+    }
 
     fn checked_expression(
         expression: &CHirExpr<'_>,
@@ -1283,6 +1384,12 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
         seen: &mut std::collections::BTreeSet<(u32, u32, u32)>,
     ) {
         match declaration {
+            CHirDecl::Asm(assembly) => {
+                render_assembly(assembly, out);
+                for operand in assembly.outputs.iter().chain(&assembly.inputs) {
+                    checked_expression(operand.expression, out, seen);
+                }
+            }
             CHirDecl::Object(object) => {
                 if let Some(initializer) = &object.initializer {
                     for action in initializer.plan().actions() {
@@ -1324,6 +1431,12 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
         seen: &mut std::collections::BTreeSet<(u32, u32, u32)>,
     ) {
         match statement {
+            CHirStmt::Asm(assembly) => {
+                render_assembly(assembly, out);
+                for operand in assembly.outputs.iter().chain(&assembly.inputs) {
+                    checked_expression(operand.expression, out, seen);
+                }
+            }
             CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
                 checked_expression(expression, out, seen);
             }
@@ -1418,8 +1531,12 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
     };
     for declaration in unit.iter() {
         match declaration {
+            CHirDecl::Asm(_) => {}
             CHirDecl::Function(function) => {
                 let _ = writeln!(out, "function {}", function.name.spelling);
+                if let Some(label) = &function.asm_label {
+                    let _ = writeln!(out, "  asm-label {label:?}");
+                }
                 written_attribute_lines(&mut out, &function.written);
                 attribute_lines(&mut out, &function.attributes);
                 if let ParameterSyntax::Prototype { parameters, .. } = &function.parameters {
@@ -1434,6 +1551,9 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
             }
             CHirDecl::Object(object) => {
                 let _ = writeln!(out, "object {}", object.name.spelling);
+                if let Some(label) = &object.asm_label {
+                    let _ = writeln!(out, "  asm-label {label:?}");
+                }
                 written_attribute_lines(&mut out, &object.written);
                 attribute_lines(&mut out, &object.attributes);
             }
@@ -1664,6 +1784,8 @@ mod tests {
             written: written_declarator(),
             storage: StorageClass::None,
             initializer,
+            asm_label: None,
+            asm_label_span: None,
             gnu_extension_spans: Vec::new(),
             span: test_span(),
         })
@@ -1838,6 +1960,8 @@ mod tests {
                     },
                     parameters: ParameterSyntax::Unspecified,
                     storage: StorageClass::None,
+                    asm_label: None,
+                    asm_label_span: None,
                     inline_spans: Vec::new(),
                     gnu_extension_spans: Vec::new(),
                     body: Some(func_body),

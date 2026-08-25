@@ -147,6 +147,9 @@ pub enum InterpreterError {
         feature: &'static str,
         span: SourceSpan,
     },
+    Asm {
+        span: SourceSpan,
+    },
     UnsupportedDeclaration {
         feature: &'static str,
         span: SourceSpan,
@@ -252,6 +255,7 @@ impl InterpreterError {
             Self::FuelExhausted { .. } => "E3008",
             Self::CallThroughNullFunctionPointer { .. } => "E3015",
             Self::CallThroughNonFunctionPointer { .. } => "E3016",
+            Self::Asm { .. } => "E3021",
             Self::Memory { error, .. } => match error.runtime_diagnostic() {
                 Some(diagnostic) => diagnostic.code,
                 None => "E3007",
@@ -341,6 +345,7 @@ impl InterpreterError {
             Self::UnsupportedStatement { feature, .. } => {
                 format!("unsupported-interpreter-statement: {feature}")
             }
+            Self::Asm { .. } => "not-lowered: asm".to_owned(),
             Self::UnsupportedDeclaration { feature, .. } => {
                 format!("unsupported-interpreter-declaration: {feature}")
             }
@@ -379,6 +384,7 @@ impl InterpreterError {
             | Self::UnsupportedType { span, .. }
             | Self::UnsupportedExpression { span, .. }
             | Self::UnsupportedStatement { span, .. }
+            | Self::Asm { span }
             | Self::UnsupportedDeclaration { span, .. }
             | Self::MalformedFunctionDeclaration { span, .. }
             | Self::DuplicateFunctionBody { span, .. }
@@ -1768,6 +1774,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     ) -> Result<Option<MachineOutcome>, InterpreterError> {
         self.tick(statement.span())?;
         match statement {
+            CHirStmt::Asm(assembly) => Err(InterpreterError::Asm {
+                span: assembly.span,
+            }),
             CHirStmt::Expr(expression, _) => {
                 self.schedule_discarded_expression(expression, tasks);
                 Ok(None)
@@ -1890,7 +1899,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         self.tick(declaration.span())?;
         let declaration = match declaration {
             CHirDecl::Object(declaration) => declaration,
-            CHirDecl::Tag(_) | CHirDecl::Typedef(_) => return Ok(()),
+            CHirDecl::Asm(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) => return Ok(()),
             CHirDecl::Function(declaration) => {
                 return Err(InterpreterError::UnsupportedDeclaration {
                     feature: "block function declaration",
@@ -2522,6 +2531,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 self.schedule_goto_in_statement(child, spelling, tasks)
             }
             CHirStmt::Expr(_, _)
+            | CHirStmt::Asm(_)
             | CHirStmt::Return(_, _)
             | CHirStmt::Break(_)
             | CHirStmt::Continue(_)
@@ -4768,6 +4778,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
             }
             CHirStmt::Expr(_, _)
+            | CHirStmt::Asm(_)
             | CHirStmt::Return(_, _)
             | CHirStmt::Break(_)
             | CHirStmt::Continue(_)
@@ -4804,7 +4815,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
                 Ok(())
             }
-            CHirDecl::Tag(_) | CHirDecl::Typedef(_) => Ok(()),
+            CHirDecl::Asm(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) => Ok(()),
             CHirDecl::Function(declaration) => Err(InterpreterError::UnsupportedDeclaration {
                 feature: "block function declaration",
                 span: declaration.span,
@@ -4968,7 +4979,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         self.tick(declaration.span())?;
         match declaration {
             CHirDecl::Object(declaration) => self.exec_object_decl(declaration),
-            CHirDecl::Tag(_) | CHirDecl::Typedef(_) => Ok(()),
+            CHirDecl::Asm(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) => Ok(()),
             CHirDecl::Function(declaration) => Err(InterpreterError::UnsupportedDeclaration {
                 feature: "block function declaration",
                 span: declaration.span,
@@ -5035,6 +5046,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     fn exec_stmt(&mut self, statement: &'arena CHirStmt<'arena>) -> Result<Flow, InterpreterError> {
         self.tick(statement.span())?;
         match statement {
+            CHirStmt::Asm(assembly) => Err(InterpreterError::Asm {
+                span: assembly.span,
+            }),
             CHirStmt::Expr(expression, _) => {
                 self.eval_expr(expression, true)?;
                 Ok(Flow::Normal)
@@ -5946,9 +5960,11 @@ fn reachable_function_body<'arena>(
 ) -> Option<&'arena CHirStmt<'arena>> {
     unit.iter().find_map(|declaration| match declaration {
         CHirDecl::Function(FunctionDecl { symbol, body, .. }) if *symbol == function => *body,
-        CHirDecl::Function(_) | CHirDecl::Object(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) => {
-            None
-        }
+        CHirDecl::Function(_)
+        | CHirDecl::Object(_)
+        | CHirDecl::Asm(_)
+        | CHirDecl::Tag(_)
+        | CHirDecl::Typedef(_) => None,
     })
 }
 
@@ -6049,6 +6065,11 @@ fn collect_declaration_symbols<'arena>(
                 collect_statement_symbols(body, output);
             }
         }
+        CHirDecl::Asm(assembly) => {
+            for operand in assembly.outputs.iter().chain(&assembly.inputs) {
+                collect_expression_symbols(operand.expression, output);
+            }
+        }
         CHirDecl::Tag(_) | CHirDecl::Typedef(_) => {}
     }
 }
@@ -6058,6 +6079,11 @@ fn collect_statement_symbols<'arena>(
     output: &mut ReferencedSymbols,
 ) {
     match statement {
+        CHirStmt::Asm(assembly) => {
+            for operand in assembly.outputs.iter().chain(&assembly.inputs) {
+                collect_expression_symbols(operand.expression, output);
+            }
+        }
         CHirStmt::Expr(expression, _) => collect_expression_symbols(expression, output),
         CHirStmt::Return(expression, _) => {
             if let Some(expression) = expression {
@@ -6194,6 +6220,7 @@ fn collect_place_symbols<'arena>(place: &MemoryPlace<'arena>, output: &mut Refer
 
 fn statement_requires_memory(unit: &CHirUnit<'_>, statement: &CHirStmt<'_>) -> bool {
     match statement {
+        CHirStmt::Asm(_) => true,
         CHirStmt::Expr(expression, _) => expression_requires_memory(unit, expression),
         CHirStmt::If(condition, then_statement, else_statement, _) => {
             expression_requires_memory(unit, condition)
@@ -6357,7 +6384,7 @@ fn collect_object_declarations<'arena>(
                 collect_statement_object_declarations(body, symbol, output);
             }
         }
-        CHirDecl::Object(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) => {}
+        CHirDecl::Object(_) | CHirDecl::Asm(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) => {}
     }
 }
 
@@ -6402,6 +6429,7 @@ fn collect_statement_object_declarations<'arena>(
             }
         }
         CHirStmt::Expr(_, _)
+        | CHirStmt::Asm(_)
         | CHirStmt::Return(_, _)
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
@@ -6441,6 +6469,7 @@ fn function_has_goto(unit: &CHirUnit<'_>, function: SymbolId) -> bool {
 fn statement_contains_goto(statement: &CHirStmt<'_>) -> bool {
     match statement {
         CHirStmt::Goto(_, _) => true,
+        CHirStmt::Asm(assembly) => assembly.is_goto,
         CHirStmt::If(_, then_statement, else_statement, _) => {
             statement_contains_goto(then_statement)
                 || else_statement.is_some_and(statement_contains_goto)
@@ -6466,6 +6495,11 @@ fn statement_contains_goto(statement: &CHirStmt<'_>) -> bool {
 
 fn statement_contains_call(statement: &CHirStmt<'_>) -> bool {
     match statement {
+        CHirStmt::Asm(assembly) => assembly
+            .outputs
+            .iter()
+            .chain(&assembly.inputs)
+            .any(|operand| expression_contains_call(operand.expression)),
         CHirStmt::Expr(expression, _) => expression_contains_call(expression),
         CHirStmt::If(condition, then_statement, else_statement, _) => {
             expression_contains_call(condition)
@@ -6858,6 +6892,7 @@ fn statement_contains_label(statement: &CHirStmt<'_>, spelling: &str) -> bool {
             )
         }),
         CHirStmt::Expr(_, _)
+        | CHirStmt::Asm(_)
         | CHirStmt::Return(_, _)
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
@@ -6921,6 +6956,7 @@ fn validate_function_labels(
             validate_function_labels(body, labels)?;
         }
         CHirStmt::Expr(_, _)
+        | CHirStmt::Asm(_)
         | CHirStmt::Return(_, _)
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
@@ -6968,6 +7004,7 @@ fn validate_function_gotos(
             });
         }
         CHirStmt::Expr(_, _)
+        | CHirStmt::Asm(_)
         | CHirStmt::Return(_, _)
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
@@ -7078,6 +7115,8 @@ mod tests {
                     variadic: false,
                 },
                 storage: StorageClass::None,
+                asm_label: None,
+                asm_label_span: None,
                 inline_spans: Vec::new(),
                 gnu_extension_spans: Vec::new(),
                 body: Some(body),
@@ -7274,6 +7313,8 @@ mod tests {
                 },
                 storage: StorageClass::None,
                 initializer: None,
+                asm_label: None,
+                asm_label_span: None,
                 gnu_extension_spans: Vec::new(),
                 span: span(0, 8),
             }),
@@ -7379,6 +7420,8 @@ mod tests {
                 variadic: false,
             },
             storage: StorageClass::None,
+            asm_label: None,
+            asm_label_span: None,
             inline_spans: Vec::new(),
             gnu_extension_spans: Vec::new(),
             body,
@@ -7570,6 +7613,8 @@ mod tests {
                     crate::WrittenInitializer::Expression(value),
                     plan,
                 )),
+                asm_label: None,
+                asm_label_span: None,
                 gnu_extension_spans: Vec::new(),
                 span: span(0, 12),
             }),

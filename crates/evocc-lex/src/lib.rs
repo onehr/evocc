@@ -87,6 +87,8 @@ pub enum TokenKind {
     /// GNU `__alignof__`, promoted only after preprocessing at the parser
     /// boundary so the raw spelling remains macro-expandable.
     GnuAlignof,
+    /// GNU `asm`/`__asm__`, promoted only after preprocessing.
+    Asm,
     /// GNU `__builtin_expect`, promoted only after preprocessing.
     BuiltinExpect,
     /// GNU `__builtin_constant_p`, promoted only after preprocessing.

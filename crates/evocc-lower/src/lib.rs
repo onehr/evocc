@@ -59,6 +59,9 @@ pub enum LowerError {
     CheckedArithmetic {
         span: SourceSpan,
     },
+    Asm {
+        span: SourceSpan,
+    },
     MalformedFunction {
         function: String,
         span: SourceSpan,
@@ -91,6 +94,7 @@ impl fmt::Display for LowerError {
             Self::CheckedArithmetic { .. } => {
                 formatter.write_str("not-lowered: checked-arithmetic")
             }
+            Self::Asm { .. } => formatter.write_str("not-lowered: asm"),
             Self::MalformedFunction {
                 function, reason, ..
             } => write!(formatter, "malformed function {function}: {reason}"),
@@ -113,6 +117,7 @@ impl LowerError {
     pub const fn code(&self) -> &'static str {
         match self {
             Self::CheckedArithmetic { .. } => "E3020",
+            Self::Asm { .. } => "E3021",
             _ => "E3101",
         }
     }
@@ -130,6 +135,7 @@ impl LowerError {
             | Self::UnsupportedExpression { span, .. }
             | Self::UnsupportedStatement { span, .. }
             | Self::CheckedArithmetic { span }
+            | Self::Asm { span }
             | Self::MalformedFunction { span, .. }
             | Self::InvalidControlFlow { span, .. }
             | Self::Layout { span, .. } => Some(*span),
@@ -429,6 +435,11 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
 
     fn statement(unit: &CHirUnit<'_>, stmt: &CHirStmt<'_>, out: &mut BTreeSet<SymbolId>) {
         match stmt {
+            CHirStmt::Asm(assembly) => {
+                for operand in assembly.outputs.iter().chain(&assembly.inputs) {
+                    expression(unit, operand.expression, out);
+                }
+            }
             CHirStmt::Expr(expr, _) | CHirStmt::Return(Some(expr), _) => {
                 expression(unit, expr, out)
             }
@@ -534,6 +545,7 @@ fn lower_globals(
             | CHirStmt::Default(body, _)
             | CHirStmt::Label(_, body, _) => collect_nested(body, out),
             CHirStmt::Expr(..)
+            | CHirStmt::Asm(_)
             | CHirStmt::Return(..)
             | CHirStmt::Break(_)
             | CHirStmt::Continue(_)
@@ -841,6 +853,11 @@ fn prevalidate_unit_for_lowering(
     })?;
     for declaration in unit.iter() {
         match declaration {
+            CHirDecl::Asm(assembly) => {
+                return Err(LowerError::Asm {
+                    span: assembly.span,
+                });
+            }
             CHirDecl::Function(function) => {
                 if let Some(body) = function.body {
                     let mut labels = BTreeMap::new();
@@ -869,6 +886,9 @@ fn prevalidate_decl_for_lowering(
     declaration: &CHirDecl<'_>,
 ) -> Result<(), LowerError> {
     match declaration {
+        CHirDecl::Asm(assembly) => Err(LowerError::Asm {
+            span: assembly.span,
+        }),
         CHirDecl::Object(object) => {
             validate_object_declaration_for_lowering(unit, object)?;
             if let Some(initializer) = &object.initializer {
@@ -894,6 +914,9 @@ fn prevalidate_stmt_for_lowering(
     labels: &mut BTreeMap<String, SourceSpan>,
 ) -> Result<(), LowerError> {
     match statement {
+        CHirStmt::Asm(assembly) => Err(LowerError::Asm {
+            span: assembly.span,
+        }),
         CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
             prevalidate_expr_for_lowering(unit, expression)
         }
@@ -2194,6 +2217,9 @@ impl<'a> FunctionLowerer<'a> {
         control: &ControlTargets,
     ) -> Result<Flow, LowerError> {
         match statement {
+            CHirStmt::Asm(assembly) => Err(LowerError::Asm {
+                span: assembly.span,
+            }),
             CHirStmt::Expr(expression, _) => {
                 self.lower_discarded_expr(expression, &mut state)?;
                 Ok(Flow {
@@ -2476,6 +2502,11 @@ impl<'a> FunctionLowerer<'a> {
     ) -> Result<(), LowerError> {
         let object = match declaration {
             CHirDecl::Object(object) => object,
+            CHirDecl::Asm(assembly) => {
+                return Err(LowerError::Asm {
+                    span: assembly.span,
+                });
+            }
             CHirDecl::Tag(_) | CHirDecl::Typedef(_) => return Ok(()),
             CHirDecl::Function(_) => {
                 return Err(LowerError::UnsupportedStatement {
@@ -5884,6 +5915,7 @@ fn contains_targeted_label(statement: &CHirStmt<'_>, names: &BTreeSet<String>) -
             matches!(item, CHirBlockItem::Statement(statement) if contains_targeted_label(statement, names))
         }),
         CHirStmt::Expr(_, _)
+        | CHirStmt::Asm(_)
         | CHirStmt::Return(_, _)
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
@@ -5894,6 +5926,9 @@ fn contains_targeted_label(statement: &CHirStmt<'_>, names: &BTreeSet<String>) -
 
 fn collect_goto_names(statement: &CHirStmt<'_>, names: &mut BTreeSet<String>) {
     match statement {
+        CHirStmt::Asm(assembly) => {
+            names.extend(assembly.labels.iter().map(|label| label.spelling.clone()));
+        }
         CHirStmt::Goto(label, _) => {
             names.insert(label.spelling.clone());
         }
@@ -5933,6 +5968,11 @@ struct CallSites {
 
 fn collect_calls_stmt(statement: &CHirStmt<'_>, calls: &mut CallSites) {
     match statement {
+        CHirStmt::Asm(assembly) => {
+            for operand in assembly.outputs.iter().chain(&assembly.inputs) {
+                collect_calls_expr(operand.expression, calls);
+            }
+        }
         CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
             collect_calls_expr(expression, calls)
         }
@@ -6084,6 +6124,16 @@ fn live_before_stmt(
     mut live_after: BTreeSet<SymbolId>,
 ) -> BTreeSet<SymbolId> {
     match statement {
+        CHirStmt::Asm(assembly) => {
+            for operand in assembly
+                .inputs
+                .iter()
+                .rev()
+                .chain(assembly.outputs.iter().rev())
+            {
+                live_before_expr(operand.expression, &mut live_after);
+            }
+        }
         CHirStmt::Expr(expression, _) => {
             live_before_expr(expression, &mut live_after);
         }
@@ -6313,6 +6363,11 @@ fn collect_symbols_item(item: &CHirBlockItem<'_>, symbols: &mut BTreeSet<SymbolI
 
 fn collect_symbols_stmt(statement: &CHirStmt<'_>, symbols: &mut BTreeSet<SymbolId>) {
     match statement {
+        CHirStmt::Asm(assembly) => {
+            for operand in assembly.outputs.iter().chain(&assembly.inputs) {
+                collect_symbols_expr(operand.expression, symbols);
+            }
+        }
         CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
             collect_symbols_expr(expression, symbols)
         }

@@ -223,6 +223,11 @@ fn assert_declaration_owned(arena: &Arena, declaration: &CHirDecl<'_>) {
         "declaration escaped caller Arena"
     );
     match declaration {
+        CHirDecl::Asm(assembly) => {
+            for operand in assembly.outputs.iter().chain(&assembly.inputs) {
+                assert_expression_owned(arena, operand.expression);
+            }
+        }
         CHirDecl::Object(object) => {
             if let Some(initializer) = object.initializer.as_ref() {
                 assert_expression_owned(
@@ -263,6 +268,11 @@ fn assert_declaration_owned(arena: &Arena, declaration: &CHirDecl<'_>) {
 fn assert_statement_owned(arena: &Arena, statement: &CHirStmt<'_>) {
     assert!(arena.contains(statement), "statement escaped caller Arena");
     match statement {
+        CHirStmt::Asm(assembly) => {
+            for operand in assembly.outputs.iter().chain(&assembly.inputs) {
+                assert_expression_owned(arena, operand.expression);
+            }
+        }
         CHirStmt::Expr(expression, _) => assert_expression_owned(arena, expression),
         CHirStmt::If(condition, then_branch, else_branch, _) => {
             assert_expression_owned(arena, condition);
@@ -388,6 +398,7 @@ fn optional_expression(expression: Option<&CHirExpr<'_>>) -> String {
 
 fn statement_kind(statement: &CHirStmt<'_>) -> &'static str {
     match statement {
+        CHirStmt::Asm(..) => "asm",
         CHirStmt::Expr(..) => "expression",
         CHirStmt::If(..) => "if",
         CHirStmt::Switch(..) => "switch",
@@ -435,6 +446,7 @@ fn collect_statement_spans(statement: &CHirStmt<'_>, facts: &mut Vec<(&'static s
             }
         }
         CHirStmt::Expr(..)
+        | CHirStmt::Asm(..)
         | CHirStmt::Return(..)
         | CHirStmt::Break(..)
         | CHirStmt::Continue(..)
@@ -445,6 +457,7 @@ fn collect_statement_spans(statement: &CHirStmt<'_>, facts: &mut Vec<(&'static s
 
 fn statement_fingerprint(statement: &CHirStmt<'_>) -> String {
     match statement {
+        CHirStmt::Asm(assembly) => format!("asm({})", assembly.template),
         CHirStmt::Expr(expression, _) => {
             format!("expr({})", expression_fingerprint(expression))
         }
