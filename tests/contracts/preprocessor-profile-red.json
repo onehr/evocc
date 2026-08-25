@@ -1,0 +1,76 @@
+{
+  "baseline": "5906674189e843e28d384e69a82dc3689e18437a",
+  "authority": [
+    "docs/evoir-spec.md revision 1.9.7 sections 6.3 and 10.4",
+    "tests/contracts/day9-acceptance-contract.json scope P",
+    ".evidence/predefined-macros/20260826-2c23684c"
+  ],
+  "commands": [
+    "cargo test -p evocc-cpp --test target_profile --no-fail-fast",
+    "cargo test -p evocc --test preprocessor_target_profile --no-fail-fast"
+  ],
+  "declaredCapabilities": {
+    "sealed-predefined-set": 3,
+    "counter-expansion": 1,
+    "feature-queries": 4,
+    "pragma-operator": 1,
+    "pragma-classification": 1
+  },
+  "summary": {
+    "failed": 10,
+    "passed": 0,
+    "buildErrors": 0
+  },
+  "failures": [
+    {
+      "test": "target_profile::predefined_macros_are_the_sealed_gcc_14_list",
+      "diagnostic": "target profile copy is absent",
+      "declaredReason": "sealed-predefined-set"
+    },
+    {
+      "test": "target_profile::the_kernel_compiler_check_takes_the_gcc_branch",
+      "diagnostic": "E0104: error-directive: \"Unknown compiler\"",
+      "declaredReason": "sealed-predefined-set"
+    },
+    {
+      "test": "preprocessor_target_profile::command_line_definitions_and_undefinitions_follow_the_target_profile",
+      "diagnostic": "__GNUC__ remains unexpanded instead of 14",
+      "declaredReason": "sealed-predefined-set"
+    },
+    {
+      "test": "target_profile::counter_increments_per_expansion",
+      "diagnostic": "__COUNTER__ remains unexpanded instead of 0 1 2",
+      "declaredReason": "counter-expansion"
+    },
+    {
+      "test": "target_profile::feature_query_tables_are_digest_checked_data",
+      "diagnostic": "attribute answer table is absent",
+      "declaredReason": "feature-queries"
+    },
+    {
+      "test": "target_profile::feature_queries_are_defined_and_answer_as_measured",
+      "diagnostic": "__has_attribute is undefined instead of defined",
+      "declaredReason": "feature-queries"
+    },
+    {
+      "test": "target_profile::has_include_performs_the_real_search",
+      "diagnostic": "__has_include yields n n instead of y n",
+      "declaredReason": "feature-queries"
+    },
+    {
+      "test": "target_profile::malformed_feature_queries_are_e0106",
+      "diagnostic": "malformed __has_attribute yields no diagnostic instead of E0106",
+      "declaredReason": "feature-queries"
+    },
+    {
+      "test": "target_profile::pragma_operator_is_processed_after_macro_expansion",
+      "diagnostic": "_Pragma remains in output instead of being processed",
+      "declaredReason": "pragma-operator"
+    },
+    {
+      "test": "target_profile::pragma_lines_are_classified",
+      "diagnostic": "poisoned identifier yields no diagnostic instead of E0108",
+      "declaredReason": "pragma-classification"
+    }
+  ]
+}

@@ -8,3 +8,6 @@ description = "C preprocessor: macro expansion, directives, token stream"
 [dependencies]
 evocc-common = { path = "../evocc-common" }
 evocc-lex = { path = "../evocc-lex" }
+
+[dev-dependencies]
+evocc-proof = { path = "../evocc-proof" }
