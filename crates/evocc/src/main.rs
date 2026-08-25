@@ -62,9 +62,14 @@ struct DriverOptions {
     include_paths: Vec<String>,
     forced_includes: Vec<String>,
     macro_prefix_maps: Vec<(String, String)>,
-    definitions: Vec<String>,
+    macro_actions: Vec<MacroAction>,
     standard_includes: bool,
     optimize_scalar_evoir: bool,
+}
+
+enum MacroAction {
+    Define(String),
+    Undefine(String),
 }
 
 const SUPPORTED_TARGET: &str = "aarch64-unknown-linux-gnu";
@@ -178,7 +183,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut include_paths = Vec::new();
     let mut forced_includes = Vec::new();
     let mut macro_prefix_maps = Vec::new();
-    let mut definitions = Vec::new();
+    let mut macro_actions = Vec::new();
     let mut standard_includes = true;
     let mut optimize_scalar_evoir = false;
     let mut index = 0;
@@ -206,7 +211,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             }
             "-P" | "-undef" => {}
             "-nostdinc" => standard_includes = false,
-            "-I" | "-D" | "-include" => {
+            "-I" | "-D" | "-U" | "-include" => {
                 index += 1;
                 let value = args
                     .get(index)
@@ -214,7 +219,8 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
                     .clone();
                 match arg.as_str() {
                     "-I" => include_paths.push(value),
-                    "-D" => definitions.push(value),
+                    "-D" => macro_actions.push(MacroAction::Define(value)),
+                    "-U" => macro_actions.push(MacroAction::Undefine(value)),
                     "-include" => forced_includes.push(value),
                     _ => unreachable!("matched driver option"),
                 }
@@ -223,7 +229,10 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
                 include_paths.push(arg[2..].to_owned());
             }
             _ if arg.starts_with("-D") && arg.len() > 2 => {
-                definitions.push(arg[2..].to_owned());
+                macro_actions.push(MacroAction::Define(arg[2..].to_owned()));
+            }
+            _ if arg.starts_with("-U") && arg.len() > 2 => {
+                macro_actions.push(MacroAction::Undefine(arg[2..].to_owned()));
             }
             _ if arg.starts_with("-fmacro-prefix-map=") => {
                 let payload = &arg["-fmacro-prefix-map=".len()..];
@@ -270,7 +279,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         include_paths,
         forced_includes,
         macro_prefix_maps,
-        definitions,
+        macro_actions,
         standard_includes,
         optimize_scalar_evoir,
     })
@@ -383,7 +392,7 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     // preprocessor does not yet expose target-specific predefined macros.
     // This is target selection for preprocessing/parsing, not a codegen claim.
     let mut pp = match options.target {
-        DriverTarget::Aarch64UnknownLinuxGnu => Preprocessor::new(),
+        DriverTarget::Aarch64UnknownLinuxGnu => Preprocessor::for_target(SUPPORTED_TARGET)?,
     };
     pp.current_file = options.input.clone();
     pp.set_standard_includes_enabled(options.standard_includes);
@@ -400,16 +409,26 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     for (old, new) in &options.macro_prefix_maps {
         pp.add_macro_prefix_map(old.clone(), new.clone());
     }
-    for definition in &options.definitions {
-        let (name, replacement) = definition
-            .split_once('=')
-            .map_or((definition.as_str(), "1"), |(name, replacement)| {
-                (name, replacement)
-            });
-        if !is_identifier(name) {
-            return Err(format!("invalid macro name in -D: `{name}`"));
+    for action in &options.macro_actions {
+        match action {
+            MacroAction::Define(definition) => {
+                let (name, replacement) = definition
+                    .split_once('=')
+                    .map_or((definition.as_str(), "1"), |(name, replacement)| {
+                        (name, replacement)
+                    });
+                if !is_identifier(name) {
+                    return Err(format!("invalid macro name in -D: `{name}`"));
+                }
+                pp.define(name.to_owned(), decoded_tokens(replacement)?);
+            }
+            MacroAction::Undefine(name) => {
+                if !is_identifier(name) {
+                    return Err(format!("invalid macro name in -U: `{name}`"));
+                }
+                pp.undefine(name);
+            }
         }
-        pp.define(name.to_owned(), decoded_tokens(replacement)?);
     }
     Ok(pp)
 }

@@ -7,6 +7,10 @@ use std::collections::{HashMap, HashSet};
 pub use evocc_common::{FileId, SourceSpan};
 pub use evocc_lex::{Lexer, Token, TokenKind, TokenText};
 
+const AARCH64_UNKNOWN_LINUX_GNU: &str = "aarch64-unknown-linux-gnu";
+const AARCH64_UNKNOWN_LINUX_GNU_PREDEFINED: &str =
+    include_str!("../predefined/aarch64-unknown-linux-gnu.h");
+
 // ---------------------------------------------------------------------------
 // Macro definition
 // ---------------------------------------------------------------------------
@@ -415,17 +419,17 @@ pub struct Preprocessor {
 
 impl Preprocessor {
     pub fn new() -> Self {
-        let mut macros = MacroMap::new();
-        macros.define("__STDC__".into(), vec![make_int_token(1)], vec![]);
-        macros.define(
-            "__STDC_VERSION__".into(),
-            vec![make_int_token(201112)],
-            vec![],
-        );
-        macros.define("__STDC_HOSTED__".into(), vec![make_int_token(1)], vec![]);
-        macros.define("__DATE__".into(), vec![make_date_token()], vec![]);
-        Self {
-            macros,
+        Self::for_target(AARCH64_UNKNOWN_LINUX_GNU)
+            .expect("the built-in target profile must be valid")
+    }
+
+    pub fn for_target(target: &str) -> Result<Self, String> {
+        let profile = match target {
+            AARCH64_UNKNOWN_LINUX_GNU => AARCH64_UNKNOWN_LINUX_GNU_PREDEFINED,
+            _ => return Err(format!("unsupported preprocessor target profile: {target}")),
+        };
+        let mut preprocessor = Self {
+            macros: MacroMap::new(),
             include_guard_seen: false,
             pragma_once_files: HashSet::new(),
             include_paths: Vec::new(),
@@ -439,7 +443,33 @@ impl Preprocessor {
             reserved_file_ids: HashSet::new(),
             next_file_id: 1,
             current_file: String::new(),
+        };
+        preprocessor.install_predefined_profile(profile)?;
+        preprocessor
+            .macros
+            .define("__DATE__".into(), vec![make_date_token()], Vec::new());
+        Ok(preprocessor)
+    }
+
+    fn install_predefined_profile(&mut self, source: &str) -> Result<(), String> {
+        let mut lexer = Lexer::new(FileId::DUMMY, source);
+        let mut tokens = Vec::new();
+        while let Some(token) = lexer.next() {
+            if token.kind == TokenKind::Error {
+                return Err("invalid token in embedded preprocessor target profile".into());
+            }
+            tokens.push(token);
         }
+        let mut expanding = HashSet::new();
+        let output = self.process_impl(TokenStream::new(tokens), source, &mut expanding, true, 0);
+        let has_non_eof_output = output
+            .into_vec()
+            .iter()
+            .any(|token| token.kind != TokenKind::Eof);
+        if has_non_eof_output || !self.errors.is_empty() {
+            return Err("embedded preprocessor target profile is not definitions-only".into());
+        }
+        Ok(())
     }
 
     pub fn macros(&self) -> &MacroMap {
@@ -723,10 +753,8 @@ impl Preprocessor {
                 match dir_name.as_str() {
                     "define" => {
                         if self.cond_active() {
-                            let (name, body) = parse_define(&raw, &mut i, source);
+                            let (name, body, is_function_like) = parse_define(&raw, &mut i, source);
                             if !name.is_empty() {
-                                let is_function_like =
-                                    !body.is_empty() && body[0].kind == TokenKind::LParen;
                                 let (params, variadic, variadic_param_name) = if is_function_like {
                                     let (p, v, vn) = extract_params(&body, source);
                                     (p, v, vn)
@@ -1168,6 +1196,34 @@ fn has_logical_newline_between(previous: &Token, current: &Token, source: &str) 
     false
 }
 
+/// Return whether translation phase 2 leaves no characters between two
+/// tokens. A function-like macro requires its opening parenthesis to be
+/// adjacent to the macro name; ordinary whitespace and comments prevent that,
+/// while a spliced physical newline does not.
+fn tokens_are_logically_adjacent(previous: &Token, current: &Token, source: &str) -> bool {
+    let start = previous.span.byte_end as usize;
+    let end = current.span.byte_start as usize;
+    if start > end || end > source.len() {
+        return false;
+    }
+
+    let gap = &source.as_bytes()[start..end];
+    let mut index = 0;
+    while index < gap.len() {
+        if gap[index] == b'\\' && gap.get(index + 1) == Some(&b'\n') {
+            index += 2;
+        } else if gap[index] == b'\\'
+            && gap.get(index + 1) == Some(&b'\r')
+            && gap.get(index + 2) == Some(&b'\n')
+        {
+            index += 3;
+        } else {
+            return false;
+        }
+    }
+    true
+}
+
 /// A token starts a logical preprocessing line when it is the first token or
 /// when an unspliced newline separates it from the previous token.
 fn is_start_of_line(tokens: &[Token], idx: usize, source: &str) -> bool {
@@ -1191,17 +1247,19 @@ fn skip_line(tokens: &[Token], i: &mut usize, source: &str) {
     }
 }
 
-/// Parse a `#define` directive. Returns (macro_name, body_tokens).
+/// Parse a `#define` directive. Returns
+/// (macro_name, body_tokens, is_function_like).
 /// `*i` points to the first token after the directive keyword.
 /// On return, `*i` points to the first token after the define body.
-fn parse_define(tokens: &[Token], i: &mut usize, source: &str) -> (String, Vec<Token>) {
+fn parse_define(tokens: &[Token], i: &mut usize, source: &str) -> (String, Vec<Token>, bool) {
     if *i >= tokens.len() {
-        return (String::new(), Vec::new());
+        return (String::new(), Vec::new(), false);
     }
     let t = &tokens[*i];
     if *i > 0 && has_logical_newline_between(&tokens[*i - 1], t, source) {
-        return (String::new(), Vec::new());
+        return (String::new(), Vec::new(), false);
     }
+    let name_index = *i;
     let name = token_lexeme(t, source).to_string();
     *i += 1;
     // Read remaining tokens on this logical line as the body.
@@ -1213,7 +1271,11 @@ fn parse_define(tokens: &[Token], i: &mut usize, source: &str) -> (String, Vec<T
         previous = *i;
         *i += 1;
     }
-    (name, body)
+    let is_function_like = body.first().is_some_and(|opening| {
+        opening.kind == TokenKind::LParen
+            && tokens_are_logically_adjacent(&tokens[name_index], opening, source)
+    });
+    (name, body, is_function_like)
 }
 
 /// Read the argument of an #include directive. Returns the filename without
