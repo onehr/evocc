@@ -1236,6 +1236,7 @@ twice would let a reader think two conditions are the same finding.
 | `E0105` | `include-not-found` | preprocessor |
 | `E0106` | `feature-query-malformed` | preprocessor |
 | `E0107` | `pragma-pack-unsupported` | preprocessor |
+| `E0108` | `poisoned-identifier-used` | preprocessor |
 | `E3018` | `invalid-lifetime-end` | runtime |
 | `E3019` | `function-pointer-target-signature-mismatch` | runtime |
 | `E3020` | `not-lowered: checked-arithmetic` | lowering |
@@ -2987,13 +2988,14 @@ else is `E0106` (`feature-query-malformed`).
 `#pragma once` is honoured. `#pragma GCC diagnostic ...`, `#pragma GCC
 visibility ...`, `#pragma GCC poison`, `#pragma pack(...)` are accepted:
 `diagnostic` and `visibility` are ignored-safe, `poison` is honoured, and
-`pack` is `E0107` (`pragma-pack-unsupported`) until layout attributes admit it.
+`pack` is `E0107` (`pragma-pack-unsupported`) until layout attributes admit it. A poisoned identifier used later is `E0108`
+(`poisoned-identifier-used`) at the use.
 Any other pragma is ignored-safe and counted in the dashboard.
 
 Diagnostics of this section are front-end (preprocessor) diagnostics: `E0102`
 `unmatched-conditional`, `E0104` `error-directive`, `E0105`
 `include-not-found`, `E0106` `feature-query-malformed`, `E0107`
-`pragma-pack-unsupported`.
+`pragma-pack-unsupported`, `E0108` `poisoned-identifier-used`.
 
 ## 11. Proof Checking Interface
 
@@ -3489,7 +3491,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
-| 1.9.7 | 2026-08-26 | Adds 10.4, the EvoCPP target profile: the sealed GCC-14 predefined macro list as authority, dynamic macros, the four feature queries with measured answers, pragmas, and preprocessor diagnostics `E0102`-`E0107`. Added because all 16 raw kernel lanes stop on `#error \"Unknown compiler\"`. |
+| 1.9.7 | 2026-08-26 | Adds 10.4, the EvoCPP target profile: the sealed GCC-14 predefined macro list as authority, dynamic macros, the four feature queries with measured answers, pragmas, and preprocessor diagnostics `E0102`-`E0108`. Added because all 16 raw kernel lanes stop on `#error \"Unknown compiler\"`. |
 | 1.9.6 | 2026-08-26 | Closes the five gaps the checked-arithmetic/asm window reported: `E2914` spans per case, what lossless `asm` keeps and drops, `const` pointee and `__int128` operands as `E2913`. Contract out-of-scope text corrected from `inline asm` to `asm lowering`. |
 | 1.9.5 | 2026-08-25 | Freezes `_Static_assert` diagnostics (`E2911`, `E2912`) and the non-arithmetic `__builtin_expect` operand (`E2913`), adds 10.1.15 checked arithmetic builtins and 10.1.16 GNU `asm` at the front-end boundary with measured oracle semantics, both fail-closed in lowering (`E3020`, `E3021`) until Section 4 gains the operations. Added because 18 and 12 kernel parse lanes stop on them. |
 | 1.9.4 | 2026-08-25 | Adds 10.1.14: `__builtin_expect`, `__builtin_constant_p` and `__alignof__` resolved by the front end with rules measured in the sealed oracle image, two recorded `ORACLE_CONFLICT`s resolved to the documented-permitted answer, and `E2909`/`E2910`. Pointer-declarator attributes are preserved and never applied. Added because 28 of 30 kernel parse lanes stop on these builtins. |
