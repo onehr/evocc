@@ -14,7 +14,8 @@
   "rulings": {
     "attributeSemantics": "preserve all; apply aligned and packed only; list the rest by name in the receipt",
     "cohort": "the frozen 16 units, unchanged",
-    "genericSelection": "2026-08-25: _Generic added to C. It is C11, not GNU, but every parse lane stops on typeof(_Generic(...)); typeof alone moves nothing."
+    "genericSelection": "2026-08-25: _Generic added to C. It is C11, not GNU, but every parse lane stops on typeof(_Generic(...)); typeof alone moves nothing.",
+    "typeofGenericSlice": "2026-08-25: the architecture owner opened exactly the typeof + _Generic portion of C against the published 30-lane first-error site. Statement expressions, designated initializers, compound literals and all of D remain closed until a later publication ranks them."
   },
   "processRules": [
     "One tests-only commit opens a red window; its failures come from declared missing constructs, never from a build error. No commit widens the declared set; each implementation commit narrows it; the last closes it.",
@@ -30,6 +31,6 @@
     "workspace, clippy -D warnings, fmt, diff-check green; one isolated offline clone replay"
   ],
   "receipt": "tests/contracts/day9-acceptance-receipt.json: per item above, the command and the number",
-  "cutLine": "A and B only, ruled 2026-08-25. C and D are deferred scope, not partial work; their red sets are not opened.",
+  "cutLine": "A and B are closed. The typeof + _Generic portion of C is open by architecture-owner instruction on 2026-08-25; the rest of C and all of D remain deferred and their red sets are not opened.",
   "reviewRequested": "2026-08-25, revision 1.9 sections 10.1.9 and 8.10-8.11/11.3; one round; findings land as amendments"
 }
