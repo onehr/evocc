@@ -506,6 +506,8 @@ pub struct Preprocessor {
     next_file_id: u32,
     counter: u32,
     builtin_feature_queries: HashSet<String>,
+    poisoned_identifiers: HashSet<String>,
+    ignored_pragma_count: u64,
     /// Current source file path for __FILE__ expansion.
     pub current_file: String,
 }
@@ -537,6 +539,8 @@ impl Preprocessor {
             next_file_id: 1,
             counter: 0,
             builtin_feature_queries: HashSet::new(),
+            poisoned_identifiers: HashSet::new(),
+            ignored_pragma_count: 0,
             current_file: String::new(),
         };
         preprocessor.install_predefined_profile(profile)?;
@@ -638,6 +642,10 @@ impl Preprocessor {
         !self.errors.is_empty()
     }
 
+    pub fn ignored_pragma_count(&self) -> u64 {
+        self.ignored_pragma_count
+    }
+
     /// Return the resolved source path registered for `file` in this
     /// preprocessing run.
     pub fn source_path(&self, file: FileId) -> Option<&str> {
@@ -683,6 +691,8 @@ impl Preprocessor {
         self.include_guard_seen = false;
         self.pragma_once_files.clear();
         self.counter = 0;
+        self.poisoned_identifiers.clear();
+        self.ignored_pragma_count = 0;
         self.register_entry_source(&tokens);
         let mut expanding: HashSet<String> = HashSet::new();
         let entry_span = tokens
@@ -1062,22 +1072,8 @@ impl Preprocessor {
                     }
                     "pragma" => {
                         if self.cond_active() {
-                            let pragma_tok = collect_line_tokens(&raw, &mut i, source);
-                            let pragma_text: String = pragma_tok
-                                .iter()
-                                .filter_map(|t| {
-                                    let s = token_lexeme(t, source);
-                                    if s.is_empty() {
-                                        None
-                                    } else {
-                                        Some(s.to_owned())
-                                    }
-                                })
-                                .collect::<Vec<_>>()
-                                .join(" ");
-                            if pragma_text.contains("once") {
-                                self.pragma_once();
-                            }
+                            let pragma_tokens = collect_line_tokens(&raw, &mut i, source);
+                            self.process_pragma(&pragma_tokens, source, tok.span);
                         }
                         skip_line(&raw, &mut i, source);
                     }
@@ -1109,6 +1105,23 @@ impl Preprocessor {
                 // change at each use.
                 if tok.kind == TokenKind::Identifier {
                     let name = token_lexeme(tok, source).to_string();
+                    if self.poisoned_identifiers.contains(&name) {
+                        self.errors.push(PreprocessError {
+                            code: "E0108",
+                            span: tok.span,
+                            message: "poisoned-identifier-used".into(),
+                        });
+                    }
+                    if name == "_Pragma" {
+                        if let Some((pragma_text, next_index)) =
+                            parse_pragma_operator(&raw, i, source)
+                        {
+                            let pragma_tokens = lex_decoded_tokens(tok.span.file, &pragma_text);
+                            self.process_pragma(&pragma_tokens, &pragma_text, tok.span);
+                            i = next_index;
+                            continue;
+                        }
+                    }
                     if name == "__COUNTER__" {
                         let value = self.counter;
                         self.counter = self.counter.wrapping_add(1);
@@ -1325,6 +1338,42 @@ impl Preprocessor {
                 message: "feature-query-malformed".into(),
             });
             Some((0, next_index))
+        }
+    }
+
+    fn process_pragma(&mut self, tokens: &[Token], source: &str, span: SourceSpan) {
+        let first = tokens
+            .first()
+            .map(|token| token_lexeme(token, source))
+            .unwrap_or_default();
+        let second = tokens
+            .get(1)
+            .map(|token| token_lexeme(token, source))
+            .unwrap_or_default();
+
+        match (first, second) {
+            ("once", _) => self.pragma_once(),
+            ("pack", _) => self.errors.push(PreprocessError {
+                code: "E0107",
+                span,
+                message: "pragma-pack-unsupported".into(),
+            }),
+            ("GCC", "poison") => {
+                for token in tokens.iter().skip(2) {
+                    if token.kind == TokenKind::Identifier {
+                        let name = token_lexeme(token, source);
+                        if !name.is_empty() {
+                            self.poisoned_identifiers.insert(name.to_owned());
+                        }
+                    }
+                }
+            }
+            ("GCC", "diagnostic" | "visibility") => {
+                self.ignored_pragma_count = self.ignored_pragma_count.saturating_add(1);
+            }
+            _ => {
+                self.ignored_pragma_count = self.ignored_pragma_count.saturating_add(1);
+            }
         }
     }
 
@@ -1656,6 +1705,55 @@ fn parse_header_name(tokens: &[Token], source: &str) -> Option<(String, IncludeK
         return (!name.is_empty()).then_some((name, IncludeKind::Angle));
     }
     None
+}
+
+fn parse_pragma_operator(tokens: &[Token], index: usize, source: &str) -> Option<(String, usize)> {
+    if tokens.get(index + 1).map(|token| token.kind) != Some(TokenKind::LParen)
+        || tokens.get(index + 2).map(|token| token.kind) != Some(TokenKind::StringLiteral)
+        || tokens.get(index + 3).map(|token| token.kind) != Some(TokenKind::RParen)
+    {
+        return None;
+    }
+    let spelling = token_lexeme(&tokens[index + 2], source);
+    let inner = spelling
+        .strip_prefix('"')
+        .and_then(|value| value.strip_suffix('"'))?;
+    let mut destringized = String::with_capacity(inner.len());
+    let mut characters = inner.chars();
+    while let Some(character) = characters.next() {
+        if character != '\\' {
+            destringized.push(character);
+            continue;
+        }
+        let Some(escaped) = characters.next() else {
+            destringized.push('\\');
+            break;
+        };
+        if matches!(escaped, '\\' | '"') {
+            destringized.push(escaped);
+        } else {
+            destringized.push('\\');
+            destringized.push(escaped);
+        }
+    }
+    Some((destringized, index + 4))
+}
+
+fn lex_decoded_tokens(file: FileId, source: &str) -> Vec<Token> {
+    let mut lexer = Lexer::new(file, source);
+    let mut tokens = Vec::new();
+    while let Some(token) = lexer.next() {
+        if token.kind == TokenKind::Eof {
+            break;
+        }
+        let spelling = token_lexeme(&token, source).to_owned();
+        tokens.push(Token {
+            kind: token.kind,
+            span: token.span,
+            text: TokenText::Decoded(spelling),
+        });
+    }
+    tokens
 }
 
 /// Collect all tokens on the current logical preprocessing line.
