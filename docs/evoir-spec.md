@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.6** | **Authoritative reference** | **2026-08-26**
+**Revision 1.9.7** | **Authoritative reference** | **2026-08-26**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1231,6 +1231,11 @@ twice would let a reader think two conditions are the same finding.
 | `E2912` | `static-assertion-not-constant` | front end |
 | `E2913` | `builtin-operand-not-convertible` | front end |
 | `E2914` | `malformed-asm` | front end |
+| `E0102` | `unmatched-conditional` | preprocessor |
+| `E0104` | `error-directive` | preprocessor |
+| `E0105` | `include-not-found` | preprocessor |
+| `E0106` | `feature-query-malformed` | preprocessor |
+| `E0107` | `pragma-pack-unsupported` | preprocessor |
 | `E3018` | `invalid-lifetime-end` | runtime |
 | `E3019` | `function-pointer-target-signature-mismatch` | runtime |
 | `E3020` | `not-lowered: checked-arithmetic` | lowering |
@@ -2935,6 +2940,61 @@ produce a placeholder value.
 
 ---
 
+### 10.4 EvoCPP Target Profile
+
+EvoCPP presents itself to headers as the GNU C dialect of the layout oracle,
+GCC 14.2 for `aarch64-unknown-linux-gnu`, so that every `#if` a header takes
+is the branch the oracle takes. Nothing here changes what the front end
+accepts; it changes only which lines reach the front end.
+
+**Predefined macros.** The predefined set is the sealed list
+`.evidence/predefined-macros/20260826-2c23684c/gcc-14-aarch64-linux.h`
+(sha256 `74801974f845be4d`, 421 macros, captured with
+`gcc-14 -std=gnu11 -dM -E - </dev/null` in image `evo-flight-lab:sealed`),
+defined verbatim before any source token, in that order. `__STDC_VERSION__`
+is `201112L` as in the list. `__OPTIMIZE__` is absent, as in the list. The
+driver's `-D`/`-U` apply after the list. The list is the authority; the
+implementation carries a copy and a test compares the copy to the sealed
+digest. `__CHAR_UNSIGNED__ 1` is in the list and agrees with the type profile
+(plain `char` is unsigned on this target).
+
+**Dynamic macros.** `__FILE__`, `__LINE__`, `__BASE_FILE__`, `__DATE__`,
+`__TIME__` as ISO C; `__COUNTER__` expands to `0`, `1`, `2`, ... per expansion
+in translation order (measured `0 1 2`).
+
+**Feature queries.** All four are defined as macros, so `#ifdef __has_attribute`
+is true (measured for `__has_attribute`, `__has_builtin`, `__has_feature`,
+`__has_include`). Their arguments are one token or one header name; anything
+else is `E0106` (`feature-query-malformed`).
+
+- `__has_attribute(name)`: `name` with a surrounding `__` pair stripped. The
+  answer is the measured GCC-14 answer for the names the kernel cohort and
+  headers use (`.evidence/predefined-macros/20260826-2c23684c/has.out`): `202311` for `fallthrough` and `noreturn`; `1`
+  for `aligned`, `alloc_size`, `always_inline`, `assume_aligned`, `cleanup`, `cold`, `const`, `copy`, `designated_init`, `error`, `externally_visible`, `format`, `gnu_inline`, `malloc`, `no_instrument_function`, `no_profile_instrument_function`, `no_sanitize_coverage`, `no_stack_protector`, `noclone`, `noinline`, `noipa`, `nonnull`, `nonstring`, `packed`, `pure`, `retain`, `section`, `uninitialized`, `unused`, `used`, `warn_unused_result`, `warning`, `weak`; `0` for `btf_type_tag`, `diagnose_as_builtin`, `disable_sanitizer_instrumentation`, `no_caller_saved_registers`, `overloadable`, `pass_dynamic_object_size`, `pass_object_size`, `preserve_most`;
+  `0` for any name not in that table. The table is data, not code: the
+  implementation reads it from the sealed file's copy and a test checks the
+  digest.
+- `__has_builtin(name)`: `1` when the front end resolves `name` (10.1.14,
+  10.1.15, `__builtin_va_list` and the names 10.1.17 will add) or the measured
+  table says `1` (`__builtin_dynamic_object_size`, `__builtin_has_attribute`,
+  `__builtin_isdigit`); `0` otherwise (`__builtin_alloca_uninitialized`).
+- `__has_feature(name)`: `0` for every name (measured: GCC-14 answers `0` for
+  all seven sanitizer and shadow-call-stack names the kernel asks about).
+- `__has_include(<h>)` and `__has_include("h")`: `1` when the include search
+  the directive would perform finds the file, else `0` (measured).
+
+**Pragmas.** `_Pragma("text")` destringizes and is processed as `#pragma text`.
+`#pragma once` is honoured. `#pragma GCC diagnostic ...`, `#pragma GCC
+visibility ...`, `#pragma GCC poison`, `#pragma pack(...)` are accepted:
+`diagnostic` and `visibility` are ignored-safe, `poison` is honoured, and
+`pack` is `E0107` (`pragma-pack-unsupported`) until layout attributes admit it.
+Any other pragma is ignored-safe and counted in the dashboard.
+
+Diagnostics of this section are front-end (preprocessor) diagnostics: `E0102`
+`unmatched-conditional`, `E0104` `error-directive`, `E0105`
+`include-not-found`, `E0106` `feature-query-malformed`, `E0107`
+`pragma-pack-unsupported`.
+
 ## 11. Proof Checking Interface
 
 ### 11.1 Names
@@ -3429,6 +3489,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.7 | 2026-08-26 | Adds 10.4, the EvoCPP target profile: the sealed GCC-14 predefined macro list as authority, dynamic macros, the four feature queries with measured answers, pragmas, and preprocessor diagnostics `E0102`-`E0107`. Added because all 16 raw kernel lanes stop on `#error \"Unknown compiler\"`. |
 | 1.9.6 | 2026-08-26 | Closes the five gaps the checked-arithmetic/asm window reported: `E2914` spans per case, what lossless `asm` keeps and drops, `const` pointee and `__int128` operands as `E2913`. Contract out-of-scope text corrected from `inline asm` to `asm lowering`. |
 | 1.9.5 | 2026-08-25 | Freezes `_Static_assert` diagnostics (`E2911`, `E2912`) and the non-arithmetic `__builtin_expect` operand (`E2913`), adds 10.1.15 checked arithmetic builtins and 10.1.16 GNU `asm` at the front-end boundary with measured oracle semantics, both fail-closed in lowering (`E3020`, `E3021`) until Section 4 gains the operations. Added because 18 and 12 kernel parse lanes stop on them. |
 | 1.9.4 | 2026-08-25 | Adds 10.1.14: `__builtin_expect`, `__builtin_constant_p` and `__alignof__` resolved by the front end with rules measured in the sealed oracle image, two recorded `ORACLE_CONFLICT`s resolved to the documented-permitted answer, and `E2909`/`E2910`. Pointer-declarator attributes are preserved and never applied. Added because 28 of 30 kernel parse lanes stop on these builtins. |
