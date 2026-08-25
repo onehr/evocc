@@ -6626,21 +6626,23 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let keyword = self.advance().expect("peeked static assertion");
         self.expect(TokenKind::LParen)?;
         let condition = self.parse_conditional()?;
-        self.expect(TokenKind::Comma)?;
-        let message = self.expect(TokenKind::StringLiteral)?;
-        while self.peek_kind() == Some(TokenKind::StringLiteral) {
-            self.advance();
+        let condition_span = condition.span();
+        if self.match_kind(TokenKind::Comma) {
+            self.expect(TokenKind::StringLiteral)?;
+            while self.peek_kind() == Some(TokenKind::StringLiteral) {
+                self.advance();
+            }
         }
         self.expect(TokenKind::RParen)?;
         self.expect(TokenKind::Semicolon)?;
         match self.eval_integer_constant_expression(condition) {
             Ok(value) if value.truth() => Some(()),
             Ok(_) => {
-                self.report("E1303", "static-assertion-failed", keyword.span);
+                self.report("E2911", "static-assertion-failed", keyword.span);
                 None
             }
             Err(()) => {
-                self.report("E1303", "not-integer-constant-expression", message.span);
+                self.report("E2912", "static-assertion-not-constant", condition_span);
                 None
             }
         }
