@@ -84,6 +84,9 @@ pub enum TokenKind {
     // C11 keywords.
     Alignas,
     Alignof,
+    /// GNU `__alignof__`, promoted only after preprocessing at the parser
+    /// boundary so the raw spelling remains macro-expandable.
+    GnuAlignof,
     Atomic,
     Bool,
     Complex,

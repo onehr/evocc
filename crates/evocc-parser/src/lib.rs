@@ -258,6 +258,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__extension__") => TokenKind::GnuExtension,
                     Some("__builtin_va_list") => TokenKind::BuiltinVaList,
                     Some("__int128") => TokenKind::GnuInt128,
+                    Some("__alignof__") => TokenKind::GnuAlignof,
                     _ => TokenKind::Identifier,
                 };
             }
@@ -6226,26 +6227,58 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return Some(self.alloc_node(CHirExpr::SizeOfExpr(operand, span)));
         }
 
-        if self.peek_kind() == Some(TokenKind::Alignof) {
+        if matches!(
+            self.peek_kind(),
+            Some(TokenKind::Alignof | TokenKind::GnuAlignof)
+        ) {
             let token = self.advance().unwrap();
+            let is_gnu = token.kind == TokenKind::GnuAlignof;
+            if is_gnu && self.peek_kind() != Some(TokenKind::LParen) {
+                self.report("E2910", "builtin-not-called", token.span);
+                return None;
+            }
             self.expect(TokenKind::LParen)?;
-            let type_name = if self
+            if is_gnu && self.peek_kind() == Some(TokenKind::RParen) {
+                self.report("E2909", "builtin-arity", token.span);
+                return None;
+            }
+            let (ty, tag_event) = if self
                 .peek()
                 .is_some_and(|token| self.token_starts_type_name(token))
             {
                 self.parse_type_name()
+            } else if is_gnu {
+                let operand = self.parse_expression()?;
+                let inferred = self.expression_type(operand).or_else(|| {
+                    self.report("E1003", "expected-expression", operand.span());
+                    None
+                })?;
+                let ty = self.materialize_inferred_type(inferred.ty, Some(operand))?;
+                Some((ty, None))
             } else {
                 self.report("E1003", "expected-expression", self.span());
                 None
             }?;
+            if self.peek_kind() != Some(TokenKind::RParen) {
+                self.report(
+                    if is_gnu { "E2909" } else { "E1002" },
+                    if is_gnu {
+                        "builtin-arity"
+                    } else {
+                        "unexpected-token"
+                    },
+                    self.span(),
+                );
+                return None;
+            }
             let end = self.peek().map(|token| token.span).unwrap_or(token.span);
             self.expect(TokenKind::RParen)?;
             let span = self.merge_span(token.span, end);
-            if let Some(event) = type_name.1 {
+            if let Some(event) = tag_event {
                 let declaration = self.finish_tag_event(event, span, Vec::new());
                 self.side_declarations.push(declaration);
             }
-            return Some(self.alloc_node(CHirExpr::AlignOf(type_name.0, span)));
+            return Some(self.alloc_node(CHirExpr::AlignOf(ty, span)));
         }
 
         if self.looks_like_parenthesized_type() {
@@ -6776,6 +6809,7 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::MinusMinus
             | TokenKind::Sizeof
             | TokenKind::Alignof
+            | TokenKind::GnuAlignof
             | TokenKind::Generic
     )
 }
