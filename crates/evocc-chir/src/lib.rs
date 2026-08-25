@@ -926,6 +926,18 @@ pub struct GenericSelectionRecord {
     pub association_count: usize,
 }
 
+/// Source-fidelity record for a front-end-resolved GNU builtin. Executable
+/// C-HIR contains only the resolved expression; operands retained here are
+/// parsed and type-checked source facts, not additional evaluation roots.
+#[derive(Debug, Clone, Copy)]
+pub enum FrontEndBuiltinRecord<'arena> {
+    Expect {
+        span: SourceSpan,
+        value: &'arena CHirExpr<'arena>,
+        expected: &'arena CHirExpr<'arena>,
+    },
+}
+
 impl CHirDecl<'_> {
     #[must_use]
     pub fn span(&self) -> SourceSpan {
@@ -949,6 +961,7 @@ pub struct CHirUnit<'arena> {
     symbols: SymbolTable,
     detached_attributes: Vec<Attribute>,
     generic_selections: Vec<GenericSelectionRecord>,
+    front_end_builtins: Vec<FrontEndBuiltinRecord<'arena>>,
 }
 
 impl<'arena> CHirUnit<'arena> {
@@ -964,6 +977,7 @@ impl<'arena> CHirUnit<'arena> {
             symbols,
             detached_attributes: Vec::new(),
             generic_selections: Vec::new(),
+            front_end_builtins: Vec::new(),
         }
     }
 
@@ -975,6 +989,10 @@ impl<'arena> CHirUnit<'arena> {
 
     pub fn set_generic_selections(&mut self, selections: Vec<GenericSelectionRecord>) {
         self.generic_selections = selections;
+    }
+
+    pub fn set_front_end_builtins(&mut self, builtins: Vec<FrontEndBuiltinRecord<'arena>>) {
+        self.front_end_builtins = builtins;
     }
 
     #[must_use]
@@ -1013,6 +1031,11 @@ impl<'arena> CHirUnit<'arena> {
     #[must_use]
     pub fn generic_selections(&self) -> &[GenericSelectionRecord] {
         &self.generic_selections
+    }
+
+    #[must_use]
+    pub fn front_end_builtins(&self) -> &[FrontEndBuiltinRecord<'arena>] {
+        &self.front_end_builtins
     }
 
     /// Every attribute in the unit, grouped by applied versus preserved.
@@ -1222,6 +1245,26 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
             "generic-selection selected={} associations={}",
             selection.selected_index, selection.association_count
         );
+    }
+    for builtin in unit.front_end_builtins() {
+        match builtin {
+            FrontEndBuiltinRecord::Expect {
+                span,
+                value,
+                expected,
+            } => {
+                let _ = writeln!(
+                    out,
+                    "builtin-expect span={}..{} value={}..{} expected={}..{}",
+                    span.byte_start,
+                    span.byte_end,
+                    value.span().byte_start,
+                    value.span().byte_end,
+                    expected.span().byte_start,
+                    expected.span().byte_end
+                );
+            }
+        }
     }
     let inventory = unit.attribute_inventory();
     for (name, count) in &inventory.applied {

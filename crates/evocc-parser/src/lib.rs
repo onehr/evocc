@@ -11,14 +11,14 @@ use evocc_chir::integer::{
 use evocc_chir::{
     AppliedAttribute, AssignmentOp, Attribute, AttributeArgument, AttributePlacement, BinaryOp,
     CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, CharLit, CharPrefix,
-    EnumeratorDecl, ExprCategory, ExprFacts, FieldProjection, FloatLit, FloatSuffix, FunctionDecl,
-    GenericSelectionRecord, IndexProjection, InitAction, InitPlan, IntBase, IntLit, IntSuffix,
-    MemoryPlace, ObjectDecl, ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceProjection,
-    PlaceRoot, PointerTypeDesc, RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName,
-    StorageClass, StringLit, StringPrefix, SubobjectPath, SubobjectStep, SymbolData, SymbolId,
-    SymbolKind, SymbolTable, SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl,
-    TypeofOperand, UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
-    WrittenInitializer,
+    EnumeratorDecl, ExprCategory, ExprFacts, FieldProjection, FloatLit, FloatSuffix,
+    FrontEndBuiltinRecord, FunctionDecl, GenericSelectionRecord, IndexProjection, InitAction,
+    InitPlan, IntBase, IntLit, IntSuffix, MemoryPlace, ObjectDecl, ObjectInitializer,
+    ParameterDecl, ParameterSyntax, PlaceProjection, PlaceRoot, PointerTypeDesc, RecordMember,
+    ScalarPlace, ScopeId, ScopeKind, SpannedName, StorageClass, StringLit, StringPrefix,
+    SubobjectPath, SubobjectStep, SymbolData, SymbolId, SymbolKind, SymbolTable, SymbolTableError,
+    TagDecl, TagMembers, TypeSpecifier, TypedefDecl, TypeofOperand, UnaryOp, UpdateOp,
+    WrittenDeclarator, WrittenDeclaratorLayer, WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_lex::{Token, TokenKind, TokenText};
@@ -236,6 +236,7 @@ pub struct Parser<'src, 'arena> {
     /// Attributes on labels and type names, which have no declaration node.
     detached_attributes: Vec<Attribute>,
     generic_selections: Vec<GenericSelectionRecord>,
+    front_end_builtins: Vec<FrontEndBuiltinRecord<'arena>>,
     switch_depth: usize,
 }
 
@@ -259,6 +260,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__builtin_va_list") => TokenKind::BuiltinVaList,
                     Some("__int128") => TokenKind::GnuInt128,
                     Some("__alignof__") => TokenKind::GnuAlignof,
+                    Some("__builtin_expect") => TokenKind::BuiltinExpect,
                     _ => TokenKind::Identifier,
                 };
             }
@@ -286,6 +288,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             loop_depth: 0,
             detached_attributes: Vec::new(),
             generic_selections: Vec::new(),
+            front_end_builtins: Vec::new(),
             switch_depth: 0,
         }
     }
@@ -334,6 +337,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         );
         unit.set_detached_attributes(std::mem::take(&mut self.detached_attributes));
         unit.set_generic_selections(std::mem::take(&mut self.generic_selections));
+        unit.set_front_end_builtins(std::mem::take(&mut self.front_end_builtins));
         unit
     }
 
@@ -6512,12 +6516,59 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 return Some(self.alloc_node(respan_expr(expr, span)));
             }
             TokenKind::Generic => return self.parse_generic_selection(tok),
+            TokenKind::BuiltinExpect => return self.parse_builtin_expect(tok),
             _ => {
                 self.report("E1003", "expected-expression", tok.span);
                 return None;
             }
         };
         Some(self.alloc_node(expression))
+    }
+
+    fn parse_builtin_expect(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        if self.peek_kind() != Some(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        self.advance();
+        if self.peek_kind() == Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let value = self.parse_argument_expression()?;
+        if !self.match_kind(TokenKind::Comma) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let expected = self.parse_argument_expression()?;
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance().expect("peeked builtin closing parenthesis");
+
+        for operand in [value, expected] {
+            let Some(inferred) = self.converted_expression_type(operand) else {
+                self.report("E1003", "expected-expression", operand.span());
+                return None;
+            };
+            if !is_arithmetic_class(self.operand_type_class(inferred.ty)) {
+                self.report("E1003", "expected-expression", operand.span());
+                return None;
+            }
+        }
+
+        let long_ty = self.intern(TypeKind::Int(IntRank::Long), Qualifiers::default());
+        let converted_value = self.alloc_node(CHirExpr::Cast(long_ty, value, value.span()));
+        let converted_expected =
+            self.alloc_node(CHirExpr::Cast(long_ty, expected, expected.span()));
+        let span = self.merge_span(keyword.span, close.span);
+        self.front_end_builtins.push(FrontEndBuiltinRecord::Expect {
+            span,
+            value: converted_value,
+            expected: converted_expected,
+        });
+        Some(self.alloc_node(CHirExpr::Cast(long_ty, value, span)))
     }
 
     fn parse_generic_selection(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
@@ -6810,6 +6861,7 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::Sizeof
             | TokenKind::Alignof
             | TokenKind::GnuAlignof
+            | TokenKind::BuiltinExpect
             | TokenKind::Generic
     )
 }

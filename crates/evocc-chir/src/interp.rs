@@ -2645,7 +2645,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 tasks.push(MachineTask::CastValue { target, span });
                 tasks.push(MachineTask::EvalExpression {
                     expression: value,
-                    allow_root_mutation: false,
+                    // A C cast converts the result; it is not an evaluation
+                    // barrier for a side effect in its operand.
+                    allow_root_mutation,
                 });
             }
             CHirExpr::Comma(left, right, _) => {
@@ -5303,7 +5305,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             CHirExpr::Cast(ty, value, _) => {
                 let target = self.integer_type(*ty, span)?;
-                Ok(self.eval_expr(value, false)?.cast(target))
+                Ok(self.eval_expr(value, allow_root_mutation)?.cast(target))
             }
             CHirExpr::SizeOf(ty, _) => {
                 let layout = self.target.layout_of(self.unit.types(), *ty).map_err(|_| {
