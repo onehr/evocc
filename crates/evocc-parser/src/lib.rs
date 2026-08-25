@@ -4759,6 +4759,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn is_modifiable_asm_output(&self, expression: &CHirExpr<'_>) -> bool {
+        if let CHirExpr::MemoryRead { place, .. } = expression {
+            return place.is_modifiable();
+        }
         let Some(inferred) = self.expression_type(expression) else {
             return false;
         };

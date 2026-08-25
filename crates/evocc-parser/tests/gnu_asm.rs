@@ -176,3 +176,12 @@ fn the_kernel_extended_asm_line_parses() {
         "unsigned long f(unsigned long dividend) { asm(\"\" : \"+rm\"(dividend)); return dividend; }\n",
     );
 }
+
+#[test]
+fn concatenated_constraint_and_projected_output_parse() {
+    accepts(
+        "typedef struct { int counter; } atomic_t; \
+         void f(int i, atomic_t *v) { unsigned long tmp; int result; \
+         asm volatile(\"\" : \"=&r\"(result), \"=&r\"(tmp), \"+Q\"(v->counter) : \"I\" \"r\"(i)); }\n",
+    );
+}
