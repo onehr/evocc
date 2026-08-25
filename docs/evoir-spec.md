@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.2** | **Authoritative reference** | **2026-08-25**
+**Revision 1.9.4** | **Authoritative reference** | **2026-08-25**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1225,6 +1225,8 @@ twice would let a reader think two conditions are the same finding.
 | `E2906` | `designator-outside-object` | front end |
 | `E2907` | `generic-selection-duplicate-association` | front end |
 | `E2908` | `generic-selection-no-match` | front end |
+| `E2909` | `builtin-arity` | front end |
+| `E2910` | `builtin-not-called` | front end |
 | `E3018` | `invalid-lifetime-end` | runtime |
 | `E3019` | `function-pointer-target-signature-mismatch` | runtime |
 
@@ -2571,6 +2573,7 @@ accepts them, and each position fixes what the attribute attaches to:
 | among the declaration specifiers | every declarator of that declaration |
 | immediately after a declarator | that declarator alone |
 | immediately before a declarator that follows a comma in a declarator list | that declarator alone |
+| after `*` (and its qualifiers) inside a pointer declarator, before the rest of the declarator | the pointer type formed by that `*`; preserved, never applied (10.1.14) |
 | after `struct`, `union` or `enum` keyword, or after the closing brace | the tag type |
 | after a member declarator | that member |
 | after a parameter declarator | that parameter |
@@ -2638,6 +2641,8 @@ front end that still emits it is defective.
 | `E2906` | designator names a member the type lacks or an index at or beyond a fixed bound |
 | `E2907` | two `_Generic` associations name compatible types, or `default` appears twice |
 | `E2908` | `_Generic` has no association compatible with the controlling type and no `default` |
+| `E2909` | `__builtin_expect`, `__builtin_constant_p` or `__alignof__` called with the wrong number of operands |
+| `E2910` | a resolved builtin name used without a call |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -2721,6 +2726,48 @@ a block-scope literal, a module global with initial bytes for a file-scope one.
 A file-scope literal of `const`-qualified type is a read-only object, and a
 store through it reports `E3014` like a string literal; an unqualified one is
 writable.
+
+#### 10.1.14 Kernel builtins resolved by the front end
+
+Three GNU builtins block every kernel parse lane once `typeof` resolves. All
+three are resolved by the front end and none survives into EvoIR; the lowered
+module is byte-identical to the one obtained by writing the resolved form.
+The rules below were measured in the sealed GCC-14/Clang-19 image
+(`.evidence/builtin-probes/20260825-2c23684c`); where the two compilers
+disagree the profile records `ORACLE_CONFLICT` and takes the rule both
+compilers document as permitted, never a vote.
+
+- `__builtin_expect(e, c)`: both operands are converted to `long`; the result
+  is the converted `e` with type `long`. `e` is evaluated; `c` is parsed and
+  converted but not evaluated (both oracles: a side effect in `c` does not
+  happen). `c` need not be a constant (both oracles accept a non-constant `c`
+  without diagnostic). The result is an integer constant expression exactly
+  when `e` is. The expectation is dropped by the front end; no hint reaches
+  EvoIR in this revision.
+- `__builtin_constant_p(e)`: `e` is parsed and type-checked but never
+  evaluated. The result has type `int` and is an integer constant expression.
+  It is `1` when `e` is an integer constant expression or a string literal,
+  and `0` otherwise, in particular for address constants (`&g` is `0` in both
+  oracles), objects, parameters and every expression with side effects.
+  `ORACLE_CONFLICT`: a `const`-qualified local initialised with a constant is
+  `0` in GCC-14 at `-O0` and `1` in Clang-19; both compilers document `0` as
+  always permitted, so this profile answers `0`. The predicate is one
+  function shared by the parser, the C-HIR interpreter and lowering; no
+  optimizer knowledge may change its answer.
+- `__alignof__(type-name)` and `__alignof__(expression)`: the alignment of the
+  type, or of the expression's type before lvalue conversion, as an integer
+  constant expression of type `size_t`; the expression is not evaluated. It
+  is the C11 `_Alignof` with an expression operand admitted, and the same
+  target layout answers both.
+
+Pointer-declarator attributes (10.1.9, position after `*`) are preserved and
+not applied: `aligned` in that position is `ORACLE_CONFLICT` (GCC-14 applies
+it to the pointer type, Clang-19 does not), so this profile applies nothing
+there and lists the attribute by name as preserved-not-applied.
+
+Errors: a builtin used with the wrong arity is `E2909`
+(`builtin-arity`); a builtin name used other than as a call is `E2910`
+(`builtin-not-called`).
 
 ### 10.2 EvoIR to EvoMIR Extraction Contract
 
@@ -3296,6 +3343,8 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.4 | 2026-08-25 | Adds 10.1.14: `__builtin_expect`, `__builtin_constant_p` and `__alignof__` resolved by the front end with rules measured in the sealed oracle image, two recorded `ORACLE_CONFLICT`s resolved to the documented-permitted answer, and `E2909`/`E2910`. Pointer-declarator attributes are preserved and never applied. Added because 28 of 30 kernel parse lanes stop on these builtins. |
+| 1.9.3 | 2026-08-25 | Adds the pointer-declarator attribute position to 10.1.9: after `*` inside a pointer declarator the attribute is a type attribute of that pointer type. Added because two kernel parse lanes stop on `void * __attribute__((__warn_unused_result__)) ERR_PTR(long)`. |
 | 1.9.2 | 2026-08-25 | Adds C11 generic selection to Section 10.1.10 beside `typeof`: controlling type after lvalue conversion, one compatible association or `default`, unselected branches unevaluated, nothing surviving into EvoIR; assigns `E2907` and `E2908`. Added because every kernel parse lane stops on `typeof(_Generic(...))`. |
 | 1.9.1 | 2026-08-25 | Records two corrections from the sealed layout oracle and the kernel cohort. `aligned(N)` on a typedef or type name sets the alignment exactly and may lower it, while on records and members it only raises; the frozen attributed layout corpus is the authority. Adds the tenth attribute position, immediately before a declarator that follows a comma in a declarator list, attaching to that declarator alone; declarator lists are admitted in every declaration position including record members, where each declarator carries its own bit width (a constant expression) and attributes. |
 | 1.9 | 2026-08-25 | Freezes the GNU extension profile the kernel cohort needs. Attributes are read in every GNU position, attached by position, and preserved losslessly; only `aligned` and `packed` are applied, to layout, with every rule checked against the frozen GCC-14 and Clang-19 oracles, and every other attribute is recorded by name as preserved-not-applied. Defines `typeof` as an unevaluated front-end type, statement expressions as a lowering pattern over block arguments with block lifetimes, designated initializers including GNU ranges as `SubobjectPath` actions with later-wins overriding, and compound literals as manifest allocation sites. Adds the known-bits lattice with constant value as its bottom, a fixed weak transfer table, meet-on-union with contradiction as an invalid union, and a two-tier bounded scheduler with per-rule match fuel and a stop rule. Certificate format `evp2` carries budget, epoch markers and rewrite premises; premises are recomputed by the checker, budgets are verified against consumption, and `evp1` remains readable for premise-free certificates. Introduces `E2903`–`E2906`. Defers every other attribute semantic, variably modified types, integer-range and non-zero lattices, and any memory rewrite. |
