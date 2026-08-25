@@ -1,8 +1,8 @@
 {
   "receiptId": "c30.kernel-dashboard",
-  "subjectCommit": "bd9a112",
-  "publishedFromRun": "20260825T082117Z-92634",
-  "previousRun": "20260824T184441Z-28691",
+  "subjectCommit": "21625b4",
+  "publishedFromRun": "20260825T121253Z-62824",
+  "previousRun": "20260825T113218Z-23644",
   "cohortSha256": "09d0e2eaf0734949164a491d30df640bf396ff7586ef495f938f565b8879a306",
   "observer": {
     "path": "tests/acceptance/day5-kernel-reductions-observer.py",
@@ -10,10 +10,10 @@
   },
   "capture": {
     "argvSha256": "1491553bac555724088f85732048aef6bc15fb76102841e3c7e17626f16d2feb",
-    "environmentSha256": "d529d623ac745e628ee2f50f108765f8813c20bde5a4ba53c053de4ada36ca4a",
+    "environmentSha256": "780d6c98c4c1e32e4d20bb1c577bed670048b661501fcab9e3cad06520584813",
     "returnCode": 0,
     "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "stdoutSha256": "24c37f98760889d3fc6ef43e1d2c99323d8701d176f49d7b94b81acb88921ef0",
+    "stdoutSha256": "4b0c04ff26718928fbc82bf0b6a5b43cd11bf5e7b385b9eb33908ec02ccd3555",
     "timedOut": false
   },
   "command": "tests/acceptance/day5-kernel-reconnaissance.py --timeout 120 --parser-timeout 10 --parser-jobs 4",
@@ -42,16 +42,16 @@
   "regressionsAgainstPrevious": [],
   "artifacts": {
     "results": {
-      "path": ".evidence/day5-kernel-reconnaissance/20260825T082117Z-92634/results.jsonl",
-      "sha256": "a96123c8ef3c3b720ceb520e94ad9db9e722f04d8da3cf5b72d6bf227fbaa277"
+      "path": ".evidence/day5-kernel-reconnaissance/20260825T121253Z-62824/results.jsonl",
+      "sha256": "54dfa3af260f0c0677754ee68ccdacd9c95ae0dacf7d4b5174be7e552750ca63"
     },
     "routing": {
-      "path": ".evidence/kernel-dashboard/bd9a112/routing.json",
-      "sha256": "7bd54518d2f48ff81467d197696192973ebd09211e652226508c1a97f9f095f6"
+      "path": ".evidence/kernel-dashboard-constant-p/21625b4/routing.json",
+      "sha256": "54b7350dc7871eade84e951b382178c2d05b754e1690e8445e1cb920917fa6ff"
     },
     "captureStatus": {
-      "path": ".evidence/kernel-dashboard/bd9a112/reconnaissance.status",
-      "sha256": "a54cab15cd4eeb59388b212a95c31d7e041736f4a92ca58c90cb80bd49f09538"
+      "path": ".evidence/kernel-dashboard-constant-p/21625b4/reconnaissance.status",
+      "sha256": "a3804eb150e55d70f686e036e174735b7b21462f23d19d60dfa9e06d9e0a18ab"
     }
   }
 }

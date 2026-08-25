@@ -2,9 +2,9 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "e1d358bf682146a266dfa0e0bb76f6045166d39c94d8f74b01c7bac315d9a417"
+    "sha256": "11da4048fc2419c9502dfafdfa8d623ebeac936a284c0d61886f57ffbcc9471e"
   },
-  "cutLine": "The frozen ten-position A profile and B plus the typeof + _Generic portion of C are closed. The new pointer-attribute site exposes an unresolved A/specification gap; statement expressions, designated initializers, compound literals and all of D remain deferred, their red sets not opened.",
+  "cutLine": "The frozen ten-position A profile, B, the typeof + _Generic portion of C, and scope E are closed. Statement expressions, designated initializers, compound literals and all of D remain deferred; their red sets were not opened. The next measured parser first errors are __builtin_mul_overflow and GNU asm, and neither was implemented in this window.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -24,20 +24,35 @@
       "bd9a112"
     ]
   },
-  "subjectCommit": "bd9a112",
+  "kernelBuiltinsRedWindow": {
+    "opened": "b558bd9 (tests only; 12/12 failed for the four declared reasons, zero Rust build errors)",
+    "closed": "21625b4",
+    "implementationCommits": [
+      "6711313",
+      "d14f024",
+      "c3d0fd4",
+      "21625b4"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/kernel-builtins-red.json",
+      "sha256": "ef117424f9b0aa79836dc043f1c88753167d07f425cac6adc7c1fc33a921d5d6"
+    }
+  },
+  "subjectCommit": "21625b4",
   "gate": {
-    "claim": ">= 1/16 dual-oracle parse, 0/16 raw preprocess, published by the script from sealed evidence",
+    "claim": "1/16 dual-oracle parse, 0/16 raw preprocess, all four declared blockers absent, and zero regressions against the preceding publication",
     "measured": {
       "dualOracleCleanParseTus": "1/16",
       "rawPreprocessClean": "0/16",
+      "originalBlockerLanesRemaining": 0,
       "regressionsAgainstPrevious": 0
     },
-    "command": "python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260824T184441Z-28691/results.jsonl",
+    "command": "python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260825T113218Z-23644/results.jsonl --evidence /Users/onehrxn/dev/30days/c30/.evidence/kernel-dashboard-constant-p",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "b707e80755e533d6fe8ca6ce3fae309510eafbf9083eefa0f9af67b4481659b3",
-      "subjectCommit": "bd9a112",
-      "publishedFromRun": "20260825T082117Z-92634"
+      "sha256": "008a7afb9e97cec7499e564ff55b47823446af85844cc2913dcb35813dba6556",
+      "subjectCommit": "21625b4",
+      "publishedFromRun": "20260825T121253Z-62824"
     },
     "result": "PASS"
   },
@@ -50,28 +65,16 @@
     },
     "stillFailing": [
       {
-        "count": 14,
-        "lanes": "7 units x {gcc,clang}-preprocessed-parser",
-        "firstError": "E2001 undeclared-identifier: __builtin_expect at include/linux/overflow.h:53",
-        "rootCause": "compiler builtin semantics are required by the pinned kernel but are not opened by the current Day 9 contract"
+        "count": 18,
+        "lanes": "9 units x {gcc,clang}-preprocessed-parser",
+        "firstError": "E2001 undeclared-identifier: __builtin_mul_overflow",
+        "rootCause": "the next measured compiler builtin; outside this red window"
       },
       {
-        "count": 10,
-        "lanes": "5 units x {gcc,clang}-preprocessed-parser",
-        "firstError": "E2001 undeclared-identifier: __builtin_constant_p at arch/arm64/include/asm/cpucaps.h:16",
-        "rootCause": "compiler builtin semantics are required by the pinned kernel but are not opened by the current Day 9 contract"
-      },
-      {
-        "count": 4,
-        "lanes": "2 units x {gcc,clang}-preprocessed-parser",
-        "firstError": "E2001 undeclared-identifier: __alignof__ at include/crypto/sha2.h:130 or include/linux/kstrtox.h:37",
-        "rootCause": "the GNU spelling is not tokenized as the already-supported _Alignof construct"
-      },
-      {
-        "count": 2,
-        "lanes": "lib-fdt-wip x {gcc,clang}-preprocessed-parser",
-        "firstError": "E1001 expected-declaration at an __attribute__ between a pointer star and its declarator in include/linux/err.h:39",
-        "rootCause": "the Section 10.1.9 placement table omits GNU attributes between a pointer star and the direct declarator while the broader contract says every GNU position; this requires a specification ruling before implementation"
+        "count": 12,
+        "lanes": "6 units x {gcc,clang}-preprocessed-parser",
+        "firstError": "E2001 undeclared-identifier: asm",
+        "rootCause": "GNU asm syntax was not opened by this red window"
       },
       {
         "count": 16,
@@ -105,6 +108,26 @@
         "commit": "bd9a112",
         "run": "20260825T082117Z-92634",
         "parseLanesStoppedOn": "14 at __builtin_expect, 10 at __builtin_constant_p, 4 at __alignof__, 2 at a pointer-declarator attribute; 2 clean; 0 regressions"
+      },
+      {
+        "commit": "6711313",
+        "run": "20260825T105452Z-77776",
+        "parseLanesStoppedOn": "18 at __builtin_expect, 10 at __builtin_constant_p, 4 at __alignof__; 2 clean; pointer-declarator attribute blockers removed; 0 regressions"
+      },
+      {
+        "commit": "d14f024",
+        "run": "20260825T111124Z-46687",
+        "parseLanesStoppedOn": "18 at __builtin_expect, 10 at __builtin_constant_p, 2 at asm; 2 clean; __alignof__ blockers removed; 0 regressions"
+      },
+      {
+        "commit": "c3d0fd4",
+        "run": "20260825T113218Z-23644",
+        "parseLanesStoppedOn": "18 at __builtin_mul_overflow, 10 at __builtin_constant_p, 2 at asm; 2 clean; __builtin_expect blockers removed; 0 regressions"
+      },
+      {
+        "commit": "21625b4",
+        "run": "20260825T121253Z-62824",
+        "parseLanesStoppedOn": "18 at __builtin_mul_overflow, 12 at asm; 2 clean; all four declared blockers absent; 0 regressions"
       }
     ]
   },
@@ -117,6 +140,16 @@
       ],
       "command": "target/release/evocc --emit=c-hir <the two kernel lines>",
       "output": "preserved-not-applied: gnu_inline x1 / no_instrument_function x1 / unused x1; applied: aligned x1"
+    },
+    "pointerDeclarator": {
+      "placementsMeasured": 3,
+      "names": [
+        "warn_unused_result",
+        "unused",
+        "aligned(64)"
+      ],
+      "result": "all retained with placement=pointer-declarator and preserved-not-applied; none changed type or layout",
+      "command": "cargo test -p evocc-parser --test gnu_pointer_attributes"
     },
     "applied": [
       "aligned",
@@ -135,12 +168,13 @@
     },
     "specificationCorrections": [
       "10.1.9: aligned(N) on a typedef or type name sets alignment exactly and may lower it (oracle: typedef int t __attribute__((aligned(1))) has alignment 1); records and members only raise",
-      "10.1.9: tenth position, immediately before a declarator that follows a comma; revision 1.9.1"
+      "10.1.9: tenth position, immediately before a declarator that follows a comma; revision 1.9.1",
+      "10.1.9 revision 1.9.4: an attribute sequence between a pointer star and its direct declarator attaches to that pointer layer, is retained, and is never applied"
     ]
   },
   "tests": {
     "workspace": {
-      "passed": 725,
+      "passed": 736,
       "failed": 0,
       "command": "cargo test --workspace --no-fail-fast"
     },
@@ -156,6 +190,14 @@
       "crates/evocc-lower/tests/front_end_resolved_forms.rs": {
         "passed": 1,
         "command": "cargo test -p evocc-lower --test front_end_resolved_forms"
+      },
+      "crates/evocc-parser/tests/gnu_pointer_attributes.rs": {
+        "passed": 4,
+        "command": "cargo test -p evocc-parser --test gnu_pointer_attributes"
+      },
+      "crates/evocc-parser/tests/kernel_builtins.rs": {
+        "passed": 7,
+        "command": "cargo test -p evocc-parser --test kernel_builtins"
       },
       "crates/evocc-parser/tests/gnu_attributes.rs": {
         "passed": 26,
@@ -192,21 +234,29 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "bd9a112",
-    "command": "git clone --no-hardlinks file://<repo> <scratch>/replay-bd9a112 && CARGO_NET_OFFLINE=true cargo test --workspace --no-fail-fast; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets -- -D warnings; cargo fmt --all -- --check; python3 tests/acceptance/publish-kernel-dashboard.py --self-test",
+    "commit": "21625b41dcb2b3a3fa5dbda9400e8d3ca787aeb1",
+    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-replay.h8OmUL/repo; cargo test --workspace --no-fail-fast --locked --offline; cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test",
     "measured": {
-      "passed": 725,
+      "passed": 736,
       "failed": 0,
       "clippy": 0,
       "fmt": "clean",
+      "ruff": "clean",
       "selfTest": "PASS"
     }
   },
+  "specAmbiguities": [
+    "Revision 1.9.4 requires __builtin_constant_p to be usable in _Static_assert but does not freeze the diagnostic code or span for a false or non-ICE _Static_assert. This window measured only the required positive form; the negative contract remains unfrozen.",
+    "Section 10.1.14 freezes builtin-name and arity diagnostics E2910/E2909, but does not freeze the diagnostic for a syntactically valid __builtin_expect operand that cannot be converted to long. No measured lane exercised that boundary, so this window did not add a negative contract for it."
+  ],
   "processDeviations": [
     "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (adce449), aligned arguments as constant expressions (ed8302b), attribute positions in members, block scope and parameters (eae3e42).",
     "The first real publication reused a stale capture after the observer refused to overwrite it, producing a receipt whose subject commit did not match its run; the publisher now captures per commit and takes the run directory from its own capture (a15872e). The receipt in the tree is from the corrected publisher.",
     "Two RED expectations were corrected by the oracle before implementation: aligned on a typedef may lower alignment (4,1 not 4,4) and a lone packed member gives (8,2) not (8,4).",
     "The typeof-only intermediate commit described by the implementation plan was not made because it would leave one declared workspace test red while the same plan required a green workspace before every production commit; bd9a112 closes both constructs atomically.",
-    "The plan's lowering identity fixture used a pointer parameter that the existing allocation manifest rejects even in the spelled-out baseline. The fixture uses an address-taken local pointer instead, preserving the intended volatile-pointer front-end identity check without expanding the pointer-call ABI."
+    "The plan's lowering identity fixture used a pointer parameter that the existing allocation manifest rejects even in the spelled-out baseline. The fixture uses an address-taken local pointer instead, preserving the intended volatile-pointer front-end identity check without expanding the pointer-call ABI.",
+    "The first dashboard publication attempt was rejected before measurement because the container runtime could not write its state within the sandbox; it was rerun with the same command outside that boundary. A separate relative-evidence-path defect in the publisher was exposed and avoided with the measured absolute evidence path recorded in gate.command.",
+    "The _Static_assert lexer token existed but its declaration grammar did not. Scope E requires __builtin_constant_p in that context, so the smallest positive _Static_assert consumer was added without opening its unfrozen negative diagnostic surface.",
+    "The final byte-identity pair exposed a previously masked __alignof__ representation difference: a cast of an integer literal lowered differently from the equivalent target-width constant. Lowering now canonicalizes that cast, and all six front-end-only form pairs are byte-identical."
   ]
 }
