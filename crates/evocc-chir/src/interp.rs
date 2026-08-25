@@ -718,6 +718,12 @@ pub fn interpret_scalar_function_with_target(
     target: &TargetDataLayout,
     limits: InterpreterLimits,
 ) -> Result<InterpretOutcome, InterpreterError> {
+    crate::validate_front_end_builtin_records(unit, target).map_err(|span| {
+        InterpreterError::UnsupportedExpression {
+            feature: "inconsistent front-end builtin record",
+            span,
+        }
+    })?;
     let requirements = reachable_memory_requirements(unit, function);
     let memory_mode = requirements.requires_memory;
     let mut interpreter = Interpreter::new(unit, target, limits, memory_mode)?;

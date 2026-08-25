@@ -89,6 +89,8 @@ pub enum TokenKind {
     GnuAlignof,
     /// GNU `__builtin_expect`, promoted only after preprocessing.
     BuiltinExpect,
+    /// GNU `__builtin_constant_p`, promoted only after preprocessing.
+    BuiltinConstantP,
     Atomic,
     Bool,
     Complex,

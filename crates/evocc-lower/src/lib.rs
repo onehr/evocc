@@ -263,7 +263,7 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
             })
         });
     let functions = index_functions(unit, target, memory_profile)?;
-    prevalidate_unit_for_lowering(unit)?;
+    prevalidate_unit_for_lowering(unit, target)?;
     let globals = lower_globals(unit, target, &memory_symbols, &allocation_origins)?;
     let mut lowered = Vec::new();
     for declaration in unit.iter() {
@@ -812,7 +812,16 @@ fn subobject_offset(
     Ok((offset, current))
 }
 
-fn prevalidate_unit_for_lowering(unit: &CHirUnit<'_>) -> Result<(), LowerError> {
+fn prevalidate_unit_for_lowering(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+) -> Result<(), LowerError> {
+    evocc_chir::validate_front_end_builtin_records(unit, target).map_err(|span| {
+        LowerError::UnsupportedExpression {
+            span,
+            feature: "inconsistent front-end builtin record",
+        }
+    })?;
     for declaration in unit.iter() {
         match declaration {
             CHirDecl::Function(function) => {
@@ -4018,6 +4027,20 @@ impl<'a> FunctionLowerer<'a> {
                     return self.coerce_to_object_type(value, Some(operand), *target, *span, state);
                 }
                 let target = canonical_integer(self.unit.types(), self.target, *target, *span)?;
+                if let CHirExpr::Lit(literal, _) = operand {
+                    let converted = integer_literal_value(*literal)
+                        .map_err(|_| LowerError::UnsupportedExpression {
+                            span: operand.span(),
+                            feature: "integer literal has no target representation",
+                        })?
+                        .cast(target);
+                    let result = self.fresh_value(bits(target));
+                    self.emit(state, Inst::Const(result.clone(), converted.raw_bits()))?;
+                    return Ok(ExprValue {
+                        value: result,
+                        integer: target,
+                    });
+                }
                 let value = self.lower_expr(operand, state)?;
                 self.cast(value, target, state)
             }

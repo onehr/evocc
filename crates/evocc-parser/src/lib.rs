@@ -9,16 +9,16 @@ use evocc_chir::integer::{
     CInteger, CIntegerType,
 };
 use evocc_chir::{
-    AppliedAttribute, AssignmentOp, Attribute, AttributeArgument, AttributePlacement, BinaryOp,
-    CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, CharLit, CharPrefix,
-    EnumeratorDecl, ExprCategory, ExprFacts, FieldProjection, FloatLit, FloatSuffix,
-    FrontEndBuiltinRecord, FunctionDecl, GenericSelectionRecord, IndexProjection, InitAction,
-    InitPlan, IntBase, IntLit, IntSuffix, MemoryPlace, ObjectDecl, ObjectInitializer,
-    ParameterDecl, ParameterSyntax, PlaceProjection, PlaceRoot, PointerTypeDesc, RecordMember,
-    ScalarPlace, ScopeId, ScopeKind, SpannedName, StorageClass, StringLit, StringPrefix,
-    SubobjectPath, SubobjectStep, SymbolData, SymbolId, SymbolKind, SymbolTable, SymbolTableError,
-    TagDecl, TagMembers, TypeSpecifier, TypedefDecl, TypeofOperand, UnaryOp, UpdateOp,
-    WrittenDeclarator, WrittenDeclaratorLayer, WrittenInitializer,
+    builtin_constant_p, AppliedAttribute, AssignmentOp, Attribute, AttributeArgument,
+    AttributePlacement, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt,
+    CHirUnit, CharLit, CharPrefix, EnumeratorDecl, ExprCategory, ExprFacts, FieldProjection,
+    FloatLit, FloatSuffix, FrontEndBuiltinRecord, FunctionDecl, GenericSelectionRecord,
+    IndexProjection, InitAction, InitPlan, IntBase, IntLit, IntSuffix, MemoryPlace, ObjectDecl,
+    ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceProjection, PlaceRoot, PointerTypeDesc,
+    RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName, StorageClass, StringLit,
+    StringPrefix, SubobjectPath, SubobjectStep, SymbolData, SymbolId, SymbolKind, SymbolTable,
+    SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl, TypeofOperand, UnaryOp,
+    UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer, WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_lex::{Token, TokenKind, TokenText};
@@ -261,6 +261,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__int128") => TokenKind::GnuInt128,
                     Some("__alignof__") => TokenKind::GnuAlignof,
                     Some("__builtin_expect") => TokenKind::BuiltinExpect,
+                    Some("__builtin_constant_p") => TokenKind::BuiltinConstantP,
                     _ => TokenKind::Identifier,
                 };
             }
@@ -907,6 +908,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     // ── external declarations ──────────────────────────────────────────
 
     fn parse_external_declaration(&mut self) -> Option<Vec<&'arena CHirDecl<'arena>>> {
+        if self.peek_kind() == Some(TokenKind::StaticAssert) {
+            self.parse_static_assert_declaration()?;
+            return Some(Vec::new());
+        }
         self.parse_declaration(DeclarationContext::File)
     }
 
@@ -920,6 +925,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let external_entities_checkpoint = self.external_entities.clone();
         let side_checkpoint = self.side_declarations.clone();
         let generic_selection_checkpoint = self.generic_selections.len();
+        let front_end_builtin_checkpoint = self.front_end_builtins.len();
         let rollback_error_checkpoint = self.rollback_error_count;
         let side_start = side_checkpoint.len();
 
@@ -934,6 +940,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.side_declarations = side_checkpoint;
             self.generic_selections
                 .truncate(generic_selection_checkpoint);
+            self.front_end_builtins
+                .truncate(front_end_builtin_checkpoint);
             None
         } else {
             result
@@ -4766,7 +4774,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut items = Vec::new();
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
             let before = self.pos;
-            if self.is_declaration_start() || self.peek_kind() == Some(TokenKind::Inline) {
+            if self.peek_kind() == Some(TokenKind::StaticAssert) {
+                self.parse_static_assert_declaration();
+            } else if self.is_declaration_start() || self.peek_kind() == Some(TokenKind::Inline) {
                 if let Some(declarations) = self.parse_declaration(DeclarationContext::Block) {
                     items.extend(declarations.into_iter().map(CHirBlockItem::Declaration));
                 }
@@ -6517,6 +6527,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             TokenKind::Generic => return self.parse_generic_selection(tok),
             TokenKind::BuiltinExpect => return self.parse_builtin_expect(tok),
+            TokenKind::BuiltinConstantP => return self.parse_builtin_constant_p(tok),
             _ => {
                 self.report("E1003", "expected-expression", tok.span);
                 return None;
@@ -6569,6 +6580,70 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             expected: converted_expected,
         });
         Some(self.alloc_node(CHirExpr::Cast(long_ty, value, span)))
+    }
+
+    fn parse_builtin_constant_p(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        if self.peek_kind() != Some(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        self.advance();
+        if self.peek_kind() == Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let operand = self.parse_argument_expression()?;
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance().expect("peeked builtin closing parenthesis");
+        if self.expression_type(operand).is_none() {
+            self.report("E1003", "expected-expression", operand.span());
+            return None;
+        }
+
+        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        let result = builtin_constant_p(operand, &self.types, &self.symbols, &target);
+        let span = self.merge_span(keyword.span, close.span);
+        self.front_end_builtins
+            .push(FrontEndBuiltinRecord::ConstantP {
+                span,
+                operand,
+                result,
+            });
+        Some(self.alloc_node(CHirExpr::Lit(
+            IntLit {
+                value: u64::from(result),
+                suffix: IntSuffix::None,
+                base: IntBase::Dec,
+            },
+            span,
+        )))
+    }
+
+    fn parse_static_assert_declaration(&mut self) -> Option<()> {
+        let keyword = self.advance().expect("peeked static assertion");
+        self.expect(TokenKind::LParen)?;
+        let condition = self.parse_conditional()?;
+        self.expect(TokenKind::Comma)?;
+        let message = self.expect(TokenKind::StringLiteral)?;
+        while self.peek_kind() == Some(TokenKind::StringLiteral) {
+            self.advance();
+        }
+        self.expect(TokenKind::RParen)?;
+        self.expect(TokenKind::Semicolon)?;
+        match self.eval_integer_constant_expression(condition) {
+            Ok(value) if value.truth() => Some(()),
+            Ok(_) => {
+                self.report("E1303", "static-assertion-failed", keyword.span);
+                None
+            }
+            Err(()) => {
+                self.report("E1303", "not-integer-constant-expression", message.span);
+                None
+            }
+        }
     }
 
     fn parse_generic_selection(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
@@ -6862,6 +6937,7 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::Alignof
             | TokenKind::GnuAlignof
             | TokenKind::BuiltinExpect
+            | TokenKind::BuiltinConstantP
             | TokenKind::Generic
     )
 }

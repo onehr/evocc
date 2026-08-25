@@ -13,6 +13,7 @@
 #![doc = concat!("evocc-chir v", env!("CARGO_PKG_VERSION"))]
 
 pub mod allocation;
+pub mod constant;
 pub mod initializer;
 pub mod integer;
 pub mod interp;
@@ -23,6 +24,7 @@ pub use allocation::{
     AllocationSite, AllocationSiteKind, AllocationSiteManifest, AllocationSiteManifestError,
     AllocationSiteOrdinal,
 };
+pub use constant::{builtin_constant_p, validate_front_end_builtin_records};
 pub use initializer::{
     InitAction, InitPlan, InitPlanError, ObjectInitializer, SubobjectPath, SubobjectStep,
     WrittenInitializer,
@@ -936,6 +938,11 @@ pub enum FrontEndBuiltinRecord<'arena> {
         value: &'arena CHirExpr<'arena>,
         expected: &'arena CHirExpr<'arena>,
     },
+    ConstantP {
+        span: SourceSpan,
+        operand: &'arena CHirExpr<'arena>,
+        result: bool,
+    },
 }
 
 impl CHirDecl<'_> {
@@ -1262,6 +1269,21 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
                     value.span().byte_end,
                     expected.span().byte_start,
                     expected.span().byte_end
+                );
+            }
+            FrontEndBuiltinRecord::ConstantP {
+                span,
+                operand,
+                result,
+            } => {
+                let _ = writeln!(
+                    out,
+                    "builtin-constant-p span={}..{} operand={}..{} result={}",
+                    span.byte_start,
+                    span.byte_end,
+                    operand.span().byte_start,
+                    operand.span().byte_end,
+                    u8::from(*result)
                 );
             }
         }
