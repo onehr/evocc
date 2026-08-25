@@ -2,9 +2,9 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "ad7102e7b468dfbf0a875bc391cd78b1ddd6ec6fad409f3c239cde81d4161654"
+    "sha256": "b82258e1df8d54cc1a4eb712cc2787f18c340efb717cd5556a92233964a4bef2"
   },
-  "cutLine": "The frozen ten-position A profile, B, the typeof + _Generic portion of C, scope E, and scope F are closed. Statement expressions, designated initializers, compound literals and all of D remain deferred; their red sets were not opened. Checked arithmetic is front-end complete and fails closed in lowering with E3020. GNU asm is preserved in C-HIR and fails closed in execution and lowering with E3021.",
+  "cutLine": "The frozen ten-position A profile, B, the typeof + _Generic portion of C, scope E, scope F, and the explicitly measured Unknown-compiler gate of scope P are closed. Statement expressions, designated initializers, compound literals and all of D remain deferred; their red sets were not opened. Checked arithmetic is front-end complete and fails closed in lowering with E3020. GNU asm is preserved in C-HIR and fails closed in execution and lowering with E3021. The generic E0104 wording conflict in scope P is retained under specAmbiguities.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -60,37 +60,60 @@
       "static-assert-diagnostic-migration"
     ]
   },
-  "subjectCommit": "094b235",
+  "preprocessorProfileRedWindow": {
+    "opened": "56c9f42 (tests only; 10/10 failed for exactly five declared capabilities, zero Rust build errors)",
+    "closed": "b53e222",
+    "implementationCommits": [
+      "c3081cb",
+      "962b2b4",
+      "c2c4f19",
+      "b53e222"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/preprocessor-profile-red.json",
+      "sha256": "5a61b6673922830be90ea5054a111f8060c124b5a9153102c23b590af909d39b"
+    },
+    "declaredCapabilities": [
+      "sealed-predefined-set",
+      "counter",
+      "feature-queries",
+      "pragma-operator",
+      "pragma-classification"
+    ]
+  },
+  "subjectCommit": "b53e222",
   "gate": {
-    "claim": "1/16 dual-oracle parse, 0/16 raw preprocess, all six declared blockers absent, and zero regressions against the preceding publication",
+    "claim": "1/16 dual-oracle parse, 2/16 raw preprocess clean, 0/16 raw lanes stopped on E0104 Unknown compiler, all five declared preprocessor capabilities present, and zero regressions against the preceding publication",
     "measured": {
       "dualOracleCleanParseTus": "1/16",
-      "rawPreprocessClean": "0/16",
-      "originalBlockerLanesRemaining": 0,
+      "rawPreprocessClean": "2/16",
+      "unknownCompilerLanesRemaining": 0,
+      "declaredProfileCapabilitiesMissing": 0,
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260825T151617Z-47009/results.jsonl --evidence /Users/onehrxn/dev/30days/c30/.evidence/day5-kernel-reconnaissance",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260825T153953Z-70633/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "6a9188f665e8c08a3f9bbcfd196e6c87715116f03e11b99c3aec5b5b91ebe413",
-      "subjectCommit": "094b235",
-      "publishedFromRun": "20260825T153953Z-70633"
+      "sha256": "f55d5b28894350f92773d9c98f8b3461f8c03a0f0f4b2c2f05ff42bff6739544",
+      "subjectCommit": "b53e222",
+      "publishedFromRun": "20260825T170334Z-98454"
     },
     "result": "PASS"
   },
   "lanes": {
     "clean": {
-      "count": 2,
+      "count": 4,
       "units": [
-        "lib-bitrev (gcc-preprocessed-parser, clang-preprocessed-parser)"
+        "lib-bitrev (evocpp-raw, gcc-preprocessed-parser, clang-preprocessed-parser)",
+        "lib-fdt-wip (evocpp-raw)"
       ]
     },
     "stillFailing": [
       {
-        "count": 16,
-        "lanes": "16 units x evocpp-raw",
-        "firstError": "E0104 error-directive: \"Unknown compiler\"",
-        "rootCause": "predefined macros; outside scope F"
+        "count": 14,
+        "lanes": "14 units x evocpp-raw",
+        "firstError": "E0104 error-directive: \"cpucaps have overflown ARM64_CB_BIT\"",
+        "rootCause": "next measured raw-preprocess first-error class; Unknown compiler is absent"
       },
       {
         "count": 10,
@@ -99,8 +122,8 @@
         "rootCause": "next measured first-error class"
       },
       {
-        "count": 8,
-        "lanes": "4 units x {gcc,clang}-preprocessed-parser",
+        "count": 6,
+        "lanes": "3 units x {gcc,clang}-preprocessed-parser",
         "firstError": "E1003 expected-expression",
         "rootCause": "next measured first-error class"
       },
@@ -115,6 +138,12 @@
         "lanes": "2 units x {gcc,clang}-preprocessed-parser",
         "firstError": "E2102 invalid-projected-lvalue",
         "rootCause": "next measured first-error class"
+      },
+      {
+        "count": 2,
+        "lanes": "1 unit x {gcc,clang}-preprocessed-parser",
+        "firstError": "E0107 pragma-pack-unsupported",
+        "rootCause": "required fail-closed boundary in specification 10.4"
       },
       {
         "count": 2,
@@ -183,26 +212,31 @@
         "commit": "094b235",
         "run": "20260825T153953Z-70633",
         "parseLanesStoppedOn": "0 at checked arithmetic or asm; 10 pointer-update, 8 expected-expression, 6 designated-initializer, 4 invalid-projected-lvalue, 2 __builtin_choose_expr; 2 clean; 0 regressions"
+      },
+      {
+        "commit": "b53e222",
+        "run": "20260825T170334Z-98454",
+        "parseLanesStoppedOn": "raw: 14 at E0104 cpucaps overflow and 2 clean; parser: 10 pointer-update, 6 expected-expression, 6 designated-initializer, 4 invalid-projected-lvalue, 2 pragma-pack, 2 __builtin_choose_expr, 2 clean; Unknown compiler 0; 0 regressions"
       }
     ]
   },
   "dashboardDelta": {
     "before": {
-      "run": "20260825T121253Z-62824",
-      "subjectCommit": "26f6c0f",
-      "declaredBlockerLanes": {
-        "checkedArithmetic": 18,
-        "asm": 12
-      },
-      "dualOracleCleanParseTus": "1/16"
-    },
-    "after": {
       "run": "20260825T153953Z-70633",
       "subjectCommit": "094b235",
       "declaredBlockerLanes": {
-        "checkedArithmetic": 0,
-        "asm": 0
+        "unknownCompiler": 16
       },
+      "rawPreprocessClean": "0/16",
+      "dualOracleCleanParseTus": "1/16"
+    },
+    "after": {
+      "run": "20260825T170334Z-98454",
+      "subjectCommit": "b53e222",
+      "declaredBlockerLanes": {
+        "unknownCompiler": 0
+      },
+      "rawPreprocessClean": "2/16",
       "dualOracleCleanParseTus": "1/16",
       "regressionsAgainstPrevious": 0
     }
@@ -250,11 +284,19 @@
   },
   "tests": {
     "workspace": {
-      "passed": 764,
+      "passed": 774,
       "failed": 0,
       "command": "cargo test --workspace --no-fail-fast"
     },
     "suites": {
+      "crates/evocc-cpp/tests/target_profile.rs": {
+        "passed": 9,
+        "command": "cargo test -p evocc-cpp --test target_profile"
+      },
+      "crates/evocc/tests/preprocessor_target_profile.rs": {
+        "passed": 1,
+        "command": "cargo test -p evocc --test preprocessor_target_profile"
+      },
       "crates/evocc-parser/tests/gnu_typeof.rs": {
         "passed": 6,
         "command": "cargo test -p evocc-parser --test gnu_typeof"
@@ -330,10 +372,10 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "094b235904f1a4a55a7c62e7620b98aa521c5f82",
-    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-overflow-asm-replay.MuVy6w/repo; cargo test --workspace --no-fail-fast --locked --offline; cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test",
+    "commit": "b53e2229dd4dfb4f8090c33593289cd60c06437c",
+    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-preprocessor-profile-replay.f4tSwD/repo; cargo test --workspace --no-fail-fast --locked --offline; cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test",
     "measured": {
-      "passed": 764,
+      "passed": 774,
       "failed": 0,
       "clippy": 0,
       "fmt": "clean",
@@ -346,7 +388,12 @@
     "Section 10.1.15 permits integer operands of differing width but does not state whether GNU __int128 value semantics are in this profile. The frozen oracle table and implementation tests cover at most 64-bit inputs; 128-bit checked-arithmetic operands remain unfrozen.",
     "Section 10.1.15 requires p to point to a non-_Bool integer and says the result is stored through p, but does not explicitly freeze whether pointer-to-const is rejected or which diagnostic and span apply.",
     "Section 10.1.16 assigns E2914 at the operand span for two named failures, but does not freeze the code/span for duplicate qualifiers, a labels section without goto, or an unresolved goto label. For an unknown template %[name], no corresponding operand span exists; this implementation anchors it to the template.",
-    "Section 10.1.16 says C-HIR preserves asm losslessly including spans, but does not enumerate whether source aliases and string-fragment spellings must survive in addition to decoded semantic text and component spans."
+    "Section 10.1.16 says C-HIR preserves asm losslessly including spans, but does not enumerate whether source aliases and string-fragment spellings must survive in addition to decoded semantic text and component spans.",
+    "Section 10.4 defines __has_builtin using names that section 10.1.17 will add, but revision 1.9.7 has no section 10.1.17. The implementation uses only the explicit plan list and measured sealed names; no additional builtin name was guessed.",
+    "Section 10.4 lists __BASE_FILE__ and __TIME__ among dynamic macros, while the frozen five-capability red window and scope-P execution instruction open only __COUNTER__. Those two dynamic macros remain outside this red window rather than being silently specified here.",
+    "Section 10.4 requires unknown pragmas to be counted in the dashboard, but the tracked dashboard schema has no ignored-pragma field or aggregation path. The preprocessor exposes a deterministic per-translation-unit count; no dashboard field was invented.",
+    "Scope line P says raw lanes no longer stop on E0104 without qualifying the message, while the execution authority specifically requires E0104 Unknown compiler at zero. Measurement has zero Unknown-compiler lanes but fourteen different E0104 cpucaps-overflow lanes; this receipt records both facts without rewriting the contract.",
+    "Section 10.4 specifies an unbounded textual sequence for __COUNTER__ but does not define behavior after the required u32 implementation reaches its maximum. The measured domain does not approach that boundary."
   ],
   "processDeviations": [
     "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (adce449), aligned arguments as constant expressions (ed8302b), attribute positions in members, block scope and parameters (eae3e42).",
@@ -357,6 +404,8 @@
     "The first dashboard publication attempt was rejected before measurement because the container runtime could not write its state within the sandbox; it was rerun with the same command outside that boundary. A separate relative-evidence-path defect in the publisher was exposed and avoided with the measured absolute evidence path recorded in gate.command.",
     "The _Static_assert lexer token existed but its declaration grammar did not. Scope E requires __builtin_constant_p in that context, so the smallest positive _Static_assert consumer was added without opening its unfrozen negative diagnostic surface.",
     "The final byte-identity pair exposed a previously masked __alignof__ representation difference: a cast of an integer literal lowered differently from the equivalent target-width constant. Lowering now canonicalizes that cast, and all six front-end-only form pairs are byte-identical.",
-    "The first asm publication had zero regressions but left six lanes stopped on E2914 because projected record lvalues are represented as checked memory reads. A new regression test failed first, asm output validation was changed to recover the retained MemoryPlace modifiability, and the follow-up publication moved all six lanes without regression."
+    "The first asm publication had zero regressions but left six lanes stopped on E2914 because projected record lvalues are represented as checked memory reads. A new regression test failed first, asm output validation was changed to recover the retained MemoryPlace modifiability, and the follow-up publication moved all six lanes without regression.",
+    "The first preprocessor publication attempt was refused before any lane because a git worktree does not contain the sealed ignored .toolchain archive and .build reference tree. The five verified commits were fast-forwarded to the clean authoritative root, and the only completed publication ran there against the declared previous run.",
+    "Two sandboxed layout invocations stopped at a denied container image-list operation while the shell EXIT cleanup masked the failure as rc 0. They were rejected as evidence; sequential elevated reruns produced explicit 128/128 and 14/14 PASS summaries with zero mismatches."
   ]
 }
