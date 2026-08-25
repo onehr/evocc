@@ -577,6 +577,12 @@ pub enum StorageClass {
     ThreadLocal,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypeofOperand {
+    TypeName,
+    Expression,
+}
+
 #[derive(Debug, Clone)]
 pub enum TypeSpecifier {
     Builtin {
@@ -602,6 +608,13 @@ pub enum TypeSpecifier {
         name: Option<SpannedName>,
         span: SourceSpan,
     },
+    /// `typeof(...)`, resolved completely by the front end while retaining
+    /// whether the source operand was a type name or an expression.
+    Typeof {
+        resolved: TypeId,
+        operand: TypeofOperand,
+        span: SourceSpan,
+    },
 }
 
 impl TypeSpecifier {
@@ -609,6 +622,7 @@ impl TypeSpecifier {
     pub fn type_id(&self) -> TypeId {
         match self {
             Self::Builtin { ty, .. } | Self::TypedefName { ty, .. } | Self::Tag { ty, .. } => *ty,
+            Self::Typeof { resolved, .. } => *resolved,
         }
     }
 
@@ -617,7 +631,8 @@ impl TypeSpecifier {
         match self {
             Self::Builtin { span, .. }
             | Self::TypedefName { span, .. }
-            | Self::Tag { span, .. } => *span,
+            | Self::Tag { span, .. }
+            | Self::Typeof { span, .. } => *span,
         }
     }
 }
@@ -895,6 +910,16 @@ pub enum CHirDecl<'arena> {
     Typedef(TypedefDecl),
 }
 
+/// Source-fidelity record for a `_Generic` that was resolved away by the
+/// front end. Expressions retain only the selected association.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GenericSelectionRecord {
+    pub span: SourceSpan,
+    pub controlling_span: SourceSpan,
+    pub selected_index: usize,
+    pub association_count: usize,
+}
+
 impl CHirDecl<'_> {
     #[must_use]
     pub fn span(&self) -> SourceSpan {
@@ -917,6 +942,7 @@ pub struct CHirUnit<'arena> {
     types: TypeInterner,
     symbols: SymbolTable,
     detached_attributes: Vec<Attribute>,
+    generic_selections: Vec<GenericSelectionRecord>,
 }
 
 impl<'arena> CHirUnit<'arena> {
@@ -931,6 +957,7 @@ impl<'arena> CHirUnit<'arena> {
             types,
             symbols,
             detached_attributes: Vec::new(),
+            generic_selections: Vec::new(),
         }
     }
 
@@ -938,6 +965,10 @@ impl<'arena> CHirUnit<'arena> {
     /// names. Called once by the parser after the unit is assembled.
     pub fn set_detached_attributes(&mut self, attributes: Vec<Attribute>) {
         self.detached_attributes = attributes;
+    }
+
+    pub fn set_generic_selections(&mut self, selections: Vec<GenericSelectionRecord>) {
+        self.generic_selections = selections;
     }
 
     #[must_use]
@@ -971,6 +1002,11 @@ impl<'arena> CHirUnit<'arena> {
     #[must_use]
     pub fn detached_attributes(&self) -> &[Attribute] {
         &self.detached_attributes
+    }
+
+    #[must_use]
+    pub fn generic_selections(&self) -> &[GenericSelectionRecord] {
+        &self.generic_selections
     }
 
     /// Every attribute in the unit, grouped by applied versus preserved.
@@ -1146,6 +1182,13 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
     for attribute in unit.detached_attributes() {
         let _ = writeln!(out, "detached");
         attribute_lines(&mut out, std::slice::from_ref(attribute));
+    }
+    for selection in unit.generic_selections() {
+        let _ = writeln!(
+            out,
+            "generic-selection selected={} associations={}",
+            selection.selected_index, selection.association_count
+        );
     }
     let inventory = unit.attribute_inventory();
     for (name, count) in &inventory.applied {

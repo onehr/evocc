@@ -475,6 +475,131 @@ impl TypeInterner {
         self.types.get(id.raw() as usize)
     }
 
+    /// C type compatibility, independent of canonical identity. Incomplete
+    /// arrays compose with fixed arrays, function parameters ignore their top
+    /// qualifiers, and GNU alignment is not part of compatibility.
+    #[must_use]
+    pub fn compatible(&self, left: TypeId, right: TypeId) -> bool {
+        self.compatible_with(left, right, false)
+    }
+
+    fn compatible_with(&self, left: TypeId, right: TypeId, ignore_top_qualifiers: bool) -> bool {
+        if left == right {
+            return true;
+        }
+        let (Some(left), Some(right)) = (self.get(left), self.get(right)) else {
+            return false;
+        };
+        if !ignore_top_qualifiers
+            && left.qualifiers.compatibility() != right.qualifiers.compatibility()
+        {
+            return false;
+        }
+        match (&left.kind, &right.kind) {
+            (TypeKind::Void, TypeKind::Void)
+            | (TypeKind::BuiltinVaList, TypeKind::BuiltinVaList) => true,
+            (TypeKind::GnuInt128(left), TypeKind::GnuInt128(right)) => left == right,
+            (TypeKind::Int(left), TypeKind::Int(right)) => left == right,
+            (TypeKind::Float(left), TypeKind::Float(right)) => left == right,
+            (TypeKind::Complex(left), TypeKind::Complex(right)) => left == right,
+            (TypeKind::Pointer(left), TypeKind::Pointer(right)) => {
+                self.compatible_with(*left, *right, false)
+            }
+            (
+                TypeKind::Array {
+                    element: left_element,
+                    bound: left_bound,
+                },
+                TypeKind::Array {
+                    element: right_element,
+                    bound: right_bound,
+                },
+            ) => {
+                self.compatible_with(*left_element, *right_element, false)
+                    && (left_bound == right_bound
+                        || matches!(left_bound, ArrayBound::Unbounded)
+                        || matches!(right_bound, ArrayBound::Unbounded))
+            }
+            (
+                TypeKind::Function {
+                    return_type: left_return,
+                    parameters: left_parameters,
+                },
+                TypeKind::Function {
+                    return_type: right_return,
+                    parameters: right_parameters,
+                },
+            ) => {
+                self.compatible_with(*left_return, *right_return, false)
+                    && self.compatible_parameters(left_parameters, right_parameters)
+            }
+            (TypeKind::Struct(left), TypeKind::Struct(right))
+            | (TypeKind::Union(left), TypeKind::Union(right))
+            | (TypeKind::Enum(left), TypeKind::Enum(right)) => left == right,
+            _ => false,
+        }
+    }
+
+    fn compatible_parameters(&self, left: &FunctionParameters, right: &FunctionParameters) -> bool {
+        match (left, right) {
+            (FunctionParameters::Unspecified, FunctionParameters::Unspecified) => true,
+            (FunctionParameters::Unspecified, prototype)
+            | (prototype, FunctionParameters::Unspecified) => {
+                self.prototype_survives_default_promotions(prototype)
+            }
+            (
+                FunctionParameters::Prototype {
+                    types: left,
+                    variadic: left_variadic,
+                },
+                FunctionParameters::Prototype {
+                    types: right,
+                    variadic: right_variadic,
+                },
+            ) => {
+                left_variadic == right_variadic
+                    && left.len() == right.len()
+                    && left
+                        .iter()
+                        .zip(right)
+                        .all(|(left, right)| self.compatible_with(*left, *right, true))
+            }
+        }
+    }
+
+    fn prototype_survives_default_promotions(&self, parameters: &FunctionParameters) -> bool {
+        let FunctionParameters::Prototype { types, variadic } = parameters else {
+            return true;
+        };
+        !variadic
+            && types.iter().all(|ty| {
+                self.get(*ty).is_some_and(|ty| match ty.kind {
+                    TypeKind::Int(
+                        IntRank::Int
+                        | IntRank::UInt
+                        | IntRank::Long
+                        | IntRank::ULong
+                        | IntRank::LongLong
+                        | IntRank::ULongLong,
+                    )
+                    | TypeKind::GnuInt128(_)
+                    | TypeKind::Float(FloatKind::F64 | FloatKind::F128)
+                    | TypeKind::Complex(ComplexBase::CF64 | ComplexBase::CF128)
+                    | TypeKind::Pointer(_)
+                    | TypeKind::Struct(_)
+                    | TypeKind::Union(_)
+                    | TypeKind::Void
+                    | TypeKind::BuiltinVaList => true,
+                    TypeKind::Int(_)
+                    | TypeKind::Float(_)
+                    | TypeKind::Complex(_)
+                    | TypeKind::Enum(_)
+                    | TypeKind::Array { .. }
+                    | TypeKind::Function { .. } => false,
+                })
+            })
+    }
+
     #[must_use]
     pub fn len(&self) -> usize {
         self.types.len()

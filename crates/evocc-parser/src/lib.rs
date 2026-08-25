@@ -12,12 +12,13 @@ use evocc_chir::{
     AppliedAttribute, AssignmentOp, Attribute, AttributeArgument, AttributePlacement, BinaryOp,
     CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, CharLit, CharPrefix,
     EnumeratorDecl, ExprCategory, ExprFacts, FieldProjection, FloatLit, FloatSuffix, FunctionDecl,
-    IndexProjection, InitAction, InitPlan, IntBase, IntLit, IntSuffix, MemoryPlace, ObjectDecl,
-    ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceProjection, PlaceRoot, PointerTypeDesc,
-    RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName, StorageClass, StringLit,
-    StringPrefix, SubobjectPath, SubobjectStep, SymbolData, SymbolId, SymbolKind, SymbolTable,
-    SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl, UnaryOp, UpdateOp,
-    WrittenDeclarator, WrittenDeclaratorLayer, WrittenInitializer,
+    GenericSelectionRecord, IndexProjection, InitAction, InitPlan, IntBase, IntLit, IntSuffix,
+    MemoryPlace, ObjectDecl, ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceProjection,
+    PlaceRoot, PointerTypeDesc, RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName,
+    StorageClass, StringLit, StringPrefix, SubobjectPath, SubobjectStep, SymbolData, SymbolId,
+    SymbolKind, SymbolTable, SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl,
+    TypeofOperand, UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
+    WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_lex::{Token, TokenKind, TokenText};
@@ -200,6 +201,14 @@ struct EntityState {
     has_definition: bool,
 }
 
+#[derive(Debug, Clone)]
+struct TemporaryParameterShadow {
+    scope: ScopeId,
+    spelling: String,
+    ty: TypeId,
+    span: SourceSpan,
+}
+
 pub struct Parser<'src, 'arena> {
     tokens: Vec<Token>,
     pos: usize,
@@ -218,13 +227,14 @@ pub struct Parser<'src, 'arena> {
     /// their prototype is still being parsed. They shadow outer typedef names
     /// immediately, but receive permanent SymbolIds only after the enclosing
     /// function declarator is complete, preserving declaration-point ID order.
-    temporary_parameter_shadows: Vec<(ScopeId, String)>,
+    temporary_parameter_shadows: Vec<TemporaryParameterShadow>,
     entities: HashMap<SymbolId, EntityState>,
     external_entities: HashMap<String, SymbolId>,
     side_declarations: Vec<&'arena CHirDecl<'arena>>,
     loop_depth: usize,
     /// Attributes on labels and type names, which have no declaration node.
     detached_attributes: Vec<Attribute>,
+    generic_selections: Vec<GenericSelectionRecord>,
     switch_depth: usize,
 }
 
@@ -273,6 +283,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             side_declarations: Vec::new(),
             loop_depth: 0,
             detached_attributes: Vec::new(),
+            generic_selections: Vec::new(),
             switch_depth: 0,
         }
     }
@@ -320,6 +331,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             std::mem::take(&mut self.symbols),
         );
         unit.set_detached_attributes(std::mem::take(&mut self.detached_attributes));
+        unit.set_generic_selections(std::mem::take(&mut self.generic_selections));
         unit
     }
 
@@ -901,6 +913,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let entities_checkpoint = self.entities.clone();
         let external_entities_checkpoint = self.external_entities.clone();
         let side_checkpoint = self.side_declarations.clone();
+        let generic_selection_checkpoint = self.generic_selections.len();
         let rollback_error_checkpoint = self.rollback_error_count;
         let side_start = side_checkpoint.len();
 
@@ -913,6 +926,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.entities = entities_checkpoint;
             self.external_entities = external_entities_checkpoint;
             self.side_declarations = side_checkpoint;
+            self.generic_selections
+                .truncate(generic_selection_checkpoint);
             None
         } else {
             result
@@ -2984,6 +2999,73 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return self.parse_tag_specifier(kind, qualifiers, token.span);
         }
 
+        if self.peek_kind() == Some(TokenKind::Typeof) {
+            let keyword = self.advance().expect("peeked typeof keyword");
+            self.expect(TokenKind::LParen)?;
+            let (base, operand, tag_event) = if self
+                .peek()
+                .is_some_and(|token| self.token_starts_type_name(token))
+            {
+                let (ty, tag_event) = self.parse_type_name_with_vla_error(Some(keyword.span))?;
+                (ty, TypeofOperand::TypeName, tag_event)
+            } else {
+                let checkpoint = self.symbols.checkpoint();
+                let mut installed = HashSet::new();
+                for shadow in self.temporary_parameter_shadows.clone() {
+                    if shadow.scope == self.current_scope
+                        && installed.insert(shadow.spelling.clone())
+                    {
+                        self.symbols
+                            .declare(
+                                shadow.scope,
+                                &shadow.spelling,
+                                SymbolData::Parameter {
+                                    storage: StorageClass::None,
+                                },
+                                shadow.ty,
+                                shadow.span,
+                            )
+                            .expect("temporary parameter spellings are unique per probe");
+                    }
+                }
+                let expression = self.parse_expression();
+                let inferred = expression.and_then(|expression| {
+                    self.expression_type(expression)
+                        .map(|inferred| (expression, inferred.ty))
+                });
+                self.symbols
+                    .rollback(checkpoint)
+                    .expect("temporary typeof bindings are table-local");
+                let Some((expression, inferred)) = inferred else {
+                    if self.diagnostic.is_none() {
+                        self.report("E1003", "expected-expression", self.span());
+                    }
+                    return None;
+                };
+                let ty = self.materialize_inferred_type(inferred, Some(expression))?;
+                if self.type_is_variably_modified(ty) {
+                    self.report(
+                        "E2904",
+                        "not-covered: variably-modified-typeof",
+                        keyword.span,
+                    );
+                }
+                (ty, TypeofOperand::Expression, None)
+            };
+            let close = self.expect(TokenKind::RParen)?;
+            let trailing = self.parse_qualifiers_with_inline(&mut inline_spans);
+            qualifiers = merge_qualifiers(qualifiers, trailing);
+            let resolved = self.qualify_typedef_type(base, qualifiers);
+            return Some(ParsedSpecifier {
+                surface: TypeSpecifier::Typeof {
+                    resolved,
+                    operand,
+                    span: self.merge_span(start, close.span),
+                },
+                tag_event,
+            });
+        }
+
         if let Some((symbol, alias_ty)) = self.peek_typedef_name() {
             let token = self.advance().expect("peeked typedef name");
             let name = SpannedName {
@@ -3865,48 +3947,24 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some((TagMembers::Enum(members), TagDefinition::Enum(canonical)))
     }
 
-    /// Parse the bounded abstract-declarator subset required by G1 type names:
-    /// pointer layers and fixed-size array suffixes. Function types, VLAs,
-    /// parenthesized abstract declarators, and GNU attributes remain rejected.
     fn parse_type_name(&mut self) -> Option<(TypeId, Option<PendingTag<'arena>>)> {
-        let specifier = self.parse_type_specifier()?;
-        let mut pointers = Vec::new();
-        while self.peek_kind() == Some(TokenKind::Star) {
-            let star = self.advance().expect("peeked pointer star");
-            let qualifiers = self.parse_qualifiers();
-            let end = self
-                .tokens
-                .get(self.pos.saturating_sub(1))
-                .map_or(star.span, |token| token.span);
-            pointers.push(DerivedDeclarator::Pointer {
-                qualifiers,
-                span: self.merge_span(star.span, end),
-            });
-        }
+        self.parse_type_name_with_vla_error(None)
+    }
 
-        let mut derived = Vec::new();
-        while self.peek_kind() == Some(TokenKind::LBracket) {
-            let open = self.advance().expect("peeked array open");
-            let bound = if self.peek_kind() == Some(TokenKind::IntLiteral) {
-                let token = self.advance().expect("peeked fixed array bound");
-                match parse_int_literal(self.token_text(&token)) {
-                    Some(literal) => ArrayBound::Fixed(literal.value),
-                    None => {
-                        self.report("E1006", "invalid-integer-literal", token.span);
-                        return None;
-                    }
-                }
-            } else {
-                self.report("E1005", "unsupported-abstract-declarator", self.span());
-                return None;
-            };
-            let close = self.expect(TokenKind::RBracket)?;
-            derived.push(DerivedDeclarator::Array {
-                bound,
-                span: self.merge_span(open.span, close.span),
-            });
-        }
-        derived.extend(pointers);
+    fn parse_type_name_with_vla_error(
+        &mut self,
+        vla_error_span: Option<SourceSpan>,
+    ) -> Option<(TypeId, Option<PendingTag<'arena>>)> {
+        let specifier = self.parse_type_specifier()?;
+        let derived = if matches!(
+            self.peek_kind(),
+            Some(TokenKind::Star | TokenKind::LBracket | TokenKind::LParen)
+        ) {
+            self.parse_abstract_declarator_with_vla_error(vla_error_span)?
+                .derived
+        } else {
+            Vec::new()
+        };
         let mut type_attributes = self.parse_attribute_specifiers(AttributePlacement::TypeName);
         let ty = self.apply_declarator(specifier.surface.type_id(), &derived);
         let ty = self.apply_attributes_to_type(ty, &mut type_attributes);
@@ -3917,6 +3975,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     // ── declarators ────────────────────────────────────────────────────
 
     fn parse_abstract_declarator(&mut self) -> Option<ParsedAbstractDeclarator> {
+        self.parse_abstract_declarator_with_vla_error(None)
+    }
+
+    fn parse_abstract_declarator_with_vla_error(
+        &mut self,
+        vla_error_span: Option<SourceSpan>,
+    ) -> Option<ParsedAbstractDeclarator> {
         let mut pointers = Vec::new();
         while self.peek_kind() == Some(TokenKind::Star) {
             let star = self.advance().expect("peeked star");
@@ -3938,7 +4003,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             );
         let mut declarator = if grouped {
             let open = self.advance().expect("peeked abstract grouping");
-            let mut inner = self.parse_abstract_declarator()?;
+            let mut inner = self.parse_abstract_declarator_with_vla_error(vla_error_span)?;
             let close = self.expect(TokenKind::RParen)?;
             inner.span = self.merge_span(open.span, close.span);
             inner
@@ -3975,7 +4040,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                             }
                         }
                     } else {
-                        self.report("E1005", "unsupported-abstract-declarator", self.span());
+                        if let Some(span) = vla_error_span {
+                            self.report("E2904", "not-covered: variably-modified-typeof", span);
+                        } else {
+                            self.report("E1005", "unsupported-abstract-declarator", self.span());
+                        }
                         ArrayBound::Variable
                     };
                     let close = self.expect(TokenKind::RBracket)?;
@@ -4302,7 +4371,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let declaration = self.finish_tag_event(event, span, Vec::new());
                 self.side_declarations.push(declaration);
             }
-            let declared_name = name.as_ref().map(|name| name.spelling.clone());
+            let declared_name = name.as_ref().map(|name| (name.spelling.clone(), name.span));
             let mut parameter_attributes = specifier_attributes;
             parameter_attributes
                 .extend(self.parse_attribute_specifiers(AttributePlacement::Parameter));
@@ -4316,9 +4385,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 written,
                 span,
             });
-            if let Some(spelling) = declared_name {
+            if let Some((spelling, span)) = declared_name {
                 self.temporary_parameter_shadows
-                    .push((self.current_scope, spelling));
+                    .push(TemporaryParameterShadow {
+                        scope: self.current_scope,
+                        spelling,
+                        ty,
+                        span,
+                    });
             }
             if !self.match_kind(TokenKind::Comma) {
                 break;
@@ -4750,7 +4824,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .temporary_parameter_shadows
                 .iter()
                 .rev()
-                .any(|(shadow_scope, shadow)| *shadow_scope == current && shadow == spelling)
+                .any(|shadow| shadow.scope == current && shadow.spelling == spelling)
             {
                 return true;
             }
@@ -4790,6 +4864,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TokenKind::Enum
                 | TokenKind::BuiltinVaList
                 | TokenKind::GnuInt128
+                | TokenKind::Typeof
         )
     }
 
@@ -5362,6 +5437,92 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | OperandTypeClass::Aggregate(_)
             | OperandTypeClass::Void
             | OperandTypeClass::Other => UpdateConstraint::Invalid,
+        }
+    }
+
+    fn materialize_inferred_type(
+        &mut self,
+        inferred: InferredType,
+        expression: Option<&CHirExpr<'_>>,
+    ) -> Option<TypeId> {
+        Some(match inferred {
+            InferredType::Canonical(ty) => ty,
+            InferredType::Integer(integer) => self.intern_c_integer_type(integer),
+            InferredType::Real(real) => self.intern(TypeKind::Float(real), Qualifiers::default()),
+            InferredType::Complex(complex) => {
+                self.intern(TypeKind::Complex(complex), Qualifiers::default())
+            }
+            InferredType::Pointer(pointer) => {
+                let pointee = self.qualify_typedef_type(pointer.pointee, pointer.qualifiers);
+                self.intern(TypeKind::Pointer(pointee), Qualifiers::default())
+            }
+            InferredType::StringArray(prefix) => {
+                let CHirExpr::StringLit(literal, _) = expression? else {
+                    return None;
+                };
+                let element = self.string_element_type(prefix);
+                let bound = literal.explicit_unit_count()?.checked_add(1)?;
+                self.intern(
+                    TypeKind::Array {
+                        element,
+                        bound: ArrayBound::Fixed(bound),
+                    },
+                    Qualifiers::default(),
+                )
+            }
+            InferredType::StringPointer(prefix) => {
+                let element = self.string_element_type(prefix);
+                self.intern(TypeKind::Pointer(element), Qualifiers::default())
+            }
+        })
+    }
+
+    fn generic_controlling_type(&mut self, expression: &CHirExpr<'_>) -> Option<TypeId> {
+        let converted = self.converted_expression_type(expression)?;
+        let ty = self.materialize_inferred_type(converted.ty, Some(expression))?;
+        let canonical = self.types.get(ty)?.clone();
+        Some(self.intern(canonical.kind, Qualifiers::default()))
+    }
+
+    fn string_element_type(&mut self, prefix: StringPrefix) -> TypeId {
+        let rank = match prefix {
+            StringPrefix::None | StringPrefix::U8 => IntRank::Char,
+            StringPrefix::L => IntRank::Int,
+            StringPrefix::U16 => IntRank::UShort,
+            StringPrefix::U => IntRank::UInt,
+        };
+        self.intern(TypeKind::Int(rank), Qualifiers::default())
+    }
+
+    fn type_is_variably_modified(&self, ty: TypeId) -> bool {
+        self.type_is_variably_modified_from(ty, &mut HashSet::new())
+    }
+
+    fn type_is_variably_modified_from(&self, ty: TypeId, seen: &mut HashSet<TypeId>) -> bool {
+        if !seen.insert(ty) {
+            return false;
+        }
+        match self.types.get(ty).map(|canonical| &canonical.kind) {
+            Some(TypeKind::Array {
+                bound: ArrayBound::Variable,
+                ..
+            }) => true,
+            Some(TypeKind::Array { element, .. } | TypeKind::Pointer(element)) => {
+                self.type_is_variably_modified_from(*element, seen)
+            }
+            Some(TypeKind::Function {
+                return_type,
+                parameters,
+            }) => {
+                self.type_is_variably_modified_from(*return_type, seen)
+                    || match parameters {
+                        FunctionParameters::Unspecified => false,
+                        FunctionParameters::Prototype { types, .. } => types
+                            .iter()
+                            .any(|ty| self.type_is_variably_modified_from(*ty, seen)),
+                    }
+            }
+            _ => false,
         }
     }
 
@@ -6296,12 +6457,93 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let span = self.merge_span(tok.span, rparen_span);
                 return Some(self.alloc_node(respan_expr(expr, span)));
             }
+            TokenKind::Generic => return self.parse_generic_selection(tok),
             _ => {
                 self.report("E1003", "expected-expression", tok.span);
                 return None;
             }
         };
         Some(self.alloc_node(expression))
+    }
+
+    fn parse_generic_selection(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        self.expect(TokenKind::LParen)?;
+        let controlling = self.parse_assignment()?;
+        let controlling_span = controlling.span();
+        let controlling_ty = self.generic_controlling_type(controlling).or_else(|| {
+            self.report("E1003", "expected-expression", controlling_span);
+            None
+        })?;
+        self.expect(TokenKind::Comma)?;
+
+        let mut association_types = Vec::new();
+        let mut default = None;
+        let mut matching = None;
+        let mut association_count = 0_usize;
+        let mut duplicate = false;
+        loop {
+            let index = association_count;
+            let association_start = self.span();
+            let association_ty = if self.peek_kind() == Some(TokenKind::Default) {
+                let token = self.advance().expect("peeked generic default");
+                if default.is_some() {
+                    self.report(
+                        "E2907",
+                        "generic-selection-duplicate-association",
+                        token.span,
+                    );
+                    duplicate = true;
+                }
+                None
+            } else {
+                let (ty, tag_event) = self.parse_type_name()?;
+                if association_types
+                    .iter()
+                    .any(|previous| self.types.compatible(*previous, ty))
+                {
+                    self.report(
+                        "E2907",
+                        "generic-selection-duplicate-association",
+                        association_start,
+                    );
+                    duplicate = true;
+                }
+                association_types.push(ty);
+                if let Some(event) = tag_event {
+                    let declaration = self.finish_tag_event(event, association_start, Vec::new());
+                    self.side_declarations.push(declaration);
+                }
+                Some(ty)
+            };
+            self.expect(TokenKind::Colon)?;
+            let expression = self.parse_assignment()?;
+            if let Some(association_ty) = association_ty {
+                if self.types.compatible(controlling_ty, association_ty) {
+                    matching = Some((index, expression));
+                }
+            } else if default.is_none() {
+                default = Some((index, expression));
+            }
+            association_count += 1;
+            if !self.match_kind(TokenKind::Comma) {
+                break;
+            }
+        }
+        let close = self.expect(TokenKind::RParen)?;
+        if duplicate {
+            return None;
+        }
+        let Some((selected_index, selected)) = matching.or(default) else {
+            self.report("E2908", "generic-selection-no-match", keyword.span);
+            return None;
+        };
+        self.generic_selections.push(GenericSelectionRecord {
+            span: self.merge_span(keyword.span, close.span),
+            controlling_span,
+            selected_index,
+            association_count,
+        });
+        Some(selected)
     }
 
     fn looks_like_parenthesized_type(&self) -> bool {
@@ -6513,6 +6755,7 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::MinusMinus
             | TokenKind::Sizeof
             | TokenKind::Alignof
+            | TokenKind::Generic
     )
 }
 
