@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.4** | **Authoritative reference** | **2026-08-25**
+**Revision 1.9.5** | **Authoritative reference** | **2026-08-25**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1227,8 +1227,14 @@ twice would let a reader think two conditions are the same finding.
 | `E2908` | `generic-selection-no-match` | front end |
 | `E2909` | `builtin-arity` | front end |
 | `E2910` | `builtin-not-called` | front end |
+| `E2911` | `static-assertion-failed` | front end |
+| `E2912` | `static-assertion-not-constant` | front end |
+| `E2913` | `builtin-operand-not-convertible` | front end |
+| `E2914` | `malformed-asm` | front end |
 | `E3018` | `invalid-lifetime-end` | runtime |
 | `E3019` | `function-pointer-target-signature-mismatch` | runtime |
+| `E3020` | `not-lowered: checked-arithmetic` | lowering |
+| `E3021` | `not-lowered: asm` | lowering |
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
 symbol selected by that value to the same type. The separation is deliberate:
@@ -2643,6 +2649,10 @@ front end that still emits it is defective.
 | `E2908` | `_Generic` has no association compatible with the controlling type and no `default` |
 | `E2909` | `__builtin_expect`, `__builtin_constant_p` or `__alignof__` called with the wrong number of operands |
 | `E2910` | a resolved builtin name used without a call |
+| `E2911` | `_Static_assert` condition evaluates to zero |
+| `E2912` | `_Static_assert` condition is not an integer constant expression |
+| `E2913` | `__builtin_expect` operand of non-arithmetic type |
+| `E2914` | `asm` template names an unknown operand, or an output operand is not a modifiable lvalue |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -2767,7 +2777,69 @@ there and lists the attribute by name as preserved-not-applied.
 
 Errors: a builtin used with the wrong arity is `E2909`
 (`builtin-arity`); a builtin name used other than as a call is `E2910`
-(`builtin-not-called`).
+(`builtin-not-called`); an `__builtin_expect` operand that is not of
+arithmetic type is `E2913` (`builtin-operand-not-convertible`; both oracles
+reject a pointer or a structure there and accept a floating operand, which
+converts to `long`).
+
+`_Static_assert(condition, message)` and the C23 one-operand form: the
+condition must be an integer constant expression, else `E2912`
+(`static-assertion-not-constant`) at the condition's span; a condition that
+evaluates to zero is `E2911` (`static-assertion-failed`) at the `_Static_assert`
+keyword. `__builtin_constant_p` and `__builtin_types_compatible_p` are integer
+constant expressions in that position; `__builtin_*_overflow` is not (both
+oracles reject it in a static assertion).
+
+#### 10.1.15 Checked arithmetic builtins
+
+`__builtin_add_overflow(a, b, p)`, `__builtin_sub_overflow(a, b, p)` and
+`__builtin_mul_overflow(a, b, p)`: `a` and `b` have integer types, which may
+differ in width and signedness; `p` is a pointer to a non-`_Bool` integer type.
+The operation is computed in infinite precision, the result is converted to the
+pointee type as if by assignment (wrapping) and stored through `p`, and the call
+yields `_Bool` `1` when the infinite-precision result is not representable in the
+pointee type, else `0`. Both operands and `p` are evaluated exactly once, left to
+right. The call is never an integer constant expression. `__builtin_*_overflow_p`
+is out of this profile (`ORACLE_CONFLICT`: Clang-19 does not provide it; the
+cohort does not use it). Measured in `.evidence/builtin-probes/20260825-2c23684c/`
+(`ovf.c`): `mul(70000, 70000) -> int` is `1` with the wrapped `605032704` stored,
+`-> long` is `0` with `4900000000`; `add(200, 100) -> unsigned char` is `1`
+with `44`; `sub(4000000000u, -1) -> long long` is `0`; `add(-1, 0) -> unsigned`
+is `1`.
+
+The front end type-checks the call and keeps it in C-HIR as a checked
+arithmetic node; the C-HIR interpreter implements the rule above. Lowering to
+EvoIR is a separate stage: until an EvoIR checked-arithmetic form is specified
+(Section 4), lowering reports `E3020` (`not-lowered: checked-arithmetic`) and
+fails closed. Parse-level acceptance is what the kernel parse lanes need now.
+
+#### 10.1.16 GNU `asm` at the front-end boundary
+
+Syntax accepted, in every position GNU C accepts it:
+
+- basic `asm("template");` at file scope and as a statement;
+- extended `asm` with up to four colon-separated sections: outputs, inputs,
+  clobbers, and (for `asm goto`) labels; each operand is `[symbolic-name]`
+  optional, a constraint string, and a parenthesised expression;
+- qualifiers `volatile`, `inline`, `goto` in any order, each at most once;
+- `__asm__` and `__volatile__` spellings;
+- an `asm("name")` label after a declarator (`int x asm("sym");`), which
+  renames the object or function for the assembler and is otherwise inert.
+
+The front end checks that output operands are modifiable lvalues, that every
+`%[name]` in the template names an operand, that `asm goto` label operands are
+labels in scope, and that string literals concatenate; it keeps the statement
+in C-HIR losslessly (template text, operands with constraints, clobbers,
+labels, qualifiers, spans). Constraint strings are preserved as text and not
+validated in this revision. `asm` has maximal effects: it reads and writes
+`mem<all>` and `world`, may not be reordered, duplicated or removed, and an
+`asm goto` is a terminator whose successors are its labels plus fall-through.
+Lowering to EvoIR is a separate stage: until Section 4 specifies an `asm`
+operation, lowering reports `E3021` (`not-lowered: asm`) and fails closed;
+the C-HIR interpreter reports the same code when it reaches one.
+
+Errors: a template naming an unknown operand or a non-lvalue output is
+`E2914` (`malformed-asm`) at the operand's span.
 
 ### 10.2 EvoIR to EvoMIR Extraction Contract
 
@@ -3343,6 +3415,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.5 | 2026-08-25 | Freezes `_Static_assert` diagnostics (`E2911`, `E2912`) and the non-arithmetic `__builtin_expect` operand (`E2913`), adds 10.1.15 checked arithmetic builtins and 10.1.16 GNU `asm` at the front-end boundary with measured oracle semantics, both fail-closed in lowering (`E3020`, `E3021`) until Section 4 gains the operations. Added because 18 and 12 kernel parse lanes stop on them. |
 | 1.9.4 | 2026-08-25 | Adds 10.1.14: `__builtin_expect`, `__builtin_constant_p` and `__alignof__` resolved by the front end with rules measured in the sealed oracle image, two recorded `ORACLE_CONFLICT`s resolved to the documented-permitted answer, and `E2909`/`E2910`. Pointer-declarator attributes are preserved and never applied. Added because 28 of 30 kernel parse lanes stop on these builtins. |
 | 1.9.3 | 2026-08-25 | Adds the pointer-declarator attribute position to 10.1.9: after `*` inside a pointer declarator the attribute is a type attribute of that pointer type. Added because two kernel parse lanes stop on `void * __attribute__((__warn_unused_result__)) ERR_PTR(long)`. |
 | 1.9.2 | 2026-08-25 | Adds C11 generic selection to Section 10.1.10 beside `typeof`: controlling type after lvalue conversion, one compatible association or `default`, unselected branches unevaluated, nothing surviving into EvoIR; assigns `E2907` and `E2908`. Added because every kernel parse lane stops on `typeof(_Generic(...))`. |
