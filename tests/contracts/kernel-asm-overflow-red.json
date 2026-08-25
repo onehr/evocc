@@ -1,0 +1,140 @@
+{
+  "baseline": "26f6c0f23002a3053a36d33628e5140ef1de6351",
+  "authority": [
+    "docs/evoir-spec.md revision 1.9.5 sections 6.3 and 10.1.14-10.1.16",
+    "tests/contracts/day9-acceptance-contract.json scope F"
+  ],
+  "commands": [
+    "cargo test -p evocc-parser --test checked_arithmetic --test gnu_asm --test static_assert -p evocc-chir --test checked_arithmetic_semantics -p evocc-lower --test fail_closed_forms --no-fail-fast"
+  ],
+  "declaredCapabilities": {
+    "checked-arithmetic": 10,
+    "extended-asm": 5,
+    "asm-goto": 3,
+    "basic-or-file-scope-asm": 1,
+    "asm-declarator-label": 1,
+    "static-assert-diagnostic-migration": 3
+  },
+  "summary": {
+    "failed": 23,
+    "passed": 0,
+    "buildErrors": 0
+  },
+  "failures": [
+    {
+      "test": "checked_arithmetic_semantics::adding_into_unsigned_char_wraps_and_reports_overflow",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_add_overflow",
+      "declaredReason": "checked-arithmetic"
+    },
+    {
+      "test": "checked_arithmetic_semantics::checked_arithmetic_evaluates_operands_once_left_to_right",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_mul_overflow",
+      "declaredReason": "checked-arithmetic"
+    },
+    {
+      "test": "checked_arithmetic_semantics::mixed_signed_subtraction_uses_infinite_precision",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_sub_overflow",
+      "declaredReason": "checked-arithmetic"
+    },
+    {
+      "test": "checked_arithmetic_semantics::multiplying_into_int_wraps_and_reports_overflow",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_mul_overflow",
+      "declaredReason": "checked-arithmetic"
+    },
+    {
+      "test": "checked_arithmetic_semantics::multiplying_into_long_is_representable",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_mul_overflow",
+      "declaredReason": "checked-arithmetic"
+    },
+    {
+      "test": "checked_arithmetic_semantics::negative_to_unsigned_reports_overflow",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_add_overflow",
+      "declaredReason": "checked-arithmetic"
+    },
+    {
+      "test": "fail_closed_forms::checked_arithmetic_fails_closed_with_only_e3020",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_mul_overflow",
+      "declaredReason": "checked-arithmetic"
+    },
+    {
+      "test": "checked_arithmetic::checked_arithmetic_calls_parse_and_have_type_bool",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_mul_overflow",
+      "declaredReason": "checked-arithmetic"
+    },
+    {
+      "test": "checked_arithmetic::checked_arithmetic_rejects_bad_operands",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_mul_overflow",
+      "declaredReason": "checked-arithmetic"
+    },
+    {
+      "test": "checked_arithmetic::the_kernel_overflow_line_parses",
+      "diagnostic": "E2001: undeclared-identifier: __builtin_mul_overflow",
+      "declaredReason": "checked-arithmetic"
+    },
+    {
+      "test": "fail_closed_forms::extended_asm_fails_closed_with_only_e3021",
+      "diagnostic": "E2001: undeclared-identifier: asm",
+      "declaredReason": "extended-asm"
+    },
+    {
+      "test": "gnu_asm::asm_reaches_chir_losslessly",
+      "diagnostic": "E2001: undeclared-identifier: asm",
+      "declaredReason": "extended-asm"
+    },
+    {
+      "test": "gnu_asm::extended_asm_forms_parse",
+      "diagnostic": "E2001: undeclared-identifier: asm",
+      "declaredReason": "extended-asm"
+    },
+    {
+      "test": "gnu_asm::extended_asm_is_checked_at_the_front_end",
+      "diagnostic": "E2001: undeclared-identifier: asm",
+      "declaredReason": "extended-asm"
+    },
+    {
+      "test": "gnu_asm::the_kernel_extended_asm_line_parses",
+      "diagnostic": "E2001: undeclared-identifier: asm",
+      "declaredReason": "extended-asm"
+    },
+    {
+      "test": "fail_closed_forms::asm_goto_fails_closed_with_only_e3021",
+      "diagnostic": "E2001: undeclared-identifier: asm",
+      "declaredReason": "asm-goto"
+    },
+    {
+      "test": "gnu_asm::asm_goto_forms_parse_and_forward_labels_resolve",
+      "diagnostic": "E2001: undeclared-identifier: asm",
+      "declaredReason": "asm-goto"
+    },
+    {
+      "test": "gnu_asm::asm_goto_labels_are_checked_at_function_end",
+      "diagnostic": "E2001: undeclared-identifier: asm",
+      "declaredReason": "asm-goto"
+    },
+    {
+      "test": "gnu_asm::basic_asm_parses_at_file_and_block_scope",
+      "diagnostic": "E1001: expected-declaration",
+      "declaredReason": "basic-or-file-scope-asm"
+    },
+    {
+      "test": "gnu_asm::asm_labels_on_declarators_are_accepted_and_inert",
+      "diagnostic": "E1004: trailing-token",
+      "declaredReason": "asm-declarator-label"
+    },
+    {
+      "test": "static_assert::zero_static_assert_uses_the_frozen_failure_code",
+      "diagnostic": "E1303: static-assertion-failed",
+      "declaredReason": "static-assert-diagnostic-migration"
+    },
+    {
+      "test": "static_assert::nonconstant_static_assert_uses_the_condition_span",
+      "diagnostic": "E1303: not-integer-constant-expression at message span",
+      "declaredReason": "static-assert-diagnostic-migration"
+    },
+    {
+      "test": "static_assert::static_assert_accepts_frozen_constant_forms",
+      "diagnostic": "E1002: expected-token: token for the one-operand form",
+      "declaredReason": "static-assert-diagnostic-migration"
+    }
+  ]
+}

@@ -9,3 +9,7 @@ description = "C High-Level IR: typed AST preserving C source semantics"
 evocc-common = { path = "../evocc-common" }
 evocc-memory = { path = "../evocc-memory" }
 evocc-types = { path = "../evocc-types" }
+
+[dev-dependencies]
+evocc-lex = { path = "../evocc-lex" }
+evocc-parser = { path = "../evocc-parser" }
