@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.1** | **Authoritative reference** | **2026-08-25**
+**Revision 1.9.2** | **Authoritative reference** | **2026-08-25**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1223,6 +1223,8 @@ twice would let a reader think two conditions are the same finding.
 | `E2904` | `not-covered: variably-modified-typeof` | front end |
 | `E2905` | `statement-expression-outside-function` | front end |
 | `E2906` | `designator-outside-object` | front end |
+| `E2907` | `generic-selection-duplicate-association` | front end |
+| `E2908` | `generic-selection-no-match` | front end |
 | `E3018` | `invalid-lifetime-end` | runtime |
 | `E3019` | `function-pointer-target-signature-mismatch` | runtime |
 
@@ -2634,8 +2636,10 @@ front end that still emits it is defective.
 | `E2904` | `typeof` of a variably modified type |
 | `E2905` | `({ ... })` at file scope or where a constant expression is required |
 | `E2906` | designator names a member the type lacks or an index at or beyond a fixed bound |
+| `E2907` | two `_Generic` associations name compatible types, or `default` appears twice |
+| `E2908` | `_Generic` has no association compatible with the controlling type and no `default` |
 
-#### 10.1.10 `typeof`
+#### 10.1.10 `typeof` and `_Generic`
 
 `typeof(type-name)` and `typeof(expression)` denote a type. `__typeof__` is the
 same construct. The result of `typeof(expression)` is the type of the expression
@@ -2647,6 +2651,21 @@ this profile has no variable-length objects.
 
 `typeof` produces a type and is fully resolved by the front end; nothing of it
 survives into EvoIR.
+
+`_Generic(controlling-expression, association-list)` is C11 generic selection
+and is resolved by the front end in the same way. The controlling expression
+is not evaluated; its type is taken after lvalue conversion, so qualifiers are
+dropped and an array or function designator becomes a pointer. Exactly one
+association may name a type compatible with that type; if one does, it is
+selected, otherwise the `default` association is selected. No two associations
+may name compatible types and `default` may appear at most once (`E2907`); a
+selection with no compatible association and no `default` is `E2908`. Only the
+selected expression is type-checked as part of the enclosing expression and only
+it is evaluated; the others are parsed and their type names resolved. The
+selection has the type, value category and value of the selected expression, is
+a constant expression when that expression is, and nothing of the selection
+survives into EvoIR: the lowered module is byte-identical to the one obtained by
+writing the selected expression in its place.
 
 #### 10.1.11 Statement Expressions
 
@@ -3277,6 +3296,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.2 | 2026-08-25 | Adds C11 generic selection to Section 10.1.10 beside `typeof`: controlling type after lvalue conversion, one compatible association or `default`, unselected branches unevaluated, nothing surviving into EvoIR; assigns `E2907` and `E2908`. Added because every kernel parse lane stops on `typeof(_Generic(...))`. |
 | 1.9.1 | 2026-08-25 | Records two corrections from the sealed layout oracle and the kernel cohort. `aligned(N)` on a typedef or type name sets the alignment exactly and may lower it, while on records and members it only raises; the frozen attributed layout corpus is the authority. Adds the tenth attribute position, immediately before a declarator that follows a comma in a declarator list, attaching to that declarator alone; declarator lists are admitted in every declaration position including record members, where each declarator carries its own bit width (a constant expression) and attributes. |
 | 1.9 | 2026-08-25 | Freezes the GNU extension profile the kernel cohort needs. Attributes are read in every GNU position, attached by position, and preserved losslessly; only `aligned` and `packed` are applied, to layout, with every rule checked against the frozen GCC-14 and Clang-19 oracles, and every other attribute is recorded by name as preserved-not-applied. Defines `typeof` as an unevaluated front-end type, statement expressions as a lowering pattern over block arguments with block lifetimes, designated initializers including GNU ranges as `SubobjectPath` actions with later-wins overriding, and compound literals as manifest allocation sites. Adds the known-bits lattice with constant value as its bottom, a fixed weak transfer table, meet-on-union with contradiction as an invalid union, and a two-tier bounded scheduler with per-rule match fuel and a stop rule. Certificate format `evp2` carries budget, epoch markers and rewrite premises; premises are recomputed by the checker, budgets are verified against consumption, and `evp1` remains readable for premise-free certificates. Introduces `E2903`–`E2906`. Defers every other attribute semantic, variably modified types, integer-range and non-zero lattices, and any memory rewrite. |
 | 1.8.2 | 2026-08-24 | Records implementation alignment for the complete Section 9 function, global, `func_addr`, and indirect-call shapes; empties the pending and superseded shape manifests without changing their machine-readable contract. Clarifies that shape comparison is an audit hint while whole-module round-trip and the independent field-sentinel manifest carry syntax completeness. |

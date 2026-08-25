@@ -6,14 +6,15 @@
   "scope": [
     "A attributes: parse in every GNU position, attach by position, preserve losslessly; apply only aligned and packed, to layout, checked against the GCC/Clang layout oracle",
     "B publication: a tracked script runs reconnaissance under the pinned observer and writes per-lane counts with the command beside each number; refuses to write on any lane regression",
-    "C typeof, statement expressions, designated initializers, compound literals",
+    "C typeof, _Generic, statement expressions, designated initializers, compound literals",
     "D known-bits lattice, two-tier bounded scheduler, certificate evp2 with premises recomputed by the checker"
   ],
   "gate": "Kernel parse/preprocess counts published by the script from sealed evidence. Process gate; no predicted number. Counts must be >= 1/16 dual-oracle parse and 0/16 raw preprocess.",
-  "order": "A, B, then re-run reconnaissance; C and D in the order the refreshed first-error sites rank them. The list is scope, not sequence.",
+  "order": "A, B, then re-run reconnaissance; C in the order the refreshed first-error sites rank them: typeof + _Generic first (all 30 parse lanes), the rest by the next publication. The list is scope, not sequence.",
   "rulings": {
     "attributeSemantics": "preserve all; apply aligned and packed only; list the rest by name in the receipt",
-    "cohort": "the frozen 16 units, unchanged"
+    "cohort": "the frozen 16 units, unchanged",
+    "genericSelection": "2026-08-25: _Generic added to C. It is C11, not GNU, but every parse lane stops on typeof(_Generic(...)); typeof alone moves nothing."
   },
   "processRules": [
     "One tests-only commit opens a red window; its failures come from declared missing constructs, never from a build error. No commit widens the declared set; each implementation commit narrows it; the last closes it.",
