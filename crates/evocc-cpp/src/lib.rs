@@ -10,6 +10,14 @@ pub use evocc_lex::{Lexer, Token, TokenKind, TokenText};
 const AARCH64_UNKNOWN_LINUX_GNU: &str = "aarch64-unknown-linux-gnu";
 const AARCH64_UNKNOWN_LINUX_GNU_PREDEFINED: &str =
     include_str!("../predefined/aarch64-unknown-linux-gnu.h");
+const HAS_ATTRIBUTE_ANSWERS: &str = include_str!("../predefined/has-attribute.tsv");
+const HAS_BUILTIN_NAMES: &str = include_str!("../predefined/has-builtin.txt");
+const FEATURE_QUERY_NAMES: [&str; 4] = [
+    "__has_attribute",
+    "__has_builtin",
+    "__has_feature",
+    "__has_include",
+];
 
 // ---------------------------------------------------------------------------
 // Macro definition
@@ -497,6 +505,7 @@ pub struct Preprocessor {
     reserved_file_ids: HashSet<FileId>,
     next_file_id: u32,
     counter: u32,
+    builtin_feature_queries: HashSet<String>,
     /// Current source file path for __FILE__ expansion.
     pub current_file: String,
 }
@@ -527,13 +536,28 @@ impl Preprocessor {
             reserved_file_ids: HashSet::new(),
             next_file_id: 1,
             counter: 0,
+            builtin_feature_queries: HashSet::new(),
             current_file: String::new(),
         };
         preprocessor.install_predefined_profile(profile)?;
+        preprocessor.install_feature_query_macros();
         preprocessor
             .macros
             .define("__DATE__".into(), vec![make_date_token()], Vec::new());
         Ok(preprocessor)
+    }
+
+    fn install_feature_query_macros(&mut self) {
+        for name in FEATURE_QUERY_NAMES {
+            self.macros.define_function_like(
+                name.to_owned(),
+                vec!["query".to_owned()],
+                false,
+                None,
+                Vec::new(),
+            );
+            self.builtin_feature_queries.insert(name.to_owned());
+        }
     }
 
     fn install_predefined_profile(&mut self, source: &str) -> Result<(), String> {
@@ -621,6 +645,7 @@ impl Preprocessor {
     }
 
     pub fn define(&mut self, name: String, body: Vec<Token>) {
+        self.builtin_feature_queries.remove(&name);
         self.macros.define(name, body, vec![]);
     }
 
@@ -630,6 +655,7 @@ impl Preprocessor {
     }
 
     pub fn undefine(&mut self, name: &str) {
+        self.builtin_feature_queries.remove(name);
         self.macros.undefine(name);
     }
 
@@ -891,6 +917,7 @@ impl Preprocessor {
                                         }
                                     })
                                     .collect();
+                                self.builtin_feature_queries.remove(&name);
                                 if is_function_like {
                                     self.macros_mut().define_function_like(
                                         name,
@@ -917,10 +944,12 @@ impl Preprocessor {
                         if self.cond_active() {
                             let directive_span = tok.span;
                             // Parse include argument: "file" or <file>
-                            let include_text = read_include_argument(&raw, &mut i, source);
-                            if !include_text.is_empty() {
+                            if let Some((include_text, include_kind)) =
+                                read_include_argument(&raw, &mut i, source)
+                            {
                                 let path = resolve_include(
                                     &include_text,
+                                    include_kind,
                                     &self.current_file,
                                     &self.include_paths,
                                     self.standard_includes,
@@ -967,11 +996,13 @@ impl Preprocessor {
                         skip_line(&raw, &mut i, source);
                     }
                     "if" => {
-                        // Evaluate a simple constant expression. For now we
-                        // support `defined(name)`, arithmetic constants (0,1),
-                        // and integer comparisons.
                         let expr_tokens = collect_line_tokens(&raw, &mut i, source);
-                        let value = evaluate_if_expr(&expr_tokens, &self.macros, source);
+                        let value = self.cond_active()
+                            && self.evaluate_conditional_expression(
+                                &expr_tokens,
+                                source,
+                                expanding,
+                            );
                         self.push_cond(value, tok.span);
                         skip_line(&raw, &mut i, source);
                     }
@@ -979,28 +1010,27 @@ impl Preprocessor {
                         if self.cond_stack.len() <= conditional_floor {
                             self.push_unmatched_conditional(tok.span);
                         } else {
-                            let had = self
+                            let mut state = self
                                 .cond_stack
-                                .last()
-                                .map(|condition| condition.had_true)
-                                .unwrap_or(false);
-                            let outer_active =
-                                self.cond_stack.iter().rev().skip(1).all(|c| c.in_true);
-                            let cs = self
-                                .cond_stack
-                                .last_mut()
+                                .pop()
                                 .expect("conditional stack was checked above");
-                            if had {
-                                cs.in_true = false;
+                            let outer_active = self.cond_active();
+                            if state.had_true {
+                                state.in_true = false;
                             } else {
                                 let line_tokens = collect_line_tokens(&raw, &mut i, source);
                                 let value = outer_active
-                                    && evaluate_if_expr(&line_tokens, &self.macros, source);
-                                cs.in_true = value;
+                                    && self.evaluate_conditional_expression(
+                                        &line_tokens,
+                                        source,
+                                        expanding,
+                                    );
+                                state.in_true = value;
                                 if value {
-                                    cs.had_true = true;
+                                    state.had_true = true;
                                 }
                             }
+                            self.cond_stack.push(state);
                         }
                         skip_line(&raw, &mut i, source);
                     }
@@ -1084,6 +1114,11 @@ impl Preprocessor {
                         self.counter = self.counter.wrapping_add(1);
                         output.push(make_int_token(i64::from(value)));
                         i += 1;
+                        continue;
+                    }
+                    if let Some((answer, next_index)) = self.expand_feature_query(&raw, i, source) {
+                        output.push(make_int_token(answer));
+                        i = next_index;
                         continue;
                     }
                     if name == "__FILE__" {
@@ -1171,9 +1206,7 @@ impl Preprocessor {
                                 continue;
                             };
                             let mut prescanned_args = Vec::with_capacity(args.len());
-                            for (argument, needs_prescan) in
-                                args.iter().zip(prescan_mask)
-                            {
+                            for (argument, needs_prescan) in args.iter().zip(prescan_mask) {
                                 if needs_prescan {
                                     let processed = self.process_impl(
                                         TokenStream::new(argument.clone()),
@@ -1228,6 +1261,88 @@ impl Preprocessor {
         }
 
         TokenStream::new(output)
+    }
+
+    fn expand_feature_query(
+        &mut self,
+        tokens: &[Token],
+        index: usize,
+        source: &str,
+    ) -> Option<(i64, usize)> {
+        let query = token_lexeme(tokens.get(index)?, source);
+        if !self.builtin_feature_queries.contains(query)
+            || tokens.get(index + 1).map(|token| token.kind) != Some(TokenKind::LParen)
+        {
+            return None;
+        }
+
+        let mut close = index + 2;
+        let mut nested = false;
+        while close < tokens.len() && tokens[close].kind != TokenKind::RParen {
+            if matches!(tokens[close].kind, TokenKind::LParen | TokenKind::RParen) {
+                nested = true;
+            }
+            close += 1;
+        }
+        let next_index = if close < tokens.len() {
+            close + 1
+        } else {
+            tokens.len()
+        };
+        let arguments = tokens.get(index + 2..close).unwrap_or_default();
+        let answer = if close >= tokens.len() || nested {
+            None
+        } else {
+            match query {
+                "__has_attribute" => one_query_token(arguments, source)
+                    .map(normalize_attribute_name)
+                    .map(attribute_answer),
+                "__has_builtin" => one_query_token(arguments, source)
+                    .map(|name| i64::from(HAS_BUILTIN_NAMES.lines().any(|known| known == name))),
+                "__has_feature" => one_query_token(arguments, source).map(|_| 0),
+                "__has_include" => parse_header_name(arguments, source).map(|(name, kind)| {
+                    i64::from(
+                        resolve_include(
+                            &name,
+                            kind,
+                            &self.current_file,
+                            &self.include_paths,
+                            self.standard_includes,
+                        )
+                        .is_some(),
+                    )
+                }),
+                _ => None,
+            }
+        };
+
+        if let Some(answer) = answer {
+            Some((answer, next_index))
+        } else {
+            self.errors.push(PreprocessError {
+                code: "E0106",
+                span: tokens[index].span,
+                message: "feature-query-malformed".into(),
+            });
+            Some((0, next_index))
+        }
+    }
+
+    fn evaluate_conditional_expression(
+        &mut self,
+        tokens: &[Token],
+        source: &str,
+        expanding: &mut HashSet<String>,
+    ) -> bool {
+        let defined_replaced = replace_defined_operators(tokens, &self.macros, source);
+        let expanded = self.process_impl(
+            TokenStream::new(defined_replaced),
+            source,
+            expanding,
+            false,
+            0,
+        );
+        evaluate_if_expr(&expanded.into_vec(), source)
     }
 
     fn mapped_file_name(&self) -> String {
@@ -1400,9 +1515,19 @@ fn parse_define(tokens: &[Token], i: &mut usize, source: &str) -> (String, Vec<T
     (name, body, is_function_like)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IncludeKind {
+    Quote,
+    Angle,
+}
+
 /// Read the argument of an #include directive. Returns the filename without
-/// quotes or angle brackets.
-fn read_include_argument(tokens: &[Token], i: &mut usize, source: &str) -> String {
+/// delimiters and the search kind.
+fn read_include_argument(
+    tokens: &[Token],
+    i: &mut usize,
+    source: &str,
+) -> Option<(String, IncludeKind)> {
     if *i < tokens.len() {
         let tok = &tokens[*i];
         let text = token_lexeme(tok, source);
@@ -1410,7 +1535,7 @@ fn read_include_argument(tokens: &[Token], i: &mut usize, source: &str) -> Strin
             // "file" → strip quotes
             let trimmed = text.trim_matches('"');
             *i += 1;
-            return trimmed.to_owned();
+            return Some((trimmed.to_owned(), IncludeKind::Quote));
         }
         if tok.kind == TokenKind::Less {
             // <file> → collect until >
@@ -1425,10 +1550,10 @@ fn read_include_argument(tokens: &[Token], i: &mut usize, source: &str) -> Strin
                 path.push_str(token_lexeme(t, source));
                 *i += 1;
             }
-            return path;
+            return Some((path, IncludeKind::Angle));
         }
     }
-    String::new()
+    None
 }
 
 /// Try to resolve an include file name to an absolute path.
@@ -1437,13 +1562,14 @@ fn read_include_argument(tokens: &[Token], i: &mut usize, source: &str) -> Strin
 /// the include path list.
 fn resolve_include(
     name: &str,
+    kind: IncludeKind,
     current_file: &str,
     include_paths: &[String],
     standard_includes: bool,
 ) -> Option<String> {
     // Quoted include: try beside the active source, then the process working
     // directory. `read_include_argument` has already removed the delimiters.
-    if !name.starts_with('/') {
+    if kind == IncludeKind::Quote && !name.starts_with('/') {
         if let Some(parent) = std::path::Path::new(current_file).parent() {
             let candidate = parent.join(name);
             if let Some(resolved) = resolved_existing_path(&candidate) {
@@ -1480,6 +1606,58 @@ fn resolved_existing_path(path: &std::path::Path) -> Option<String> {
         .map(|resolved| resolved.to_string_lossy().into_owned())
 }
 
+fn one_query_token<'a>(tokens: &'a [Token], source: &'a str) -> Option<&'a str> {
+    if tokens.len() == 1 {
+        let spelling = token_lexeme(&tokens[0], source);
+        (!spelling.is_empty()).then_some(spelling)
+    } else {
+        None
+    }
+}
+
+fn normalize_attribute_name(name: &str) -> &str {
+    name.strip_prefix("__")
+        .and_then(|inner| inner.strip_suffix("__"))
+        .filter(|inner| !inner.is_empty())
+        .unwrap_or(name)
+}
+
+fn attribute_answer(name: &str) -> i64 {
+    HAS_ATTRIBUTE_ANSWERS
+        .lines()
+        .filter_map(|line| line.split_once('\t'))
+        .find_map(|(known, answer)| {
+            (known == name)
+                .then(|| answer.parse::<i64>().ok())
+                .flatten()
+        })
+        .unwrap_or(0)
+}
+
+fn parse_header_name(tokens: &[Token], source: &str) -> Option<(String, IncludeKind)> {
+    if tokens.len() == 1 && tokens[0].kind == TokenKind::StringLiteral {
+        let spelling = token_lexeme(&tokens[0], source);
+        return spelling
+            .strip_prefix('"')
+            .and_then(|inner| inner.strip_suffix('"'))
+            .map(|name| (name.to_owned(), IncludeKind::Quote));
+    }
+    if tokens.len() >= 3
+        && tokens.first().map(|token| token.kind) == Some(TokenKind::Less)
+        && tokens.last().map(|token| token.kind) == Some(TokenKind::Greater)
+        && tokens[1..tokens.len() - 1]
+            .iter()
+            .all(|token| !matches!(token.kind, TokenKind::Less | TokenKind::Greater))
+    {
+        let name = tokens[1..tokens.len() - 1]
+            .iter()
+            .map(|token| token_lexeme(token, source))
+            .collect::<String>();
+        return (!name.is_empty()).then_some((name, IncludeKind::Angle));
+    }
+    None
+}
+
 /// Collect all tokens on the current logical preprocessing line.
 fn collect_line_tokens(tokens: &[Token], i: &mut usize, source: &str) -> Vec<Token> {
     if *i >= tokens.len() {
@@ -1501,120 +1679,401 @@ fn collect_line_tokens(tokens: &[Token], i: &mut usize, source: &str) -> Vec<Tok
     result
 }
 
-/// Evaluate a simple #if / #elif constant expression.
-/// Supports: `defined(NAME)`, integer constants (0, 1), +, -, *, /,
-/// &&, ||, ==, !=, <, >, <=, >=, !, parentheses.
-fn evaluate_if_expr(tokens: &[Token], macros: &MacroMap, source: &str) -> bool {
-    // Filter tokens: keep identifiers, integers, operators, parens.
-    // Evaluate as a left-to-right calculator with precedence.
-    // For the curated fixtures, we mostly need `defined(NAME)` and simple
-    // arithmetic like `1 + 2 * 3 == 7`.
-    let mut i: usize = 0;
-    evaluate_if_or(tokens, &mut i, macros, source)
+fn replace_defined_operators(tokens: &[Token], macros: &MacroMap, source: &str) -> Vec<Token> {
+    let mut result = Vec::with_capacity(tokens.len());
+    let mut index = 0;
+    while index < tokens.len() {
+        if token_lexeme(&tokens[index], source) != "defined" {
+            result.push(tokens[index].clone());
+            index += 1;
+            continue;
+        }
+
+        let (name_index, next_index) = if tokens.get(index + 1).map(|token| token.kind)
+            == Some(TokenKind::LParen)
+            && tokens.get(index + 2).is_some()
+            && tokens.get(index + 3).map(|token| token.kind) == Some(TokenKind::RParen)
+        {
+            (index + 2, index + 4)
+        } else if tokens.get(index + 1).is_some() {
+            (index + 1, index + 2)
+        } else {
+            result.push(tokens[index].clone());
+            index += 1;
+            continue;
+        };
+        let name = token_lexeme(&tokens[name_index], source);
+        let mut answer = make_int_token(i64::from(macros.contains(name)));
+        answer.span = tokens[index].span;
+        result.push(answer);
+        index = next_index;
+    }
+    result
 }
 
-fn evaluate_if_or(tokens: &[Token], i: &mut usize, macros: &MacroMap, source: &str) -> bool {
-    let mut val = evaluate_if_and(tokens, i, macros, source);
-    while *i < tokens.len() && tokens[*i].kind == TokenKind::PipePipe {
-        *i += 1;
-        let rhs = evaluate_if_and(tokens, i, macros, source);
-        val = val || rhs;
-    }
-    val
+#[derive(Debug, Clone, Copy)]
+struct PpInteger {
+    bits: u64,
+    unsigned: bool,
 }
 
-fn evaluate_if_and(tokens: &[Token], i: &mut usize, macros: &MacroMap, source: &str) -> bool {
-    let mut val = evaluate_if_cmp(tokens, i, macros, source);
-    while *i < tokens.len() && tokens[*i].kind == TokenKind::AmpAmp {
-        *i += 1;
-        let rhs = evaluate_if_cmp(tokens, i, macros, source);
-        val = val && rhs;
+impl PpInteger {
+    const ZERO: Self = Self {
+        bits: 0,
+        unsigned: false,
+    };
+
+    fn from_bool(value: bool) -> Self {
+        Self {
+            bits: u64::from(value),
+            unsigned: false,
+        }
     }
-    val
+
+    fn is_true(self) -> bool {
+        self.bits != 0
+    }
+
+    fn common_bits(self, other: Self) -> (u64, u64, bool) {
+        (self.bits, other.bits, self.unsigned || other.unsigned)
+    }
+
+    fn compare(self, other: Self, compare: impl FnOnce(i128, i128) -> bool) -> Self {
+        let (left, right, unsigned) = self.common_bits(other);
+        let (left, right) = if unsigned {
+            (i128::from(left), i128::from(right))
+        } else {
+            (i128::from(left as i64), i128::from(right as i64))
+        };
+        Self::from_bool(compare(left, right))
+    }
 }
 
-fn evaluate_if_cmp(tokens: &[Token], i: &mut usize, macros: &MacroMap, source: &str) -> bool {
-    let lhs = evaluate_if_unary(tokens, i, macros, source);
-    if *i >= tokens.len() {
-        return lhs;
+struct IfExpression<'a> {
+    tokens: &'a [Token],
+    source: &'a str,
+    index: usize,
+}
+
+impl<'a> IfExpression<'a> {
+    fn new(tokens: &'a [Token], source: &'a str) -> Self {
+        Self {
+            tokens,
+            source,
+            index: 0,
+        }
     }
-    let op = tokens[*i].kind;
-    match op {
-        TokenKind::EqEq
-        | TokenKind::NotEq
-        | TokenKind::Less
-        | TokenKind::LessEq
-        | TokenKind::Greater
-        | TokenKind::GreaterEq => {
-            *i += 1;
-            let rhs = evaluate_if_unary(tokens, i, macros, source);
-            match op {
-                TokenKind::EqEq => lhs == rhs,
-                TokenKind::NotEq => lhs != rhs,
-                TokenKind::Less => !lhs & rhs,
-                TokenKind::LessEq => lhs <= rhs,
-                TokenKind::Greater => lhs & !rhs,
-                TokenKind::GreaterEq => lhs >= rhs,
-                _ => false,
+
+    fn take(&mut self, kind: TokenKind) -> bool {
+        if self.tokens.get(self.index).map(|token| token.kind) == Some(kind) {
+            self.index += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn conditional(&mut self) -> PpInteger {
+        let condition = self.logical_or();
+        if !self.take(TokenKind::Question) {
+            return condition;
+        }
+        let when_true = self.conditional();
+        if !self.take(TokenKind::Colon) {
+            return PpInteger::ZERO;
+        }
+        let when_false = self.conditional();
+        if condition.is_true() {
+            when_true
+        } else {
+            when_false
+        }
+    }
+
+    fn logical_or(&mut self) -> PpInteger {
+        let mut value = self.logical_and();
+        while self.take(TokenKind::PipePipe) {
+            let right = self.logical_and();
+            value = PpInteger::from_bool(value.is_true() || right.is_true());
+        }
+        value
+    }
+
+    fn logical_and(&mut self) -> PpInteger {
+        let mut value = self.bitwise_or();
+        while self.take(TokenKind::AmpAmp) {
+            let right = self.bitwise_or();
+            value = PpInteger::from_bool(value.is_true() && right.is_true());
+        }
+        value
+    }
+
+    fn bitwise_or(&mut self) -> PpInteger {
+        let mut value = self.bitwise_xor();
+        while self.take(TokenKind::Pipe) {
+            let right = self.bitwise_xor();
+            value = PpInteger {
+                bits: value.bits | right.bits,
+                unsigned: value.unsigned || right.unsigned,
+            };
+        }
+        value
+    }
+
+    fn bitwise_xor(&mut self) -> PpInteger {
+        let mut value = self.bitwise_and();
+        while self.take(TokenKind::Caret) {
+            let right = self.bitwise_and();
+            value = PpInteger {
+                bits: value.bits ^ right.bits,
+                unsigned: value.unsigned || right.unsigned,
+            };
+        }
+        value
+    }
+
+    fn bitwise_and(&mut self) -> PpInteger {
+        let mut value = self.equality();
+        while self.take(TokenKind::Amp) {
+            let right = self.equality();
+            value = PpInteger {
+                bits: value.bits & right.bits,
+                unsigned: value.unsigned || right.unsigned,
+            };
+        }
+        value
+    }
+
+    fn equality(&mut self) -> PpInteger {
+        let mut value = self.relational();
+        loop {
+            if self.take(TokenKind::EqEq) {
+                let right = self.relational();
+                value = value.compare(right, |left, right| left == right);
+            } else if self.take(TokenKind::NotEq) {
+                let right = self.relational();
+                value = value.compare(right, |left, right| left != right);
+            } else {
+                return value;
             }
         }
-        _ => lhs,
+    }
+
+    fn relational(&mut self) -> PpInteger {
+        let mut value = self.shift();
+        loop {
+            if self.take(TokenKind::Less) {
+                let right = self.shift();
+                value = value.compare(right, |left, right| left < right);
+            } else if self.take(TokenKind::LessEq) {
+                let right = self.shift();
+                value = value.compare(right, |left, right| left <= right);
+            } else if self.take(TokenKind::Greater) {
+                let right = self.shift();
+                value = value.compare(right, |left, right| left > right);
+            } else if self.take(TokenKind::GreaterEq) {
+                let right = self.shift();
+                value = value.compare(right, |left, right| left >= right);
+            } else {
+                return value;
+            }
+        }
+    }
+
+    fn shift(&mut self) -> PpInteger {
+        let mut value = self.additive();
+        loop {
+            if self.take(TokenKind::ShiftLeft) {
+                let right = self.additive();
+                value.bits = if right.bits < 64 {
+                    value.bits.wrapping_shl(right.bits as u32)
+                } else {
+                    0
+                };
+            } else if self.take(TokenKind::ShiftRight) {
+                let right = self.additive();
+                value.bits = if right.bits < 64 {
+                    if value.unsigned {
+                        value.bits >> right.bits
+                    } else {
+                        ((value.bits as i64) >> right.bits) as u64
+                    }
+                } else {
+                    0
+                };
+            } else {
+                return value;
+            }
+        }
+    }
+
+    fn additive(&mut self) -> PpInteger {
+        let mut value = self.multiplicative();
+        loop {
+            if self.take(TokenKind::Plus) {
+                let right = self.multiplicative();
+                value.bits = value.bits.wrapping_add(right.bits);
+                value.unsigned |= right.unsigned;
+            } else if self.take(TokenKind::Minus) {
+                let right = self.multiplicative();
+                value.bits = value.bits.wrapping_sub(right.bits);
+                value.unsigned |= right.unsigned;
+            } else {
+                return value;
+            }
+        }
+    }
+
+    fn multiplicative(&mut self) -> PpInteger {
+        let mut value = self.unary();
+        loop {
+            if self.take(TokenKind::Star) {
+                let right = self.unary();
+                value.bits = value.bits.wrapping_mul(right.bits);
+                value.unsigned |= right.unsigned;
+            } else if self.take(TokenKind::Slash) {
+                let right = self.unary();
+                value = pp_divide(value, right);
+            } else if self.take(TokenKind::Percent) {
+                let right = self.unary();
+                value = pp_remainder(value, right);
+            } else {
+                return value;
+            }
+        }
+    }
+
+    fn unary(&mut self) -> PpInteger {
+        if self.take(TokenKind::Plus) {
+            return self.unary();
+        }
+        if self.take(TokenKind::Minus) {
+            let mut value = self.unary();
+            value.bits = value.bits.wrapping_neg();
+            return value;
+        }
+        if self.take(TokenKind::Bang) {
+            return PpInteger::from_bool(!self.unary().is_true());
+        }
+        if self.take(TokenKind::Tilde) {
+            let mut value = self.unary();
+            value.bits = !value.bits;
+            return value;
+        }
+        self.primary()
+    }
+
+    fn primary(&mut self) -> PpInteger {
+        let Some(token) = self.tokens.get(self.index) else {
+            return PpInteger::ZERO;
+        };
+        if token.kind == TokenKind::LParen {
+            self.index += 1;
+            let value = self.conditional();
+            let _ = self.take(TokenKind::RParen);
+            return value;
+        }
+        self.index += 1;
+        match token.kind {
+            TokenKind::IntLiteral => parse_pp_integer(token_lexeme(token, self.source)),
+            TokenKind::CharLiteral => parse_pp_character(token_lexeme(token, self.source)),
+            _ => PpInteger::ZERO,
+        }
     }
 }
 
-fn evaluate_if_unary(tokens: &[Token], i: &mut usize, macros: &MacroMap, source: &str) -> bool {
-    if *i >= tokens.len() {
-        return false;
+fn pp_divide(left: PpInteger, right: PpInteger) -> PpInteger {
+    let unsigned = left.unsigned || right.unsigned;
+    if right.bits == 0 {
+        return PpInteger { bits: 0, unsigned };
     }
-    if tokens[*i].kind == TokenKind::Bang {
-        *i += 1;
-        return !evaluate_if_unary(tokens, i, macros, source);
-    }
-    evaluate_if_primary(tokens, i, macros, source)
+    let bits = if unsigned {
+        left.bits / right.bits
+    } else {
+        let dividend = left.bits as i64;
+        let divisor = right.bits as i64;
+        if dividend == i64::MIN && divisor == -1 {
+            i64::MIN as u64
+        } else {
+            (dividend / divisor) as u64
+        }
+    };
+    PpInteger { bits, unsigned }
 }
 
-fn evaluate_if_primary(tokens: &[Token], i: &mut usize, macros: &MacroMap, source: &str) -> bool {
-    if *i >= tokens.len() {
-        return false;
+fn pp_remainder(left: PpInteger, right: PpInteger) -> PpInteger {
+    let unsigned = left.unsigned || right.unsigned;
+    if right.bits == 0 {
+        return PpInteger { bits: 0, unsigned };
     }
-    let tok = &tokens[*i];
-    let text = token_lexeme(tok, source);
-
-    // defined(NAME)
-    if text == "defined" && *i + 2 < tokens.len() && tokens[*i + 1].kind == TokenKind::LParen {
-        *i += 2; // skip defined and (
-        let name = token_lexeme(&tokens[*i], source);
-        *i += 1;
-        if *i < tokens.len() && tokens[*i].kind == TokenKind::RParen {
-            *i += 1;
+    let bits = if unsigned {
+        left.bits % right.bits
+    } else {
+        let dividend = left.bits as i64;
+        let divisor = right.bits as i64;
+        if dividend == i64::MIN && divisor == -1 {
+            0
+        } else {
+            (dividend % divisor) as u64
         }
-        return macros.contains(name);
-    }
+    };
+    PpInteger { bits, unsigned }
+}
 
-    // Integer constant
-    if let Ok(val) = text.parse::<i64>() {
-        *i += 1;
-        return val != 0;
+fn parse_pp_integer(spelling: &str) -> PpInteger {
+    let suffix_start = spelling
+        .char_indices()
+        .rev()
+        .find(|(_, character)| !matches!(character, 'u' | 'U' | 'l' | 'L'))
+        .map_or(0, |(index, character)| index + character.len_utf8());
+    let (digits, suffix) = spelling.split_at(suffix_start);
+    let explicitly_unsigned = suffix
+        .chars()
+        .any(|character| matches!(character, 'u' | 'U'));
+    let (radix, digits) = if let Some(rest) = digits
+        .strip_prefix("0x")
+        .or_else(|| digits.strip_prefix("0X"))
+    {
+        (16, rest)
+    } else if let Some(rest) = digits
+        .strip_prefix("0b")
+        .or_else(|| digits.strip_prefix("0B"))
+    {
+        (2, rest)
+    } else if digits.len() > 1 && digits.starts_with('0') {
+        (8, &digits[1..])
+    } else {
+        (10, digits)
+    };
+    let bits = u64::from_str_radix(digits, radix).unwrap_or(0);
+    PpInteger {
+        bits,
+        unsigned: explicitly_unsigned || (radix != 10 && bits > i64::MAX as u64),
     }
+}
 
-    // Identifier (undefined macro → 0 per C standard)
-    if tok.kind == TokenKind::Identifier {
-        *i += 1;
-        return false;
+fn parse_pp_character(spelling: &str) -> PpInteger {
+    let inner = spelling
+        .strip_prefix('\'')
+        .and_then(|value| value.strip_suffix('\''))
+        .unwrap_or(spelling);
+    let value = match inner.as_bytes() {
+        [b'\\', b'n'] => b'\n',
+        [b'\\', b'r'] => b'\r',
+        [b'\\', b't'] => b'\t',
+        [b'\\', b'0'] => 0,
+        [b'\\', escaped] => *escaped,
+        [single] => *single,
+        _ => 0,
+    };
+    PpInteger {
+        bits: u64::from(value),
+        unsigned: false,
     }
+}
 
-    // '(' expr ')'
-    if tok.kind == TokenKind::LParen {
-        *i += 1;
-        let val = evaluate_if_or(tokens, i, macros, source);
-        if *i < tokens.len() && tokens[*i].kind == TokenKind::RParen {
-            *i += 1;
-        }
-        return val;
-    }
-
-    *i += 1;
-    false
+fn evaluate_if_expr(tokens: &[Token], source: &str) -> bool {
+    IfExpression::new(tokens, source).conditional().is_true()
 }
 
 /// Extract parameter names from a function-like macro body.
