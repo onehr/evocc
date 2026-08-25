@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.5** | **Authoritative reference** | **2026-08-25**
+**Revision 1.9.6** | **Authoritative reference** | **2026-08-26**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2799,7 +2799,11 @@ The operation is computed in infinite precision, the result is converted to the
 pointee type as if by assignment (wrapping) and stored through `p`, and the call
 yields `_Bool` `1` when the infinite-precision result is not representable in the
 pointee type, else `0`. Both operands and `p` are evaluated exactly once, left to
-right. The call is never an integer constant expression. `__builtin_*_overflow_p`
+right. The call is never an integer constant expression. A `p` whose pointee is
+`const`-qualified is `E2913` at the third operand (both oracles reject it).
+`__int128` operands or pointee are `E2913` in this profile (both oracles accept
+them; the cohort never uses them, and 10.1.5 keeps `__int128` value semantics
+closed), so the profile fails closed rather than half-implements them. `__builtin_*_overflow_p`
 is out of this profile (`ORACLE_CONFLICT`: Clang-19 does not provide it; the
 cohort does not use it). Measured in `.evidence/builtin-probes/20260825-2c23684c/`
 (`ovf.c`): `mul(70000, 70000) -> int` is `1` with the wrapped `605032704` stored,
@@ -2838,8 +2842,18 @@ Lowering to EvoIR is a separate stage: until Section 4 specifies an `asm`
 operation, lowering reports `E3021` (`not-lowered: asm`) and fails closed;
 the C-HIR interpreter reports the same code when it reaches one.
 
-Errors: a template naming an unknown operand or a non-lvalue output is
-`E2914` (`malformed-asm`) at the operand's span.
+Errors (`E2914`, `malformed-asm`), each at the span named: an output operand
+that is not a modifiable lvalue, at the operand expression; a `%[name]` that
+names no operand or label, at the template string literal; a qualifier written
+twice, at the second qualifier; an `asm goto` label that does not resolve, at
+the label operand; a labels section without `goto`, at the fourth colon.
+
+Lossless means: the qualifier spellings and `asm`/`__asm__` spelling as
+written, the template as the single concatenated string the assembler will
+see (the individual string-literal pieces are not kept), every operand's
+symbolic name, constraint text and expression, clobber strings in order, and
+label names. The keyword-alias and piece spellings are the only things the
+representation drops.
 
 ### 10.2 EvoIR to EvoMIR Extraction Contract
 
@@ -3415,6 +3429,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.6 | 2026-08-26 | Closes the five gaps the checked-arithmetic/asm window reported: `E2914` spans per case, what lossless `asm` keeps and drops, `const` pointee and `__int128` operands as `E2913`. Contract out-of-scope text corrected from `inline asm` to `asm lowering`. |
 | 1.9.5 | 2026-08-25 | Freezes `_Static_assert` diagnostics (`E2911`, `E2912`) and the non-arithmetic `__builtin_expect` operand (`E2913`), adds 10.1.15 checked arithmetic builtins and 10.1.16 GNU `asm` at the front-end boundary with measured oracle semantics, both fail-closed in lowering (`E3020`, `E3021`) until Section 4 gains the operations. Added because 18 and 12 kernel parse lanes stop on them. |
 | 1.9.4 | 2026-08-25 | Adds 10.1.14: `__builtin_expect`, `__builtin_constant_p` and `__alignof__` resolved by the front end with rules measured in the sealed oracle image, two recorded `ORACLE_CONFLICT`s resolved to the documented-permitted answer, and `E2909`/`E2910`. Pointer-declarator attributes are preserved and never applied. Added because 28 of 30 kernel parse lanes stop on these builtins. |
 | 1.9.3 | 2026-08-25 | Adds the pointer-declarator attribute position to 10.1.9: after `*` inside a pointer declarator the attribute is a type attribute of that pointer type. Added because two kernel parse lanes stop on `void * __attribute__((__warn_unused_result__)) ERR_PTR(long)`. |
