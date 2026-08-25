@@ -518,8 +518,9 @@ fn assert_unnamed_parameter(source: &str, expected: UnnamedParameterShape) {
     match expected {
         UnnamedParameterShape::Pointer => {
             assert_eq!(span_text(source, parameter.span), "int *");
-            let [WrittenDeclaratorLayer::Pointer { qualifiers, span }] =
-                parameter.written.layers.as_slice()
+            let [WrittenDeclaratorLayer::Pointer {
+                qualifiers, span, ..
+            }] = parameter.written.layers.as_slice()
             else {
                 panic!("unnamed pointer must retain exactly one written pointer layer");
             };
@@ -553,6 +554,7 @@ fn assert_unnamed_parameter(source: &str, expected: UnnamedParameterShape) {
             let [WrittenDeclaratorLayer::Pointer {
                 qualifiers,
                 span: pointer_span,
+                ..
             }, WrittenDeclaratorLayer::Function {
                 span: function_span,
             }] = parameter.written.layers.as_slice()

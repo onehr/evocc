@@ -641,6 +641,9 @@ impl TypeSpecifier {
 pub enum WrittenDeclaratorLayer {
     Pointer {
         qualifiers: Qualifiers,
+        /// Attributes written after this pointer's `*`. They belong only to
+        /// this layer and are preserved without semantic application.
+        attributes: Vec<Attribute>,
         span: SourceSpan,
     },
     Array {
@@ -686,6 +689,8 @@ pub enum AttributePlacement {
     Enumerator,
     /// In a type name.
     TypeName,
+    /// After `*` and its qualifiers, before the rest of the declarator.
+    PointerDeclarator,
 }
 
 impl AttributePlacement {
@@ -703,6 +708,7 @@ impl AttributePlacement {
             Self::Label => "label",
             Self::Enumerator => "enumerator",
             Self::TypeName => "type-name",
+            Self::PointerDeclarator => "pointer-declarator",
         }
     }
 }
@@ -1051,11 +1057,13 @@ impl<'unit, 'arena> IntoIterator for &'unit CHirUnit<'arena> {
 fn inventory_of_declaration(declaration: &CHirDecl<'_>, inventory: &mut AttributeInventory) {
     match declaration {
         CHirDecl::Function(function) => {
+            inventory_of_written(&function.written, inventory);
             for attribute in &function.attributes {
                 inventory.record(attribute);
             }
             if let ParameterSyntax::Prototype { parameters, .. } = &function.parameters {
                 for parameter in parameters {
+                    inventory_of_written(&parameter.written, inventory);
                     for attribute in &parameter.attributes {
                         inventory.record(attribute);
                     }
@@ -1063,11 +1071,13 @@ fn inventory_of_declaration(declaration: &CHirDecl<'_>, inventory: &mut Attribut
             }
         }
         CHirDecl::Object(object) => {
+            inventory_of_written(&object.written, inventory);
             for attribute in &object.attributes {
                 inventory.record(attribute);
             }
         }
         CHirDecl::Typedef(typedef) => {
+            inventory_of_written(&typedef.written, inventory);
             for attribute in &typedef.attributes {
                 inventory.record(attribute);
             }
@@ -1079,6 +1089,7 @@ fn inventory_of_declaration(declaration: &CHirDecl<'_>, inventory: &mut Attribut
             match &tag.members {
                 TagMembers::Struct(members) | TagMembers::Union(members) => {
                     for member in members {
+                        inventory_of_written(&member.written, inventory);
                         for attribute in &member.attributes {
                             inventory.record(attribute);
                         }
@@ -1092,6 +1103,16 @@ fn inventory_of_declaration(declaration: &CHirDecl<'_>, inventory: &mut Attribut
                     }
                 }
                 TagMembers::Incomplete => {}
+            }
+        }
+    }
+}
+
+fn inventory_of_written(written: &WrittenDeclarator, inventory: &mut AttributeInventory) {
+    for layer in &written.layers {
+        if let WrittenDeclaratorLayer::Pointer { attributes, .. } = layer {
+            for attribute in attributes {
+                inventory.record(attribute);
             }
         }
     }
@@ -1128,26 +1149,37 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
             );
         }
     };
+    let written_attribute_lines = |out: &mut String, written: &WrittenDeclarator| {
+        for layer in &written.layers {
+            if let WrittenDeclaratorLayer::Pointer { attributes, .. } = layer {
+                attribute_lines(out, attributes);
+            }
+        }
+    };
     for declaration in unit.iter() {
         match declaration {
             CHirDecl::Function(function) => {
                 let _ = writeln!(out, "function {}", function.name.spelling);
+                written_attribute_lines(&mut out, &function.written);
                 attribute_lines(&mut out, &function.attributes);
                 if let ParameterSyntax::Prototype { parameters, .. } = &function.parameters {
                     for parameter in parameters {
                         if let Some(name) = &parameter.name {
                             let _ = writeln!(out, "  parameter {}", name.spelling);
                         }
+                        written_attribute_lines(&mut out, &parameter.written);
                         attribute_lines(&mut out, &parameter.attributes);
                     }
                 }
             }
             CHirDecl::Object(object) => {
                 let _ = writeln!(out, "object {}", object.name.spelling);
+                written_attribute_lines(&mut out, &object.written);
                 attribute_lines(&mut out, &object.attributes);
             }
             CHirDecl::Typedef(typedef) => {
                 let _ = writeln!(out, "typedef {}", typedef.name.spelling);
+                written_attribute_lines(&mut out, &typedef.written);
                 attribute_lines(&mut out, &typedef.attributes);
             }
             CHirDecl::Tag(tag) => {
@@ -1165,6 +1197,7 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
                                 .as_ref()
                                 .map_or("<anonymous>", |name| name.spelling.as_str());
                             let _ = writeln!(out, "  member {name}");
+                            written_attribute_lines(&mut out, &member.written);
                             attribute_lines(&mut out, &member.attributes);
                         }
                     }

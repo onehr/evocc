@@ -72,7 +72,12 @@ fn aligned_on_a_pointer_declarator_is_preserved_but_never_applied() {
         output.contains("preserved-not-applied: aligned x1"),
         "{output}"
     );
-    assert!(!output.contains("applied: aligned"), "{output}");
+    assert!(
+        output
+            .lines()
+            .all(|line| !line.starts_with("applied: aligned")),
+        "{output}"
+    );
 }
 
 #[test]
@@ -80,5 +85,10 @@ fn malformed_pointer_attribute_reports_the_attribute_diagnostic() {
     let arena = Arena::default();
     let error = parse("void * __attribute__((unused),) f(void);\n", &arena)
         .expect_err("malformed pointer attribute must be rejected");
+    assert!(error.starts_with("E2903:"), "expected E2903, got {error}");
+
+    let arena = Arena::default();
+    let error = parse("void * __attribute__((aligned(3))) f(void);\n", &arena)
+        .expect_err("invalid pointer alignment must be rejected");
     assert!(error.starts_with("E2903:"), "expected E2903, got {error}");
 }

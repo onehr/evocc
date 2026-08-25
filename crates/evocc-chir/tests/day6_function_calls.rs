@@ -663,6 +663,7 @@ fn program_with_options(
                     layers: if matches!(fault, AddFault::ForgedWrittenDeclarator) && symbol == add {
                         vec![WrittenDeclaratorLayer::Pointer {
                             qualifiers: Qualifiers::default(),
+                            attributes: Vec::new(),
                             span: at,
                         }]
                     } else {

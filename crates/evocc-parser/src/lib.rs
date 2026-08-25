@@ -40,6 +40,7 @@ pub struct ParseDiagnostic {
 enum DerivedDeclarator {
     Pointer {
         qualifiers: Qualifiers,
+        attributes: Vec<Attribute>,
         span: SourceSpan,
     },
     Array {
@@ -2874,6 +2875,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         ty
     }
 
+    /// Pointer-position attributes are never applied, but an `aligned`
+    /// argument must still satisfy the attribute grammar's representability
+    /// and power-of-two constraint.
+    fn validate_pointer_attributes(&mut self, attributes: &[Attribute]) {
+        for attribute in attributes {
+            if attribute.name == "aligned" {
+                let _ = self.aligned_bytes(attribute);
+            }
+        }
+    }
+
     /// Apply `packed` and `aligned` written on a tag itself.
     fn apply_attributes_to_tag(&mut self, tag: TagId, attributes: &mut [Attribute]) {
         for attribute in attributes.iter_mut() {
@@ -3986,12 +3998,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         while self.peek_kind() == Some(TokenKind::Star) {
             let star = self.advance().expect("peeked star");
             let qualifiers = self.parse_qualifiers();
+            let attributes = self.parse_attribute_specifiers(AttributePlacement::PointerDeclarator);
+            self.validate_pointer_attributes(&attributes);
             let end = self
                 .tokens
                 .get(self.pos.saturating_sub(1))
                 .map_or(star.span, |token| token.span);
             pointers.push(DerivedDeclarator::Pointer {
                 qualifiers,
+                attributes,
                 span: self.merge_span(star.span, end),
             });
         }
@@ -4099,12 +4114,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         while self.peek_kind() == Some(TokenKind::Star) {
             let star = self.advance().expect("peeked star");
             let qualifiers = self.parse_qualifiers();
+            let attributes = self.parse_attribute_specifiers(AttributePlacement::PointerDeclarator);
+            self.validate_pointer_attributes(&attributes);
             let end = self
                 .tokens
                 .get(self.pos.saturating_sub(1))
                 .map_or(star.span, |t| t.span);
             pointers.push(DerivedDeclarator::Pointer {
                 qualifiers,
+                attributes,
                 span: self.merge_span(star.span, end),
             });
         }
@@ -4487,12 +4505,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             layers: derived
                 .iter()
                 .map(|layer| match layer {
-                    DerivedDeclarator::Pointer { qualifiers, span } => {
-                        WrittenDeclaratorLayer::Pointer {
-                            qualifiers: *qualifiers,
-                            span: *span,
-                        }
-                    }
+                    DerivedDeclarator::Pointer {
+                        qualifiers,
+                        attributes,
+                        span,
+                    } => WrittenDeclaratorLayer::Pointer {
+                        qualifiers: *qualifiers,
+                        attributes: attributes.clone(),
+                        span: *span,
+                    },
                     DerivedDeclarator::Array { bound, span } => WrittenDeclaratorLayer::Array {
                         bound: bound.clone(),
                         span: *span,
