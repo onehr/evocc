@@ -117,6 +117,7 @@ fn eval_integer_constant(
         CHirExpr::FloatLit(_, _)
         | CHirExpr::StringLit(_, _)
         | CHirExpr::Call(_, _, _)
+        | CHirExpr::CheckedArithmetic { .. }
         | CHirExpr::Member(_, _, _)
         | CHirExpr::PtrMember(_, _, _)
         | CHirExpr::Index(_, _, _)
@@ -192,6 +193,7 @@ fn expression_size(
         | CHirExpr::Assign { facts, .. }
         | CHirExpr::MemoryAssign { facts, .. }
         | CHirExpr::MemoryRead { facts, .. }
+        | CHirExpr::CheckedArithmetic { facts, .. }
         | CHirExpr::Update { facts, .. }
         | CHirExpr::MemoryUpdate { facts, .. } => facts_size(*facts, types, target),
         CHirExpr::Cast(ty, _, _) | CHirExpr::CompoundLit(ty, _, _) => target
@@ -242,6 +244,7 @@ fn integer_expression_type(
             })
         }
         CHirExpr::MemoryRead { facts, .. }
+        | CHirExpr::CheckedArithmetic { facts, .. }
         | CHirExpr::Assign { facts, .. }
         | CHirExpr::MemoryAssign { facts, .. }
         | CHirExpr::Update { facts, .. }
@@ -321,6 +324,7 @@ fn integer_expression_type(
 fn expression_type_id(expression: &CHirExpr<'_>) -> Option<TypeId> {
     match expression {
         CHirExpr::Ident { facts, .. }
+        | CHirExpr::CheckedArithmetic { facts, .. }
         | CHirExpr::Assign { facts, .. }
         | CHirExpr::MemoryAssign { facts, .. }
         | CHirExpr::MemoryRead { facts, .. }

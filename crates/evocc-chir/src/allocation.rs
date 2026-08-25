@@ -1234,6 +1234,13 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                 }
                 work.push(WorkItem::Expression(callee));
             }
+            CHirExpr::CheckedArithmetic {
+                lhs, rhs, target, ..
+            } => {
+                work.push(WorkItem::Expression(target));
+                work.push(WorkItem::Expression(rhs));
+                work.push(WorkItem::Expression(lhs));
+            }
             CHirExpr::Assign { target, value, .. } => {
                 work.push(WorkItem::Expression(value));
                 work.push(WorkItem::Expression(target));

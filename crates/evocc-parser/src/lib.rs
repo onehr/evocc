@@ -11,14 +11,15 @@ use evocc_chir::integer::{
 use evocc_chir::{
     builtin_constant_p, AppliedAttribute, AssignmentOp, Attribute, AttributeArgument,
     AttributePlacement, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt,
-    CHirUnit, CharLit, CharPrefix, EnumeratorDecl, ExprCategory, ExprFacts, FieldProjection,
-    FloatLit, FloatSuffix, FrontEndBuiltinRecord, FunctionDecl, GenericSelectionRecord,
-    IndexProjection, InitAction, InitPlan, IntBase, IntLit, IntSuffix, MemoryPlace, ObjectDecl,
-    ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceProjection, PlaceRoot, PointerTypeDesc,
-    RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName, StorageClass, StringLit,
-    StringPrefix, SubobjectPath, SubobjectStep, SymbolData, SymbolId, SymbolKind, SymbolTable,
-    SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl, TypeofOperand, UnaryOp,
-    UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer, WrittenInitializer,
+    CHirUnit, CharLit, CharPrefix, CheckedArithmeticOp, EnumeratorDecl, ExprCategory, ExprFacts,
+    FieldProjection, FloatLit, FloatSuffix, FrontEndBuiltinRecord, FunctionDecl,
+    GenericSelectionRecord, IndexProjection, InitAction, InitPlan, IntBase, IntLit, IntSuffix,
+    MemoryPlace, ObjectDecl, ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceProjection,
+    PlaceRoot, PointerTypeDesc, RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName,
+    StorageClass, StringLit, StringPrefix, SubobjectPath, SubobjectStep, SymbolData, SymbolId,
+    SymbolKind, SymbolTable, SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl,
+    TypeofOperand, UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
+    WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_lex::{Token, TokenKind, TokenText};
@@ -262,6 +263,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__alignof__") => TokenKind::GnuAlignof,
                     Some("__builtin_expect") => TokenKind::BuiltinExpect,
                     Some("__builtin_constant_p") => TokenKind::BuiltinConstantP,
+                    Some("__builtin_add_overflow") => TokenKind::BuiltinAddOverflow,
+                    Some("__builtin_sub_overflow") => TokenKind::BuiltinSubOverflow,
+                    Some("__builtin_mul_overflow") => TokenKind::BuiltinMulOverflow,
                     _ => TokenKind::Identifier,
                 };
             }
@@ -1473,6 +1477,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::SizeOfExpr(operand, _) => self.expression_type(operand).is_some(),
             CHirExpr::Unary(UnaryOp::AddrOf | UnaryOp::Deref, _, _)
             | CHirExpr::Call(_, _, _)
+            | CHirExpr::CheckedArithmetic { .. }
             | CHirExpr::Assign { .. }
             | CHirExpr::MemoryAssign { .. }
             | CHirExpr::Update { .. }
@@ -1582,6 +1587,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .map(|value| value.mathematical_value() as f64),
             CHirExpr::StringLit(_, _)
             | CHirExpr::Call(_, _, _)
+            | CHirExpr::CheckedArithmetic { .. }
             | CHirExpr::Assign { .. }
             | CHirExpr::MemoryAssign { .. }
             | CHirExpr::Update { .. }
@@ -3787,6 +3793,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::FloatLit(_, _)
             | CHirExpr::StringLit(_, _)
             | CHirExpr::Call(_, _, _)
+            | CHirExpr::CheckedArithmetic { .. }
             | CHirExpr::Member(_, _, _)
             | CHirExpr::PtrMember(_, _, _)
             | CHirExpr::Index(_, _, _)
@@ -3872,6 +3879,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 Ok(usual_arithmetic_type(when_true, when_false))
             }
             CHirExpr::Cast(ty, _, _) => self.canonical_integer_type(*ty),
+            CHirExpr::CheckedArithmetic { .. } => Ok(CIntegerType::INT),
             CHirExpr::SizeOf(ty, _) | CHirExpr::AlignOf(ty, _) => {
                 TargetDataLayout::aarch64_unknown_linux_gnu()
                     .layout_of(&self.types, *ty)
@@ -5680,6 +5688,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 };
                 (InferredType::Canonical(*return_type), ExprCategory::Value)
             }
+            CHirExpr::CheckedArithmetic { facts, .. } => {
+                (InferredType::Canonical(facts.ty()), ExprCategory::Value)
+            }
             CHirExpr::Cast(ty, _, _) => (InferredType::Canonical(*ty), ExprCategory::Value),
             CHirExpr::SizeOf(_, _) | CHirExpr::SizeOfExpr(_, _) | CHirExpr::AlignOf(_, _) => (
                 InferredType::Integer(CIntegerType::ULONG),
@@ -6528,6 +6539,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             TokenKind::Generic => return self.parse_generic_selection(tok),
             TokenKind::BuiltinExpect => return self.parse_builtin_expect(tok),
             TokenKind::BuiltinConstantP => return self.parse_builtin_constant_p(tok),
+            TokenKind::BuiltinAddOverflow => {
+                return self.parse_checked_arithmetic(tok, CheckedArithmeticOp::Add);
+            }
+            TokenKind::BuiltinSubOverflow => {
+                return self.parse_checked_arithmetic(tok, CheckedArithmeticOp::Sub);
+            }
+            TokenKind::BuiltinMulOverflow => {
+                return self.parse_checked_arithmetic(tok, CheckedArithmeticOp::Mul);
+            }
             _ => {
                 self.report("E1003", "expected-expression", tok.span);
                 return None;
@@ -6620,6 +6640,81 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             },
             span,
         )))
+    }
+
+    fn parse_checked_arithmetic(
+        &mut self,
+        keyword: Token,
+        op: CheckedArithmeticOp,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        if self.peek_kind() != Some(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        self.advance();
+        if self.peek_kind() == Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let lhs = self.parse_argument_expression()?;
+        if !self.match_kind(TokenKind::Comma) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let rhs = self.parse_argument_expression()?;
+        if !self.match_kind(TokenKind::Comma) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let target = self.parse_argument_expression()?;
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance().expect("peeked builtin closing parenthesis");
+
+        for operand in [lhs, rhs] {
+            let Some(inferred) = self.converted_expression_type(operand) else {
+                self.report("E2913", "builtin-operand-not-convertible", operand.span());
+                return None;
+            };
+            if !matches!(
+                self.operand_type_class(inferred.ty),
+                OperandTypeClass::Integer(_)
+            ) {
+                self.report("E2913", "builtin-operand-not-convertible", operand.span());
+                return None;
+            }
+        }
+
+        let Some(target_inferred) = self.converted_expression_type(target) else {
+            self.report("E2913", "builtin-operand-not-convertible", target.span());
+            return None;
+        };
+        let OperandTypeClass::Pointer(pointer) = self.operand_type_class(target_inferred.ty) else {
+            self.report("E2913", "builtin-operand-not-convertible", target.span());
+            return None;
+        };
+        let Ok(target_integer) = self.canonical_integer_type(pointer.pointee) else {
+            self.report("E2913", "builtin-operand-not-convertible", target.span());
+            return None;
+        };
+        if target_integer == CIntegerType::BOOL {
+            self.report("E2913", "builtin-operand-not-convertible", target.span());
+            return None;
+        }
+
+        let result_ty = self.intern(TypeKind::Int(IntRank::Bool), Qualifiers::default());
+        let span = self.merge_span(keyword.span, close.span);
+        Some(self.alloc_node(CHirExpr::CheckedArithmetic {
+            op,
+            lhs,
+            rhs,
+            target,
+            target_ty: pointer.pointee,
+            facts: ExprFacts::value(result_ty),
+            span,
+        }))
     }
 
     fn parse_static_assert_declaration(&mut self) -> Option<()> {
@@ -6940,6 +7035,9 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::GnuAlignof
             | TokenKind::BuiltinExpect
             | TokenKind::BuiltinConstantP
+            | TokenKind::BuiltinAddOverflow
+            | TokenKind::BuiltinSubOverflow
+            | TokenKind::BuiltinMulOverflow
             | TokenKind::Generic
     )
 }
@@ -7293,6 +7391,23 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
         CHirExpr::Call(callee, arguments, _) => {
             CHirExpr::Call(callee, arguments.clone(), paren_span)
         }
+        CHirExpr::CheckedArithmetic {
+            op,
+            lhs,
+            rhs,
+            target,
+            target_ty,
+            facts,
+            ..
+        } => CHirExpr::CheckedArithmetic {
+            op: *op,
+            lhs,
+            rhs,
+            target,
+            target_ty: *target_ty,
+            facts: *facts,
+            span: paren_span,
+        },
         CHirExpr::Cast(ty, operand, _) => CHirExpr::Cast(*ty, operand, paren_span),
         CHirExpr::SizeOf(ty, _) => CHirExpr::SizeOf(*ty, paren_span),
         CHirExpr::SizeOfExpr(operand, _) => CHirExpr::SizeOfExpr(operand, paren_span),

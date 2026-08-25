@@ -88,3 +88,22 @@ fn the_kernel_overflow_line_parses() {
          if (__builtin_mul_overflow(factor1, factor2, &bytes)) return 1; return (int)bytes; }\n",
     );
 }
+
+#[test]
+fn checked_arithmetic_is_visible_in_the_chir_summary() {
+    let arena = Arena::default();
+    let unit = parse(
+        "int f(int a, int b) { int r; return __builtin_mul_overflow(a, b, &r); }\n",
+        &arena,
+    )
+    .expect("fixture must parse");
+    let summary = evocc_chir::render_unit_summary(&unit);
+    assert!(
+        summary.contains("checked mul("),
+        "checked operation missing from:\n{summary}"
+    );
+    assert!(
+        summary.contains(" -> *"),
+        "checked destination missing from:\n{summary}"
+    );
+}

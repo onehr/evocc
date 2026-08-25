@@ -118,6 +118,13 @@ fn assert_expr_owned(arena: &Arena, expression: &CHirExpr<'_>) {
                 assert_expr_owned(arena, argument);
             }
         }
+        CHirExpr::CheckedArithmetic {
+            lhs, rhs, target, ..
+        } => {
+            assert_expr_owned(arena, lhs);
+            assert_expr_owned(arena, rhs);
+            assert_expr_owned(arena, target);
+        }
         CHirExpr::CompoundLit(_, values, _) => {
             for value in values {
                 assert_expr_owned(arena, value);

@@ -23,14 +23,16 @@ use evocc_types::{
 
 use crate::{
     integer::{
-        enum_integer_type, eval_binary_integer, eval_unary_integer, integer_literal_value,
-        integer_type_for_rank, usual_arithmetic_type, CInteger, CIntegerType, IntegerError,
+        enum_integer_type, eval_binary_integer, eval_checked_arithmetic, eval_unary_integer,
+        integer_literal_value, integer_type_for_rank, usual_arithmetic_type, CInteger,
+        CIntegerType, IntegerError,
     },
     AllocationSiteKind, AllocationSiteManifest, AllocationSiteManifestError, AssignmentOp,
-    BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, ExprCategory,
-    ExprFacts, FunctionDecl, InitAction, MemoryPlace, ObjectDecl, ParameterSyntax, PlaceProjection,
-    PlaceRoot, PointerTypeDesc, ScalarPlace, ScopeKind, StorageClass, SubobjectPath, SubobjectStep,
-    SymbolId, SymbolKind, UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
+    BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit,
+    CheckedArithmeticOp, ExprCategory, ExprFacts, FunctionDecl, InitAction, MemoryPlace,
+    ObjectDecl, ParameterSyntax, PlaceProjection, PlaceRoot, PointerTypeDesc, ScalarPlace,
+    ScopeKind, StorageClass, SubobjectPath, SubobjectStep, SymbolId, SymbolKind, UnaryOp, UpdateOp,
+    WrittenDeclarator, WrittenDeclaratorLayer,
 };
 
 const DEFAULT_FUEL: u64 = 100_000;
@@ -623,6 +625,11 @@ enum MachineTask<'arena> {
     ApplyBinary {
         operator: BinaryOp,
         left: CValue,
+        span: SourceSpan,
+    },
+    ApplyCheckedArithmetic {
+        operator: CheckedArithmeticOp,
+        target_type: TypeId,
         span: SourceSpan,
     },
     SelectTernary {
@@ -1417,6 +1424,44 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 } => {
                     let right = pop_machine_value(&mut values, span)?;
                     values.push(self.apply_machine_binary(operator, left, right, span)?);
+                    None
+                }
+                MachineTask::ApplyCheckedArithmetic {
+                    operator,
+                    target_type,
+                    span,
+                } => {
+                    let (address, pointer_type) =
+                        expect_machine_pointer(pop_machine_value(&mut values, span)?, span)?;
+                    if pointer_type.pointee() != target_type {
+                        return Err(InterpreterError::UnsupportedExpression {
+                            feature: "inconsistent checked-arithmetic target type",
+                            span,
+                        });
+                    }
+                    let right =
+                        expect_machine_integer(pop_machine_value(&mut values, span)?, span)?;
+                    let left = expect_machine_integer(pop_machine_value(&mut values, span)?, span)?;
+                    let target_integer = self.integer_type(target_type, span)?;
+                    let (stored, overflowed) =
+                        eval_checked_arithmetic(operator, left, right, target_integer);
+                    let qualifiers = self
+                        .unit
+                        .types()
+                        .get(target_type)
+                        .ok_or(InterpreterError::UnsupportedType {
+                            ty: target_type,
+                            span,
+                        })?
+                        .qualifiers;
+                    self.store_memory_value(
+                        address,
+                        target_type,
+                        qualifiers,
+                        CValue::Integer(stored),
+                        span,
+                    )?;
+                    values.push(CValue::Integer(CInteger::int(i32::from(overflowed))));
                     None
                 }
                 MachineTask::SelectTernary {
@@ -2644,6 +2689,32 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     values: Vec::new(),
                     span,
                     expects_value: true,
+                });
+            }
+            CHirExpr::CheckedArithmetic {
+                op,
+                lhs,
+                rhs,
+                target,
+                target_ty,
+                ..
+            } => {
+                tasks.push(MachineTask::ApplyCheckedArithmetic {
+                    operator: *op,
+                    target_type: *target_ty,
+                    span,
+                });
+                tasks.push(MachineTask::EvalExpression {
+                    expression: target,
+                    allow_root_mutation: false,
+                });
+                tasks.push(MachineTask::EvalExpression {
+                    expression: rhs,
+                    allow_root_mutation: true,
+                });
+                tasks.push(MachineTask::EvalExpression {
+                    expression: lhs,
+                    allow_root_mutation: true,
                 });
             }
             CHirExpr::Cast(ty, value, _) => {
@@ -5379,6 +5450,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirExpr::FloatLit(_, _)
             | CHirExpr::StringLit(_, _)
             | CHirExpr::Call(_, _, _)
+            | CHirExpr::CheckedArithmetic { .. }
             | CHirExpr::Member(_, _, _)
             | CHirExpr::PtrMember(_, _, _)
             | CHirExpr::Index(_, _, _)
@@ -5405,6 +5477,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 .map_err(|error| self.integer_error(error, span)),
             CHirExpr::CharLit(_, _) => Ok(CIntegerType::INT),
             CHirExpr::Ident { facts, .. }
+            | CHirExpr::CheckedArithmetic { facts, .. }
             | CHirExpr::Assign { facts, .. }
             | CHirExpr::MemoryAssign { facts, .. }
             | CHirExpr::MemoryRead { facts, .. }
@@ -5922,6 +5995,13 @@ fn push_static_initializer_children<'arena>(
                 push(argument);
             }
         }
+        CHirExpr::CheckedArithmetic {
+            lhs, rhs, target, ..
+        } => {
+            push(lhs);
+            push(rhs);
+            push(target);
+        }
         CHirExpr::CompoundLit(_, elements, _) => {
             for element in elements {
                 push(element);
@@ -6069,6 +6149,13 @@ fn collect_expression_symbols<'arena>(
             for argument in arguments {
                 collect_expression_symbols(argument, output);
             }
+        }
+        CHirExpr::CheckedArithmetic {
+            lhs, rhs, target, ..
+        } => {
+            collect_expression_symbols(lhs, output);
+            collect_expression_symbols(rhs, output);
+            collect_expression_symbols(target, output);
         }
         CHirExpr::CompoundLit(_, elements, _) => {
             for element in elements {
@@ -6223,6 +6310,10 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
                     .iter()
                     .any(|argument| expression_requires_memory(unit, argument))
         }
+        // The result pointer is written even when the mathematical operation
+        // does not overflow, so checked arithmetic always selects the explicit
+        // memory task machine.
+        CHirExpr::CheckedArithmetic { .. } => true,
         CHirExpr::Assign { target, value, .. } => {
             expression_requires_memory(unit, target) || expression_requires_memory(unit, value)
         }
@@ -6433,6 +6524,13 @@ fn declaration_contains_call(declaration: &CHirDecl<'_>) -> bool {
 fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
     match expression {
         CHirExpr::Call(_, _, _) => true,
+        CHirExpr::CheckedArithmetic {
+            lhs, rhs, target, ..
+        } => {
+            expression_contains_call(lhs)
+                || expression_contains_call(rhs)
+                || expression_contains_call(target)
+        }
         CHirExpr::Unary(_, operand, _) | CHirExpr::Cast(_, operand, _) => {
             expression_contains_call(operand)
         }

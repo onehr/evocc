@@ -232,6 +232,18 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                     .collect::<Vec<_>>();
                 format!("call({callee},[{}])", arguments.join(","))
             }
+            CHirExpr::CheckedArithmetic {
+                op,
+                lhs,
+                rhs,
+                target,
+                ..
+            } => {
+                let lhs = self.expression(&format!("{path}.lhs"), lhs);
+                let rhs = self.expression(&format!("{path}.rhs"), rhs);
+                let target = self.expression(&format!("{path}.target"), target);
+                format!("checked({op:?},{lhs},{rhs},{target})")
+            }
             CHirExpr::Cast(ty, child, _) => {
                 let ty = self.type_fingerprint(*ty);
                 let child = self.expression(&format!("{path}.operand"), child);

@@ -56,6 +56,9 @@ pub enum LowerError {
         span: SourceSpan,
         feature: &'static str,
     },
+    CheckedArithmetic {
+        span: SourceSpan,
+    },
     MalformedFunction {
         function: String,
         span: SourceSpan,
@@ -85,6 +88,9 @@ impl fmt::Display for LowerError {
             Self::UnsupportedType { feature, .. }
             | Self::UnsupportedExpression { feature, .. }
             | Self::UnsupportedStatement { feature, .. } => formatter.write_str(feature),
+            Self::CheckedArithmetic { .. } => {
+                formatter.write_str("not-lowered: checked-arithmetic")
+            }
             Self::MalformedFunction {
                 function, reason, ..
             } => write!(formatter, "malformed function {function}: {reason}"),
@@ -105,7 +111,10 @@ impl LowerError {
     /// Stable diagnostic code for the C-HIR to EvoIR lowering boundary.
     #[must_use]
     pub const fn code(&self) -> &'static str {
-        "E3101"
+        match self {
+            Self::CheckedArithmetic { .. } => "E3020",
+            _ => "E3101",
+        }
     }
 
     /// Source location associated with a source-derived lowering failure.
@@ -120,6 +129,7 @@ impl LowerError {
             | Self::UnsupportedType { span, .. }
             | Self::UnsupportedExpression { span, .. }
             | Self::UnsupportedStatement { span, .. }
+            | Self::CheckedArithmetic { span }
             | Self::MalformedFunction { span, .. }
             | Self::InvalidControlFlow { span, .. }
             | Self::Layout { span, .. } => Some(*span),
@@ -380,6 +390,13 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                 for argument in arguments {
                     expression(unit, argument, out);
                 }
+            }
+            CHirExpr::CheckedArithmetic {
+                lhs, rhs, target, ..
+            } => {
+                expression(unit, lhs, out);
+                expression(unit, rhs, out);
+                expression(unit, target, out);
             }
             CHirExpr::Assign { target, value, .. } => {
                 expression(unit, target, out);
@@ -1106,6 +1123,9 @@ fn prevalidate_expr_for_lowering(
                 prevalidate_expr_for_lowering(unit, argument)?;
             }
             Ok(())
+        }
+        CHirExpr::CheckedArithmetic { span, .. } => {
+            Err(LowerError::CheckedArithmetic { span: *span })
         }
         CHirExpr::CompoundLit(_, elements, _) => {
             for element in elements {
@@ -4018,6 +4038,9 @@ impl<'a> FunctionLowerer<'a> {
                     span: *span,
                     feature: "void call used as a scalar expression",
                 }),
+            CHirExpr::CheckedArithmetic { span, .. } => {
+                Err(LowerError::CheckedArithmetic { span: *span })
+            }
             CHirExpr::Cast(target, operand, span) => {
                 if matches!(
                     self.unit.types().get(*target).map(|ty| &ty.kind),
@@ -5995,6 +6018,13 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
                 collect_calls_expr(argument, calls);
             }
         }
+        CHirExpr::CheckedArithmetic {
+            lhs, rhs, target, ..
+        } => {
+            collect_calls_expr(lhs, calls);
+            collect_calls_expr(rhs, calls);
+            collect_calls_expr(target, calls);
+        }
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::SizeOfExpr(operand, _)
@@ -6243,6 +6273,13 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
             }
             live_before_expr(callee, live);
         }
+        CHirExpr::CheckedArithmetic {
+            lhs, rhs, target, ..
+        } => {
+            live_before_expr(target, live);
+            live_before_expr(rhs, live);
+            live_before_expr(lhs, live);
+        }
         CHirExpr::CompoundLit(_, elements, _) => {
             for element in elements.iter().rev() {
                 live_before_expr(element, live);
@@ -6395,6 +6432,13 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
             for argument in arguments {
                 collect_symbols_expr(argument, symbols);
             }
+        }
+        CHirExpr::CheckedArithmetic {
+            lhs, rhs, target, ..
+        } => {
+            collect_symbols_expr(lhs, symbols);
+            collect_symbols_expr(rhs, symbols);
+            collect_symbols_expr(target, symbols);
         }
         CHirExpr::CompoundLit(_, elements, _) => {
             for element in elements {

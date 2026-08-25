@@ -339,6 +339,14 @@ pub enum BinaryOp {
     BitXorAssign,
 }
 
+/// Infinite-precision arithmetic selected by a checked GNU builtin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CheckedArithmeticOp {
+    Add,
+    Sub,
+    Mul,
+}
+
 // ---------------------------------------------------------------------------
 // CHirExpr — C expression nodes
 // ---------------------------------------------------------------------------
@@ -373,6 +381,17 @@ pub enum CHirExpr<'arena> {
         Vec<&'arena CHirExpr<'arena>>,
         SourceSpan,
     ),
+    /// Front-end-complete GNU checked arithmetic. The first two operands and
+    /// the destination pointer are evaluation roots, in that source order.
+    CheckedArithmetic {
+        op: CheckedArithmeticOp,
+        lhs: &'arena CHirExpr<'arena>,
+        rhs: &'arena CHirExpr<'arena>,
+        target: &'arena CHirExpr<'arena>,
+        target_ty: TypeId,
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
     Cast(TypeId, &'arena CHirExpr<'arena>, SourceSpan),
     SizeOf(TypeId, SourceSpan),
     SizeOfExpr(&'arena CHirExpr<'arena>, SourceSpan),
@@ -454,6 +473,7 @@ impl CHirExpr<'_> {
             | Self::Binary(_, _, _, span)
             | Self::Ternary(_, _, _, span)
             | Self::Call(_, _, span)
+            | Self::CheckedArithmetic { span, .. }
             | Self::Cast(_, _, span)
             | Self::SizeOf(_, span)
             | Self::SizeOfExpr(_, span)
@@ -1157,6 +1177,216 @@ fn inventory_of_written(written: &WrittenDeclarator, inventory: &mut AttributeIn
 #[must_use]
 pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
     use std::fmt::Write as _;
+
+    fn checked_expression(
+        expression: &CHirExpr<'_>,
+        out: &mut String,
+        seen: &mut std::collections::BTreeSet<(u32, u32, u32)>,
+    ) {
+        if let CHirExpr::CheckedArithmetic {
+            op,
+            lhs,
+            rhs,
+            target,
+            target_ty,
+            span,
+            ..
+        } = expression
+        {
+            let identity = (span.file.raw(), span.byte_start, span.byte_end);
+            if seen.insert(identity) {
+                let operation = match op {
+                    CheckedArithmeticOp::Add => "add",
+                    CheckedArithmeticOp::Sub => "sub",
+                    CheckedArithmeticOp::Mul => "mul",
+                };
+                let _ = writeln!(
+                    out,
+                    "checked {operation}({}..{}, {}..{}) -> *{}..{} target-type={}",
+                    lhs.span().byte_start,
+                    lhs.span().byte_end,
+                    rhs.span().byte_start,
+                    rhs.span().byte_end,
+                    target.span().byte_start,
+                    target.span().byte_end,
+                    target_ty.raw()
+                );
+            }
+        }
+        match expression {
+            CHirExpr::Unary(_, operand, _)
+            | CHirExpr::Cast(_, operand, _)
+            | CHirExpr::SizeOfExpr(operand, _)
+            | CHirExpr::Member(operand, _, _)
+            | CHirExpr::PtrMember(operand, _, _)
+            | CHirExpr::Update {
+                target: operand, ..
+            } => checked_expression(operand, out, seen),
+            CHirExpr::Binary(_, lhs, rhs, _)
+            | CHirExpr::Index(lhs, rhs, _)
+            | CHirExpr::Comma(lhs, rhs, _)
+            | CHirExpr::Assign {
+                target: lhs,
+                value: rhs,
+                ..
+            } => {
+                checked_expression(lhs, out, seen);
+                checked_expression(rhs, out, seen);
+            }
+            CHirExpr::Ternary(condition, when_true, when_false, _) => {
+                checked_expression(condition, out, seen);
+                checked_expression(when_true, out, seen);
+                checked_expression(when_false, out, seen);
+            }
+            CHirExpr::Call(callee, arguments, _) => {
+                checked_expression(callee, out, seen);
+                for argument in arguments {
+                    checked_expression(argument, out, seen);
+                }
+            }
+            CHirExpr::CheckedArithmetic {
+                lhs, rhs, target, ..
+            } => {
+                checked_expression(lhs, out, seen);
+                checked_expression(rhs, out, seen);
+                checked_expression(target, out, seen);
+            }
+            CHirExpr::MemoryAssign { place, value, .. } => {
+                for source in place.source_expressions() {
+                    checked_expression(source, out, seen);
+                }
+                checked_expression(value, out, seen);
+            }
+            CHirExpr::MemoryRead { place, .. } | CHirExpr::MemoryUpdate { place, .. } => {
+                for source in place.source_expressions() {
+                    checked_expression(source, out, seen);
+                }
+            }
+            CHirExpr::CompoundLit(_, elements, _) => {
+                for element in elements {
+                    checked_expression(element, out, seen);
+                }
+            }
+            CHirExpr::Lit(_, _)
+            | CHirExpr::FloatLit(_, _)
+            | CHirExpr::CharLit(_, _)
+            | CHirExpr::StringLit(_, _)
+            | CHirExpr::Ident { .. }
+            | CHirExpr::SizeOf(_, _)
+            | CHirExpr::AlignOf(_, _) => {}
+        }
+    }
+
+    fn checked_declaration(
+        declaration: &CHirDecl<'_>,
+        out: &mut String,
+        seen: &mut std::collections::BTreeSet<(u32, u32, u32)>,
+    ) {
+        match declaration {
+            CHirDecl::Object(object) => {
+                if let Some(initializer) = &object.initializer {
+                    for action in initializer.plan().actions() {
+                        if let InitAction::StoreScalar { value, .. } = action {
+                            checked_expression(value, out, seen);
+                        }
+                    }
+                }
+            }
+            CHirDecl::Function(function) => {
+                if let Some(body) = function.body {
+                    checked_statement(body, out, seen);
+                }
+            }
+            CHirDecl::Tag(tag) => match &tag.members {
+                TagMembers::Struct(members) | TagMembers::Union(members) => {
+                    for member in members {
+                        if let Some(width) = member.bit_width {
+                            checked_expression(width, out, seen);
+                        }
+                    }
+                }
+                TagMembers::Enum(enumerators) => {
+                    for enumerator in enumerators {
+                        if let Some(value) = enumerator.written_value {
+                            checked_expression(value, out, seen);
+                        }
+                    }
+                }
+                TagMembers::Incomplete => {}
+            },
+            CHirDecl::Typedef(_) => {}
+        }
+    }
+
+    fn checked_statement(
+        statement: &CHirStmt<'_>,
+        out: &mut String,
+        seen: &mut std::collections::BTreeSet<(u32, u32, u32)>,
+    ) {
+        match statement {
+            CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
+                checked_expression(expression, out, seen);
+            }
+            CHirStmt::If(condition, then_statement, else_statement, _) => {
+                checked_expression(condition, out, seen);
+                checked_statement(then_statement, out, seen);
+                if let Some(else_statement) = else_statement {
+                    checked_statement(else_statement, out, seen);
+                }
+            }
+            CHirStmt::Switch(expression, body, _)
+            | CHirStmt::While(expression, body, _)
+            | CHirStmt::Case(expression, body, _) => {
+                checked_expression(expression, out, seen);
+                checked_statement(body, out, seen);
+            }
+            CHirStmt::DoWhile(body, condition, _) => {
+                checked_statement(body, out, seen);
+                checked_expression(condition, out, seen);
+            }
+            CHirStmt::For(initializer, condition, step, body, _) => {
+                match initializer {
+                    CHirForInit::Empty => {}
+                    CHirForInit::Expression(expression) => {
+                        checked_expression(expression, out, seen);
+                    }
+                    CHirForInit::Declaration(declarations) => {
+                        for declaration in declarations {
+                            checked_declaration(declaration, out, seen);
+                        }
+                    }
+                }
+                if let Some(condition) = condition {
+                    checked_expression(condition, out, seen);
+                }
+                if let Some(step) = step {
+                    checked_expression(step, out, seen);
+                }
+                checked_statement(body, out, seen);
+            }
+            CHirStmt::Compound(items, _) => {
+                for item in items {
+                    match item {
+                        CHirBlockItem::Declaration(declaration) => {
+                            checked_declaration(declaration, out, seen);
+                        }
+                        CHirBlockItem::Statement(statement) => {
+                            checked_statement(statement, out, seen);
+                        }
+                    }
+                }
+            }
+            CHirStmt::Label(_, child, _) | CHirStmt::Default(child, _) => {
+                checked_statement(child, out, seen);
+            }
+            CHirStmt::Return(None, _)
+            | CHirStmt::Break(_)
+            | CHirStmt::Continue(_)
+            | CHirStmt::Goto(_, _)
+            | CHirStmt::Null(_) => {}
+        }
+    }
+
     let mut out = String::new();
     let attribute_lines = |out: &mut String, attributes: &[Attribute]| {
         for attribute in attributes {
@@ -1287,6 +1517,10 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
                 );
             }
         }
+    }
+    let mut rendered_checked = std::collections::BTreeSet::new();
+    for declaration in unit.iter() {
+        checked_declaration(declaration, &mut out, &mut rendered_checked);
     }
     let inventory = unit.attribute_inventory();
     for (name, count) in &inventory.applied {

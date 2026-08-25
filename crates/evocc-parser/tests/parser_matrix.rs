@@ -267,6 +267,18 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
                 .collect::<Vec<_>>()
                 .join(",")
         ),
+        CHirExpr::CheckedArithmetic {
+            op,
+            lhs,
+            rhs,
+            target,
+            ..
+        } => format!(
+            "checked({op:?},{},{},{})",
+            canonical_expr(lhs, types),
+            canonical_expr(rhs, types),
+            canonical_expr(target, types)
+        ),
         CHirExpr::Cast(ty, operand, _) => {
             format!(
                 "cast({},{})",

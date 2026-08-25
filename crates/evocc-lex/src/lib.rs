@@ -91,6 +91,10 @@ pub enum TokenKind {
     BuiltinExpect,
     /// GNU `__builtin_constant_p`, promoted only after preprocessing.
     BuiltinConstantP,
+    /// GNU checked-arithmetic builtins, promoted only after preprocessing.
+    BuiltinAddOverflow,
+    BuiltinSubOverflow,
+    BuiltinMulOverflow,
     Atomic,
     Bool,
     Complex,

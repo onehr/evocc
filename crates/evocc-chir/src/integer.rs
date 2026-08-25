@@ -6,7 +6,7 @@
 
 use evocc_types::IntRank;
 
-use crate::{BinaryOp, FloatLit, IntBase, IntLit, IntSuffix, UnaryOp};
+use crate::{BinaryOp, CheckedArithmeticOp, FloatLit, IntBase, IntLit, IntSuffix, UnaryOp};
 
 /// A C integer type in the Day 5 AArch64 GNU ABI.
 ///
@@ -164,6 +164,129 @@ impl CInteger {
         } else {
             self
         }
+    }
+}
+
+/// Evaluate a checked-arithmetic builtin without inheriting host overflow.
+///
+/// Supported C operands are at most 64 bits. Their exact signed magnitude,
+/// including the product of two `unsigned long` values, fits in `u128` even
+/// when its mathematical value does not fit in Rust's `i128`.
+#[must_use]
+pub fn eval_checked_arithmetic(
+    op: CheckedArithmeticOp,
+    lhs: CInteger,
+    rhs: CInteger,
+    target: CIntegerType,
+) -> (CInteger, bool) {
+    let lhs = SignedMagnitude::from_integer(lhs);
+    let rhs = SignedMagnitude::from_integer(rhs);
+    let exact = match op {
+        CheckedArithmeticOp::Add => lhs.add(rhs),
+        CheckedArithmeticOp::Sub => lhs.add(rhs.negated()),
+        CheckedArithmeticOp::Mul => lhs.multiply(rhs),
+    };
+    let representable = exact.is_representable(target);
+    (
+        CInteger::new(exact.wrapped_bits(target), target),
+        !representable,
+    )
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SignedMagnitude {
+    negative: bool,
+    magnitude: u128,
+}
+
+impl SignedMagnitude {
+    fn from_integer(value: CInteger) -> Self {
+        let mathematical = value.mathematical_value();
+        Self {
+            negative: mathematical < 0,
+            magnitude: mathematical.unsigned_abs(),
+        }
+        .normalized()
+    }
+
+    fn normalized(self) -> Self {
+        Self {
+            negative: self.negative && self.magnitude != 0,
+            magnitude: self.magnitude,
+        }
+    }
+
+    fn negated(self) -> Self {
+        Self {
+            negative: !self.negative,
+            magnitude: self.magnitude,
+        }
+        .normalized()
+    }
+
+    fn add(self, other: Self) -> Self {
+        if self.negative == other.negative {
+            return Self {
+                negative: self.negative,
+                magnitude: self
+                    .magnitude
+                    .checked_add(other.magnitude)
+                    .expect("the sum of two 64-bit magnitudes fits u128"),
+            }
+            .normalized();
+        }
+        if self.magnitude >= other.magnitude {
+            Self {
+                negative: self.negative,
+                magnitude: self.magnitude - other.magnitude,
+            }
+            .normalized()
+        } else {
+            Self {
+                negative: other.negative,
+                magnitude: other.magnitude - self.magnitude,
+            }
+            .normalized()
+        }
+    }
+
+    fn multiply(self, other: Self) -> Self {
+        Self {
+            negative: self.negative != other.negative,
+            magnitude: self
+                .magnitude
+                .checked_mul(other.magnitude)
+                .expect("the product of two 64-bit magnitudes fits u128"),
+        }
+        .normalized()
+    }
+
+    fn is_representable(self, target: CIntegerType) -> bool {
+        if target.is_signed() {
+            let negative_limit = 1_u128 << (target.bits() - 1);
+            if self.negative {
+                self.magnitude <= negative_limit
+            } else {
+                self.magnitude < negative_limit
+            }
+        } else {
+            !self.negative && self.magnitude <= u128::from(target.mask())
+        }
+    }
+
+    fn wrapped_bits(self, target: CIntegerType) -> u64 {
+        let modulus_mask = if target.bits() == 64 {
+            u128::from(u64::MAX)
+        } else {
+            (1_u128 << target.bits()) - 1
+        };
+        let low = self.magnitude & modulus_mask;
+        let wrapped = if self.negative {
+            ((!low).wrapping_add(1)) & modulus_mask
+        } else {
+            low
+        };
+        u64::try_from(wrapped).expect("target width is at most 64 bits")
     }
 }
 
