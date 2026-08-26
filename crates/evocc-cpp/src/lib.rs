@@ -255,9 +255,7 @@ impl MacroMap {
                             let text = tokens_to_string(&arg);
                             let str_tok = make_string_token(&text);
                             if let Some(pt) = pending_paste.take() {
-                                let prev_text = token_text(&pt);
-                                let combined = format!("{}{}", prev_text, str_text(&str_tok));
-                                result.push(make_identifier(&combined));
+                                result.push(paste_tokens(&pt, &str_tok));
                             } else {
                                 result.push(str_tok);
                             }
@@ -287,18 +285,16 @@ impl MacroMap {
                     };
                 if let Some(arg) = self.resolve_arg(tok, m, selected_args) {
                     if arg.is_empty() {
-                        // Empty expansion: if preceded by ##, drop ## and the
-                        // other token too; otherwise just skip.
-                        pending_paste = None;
+                        // An empty paste operand is a placemarker: the other
+                        // operand survives unchanged.
+                        if let Some(pt) = pending_paste.take() {
+                            result.push(pt);
+                        }
                     } else {
                         let mut expanded = arg.clone();
                         if let Some(pt) = pending_paste.take() {
                             // Paste preceding token with first expanded token
-                            let prev_text = token_text(&pt);
-                            let first_text = token_text(&expanded[0]);
-                            let combined = format!("{}{}", prev_text, first_text);
-                            let pasted = make_identifier(&combined);
-                            result.push(pasted);
+                            result.push(paste_tokens(&pt, &expanded[0]));
                             result.extend_from_slice(&expanded[1..]);
                         } else {
                             result.append(&mut expanded);
@@ -311,10 +307,7 @@ impl MacroMap {
 
             // General fallthrough: emit literally, with token pasting.
             if let Some(pt) = pending_paste.take() {
-                let prev_text = token_text(&pt);
-                let curr_text = token_text(tok);
-                let combined = format!("{}{}", prev_text, curr_text);
-                result.push(make_identifier(&combined));
+                result.push(paste_tokens(&pt, tok));
             } else {
                 result.push(tok.clone());
             }
@@ -1067,6 +1060,15 @@ impl Preprocessor {
                     }
                 }
             } else if self.cond_active() {
+                if tok.kind == TokenKind::Error {
+                    self.errors.push(PreprocessError {
+                        code: "E0001",
+                        span: tok.span,
+                        message: "invalid token".into(),
+                    });
+                    i += 1;
+                    continue;
+                }
                 // Predefined context-dependent macros are expanded inline
                 // rather than through the macro table because their values
                 // change at each use.
@@ -1173,7 +1175,12 @@ impl Preprocessor {
                                 }
                                 j += 1;
                             }
-                            if !current_arg.is_empty() {
+                            let expects_named_argument = self
+                                .macros
+                                .get(&name)
+                                .is_some_and(|macro_def| !macro_def.params.is_empty());
+                            if !current_arg.is_empty() || !args.is_empty() || expects_named_argument
+                            {
                                 args.push(current_arg);
                             }
                             i = j; // advance past ')' and arguments
@@ -2249,19 +2256,30 @@ fn tokens_to_string(tokens: &[Token]) -> String {
         .join(" ")
 }
 
+/// Re-lex a token-paste result through the production lexer. C requires the
+/// concatenated spelling to form exactly one preprocessing token.
+fn paste_tokens(left: &Token, right: &Token) -> Token {
+    let combined = format!("{}{}", token_text(left), token_text(right));
+    let mut lexer = Lexer::new(FileId::DUMMY, &combined);
+    let mut tokens = Vec::new();
+    while let Some(token) = lexer.next() {
+        if token.kind != TokenKind::Eof {
+            tokens.push(token);
+        }
+    }
+    let kind = if tokens.len() == 1 && tokens[0].kind != TokenKind::Error {
+        tokens.remove(0).kind
+    } else {
+        TokenKind::Error
+    };
+    Token::new(kind, left.span, TokenText::Decoded(combined))
+}
+
 fn make_string_token(text: &str) -> Token {
     Token::new(
         TokenKind::StringLiteral,
         SourceSpan::new(FileId::DUMMY, 0, 0, 0, 0),
         TokenText::Decoded(format!("\"{}\"", text)),
-    )
-}
-
-fn make_identifier(text: &str) -> Token {
-    Token::new(
-        TokenKind::Identifier,
-        SourceSpan::new(FileId::DUMMY, 0, 0, 0, 0),
-        TokenText::Decoded(text.to_owned()),
     )
 }
 
