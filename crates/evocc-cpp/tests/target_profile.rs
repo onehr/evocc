@@ -231,6 +231,19 @@ fn counter_increments_per_expansion() {
 }
 
 #[test]
+fn gnu_comma_paste_elides_only_an_omitted_variadic_argument() {
+    assert_eq!(
+        preprocess(concat!(
+            "#define APPLY(f, ...) f(1, ## __VA_ARGS__)\n",
+            "APPLY(a)\n",
+            "APPLY(b, 2, 3)\n",
+            "APPLY(c,)\n",
+        )),
+        "a(1)b(1,2,3)c(1,)"
+    );
+}
+
+#[test]
 fn feature_query_tables_are_digest_checked_data() {
     let attributes = fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),

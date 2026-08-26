@@ -150,12 +150,16 @@ impl MacroMap {
 
         let mut mask = vec![false; arg_count];
         for (index, token) in macro_def.body.iter().enumerate() {
-            if token.kind != TokenKind::Identifier
-                || parameter_is_quoted_or_pasted(&macro_def.body, index)
-            {
+            if token.kind != TokenKind::Identifier {
                 continue;
             }
             let spelling = token_text(token);
+            let gnu_comma_variadic = macro_def.variadic
+                && spelling == "__VA_ARGS__"
+                && parameter_uses_gnu_comma_elision(&macro_def.body, index);
+            if parameter_is_quoted_or_pasted(&macro_def.body, index) && !gnu_comma_variadic {
+                continue;
+            }
             if let Some(parameter_index) = macro_def
                 .params
                 .iter()
@@ -277,13 +281,28 @@ impl MacroMap {
 
             // Identifier — possible parameter reference
             if tok.kind == TokenKind::Identifier {
-                let selected_args =
-                    if pending_paste.is_some() || parameter_is_followed_by_paste(body, i) {
-                        args
-                    } else {
-                        prescanned_args
-                    };
-                if let Some(arg) = self.resolve_arg(tok, m, selected_args) {
+                let gnu_comma_variadic = m.variadic
+                    && token_text(tok) == "__VA_ARGS__"
+                    && parameter_uses_gnu_comma_elision(body, i);
+                let selected_args = if gnu_comma_variadic {
+                    prescanned_args
+                } else if pending_paste.is_some() || parameter_is_followed_by_paste(body, i) {
+                    args
+                } else {
+                    prescanned_args
+                };
+                if let Some(mut arg) = self.resolve_arg(tok, m, selected_args) {
+                    if gnu_comma_variadic {
+                        let comma = pending_paste
+                            .take()
+                            .expect("GNU comma elision has a preceding paste operand");
+                        if args.len() > m.params.len() {
+                            result.push(comma);
+                            result.append(&mut arg);
+                        }
+                        i += 1;
+                        continue;
+                    }
                     if arg.is_empty() {
                         // An empty paste operand is a placemarker: the other
                         // operand survives unchanged.
@@ -291,13 +310,12 @@ impl MacroMap {
                             result.push(pt);
                         }
                     } else {
-                        let mut expanded = arg.clone();
                         if let Some(pt) = pending_paste.take() {
                             // Paste preceding token with first expanded token
-                            result.push(paste_tokens(&pt, &expanded[0]));
-                            result.extend_from_slice(&expanded[1..]);
+                            result.push(paste_tokens(&pt, &arg[0]));
+                            result.extend_from_slice(&arg[1..]);
                         } else {
-                            result.append(&mut expanded);
+                            result.append(&mut arg);
                         }
                     }
                     i += 1;
@@ -360,6 +378,16 @@ fn hash_token_is_paste(body: &[Token], index: usize) -> bool {
 
 fn parameter_is_followed_by_paste(body: &[Token], index: usize) -> bool {
     hash_token_is_paste(body, index + 1)
+}
+
+fn parameter_uses_gnu_comma_elision(body: &[Token], index: usize) -> bool {
+    index
+        .checked_sub(1)
+        .is_some_and(|paste| hash_token_is_paste(body, paste))
+        && index
+            .checked_sub(2)
+            .and_then(|comma| body.get(comma))
+            .is_some_and(|token| token.kind == TokenKind::Comma)
 }
 
 fn parameter_is_quoted_or_pasted(body: &[Token], index: usize) -> bool {
