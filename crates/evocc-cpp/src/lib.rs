@@ -5,7 +5,7 @@
 use std::collections::{HashMap, HashSet};
 
 pub use evocc_common::{FileId, SourceSpan};
-use evocc_lex::universal_character_name_len_at;
+use evocc_lex::preprocessing_number_len_at;
 pub use evocc_lex::{Lexer, Token, TokenKind, TokenText};
 
 const AARCH64_UNKNOWN_LINUX_GNU: &str = "aarch64-unknown-linux-gnu";
@@ -990,10 +990,23 @@ impl Preprocessor {
                     "include" => {
                         if self.cond_active() {
                             let directive_span = tok.span;
-                            // Parse include argument: "file" or <file>
-                            if let Some((include_text, include_kind)) =
-                                read_include_argument(&raw, &mut i, source)
+                            let argument = collect_line_tokens(&raw, &mut i, source);
+                            let header = if let Some(header) = parse_header_name(&argument, source)
                             {
+                                Some(header)
+                            } else {
+                                let expanded = self
+                                    .process_impl(
+                                        TokenStream::new(argument),
+                                        source,
+                                        expanding,
+                                        false,
+                                        0,
+                                    )
+                                    .into_vec();
+                                parse_header_name(&expanded, source)
+                            };
+                            if let Some((include_text, include_kind)) = header {
                                 let path = resolve_include(
                                     &include_text,
                                     include_kind,
@@ -2427,16 +2440,41 @@ fn str_text(tok: &Token) -> String {
     }
 }
 
-/// Concatenate the text of all tokens in a slice (used for stringification).
+/// Spell a macro argument for `#` stringification.
+///
+/// Whitespace between preprocessing tokens collapses to one space, while
+/// adjacent source tokens remain adjacent. Backslashes and quotes are escaped
+/// only inside character/string literal spellings; an `other` backslash token
+/// is preserved verbatim, matching the preprocessing-token grammar.
 fn tokens_to_string(tokens: &[Token]) -> String {
-    tokens
-        .iter()
-        .map(|t| match &t.text {
-            TokenText::Decoded(s) => s.as_str(),
-            TokenText::Borrowed => "",
-        })
-        .collect::<Vec<&str>>()
-        .join(" ")
+    let mut result = String::new();
+    for (index, token) in tokens.iter().enumerate() {
+        if index > 0 && tokens_need_stringify_space(&tokens[index - 1], token) {
+            result.push(' ');
+        }
+        let spelling = token_text(token);
+        if matches!(
+            token.kind,
+            TokenKind::CharLiteral | TokenKind::StringLiteral
+        ) {
+            for character in spelling.chars() {
+                if matches!(character, '\\' | '"') {
+                    result.push('\\');
+                }
+                result.push(character);
+            }
+        } else {
+            result.push_str(&spelling);
+        }
+    }
+    result
+}
+
+fn tokens_need_stringify_space(left: &Token, right: &Token) -> bool {
+    left.span.file == FileId::DUMMY
+        || right.span.file == FileId::DUMMY
+        || left.span.file != right.span.file
+        || left.span.byte_end != right.span.byte_start
 }
 
 /// Re-lex a token-paste result. The production lexer recognizes complete C
@@ -2453,7 +2491,7 @@ fn paste_tokens(left: &Token, right: &Token, operator_span: SourceSpan) -> Token
     }
     let kind = if tokens.len() == 1 && tokens[0].kind != TokenKind::Error {
         tokens.remove(0).kind
-    } else if is_preprocessing_number(&combined) {
+    } else if preprocessing_number_len_at(&combined, 0) == Some(combined.len()) {
         TokenKind::PpNumber
     } else {
         TokenKind::Error
@@ -2474,45 +2512,6 @@ fn invalid_paste_spelling(token: &Token) -> Option<&str> {
         return None;
     };
     text.strip_prefix(INVALID_PASTE_MARKER_PREFIX)
-}
-
-fn is_preprocessing_number(spelling: &str) -> bool {
-    let Some(first) = spelling.chars().next() else {
-        return false;
-    };
-    if !first.is_ascii_digit() {
-        return false;
-    }
-
-    let mut position = first.len_utf8();
-    while position < spelling.len() {
-        if let Some(length) = universal_character_name_len_at(spelling, position) {
-            position += length;
-            continue;
-        }
-        let character = spelling[position..]
-            .chars()
-            .next()
-            .expect("position is within the preprocessing number");
-        position += character.len_utf8();
-        if matches!(character, 'e' | 'E' | 'p' | 'P')
-            && spelling[position..]
-                .chars()
-                .next()
-                .is_some_and(|next| matches!(next, '+' | '-'))
-        {
-            position += 1;
-        } else if character == '.'
-            || character == '_'
-            || character == '$'
-            || character.is_alphanumeric()
-        {
-            continue;
-        } else {
-            return false;
-        }
-    }
-    true
 }
 
 fn make_string_token(text: &str) -> Token {

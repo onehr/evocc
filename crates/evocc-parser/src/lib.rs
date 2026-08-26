@@ -246,17 +246,17 @@ pub struct Parser<'src, 'arena> {
 
 impl<'src, 'arena> Parser<'src, 'arena> {
     pub fn new(mut tokens: Vec<Token>, file: FileId, source: &'src str) -> Self {
-        // A pasted pp-number remains a preprocessing token while macros can
-        // still consume it. If it survives to this boundary, translation
-        // phase 7 cannot convert it to a C token and must diagnose it before
-        // syntactic parsing begins.
+        // Preprocessing numbers and `other` characters remain available to
+        // macro expansion through translation phase 4. If either survives to
+        // this phase-7 boundary, it has no C-token form and is diagnosed at
+        // the exact preserved token rather than leaking into syntax errors.
         let lexical_diagnostic = tokens
             .iter()
-            .find(|token| token.kind == TokenKind::PpNumber)
+            .find(|token| matches!(token.kind, TokenKind::PpNumber | TokenKind::PpOther))
             .map(|token| ParseDiagnostic {
                 span: token.span,
-                code: "E0001",
-                message: "invalid token".to_owned(),
+                code: "E0112",
+                message: "stray-token".to_owned(),
             });
         // GNU contextual spellings must remain identifiers through
         // preprocessing so they can be macro-expanded or token-pasted. Turn

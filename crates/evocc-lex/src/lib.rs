@@ -175,6 +175,10 @@ pub enum TokenKind {
     /// literal token. The preprocessor preserves it until its consuming
     /// context performs the required re-lexing.
     PpNumber,
+    /// A non-whitespace character that is not another preprocessing-token
+    /// production. Translation phase 4 must preserve it for macro expansion,
+    /// pasting, and stringification; phase 7 diagnoses it if it survives.
+    PpOther,
     Hash,
     HashHash,
 }
@@ -264,6 +268,178 @@ pub fn universal_character_name_len_at(source: &str, pos: usize) -> Option<usize
     let end = pos + 2 + digits;
     (end <= bytes.len() && bytes[pos + 2..end].iter().all(u8::is_ascii_hexdigit))
         .then_some(2 + digits)
+}
+
+/// Return the byte length of the preprocessing number beginning at `pos`.
+///
+/// This is the spelling grammar from C11 6.4 rather than the narrower C
+/// integer/floating-constant grammar. Keeping it shared prevents the lexer
+/// and token-paste re-lexer from disagreeing about values such as `.5foo` or
+/// `1.2.3e+x`.
+#[must_use]
+pub fn preprocessing_number_len_at(source: &str, pos: usize) -> Option<usize> {
+    let bytes = source.as_bytes();
+    let first = *bytes.get(pos)?;
+    let mut cursor = if first.is_ascii_digit() {
+        pos + 1
+    } else if first == b'.' && bytes.get(pos + 1).is_some_and(u8::is_ascii_digit) {
+        pos + 2
+    } else {
+        return None;
+    };
+
+    while cursor < source.len() {
+        if let Some(length) = universal_character_name_len_at(source, cursor) {
+            cursor += length;
+            continue;
+        }
+        let character = source[cursor..]
+            .chars()
+            .next()
+            .expect("cursor is within the preprocessing number");
+        cursor += character.len_utf8();
+        if matches!(character, 'e' | 'E' | 'p' | 'P')
+            && source[cursor..]
+                .chars()
+                .next()
+                .is_some_and(|next| matches!(next, '+' | '-'))
+        {
+            cursor += 1;
+        } else if character == '.'
+            || character == '_'
+            || character == '$'
+            || character.is_alphanumeric()
+        {
+            continue;
+        } else {
+            cursor -= character.len_utf8();
+            break;
+        }
+    }
+    Some(cursor - pos)
+}
+
+fn classify_c_number(spelling: &str) -> Option<TokenKind> {
+    if is_c_integer_constant(spelling) {
+        Some(TokenKind::IntLiteral)
+    } else if is_c_floating_constant(spelling) {
+        Some(TokenKind::FloatLiteral)
+    } else {
+        None
+    }
+}
+
+fn split_integer_suffix(spelling: &str) -> (&str, &str) {
+    let suffix_start = spelling
+        .char_indices()
+        .find_map(|(index, character)| matches!(character, 'u' | 'U' | 'l' | 'L').then_some(index))
+        .unwrap_or(spelling.len());
+    spelling.split_at(suffix_start)
+}
+
+fn valid_integer_suffix(suffix: &str) -> bool {
+    matches!(
+        suffix.to_ascii_lowercase().as_str(),
+        "" | "u" | "l" | "ul" | "lu" | "ll" | "ull" | "llu"
+    )
+}
+
+fn is_c_integer_constant(spelling: &str) -> bool {
+    let (digits, suffix) = split_integer_suffix(spelling);
+    if digits.is_empty() || !valid_integer_suffix(suffix) {
+        return false;
+    }
+    if let Some(hex) = digits
+        .strip_prefix("0x")
+        .or_else(|| digits.strip_prefix("0X"))
+    {
+        return !hex.is_empty() && hex.bytes().all(|byte| byte.is_ascii_hexdigit());
+    }
+    if let Some(binary) = digits
+        .strip_prefix("0b")
+        .or_else(|| digits.strip_prefix("0B"))
+    {
+        return !binary.is_empty() && binary.bytes().all(|byte| matches!(byte, b'0' | b'1'));
+    }
+    if digits.starts_with('0') {
+        digits.bytes().all(|byte| matches!(byte, b'0'..=b'7'))
+    } else {
+        digits.bytes().all(|byte| byte.is_ascii_digit())
+    }
+}
+
+fn strip_float_suffix(spelling: &str) -> &str {
+    spelling
+        .char_indices()
+        .next_back()
+        .filter(|(_, character)| matches!(character, 'f' | 'F' | 'l' | 'L'))
+        .map_or(spelling, |(index, _)| &spelling[..index])
+}
+
+fn consume_ascii_digits(bytes: &[u8], cursor: &mut usize, predicate: fn(u8) -> bool) -> usize {
+    let start = *cursor;
+    while bytes.get(*cursor).is_some_and(|byte| predicate(*byte)) {
+        *cursor += 1;
+    }
+    *cursor - start
+}
+
+fn consume_exponent(bytes: &[u8], cursor: &mut usize, marker: fn(u8) -> bool) -> bool {
+    if !bytes.get(*cursor).is_some_and(|byte| marker(*byte)) {
+        return false;
+    }
+    *cursor += 1;
+    if bytes
+        .get(*cursor)
+        .is_some_and(|byte| matches!(byte, b'+' | b'-'))
+    {
+        *cursor += 1;
+    }
+    consume_ascii_digits(bytes, cursor, |byte| byte.is_ascii_digit()) > 0
+}
+
+fn is_c_floating_constant(spelling: &str) -> bool {
+    let core = strip_float_suffix(spelling);
+    let bytes = core.as_bytes();
+    if bytes.is_empty() {
+        return false;
+    }
+
+    if bytes.starts_with(b"0x") || bytes.starts_with(b"0X") {
+        let mut cursor = 2;
+        let before_dot = consume_ascii_digits(bytes, &mut cursor, |byte| byte.is_ascii_hexdigit());
+        let after_dot = if bytes.get(cursor) == Some(&b'.') {
+            cursor += 1;
+            consume_ascii_digits(bytes, &mut cursor, |byte| byte.is_ascii_hexdigit())
+        } else {
+            0
+        };
+        return before_dot + after_dot > 0
+            && consume_exponent(bytes, &mut cursor, |byte| matches!(byte, b'p' | b'P'))
+            && cursor == bytes.len();
+    }
+
+    let mut cursor = 0;
+    let before_dot = consume_ascii_digits(bytes, &mut cursor, |byte| byte.is_ascii_digit());
+    let has_dot = bytes.get(cursor) == Some(&b'.');
+    let after_dot = if has_dot {
+        cursor += 1;
+        consume_ascii_digits(bytes, &mut cursor, |byte| byte.is_ascii_digit())
+    } else {
+        0
+    };
+    let has_exponent = if bytes
+        .get(cursor)
+        .is_some_and(|byte| matches!(byte, b'e' | b'E'))
+    {
+        if !consume_exponent(bytes, &mut cursor, |byte| matches!(byte, b'e' | b'E')) {
+            return false;
+        }
+        true
+    } else {
+        false
+    };
+    before_dot + after_dot > 0 && (has_dot || has_exponent) && cursor == bytes.len()
 }
 
 // ---------------------------------------------------------------------------
@@ -602,11 +778,17 @@ impl<'src> Lexer<'src> {
                 }
             }
             _ => {
-                // Any unrecognized byte is an Error token advancing over one
-                // char so the lexer never loops infinitely.
-                self.pos += 1;
+                // Translation phase 3 preserves every non-whitespace
+                // character as a preprocessing token. Consume one Unicode
+                // scalar so a later parser diagnostic points at exactly the
+                // token that survived preprocessing.
+                let character = self.source[self.pos..]
+                    .chars()
+                    .next()
+                    .expect("position is within the source");
+                self.pos += character.len_utf8();
                 self.col += 1;
-                Some(self.make_token(TokenKind::Error, start_pos, self.pos))
+                Some(self.make_token(TokenKind::PpOther, start_pos, self.pos))
             }
         }
     }
@@ -740,78 +922,13 @@ impl<'src> Lexer<'src> {
     }
 
     fn numeric_literal(&mut self, start_pos: usize) -> Token {
-        let mut is_float = false;
-        let is_hex = self.pos + 1 < self.source.len()
-            && self.source.as_bytes()[self.pos] == b'0'
-            && matches!(self.source.as_bytes()[self.pos + 1], b'x' | b'X');
-
-        if self.source.as_bytes()[self.pos] == b'.' {
-            is_float = true;
-            self.pos += 1;
-            self.col += 1;
-            self.advance_while(|byte| byte.is_ascii_digit());
-        } else if is_hex {
-            self.pos += 2;
-            self.col += 2;
-            self.advance_while(|byte| byte.is_ascii_hexdigit());
-            if self.source.as_bytes().get(self.pos) == Some(&b'.') {
-                is_float = true;
-                self.pos += 1;
-                self.col += 1;
-                self.advance_while(|byte| byte.is_ascii_hexdigit());
-            }
-        } else {
-            self.advance_while(|byte| byte.is_ascii_digit());
-            if self.source.as_bytes().get(self.pos) == Some(&b'.') {
-                is_float = true;
-                self.pos += 1;
-                self.col += 1;
-                self.advance_while(|byte| byte.is_ascii_digit());
-            }
-        }
-
-        let exponent = if is_hex { b'p' } else { b'e' };
-        if self
-            .source
-            .as_bytes()
-            .get(self.pos)
-            .is_some_and(|byte| byte.to_ascii_lowercase() == exponent)
-        {
-            is_float = true;
-            self.pos += 1;
-            self.col += 1;
-            if self
-                .source
-                .as_bytes()
-                .get(self.pos)
-                .is_some_and(|byte| matches!(byte, b'+' | b'-'))
-            {
-                self.pos += 1;
-                self.col += 1;
-            }
-            self.advance_while(|byte| byte.is_ascii_digit());
-        }
-
-        if is_float {
-            if self
-                .source
-                .as_bytes()
-                .get(self.pos)
-                .is_some_and(|byte| matches!(byte, b'f' | b'F' | b'l' | b'L'))
-            {
-                self.pos += 1;
-                self.col += 1;
-            }
-        } else {
-            self.advance_while(|byte| matches!(byte, b'u' | b'U' | b'l' | b'L'));
-        }
-
+        let length = preprocessing_number_len_at(self.source.as_ref(), start_pos)
+            .expect("numeric dispatch begins at a preprocessing number");
+        self.pos = start_pos + length;
+        self.col += self.source[start_pos..self.pos].chars().count() as u32;
+        let spelling = &self.source[start_pos..self.pos];
         self.make_token(
-            if is_float {
-                TokenKind::FloatLiteral
-            } else {
-                TokenKind::IntLiteral
-            },
+            classify_c_number(spelling).unwrap_or(TokenKind::PpNumber),
             start_pos,
             self.pos,
         )
@@ -855,15 +972,6 @@ impl<'src> Lexer<'src> {
         } else {
             false
         }
-    }
-
-    fn advance_while(&mut self, pred: fn(u8) -> bool) -> usize {
-        let bytes = self.source.as_bytes();
-        while self.pos < bytes.len() && pred(bytes[self.pos]) {
-            self.pos += 1;
-            self.col += 1;
-        }
-        self.pos
     }
 
     fn match_next(&mut self, expected: u8) -> Option<u8> {
@@ -1780,9 +1888,9 @@ mod tests {
     }
 
     #[test]
-    fn phase_two_splice_keeps_a_following_error_on_its_physical_line() {
+    fn phase_two_splice_keeps_a_following_other_token_on_its_physical_line() {
         let tokens = lex("int ok;\\\n@");
-        assert_eq!(tokens[3].kind, TokenKind::Error);
+        assert_eq!(tokens[3].kind, TokenKind::PpOther);
         assert_eq!(tokens[3].span, SourceSpan::new(FileId::new(1), 9, 10, 2, 1),);
     }
 
