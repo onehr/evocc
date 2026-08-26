@@ -461,7 +461,10 @@ pub enum CHirExpr<'arena> {
         facts: ExprFacts,
         span: SourceSpan,
     },
-    CompoundLit(TypeId, Vec<&'arena CHirExpr<'arena>>, SourceSpan),
+    /// A C compound-literal object. The normalized initializer is the sole
+    /// write authority; allocation duration is derived from the occurrence's
+    /// file/function context by the allocation manifest.
+    CompoundLit(TypeId, ObjectInitializer<'arena>, SourceSpan),
     Comma(
         &'arena CHirExpr<'arena>,
         &'arena CHirExpr<'arena>,
@@ -1374,9 +1377,11 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
                 }
             }
             CHirExpr::StatementExpr { body, .. } => checked_statement(body, out, seen),
-            CHirExpr::CompoundLit(_, elements, _) => {
-                for element in elements {
-                    checked_expression(element, out, seen);
+            CHirExpr::CompoundLit(_, initializer, _) => {
+                for action in initializer.plan().actions() {
+                    if let InitAction::StoreScalar { value, .. } = action {
+                        checked_expression(value, out, seen);
+                    }
                 }
             }
             CHirExpr::Lit(_, _)
@@ -1895,7 +1900,25 @@ mod tests {
                     span: s,
                 },
             ),
-            arena_expr(&arena, CHirExpr::CompoundLit(int_id, vec![id], s)),
+            arena_expr(
+                &arena,
+                CHirExpr::CompoundLit(
+                    int_id,
+                    ObjectInitializer::new(
+                        WrittenInitializer::Expression(id),
+                        InitPlan::new(
+                            int_id,
+                            vec![InitAction::store_scalar(
+                                SubobjectPath::root(),
+                                int_id,
+                                id,
+                                s,
+                            )],
+                        ),
+                    ),
+                    s,
+                ),
+            ),
             arena_expr(&arena, CHirExpr::Comma(id, id, s)),
         ];
 

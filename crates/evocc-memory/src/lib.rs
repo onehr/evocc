@@ -274,6 +274,7 @@ pub enum InitialState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ObjectOwner {
     Static,
+    ReadOnlyStatic,
     StringLiteral,
     Automatic { frame: FrameId, scope: ScopeId },
 }
@@ -1024,6 +1025,31 @@ impl MemoryState {
         )
     }
 
+    /// Freeze a fully initialized static object against subsequent stores.
+    pub fn freeze_static(&self, pointer: Pointer) -> Result<Self, MemoryFault> {
+        if pointer.object.is_null() {
+            return Err(MemoryFault::NullDereference { access: None });
+        }
+        let object = self
+            .objects
+            .get(&pointer.object)
+            .ok_or(MemoryFault::UnknownObject {
+                object: pointer.object,
+            })?;
+        if pointer.byte_offset != 0 || object.info.owner != ObjectOwner::Static {
+            return Err(MemoryFault::ReadOnlyObject {
+                object: pointer.object,
+            });
+        }
+        let mut next = self.clone();
+        next.objects
+            .get_mut(&pointer.object)
+            .expect("object checked immediately before cloning")
+            .info
+            .owner = ObjectOwner::ReadOnlyStatic;
+        Ok(next)
+    }
+
     pub fn allocate_string_literal(
         &self,
         origin_site: u64,
@@ -1559,7 +1585,10 @@ impl MemoryState {
             .ok_or(MemoryFault::UnknownObject {
                 object: address.object,
             })?;
-        if object.info.owner == ObjectOwner::StringLiteral {
+        if matches!(
+            object.info.owner,
+            ObjectOwner::StringLiteral | ObjectOwner::ReadOnlyStatic
+        ) {
             return Err(MemoryFault::ReadOnlyObject {
                 object: address.object,
             });

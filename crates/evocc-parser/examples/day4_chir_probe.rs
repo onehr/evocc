@@ -297,9 +297,16 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 let right = self.expression(&format!("{path}.right"), right);
                 format!("memory_{operator}({left},{right})")
             }
-            CHirExpr::CompoundLit(ty, values, _) => {
-                let values = values
+            CHirExpr::CompoundLit(ty, initializer, _) => {
+                let values = initializer
+                    .plan()
+                    .actions()
                     .iter()
+                    .filter_map(|action| match action {
+                        evocc_chir::InitAction::StoreScalar { value, .. } => Some(value),
+                        evocc_chir::InitAction::StoreString { .. }
+                        | evocc_chir::InitAction::ZeroScalar { .. } => None,
+                    })
                     .enumerate()
                     .map(|(index, value)| self.expression(&format!("{path}.value[{index}]"), value))
                     .collect::<Vec<_>>();

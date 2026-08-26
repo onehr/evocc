@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use evocc_chir::{
-    AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirStmt, ParameterSyntax, UnaryOp,
-    UpdateOp,
+    AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirStmt, InitAction,
+    ParameterSyntax, UnaryOp, UpdateOp,
 };
 use evocc_common::{Arena, FileId};
 use evocc_lex::{Lexer, TokenKind};
@@ -330,12 +330,17 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
                 .join(","),
             canonical_expr(right, types)
         ),
-        CHirExpr::CompoundLit(ty, values, _) => format!(
+        CHirExpr::CompoundLit(ty, initializer, _) => format!(
             "compound({},[{}])",
             canonical_type(*ty, types),
-            values
+            initializer
+                .plan()
+                .actions()
                 .iter()
-                .map(|value| canonical_expr(value, types))
+                .filter_map(|action| match action {
+                    InitAction::StoreScalar { value, .. } => Some(canonical_expr(value, types)),
+                    InitAction::StoreString { .. } | InitAction::ZeroScalar { .. } => None,
+                })
                 .collect::<Vec<_>>()
                 .join(",")
         ),

@@ -41,6 +41,11 @@ pub enum AllocationSiteKind<'arena> {
     Object(SymbolId),
     /// One exact string-literal expression node, not its spelling or span.
     StringLiteral(&'arena CHirExpr<'arena>),
+    /// One exact compound-literal expression and its C storage duration.
+    CompoundLiteral {
+        expression: &'arena CHirExpr<'arena>,
+        static_storage: bool,
+    },
 }
 
 impl<'arena> AllocationSiteKind<'arena> {
@@ -48,7 +53,7 @@ impl<'arena> AllocationSiteKind<'arena> {
     pub fn object_symbol(self) -> Option<SymbolId> {
         match self {
             Self::Object(symbol) => Some(symbol),
-            Self::StringLiteral(_) => None,
+            Self::StringLiteral(_) | Self::CompoundLiteral { .. } => None,
         }
     }
 
@@ -57,6 +62,18 @@ impl<'arena> AllocationSiteKind<'arena> {
         match self {
             Self::Object(_) => None,
             Self::StringLiteral(expression) => Some(expression),
+            Self::CompoundLiteral { .. } => None,
+        }
+    }
+
+    #[must_use]
+    pub fn compound_literal(self) -> Option<(&'arena CHirExpr<'arena>, bool)> {
+        match self {
+            Self::CompoundLiteral {
+                expression,
+                static_storage,
+            } => Some((expression, static_storage)),
+            Self::Object(_) | Self::StringLiteral(_) => None,
         }
     }
 }
@@ -344,6 +361,7 @@ pub struct AllocationSiteManifest<'arena> {
     sites: Vec<AllocationSite<'arena>>,
     object_sites: HashMap<SymbolId, usize>,
     string_sites: HashMap<usize, usize>,
+    compound_sites: HashMap<usize, usize>,
     string_spans: BTreeMap<SpanKey, Vec<AllocationSiteOrdinal>>,
 }
 
@@ -392,6 +410,20 @@ impl<'arena> AllocationSiteManifest<'arena> {
             return None;
         }
         self.string_sites
+            .get(&node_identity(expression))
+            .and_then(|index| self.sites.get(*index))
+    }
+
+    /// Look up a compound-literal site by exact C-HIR node identity.
+    #[must_use]
+    pub fn compound_literal_site(
+        &self,
+        expression: &CHirExpr<'arena>,
+    ) -> Option<&AllocationSite<'arena>> {
+        if !matches!(expression, CHirExpr::CompoundLit(_, _, _)) {
+            return None;
+        }
+        self.compound_sites
             .get(&node_identity(expression))
             .and_then(|index| self.sites.get(*index))
     }
@@ -558,6 +590,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
         let mut sites = Vec::with_capacity(pending.len());
         let mut object_sites = HashMap::new();
         let mut string_sites = HashMap::new();
+        let mut compound_sites = HashMap::new();
         let mut string_spans = BTreeMap::<SpanKey, Vec<AllocationSiteOrdinal>>::new();
         for (index, pending) in pending.into_iter().enumerate() {
             let ordinal = AllocationSiteOrdinal(
@@ -580,6 +613,9 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                         .or_default()
                         .push(ordinal);
                 }
+                AllocationSiteKind::CompoundLiteral { expression, .. } => {
+                    compound_sites.insert(node_identity(expression), index);
+                }
             }
             sites.push(site);
         }
@@ -588,6 +624,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             sites,
             object_sites,
             string_sites,
+            compound_sites,
             string_spans,
         })
     }
@@ -947,7 +984,11 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                 parameter.ty,
                 parameter.span,
             )?;
-            if canonical.ty != parameter.ty || parameter.specifier.type_id() != parameter.ty {
+            // `specifier.type_id()` is only the declaration-specifier base;
+            // pointer/array layers live in `written` and are already reflected
+            // in `parameter.ty`. Comparing the base directly to the completed
+            // type rejects every derived parameter declarator.
+            if canonical.ty != parameter.ty {
                 return Err(AllocationSiteManifestError::SymbolTypeMismatch {
                     symbol,
                     declaration: parameter.ty,
@@ -1412,13 +1453,20 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                     current_function,
                 });
             }
-            CHirExpr::CompoundLit(_, expressions, _) => {
-                for expression in expressions.iter().rev().copied() {
-                    work.push(WorkItem::Expression {
+            CHirExpr::CompoundLit(_, initializer, anchor) => {
+                let encounter = self.encounter()?;
+                self.strings.push(PendingSite {
+                    kind: AllocationSiteKind::CompoundLiteral {
                         expression,
-                        current_function,
-                    });
-                }
+                        static_storage: current_function.is_none(),
+                    },
+                    anchor: *anchor,
+                    encounter,
+                });
+                work.push(WorkItem::WrittenInitializer {
+                    initializer: initializer.written(),
+                    current_function,
+                });
             }
             CHirExpr::Lit(_, _)
             | CHirExpr::FloatLit(_, _)

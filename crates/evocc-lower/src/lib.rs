@@ -14,9 +14,9 @@ use evocc_chir::integer::{
 use evocc_chir::{
     AllocationSiteManifest, AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit,
     CHirStmt, CHirUnit, ExprCategory, ExprFacts, FunctionDecl, InitAction, MemoryPlace, ObjectDecl,
-    ParameterSyntax, PlaceProjection, PlaceRoot, ScalarPlace, ScopeKind, StorageClass,
-    SubobjectPath, SubobjectStep, SymbolId, SymbolKind, UnaryOp, UpdateOp, WrittenDeclarator,
-    WrittenDeclaratorLayer,
+    ObjectInitializer, ParameterSyntax, PlaceProjection, PlaceRoot, ScalarPlace, ScopeKind,
+    StorageClass, SubobjectPath, SubobjectStep, SymbolId, SymbolKind, UnaryOp, UpdateOp,
+    WrittenDeclarator, WrittenDeclaratorLayer,
 };
 use evocc_common::SourceSpan;
 use evocc_evoir::{
@@ -154,10 +154,17 @@ impl LowerError {
 struct FunctionInfo {
     name: String,
     parameter_symbols: Vec<SymbolId>,
-    parameter_types: Vec<CIntegerType>,
-    return_type: Option<CIntegerType>,
+    parameter_types: Vec<FunctionValueType>,
+    return_type: Option<FunctionValueType>,
     participant: bool,
     span: SourceSpan,
+}
+
+#[derive(Debug, Clone)]
+struct FunctionValueType {
+    source: TypeId,
+    ir: EvoIRType,
+    integer: CIntegerType,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -230,6 +237,7 @@ struct FunctionLowerer<'a> {
     info: &'a FunctionInfo,
     memory_symbols: &'a BTreeSet<SymbolId>,
     allocation_origins: &'a BTreeMap<SymbolId, u64>,
+    compound_origins: BTreeMap<usize, (u64, bool)>,
     blocks: Vec<DraftBlock>,
     next_value: u32,
     next_block: BlockId,
@@ -259,6 +267,20 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
             site.kind()
                 .object_symbol()
                 .map(|symbol| (symbol, site.ordinal().raw()))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let compound_origins = manifest
+        .sites()
+        .iter()
+        .filter_map(|site| {
+            site.kind()
+                .compound_literal()
+                .map(|(expression, static_storage)| {
+                    (
+                        expression as *const CHirExpr<'_> as usize,
+                        (site.ordinal().raw(), static_storage),
+                    )
+                })
         })
         .collect::<BTreeMap<_, _>>();
     let memory_profile = !memory_symbols.is_empty()
@@ -306,6 +328,7 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
                 info,
                 &memory_symbols,
                 &allocation_origins,
+                &compound_origins,
             )
             .lower(function)?,
         );
@@ -420,9 +443,11 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                 place(unit, memory, out);
                 expression(unit, value, out);
             }
-            CHirExpr::CompoundLit(_, elements, _) => {
-                for element in elements {
-                    expression(unit, element, out);
+            CHirExpr::CompoundLit(_, initializer, _) => {
+                for action in initializer.plan().actions() {
+                    if let InitAction::StoreScalar { value, .. } = action {
+                        expression(unit, value, out);
+                    }
                 }
             }
             CHirExpr::StatementExpr { body, .. } => statement(unit, body, out),
@@ -1152,9 +1177,11 @@ fn prevalidate_expr_for_lowering(
         CHirExpr::CheckedArithmetic { span, .. } => {
             Err(LowerError::CheckedArithmetic { span: *span })
         }
-        CHirExpr::CompoundLit(_, elements, _) => {
-            for element in elements {
-                prevalidate_expr_for_lowering(unit, element)?;
+        CHirExpr::CompoundLit(_, initializer, _) => {
+            for action in initializer.plan().actions() {
+                if let InitAction::StoreScalar { value, .. } = action {
+                    prevalidate_expr_for_lowering(unit, value)?;
+                }
             }
             Ok(())
         }
@@ -1338,7 +1365,7 @@ fn function_info(
         .kind
     {
         TypeKind::Void => None,
-        _ => Some(canonical_integer(
+        _ => Some(function_value_type(
             unit.types(),
             target,
             *return_type,
@@ -1368,7 +1395,7 @@ fn function_info(
     };
     let parameter_types = types
         .iter()
-        .map(|ty| canonical_integer(unit.types(), target, *ty, function.span))
+        .map(|ty| function_value_type(unit.types(), target, *ty, function.span))
         .collect::<Result<Vec<_>, _>>()?;
     let parameter_symbols = match &function.parameters {
         ParameterSyntax::Prototype {
@@ -1409,7 +1436,6 @@ fn function_info(
                         && scope.parent() == Some(unit.symbols().file_scope())
                         && function_scope.is_none_or(|expected| expected == symbol.scope());
                     if *canonical_type != parameter.ty
-                        || parameter.specifier.type_id() != parameter.ty
                         || !written_declarator_matches(
                             unit.types(),
                             &parameter.written,
@@ -1460,6 +1486,41 @@ fn function_info(
         participant: false,
         span: function.span,
     })
+}
+
+fn function_value_type(
+    types: &TypeInterner,
+    target: &TargetDataLayout,
+    ty: TypeId,
+    span: SourceSpan,
+) -> Result<FunctionValueType, LowerError> {
+    match types.get(ty).map(|canonical| &canonical.kind) {
+        Some(TypeKind::Pointer(pointee))
+            if !matches!(
+                types.get(*pointee).map(|ty| &ty.kind),
+                Some(TypeKind::Function { .. })
+            ) =>
+        {
+            Ok(FunctionValueType {
+                source: ty,
+                ir: EvoIRType::Ptr(AddressSpace::Generic),
+                integer: CIntegerType::ULONG,
+            })
+        }
+        Some(TypeKind::Int(_) | TypeKind::Enum(_)) => {
+            let integer = canonical_integer(types, target, ty, span)?;
+            Ok(FunctionValueType {
+                source: ty,
+                ir: bits(integer),
+                integer,
+            })
+        }
+        _ => Err(LowerError::UnsupportedType {
+            ty,
+            span,
+            feature: "function value type is neither an integer nor object pointer",
+        }),
+    }
 }
 
 fn canonical_integer(
@@ -1757,6 +1818,7 @@ impl<'a> FunctionLowerer<'a> {
         info: &'a FunctionInfo,
         memory_symbols: &'a BTreeSet<SymbolId>,
         allocation_origins: &'a BTreeMap<SymbolId, u64>,
+        compound_origins: &BTreeMap<usize, (u64, bool)>,
     ) -> Self {
         Self {
             unit,
@@ -1765,6 +1827,7 @@ impl<'a> FunctionLowerer<'a> {
             info,
             memory_symbols,
             allocation_origins,
+            compound_origins: compound_origins.clone(),
             blocks: Vec::new(),
             next_value: 0,
             next_block: 0,
@@ -1789,15 +1852,15 @@ impl<'a> FunctionLowerer<'a> {
         let mut params = Vec::new();
         let mut env = Environment::new();
         let mut entry_args = Vec::new();
-        for (index, (symbol, integer)) in self
+        for (index, (symbol, value_type)) in self
             .info
             .parameter_symbols
             .iter()
             .copied()
-            .zip(self.info.parameter_types.iter().copied())
+            .zip(self.info.parameter_types.iter())
             .enumerate()
         {
-            let ty = bits(integer);
+            let ty = value_type.ir.clone();
             params.push(FunctionParam {
                 name: format!("arg{index}"),
                 ty: ty.clone(),
@@ -1814,7 +1877,7 @@ impl<'a> FunctionLowerer<'a> {
                 EnvKey::Local(symbol),
                 BoundValue {
                     value,
-                    integer: Some(integer),
+                    integer: Some(value_type.integer),
                 },
             );
         }
@@ -1890,8 +1953,14 @@ impl<'a> FunctionLowerer<'a> {
         for state in &flow.normal {
             if self.info.return_type.is_none() || self.info.name == "main" {
                 let mut returned = Vec::new();
-                if let Some(integer) = self.info.return_type {
-                    returned.push(self.constant(state, integer, 0)?.value);
+                if let Some(value_type) = self.info.return_type.as_ref() {
+                    if matches!(value_type.ir, EvoIRType::Ptr(_)) {
+                        let value = self.fresh_value(value_type.ir.clone());
+                        self.emit(state, Inst::PtrNull(value.clone()))?;
+                        returned.push(value);
+                    } else {
+                        returned.push(self.constant(state, value_type.integer, 0)?.value);
+                    }
                 }
                 if self.info.participant {
                     returned.push(self.token(state, EnvKey::Memory)?.value);
@@ -1925,7 +1994,8 @@ impl<'a> FunctionLowerer<'a> {
         let mut returns = self
             .info
             .return_type
-            .map(|integer| vec![bits(integer)])
+            .as_ref()
+            .map(|value_type| vec![value_type.ir.clone()])
             .unwrap_or_default();
         if self.info.participant {
             returns.push(EvoIRType::Mem(Region::All));
@@ -2248,10 +2318,21 @@ impl<'a> FunctionLowerer<'a> {
             }
             CHirStmt::Return(expression, span) => {
                 let mut returned = Vec::new();
-                match (self.info.return_type, expression) {
+                match (self.info.return_type.as_ref(), expression) {
                     (Some(expected), Some(expression)) => {
                         let lowered = self.lower_expr(expression, &mut state)?;
-                        returned.push(self.cast(lowered, expected, &state)?.value);
+                        let lowered = if matches!(expected.ir, EvoIRType::Ptr(_)) {
+                            self.coerce_to_object_type(
+                                lowered,
+                                Some(expression),
+                                expected.source,
+                                *span,
+                                &state,
+                            )?
+                        } else {
+                            self.cast(lowered, expected.integer, &state)?
+                        };
+                        returned.push(lowered.value);
                     }
                     (None, None) => {}
                     _ => {
@@ -2699,7 +2780,7 @@ impl<'a> FunctionLowerer<'a> {
         &self,
         function_ty: TypeId,
         span: SourceSpan,
-    ) -> Result<(Vec<CIntegerType>, Option<CIntegerType>), LowerError> {
+    ) -> Result<(Vec<FunctionValueType>, Option<FunctionValueType>), LowerError> {
         let TypeKind::Function {
             return_type,
             parameters,
@@ -2725,7 +2806,7 @@ impl<'a> FunctionLowerer<'a> {
                 variadic: false,
             } => types
                 .iter()
-                .map(|ty| canonical_integer(self.unit.types(), self.target, *ty, span))
+                .map(|ty| function_value_type(self.unit.types(), self.target, *ty, span))
                 .collect::<Result<Vec<_>, _>>()?,
             _ => {
                 return Err(LowerError::UnsupportedType {
@@ -2737,7 +2818,7 @@ impl<'a> FunctionLowerer<'a> {
         };
         let return_type = match self.unit.types().get(*return_type).map(|ty| &ty.kind) {
             Some(TypeKind::Void) => None,
-            Some(_) => Some(canonical_integer(
+            Some(_) => Some(function_value_type(
                 self.unit.types(),
                 self.target,
                 *return_type,
@@ -2890,6 +2971,9 @@ impl<'a> FunctionLowerer<'a> {
                     });
                 }
                 lowered.value
+            }
+            PlaceRoot::CompoundLiteral { expression, .. } => {
+                self.lower_compound_literal_address(expression, state)?
             }
         };
         for projection in place.projections() {
@@ -3274,6 +3358,221 @@ impl<'a> FunctionLowerer<'a> {
             }
         }
         Ok(())
+    }
+
+    fn lower_initializer_at(
+        &mut self,
+        address: Value,
+        object_ty: TypeId,
+        initializer: &ObjectInitializer<'a>,
+        object_span: SourceSpan,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
+        for action in initializer.plan().actions() {
+            let action_span = action.span().unwrap_or(object_span);
+            let (offset, actual_ty) = subobject_offset(
+                self.unit,
+                self.target,
+                object_ty,
+                action.path(),
+                action_span,
+            )?;
+            if actual_ty != action.destination_type() {
+                return Err(LowerError::UnsupportedStatement {
+                    span: action_span,
+                    feature: "initializer destination type does not match subobject path",
+                });
+            }
+            let action_address = self.constant_offset_address(
+                address.clone(),
+                u64::try_from(offset).map_err(|_| LowerError::UnsupportedStatement {
+                    span: action_span,
+                    feature: "initializer has a negative object offset",
+                })?,
+                state,
+            )?;
+            match action {
+                InitAction::StoreScalar {
+                    destination_type,
+                    value,
+                    ..
+                } => {
+                    let lowered = self.lower_expr(value, state)?;
+                    let lowered = self.coerce_to_object_type(
+                        lowered,
+                        Some(value),
+                        *destination_type,
+                        action_span,
+                        state,
+                    )?;
+                    let volatile = self
+                        .unit
+                        .types()
+                        .get(*destination_type)
+                        .is_some_and(|ty| ty.qualifiers.is_volatile);
+                    self.emit_memory_store(
+                        action_address,
+                        lowered,
+                        *destination_type,
+                        volatile,
+                        action_span,
+                        state,
+                    )?;
+                }
+                InitAction::ZeroScalar {
+                    destination_type, ..
+                } => {
+                    let zero = match self.unit.types().get(*destination_type).map(|ty| &ty.kind) {
+                        Some(TypeKind::Pointer(_)) => {
+                            let pointer = self
+                                .fresh_value(self.c_value_type(*destination_type, action_span)?.0);
+                            self.emit(state, Inst::PtrNull(pointer.clone()))?;
+                            ExprValue {
+                                value: pointer,
+                                integer: CIntegerType::ULONG,
+                            }
+                        }
+                        _ => {
+                            let integer = canonical_integer(
+                                self.unit.types(),
+                                self.target,
+                                *destination_type,
+                                action_span,
+                            )?;
+                            self.constant(state, integer, 0)?
+                        }
+                    };
+                    self.emit_memory_store(
+                        action_address,
+                        zero,
+                        *destination_type,
+                        false,
+                        action_span,
+                        state,
+                    )?;
+                }
+                InitAction::StoreString {
+                    destination_type,
+                    literal,
+                    ..
+                } => {
+                    let (element, count) =
+                        match self.unit.types().get(*destination_type).map(|ty| &ty.kind) {
+                            Some(TypeKind::Array {
+                                element,
+                                bound: ArrayBound::Fixed(count),
+                            }) => (*element, *count),
+                            _ => {
+                                return Err(LowerError::UnsupportedStatement {
+                                    span: action_span,
+                                    feature: "string initializer destination is not a fixed array",
+                                });
+                            }
+                        };
+                    let mut units = literal
+                        .decoded_units()
+                        .ok_or(LowerError::UnsupportedStatement {
+                            span: action_span,
+                            feature: "string initializer decoding failed",
+                        })?
+                        .into_iter()
+                        .map(u8::try_from)
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(|_| LowerError::UnsupportedStatement {
+                            span: action_span,
+                            feature: "wide string unit is outside Day 7",
+                        })?;
+                    let count =
+                        usize::try_from(count).map_err(|_| LowerError::UnsupportedType {
+                            ty: *destination_type,
+                            span: action_span,
+                            feature: "string destination length exceeds host representation",
+                        })?;
+                    units.resize(count, 0);
+                    let element_layout = self.access_layout(element, action_span)?;
+                    for (index, byte) in units.into_iter().take(count).enumerate() {
+                        let address = self.constant_offset_address(
+                            action_address.clone(),
+                            u64::try_from(index)
+                                .ok()
+                                .and_then(|index| index.checked_mul(element_layout.size_bytes))
+                                .ok_or(LowerError::UnsupportedType {
+                                    ty: element,
+                                    span: action_span,
+                                    feature: "string element offset overflow",
+                                })?,
+                            state,
+                        )?;
+                        let integer = canonical_integer(
+                            self.unit.types(),
+                            self.target,
+                            element,
+                            action_span,
+                        )?;
+                        let value = self.constant(state, integer, u64::from(byte))?;
+                        self.emit_memory_store(address, value, element, false, action_span, state)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn lower_compound_literal_address(
+        &mut self,
+        expression: &'a CHirExpr<'a>,
+        state: &mut State,
+    ) -> Result<Value, LowerError> {
+        let CHirExpr::CompoundLit(ty, initializer, span) = expression else {
+            return Err(LowerError::UnsupportedExpression {
+                span: expression.span(),
+                feature: "compound-literal allocation requested for another expression",
+            });
+        };
+        if initializer.plan().target_type() != *ty
+            || initializer.plan().validate(self.unit.types()).is_err()
+        {
+            return Err(LowerError::UnsupportedExpression {
+                span: *span,
+                feature: "compound-literal initializer plan is invalid",
+            });
+        }
+        let identity = expression as *const CHirExpr<'a> as usize;
+        let (origin, static_storage) = self.compound_origins.get(&identity).copied().ok_or(
+            LowerError::InvalidGeneratedSsa {
+                message: "compound literal has no allocation origin".to_owned(),
+            },
+        )?;
+        let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+        if static_storage {
+            self.emit(
+                state,
+                Inst::GlobalAddr {
+                    result: address.clone(),
+                    symbol: format!("__evocc.compound.{origin}"),
+                },
+            )?;
+            return Ok(address);
+        }
+        let mem_in = self.token(state, EnvKey::Memory)?.value;
+        let world_in = self.token(state, EnvKey::World)?.value;
+        let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+        let world_out = self.fresh_value(EvoIRType::World);
+        self.emit(
+            state,
+            Inst::Alloca {
+                result: address.clone(),
+                mem_in,
+                world_in,
+                mem_out: mem_out.clone(),
+                world_out: world_out.clone(),
+                origin,
+                layout: self.access_layout(*ty, *span)?,
+            },
+        )?;
+        self.replace_effect_tokens(state, mem_out, Some(world_out));
+        self.lower_initializer_at(address.clone(), *ty, initializer, *span, state)?;
+        Ok(address)
     }
 
     fn end_object_lifetime(
@@ -4103,6 +4402,25 @@ impl<'a> FunctionLowerer<'a> {
                     span: *span,
                     feature: "void statement expression used where a value is required",
                 }),
+            CHirExpr::CompoundLit(ty, _, span) => {
+                let address = self.lower_compound_literal_address(expression, state)?;
+                if matches!(
+                    self.unit.types().get(*ty).map(|canonical| &canonical.kind),
+                    Some(TypeKind::Array { .. })
+                ) {
+                    Ok(ExprValue {
+                        value: address,
+                        integer: CIntegerType::ULONG,
+                    })
+                } else {
+                    let volatile = self
+                        .unit
+                        .types()
+                        .get(*ty)
+                        .is_some_and(|canonical| canonical.qualifiers.is_volatile);
+                    self.emit_memory_load(address, *ty, volatile, *span, state)
+                }
+            }
             CHirExpr::Cast(target, operand, span) => {
                 if matches!(
                     self.unit.types().get(*target).map(|ty| &ty.kind),
@@ -4203,8 +4521,7 @@ impl<'a> FunctionLowerer<'a> {
             | CHirExpr::SizeOfExpr(_, span)
             | CHirExpr::Member(_, _, span)
             | CHirExpr::PtrMember(_, _, span)
-            | CHirExpr::Index(_, _, span)
-            | CHirExpr::CompoundLit(_, _, span) => Err(LowerError::UnsupportedExpression {
+            | CHirExpr::Index(_, _, span) => Err(LowerError::UnsupportedExpression {
                 span: *span,
                 feature: "expression requires the Day-7 object or non-integer model",
             }),
@@ -4322,6 +4639,9 @@ impl<'a> FunctionLowerer<'a> {
                         });
                     }
                     pointer.value
+                }
+                CHirExpr::CompoundLit(_, _, _) => {
+                    self.lower_compound_literal_address(operand, state)?
                 }
                 _ => {
                     return Err(LowerError::UnsupportedExpression {
@@ -5045,7 +5365,7 @@ impl<'a> FunctionLowerer<'a> {
         let (parameter_types, return_type, direct_name) = if let Some(function) = direct {
             (
                 function.parameter_types.clone(),
-                function.return_type,
+                function.return_type.clone(),
                 Some(function.name.clone()),
             )
         } else {
@@ -5086,14 +5406,24 @@ impl<'a> FunctionLowerer<'a> {
         let mut argument_keys = Vec::new();
         for (argument, expected) in arguments.iter().zip(&parameter_types) {
             let value = self.lower_expr(argument, state)?;
-            let value = self.cast(value, *expected, state)?;
+            let value = if matches!(expected.ir, EvoIRType::Ptr(_)) {
+                self.coerce_to_object_type(
+                    value,
+                    Some(argument),
+                    expected.source,
+                    argument.span(),
+                    state,
+                )?
+            } else {
+                self.cast(value, expected.integer, state)?
+            };
             let key = EnvKey::Temporary(self.next_temporary);
             self.next_temporary += 1;
             state.env.insert(
                 key,
                 BoundValue {
                     value: value.value,
-                    integer: Some(*expected),
+                    integer: Some(expected.integer),
                 },
             );
             argument_keys.push(key);
@@ -5112,8 +5442,8 @@ impl<'a> FunctionLowerer<'a> {
         let mem_in = self.token(state, EnvKey::Memory)?.value;
         let world_in = self.token(state, EnvKey::World)?.value;
         let mut results = Vec::new();
-        if let Some(integer) = return_type {
-            results.push(self.fresh_value(bits(integer)));
+        if let Some(value_type) = return_type.as_ref() {
+            results.push(self.fresh_value(value_type.ir.clone()));
         }
         let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
         let world_out = self.fresh_value(EvoIRType::World);
@@ -5161,9 +5491,9 @@ impl<'a> FunctionLowerer<'a> {
                 integer: None,
             },
         );
-        Ok(return_type.map(|integer| ExprValue {
+        Ok(return_type.map(|value_type| ExprValue {
             value: results.remove(0),
-            integer,
+            integer: value_type.integer,
         }))
     }
 
@@ -6353,9 +6683,11 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
                 collect_calls_expr(source, calls);
             }
         }
-        CHirExpr::CompoundLit(_, elements, _) => {
-            for element in elements {
-                collect_calls_expr(element, calls);
+        CHirExpr::CompoundLit(_, initializer, _) => {
+            for action in initializer.plan().actions() {
+                if let InitAction::StoreScalar { value, .. } = action {
+                    collect_calls_expr(value, calls);
+                }
             }
         }
         CHirExpr::StatementExpr { body, .. } => collect_calls_stmt(body, calls),
@@ -6580,9 +6912,11 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
             live_before_expr(rhs, live);
             live_before_expr(lhs, live);
         }
-        CHirExpr::CompoundLit(_, elements, _) => {
-            for element in elements.iter().rev() {
-                live_before_expr(element, live);
+        CHirExpr::CompoundLit(_, initializer, _) => {
+            for action in initializer.plan().actions().iter().rev() {
+                if let InitAction::StoreScalar { value, .. } = action {
+                    live_before_expr(value, live);
+                }
             }
         }
         CHirExpr::StatementExpr { body, .. } => {
@@ -6748,9 +7082,11 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
             collect_symbols_expr(rhs, symbols);
             collect_symbols_expr(target, symbols);
         }
-        CHirExpr::CompoundLit(_, elements, _) => {
-            for element in elements {
-                collect_symbols_expr(element, symbols);
+        CHirExpr::CompoundLit(_, initializer, _) => {
+            for action in initializer.plan().actions() {
+                if let InitAction::StoreScalar { value, .. } = action {
+                    collect_symbols_expr(value, symbols);
+                }
             }
         }
         CHirExpr::StatementExpr { body, .. } => collect_symbols_stmt(body, symbols),

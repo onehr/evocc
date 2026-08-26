@@ -122,6 +122,12 @@ pub enum PlaceRoot<'arena> {
         pointer: &'arena CHirExpr<'arena>,
         pointer_type: PointerTypeDesc,
     },
+    /// One exact compound-literal occurrence. Evaluating this root allocates
+    /// and initializes that object exactly once for this place evaluation.
+    CompoundLiteral {
+        expression: &'arena CHirExpr<'arena>,
+        ty: TypeId,
+    },
 }
 
 impl<'arena> PlaceRoot<'arena> {
@@ -131,6 +137,7 @@ impl<'arena> PlaceRoot<'arena> {
         match self {
             Self::Object { .. } => None,
             Self::PointerExpression { pointer, .. } => Some(*pointer),
+            Self::CompoundLiteral { .. } => None,
         }
     }
 }
@@ -389,6 +396,16 @@ impl<'arena> MemoryPlace<'arena> {
                     true,
                 )
             }
+            PlaceRoot::CompoundLiteral { expression, ty } => {
+                if !matches!(expression, CHirExpr::CompoundLit(actual, _, _) if actual == ty) {
+                    return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
+                }
+                let qualifiers = types
+                    .get(*ty)
+                    .ok_or(MemoryPlaceError::UnknownType(*ty))?
+                    .qualifiers;
+                (*ty, qualifiers, true)
+            }
         };
 
         let mut bit_field = false;
@@ -512,7 +529,7 @@ impl<'arena> MemoryPlace<'arena> {
     pub const fn root_symbol(&self) -> Option<SymbolId> {
         match self.root {
             PlaceRoot::Object { symbol } => Some(symbol),
-            PlaceRoot::PointerExpression { .. } => None,
+            PlaceRoot::PointerExpression { .. } | PlaceRoot::CompoundLiteral { .. } => None,
         }
     }
 
@@ -532,6 +549,7 @@ impl<'arena> MemoryPlace<'arena> {
             PlaceRoot::Object { symbol } => {
                 PointerTypeDesc::to_object(types, symbols.symbol(*symbol).ok()?.ty())
             }
+            PlaceRoot::CompoundLiteral { ty, .. } => PointerTypeDesc::to_object(types, *ty),
         }
     }
 

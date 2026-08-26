@@ -340,11 +340,7 @@ const G2_CASES: &[Case] = &[
         id: "boundary.compound-literal",
         area: Area::Day9Boundary,
         source: "struct S { int a; }; int f(void) { return ((struct S){ 1 }).a; }\n",
-        expected: Expected::RedDiagnostic {
-            column: 54,
-            code: "E2902",
-            message: "not-covered-day9: compound-literal",
-        },
+        expected: Expected::SilentSuccess,
     },
 ];
 
@@ -485,7 +481,7 @@ fn assert_topology() {
     );
     assert_eq!(
         (silent_success, red_diagnostic),
-        (21, 15),
+        (22, 14),
         "G2 expectation topology changed"
     );
 }

@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use evocc_chir::{
-    BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, TagMembers, TypeSpecifier,
+    BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, InitAction, TagMembers,
+    TypeSpecifier,
 };
 use evocc_common::{Arena, FileId};
 use evocc_lex::{Lexer, TokenKind};
@@ -209,9 +210,11 @@ fn assert_expression_owned(arena: &Arena, expression: &CHirExpr<'_>) {
             assert_expression_owned(arena, rhs);
             assert_expression_owned(arena, target);
         }
-        CHirExpr::CompoundLit(_, values, _) => {
-            for value in values {
-                assert_expression_owned(arena, value);
+        CHirExpr::CompoundLit(_, initializer, _) => {
+            for action in initializer.plan().actions() {
+                if let InitAction::StoreScalar { value, .. } = action {
+                    assert_expression_owned(arena, value);
+                }
             }
         }
         CHirExpr::StatementExpr { body, .. } => assert_statement_owned(arena, body),

@@ -1724,6 +1724,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         match expression {
             CHirExpr::StringLit(_, _) => true,
+            CHirExpr::CompoundLit(_, _, _) => self.current_scope == self.symbols.file_scope(),
             CHirExpr::Ident { symbol, .. } => self.symbol_decays_to_static_address(*symbol),
             CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => self.lvalue_has_static_address(operand),
             CHirExpr::Binary(BinaryOp::Add, left, right, _) => {
@@ -1763,6 +1764,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     && self.eval_integer_constant_expression(index).is_ok()
             }
             CHirExpr::Unary(UnaryOp::Deref, pointer, _) => self.is_static_address_constant(pointer),
+            CHirExpr::CompoundLit(_, _, _) => self.current_scope == self.symbols.file_scope(),
             _ => false,
         }
     }
@@ -5806,6 +5808,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     facts.ty(),
                 ))
             }
+            CHirExpr::CompoundLit(ty, _, _) => Some((
+                PlaceRoot::CompoundLiteral {
+                    expression,
+                    ty: *ty,
+                },
+                Vec::new(),
+                *ty,
+            )),
             CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
                 let pointer_type = self.pointer_root_descriptor(pointer)?;
                 Some((
@@ -6986,8 +6996,27 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let (ty, tag_event) = self.parse_type_name()?;
             let close = self.expect(TokenKind::RParen)?;
             if self.peek_kind() == Some(TokenKind::LBrace) {
-                self.report("E2902", "not-covered-day9: compound-literal", self.span());
-                return None;
+                if let Some(event) = tag_event {
+                    let declaration = self.finish_tag_event(
+                        event,
+                        self.merge_span(open.span, close.span),
+                        Vec::new(),
+                    );
+                    self.side_declarations.push(declaration);
+                }
+                let written = self.parse_written_initializer()?;
+                let ty = self.infer_initializer_target_type(ty, &written)?;
+                let plan = self.normalize_initializer_plan(ty, &written)?;
+                if self.current_scope == self.symbols.file_scope() {
+                    self.validate_static_initializer_plan(&plan)?;
+                }
+                let span = self.merge_span(open.span, written.span());
+                let expression = self.alloc_node(CHirExpr::CompoundLit(
+                    ty,
+                    ObjectInitializer::new(written, plan),
+                    span,
+                ));
+                return self.parse_postfix_tail(expression);
             }
             if !self.peek_kind().is_some_and(can_start_expression) {
                 self.report("E1003", "expected-expression", close.span);
@@ -7006,7 +7035,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn parse_postfix(&mut self) -> Option<&'arena CHirExpr<'arena>> {
-        let mut expression = self.parse_primary()?;
+        let expression = self.parse_primary()?;
+        self.parse_postfix_tail(expression)
+    }
+
+    fn parse_postfix_tail(
+        &mut self,
+        mut expression: &'arena CHirExpr<'arena>,
+    ) -> Option<&'arena CHirExpr<'arena>> {
         loop {
             match self.peek_kind() {
                 Some(TokenKind::LParen) => {
@@ -8000,9 +8036,11 @@ fn collect_jump_regions_expr(
             }
             collect_jump_regions_expr(value, regions, next_region, labels, gotos);
         }
-        CHirExpr::CompoundLit(_, values, _) => {
-            for value in values {
-                collect_jump_regions_expr(value, regions, next_region, labels, gotos);
+        CHirExpr::CompoundLit(_, initializer, _) => {
+            for action in initializer.plan().actions() {
+                if let InitAction::StoreScalar { value, .. } = action {
+                    collect_jump_regions_expr(value, regions, next_region, labels, gotos);
+                }
             }
         }
         CHirExpr::StatementExpr { body, .. } => {

@@ -125,9 +125,11 @@ fn assert_expr_owned(arena: &Arena, expression: &CHirExpr<'_>) {
             assert_expr_owned(arena, rhs);
             assert_expr_owned(arena, target);
         }
-        CHirExpr::CompoundLit(_, values, _) => {
-            for value in values {
-                assert_expr_owned(arena, value);
+        CHirExpr::CompoundLit(_, initializer, _) => {
+            for action in initializer.plan().actions() {
+                if let evocc_chir::InitAction::StoreScalar { value, .. } = action {
+                    assert_expr_owned(arena, value);
+                }
             }
         }
         CHirExpr::StatementExpr { body, .. } => assert_stmt_owned(arena, body),

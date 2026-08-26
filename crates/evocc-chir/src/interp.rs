@@ -451,6 +451,24 @@ struct MemoryBinding {
     ty: TypeId,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct InitializerTarget<'arena> {
+    binding: MemoryBinding,
+    initializer: &'arena crate::ObjectInitializer<'arena>,
+    symbol: Option<SymbolId>,
+    span: SourceSpan,
+}
+
+fn invalid_initializer_target(target: InitializerTarget<'_>, span: SourceSpan) -> InterpreterError {
+    target.symbol.map_or(
+        InterpreterError::UnsupportedExpression {
+            feature: "invalid compound-literal initializer plan",
+            span,
+        },
+        |symbol| InterpreterError::InvalidInitializerPlan { symbol, span },
+    )
+}
+
 #[derive(Debug)]
 struct MemoryFrame {
     id: FrameId,
@@ -606,14 +624,19 @@ enum MachineTask<'arena> {
     /// Plans are ordered and may target subobjects, so they are driven one
     /// action at a time rather than assumed to be a single whole-object store.
     ContinueMemoryInitializer {
-        declaration: &'arena ObjectDecl<'arena>,
+        target: InitializerTarget<'arena>,
         index: usize,
     },
     /// Store one evaluated initializer value into the subobject its action
     /// designates.
     FinishMemorySubobject {
-        declaration: &'arena ObjectDecl<'arena>,
+        target: InitializerTarget<'arena>,
         index: usize,
+    },
+    YieldCompoundLiteral {
+        binding: MemoryBinding,
+        as_address: bool,
+        span: SourceSpan,
     },
     FinishReturnValue(SourceSpan),
     SelectIf {
@@ -770,6 +793,7 @@ struct Interpreter<'unit, 'arena> {
     slots: HashMap<SymbolId, Slot>,
     manifest: Option<AllocationSiteManifest<'arena>>,
     static_bindings: HashMap<SymbolId, MemoryBinding>,
+    static_compound_bindings: HashMap<usize, MemoryBinding>,
     memory_frame: Option<MemoryFrame>,
     memory_mode: bool,
     memory: MemoryState,
@@ -804,6 +828,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             slots: HashMap::new(),
             manifest: None,
             static_bindings: HashMap::new(),
+            static_compound_bindings: HashMap::new(),
             memory_frame: None,
             memory_mode,
             memory,
@@ -854,11 +879,20 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         required: &BTreeSet<SymbolId>,
     ) -> Result<(), InterpreterError> {
         let mut plans = Vec::new();
+        let mut compound_plans = Vec::new();
         let manifest = self
             .manifest
             .as_ref()
             .ok_or(InterpreterError::MissingAllocationManifest)?;
         for site in manifest.sites() {
+            if let AllocationSiteKind::CompoundLiteral {
+                expression,
+                static_storage: true,
+            } = site.kind()
+            {
+                compound_plans.push((expression, site.ordinal().raw()));
+                continue;
+            }
             let AllocationSiteKind::Object(symbol) = site.kind() else {
                 continue;
             };
@@ -875,6 +909,22 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 },
             )?;
             plans.push((object, site.ordinal().raw()));
+        }
+
+        for (expression, site) in &compound_plans {
+            let CHirExpr::CompoundLit(ty, _, span) = expression else {
+                unreachable!("manifest compound site has compound expression authority")
+            };
+            let layout = self.access_layout(*ty, *span)?;
+            let (memory, address) = self
+                .memory
+                .allocate_static(*site, layout, InitialState::Zeroed)
+                .map_err(|error| self.memory_error(error, *span))?;
+            self.memory = memory;
+            self.static_compound_bindings.insert(
+                *expression as *const CHirExpr<'arena> as usize,
+                MemoryBinding { address, ty: *ty },
+            );
         }
 
         for (declaration, site) in &plans {
@@ -912,63 +962,209 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
         }
 
+        for (expression, _) in compound_plans {
+            let CHirExpr::CompoundLit(ty, initializer, span) = expression else {
+                unreachable!("manifest compound site has compound expression authority")
+            };
+            if initializer.plan().target_type() != *ty
+                || initializer.plan().validate(self.unit.types()).is_err()
+            {
+                return Err(InterpreterError::UnsupportedExpression {
+                    feature: "invalid static compound-literal initializer plan",
+                    span: *span,
+                });
+            }
+            let binding = self
+                .static_compound_bindings
+                .get(&(expression as *const CHirExpr<'arena> as usize))
+                .copied()
+                .ok_or(InterpreterError::UnsupportedExpression {
+                    feature: "static compound literal has no binding",
+                    span: *span,
+                })?;
+            self.initialize_static_plan(binding, initializer, *span)?;
+            if self
+                .unit
+                .types()
+                .get(*ty)
+                .is_some_and(|canonical| canonical.qualifiers.is_const)
+            {
+                self.memory = self
+                    .memory
+                    .freeze_static(binding.address)
+                    .map_err(|error| self.memory_error(error, *span))?;
+            }
+        }
+
         for (declaration, _) in plans {
             let Some(initializer) = &declaration.initializer else {
                 continue;
             };
             self.validate_initializer_plan(&declaration)?;
-            let action = initializer.plan().actions().first().ok_or(
-                InterpreterError::InvalidInitializerPlan {
+            let binding = self
+                .static_bindings
+                .get(&declaration.symbol)
+                .copied()
+                .ok_or(InterpreterError::MalformedObjectDeclaration {
                     symbol: declaration.symbol,
-                    span: initializer.span(),
-                },
-            )?;
+                    span: declaration.span,
+                })?;
+            self.initialize_static_plan(binding, initializer, declaration.span)?;
+        }
+        Ok(())
+    }
+
+    fn initialize_static_plan(
+        &mut self,
+        binding: MemoryBinding,
+        initializer: &crate::ObjectInitializer<'arena>,
+        object_span: SourceSpan,
+    ) -> Result<(), InterpreterError> {
+        for action in initializer.plan().actions() {
+            let span = action.span().unwrap_or(object_span);
+            let (address, actual_ty) = self.subobject_address(binding, action.path(), span)?;
+            if actual_ty != action.destination_type() {
+                return Err(InterpreterError::UnsupportedExpression {
+                    feature: "static initializer path disagrees with its destination type",
+                    span,
+                });
+            }
             match action {
                 InitAction::StoreScalar {
-                    path,
                     destination_type,
                     value,
-                    span,
-                } if path.is_root() && *destination_type == declaration.ty => {
-                    let integer_type = self.integer_type(declaration.ty, *span)?;
+                    ..
+                } => {
                     self.guard_static_initializer_evaluation(value)?;
-                    let value = self.eval_expr(value, false)?.cast(integer_type);
-                    let binding = self
-                        .static_bindings
-                        .get(&declaration.symbol)
-                        .copied()
-                        .ok_or(InterpreterError::MalformedObjectDeclaration {
-                            symbol: declaration.symbol,
-                            span: declaration.span,
-                        })?;
-                    self.memory = self
-                        .memory
-                        .store_integer(
-                            binding.address,
-                            self.access_layout(binding.ty, *span)?,
-                            u128::from(value.raw_bits()),
-                        )
-                        .map_err(|error| self.memory_error(error, *span))?;
+                    let value = self.eval_static_initializer_value(value)?;
+                    let value = cast_machine_value(
+                        value,
+                        self.value_type(*destination_type, span)?,
+                        span,
+                        self.unit.types(),
+                    )?;
+                    self.store_memory_value(
+                        address,
+                        *destination_type,
+                        Qualifiers::default(),
+                        value,
+                        span,
+                    )?;
                 }
                 InitAction::ZeroScalar {
-                    path,
-                    destination_type,
-                } if path.is_root() && *destination_type == declaration.ty => {}
-                InitAction::StoreScalar { span, .. } | InitAction::StoreString { span, .. } => {
-                    return Err(InterpreterError::InvalidInitializerPlan {
-                        symbol: declaration.symbol,
-                        span: *span,
-                    });
+                    destination_type, ..
+                } => {
+                    let value = self.zero_value(*destination_type, span)?;
+                    self.store_memory_value(
+                        address,
+                        *destination_type,
+                        Qualifiers::default(),
+                        value,
+                        span,
+                    )?;
                 }
-                InitAction::ZeroScalar { .. } => {
-                    return Err(InterpreterError::InvalidInitializerPlan {
-                        symbol: declaration.symbol,
-                        span: initializer.span(),
-                    });
+                InitAction::StoreString {
+                    destination_type,
+                    literal,
+                    ..
+                } => {
+                    let layout = self.access_layout(*destination_type, span)?;
+                    let mut bytes = literal
+                        .decoded_units()
+                        .ok_or(InterpreterError::UnsupportedExpression {
+                            feature: "invalid static string initializer",
+                            span,
+                        })?
+                        .into_iter()
+                        .map(u8::try_from)
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(|_| InterpreterError::UnsupportedExpression {
+                            feature: "wide static string initializer",
+                            span,
+                        })?;
+                    bytes.resize(
+                        usize::try_from(layout.size_bytes).map_err(|_| {
+                            InterpreterError::UnsupportedType {
+                                ty: *destination_type,
+                                span,
+                            }
+                        })?,
+                        0,
+                    );
+                    let value = ByteSequence::try_from_bytes(bytes)
+                        .map_err(|error| self.memory_error(error, span))?;
+                    self.memory = self
+                        .memory
+                        .store_bytes(address, layout, &value)
+                        .map_err(|error| self.memory_error(error, span))?;
                 }
             }
         }
         Ok(())
+    }
+
+    fn eval_static_initializer_value(
+        &mut self,
+        expression: &'arena CHirExpr<'arena>,
+    ) -> Result<CValue, InterpreterError> {
+        match expression {
+            CHirExpr::Unary(UnaryOp::AddrOf, operand, span)
+                if matches!(operand, CHirExpr::CompoundLit(_, _, _)) =>
+            {
+                self.static_compound_pointer(operand, *span, false)
+            }
+            CHirExpr::CompoundLit(_, _, span) => {
+                self.static_compound_pointer(expression, *span, true)
+            }
+            CHirExpr::Cast(ty, operand, span)
+                if matches!(
+                    self.unit.types().get(*ty).map(|canonical| &canonical.kind),
+                    Some(TypeKind::Pointer(_))
+                ) =>
+            {
+                let value = self.eval_static_initializer_value(operand)?;
+                cast_machine_value(
+                    value,
+                    self.value_type(*ty, *span)?,
+                    *span,
+                    self.unit.types(),
+                )
+            }
+            _ => self.eval_expr(expression, false).map(CValue::Integer),
+        }
+    }
+
+    fn static_compound_pointer(
+        &self,
+        expression: &'arena CHirExpr<'arena>,
+        span: SourceSpan,
+        decay_array: bool,
+    ) -> Result<CValue, InterpreterError> {
+        let CHirExpr::CompoundLit(ty, _, _) = expression else {
+            unreachable!("static compound pointer requires compound expression")
+        };
+        let binding = self
+            .static_compound_bindings
+            .get(&(expression as *const CHirExpr<'arena> as usize))
+            .copied()
+            .ok_or(InterpreterError::UnsupportedExpression {
+                feature: "static compound literal has no binding",
+                span,
+            })?;
+        let pointee = if decay_array {
+            match self.unit.types().get(*ty).map(|canonical| &canonical.kind) {
+                Some(TypeKind::Array { element, .. }) => *element,
+                _ => *ty,
+            }
+        } else {
+            *ty
+        };
+        let pointer = PointerTypeDesc::to_object(self.unit.types(), pointee)
+            .ok_or(InterpreterError::UnsupportedType { ty: pointee, span })?;
+        Ok(CValue::Pointer {
+            value: binding.address,
+            ty: pointer,
+        })
     }
 
     fn run(mut self, function: SymbolId) -> Result<InterpretOutcome, InterpreterError> {
@@ -1362,33 +1558,83 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     self.store_bound_value(symbol, value, span)?;
                     None
                 }
-                MachineTask::ContinueMemoryInitializer { declaration, index } => {
-                    self.continue_memory_initializer(declaration, index, &mut tasks)?;
+                MachineTask::ContinueMemoryInitializer { target, index } => {
+                    self.continue_memory_initializer(target, index, &mut tasks)?;
                     None
                 }
-                MachineTask::FinishMemorySubobject { declaration, index } => {
-                    let span = declaration
+                MachineTask::FinishMemorySubobject { target, index } => {
+                    let action = target
                         .initializer
-                        .as_ref()
-                        .map_or(declaration.span, crate::ObjectInitializer::span);
-                    let action = declaration
-                        .initializer
-                        .as_ref()
-                        .and_then(|initializer| initializer.plan().actions().get(index))
-                        .ok_or(InterpreterError::InvalidInitializerPlan {
-                            symbol: declaration.symbol,
-                            span,
-                        })?;
+                        .plan()
+                        .actions()
+                        .get(index)
+                        .ok_or_else(|| invalid_initializer_target(target, target.span))?;
                     let InitAction::StoreScalar { path, span, .. } = action else {
-                        return Err(InterpreterError::InvalidInitializerPlan {
-                            symbol: declaration.symbol,
-                            span,
-                        });
+                        return Err(invalid_initializer_target(target, target.span));
                     };
                     let value = pop_machine_value(&mut values, *span)?;
-                    let (address, ty) = self.subobject_address(declaration, path, *span)?;
-                    let value = cast_machine_value(value, self.value_type(ty, *span)?, *span)?;
+                    let (address, ty) = self.subobject_address(target.binding, path, *span)?;
+                    let value = cast_machine_value(
+                        value,
+                        self.value_type(ty, *span)?,
+                        *span,
+                        self.unit.types(),
+                    )?;
                     self.store_memory_value(address, ty, Qualifiers::default(), value, *span)?;
+                    None
+                }
+                MachineTask::YieldCompoundLiteral {
+                    binding,
+                    as_address,
+                    span,
+                } => {
+                    let pointer_type = PointerTypeDesc::to_object(self.unit.types(), binding.ty)
+                        .ok_or(InterpreterError::UnsupportedType {
+                            ty: binding.ty,
+                            span,
+                        })?;
+                    if as_address
+                        || matches!(
+                            self.unit.types().get(binding.ty).map(|ty| &ty.kind),
+                            Some(TypeKind::Array { .. })
+                        )
+                    {
+                        values.push(CValue::Pointer {
+                            value: binding.address,
+                            ty: if as_address {
+                                pointer_type
+                            } else {
+                                let TypeKind::Array { element, .. } = self
+                                    .unit
+                                    .types()
+                                    .get(binding.ty)
+                                    .expect("compound type checked above")
+                                    .kind
+                                else {
+                                    unreachable!()
+                                };
+                                PointerTypeDesc::to_object(self.unit.types(), element).ok_or(
+                                    InterpreterError::UnsupportedType { ty: element, span },
+                                )?
+                            },
+                        });
+                    } else {
+                        let qualifiers = self
+                            .unit
+                            .types()
+                            .get(binding.ty)
+                            .ok_or(InterpreterError::UnsupportedType {
+                                ty: binding.ty,
+                                span,
+                            })?
+                            .qualifiers;
+                        values.push(self.load_memory_value(
+                            binding.address,
+                            binding.ty,
+                            qualifiers,
+                            span,
+                        )?);
+                    }
                     None
                 }
                 MachineTask::FinishReturnValue(span) => {
@@ -1548,7 +1794,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
                 MachineTask::CastValue { target, span } => {
                     let value = pop_machine_value(&mut values, span)?;
-                    values.push(cast_machine_value(value, target, span)?);
+                    values.push(cast_machine_value(value, target, span, self.unit.types())?);
                     None
                 }
                 MachineTask::ApplyAssignment {
@@ -2042,8 +2288,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span: initializer.span(),
             });
         }
+        let binding = self.require_memory_binding(declaration.symbol, declaration.span)?;
         tasks.push(MachineTask::ContinueMemoryInitializer {
-            declaration,
+            target: InitializerTarget {
+                binding,
+                initializer,
+                symbol: Some(declaration.symbol),
+                span: declaration.span,
+            },
             index: 0,
         });
         Ok(())
@@ -2127,12 +2379,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     /// Address of one designated subobject of an already-bound object.
     fn subobject_address(
         &self,
-        declaration: &ObjectDecl<'arena>,
+        binding: MemoryBinding,
         path: &SubobjectPath,
         span: SourceSpan,
     ) -> Result<(Pointer, TypeId), InterpreterError> {
-        let binding = self.require_memory_binding(declaration.symbol, span)?;
-        let (offset, ty) = self.subobject_offset(declaration.ty, path, span)?;
+        let (offset, ty) = self.subobject_offset(binding.ty, path, span)?;
         let address = binding
             .address
             .checked_offset(offset)
@@ -2143,13 +2394,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     /// Schedule the next action of an initializer plan, if any remain.
     fn continue_memory_initializer(
         &mut self,
-        declaration: &'arena ObjectDecl<'arena>,
+        target: InitializerTarget<'arena>,
         index: usize,
         tasks: &mut Vec<MachineTask<'arena>>,
     ) -> Result<(), InterpreterError> {
-        let Some(initializer) = &declaration.initializer else {
-            return Ok(());
-        };
+        let initializer = target.initializer;
         let Some(action) = initializer.plan().actions().get(index) else {
             return Ok(());
         };
@@ -2159,12 +2408,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             } => {
                 // Reject before evaluating, so a rejected destination cannot
                 // run the initializer's side effects first.
-                self.subobject_address(declaration, path, *span)?;
+                self.subobject_address(target.binding, path, *span)?;
                 tasks.push(MachineTask::ContinueMemoryInitializer {
-                    declaration,
+                    target,
                     index: index + 1,
                 });
-                tasks.push(MachineTask::FinishMemorySubobject { declaration, index });
+                tasks.push(MachineTask::FinishMemorySubobject { target, index });
                 tasks.push(MachineTask::EvalExpression {
                     expression: value,
                     allow_root_mutation: true,
@@ -2173,11 +2422,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             InitAction::ZeroScalar { path, .. } => {
                 let span = initializer.span();
-                let (address, ty) = self.subobject_address(declaration, path, span)?;
+                let (address, ty) = self.subobject_address(target.binding, path, span)?;
                 let value = self.zero_value(ty, span)?;
                 self.store_memory_value(address, ty, Qualifiers::default(), value, span)?;
                 tasks.push(MachineTask::ContinueMemoryInitializer {
-                    declaration,
+                    target,
                     index: index + 1,
                 });
                 Ok(())
@@ -2188,27 +2437,18 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 literal,
                 span,
             } => {
-                let (address, actual_type) = self.subobject_address(declaration, path, *span)?;
+                let (address, actual_type) = self.subobject_address(target.binding, path, *span)?;
                 if actual_type != *destination_type {
-                    return Err(InterpreterError::InvalidInitializerPlan {
-                        symbol: declaration.symbol,
-                        span: *span,
-                    });
+                    return Err(invalid_initializer_target(target, *span));
                 }
                 let layout = self.access_layout(*destination_type, *span)?;
                 let mut bytes = literal
                     .decoded_units()
-                    .ok_or(InterpreterError::InvalidInitializerPlan {
-                        symbol: declaration.symbol,
-                        span: *span,
-                    })?
+                    .ok_or_else(|| invalid_initializer_target(target, *span))?
                     .into_iter()
                     .map(u8::try_from)
                     .collect::<Result<Vec<_>, _>>()
-                    .map_err(|_| InterpreterError::InvalidInitializerPlan {
-                        symbol: declaration.symbol,
-                        span: *span,
-                    })?;
+                    .map_err(|_| invalid_initializer_target(target, *span))?;
                 let destination_len = usize::try_from(layout.size_bytes).map_err(|_| {
                     InterpreterError::UnsupportedType {
                         ty: *destination_type,
@@ -2216,10 +2456,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     }
                 })?;
                 if bytes.len() > destination_len {
-                    return Err(InterpreterError::InvalidInitializerPlan {
-                        symbol: declaration.symbol,
-                        span: *span,
-                    });
+                    return Err(invalid_initializer_target(target, *span));
                 }
                 bytes.resize(destination_len, 0);
                 let value = ByteSequence::try_from_bytes(bytes)
@@ -2229,7 +2466,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     .store_bytes(address, layout, &value)
                     .map_err(|error| self.memory_error(error, *span))?;
                 tasks.push(MachineTask::ContinueMemoryInitializer {
-                    declaration,
+                    target,
                     index: index + 1,
                 });
                 Ok(())
@@ -2728,7 +2965,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span,
             } => values.push(self.load_identifier(*symbol, spelling, *facts, *span)?),
             CHirExpr::Unary(UnaryOp::AddrOf, operand, _) if self.memory_mode => {
-                values.push(self.address_of_expression(operand, span)?);
+                if matches!(operand, CHirExpr::CompoundLit(_, _, _)) {
+                    self.schedule_compound_literal(operand, true, tasks)?;
+                } else {
+                    values.push(self.address_of_expression(operand, span)?);
+                }
             }
             CHirExpr::Unary(UnaryOp::Deref, operand, _) if self.memory_mode => {
                 let pointer_type = self.pointer_type_of_expression(operand)?;
@@ -3005,6 +3246,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             } => {
                 self.schedule_statement_expression(body, *value, *span, tasks)?;
             }
+            CHirExpr::CompoundLit(_, _, _) if self.memory_mode => {
+                self.schedule_compound_literal(expression, false, tasks)?;
+            }
+            CHirExpr::CompoundLit(_, _, _) => {
+                return Err(InterpreterError::UnsupportedExpression {
+                    feature: "compound literal outside the object-memory machine",
+                    span,
+                });
+            }
             // Reaching this means requirement analysis concluded the program
             // needs no object memory while its C-HIR designates a subobject.
             // The two must agree, so this is reported rather than papered over
@@ -3024,10 +3274,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span,
                 });
             }
-            CHirExpr::Member(_, _, _)
-            | CHirExpr::PtrMember(_, _, _)
-            | CHirExpr::Index(_, _, _)
-            | CHirExpr::CompoundLit(_, _, _) => {
+            CHirExpr::Member(_, _, _) | CHirExpr::PtrMember(_, _, _) | CHirExpr::Index(_, _, _) => {
                 return Err(InterpreterError::UnsupportedExpression {
                     feature: "function call nested outside scalar expression subset",
                     span,
@@ -3196,7 +3443,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let binding_span = call_span.unwrap_or(declaration.span);
         let mut parameter_bindings = Vec::with_capacity(arguments.len());
         for ((symbol, ty), argument) in signature.parameters.into_iter().zip(arguments) {
-            let argument = cast_machine_value(argument, ty, binding_span)?;
+            let argument = cast_machine_value(argument, ty, binding_span, self.unit.types())?;
             match (ty, argument) {
                 (ValueType::Integer(ty), CValue::Integer(value)) => {
                     parameter_bindings.push((
@@ -3424,7 +3671,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         && scope.parent() == Some(self.unit.symbols().file_scope())
                         && function_scope.is_none_or(|expected| expected == symbol.scope());
                     if *canonical_type != parameter.ty
-                        || parameter.specifier.type_id() != parameter.ty
                         || !self.written_declarator_matches(
                             &parameter.written,
                             parameter.ty,
@@ -3598,12 +3844,22 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         values: &mut Vec<CValue>,
     ) -> Result<Option<MachineOutcome>, InterpreterError> {
         let return_value = match (exit, end.return_value_type) {
-            (FunctionExit::Explicit(Some(value)), ValueType::Integer(return_integer)) => Some(
-                cast_machine_value(value, ValueType::Integer(return_integer), end.body_span)?,
-            ),
-            (FunctionExit::Explicit(Some(value)), ValueType::Pointer(return_type)) => Some(
-                cast_machine_value(value, ValueType::Pointer(return_type), end.body_span)?,
-            ),
+            (FunctionExit::Explicit(Some(value)), ValueType::Integer(return_integer)) => {
+                Some(cast_machine_value(
+                    value,
+                    ValueType::Integer(return_integer),
+                    end.body_span,
+                    self.unit.types(),
+                )?)
+            }
+            (FunctionExit::Explicit(Some(value)), ValueType::Pointer(return_type)) => {
+                Some(cast_machine_value(
+                    value,
+                    ValueType::Pointer(return_type),
+                    end.body_span,
+                    self.unit.types(),
+                )?)
+            }
             (FunctionExit::Explicit(None), ValueType::Void)
             | (FunctionExit::FellOffEnd, ValueType::Void) => None,
             (FunctionExit::FellOffEnd, ValueType::Integer(return_integer)) if end.is_main => {
@@ -4213,8 +4469,92 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ty: self.root_pointer_type(place, target_span)?,
                 });
             }
+            PlaceRoot::CompoundLiteral { expression, .. } => {
+                self.schedule_compound_literal(expression, true, tasks)?;
+            }
         }
         Ok(subscripts.len())
+    }
+
+    fn schedule_compound_literal(
+        &mut self,
+        expression: &'arena CHirExpr<'arena>,
+        as_address: bool,
+        tasks: &mut Vec<MachineTask<'arena>>,
+    ) -> Result<(), InterpreterError> {
+        let CHirExpr::CompoundLit(ty, initializer, span) = expression else {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "compound-literal allocation requested for another expression",
+                span: expression.span(),
+            });
+        };
+        if initializer.plan().target_type() != *ty
+            || initializer.plan().validate(self.unit.types()).is_err()
+        {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "invalid compound-literal initializer plan",
+                span: *span,
+            });
+        }
+        let site = self
+            .manifest
+            .as_ref()
+            .ok_or(InterpreterError::MissingAllocationManifest)?
+            .compound_literal_site(expression)
+            .ok_or(InterpreterError::UnsupportedExpression {
+                feature: "compound literal has no allocation site",
+                span: *span,
+            })?;
+        let static_storage = matches!(
+            site.kind(),
+            AllocationSiteKind::CompoundLiteral {
+                static_storage: true,
+                ..
+            }
+        );
+        let identity = expression as *const CHirExpr<'arena> as usize;
+        let binding = if static_storage {
+            self.static_compound_bindings
+                .get(&identity)
+                .copied()
+                .ok_or(InterpreterError::UnsupportedExpression {
+                    feature: "static compound literal was not initialized",
+                    span: *span,
+                })?
+        } else {
+            let layout = self.access_layout(*ty, *span)?;
+            let (frame, scope) = self
+                .memory_frame
+                .as_ref()
+                .map(|frame| (frame.id, frame.current_scope))
+                .ok_or(InterpreterError::UnsupportedExpression {
+                    feature: "automatic compound literal has no active scope",
+                    span: *span,
+                })?;
+            let (memory, address) = self
+                .memory
+                .allocate_automatic(frame, scope, site.ordinal().raw(), layout)
+                .map_err(|error| self.memory_error(error, *span))?;
+            self.memory = memory;
+            MemoryBinding { address, ty: *ty }
+        };
+        tasks.push(MachineTask::YieldCompoundLiteral {
+            binding,
+            as_address,
+            span: *span,
+        });
+        if !static_storage {
+            tasks.push(MachineTask::ContinueMemoryInitializer {
+                target: InitializerTarget {
+                    binding,
+                    initializer,
+                    symbol: None,
+                    span: *span,
+                },
+                index: 0,
+            });
+        }
+        Ok(())
     }
 
     /// Pointer type of a place's root, which is what address folding starts
@@ -4848,7 +5188,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             // Simple assignment converts its right operand to the type of the
             // designated object, which is where a null pointer constant becomes
             // a null pointer and a narrower integer is truncated.
-            let right = cast_machine_value(right, self.value_type(ty, span)?, span)?;
+            let right =
+                cast_machine_value(right, self.value_type(ty, span)?, span, self.unit.types())?;
             return self.store_memory_value(address, ty, qualifiers, right, span);
         }
         let left = self.load_memory_value(address, ty, qualifiers, target_span)?;
@@ -5005,9 +5346,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
                 self.predeclare_expr(value)?;
             }
-            CHirExpr::CompoundLit(_, elements, _) => {
-                for element in elements {
-                    self.predeclare_expr(element)?;
+            CHirExpr::CompoundLit(_, initializer, _) => {
+                for action in initializer.plan().actions() {
+                    if let InitAction::StoreScalar { value, .. } = action {
+                        self.predeclare_expr(value)?;
+                    }
                 }
             }
             CHirExpr::StatementExpr { body, .. } => self.predeclare_stmt(body)?,
@@ -6261,9 +6604,11 @@ fn push_static_initializer_children<'arena>(
             push(rhs);
             push(target);
         }
-        CHirExpr::CompoundLit(_, elements, _) => {
-            for element in elements {
-                push(element);
+        CHirExpr::CompoundLit(_, initializer, _) => {
+            for action in initializer.plan().actions() {
+                if let InitAction::StoreScalar { value, .. } = action {
+                    push(value);
+                }
             }
         }
         CHirExpr::MemoryAssign { place, value, .. } => {
@@ -6432,9 +6777,11 @@ fn collect_expression_symbols<'arena>(
             collect_expression_symbols(target, output);
         }
         CHirExpr::StatementExpr { body, .. } => collect_statement_symbols(body, output),
-        CHirExpr::CompoundLit(_, elements, _) => {
-            for element in elements {
-                collect_expression_symbols(element, output);
+        CHirExpr::CompoundLit(_, initializer, _) => {
+            for action in initializer.plan().actions() {
+                if let InitAction::StoreScalar { value, .. } = action {
+                    collect_expression_symbols(value, output);
+                }
             }
         }
         CHirExpr::Assign { target, value, .. } => {
@@ -6848,8 +7195,15 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
         // Statement expressions require the iterative task machine even when
         // their body contains no call, because control may leave the region.
         CHirExpr::StatementExpr { .. } => true,
-        CHirExpr::CompoundLit(_, values, _) => {
-            values.iter().any(|value| expression_contains_call(value))
+        CHirExpr::CompoundLit(_, initializer, _) => {
+            initializer
+                .plan()
+                .actions()
+                .iter()
+                .any(|action| match action {
+                    InitAction::StoreScalar { value, .. } => expression_contains_call(value),
+                    InitAction::StoreString { .. } | InitAction::ZeroScalar { .. } => false,
+                })
         }
         CHirExpr::Lit(_, _)
         | CHirExpr::FloatLit(_, _)
@@ -6916,12 +7270,18 @@ fn cast_machine_value(
     value: CValue,
     target: ValueType,
     span: SourceSpan,
+    types: &TypeInterner,
 ) -> Result<CValue, InterpreterError> {
     match (value, target) {
         (CValue::Integer(value), ValueType::Integer(target)) => {
             Ok(CValue::Integer(value.cast(target)))
         }
         (CValue::Pointer { value, ty }, ValueType::Pointer(target)) if ty == target => {
+            Ok(CValue::Pointer { value, ty: target })
+        }
+        (CValue::Pointer { value, ty }, ValueType::Pointer(target))
+            if pointer_runtime_conversion(types, ty, target) =>
+        {
             Ok(CValue::Pointer { value, ty: target })
         }
         (CValue::FunctionPointer { value, ty }, ValueType::Pointer(target)) if ty == target => {
@@ -6952,6 +7312,23 @@ fn cast_machine_value(
             span,
         }),
     }
+}
+
+fn pointer_runtime_conversion(
+    types: &TypeInterner,
+    source: PointerTypeDesc,
+    target: PointerTypeDesc,
+) -> bool {
+    let (Some(source_ty), Some(target_ty)) =
+        (types.get(source.pointee()), types.get(target.pointee()))
+    else {
+        return false;
+    };
+    // The parser has already distinguished implicit qualification conversion
+    // from an explicit cast. Runtime pointer values carry provenance, not C
+    // qualifiers, so either source-level form preserves the same capability
+    // when the unqualified pointee kind is compatible.
+    source_ty.kind == target_ty.kind
 }
 
 fn assignment_binary(operator: AssignmentOp) -> Option<BinaryOp> {
