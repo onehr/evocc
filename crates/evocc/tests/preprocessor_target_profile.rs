@@ -63,3 +63,22 @@ fn command_line_definitions_and_undefinitions_follow_the_target_profile() {
         "n"
     );
 }
+
+#[test]
+fn a_pasted_nonliteral_reaches_the_c_lexer_diagnostic_at_the_parser_boundary() {
+    let output = run(
+        &[
+            "--parse-only",
+            "--target=aarch64-unknown-linux-gnu",
+            "/dev/stdin",
+        ],
+        "#define CAT(a, b) a##b\nint value = CAT(1, x);\n",
+    );
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8(output.stderr).expect("diagnostic is UTF-8");
+    assert!(
+        stderr.contains("error[E0001]: invalid token"),
+        "unexpected diagnostic: {stderr:?}"
+    );
+}

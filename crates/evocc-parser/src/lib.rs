@@ -246,6 +246,18 @@ pub struct Parser<'src, 'arena> {
 
 impl<'src, 'arena> Parser<'src, 'arena> {
     pub fn new(mut tokens: Vec<Token>, file: FileId, source: &'src str) -> Self {
+        // A pasted pp-number remains a preprocessing token while macros can
+        // still consume it. If it survives to this boundary, translation
+        // phase 7 cannot convert it to a C token and must diagnose it before
+        // syntactic parsing begins.
+        let lexical_diagnostic = tokens
+            .iter()
+            .find(|token| token.kind == TokenKind::PpNumber)
+            .map(|token| ParseDiagnostic {
+                span: token.span,
+                code: "E0001",
+                message: "invalid token".to_owned(),
+            });
         // GNU contextual spellings must remain identifiers through
         // preprocessing so they can be macro-expanded or token-pasted. Turn
         // an exact surviving spelling into its parser token only at this
@@ -282,11 +294,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             pos: 0,
             file,
             source,
-            had_error: false,
-            error_count: 0,
+            had_error: lexical_diagnostic.is_some(),
+            error_count: usize::from(lexical_diagnostic.is_some()),
             error_limit: None,
-            rollback_error_count: 0,
-            diagnostic: None,
+            rollback_error_count: usize::from(lexical_diagnostic.is_some()),
+            diagnostic: lexical_diagnostic,
             arena: None,
             types: TypeInterner::new(),
             symbols,
@@ -318,7 +330,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         assert!(self.arena.is_none(), "Parser instances parse only one unit");
         self.arena = Some(arena);
         let mut decls = Vec::new();
-        while !self.is_done() {
+        while !self.is_done() && !self.reached_error_limit() {
             if self.consume_pragma_pack_marker() {
                 continue;
             }

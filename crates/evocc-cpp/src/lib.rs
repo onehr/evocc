@@ -5,6 +5,7 @@
 use std::collections::{HashMap, HashSet};
 
 pub use evocc_common::{FileId, SourceSpan};
+use evocc_lex::universal_character_name_len_at;
 pub use evocc_lex::{Lexer, Token, TokenKind, TokenText};
 
 const AARCH64_UNKNOWN_LINUX_GNU: &str = "aarch64-unknown-linux-gnu";
@@ -18,6 +19,7 @@ const FEATURE_QUERY_NAMES: [&str; 4] = [
     "__has_feature",
     "__has_include",
 ];
+const INVALID_PASTE_MARKER_PREFIX: &str = "\u{1e}evocc-invalid-paste:";
 
 // ---------------------------------------------------------------------------
 // Macro definition
@@ -55,6 +57,12 @@ impl Macro {
 #[derive(Debug, Default)]
 pub struct MacroMap {
     macros: HashMap<String, Macro>,
+}
+
+#[derive(Debug)]
+struct PendingPaste {
+    left: Token,
+    operator_span: SourceSpan,
 }
 
 impl MacroMap {
@@ -230,7 +238,7 @@ impl MacroMap {
         }
 
         let mut result: Vec<Token> = Vec::new();
-        let mut pending_paste: Option<Token> = None;
+        let mut pending_paste: Option<PendingPaste> = None;
         let body = &m.body;
         let mut i = 0;
 
@@ -244,7 +252,10 @@ impl MacroMap {
                     continue;
                 }
                 if let Some(last) = result.pop() {
-                    pending_paste = Some(last);
+                    pending_paste = Some(PendingPaste {
+                        left: last,
+                        operator_span: tok.span,
+                    });
                 }
                 i += 1;
                 continue;
@@ -259,7 +270,7 @@ impl MacroMap {
                             let text = tokens_to_string(&arg);
                             let str_tok = make_string_token(&text);
                             if let Some(pt) = pending_paste.take() {
-                                result.push(paste_tokens(&pt, &str_tok));
+                                result.push(paste_tokens(&pt.left, &str_tok, pt.operator_span));
                             } else {
                                 result.push(str_tok);
                             }
@@ -272,7 +283,7 @@ impl MacroMap {
                 }
                 // # not followed by identifier: just emit
                 if let Some(pt) = pending_paste.take() {
-                    result.push(pt);
+                    result.push(pt.left);
                 }
                 result.push(tok.clone());
                 i += 1;
@@ -297,7 +308,7 @@ impl MacroMap {
                             .take()
                             .expect("GNU comma elision has a preceding paste operand");
                         if args.len() > m.params.len() {
-                            result.push(comma);
+                            result.push(comma.left);
                             result.append(&mut arg);
                         }
                         i += 1;
@@ -307,12 +318,12 @@ impl MacroMap {
                         // An empty paste operand is a placemarker: the other
                         // operand survives unchanged.
                         if let Some(pt) = pending_paste.take() {
-                            result.push(pt);
+                            result.push(pt.left);
                         }
                     } else {
                         if let Some(pt) = pending_paste.take() {
                             // Paste preceding token with first expanded token
-                            result.push(paste_tokens(&pt, &arg[0]));
+                            result.push(paste_tokens(&pt.left, &arg[0], pt.operator_span));
                             result.extend_from_slice(&arg[1..]);
                         } else {
                             result.append(&mut arg);
@@ -325,7 +336,7 @@ impl MacroMap {
 
             // General fallthrough: emit literally, with token pasting.
             if let Some(pt) = pending_paste.take() {
-                result.push(paste_tokens(&pt, tok));
+                result.push(paste_tokens(&pt.left, tok, pt.operator_span));
             } else {
                 result.push(tok.clone());
             }
@@ -334,7 +345,7 @@ impl MacroMap {
 
         // Flush any dangling pending paste
         if let Some(pt) = pending_paste.take() {
-            result.push(pt);
+            result.push(pt.left);
         }
 
         Some(result)
@@ -1131,10 +1142,15 @@ impl Preprocessor {
                 }
             } else if self.cond_active() {
                 if tok.kind == TokenKind::Error {
+                    let (code, message) = if invalid_paste_spelling(tok).is_some() {
+                        ("E0110", "invalid-token-paste")
+                    } else {
+                        ("E0001", "invalid token")
+                    };
                     self.errors.push(PreprocessError {
-                        code: "E0001",
+                        code,
                         span: tok.span,
-                        message: "invalid token".into(),
+                        message: message.into(),
                     });
                     i += 1;
                     continue;
@@ -1452,7 +1468,21 @@ impl Preprocessor {
             false,
             0,
         );
-        evaluate_if_expr(&expanded.into_vec(), source)
+        let expanded = expanded.into_vec();
+        if let Some(token) = expanded.iter().find(|token| {
+            matches!(
+                token.kind,
+                TokenKind::IntLiteral | TokenKind::FloatLiteral | TokenKind::PpNumber
+            ) && parse_pp_integer_checked(token_lexeme(token, source)).is_none()
+        }) {
+            self.errors.push(PreprocessError {
+                code: "E0111",
+                span: token.span,
+                message: "conditional-operand-not-integer".into(),
+            });
+            return false;
+        }
+        evaluate_if_expr(&expanded, source)
     }
 
     fn mapped_file_name(&self) -> String {
@@ -2181,7 +2211,9 @@ impl<'a> IfExpression<'a> {
         }
         self.index += 1;
         match token.kind {
-            TokenKind::IntLiteral => parse_pp_integer(token_lexeme(token, self.source)),
+            TokenKind::IntLiteral | TokenKind::PpNumber => {
+                parse_pp_integer(token_lexeme(token, self.source))
+            }
             TokenKind::CharLiteral => parse_pp_character(token_lexeme(token, self.source)),
             _ => PpInteger::ZERO,
         }
@@ -2227,6 +2259,10 @@ fn pp_remainder(left: PpInteger, right: PpInteger) -> PpInteger {
 }
 
 fn parse_pp_integer(spelling: &str) -> PpInteger {
+    parse_pp_integer_checked(spelling).unwrap_or(PpInteger::ZERO)
+}
+
+fn parse_pp_integer_checked(spelling: &str) -> Option<PpInteger> {
     let suffix_start = spelling
         .char_indices()
         .rev()
@@ -2236,6 +2272,13 @@ fn parse_pp_integer(spelling: &str) -> PpInteger {
     let explicitly_unsigned = suffix
         .chars()
         .any(|character| matches!(character, 'u' | 'U'));
+    let normalized_suffix = suffix.to_ascii_lowercase();
+    if !matches!(
+        normalized_suffix.as_str(),
+        "" | "u" | "l" | "ul" | "lu" | "ll" | "ull" | "llu"
+    ) {
+        return None;
+    }
     let (radix, digits) = if let Some(rest) = digits
         .strip_prefix("0x")
         .or_else(|| digits.strip_prefix("0X"))
@@ -2251,11 +2294,14 @@ fn parse_pp_integer(spelling: &str) -> PpInteger {
     } else {
         (10, digits)
     };
-    let bits = u64::from_str_radix(digits, radix).unwrap_or(0);
-    PpInteger {
+    if digits.is_empty() {
+        return None;
+    }
+    let bits = u64::from_str_radix(digits, radix).ok()?;
+    Some(PpInteger {
         bits,
         unsigned: explicitly_unsigned || (radix != 10 && bits > i64::MAX as u64),
-    }
+    })
 }
 
 fn parse_pp_character(spelling: &str) -> PpInteger {
@@ -2393,9 +2439,10 @@ fn tokens_to_string(tokens: &[Token]) -> String {
         .join(" ")
 }
 
-/// Re-lex a token-paste result through the production lexer. C requires the
-/// concatenated spelling to form exactly one preprocessing token.
-fn paste_tokens(left: &Token, right: &Token) -> Token {
+/// Re-lex a token-paste result. The production lexer recognizes complete C
+/// tokens; the extra pp-number path preserves preprocessing tokens such as
+/// `1_MODULE` until a later consuming context can classify them.
+fn paste_tokens(left: &Token, right: &Token, operator_span: SourceSpan) -> Token {
     let combined = format!("{}{}", token_text(left), token_text(right));
     let mut lexer = Lexer::new(FileId::DUMMY, &combined);
     let mut tokens = Vec::new();
@@ -2406,10 +2453,66 @@ fn paste_tokens(left: &Token, right: &Token) -> Token {
     }
     let kind = if tokens.len() == 1 && tokens[0].kind != TokenKind::Error {
         tokens.remove(0).kind
+    } else if is_preprocessing_number(&combined) {
+        TokenKind::PpNumber
     } else {
         TokenKind::Error
     };
-    Token::new(kind, left.span, TokenText::Decoded(combined))
+    let (span, text) = if kind == TokenKind::Error {
+        (
+            operator_span,
+            TokenText::Decoded(format!("{INVALID_PASTE_MARKER_PREFIX}{combined}")),
+        )
+    } else {
+        (left.span, TokenText::Decoded(combined))
+    };
+    Token::new(kind, span, text)
+}
+
+fn invalid_paste_spelling(token: &Token) -> Option<&str> {
+    let TokenText::Decoded(text) = &token.text else {
+        return None;
+    };
+    text.strip_prefix(INVALID_PASTE_MARKER_PREFIX)
+}
+
+fn is_preprocessing_number(spelling: &str) -> bool {
+    let Some(first) = spelling.chars().next() else {
+        return false;
+    };
+    if !first.is_ascii_digit() {
+        return false;
+    }
+
+    let mut position = first.len_utf8();
+    while position < spelling.len() {
+        if let Some(length) = universal_character_name_len_at(spelling, position) {
+            position += length;
+            continue;
+        }
+        let character = spelling[position..]
+            .chars()
+            .next()
+            .expect("position is within the preprocessing number");
+        position += character.len_utf8();
+        if matches!(character, 'e' | 'E' | 'p' | 'P')
+            && spelling[position..]
+                .chars()
+                .next()
+                .is_some_and(|next| matches!(next, '+' | '-'))
+        {
+            position += 1;
+        } else if character == '.'
+            || character == '_'
+            || character == '$'
+            || character.is_alphanumeric()
+        {
+            continue;
+        } else {
+            return false;
+        }
+    }
+    true
 }
 
 fn make_string_token(text: &str) -> Token {

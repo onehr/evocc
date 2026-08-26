@@ -44,6 +44,14 @@ fn pasted_preprocessing_numbers_survive_until_their_consuming_context() {
 }
 
 #[test]
+fn an_identifier_universal_character_name_is_valid_inside_a_pp_number() {
+    let source = "#define CAT(a, b) a##b\nCAT(1, \\u0041)\n";
+    let (tokens, errors) = preprocess(source);
+    assert!(errors.is_empty(), "unexpected diagnostics: {errors:?}");
+    assert_eq!(spellings(&tokens, source), ["1\\u0041"]);
+}
+
+#[test]
 fn the_kernel_module_shape_can_repaste_a_preprocessing_number() {
     let source = concat!(
         "#define CAT_RAW(a, b) a##b\n",
@@ -72,7 +80,12 @@ fn an_invalid_paste_has_the_frozen_diagnostic_at_the_operator() {
 
 #[test]
 fn a_noninteger_preprocessing_number_is_rejected_only_when_if_consumes_it() {
-    for pasted in ["CAT(1, x)", "CAT(1, .5)"] {
+    for (pasted, spelling) in [
+        ("CAT(1, x)", "1x"),
+        ("CAT(1, .5)", "1.5"),
+        ("CAT(0, 8)", "08"),
+        ("CAT(1, lul)", "1lul"),
+    ] {
         let source = format!("#define CAT(a, b) a##b\n{pasted}\n#if {pasted}\ny\n#endif\n");
         let (tokens, errors) = preprocess(&source);
         assert_eq!(errors.len(), 1, "{pasted}: {errors:?}");
@@ -81,7 +94,7 @@ fn a_noninteger_preprocessing_number_is_rejected_only_when_if_consumes_it() {
         assert!(
             spellings(&tokens, &source)
                 .iter()
-                .any(|token| token == "1x" || token == "1.5"),
+                .any(|token| token == spelling),
             "the translation-unit occurrence must survive: {tokens:?}"
         );
     }

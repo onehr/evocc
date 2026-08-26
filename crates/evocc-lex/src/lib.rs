@@ -40,7 +40,8 @@ pub enum TokenText {
     Decoded(String),
 }
 
-/// Enumeration of all token categories the lexer can produce.
+/// Enumeration of token categories carried by the lexical and preprocessing
+/// pipeline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
     Eof,
@@ -170,6 +171,10 @@ pub enum TokenKind {
     LBrace,
     RBrace,
     // Preprocessor tokens (visible after token pasting).
+    /// A preprocessing number produced by `##` that is not yet a valid C
+    /// literal token. The preprocessor preserves it until its consuming
+    /// context performs the required re-lexing.
+    PpNumber,
     Hash,
     HashHash,
 }
@@ -242,6 +247,23 @@ pub fn try_keyword(lexeme: &str) -> Option<TokenKind> {
     // Keywords are 50-ish entries; a linear scan is fine until the lexer is
     // on the hot path. A perfect-hash table can replace this later.
     KEYWORDS.iter().find(|(s, _)| *s == lexeme).map(|(_, k)| *k)
+}
+
+/// Return the byte length of a syntactically complete universal character
+/// name beginning at `pos`. Identifier and preprocessing-number recognition
+/// share this spelling-level predicate so the two token grammars cannot
+/// disagree about where a UCN ends.
+#[must_use]
+pub fn universal_character_name_len_at(source: &str, pos: usize) -> Option<usize> {
+    let bytes = source.as_bytes();
+    let digits = match bytes.get(pos..pos + 2)? {
+        [b'\\', b'u'] => 4,
+        [b'\\', b'U'] => 8,
+        _ => return None,
+    };
+    let end = pos + 2 + digits;
+    (end <= bytes.len() && bytes[pos + 2..end].iter().all(u8::is_ascii_hexdigit))
+        .then_some(2 + digits)
 }
 
 // ---------------------------------------------------------------------------
@@ -817,7 +839,7 @@ impl<'src> Lexer<'src> {
     fn is_identifier_start_at(&self, pos: usize) -> bool {
         let bytes = self.source.as_bytes();
         if bytes.get(pos) == Some(&b'\\') {
-            return self.ucn_len_at(pos).is_some();
+            return universal_character_name_len_at(self.source.as_ref(), pos).is_some();
         }
         self.source[pos..]
             .chars()
@@ -825,20 +847,8 @@ impl<'src> Lexer<'src> {
             .is_some_and(|ch| ch == '_' || ch == '$' || ch.is_alphabetic())
     }
 
-    fn ucn_len_at(&self, pos: usize) -> Option<usize> {
-        let bytes = self.source.as_bytes();
-        let digits = match bytes.get(pos..pos + 2)? {
-            [b'\\', b'u'] => 4,
-            [b'\\', b'U'] => 8,
-            _ => return None,
-        };
-        let end = pos + 2 + digits;
-        (end <= bytes.len() && bytes[pos + 2..end].iter().all(u8::is_ascii_hexdigit))
-            .then_some(2 + digits)
-    }
-
     fn consume_ucn(&mut self) -> bool {
-        if let Some(len) = self.ucn_len_at(self.pos) {
+        if let Some(len) = universal_character_name_len_at(self.source.as_ref(), self.pos) {
             self.pos += len;
             self.col += len as u32;
             true

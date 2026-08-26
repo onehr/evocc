@@ -37,5 +37,25 @@
   ],
   "greenControls": [
     "pasted_integer_constants_remain_valid_if_operands"
+  ],
+  "boundaryReviewRed": [
+    {
+      "command": "cargo test -p evocc --test preprocessor_target_profile a_pasted_nonliteral_reaches_the_c_lexer_diagnostic_at_the_parser_boundary --no-fail-fast",
+      "diagnostic": "expected E0001 invalid token, observed E1003 expected-expression at 2:17",
+      "buildErrors": 0,
+      "required": "a pp-number that survives preprocessing is rejected by C token conversion before syntactic parsing"
+    },
+    {
+      "command": "cargo test -p evocc-cpp --test token_paste_pp_numbers an_identifier_universal_character_name_is_valid_inside_a_pp_number --no-fail-fast",
+      "diagnostic": "CAT(1, \\u0041) was rejected eagerly as E0110 invalid-token-paste",
+      "buildErrors": 0,
+      "required": "the shared identifier-character grammar accepts a complete UCN inside a pp-number"
+    },
+    {
+      "command": "cargo test -p evocc-cpp --test token_paste_pp_numbers a_noninteger_preprocessing_number_is_rejected_only_when_if_consumes_it --no-fail-fast",
+      "diagnostic": "the lexer classified pasted 08 as IntLiteral and #if silently evaluated it as zero without E0111",
+      "buildErrors": 0,
+      "required": "every numeric preprocessing token is checked as an integer constant at #if consumption, including lexer-shaped IntLiteral tokens"
+    }
   ]
 }
