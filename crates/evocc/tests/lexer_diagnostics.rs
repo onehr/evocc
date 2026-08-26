@@ -68,7 +68,6 @@ fn assert_rejected(id: &str, input: &[u8], code: &str, line: u32, column: u32) {
 
 #[test]
 fn raw_and_unterminated_inputs_fail_with_structured_diagnostics() {
-    assert_rejected("invalid-token", b"@", "E0001", 1, 1);
     assert_rejected("invalid-utf8", &[0xff], "E0002", 1, 1);
     assert_rejected("unterminated-string", b"\"unterminated", "E0001", 1, 1);
     assert_rejected("unterminated-char", b"'x", "E0001", 1, 1);
@@ -84,5 +83,10 @@ fn valid_control_is_not_rejected() {
         "{}",
         String::from_utf8_lossy(&stderr)
     );
+    assert!(stderr.is_empty());
+
+    let (status, stdout, stderr) = run_bounded(b"@");
+    assert_eq!(status.code(), Some(0));
+    assert_eq!(stdout, b"@\n");
     assert!(stderr.is_empty());
 }

@@ -1,0 +1,99 @@
+{
+  "baseline": "7bc7dc476d320af594acabcd834f3b49f45053d4",
+  "authority": [
+    "docs/evoir-spec.md revision 1.9.12 sections 6.3 and 10.4",
+    "tests/contracts/day9-acceptance-contract.json scope P4"
+  ],
+  "oracleEvidence": [
+    {
+      "path": ".evidence/builtin-probes/20260826-2c23684c/stray.c",
+      "sha256": "87c6bcd8c3b8fb82db45d6f96da96f647f4e90268294201b968483c5e01092d5"
+    },
+    {
+      "path": ".evidence/builtin-probes/20260826-2c23684c/stray.out",
+      "sha256": "67d4a8c80c43be04e22802e8c498031dac6a4f13cdbb9467ee3ce9a230a575ad"
+    }
+  ],
+  "focusedCommand": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/private/tmp/c30-cargo-test-runner.sh cargo test -p evocc-cpp --test preprocessing_token_grammar -p evocc --test preprocessing_token_diagnostics --test lexer_diagnostics --test preprocessor_target_profile -p evocc-lex --test c11_full_goldens --no-fail-fast",
+  "summary": {
+    "failed": 11,
+    "passed": 5,
+    "buildErrors": 0,
+    "unexpectedFailedTargets": 0
+  },
+  "declaredCapability": "all C11 6.4 preprocessing-token productions survive preprocessing operations and only tokens without a C form fail at conversion with E0112",
+  "productionCoverage": {
+    "header-name": "RED: a raw header-name resolves, but its macro-expanded placemarker-paste form is not consumed by #include and stringification inserts spaces",
+    "identifier": "GREEN control: lex, CAT expansion and stringification agree",
+    "pp-number": "RED: .5foo is split into FloatLiteral plus Identifier and 1.2.3e+x into two FloatLiterals plus Identifier; surviving non-C forms reach E1004/E1002 instead of E0112",
+    "character-or-string-literal": "RED: quotes inside a stringified string literal are not escaped",
+    "punctuator": "GREEN control: lex, CAT expansion and stringification agree",
+    "other": "RED: backslash is an eager Error/E0001 token rather than a preserved preprocessing token; C conversion therefore cannot issue E0112"
+  },
+  "failures": [
+    {
+      "test": "header_name_spelling_survives_expansion_pasting_and_stringification",
+      "diagnostic": "the direct include emits one header marker, the macro-expanded include emits none, and stringification is \"< fixture . h >\"",
+      "required": "both includes emit the marker and stringification is \"<fixture.h>\""
+    },
+    {
+      "test": "leading_dot_preprocessing_number_survives_expansion_pasting_and_stringification",
+      "diagnostic": ".5foo lexed as two tokens: FloatLiteral .5 plus Identifier foo",
+      "required": ".5foo lexes as one PpNumber and survives expansion, paste and stringification"
+    },
+    {
+      "test": "multi_dot_exponent_preprocessing_number_survives_pasting_and_stringification",
+      "diagnostic": "1.2.3e+x lexed as FloatLiteral 1.2, FloatLiteral .3e+ and Identifier x",
+      "required": "1.2.3e+x lexes as one PpNumber and survives paste and stringification"
+    },
+    {
+      "test": "character_and_string_literals_survive_expansion_pasting_and_stringification",
+      "diagnostic": "observed stringification \"L\"text\"\" without escaped inner quotes",
+      "required": "oracle spelling \"L\\\"text\\\"\""
+    },
+    {
+      "test": "other_character_tokens_survive_expansion_pasting_and_stringification",
+      "diagnostic": "backslash in \\sreg lexed as TokenKind::Error",
+      "required": "backslash, @ and backtick survive lexing, macro expansion, paste placemarking and stringification"
+    },
+    {
+      "test": "other_character_reaching_the_c_lexer_is_a_stray_token",
+      "diagnostic": "observed E0001 invalid token at 1:9",
+      "required": "E0112 stray-token at 1:9"
+    },
+    {
+      "test": "leading_dot_preprocessing_number_without_a_c_form_is_a_stray_token",
+      "diagnostic": "observed E1004 trailing-token at 1:12 for .5foo",
+      "required": "E0112 stray-token at 1:9"
+    },
+    {
+      "test": "multi_dot_preprocessing_number_without_a_c_form_is_a_stray_token",
+      "diagnostic": "observed E1002 expected-token:semicolon at 1:12 for 1.2.3e+x",
+      "required": "E0112 stray-token at 1:9"
+    },
+    {
+      "test": "valid_control_is_not_rejected",
+      "diagnostic": "preprocess-only @ exits 1 with E0001",
+      "required": "preprocess-only @ succeeds and emits @"
+    },
+    {
+      "test": "a_pasted_nonliteral_reaches_the_c_lexer_diagnostic_at_the_parser_boundary",
+      "diagnostic": "pasted 1x still reports E0001 invalid token",
+      "required": "pasted 1x reports E0112 stray-token at the parser boundary"
+    },
+    {
+      "test": "every_c11_golden_matches_kind_spelling_span_diagnostic_and_eof",
+      "diagnostic": "@ and backtick remain Error tokens with E0001",
+      "required": "both are PpOther tokens with no lexer-stage diagnostic"
+    }
+  ],
+  "greenControls": [
+    "identifier_survives_expansion_pasting_and_stringification",
+    "punctuator_survives_expansion_pasting_and_stringification"
+  ],
+  "specGaps": [
+    "P4.C11-reference-scope: section 10.4 cites C11 6.4.8 while the complete preprocessing-token production is in C11 6.4",
+    "P4.header-name-and-other-paste: section 10.4 enumerates identifier, punctuator, literal and pp-number paste results but does not say whether header-name or other may be synthesized by two nonempty operands; the RED uses placemarker preservation and does not invent that rule",
+    "P4.dollar-classification: scope P4 lists dollar among stray characters while section 10.4 limits it to outside identifiers and the GNU lexer accepts dollar as an identifier character; no standalone-dollar classification is asserted"
+  ]
+}

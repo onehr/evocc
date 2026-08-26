@@ -127,8 +127,8 @@ identifier_ascii	616c7068615f313233	Identifier|616c7068615f313233|0|9|1|1;Eof||9
 identifier_gnu_dollar	24676e75	Identifier|24676e75|0|4|1|1;Eof||4|4|1|5	-
 identifier_unicode_pi	cf80	Identifier|cf80|0|2|1|1;Eof||2|2|1|2	-
 identifier_ucn_pi	5c7530336330	Identifier|5c7530336330|0|6|1|1;Eof||6|6|1|7	-
-invalid_at	40	Error|40|0|1|1|1;Eof||1|1|1|2	E0001@1:1
-invalid_backtick	60	Error|60|0|1|1|1;Eof||1|1|1|2	E0001@1:1
+preprocessing_other_at	40	PpOther|40|0|1|1|1;Eof||1|1|1|2	-
+preprocessing_other_backtick	60	PpOther|60|0|1|1|1;Eof||1|1|1|2	-
 stream_empty		Eof||0|0|1|1	-
 stream_whitespace_only	20090a	Eof||3|3|2|1	-
 stream_block_comment_only	2f2a782a2f	Eof||5|5|1|6	-

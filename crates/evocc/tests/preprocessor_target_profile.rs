@@ -78,7 +78,7 @@ fn a_pasted_nonliteral_reaches_the_c_lexer_diagnostic_at_the_parser_boundary() {
     assert!(output.stdout.is_empty());
     let stderr = String::from_utf8(output.stderr).expect("diagnostic is UTF-8");
     assert!(
-        stderr.contains("error[E0001]: invalid token"),
+        stderr.contains("error[E0112]: stray-token"),
         "unexpected diagnostic: {stderr:?}"
     );
 }
