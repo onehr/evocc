@@ -3025,7 +3025,9 @@ any of the suffixes `u`, `l`, `ul`, `ll`, `ull` in either case, decimal, octal
 and hexadecimal forms. Evaluation is in `intmax_t`/`uintmax_t` with the usual
 arithmetic conversions; an identifier that is not a macro is `0`; `defined`
 and the feature queries are evaluated before expansion. Measured defect at
-revision 1.9.7: `#if 1UL > 100` and `#if CAT(300,) > 100` were false.
+revision 1.9.7: suffixed literals were right (`#if 1UL == 1` true) but pasted
+pp-numbers were not (`#if CAT(300,) > 100` and `#if CAT(0x1,00) > 100` false),
+which is what made `ARM64_NCAPS >= BIT(15)` true in every raw kernel lane.
 
 **Feature queries.** All four are defined as macros, so `#ifdef __has_attribute`
 is true (measured for `__has_attribute`, `__has_builtin`, `__has_feature`,
