@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.8** | **Authoritative reference** | **2026-08-26**
+**Revision 1.9.9** | **Authoritative reference** | **2026-08-26**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -3060,8 +3060,13 @@ is in effect to `N` (a power of two); `pack()` restores the default;
 `pack(1)` on `{char; int}` gives size 5 alignment 1, `pack(2)` on
 `{char; int; long}` gives 14/2, `pack()` restores 8/4. The preprocessor turns
 the directive into a layout marker the parser applies as a record-level
-`max_align` (10.1.9 semantics: member alignment is `min(natural, N)`; an
-`aligned` attribute on a member still raises). `pack(show)` and any other
+`max_align`: member alignment is `min(natural, N)`, and a member `aligned(M)`
+with `M > N` does **not** raise it while the pack is active (measured, both
+oracles, all three attribute placements: `pack(1)` with `int
+__attribute__((aligned(4)))` gives size 5 alignment 1;
+`.evidence/builtin-probes/20260826-2c23684c/pack-stack.out`, sha256
+`58033385db011629e6ebf9619876bb814d1fa6c563f85f66b0add88a46352ecf`; the
+push/pop stack there measures `5/1, 12/4, 5/1, 8/4`). `pack(show)` and any other
 argument form are `E0107` (`pragma-pack-unsupported`). A poisoned identifier
 used later is `E0108` (`poisoned-identifier-used`) at the use.
 Any other pragma is ignored-safe; the acceptance receipt lists the ignored
@@ -3567,6 +3572,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.9 | 2026-08-26 | Corrects 10.4 `#pragma pack`: a member `aligned` attribute does not raise alignment above the active pack cap. Revision 1.9.8 asserted the opposite from documentation without a probe; the executing agent's sealed probe showed both oracles at 5/1. |
 | 1.9.8 | 2026-08-26 | Adds 10.1.17 (compile-time builtins, bit builtins, `__builtin_unreachable`, `__builtin_return_address`, `__auto_type`, `?:`, case ranges, `__label__`) with measured oracle semantics; gives `#pragma pack` its measured layout meaning; freezes `#if` arithmetic on suffixed and pasted pp-numbers after a measured defect; `E0109`, `E2915`, `E2916`, `E3022`-`E3025`. Fixes the dangling 10.1.17 reference and the pragma-count wording reported by the preprocessor window. |
 | 1.9.7 | 2026-08-26 | Adds 10.4, the EvoCPP target profile: the sealed GCC-14 predefined macro list as authority, dynamic macros, the four feature queries with measured answers, pragmas, and preprocessor diagnostics `E0102`-`E0108`. Added because all 16 raw kernel lanes stop on `#error \"Unknown compiler\"`. |
 | 1.9.6 | 2026-08-26 | Closes the five gaps the checked-arithmetic/asm window reported: `E2914` spans per case, what lossless `asm` keeps and drops, `const` pointee and `__int128` operands as `E2913`. Contract out-of-scope text corrected from `inline asm` to `asm lowering`. |
