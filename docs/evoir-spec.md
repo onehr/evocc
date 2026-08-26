@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.9** | **Authoritative reference** | **2026-08-26**
+**Revision 1.9.10** | **Authoritative reference** | **2026-08-26**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1240,6 +1240,7 @@ twice would let a reader think two conditions are the same finding.
 | `E0107` | `pragma-pack-unsupported` | preprocessor |
 | `E0108` | `poisoned-identifier-used` | preprocessor |
 | `E0109` | `counter-overflow` | preprocessor |
+| `E0110` | `invalid-token-paste` | preprocessor |
 | `E3018` | `invalid-lifetime-end` | runtime |
 | `E3019` | `function-pointer-target-signature-mismatch` | runtime |
 | `E3020` | `not-lowered: checked-arithmetic` | lowering |
@@ -3019,6 +3020,11 @@ digest. `__CHAR_UNSIGNED__ 1` is in the list and agrees with the type profile
 in translation order (measured `0 1 2`); a translation unit that expands it
 2^32 times is `E0109` (`counter-overflow`).
 
+**Token pasting.** The operands of `##` are concatenated and the result is
+re-lexed; a result that is not one valid preprocessing token is `E0110`
+(`invalid-token-paste`) at the `##` operator (both oracles reject
+`CAT(1,+)`). GNU comma elision before an empty `__VA_ARGS__` is honoured.
+
 **`#if` arithmetic.** Every pp-number in a controlling expression, including
 one produced by `##` or by macro expansion, is re-lexed as an integer constant:
 any of the suffixes `u`, `l`, `ul`, `ll`, `ull` in either case, decimal, octal
@@ -3066,7 +3072,13 @@ oracles, all three attribute placements: `pack(1)` with `int
 __attribute__((aligned(4)))` gives size 5 alignment 1;
 `.evidence/builtin-probes/20260826-2c23684c/pack-stack.out`, sha256
 `58033385db011629e6ebf9619876bb814d1fa6c563f85f66b0add88a46352ecf`; the
-push/pop stack there measures `5/1, 12/4, 5/1, 8/4`). `pack(show)` and any other
+push/pop stack there measures `5/1, 12/4, 5/1, 8/4`). `pack` directives are
+honoured at file scope and at block scope (measured: block-scope `pack(1)` gives
+5/1, then 8/4 after `pack()`, both oracles); a `pack` directive inside a
+record's member list is `E0107` (`ORACLE_CONFLICT`: GCC-14 applies it to the
+following members, 5/1, Clang-19 ignores it, 8/4; evidence
+`pack-gaps.out`). `pack(pop)` on an empty stack is ignored (both oracles warn
+and continue); the receipt counts it. `pack(show)` and any other
 argument form are `E0107` (`pragma-pack-unsupported`). A poisoned identifier
 used later is `E0108` (`poisoned-identifier-used`) at the use.
 Any other pragma is ignored-safe; the acceptance receipt lists the ignored
@@ -3076,7 +3088,7 @@ Diagnostics of this section are front-end (preprocessor) diagnostics: `E0102`
 `unmatched-conditional`, `E0104` `error-directive`, `E0105`
 `include-not-found`, `E0106` `feature-query-malformed`, `E0107`
 `pragma-pack-unsupported`, `E0108` `poisoned-identifier-used`, `E0109`
-`counter-overflow`.
+`counter-overflow`, `E0110` `invalid-token-paste`.
 
 ## 11. Proof Checking Interface
 
@@ -3572,6 +3584,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.10 | 2026-08-26 | Closes the three gaps the paste/pack window reported: `E0110` for an invalid `##` result, `pack(pop)` on an empty stack ignored, `pack` honoured at block scope and refused inside a member list (`ORACLE_CONFLICT`). All measured. |
 | 1.9.9 | 2026-08-26 | Corrects 10.4 `#pragma pack`: a member `aligned` attribute does not raise alignment above the active pack cap. Revision 1.9.8 asserted the opposite from documentation without a probe; the executing agent's sealed probe showed both oracles at 5/1. |
 | 1.9.8 | 2026-08-26 | Adds 10.1.17 (compile-time builtins, bit builtins, `__builtin_unreachable`, `__builtin_return_address`, `__auto_type`, `?:`, case ranges, `__label__`) with measured oracle semantics; gives `#pragma pack` its measured layout meaning; freezes `#if` arithmetic on suffixed and pasted pp-numbers after a measured defect; `E0109`, `E2915`, `E2916`, `E3022`-`E3025`. Fixes the dangling 10.1.17 reference and the pragma-count wording reported by the preprocessor window. |
 | 1.9.7 | 2026-08-26 | Adds 10.4, the EvoCPP target profile: the sealed GCC-14 predefined macro list as authority, dynamic macros, the four feature queries with measured answers, pragmas, and preprocessor diagnostics `E0102`-`E0108`. Added because all 16 raw kernel lanes stop on `#error \"Unknown compiler\"`. |
