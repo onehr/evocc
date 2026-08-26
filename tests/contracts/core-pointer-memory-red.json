@@ -1,0 +1,65 @@
+{
+  "contractId": "c30.core-pointer-memory.red.v1",
+  "authority": {
+    "specification": "docs/evoir-spec.md revision 1.9.11 sections 10.1.3 and 10.1.5",
+    "acceptanceContract": "tests/contracts/day9-acceptance-contract.json scope line G"
+  },
+  "baselineCommit": "7dce708",
+  "classification": "tests-only RED",
+  "declaredMissingCapabilities": [
+    "scaled pointer prefix, postfix and compound updates",
+    "memory places rooted at a loaded pointer value"
+  ],
+  "observations": [
+    {
+      "command": "cargo test --workspace --no-fail-fast",
+      "failedTargets": 4,
+      "failedAssertions": 6,
+      "buildErrors": 0,
+      "diagnostics": [
+        "evocc-parser/pointer_updates: two E2704 pointer-update failures",
+        "evocc-parser/loaded_pointer_places: two E2102 invalid-projected-lvalue failures",
+        "evocc-lower/day7_memory_equivalence_red: the same two declared parser diagnostics",
+        "evocc-proofcheck/pointer_memory_proof: E2704 before proof production"
+      ]
+    },
+    {
+      "command": "cargo test -p evocc-parser --test pointer_updates --test loaded_pointer_places --no-fail-fast",
+      "failed": 4,
+      "passedControls": 2,
+      "buildErrors": 0,
+      "diagnostics": [
+        "direct and pointer-member update programs: E2704 not-covered-day7: pointer-update",
+        "loaded pointer field chains and dereferenced pointer roots: E2102 invalid-projected-lvalue"
+      ]
+    },
+    {
+      "command": "cargo test -p evocc-lower --test day7_memory_equivalence_red parsed_c_memory_programs_are_equivalent_in_both_interpreters --no-fail-fast",
+      "failed": 1,
+      "passedControls": 6,
+      "buildErrors": 0,
+      "diagnostics": [
+        "scaled_pointer_updates: parser E2704 at 1:80",
+        "loaded_pointer_place_chain: parser E2102 at 1:183"
+      ]
+    },
+    {
+      "command": "cargo test -p evocc-proofcheck --test pointer_memory_proof --no-fail-fast",
+      "failed": 1,
+      "passedControls": 0,
+      "buildErrors": 0,
+      "diagnostics": [
+        "proof fixture: parser E2704 at 1:189 before lowering or certificate production"
+      ]
+    }
+  ],
+  "requiredGreenProperties": [
+    "prefix and postfix results preserve C value semantics while updating by pointee size",
+    "pointer += and -= accept only integer offsets and perform one checked scaled offset",
+    "direct and projected pointer objects share update semantics without evaluating a place twice",
+    "p->next->value, holder.next->value, (*pp)->value and **ipp work as reads and writes",
+    "C-HIR and EvoIR interpreters return the same value for both new forms",
+    "lowered EvoIR validates and its equality certificate is accepted by the independent evo-proofcheck binary",
+    "invalid void-pointer, function-pointer and floating-offset updates remain E2102 invalid-update-operands"
+  ]
+}

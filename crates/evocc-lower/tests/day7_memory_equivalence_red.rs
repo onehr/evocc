@@ -93,6 +93,18 @@ const CASES: &[Case] = &[
         expected: 1_122,
         expected_volatile_ir_accesses: Some(ORDERED_VOLATILE_IR_ACCESSES),
     },
+    Case {
+        id: "scaled_pointer_updates",
+        source: "int main(void) { int a[6] = {10, 20, 30, 40, 50, 60}; int *p = a; int first = *p++; int second = *++p; int third = *p--; int fourth = *--p; p += 3; int fifth = *p; p -= 2; int sixth = *p; return first + second + third + fourth + fifth + sixth; }\n",
+        expected: 140,
+        expected_volatile_ir_accesses: None,
+    },
+    Case {
+        id: "loaded_pointer_place_chain",
+        source: "struct Node { int value; struct Node *next; }; int main(void) { struct Node a; struct Node b; struct Node c; a.next = &b; b.next = &c; b.value = 1; c.value = 7; struct Node *p = &a; p->next->value = 5; p->next->next->value += 2; return p->next->value * 10 + p->next->next->value; }\n",
+        expected: 59,
+        expected_volatile_ir_accesses: None,
+    },
 ];
 
 const STRING_UNIT_CASES: &[Case] = &[
@@ -737,8 +749,8 @@ fn check_generated_case_bounded(case: GeneratedCase, ordinal: usize) -> Vec<Stri
 #[test]
 fn parsed_c_memory_programs_are_equivalent_in_both_interpreters() {
     let mut failures = Vec::new();
-    if CASES.len() != 6 {
-        failures.push(format!("case denominator is {}, expected 6", CASES.len()));
+    if CASES.len() != 8 {
+        failures.push(format!("case denominator is {}, expected 8", CASES.len()));
     }
     let unique_ids = CASES.iter().map(|case| case.id).collect::<BTreeSet<_>>();
     let unique_sources = CASES

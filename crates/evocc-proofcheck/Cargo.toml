@@ -12,3 +12,12 @@ path = "src/main.rs"
 [dependencies]
 evocc-evoir = { path = "../evocc-evoir" }
 evocc-proof = { path = "../evocc-proof" }
+
+[dev-dependencies]
+evocc-chir = { path = "../evocc-chir" }
+evocc-common = { path = "../evocc-common" }
+evocc-eqopt = { path = "../evocc-eqopt" }
+evocc-lex = { path = "../evocc-lex" }
+evocc-lower = { path = "../evocc-lower" }
+evocc-parser = { path = "../evocc-parser" }
+evocc-types = { path = "../evocc-types" }

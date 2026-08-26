@@ -115,8 +115,15 @@ version = "0.0.0"
 name = "evocc-proofcheck"
 version = "0.0.0"
 dependencies = [
+ "evocc-chir",
+ "evocc-common",
+ "evocc-eqopt",
  "evocc-evoir",
+ "evocc-lex",
+ "evocc-lower",
+ "evocc-parser",
  "evocc-proof",
+ "evocc-types",
 ]
 
 [[package]]
