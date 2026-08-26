@@ -1,8 +1,8 @@
 {
   "receiptId": "c30.kernel-dashboard",
-  "subjectCommit": "ca6845f",
-  "publishedFromRun": "20260826T080442Z-10002",
-  "previousRun": "20260826T022731Z-97460",
+  "subjectCommit": "fa0c98e",
+  "publishedFromRun": "20260826T121134Z-59549",
+  "previousRun": "20260826T080442Z-10002",
   "cohortSha256": "09d0e2eaf0734949164a491d30df640bf396ff7586ef495f938f565b8879a306",
   "observer": {
     "path": "tests/acceptance/day5-kernel-reductions-observer.py",
@@ -13,7 +13,7 @@
     "environmentSha256": "780d6c98c4c1e32e4d20bb1c577bed670048b661501fcab9e3cad06520584813",
     "returnCode": 0,
     "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "stdoutSha256": "1825f45c90c54939e291646f76d5ef174fe8dd1e2160f62ec29828c1114f9150",
+    "stdoutSha256": "e2f4861e1c5be7a14cf0bf219ffee1ebcad90ac2a302d2940d665b2da287ca57",
     "timedOut": false
   },
   "command": "tests/acceptance/day5-kernel-reconnaissance.py --timeout 120 --parser-timeout 10 --parser-jobs 4",
@@ -24,33 +24,33 @@
         "failed": 14
       },
       "gcc-preprocessed-parser": {
-        "clean": 1,
-        "failed": 15
+        "clean": 2,
+        "failed": 14
       },
       "clang-preprocessed-parser": {
-        "clean": 1,
-        "failed": 15
+        "clean": 2,
+        "failed": 14
       }
     },
-    "dualOracleCleanParseTus": "1/16"
+    "dualOracleCleanParseTus": "2/16"
   },
   "routing": {
-    "unclassified": 44,
-    "clean": 4
+    "unclassified": 42,
+    "clean": 6
   },
   "regressionsAgainstPrevious": [],
   "artifacts": {
     "results": {
-      "path": ".evidence/day5-kernel-reconnaissance/20260826T080442Z-10002/results.jsonl",
-      "sha256": "b3ddf91bef49a639eddf66acffb142d105a94f87188cc1c86bbf5442d99152b9"
+      "path": ".evidence/day5-kernel-reconnaissance/20260826T121134Z-59549/results.jsonl",
+      "sha256": "edc88c17da680121887db35e216f2d9c18109988682aaa2679d280aff4b4c72d"
     },
     "routing": {
-      "path": ".evidence/kernel-dashboard/ca6845f/routing.json",
-      "sha256": "c7189e4bd7fdd4a1b2d02e8e4ee58849b3777be1864e97b346594d4babe70df5"
+      "path": ".evidence/kernel-dashboard/fa0c98e/routing.json",
+      "sha256": "2388765db58acdf87128805c5879901b529d2d4b866d435a3b779efa7606520d"
     },
     "captureStatus": {
-      "path": ".evidence/kernel-dashboard/ca6845f/reconnaissance.status",
-      "sha256": "f3f3f8fb15685f98160fc91d26e9bbfd0b3ba57973396fc3ffc8f56ac3856418"
+      "path": ".evidence/kernel-dashboard/fa0c98e/reconnaissance.status",
+      "sha256": "2f94b2a59094a07a3462e40b7fc0c898f71aa961b35dc4a22800469de16778f0"
     }
   }
 }

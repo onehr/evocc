@@ -4,7 +4,7 @@
     "path": "tests/contracts/day9-acceptance-contract.json",
     "sha256": "e8f3a9589a2317efbc21ccadb5aae87790dcceda6f83a244d08377e8c773453a"
   },
-  "cutLine": "The frozen ten-position A profile, B, the typeof + _Generic portion of C, scope E, scope F, the explicitly measured Unknown-compiler gate of scope P, pasted-pp-number plus pragma-pack scope P2, and preprocessing-token paste scope P3 are closed. Statement expressions, designated initializers, compound literals and all of D remain deferred; their red sets were not opened. Checked arithmetic is front-end complete and fails closed in lowering with E3020. GNU asm is preserved in C-HIR and fails closed in execution and lowering with E3021. The generic E0104 wording conflict in scope P is retained under specAmbiguities.",
+  "cutLine": "The frozen ten-position A profile, B, the typeof + _Generic portion of C, scope E, scope F, the explicitly measured Unknown-compiler gate of scope P, pasted-pp-number plus pragma-pack scope P2, preprocessing-token paste scope P3, and core pointer-memory scope G are closed. Statement expressions, designated initializers, compound literals and all of D remain deferred; their red sets were not opened. Checked arithmetic is front-end complete and fails closed in lowering with E3020. GNU asm is preserved in C-HIR and fails closed in execution and lowering with E3021. The generic E0104 wording conflict in scope P is retained under specAmbiguities.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -117,32 +117,47 @@
       "preprocessing-token-paste"
     ]
   },
-  "subjectCommit": "ca6845f",
+  "corePointerMemoryRedWindow": {
+    "opened": "734eabd (tests only; four targets contained six failing assertions for exactly two declared capabilities, zero Rust build errors)",
+    "closed": "fa0c98e",
+    "implementationCommits": [
+      "fa0c98e"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/core-pointer-memory-red.json",
+      "sha256": "1020cc316c91e155d620fcbb5c95e67d1c09aa2b2decc3fa2f45c39bcbf8bac6"
+    },
+    "declaredCapabilities": [
+      "scaled-pointer-updates",
+      "loaded-pointer-rooted-memory-places"
+    ]
+  },
+  "subjectCommit": "fa0c98e",
   "gate": {
-    "claim": "1/16 dual-oracle parse, 2/16 raw preprocess clean, zero raw lanes stopped at the autoconf.h pasted-pp-number frontier, all fourteen affected raw lanes advanced to the next measured sysreg.h first-error site, the declared P3 property is present, and zero regressions against the P2 publication",
+    "claim": "2/16 dual-oracle parse, 2/16 raw preprocess clean, zero parser lanes stopped on E2704 pointer-update or E2102 invalid-projected-lvalue, both declared G properties are present, and zero regressions against the P3 publication",
     "measured": {
-      "dualOracleCleanParseTus": "1/16",
+      "dualOracleCleanParseTus": "2/16",
       "rawPreprocessClean": "2/16",
-      "autoconfPpNumberLanesRemaining": 0,
-      "nextSysregInvalidTokenLanes": 14,
-      "declaredP3PropertiesMissing": 0,
+      "pointerUpdateLanesRemaining": 0,
+      "invalidProjectedLvalueLanesRemaining": 0,
+      "declaredGPropertiesMissing": 0,
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260826T022731Z-97460/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260826T080442Z-10002/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "f5a0865fd5c60bb5f7e59e65d5de574a81bfff39a2bd35949f8b9787fdd32db2",
-      "subjectCommit": "ca6845f",
-      "publishedFromRun": "20260826T080442Z-10002"
+      "sha256": "83254569829533b773b73a9e496b4908d0c02a50228efdc5aee696ef83208f08",
+      "subjectCommit": "fa0c98e",
+      "publishedFromRun": "20260826T121134Z-59549"
     },
     "result": "PASS"
   },
   "lanes": {
     "clean": {
-      "count": 4,
+      "count": 6,
       "units": [
         "lib-bitrev (evocpp-raw, gcc-preprocessed-parser, clang-preprocessed-parser)",
-        "lib-fdt-wip (evocpp-raw)"
+        "lib-fdt-wip (evocpp-raw, gcc-preprocessed-parser, clang-preprocessed-parser)"
       ]
     },
     "stillFailing": [
@@ -153,28 +168,22 @@
         "rootCause": "next measured raw-preprocess first-error site at arch/arm64/include/asm/sysreg.h:1163:26 after all fourteen lanes left @gcc-output/include/generated/autoconf.h:2300:26"
       },
       {
-        "count": 10,
-        "lanes": "5 units x {gcc,clang}-preprocessed-parser",
-        "firstError": "E2704 not-covered-day7: pointer-update",
-        "rootCause": "next measured first-error class"
+        "count": 12,
+        "lanes": "6 units x {gcc,clang}-preprocessed-parser",
+        "firstError": "E1003 expected-expression",
+        "rootCause": "measured statement-expression expansions including smp_load_acquire, READ_ONCE and max/min forms; scope H"
       },
       {
         "count": 8,
         "lanes": "4 units x {gcc,clang}-preprocessed-parser",
-        "firstError": "E1003 expected-expression",
-        "rootCause": "next measured first-error class"
+        "firstError": "E1002 expected-token: :",
+        "rootCause": "measured GNU case-range syntax, including case '0' ... '7'; scope I"
       },
       {
         "count": 6,
         "lanes": "3 units x {gcc,clang}-preprocessed-parser",
         "firstError": "E2901 not-covered-day9: designated-initializer",
         "rootCause": "deferred by the frozen cut line"
-      },
-      {
-        "count": 4,
-        "lanes": "2 units x {gcc,clang}-preprocessed-parser",
-        "firstError": "E2102 invalid-projected-lvalue",
-        "rootCause": "next measured first-error class"
       },
       {
         "count": 2,
@@ -263,30 +272,40 @@
         "commit": "ca6845f",
         "run": "20260826T080442Z-10002",
         "parseLanesStoppedOn": "raw: all 14 affected lanes moved from @gcc-output/include/generated/autoconf.h:2300:26 to arch/arm64/include/asm/sysreg.h:1163:26 with E0001, and 2 remain clean; parser: 10 pointer-update, 8 expected-expression, 6 designated-initializer, 4 invalid-projected-lvalue, 2 __builtin_choose_expr, 2 clean; 0 regressions"
+      },
+      {
+        "commit": "fa0c98e",
+        "run": "20260826T121134Z-59549",
+        "parseLanesStoppedOn": "raw: 14 E0001 at arch/arm64/include/asm/sysreg.h:1163:26 and 2 clean; parser: pointer-update 0, invalid-projected-lvalue 0, 12 expected-expression, 8 expected-token colon, 6 designated-initializer, 2 __builtin_choose_expr, 4 clean; dual-oracle clean 2/16; 0 regressions"
       }
     ]
   },
   "dashboardDelta": {
     "before": {
-      "run": "20260826T022731Z-97460",
-      "subjectCommit": "2cf588c",
+      "run": "20260826T080442Z-10002",
+      "subjectCommit": "ca6845f",
       "declaredBlockerLanes": {
-        "autoconfPpNumber": 14
+        "pointerUpdate": 10,
+        "invalidProjectedLvalue": 4
       },
       "rawPreprocessClean": "2/16",
       "dualOracleCleanParseTus": "1/16"
     },
     "after": {
-      "run": "20260826T080442Z-10002",
-      "subjectCommit": "ca6845f",
+      "run": "20260826T121134Z-59549",
+      "subjectCommit": "fa0c98e",
       "declaredBlockerLanes": {
-        "autoconfPpNumber": 0
+        "pointerUpdate": 0,
+        "invalidProjectedLvalue": 0
       },
-      "nextFirstErrorSites": {
-        "arch/arm64/include/asm/sysreg.h:1163:26 E0001 invalid token": 14
+      "nextFirstErrorClasses": {
+        "E1003 expected-expression": 12,
+        "E1002 expected-token colon": 8,
+        "E2901 designated-initializer": 6,
+        "E2001 __builtin_choose_expr": 2
       },
       "rawPreprocessClean": "2/16",
-      "dualOracleCleanParseTus": "1/16",
+      "dualOracleCleanParseTus": "2/16",
       "regressionsAgainstPrevious": 0
     }
   },
@@ -334,11 +353,27 @@
   },
   "tests": {
     "workspace": {
-      "passed": 790,
+      "passed": 797,
       "failed": 0,
       "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/private/tmp/c30-cargo-test-runner.sh cargo test --workspace --no-fail-fast; the passed count is from the same command with -- --list | rg -c ': test$'"
     },
     "suites": {
+      "crates/evocc-parser/tests/pointer_updates.rs": {
+        "passed": 3,
+        "command": "cargo test -p evocc-parser --test pointer_updates"
+      },
+      "crates/evocc-parser/tests/loaded_pointer_places.rs": {
+        "passed": 3,
+        "command": "cargo test -p evocc-parser --test loaded_pointer_places"
+      },
+      "crates/evocc-lower/tests/day7_memory_equivalence_red.rs": {
+        "passed": 5,
+        "command": "cargo test -p evocc-lower --test day7_memory_equivalence_red"
+      },
+      "crates/evocc-proofcheck/tests/pointer_memory_proof.rs": {
+        "passed": 1,
+        "command": "cargo test -p evocc-proofcheck --test pointer_memory_proof"
+      },
       "crates/evocc-cpp/tests/token_paste_pp_numbers.rs": {
         "passed": 6,
         "command": "cargo test -p evocc-cpp --test token_paste_pp_numbers"
@@ -438,10 +473,10 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "ca6845fb7bf8367e3281577ac8e63ae1ca0149b9",
-    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-ppnumber-replay.ZWQSgN/repo; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/private/tmp/c30-cargo-test-runner.sh cargo test --workspace --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test",
+    "commit": "fa0c98eb93a974865714e8518e30e491dfce7d87",
+    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-pointer-memory-replay.FqDHeP/repo; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/private/tmp/c30-cargo-test-runner.sh cargo test --workspace --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test",
     "measured": {
-      "passed": 790,
+      "passed": 797,
       "failed": 0,
       "clippy": 0,
       "fmt": "clean",
@@ -478,6 +513,8 @@
     "The initial sandboxed layout subject invocation returned no usable evidence because the sealed local container boundary was denied. The authoritative reruns used the same commands with the required container permission and produced explicit 128/128 and 22/22 PASS summaries with zero mismatches.",
     "A first attempt to run the base and attributed layout gates concurrently was rejected because both fail-closed checks share the global container inventory. No result from that attempt was used; the recorded gates are the subsequent sequential 128/128 and 22/22 runs.",
     "macOS provenance scanning made direct execution of workspace test binaries take roughly one minute per target. The recorded workspace and isolated-clone test commands use a temporary runner that copies each already-built binary to /private/tmp and removes only the copy's provenance attribute before execution; focused direct runs and the full semantic results agree.",
-    "Three boundary probes (UCN identifier characters in a pp-number, delayed C-token conversion, and numeric-shaped invalid integer tokens in #if) were added after the opening checkpoint. Each was observed RED before its fix and is recorded in the RED diagnostic artifact; they refine the single declared preprocessing-token-paste capability rather than expanding the window."
+    "Three boundary probes (UCN identifier characters in a pp-number, delayed C-token conversion, and numeric-shaped invalid integer tokens in #if) were added after the opening checkpoint. Each was observed RED before its fix and is recorded in the RED diagnostic artifact; they refine the single declared preprocessing-token-paste capability rather than expanding the window.",
+    "The invalid differential corpus exposed a semantic split inside the declared pointer-update capability: C-HIR computed a new byte offset without validating the resulting pointer while EvoIR enforced pointer_valid. C-HIR now calls the shared object-memory validity check after source pointer arithmetic, so both interpreters report E3011 beyond one-past.",
+    "The first independent-proof fixture yielded a valid zero-region certificate because its only add was rooted in memory and therefore ineligible for P0. A separate pure identity function now forces one non-vacuous scalar rewrite while the same module still exercises loaded-pointer places; evo-proofcheck replays that certificate independently."
   ]
 }
