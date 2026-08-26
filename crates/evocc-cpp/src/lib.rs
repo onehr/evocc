@@ -233,42 +233,21 @@ impl MacroMap {
         while i < body.len() {
             let tok = &body[i];
 
-            // Token pasting operator (##).
-            // Must come FIRST so that ## isn't misinterpreted as
-            // stringification by the handler below.
-            // The real lexer produces two consecutive HashHash tokens for ##;
-            // tests create a single HashHash token with text "##".
-            // Handle both representations.
+            // Token pasting operator (##). The lexer emits one HashHash token.
             if tok.kind == TokenKind::HashHash {
-                let next_is_hashhash =
-                    i + 1 < body.len() && body[i + 1].kind == TokenKind::HashHash;
-                let is_double_hash = next_is_hashhash || token_text(tok).len() >= 2;
-                if is_double_hash {
-                    if pending_paste.is_some() {
-                        if next_is_hashhash {
-                            i += 2;
-                        } else {
-                            i += 1;
-                        }
-                        continue;
-                    }
-                    if let Some(last) = result.pop() {
-                        pending_paste = Some(last);
-                    }
-                    if next_is_hashhash {
-                        i += 2; // consume both ## tokens
-                    } else {
-                        i += 1; // consume single ## token
-                    }
+                if pending_paste.is_some() {
+                    i += 1;
                     continue;
                 }
-                // Single # — fall through to stringification handler
+                if let Some(last) = result.pop() {
+                    pending_paste = Some(last);
+                }
+                i += 1;
+                continue;
             }
 
             // Stringification: # param -> string literal.
-            // The lexer has a bug that returns HashHash for single #, so
-            // we check both Hash and HashHash.
-            if tok.kind == TokenKind::Hash || tok.kind == TokenKind::HashHash {
+            if tok.kind == TokenKind::Hash {
                 if i + 1 < body.len() {
                     let next = &body[i + 1];
                     if next.kind == TokenKind::Identifier {
@@ -381,21 +360,9 @@ impl MacroMap {
     }
 }
 
-fn is_hash_token(token: &Token) -> bool {
-    token.kind == TokenKind::Hash || token.kind == TokenKind::HashHash
-}
-
 fn hash_token_is_paste(body: &[Token], index: usize) -> bool {
-    let Some(token) = body.get(index) else {
-        return false;
-    };
-    is_hash_token(token)
-        && (token_text(token).len() >= 2
-            || index
-                .checked_sub(1)
-                .and_then(|previous| body.get(previous))
-                .is_some_and(is_hash_token)
-            || body.get(index + 1).is_some_and(is_hash_token))
+    body.get(index)
+        .is_some_and(|token| token.kind == TokenKind::HashHash)
 }
 
 fn parameter_is_followed_by_paste(body: &[Token], index: usize) -> bool {
@@ -406,7 +373,7 @@ fn parameter_is_quoted_or_pasted(body: &[Token], index: usize) -> bool {
     index
         .checked_sub(1)
         .and_then(|previous| body.get(previous))
-        .is_some_and(is_hash_token)
+        .is_some_and(|token| matches!(token.kind, TokenKind::Hash | TokenKind::HashHash))
         || parameter_is_followed_by_paste(body, index)
 }
 
@@ -1444,12 +1411,9 @@ fn token_lexeme<'a>(tok: &'a Token, source: &'a str) -> &'a str {
     &source[start..end]
 }
 
-/// Check whether a token kind marks the start of a preprocessor directive
-/// line. The lexer produces either `Hash` or `HashHash` for a leading `#`;
-/// both must be recognized because the operator handler in the lexer uses
-/// `match_next` which checks the current byte, not the next one.
+/// Check whether a token kind marks the start of a preprocessor directive line.
 fn is_directive_hash(kind: TokenKind) -> bool {
-    kind == TokenKind::Hash || kind == TokenKind::HashHash
+    kind == TokenKind::Hash
 }
 
 /// Return whether the physical source gap contains a newline that survives C
