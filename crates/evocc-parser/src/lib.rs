@@ -235,6 +235,7 @@ pub struct Parser<'src, 'arena> {
     external_entities: HashMap<String, SymbolId>,
     side_declarations: Vec<&'arena CHirDecl<'arena>>,
     loop_depth: usize,
+    constant_expression_depth: usize,
     /// Attributes on labels and type names, which have no declaration node.
     detached_attributes: Vec<Attribute>,
     generic_selections: Vec<GenericSelectionRecord>,
@@ -308,6 +309,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             external_entities: HashMap::new(),
             side_declarations: Vec::new(),
             loop_depth: 0,
+            constant_expression_depth: 0,
             detached_attributes: Vec::new(),
             generic_selections: Vec::new(),
             front_end_builtins: Vec::new(),
@@ -1106,6 +1108,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.bind_parameters(&mut parameters);
                 let body = self.parse_function_body();
                 self.validate_asm_goto_labels(body)?;
+                self.validate_statement_expression_jumps(body)?;
                 self.current_scope = outer_scope;
                 if context != DeclarationContext::File {
                     self.report("E1205", "nested-function-definition", open);
@@ -1546,6 +1549,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::MemoryAssign { .. }
             | CHirExpr::Update { .. }
             | CHirExpr::MemoryUpdate { .. }
+            | CHirExpr::StatementExpr { .. }
             | CHirExpr::CompoundLit(_, _, _)
             | CHirExpr::Comma(_, _, _)
             | CHirExpr::StringLit(_, _)
@@ -1656,6 +1660,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::MemoryAssign { .. }
             | CHirExpr::Update { .. }
             | CHirExpr::MemoryUpdate { .. }
+            | CHirExpr::StatementExpr { .. }
             | CHirExpr::CompoundLit(_, _, _)
             | CHirExpr::Comma(_, _, _)
             | CHirExpr::Member(_, _, _)
@@ -2609,6 +2614,35 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         body
     }
 
+    fn in_function_scope(&self) -> bool {
+        let mut scope = Some(self.current_scope);
+        while let Some(id) = scope {
+            let current = self
+                .symbols
+                .scope(id)
+                .expect("the parser current scope chain is always live");
+            if current.kind() == ScopeKind::Function {
+                return true;
+            }
+            scope = current.parent();
+        }
+        false
+    }
+
+    fn parse_required_constant_conditional(&mut self) -> Option<&'arena CHirExpr<'arena>> {
+        self.constant_expression_depth += 1;
+        let expression = self.parse_conditional();
+        self.constant_expression_depth -= 1;
+        expression
+    }
+
+    fn parse_required_constant_assignment(&mut self) -> Option<&'arena CHirExpr<'arena>> {
+        self.constant_expression_depth += 1;
+        let expression = self.parse_assignment();
+        self.constant_expression_depth -= 1;
+        expression
+    }
+
     fn validate_asm_goto_labels(&mut self, body: &CHirStmt<'_>) -> Option<()> {
         let mut defined = HashSet::new();
         let mut referenced = Vec::new();
@@ -2618,6 +2652,32 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .find(|label| !defined.contains(&label.spelling))
         {
             self.report("E2914", "malformed-asm", label.span);
+            return None;
+        }
+        Some(())
+    }
+
+    fn validate_statement_expression_jumps(&mut self, body: &CHirStmt<'_>) -> Option<()> {
+        let mut labels = HashMap::new();
+        let mut gotos = Vec::new();
+        let mut regions = Vec::new();
+        let mut next_region = 0_u32;
+        collect_jump_regions_stmt(
+            body,
+            &mut regions,
+            &mut next_region,
+            &mut labels,
+            &mut gotos,
+        );
+        if let Some(reference) = gotos.into_iter().find(|reference| {
+            labels
+                .get(&reference.name)
+                .is_some_and(|target| !reference.regions.starts_with(target))
+        }) {
+            // Revision 1.9.12 makes the construct malformed but does not
+            // assign a dedicated diagnostic. Keep the established generic
+            // syntax diagnostic until that contract gap is adjudicated.
+            self.report("E1003", "expected-expression", reference.span);
             return None;
         }
         Some(())
@@ -2861,7 +2921,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2903", "malformed-attribute", self.span());
             return None;
         }
-        let expression = self.parse_conditional()?;
+        let expression = self.parse_required_constant_conditional()?;
         let span = expression.span();
         let mut argument = self.attribute_argument(span, span);
         argument.integer = self
@@ -3527,7 +3587,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 // A bit width is a constant expression, so it stops before a
                 // comma that introduces the next declarator.
                 let bit_width = if self.match_kind(TokenKind::Colon) {
-                    Some(self.parse_conditional()?)
+                    Some(self.parse_required_constant_conditional()?)
                 } else {
                     None
                 };
@@ -3893,6 +3953,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::MemoryAssign { .. }
             | CHirExpr::Update { .. }
             | CHirExpr::MemoryUpdate { .. }
+            | CHirExpr::StatementExpr { .. }
             | CHirExpr::CompoundLit(_, _, _)
             | CHirExpr::Comma(_, _, _) => Err(()),
         }
@@ -3972,6 +4033,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             CHirExpr::Cast(ty, _, _) => self.canonical_integer_type(*ty),
             CHirExpr::CheckedArithmetic { .. } => Ok(CIntegerType::INT),
+            CHirExpr::StatementExpr { facts, .. } => self.canonical_integer_type(facts.ty()),
             CHirExpr::SizeOf(ty, _) | CHirExpr::AlignOf(ty, _) => {
                 TargetDataLayout::aarch64_unknown_linux_gnu()
                     .layout_of(&self.types, *ty)
@@ -4012,7 +4074,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let enumerator_attributes =
                 self.parse_attribute_specifiers(AttributePlacement::Enumerator);
             let written_value = if self.match_kind(TokenKind::Assign) {
-                Some(self.parse_assignment()?)
+                Some(self.parse_required_constant_assignment()?)
             } else {
                 None
             };
@@ -6000,6 +6062,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::MemoryUpdate { facts, .. } => {
                 (InferredType::Canonical(facts.ty()), facts.category())
             }
+            CHirExpr::StatementExpr { facts, .. } => {
+                (InferredType::Canonical(facts.ty()), ExprCategory::Value)
+            }
             CHirExpr::CompoundLit(ty, _, _) => (InferredType::Canonical(*ty), ExprCategory::LValue),
             CHirExpr::Comma(_, right, _) => {
                 let right = self.converted_expression_type(right)?;
@@ -6820,6 +6885,40 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 return Some(self.alloc_node(CHirExpr::StringLit(literal, span)));
             }
             TokenKind::LParen => {
+                if self.peek_kind() == Some(TokenKind::LBrace) {
+                    if !self.in_function_scope() || self.constant_expression_depth != 0 {
+                        self.report("E2905", "statement-expression-outside-function", tok.span);
+                        return None;
+                    }
+                    let body = self.parse_compound_statement(true);
+                    let close = self.expect(TokenKind::RParen)?;
+                    let value = match body {
+                        CHirStmt::Compound(items, _) => items.last().and_then(|item| match item {
+                            CHirBlockItem::Statement(CHirStmt::Expr(expression, _)) => {
+                                Some(*expression)
+                            }
+                            CHirBlockItem::Declaration(_) | CHirBlockItem::Statement(_) => None,
+                        }),
+                        _ => unreachable!("statement expression parses one compound statement"),
+                    };
+                    let ty = if let Some(expression) = value {
+                        let inferred =
+                            self.converted_expression_type(expression).or_else(|| {
+                                self.report("E1003", "expected-expression", expression.span());
+                                None
+                            })?;
+                        self.materialize_inferred_type(inferred.ty, Some(expression))?
+                    } else {
+                        self.intern(TypeKind::Void, Qualifiers::default())
+                    };
+                    let span = self.merge_span(tok.span, close.span);
+                    return Some(self.alloc_node(CHirExpr::StatementExpr {
+                        body,
+                        value,
+                        facts: ExprFacts::value(ty),
+                        span,
+                    }));
+                }
                 let expr = self.parse_expression()?;
                 let rparen_span = self.peek().map(|t| t.span).unwrap_or(tok.span);
                 self.expect(TokenKind::RParen)?;
@@ -7010,7 +7109,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn parse_static_assert_declaration(&mut self) -> Option<()> {
         let keyword = self.advance().expect("peeked static assertion");
         self.expect(TokenKind::LParen)?;
-        let condition = self.parse_conditional()?;
+        let condition = self.parse_required_constant_conditional()?;
         let condition_span = condition.span();
         if self.match_kind(TokenKind::Comma) {
             self.expect(TokenKind::StringLiteral)?;
@@ -7408,6 +7507,202 @@ fn collect_asm_goto_labels(
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
         | CHirStmt::Null(_) => {}
+    }
+}
+
+#[derive(Debug)]
+struct JumpRegionReference {
+    name: String,
+    span: SourceSpan,
+    regions: Vec<u32>,
+}
+
+fn collect_jump_regions_decl(
+    declaration: &CHirDecl<'_>,
+    regions: &mut Vec<u32>,
+    next_region: &mut u32,
+    labels: &mut HashMap<String, Vec<u32>>,
+    gotos: &mut Vec<JumpRegionReference>,
+) {
+    match declaration {
+        CHirDecl::Object(object) => {
+            if let Some(initializer) = &object.initializer {
+                for action in initializer.plan().actions() {
+                    if let InitAction::StoreScalar { value, .. } = action {
+                        collect_jump_regions_expr(value, regions, next_region, labels, gotos);
+                    }
+                }
+            }
+        }
+        CHirDecl::Asm(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) | CHirDecl::Function(_) => {}
+    }
+}
+
+fn collect_jump_regions_stmt(
+    statement: &CHirStmt<'_>,
+    regions: &mut Vec<u32>,
+    next_region: &mut u32,
+    labels: &mut HashMap<String, Vec<u32>>,
+    gotos: &mut Vec<JumpRegionReference>,
+) {
+    match statement {
+        CHirStmt::Asm(assembly) => {
+            gotos.extend(assembly.labels.iter().map(|label| JumpRegionReference {
+                name: label.spelling.clone(),
+                span: label.span,
+                regions: regions.clone(),
+            }));
+            for operand in assembly.outputs.iter().chain(&assembly.inputs) {
+                collect_jump_regions_expr(operand.expression, regions, next_region, labels, gotos);
+            }
+        }
+        CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
+            collect_jump_regions_expr(expression, regions, next_region, labels, gotos);
+        }
+        CHirStmt::If(condition, then_statement, else_statement, _) => {
+            collect_jump_regions_expr(condition, regions, next_region, labels, gotos);
+            collect_jump_regions_stmt(then_statement, regions, next_region, labels, gotos);
+            if let Some(else_statement) = else_statement {
+                collect_jump_regions_stmt(else_statement, regions, next_region, labels, gotos);
+            }
+        }
+        CHirStmt::Switch(expression, body, _)
+        | CHirStmt::While(expression, body, _)
+        | CHirStmt::Case(expression, body, _) => {
+            collect_jump_regions_expr(expression, regions, next_region, labels, gotos);
+            collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
+        }
+        CHirStmt::DoWhile(body, condition, _) => {
+            collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
+            collect_jump_regions_expr(condition, regions, next_region, labels, gotos);
+        }
+        CHirStmt::For(initializer, condition, step, body, _) => {
+            match initializer {
+                CHirForInit::Empty => {}
+                CHirForInit::Expression(expression) => {
+                    collect_jump_regions_expr(expression, regions, next_region, labels, gotos);
+                }
+                CHirForInit::Declaration(declarations) => {
+                    for declaration in declarations {
+                        collect_jump_regions_decl(declaration, regions, next_region, labels, gotos);
+                    }
+                }
+            }
+            if let Some(condition) = condition {
+                collect_jump_regions_expr(condition, regions, next_region, labels, gotos);
+            }
+            if let Some(step) = step {
+                collect_jump_regions_expr(step, regions, next_region, labels, gotos);
+            }
+            collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
+        }
+        CHirStmt::Compound(items, _) => {
+            for item in items {
+                match item {
+                    CHirBlockItem::Declaration(declaration) => {
+                        collect_jump_regions_decl(declaration, regions, next_region, labels, gotos)
+                    }
+                    CHirBlockItem::Statement(statement) => {
+                        collect_jump_regions_stmt(statement, regions, next_region, labels, gotos)
+                    }
+                }
+            }
+        }
+        CHirStmt::Label(label, body, _) => {
+            labels.insert(label.spelling.clone(), regions.clone());
+            collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
+        }
+        CHirStmt::Default(body, _) => {
+            collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
+        }
+        CHirStmt::Goto(label, _) => gotos.push(JumpRegionReference {
+            name: label.spelling.clone(),
+            span: label.span,
+            regions: regions.clone(),
+        }),
+        CHirStmt::Return(None, _)
+        | CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Null(_) => {}
+    }
+}
+
+fn collect_jump_regions_expr(
+    expression: &CHirExpr<'_>,
+    regions: &mut Vec<u32>,
+    next_region: &mut u32,
+    labels: &mut HashMap<String, Vec<u32>>,
+    gotos: &mut Vec<JumpRegionReference>,
+) {
+    match expression {
+        CHirExpr::Unary(_, operand, _)
+        | CHirExpr::Cast(_, operand, _)
+        | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::Member(operand, _, _)
+        | CHirExpr::PtrMember(operand, _, _) => {
+            collect_jump_regions_expr(operand, regions, next_region, labels, gotos);
+        }
+        CHirExpr::Binary(_, left, right, _)
+        | CHirExpr::Index(left, right, _)
+        | CHirExpr::Comma(left, right, _) => {
+            collect_jump_regions_expr(left, regions, next_region, labels, gotos);
+            collect_jump_regions_expr(right, regions, next_region, labels, gotos);
+        }
+        CHirExpr::Ternary(condition, when_true, when_false, _) => {
+            collect_jump_regions_expr(condition, regions, next_region, labels, gotos);
+            collect_jump_regions_expr(when_true, regions, next_region, labels, gotos);
+            collect_jump_regions_expr(when_false, regions, next_region, labels, gotos);
+        }
+        CHirExpr::Call(callee, arguments, _) => {
+            collect_jump_regions_expr(callee, regions, next_region, labels, gotos);
+            for argument in arguments {
+                collect_jump_regions_expr(argument, regions, next_region, labels, gotos);
+            }
+        }
+        CHirExpr::CheckedArithmetic {
+            lhs, rhs, target, ..
+        } => {
+            collect_jump_regions_expr(lhs, regions, next_region, labels, gotos);
+            collect_jump_regions_expr(rhs, regions, next_region, labels, gotos);
+            collect_jump_regions_expr(target, regions, next_region, labels, gotos);
+        }
+        CHirExpr::Assign { target, value, .. } => {
+            collect_jump_regions_expr(target, regions, next_region, labels, gotos);
+            collect_jump_regions_expr(value, regions, next_region, labels, gotos);
+        }
+        CHirExpr::Update { target, .. } => {
+            collect_jump_regions_expr(target, regions, next_region, labels, gotos);
+        }
+        CHirExpr::MemoryRead { place, .. } | CHirExpr::MemoryUpdate { place, .. } => {
+            for source in place.source_expressions() {
+                collect_jump_regions_expr(source, regions, next_region, labels, gotos);
+            }
+        }
+        CHirExpr::MemoryAssign { place, value, .. } => {
+            for source in place.source_expressions() {
+                collect_jump_regions_expr(source, regions, next_region, labels, gotos);
+            }
+            collect_jump_regions_expr(value, regions, next_region, labels, gotos);
+        }
+        CHirExpr::CompoundLit(_, values, _) => {
+            for value in values {
+                collect_jump_regions_expr(value, regions, next_region, labels, gotos);
+            }
+        }
+        CHirExpr::StatementExpr { body, .. } => {
+            let region = *next_region;
+            *next_region = next_region.saturating_add(1);
+            regions.push(region);
+            collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
+            regions.pop();
+        }
+        CHirExpr::Lit(..)
+        | CHirExpr::FloatLit(..)
+        | CHirExpr::CharLit(..)
+        | CHirExpr::StringLit(..)
+        | CHirExpr::Ident { .. }
+        | CHirExpr::SizeOf(..)
+        | CHirExpr::AlignOf(..) => {}
     }
 }
 
@@ -7845,6 +8140,14 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
         CHirExpr::CompoundLit(ty, values, _) => {
             CHirExpr::CompoundLit(*ty, values.clone(), paren_span)
         }
+        CHirExpr::StatementExpr {
+            body, value, facts, ..
+        } => CHirExpr::StatementExpr {
+            body,
+            value: *value,
+            facts: *facts,
+            span: paren_span,
+        },
         CHirExpr::Comma(lhs, rhs, _) => CHirExpr::Comma(lhs, rhs, paren_span),
     }
 }

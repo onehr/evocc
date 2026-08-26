@@ -214,6 +214,7 @@ fn assert_expression_owned(arena: &Arena, expression: &CHirExpr<'_>) {
                 assert_expression_owned(arena, value);
             }
         }
+        CHirExpr::StatementExpr { body, .. } => assert_statement_owned(arena, body),
     }
 }
 

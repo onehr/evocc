@@ -339,6 +339,12 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
                 .collect::<Vec<_>>()
                 .join(",")
         ),
+        CHirExpr::StatementExpr { value, .. } => format!(
+            "statement_expr({})",
+            value
+                .map(|value| canonical_expr(value, types))
+                .unwrap_or_else(|| "void".into())
+        ),
         CHirExpr::Comma(left, right, _) => {
             format!(
                 "comma({},{})",

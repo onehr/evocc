@@ -545,6 +545,12 @@ enum MachineTask<'arena> {
         items: &'arena [CHirBlockItem<'arena>],
         index: usize,
     },
+    StatementExpressionContinue {
+        items: &'arena [CHirBlockItem<'arena>],
+        index: usize,
+        value: Option<&'arena CHirExpr<'arena>>,
+        span: SourceSpan,
+    },
     SwitchContinue {
         items: &'arena [CHirBlockItem<'arena>],
         index: usize,
@@ -1154,6 +1160,53 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     }
                     None
                 }
+                MachineTask::StatementExpressionContinue {
+                    items,
+                    index,
+                    value,
+                    span,
+                } => {
+                    if let Some(item) = items.get(index) {
+                        let is_value = matches!(
+                            (item, value),
+                            (CHirBlockItem::Statement(CHirStmt::Expr(expression, _)), Some(value))
+                                if std::ptr::eq(*expression, value)
+                        );
+                        if index + 1 < items.len() {
+                            tasks.push(MachineTask::StatementExpressionContinue {
+                                items,
+                                index: index + 1,
+                                value,
+                                span,
+                            });
+                        }
+                        if is_value {
+                            let CHirBlockItem::Statement(CHirStmt::Expr(expression, _)) = item
+                            else {
+                                unreachable!("the value predicate checked this shape")
+                            };
+                            tasks.push(MachineTask::EvalExpression {
+                                expression,
+                                allow_root_mutation: true,
+                            });
+                        } else {
+                            tasks.push(match item {
+                                CHirBlockItem::Declaration(declaration) => {
+                                    MachineTask::ExecDeclaration(declaration)
+                                }
+                                CHirBlockItem::Statement(statement) => {
+                                    MachineTask::ExecStatement(statement)
+                                }
+                            });
+                        }
+                    } else if value.is_some() {
+                        return Err(InterpreterError::UnsupportedExpression {
+                            feature: "statement expression result is not its final statement",
+                            span,
+                        });
+                    }
+                    None
+                }
                 MachineTask::SwitchContinue { items, index } => {
                     if let Some(item) = items.get(index) {
                         tasks.push(MachineTask::SwitchContinue {
@@ -1275,7 +1328,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                             body,
                             span,
                         });
-                        self.schedule_discarded_expression(step, &mut tasks);
+                        self.schedule_discarded_expression(step, &mut tasks)?;
                     } else {
                         tasks.push(MachineTask::ForCheck {
                             condition,
@@ -1760,7 +1813,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span: assembly.span,
             }),
             CHirStmt::Expr(expression, _) => {
-                self.schedule_discarded_expression(expression, tasks);
+                self.schedule_discarded_expression(expression, tasks)?;
                 Ok(None)
             }
             CHirStmt::Return(Some(expression), span) => {
@@ -1835,7 +1888,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 match initializer {
                     CHirForInit::Empty => {}
                     CHirForInit::Expression(expression) => {
-                        self.schedule_discarded_expression(expression, tasks);
+                        self.schedule_discarded_expression(expression, tasks)?;
                     }
                     CHirForInit::Declaration(declarations) => {
                         for declaration in declarations.iter().rev() {
@@ -2569,10 +2622,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn schedule_discarded_expression(
-        &self,
+        &mut self,
         expression: &'arena CHirExpr<'arena>,
         tasks: &mut Vec<MachineTask<'arena>>,
-    ) {
+    ) -> Result<(), InterpreterError> {
         if let CHirExpr::Call(callee, arguments, call_span) = expression {
             if self.call_designator_returns_void(callee) {
                 tasks.push(MachineTask::EvalCallArguments {
@@ -2583,14 +2636,65 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span: *call_span,
                     expects_value: false,
                 });
-                return;
+                return Ok(());
             }
+        }
+        if let CHirExpr::StatementExpr {
+            body,
+            value: None,
+            span,
+            ..
+        } = expression
+        {
+            self.schedule_statement_expression(body, None, *span, tasks)?;
+            return Ok(());
         }
         tasks.push(MachineTask::DiscardExpression(expression.span()));
         tasks.push(MachineTask::EvalExpression {
             expression,
             allow_root_mutation: true,
         });
+        Ok(())
+    }
+
+    fn schedule_statement_expression(
+        &mut self,
+        body: &'arena CHirStmt<'arena>,
+        value: Option<&'arena CHirExpr<'arena>>,
+        span: SourceSpan,
+        tasks: &mut Vec<MachineTask<'arena>>,
+    ) -> Result<(), InterpreterError> {
+        let CHirStmt::Compound(items, _) = body else {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "statement expression body is not compound",
+                span,
+            });
+        };
+        let result_matches = match (value, items.last()) {
+            (None, _) => true,
+            (Some(value), Some(CHirBlockItem::Statement(CHirStmt::Expr(expression, _)))) => {
+                std::ptr::eq(value, *expression)
+            }
+            (Some(_), _) => false,
+        };
+        if !result_matches {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "statement expression result is not its final statement",
+                span,
+            });
+        }
+        let saved = self.activate_block_items(items)?;
+        tasks.push(MachineTask::RestoreSlots(saved));
+        if let Some(exit) = self.enter_memory_scope(body.span())? {
+            tasks.push(MachineTask::ExitMemoryScope(exit));
+        }
+        tasks.push(MachineTask::StatementExpressionContinue {
+            items,
+            index: 0,
+            value,
+            span,
+        });
+        Ok(())
     }
 
     fn schedule_expression(
@@ -2895,6 +2999,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     u64::from(layout.align_bytes),
                     CIntegerType::ULONG,
                 )));
+            }
+            CHirExpr::StatementExpr {
+                body, value, span, ..
+            } => {
+                self.schedule_statement_expression(body, *value, *span, tasks)?;
             }
             // Reaching this means requirement analysis concluded the program
             // needs no object memory while its C-HIR designates a subobject.
@@ -4779,23 +4888,49 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         statement: &'arena CHirStmt<'arena>,
     ) -> Result<(), InterpreterError> {
         match statement {
-            CHirStmt::If(_, then_statement, else_statement, _) => {
+            CHirStmt::Asm(assembly) => {
+                for operand in assembly.outputs.iter().chain(&assembly.inputs) {
+                    self.predeclare_expr(operand.expression)?;
+                }
+            }
+            CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
+                self.predeclare_expr(expression)?;
+            }
+            CHirStmt::If(condition, then_statement, else_statement, _) => {
+                self.predeclare_expr(condition)?;
                 self.predeclare_stmt(then_statement)?;
                 if let Some(else_statement) = else_statement {
                     self.predeclare_stmt(else_statement)?;
                 }
             }
-            CHirStmt::Switch(_, body, _)
-            | CHirStmt::While(_, body, _)
-            | CHirStmt::Label(_, body, _)
-            | CHirStmt::Case(_, body, _)
-            | CHirStmt::Default(body, _) => self.predeclare_stmt(body)?,
-            CHirStmt::DoWhile(body, _, _) => self.predeclare_stmt(body)?,
-            CHirStmt::For(initializer, _, _, body, _) => {
-                if let CHirForInit::Declaration(declarations) = initializer {
-                    for declaration in declarations {
-                        self.predeclare_decl(declaration)?;
+            CHirStmt::Switch(expression, body, _)
+            | CHirStmt::While(expression, body, _)
+            | CHirStmt::Case(expression, body, _) => {
+                self.predeclare_expr(expression)?;
+                self.predeclare_stmt(body)?;
+            }
+            CHirStmt::Label(_, body, _) | CHirStmt::Default(body, _) => {
+                self.predeclare_stmt(body)?;
+            }
+            CHirStmt::DoWhile(body, condition, _) => {
+                self.predeclare_stmt(body)?;
+                self.predeclare_expr(condition)?;
+            }
+            CHirStmt::For(initializer, condition, step, body, _) => {
+                match initializer {
+                    CHirForInit::Empty => {}
+                    CHirForInit::Expression(expression) => self.predeclare_expr(expression)?,
+                    CHirForInit::Declaration(declarations) => {
+                        for declaration in declarations {
+                            self.predeclare_decl(declaration)?;
+                        }
                     }
+                }
+                if let Some(condition) = condition {
+                    self.predeclare_expr(condition)?;
+                }
+                if let Some(step) = step {
+                    self.predeclare_expr(step)?;
                 }
                 self.predeclare_stmt(body)?;
             }
@@ -4811,13 +4946,78 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     }
                 }
             }
-            CHirStmt::Expr(_, _)
-            | CHirStmt::Asm(_)
-            | CHirStmt::Return(_, _)
+            CHirStmt::Return(None, _)
             | CHirStmt::Break(_)
             | CHirStmt::Continue(_)
             | CHirStmt::Goto(_, _)
             | CHirStmt::Null(_) => {}
+        }
+        Ok(())
+    }
+
+    fn predeclare_expr(
+        &mut self,
+        expression: &'arena CHirExpr<'arena>,
+    ) -> Result<(), InterpreterError> {
+        match expression {
+            CHirExpr::Unary(_, operand, _)
+            | CHirExpr::Cast(_, operand, _)
+            | CHirExpr::SizeOfExpr(operand, _)
+            | CHirExpr::Member(operand, _, _)
+            | CHirExpr::PtrMember(operand, _, _) => self.predeclare_expr(operand)?,
+            CHirExpr::Binary(_, left, right, _)
+            | CHirExpr::Index(left, right, _)
+            | CHirExpr::Comma(left, right, _) => {
+                self.predeclare_expr(left)?;
+                self.predeclare_expr(right)?;
+            }
+            CHirExpr::Ternary(condition, when_true, when_false, _) => {
+                self.predeclare_expr(condition)?;
+                self.predeclare_expr(when_true)?;
+                self.predeclare_expr(when_false)?;
+            }
+            CHirExpr::Call(callee, arguments, _) => {
+                self.predeclare_expr(callee)?;
+                for argument in arguments {
+                    self.predeclare_expr(argument)?;
+                }
+            }
+            CHirExpr::CheckedArithmetic {
+                lhs, rhs, target, ..
+            } => {
+                self.predeclare_expr(lhs)?;
+                self.predeclare_expr(rhs)?;
+                self.predeclare_expr(target)?;
+            }
+            CHirExpr::Assign { target, value, .. } => {
+                self.predeclare_expr(target)?;
+                self.predeclare_expr(value)?;
+            }
+            CHirExpr::Update { target, .. } => self.predeclare_expr(target)?,
+            CHirExpr::MemoryRead { place, .. } | CHirExpr::MemoryUpdate { place, .. } => {
+                for source in place.source_expressions() {
+                    self.predeclare_expr(source)?;
+                }
+            }
+            CHirExpr::MemoryAssign { place, value, .. } => {
+                for source in place.source_expressions() {
+                    self.predeclare_expr(source)?;
+                }
+                self.predeclare_expr(value)?;
+            }
+            CHirExpr::CompoundLit(_, elements, _) => {
+                for element in elements {
+                    self.predeclare_expr(element)?;
+                }
+            }
+            CHirExpr::StatementExpr { body, .. } => self.predeclare_stmt(body)?,
+            CHirExpr::Lit(..)
+            | CHirExpr::FloatLit(..)
+            | CHirExpr::CharLit(..)
+            | CHirExpr::StringLit(..)
+            | CHirExpr::Ident { .. }
+            | CHirExpr::SizeOf(..)
+            | CHirExpr::AlignOf(..) => {}
         }
         Ok(())
     }
@@ -4846,6 +5046,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         symbol: declaration.symbol,
                         span: declaration.span,
                     });
+                }
+                if let Some(initializer) = &declaration.initializer {
+                    for action in initializer.plan().actions() {
+                        if let InitAction::StoreScalar { value, .. } = action {
+                            self.predeclare_expr(value)?;
+                        }
+                    }
                 }
                 Ok(())
             }
@@ -5502,6 +5709,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirExpr::Member(_, _, _)
             | CHirExpr::PtrMember(_, _, _)
             | CHirExpr::Index(_, _, _)
+            | CHirExpr::StatementExpr { .. }
             | CHirExpr::CompoundLit(_, _, _)
             | CHirExpr::Assign { .. }
             | CHirExpr::MemoryAssign { .. }
@@ -5530,7 +5738,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirExpr::MemoryAssign { facts, .. }
             | CHirExpr::MemoryRead { facts, .. }
             | CHirExpr::Update { facts, .. }
-            | CHirExpr::MemoryUpdate { facts, .. } => self.integer_type(facts.ty(), span),
+            | CHirExpr::MemoryUpdate { facts, .. }
+            | CHirExpr::StatementExpr { facts, .. } => self.integer_type(facts.ty(), span),
             CHirExpr::Unary(operator, operand, _) => match operator {
                 crate::UnaryOp::Not => Ok(CIntegerType::INT),
                 crate::UnaryOp::Plus | crate::UnaryOp::Neg | crate::UnaryOp::BitNot => {
@@ -6068,7 +6277,12 @@ fn push_static_initializer_children<'arena>(
                 push(source);
             }
         }
-        CHirExpr::Ident { .. }
+        // The parser rejects statement expressions in static initializers.
+        // A forged node is retained here as a leaf so this expression-only
+        // depth walk stays total without pretending a statement is an
+        // ordinary constant-expression child.
+        CHirExpr::StatementExpr { .. }
+        | CHirExpr::Ident { .. }
         | CHirExpr::Lit(_, _)
         | CHirExpr::FloatLit(_, _)
         | CHirExpr::CharLit(_, _)
@@ -6217,6 +6431,7 @@ fn collect_expression_symbols<'arena>(
             collect_expression_symbols(rhs, output);
             collect_expression_symbols(target, output);
         }
+        CHirExpr::StatementExpr { body, .. } => collect_statement_symbols(body, output),
         CHirExpr::CompoundLit(_, elements, _) => {
             for element in elements {
                 collect_expression_symbols(element, output);
@@ -6375,6 +6590,7 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         // does not overflow, so checked arithmetic always selects the explicit
         // memory task machine.
         CHirExpr::CheckedArithmetic { .. } => true,
+        CHirExpr::StatementExpr { body, .. } => statement_requires_memory(unit, body),
         CHirExpr::Assign { target, value, .. } => {
             expression_requires_memory(unit, target) || expression_requires_memory(unit, value)
         }
@@ -6629,6 +6845,9 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
         CHirExpr::MemoryUpdate { place, .. } => {
             place.source_expressions().any(expression_contains_call)
         }
+        // Statement expressions require the iterative task machine even when
+        // their body contains no call, because control may leave the region.
+        CHirExpr::StatementExpr { .. } => true,
         CHirExpr::CompoundLit(_, values, _) => {
             values.iter().any(|value| expression_contains_call(value))
         }

@@ -452,6 +452,15 @@ pub enum CHirExpr<'arena> {
         facts: ExprFacts,
         span: SourceSpan,
     },
+    /// A GNU statement expression. `body` is the sole execution authority;
+    /// `value` only identifies the final expression statement whose value is
+    /// yielded when control reaches the closing brace.
+    StatementExpr {
+        body: &'arena CHirStmt<'arena>,
+        value: Option<&'arena CHirExpr<'arena>>,
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
     CompoundLit(TypeId, Vec<&'arena CHirExpr<'arena>>, SourceSpan),
     Comma(
         &'arena CHirExpr<'arena>,
@@ -486,6 +495,7 @@ impl CHirExpr<'_> {
             | Self::MemoryRead { span, .. }
             | Self::Update { span, .. }
             | Self::MemoryUpdate { span, .. }
+            | Self::StatementExpr { span, .. }
             | Self::CompoundLit(_, _, span)
             | Self::Comma(_, _, span) => *span,
         }
@@ -1363,6 +1373,7 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
                     checked_expression(source, out, seen);
                 }
             }
+            CHirExpr::StatementExpr { body, .. } => checked_statement(body, out, seen),
             CHirExpr::CompoundLit(_, elements, _) => {
                 for element in elements {
                     checked_expression(element, out, seen);

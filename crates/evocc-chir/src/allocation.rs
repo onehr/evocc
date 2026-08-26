@@ -148,6 +148,9 @@ pub enum AllocationSiteManifestError {
         duplicate_function: SymbolId,
         span: SourceSpan,
     },
+    StatementExpressionOutsideFunction {
+        span: SourceSpan,
+    },
     FunctionScopeMismatch {
         function: SymbolId,
         span: SourceSpan,
@@ -265,6 +268,9 @@ impl fmt::Display for AllocationSiteManifestError {
                 first_function.raw(),
                 duplicate_function.raw()
             ),
+            Self::StatementExpressionOutsideFunction { .. } => {
+                formatter.write_str("statement expression has no enclosing function authority")
+            }
             Self::FunctionScopeMismatch { function, .. } => write!(
                 formatter,
                 "function {} has no unique declarator-anchored function scope",
@@ -464,8 +470,14 @@ enum WorkItem<'arena> {
         statement: &'arena CHirStmt<'arena>,
         current_function: FunctionAuthority,
     },
-    Expression(&'arena CHirExpr<'arena>),
-    WrittenInitializer(&'arena WrittenInitializer<'arena>),
+    Expression {
+        expression: &'arena CHirExpr<'arena>,
+        current_function: Option<FunctionAuthority>,
+    },
+    WrittenInitializer {
+        initializer: &'arena WrittenInitializer<'arena>,
+        current_function: Option<FunctionAuthority>,
+    },
 }
 
 struct Deriver<'unit, 'arena> {
@@ -526,9 +538,15 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                     statement,
                     current_function,
                 } => self.visit_statement(statement, current_function, &mut work)?,
-                WorkItem::Expression(expression) => self.visit_expression(expression, &mut work)?,
-                WorkItem::WrittenInitializer(initializer) => {
-                    self.visit_written_initializer(initializer, &mut work);
+                WorkItem::Expression {
+                    expression,
+                    current_function,
+                } => self.visit_expression(expression, current_function, &mut work)?,
+                WorkItem::WrittenInitializer {
+                    initializer,
+                    current_function,
+                } => {
+                    self.visit_written_initializer(initializer, current_function, &mut work);
                 }
             }
         }
@@ -1011,7 +1029,10 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
         match declaration {
             CHirDecl::Asm(assembly) => {
                 for operand in assembly.outputs.iter().chain(&assembly.inputs).rev() {
-                    work.push(WorkItem::Expression(operand.expression));
+                    work.push(WorkItem::Expression {
+                        expression: operand.expression,
+                        current_function,
+                    });
                 }
             }
             CHirDecl::Object(object) => {
@@ -1037,7 +1058,10 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                     for action in initializer.plan().actions().iter().rev() {
                         match action {
                             InitAction::StoreScalar { value, .. } => {
-                                work.push(WorkItem::Expression(value));
+                                work.push(WorkItem::Expression {
+                                    expression: value,
+                                    current_function,
+                                });
                             }
                             // StoreString owns a normalized literal value, not
                             // an expression identity. Its authoritative source
@@ -1045,7 +1069,10 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                             InitAction::StoreString { .. } | InitAction::ZeroScalar { .. } => {}
                         }
                     }
-                    work.push(WorkItem::WrittenInitializer(initializer.written()));
+                    work.push(WorkItem::WrittenInitializer {
+                        initializer: initializer.written(),
+                        current_function,
+                    });
                 }
             }
             CHirDecl::Function(function) => {
@@ -1064,14 +1091,20 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                 TagMembers::Struct(members) | TagMembers::Union(members) => {
                     for member in members.iter().rev() {
                         if let Some(bit_width) = member.bit_width {
-                            work.push(WorkItem::Expression(bit_width));
+                            work.push(WorkItem::Expression {
+                                expression: bit_width,
+                                current_function,
+                            });
                         }
                     }
                 }
                 TagMembers::Enum(enumerators) => {
                     for enumerator in enumerators.iter().rev() {
                         if let Some(value) = enumerator.written_value {
-                            work.push(WorkItem::Expression(value));
+                            work.push(WorkItem::Expression {
+                                expression: value,
+                                current_function,
+                            });
                         }
                     }
                 }
@@ -1101,11 +1134,17 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
         match statement {
             CHirStmt::Asm(assembly) => {
                 for operand in assembly.outputs.iter().chain(&assembly.inputs).rev() {
-                    work.push(WorkItem::Expression(operand.expression));
+                    work.push(WorkItem::Expression {
+                        expression: operand.expression,
+                        current_function: Some(current_function),
+                    });
                 }
             }
             CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
-                work.push(WorkItem::Expression(expression));
+                work.push(WorkItem::Expression {
+                    expression,
+                    current_function: Some(current_function),
+                });
             }
             CHirStmt::If(condition, then_statement, else_statement, _) => {
                 if let Some(else_statement) = else_statement {
@@ -1118,17 +1157,26 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                     statement: then_statement,
                     current_function,
                 });
-                work.push(WorkItem::Expression(condition));
+                work.push(WorkItem::Expression {
+                    expression: condition,
+                    current_function: Some(current_function),
+                });
             }
             CHirStmt::Switch(expression, body, _) | CHirStmt::While(expression, body, _) => {
                 work.push(WorkItem::Statement {
                     statement: body,
                     current_function,
                 });
-                work.push(WorkItem::Expression(expression));
+                work.push(WorkItem::Expression {
+                    expression,
+                    current_function: Some(current_function),
+                });
             }
             CHirStmt::DoWhile(body, condition, _) => {
-                work.push(WorkItem::Expression(condition));
+                work.push(WorkItem::Expression {
+                    expression: condition,
+                    current_function: Some(current_function),
+                });
                 work.push(WorkItem::Statement {
                     statement: body,
                     current_function,
@@ -1140,15 +1188,24 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                     current_function,
                 });
                 if let Some(post) = post {
-                    work.push(WorkItem::Expression(post));
+                    work.push(WorkItem::Expression {
+                        expression: post,
+                        current_function: Some(current_function),
+                    });
                 }
                 if let Some(condition) = condition {
-                    work.push(WorkItem::Expression(condition));
+                    work.push(WorkItem::Expression {
+                        expression: condition,
+                        current_function: Some(current_function),
+                    });
                 }
                 match initializer {
                     CHirForInit::Empty => {}
                     CHirForInit::Expression(expression) => {
-                        work.push(WorkItem::Expression(expression));
+                        work.push(WorkItem::Expression {
+                            expression,
+                            current_function: Some(current_function),
+                        });
                     }
                     CHirForInit::Declaration(declarations) => {
                         for declaration in declarations.iter().rev().copied() {
@@ -1196,7 +1253,10 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                     statement,
                     current_function,
                 });
-                work.push(WorkItem::Expression(expression));
+                work.push(WorkItem::Expression {
+                    expression,
+                    current_function: Some(current_function),
+                });
             }
         }
         Ok(())
@@ -1205,6 +1265,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
     fn visit_expression(
         &mut self,
         expression: &'arena CHirExpr<'arena>,
+        current_function: Option<FunctionAuthority>,
         work: &mut Vec<WorkItem<'arena>>,
     ) -> Result<(), AllocationSiteManifestError> {
         if !self.visited_expressions.insert(node_identity(expression)) {
@@ -1225,35 +1286,60 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             | CHirExpr::SizeOfExpr(operand, _)
             | CHirExpr::Member(operand, _, _)
             | CHirExpr::PtrMember(operand, _, _) => {
-                work.push(WorkItem::Expression(operand));
+                work.push(WorkItem::Expression {
+                    expression: operand,
+                    current_function,
+                });
             }
             CHirExpr::Binary(_, left, right, _)
             | CHirExpr::Index(left, right, _)
             | CHirExpr::Comma(left, right, _) => {
-                work.push(WorkItem::Expression(right));
-                work.push(WorkItem::Expression(left));
+                work.push(WorkItem::Expression {
+                    expression: right,
+                    current_function,
+                });
+                work.push(WorkItem::Expression {
+                    expression: left,
+                    current_function,
+                });
             }
             CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
-                work.push(WorkItem::Expression(else_expression));
-                work.push(WorkItem::Expression(then_expression));
-                work.push(WorkItem::Expression(condition));
+                for expression in [else_expression, then_expression, condition] {
+                    work.push(WorkItem::Expression {
+                        expression,
+                        current_function,
+                    });
+                }
             }
             CHirExpr::Call(callee, arguments, _) => {
                 for argument in arguments.iter().rev().copied() {
-                    work.push(WorkItem::Expression(argument));
+                    work.push(WorkItem::Expression {
+                        expression: argument,
+                        current_function,
+                    });
                 }
-                work.push(WorkItem::Expression(callee));
+                work.push(WorkItem::Expression {
+                    expression: callee,
+                    current_function,
+                });
             }
             CHirExpr::CheckedArithmetic {
                 lhs, rhs, target, ..
             } => {
-                work.push(WorkItem::Expression(target));
-                work.push(WorkItem::Expression(rhs));
-                work.push(WorkItem::Expression(lhs));
+                for expression in [target, rhs, lhs] {
+                    work.push(WorkItem::Expression {
+                        expression,
+                        current_function,
+                    });
+                }
             }
             CHirExpr::Assign { target, value, .. } => {
-                work.push(WorkItem::Expression(value));
-                work.push(WorkItem::Expression(target));
+                for expression in [value, target] {
+                    work.push(WorkItem::Expression {
+                        expression,
+                        current_function,
+                    });
+                }
             }
             CHirExpr::MemoryRead {
                 place, target_span, ..
@@ -1264,7 +1350,10 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                         span: *target_span,
                     })?;
                 for source in place.source_expressions().rev() {
-                    work.push(WorkItem::Expression(source));
+                    work.push(WorkItem::Expression {
+                        expression: source,
+                        current_function,
+                    });
                 }
             }
             CHirExpr::MemoryAssign {
@@ -1278,13 +1367,22 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                     .map_err(|_| AllocationSiteManifestError::InvalidMemoryPlace {
                         span: *target_span,
                     })?;
-                work.push(WorkItem::Expression(value));
+                work.push(WorkItem::Expression {
+                    expression: value,
+                    current_function,
+                });
                 for source in place.source_expressions().rev() {
-                    work.push(WorkItem::Expression(source));
+                    work.push(WorkItem::Expression {
+                        expression: source,
+                        current_function,
+                    });
                 }
             }
             CHirExpr::Update { target, .. } => {
-                work.push(WorkItem::Expression(target));
+                work.push(WorkItem::Expression {
+                    expression: target,
+                    current_function,
+                });
             }
             CHirExpr::MemoryUpdate {
                 place, target_span, ..
@@ -1295,12 +1393,31 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                         span: *target_span,
                     })?;
                 for source in place.source_expressions().rev() {
-                    work.push(WorkItem::Expression(source));
+                    work.push(WorkItem::Expression {
+                        expression: source,
+                        current_function,
+                    });
                 }
+            }
+            CHirExpr::StatementExpr { body, span, .. } => {
+                let Some(current_function) = current_function else {
+                    return Err(
+                        AllocationSiteManifestError::StatementExpressionOutsideFunction {
+                            span: *span,
+                        },
+                    );
+                };
+                work.push(WorkItem::Statement {
+                    statement: body,
+                    current_function,
+                });
             }
             CHirExpr::CompoundLit(_, expressions, _) => {
                 for expression in expressions.iter().rev().copied() {
-                    work.push(WorkItem::Expression(expression));
+                    work.push(WorkItem::Expression {
+                        expression,
+                        current_function,
+                    });
                 }
             }
             CHirExpr::Lit(_, _)
@@ -1316,6 +1433,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
     fn visit_written_initializer(
         &mut self,
         initializer: &'arena WrittenInitializer<'arena>,
+        current_function: Option<FunctionAuthority>,
         work: &mut Vec<WorkItem<'arena>>,
     ) {
         if !self.visited_initializers.insert(node_identity(initializer)) {
@@ -1323,11 +1441,17 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
         }
         match initializer {
             WrittenInitializer::Expression(expression) => {
-                work.push(WorkItem::Expression(expression));
+                work.push(WorkItem::Expression {
+                    expression,
+                    current_function,
+                });
             }
             WrittenInitializer::List { elements, .. } => {
                 for element in elements.iter().rev() {
-                    work.push(WorkItem::WrittenInitializer(element));
+                    work.push(WorkItem::WrittenInitializer {
+                        initializer: element,
+                        current_function,
+                    });
                 }
             }
         }

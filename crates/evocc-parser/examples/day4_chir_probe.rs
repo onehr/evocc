@@ -309,6 +309,10 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                     values.join(",")
                 )
             }
+            CHirExpr::StatementExpr { body, value, .. } => {
+                let body = self.statement(&format!("{path}.body"), body);
+                format!("statement_expr({body},value={})", value.is_some())
+            }
             CHirExpr::Comma(left, right, _) => {
                 let left = self.expression(&format!("{path}.left"), left);
                 let right = self.expression(&format!("{path}.right"), right);

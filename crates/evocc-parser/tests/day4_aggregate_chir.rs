@@ -130,6 +130,7 @@ fn assert_expr_owned(arena: &Arena, expression: &CHirExpr<'_>) {
                 assert_expr_owned(arena, value);
             }
         }
+        CHirExpr::StatementExpr { body, .. } => assert_stmt_owned(arena, body),
     }
 }
 

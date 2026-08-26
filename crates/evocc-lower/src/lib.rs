@@ -13,7 +13,7 @@ use evocc_chir::integer::{
 };
 use evocc_chir::{
     AllocationSiteManifest, AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit,
-    CHirStmt, CHirUnit, ExprCategory, FunctionDecl, InitAction, MemoryPlace, ObjectDecl,
+    CHirStmt, CHirUnit, ExprCategory, ExprFacts, FunctionDecl, InitAction, MemoryPlace, ObjectDecl,
     ParameterSyntax, PlaceProjection, PlaceRoot, ScalarPlace, ScopeKind, StorageClass,
     SubobjectPath, SubobjectStep, SymbolId, SymbolKind, UnaryOp, UpdateOp, WrittenDeclarator,
     WrittenDeclaratorLayer,
@@ -238,6 +238,7 @@ struct FunctionLowerer<'a> {
     goto_names: BTreeSet<String>,
     labels: BTreeMap<String, JumpTarget>,
     pending_gotos: BTreeMap<String, Vec<State>>,
+    active_control: ControlTargets,
 }
 
 /// Lower a complete C-HIR translation unit into one validated EvoIR module.
@@ -424,6 +425,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                     expression(unit, element, out);
                 }
             }
+            CHirExpr::StatementExpr { body, .. } => statement(unit, body, out),
             CHirExpr::Lit(..)
             | CHirExpr::FloatLit(..)
             | CHirExpr::CharLit(..)
@@ -1156,6 +1158,10 @@ fn prevalidate_expr_for_lowering(
             }
             Ok(())
         }
+        CHirExpr::StatementExpr { body, .. } => {
+            let mut labels = BTreeMap::new();
+            prevalidate_stmt_for_lowering(unit, body, &mut labels)
+        }
         CHirExpr::SizeOf(ty, span) | CHirExpr::AlignOf(ty, span) => {
             if unit.types().get(*ty).is_none() {
                 Err(LowerError::UnknownType {
@@ -1767,6 +1773,7 @@ impl<'a> FunctionLowerer<'a> {
             goto_names: BTreeSet::new(),
             labels: BTreeMap::new(),
             pending_gotos: BTreeMap::new(),
+            active_control: ControlTargets::default(),
         }
     }
 
@@ -2210,6 +2217,19 @@ impl<'a> FunctionLowerer<'a> {
     }
 
     fn lower_stmt(
+        &mut self,
+        statement: &'a CHirStmt<'a>,
+        state: State,
+        live_after: &BTreeSet<SymbolId>,
+        control: &ControlTargets,
+    ) -> Result<Flow, LowerError> {
+        let previous = std::mem::replace(&mut self.active_control, control.clone());
+        let result = self.lower_stmt_active(statement, state, live_after, control);
+        self.active_control = previous;
+        result
+    }
+
+    fn lower_stmt_active(
         &mut self,
         statement: &'a CHirStmt<'a>,
         mut state: State,
@@ -4072,6 +4092,17 @@ impl<'a> FunctionLowerer<'a> {
             CHirExpr::CheckedArithmetic { span, .. } => {
                 Err(LowerError::CheckedArithmetic { span: *span })
             }
+            CHirExpr::StatementExpr {
+                body,
+                value,
+                facts,
+                span,
+            } => self
+                .lower_statement_expression(body, *value, *facts, *span, state)?
+                .ok_or(LowerError::UnsupportedExpression {
+                    span: *span,
+                    feature: "void statement expression used where a value is required",
+                }),
             CHirExpr::Cast(target, operand, span) => {
                 if matches!(
                     self.unit.types().get(*target).map(|ty| &ty.kind),
@@ -4190,6 +4221,83 @@ impl<'a> FunctionLowerer<'a> {
                 )
             }
         }
+    }
+
+    fn lower_statement_expression(
+        &mut self,
+        body: &'a CHirStmt<'a>,
+        value: Option<&'a CHirExpr<'a>>,
+        facts: ExprFacts,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<Option<ExprValue>, LowerError> {
+        let CHirStmt::Compound(items, _) = body else {
+            return Err(LowerError::UnsupportedExpression {
+                span,
+                feature: "statement expression body is not a compound statement",
+            });
+        };
+        let prefix = if let Some(value) = value {
+            let Some(CHirBlockItem::Statement(CHirStmt::Expr(final_value, _))) = items.last()
+            else {
+                return Err(LowerError::UnsupportedExpression {
+                    span,
+                    feature: "statement expression value is not its final expression statement",
+                });
+            };
+            if !std::ptr::eq(*final_value, value) {
+                return Err(LowerError::UnsupportedExpression {
+                    span,
+                    feature: "statement expression value identity is not authoritative",
+                });
+            }
+            &items[..items.len() - 1]
+        } else {
+            items.as_ref()
+        };
+
+        let mut live = state.locals.clone();
+        if let Some(value) = value {
+            collect_symbols_expr(value, &mut live);
+        }
+        let control = self.active_control.clone();
+        let flow = self.lower_compound_items(prefix, state.clone(), &live, &control, false)?;
+        let Some(mut continued) = self.merge_states(flow.normal, &live)? else {
+            return Err(LowerError::InvalidControlFlow {
+                span,
+                reason: "statement expression has no normal path to its value",
+            });
+        };
+
+        let result = value
+            .map(|value| self.lower_expr(value, &mut continued))
+            .transpose()?;
+        if let Some(result) = &result {
+            let expected = self.c_value_type(facts.ty(), span)?.0;
+            if result.value.ty != expected {
+                return Err(LowerError::UnsupportedExpression {
+                    span,
+                    feature: "statement expression result disagrees with its semantic type",
+                });
+            }
+        }
+
+        for item in items {
+            let CHirBlockItem::Declaration(CHirDecl::Object(object)) = item else {
+                continue;
+            };
+            if self.memory_symbols.contains(&object.symbol)
+                && continued.env.contains_key(&EnvKey::Address(object.symbol))
+                && object.storage != StorageClass::Static
+            {
+                self.end_object_lifetime(object.symbol, &mut continued)?;
+            }
+            continued.env.remove(&EnvKey::Local(object.symbol));
+            continued.env.remove(&EnvKey::Address(object.symbol));
+            continued.locals.remove(&object.symbol);
+        }
+        *state = continued;
+        Ok(result)
     }
 
     fn lower_unary(
@@ -5071,6 +5179,15 @@ impl<'a> FunctionLowerer<'a> {
             CHirExpr::Comma(left, right, _) => {
                 self.lower_discarded_expr(left, state)?;
                 self.lower_discarded_expr(right, state)?;
+            }
+            CHirExpr::StatementExpr {
+                body,
+                value: None,
+                facts,
+                span,
+            } => {
+                let result = self.lower_statement_expression(body, None, *facts, *span, state)?;
+                debug_assert!(result.is_none());
             }
             _ => {
                 let _ = self.lower_expr(expression, state)?;
@@ -6241,6 +6358,7 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
                 collect_calls_expr(element, calls);
             }
         }
+        CHirExpr::StatementExpr { body, .. } => collect_calls_stmt(body, calls),
         CHirExpr::Lit(..)
         | CHirExpr::FloatLit(..)
         | CHirExpr::CharLit(..)
@@ -6467,6 +6585,9 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
                 live_before_expr(element, live);
             }
         }
+        CHirExpr::StatementExpr { body, .. } => {
+            *live = live_before_stmt(body, std::mem::take(live));
+        }
         CHirExpr::Lit(..)
         | CHirExpr::FloatLit(..)
         | CHirExpr::CharLit(..)
@@ -6632,6 +6753,7 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
                 collect_symbols_expr(element, symbols);
             }
         }
+        CHirExpr::StatementExpr { body, .. } => collect_symbols_stmt(body, symbols),
         CHirExpr::Lit(..)
         | CHirExpr::FloatLit(..)
         | CHirExpr::CharLit(..)

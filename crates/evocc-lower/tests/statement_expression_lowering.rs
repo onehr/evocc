@@ -2,8 +2,8 @@ use evocc_chir::interp::{interpret_scalar_function, InterpreterLimits as ChirLim
 use evocc_chir::{CHirDecl, CHirUnit, SymbolId};
 use evocc_common::{Arena, FileId};
 use evocc_evoir::{
-    interpret_module, render_module, validate_module, InterpreterLimits as EvoIrLimits, Module,
-    RuntimeValue,
+    interpret_module, render_module, validate_module, Inst, InterpreterLimits as EvoIrLimits,
+    Module, RuntimeValue,
 };
 use evocc_lex::{Lexer, TokenKind};
 use evocc_lower::lower_unit;
@@ -131,10 +131,23 @@ fn conditional_expression_has_one_value_join_block() {
         .iter()
         .find(|function| function.name == "main")
         .unwrap();
+    let mut predecessor_counts = std::collections::BTreeMap::new();
+    for block in &main.blocks {
+        match &block.terminator {
+            Inst::Br(target, _) => *predecessor_counts.entry(*target).or_insert(0_usize) += 1,
+            Inst::CondBr(_, true_target, _, false_target, _) => {
+                *predecessor_counts.entry(*true_target).or_insert(0_usize) += 1;
+                *predecessor_counts.entry(*false_target).or_insert(0_usize) += 1;
+            }
+            _ => {}
+        }
+    }
     let value_joins = main
         .blocks
         .iter()
-        .filter(|block| block.args.len() == 1)
+        .filter(|block| {
+            predecessor_counts.get(&block.id).copied().unwrap_or(0) > 1 && block.args.len() == 1
+        })
         .count();
     assert_eq!(value_joins, 1, "one block argument transports the value");
 }

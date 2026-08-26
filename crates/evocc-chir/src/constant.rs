@@ -126,6 +126,7 @@ fn eval_integer_constant(
         | CHirExpr::MemoryRead { .. }
         | CHirExpr::Update { .. }
         | CHirExpr::MemoryUpdate { .. }
+        | CHirExpr::StatementExpr { .. }
         | CHirExpr::CompoundLit(_, _, _)
         | CHirExpr::Comma(_, _, _) => None,
     }
@@ -195,7 +196,8 @@ fn expression_size(
         | CHirExpr::MemoryRead { facts, .. }
         | CHirExpr::CheckedArithmetic { facts, .. }
         | CHirExpr::Update { facts, .. }
-        | CHirExpr::MemoryUpdate { facts, .. } => facts_size(*facts, types, target),
+        | CHirExpr::MemoryUpdate { facts, .. }
+        | CHirExpr::StatementExpr { facts, .. } => facts_size(*facts, types, target),
         CHirExpr::Cast(ty, _, _) | CHirExpr::CompoundLit(ty, _, _) => target
             .layout_of(types, *ty)
             .ok()
@@ -248,7 +250,8 @@ fn integer_expression_type(
         | CHirExpr::Assign { facts, .. }
         | CHirExpr::MemoryAssign { facts, .. }
         | CHirExpr::Update { facts, .. }
-        | CHirExpr::MemoryUpdate { facts, .. } => canonical_integer_type(types, facts.ty()),
+        | CHirExpr::MemoryUpdate { facts, .. }
+        | CHirExpr::StatementExpr { facts, .. } => canonical_integer_type(types, facts.ty()),
         CHirExpr::Unary(operator, operand, _) => match operator {
             crate::UnaryOp::Not => Some(CIntegerType::INT),
             crate::UnaryOp::Plus | crate::UnaryOp::Neg | crate::UnaryOp::BitNot => Some(
@@ -329,7 +332,8 @@ fn expression_type_id(expression: &CHirExpr<'_>) -> Option<TypeId> {
         | CHirExpr::MemoryAssign { facts, .. }
         | CHirExpr::MemoryRead { facts, .. }
         | CHirExpr::Update { facts, .. }
-        | CHirExpr::MemoryUpdate { facts, .. } => Some(facts.ty()),
+        | CHirExpr::MemoryUpdate { facts, .. }
+        | CHirExpr::StatementExpr { facts, .. } => Some(facts.ty()),
         CHirExpr::Cast(ty, _, _)
         | CHirExpr::SizeOf(ty, _)
         | CHirExpr::AlignOf(ty, _)
