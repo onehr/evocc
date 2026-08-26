@@ -6,7 +6,7 @@ use evocc_evoir::{
     Module, RuntimeValue,
 };
 use evocc_lex::{Lexer, TokenKind};
-use evocc_lower::lower_unit;
+use evocc_lower::{lower_unit, LowerError};
 use evocc_parser::Parser;
 use evocc_types::{EvoIRType, TargetDataLayout};
 
@@ -188,4 +188,22 @@ fn designated_and_positional_forms_lower_to_identical_bytes() {
         31,
     ));
     assert_eq!(designated, positional);
+}
+
+#[test]
+fn file_scope_compound_pointer_fails_closed_without_a_global_identity() {
+    let arena = Arena::default();
+    let unit = parse("int *values = (int[]){ 1, 2 };\n", &arena, 32);
+    let error = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+        .expect_err("an unspecified relocation identity must not produce dangling global_addr");
+    assert!(
+        matches!(
+            &error,
+            LowerError::UnsupportedExpression {
+                feature: "global initializer is not an admitted integer constant",
+                ..
+            }
+        ),
+        "unexpected fail-closed boundary: {error:?}"
+    );
 }

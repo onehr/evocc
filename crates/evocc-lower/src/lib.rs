@@ -3545,14 +3545,11 @@ impl<'a> FunctionLowerer<'a> {
         )?;
         let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
         if static_storage {
-            self.emit(
-                state,
-                Inst::GlobalAddr {
-                    result: address.clone(),
-                    symbol: format!("__evocc.compound.{origin}"),
-                },
-            )?;
-            return Ok(address);
+            return Err(LowerError::UnsupportedExpression {
+                span: *span,
+                feature:
+                    "file-scope compound-literal relocation has no specified EvoIR global identity",
+            });
         }
         let mem_in = self.token(state, EnvKey::Memory)?.value;
         let world_in = self.token(state, EnvKey::World)?.value;
