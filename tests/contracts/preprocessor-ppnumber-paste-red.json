@@ -1,0 +1,41 @@
+{
+  "baseline": "640df75e3dfa458b41830e2243135523ff24fb2a",
+  "authority": [
+    "docs/evoir-spec.md revision 1.9.11 sections 6.3 and 10.4",
+    "tests/contracts/day9-acceptance-contract.json scope P3"
+  ],
+  "focusedCommand": "cargo test -p evocc-cpp --test token_paste_pp_numbers --no-fail-fast",
+  "workspaceCommand": "cargo test --workspace --no-fail-fast",
+  "summary": {
+    "failed": 4,
+    "passed": 1,
+    "buildErrors": 0,
+    "unexpectedFailedTargets": 0
+  },
+  "declaredCapability": "token pasting produces any single preprocessing token; noninteger pp-numbers are diagnosed only by their consuming context",
+  "failures": [
+    {
+      "test": "pasted_preprocessing_numbers_survive_until_their_consuming_context",
+      "diagnostic": "1_MODULE and 1x are rejected eagerly as E0001 invalid token",
+      "required": "1_MODULE, 1x and 1.5 survive preprocessing without a diagnostic"
+    },
+    {
+      "test": "the_kernel_module_shape_can_repaste_a_preprocessing_number",
+      "diagnostic": "the intermediate 1_MODULE is rejected as E0001 before __ARG_PLACEHOLDER_##x can consume it",
+      "required": "the intermediate pp-number can be pasted again into __ARG_PLACEHOLDER_1_MODULE"
+    },
+    {
+      "test": "an_invalid_paste_has_the_frozen_diagnostic_at_the_operator",
+      "diagnostic": "CAT(1, +) reports E0001 rather than E0110",
+      "required": "E0110 invalid-token-paste at the ## operator span"
+    },
+    {
+      "test": "a_noninteger_preprocessing_number_is_rejected_only_when_if_consumes_it",
+      "diagnostic": "1x is rejected eagerly as E0001 and 1.5 is silently treated as zero in #if",
+      "required": "the translation-unit occurrence survives and the #if occurrence alone reports E0111 conditional-operand-not-integer"
+    }
+  ],
+  "greenControls": [
+    "pasted_integer_constants_remain_valid_if_operands"
+  ]
+}
