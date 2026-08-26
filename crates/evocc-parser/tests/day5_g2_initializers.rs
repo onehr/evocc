@@ -904,7 +904,7 @@ fn failed_initializer_rolls_back_its_declaration_without_ghost_symbols() {
 }
 
 #[test]
-fn unsupported_forms_have_stable_day5_or_day9_boundaries() {
+fn unsupported_initializer_forms_keep_their_stable_boundaries() {
     assert_diagnostic(
         INVALID_INITIALIZER_TYPE,
         "1.5",
@@ -920,20 +920,6 @@ fn unsupported_forms_have_stable_day5_or_day9_boundaries() {
         "not-covered-day7: aggregate-copy-initializer",
     );
     assert_diagnostic(
-        DESIGNATED_BOUNDARY,
-        ".",
-        0,
-        "E2901",
-        "not-covered-day9: designated-initializer",
-    );
-    assert_diagnostic(
-        COMPOUND_LITERAL_BOUNDARY,
-        "{",
-        2,
-        "E2902",
-        "not-covered-day9: compound-literal",
-    );
-    assert_diagnostic(
         WIDE_STRING_BOUNDARY,
         "L\"x\"",
         0,
@@ -947,4 +933,16 @@ fn unsupported_forms_have_stable_day5_or_day9_boundaries() {
         "E2203",
         "variable-length-object-cannot-be-initialized",
     );
+}
+
+#[test]
+fn designated_initializers_are_covered_forms() {
+    let designated_arena = Arena::default();
+    parse_valid(DESIGNATED_BOUNDARY, &designated_arena);
+}
+
+#[test]
+fn compound_literals_are_covered_forms() {
+    let compound_arena = Arena::default();
+    parse_valid(COMPOUND_LITERAL_BOUNDARY, &compound_arena);
 }

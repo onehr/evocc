@@ -1,0 +1,72 @@
+{
+  "receiptId": "c30.statement-expressions-initializers.red",
+  "authority": {
+    "specification": "docs/evoir-spec.md revision 1.9.12 sections 10.1.11-10.1.13",
+    "contract": "tests/contracts/day9-acceptance-contract.json scope line C"
+  },
+  "baseline": "0f25d25",
+  "declaredMissingCapabilities": [
+    "statement-expressions",
+    "designated-initializers",
+    "compound-literals"
+  ],
+  "redCommand": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/private/tmp/c30-cargo-test-runner.sh cargo test -p evocc-parser --test statement_expressions --test designated_initializers --test compound_literals --test day5_g2_initializers -p evocc-chir --test statement_expression_values -p evocc-lower --test statement_expression_lowering --no-fail-fast",
+  "measured": {
+    "passed": 12,
+    "failed": 26,
+    "ignored": 0,
+    "rustBuildErrors": 0,
+    "failureClasses": {
+      "E1003 expected-expression at statement expression": 10,
+      "E2901 not-covered-day9: designated-initializer": 8,
+      "E2902 not-covered-day9: compound-literal": 8
+    }
+  },
+  "observations": [
+    { "suite": "evocc-parser/statement_expressions", "test": "final_expression_yields_a_value_and_nesting_is_compositional", "observed": "E1003 expected-expression", "reason": "statement-expressions" },
+    { "suite": "evocc-parser/statement_expressions", "test": "result_undergoes_lvalue_conversion_and_is_never_assignable", "observed": "E1003 expected-expression", "reason": "statement-expressions" },
+    { "suite": "evocc-parser/statement_expressions", "test": "control_flow_may_leave_but_not_enter_the_expression", "observed": "E1003 expected-expression", "reason": "statement-expressions" },
+    { "suite": "evocc-parser/statement_expressions", "test": "file_scope_and_constant_expression_contexts_report_e2905", "observed": "E1003 expected-expression", "reason": "statement-expressions" },
+    { "suite": "evocc-parser/statement_expressions", "test": "measured_kernel_shapes_parse_without_surface_rewriting", "observed": "E1003 expected-expression", "reason": "statement-expressions" },
+    { "suite": "evocc-parser/designated_initializers", "test": "field_index_chain_and_range_designators_parse", "observed": "E2901 not-covered-day9: designated-initializer", "reason": "designated-initializers" },
+    { "suite": "evocc-parser/designated_initializers", "test": "positional_cursor_continues_after_a_designator", "observed": "E2901 not-covered-day9: designated-initializer", "reason": "designated-initializers" },
+    { "suite": "evocc-parser/designated_initializers", "test": "later_overlapping_action_wins_while_written_form_retains_both", "observed": "E2901 not-covered-day9: designated-initializer", "reason": "designated-initializers" },
+    { "suite": "evocc-parser/designated_initializers", "test": "nested_array_record_and_string_designators_parse", "observed": "E2901 not-covered-day9: designated-initializer", "reason": "designated-initializers" },
+    { "suite": "evocc-parser/designated_initializers", "test": "invalid_designators_report_e2906_at_the_front_end", "observed": "E2901 not-covered-day9: designated-initializer", "reason": "designated-initializers" },
+    { "suite": "evocc-parser/designated_initializers", "test": "measured_nested_kernel_style_initializers_parse_verbatim", "observed": "E2901 not-covered-day9: designated-initializer", "reason": "designated-initializers" },
+    { "suite": "evocc-parser/compound_literals", "test": "scalar_record_address_and_array_literals_parse", "observed": "E2902 not-covered-day9: compound-literal", "reason": "compound-literals" },
+    { "suite": "evocc-parser/compound_literals", "test": "file_scope_literals_have_static_storage", "observed": "E2902 not-covered-day9: compound-literal", "reason": "compound-literals" },
+    { "suite": "evocc-parser/compound_literals", "test": "each_occurrence_has_a_consecutive_allocation_site", "observed": "E2902 not-covered-day9: compound-literal", "reason": "compound-literals" },
+    { "suite": "evocc-parser/compound_literals", "test": "block_scope_occurrence_can_be_reentered_as_a_fresh_object", "observed": "E2902 not-covered-day9: compound-literal", "reason": "compound-literals" },
+    { "suite": "evocc-parser/compound_literals", "test": "const_file_scope_literal_can_be_addressed_for_runtime_read_only_checks", "observed": "E2902 not-covered-day9: compound-literal", "reason": "compound-literals" },
+    { "suite": "evocc-chir/statement_expression_values", "test": "final_expression_and_nested_values_are_observable", "observed": "E1003 expected-expression", "reason": "statement-expressions" },
+    { "suite": "evocc-chir/statement_expression_values", "test": "break_leaves_the_statement_expression_and_its_enclosing_loop", "observed": "E1003 expected-expression", "reason": "statement-expressions" },
+    { "suite": "evocc-chir/statement_expression_values", "test": "reentering_a_block_scope_literal_allocates_a_fresh_object", "observed": "E2902 not-covered-day9: compound-literal", "reason": "compound-literals" },
+    { "suite": "evocc-chir/statement_expression_values", "test": "const_file_scope_literal_rejects_a_store_with_e3014", "observed": "E2902 not-covered-day9: compound-literal", "reason": "compound-literals" },
+    { "suite": "evocc-lower/statement_expression_lowering", "test": "straight_line_expression_adds_no_control_flow_block", "observed": "E1003 expected-expression", "reason": "statement-expressions" },
+    { "suite": "evocc-lower/statement_expression_lowering", "test": "conditional_expression_has_one_value_join_block", "observed": "E1003 expected-expression", "reason": "statement-expressions" },
+    { "suite": "evocc-lower/statement_expression_lowering", "test": "both_interpreters_agree_on_statement_and_initializer_forms", "observed": "E1003 expected-expression", "reason": "statement-expressions" },
+    { "suite": "evocc-lower/statement_expression_lowering", "test": "designated_and_positional_forms_lower_to_identical_bytes", "observed": "E2901 not-covered-day9: designated-initializer", "reason": "designated-initializers" },
+    { "suite": "evocc-parser/day5_g2_initializers", "test": "designated_initializers_are_covered_forms", "observed": "E2901 not-covered-day9: designated-initializer", "reason": "designated-initializers" },
+    { "suite": "evocc-parser/day5_g2_initializers", "test": "compound_literals_are_covered_forms", "observed": "E2902 not-covered-day9: compound-literal", "reason": "compound-literals" }
+  ],
+  "dependentFixture": {
+    "capability": "__auto_type",
+    "source": "struct range { unsigned long start; }; void set(struct range *r, struct range *r1) { r->start = ({ __auto_type x = r1->start; x + 1; }); }",
+    "isolatedCurrentDiagnostic": "E2001 undeclared-identifier: __auto_type",
+    "disposition": "Declared as depending on the later compile-time inference window; the active statement-expression fixture uses typeof(r1->start) and no test is disabled."
+  },
+  "knownAuthorityGaps": [
+    "H-STALE-EXCLUSION: section 10.1.7 still says statement expressions are outside the profile while section 10.1.11 covers them.",
+    "H-JUMP-IN-DIAGNOSTIC: jumping into a statement expression is malformed but no diagnostic code or exact message is assigned.",
+    "H-STATIC-LITERAL-RELOCATION: the required file-scope pointer initializer needs a static relocation/provenance representation that revision 1.7 explicitly deferred.",
+    "H-COMPOUND-GLOBAL-IDENTITY: no deterministic unnamed compound-literal global identity or GlobalKind is specified.",
+    "H-READONLY-STATIC: E3014 is broadened to const file-scope literals here while the memory sections still define read-only storage as string-literal-only.",
+    "H-JOIN-ARG-CARDINALITY: the stated single value block argument does not say how it composes with mandatory live-local, mem<all>, or world block arguments.",
+    "H-SCALAR-DESIGNATOR-DIAGNOSTIC: the plan requires E2906 on scalar designators but the normative E2906 condition names only missing fields and fixed-bound indexes.",
+    "H-DESIGNATOR-ICE-DIAGNOSTICS: invalid designator index and range constant expressions have no assigned diagnostic.",
+    "H-RANGE-EVALUATION-COUNT: side-effect evaluation multiplicity for GNU range initializers is not specified.",
+    "H-INCOMPLETE-ARRAY-DESIGNATED-BOUND: sparse and range designators do not have a frozen incomplete-array bound rule.",
+    "H-CLOSING-EDGE-CLEANUP: statement-expression lifetime closure is required on every exit but the lowering paragraph does not define the cleanup edge form."
+  ]
+}
