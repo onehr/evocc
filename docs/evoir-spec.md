@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.11** | **Authoritative reference** | **2026-08-26**
+**Revision 1.9.12** | **Authoritative reference** | **2026-08-27**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1242,6 +1242,7 @@ twice would let a reader think two conditions are the same finding.
 | `E0109` | `counter-overflow` | preprocessor |
 | `E0110` | `invalid-token-paste` | preprocessor |
 | `E0111` | `conditional-operand-not-integer` | preprocessor |
+| `E0112` | `stray-token` | front end |
 | `E3018` | `invalid-lifetime-end` | runtime |
 | `E3019` | `function-pointer-target-signature-mismatch` | runtime |
 | `E3020` | `not-lowered: checked-arithmetic` | lowering |
@@ -3025,7 +3026,8 @@ in translation order (measured `0 1 2`); a translation unit that expands it
 re-lexed as one *preprocessing* token (C11 6.4.8): an identifier, a
 punctuator, a string or character literal, or a pp-number, which is a digit
 followed by any sequence of digits, identifier characters, `.`, and `e`/`E`/`p`/`P`
-followed by a sign. `1_MODULE`, `1x` and `1.5` are therefore valid results
+followed by a sign, and may begin with `.` followed by a digit (`.5foo` and
+`1.2.3e+x` are each one pp-number). `1_MODULE`, `1x` and `1.5` are therefore valid results
 (measured, both oracles: `CAT(1,_MODULE)` gives `1_MODULE`; the kernel's
 `IS_ENABLED(CONFIG_X)` expands `IS_MODULE(1)` to `1##_MODULE` and relies on
 it). A result that is not one preprocessing token is `E0110`
@@ -3033,7 +3035,21 @@ it). A result that is not one preprocessing token is `E0110`
 `CAT(1,+)`). A pp-number that is not a valid integer constant is an error
 only where it is consumed: `E0111` (`conditional-operand-not-integer`) in a
 `#if`, or the C lexer's diagnostic in the translation unit. GNU comma elision
-before an empty `__VA_ARGS__` is honoured. Measured defect at revision
+before an empty `__VA_ARGS__` is honoured.
+
+**Other characters.** Any non-white-space character that does not begin another
+preprocessing token (`\\`, `@`, `` ` ``, `$` outside identifiers) is a single
+preprocessing token of its own (C11 6.4 *each non-white-space character that
+cannot be one of the above*). It passes through macro expansion and is kept by
+`#` stringification (measured, both oracles: `S(\\sreg)` is `"\\sreg"`, which
+the kernel's `sysreg.h` relies on to build assembler text). It is an error only
+when it reaches the C lexer as a token: `E0112` (`stray-token`) at that token,
+the same code every preprocessing token that has no C token form reports at
+conversion (a pp-number that is not a C constant included). Measured defect at
+revision 1.9.11: `\\` inside a macro body was `E0001` at the `#define`, which
+stopped all 14 raw kernel lanes at `sysreg.h:1163`.
+
+Measured defect at revision
 1.9.10: the re-lexer rejected `1_MODULE`, which stopped all 14 raw kernel
 lanes at the `1` of `#define CONFIG_ARM64_PAN 1` (440 diagnostics per unit).
 
@@ -3101,7 +3117,7 @@ Diagnostics of this section are front-end (preprocessor) diagnostics: `E0102`
 `include-not-found`, `E0106` `feature-query-malformed`, `E0107`
 `pragma-pack-unsupported`, `E0108` `poisoned-identifier-used`, `E0109`
 `counter-overflow`, `E0110` `invalid-token-paste`, `E0111`
-`conditional-operand-not-integer`.
+`conditional-operand-not-integer`, `E0112` `stray-token`.
 
 ## 11. Proof Checking Interface
 
@@ -3597,6 +3613,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.12 | 2026-08-27 | Completes the preprocessing-token grammar: `.5foo` is a pp-number, stray characters such as `\\` are single pp-tokens kept by stringification, and `E0112` is the one diagnostic for a pp-token with no C form when it reaches the C lexer. Measured after every raw kernel lane stopped on `\\sreg` in `sysreg.h`. |
 | 1.9.11 | 2026-08-26 | Token pasting yields any preprocessing token, including pp-numbers such as `1_MODULE`; `E0111` for a pp-number that is not an integer in `#if`. Measured after the re-lexer rejected the kernel's `IS_MODULE(1)` expansion in every raw lane. |
 | 1.9.10 | 2026-08-26 | Closes the three gaps the paste/pack window reported: `E0110` for an invalid `##` result, `pack(pop)` on an empty stack ignored, `pack` honoured at block scope and refused inside a member list (`ORACLE_CONFLICT`). All measured. |
 | 1.9.9 | 2026-08-26 | Corrects 10.4 `#pragma pack`: a member `aligned` attribute does not raise alignment above the active pack cap. Revision 1.9.8 asserted the opposite from documentation without a probe; the executing agent's sealed probe showed both oracles at 5/1. |

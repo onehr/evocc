@@ -14,7 +14,9 @@
     "P preprocessor target profile (spec 10.4): sealed GCC-14 predefined macros, __COUNTER__, __has_attribute/__has_builtin/__has_feature/__has_include with measured answers, _Pragma; gate: no raw lane stops on E0104 \"Unknown compiler\"; where they stop next is counted, not predicted",
     "P2 preprocessor defects measured after P: #if evaluation of pasted pp-numbers (CAT(300,), CAT(0x1,00); suffixed literals already correct); #pragma pack(N)/pack()/push/pop applied to record layout (spec 10.4)",
     "I compile-time builtins and small GNU forms (spec 10.1.17): __builtin_choose_expr, __builtin_types_compatible_p, __builtin_offsetof, bit builtins, __builtin_unreachable, __builtin_return_address, __auto_type, ?:, case ranges, __label__",
-    "P3 preprocessor: a ## result is any C11 preprocessing token including pp-numbers (1_MODULE, 1x, 1.5); E0111 only when such a pp-number is consumed by #if (spec 10.4). Gate: no raw lane stops at autoconf.h"
+    "P3 preprocessor: a ## result is any C11 preprocessing token including pp-numbers (1_MODULE, 1x, 1.5); E0111 only when such a pp-number is consumed by #if (spec 10.4). Gate: no raw lane stops at autoconf.h",
+    "P4 preprocessor: stray characters (backslash, @, backtick, $) are single pp-tokens kept by stringification; .5foo is a pp-number; E0112 at the C lexer for a pp-token with no C form (spec 10.4). Gate: no raw lane stops in sysreg.h",
+    "G2 remaining Day 7 debt, each still reported as not-covered-day7 in the parser: aggregate copy-initializer, flexible-array initializer, aggregate assignment and aggregate lvalue assignment, volatile-or-atomic update. Not yet opened; opened when telemetry reaches one or when C1 needs it, whichever first"
   ],
   "gate": "Kernel parse/preprocess counts published by the script from sealed evidence. Process gate; no predicted number. Counts must be >= 1/16 dual-oracle parse and 0/16 raw preprocess.",
   "order": "A, B, then re-run reconnaissance; C in the order the refreshed first-error sites rank them: typeof + _Generic first (all 30 parse lanes), the rest by the next publication. The list is scope, not sequence.",
