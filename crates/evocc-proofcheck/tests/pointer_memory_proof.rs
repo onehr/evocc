@@ -66,10 +66,11 @@ fn parse<'arena>(source: &str, arena: &'arena Arena) -> CHirUnit<'arena> {
 #[test]
 fn pointer_memory_lowering_replays_at_the_independent_proof_boundary() {
     let source = concat!(
+        "int identity(int value) { return value + 0; } ",
         "struct Node { int value; struct Node *next; }; ",
         "int main(void) { struct Node a; struct Node b; int values[3] = {4, 5, 6}; ",
         "a.next = &b; b.value = 9; struct Node *node = &a; int *p = values; p++; ",
-        "int selected = *p + node->next->value; return selected + 0; }",
+        "int selected = *p + node->next->value; return identity(selected); }",
     );
     let arena = Arena::default();
     let unit = parse(source, &arena);

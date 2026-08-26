@@ -5105,16 +5105,28 @@ impl<'a> FunctionLowerer<'a> {
             let result = if operator == AssignmentOp::Simple {
                 self.coerce_to_object_type(right, Some(assigned), place.ty(), span, state)?
             } else {
-                let destination =
-                    canonical_integer(self.unit.types(), self.target, place.ty(), span)?;
-                self.compute_compound_assignment(
-                    operator,
-                    original.expect("compound assignment loaded its object"),
-                    right,
-                    destination,
-                    span,
-                    state,
-                )?
+                let original = original.expect("compound assignment loaded its object");
+                if matches!(original.value.ty, EvoIRType::Ptr(_)) {
+                    self.compute_pointer_assignment(
+                        operator,
+                        original,
+                        right,
+                        place.ty(),
+                        span,
+                        state,
+                    )?
+                } else {
+                    let destination =
+                        canonical_integer(self.unit.types(), self.target, place.ty(), span)?;
+                    self.compute_compound_assignment(
+                        operator,
+                        original,
+                        right,
+                        destination,
+                        span,
+                        state,
+                    )?
+                }
             };
             return self.emit_memory_store(address, result, place.ty(), volatile, span, state);
         }
@@ -5122,15 +5134,13 @@ impl<'a> FunctionLowerer<'a> {
             self.unit.types().get(place.ty()).map(|ty| &ty.kind),
             Some(TypeKind::Pointer(_))
         ) {
-            if operator != AssignmentOp::Simple {
-                return Err(LowerError::UnsupportedExpression {
-                    span,
-                    feature: "compound pointer assignment is outside Day 7",
-                });
-            }
             let right = self.lower_expr(assigned, state)?;
-            let result =
-                self.coerce_to_object_type(right, Some(assigned), place.ty(), span, state)?;
+            let result = if operator == AssignmentOp::Simple {
+                self.coerce_to_object_type(right, Some(assigned), place.ty(), span, state)?
+            } else {
+                let original = self.local(state, place.symbol(), span)?;
+                self.compute_pointer_assignment(operator, original, right, place.ty(), span, state)?
+            };
             state.env.insert(
                 EnvKey::Local(place.symbol()),
                 BoundValue {
@@ -5245,6 +5255,35 @@ impl<'a> FunctionLowerer<'a> {
     ) -> Result<ExprValue, LowerError> {
         self.validate_place(place, target, span)?;
         let original = self.local(state, place.symbol(), span)?;
+        if matches!(original.value.ty, EvoIRType::Ptr(_)) {
+            let one = self.constant(state, CIntegerType::INT, 1)?;
+            let updated = self.compute_pointer_assignment(
+                if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PostIncrement) {
+                    AssignmentOp::Add
+                } else {
+                    AssignmentOp::Subtract
+                },
+                original.clone(),
+                one,
+                place.ty(),
+                span,
+                state,
+            )?;
+            state.env.insert(
+                EnvKey::Local(place.symbol()),
+                BoundValue {
+                    value: updated.value.clone(),
+                    integer: Some(CIntegerType::ULONG),
+                },
+            );
+            return Ok(
+                if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PreDecrement) {
+                    updated
+                } else {
+                    original
+                },
+            );
+        }
         let promoted_type = integer_promotion(original.integer);
         let promoted = self.cast(original.clone(), promoted_type, state)?;
         let one = self.constant(state, promoted_type, 1)?;
@@ -5346,6 +5385,63 @@ impl<'a> FunctionLowerer<'a> {
         self.cast(computed, destination, state)
     }
 
+    fn compute_pointer_assignment(
+        &mut self,
+        operator: AssignmentOp,
+        pointer: ExprValue,
+        index: ExprValue,
+        pointer_ty: TypeId,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        if !matches!(pointer.value.ty, EvoIRType::Ptr(_))
+            || !matches!(index.value.ty, EvoIRType::Bits(_))
+        {
+            return Err(LowerError::UnsupportedExpression {
+                span,
+                feature: "pointer assignment operands disagree with C-HIR types",
+            });
+        }
+        let pointee = match self.unit.types().get(pointer_ty).map(|ty| &ty.kind) {
+            Some(TypeKind::Pointer(pointee)) => *pointee,
+            _ => {
+                return Err(LowerError::UnsupportedExpression {
+                    span,
+                    feature: "pointer assignment target is not a canonical pointer",
+                });
+            }
+        };
+        let direction = match operator {
+            AssignmentOp::Add => OffsetDirection::Add,
+            AssignmentOp::Subtract => OffsetDirection::Subtract,
+            _ => {
+                return Err(LowerError::UnsupportedExpression {
+                    span,
+                    feature: "invalid compound pointer assignment operator",
+                });
+            }
+        };
+        let layout = self.access_layout(pointee, span)?;
+        let promoted_type = integer_promotion(index.integer);
+        let index = self.cast(index, promoted_type, state)?;
+        let value = self.offset_address(
+            pointer.value,
+            index,
+            direction,
+            if promoted_type.is_signed() {
+                IndexSignedness::Signed
+            } else {
+                IndexSignedness::Unsigned
+            },
+            layout.size_bytes,
+            state,
+        )?;
+        Ok(ExprValue {
+            value,
+            integer: CIntegerType::ULONG,
+        })
+    }
+
     fn lower_memory_assignment(
         &mut self,
         operator: AssignmentOp,
@@ -5372,16 +5468,28 @@ impl<'a> FunctionLowerer<'a> {
         let result = if operator == AssignmentOp::Simple {
             self.coerce_to_object_type(right, Some(assigned), place.value_ty(), span, state)?
         } else {
-            let destination =
-                canonical_integer(self.unit.types(), self.target, place.value_ty(), span)?;
-            self.compute_compound_assignment(
-                operator,
-                original.expect("memory compound assignment loaded its left value"),
-                right,
-                destination,
-                span,
-                state,
-            )?
+            let original = original.expect("memory compound assignment loaded its left value");
+            if matches!(original.value.ty, EvoIRType::Ptr(_)) {
+                self.compute_pointer_assignment(
+                    operator,
+                    original,
+                    right,
+                    place.value_ty(),
+                    span,
+                    state,
+                )?
+            } else {
+                let destination =
+                    canonical_integer(self.unit.types(), self.target, place.value_ty(), span)?;
+                self.compute_compound_assignment(
+                    operator,
+                    original,
+                    right,
+                    destination,
+                    span,
+                    state,
+                )?
+            }
         };
         self.emit_memory_store(
             address,
@@ -5410,10 +5518,34 @@ impl<'a> FunctionLowerer<'a> {
             state,
         )?;
         if matches!(original.value.ty, EvoIRType::Ptr(_)) {
-            return Err(LowerError::UnsupportedExpression {
+            let one = self.constant(state, CIntegerType::INT, 1)?;
+            let updated = self.compute_pointer_assignment(
+                if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PostIncrement) {
+                    AssignmentOp::Add
+                } else {
+                    AssignmentOp::Subtract
+                },
+                original.clone(),
+                one,
+                place.value_ty(),
                 span,
-                feature: "pointer update is outside Day 7",
-            });
+                state,
+            )?;
+            self.emit_memory_store(
+                address,
+                updated.clone(),
+                place.value_ty(),
+                place.access_qualifiers().is_volatile,
+                target_span,
+                state,
+            )?;
+            return Ok(
+                if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PreDecrement) {
+                    updated
+                } else {
+                    original
+                },
+            );
         }
         let promoted_type = integer_promotion(original.integer);
         let promoted = self.cast(original.clone(), promoted_type, state)?;

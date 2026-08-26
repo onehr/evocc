@@ -1548,12 +1548,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     target_span,
                     span,
                 } => {
-                    values.push(CValue::Integer(self.apply_scalar_update(
-                        operator,
-                        symbol,
-                        target_span,
-                        span,
-                    )?));
+                    values.push(self.apply_scalar_update(operator, symbol, target_span, span)?);
                     None
                 }
                 MachineTask::ApplyIndirectUpdate {
@@ -1565,29 +1560,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 } => {
                     let (address, _) =
                         expect_machine_pointer(pop_machine_value(&mut values, span)?, target_span)?;
-                    let old = expect_machine_integer(
-                        self.load_memory_value(address, value_type, qualifiers, target_span)?,
-                        target_span,
-                    )?;
-                    let binary = match operator {
-                        UpdateOp::PreIncrement | UpdateOp::PostIncrement => BinaryOp::Add,
-                        UpdateOp::PreDecrement | UpdateOp::PostDecrement => BinaryOp::Sub,
-                    };
-                    let stepped = eval_binary_integer(binary, old, CInteger::new(1, old.ty()))
-                        .map_err(|error| self.integer_error(error, span))?;
-                    self.store_memory_value(
-                        address,
-                        value_type,
-                        qualifiers,
-                        CValue::Integer(stepped),
-                        span,
-                    )?;
+                    let old =
+                        self.load_memory_value(address, value_type, qualifiers, target_span)?;
+                    let stepped = self.step_update_value(old, operator, span)?;
+                    self.store_memory_value(address, value_type, qualifiers, stepped, span)?;
                     // A prefix form yields the updated object; a postfix form
                     // yields the value it held before the update.
-                    values.push(CValue::Integer(match operator {
+                    values.push(match operator {
                         UpdateOp::PreIncrement | UpdateOp::PreDecrement => stepped,
                         UpdateOp::PostIncrement | UpdateOp::PostDecrement => old,
-                    }));
+                    });
                     None
                 }
                 MachineTask::FoldPlaceAddress { place, span } => {
@@ -2649,7 +2631,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 tasks.push(MachineTask::LoadDereference { pointer_type, span });
                 tasks.push(MachineTask::EvalExpression {
                     expression: operand,
-                    allow_root_mutation: false,
+                    // A postfix or prefix update is part of the pointer
+                    // expression in `*p++` / `*++p`; the dereference must not
+                    // turn that legitimate single mutation into a boundary.
+                    allow_root_mutation: true,
                 });
             }
             CHirExpr::Unary(operator, operand, _) => {
@@ -4006,8 +3991,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirExpr::Assign { facts, .. }
             | CHirExpr::MemoryAssign { facts, .. }
             | CHirExpr::Update { facts, .. }
-            | CHirExpr::MemoryUpdate { facts, .. } => facts.ty(),
+            | CHirExpr::MemoryUpdate { facts, .. }
+            | CHirExpr::MemoryRead { facts, .. } => facts.ty(),
             CHirExpr::Cast(ty, _, _) => *ty,
+            CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
+                self.pointer_type_of_expression(pointer)?.pointee()
+            }
             _ => {
                 return Err(InterpreterError::UnsupportedExpression {
                     feature: "pointer expression type unavailable",
@@ -4422,11 +4411,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         symbol: SymbolId,
         target_span: SourceSpan,
         span: SourceSpan,
-    ) -> Result<CInteger, InterpreterError> {
-        let binary = match operator {
-            UpdateOp::PreIncrement | UpdateOp::PostIncrement => BinaryOp::Add,
-            UpdateOp::PreDecrement | UpdateOp::PostDecrement => BinaryOp::Sub,
-        };
+    ) -> Result<CValue, InterpreterError> {
         let previous = if self.memory_mode {
             let binding = self.require_memory_binding(symbol, target_span)?;
             let qualifiers = self
@@ -4438,24 +4423,22 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span: target_span,
                 })?
                 .qualifiers;
-            expect_machine_integer(
-                self.load_memory_value(binding.address, binding.ty, qualifiers, target_span)?,
-                target_span,
-            )?
+            self.load_memory_value(binding.address, binding.ty, qualifiers, target_span)?
         } else {
             let slot = *self
                 .slots
                 .get(&symbol)
                 .ok_or(InterpreterError::InvalidScalarPlace { symbol, span })?;
-            slot.value
-                .ok_or_else(|| self.uninitialized_read(symbol, target_span))?
+            CValue::Integer(
+                slot.value
+                    .ok_or_else(|| self.uninitialized_read(symbol, target_span))?,
+            )
         };
-        let updated = eval_binary_integer(binary, previous, CInteger::int(1))
-            .map_err(|error| self.integer_error(error, span))?
-            .cast(previous.ty());
+        let updated = self.step_update_value(previous, operator, span)?;
         if self.memory_mode {
-            self.store_bound_value(symbol, CValue::Integer(updated), span)?;
+            self.store_bound_value(symbol, updated, span)?;
         } else {
+            let updated = expect_machine_integer(updated, span)?;
             self.slots
                 .get_mut(&symbol)
                 .ok_or(InterpreterError::InvalidScalarPlace { symbol, span })?
@@ -4468,6 +4451,37 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 previous
             },
         )
+    }
+
+    fn step_update_value(
+        &self,
+        previous: CValue,
+        operator: UpdateOp,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        let direction = match operator {
+            UpdateOp::PreIncrement | UpdateOp::PostIncrement => OffsetDirection::Add,
+            UpdateOp::PreDecrement | UpdateOp::PostDecrement => OffsetDirection::Subtract,
+        };
+        match previous {
+            CValue::Integer(previous) => {
+                let binary = if direction == OffsetDirection::Add {
+                    BinaryOp::Add
+                } else {
+                    BinaryOp::Sub
+                };
+                eval_binary_integer(binary, previous, CInteger::int(1))
+                    .map(|updated| CValue::Integer(updated.cast(previous.ty())))
+                    .map_err(|error| self.integer_error(error, span))
+            }
+            CValue::Pointer { value, ty } => {
+                self.offset_pointer_value(value, ty, CInteger::int(1), direction, span)
+            }
+            CValue::FunctionPointer { .. } => Err(InterpreterError::UnsupportedExpression {
+                feature: "function pointer update",
+                span,
+            }),
+        }
     }
 
     fn uninitialized_read(&self, symbol: SymbolId, span: SourceSpan) -> InterpreterError {
@@ -4701,6 +4715,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 layout.size_bytes,
             )
             .map_err(|error| self.memory_error(error, span))?;
+        self.memory
+            .check_pointer(value)
+            .map_err(|error| self.memory_error(error, span))?;
         Ok(CValue::Pointer {
             value,
             ty: pointer_type,
@@ -4725,10 +4742,27 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             let right = cast_machine_value(right, self.value_type(ty, span)?, span)?;
             return self.store_memory_value(address, ty, qualifiers, right, span);
         }
-        let left = expect_machine_integer(
-            self.load_memory_value(address, ty, qualifiers, target_span)?,
-            target_span,
-        )?;
+        let left = self.load_memory_value(address, ty, qualifiers, target_span)?;
+        if let CValue::Pointer {
+            value,
+            ty: pointer_type,
+        } = left
+        {
+            let direction = match operator {
+                AssignmentOp::Add => OffsetDirection::Add,
+                AssignmentOp::Subtract => OffsetDirection::Subtract,
+                _ => {
+                    return Err(InterpreterError::UnsupportedExpression {
+                        feature: "invalid compound pointer assignment operator",
+                        span,
+                    });
+                }
+            };
+            let index = expect_machine_integer(right, span)?;
+            let result = self.offset_pointer_value(value, pointer_type, index, direction, span)?;
+            return self.store_memory_value(address, ty, qualifiers, result, span);
+        }
+        let left = expect_machine_integer(left, target_span)?;
         let right = expect_machine_integer(right, span)?;
         let binary =
             assignment_binary(operator).ok_or(InterpreterError::UnsupportedExpression {

@@ -153,6 +153,12 @@ const INVALID_CHIR_CASES: &[InvalidCHirCase] = &[
         expected_code: "E3010",
         expected_message: "dangling-pointer-access",
     },
+    InvalidCHirCase {
+        id: "pointer_update_beyond_one_past",
+        source: "int main(void) { int values[2] = {1, 2}; int *pointer = values; pointer += 3; return 0; }\n",
+        expected_code: "E3011",
+        expected_message: "out-of-bounds-memory-access",
+    },
 ];
 
 fn parse<'arena>(
@@ -792,7 +798,7 @@ fn chir_string_initializers_use_one_fragment_aware_code_unit_authority() {
 fn chir_invalid_memory_programs_report_exact_typed_diagnostics() {
     assert_eq!(
         INVALID_CHIR_CASES.len(),
-        4,
+        5,
         "invalid RED denominator changed"
     );
     for (ordinal, case) in INVALID_CHIR_CASES.iter().copied().enumerate() {

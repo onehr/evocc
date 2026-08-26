@@ -836,20 +836,16 @@ fn failed_update_rolls_back_function_scope_symbols_and_types() {
 }
 
 #[test]
-fn otherwise_valid_pointer_updates_are_an_explicit_day7_boundary() {
-    for (source, target) in [
-        (DAY7_POINTER_ADD, "p += 1"),
-        (DAY7_POINTER_UPDATE, "p++"),
-        (DAY7_POINTER_PREFIX, "++p"),
-        (DAY7_POINTER_SUBTRACT, "p -= 1"),
+fn valid_pointer_updates_produce_typed_chir() {
+    for source in [
+        DAY7_POINTER_ADD,
+        DAY7_POINTER_UPDATE,
+        DAY7_POINTER_PREFIX,
+        DAY7_POINTER_SUBTRACT,
     ] {
-        assert_diagnostic(
-            source,
-            target,
-            0,
-            "E2704",
-            "not-covered-day7: pointer-update",
-        );
+        let arena = Arena::default();
+        let unit = parse_valid(source, &arena);
+        assert_eq!(unit.declarations().len(), 1);
     }
 }
 

@@ -9,7 +9,7 @@ use std::{collections::HashSet, fmt};
 use evocc_types::{Qualifiers, TagDefinition, TagId, TagState, TypeId, TypeInterner, TypeKind};
 
 use crate::integer::CIntegerType;
-use crate::{CHirExpr, StorageClass, SymbolId, SymbolKind, SymbolTable};
+use crate::{CHirExpr, StorageClass, SymbolId, SymbolKind, SymbolTable, UnaryOp};
 
 /// A pointer expression's target type without requiring a synthetic pointer
 /// [`TypeId`].
@@ -755,8 +755,12 @@ fn pointer_expression_type(
         | CHirExpr::Assign { facts, .. }
         | CHirExpr::MemoryAssign { facts, .. }
         | CHirExpr::Update { facts, .. }
-        | CHirExpr::MemoryUpdate { facts, .. } => facts.ty(),
+        | CHirExpr::MemoryUpdate { facts, .. }
+        | CHirExpr::MemoryRead { facts, .. } => facts.ty(),
         CHirExpr::Cast(ty, _, _) => *ty,
+        CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
+            pointer_expression_type(types, pointer)?.pointee()
+        }
         _ => return Err(MemoryPlaceError::PointerExpressionTypeUnavailable),
     };
     PointerTypeDesc::from_canonical_pointer(types, ty)

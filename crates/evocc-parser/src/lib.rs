@@ -5238,11 +5238,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let typed_target = typed_target?;
         let span = self.merge_span(target.span(), value.span());
         match self.assignment_constraint(op, typed_target.ty(), value) {
-            UpdateConstraint::Scalar => {}
-            UpdateConstraint::PointerBoundary => {
-                self.report("E2704", "not-covered-day7: pointer-update", span);
-                return None;
-            }
+            UpdateConstraint::Scalar | UpdateConstraint::PointerBoundary => {}
             UpdateConstraint::AggregateBoundary => {
                 self.report(
                     "E2703",
@@ -5632,8 +5628,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::Assign { facts, .. }
             | CHirExpr::MemoryAssign { facts, .. }
             | CHirExpr::Update { facts, .. }
-            | CHirExpr::MemoryUpdate { facts, .. } => facts.ty(),
+            | CHirExpr::MemoryUpdate { facts, .. }
+            | CHirExpr::MemoryRead { facts, .. } => facts.ty(),
             CHirExpr::Cast(ty, _, _) => *ty,
+            CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
+                let pointer_ty = self.canonical_pointer_expression_type(pointer)?;
+                let canonical = self.types.get(pointer_ty)?;
+                let TypeKind::Pointer(pointee) = canonical.kind else {
+                    return None;
+                };
+                pointee
+            }
             _ => return None,
         };
         matches!(
@@ -6476,11 +6481,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             };
             let span = self.merge_span(token.span, target.span());
             match self.update_constraint(typed_target.ty()) {
-                UpdateConstraint::Scalar => {}
-                UpdateConstraint::PointerBoundary => {
-                    self.report("E2704", "not-covered-day7: pointer-update", span);
-                    return None;
-                }
+                UpdateConstraint::Scalar | UpdateConstraint::PointerBoundary => {}
                 UpdateConstraint::AggregateBoundary | UpdateConstraint::Invalid => {
                     self.report("E2102", "invalid-update-operands", span);
                     return None;
@@ -6689,11 +6690,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     };
                     let span = self.merge_span(target.span(), token.span);
                     match self.update_constraint(typed_target.ty()) {
-                        UpdateConstraint::Scalar => {}
-                        UpdateConstraint::PointerBoundary => {
-                            self.report("E2704", "not-covered-day7: pointer-update", span);
-                            return None;
-                        }
+                        UpdateConstraint::Scalar | UpdateConstraint::PointerBoundary => {}
                         UpdateConstraint::AggregateBoundary | UpdateConstraint::Invalid => {
                             self.report("E2102", "invalid-update-operands", span);
                             return None;
