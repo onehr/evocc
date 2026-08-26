@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use evocc_cpp::{
-    FileId, Lexer, PreprocessError, Preprocessor, Token, TokenKind, TokenStream, TokenText,
+    pragma_pack_action, FileId, Lexer, PreprocessError, Preprocessor, Token, TokenKind,
+    TokenStream, TokenText,
 };
 use evocc_proof::sha256_hex;
 
@@ -102,7 +103,10 @@ fn can_concatenate(group: &[(TokenKind, String)], kind: TokenKind, text: &str) -
 fn render(tokens: &[Token], source: &str) -> String {
     let mut rendered = String::new();
     let mut unseparated = Vec::<(TokenKind, String)>::new();
-    for token in tokens.iter().filter(|token| token.kind != TokenKind::Eof) {
+    for token in tokens
+        .iter()
+        .filter(|token| token.kind != TokenKind::Eof && pragma_pack_action(token).is_none())
+    {
         let text = spelling(token, source);
         if text.is_empty() {
             continue;
@@ -392,7 +396,8 @@ fn pragma_lines_are_classified() {
     assert_eq!(preprocess("#pragma GCC visibility push(default)\nx\n"), "x");
     assert_eq!(preprocess("#pragma GCC poison bad\nok\n"), "ok");
     assert_eq!(first_error_code("#pragma GCC poison bad\nbad\n"), "E0108");
-    assert_eq!(first_error_code("#pragma pack(1)\n"), "E0107");
+    assert_eq!(first_error_code("#pragma pack(1)\n"), "NONE");
+    assert_eq!(first_error_code("#pragma pack(show)\n"), "E0107");
     assert_eq!(preprocess("#pragma something_else here\nx\n"), "x");
 }
 

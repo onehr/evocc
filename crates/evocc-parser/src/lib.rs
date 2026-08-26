@@ -22,6 +22,7 @@ use evocc_chir::{
     WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
+use evocc_cpp::{pragma_pack_action, PragmaPackAction};
 use evocc_lex::{Token, TokenKind, TokenText};
 use evocc_types::{
     ArrayBound, BitFieldSpec, CanonicalType, ComplexBase, EnumConstant, FieldLayoutAttributes,
@@ -239,6 +240,8 @@ pub struct Parser<'src, 'arena> {
     generic_selections: Vec<GenericSelectionRecord>,
     front_end_builtins: Vec<FrontEndBuiltinRecord<'arena>>,
     switch_depth: usize,
+    pack_alignment: Option<u32>,
+    pack_stack: Vec<Option<u32>>,
 }
 
 impl<'src, 'arena> Parser<'src, 'arena> {
@@ -297,6 +300,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             generic_selections: Vec::new(),
             front_end_builtins: Vec::new(),
             switch_depth: 0,
+            pack_alignment: None,
+            pack_stack: Vec::new(),
         }
     }
 
@@ -314,6 +319,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.arena = Some(arena);
         let mut decls = Vec::new();
         while !self.is_done() {
+            if self.consume_pragma_pack_marker() {
+                continue;
+            }
             if let Some((code, message)) = misplaced_statement_diagnostic(self.peek_kind()) {
                 self.report(code, message, self.span());
                 if self.reached_error_limit() {
@@ -359,6 +367,27 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn reached_error_limit(&self) -> bool {
         self.error_limit
             .is_some_and(|limit| self.error_count >= limit.get())
+    }
+
+    fn consume_pragma_pack_marker(&mut self) -> bool {
+        let Some(action) = self.peek().and_then(pragma_pack_action) else {
+            return false;
+        };
+        self.advance();
+        match action {
+            PragmaPackAction::Set(alignment) => self.pack_alignment = Some(alignment),
+            PragmaPackAction::Reset => self.pack_alignment = None,
+            PragmaPackAction::Push(alignment) => {
+                self.pack_stack.push(self.pack_alignment);
+                if let Some(alignment) = alignment {
+                    self.pack_alignment = Some(alignment);
+                }
+            }
+            PragmaPackAction::Pop => {
+                self.pack_alignment = self.pack_stack.pop().unwrap_or(None);
+            }
+        }
+        true
     }
 
     // ── helpers ────────────────────────────────────────────────────────
@@ -2920,6 +2949,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                             TagLayoutAttributes {
                                 packed: true,
                                 aligned: None,
+                                max_align: None,
                             },
                         );
                         attribute.applied = Some(AppliedAttribute::Packed);
@@ -2956,6 +2986,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         TagLayoutAttributes {
                             packed: true,
                             aligned: None,
+                            max_align: None,
                         },
                     );
                     attribute.applied = Some(AppliedAttribute::Packed);
@@ -2967,6 +2998,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                             TagLayoutAttributes {
                                 packed: false,
                                 aligned: Some(bytes),
+                                max_align: None,
                             },
                         );
                         attribute.applied = Some(AppliedAttribute::Aligned(bytes));
@@ -3336,6 +3368,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.types.tag(tag).map(|tag| &tag.state),
                 Some(TagState::Complete(_))
             );
+            if !duplicate && matches!(requested_kind, TagKind::Struct | TagKind::Union) {
+                if let Some(max_align) = self.pack_alignment {
+                    self.types.set_tag_layout(
+                        tag,
+                        TagLayoutAttributes {
+                            max_align: Some(max_align),
+                            ..TagLayoutAttributes::default()
+                        },
+                    );
+                }
+            }
             if duplicate {
                 if let Some(name) = &name {
                     self.report(

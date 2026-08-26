@@ -477,6 +477,44 @@ pub struct PreprocessError {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PragmaPackAction {
+    Set(u32),
+    Reset,
+    Push(Option<u32>),
+    Pop,
+}
+
+const PRAGMA_PACK_MARKER_PREFIX: &str = "\u{1e}evocc-pragma-pack:";
+
+/// Decode the synthetic token that carries a supported `#pragma pack` across
+/// the preprocessor/parser boundary. The control-character prefix cannot be
+/// produced by the source lexer as an identifier.
+pub fn pragma_pack_action(token: &Token) -> Option<PragmaPackAction> {
+    if token.kind != TokenKind::Identifier {
+        return None;
+    }
+    let TokenText::Decoded(text) = &token.text else {
+        return None;
+    };
+    let encoded = text.strip_prefix(PRAGMA_PACK_MARKER_PREFIX)?;
+    match encoded {
+        "reset" => Some(PragmaPackAction::Reset),
+        "push" => Some(PragmaPackAction::Push(None)),
+        "pop" => Some(PragmaPackAction::Pop),
+        _ => encoded
+            .strip_prefix("set=")
+            .and_then(|value| value.parse().ok())
+            .map(PragmaPackAction::Set)
+            .or_else(|| {
+                encoded
+                    .strip_prefix("push=")
+                    .and_then(|value| value.parse().ok())
+                    .map(|value| PragmaPackAction::Push(Some(value)))
+            }),
+    }
+}
+
 #[derive(Debug)]
 pub struct Preprocessor {
     macros: MacroMap,
@@ -1061,7 +1099,11 @@ impl Preprocessor {
                     "pragma" => {
                         if self.cond_active() {
                             let pragma_tokens = collect_line_tokens(&raw, &mut i, source);
-                            self.process_pragma(&pragma_tokens, source, tok.span);
+                            if let Some(marker) =
+                                self.process_pragma(&pragma_tokens, source, tok.span)
+                            {
+                                output.push(marker);
+                            }
                         }
                         skip_line(&raw, &mut i, source);
                     }
@@ -1114,7 +1156,11 @@ impl Preprocessor {
                             parse_pragma_operator(&raw, i, source)
                         {
                             let pragma_tokens = lex_decoded_tokens(tok.span.file, &pragma_text);
-                            self.process_pragma(&pragma_tokens, &pragma_text, tok.span);
+                            if let Some(marker) =
+                                self.process_pragma(&pragma_tokens, &pragma_text, tok.span)
+                            {
+                                output.push(marker);
+                            }
                             i = next_index;
                             continue;
                         }
@@ -1343,7 +1389,12 @@ impl Preprocessor {
         }
     }
 
-    fn process_pragma(&mut self, tokens: &[Token], source: &str, span: SourceSpan) {
+    fn process_pragma(
+        &mut self,
+        tokens: &[Token],
+        source: &str,
+        span: SourceSpan,
+    ) -> Option<Token> {
         let first = tokens
             .first()
             .map(|token| token_lexeme(token, source))
@@ -1353,13 +1404,20 @@ impl Preprocessor {
             .map(|token| token_lexeme(token, source))
             .unwrap_or_default();
 
-        match (first, second) {
-            ("once", _) => self.pragma_once(),
-            ("pack", _) => self.errors.push(PreprocessError {
+        if first == "pack" {
+            if let Some(action) = parse_pragma_pack_action(tokens, source) {
+                return Some(make_pragma_pack_marker(action, span));
+            }
+            self.errors.push(PreprocessError {
                 code: "E0107",
                 span,
                 message: "pragma-pack-unsupported".into(),
-            }),
+            });
+            return None;
+        }
+
+        match (first, second) {
+            ("once", _) => self.pragma_once(),
             ("GCC", "poison") => {
                 for token in tokens.iter().skip(2) {
                     if token.kind == TokenKind::Identifier {
@@ -1377,6 +1435,7 @@ impl Preprocessor {
                 self.ignored_pragma_count = self.ignored_pragma_count.saturating_add(1);
             }
         }
+        None
     }
 
     fn evaluate_conditional_expression(
@@ -1431,6 +1490,56 @@ impl Default for Preprocessor {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+fn parse_pragma_pack_action(tokens: &[Token], source: &str) -> Option<PragmaPackAction> {
+    if tokens.first().map(|token| token_lexeme(token, source)) != Some("pack")
+        || tokens.get(1).map(|token| token.kind) != Some(TokenKind::LParen)
+        || tokens.last().map(|token| token.kind) != Some(TokenKind::RParen)
+    {
+        return None;
+    }
+    let arguments = tokens.get(2..tokens.len().checked_sub(1)?)?;
+    match arguments {
+        [] => Some(PragmaPackAction::Reset),
+        [argument] if token_lexeme(argument, source) == "push" => {
+            Some(PragmaPackAction::Push(None))
+        }
+        [argument] if token_lexeme(argument, source) == "pop" => Some(PragmaPackAction::Pop),
+        [alignment] => pragma_pack_alignment(alignment, source).map(PragmaPackAction::Set),
+        [push, comma, alignment]
+            if token_lexeme(push, source) == "push" && comma.kind == TokenKind::Comma =>
+        {
+            pragma_pack_alignment(alignment, source)
+                .map(|alignment| PragmaPackAction::Push(Some(alignment)))
+        }
+        _ => None,
+    }
+}
+
+fn pragma_pack_alignment(token: &Token, source: &str) -> Option<u32> {
+    if token.kind != TokenKind::IntLiteral {
+        return None;
+    }
+    token_lexeme(token, source)
+        .parse::<u32>()
+        .ok()
+        .filter(|alignment| alignment.is_power_of_two())
+}
+
+fn make_pragma_pack_marker(action: PragmaPackAction, span: SourceSpan) -> Token {
+    let action = match action {
+        PragmaPackAction::Set(alignment) => format!("set={alignment}"),
+        PragmaPackAction::Reset => "reset".to_owned(),
+        PragmaPackAction::Push(None) => "push".to_owned(),
+        PragmaPackAction::Push(Some(alignment)) => format!("push={alignment}"),
+        PragmaPackAction::Pop => "pop".to_owned(),
+    };
+    Token::new(
+        TokenKind::Identifier,
+        span,
+        TokenText::Decoded(format!("{PRAGMA_PACK_MARKER_PREFIX}{action}")),
+    )
+}
 
 /// Extract the source text of a token from the original source buffer using
 /// its span. Returns "" for dummy spans or out-of-bounds.

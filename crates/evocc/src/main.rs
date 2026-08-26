@@ -21,7 +21,7 @@ use evocc_chir::{
     CHirDecl,
 };
 use evocc_common::{Arena, FileId};
-use evocc_cpp::Preprocessor;
+use evocc_cpp::{pragma_pack_action, Preprocessor};
 use evocc_eqopt::{optimize_scalar_module_certified_persistent, EqualityState, ScalarEqBudget};
 use evocc_evoir::{
     interpret_module, render_module, InterpreterLimits as EvoIrLimits, Module, RuntimeValue,
@@ -468,7 +468,10 @@ fn is_identifier(name: &str) -> bool {
 fn render_preprocessed(tokens: &[evocc_lex::Token], source: &str) -> Result<String, String> {
     let mut rendered = String::new();
     let mut unseparated: Vec<(TokenKind, String)> = Vec::new();
-    for token in tokens.iter().filter(|token| token.kind != TokenKind::Eof) {
+    for token in tokens
+        .iter()
+        .filter(|token| token.kind != TokenKind::Eof && pragma_pack_action(token).is_none())
+    {
         let text = match &token.text {
             evocc_lex::TokenText::Decoded(text) => text.clone(),
             evocc_lex::TokenText::Borrowed => source

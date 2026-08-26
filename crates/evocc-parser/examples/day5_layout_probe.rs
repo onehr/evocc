@@ -17,6 +17,7 @@ use std::io::{self, BufRead, Write};
 
 use evocc_chir::CHirDecl;
 use evocc_common::{Arena, FileId};
+use evocc_cpp::{Preprocessor, TokenStream};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::Parser;
 use evocc_types::{
@@ -411,6 +412,20 @@ fn project(
             ));
         }
         tokens.push(token);
+    }
+
+    let mut preprocessor = Preprocessor::new();
+    let tokens = preprocessor
+        .process(TokenStream::new(tokens), source)
+        .into_vec();
+    if let Some(diagnostic) = preprocessor.errors().first() {
+        return Err(format!(
+            "{}: {} at bytes {}..{}",
+            diagnostic.code,
+            diagnostic.message,
+            diagnostic.span.byte_start,
+            diagnostic.span.byte_end
+        ));
     }
 
     let arena = Arena::default();

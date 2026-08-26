@@ -288,6 +288,9 @@ pub struct TagLayoutAttributes {
     /// `aligned(N)`: the record's alignment is at least `N`, and its size is
     /// rounded up to a multiple of it.
     pub aligned: Option<u32>,
+    /// Active `#pragma pack(N)` when the record was defined. This caps member
+    /// alignment after member attributes have been applied.
+    pub max_align: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -634,6 +637,10 @@ impl TypeInterner {
         tag.layout.packed |= layout.packed;
         tag.layout.aligned = match (tag.layout.aligned, layout.aligned) {
             (Some(a), Some(b)) => Some(a.max(b)),
+            (a, b) => a.or(b),
+        };
+        tag.layout.max_align = match (tag.layout.max_align, layout.max_align) {
+            (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
         };
         true
@@ -1187,16 +1194,12 @@ impl<'a> LayoutContext<'a> {
             if let Some(spec) = field.bit_field {
                 let (base_layout, type_bits) = self.bit_field_base(tag, field_index, field.ty)?;
                 let packed = attributes.packed || field.layout.packed;
+                let effective_layout = member_layout(base_layout, attributes, field.layout);
                 // AAPCS64 10.1.8: the container type contributes to aggregate
                 // alignment even for anonymous and zero-width bit-fields.
                 // `packed` removes that contribution: the bit-field then packs
                 // to bit granularity and imposes no alignment of its own.
-                if !packed {
-                    record_align = record_align.max(base_layout.align_bytes);
-                }
-                if let Some(align) = field.layout.aligned {
-                    record_align = record_align.max(align);
-                }
+                record_align = record_align.max(effective_layout.align_bytes);
                 if spec.width_bits == 0 && field.name.is_some() {
                     return Err(LayoutError::NamedZeroWidthBitField { tag, field_index });
                 }
@@ -1265,7 +1268,7 @@ impl<'a> LayoutContext<'a> {
                 layouts.push(RecordFieldLayout {
                     field_index,
                     byte_offset: start_bits / 8,
-                    layout: base_layout,
+                    layout: effective_layout,
                     bit_field: Some(BitFieldLayout {
                         storage_byte_offset: storage_bits / 8,
                         storage_size_bytes,
@@ -1280,7 +1283,8 @@ impl<'a> LayoutContext<'a> {
                 if field_index + 1 != fields.len() {
                     return Err(LayoutError::FlexibleArrayNotLast { tag, field_index });
                 }
-                let element_layout = self.layout_type(element)?;
+                let element_layout =
+                    member_layout(self.layout_type(element)?, attributes, field.layout);
                 let prefix_end = occupied_end_bytes;
                 let placement_end = bits_to_bytes(cursor_bits)?;
                 let offset = checked_align_up(
@@ -1355,12 +1359,8 @@ impl<'a> LayoutContext<'a> {
         for (field_index, field) in fields.iter().enumerate() {
             if let Some(spec) = field.bit_field {
                 let (base_layout, type_bits) = self.bit_field_base(tag, field_index, field.ty)?;
-                if !(attributes.packed || field.layout.packed) {
-                    record_align = record_align.max(base_layout.align_bytes);
-                }
-                if let Some(align) = field.layout.aligned {
-                    record_align = record_align.max(align);
-                }
+                let effective_layout = member_layout(base_layout, attributes, field.layout);
+                record_align = record_align.max(effective_layout.align_bytes);
                 if spec.width_bits == 0 && field.name.is_some() {
                     return Err(LayoutError::NamedZeroWidthBitField { tag, field_index });
                 }
@@ -1378,7 +1378,7 @@ impl<'a> LayoutContext<'a> {
                 layouts.push(RecordFieldLayout {
                     field_index,
                     byte_offset: 0,
-                    layout: base_layout,
+                    layout: effective_layout,
                     bit_field: Some(BitFieldLayout {
                         storage_byte_offset: 0,
                         storage_size_bytes: u32::try_from(base_layout.size_bytes)
@@ -1502,9 +1502,8 @@ fn complex_layout(base: ComplexBase) -> TypeLayout {
 /// own GNU layout attributes.
 ///
 /// `packed` on either lowers the member to alignment one; `aligned(N)` on the
-/// member then raises it to at least `N`. Order matters only for the
-/// combination, where GNU C gives `aligned` the last word. Size is never
-/// changed by either.
+/// member then raises it to at least `N`; an active `#pragma pack` cap is
+/// applied last. Size is never changed by any of them.
 fn member_layout(
     natural: TypeLayout,
     record: TagLayoutAttributes,
@@ -1516,6 +1515,9 @@ fn member_layout(
     }
     if let Some(raised) = field.aligned {
         align = align.max(raised);
+    }
+    if let Some(cap) = record.max_align {
+        align = align.min(cap);
     }
     TypeLayout::new(natural.size_bytes, align)
 }
