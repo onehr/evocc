@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.7** | **Authoritative reference** | **2026-08-26**
+**Revision 1.9.8** | **Authoritative reference** | **2026-08-26**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1231,16 +1231,23 @@ twice would let a reader think two conditions are the same finding.
 | `E2912` | `static-assertion-not-constant` | front end |
 | `E2913` | `builtin-operand-not-convertible` | front end |
 | `E2914` | `malformed-asm` | front end |
+| `E2915` | `auto-type-misuse` | front end |
+| `E2916` | `case-range-invalid` | front end |
 | `E0102` | `unmatched-conditional` | preprocessor |
 | `E0104` | `error-directive` | preprocessor |
 | `E0105` | `include-not-found` | preprocessor |
 | `E0106` | `feature-query-malformed` | preprocessor |
 | `E0107` | `pragma-pack-unsupported` | preprocessor |
 | `E0108` | `poisoned-identifier-used` | preprocessor |
+| `E0109` | `counter-overflow` | preprocessor |
 | `E3018` | `invalid-lifetime-end` | runtime |
 | `E3019` | `function-pointer-target-signature-mismatch` | runtime |
 | `E3020` | `not-lowered: checked-arithmetic` | lowering |
 | `E3021` | `not-lowered: asm` | lowering |
+| `E3022` | `bit-builtin-zero-operand` | runtime |
+| `E3023` | `not-lowered: bit-builtin` | lowering |
+| `E3024` | `unreachable-reached` | runtime |
+| `E3025` | `not-lowered: return-address` | lowering |
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
 symbol selected by that value to the same type. The separation is deliberate:
@@ -2659,6 +2666,8 @@ front end that still emits it is defective.
 | `E2912` | `_Static_assert` condition is not an integer constant expression |
 | `E2913` | `__builtin_expect` operand of non-arithmetic type |
 | `E2914` | `asm` template names an unknown operand, or an output operand is not a modifiable lvalue |
+| `E2915` | `__auto_type` with no initializer, several declarators, or an array/function declarator |
+| `E2916` | `case a ... b` with `a > b` or overlapping another case |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -2941,6 +2950,52 @@ produce a placeholder value.
 
 ---
 
+#### 10.1.17 Compile-time builtins, `__auto_type` and small GNU forms
+
+All measured in `.evidence/builtin-probes/20260826-2c23684c/win_i.out`; GCC-14
+and Clang-19 agree on every row.
+
+- `__builtin_choose_expr(c, a, b)`: `c` is an integer constant expression;
+  the result *is* `a` when `c` is nonzero, else `b`: same type (no conversion),
+  same value category (an lvalue stays assignable), same constant-expression
+  status. The unselected operand is parsed and type-checked but never
+  evaluated. Non-constant `c` is `E2912` at `c`.
+- `__builtin_types_compatible_p(T1, T2)`: integer constant expression of type
+  `int`, `1` when the two type names are compatible after dropping top-level
+  qualifiers (`const int` vs `int` is `1`; `int[4]` vs `int[]` is `1`).
+- `__builtin_offsetof(T, designator)`: integer constant expression of type
+  `size_t`; the designator is a member path with `.` and `[constant]` steps
+  (`i` is 4, `arr[2]` is 16, `in.x` is 24 in the probe). A path the type lacks
+  is `E2906`.
+- `__builtin_ffs`, `__builtin_ffsl`, `__builtin_ffsll`, `__builtin_clz`,
+  `__builtin_clzl`, `__builtin_clzll`, `__builtin_ctz`/`l`/`ll`,
+  `__builtin_popcount`/`l`/`ll`: result type `int`; `ffs(0)` is `0`; `clz`/`ctz`
+  of `0` is undefined (`E3004`-class runtime report `E3022`,
+  `bit-builtin-zero-operand`); an integer-constant-expression operand makes the
+  call an integer constant expression (both oracles accept them in
+  `_Static_assert`). The front end folds constant operands; non-constant
+  operands become a C-HIR intrinsic that lowers to EvoIR bit operations
+  (Section 3) when they exist and otherwise reports `E3023`
+  (`not-lowered: bit-builtin`) and fails closed.
+- `__builtin_unreachable()`: a statement-expression of type `void`; reaching
+  it is undefined behaviour reported as `E3024` (`unreachable-reached`) by the
+  interpreters and lowered to the EvoIR unreachable terminator.
+- `__builtin_return_address(0)`: type `void *`; accepted by the front end;
+  lowering reports `E3025` (`not-lowered: return-address`) and fails closed;
+  an argument other than the constant `0` is `E2913`.
+- `__auto_type`: exactly one declarator, no array or function declarator, an
+  initializer required; the declared type is the initializer's type after
+  lvalue conversion (qualifiers dropped, arrays and functions decay: measured
+  `const int` gives `int`, `int[3]` gives `int *`). Violations are `E2915`
+  (`auto-type-misuse`) at the declarator.
+- `a ?: b`: `a` is evaluated once; the result is `a` when nonzero, else `b`,
+  with the usual conditional-operator typing.
+- `case a ... b`: inclusive constant range in a `switch`; an empty or
+  overlapping range is `E2916` (`case-range-invalid`).
+- `__label__ name;` at the start of a block declares a block-local label for
+  `goto` and computed use; an undeclared use is the existing undeclared-label
+  diagnostic.
+
 ### 10.4 EvoCPP Target Profile
 
 EvoCPP presents itself to headers as the GNU C dialect of the layout oracle,
@@ -2961,7 +3016,16 @@ digest. `__CHAR_UNSIGNED__ 1` is in the list and agrees with the type profile
 
 **Dynamic macros.** `__FILE__`, `__LINE__`, `__BASE_FILE__`, `__DATE__`,
 `__TIME__` as ISO C; `__COUNTER__` expands to `0`, `1`, `2`, ... per expansion
-in translation order (measured `0 1 2`).
+in translation order (measured `0 1 2`); a translation unit that expands it
+2^32 times is `E0109` (`counter-overflow`).
+
+**`#if` arithmetic.** Every pp-number in a controlling expression, including
+one produced by `##` or by macro expansion, is re-lexed as an integer constant:
+any of the suffixes `u`, `l`, `ul`, `ll`, `ull` in either case, decimal, octal
+and hexadecimal forms. Evaluation is in `intmax_t`/`uintmax_t` with the usual
+arithmetic conversions; an identifier that is not a macro is `0`; `defined`
+and the feature queries are evaluated before expansion. Measured defect at
+revision 1.9.7: `#if 1UL > 100` and `#if CAT(300,) > 100` were false.
 
 **Feature queries.** All four are defined as macros, so `#ifdef __has_attribute`
 is true (measured for `__has_attribute`, `__has_builtin`, `__has_feature`,
@@ -2988,14 +3052,24 @@ else is `E0106` (`feature-query-malformed`).
 `#pragma once` is honoured. `#pragma GCC diagnostic ...`, `#pragma GCC
 visibility ...`, `#pragma GCC poison`, `#pragma pack(...)` are accepted:
 `diagnostic` and `visibility` are ignored-safe, `poison` is honoured, and
-`pack` is `E0107` (`pragma-pack-unsupported`) until layout attributes admit it. A poisoned identifier used later is `E0108`
-(`poisoned-identifier-used`) at the use.
-Any other pragma is ignored-safe and counted in the dashboard.
+`pack(N)` sets the maximum member alignment of every record defined while it
+is in effect to `N` (a power of two); `pack()` restores the default;
+`pack(push[, N])` and `pack(pop)` maintain a stack. Measured (both oracles):
+`pack(1)` on `{char; int}` gives size 5 alignment 1, `pack(2)` on
+`{char; int; long}` gives 14/2, `pack()` restores 8/4. The preprocessor turns
+the directive into a layout marker the parser applies as a record-level
+`max_align` (10.1.9 semantics: member alignment is `min(natural, N)`; an
+`aligned` attribute on a member still raises). `pack(show)` and any other
+argument form are `E0107` (`pragma-pack-unsupported`). A poisoned identifier
+used later is `E0108` (`poisoned-identifier-used`) at the use.
+Any other pragma is ignored-safe; the acceptance receipt lists the ignored
+pragma names it met.
 
 Diagnostics of this section are front-end (preprocessor) diagnostics: `E0102`
 `unmatched-conditional`, `E0104` `error-directive`, `E0105`
 `include-not-found`, `E0106` `feature-query-malformed`, `E0107`
-`pragma-pack-unsupported`, `E0108` `poisoned-identifier-used`.
+`pragma-pack-unsupported`, `E0108` `poisoned-identifier-used`, `E0109`
+`counter-overflow`.
 
 ## 11. Proof Checking Interface
 
@@ -3491,6 +3565,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.8 | 2026-08-26 | Adds 10.1.17 (compile-time builtins, bit builtins, `__builtin_unreachable`, `__builtin_return_address`, `__auto_type`, `?:`, case ranges, `__label__`) with measured oracle semantics; gives `#pragma pack` its measured layout meaning; freezes `#if` arithmetic on suffixed and pasted pp-numbers after a measured defect; `E0109`, `E2915`, `E2916`, `E3022`-`E3025`. Fixes the dangling 10.1.17 reference and the pragma-count wording reported by the preprocessor window. |
 | 1.9.7 | 2026-08-26 | Adds 10.4, the EvoCPP target profile: the sealed GCC-14 predefined macro list as authority, dynamic macros, the four feature queries with measured answers, pragmas, and preprocessor diagnostics `E0102`-`E0108`. Added because all 16 raw kernel lanes stop on `#error \"Unknown compiler\"`. |
 | 1.9.6 | 2026-08-26 | Closes the five gaps the checked-arithmetic/asm window reported: `E2914` spans per case, what lossless `asm` keeps and drops, `const` pointee and `__int128` operands as `E2913`. Contract out-of-scope text corrected from `inline asm` to `asm lowering`. |
 | 1.9.5 | 2026-08-25 | Freezes `_Static_assert` diagnostics (`E2911`, `E2912`) and the non-arithmetic `__builtin_expect` operand (`E2913`), adds 10.1.15 checked arithmetic builtins and 10.1.16 GNU `asm` at the front-end boundary with measured oracle semantics, both fail-closed in lowering (`E3020`, `E3021`) until Section 4 gains the operations. Added because 18 and 12 kernel parse lanes stop on them. |

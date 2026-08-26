@@ -11,7 +11,9 @@
     "E kernel parse blockers measured after typeof: __builtin_expect, __builtin_constant_p, __alignof__ (front-end resolved, spec 10.1.14) and the pointer-declarator attribute position (preserved, not applied)",
     "F kernel parse blockers measured after E: __builtin_{add,sub,mul}_overflow (10.1.15) and GNU asm incl. asm goto and asm labels (10.1.16), both front-end complete and fail-closed in lowering; _Static_assert codes migrate to E2911/E2912",
     "G core C debt measured after F: pointer updates (++, --, +=, -= on pointers) and memory places rooted at a loaded pointer value (p->next->v, s.next->v, (*pp)->v, **pp), full lowering with proofs; no not-covered-dayN message may remain",
-    "P preprocessor target profile (spec 10.4): sealed GCC-14 predefined macros, __COUNTER__, __has_attribute/__has_builtin/__has_feature/__has_include with measured answers, _Pragma; gate: raw preprocess lanes no longer stop on E0104, counted by the dashboard"
+    "P preprocessor target profile (spec 10.4): sealed GCC-14 predefined macros, __COUNTER__, __has_attribute/__has_builtin/__has_feature/__has_include with measured answers, _Pragma; gate: no raw lane stops on E0104 \"Unknown compiler\"; where they stop next is counted, not predicted",
+    "P2 preprocessor defects measured after P: #if evaluation of suffixed and pasted pp-numbers (1UL, CAT(300,)); #pragma pack(N)/pack()/push/pop applied to record layout (spec 10.4)",
+    "I compile-time builtins and small GNU forms (spec 10.1.17): __builtin_choose_expr, __builtin_types_compatible_p, __builtin_offsetof, bit builtins, __builtin_unreachable, __builtin_return_address, __auto_type, ?:, case ranges, __label__"
   ],
   "gate": "Kernel parse/preprocess counts published by the script from sealed evidence. Process gate; no predicted number. Counts must be >= 1/16 dual-oracle parse and 0/16 raw preprocess.",
   "order": "A, B, then re-run reconnaissance; C in the order the refreshed first-error sites rank them: typeof + _Generic first (all 30 parse lanes), the rest by the next publication. The list is scope, not sequence.",
