@@ -36,10 +36,12 @@ fn written_initializer_preserves_expression_and_brace_structure() {
     let second = literal(2, 2);
     let nested = WrittenInitializer::List {
         elements: vec![WrittenInitializer::Expression(&second)],
+        designations: vec![None],
         span: span(4),
     };
     let written = WrittenInitializer::List {
         elements: vec![WrittenInitializer::Expression(&first), nested],
+        designations: vec![None, None],
         span: span(5),
     };
 

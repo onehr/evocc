@@ -11,7 +11,7 @@ use evocc_types::{
     ArrayBound, IntRank, TagDefinition, TagId, TagState, TypeId, TypeInterner, TypeKind,
 };
 
-use crate::{CHirExpr, StringLit, StringPrefix};
+use crate::{CHirExpr, SpannedName, StringLit, StringPrefix};
 
 /// The single authoritative representation of one written object
 /// initializer and its checked, normalized meaning.
@@ -53,6 +53,32 @@ pub enum WrittenInitializer<'arena> {
     Expression(&'arena CHirExpr<'arena>),
     List {
         elements: Vec<WrittenInitializer<'arena>>,
+        /// Optional designator list paired positionally with `elements`.
+        /// Keeping it beside the unmodified initializer preserves every
+        /// written entry even when normalization later applies last-wins.
+        designations: Vec<Option<InitializerDesignation<'arena>>>,
+        span: SourceSpan,
+    },
+}
+
+/// A source-level designator list preceding one initializer-list element.
+#[derive(Debug, Clone)]
+pub struct InitializerDesignation<'arena> {
+    pub designators: Vec<WrittenDesignator<'arena>>,
+    pub span: SourceSpan,
+}
+
+/// One source-level component of an initializer designation.
+#[derive(Debug, Clone)]
+pub enum WrittenDesignator<'arena> {
+    Field(SpannedName),
+    Index {
+        expression: &'arena CHirExpr<'arena>,
+        span: SourceSpan,
+    },
+    Range {
+        first: &'arena CHirExpr<'arena>,
+        last: &'arena CHirExpr<'arena>,
         span: SourceSpan,
     },
 }
@@ -71,6 +97,14 @@ impl<'arena> WrittenInitializer<'arena> {
         match self {
             Self::Expression(_) => None,
             Self::List { elements, .. } => Some(elements),
+        }
+    }
+
+    #[must_use]
+    pub fn designations(&self) -> Option<&[Option<InitializerDesignation<'_>>]> {
+        match self {
+            Self::Expression(_) => None,
+            Self::List { designations, .. } => Some(designations),
         }
     }
 
@@ -244,6 +278,25 @@ impl<'arena> InitPlan<'arena> {
             target_type,
             actions,
         }
+    }
+
+    /// Build the canonical plan for a written initializer stream. When a
+    /// later write overlaps an earlier write, only the later meaning remains;
+    /// the lossless [`WrittenInitializer`] continues to retain both entries.
+    #[must_use]
+    pub fn with_last_write_wins(
+        target_type: TypeId,
+        actions: Vec<InitAction<'arena>>,
+        types: &TypeInterner,
+    ) -> Self {
+        let mut retained: Vec<InitAction<'arena>> = Vec::with_capacity(actions.len());
+        for action in actions {
+            retained.retain(|earlier| {
+                !paths_overlap(types, target_type, earlier.path(), action.path())
+            });
+            retained.push(action);
+        }
+        Self::new(target_type, retained)
     }
 
     #[must_use]

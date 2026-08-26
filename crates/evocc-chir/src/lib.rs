@@ -26,8 +26,8 @@ pub use allocation::{
 };
 pub use constant::{builtin_constant_p, validate_front_end_builtin_records};
 pub use initializer::{
-    InitAction, InitPlan, InitPlanError, ObjectInitializer, SubobjectPath, SubobjectStep,
-    WrittenInitializer,
+    InitAction, InitPlan, InitPlanError, InitializerDesignation, ObjectInitializer, SubobjectPath,
+    SubobjectStep, WrittenDesignator, WrittenInitializer,
 };
 pub use place::{
     FieldProjection, IndexProjection, MemoryPlace, MemoryPlaceError, PlaceProjection, PlaceRoot,

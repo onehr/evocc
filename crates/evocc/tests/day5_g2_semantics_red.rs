@@ -329,16 +329,12 @@ const G2_CASES: &[Case] = &[
         source: "int values[2] = { 1, 2, };\n",
         expected: Expected::SilentSuccess,
     },
-    // Explicit Day 9 exclusions: these must fail by policy, not parse accidentally (2).
+    // Frozen extension boundaries migrate independently as their semantics land (2).
     Case {
         id: "boundary.designated-initializer",
         area: Area::Day9Boundary,
         source: "struct S { int a; int b; }; struct S value = { .b = 2 };\n",
-        expected: Expected::RedDiagnostic {
-            column: 48,
-            code: "E2901",
-            message: "not-covered-day9: designated-initializer",
-        },
+        expected: Expected::SilentSuccess,
     },
     Case {
         id: "boundary.compound-literal",
@@ -489,7 +485,7 @@ fn assert_topology() {
     );
     assert_eq!(
         (silent_success, red_diagnostic),
-        (20, 16),
+        (21, 15),
         "G2 expectation topology changed"
     );
 }

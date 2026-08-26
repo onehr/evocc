@@ -13,13 +13,13 @@ use evocc_chir::{
     AttributeArgument, AttributePlacement, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr,
     CHirForInit, CHirStmt, CHirUnit, CharLit, CharPrefix, CheckedArithmeticOp, EnumeratorDecl,
     ExprCategory, ExprFacts, FieldProjection, FloatLit, FloatSuffix, FrontEndBuiltinRecord,
-    FunctionDecl, GenericSelectionRecord, IndexProjection, InitAction, InitPlan, IntBase, IntLit,
-    IntSuffix, MemoryPlace, ObjectDecl, ObjectInitializer, ParameterDecl, ParameterSyntax,
-    PlaceProjection, PlaceRoot, PointerTypeDesc, RecordMember, ScalarPlace, ScopeId, ScopeKind,
-    SpannedName, StorageClass, StringLit, StringPrefix, SubobjectPath, SubobjectStep, SymbolData,
-    SymbolId, SymbolKind, SymbolTable, SymbolTableError, TagDecl, TagMembers, TypeSpecifier,
-    TypedefDecl, TypeofOperand, UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
-    WrittenInitializer,
+    FunctionDecl, GenericSelectionRecord, IndexProjection, InitAction, InitPlan,
+    InitializerDesignation, IntBase, IntLit, IntSuffix, MemoryPlace, ObjectDecl, ObjectInitializer,
+    ParameterDecl, ParameterSyntax, PlaceProjection, PlaceRoot, PointerTypeDesc, RecordMember,
+    ScalarPlace, ScopeId, ScopeKind, SpannedName, StorageClass, StringLit, StringPrefix,
+    SubobjectPath, SubobjectStep, SymbolData, SymbolId, SymbolKind, SymbolTable, SymbolTableError,
+    TagDecl, TagMembers, TypeSpecifier, TypedefDecl, TypeofOperand, UnaryOp, UpdateOp,
+    WrittenDeclarator, WrittenDeclaratorLayer, WrittenDesignator, WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_cpp::{pragma_pack_action, PragmaPackAction};
@@ -177,6 +177,12 @@ enum InitializerPreflightError {
     TooLarge,
     RecursiveObject,
     InvalidObject,
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedInitializerTarget {
+    path: SubobjectPath,
+    ty: TypeId,
 }
 
 fn checked_initializer_action_add(left: u64, right: u64) -> Result<u64, InitializerPreflightError> {
@@ -1338,17 +1344,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
         let open = self.advance().expect("peeked initializer brace");
         let mut elements = Vec::new();
+        let mut designations = Vec::new();
         if self.peek_kind() != Some(TokenKind::RBrace) {
             loop {
-                if matches!(self.peek_kind(), Some(TokenKind::Dot | TokenKind::LBracket)) {
-                    self.report(
-                        "E2901",
-                        "not-covered-day9: designated-initializer",
-                        self.span(),
-                    );
-                    return None;
-                }
+                let designation =
+                    if matches!(self.peek_kind(), Some(TokenKind::Dot | TokenKind::LBracket)) {
+                        Some(self.parse_initializer_designation()?)
+                    } else {
+                        None
+                    };
                 elements.push(self.parse_written_initializer()?);
+                designations.push(designation);
                 if !self.match_kind(TokenKind::Comma) {
                     break;
                 }
@@ -1360,7 +1366,50 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let close = self.expect(TokenKind::RBrace)?;
         Some(WrittenInitializer::List {
             elements,
+            designations,
             span: self.merge_span(open.span, close.span),
+        })
+    }
+
+    fn parse_initializer_designation(&mut self) -> Option<InitializerDesignation<'arena>> {
+        let start = self.span();
+        let mut designators = Vec::new();
+        loop {
+            match self.peek_kind() {
+                Some(TokenKind::Dot) => {
+                    self.advance();
+                    let token = self.expect(TokenKind::Identifier)?;
+                    designators.push(WrittenDesignator::Field(SpannedName {
+                        spelling: self.token_text(&token).to_owned(),
+                        span: token.span,
+                    }));
+                }
+                Some(TokenKind::LBracket) => {
+                    let open = self.advance().expect("peeked designator bracket");
+                    let first = self.parse_conditional()?;
+                    if self.match_kind(TokenKind::Ellipsis) {
+                        let last = self.parse_conditional()?;
+                        let close = self.expect(TokenKind::RBracket)?;
+                        designators.push(WrittenDesignator::Range {
+                            first,
+                            last,
+                            span: self.merge_span(open.span, close.span),
+                        });
+                    } else {
+                        let close = self.expect(TokenKind::RBracket)?;
+                        designators.push(WrittenDesignator::Index {
+                            expression: first,
+                            span: self.merge_span(open.span, close.span),
+                        });
+                    }
+                }
+                _ => break,
+            }
+        }
+        let assign = self.expect(TokenKind::Assign)?;
+        Some(InitializerDesignation {
+            designators,
+            span: self.merge_span(start, assign.span),
         })
     }
 
@@ -1405,7 +1454,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         self.report("E2202", "invalid-initializer-type", expression.span());
                         return None;
                     }
-                    WrittenInitializer::List { elements, span } => {
+                    WrittenInitializer::List { elements, span, .. } => {
                         if let Some(WrittenInitializer::Expression(CHirExpr::StringLit(
                             literal,
                             literal_span,
@@ -1676,13 +1725,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         match expression {
             CHirExpr::StringLit(_, _) => true,
             CHirExpr::Ident { symbol, .. } => self.symbol_decays_to_static_address(*symbol),
-            CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => match operand {
-                CHirExpr::Ident { symbol, .. } => self.symbol_has_static_address(*symbol),
-                CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
-                    self.is_static_address_constant(pointer)
-                }
-                _ => false,
-            },
+            CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => self.lvalue_has_static_address(operand),
             CHirExpr::Binary(BinaryOp::Add, left, right, _) => {
                 (self.is_static_address_constant(left)
                     && self.eval_integer_constant_expression(right).is_ok())
@@ -1707,6 +1750,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .is_some_and(|condition| {
                     self.is_static_address_constant(if condition { when_true } else { when_false })
                 }),
+            _ => false,
+        }
+    }
+
+    fn lvalue_has_static_address(&self, expression: &CHirExpr<'_>) -> bool {
+        match expression {
+            CHirExpr::Ident { symbol, .. } => self.symbol_has_static_address(*symbol),
+            CHirExpr::Member(base, _, _) => self.lvalue_has_static_address(base),
+            CHirExpr::Index(base, index, _) => {
+                self.is_static_address_constant(base)
+                    && self.eval_integer_constant_expression(index).is_ok()
+            }
+            CHirExpr::Unary(UnaryOp::Deref, pointer, _) => self.is_static_address_constant(pointer),
             _ => false,
         }
     }
@@ -1813,7 +1869,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 return None;
             }
         }
-        match self.initializer_action_count(target, written) {
+        let action_count = if self.written_initializer_has_designations(written) {
+            self.initializer_subobject_count(target, &mut HashSet::new())
+        } else {
+            self.initializer_action_count(target, written)
+        };
+        match action_count {
             Ok(_) => {}
             Err(InitializerPreflightError::TooLarge) => {
                 self.report("E2207", "initializer-plan-too-large", written.span());
@@ -1833,12 +1894,28 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2207", "initializer-plan-too-large", written.span());
             return None;
         }
-        let plan = InitPlan::new(target, actions);
+        let plan = InitPlan::with_last_write_wins(target, actions, &self.types);
         if plan.validate(&self.types).is_err() {
             self.report("E2202", "invalid-initializer-type", written.span());
             return None;
         }
         Some(plan)
+    }
+
+    fn written_initializer_has_designations(&self, written: &WrittenInitializer<'arena>) -> bool {
+        match written {
+            WrittenInitializer::Expression(_) => false,
+            WrittenInitializer::List {
+                elements,
+                designations,
+                ..
+            } => {
+                designations.iter().any(Option::is_some)
+                    || elements
+                        .iter()
+                        .any(|element| self.written_initializer_has_designations(element))
+            }
+        }
     }
 
     fn validate_initializer_object_graph(
@@ -2192,8 +2269,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             ) if self.string_initializes_array_directly(target, literal) => {
                 self.normalize_string_initializer(target, path, literal, *span, actions)
             }
-            (TypeKind::Array { .. }, WrittenInitializer::List { elements, .. })
-                if elements.first().is_some_and(|element| {
+            (
+                TypeKind::Array { .. },
+                WrittenInitializer::List {
+                    elements,
+                    designations,
+                    ..
+                },
+            ) if designations.first().is_none_or(Option::is_none)
+                && elements.first().is_some_and(|element| {
                     matches!(
                         element,
                         WrittenInitializer::Expression(CHirExpr::StringLit(literal, _))
@@ -2215,8 +2299,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             (
                 TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_),
-                WrittenInitializer::List { elements, .. },
-            ) => self.normalize_aggregate_elements(target, path, elements, actions, true),
+                WrittenInitializer::List {
+                    elements,
+                    designations,
+                    ..
+                },
+            ) => self.normalize_aggregate_elements(
+                target,
+                path,
+                elements,
+                designations,
+                actions,
+                true,
+            ),
             (
                 TypeKind::Struct(_) | TypeKind::Union(_),
                 WrittenInitializer::Expression(expression),
@@ -2263,8 +2358,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TypeKind::Complex(_)
                 | TypeKind::Pointer(_)
                 | TypeKind::Enum(_),
-                WrittenInitializer::List { elements, .. },
+                WrittenInitializer::List {
+                    elements,
+                    designations,
+                    ..
+                },
             ) => {
+                if let Some(designation) = designations.iter().flatten().next() {
+                    self.report("E2906", "designator-outside-object", designation.span);
+                    return None;
+                }
                 let Some(first) = elements.first() else {
                     actions.push(InitAction::zero_scalar(path, target));
                     return Some(());
@@ -2288,9 +2391,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         target: TypeId,
         path: SubobjectPath,
         elements: &[WrittenInitializer<'arena>],
+        designations: &[Option<InitializerDesignation<'arena>>],
         actions: &mut Vec<InitAction<'arena>>,
         diagnose_excess: bool,
     ) -> Option<()> {
+        if designations.iter().any(Option::is_some) {
+            return self.normalize_designated_aggregate_elements(
+                target,
+                path,
+                elements,
+                designations,
+                actions,
+            );
+        }
         if let Some(first) = elements.first() {
             if self.aggregate_first_initializable_member_is_flexible(target) {
                 self.report(
@@ -2327,6 +2440,201 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
         }
         Some(())
+    }
+
+    fn normalize_designated_aggregate_elements(
+        &mut self,
+        target: TypeId,
+        path: SubobjectPath,
+        elements: &[WrittenInitializer<'arena>],
+        designations: &[Option<InitializerDesignation<'arena>>],
+        actions: &mut Vec<InitAction<'arena>>,
+    ) -> Option<()> {
+        if elements.len() != designations.len() {
+            unreachable!("initializer elements and designations are positional peers");
+        }
+        if let Some(first) = elements.first() {
+            if self.aggregate_first_initializable_member_is_flexible(target) {
+                self.report(
+                    "E2706",
+                    "not-covered-day7: flexible-array-initializer",
+                    first.span(),
+                );
+                return None;
+            }
+        }
+        let Some(children) = self.aggregate_initializer_children(target) else {
+            let span = designations
+                .iter()
+                .flatten()
+                .next()
+                .map_or_else(|| self.span(), |designation| designation.span);
+            self.report("E2906", "designator-outside-object", span);
+            return None;
+        };
+
+        // Establish the same complete-object zero state as a positional
+        // initializer. Explicit source writes follow it and are canonicalized
+        // with last-write-wins when the plan is constructed.
+        self.zero_fill_initializer(target, path.clone(), actions)?;
+        let mut cursor = 0_usize;
+        for (element, designation) in elements.iter().zip(designations) {
+            if let Some(designation) = designation {
+                let resolved = self.resolve_initializer_designation(target, &path, designation)?;
+                cursor = self.designation_successor_cursor(&path, &children, &resolved);
+                for destination in resolved {
+                    self.normalize_initializer_value(
+                        destination.ty,
+                        destination.path,
+                        element,
+                        actions,
+                    )?;
+                }
+                continue;
+            }
+
+            let Some((step, child)) = children.get(cursor).copied() else {
+                self.report("E2201", "excess-initializer", element.span());
+                return None;
+            };
+            self.normalize_initializer_value(
+                child,
+                extend_subobject_path(path.clone(), step),
+                element,
+                actions,
+            )?;
+            cursor += 1;
+        }
+        Some(())
+    }
+
+    fn resolve_initializer_designation(
+        &mut self,
+        target: TypeId,
+        base_path: &SubobjectPath,
+        designation: &InitializerDesignation<'arena>,
+    ) -> Option<Vec<ResolvedInitializerTarget>> {
+        let mut resolved = vec![ResolvedInitializerTarget {
+            path: base_path.clone(),
+            ty: target,
+        }];
+        for designator in &designation.designators {
+            let mut next = Vec::new();
+            match designator {
+                WrittenDesignator::Field(name) => {
+                    for current in resolved {
+                        let Some((field_index, field_type)) =
+                            self.designated_field(current.ty, &name.spelling)
+                        else {
+                            self.report("E2906", "designator-outside-object", name.span);
+                            return None;
+                        };
+                        next.push(ResolvedInitializerTarget {
+                            path: current.path.with_field(field_index),
+                            ty: field_type,
+                        });
+                    }
+                }
+                WrittenDesignator::Index { expression, span } => {
+                    let index = self.designator_constant_index(expression, *span)?;
+                    for current in resolved {
+                        let element = self.designated_element_type(current.ty, index, *span)?;
+                        next.push(ResolvedInitializerTarget {
+                            path: current.path.with_index(index),
+                            ty: element,
+                        });
+                    }
+                }
+                WrittenDesignator::Range { first, last, span } => {
+                    let first = self.designator_constant_index(first, *span)?;
+                    let last = self.designator_constant_index(last, *span)?;
+                    if first > last
+                        || last
+                            .checked_sub(first)
+                            .is_none_or(|width| width >= MAX_INITIALIZER_SUBOBJECTS)
+                    {
+                        self.report("E2906", "designator-outside-object", *span);
+                        return None;
+                    }
+                    for current in resolved {
+                        for index in first..=last {
+                            let element = self.designated_element_type(current.ty, index, *span)?;
+                            next.push(ResolvedInitializerTarget {
+                                path: current.path.clone().with_index(index),
+                                ty: element,
+                            });
+                        }
+                    }
+                }
+            }
+            resolved = next;
+        }
+        Some(resolved)
+    }
+
+    fn designated_field(&self, target: TypeId, spelling: &str) -> Option<(usize, TypeId)> {
+        let (TypeKind::Struct(tag) | TypeKind::Union(tag)) = self.types.get(target)?.kind else {
+            return None;
+        };
+        let TagState::Complete(TagDefinition::Struct(fields) | TagDefinition::Union(fields)) =
+            &self.types.tag(tag)?.state
+        else {
+            return None;
+        };
+        fields
+            .iter()
+            .enumerate()
+            .find(|(_, field)| field.name.as_deref() == Some(spelling))
+            .map(|(index, field)| (index, field.ty))
+    }
+
+    fn designator_constant_index(
+        &mut self,
+        expression: &CHirExpr<'_>,
+        span: SourceSpan,
+    ) -> Option<u64> {
+        let index = self
+            .eval_integer_constant_expression(expression)
+            .ok()
+            .and_then(|value| u64::try_from(value.mathematical_value()).ok());
+        let Some(index) = index else {
+            self.report("E2906", "designator-outside-object", span);
+            return None;
+        };
+        Some(index)
+    }
+
+    fn designated_element_type(
+        &mut self,
+        target: TypeId,
+        index: u64,
+        span: SourceSpan,
+    ) -> Option<TypeId> {
+        let Some(TypeKind::Array { element, bound }) =
+            self.types.get(target).map(|ty| ty.kind.clone())
+        else {
+            self.report("E2906", "designator-outside-object", span);
+            return None;
+        };
+        if matches!(bound, ArrayBound::Fixed(size) if index >= size) {
+            self.report("E2906", "designator-outside-object", span);
+            return None;
+        }
+        Some(element)
+    }
+
+    fn designation_successor_cursor(
+        &self,
+        base_path: &SubobjectPath,
+        children: &[(SubobjectStep, TypeId)],
+        resolved: &[ResolvedInitializerTarget],
+    ) -> usize {
+        resolved
+            .iter()
+            .filter_map(|target| target.path.steps().get(base_path.steps().len()))
+            .filter_map(|step| children.iter().position(|(candidate, _)| candidate == step))
+            .max()
+            .map_or(children.len(), |index| index + 1)
     }
 
     fn aggregate_first_initializable_member_is_flexible(&self, target: TypeId) -> bool {
@@ -2372,7 +2680,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             *cursor += 1;
             return self.normalize_initializer_value(target, path, initializer, actions);
         }
-        self.normalize_aggregate_elements(target, path, &elements[*cursor..], actions, false)?;
+        let undesignated = vec![None; elements.len().saturating_sub(*cursor)];
+        self.normalize_aggregate_elements(
+            target,
+            path,
+            &elements[*cursor..],
+            &undesignated,
+            actions,
+            false,
+        )?;
         *cursor = self.initializer_stream_consumption(target, elements, *cursor)?;
         Some(())
     }

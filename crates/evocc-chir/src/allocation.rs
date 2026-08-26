@@ -1446,7 +1446,34 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                     current_function,
                 });
             }
-            WrittenInitializer::List { elements, .. } => {
+            WrittenInitializer::List {
+                elements,
+                designations,
+                ..
+            } => {
+                for designation in designations.iter().rev().flatten() {
+                    for designator in designation.designators.iter().rev() {
+                        match designator {
+                            crate::WrittenDesignator::Field(_) => {}
+                            crate::WrittenDesignator::Index { expression, .. } => {
+                                work.push(WorkItem::Expression {
+                                    expression,
+                                    current_function,
+                                });
+                            }
+                            crate::WrittenDesignator::Range { first, last, .. } => {
+                                work.push(WorkItem::Expression {
+                                    expression: last,
+                                    current_function,
+                                });
+                                work.push(WorkItem::Expression {
+                                    expression: first,
+                                    current_function,
+                                });
+                            }
+                        }
+                    }
+                }
                 for element in elements.iter().rev() {
                     work.push(WorkItem::WrittenInitializer {
                         initializer: element,
@@ -2196,6 +2223,7 @@ mod tests {
         let odd_initializer = ObjectInitializer::new(
             WrittenInitializer::List {
                 elements: vec![WrittenInitializer::Expression(written_value)],
+                designations: vec![None],
                 span: span(13),
             },
             InitPlan::new(
