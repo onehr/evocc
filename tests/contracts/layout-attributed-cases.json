@@ -3,9 +3,9 @@
   "contractState": "frozen",
   "target": "aarch64-unknown-linux-gnu",
   "dialect": "gnu11",
-  "caseCount": 14,
+  "caseCount": 22,
   "categoryCounts": {
-    "attributed": 14
+    "attributed": 22
   },
   "observationSchema": [
     "id",
@@ -39,8 +39,8 @@
     }
   },
   "oracleEvidence": {
-    "observerSourceSha256": "540c8460612c9886c28bfe0cb7bcc4ac2d434208021f0a979c877f2fda857d09",
-    "consensusSha256": "79a9c8c5a123fed6e40344b5e31e2692bedda5d7cfdc03de4316a8cb77461c05",
+    "observerSourceSha256": "8bfe7d68b921aa329336139b23cd6cbfa268c69264f87f5de95eccd4638c0441",
+    "consensusSha256": "8e1bffbf0e784653d575b08ef80a7df3324d83770a5d4bc5e3ed7d000d9fddbb",
     "imageId": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
     "gcc": {
       "path": "/usr/bin/gcc-14",
@@ -376,6 +376,235 @@
         "align": 4,
         "offsets": [
           0
+        ],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 15,
+      "id": "pragma.pack-set-1",
+      "category": "attributed",
+      "typeName": "case_015_t",
+      "source": "#pragma pack(1)\ntypedef struct { char c; int i; } case_015_t;\n#pragma pack()\n",
+      "sourceSha256": "8ee064eaf7340b075a557feb140fa3f913576387feb28e6ab9139b2ea2dd938a",
+      "offsets": [
+        {
+          "label": "c",
+          "expression": "offsetof(case_015_t, c)"
+        },
+        {
+          "label": "i",
+          "expression": "offsetof(case_015_t, i)"
+        }
+      ],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 5,
+        "align": 1,
+        "offsets": [
+          0,
+          1
+        ],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 16,
+      "id": "pragma.pack-reset-default",
+      "category": "attributed",
+      "typeName": "case_016_t",
+      "source": "#pragma pack(1)\nstruct case_016_t_seed { char c; int i; };\n#pragma pack()\ntypedef struct { char c; int i; } case_016_t;\n",
+      "sourceSha256": "bb06bdcb3f5001c2d8b5038a2023d201303a1eb6d75ec3be63b4dce816ceac45",
+      "offsets": [
+        {
+          "label": "c",
+          "expression": "offsetof(case_016_t, c)"
+        },
+        {
+          "label": "i",
+          "expression": "offsetof(case_016_t, i)"
+        }
+      ],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 8,
+        "align": 4,
+        "offsets": [
+          0,
+          4
+        ],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 17,
+      "id": "pragma.pack-set-2",
+      "category": "attributed",
+      "typeName": "case_017_t",
+      "source": "#pragma pack(2)\ntypedef struct { char c; int i; long l; } case_017_t;\n#pragma pack()\n",
+      "sourceSha256": "cf2a39c4143380b62c49818615d7f6185fe8179e4ef423f98e9e94cd4a78e191",
+      "offsets": [
+        {
+          "label": "c",
+          "expression": "offsetof(case_017_t, c)"
+        },
+        {
+          "label": "i",
+          "expression": "offsetof(case_017_t, i)"
+        },
+        {
+          "label": "l",
+          "expression": "offsetof(case_017_t, l)"
+        }
+      ],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 14,
+        "align": 2,
+        "offsets": [
+          0,
+          2,
+          6
+        ],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 18,
+      "id": "pragma.pack-push-1",
+      "category": "attributed",
+      "typeName": "case_018_t",
+      "source": "#pragma pack(push, 1)\ntypedef struct { char c; int i; } case_018_t;\n#pragma pack(pop)\n",
+      "sourceSha256": "f4973a8d3d08bc86bfd78bdabd28a685515782ed47434b0913117b76b420958b",
+      "offsets": [
+        {
+          "label": "c",
+          "expression": "offsetof(case_018_t, c)"
+        },
+        {
+          "label": "i",
+          "expression": "offsetof(case_018_t, i)"
+        }
+      ],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 5,
+        "align": 1,
+        "offsets": [
+          0,
+          1
+        ],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 19,
+      "id": "pragma.pack-nested-push-4",
+      "category": "attributed",
+      "typeName": "case_019_t",
+      "source": "#pragma pack(push, 1)\n#pragma pack(push, 4)\ntypedef struct { char c; long l; } case_019_t;\n#pragma pack(pop)\n#pragma pack(pop)\n",
+      "sourceSha256": "175ef4400621ddce9c5c2c9e858c3917a29da9a4d1704d8c1b9f56db7c7aa1e0",
+      "offsets": [
+        {
+          "label": "c",
+          "expression": "offsetof(case_019_t, c)"
+        },
+        {
+          "label": "l",
+          "expression": "offsetof(case_019_t, l)"
+        }
+      ],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 12,
+        "align": 4,
+        "offsets": [
+          0,
+          4
+        ],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 20,
+      "id": "pragma.pack-pop-restores-1",
+      "category": "attributed",
+      "typeName": "case_020_t",
+      "source": "#pragma pack(push, 1)\n#pragma pack(push, 4)\nstruct case_020_t_seed { char c; long l; };\n#pragma pack(pop)\ntypedef struct { char c; int i; } case_020_t;\n#pragma pack(pop)\n",
+      "sourceSha256": "90c355e07b9f468522f525d4c5c69f13686847a1ba3c8c8579e4e98b270211e2",
+      "offsets": [
+        {
+          "label": "c",
+          "expression": "offsetof(case_020_t, c)"
+        },
+        {
+          "label": "i",
+          "expression": "offsetof(case_020_t, i)"
+        }
+      ],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 5,
+        "align": 1,
+        "offsets": [
+          0,
+          1
+        ],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 21,
+      "id": "pragma.pack-pop-restores-default",
+      "category": "attributed",
+      "typeName": "case_021_t",
+      "source": "#pragma pack(push, 1)\nstruct case_021_t_seed { char c; int i; };\n#pragma pack(pop)\ntypedef struct { char c; int i; } case_021_t;\n",
+      "sourceSha256": "41d0dfe31d3f56eb70f77fa865355b0000faedba42a05071145de2de645dafd8",
+      "offsets": [
+        {
+          "label": "c",
+          "expression": "offsetof(case_021_t, c)"
+        },
+        {
+          "label": "i",
+          "expression": "offsetof(case_021_t, i)"
+        }
+      ],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 8,
+        "align": 4,
+        "offsets": [
+          0,
+          4
+        ],
+        "storageHex": null
+      }
+    },
+    {
+      "ordinal": 22,
+      "id": "pragma.pack-caps-aligned-member",
+      "category": "attributed",
+      "typeName": "case_022_t",
+      "source": "#pragma pack(1)\ntypedef struct { char c; int __attribute__((aligned(4))) i; } case_022_t;\n#pragma pack()\n",
+      "sourceSha256": "fcaf614f050870bf7ec3eaed75879b513de9f68d28d39ba46d4df3fc00dfdfcc",
+      "offsets": [
+        {
+          "label": "c",
+          "expression": "offsetof(case_022_t, c)"
+        },
+        {
+          "label": "i",
+          "expression": "offsetof(case_022_t, i)"
+        }
+      ],
+      "storageAssignments": [],
+      "oracleConsensus": {
+        "size": 5,
+        "align": 1,
+        "offsets": [
+          0,
+          1
         ],
         "storageHex": null
       }

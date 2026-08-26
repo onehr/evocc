@@ -29,8 +29,8 @@ EXPECTED_TOTAL = 128
 # environment so the frozen 128-case Day 5 manifest is never touched: the two
 # sets are different contracts with different denominators, and a reader of
 # either receipt should be able to tell which one produced a number.
-ATTRIBUTED_COUNTS = {"attributed": 14}
-ATTRIBUTED_TOTAL = 14
+ATTRIBUTED_COUNTS = {"attributed": 22}
+ATTRIBUTED_TOTAL = 22
 CASE_SET = os.environ.get("C30_LAYOUT_CASE_SET", "day5")
 if CASE_SET == "attributed":
     EXPECTED_COUNTS = ATTRIBUTED_COUNTS
@@ -129,6 +129,50 @@ def build_attributed_cases() -> list[dict[str, Any]]:
     add("attr.aligned-after-keyword", "typedef struct __attribute__((aligned(16))) { char c; } $T;", (("c", "offsetof($T, c)"),))
     add("attr.packed-after-keyword", "typedef struct __attribute__((packed)) { short s; char c; int i; } $T;", (("s", "offsetof($T, s)"), ("c", "offsetof($T, c)"), ("i", "offsetof($T, i)")))
     add("attr.aligned-struct-tag-rounds-size", "typedef struct { char c; } __attribute__((aligned(4))) $T;", (("c", "offsetof($T, c)"),))
+    add(
+        "pragma.pack-set-1",
+        "#pragma pack(1)\ntypedef struct { char c; int i; } $T;\n#pragma pack()",
+        (("c", "offsetof($T, c)"), ("i", "offsetof($T, i)")),
+    )
+    add(
+        "pragma.pack-reset-default",
+        "#pragma pack(1)\nstruct $T_seed { char c; int i; };\n#pragma pack()\ntypedef struct { char c; int i; } $T;",
+        (("c", "offsetof($T, c)"), ("i", "offsetof($T, i)")),
+    )
+    add(
+        "pragma.pack-set-2",
+        "#pragma pack(2)\ntypedef struct { char c; int i; long l; } $T;\n#pragma pack()",
+        (
+            ("c", "offsetof($T, c)"),
+            ("i", "offsetof($T, i)"),
+            ("l", "offsetof($T, l)"),
+        ),
+    )
+    add(
+        "pragma.pack-push-1",
+        "#pragma pack(push, 1)\ntypedef struct { char c; int i; } $T;\n#pragma pack(pop)",
+        (("c", "offsetof($T, c)"), ("i", "offsetof($T, i)")),
+    )
+    add(
+        "pragma.pack-nested-push-4",
+        "#pragma pack(push, 1)\n#pragma pack(push, 4)\ntypedef struct { char c; long l; } $T;\n#pragma pack(pop)\n#pragma pack(pop)",
+        (("c", "offsetof($T, c)"), ("l", "offsetof($T, l)")),
+    )
+    add(
+        "pragma.pack-pop-restores-1",
+        "#pragma pack(push, 1)\n#pragma pack(push, 4)\nstruct $T_seed { char c; long l; };\n#pragma pack(pop)\ntypedef struct { char c; int i; } $T;\n#pragma pack(pop)",
+        (("c", "offsetof($T, c)"), ("i", "offsetof($T, i)")),
+    )
+    add(
+        "pragma.pack-pop-restores-default",
+        "#pragma pack(push, 1)\nstruct $T_seed { char c; int i; };\n#pragma pack(pop)\ntypedef struct { char c; int i; } $T;",
+        (("c", "offsetof($T, c)"), ("i", "offsetof($T, i)")),
+    )
+    add(
+        "pragma.pack-caps-aligned-member",
+        "#pragma pack(1)\ntypedef struct { char c; int __attribute__((aligned(4))) i; } $T;\n#pragma pack()",
+        (("c", "offsetof($T, c)"), ("i", "offsetof($T, i)")),
+    )
     return cases
 
 

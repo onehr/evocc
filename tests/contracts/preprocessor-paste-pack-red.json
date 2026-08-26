@@ -1,0 +1,135 @@
+{
+  "baseline": "6ac277decb9ade1958df26a9e3b45ee9767900c8",
+  "authority": [
+    "docs/evoir-spec.md revision 1.9.9 sections 6.3, 10.1.9 and 10.4",
+    "tests/contracts/day9-acceptance-contract.json scope P2",
+    ".evidence/builtin-probes/20260826-2c23684c/pack-stack.out"
+  ],
+  "command": "cargo test --no-fail-fast -p evocc-cpp --test if_arithmetic -p evocc-lex --test hash_tokens -p evocc-parser --test pragma_pack",
+  "declaredCapabilities": {
+    "pasted-pp-number-if-arithmetic": {
+      "redFailures": 3,
+      "status": "missing"
+    },
+    "canonical-hash-operator-tokens": {
+      "redFailures": 0,
+      "status": "already satisfied by the production lexer; the contract test passes and the stale evocc-cpp compatibility path remains to be removed"
+    },
+    "pragma-pack-layout": {
+      "redFailures": 2,
+      "status": "missing"
+    }
+  },
+  "summary": {
+    "failed": 5,
+    "passed": 3,
+    "buildErrors": 0
+  },
+  "layoutGate": {
+    "commands": [
+      "bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject"
+    ],
+    "baseline": {
+      "status": "PASS",
+      "passed": 128,
+      "failed": 0
+    },
+    "attributed": {
+      "status": "RED",
+      "passedExistingCases": 14,
+      "failedNewCases": 8,
+      "buildErrors": 0,
+      "evidenceRun": "20260826T012915Z-46508"
+    }
+  },
+  "failures": [
+    {
+      "test": "if_arithmetic::pasted_pp_numbers_are_relexed_in_if_arithmetic",
+      "diagnostic": "CAT(300,) > 100 selects n instead of y",
+      "declaredReason": "pasted-pp-number-if-arithmetic"
+    },
+    {
+      "test": "if_arithmetic::the_kernel_bit_macro_uses_the_pasted_literal_value",
+      "diagnostic": "100 >= BIT(15) selects over instead of ok because 1##UL evaluates as zero",
+      "declaredReason": "pasted-pp-number-if-arithmetic"
+    },
+    {
+      "test": "if_arithmetic::a_paste_that_cannot_form_one_token_is_rejected",
+      "diagnostic": "CAT(1,+) produces no preprocessing error",
+      "declaredReason": "pasted-pp-number-if-arithmetic"
+    },
+    {
+      "test": "pragma_pack::pragma_pack_caps_records_defined_while_active",
+      "diagnostic": "E0107: pragma-pack-unsupported on supported pack(1), pack(), and pack(2)",
+      "declaredReason": "pragma-pack-layout"
+    },
+    {
+      "test": "pragma_pack::pragma_pack_push_pop_is_a_stack_and_caps_aligned_members",
+      "diagnostic": "E0107: pragma-pack-unsupported on supported push/pop and aligned-member forms",
+      "declaredReason": "pragma-pack-layout"
+    }
+  ],
+  "greenControls": [
+    "if_arithmetic::direct_pp_numbers_keep_their_integer_values_and_suffixes",
+    "hash_tokens::preprocessing_hash_operators_are_single_tokens",
+    "pragma_pack::unsupported_pack_forms_are_e0107"
+  ],
+  "layoutFailures": [
+    {
+      "case": "pragma.pack-set-1",
+      "diagnostic": "E1001: expected-declaration at bytes 0..1",
+      "declaredReason": "pragma-pack-layout"
+    },
+    {
+      "case": "pragma.pack-reset-default",
+      "diagnostic": "E1001: expected-declaration at bytes 0..1",
+      "declaredReason": "pragma-pack-layout"
+    },
+    {
+      "case": "pragma.pack-set-2",
+      "diagnostic": "E1001: expected-declaration at bytes 0..1",
+      "declaredReason": "pragma-pack-layout"
+    },
+    {
+      "case": "pragma.pack-push-1",
+      "diagnostic": "E1001: expected-declaration at bytes 0..1",
+      "declaredReason": "pragma-pack-layout"
+    },
+    {
+      "case": "pragma.pack-nested-push-4",
+      "diagnostic": "E1001: expected-declaration at bytes 0..1",
+      "declaredReason": "pragma-pack-layout"
+    },
+    {
+      "case": "pragma.pack-pop-restores-1",
+      "diagnostic": "E1001: expected-declaration at bytes 0..1",
+      "declaredReason": "pragma-pack-layout"
+    },
+    {
+      "case": "pragma.pack-pop-restores-default",
+      "diagnostic": "E1001: expected-declaration at bytes 0..1",
+      "declaredReason": "pragma-pack-layout"
+    },
+    {
+      "case": "pragma.pack-caps-aligned-member",
+      "diagnostic": "E1001: expected-declaration at bytes 0..1",
+      "declaredReason": "pragma-pack-layout"
+    }
+  ],
+  "oracleEvidence": {
+    "probe": {
+      "path": ".evidence/builtin-probes/20260826-2c23684c/pack-stack.out",
+      "sha256": "58033385db011629e6ebf9619876bb814d1fa6c563f85f66b0add88a46352ecf",
+      "result": "GCC-14 and Clang-19 agree: push/pop 5/1, 12/4, 5/1, 8/4; pack(1) plus aligned(4) is 5/1"
+    },
+    "attributedLayout": {
+      "measureRun": "20260826T012345Z-5690",
+      "frozenReplayRun": "20260826T012514Z-16713",
+      "caseCount": 22,
+      "oracleConflicts": 0,
+      "consensusSha256": "8e1bffbf0e784653d575b08ef80a7df3324d83770a5d4bc5e3ed7d000d9fddbb",
+      "manifestSha256": "ca967c8a71102c84585d4ac4763bea977d19c73e0b2c2342ce6457f4645f3d7f"
+    }
+  }
+}
