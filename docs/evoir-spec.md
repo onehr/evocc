@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.10** | **Authoritative reference** | **2026-08-26**
+**Revision 1.9.11** | **Authoritative reference** | **2026-08-26**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1241,6 +1241,7 @@ twice would let a reader think two conditions are the same finding.
 | `E0108` | `poisoned-identifier-used` | preprocessor |
 | `E0109` | `counter-overflow` | preprocessor |
 | `E0110` | `invalid-token-paste` | preprocessor |
+| `E0111` | `conditional-operand-not-integer` | preprocessor |
 | `E3018` | `invalid-lifetime-end` | runtime |
 | `E3019` | `function-pointer-target-signature-mismatch` | runtime |
 | `E3020` | `not-lowered: checked-arithmetic` | lowering |
@@ -3021,9 +3022,20 @@ in translation order (measured `0 1 2`); a translation unit that expands it
 2^32 times is `E0109` (`counter-overflow`).
 
 **Token pasting.** The operands of `##` are concatenated and the result is
-re-lexed; a result that is not one valid preprocessing token is `E0110`
+re-lexed as one *preprocessing* token (C11 6.4.8): an identifier, a
+punctuator, a string or character literal, or a pp-number, which is a digit
+followed by any sequence of digits, identifier characters, `.`, and `e`/`E`/`p`/`P`
+followed by a sign. `1_MODULE`, `1x` and `1.5` are therefore valid results
+(measured, both oracles: `CAT(1,_MODULE)` gives `1_MODULE`; the kernel's
+`IS_ENABLED(CONFIG_X)` expands `IS_MODULE(1)` to `1##_MODULE` and relies on
+it). A result that is not one preprocessing token is `E0110`
 (`invalid-token-paste`) at the `##` operator (both oracles reject
-`CAT(1,+)`). GNU comma elision before an empty `__VA_ARGS__` is honoured.
+`CAT(1,+)`). A pp-number that is not a valid integer constant is an error
+only where it is consumed: `E0111` (`conditional-operand-not-integer`) in a
+`#if`, or the C lexer's diagnostic in the translation unit. GNU comma elision
+before an empty `__VA_ARGS__` is honoured. Measured defect at revision
+1.9.10: the re-lexer rejected `1_MODULE`, which stopped all 14 raw kernel
+lanes at the `1` of `#define CONFIG_ARM64_PAN 1` (440 diagnostics per unit).
 
 **`#if` arithmetic.** Every pp-number in a controlling expression, including
 one produced by `##` or by macro expansion, is re-lexed as an integer constant:
@@ -3088,7 +3100,8 @@ Diagnostics of this section are front-end (preprocessor) diagnostics: `E0102`
 `unmatched-conditional`, `E0104` `error-directive`, `E0105`
 `include-not-found`, `E0106` `feature-query-malformed`, `E0107`
 `pragma-pack-unsupported`, `E0108` `poisoned-identifier-used`, `E0109`
-`counter-overflow`, `E0110` `invalid-token-paste`.
+`counter-overflow`, `E0110` `invalid-token-paste`, `E0111`
+`conditional-operand-not-integer`.
 
 ## 11. Proof Checking Interface
 
@@ -3584,6 +3597,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.11 | 2026-08-26 | Token pasting yields any preprocessing token, including pp-numbers such as `1_MODULE`; `E0111` for a pp-number that is not an integer in `#if`. Measured after the re-lexer rejected the kernel's `IS_MODULE(1)` expansion in every raw lane. |
 | 1.9.10 | 2026-08-26 | Closes the three gaps the paste/pack window reported: `E0110` for an invalid `##` result, `pack(pop)` on an empty stack ignored, `pack` honoured at block scope and refused inside a member list (`ORACLE_CONFLICT`). All measured. |
 | 1.9.9 | 2026-08-26 | Corrects 10.4 `#pragma pack`: a member `aligned` attribute does not raise alignment above the active pack cap. Revision 1.9.8 asserted the opposite from documentation without a probe; the executing agent's sealed probe showed both oracles at 5/1. |
 | 1.9.8 | 2026-08-26 | Adds 10.1.17 (compile-time builtins, bit builtins, `__builtin_unreachable`, `__builtin_return_address`, `__auto_type`, `?:`, case ranges, `__label__`) with measured oracle semantics; gives `#pragma pack` its measured layout meaning; freezes `#if` arithmetic on suffixed and pasted pp-numbers after a measured defect; `E0109`, `E2915`, `E2916`, `E3022`-`E3025`. Fixes the dangling 10.1.17 reference and the pragma-count wording reported by the preprocessor window. |
