@@ -64,3 +64,23 @@ fn asm_goto_fails_closed_with_only_e3021() {
         "not-lowered: asm",
     );
 }
+
+#[test]
+fn runtime_bit_builtins_fail_closed_with_only_e3023() {
+    assert_lowering_error(
+        "int f(unsigned value) { return __builtin_clz(value); }\n",
+        3,
+        "E3023",
+        "not-lowered: bit-builtin",
+    );
+}
+
+#[test]
+fn return_address_fails_closed_with_only_e3025() {
+    assert_lowering_error(
+        "void *f(void) { return __builtin_return_address(0); }\n",
+        4,
+        "E3025",
+        "not-lowered: return-address",
+    );
+}

@@ -34,6 +34,18 @@ fn lower(source: &str, ordinal: u32) -> Module {
     module
 }
 
+fn assert_pairs(pairs: &[(&str, &str)], ordinal_base: u32) {
+    for (offset, (written, spelled_out)) in pairs.iter().enumerate() {
+        let ordinal = ordinal_base + u32::try_from(offset).expect("small fixture index");
+        let written = render_module(&lower(written, ordinal));
+        let spelled_out = render_module(&lower(spelled_out, ordinal));
+        assert_eq!(
+            written, spelled_out,
+            "front-end-only form leaked into EvoIR pair {ordinal}"
+        );
+    }
+}
+
 #[test]
 fn front_end_resolved_forms_leave_byte_identical_evoir() {
     let pairs = [
@@ -63,12 +75,71 @@ fn front_end_resolved_forms_leave_byte_identical_evoir() {
         ),
     ];
 
-    for (ordinal, (written, spelled_out)) in pairs.into_iter().enumerate() {
-        let written = render_module(&lower(written, ordinal as u32));
-        let spelled_out = render_module(&lower(spelled_out, ordinal as u32));
-        assert_eq!(
-            written, spelled_out,
-            "front-end-only form leaked into EvoIR pair {ordinal}"
-        );
-    }
+    assert_pairs(&pairs, 0);
+}
+
+#[test]
+fn selection_type_and_offset_builtins_resolve_before_lowering() {
+    assert_pairs(
+        &[
+            (
+                "int f(int x) { return __builtin_choose_expr(1, x + 1, x + 2); }\n",
+                "int f(int x) { return x + 1; }\n",
+            ),
+            (
+                "int f(void) { return __builtin_types_compatible_p(const int, int); }\n",
+                "int f(void) { return 1; }\n",
+            ),
+            (
+                "struct s { char c; int i; }; unsigned long f(void) { return __builtin_offsetof(struct s, i); }\n",
+                "struct s { char c; int i; }; unsigned long f(void) { return 4ul; }\n",
+            ),
+        ],
+        100,
+    );
+}
+
+#[test]
+fn constant_bit_builtins_resolve_before_lowering() {
+    assert_pairs(
+        &[(
+            "int f(void) { return __builtin_ffs(8) + __builtin_popcount(7u); }\n",
+            "int f(void) { return 7; }\n",
+        )],
+        110,
+    );
+}
+
+#[test]
+fn inferred_declarations_and_elvis_resolve_before_lowering() {
+    assert_pairs(
+        &[
+            (
+                "int f(int x) { __auto_type value = x; return value; }\n",
+                "int f(int x) { int value = x; return value; }\n",
+            ),
+            (
+                "int f(int a, int b) { return a ?: b; }\n",
+                "int f(int a, int b) { int temporary = a; return temporary ? temporary : b; }\n",
+            ),
+        ],
+        120,
+    );
+}
+
+#[test]
+fn case_ranges_and_local_labels_resolve_before_lowering() {
+    assert_pairs(
+        &[
+            (
+                "int f(int x) { switch (x) { case 1 ... 3: return 1; default: return 0; } }\n",
+                "int f(int x) { switch (x) { case 1: case 2: case 3: return 1; default: return 0; } }\n",
+            ),
+            (
+                "int f(void) { __label__ out; goto out; out: return 1; }\n",
+                "int f(void) { goto out; out: return 1; }\n",
+            ),
+        ],
+        130,
+    );
 }

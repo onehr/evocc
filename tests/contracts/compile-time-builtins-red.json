@@ -1,0 +1,166 @@
+{
+  "receiptId": "c30.compile-time-builtins.red",
+  "authority": {
+    "specification": "docs/evoir-spec.md revision 1.9.14 sections 10.1.17 and 6.3",
+    "contract": "tests/contracts/day9-acceptance-contract.json scope line I"
+  },
+  "baseline": "388a34f29ebc89e834a7db3e94aec62765cd6341",
+  "declaredMissingCapabilities": [
+    "choose-expression",
+    "type-compatibility-builtin",
+    "offset-builtin",
+    "bit-counting-builtins",
+    "unreachable-builtin",
+    "return-address-builtin",
+    "inferred-auto-type",
+    "elvis-operator",
+    "case-ranges",
+    "local-label-declarations"
+  ],
+  "redCommand": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/private/tmp/c30-cargo-test-runner.sh cargo test -p evocc-parser --test compile_time_builtins -p evocc-chir --test compile_time_builtin_values -p evocc-lower --test front_end_resolved_forms --test fail_closed_forms --no-fail-fast",
+  "measured": {
+    "passedControls": 4,
+    "failed": 22,
+    "ignored": 0,
+    "rustBuildErrors": 0,
+    "failureClasses": {
+      "E2001 undeclared-identifier": 17,
+      "E1003 expected-expression": 2,
+      "E1002 expected-token: colon": 3
+    }
+  },
+  "observations": [
+    {
+      "suite": "evocc-parser/compile_time_builtins",
+      "test": "choose_expr_preserves_selected_type_value_category_and_constant_status",
+      "observed": "E2001 undeclared-identifier: __builtin_choose_expr",
+      "reason": "choose-expression"
+    },
+    {
+      "suite": "evocc-parser/compile_time_builtins",
+      "test": "types_compatible_p_uses_compatible_unqualified_types",
+      "observed": "E2001 undeclared-identifier: __builtin_types_compatible_p",
+      "reason": "type-compatibility-builtin"
+    },
+    {
+      "suite": "evocc-parser/compile_time_builtins",
+      "test": "builtin_offsetof_accepts_member_index_and_nested_paths",
+      "observed": "E2001 undeclared-identifier: __builtin_offsetof",
+      "reason": "offset-builtin"
+    },
+    {
+      "suite": "evocc-parser/compile_time_builtins",
+      "test": "bit_builtins_fold_integer_constant_expressions_to_int",
+      "observed": "E2001 undeclared-identifier: __builtin_ffs",
+      "reason": "bit-counting-builtins"
+    },
+    {
+      "suite": "evocc-parser/compile_time_builtins",
+      "test": "builtin_unreachable_is_a_void_expression_statement",
+      "observed": "E2001 undeclared-identifier: __builtin_unreachable",
+      "reason": "unreachable-builtin"
+    },
+    {
+      "suite": "evocc-parser/compile_time_builtins",
+      "test": "builtin_return_address_accepts_only_constant_zero",
+      "observed": "E2001 undeclared-identifier: __builtin_return_address",
+      "reason": "return-address-builtin"
+    },
+    {
+      "suite": "evocc-parser/compile_time_builtins",
+      "test": "auto_type_infers_one_initialized_non_array_declarator",
+      "observed": "E2001 undeclared-identifier: __auto_type",
+      "reason": "inferred-auto-type"
+    },
+    {
+      "suite": "evocc-parser/compile_time_builtins",
+      "test": "elvis_operator_uses_its_left_operand_as_the_true_arm",
+      "observed": "E1003 expected-expression",
+      "reason": "elvis-operator"
+    },
+    {
+      "suite": "evocc-parser/compile_time_builtins",
+      "test": "case_ranges_are_inclusive_nonoverlapping_integer_ranges",
+      "observed": "E1002 expected-token: :",
+      "reason": "case-ranges"
+    },
+    {
+      "suite": "evocc-parser/compile_time_builtins",
+      "test": "local_label_declarations_bind_gotos_in_their_block",
+      "observed": "E2001 undeclared-identifier: __label__",
+      "reason": "local-label-declarations"
+    },
+    {
+      "suite": "evocc-chir/compile_time_builtin_values",
+      "test": "bit_builtins_match_the_frozen_oracle_values_at_runtime",
+      "observed": "E2001 undeclared-identifier: __builtin_ffs",
+      "reason": "bit-counting-builtins"
+    },
+    {
+      "suite": "evocc-chir/compile_time_builtin_values",
+      "test": "zero_clz_or_ctz_reports_the_typed_runtime_diagnostic",
+      "observed": "E2001 undeclared-identifier: __builtin_clz",
+      "reason": "bit-counting-builtins"
+    },
+    {
+      "suite": "evocc-chir/compile_time_builtin_values",
+      "test": "choose_expr_preserves_an_lvalue_and_never_evaluates_the_other_arm",
+      "observed": "E2001 undeclared-identifier: __builtin_choose_expr",
+      "reason": "choose-expression"
+    },
+    {
+      "suite": "evocc-chir/compile_time_builtin_values",
+      "test": "elvis_evaluates_its_left_operand_exactly_once",
+      "observed": "E1003 expected-expression",
+      "reason": "elvis-operator"
+    },
+    {
+      "suite": "evocc-chir/compile_time_builtin_values",
+      "test": "case_range_dispatches_every_value_in_the_inclusive_interval",
+      "observed": "E1002 expected-token: :",
+      "reason": "case-ranges"
+    },
+    {
+      "suite": "evocc-chir/compile_time_builtin_values",
+      "test": "reaching_builtin_unreachable_reports_the_typed_runtime_diagnostic",
+      "observed": "E2001 undeclared-identifier: __builtin_unreachable",
+      "reason": "unreachable-builtin"
+    },
+    {
+      "suite": "evocc-lower/fail_closed_forms",
+      "test": "runtime_bit_builtins_fail_closed_with_only_e3023",
+      "observed": "E2001 undeclared-identifier: __builtin_clz",
+      "reason": "bit-counting-builtins"
+    },
+    {
+      "suite": "evocc-lower/fail_closed_forms",
+      "test": "return_address_fails_closed_with_only_e3025",
+      "observed": "E2001 undeclared-identifier: __builtin_return_address",
+      "reason": "return-address-builtin"
+    },
+    {
+      "suite": "evocc-lower/front_end_resolved_forms",
+      "test": "selection_type_and_offset_builtins_resolve_before_lowering",
+      "observed": "E2001 undeclared-identifier: __builtin_choose_expr",
+      "reason": "choose-expression"
+    },
+    {
+      "suite": "evocc-lower/front_end_resolved_forms",
+      "test": "constant_bit_builtins_resolve_before_lowering",
+      "observed": "E2001 undeclared-identifier: __builtin_ffs",
+      "reason": "bit-counting-builtins"
+    },
+    {
+      "suite": "evocc-lower/front_end_resolved_forms",
+      "test": "inferred_declarations_and_elvis_resolve_before_lowering",
+      "observed": "E2001 undeclared-identifier: __auto_type",
+      "reason": "inferred-auto-type"
+    },
+    {
+      "suite": "evocc-lower/front_end_resolved_forms",
+      "test": "case_ranges_and_local_labels_resolve_before_lowering",
+      "observed": "E1002 expected-token: :",
+      "reason": "case-ranges"
+    }
+  ]
+}
