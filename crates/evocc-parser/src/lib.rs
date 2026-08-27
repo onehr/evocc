@@ -2627,7 +2627,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             if let Some(first) = elements.first() {
                 self.report(
                     "E2706",
-                    "not-covered-day7: flexible-array-initializer",
+                    "unsupported-unbounded-array-initializer",
                     first.span(),
                 );
                 return None;

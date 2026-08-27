@@ -165,6 +165,7 @@ impl LowerError {
 #[derive(Debug, Clone)]
 struct FunctionInfo {
     name: String,
+    ordinal: u32,
     parameter_symbols: Vec<SymbolId>,
     parameter_types: Vec<FunctionValueType>,
     return_type: Option<FunctionValueType>,
@@ -183,6 +184,7 @@ struct FunctionValueType {
 enum EnvKey {
     Local(SymbolId),
     Address(SymbolId),
+    ReturnDestination,
     Temporary(u32),
     Memory,
     World,
@@ -254,6 +256,7 @@ struct FunctionLowerer<'a> {
     next_value: u32,
     next_block: BlockId,
     next_temporary: u32,
+    next_synthetic_origin: u32,
     next_placeholder: BlockId,
     goto_names: BTreeSet<String>,
     labels: BTreeMap<String, JumpTarget>,
@@ -378,8 +381,23 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             }
             if let Some(initializer) = &object.initializer {
                 for action in initializer.plan().actions() {
-                    if let InitAction::StoreScalar { value, .. } = action {
+                    if let InitAction::StoreScalar { value, .. }
+                    | InitAction::CopyAggregate { value, .. } = action
+                    {
                         expression(unit, value, out);
+                    }
+                }
+            }
+        } else if let CHirDecl::Function(function) = declaration {
+            if let ParameterSyntax::Prototype { parameters, .. } = &function.parameters {
+                for parameter in parameters {
+                    if matches!(
+                        unit.types().get(parameter.ty).map(|ty| &ty.kind),
+                        Some(TypeKind::Struct(_) | TypeKind::Union(_))
+                    ) {
+                        if let Some(symbol) = parameter.symbol {
+                            out.insert(symbol);
+                        }
                     }
                 }
             }
@@ -459,7 +477,9 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             }
             CHirExpr::CompoundLit(_, initializer, _) => {
                 for action in initializer.plan().actions() {
-                    if let InitAction::StoreScalar { value, .. } = action {
+                    if let InitAction::StoreScalar { value, .. }
+                    | InitAction::CopyAggregate { value, .. } = action
+                    {
                         expression(unit, value, out);
                     }
                 }
@@ -641,12 +661,44 @@ fn lower_globals(
                     span: object.span,
                     source,
                 })?;
-            let size =
-                usize::try_from(layout.size_bytes).map_err(|_| LowerError::UnsupportedType {
-                    ty: object.ty,
-                    span: object.span,
-                    feature: "global object exceeds host representation",
-                })?;
+            let mut object_size = layout.size_bytes;
+            if let Some(initializer) = &object.initializer {
+                if initializer.plan().flexible_array_elements() != 0 {
+                    for action in initializer.plan().actions() {
+                        let action_span = action.span().unwrap_or(object.span);
+                        let (offset, actual_ty) =
+                            subobject_offset(unit, target, object.ty, action.path(), action_span)?;
+                        if actual_ty != action.destination_type() || offset < 0 {
+                            return Err(LowerError::UnsupportedStatement {
+                                span: action_span,
+                                feature: "flexible initializer path disagrees with its object",
+                            });
+                        }
+                        let destination =
+                            target
+                                .layout_of(unit.types(), actual_ty)
+                                .map_err(|source| LowerError::Layout {
+                                    ty: actual_ty,
+                                    span: action_span,
+                                    source,
+                                })?;
+                        object_size = object_size.max(
+                            u64::try_from(offset)
+                                .ok()
+                                .and_then(|offset| offset.checked_add(destination.size_bytes))
+                                .ok_or(LowerError::UnsupportedStatement {
+                                    span: action_span,
+                                    feature: "flexible initializer range overflow",
+                                })?,
+                        );
+                    }
+                }
+            }
+            let size = usize::try_from(object_size).map_err(|_| LowerError::UnsupportedType {
+                ty: object.ty,
+                span: object.span,
+                feature: "global object exceeds host representation",
+            })?;
             let mut bytes = vec![0_u8; size];
             if let Some(initializer) = &object.initializer {
                 for action in initializer.plan().actions() {
@@ -676,7 +728,7 @@ fn lower_globals(
                 } else {
                     GlobalVisibility::Internal
                 },
-                layout: AccessLayout::new(layout.size_bytes, layout.align_bytes),
+                layout: AccessLayout::new(object_size, layout.align_bytes),
                 bytes,
                 initialized: vec![true; size],
             })
@@ -948,7 +1000,9 @@ fn prevalidate_decl_for_lowering(
             validate_object_declaration_for_lowering(unit, object)?;
             if let Some(initializer) = &object.initializer {
                 for action in initializer.plan().actions() {
-                    if let InitAction::StoreScalar { value, .. } = action {
+                    if let InitAction::StoreScalar { value, .. }
+                    | InitAction::CopyAggregate { value, .. } = action
+                    {
                         prevalidate_expr_for_lowering(unit, value)?;
                     }
                 }
@@ -1218,7 +1272,9 @@ fn prevalidate_expr_for_lowering(
         CHirExpr::BuiltinUnreachable { .. } => Ok(()),
         CHirExpr::CompoundLit(_, initializer, _) => {
             for action in initializer.plan().actions() {
-                if let InitAction::StoreScalar { value, .. } = action {
+                if let InitAction::StoreScalar { value, .. }
+                | InitAction::CopyAggregate { value, .. } = action
+                {
                     prevalidate_expr_for_lowering(unit, value)?;
                 }
             }
@@ -1340,6 +1396,11 @@ fn index_functions(
         for info in definitions.values_mut() {
             info.participant = true;
         }
+    }
+    for (ordinal, info) in definitions.values_mut().enumerate() {
+        info.ordinal = u32::try_from(ordinal).map_err(|_| LowerError::InvalidGeneratedSsa {
+            message: "function count exceeds the aggregate temporary origin namespace".to_owned(),
+        })?;
     }
     Ok(definitions)
 }
@@ -1519,6 +1580,7 @@ fn function_info(
     };
     Ok(FunctionInfo {
         name: function.name.spelling.clone(),
+        ordinal: 0,
         parameter_symbols,
         parameter_types,
         return_type,
@@ -1554,6 +1616,11 @@ fn function_value_type(
                 integer,
             })
         }
+        Some(TypeKind::Struct(_) | TypeKind::Union(_)) => Ok(FunctionValueType {
+            source: ty,
+            ir: EvoIRType::Ptr(AddressSpace::Generic),
+            integer: CIntegerType::ULONG,
+        }),
         _ => Err(LowerError::UnsupportedType {
             ty,
             span,
@@ -1871,6 +1938,7 @@ impl<'a> FunctionLowerer<'a> {
             next_value: 0,
             next_block: 0,
             next_temporary: 0,
+            next_synthetic_origin: 0,
             next_placeholder: BREAK_TARGET_BASE,
             goto_names: BTreeSet::new(),
             labels: BTreeMap::new(),
@@ -1905,18 +1973,52 @@ impl<'a> FunctionLowerer<'a> {
                 ty: ty.clone(),
             });
             let value = self.fresh_value(ty);
+            let key = if self.is_aggregate_type(value_type.source) {
+                EnvKey::Address(symbol)
+            } else {
+                EnvKey::Local(symbol)
+            };
             entry_args.push((
-                EnvKey::Local(symbol),
+                key,
                 BlockArg {
                     name: format!("param{index}"),
                     value: value.clone(),
                 },
             ));
             env.insert(
-                EnvKey::Local(symbol),
+                key,
                 BoundValue {
                     value,
-                    integer: Some(value_type.integer),
+                    integer: (!self.is_aggregate_type(value_type.source))
+                        .then_some(value_type.integer),
+                },
+            );
+        }
+        if self
+            .info
+            .return_type
+            .as_ref()
+            .is_some_and(|returned| self.is_aggregate_type(returned.source))
+        {
+            let index = params.len();
+            let ty = EvoIRType::Ptr(AddressSpace::Generic);
+            params.push(FunctionParam {
+                name: format!("arg{index}"),
+                ty: ty.clone(),
+            });
+            let value = self.fresh_value(ty);
+            entry_args.push((
+                EnvKey::ReturnDestination,
+                BlockArg {
+                    name: "return_destination".into(),
+                    value: value.clone(),
+                },
+            ));
+            env.insert(
+                EnvKey::ReturnDestination,
+                BoundValue {
+                    value,
+                    integer: None,
                 },
             );
         }
@@ -2034,6 +2136,7 @@ impl<'a> FunctionLowerer<'a> {
             .info
             .return_type
             .as_ref()
+            .filter(|value_type| !self.is_aggregate_type(value_type.source))
             .map(|value_type| vec![value_type.ir.clone()])
             .unwrap_or_default();
         if self.info.participant {
@@ -2196,6 +2299,9 @@ impl<'a> FunctionLowerer<'a> {
             if seen.insert(key) {
                 keys.push(key);
             }
+        }
+        if state.env.contains_key(&EnvKey::ReturnDestination) {
+            keys.push(EnvKey::ReturnDestination);
         }
         if self.info.participant {
             if state.env.contains_key(&EnvKey::Memory) {
@@ -2363,19 +2469,32 @@ impl<'a> FunctionLowerer<'a> {
                 let mut returned = Vec::new();
                 match (self.info.return_type.as_ref(), expression) {
                     (Some(expected), Some(expression)) => {
-                        let lowered = self.lower_expr(expression, &mut state)?;
-                        let lowered = if matches!(expected.ir, EvoIRType::Ptr(_)) {
-                            self.coerce_to_object_type(
-                                lowered,
-                                Some(expression),
+                        if self.is_aggregate_type(expected.source) {
+                            let source = self.lower_expr(expression, &mut state)?;
+                            let destination = self.token(&state, EnvKey::ReturnDestination)?.value;
+                            self.emit_aggregate_transfer(
+                                destination,
+                                source.value,
                                 expected.source,
+                                self.aggregate_source_is_volatile(expression),
                                 *span,
-                                &state,
-                            )?
+                                &mut state,
+                            )?;
                         } else {
-                            self.cast(lowered, expected.integer, &state)?
-                        };
-                        returned.push(lowered.value);
+                            let lowered = self.lower_expr(expression, &mut state)?;
+                            let lowered = if matches!(expected.ir, EvoIRType::Ptr(_)) {
+                                self.coerce_to_object_type(
+                                    lowered,
+                                    Some(expression),
+                                    expected.source,
+                                    *span,
+                                    &state,
+                                )?
+                            } else {
+                                self.cast(lowered, expected.integer, &state)?
+                            };
+                            returned.push(lowered.value);
+                        }
                     }
                     (None, None) => {}
                     _ => {
@@ -2770,18 +2889,19 @@ impl<'a> FunctionLowerer<'a> {
         };
         let mut params = parameter_types
             .iter()
-            .map(|ty| canonical_integer(self.unit.types(), self.target, *ty, span).map(bits))
+            .map(|ty| {
+                function_value_type(self.unit.types(), self.target, *ty, span)
+                    .map(|value_type| value_type.ir)
+            })
             .collect::<Result<Vec<_>, _>>()?;
-        params.push(EvoIRType::Mem(Region::All));
-        params.push(EvoIRType::World);
-        let mut results = match self.unit.types().get(*return_type).map(|ty| &ty.kind) {
-            Some(TypeKind::Void) => Vec::new(),
-            Some(_) => vec![bits(canonical_integer(
+        let returned = match self.unit.types().get(*return_type).map(|ty| &ty.kind) {
+            Some(TypeKind::Void) => None,
+            Some(_) => Some(function_value_type(
                 self.unit.types(),
                 self.target,
                 *return_type,
                 span,
-            )?)],
+            )?),
             None => {
                 return Err(LowerError::UnknownType {
                     ty: *return_type,
@@ -2789,6 +2909,18 @@ impl<'a> FunctionLowerer<'a> {
                 });
             }
         };
+        if returned
+            .as_ref()
+            .is_some_and(|value_type| self.is_aggregate_type(value_type.source))
+        {
+            params.push(EvoIRType::Ptr(AddressSpace::Generic));
+        }
+        params.push(EvoIRType::Mem(Region::All));
+        params.push(EvoIRType::World);
+        let mut results = returned
+            .filter(|value_type| !self.is_aggregate_type(value_type.source))
+            .map(|value_type| vec![value_type.ir])
+            .unwrap_or_default();
         results.push(EvoIRType::Mem(Region::All));
         results.push(EvoIRType::World);
         Ok(EvoIRType::FnPtr { params, results })
@@ -2883,6 +3015,227 @@ impl<'a> FunctionLowerer<'a> {
             .layout_of(self.unit.types(), ty)
             .map_err(|source| LowerError::Layout { ty, span, source })?;
         Ok(AccessLayout::new(layout.size_bytes, layout.align_bytes))
+    }
+
+    fn is_aggregate_type(&self, ty: TypeId) -> bool {
+        matches!(
+            self.unit.types().get(ty).map(|canonical| &canonical.kind),
+            Some(TypeKind::Struct(_) | TypeKind::Union(_))
+        )
+    }
+
+    fn synthetic_origin(&mut self) -> Result<u64, LowerError> {
+        let local = self.next_synthetic_origin;
+        self.next_synthetic_origin =
+            self.next_synthetic_origin
+                .checked_add(1)
+                .ok_or(LowerError::InvalidGeneratedSsa {
+                    message: "aggregate temporary origin counter overflow".to_owned(),
+                })?;
+        Ok((1_u64 << 63) | (u64::from(self.info.ordinal) << 32) | u64::from(local))
+    }
+
+    fn emit_alloca(
+        &mut self,
+        ty: TypeId,
+        span: SourceSpan,
+        origin: u64,
+        state: &mut State,
+    ) -> Result<Value, LowerError> {
+        let layout = self.access_layout(ty, span)?;
+        let mem_in = self.token(state, EnvKey::Memory)?.value;
+        let world_in = self.token(state, EnvKey::World)?.value;
+        let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+        let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+        let world_out = self.fresh_value(EvoIRType::World);
+        self.emit(
+            state,
+            Inst::Alloca {
+                result: address.clone(),
+                mem_in,
+                world_in,
+                mem_out: mem_out.clone(),
+                world_out: world_out.clone(),
+                origin,
+                layout,
+            },
+        )?;
+        self.replace_effect_tokens(state, mem_out, Some(world_out));
+        Ok(address)
+    }
+
+    fn emit_copy(
+        &mut self,
+        destination: Value,
+        source: Value,
+        ty: TypeId,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
+        if !matches!(destination.ty, EvoIRType::Ptr(_)) || !matches!(source.ty, EvoIRType::Ptr(_)) {
+            return Err(LowerError::UnsupportedExpression {
+                span,
+                feature: "aggregate copy operands are not object addresses",
+            });
+        }
+        let mem_in = self.token(state, EnvKey::Memory)?.value;
+        let world_in = self.token(state, EnvKey::World)?.value;
+        let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+        let world_out = self.fresh_value(EvoIRType::World);
+        let layout = self.access_layout(ty, span)?;
+        self.emit(
+            state,
+            Inst::Copy {
+                destination,
+                source,
+                mem_in,
+                world_in,
+                mem_out: mem_out.clone(),
+                world_out: world_out.clone(),
+                layout,
+            },
+        )?;
+        self.replace_effect_tokens(state, mem_out, Some(world_out));
+        Ok(())
+    }
+
+    fn aggregate_source_is_volatile(&self, expression: &CHirExpr<'_>) -> bool {
+        match expression {
+            CHirExpr::MemoryRead { place, .. } => place.access_qualifiers().is_volatile,
+            CHirExpr::Ident { facts, .. }
+            | CHirExpr::MemoryAssign { facts, .. }
+            | CHirExpr::StatementExpr { facts, .. } => self
+                .unit
+                .types()
+                .get(facts.ty())
+                .is_some_and(|ty| ty.qualifiers.is_volatile),
+            CHirExpr::CompoundLit(ty, _, _) => self
+                .unit
+                .types()
+                .get(*ty)
+                .is_some_and(|ty| ty.qualifiers.is_volatile),
+            _ => false,
+        }
+    }
+
+    fn emit_aggregate_transfer(
+        &mut self,
+        destination: Value,
+        source: Value,
+        ty: TypeId,
+        volatile: bool,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
+        if !volatile {
+            return self.emit_copy(destination, source, ty, span, state);
+        }
+        let kind = self
+            .unit
+            .types()
+            .get(ty)
+            .ok_or(LowerError::UnknownType { ty, span })?
+            .kind
+            .clone();
+        match kind {
+            TypeKind::Struct(tag) => {
+                let fields = match &self
+                    .unit
+                    .types()
+                    .tag(tag)
+                    .ok_or(LowerError::UnsupportedType {
+                        ty,
+                        span,
+                        feature: "volatile aggregate has an unknown record tag",
+                    })?
+                    .state
+                {
+                    TagState::Complete(TagDefinition::Struct(fields)) => fields.clone(),
+                    _ => {
+                        return Err(LowerError::UnsupportedType {
+                            ty,
+                            span,
+                            feature: "volatile aggregate is not a complete struct",
+                        });
+                    }
+                };
+                let layout = self
+                    .target
+                    .record_layout(self.unit.types(), tag)
+                    .map_err(|source| LowerError::Layout { ty, span, source })?;
+                for (field_index, field) in fields.into_iter().enumerate() {
+                    let Some(field_layout) = layout
+                        .fields
+                        .iter()
+                        .find(|layout| layout.field_index == field_index)
+                    else {
+                        return Err(LowerError::UnsupportedType {
+                            ty,
+                            span,
+                            feature: "volatile member has no target layout",
+                        });
+                    };
+                    if field.bit_field.is_some() {
+                        return Err(LowerError::UnsupportedType {
+                            ty,
+                            span,
+                            feature: "volatile aggregate bit-field copy is not specified",
+                        });
+                    }
+                    let destination = self.constant_offset_address(
+                        destination.clone(),
+                        field_layout.byte_offset,
+                        state,
+                    )?;
+                    let source = self.constant_offset_address(
+                        source.clone(),
+                        field_layout.byte_offset,
+                        state,
+                    )?;
+                    self.emit_aggregate_transfer(destination, source, field.ty, true, span, state)?;
+                }
+                Ok(())
+            }
+            TypeKind::Union(_) => Err(LowerError::UnsupportedType {
+                ty,
+                span,
+                feature: "volatile union copy has no selected-member authority",
+            }),
+            TypeKind::Array {
+                element,
+                bound: ArrayBound::Fixed(count),
+            } => {
+                let element_layout = self.access_layout(element, span)?;
+                for index in 0..count {
+                    let offset = index.checked_mul(element_layout.size_bytes).ok_or(
+                        LowerError::UnsupportedType {
+                            ty,
+                            span,
+                            feature: "volatile array member offset overflow",
+                        },
+                    )?;
+                    let destination =
+                        self.constant_offset_address(destination.clone(), offset, state)?;
+                    let source = self.constant_offset_address(source.clone(), offset, state)?;
+                    self.emit_aggregate_transfer(destination, source, element, true, span, state)?;
+                }
+                Ok(())
+            }
+            TypeKind::Array {
+                bound: ArrayBound::Unbounded,
+                ..
+            } => Ok(()),
+            TypeKind::Pointer(_) | TypeKind::Int(_) | TypeKind::Enum(_) => {
+                let value = self.emit_memory_load(source, ty, true, span, state)?;
+                self.emit_memory_store(destination, value, ty, true, span, state)?;
+                Ok(())
+            }
+            _ => Err(LowerError::UnsupportedType {
+                ty,
+                span,
+                feature: "volatile aggregate member has no executable scalar representation",
+            }),
+        }
     }
 
     fn replace_effect_tokens(&self, state: &mut State, memory: Value, world: Option<Value>) {
@@ -3398,11 +3751,27 @@ impl<'a> FunctionLowerer<'a> {
                         self.emit_memory_store(address, value, element, false, action_span, state)?;
                     }
                 }
-                InitAction::CopyAggregate { span, .. } => {
-                    return Err(LowerError::UnsupportedExpression {
-                        span: *span,
-                        feature: "aggregate copy initializer",
-                    });
+                InitAction::CopyAggregate {
+                    destination_type,
+                    value,
+                    span,
+                    ..
+                } => {
+                    let source = self.lower_expr(value, state)?;
+                    let volatile = self
+                        .unit
+                        .types()
+                        .get(*destination_type)
+                        .is_some_and(|ty| ty.qualifiers.is_volatile)
+                        || self.aggregate_source_is_volatile(value);
+                    self.emit_aggregate_transfer(
+                        action_address,
+                        source.value,
+                        *destination_type,
+                        volatile,
+                        *span,
+                        state,
+                    )?;
                 }
             }
         }
@@ -3562,11 +3931,27 @@ impl<'a> FunctionLowerer<'a> {
                         self.emit_memory_store(address, value, element, false, action_span, state)?;
                     }
                 }
-                InitAction::CopyAggregate { span, .. } => {
-                    return Err(LowerError::UnsupportedExpression {
-                        span: *span,
-                        feature: "aggregate copy initializer",
-                    });
+                InitAction::CopyAggregate {
+                    destination_type,
+                    value,
+                    span,
+                    ..
+                } => {
+                    let source = self.lower_expr(value, state)?;
+                    let volatile = self
+                        .unit
+                        .types()
+                        .get(*destination_type)
+                        .is_some_and(|ty| ty.qualifiers.is_volatile)
+                        || self.aggregate_source_is_volatile(value);
+                    self.emit_aggregate_transfer(
+                        action_address,
+                        source.value,
+                        *destination_type,
+                        volatile,
+                        *span,
+                        state,
+                    )?;
                 }
             }
         }
@@ -4459,7 +4844,7 @@ impl<'a> FunctionLowerer<'a> {
                     let address = self.object_address(*symbol, *span, state)?;
                     if matches!(
                         self.unit.types().get(facts.ty()).map(|ty| &ty.kind),
-                        Some(TypeKind::Array { .. })
+                        Some(TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_))
                     ) {
                         return Ok(ExprValue {
                             value: address,
@@ -4517,7 +4902,7 @@ impl<'a> FunctionLowerer<'a> {
                 let address = self.lower_compound_literal_address(expression, state)?;
                 if matches!(
                     self.unit.types().get(*ty).map(|canonical| &canonical.kind),
-                    Some(TypeKind::Array { .. })
+                    Some(TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_))
                 ) {
                     Ok(ExprValue {
                         value: address,
@@ -4640,6 +5025,12 @@ impl<'a> FunctionLowerer<'a> {
                 place, target_span, ..
             } => {
                 let address = self.lower_place_address(place, *target_span, state)?;
+                if self.is_aggregate_type(place.value_ty()) {
+                    return Ok(ExprValue {
+                        value: address,
+                        integer: CIntegerType::ULONG,
+                    });
+                }
                 self.emit_memory_load(
                     address,
                     place.value_ty(),
@@ -4701,7 +5092,11 @@ impl<'a> FunctionLowerer<'a> {
             .map(|value| self.lower_expr(value, &mut continued))
             .transpose()?;
         if let Some(result) = &result {
-            let expected = self.c_value_type(facts.ty(), span)?.0;
+            let expected = if self.is_aggregate_type(facts.ty()) {
+                EvoIRType::Ptr(AddressSpace::Generic)
+            } else {
+                self.c_value_type(facts.ty(), span)?.0
+            };
             if result.value.ty != expected {
                 return Err(LowerError::UnsupportedExpression {
                     span,
@@ -4775,6 +5170,12 @@ impl<'a> FunctionLowerer<'a> {
                 });
             }
             let pointee = self.pointer_pointee_type(operand, span)?;
+            if self.is_aggregate_type(pointee) {
+                return Ok(ExprValue {
+                    value: pointer.value,
+                    integer: CIntegerType::ULONG,
+                });
+            }
             let volatile = self
                 .unit
                 .types()
@@ -5645,17 +6046,36 @@ impl<'a> FunctionLowerer<'a> {
         };
         let mut argument_keys = Vec::new();
         for (argument, expected) in arguments.iter().zip(&parameter_types) {
-            let value = self.lower_expr(argument, state)?;
-            let value = if matches!(expected.ir, EvoIRType::Ptr(_)) {
-                self.coerce_to_object_type(
-                    value,
-                    Some(argument),
+            let value = if self.is_aggregate_type(expected.source) {
+                let source = self.lower_expr(argument, state)?;
+                let origin = self.synthetic_origin()?;
+                let destination =
+                    self.emit_alloca(expected.source, argument.span(), origin, state)?;
+                self.emit_aggregate_transfer(
+                    destination.clone(),
+                    source.value,
                     expected.source,
+                    self.aggregate_source_is_volatile(argument),
                     argument.span(),
                     state,
-                )?
+                )?;
+                ExprValue {
+                    value: destination,
+                    integer: CIntegerType::ULONG,
+                }
             } else {
-                self.cast(value, expected.integer, state)?
+                let value = self.lower_expr(argument, state)?;
+                if matches!(expected.ir, EvoIRType::Ptr(_)) {
+                    self.coerce_to_object_type(
+                        value,
+                        Some(argument),
+                        expected.source,
+                        argument.span(),
+                        state,
+                    )?
+                } else {
+                    self.cast(value, expected.integer, state)?
+                }
             };
             let key = EnvKey::Temporary(self.next_temporary);
             self.next_temporary += 1;
@@ -5663,12 +6083,12 @@ impl<'a> FunctionLowerer<'a> {
                 key,
                 BoundValue {
                     value: value.value,
-                    integer: Some(expected.integer),
+                    integer: (!self.is_aggregate_type(expected.source)).then_some(expected.integer),
                 },
             );
             argument_keys.push(key);
         }
-        let args = argument_keys
+        let mut args = argument_keys
             .into_iter()
             .map(|key| {
                 state.env.remove(&key).map(|bound| bound.value).ok_or(
@@ -5679,10 +6099,27 @@ impl<'a> FunctionLowerer<'a> {
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
+        let aggregate_return = if return_type
+            .as_ref()
+            .is_some_and(|value_type| self.is_aggregate_type(value_type.source))
+        {
+            let value_type = return_type
+                .as_ref()
+                .expect("aggregate return predicate requires a return type");
+            let origin = self.synthetic_origin()?;
+            let destination = self.emit_alloca(value_type.source, span, origin, state)?;
+            args.push(destination.clone());
+            Some(destination)
+        } else {
+            None
+        };
         let mem_in = self.token(state, EnvKey::Memory)?.value;
         let world_in = self.token(state, EnvKey::World)?.value;
         let mut results = Vec::new();
-        if let Some(value_type) = return_type.as_ref() {
+        if let Some(value_type) = return_type
+            .as_ref()
+            .filter(|value_type| !self.is_aggregate_type(value_type.source))
+        {
             results.push(self.fresh_value(value_type.ir.clone()));
         }
         let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
@@ -5731,9 +6168,19 @@ impl<'a> FunctionLowerer<'a> {
                 integer: None,
             },
         );
-        Ok(return_type.map(|value_type| ExprValue {
-            value: results.remove(0),
-            integer: value_type.integer,
+        Ok(return_type.map(|value_type| {
+            if self.is_aggregate_type(value_type.source) {
+                ExprValue {
+                    value: aggregate_return
+                        .expect("aggregate-returning call allocated its result object"),
+                    integer: CIntegerType::ULONG,
+                }
+            } else {
+                ExprValue {
+                    value: results.remove(0),
+                    integer: value_type.integer,
+                }
+            }
         }))
     }
 
@@ -6140,6 +6587,27 @@ impl<'a> FunctionLowerer<'a> {
     ) -> Result<ExprValue, LowerError> {
         let address = self.lower_place_address(place, target_span, state)?;
         let volatile = place.access_qualifiers().is_volatile;
+        if self.is_aggregate_type(place.value_ty()) {
+            if operator != AssignmentOp::Simple {
+                return Err(LowerError::UnsupportedExpression {
+                    span,
+                    feature: "aggregate compound assignment reached lowering",
+                });
+            }
+            let source = self.lower_expr(assigned, state)?;
+            self.emit_aggregate_transfer(
+                address.clone(),
+                source.value,
+                place.value_ty(),
+                volatile || self.aggregate_source_is_volatile(assigned),
+                span,
+                state,
+            )?;
+            return Ok(ExprValue {
+                value: address,
+                integer: CIntegerType::ULONG,
+            });
+        }
         let original = if operator == AssignmentOp::Simple {
             None
         } else {
@@ -6937,7 +7405,9 @@ fn collect_calls_decl(declaration: &CHirDecl<'_>, calls: &mut CallSites) {
     if let CHirDecl::Object(object) = declaration {
         if let Some(initializer) = &object.initializer {
             for action in initializer.plan.actions() {
-                if let InitAction::StoreScalar { value, .. } = action {
+                if let InitAction::StoreScalar { value, .. }
+                | InitAction::CopyAggregate { value, .. } = action
+                {
                     collect_calls_expr(value, calls);
                 }
             }
@@ -7009,7 +7479,9 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
         }
         CHirExpr::CompoundLit(_, initializer, _) => {
             for action in initializer.plan().actions() {
-                if let InitAction::StoreScalar { value, .. } = action {
+                if let InitAction::StoreScalar { value, .. }
+                | InitAction::CopyAggregate { value, .. } = action
+                {
                     collect_calls_expr(value, calls);
                 }
             }
@@ -7059,7 +7531,9 @@ fn live_before_stmt(
                             live_after.remove(&object.symbol);
                             if let Some(initializer) = &object.initializer {
                                 for action in initializer.plan().actions() {
-                                    if let InitAction::StoreScalar { value, .. } = action {
+                                    if let InitAction::StoreScalar { value, .. }
+                                    | InitAction::CopyAggregate { value, .. } = action
+                                    {
                                         live_before_expr(value, &mut live_after);
                                     }
                                 }
@@ -7135,7 +7609,9 @@ fn live_before_stmt(
                             live_after.remove(&object.symbol);
                             if let Some(initializer) = &object.initializer {
                                 for action in initializer.plan().actions() {
-                                    if let InitAction::StoreScalar { value, .. } = action {
+                                    if let InitAction::StoreScalar { value, .. }
+                                    | InitAction::CopyAggregate { value, .. } = action
+                                    {
                                         live_before_expr(value, &mut live_after);
                                     }
                                 }
@@ -7247,7 +7723,9 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
         }
         CHirExpr::CompoundLit(_, initializer, _) => {
             for action in initializer.plan().actions().iter().rev() {
-                if let InitAction::StoreScalar { value, .. } = action {
+                if let InitAction::StoreScalar { value, .. }
+                | InitAction::CopyAggregate { value, .. } = action
+                {
                     live_before_expr(value, live);
                 }
             }
@@ -7272,7 +7750,9 @@ fn collect_symbols_item(item: &CHirBlockItem<'_>, symbols: &mut BTreeSet<SymbolI
             if let CHirDecl::Object(object) = declaration {
                 if let Some(initializer) = &object.initializer {
                     for action in initializer.plan.actions() {
-                        if let InitAction::StoreScalar { value, .. } = action {
+                        if let InitAction::StoreScalar { value, .. }
+                        | InitAction::CopyAggregate { value, .. } = action
+                        {
                             collect_symbols_expr(value, symbols);
                         }
                     }
@@ -7426,7 +7906,9 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
         }
         CHirExpr::CompoundLit(_, initializer, _) => {
             for action in initializer.plan().actions() {
-                if let InitAction::StoreScalar { value, .. } = action {
+                if let InitAction::StoreScalar { value, .. }
+                | InitAction::CopyAggregate { value, .. } = action
+                {
                     collect_symbols_expr(value, symbols);
                 }
             }
