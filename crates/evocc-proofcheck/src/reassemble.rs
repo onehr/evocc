@@ -293,6 +293,18 @@ fn remap_uses(instruction: &mut Inst, aliases: &HashMap<u32, Value>) {
             remap(mem_in, aliases);
             remap(world_in, aliases);
         }
+        Inst::Copy {
+            destination,
+            source,
+            mem_in,
+            world_in,
+            ..
+        } => {
+            remap(destination, aliases);
+            remap(source, aliases);
+            remap(mem_in, aliases);
+            remap(world_in, aliases);
+        }
         Inst::Call {
             args,
             mem_in,
@@ -454,6 +466,15 @@ fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
             world_out,
             ..
         } => vec![address, value, mem_in, world_in, mem_out, world_out],
+        Inst::Copy {
+            destination,
+            source,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            ..
+        } => vec![destination, source, mem_in, world_in, mem_out, world_out],
         Inst::Call {
             results,
             args,

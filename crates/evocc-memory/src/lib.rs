@@ -515,6 +515,7 @@ pub enum MemoryFaultKind {
     ByteLengthMismatch,
     IntegerWidthUnsupported,
     InvalidPointerRepresentation,
+    OverlappingCopy,
     VolatileEventLimitExceeded,
     VolatileSequenceExhausted,
 }
@@ -637,6 +638,11 @@ pub enum MemoryFault {
         address: Pointer,
         access: AccessLayout,
     },
+    OverlappingCopy {
+        destination: Pointer,
+        source: Pointer,
+        size_bytes: u64,
+    },
     VolatileEventLimitExceeded {
         max_events: u64,
     },
@@ -684,6 +690,7 @@ impl MemoryFault {
             Self::InvalidPointerRepresentation { .. } => {
                 MemoryFaultKind::InvalidPointerRepresentation
             }
+            Self::OverlappingCopy { .. } => MemoryFaultKind::OverlappingCopy,
             Self::VolatileEventLimitExceeded { .. } => MemoryFaultKind::VolatileEventLimitExceeded,
             Self::VolatileSequenceExhausted => MemoryFaultKind::VolatileSequenceExhausted,
         }
@@ -728,6 +735,10 @@ impl MemoryFault {
             Self::ReadOnlyObject { .. } => MemoryDiagnostic {
                 code: "E3014",
                 message: "write-to-read-only-object",
+            },
+            Self::OverlappingCopy { .. } => MemoryDiagnostic {
+                code: "E3027",
+                message: "overlapping-copy",
             },
             _ => return None,
         };
@@ -1268,6 +1279,83 @@ impl MemoryState {
         object.bytes[range.clone()].copy_from_slice(&value.bytes);
         object.initialized[range.clone()].fill(true);
         object.pointer_fragments[range].clone_from_slice(&value.pointer_fragments);
+        Ok(next)
+    }
+
+    /// Copy one object representation without semantically reading its bytes.
+    ///
+    /// Unlike [`Self::load_bytes`], this operation transfers the initialized
+    /// bitmap verbatim, so padding and other indeterminate bytes do not trap.
+    /// Complete stored pointer representations retain their provenance shadow.
+    pub fn copy_bytes(
+        &self,
+        destination: Pointer,
+        source: Pointer,
+        access: AccessLayout,
+    ) -> Result<Self, MemoryFault> {
+        if !is_valid_alignment(access.align_bytes) {
+            return Err(MemoryFault::InvalidAlignment {
+                align_bytes: access.align_bytes,
+            });
+        }
+        self.check_pointer(destination)?;
+        self.check_pointer(source)?;
+        if access.size_bytes == 0 {
+            return Ok(self.clone());
+        }
+        if access.size_bytes > i64::MAX as u64 {
+            return Err(MemoryFault::InvalidAccessSize {
+                size_bytes: access.size_bytes,
+            });
+        }
+
+        let destination_range = self.checked_store_range(destination, access)?;
+        let source_range = self.checked_range(source, access)?;
+        if destination.object == source.object
+            && destination_range != source_range
+            && destination_range.start < source_range.end
+            && source_range.start < destination_range.end
+        {
+            return Err(MemoryFault::OverlappingCopy {
+                destination,
+                source,
+                size_bytes: access.size_bytes,
+            });
+        }
+        if destination.object == source.object && destination_range == source_range {
+            return Ok(self.clone());
+        }
+
+        let source_object = self
+            .objects
+            .get(&source.object)
+            .ok_or(MemoryFault::UnknownObject {
+                object: source.object,
+            })?;
+        let bytes = clone_slice(
+            &source_object.bytes[source_range.clone()],
+            access.size_bytes,
+        )?;
+        let initialized = clone_slice(
+            &source_object.initialized[source_range.clone()],
+            access.size_bytes,
+        )?;
+        let pointer_fragments = clone_slice(
+            &source_object.pointer_fragments[source_range],
+            access.size_bytes,
+        )?;
+
+        let mut next = self.clone();
+        let destination_object =
+            next.objects
+                .get_mut(&destination.object)
+                .ok_or(MemoryFault::UnknownObject {
+                    object: destination.object,
+                })?;
+        destination_object.bytes[destination_range.clone()].copy_from_slice(&bytes);
+        destination_object.initialized[destination_range.clone()].copy_from_slice(&initialized);
+        destination_object.pointer_fragments[destination_range]
+            .clone_from_slice(&pointer_fragments);
         Ok(next)
     }
 

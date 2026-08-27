@@ -74,6 +74,7 @@ pub fn ingest_scalar_inst(inst: &Inst) -> Result<ScalarOperator, ScalarBridgeErr
         | Inst::AccessInBounds { .. }
         | Inst::Load { .. }
         | Inst::Store { .. }
+        | Inst::Copy { .. }
         | Inst::Call { .. }
         | Inst::IndirectCall { .. } => {
             return Err(ScalarBridgeError {
@@ -847,6 +848,18 @@ pub(crate) fn remap_inst_uses(inst: &mut Inst, aliases: &HashMap<u32, Value>) {
         } => {
             remap(address, aliases);
             remap(value, aliases);
+            remap(mem_in, aliases);
+            remap(world_in, aliases);
+        }
+        Inst::Copy {
+            destination,
+            source,
+            mem_in,
+            world_in,
+            ..
+        } => {
+            remap(destination, aliases);
+            remap(source, aliases);
             remap(mem_in, aliases);
             remap(world_in, aliases);
         }

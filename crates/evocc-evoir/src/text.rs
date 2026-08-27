@@ -376,6 +376,25 @@ impl FunctionRenderer {
                 render_value(address),
                 render_value(value)
             ),
+            Inst::Copy {
+                destination,
+                source,
+                mem_in,
+                world_in,
+                mem_out,
+                world_out,
+                layout,
+            } => format!(
+                "({}, {}) = copy {}, {}, {}, {} [size={}, align={}]",
+                render_value(mem_out),
+                render_value(world_out),
+                render_value(mem_in),
+                render_value(world_in),
+                render_value(destination),
+                render_value(source),
+                layout.size_bytes,
+                layout.align_bytes
+            ),
             Inst::PtrOffset {
                 result,
                 base,

@@ -873,6 +873,25 @@ fn render_inst(inst: &Inst) -> String {
             value(address),
             value(stored)
         ),
+        Inst::Copy {
+            destination,
+            source,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            layout,
+        } => format!(
+            "({}, {}) = copy {}, {}, {}, {} [size={}, align={}]",
+            value(mem_out),
+            value(world_out),
+            value(mem_in),
+            value(world_in),
+            value(destination),
+            value(source),
+            layout.size_bytes,
+            layout.align_bytes
+        ),
         Inst::PtrOffset {
             result,
             base,

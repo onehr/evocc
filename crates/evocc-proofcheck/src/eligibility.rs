@@ -367,6 +367,13 @@ fn inst_operands(instruction: &Inst) -> Vec<&Value> {
             world_in,
             ..
         } => vec![address, value, mem_in, world_in],
+        Inst::Copy {
+            destination,
+            source,
+            mem_in,
+            world_in,
+            ..
+        } => vec![destination, source, mem_in, world_in],
         Inst::Call {
             args,
             mem_in,

@@ -187,6 +187,15 @@ fn sentinel_instructions() -> Vec<Inst> {
             world_out: world(1365),
             volatile: true,
         },
+        Inst::Copy {
+            destination: pointer(1366),
+            source: pointer(1367),
+            mem_in: mem(1368),
+            world_in: world(1369),
+            mem_out: mem(1376),
+            world_out: world(1377),
+            layout: AccessLayout::new(64, 16),
+        },
         Inst::PtrOffset {
             result: pointer(1370),
             base: pointer(1371),
@@ -510,6 +519,26 @@ fn inst_schema(inst: &Inst) -> &'static str {
                 address, value, mem_in, world_in, mem_out, world_out, volatile,
             );
             "Inst.Store(address,value,mem_in,world_in,mem_out,world_out,volatile)"
+        }
+        Inst::Copy {
+            destination,
+            source,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            layout,
+        } => {
+            let _ = (
+                destination,
+                source,
+                mem_in,
+                world_in,
+                mem_out,
+                world_out,
+                layout,
+            );
+            "Inst.Copy(destination,source,mem_in,world_in,mem_out,world_out,layout)"
         }
         Inst::PtrOffset {
             result,

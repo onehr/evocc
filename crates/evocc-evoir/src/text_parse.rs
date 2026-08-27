@@ -688,6 +688,27 @@ fn parse_tuple_instruction(
             });
         }
     }
+    if let Some(rest) = rhs.strip_prefix("copy ") {
+        require_count(&result_ids, 2, "copy results")?;
+        let (operands, attributes) = split_attributes(rest)?;
+        let operands = parse_values(operands, values, false)?;
+        require_count(&operands, 4, "copy operands")?;
+        return Ok(Inst::Copy {
+            mem_in: operands[0].clone(),
+            world_in: operands[1].clone(),
+            destination: operands[2].clone(),
+            source: operands[3].clone(),
+            mem_out: Value {
+                id: result_ids[0],
+                ty: operands[0].ty.clone(),
+            },
+            world_out: Value {
+                id: result_ids[1],
+                ty: EvoIRType::World,
+            },
+            layout: parse_layout(attributes)?,
+        });
+    }
     if let Some(rest) = rhs.strip_prefix("call ") {
         let open = rest.find('(').ok_or_else(|| "malformed call".to_owned())?;
         let callee_text = &rest[..open];

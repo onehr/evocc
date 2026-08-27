@@ -324,6 +324,18 @@ pub enum Inst {
         volatile: bool,
     },
 
+    /// Copy a complete object representation, including initializedness and
+    /// pointer provenance, between identical or disjoint ranges.
+    Copy {
+        destination: Value,
+        source: Value,
+        mem_in: Value,
+        world_in: Value,
+        mem_out: Value,
+        world_out: Value,
+        layout: AccessLayout,
+    },
+
     /// Target-scaled, provenance-preserving pointer arithmetic.
     PtrOffset {
         result: Value,
@@ -413,6 +425,9 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
             ..
         } => vec![result, mem_out, world_out],
         Inst::Store {
+            mem_out, world_out, ..
+        }
+        | Inst::Copy {
             mem_out, world_out, ..
         } => vec![mem_out, world_out],
         Inst::Alloca {
@@ -511,6 +526,13 @@ pub fn inst_uses(inst: &Inst) -> Vec<&Value> {
             world_in,
             ..
         } => vec![address, value, mem_in, world_in],
+        Inst::Copy {
+            destination,
+            source,
+            mem_in,
+            world_in,
+            ..
+        } => vec![destination, source, mem_in, world_in],
         Inst::Alloca {
             mem_in, world_in, ..
         } => vec![mem_in, world_in],
@@ -728,6 +750,12 @@ fn inst_effect_summary(inst: &Inst) -> EffectSummary {
         Inst::Store { volatile, .. } => EffectSummary {
             writes_all: true,
             volatile: *volatile,
+            may_trap: true,
+            ..EffectSummary::default()
+        },
+        Inst::Copy { .. } => EffectSummary {
+            reads_all: true,
+            writes_all: true,
             may_trap: true,
             ..EffectSummary::default()
         },
@@ -1169,6 +1197,7 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                     }
                     Inst::Load { .. }
                     | Inst::Store { .. }
+                    | Inst::Copy { .. }
                     | Inst::Alloca { .. }
                     | Inst::LifetimeEnd { .. }
                     | Inst::PointerValid { .. }
@@ -1720,6 +1749,13 @@ impl EffectState {
                 world_out,
                 ..
             }
+            | Inst::Copy {
+                mem_in,
+                world_in,
+                mem_out,
+                world_out,
+                ..
+            }
             | Inst::Alloca {
                 mem_in,
                 world_in,
@@ -1969,6 +2005,25 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             expect_pointer(&address.ty, "store address", block)?;
             expect_data_type(&value.ty, "stored value", block)?;
             expect_day7_effect_tokens(mem_in, world_in, mem_out, world_out, "store", block)
+        }
+        Inst::Copy {
+            destination,
+            source,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            layout,
+        } => {
+            expect_pointer(&destination.ty, "copy destination", block)?;
+            expect_pointer(&source.ty, "copy source", block)?;
+            if layout.align_bytes == 0 || !layout.align_bytes.is_power_of_two() {
+                return Err(format!(
+                    "copy in block {block} has invalid alignment {}",
+                    layout.align_bytes
+                ));
+            }
+            expect_day7_effect_tokens(mem_in, world_in, mem_out, world_out, "copy", block)
         }
         Inst::Call {
             results,
@@ -4011,6 +4066,28 @@ fn execute_instruction(
                     return Err(InterpreterError::UninitializedRead { block });
                 }
             }
+            let next_memory_token = state.fresh_token()?;
+            let next_world_token = state.fresh_token()?;
+            write_value(values, mem_out, next_memory_token);
+            write_value(values, world_out, next_world_token);
+        }
+        Inst::Copy {
+            destination,
+            source,
+            mem_in,
+            world_in,
+            mem_out,
+            world_out,
+            layout,
+        } => {
+            let _ = read_value(values, mem_in, block)?;
+            let _ = read_value(values, world_in, block)?;
+            let destination = read_pointer(values, destination, block)?;
+            let source = read_pointer(values, source, block)?;
+            state.memory = state
+                .memory
+                .copy_bytes(destination, source, *layout)
+                .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
             let next_memory_token = state.fresh_token()?;
             let next_world_token = state.fresh_token()?;
             write_value(values, mem_out, next_memory_token);
