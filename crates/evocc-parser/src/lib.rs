@@ -1001,6 +1001,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     // ── external declarations ──────────────────────────────────────────
 
     fn parse_external_declaration(&mut self) -> Option<Vec<&'arena CHirDecl<'arena>>> {
+        if self.match_kind(TokenKind::Semicolon) {
+            return Some(Vec::new());
+        }
         if self.peek_kind() == Some(TokenKind::StaticAssert) {
             self.parse_static_assert_declaration()?;
             return Some(Vec::new());
@@ -4161,6 +4164,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut members = Vec::new();
         let mut canonical = Vec::new();
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
+            if self.match_kind(TokenKind::Semicolon) {
+                continue;
+            }
             let start = self.span();
             let mut specifier_attributes =
                 self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers);
