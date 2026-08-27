@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.15** | **Authoritative reference** | **2026-08-27**
+**Revision 1.9.16** | **Authoritative reference** | **2026-08-28**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1196,6 +1196,7 @@ each code's meaning and deliberately does not repeat the text.
 | `E3012` | The byte offset does not satisfy the access alignment. |
 | `E3013` | The provenance is absent/forged or stored pointer bytes lack one complete provenance representation. |
 | `E3027` | `copy` ranges overlap without being identical. |
+| `E3028` | A computed `goto` operand is not the address of a label whose address is taken in the current function. |
 | `E3014` | A store targets string-literal storage. |
 | `E3018` | `lifetime.end` names a live base pointer that is not an automatic object owned by the current frame. |
 
@@ -1282,6 +1283,8 @@ twice would let a reader think two conditions are the same finding.
 | `E2917` | `designator-index-not-constant` | front end |
 | `E2918` | `jump-into-statement-expression` | front end |
 | `E2919` | `flexible-array-initializer-not-static` | front end |
+| `E2920` | `undeclared-label` | front end |
+| `E2922` | `volatile-aggregate-copy-unsupported` | front end |
 | `E0102` | `unmatched-conditional` | preprocessor |
 | `E0104` | `error-directive` | preprocessor |
 | `E0105` | `include-not-found` | preprocessor |
@@ -1302,6 +1305,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3025` | `not-lowered: return-address` | lowering |
 | `E3026` | `not-lowered: static-relocation` | lowering |
 | `E3027` | `overlapping-copy` | runtime |
+| `E3028` | `computed-goto-invalid-target` | runtime |
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
 symbol selected by that value to the same type. The separation is deliberate:
@@ -2505,14 +2509,31 @@ sequence.
 an automatic object from another object or from a call result, passing one by
 value and returning one by value each lower to one `copy` of the type's size
 at the type's alignment (Section 3). The C-HIR interpreter performs the same
-byte-and-bitmap transfer. A `volatile`-qualified aggregate is copied member by
-member with `volatile` scalar accesses in declaration order. `_Atomic` objects
-remain outside this profile (`E2702`). The padding bytes of an initialized
+byte-and-bitmap transfer. A `volatile`-qualified record without bit-field
+members is copied member by member with `volatile` scalar accesses in
+declaration order. A `volatile` union has no member the copy could select,
+and a `volatile` bit-field has no portable access width, mask or trace
+granularity, so both report `E2922`
+(`volatile-aggregate-copy-unsupported`) and fail closed; the kernel cohort
+contains neither. `_Atomic` objects remain outside this profile (`E2702`). The padding bytes of an initialized
 aggregate are uninitialized, and after a copy so are the destination's
 (measured: after `b = a`, GCC-14 leaves `a`'s padding bytes in `b`, Clang-19
 zeros them; both are consistent with "unspecified", so the profile transfers
 initializedness rather than choosing bytes; evidence
 `.evidence/builtin-probes/20260826-2c23684c/g2.out`).
+
+**Records across calls.** EvoIR has no record-typed value, so records cross a
+call boundary through memory. Each record parameter is one `ptr<generic>`
+argument holding the address of a caller-allocated copy of the argument, in the
+parameter's declared position. A function returning a record takes one
+additional `ptr<generic>` argument, the return destination, after every declared
+parameter and before the trailing `mem<R>` and `world` arguments, and returns no
+value for it; `return e;` copies `e` into that destination. The caller's
+temporaries for both are ordinary `alloca` sites whose `origin` comes from a
+reserved half of the ordinal space, disjoint from every source-derived
+allocation site, assigned in lowering order so two lowerings of one unit agree
+byte for byte. Register-level classification (which of these copies a target ABI
+may keep in registers) is a backend concern and never changes this form.
 
 **Flexible array members.** A record whose last member is an array of unknown
 bound may be initialized at file scope with elements for that member; the
@@ -2749,6 +2770,8 @@ front end that still emits it is defective.
 | `E2917` | designator index or range bound not an integer constant expression, range with `a > b`, or a range initializer that is not constant |
 | `E2918` | `goto` into a statement expression |
 | `E2919` | initializer for a flexible array member outside file scope |
+| `E2920` | `goto` names a label no enclosing function scope declares |
+| `E2922` | copy of a `volatile` union, or of a `volatile` record with a bit-field member |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -3090,18 +3113,37 @@ and Clang-19 agree on every row.
 - `__builtin_return_address(0)`: type `void *`; accepted by the front end;
   lowering reports `E3025` (`not-lowered: return-address`) and fails closed;
   an argument other than the constant `0` is `E2913`.
-- `__auto_type`: exactly one declarator, no array or function declarator, an
-  initializer required; the declared type is the initializer's type after
-  lvalue conversion (qualifiers dropped, arrays and functions decay: measured
-  `const int` gives `int`, `int[3]` gives `int *`). Violations are `E2915`
-  (`auto-type-misuse`) at the declarator.
+- `__auto_type`: exactly one declarator, which must be a plain identifier (no
+  pointer, array or function declarator), and an initializer is required; the
+  declared type is the initializer's type after lvalue conversion (qualifiers
+  dropped, arrays and functions decay: measured `const int` gives `int`,
+  `int[3]` gives `int *`). The declared object may not appear in its own
+  initializer. Violations are `E2915` (`auto-type-misuse`) at the declarator.
+  `ORACLE_CONFLICT` on a pointer declarator (`__auto_type *p = &l;`): GCC-14
+  refuses it, Clang-19 accepts it, so this profile refuses it; both refuse the
+  array form and the self-reference. Evidence
+  `.evidence/builtin-probes/20260826-2c23684c/gaps3.out`.
+- A stray `;` where an external declaration or a block item may appear is an
+  empty declaration and has no effect. Both oracles accept it silently and warn
+  only under `-pedantic`; the kernel writes one after every `static inline`
+  function that a macro expanded. It is not a diagnostic in this dialect.
 - `a ?: b`: `a` is evaluated once; the result is `a` when nonzero, else `b`,
   with the usual conditional-operator typing.
-- `case a ... b`: inclusive constant range in a `switch`; an empty or
-  overlapping range is `E2916` (`case-range-invalid`).
-- `__label__ name;` at the start of a block declares a block-local label for
-  `goto` and computed use; an undeclared use is the existing undeclared-label
-  diagnostic.
+- `case a ... b`: inclusive range in a `switch` whose bounds are integer
+  constant expressions. A non-constant bound, `a > b`, or a range overlapping
+  another case is `E2916` (`case-range-invalid`) (all three rejected by both
+  oracles).
+- `__label__ name;` at the start of a block declares a block-local label. A
+  `goto` naming a label that no enclosing function scope declares is `E2920`
+  (`undeclared-label`) at the label name (both oracles reject it).
+- Computed goto: `&&name` is the address of a label in the current function,
+  of type `void *` and not a constant expression; `goto *expr` transfers control
+  to such an address (both oracles accept; the kernel cohort writes
+  `(unsigned long)&&__here`). A computed `goto` block's successors are exactly
+  the labels of the current function whose address is taken anywhere in it,
+  which is the conservative control-flow graph every analysis must use.
+  Reaching a computed `goto` whose operand is not one of those addresses is
+  undefined behaviour reported as `E3028` (`computed-goto-invalid-target`).
 
 ### 10.4 EvoCPP Target Profile
 
@@ -3721,6 +3763,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.16 | 2026-08-28 | Closes the eight gaps the compile-time-builtin and aggregate-copy windows reported and the one blocking every parse lane: the empty external declaration is accepted; `__auto_type` needs a plain identifier and may not reference itself (one `ORACLE_CONFLICT`, refused); computed `goto` and label addresses are specified with their conservative successor set (`E3028`); `E2920` for an undeclared label; a non-constant case-range bound is `E2916`; `volatile` union and bit-field copies fail closed (`E2922`); and records cross calls through memory with a trailing return-destination pointer and reserved synthetic origins. |
 | 1.9.15 | 2026-08-27 | Names `trap.unreachable_reached` as the second trap reason, with its textual form, effects, appendix row and C-HIR contract row, and states that a trap terminator is a report and never a licence for an optimistic transition. Revision 1.9.14's 10.1.17 referred to an unreachable terminator that Sections 3, 4 and 9 did not define. |
 | 1.9.14 | 2026-08-27 | Adds the `copy` instruction (Section 3, effects, textual form, `E3027`) as the single lowering of C aggregate assignment, copy-initialization, by-value passing and return; states padding and initializedness transfer from measured oracle behaviour; admits file-scope flexible-array-member initializers (`E2919` elsewhere). Opened because six kernel parse lanes stop on aggregate copy-initialization. |
 | 1.9.13 | 2026-08-27 | Closes the fourteen gaps the preprocessing-grammar and statement-expression/initializer windows reported: `E2917`, `E2918`, `E3026`; join-block argument order and exit cleanup for statement expressions; scalar and non-constant designators; incomplete-array bounds and range initializers (measured; one `ORACLE_CONFLICT` resolved by refusal); the `compound_literal` global kind and read-only storage; paste results and `$`; the stale exclusion in 10.1.7. |
