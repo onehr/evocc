@@ -1098,7 +1098,8 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                 if let Some(initializer) = &object.initializer {
                     for action in initializer.plan().actions().iter().rev() {
                         match action {
-                            InitAction::StoreScalar { value, .. } => {
+                            InitAction::StoreScalar { value, .. }
+                            | InitAction::CopyAggregate { value, .. } => {
                                 work.push(WorkItem::Expression {
                                     expression: value,
                                     current_function,

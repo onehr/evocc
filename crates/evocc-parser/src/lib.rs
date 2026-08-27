@@ -258,6 +258,10 @@ pub struct Parser<'src, 'arena> {
     next_local_label: u64,
     pack_alignment: Option<u32>,
     pack_stack: Vec<Option<u32>>,
+    /// True only while normalizing an initializer attached to a file-scope
+    /// object.  It admits the final flexible member without changing the
+    /// record type itself.
+    flexible_initializer_allowed: bool,
 }
 
 impl<'src, 'arena> Parser<'src, 'arena> {
@@ -355,6 +359,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             next_local_label: 0,
             pack_alignment: None,
             pack_stack: Vec::new(),
+            flexible_initializer_allowed: false,
         }
     }
 
@@ -1308,7 +1313,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.symbols
                     .update_symbol_type(symbol, full_type)
                     .expect("declared symbols belong to the parser symbol table");
-                let plan = self.normalize_initializer_plan(full_type, &written_initializer)?;
+                let plan = self.normalize_initializer_plan(
+                    full_type,
+                    &written_initializer,
+                    context == DeclarationContext::File,
+                )?;
                 if self.initializer_has_static_storage(context, storage) {
                     self.validate_static_initializer_plan(&plan)?;
                 }
@@ -1999,6 +2008,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         &mut self,
         target: TypeId,
         written: &WrittenInitializer<'arena>,
+        allow_flexible_member: bool,
+    ) -> Option<InitPlan<'arena>> {
+        let previous = self.flexible_initializer_allowed;
+        self.flexible_initializer_allowed = allow_flexible_member;
+        let result = self.normalize_initializer_plan_inner(target, written);
+        self.flexible_initializer_allowed = previous;
+        result
+    }
+
+    fn normalize_initializer_plan_inner(
+        &mut self,
+        target: TypeId,
+        written: &WrittenInitializer<'arena>,
     ) -> Option<InitPlan<'arena>> {
         match self.validate_initializer_object_graph(target, &mut HashSet::new()) {
             Ok(()) => {}
@@ -2038,7 +2060,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2207", "initializer-plan-too-large", written.span());
             return None;
         }
-        let plan = InitPlan::with_last_write_wins(target, actions, &self.types);
+        let flexible_array_elements = self.flexible_initializer_element_count(target, &actions);
+        let plan = InitPlan::with_last_write_wins(target, actions, &self.types)
+            .with_flexible_array_elements(flexible_array_elements);
         if plan.validate(&self.types).is_err() {
             self.report("E2202", "invalid-initializer-type", written.span());
             return None;
@@ -2078,7 +2102,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
             | TypeKind::Pointer(_)
-            | TypeKind::Enum(_) => Ok(()),
+            | TypeKind::Enum(_)
+            | TypeKind::GnuInt128(_) => Ok(()),
             TypeKind::Array { element, .. } => {
                 self.validate_initializer_object_graph(element, visiting)
             }
@@ -2104,10 +2129,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 visiting.remove(&target);
                 Ok(())
             }
-            TypeKind::Void
-            | TypeKind::BuiltinVaList
-            | TypeKind::GnuInt128(_)
-            | TypeKind::Function { .. } => Err(InitializerPreflightError::InvalidObject),
+            TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. } => {
+                Err(InitializerPreflightError::InvalidObject)
+            }
         }
     }
 
@@ -2148,7 +2172,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TypeKind::Float(_)
                 | TypeKind::Complex(_)
                 | TypeKind::Pointer(_)
-                | TypeKind::Enum(_),
+                | TypeKind::Enum(_)
+                | TypeKind::GnuInt128(_),
                 WrittenInitializer::Expression(_),
             ) => Ok(1),
             (
@@ -2156,11 +2181,25 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TypeKind::Float(_)
                 | TypeKind::Complex(_)
                 | TypeKind::Pointer(_)
-                | TypeKind::Enum(_),
+                | TypeKind::Enum(_)
+                | TypeKind::GnuInt128(_),
                 WrittenInitializer::List { elements, .. },
             ) => elements
                 .first()
                 .map_or(Ok(1), |first| self.initializer_action_count(target, first)),
+            (
+                TypeKind::Array {
+                    element,
+                    bound: ArrayBound::Unbounded,
+                },
+                WrittenInitializer::List { elements, .. },
+            ) if self.flexible_initializer_allowed => {
+                elements.iter().try_fold(0_u64, |count, written| {
+                    count
+                        .checked_add(self.initializer_action_count(element, written)?)
+                        .ok_or(InitializerPreflightError::TooLarge)
+                })
+            }
             (
                 TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_),
                 WrittenInitializer::List { elements, .. },
@@ -2171,13 +2210,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_),
                 WrittenInitializer::Expression(_),
             ) => Ok(0),
-            (
-                TypeKind::Void
-                | TypeKind::BuiltinVaList
-                | TypeKind::GnuInt128(_)
-                | TypeKind::Function { .. },
-                _,
-            ) => Err(InitializerPreflightError::InvalidObject),
+            (TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. }, _) => {
+                Err(InitializerPreflightError::InvalidObject)
+            }
         }
     }
 
@@ -2319,7 +2354,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
             | TypeKind::Pointer(_)
-            | TypeKind::Enum(_) => Ok(1),
+            | TypeKind::Enum(_)
+            | TypeKind::GnuInt128(_) => Ok(1),
             TypeKind::Array {
                 element,
                 bound: ArrayBound::Fixed(bound),
@@ -2391,10 +2427,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 visiting.remove(&target);
                 Ok(count)
             }
-            TypeKind::Void
-            | TypeKind::BuiltinVaList
-            | TypeKind::GnuInt128(_)
-            | TypeKind::Function { .. } => Err(InitializerPreflightError::InvalidObject),
+            TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. } => {
+                Err(InitializerPreflightError::InvalidObject)
+            }
         }
     }
 
@@ -2442,6 +2477,47 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 Some(())
             }
             (
+                TypeKind::Array {
+                    element,
+                    bound: ArrayBound::Unbounded,
+                },
+                WrittenInitializer::List {
+                    elements,
+                    designations,
+                    ..
+                },
+            ) if self.flexible_initializer_allowed => {
+                if designations.iter().any(Option::is_some) {
+                    for (written, designation) in elements.iter().zip(designations) {
+                        let Some(designation) = designation else {
+                            self.report("E2906", "designator-outside-object", written.span());
+                            return None;
+                        };
+                        let resolved =
+                            self.resolve_initializer_designation(target, &path, designation)?;
+                        for destination in resolved {
+                            self.normalize_initializer_value(
+                                destination.ty,
+                                destination.path,
+                                written,
+                                actions,
+                            )?;
+                        }
+                    }
+                    return Some(());
+                }
+                for (index, written) in elements.iter().enumerate() {
+                    let index = u64::try_from(index).ok()?;
+                    self.normalize_initializer_value(
+                        *element,
+                        path.clone().with_index(index),
+                        written,
+                        actions,
+                    )?;
+                }
+                Some(())
+            }
+            (
                 TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_),
                 WrittenInitializer::List {
                     elements,
@@ -2460,15 +2536,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 TypeKind::Struct(_) | TypeKind::Union(_),
                 WrittenInitializer::Expression(expression),
             ) => {
-                let diagnostic =
-                    match self.assignment_constraint(AssignmentOp::Simple, target, expression) {
-                        UpdateConstraint::AggregateBoundary => {
-                            ("E2705", "not-covered-day7: aggregate-copy-initializer")
-                        }
-                        _ => ("E2202", "invalid-initializer-type"),
-                    };
-                self.report(diagnostic.0, diagnostic.1, expression.span());
-                None
+                if self.assignment_constraint(AssignmentOp::Simple, target, expression)
+                    != UpdateConstraint::AggregateBoundary
+                {
+                    self.report("E2202", "invalid-initializer-type", expression.span());
+                    return None;
+                }
+                actions.push(InitAction::copy_aggregate(
+                    path,
+                    target,
+                    expression,
+                    expression.span(),
+                ));
+                Some(())
             }
             (TypeKind::Array { .. }, WrittenInitializer::Expression(expression)) => {
                 self.report("E2202", "invalid-initializer-type", expression.span());
@@ -2479,7 +2559,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TypeKind::Float(_)
                 | TypeKind::Complex(_)
                 | TypeKind::Pointer(_)
-                | TypeKind::Enum(_),
+                | TypeKind::Enum(_)
+                | TypeKind::GnuInt128(_),
                 WrittenInitializer::Expression(expression),
             ) => {
                 if self.assignment_constraint(AssignmentOp::Simple, target, expression)
@@ -2501,7 +2582,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TypeKind::Float(_)
                 | TypeKind::Complex(_)
                 | TypeKind::Pointer(_)
-                | TypeKind::Enum(_),
+                | TypeKind::Enum(_)
+                | TypeKind::GnuInt128(_),
                 WrittenInitializer::List {
                     elements,
                     designations,
@@ -2539,6 +2621,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         actions: &mut Vec<InitAction<'arena>>,
         diagnose_excess: bool,
     ) -> Option<()> {
+        if self.aggregate_first_initializable_member_is_unbounded(target)
+            && self.final_flexible_array_member(target).is_none()
+        {
+            if let Some(first) = elements.first() {
+                self.report(
+                    "E2706",
+                    "not-covered-day7: flexible-array-initializer",
+                    first.span(),
+                );
+                return None;
+            }
+        }
         if designations.iter().any(Option::is_some) {
             return self.normalize_designated_aggregate_elements(
                 target,
@@ -2547,16 +2641,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 designations,
                 actions,
             );
-        }
-        if let Some(first) = elements.first() {
-            if self.aggregate_first_initializable_member_is_flexible(target) {
-                self.report(
-                    "E2706",
-                    "not-covered-day7: flexible-array-initializer",
-                    first.span(),
-                );
-                return None;
-            }
         }
         let Some(children) = self.aggregate_initializer_children(target) else {
             self.report(
@@ -2568,6 +2652,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             );
             return None;
         };
+        if !self.flexible_initializer_allowed
+            && self.final_flexible_array_member(target).is_some()
+            && elements.len() > children.len()
+        {
+            self.report(
+                "E2919",
+                "flexible-array-initializer-not-static",
+                elements[children.len()].span(),
+            );
+            return None;
+        }
         let mut cursor = 0;
         for (step, child) in children {
             let child_path = extend_subobject_path(path.clone(), step);
@@ -2597,15 +2692,26 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if elements.len() != designations.len() {
             unreachable!("initializer elements and designations are positional peers");
         }
-        if let Some(first) = elements.first() {
-            if self.aggregate_first_initializable_member_is_flexible(target) {
-                self.report(
-                    "E2706",
-                    "not-covered-day7: flexible-array-initializer",
-                    first.span(),
-                );
-                return None;
-            }
+        if !self.flexible_initializer_allowed
+            && self.final_flexible_array_member(target).is_some()
+            && designations.iter().flatten().any(|designation| {
+                designation.designators.iter().any(|designator| {
+                    matches!(designator, WrittenDesignator::Field(name) if self.final_flexible_array_member(target).is_some_and(|(_, field, _)| name.spelling == field))
+                })
+            })
+        {
+            let span = designations
+                .iter()
+                .flatten()
+                .find_map(|designation| {
+                    designation.designators.iter().find_map(|designator| match designator {
+                        WrittenDesignator::Field(name) => Some(name.span),
+                        _ => None,
+                    })
+                })
+                .unwrap_or_else(|| self.span());
+            self.report("E2919", "flexible-array-initializer-not-static", span);
+            return None;
         }
         let Some(children) = self.aggregate_initializer_children(target) else {
             let span = designations
@@ -2781,7 +2887,28 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .map_or(children.len(), |index| index + 1)
     }
 
-    fn aggregate_first_initializable_member_is_flexible(&self, target: TypeId) -> bool {
+    fn final_flexible_array_member(&self, target: TypeId) -> Option<(usize, String, TypeId)> {
+        let Some(TypeKind::Struct(tag)) = self.types.get(target).map(|ty| &ty.kind) else {
+            return None;
+        };
+        let tag = self.types.tag(*tag)?;
+        let fields = match &tag.state {
+            TagState::Complete(TagDefinition::Struct(fields)) => fields,
+            TagState::Incomplete
+            | TagState::Complete(TagDefinition::Union(_) | TagDefinition::Enum(_)) => return None,
+        };
+        let (field_index, field) = fields.iter().enumerate().next_back()?;
+        let Some(TypeKind::Array {
+            element,
+            bound: ArrayBound::Unbounded,
+        }) = self.types.get(field.ty).map(|ty| &ty.kind)
+        else {
+            return None;
+        };
+        Some((field_index, field.name.clone()?, *element))
+    }
+
+    fn aggregate_first_initializable_member_is_unbounded(&self, target: TypeId) -> bool {
         let Some(TypeKind::Struct(tag) | TypeKind::Union(tag)) =
             self.types.get(target).map(|ty| &ty.kind)
         else {
@@ -2807,6 +2934,30 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     })
                 )
             })
+    }
+
+    fn flexible_initializer_element_count(
+        &self,
+        target: TypeId,
+        actions: &[InitAction<'arena>],
+    ) -> u64 {
+        let Some((field_index, _, _)) = self.final_flexible_array_member(target) else {
+            return 0;
+        };
+        actions
+            .iter()
+            .filter_map(|action| match action.path().steps() {
+                [SubobjectStep::Field {
+                    field_index: candidate,
+                }, SubobjectStep::Index { index }]
+                    if *candidate == field_index =>
+                {
+                    index.checked_add(1)
+                }
+                _ => None,
+            })
+            .max()
+            .unwrap_or(0)
     }
 
     fn normalize_stream_subobject(
@@ -2849,7 +3000,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
             | TypeKind::Pointer(_)
-            | TypeKind::Enum(_) => {
+            | TypeKind::Enum(_)
+            | TypeKind::GnuInt128(_) => {
                 actions.push(InitAction::zero_scalar(path, target));
                 Some(())
             }
@@ -2879,10 +3031,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 Some(())
             }
-            TypeKind::Void
-            | TypeKind::BuiltinVaList
-            | TypeKind::GnuInt128(_)
-            | TypeKind::Function { .. } => None,
+            TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. } => None,
         }
     }
 
@@ -2945,6 +3094,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TypeKind::Complex(_)
                 | TypeKind::Pointer(_)
                 | TypeKind::Enum(_)
+                | TypeKind::GnuInt128(_)
         ) {
             return true;
         }
@@ -3002,6 +3152,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                                 ..
                             })
                         )
+                        && !self.flexible_initializer_allowed
                     {
                         continue;
                     }
@@ -5923,14 +6074,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let span = self.merge_span(target.span(), value.span());
         match self.assignment_constraint(op, typed_target.ty(), value) {
             UpdateConstraint::Scalar | UpdateConstraint::PointerBoundary => {}
-            UpdateConstraint::AggregateBoundary => {
-                self.report(
-                    "E2703",
-                    "not-covered-day7: aggregate-assignment",
-                    target.span(),
-                );
-                return None;
-            }
+            UpdateConstraint::AggregateBoundary => {}
             UpdateConstraint::Invalid => {
                 self.report("E2102", "invalid-update-operands", span);
                 return None;
@@ -5980,24 +6124,40 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 return None;
             }
             if place.access_qualifiers().is_atomic {
-                self.report(
-                    "E2702",
-                    "not-covered-day7: volatile-or-atomic-update",
-                    target.span(),
-                );
+                self.report("E2702", "atomic-update-unsupported", target.span());
                 return None;
             }
             return Some(TypedUpdateTarget::Memory(place.clone()));
+        }
+        let aggregate_target =
+            self.expression_type(target)
+                .is_some_and(|inferred| match inferred.ty {
+                    InferredType::Canonical(ty) => matches!(
+                        self.types.get(ty).map(|canonical| &canonical.kind),
+                        Some(TypeKind::Struct(_) | TypeKind::Union(_))
+                    ),
+                    _ => false,
+                });
+        if aggregate_target {
+            let place = self.resolve_memory_place(target).or_else(|| {
+                self.report("E2101", "expected-modifiable-lvalue", target.span());
+                None
+            })?;
+            if !place.is_modifiable() {
+                self.report("E2101", "expected-modifiable-lvalue", target.span());
+                return None;
+            }
+            if place.access_qualifiers().is_atomic {
+                self.report("E2702", "atomic-update-unsupported", target.span());
+                return None;
+            }
+            return Some(TypedUpdateTarget::Memory(place));
         }
         if matches!(
             target,
             CHirExpr::Member(_, _, _) | CHirExpr::PtrMember(_, _, _) | CHirExpr::Index(_, _, _)
         ) {
-            self.report(
-                "E2705",
-                "not-covered-day7: aggregate-lvalue-assignment",
-                target.span(),
-            );
+            self.report("E2101", "expected-modifiable-lvalue", target.span());
             return None;
         }
 
@@ -6022,7 +6182,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// unnamed struct or union is a separate language feature, and silently
     /// resolving through one here would designate a different subobject than
     /// the source names.
-    fn record_member(&self, record_ty: TypeId, name: &str) -> Option<FieldProjection> {
+    fn record_member_path(&self, record_ty: TypeId, name: &str) -> Option<Vec<FieldProjection>> {
+        self.record_member_path_inner(record_ty, name, &mut HashSet::new())
+    }
+
+    fn record_member_path_inner(
+        &self,
+        record_ty: TypeId,
+        name: &str,
+        visiting: &mut HashSet<TypeId>,
+    ) -> Option<Vec<FieldProjection>> {
+        if !visiting.insert(record_ty) {
+            return None;
+        }
         let canonical = self.types.get(record_ty)?;
         let tag = match canonical.kind {
             TypeKind::Struct(tag) | TypeKind::Union(tag) => tag,
@@ -6034,11 +6206,39 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | TagState::Complete(TagDefinition::Union(fields)) => fields,
             TagState::Incomplete | TagState::Complete(TagDefinition::Enum(_)) => return None,
         };
-        let (index, field) = fields
+        if let Some((index, field)) = fields
             .iter()
             .enumerate()
-            .find(|(_, field)| field.name.as_deref() == Some(name))?;
-        Some(FieldProjection::new(tag, index, field.ty))
+            .find(|(_, field)| field.name.as_deref() == Some(name))
+        {
+            visiting.remove(&record_ty);
+            return Some(vec![FieldProjection::new(tag, index, field.ty)]);
+        }
+
+        let mut found = None;
+        for (index, field) in fields
+            .iter()
+            .enumerate()
+            .filter(|(_, field)| field.name.is_none() && field.bit_field.is_none())
+        {
+            if !matches!(
+                self.types.get(field.ty).map(|ty| &ty.kind),
+                Some(TypeKind::Struct(_) | TypeKind::Union(_))
+            ) {
+                continue;
+            }
+            let Some(mut nested) = self.record_member_path_inner(field.ty, name, visiting) else {
+                continue;
+            };
+            let mut path = vec![FieldProjection::new(tag, index, field.ty)];
+            path.append(&mut nested);
+            if found.replace(path).is_some() {
+                visiting.remove(&record_ty);
+                return None;
+            }
+        }
+        visiting.remove(&record_ty);
+        found
     }
 
     /// Split a subscript into its pointer-like and integer operands.
@@ -6133,21 +6333,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             CHirExpr::Member(base, name, _) => {
                 let (root, mut projections, base_ty) = self.resolve_place_chain(base)?;
-                let field = self.record_member(base_ty, name)?;
-                let field_ty = field.field_ty();
-                projections.push(PlaceProjection::Field(field));
+                let fields = self.record_member_path(base_ty, name)?;
+                let field_ty = fields.last()?.field_ty();
+                projections.extend(fields.into_iter().map(PlaceProjection::Field));
                 Some((root, projections, field_ty))
             }
             CHirExpr::PtrMember(pointer, name, _) => {
                 let pointer_type = self.pointer_root_descriptor(pointer)?;
-                let field = self.record_member(pointer_type.pointee(), name)?;
-                let field_ty = field.field_ty();
+                let fields = self.record_member_path(pointer_type.pointee(), name)?;
+                let field_ty = fields.last()?.field_ty();
                 Some((
                     PlaceRoot::PointerExpression {
                         pointer,
                         pointer_type,
                     },
-                    vec![PlaceProjection::Field(field)],
+                    fields.into_iter().map(PlaceProjection::Field).collect(),
                     field_ty,
                 ))
             }
@@ -6222,6 +6422,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         expression: &'arena CHirExpr<'arena>,
     ) -> &'arena CHirExpr<'arena> {
         let span = expression.span();
+        // A member selected from an aggregate value (for example
+        // `(destination = source).field`) is not rooted in a separately
+        // derivable lvalue.  Keep the value-producing base attached so the
+        // interpreter and lowering evaluate the copy exactly once before
+        // selecting the member.
+        if let CHirExpr::Member(base, _, _) = expression {
+            if self
+                .expression_type(base)
+                .is_some_and(|inferred| inferred.category == ExprCategory::Value)
+            {
+                return expression;
+            }
+        }
         // A projection that cannot even be typed is ill formed, not merely
         // outside this slice, so it is reported here rather than left to
         // surface as a confusing failure in a later stage.
@@ -6251,13 +6464,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn is_loadable_scalar(&self, ty: TypeId) -> bool {
         matches!(
             self.types.get(ty).map(|canonical| &canonical.kind),
-            Some(
-                TypeKind::Int(_)
-                    | TypeKind::Enum(_)
-                    | TypeKind::Pointer(_)
-                    | TypeKind::Float(_)
-                    | TypeKind::GnuInt128(_)
-            )
+            Some(TypeKind::Int(_) | TypeKind::Enum(_) | TypeKind::Pointer(_) | TypeKind::Float(_))
         )
     }
 
@@ -6300,11 +6507,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         }
         if place.access_qualifiers().is_atomic {
-            self.report(
-                "E2702",
-                "not-covered-day7: volatile-or-atomic-update",
-                target_span,
-            );
+            self.report("E2702", "atomic-update-unsupported", target_span);
             return None;
         }
         Some(place)
@@ -6350,11 +6553,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .get(target.ty)
             .expect("identifier facts only reference interned types");
         if canonical.qualifiers.is_atomic {
-            self.report(
-                "E2702",
-                "not-covered-day7: volatile-or-atomic-update",
-                target_span,
-            );
+            self.report("E2702", "atomic-update-unsupported", target_span);
             return None;
         }
         match ScalarPlace::bind(&self.symbols, &self.types, target.symbol) {
@@ -6376,7 +6575,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let Some(right) = self.converted_expression_type(value) else {
             return UpdateConstraint::Invalid;
         };
-        let right_class = self.operand_type_class(right.ty);
+        let right_type = right.ty;
+        let right_class = self.operand_type_class(right_type);
+
+        if op == AssignmentOp::Simple {
+            if let InferredType::Canonical(right_ty) = right_type {
+                if self.same_unqualified_type(target_ty, right_ty)
+                    && matches!(
+                        self.types.get(target_ty).map(|canonical| &canonical.kind),
+                        Some(TypeKind::GnuInt128(_))
+                    )
+                {
+                    return UpdateConstraint::Scalar;
+                }
+            }
+        }
 
         match op {
             AssignmentOp::Simple => match (left, right_class) {
@@ -6727,7 +6940,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     return None;
                 };
                 (
-                    InferredType::Canonical(self.record_member(base_ty, name)?.field_ty()),
+                    InferredType::Canonical(
+                        self.record_member_path(base_ty, name)?.last()?.field_ty(),
+                    ),
                     ExprCategory::LValue,
                 )
             }
@@ -6738,7 +6953,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     return None;
                 };
                 (
-                    InferredType::Canonical(self.record_member(pointee.pointee, name)?.field_ty()),
+                    InferredType::Canonical(
+                        self.record_member_path(pointee.pointee, name)?
+                            .last()?
+                            .field_ty(),
+                    ),
                     ExprCategory::LValue,
                 )
             }
@@ -7329,7 +7548,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 let written = self.parse_written_initializer()?;
                 let ty = self.infer_initializer_target_type(ty, &written)?;
-                let plan = self.normalize_initializer_plan(ty, &written)?;
+                let plan = self.normalize_initializer_plan(ty, &written, false)?;
                 if self.current_scope == self.symbols.file_scope() {
                     self.validate_static_initializer_plan(&plan)?;
                 }

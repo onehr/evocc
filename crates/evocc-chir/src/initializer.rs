@@ -182,6 +182,15 @@ pub enum InitAction<'arena> {
         literal: StringLit,
         span: SourceSpan,
     },
+    /// Copy one complete record or union value into the designated
+    /// subobject.  Keeping this distinct from a scalar store prevents later
+    /// consumers from accidentally expanding the copy member by member.
+    CopyAggregate {
+        path: SubobjectPath,
+        destination_type: TypeId,
+        value: &'arena CHirExpr<'arena>,
+        span: SourceSpan,
+    },
     ZeroScalar {
         path: SubobjectPath,
         destination_type: TypeId,
@@ -222,6 +231,21 @@ impl<'arena> InitAction<'arena> {
     }
 
     #[must_use]
+    pub fn copy_aggregate(
+        path: SubobjectPath,
+        destination_type: TypeId,
+        value: &'arena CHirExpr<'arena>,
+        span: SourceSpan,
+    ) -> Self {
+        Self::CopyAggregate {
+            path,
+            destination_type,
+            value,
+            span,
+        }
+    }
+
+    #[must_use]
     pub fn zero_scalar(path: SubobjectPath, destination_type: TypeId) -> Self {
         Self::ZeroScalar {
             path,
@@ -234,6 +258,7 @@ impl<'arena> InitAction<'arena> {
         match self {
             Self::StoreScalar { path, .. }
             | Self::StoreString { path, .. }
+            | Self::CopyAggregate { path, .. }
             | Self::ZeroScalar { path, .. } => path,
         }
     }
@@ -247,6 +272,9 @@ impl<'arena> InitAction<'arena> {
             | Self::StoreString {
                 destination_type, ..
             }
+            | Self::CopyAggregate {
+                destination_type, ..
+            }
             | Self::ZeroScalar {
                 destination_type, ..
             } => *destination_type,
@@ -258,7 +286,9 @@ impl<'arena> InitAction<'arena> {
     #[must_use]
     pub fn span(&self) -> Option<SourceSpan> {
         match self {
-            Self::StoreScalar { span, .. } | Self::StoreString { span, .. } => Some(*span),
+            Self::StoreScalar { span, .. }
+            | Self::StoreString { span, .. }
+            | Self::CopyAggregate { span, .. } => Some(*span),
             Self::ZeroScalar { .. } => None,
         }
     }
@@ -269,6 +299,7 @@ impl<'arena> InitAction<'arena> {
 pub struct InitPlan<'arena> {
     target_type: TypeId,
     actions: Vec<InitAction<'arena>>,
+    flexible_array_elements: u64,
 }
 
 impl<'arena> InitPlan<'arena> {
@@ -277,6 +308,7 @@ impl<'arena> InitPlan<'arena> {
         Self {
             target_type,
             actions,
+            flexible_array_elements: 0,
         }
     }
 
@@ -307,6 +339,20 @@ impl<'arena> InitPlan<'arena> {
     #[must_use]
     pub fn actions(&self) -> &[InitAction<'arena>] {
         &self.actions
+    }
+
+    /// Number of explicitly materialized elements in a final flexible array
+    /// member.  This extends the declared object's storage without changing
+    /// the record type or its `sizeof`.
+    #[must_use]
+    pub fn flexible_array_elements(&self) -> u64 {
+        self.flexible_array_elements
+    }
+
+    #[must_use]
+    pub fn with_flexible_array_elements(mut self, elements: u64) -> Self {
+        self.flexible_array_elements = elements;
+        self
     }
 
     #[must_use]
@@ -365,6 +411,15 @@ impl<'arena> InitPlan<'arena> {
                         literal,
                     )?;
                 }
+                InitAction::CopyAggregate { .. }
+                    if !matches!(destination_kind, TypeKind::Struct(_) | TypeKind::Union(_)) =>
+                {
+                    return Err(InitPlanError::AggregateDestinationIsNotRecord {
+                        action: action_index,
+                        path: path.clone(),
+                        destination,
+                    });
+                }
                 InitAction::ZeroScalar { .. } if !is_scalar(destination_kind) => {
                     return Err(InitPlanError::ZeroDestinationIsNotScalar {
                         action: action_index,
@@ -372,7 +427,9 @@ impl<'arena> InitPlan<'arena> {
                         destination,
                     });
                 }
-                InitAction::StoreScalar { .. } | InitAction::ZeroScalar { .. } => {}
+                InitAction::StoreScalar { .. }
+                | InitAction::CopyAggregate { .. }
+                | InitAction::ZeroScalar { .. } => {}
             }
         }
 
@@ -570,6 +627,7 @@ fn is_scalar(kind: &TypeKind) -> bool {
             | TypeKind::Complex(_)
             | TypeKind::Pointer(_)
             | TypeKind::Enum(_)
+            | TypeKind::GnuInt128(_)
     )
 }
 
@@ -695,6 +753,11 @@ pub enum InitPlanError {
         destination: TypeId,
     },
     ScalarDestinationIsNotScalar {
+        action: usize,
+        path: SubobjectPath,
+        destination: TypeId,
+    },
+    AggregateDestinationIsNotRecord {
         action: usize,
         path: SubobjectPath,
         destination: TypeId,
@@ -829,6 +892,15 @@ impl fmt::Display for InitPlanError {
             } => write!(
                 formatter,
                 "initializer action {action} scalar store targets non-scalar type {}",
+                destination.raw()
+            ),
+            Self::AggregateDestinationIsNotRecord {
+                action,
+                destination,
+                ..
+            } => write!(
+                formatter,
+                "initializer action {action} aggregate copy targets non-record type {}",
                 destination.raw()
             ),
             Self::StringDestinationIsNotCharacterArray {

@@ -582,15 +582,10 @@ fn non_modifiable_targets_report_exact_e2101_without_panic() {
 }
 
 #[test]
-fn valid_aggregate_assignment_remains_an_explicit_day7_boundary() {
+fn record_and_union_assignments_are_accepted() {
     for source in [DAY7_UNION_ASSIGN, DAY7_STRUCT_ASSIGN] {
-        assert_diagnostic(
-            source,
-            "left",
-            1,
-            "E2703",
-            "not-covered-day7: aggregate-assignment",
-        );
+        let arena = Arena::default();
+        assert!(!parse_valid(source, &arena).is_empty());
     }
 }
 
@@ -849,20 +844,10 @@ fn valid_pointer_updates_produce_typed_chir() {
     }
 }
 
-/// Subscript and member lvalues are now resolved to checked places, so the
-/// boundary has moved rather than disappeared: what remains unrepresentable is
-/// assigning to an lvalue whose type is an aggregate, because that is an object
-/// copy rather than a scalar store. This pins the boundary where it actually
-/// is, so that a later change moving it again has to say so.
 #[test]
-fn aggregate_lvalue_assignment_is_still_unrepresentable() {
-    assert_diagnostic(
-        AGGREGATE_MEMBER_ASSIGN,
-        "o.inner",
-        0,
-        "E2705",
-        "not-covered-day7: aggregate-lvalue-assignment",
-    );
+fn aggregate_member_assignment_is_accepted() {
+    let arena = Arena::default();
+    assert!(!parse_valid(AGGREGATE_MEMBER_ASSIGN, &arena).is_empty());
 }
 
 /// The forms the boundary used to cover are executable now, and stay that way.
@@ -956,11 +941,5 @@ fn volatile_scalar_update_is_an_accepted_day7_contract() {
 
 #[test]
 fn atomic_update_remains_an_explicit_unsupported_boundary() {
-    assert_diagnostic(
-        DAY7_ATOMIC,
-        "x",
-        1,
-        "E2702",
-        "not-covered-day7: volatile-or-atomic-update",
-    );
+    assert_diagnostic(DAY7_ATOMIC, "x", 1, "E2702", "atomic-update-unsupported");
 }

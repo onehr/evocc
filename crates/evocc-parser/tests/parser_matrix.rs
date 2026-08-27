@@ -348,7 +348,10 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
                 .actions()
                 .iter()
                 .filter_map(|action| match action {
-                    InitAction::StoreScalar { value, .. } => Some(canonical_expr(value, types)),
+                    InitAction::StoreScalar { value, .. }
+                    | InitAction::CopyAggregate { value, .. } => {
+                        Some(canonical_expr(value, types))
+                    }
                     InitAction::StoreString { .. } | InitAction::ZeroScalar { .. } => None,
                 })
                 .collect::<Vec<_>>()

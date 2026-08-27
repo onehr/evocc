@@ -161,7 +161,7 @@ const SOURCES: &[SourceCase] = &[
         source: INVALID_INITIALIZER_TYPE,
     },
     SourceCase {
-        id: "boundary.day7-aggregate-copy",
+        id: "aggregate.copy-initializer",
         source: AGGREGATE_COPY_BOUNDARY,
     },
     SourceCase {
@@ -181,7 +181,7 @@ const SOURCES: &[SourceCase] = &[
         source: VLA_INITIALIZER_BOUNDARY,
     },
     SourceCase {
-        id: "boundary.flexible-array-member",
+        id: "aggregate.flexible-array-member",
         source: FLEXIBLE_MEMBER_BOUNDARY,
     },
     SourceCase {
@@ -841,7 +841,6 @@ fn excess_and_string_overflow_report_exact_semantic_diagnostics() {
         (SCALAR_EXCESS, "2", 0),
         (ARRAY_NESTED_EXCESS, "2", 0),
         (UNION_EXCESS, "8", 0),
-        (FLEXIBLE_MEMBER_BOUNDARY, "{ 2 }", 0),
     ] {
         assert_diagnostic(source, target, occurrence, "E2201", "excess-initializer");
     }
@@ -904,6 +903,22 @@ fn failed_initializer_rolls_back_its_declaration_without_ghost_symbols() {
 }
 
 #[test]
+fn aggregate_copy_and_flexible_member_initializers_are_accepted() {
+    let aggregate_arena = Arena::default();
+    let aggregate = parse_valid(AGGREGATE_COPY_BOUNDARY, &aggregate_arena);
+    let value = object(&aggregate, "value");
+    assert!(matches!(
+        initializer(value).plan().actions(),
+        [InitAction::CopyAggregate { .. }]
+    ));
+
+    let flexible_arena = Arena::default();
+    let flexible = parse_valid(FLEXIBLE_MEMBER_BOUNDARY, &flexible_arena);
+    let packet = object(&flexible, "packet");
+    assert_eq!(initializer(packet).plan().flexible_array_elements(), 1);
+}
+
+#[test]
 fn unsupported_initializer_forms_keep_their_stable_boundaries() {
     assert_diagnostic(
         INVALID_INITIALIZER_TYPE,
@@ -911,13 +926,6 @@ fn unsupported_initializer_forms_keep_their_stable_boundaries() {
         0,
         "E2202",
         "invalid-initializer-type",
-    );
-    assert_diagnostic(
-        AGGREGATE_COPY_BOUNDARY,
-        "other",
-        1,
-        "E2705",
-        "not-covered-day7: aggregate-copy-initializer",
     );
     assert_diagnostic(
         WIDE_STRING_BOUNDARY,

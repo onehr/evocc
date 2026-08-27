@@ -761,6 +761,12 @@ fn apply_static_initializer(
                     .unwrap_or(0) as u8;
             }
         }
+        InitAction::CopyAggregate { span, .. } => {
+            return Err(LowerError::UnsupportedExpression {
+                span: *span,
+                feature: "global aggregate copy initializer",
+            });
+        }
     }
     Ok(())
 }
@@ -3392,6 +3398,12 @@ impl<'a> FunctionLowerer<'a> {
                         self.emit_memory_store(address, value, element, false, action_span, state)?;
                     }
                 }
+                InitAction::CopyAggregate { span, .. } => {
+                    return Err(LowerError::UnsupportedExpression {
+                        span: *span,
+                        feature: "aggregate copy initializer",
+                    });
+                }
             }
         }
         Ok(())
@@ -3549,6 +3561,12 @@ impl<'a> FunctionLowerer<'a> {
                         let value = self.constant(state, integer, u64::from(byte))?;
                         self.emit_memory_store(address, value, element, false, action_span, state)?;
                     }
+                }
+                InitAction::CopyAggregate { span, .. } => {
+                    return Err(LowerError::UnsupportedExpression {
+                        span: *span,
+                        feature: "aggregate copy initializer",
+                    });
                 }
             }
         }

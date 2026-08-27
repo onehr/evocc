@@ -17,7 +17,7 @@ use evocc_memory::{
     WorldLimits, WorldState,
 };
 use evocc_types::{
-    FunctionParameters, Qualifiers, TagDefinition, TagState, TargetDataLayout, TypeId,
+    ArrayBound, FunctionParameters, Qualifiers, TagDefinition, TagState, TargetDataLayout, TypeId,
     TypeInterner, TypeKind,
 };
 
@@ -447,6 +447,14 @@ enum CValue {
         value: PointerValue,
         ty: PointerTypeDesc,
     },
+    /// A record or union value remains backed by object storage until copied.
+    /// This preserves padding initializedness and pointer provenance without
+    /// inventing a second aggregate representation in the interpreter.
+    Aggregate {
+        address: Pointer,
+        ty: TypeId,
+        qualifiers: Qualifiers,
+    },
 }
 
 /// The value-level part of a function signature accepted by the task machine.
@@ -455,6 +463,7 @@ enum ValueType {
     Void,
     Integer(CIntegerType),
     Pointer(PointerTypeDesc),
+    Aggregate(TypeId),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -565,6 +574,12 @@ enum MachineTask<'arena> {
     /// each one has been evaluated exactly once by the time this runs.
     LoadProjectedPlace {
         place: &'arena MemoryPlace<'arena>,
+        span: SourceSpan,
+    },
+    /// Select a scalar member from an aggregate value whose producer must be
+    /// evaluated first (notably the value of a record assignment).
+    LoadAggregateMember {
+        name: &'arena str,
         span: SourceSpan,
     },
     RestoreFuelAnchor(Option<SourceSpan>),
@@ -822,6 +837,7 @@ struct Interpreter<'unit, 'arena> {
     fuel_limit: u64,
     consumed: u64,
     fuel_anchor: Option<SourceSpan>,
+    temporary_origin_site: u64,
 }
 
 impl<'unit, 'arena> Interpreter<'unit, 'arena> {
@@ -857,6 +873,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             fuel_limit: limits.fuel(),
             consumed: 0,
             fuel_anchor: None,
+            temporary_origin_site: 0,
         })
     }
 
@@ -868,6 +885,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     fn derive_allocation_manifest(&mut self) -> Result<(), InterpreterError> {
         let manifest = AllocationSiteManifest::derive(self.unit)
             .map_err(|error| InterpreterError::InvalidAllocationManifest { error })?;
+        self.temporary_origin_site = u64::try_from(manifest.sites().len())
+            .map_err(|_| InterpreterError::MissingAllocationManifest)?;
         self.manifest = Some(manifest);
         Ok(())
     }
@@ -949,20 +968,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         }
 
         for (declaration, site) in &plans {
-            let layout = self
-                .target
-                .layout_of(self.unit.types(), declaration.ty)
-                .map_err(|_| InterpreterError::UnsupportedType {
-                    ty: declaration.ty,
-                    span: declaration.span,
-                })?;
+            let layout = self.object_access_layout(
+                declaration.ty,
+                declaration.initializer.as_ref(),
+                declaration.span,
+            )?;
             let (memory, address) = self
                 .memory
-                .allocate_static(
-                    *site,
-                    AccessLayout::from_type_layout(layout),
-                    InitialState::Zeroed,
-                )
+                .allocate_static(*site, layout, InitialState::Zeroed)
                 .map_err(|error| self.memory_error(error, declaration.span))?;
             self.memory = memory;
             if self
@@ -1118,6 +1131,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         .memory
                         .store_bytes(address, layout, &value)
                         .map_err(|error| self.memory_error(error, span))?;
+                }
+                InitAction::CopyAggregate { span, .. } => {
+                    return Err(InterpreterError::UnsupportedExpression {
+                        feature: "aggregate copy in static initializer",
+                        span: *span,
+                    });
                 }
             }
         }
@@ -1590,8 +1609,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         .actions()
                         .get(index)
                         .ok_or_else(|| invalid_initializer_target(target, target.span))?;
-                    let InitAction::StoreScalar { path, span, .. } = action else {
-                        return Err(invalid_initializer_target(target, target.span));
+                    let (path, span) = match action {
+                        InitAction::StoreScalar { path, span, .. }
+                        | InitAction::CopyAggregate { path, span, .. } => (path, span),
+                        InitAction::StoreString { .. } | InitAction::ZeroScalar { .. } => {
+                            return Err(invalid_initializer_target(target, target.span));
+                        }
                     };
                     let value = pop_machine_value(&mut values, *span)?;
                     let (address, ty) = self.subobject_address(target.binding, path, *span)?;
@@ -1957,6 +1980,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     values.push(value);
                     None
                 }
+                MachineTask::LoadAggregateMember { name, span } => {
+                    let aggregate = pop_machine_value(&mut values, span)?;
+                    let (address, ty, qualifiers) =
+                        self.aggregate_member_address(aggregate, name, span)?;
+                    values.push(self.load_memory_value(address, ty, qualifiers, span)?);
+                    None
+                }
                 MachineTask::ApplyIndirectAssignment {
                     operator,
                     pointer_type,
@@ -2303,7 +2333,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 slot.value = Some(CInteger::new(0, ty));
                 Ok(())
             }
-            InitAction::StoreScalar { span, .. } | InitAction::StoreString { span, .. } => {
+            InitAction::StoreScalar { span, .. }
+            | InitAction::StoreString { span, .. }
+            | InitAction::CopyAggregate { span, .. } => {
                 Err(InterpreterError::InvalidInitializerPlan {
                     symbol: declaration.symbol,
                     span: *span,
@@ -2335,7 +2367,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             return Ok(());
         }
-        self.allocate_automatic_object(declaration.symbol, declaration.ty, declaration.span)?;
+        self.allocate_automatic_object(
+            declaration.symbol,
+            declaration.ty,
+            declaration.initializer.as_ref(),
+            declaration.span,
+        )?;
         let Some(initializer) = &declaration.initializer else {
             return Ok(());
         };
@@ -2462,6 +2499,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         match action {
             InitAction::StoreScalar {
                 path, span, value, ..
+            }
+            | InitAction::CopyAggregate {
+                path, span, value, ..
             } => {
                 // Reject before evaluating, so a rejected destination cannot
                 // run the initializer's side effects first.
@@ -2543,7 +2583,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             },
         )?;
         match action {
-            InitAction::StoreScalar { span, .. } | InitAction::StoreString { span, .. } => {
+            InitAction::StoreScalar { span, .. }
+            | InitAction::StoreString { span, .. }
+            | InitAction::CopyAggregate { span, .. } => {
                 Err(InterpreterError::InvalidInitializerPlan {
                     symbol: declaration.symbol,
                     span: *span,
@@ -3316,6 +3358,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 });
                 self.schedule_place_operands(place, *target_span, tasks, values)?;
             }
+            CHirExpr::Member(base, name, _) if self.memory_mode => {
+                tasks.push(MachineTask::LoadAggregateMember {
+                    name: name.as_str(),
+                    span,
+                });
+                tasks.push(MachineTask::EvalExpression {
+                    expression: base,
+                    allow_root_mutation: true,
+                });
+            }
             CHirExpr::SizeOf(ty, _) => {
                 let layout = self.target.layout_of(self.unit.types(), *ty).map_err(|_| {
                     InterpreterError::UnsupportedExpression {
@@ -3579,6 +3631,24 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         },
                     ));
                 }
+                (
+                    ValueType::Aggregate(parameter_type),
+                    CValue::Aggregate {
+                        address,
+                        ty,
+                        qualifiers,
+                    },
+                ) if self.same_aggregate_type(parameter_type, ty) => {
+                    parameter_bindings.push((
+                        symbol,
+                        ValueType::Aggregate(parameter_type),
+                        CValue::Aggregate {
+                            address,
+                            ty,
+                            qualifiers,
+                        },
+                    ));
+                }
                 (ValueType::Void, _) | (_, _) => {
                     return Err(InterpreterError::UnsupportedFunctionSignature {
                         symbol: function,
@@ -3621,7 +3691,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         span: declaration.span,
                     })?
                     .ty();
-                self.allocate_automatic_object(symbol, ty, binding_span)?;
+                self.allocate_automatic_object(symbol, ty, None, binding_span)?;
                 self.store_bound_value(symbol, value, binding_span)?;
             }
             caller
@@ -3949,7 +4019,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         exit: FunctionExit,
         values: &mut Vec<CValue>,
     ) -> Result<Option<MachineOutcome>, InterpreterError> {
-        let return_value = match (exit, end.return_value_type) {
+        let mut return_value = match (exit, end.return_value_type) {
             (FunctionExit::Explicit(Some(value)), ValueType::Integer(return_integer)) => {
                 Some(cast_machine_value(
                     value,
@@ -3966,12 +4036,23 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     self.unit.types(),
                 )?)
             }
+            (FunctionExit::Explicit(Some(value)), ValueType::Aggregate(return_type)) => {
+                Some(cast_machine_value(
+                    value,
+                    ValueType::Aggregate(return_type),
+                    end.body_span,
+                    self.unit.types(),
+                )?)
+            }
             (FunctionExit::Explicit(None), ValueType::Void)
             | (FunctionExit::FellOffEnd, ValueType::Void) => None,
             (FunctionExit::FellOffEnd, ValueType::Integer(return_integer)) if end.is_main => {
                 Some(CValue::Integer(CInteger::int(0).cast(return_integer)))
             }
-            (FunctionExit::Explicit(None), ValueType::Integer(_) | ValueType::Pointer(_)) => {
+            (
+                FunctionExit::Explicit(None),
+                ValueType::Integer(_) | ValueType::Pointer(_) | ValueType::Aggregate(_),
+            ) => {
                 return Err(InterpreterError::UnsupportedStatement {
                     feature: "empty return in scalar function",
                     span: end.body_span,
@@ -3983,7 +4064,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span: end.body_span,
                 });
             }
-            (FunctionExit::FellOffEnd, ValueType::Integer(_) | ValueType::Pointer(_)) => {
+            (
+                FunctionExit::FellOffEnd,
+                ValueType::Integer(_) | ValueType::Pointer(_) | ValueType::Aggregate(_),
+            ) => {
                 return Err(InterpreterError::MissingReturn {
                     span: end.body_span,
                 });
@@ -3991,6 +4075,41 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         };
 
         if self.memory_mode {
+            if let Some(CValue::Aggregate {
+                address: source,
+                ty,
+                qualifiers,
+            }) = return_value
+            {
+                let caller = end.caller_memory_frame.as_ref().ok_or(
+                    InterpreterError::UnsupportedFunctionSignature {
+                        symbol: end.symbol,
+                        span: end.body_span,
+                    },
+                )?;
+                let layout = self.access_layout(ty, end.body_span)?;
+                let (memory, destination) = self
+                    .memory
+                    .allocate_automatic(
+                        caller.id,
+                        caller.current_scope,
+                        self.temporary_origin_site,
+                        layout,
+                    )
+                    .map_err(|error| self.memory_error(error, end.body_span))?;
+                self.memory = memory;
+                return_value = Some(self.store_memory_value(
+                    destination,
+                    ty,
+                    Qualifiers::default(),
+                    CValue::Aggregate {
+                        address: source,
+                        ty,
+                        qualifiers,
+                    },
+                    end.body_span,
+                )?);
+            }
             let frame = self
                 .memory_frame
                 .take()
@@ -4032,6 +4151,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         span: end.body_span,
                     });
                 }
+                Some(CValue::Aggregate { .. }) => {
+                    return Err(InterpreterError::UnsupportedExpression {
+                        feature: "aggregate return from scalar interpreter root",
+                        span: end.body_span,
+                    });
+                }
                 None => None,
             };
             Ok(Some(MachineOutcome { return_value }))
@@ -4058,6 +4183,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     fn value_type(&self, ty: TypeId, span: SourceSpan) -> Result<ValueType, InterpreterError> {
         match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
             Some(TypeKind::Void) => Ok(ValueType::Void),
+            Some(TypeKind::Struct(_) | TypeKind::Union(_)) => Ok(ValueType::Aggregate(ty)),
             Some(TypeKind::Pointer(_)) => {
                 PointerTypeDesc::from_canonical_pointer(self.unit.types(), ty)
                     .map(ValueType::Pointer)
@@ -4084,6 +4210,61 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .layout_of(self.unit.types(), ty)
             .map(AccessLayout::from_type_layout)
             .map_err(|_| InterpreterError::UnsupportedType { ty, span })
+    }
+
+    fn object_access_layout(
+        &self,
+        ty: TypeId,
+        initializer: Option<&crate::ObjectInitializer<'arena>>,
+        span: SourceSpan,
+    ) -> Result<AccessLayout, InterpreterError> {
+        let base = self.access_layout(ty, span)?;
+        let count = initializer.map_or(0, |initializer| {
+            initializer.plan().flexible_array_elements()
+        });
+        if count == 0 {
+            return Ok(base);
+        }
+        let TypeKind::Struct(tag) = self
+            .unit
+            .types()
+            .get(ty)
+            .ok_or(InterpreterError::UnsupportedType { ty, span })?
+            .kind
+        else {
+            return Err(InterpreterError::UnsupportedType { ty, span });
+        };
+        let fields = match &self
+            .unit
+            .types()
+            .tag(tag)
+            .ok_or(InterpreterError::UnsupportedType { ty, span })?
+            .state
+        {
+            TagState::Complete(TagDefinition::Struct(fields)) => fields,
+            _ => return Err(InterpreterError::UnsupportedType { ty, span }),
+        };
+        let field = fields
+            .last()
+            .ok_or(InterpreterError::UnsupportedType { ty, span })?;
+        let TypeKind::Array {
+            element,
+            bound: ArrayBound::Unbounded,
+        } = self
+            .unit
+            .types()
+            .get(field.ty)
+            .ok_or(InterpreterError::UnsupportedType { ty: field.ty, span })?
+            .kind
+        else {
+            return Err(InterpreterError::UnsupportedType { ty, span });
+        };
+        let element = self.access_layout(element, span)?;
+        let size_bytes = count
+            .checked_mul(element.size_bytes)
+            .and_then(|extension| base.size_bytes.checked_add(extension))
+            .ok_or(InterpreterError::UnsupportedType { ty, span })?;
+        Ok(AccessLayout::new(size_bytes, base.align_bytes))
     }
 
     fn memory_binding(&self, symbol: SymbolId) -> Option<MemoryBinding> {
@@ -4234,6 +4415,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         &mut self,
         symbol: SymbolId,
         ty: TypeId,
+        initializer: Option<&crate::ObjectInitializer<'arena>>,
         span: SourceSpan,
     ) -> Result<(), InterpreterError> {
         let site = self
@@ -4244,7 +4426,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .ok_or(InterpreterError::MalformedObjectDeclaration { symbol, span })?
             .ordinal()
             .raw();
-        let layout = self.access_layout(ty, span)?;
+        let layout = self.object_access_layout(ty, initializer, span)?;
         let (frame, scope) = self
             .memory_frame
             .as_ref()
@@ -4295,7 +4477,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 value: Pointer::NULL,
                 ty: pointer,
             }),
-            ValueType::Void => Err(InterpreterError::UnsupportedType { ty, span }),
+            ValueType::Void | ValueType::Aggregate(_) => {
+                Err(InterpreterError::UnsupportedType { ty, span })
+            }
         }
     }
 
@@ -4785,6 +4969,102 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         self.project_place_address(root, place, &subscripts, span)
     }
 
+    fn aggregate_member_address(
+        &self,
+        aggregate: CValue,
+        name: &str,
+        span: SourceSpan,
+    ) -> Result<(Pointer, TypeId, Qualifiers), InterpreterError> {
+        let CValue::Aggregate {
+            address,
+            ty,
+            qualifiers,
+        } = aggregate
+        else {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "member base is not an aggregate value",
+                span,
+            });
+        };
+        self.aggregate_member_address_in(address, ty, qualifiers, name, span)
+    }
+
+    fn aggregate_member_address_in(
+        &self,
+        address: Pointer,
+        ty: TypeId,
+        qualifiers: Qualifiers,
+        name: &str,
+        span: SourceSpan,
+    ) -> Result<(Pointer, TypeId, Qualifiers), InterpreterError> {
+        let tag = match self.unit.types().get(ty).map(|ty| &ty.kind) {
+            Some(TypeKind::Struct(tag) | TypeKind::Union(tag)) => *tag,
+            _ => return Err(InterpreterError::UnsupportedType { ty, span }),
+        };
+        let fields = match &self
+            .unit
+            .types()
+            .tag(tag)
+            .ok_or(InterpreterError::UnsupportedType { ty, span })?
+            .state
+        {
+            TagState::Complete(TagDefinition::Struct(fields) | TagDefinition::Union(fields)) => {
+                fields
+            }
+            _ => return Err(InterpreterError::UnsupportedType { ty, span }),
+        };
+        let record = self
+            .target
+            .record_layout(self.unit.types(), tag)
+            .map_err(|_| InterpreterError::UnsupportedType { ty, span })?;
+        for (field_index, field) in fields.iter().enumerate() {
+            let layout = record
+                .fields
+                .iter()
+                .find(|layout| layout.field_index == field_index)
+                .ok_or(InterpreterError::UnsupportedType { ty: field.ty, span })?;
+            if layout.bit_field.is_some() {
+                continue;
+            }
+            let offset = i64::try_from(layout.byte_offset)
+                .map_err(|_| InterpreterError::UnsupportedType { ty: field.ty, span })?;
+            let field_address = address
+                .checked_offset(offset)
+                .map_err(|error| self.memory_error(error, span))?;
+            let field_qualifiers = merge_memory_qualifiers(
+                qualifiers,
+                self.unit
+                    .types()
+                    .get(field.ty)
+                    .ok_or(InterpreterError::UnsupportedType { ty: field.ty, span })?
+                    .qualifiers,
+            );
+            if field.name.as_deref() == Some(name) {
+                return Ok((field_address, field.ty, field_qualifiers));
+            }
+            if field.name.is_none()
+                && matches!(
+                    self.unit.types().get(field.ty).map(|ty| &ty.kind),
+                    Some(TypeKind::Struct(_) | TypeKind::Union(_))
+                )
+            {
+                if let Ok(found) = self.aggregate_member_address_in(
+                    field_address,
+                    field.ty,
+                    field_qualifiers,
+                    name,
+                    span,
+                ) {
+                    return Ok(found);
+                }
+            }
+        }
+        Err(InterpreterError::UnsupportedExpression {
+            feature: "unknown aggregate member",
+            span,
+        })
+    }
+
     fn load_memory_value(
         &mut self,
         address: Pointer,
@@ -4860,6 +5140,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ty: pointer_type,
                 })
             }
+            ValueType::Aggregate(aggregate_type) => Ok(CValue::Aggregate {
+                address,
+                ty: aggregate_type,
+                qualifiers,
+            }),
             ValueType::Void => Err(InterpreterError::UnsupportedType { ty, span }),
         }
     }
@@ -4948,8 +5233,243 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ty: expected,
                 })
             }
+            (
+                ValueType::Aggregate(expected),
+                CValue::Aggregate {
+                    address: source,
+                    ty: actual,
+                    qualifiers: source_qualifiers,
+                },
+            ) if self.same_aggregate_type(expected, actual) => {
+                if qualifiers.is_volatile || source_qualifiers.is_volatile {
+                    self.copy_volatile_aggregate(
+                        address,
+                        expected,
+                        qualifiers,
+                        source,
+                        actual,
+                        source_qualifiers,
+                        span,
+                    )?;
+                } else {
+                    self.memory = self
+                        .memory
+                        .copy_bytes(address, source, layout)
+                        .map_err(|error| self.memory_error(error, span))?;
+                }
+                Ok(CValue::Aggregate {
+                    address,
+                    ty: expected,
+                    qualifiers,
+                })
+            }
             _ => Err(InterpreterError::UnsupportedExpression {
                 feature: "incompatible memory store value",
+                span,
+            }),
+        }
+    }
+
+    fn same_aggregate_type(&self, left: TypeId, right: TypeId) -> bool {
+        matches!(
+            (self.unit.types().get(left), self.unit.types().get(right)),
+            (Some(left), Some(right))
+                if matches!(left.kind, TypeKind::Struct(_) | TypeKind::Union(_))
+                    && left.kind == right.kind
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn copy_volatile_aggregate(
+        &mut self,
+        destination: Pointer,
+        destination_type: TypeId,
+        destination_qualifiers: Qualifiers,
+        source: Pointer,
+        source_type: TypeId,
+        source_qualifiers: Qualifiers,
+        span: SourceSpan,
+    ) -> Result<(), InterpreterError> {
+        let destination_kind = self
+            .unit
+            .types()
+            .get(destination_type)
+            .ok_or(InterpreterError::UnsupportedType {
+                ty: destination_type,
+                span,
+            })?
+            .kind
+            .clone();
+        let source_kind = self
+            .unit
+            .types()
+            .get(source_type)
+            .ok_or(InterpreterError::UnsupportedType {
+                ty: source_type,
+                span,
+            })?
+            .kind
+            .clone();
+        if destination_kind != source_kind {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "incompatible volatile aggregate copy",
+                span,
+            });
+        }
+        match destination_kind {
+            TypeKind::Struct(tag) => {
+                let fields = match &self
+                    .unit
+                    .types()
+                    .tag(tag)
+                    .ok_or(InterpreterError::UnsupportedType {
+                        ty: destination_type,
+                        span,
+                    })?
+                    .state
+                {
+                    TagState::Complete(TagDefinition::Struct(fields)) => fields.clone(),
+                    _ => {
+                        return Err(InterpreterError::UnsupportedType {
+                            ty: destination_type,
+                            span,
+                        })
+                    }
+                };
+                let record = self
+                    .target
+                    .record_layout(self.unit.types(), tag)
+                    .map_err(|_| InterpreterError::UnsupportedType {
+                        ty: destination_type,
+                        span,
+                    })?;
+                for (field_index, field) in fields.iter().enumerate() {
+                    let layout_field = record
+                        .fields
+                        .iter()
+                        .find(|layout| layout.field_index == field_index)
+                        .ok_or(InterpreterError::UnsupportedType { ty: field.ty, span })?;
+                    if layout_field.bit_field.is_some() {
+                        return Err(InterpreterError::UnsupportedExpression {
+                            feature: "volatile aggregate bit-field copy",
+                            span,
+                        });
+                    }
+                    if matches!(
+                        self.unit.types().get(field.ty).map(|ty| &ty.kind),
+                        Some(TypeKind::Array {
+                            bound: ArrayBound::Unbounded,
+                            ..
+                        })
+                    ) {
+                        continue;
+                    }
+                    let offset = i64::try_from(layout_field.byte_offset)
+                        .map_err(|_| InterpreterError::UnsupportedType { ty: field.ty, span })?;
+                    let destination = destination
+                        .checked_offset(offset)
+                        .map_err(|error| self.memory_error(error, span))?;
+                    let source = source
+                        .checked_offset(offset)
+                        .map_err(|error| self.memory_error(error, span))?;
+                    let field_qualifiers = self
+                        .unit
+                        .types()
+                        .get(field.ty)
+                        .ok_or(InterpreterError::UnsupportedType { ty: field.ty, span })?
+                        .qualifiers;
+                    self.copy_volatile_subobject(
+                        destination,
+                        field.ty,
+                        merge_memory_qualifiers(destination_qualifiers, field_qualifiers),
+                        source,
+                        field.ty,
+                        merge_memory_qualifiers(source_qualifiers, field_qualifiers),
+                        span,
+                    )?;
+                }
+                Ok(())
+            }
+            TypeKind::Union(_) => Err(InterpreterError::UnsupportedExpression {
+                feature: "volatile union copy has no selected-member authority",
+                span,
+            }),
+            _ => Err(InterpreterError::UnsupportedExpression {
+                feature: "volatile aggregate copy reached non-aggregate",
+                span,
+            }),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn copy_volatile_subobject(
+        &mut self,
+        destination: Pointer,
+        destination_type: TypeId,
+        destination_qualifiers: Qualifiers,
+        source: Pointer,
+        source_type: TypeId,
+        source_qualifiers: Qualifiers,
+        span: SourceSpan,
+    ) -> Result<(), InterpreterError> {
+        match self
+            .unit
+            .types()
+            .get(destination_type)
+            .map(|ty| ty.kind.clone())
+        {
+            Some(TypeKind::Struct(_) | TypeKind::Union(_)) => self.copy_volatile_aggregate(
+                destination,
+                destination_type,
+                destination_qualifiers,
+                source,
+                source_type,
+                source_qualifiers,
+                span,
+            ),
+            Some(TypeKind::Array {
+                element,
+                bound: ArrayBound::Fixed(count),
+            }) => {
+                let layout = self.access_layout(element, span)?;
+                for index in 0..count {
+                    let offset = index
+                        .checked_mul(layout.size_bytes)
+                        .and_then(|offset| i64::try_from(offset).ok())
+                        .ok_or(InterpreterError::UnsupportedType {
+                            ty: destination_type,
+                            span,
+                        })?;
+                    self.copy_volatile_subobject(
+                        destination
+                            .checked_offset(offset)
+                            .map_err(|error| self.memory_error(error, span))?,
+                        element,
+                        destination_qualifiers,
+                        source
+                            .checked_offset(offset)
+                            .map_err(|error| self.memory_error(error, span))?,
+                        element,
+                        source_qualifiers,
+                        span,
+                    )?;
+                }
+                Ok(())
+            }
+            Some(TypeKind::Array { .. }) => Ok(()),
+            Some(_) => {
+                let value = self.load_memory_value(source, source_type, source_qualifiers, span)?;
+                self.store_memory_value(
+                    destination,
+                    destination_type,
+                    destination_qualifiers,
+                    value,
+                    span,
+                )?;
+                Ok(())
+            }
+            None => Err(InterpreterError::UnsupportedType {
+                ty: destination_type,
                 span,
             }),
         }
@@ -5034,6 +5554,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             CValue::FunctionPointer { .. } => Err(InterpreterError::UnsupportedExpression {
                 feature: "function pointer update",
+                span,
+            }),
+            CValue::Aggregate { .. } => Err(InterpreterError::UnsupportedExpression {
+                feature: "aggregate update",
                 span,
             }),
         }
@@ -5586,6 +6110,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             } => self
                 .subobject_offset(declaration.ty, path, *span)
                 .is_ok_and(|(_, ty)| ty == *destination_type),
+            InitAction::CopyAggregate {
+                path,
+                destination_type,
+                span,
+                ..
+            } => self
+                .subobject_offset(declaration.ty, path, *span)
+                .is_ok_and(|(_, ty)| ty == *destination_type),
             InitAction::ZeroScalar {
                 path,
                 destination_type,
@@ -5722,7 +6254,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 path,
                 destination_type,
             } if path.is_root() && *destination_type == declaration.ty => CInteger::new(0, ty),
-            InitAction::StoreScalar { span, .. } | InitAction::StoreString { span, .. } => {
+            InitAction::StoreScalar { span, .. }
+            | InitAction::StoreString { span, .. }
+            | InitAction::CopyAggregate { span, .. } => {
                 return Err(InterpreterError::InvalidInitializerPlan {
                     symbol: declaration.symbol,
                     span: *span,
@@ -7054,7 +7588,8 @@ fn declaration_requires_memory(unit: &CHirUnit<'_>, declaration: &CHirDecl<'_>) 
                 .actions()
                 .iter()
                 .any(|action| match action {
-                    InitAction::StoreScalar { value, .. } => {
+                    InitAction::StoreScalar { value, .. }
+                    | InitAction::CopyAggregate { value, .. } => {
                         expression_requires_memory(unit, value)
                     }
                     InitAction::StoreString { .. } => true,
@@ -7336,7 +7871,9 @@ fn declaration_contains_call(declaration: &CHirDecl<'_>) -> bool {
             .actions()
             .iter()
             .any(|action| match action {
-                InitAction::StoreScalar { value, .. } => expression_contains_call(value),
+                InitAction::StoreScalar { value, .. } | InitAction::CopyAggregate { value, .. } => {
+                    expression_contains_call(value)
+                }
                 InitAction::ZeroScalar { .. } | InitAction::StoreString { .. } => false,
             })
     })
@@ -7392,7 +7929,8 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
                 .actions()
                 .iter()
                 .any(|action| match action {
-                    InitAction::StoreScalar { value, .. } => expression_contains_call(value),
+                    InitAction::StoreScalar { value, .. }
+                    | InitAction::CopyAggregate { value, .. } => expression_contains_call(value),
                     InitAction::StoreString { .. } | InitAction::ZeroScalar { .. } => false,
                 })
         }
@@ -7429,13 +7967,17 @@ fn machine_truth(value: CValue, _span: SourceSpan) -> Result<bool, InterpreterEr
         CValue::Integer(value) => Ok(value.truth()),
         CValue::Pointer { value, .. } => Ok(!value.object().is_null()),
         CValue::FunctionPointer { value, .. } => Ok(value != PointerValue::Null),
+        CValue::Aggregate { .. } => Err(InterpreterError::UnsupportedExpression {
+            feature: "aggregate controlling expression",
+            span: _span,
+        }),
     }
 }
 
 fn expect_machine_integer(value: CValue, span: SourceSpan) -> Result<CInteger, InterpreterError> {
     match value {
         CValue::Integer(value) => Ok(value),
-        CValue::Pointer { .. } | CValue::FunctionPointer { .. } => {
+        CValue::Pointer { .. } | CValue::FunctionPointer { .. } | CValue::Aggregate { .. } => {
             Err(InterpreterError::UnsupportedExpression {
                 feature: "pointer value in integer task-machine operation",
                 span,
@@ -7450,7 +7992,7 @@ fn expect_machine_pointer(
 ) -> Result<(Pointer, PointerTypeDesc), InterpreterError> {
     match value {
         CValue::Pointer { value, ty } => Ok((value, ty)),
-        CValue::Integer(_) | CValue::FunctionPointer { .. } => {
+        CValue::Integer(_) | CValue::FunctionPointer { .. } | CValue::Aggregate { .. } => {
             Err(InterpreterError::UnsupportedExpression {
                 feature: "integer value in pointer task-machine operation",
                 span,
@@ -7480,6 +8022,27 @@ fn cast_machine_value(
         (CValue::FunctionPointer { value, ty }, ValueType::Pointer(target)) if ty == target => {
             Ok(CValue::FunctionPointer { value, ty: target })
         }
+        (
+            CValue::Aggregate {
+                address,
+                ty,
+                qualifiers,
+            },
+            ValueType::Aggregate(target),
+        ) if types
+            .get(ty)
+            .zip(types.get(target))
+            .is_some_and(|(source, target)| {
+                matches!(source.kind, TypeKind::Struct(_) | TypeKind::Union(_))
+                    && source.kind == target.kind
+            }) =>
+        {
+            Ok(CValue::Aggregate {
+                address,
+                ty: target,
+                qualifiers,
+            })
+        }
         // C11 6.3.2.3p3: a null pointer constant converts to a null pointer of
         // the destination type. Whether the source really was a *constant* is
         // settled where the assignment was type checked; only the conversion
@@ -7494,7 +8057,13 @@ fn cast_machine_value(
         | (CValue::Pointer { .. }, ValueType::Integer(_))
         | (CValue::Pointer { .. }, ValueType::Pointer(_))
         | (CValue::FunctionPointer { .. }, ValueType::Integer(_))
-        | (CValue::FunctionPointer { .. }, ValueType::Pointer(_)) => {
+        | (CValue::FunctionPointer { .. }, ValueType::Pointer(_))
+        | (CValue::Aggregate { .. }, ValueType::Integer(_) | ValueType::Pointer(_))
+        | (
+            CValue::Integer(_) | CValue::Pointer { .. } | CValue::FunctionPointer { .. },
+            ValueType::Aggregate(_),
+        )
+        | (CValue::Aggregate { .. }, ValueType::Aggregate(_)) => {
             Err(InterpreterError::UnsupportedExpression {
                 feature: "pointer cast execution before Day 7 memory bindings",
                 span,
@@ -7522,6 +8091,21 @@ fn pointer_runtime_conversion(
     // qualifiers, so either source-level form preserves the same capability
     // when the unqualified pointee kind is compatible.
     source_ty.kind == target_ty.kind
+        || (!matches!(source_ty.kind, TypeKind::Function { .. })
+            && !matches!(target_ty.kind, TypeKind::Function { .. }))
+}
+
+fn merge_memory_qualifiers(left: Qualifiers, right: Qualifiers) -> Qualifiers {
+    Qualifiers {
+        is_const: left.is_const || right.is_const,
+        is_volatile: left.is_volatile || right.is_volatile,
+        is_restrict: left.is_restrict || right.is_restrict,
+        is_atomic: left.is_atomic || right.is_atomic,
+        aligned: match (left.aligned, right.aligned) {
+            (Some(left), Some(right)) => Some(left.max(right)),
+            (left, right) => left.or(right),
+        },
+    }
 }
 
 fn assignment_binary(operator: AssignmentOp) -> Option<BinaryOp> {

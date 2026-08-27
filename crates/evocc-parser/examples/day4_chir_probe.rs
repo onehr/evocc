@@ -314,7 +314,8 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                     .actions()
                     .iter()
                     .filter_map(|action| match action {
-                        evocc_chir::InitAction::StoreScalar { value, .. } => Some(value),
+                        evocc_chir::InitAction::StoreScalar { value, .. }
+                        | evocc_chir::InitAction::CopyAggregate { value, .. } => Some(value),
                         evocc_chir::InitAction::StoreString { .. }
                         | evocc_chir::InitAction::ZeroScalar { .. } => None,
                     })
