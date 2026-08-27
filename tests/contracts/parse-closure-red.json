@@ -1,0 +1,124 @@
+{
+  "receiptId": "c30.parse-closure.red",
+  "authority": {
+    "specification": "docs/evoir-spec.md revision 1.9.16 sections 10.1.17, 10.1.3, and 6.3",
+    "contract": "tests/contracts/day9-acceptance-contract.json scope line J"
+  },
+  "baseline": {
+    "specificationCommit": "7b9c3284c30dd8b2a6a2ed2489cb11de2f3fc2ca",
+    "scopeCommit": "988f93338d4068220ee607448d6b7ad8d6ee9846"
+  },
+  "declaredMissingCapabilities": [
+    "empty-declarations",
+    "undeclared-label-diagnostic",
+    "auto-type-refusals",
+    "label-address-and-computed-goto",
+    "volatile-aggregate-refusal",
+    "record-call-abi"
+  ],
+  "redCommand": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --no-fail-fast -p evocc-parser --test empty_declarations --test labels_and_computed_goto --test auto_type_restrictions --test volatile_aggregate_copies -p evocc-lower --test computed_goto_lowering --test record_call_abi",
+  "measured": {
+    "passedControls": 7,
+    "failed": 13,
+    "ignored": 0,
+    "rustBuildErrors": 0,
+    "suites": {
+      "evocc-parser/empty_declarations": { "passed": 0, "failed": 3 },
+      "evocc-parser/labels_and_computed_goto": { "passed": 1, "failed": 3 },
+      "evocc-parser/auto_type_restrictions": { "passed": 1, "failed": 2 },
+      "evocc-parser/volatile_aggregate_copies": { "passed": 1, "failed": 2 },
+      "evocc-lower/computed_goto_lowering": { "passed": 1, "failed": 3 },
+      "evocc-lower/record_call_abi": { "passed": 3, "failed": 0 }
+    },
+    "failureClasses": {
+      "E1001 expected-declaration": 3,
+      "E1002 expected-token: identifier": 1,
+      "E1003 expected-expression": 4,
+      "silent acceptance of invalid ordinary goto": 1,
+      "silent acceptance of invalid auto-type declarator": 1,
+      "silent acceptance of auto-type self-reference": 1,
+      "silent acceptance of forbidden volatile union copy": 1,
+      "silent acceptance of forbidden volatile bit-field record copy": 1
+    }
+  },
+  "observations": [
+    {
+      "suite": "evocc-parser/empty_declarations",
+      "tests": [
+        "file_scope_empty_declarations_have_no_semantic_nodes",
+        "empty_record_member_declarations_are_ignored",
+        "macro_expanded_inline_function_tail_is_accepted"
+      ],
+      "observed": "E1001 expected-declaration at the empty declaration",
+      "reason": "empty-declarations"
+    },
+    {
+      "suite": "evocc-parser/labels_and_computed_goto",
+      "test": "ordinary_goto_requires_a_declared_function_label",
+      "observed": "goto nowhere and a jump to an out-of-scope local label are accepted without E2920",
+      "reason": "undeclared-label-diagnostic"
+    },
+    {
+      "suite": "evocc-parser/labels_and_computed_goto",
+      "tests": [
+        "label_addresses_are_void_pointers_with_function_scope",
+        "computed_goto_composes_with_local_labels_and_loops"
+      ],
+      "observed": "E1003 expected-expression at &&label and E1002 expected-token: identifier at goto *expr",
+      "reason": "label-address-and-computed-goto"
+    },
+    {
+      "suite": "evocc-parser/auto_type_restrictions",
+      "tests": [
+        "inferred_type_requires_a_plain_identifier_declarator",
+        "inferred_type_object_cannot_appear_in_its_initializer"
+      ],
+      "observed": "__auto_type *p and __auto_type x = x are accepted",
+      "reason": "auto-type-refusals"
+    },
+    {
+      "suite": "evocc-parser/volatile_aggregate_copies",
+      "tests": [
+        "volatile_union_copy_is_refused",
+        "volatile_record_with_a_bit_field_is_refused"
+      ],
+      "observed": "both forbidden volatile aggregate copies are accepted without E2922",
+      "reason": "volatile-aggregate-refusal"
+    },
+    {
+      "suite": "evocc-lower/computed_goto_lowering",
+      "tests": [
+        "computed_goto_lists_exactly_the_address_taken_labels_as_successors",
+        "dispatch_loop_executes_identically_in_both_interpreters",
+        "invalid_computed_target_is_the_same_typed_runtime_failure"
+      ],
+      "observed": "the front end cannot represent label addresses or computed goto, so lowering and execution assertions cannot run",
+      "reason": "label-address-and-computed-goto"
+    },
+    {
+      "suite": "evocc-lower/record_call_abi",
+      "tests": [
+        "record_parameter_and_return_destination_have_the_frozen_signature",
+        "caller_temporaries_use_a_reserved_deterministic_origin_range",
+        "volatile_record_copy_remains_memberwise"
+      ],
+      "observed": "all three assertions pass at the RED baseline",
+      "reason": "record-call-abi"
+    }
+  ],
+  "oracleEvidence": {
+    "path": ".evidence/builtin-probes/20260828-2c23684c/parse-closure.out",
+    "sha256": "8cef828d4ae054775dbacff61ba5d572b48dc3b61a2b01e977705d280ff6cefc",
+    "result": "GCC-14 and Clang-19 accept an empty record member declaration in GNU C11; both reject a label address at file scope"
+  },
+  "openSpecificationQuestions": [
+    {
+      "id": "J-COMPUTED-GOTO-EVOIR-FORM",
+      "detail": "Revision 1.9.16 specifies computed-goto source and runtime behavior but no Section 3 instruction/value form or Section 9 textual production. Production lowering is not inferred by this receipt."
+    },
+    {
+      "id": "J-LABEL-ADDRESS-OUTSIDE-FUNCTION-DIAGNOSTIC",
+      "detail": "Revision 1.9.16 requires function scope for &&label but does not assign the source diagnostic for a file-scope occurrence. The RED assertion uses E2920 as the nearest named-label diagnostic pending authority."
+    }
+  ]
+}
