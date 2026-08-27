@@ -1,8 +1,8 @@
 {
   "receiptId": "c30.kernel-dashboard",
-  "subjectCommit": "e638570",
-  "publishedFromRun": "20260826T210931Z-30859",
-  "previousRun": "20260826T195717Z-37307",
+  "subjectCommit": "3a201db",
+  "publishedFromRun": "20260826T233030Z-8961",
+  "previousRun": "20260826T210931Z-30859",
   "cohortSha256": "09d0e2eaf0734949164a491d30df640bf396ff7586ef495f938f565b8879a306",
   "observer": {
     "path": "tests/acceptance/day5-kernel-reductions-observer.py",
@@ -13,7 +13,7 @@
     "environmentSha256": "780d6c98c4c1e32e4d20bb1c577bed670048b661501fcab9e3cad06520584813",
     "returnCode": 0,
     "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "stdoutSha256": "bf6da63e5329de67061f7ae7a9bea0e2b41a9db6e56ad780f23bfef93e0fd347",
+    "stdoutSha256": "c0f0143a2f207a0e52b1916354f3a681f507f59cab395815f4bfe48c0e9303b4",
     "timedOut": false
   },
   "command": "tests/acceptance/day5-kernel-reconnaissance.py --timeout 120 --parser-timeout 10 --parser-jobs 4",
@@ -41,16 +41,16 @@
   "regressionsAgainstPrevious": [],
   "artifacts": {
     "results": {
-      "path": ".evidence/day5-kernel-reconnaissance/20260826T210931Z-30859/results.jsonl",
-      "sha256": "3cd91bc8137cfe968361e8bc54487d014019e5b6993344391e5322206ceb45e0"
+      "path": ".evidence/day5-kernel-reconnaissance/20260826T233030Z-8961/results.jsonl",
+      "sha256": "f5b420de0cf68ca4f0376e58e804709e7d5652f690c9e69b5dd4a0bf93e2d6c4"
     },
     "routing": {
-      "path": ".evidence/kernel-dashboard/e638570/routing.json",
+      "path": ".evidence/kernel-dashboard/3a201db/routing.json",
       "sha256": "e8996e6d576364fe1f90f3474d50da92ecfaf41815f63698d2b586837856d94b"
     },
     "captureStatus": {
-      "path": ".evidence/kernel-dashboard/e638570/reconnaissance.status",
-      "sha256": "5d56df0e861858c3574e1983494ab181b360fa88d08d89ea7390b6be42e05941"
+      "path": ".evidence/kernel-dashboard/3a201db/reconnaissance.status",
+      "sha256": "ef7601175e0ee686a0cb76b181a3cdcf6967a5c162a65a0b7538f372ab5bd30d"
     }
   }
 }
