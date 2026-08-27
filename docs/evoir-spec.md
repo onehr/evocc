@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.12** | **Authoritative reference** | **2026-08-27**
+**Revision 1.9.13** | **Authoritative reference** | **2026-08-27**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -189,7 +189,8 @@ return values from calls. A `tuple<>` (empty tuple) is equivalent to `void`.
 
 An EvoIR module contains an ordered global-object table followed by an ordered
 function table. A global object binds one unique symbol, stable source-origin
-site, and global kind (`file`, `function_static`, or `string_literal`) to a fixed size and
+site, and global kind (`file`, `function_static`, `string_literal`, or
+`compound_literal`) to a fixed size and
 alignment, initial bytes, and a byte-for-byte initializedness bitmap. Module
 interpretation allocates every global exactly once before entering the
 requested function; `global_addr` then returns that object's stable
@@ -954,7 +955,8 @@ marks its objects dead in a new snapshot but retains their tombstones. A stale
 pointer therefore remains deterministically dangling and can never become a
 pointer to a later allocation. Static and string-literal objects are allocated
 once during module initialization and live for the whole execution.
-String-literal objects are read-only; an attempted store reports `E3014`.
+String-literal objects and `const`-qualified file-scope compound literals are
+read-only; an attempted store reports `E3014`.
 
 A function-scoped object declared with static storage duration is **not** an
 automatic object of its frame. It has one module-global identity, one allocation
@@ -1233,6 +1235,8 @@ twice would let a reader think two conditions are the same finding.
 | `E2914` | `malformed-asm` | front end |
 | `E2915` | `auto-type-misuse` | front end |
 | `E2916` | `case-range-invalid` | front end |
+| `E2917` | `designator-index-not-constant` | front end |
+| `E2918` | `jump-into-statement-expression` | front end |
 | `E0102` | `unmatched-conditional` | preprocessor |
 | `E0104` | `error-directive` | preprocessor |
 | `E0105` | `include-not-found` | preprocessor |
@@ -1251,6 +1255,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3023` | `not-lowered: bit-builtin` | lowering |
 | `E3024` | `unreachable-reached` | runtime |
 | `E3025` | `not-lowered: return-address` | lowering |
+| `E3026` | `not-lowered: static-relocation` | lowering |
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
 symbol selected by that value to the same type. The separation is deliberate:
@@ -2528,9 +2533,9 @@ Bitfields lower to load-modify-store sequences using bitwise operations:
 
 #### 10.1.7 Function Call Lowering
 
-C function calls lower to EvoIR `call` instructions. Attributes, `typeof`, and
-statement expressions remain outside this profile, so no attribute refines a
-summary.
+C function calls lower to EvoIR `call` instructions. Attributes (10.1.9) never
+refine a call summary in this revision; `typeof` (10.1.10) and statement
+expressions (10.1.11) are resolved before this lowering sees a call.
 
 **Effects.** Section 4.6 is the only authority. A call's summary is the callee's
 summary, and a function's summary is the least fixed point over its call graph;
@@ -2671,6 +2676,8 @@ front end that still emits it is defective.
 | `E2914` | `asm` template names an unknown operand, or an output operand is not a modifiable lvalue |
 | `E2915` | `__auto_type` with no initializer, several declarators, or an array/function declarator |
 | `E2916` | `case a ... b` with `a > b` or overlapping another case |
+| `E2917` | designator index or range bound not an integer constant expression, range with `a > b`, or a range initializer that is not constant |
+| `E2918` | `goto` into a statement expression |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -2710,14 +2717,22 @@ lvalue and its type is never an array or function type.
 Objects declared inside end their lifetime at the closing brace, exactly as for
 any block, so a pointer to one that escapes is dangling under Section 5.2.
 `break`, `continue`, `goto` and `return` may leave a statement expression;
-jumping into one is malformed. At file scope, or anywhere a constant expression
+jumping into one is `E2918` (`jump-into-statement-expression`) at the `goto`
+(both oracles reject it). At file scope, or anywhere a constant expression
 is required, it reports `E2905`.
 
 Lowering places the compound statement's blocks into the enclosing function's
 control-flow graph as ordinary blocks. When the statement expression contains no
 control flow, its value is simply the last instruction's result. When it does,
-lowering creates a join block whose single block argument carries the value, and
-every path that reaches the closing brace passes its value on that edge. Nothing
+lowering creates a join block with one block argument for the value, in
+addition to whatever block arguments the enclosing lowering already threads
+across that edge (the current `mem<all>` and `world` tokens and any live
+local carried by value); the value argument is the last one. Every path
+that reaches the closing brace passes its value on that edge. On every exit
+from the statement expression, including `break`, `continue`, `goto` and
+`return`, the objects it declared end with the same `lifetime.end` sequence
+the enclosing block lowering emits for any block exit (Section 3, `lifetime.end`;
+no new edge form exists: the exits are ordinary block exits). Nothing
 new is added to EvoIR: the construct is entirely a lowering pattern over
 Section 2.3 block arguments, which is why it belongs in this contract rather
 than in the instruction set.
@@ -2730,11 +2745,22 @@ every other initializer action. The GNU range form `[a ... b]` expands to one
 `Index` step per value in the closed range and is otherwise identical.
 
 After a designated subobject, positional initialization continues from the
-subobject that follows it, as it would after an undesignated one. When two
+subobject that follows it, as it would after an undesignated one (measured:
+`{ [1] = 1, 9, 9 }` has four elements). When two
 actions name overlapping paths, the later one wins and the earlier is dropped
 from the plan; the written form still records both, so the dump shows what the
-source said. A designator naming a member the type does not have, or an index at
-or beyond a fixed bound, reports `E2906` at the designator.
+source said. A designator naming a member the type does not have, an index at
+or beyond a fixed bound, or any designator applied to a scalar, reports `E2906`
+at the designator. An index or range bound that is not an integer constant
+expression, or a range with `a > b`, is `E2917`
+(`designator-index-not-constant`) at that expression. For an array of
+unknown bound the bound becomes one more than the largest index any
+designator or positional element reaches (measured: `[5] = 1` gives 6,
+`[2 ... 4] = 7` gives 5). A range designator's initializer must be an
+integer constant expression or an address constant: the oracles disagree
+on a non-constant one (GCC-14 evaluates it once, Clang-19 refuses), so this
+profile refuses it with `E2917` (`ORACLE_CONFLICT`, evidence
+`.evidence/builtin-probes/20260826-2c23684c/hgaps.out`).
 
 Nothing changes below the plan: lowering consumes `InitAction`s exactly as
 before, so an initializer that arrives through designators is
@@ -2751,9 +2777,16 @@ interpreters and the lowering agree on its `ObjectOrigin`.
 
 Lowering is the existing object path: an `alloca` plus the initializer plan for
 a block-scope literal, a module global with initial bytes for a file-scope one.
-A file-scope literal of `const`-qualified type is a read-only object, and a
-store through it reports `E3014` like a string literal; an unqualified one is
-writable.
+A file-scope literal is a global of kind `compound_literal` (Section 2.1); its
+symbol is generated from its allocation-site ordinal, `.lit.<ordinal>`, so two
+lowerings of one unit agree byte for byte. A file-scope literal of
+`const`-qualified type is a read-only object exactly as a string-literal global
+is (Section 5 read-only storage now names both kinds), and a store through it
+reports `E3014`; an unqualified one is writable. A file-scope *pointer*
+initializer that takes a literal's address (`int *r = (int []){5, 6};`, accepted
+by both oracles) needs the static relocation schema Section 2.1 defers; until
+that schema exists lowering reports `E3026` (`not-lowered: static-relocation`)
+and fails closed, and the receipt counts each occurrence.
 
 #### 10.1.14 Kernel builtins resolved by the front end
 
@@ -3023,7 +3056,7 @@ in translation order (measured `0 1 2`); a translation unit that expands it
 2^32 times is `E0109` (`counter-overflow`).
 
 **Token pasting.** The operands of `##` are concatenated and the result is
-re-lexed as one *preprocessing* token (C11 6.4.8): an identifier, a
+re-lexed as one *preprocessing* token (C11 6.4, with pp-numbers per 6.4.8): an identifier, a
 punctuator, a string or character literal, or a pp-number, which is a digit
 followed by any sequence of digits, identifier characters, `.`, and `e`/`E`/`p`/`P`
 followed by a sign, and may begin with `.` followed by a digit (`.5foo` and
@@ -3032,7 +3065,10 @@ followed by a sign, and may begin with `.` followed by a digit (`.5foo` and
 `IS_ENABLED(CONFIG_X)` expands `IS_MODULE(1)` to `1##_MODULE` and relies on
 it). A result that is not one preprocessing token is `E0110`
 (`invalid-token-paste`) at the `##` operator (both oracles reject
-`CAT(1,+)`). A pp-number that is not a valid integer constant is an error
+`CAT(1,+)`). A header-name is never a paste result, and two non-empty operands
+never form an *other* token (both oracles reject `C(@,@)` and `C(\\,x)`); `$`
+is an identifier character in this dialect, so a lone `$` is an identifier,
+not a stray character. A pp-number that is not a valid integer constant is an error
 only where it is consumed: `E0111` (`conditional-operand-not-integer`) in a
 `#if`, or the C lexer's diagnostic in the translation unit. GNU comma elision
 before an empty `__VA_ARGS__` is honoured.
@@ -3613,6 +3649,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.13 | 2026-08-27 | Closes the fourteen gaps the preprocessing-grammar and statement-expression/initializer windows reported: `E2917`, `E2918`, `E3026`; join-block argument order and exit cleanup for statement expressions; scalar and non-constant designators; incomplete-array bounds and range initializers (measured; one `ORACLE_CONFLICT` resolved by refusal); the `compound_literal` global kind and read-only storage; paste results and `$`; the stale exclusion in 10.1.7. |
 | 1.9.12 | 2026-08-27 | Completes the preprocessing-token grammar: `.5foo` is a pp-number, stray characters such as `\\` are single pp-tokens kept by stringification, and `E0112` is the one diagnostic for a pp-token with no C form when it reaches the C lexer. Measured after every raw kernel lane stopped on `\\sreg` in `sysreg.h`. |
 | 1.9.11 | 2026-08-26 | Token pasting yields any preprocessing token, including pp-numbers such as `1_MODULE`; `E0111` for a pp-number that is not an integer in `#if`. Measured after the re-lexer rejected the kernel's `IS_MODULE(1)` expansion in every raw lane. |
 | 1.9.10 | 2026-08-26 | Closes the three gaps the paste/pack window reported: `E0110` for an invalid `##` result, `pack(pop)` on an empty stack ignored, `pack` honoured at block scope and refused inside a member list (`ORACLE_CONFLICT`). All measured. |
