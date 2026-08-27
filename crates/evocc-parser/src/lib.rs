@@ -1108,13 +1108,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         };
         if auto_type_span.is_some()
-            && (storage == StorageClass::Typedef
-                || declarator.derived.iter().any(|layer| {
-                    matches!(
-                        layer,
-                        DerivedDeclarator::Array { .. } | DerivedDeclarator::Function { .. }
-                    )
-                }))
+            && (storage == StorageClass::Typedef || !declarator.derived.is_empty())
         {
             self.report("E2915", "auto-type-misuse", declarator.span);
             return None;
@@ -1288,6 +1282,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let mut declaration_specifier = specifier.surface.clone();
             let initializer = if self.match_kind(TokenKind::Assign) {
                 let written_initializer = self.parse_written_initializer()?;
+                if auto_type_span.is_some()
+                    && written_initializer_references_symbol(&written_initializer, symbol)
+                {
+                    self.report("E2915", "auto-type-misuse", declarator.span);
+                    return None;
+                }
                 if storage == StorageClass::Typedef
                     || (storage == StorageClass::Extern && context != DeclarationContext::File)
                 {
@@ -3283,6 +3283,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             &mut labels,
             &mut gotos,
         );
+        if let Some(reference) = gotos
+            .iter()
+            .find(|reference| !labels.contains_key(&reference.name))
+        {
+            self.report("E2920", "undeclared-label", reference.span);
+            return None;
+        }
         if let Some(reference) = gotos.into_iter().find(|reference| {
             labels
                 .get(&reference.name)
@@ -6078,13 +6085,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let value = self.parse_assignment()?;
         let typed_target = typed_target?;
         let span = self.merge_span(target.span(), value.span());
-        match self.assignment_constraint(op, typed_target.ty(), value) {
+        let constraint = self.assignment_constraint(op, typed_target.ty(), value);
+        match constraint {
             UpdateConstraint::Scalar | UpdateConstraint::PointerBoundary => {}
             UpdateConstraint::AggregateBoundary => {}
             UpdateConstraint::Invalid => {
                 self.report("E2102", "invalid-update-operands", span);
                 return None;
             }
+        }
+        if constraint == UpdateConstraint::AggregateBoundary
+            && self.volatile_aggregate_copy_is_unsupported(typed_target.ty(), value)
+        {
+            self.report("E2922", "volatile-aggregate-copy-unsupported", span);
+            return None;
         }
         Some(match typed_target {
             TypedUpdateTarget::Direct(target_identity) => {
@@ -6672,6 +6686,51 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     UpdateConstraint::Invalid
                 }
             }
+        }
+    }
+
+    fn volatile_aggregate_copy_is_unsupported(
+        &self,
+        target_ty: TypeId,
+        value: &CHirExpr<'_>,
+    ) -> bool {
+        let Some(target) = self.types.get(target_ty) else {
+            return false;
+        };
+        let source_is_volatile = self
+            .expression_type(value)
+            .and_then(|inferred| match inferred.ty {
+                InferredType::Canonical(ty) => self.types.get(ty),
+                InferredType::Integer(_)
+                | InferredType::Real(_)
+                | InferredType::Complex(_)
+                | InferredType::Pointer(_)
+                | InferredType::StringArray(_)
+                | InferredType::StringPointer(_) => None,
+            })
+            .is_some_and(|source| source.qualifiers.is_volatile);
+        if !target.qualifiers.is_volatile && !source_is_volatile {
+            return false;
+        }
+        match &target.kind {
+            TypeKind::Union(_) => true,
+            TypeKind::Struct(tag) => self.types.tag(*tag).is_some_and(|tag| {
+                matches!(
+                    &tag.state,
+                    TagState::Complete(TagDefinition::Struct(fields))
+                        if fields.iter().any(|field| field.bit_field.is_some())
+                )
+            }),
+            TypeKind::Void
+            | TypeKind::Int(_)
+            | TypeKind::Float(_)
+            | TypeKind::Complex(_)
+            | TypeKind::Pointer(_)
+            | TypeKind::Array { .. }
+            | TypeKind::Function { .. }
+            | TypeKind::Enum(_)
+            | TypeKind::BuiltinVaList
+            | TypeKind::GnuInt128(_) => false,
         }
     }
 
@@ -8939,6 +8998,210 @@ fn collect_jump_regions_expr(
         | CHirExpr::AlignOf(..)
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. } => {}
+    }
+}
+
+fn written_initializer_references_symbol(
+    initializer: &WrittenInitializer<'_>,
+    symbol: SymbolId,
+) -> bool {
+    match initializer {
+        WrittenInitializer::Expression(expression) => {
+            expression_references_symbol(expression, symbol)
+        }
+        WrittenInitializer::List {
+            elements,
+            designations,
+            ..
+        } => {
+            elements
+                .iter()
+                .any(|element| written_initializer_references_symbol(element, symbol))
+                || designations.iter().flatten().any(|designation| {
+                    designation
+                        .designators
+                        .iter()
+                        .any(|designator| match designator {
+                            WrittenDesignator::Field(_) => false,
+                            WrittenDesignator::Index { expression, .. } => {
+                                expression_references_symbol(expression, symbol)
+                            }
+                            WrittenDesignator::Range { first, last, .. } => {
+                                expression_references_symbol(first, symbol)
+                                    || expression_references_symbol(last, symbol)
+                            }
+                        })
+                })
+        }
+    }
+}
+
+fn declaration_references_symbol(declaration: &CHirDecl<'_>, symbol: SymbolId) -> bool {
+    match declaration {
+        CHirDecl::Asm(assembly) => assembly
+            .outputs
+            .iter()
+            .chain(&assembly.inputs)
+            .any(|operand| expression_references_symbol(operand.expression, symbol)),
+        CHirDecl::Object(object) => object.initializer.as_ref().is_some_and(|initializer| {
+            written_initializer_references_symbol(initializer.written(), symbol)
+        }),
+        CHirDecl::Function(function) => function
+            .body
+            .is_some_and(|body| statement_references_symbol(body, symbol)),
+        CHirDecl::Tag(tag) => match &tag.members {
+            TagMembers::Incomplete => false,
+            TagMembers::Struct(members) | TagMembers::Union(members) => {
+                members.iter().any(|member| {
+                    member
+                        .bit_width
+                        .is_some_and(|width| expression_references_symbol(width, symbol))
+                })
+            }
+            TagMembers::Enum(enumerators) => enumerators.iter().any(|enumerator| {
+                enumerator
+                    .written_value
+                    .is_some_and(|value| expression_references_symbol(value, symbol))
+            }),
+        },
+        CHirDecl::Typedef(_) => false,
+    }
+}
+
+fn statement_references_symbol(statement: &CHirStmt<'_>, symbol: SymbolId) -> bool {
+    match statement {
+        CHirStmt::Asm(assembly) => assembly
+            .outputs
+            .iter()
+            .chain(&assembly.inputs)
+            .any(|operand| expression_references_symbol(operand.expression, symbol)),
+        CHirStmt::Expr(expression, _) => expression_references_symbol(expression, symbol),
+        CHirStmt::If(condition, then_statement, else_statement, _) => {
+            expression_references_symbol(condition, symbol)
+                || statement_references_symbol(then_statement, symbol)
+                || else_statement
+                    .is_some_and(|statement| statement_references_symbol(statement, symbol))
+        }
+        CHirStmt::Switch(expression, body, _)
+        | CHirStmt::While(expression, body, _)
+        | CHirStmt::Case(expression, body, _) => {
+            expression_references_symbol(expression, symbol)
+                || statement_references_symbol(body, symbol)
+        }
+        CHirStmt::DoWhile(body, condition, _) => {
+            statement_references_symbol(body, symbol)
+                || expression_references_symbol(condition, symbol)
+        }
+        CHirStmt::For(initializer, condition, step, body, _) => {
+            let initializer_references = match initializer {
+                CHirForInit::Empty => false,
+                CHirForInit::Expression(expression) => {
+                    expression_references_symbol(expression, symbol)
+                }
+                CHirForInit::Declaration(declarations) => declarations
+                    .iter()
+                    .any(|declaration| declaration_references_symbol(declaration, symbol)),
+            };
+            initializer_references
+                || condition
+                    .is_some_and(|expression| expression_references_symbol(expression, symbol))
+                || step.is_some_and(|expression| expression_references_symbol(expression, symbol))
+                || statement_references_symbol(body, symbol)
+        }
+        CHirStmt::Return(expression, _) => {
+            expression.is_some_and(|expression| expression_references_symbol(expression, symbol))
+        }
+        CHirStmt::Compound(items, _) => items.iter().any(|item| match item {
+            CHirBlockItem::Declaration(declaration) => {
+                declaration_references_symbol(declaration, symbol)
+            }
+            CHirBlockItem::Statement(statement) => statement_references_symbol(statement, symbol),
+        }),
+        CHirStmt::Label(_, body, _) | CHirStmt::Default(body, _) => {
+            statement_references_symbol(body, symbol)
+        }
+        CHirStmt::CaseRange(first, last, body, _) => {
+            expression_references_symbol(first, symbol)
+                || expression_references_symbol(last, symbol)
+                || statement_references_symbol(body, symbol)
+        }
+        CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {
+            false
+        }
+    }
+}
+
+fn place_references_symbol(place: &MemoryPlace<'_>, symbol: SymbolId) -> bool {
+    place.root_symbol() == Some(symbol)
+        || matches!(
+            place.root(),
+            PlaceRoot::CompoundLiteral { expression, .. }
+                if expression_references_symbol(expression, symbol)
+        )
+        || place
+            .source_expressions()
+            .any(|expression| expression_references_symbol(expression, symbol))
+}
+
+fn expression_references_symbol(expression: &CHirExpr<'_>, symbol: SymbolId) -> bool {
+    match expression {
+        CHirExpr::Ident {
+            symbol: referenced, ..
+        } => *referenced == symbol,
+        CHirExpr::Unary(_, operand, _)
+        | CHirExpr::Cast(_, operand, _)
+        | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::BitBuiltin { operand, .. }
+        | CHirExpr::Member(operand, _, _)
+        | CHirExpr::PtrMember(operand, _, _) => expression_references_symbol(operand, symbol),
+        CHirExpr::Binary(_, left, right, _)
+        | CHirExpr::Index(left, right, _)
+        | CHirExpr::Comma(left, right, _)
+        | CHirExpr::Elvis(left, right, _) => {
+            expression_references_symbol(left, symbol)
+                || expression_references_symbol(right, symbol)
+        }
+        CHirExpr::Ternary(condition, when_true, when_false, _) => {
+            expression_references_symbol(condition, symbol)
+                || expression_references_symbol(when_true, symbol)
+                || expression_references_symbol(when_false, symbol)
+        }
+        CHirExpr::Call(callee, arguments, _) => {
+            expression_references_symbol(callee, symbol)
+                || arguments
+                    .iter()
+                    .any(|argument| expression_references_symbol(argument, symbol))
+        }
+        CHirExpr::CheckedArithmetic {
+            lhs, rhs, target, ..
+        } => {
+            expression_references_symbol(lhs, symbol)
+                || expression_references_symbol(rhs, symbol)
+                || expression_references_symbol(target, symbol)
+        }
+        CHirExpr::Assign { target, value, .. } => {
+            expression_references_symbol(target, symbol)
+                || expression_references_symbol(value, symbol)
+        }
+        CHirExpr::Update { target, .. } => expression_references_symbol(target, symbol),
+        CHirExpr::MemoryAssign { place, value, .. } => {
+            place_references_symbol(place, symbol) || expression_references_symbol(value, symbol)
+        }
+        CHirExpr::MemoryRead { place, .. } | CHirExpr::MemoryUpdate { place, .. } => {
+            place_references_symbol(place, symbol)
+        }
+        CHirExpr::StatementExpr { body, .. } => statement_references_symbol(body, symbol),
+        CHirExpr::CompoundLit(_, initializer, _) => {
+            written_initializer_references_symbol(initializer.written(), symbol)
+        }
+        CHirExpr::Lit(..)
+        | CHirExpr::FloatLit(..)
+        | CHirExpr::CharLit(..)
+        | CHirExpr::StringLit(..)
+        | CHirExpr::SizeOf(..)
+        | CHirExpr::AlignOf(..)
+        | CHirExpr::BuiltinUnreachable { .. }
+        | CHirExpr::BuiltinReturnAddress { .. } => false,
     }
 }
 
