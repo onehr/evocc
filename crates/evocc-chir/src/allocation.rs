@@ -1299,6 +1299,20 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                     current_function: Some(current_function),
                 });
             }
+            CHirStmt::CaseRange(first, last, statement, _) => {
+                work.push(WorkItem::Statement {
+                    statement,
+                    current_function,
+                });
+                work.push(WorkItem::Expression {
+                    expression: last,
+                    current_function: Some(current_function),
+                });
+                work.push(WorkItem::Expression {
+                    expression: first,
+                    current_function: Some(current_function),
+                });
+            }
         }
         Ok(())
     }

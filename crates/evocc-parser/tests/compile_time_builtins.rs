@@ -137,6 +137,9 @@ fn elvis_operator_uses_its_left_operand_as_the_true_arm() {
 #[test]
 fn case_ranges_are_inclusive_nonoverlapping_integer_ranges() {
     accepts("int f(int value) { switch (value) { case 1 ... 3: return 7; default: return 0; } }\n");
+    accepts(
+        "int f(int value) { switch (value) { case -1 ... 1: switch (value) { case -1 ... 1: return 7; } default: return 0; } }\n",
+    );
     rejects(
         "int f(int value) { switch (value) { case 3 ... 1: return 7; } return 0; }\n",
         "E2916",
@@ -150,4 +153,7 @@ fn case_ranges_are_inclusive_nonoverlapping_integer_ranges() {
 #[test]
 fn local_label_declarations_bind_gotos_in_their_block() {
     accepts("int f(int value) { __label__ out; if (value) goto out; return 0; out: return 1; }\n");
+    accepts(
+        "int f(int value) { out: { __label__ out; if (value) goto out; out: return 1; } return 0; }\n",
+    );
 }

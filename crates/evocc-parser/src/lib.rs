@@ -218,6 +218,12 @@ struct TemporaryParameterShadow {
     span: SourceSpan,
 }
 
+#[derive(Debug)]
+struct SwitchCaseContext {
+    selector_type: Option<CIntegerType>,
+    intervals: Vec<(i128, i128)>,
+}
+
 pub struct Parser<'src, 'arena> {
     tokens: Vec<Token>,
     pos: usize,
@@ -247,6 +253,9 @@ pub struct Parser<'src, 'arena> {
     generic_selections: Vec<GenericSelectionRecord>,
     front_end_builtins: Vec<FrontEndBuiltinRecord<'arena>>,
     switch_depth: usize,
+    switch_cases: Vec<SwitchCaseContext>,
+    local_label_scopes: Vec<HashMap<String, String>>,
+    next_local_label: u64,
     pack_alignment: Option<u32>,
     pack_stack: Vec<Option<u32>>,
 }
@@ -305,6 +314,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__builtin_unreachable") => TokenKind::BuiltinUnreachable,
                     Some("__builtin_return_address") => TokenKind::BuiltinReturnAddress,
                     Some("__auto_type") => TokenKind::AutoType,
+                    Some("__label__") => TokenKind::LocalLabel,
                     Some("__builtin_add_overflow") => TokenKind::BuiltinAddOverflow,
                     Some("__builtin_sub_overflow") => TokenKind::BuiltinSubOverflow,
                     Some("__builtin_mul_overflow") => TokenKind::BuiltinMulOverflow,
@@ -340,6 +350,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             generic_selections: Vec::new(),
             front_end_builtins: Vec::new(),
             switch_depth: 0,
+            switch_cases: Vec::new(),
+            local_label_scopes: Vec::new(),
+            next_local_label: 0,
             pack_alignment: None,
             pack_stack: Vec::new(),
         }
@@ -5284,6 +5297,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2914", "malformed-asm", template_span);
             return None;
         }
+        for label in &mut labels {
+            if let Some(internal) = self.resolve_local_label(&label.spelling) {
+                label.spelling = internal;
+            }
+        }
 
         Some(AsmStmt {
             template,
@@ -5485,9 +5503,24 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.expect(TokenKind::LParen)?;
         let expression = self.parse_expression()?;
         self.expect(TokenKind::RParen)?;
+        let selector_type = self
+            .converted_expression_type(expression)
+            .and_then(|inferred| {
+                let OperandTypeClass::Integer(ty) = self.operand_type_class(inferred.ty) else {
+                    return None;
+                };
+                Some(CInteger::new(0, ty).promoted().ty())
+            });
+        self.switch_cases.push(SwitchCaseContext {
+            selector_type,
+            intervals: Vec::new(),
+        });
         self.switch_depth += 1;
         let body = self.parse_statement();
         self.switch_depth -= 1;
+        self.switch_cases
+            .pop()
+            .expect("every active switch owns one case context");
         let body = body?;
         let span = self.merge_span(keyword.span, body.span());
         Some(self.alloc_node(CHirStmt::Switch(expression, body, span)))
@@ -5572,8 +5605,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn parse_goto_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
         let keyword = self.advance().expect("peeked goto");
         let token = self.expect(TokenKind::Identifier)?;
+        let spelling = self.token_text(&token).to_owned();
         let label = SpannedName {
-            spelling: self.token_text(&token).to_owned(),
+            spelling: self.resolve_local_label(&spelling).unwrap_or(spelling),
             span: token.span,
         };
         let semicolon = self.expect(TokenKind::Semicolon)?;
@@ -5583,8 +5617,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn parse_label_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
         let token = self.advance().expect("peeked label");
+        let spelling = self.token_text(&token).to_owned();
         let label = SpannedName {
-            spelling: self.token_text(&token).to_owned(),
+            spelling: self.resolve_local_label(&spelling).unwrap_or(spelling),
             span: token.span,
         };
         self.expect(TokenKind::Colon)?;
@@ -5602,11 +5637,67 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if self.switch_depth == 0 {
             self.report("E1203", "case-outside-switch", keyword.span);
         }
-        let value = self.parse_expression()?;
+        let first = self.parse_conditional()?;
+        let last = if self.match_kind(TokenKind::Ellipsis) {
+            Some(self.parse_conditional()?)
+        } else {
+            None
+        };
+        let endpoint = last.unwrap_or(first);
+        let interval_span = self.merge_span(first.span(), endpoint.span());
+        self.register_switch_interval(first, endpoint, interval_span, last.is_some())?;
         self.expect(TokenKind::Colon)?;
         let nested = self.parse_statement()?;
         let span = self.merge_span(keyword.span, nested.span());
-        Some(self.alloc_node(CHirStmt::Case(value, nested, span)))
+        Some(match last {
+            Some(last) => self.alloc_node(CHirStmt::CaseRange(first, last, nested, span)),
+            None => self.alloc_node(CHirStmt::Case(first, nested, span)),
+        })
+    }
+
+    fn register_switch_interval(
+        &mut self,
+        first: &CHirExpr<'_>,
+        last: &CHirExpr<'_>,
+        span: SourceSpan,
+        require_constant: bool,
+    ) -> Option<()> {
+        let selector_type = self
+            .switch_cases
+            .last()
+            .and_then(|context| context.selector_type);
+        let converted = selector_type.and_then(|ty| {
+            let first = self.eval_integer_constant_expression(first).ok()?.cast(ty);
+            let last = self.eval_integer_constant_expression(last).ok()?.cast(ty);
+            Some((first.mathematical_value(), last.mathematical_value()))
+        });
+        let Some((first, last)) = converted else {
+            if require_constant {
+                self.report("E2916", "case-range-invalid", span);
+                return None;
+            }
+            return Some(());
+        };
+        if first > last {
+            self.report("E2916", "case-range-invalid", span);
+            return None;
+        }
+        let overlaps = self.switch_cases.last().is_some_and(|context| {
+            context
+                .intervals
+                .iter()
+                .any(|(other_first, other_last)| first <= *other_last && *other_first <= last)
+        });
+        if overlaps {
+            self.report("E2916", "case-range-invalid", span);
+            return None;
+        }
+        self.switch_cases
+            .last_mut()
+            .expect("case labels inside a switch have one active context")
+            .intervals
+            .push((first, last));
+        Some(())
     }
 
     fn parse_default_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
@@ -5627,17 +5718,26 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if create_block_scope {
             self.current_scope = self.create_scope(ScopeKind::Block, Some(lbrace.span));
         }
+        self.local_label_scopes.push(HashMap::new());
         let mut items = Vec::new();
+        let mut at_block_start = true;
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
             let before = self.pos;
-            if self.peek_kind() == Some(TokenKind::StaticAssert) {
+            if at_block_start && self.peek_kind() == Some(TokenKind::LocalLabel) {
+                self.parse_local_label_declaration();
+            } else if self.peek_kind() == Some(TokenKind::StaticAssert) {
+                at_block_start = false;
                 self.parse_static_assert_declaration();
             } else if self.is_declaration_start() || self.peek_kind() == Some(TokenKind::Inline) {
+                at_block_start = false;
                 if let Some(declarations) = self.parse_declaration(DeclarationContext::Block) {
                     items.extend(declarations.into_iter().map(CHirBlockItem::Declaration));
                 }
-            } else if let Some(statement) = self.parse_statement() {
-                items.push(CHirBlockItem::Statement(statement));
+            } else {
+                at_block_start = false;
+                if let Some(statement) = self.parse_statement() {
+                    items.push(CHirBlockItem::Statement(statement));
+                }
             }
             if self.pos == before {
                 self.report("E1003", "expected-expression", self.span());
@@ -5651,10 +5751,38 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         };
         let end = rbrace.as_ref().map_or(start_span, |token| token.span);
         let span = self.merge_span(start_span, end);
+        self.local_label_scopes
+            .pop()
+            .expect("every compound statement owns one local-label scope");
         if create_block_scope {
             self.current_scope = outer_scope;
         }
         self.alloc_node(CHirStmt::Compound(items, span))
+    }
+
+    fn parse_local_label_declaration(&mut self) -> Option<()> {
+        self.advance().expect("peeked __label__");
+        let token = self.expect(TokenKind::Identifier)?;
+        let spelling = self.token_text(&token).to_owned();
+        let internal = format!("{spelling}.__local_label.{}", self.next_local_label);
+        let Some(next_local_label) = self.next_local_label.checked_add(1) else {
+            self.report("E1001", "expected-declaration", token.span);
+            return None;
+        };
+        self.next_local_label = next_local_label;
+        self.local_label_scopes
+            .last_mut()
+            .expect("local-label declarations occur inside a compound statement")
+            .insert(spelling, internal);
+        self.expect(TokenKind::Semicolon)?;
+        Some(())
+    }
+
+    fn resolve_local_label(&self, spelling: &str) -> Option<String> {
+        self.local_label_scopes
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(spelling).cloned())
     }
 
     fn is_declaration_start(&self) -> bool {
@@ -8360,6 +8488,7 @@ fn collect_asm_goto_labels(
         | CHirStmt::DoWhile(body, _, _)
         | CHirStmt::For(_, _, _, body, _)
         | CHirStmt::Case(_, body, _)
+        | CHirStmt::CaseRange(_, _, body, _)
         | CHirStmt::Default(body, _) => collect_asm_goto_labels(body, defined, referenced),
         CHirStmt::Compound(items, _) => {
             for item in items {
@@ -8441,6 +8570,11 @@ fn collect_jump_regions_stmt(
         | CHirStmt::While(expression, body, _)
         | CHirStmt::Case(expression, body, _) => {
             collect_jump_regions_expr(expression, regions, next_region, labels, gotos);
+            collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
+        }
+        CHirStmt::CaseRange(first, last, body, _) => {
+            collect_jump_regions_expr(first, regions, next_region, labels, gotos);
+            collect_jump_regions_expr(last, regions, next_region, labels, gotos);
             collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
         }
         CHirStmt::DoWhile(body, condition, _) => {

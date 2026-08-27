@@ -204,6 +204,11 @@ fn assert_stmt_owned(arena: &Arena, statement: &CHirStmt<'_>) {
             assert_expr_owned(arena, value);
             assert_stmt_owned(arena, nested);
         }
+        CHirStmt::CaseRange(first, last, nested, _) => {
+            assert_expr_owned(arena, first);
+            assert_expr_owned(arena, last);
+            assert_stmt_owned(arena, nested);
+        }
         CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {}
     }
 }

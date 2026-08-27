@@ -107,10 +107,19 @@ fn elvis_evaluates_its_left_operand_exactly_once() {
 
 #[test]
 fn case_range_dispatches_every_value_in_the_inclusive_interval() {
-    assert_eq!(
-        evaluate("int main(void) { int value = 2; switch (value) { case 1 ... 3: return 7; default: return 0; } }\n")
+    for value in [1, 2, 3] {
+        assert_eq!(
+            evaluate(&format!(
+                "int main(void) {{ int value = {value}; switch (value) {{ case 1 ... 3: return 7; default: return 0; }} }}\n"
+            ))
             .unwrap(),
-        7
+            7
+        );
+    }
+    assert_eq!(
+        evaluate("int main(void) { int value = -1; switch (value) { case -1 ... 1: return 9; default: return 0; } }\n")
+            .unwrap(),
+        9
     );
 }
 

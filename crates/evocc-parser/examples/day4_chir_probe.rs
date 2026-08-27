@@ -461,6 +461,12 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 let nested = self.statement(&format!("{path}.statement"), nested);
                 format!("case({value},{nested})")
             }
+            CHirStmt::CaseRange(first, last, nested, _) => {
+                let first = self.expression(&format!("{path}.first"), first);
+                let last = self.expression(&format!("{path}.last"), last);
+                let nested = self.statement(&format!("{path}.statement"), nested);
+                format!("case_range({first},{last},{nested})")
+            }
             CHirStmt::Default(nested, _) => {
                 let nested = self.statement(&format!("{path}.statement"), nested);
                 format!("default({nested})")

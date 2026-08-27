@@ -2215,10 +2215,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 tasks.push(MachineTask::ExecStatement(child));
                 Ok(None)
             }
-            CHirStmt::Case(_, _, _) => Err(InterpreterError::InvalidControlFlow {
-                flow: "case outside switch",
-                span: statement.span(),
-            }),
+            CHirStmt::Case(_, _, _) | CHirStmt::CaseRange(_, _, _, _) => {
+                Err(InterpreterError::InvalidControlFlow {
+                    flow: "case outside switch",
+                    span: statement.span(),
+                })
+            }
             CHirStmt::Default(_, _) => Err(InterpreterError::InvalidControlFlow {
                 flow: "default outside switch",
                 span: statement.span(),
@@ -2602,6 +2604,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         selected = Some(index);
                     }
                 }
+                CHirStmt::CaseRange(first, last, _, _) if selected.is_none() => {
+                    let first = self.eval_expr(first, false)?.cast(controlling.ty());
+                    let last = self.eval_expr(last, false)?.cast(controlling.ty());
+                    let value = controlling.mathematical_value();
+                    if first.mathematical_value() <= value && value <= last.mathematical_value() {
+                        selected = Some(index);
+                    }
+                }
                 CHirStmt::Default(_, _) if default.is_none() => default = Some(index),
                 _ => {}
             }
@@ -2854,7 +2864,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 });
                 self.schedule_goto_in_statement(body, spelling, tasks)
             }
-            CHirStmt::Case(_, child, _) | CHirStmt::Default(child, _) => {
+            CHirStmt::Case(_, child, _)
+            | CHirStmt::CaseRange(_, _, child, _)
+            | CHirStmt::Default(child, _) => {
                 self.schedule_goto_in_statement(child, spelling, tasks)
             }
             CHirStmt::Expr(_, _)
@@ -5344,6 +5356,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 self.predeclare_expr(expression)?;
                 self.predeclare_stmt(body)?;
             }
+            CHirStmt::CaseRange(first, last, body, _) => {
+                self.predeclare_expr(first)?;
+                self.predeclare_expr(last)?;
+                self.predeclare_stmt(body)?;
+            }
             CHirStmt::Label(_, body, _) | CHirStmt::Default(body, _) => {
                 self.predeclare_stmt(body)?;
             }
@@ -5776,10 +5793,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span: *span,
             }),
             CHirStmt::Label(_, child, _) => self.exec_stmt(child),
-            CHirStmt::Case(_, _, _) => Err(InterpreterError::InvalidControlFlow {
-                flow: "case outside switch",
-                span: statement.span(),
-            }),
+            CHirStmt::Case(_, _, _) | CHirStmt::CaseRange(_, _, _, _) => {
+                Err(InterpreterError::InvalidControlFlow {
+                    flow: "case outside switch",
+                    span: statement.span(),
+                })
+            }
             CHirStmt::Default(_, _) => Err(InterpreterError::InvalidControlFlow {
                 flow: "default outside switch",
                 span: statement.span(),
@@ -5894,6 +5913,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         selected = Some(index);
                     }
                 }
+                CHirStmt::CaseRange(first, last, _, _) if selected.is_none() => {
+                    let first = self.eval_expr(first, false)?.cast(controlling.ty());
+                    let last = self.eval_expr(last, false)?.cast(controlling.ty());
+                    let value = controlling.mathematical_value();
+                    if first.mathematical_value() <= value && value <= last.mathematical_value() {
+                        selected = Some(index);
+                    }
+                }
                 CHirStmt::Default(_, _) if default.is_none() => default = Some(index),
                 _ => {}
             }
@@ -5930,7 +5957,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         statement: &'arena CHirStmt<'arena>,
     ) -> Result<Flow, InterpreterError> {
         match statement {
-            CHirStmt::Case(_, child, span) | CHirStmt::Default(child, span) => {
+            CHirStmt::Case(_, child, span)
+            | CHirStmt::CaseRange(_, _, child, span)
+            | CHirStmt::Default(child, span) => {
                 self.tick(*span)?;
                 self.exec_switch_item(child)
             }
@@ -6880,6 +6909,11 @@ fn collect_statement_symbols<'arena>(
             collect_expression_symbols(expression, output);
             collect_statement_symbols(child, output);
         }
+        CHirStmt::CaseRange(first, last, child, _) => {
+            collect_expression_symbols(first, output);
+            collect_expression_symbols(last, output);
+            collect_statement_symbols(child, output);
+        }
         CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {}
     }
 }
@@ -7001,6 +7035,7 @@ fn statement_requires_memory(unit: &CHirUnit<'_>, statement: &CHirStmt<'_>) -> b
         }),
         CHirStmt::Label(_, child, _)
         | CHirStmt::Case(_, child, _)
+        | CHirStmt::CaseRange(_, _, child, _)
         | CHirStmt::Default(child, _) => statement_requires_memory(unit, child),
         CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {
             false
@@ -7154,6 +7189,7 @@ fn collect_statement_object_declarations<'arena>(
         | CHirStmt::DoWhile(body, _, _)
         | CHirStmt::Label(_, body, _)
         | CHirStmt::Case(_, body, _)
+        | CHirStmt::CaseRange(_, _, body, _)
         | CHirStmt::Default(body, _) => {
             collect_statement_object_declarations(body, symbol, output);
         }
@@ -7233,6 +7269,7 @@ fn statement_contains_goto(statement: &CHirStmt<'_>) -> bool {
         }),
         CHirStmt::Label(_, child, _)
         | CHirStmt::Case(_, child, _)
+        | CHirStmt::CaseRange(_, _, child, _)
         | CHirStmt::Default(child, _) => statement_contains_goto(child),
         CHirStmt::Expr(_, _)
         | CHirStmt::Return(_, _)
@@ -7281,6 +7318,7 @@ fn statement_contains_call(statement: &CHirStmt<'_>) -> bool {
         }),
         CHirStmt::Label(_, child, _)
         | CHirStmt::Case(_, child, _)
+        | CHirStmt::CaseRange(_, _, child, _)
         | CHirStmt::Default(child, _) => statement_contains_call(child),
         CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {
             false
@@ -7667,6 +7705,7 @@ fn statement_contains_label(statement: &CHirStmt<'_>, spelling: &str) -> bool {
         | CHirStmt::While(_, body, _)
         | CHirStmt::For(_, _, _, body, _)
         | CHirStmt::Case(_, body, _)
+        | CHirStmt::CaseRange(_, _, body, _)
         | CHirStmt::Default(body, _) => statement_contains_label(body, spelling),
         CHirStmt::DoWhile(body, _, _) => statement_contains_label(body, spelling),
         CHirStmt::Compound(items, _) => items.iter().any(|item| {
@@ -7723,6 +7762,7 @@ fn validate_function_labels(
         | CHirStmt::DoWhile(body, _, _)
         | CHirStmt::For(_, _, _, body, _)
         | CHirStmt::Case(_, body, _)
+        | CHirStmt::CaseRange(_, _, body, _)
         | CHirStmt::Default(body, _) => validate_function_labels(body, labels)?,
         CHirStmt::Compound(items, _) => {
             for item in items {
@@ -7773,6 +7813,7 @@ fn validate_function_gotos(
         | CHirStmt::DoWhile(body, _, _)
         | CHirStmt::For(_, _, _, body, _)
         | CHirStmt::Case(_, body, _)
+        | CHirStmt::CaseRange(_, _, body, _)
         | CHirStmt::Default(body, _)
         | CHirStmt::Label(_, body, _) => validate_function_gotos(body, labels)?,
         CHirStmt::Compound(items, _) => {

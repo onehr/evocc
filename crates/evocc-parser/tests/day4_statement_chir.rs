@@ -337,6 +337,11 @@ fn assert_statement_owned(arena: &Arena, statement: &CHirStmt<'_>) {
             assert_expression_owned(arena, value);
             assert_statement_owned(arena, nested);
         }
+        CHirStmt::CaseRange(first, last, nested, _) => {
+            assert_expression_owned(arena, first);
+            assert_expression_owned(arena, last);
+            assert_statement_owned(arena, nested);
+        }
         CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {}
     }
 }
@@ -420,6 +425,7 @@ fn statement_kind(statement: &CHirStmt<'_>) -> &'static str {
         CHirStmt::Goto(..) => "goto",
         CHirStmt::Label(..) => "label",
         CHirStmt::Case(..) => "case",
+        CHirStmt::CaseRange(..) => "case-range",
         CHirStmt::Default(..) => "default",
         CHirStmt::Null(..) => "null",
     }
@@ -445,6 +451,7 @@ fn collect_statement_spans(statement: &CHirStmt<'_>, facts: &mut Vec<(&'static s
         CHirStmt::DoWhile(body, _, _)
         | CHirStmt::Label(_, body, _)
         | CHirStmt::Case(_, body, _)
+        | CHirStmt::CaseRange(_, _, body, _)
         | CHirStmt::Default(body, _) => collect_statement_spans(body, facts),
         CHirStmt::Compound(items, _) => {
             for item in items {
@@ -542,6 +549,12 @@ fn statement_fingerprint(statement: &CHirStmt<'_>) -> String {
         CHirStmt::Case(value, nested, _) => format!(
             "case({},{})",
             expression_fingerprint(value),
+            statement_fingerprint(nested)
+        ),
+        CHirStmt::CaseRange(first, last, nested, _) => format!(
+            "case-range({},{},{})",
+            expression_fingerprint(first),
+            expression_fingerprint(last),
             statement_fingerprint(nested)
         ),
         CHirStmt::Default(nested, _) => {

@@ -629,6 +629,14 @@ pub enum CHirStmt<'arena> {
         &'arena CHirStmt<'arena>,
         SourceSpan,
     ),
+    /// GNU inclusive case range. Both endpoints are retained constant
+    /// expressions; consumers compare them after the switch promotion.
+    CaseRange(
+        &'arena CHirExpr<'arena>,
+        &'arena CHirExpr<'arena>,
+        &'arena CHirStmt<'arena>,
+        SourceSpan,
+    ),
     Default(&'arena CHirStmt<'arena>, SourceSpan),
     Null(SourceSpan),
 }
@@ -651,6 +659,7 @@ impl CHirStmt<'_> {
             | Self::Goto(_, span)
             | Self::Label(_, _, span)
             | Self::Case(_, _, span)
+            | Self::CaseRange(_, _, _, span)
             | Self::Default(_, span)
             | Self::Null(span) => *span,
         }
@@ -1510,6 +1519,11 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
             | CHirStmt::While(expression, body, _)
             | CHirStmt::Case(expression, body, _) => {
                 checked_expression(expression, out, seen);
+                checked_statement(body, out, seen);
+            }
+            CHirStmt::CaseRange(first, last, body, _) => {
+                checked_expression(first, out, seen);
+                checked_expression(last, out, seen);
                 checked_statement(body, out, seen);
             }
             CHirStmt::DoWhile(body, condition, _) => {

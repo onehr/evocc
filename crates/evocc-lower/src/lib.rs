@@ -499,6 +499,11 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                 expression(unit, expr, out);
                 statement(unit, body, out);
             }
+            CHirStmt::CaseRange(first, last, body, _) => {
+                expression(unit, first, out);
+                expression(unit, last, out);
+                statement(unit, body, out);
+            }
             CHirStmt::DoWhile(body, expr, _) => {
                 statement(unit, body, out);
                 expression(unit, expr, out);
@@ -585,6 +590,7 @@ fn lower_globals(
             | CHirStmt::DoWhile(body, _, _)
             | CHirStmt::For(_, _, _, body, _)
             | CHirStmt::Case(_, body, _)
+            | CHirStmt::CaseRange(_, _, body, _)
             | CHirStmt::Default(body, _)
             | CHirStmt::Label(_, body, _) => collect_nested(body, out),
             CHirStmt::Expr(..)
@@ -975,6 +981,11 @@ fn prevalidate_stmt_for_lowering(
         | CHirStmt::While(expression, body, _)
         | CHirStmt::Case(expression, body, _) => {
             prevalidate_expr_for_lowering(unit, expression)?;
+            prevalidate_stmt_for_lowering(unit, body, labels)
+        }
+        CHirStmt::CaseRange(first, last, body, _) => {
+            prevalidate_expr_for_lowering(unit, first)?;
+            prevalidate_expr_for_lowering(unit, last)?;
             prevalidate_stmt_for_lowering(unit, body, labels)
         }
         CHirStmt::DoWhile(body, expression, _) => {
@@ -2448,12 +2459,12 @@ impl<'a> FunctionLowerer<'a> {
                 live_after,
                 control,
             ),
-            CHirStmt::Case(_, _, span) | CHirStmt::Default(_, span) => {
-                Err(LowerError::UnsupportedStatement {
-                    span: *span,
-                    feature: "unstructured label outside a switch lowering context",
-                })
-            }
+            CHirStmt::Case(_, _, span)
+            | CHirStmt::CaseRange(_, _, _, span)
+            | CHirStmt::Default(_, span) => Err(LowerError::UnsupportedStatement {
+                span: *span,
+                feature: "unstructured label outside a switch lowering context",
+            }),
         }
     }
 
@@ -4019,7 +4030,7 @@ impl<'a> FunctionLowerer<'a> {
             );
             Some(key)
         };
-        let (prefix, segments) = switch_segments(body)?;
+        let (prefix, segments) = switch_segments(body, self.unit, self.target, selector_type)?;
         let mut switch_locals = state.locals.clone();
         for item in prefix {
             if let CHirBlockItem::Declaration(CHirDecl::Object(object)) = item {
@@ -4111,7 +4122,15 @@ impl<'a> FunctionLowerer<'a> {
                     collect_symbols_expr(expression, &mut remaining);
                     for later in &segments[index + 1..] {
                         if let Some(case) = later.case {
-                            collect_symbols_expr(case, &mut remaining);
+                            match case {
+                                SwitchCase::Single(expression) => {
+                                    collect_symbols_expr(expression, &mut remaining);
+                                }
+                                SwitchCase::Range(first, last) => {
+                                    collect_symbols_expr(first, &mut remaining);
+                                    collect_symbols_expr(last, &mut remaining);
+                                }
+                            }
                         }
                         for item in &later.items {
                             collect_symbols_switch_item(item, &mut remaining);
@@ -4144,11 +4163,10 @@ impl<'a> FunctionLowerer<'a> {
         for (position, (index, mut dispatch, next, next_keys)) in
             dispatch_states.into_iter().enumerate()
         {
-            let case_expression = segments[index].case.ok_or(LowerError::InvalidControlFlow {
+            let case_matcher = segments[index].case.ok_or(LowerError::InvalidControlFlow {
                 span: body.span(),
                 reason: "switch dispatch does not reference a case",
             })?;
-            let case_value = self.lower_expr(case_expression, &mut dispatch)?;
             let current_selector = if let CHirExpr::Ident { symbol, span, .. } = expression {
                 self.local(&dispatch, *symbol, *span)?
             } else {
@@ -4172,13 +4190,56 @@ impl<'a> FunctionLowerer<'a> {
                 }
             };
             let compared_type = current_selector.integer;
-            let lhs = self.cast(current_selector, compared_type, &dispatch)?;
-            let rhs = self.cast(case_value, compared_type, &dispatch)?;
-            let condition = self.fresh_value(EvoIRType::Bits(1));
-            self.emit(
-                &dispatch,
-                Inst::ICmp(condition.clone(), CmpOp::Eq, lhs.value, rhs.value),
-            )?;
+            let selector = self.cast(current_selector, compared_type, &dispatch)?;
+            let condition = match case_matcher {
+                SwitchCase::Single(expression) => {
+                    let case_value = self.lower_expr(expression, &mut dispatch)?;
+                    let case_value = self.cast(case_value, compared_type, &dispatch)?;
+                    let condition = self.fresh_value(EvoIRType::Bits(1));
+                    self.emit(
+                        &dispatch,
+                        Inst::ICmp(
+                            condition.clone(),
+                            CmpOp::Eq,
+                            selector.value,
+                            case_value.value,
+                        ),
+                    )?;
+                    condition
+                }
+                SwitchCase::Range(first, last) => {
+                    let first = self.lower_expr(first, &mut dispatch)?;
+                    let last = self.lower_expr(last, &mut dispatch)?;
+                    let first = self.cast(first, compared_type, &dispatch)?;
+                    let last = self.cast(last, compared_type, &dispatch)?;
+                    let comparison = if compared_type.is_signed() {
+                        CmpOp::SLe
+                    } else {
+                        CmpOp::ULe
+                    };
+                    let above_first = self.fresh_value(EvoIRType::Bits(1));
+                    let below_last = self.fresh_value(EvoIRType::Bits(1));
+                    let condition = self.fresh_value(EvoIRType::Bits(1));
+                    self.emit(
+                        &dispatch,
+                        Inst::ICmp(
+                            above_first.clone(),
+                            comparison,
+                            first.value,
+                            selector.value.clone(),
+                        ),
+                    )?;
+                    self.emit(
+                        &dispatch,
+                        Inst::ICmp(below_last.clone(), comparison, selector.value, last.value),
+                    )?;
+                    self.emit(
+                        &dispatch,
+                        Inst::And(condition.clone(), above_first, below_last),
+                    )?;
+                    condition
+                }
+            };
             let true_entry = &entries[index];
             let (false_target, false_args) =
                 if position + 1 < segments.len() && !next_keys.is_empty() {
@@ -6455,8 +6516,14 @@ impl<'a> FunctionLowerer<'a> {
 
 #[derive(Debug)]
 struct SwitchSegment<'a> {
-    case: Option<&'a CHirExpr<'a>>,
+    case: Option<SwitchCase<'a>>,
     items: Vec<SwitchSegmentItem<'a>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum SwitchCase<'a> {
+    Single(&'a CHirExpr<'a>),
+    Range(&'a CHirExpr<'a>, &'a CHirExpr<'a>),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -6467,6 +6534,9 @@ enum SwitchSegmentItem<'a> {
 
 fn switch_segments<'a>(
     body: &'a CHirStmt<'a>,
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    selector_type: CIntegerType,
 ) -> Result<(&'a [CHirBlockItem<'a>], Vec<SwitchSegment<'a>>), LowerError> {
     let CHirStmt::Compound(items, _) = body else {
         return Err(LowerError::UnsupportedStatement {
@@ -6496,23 +6566,20 @@ fn switch_segments<'a>(
             continue;
         };
         match statement {
-            CHirStmt::Case(case, nested, _) => {
+            CHirStmt::Case(..) | CHirStmt::CaseRange(..) | CHirStmt::Default(..) => {
                 if segments.is_empty() {
                     prefix_end = index;
                 }
-                segments.push(SwitchSegment {
-                    case: Some(case),
-                    items: vec![SwitchSegmentItem::Statement(nested)],
-                });
-            }
-            CHirStmt::Default(nested, _) => {
-                if segments.is_empty() {
-                    prefix_end = index;
+                let (labels, nested) = switch_label_chain(statement, unit, target, selector_type);
+                let label_count = labels.len();
+                for (label_index, case) in labels.into_iter().enumerate() {
+                    let items = if label_index + 1 == label_count {
+                        vec![SwitchSegmentItem::Statement(nested)]
+                    } else {
+                        Vec::new()
+                    };
+                    segments.push(SwitchSegment { case, items });
                 }
-                segments.push(SwitchSegment {
-                    case: None,
-                    items: vec![SwitchSegmentItem::Statement(nested)],
-                });
             }
             other => {
                 let Some(segment) = segments.last_mut() else {
@@ -6526,6 +6593,75 @@ fn switch_segments<'a>(
         }
     }
     Ok((&items[..prefix_end], segments))
+}
+
+fn switch_label_chain<'a>(
+    statement: &'a CHirStmt<'a>,
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    selector_type: CIntegerType,
+) -> (Vec<Option<SwitchCase<'a>>>, &'a CHirStmt<'a>) {
+    let mut labels = Vec::new();
+    let mut nested = statement;
+    loop {
+        match nested {
+            CHirStmt::Case(value, body, _) => {
+                labels.push(Some(SwitchCase::Single(value)));
+                nested = body;
+            }
+            CHirStmt::CaseRange(first, last, body, _) => {
+                labels.push(Some(SwitchCase::Range(first, last)));
+                nested = body;
+            }
+            CHirStmt::Default(body, _) => {
+                labels.push(None);
+                nested = body;
+            }
+            _ => break,
+        }
+    }
+
+    let mut coalesced = Vec::with_capacity(labels.len());
+    let mut index = 0;
+    while index < labels.len() {
+        let Some(SwitchCase::Single(first)) = labels[index] else {
+            coalesced.push(labels[index]);
+            index += 1;
+            continue;
+        };
+        let mut last = first;
+        let mut last_value = normalized_case_value(unit, target, first, selector_type);
+        let mut end = index + 1;
+        while end < labels.len() {
+            let Some(SwitchCase::Single(candidate)) = labels[end] else {
+                break;
+            };
+            let candidate_value = normalized_case_value(unit, target, candidate, selector_type);
+            if last_value.and_then(|value| value.checked_add(1)) != candidate_value {
+                break;
+            }
+            last = candidate;
+            last_value = candidate_value;
+            end += 1;
+        }
+        if end == index + 1 {
+            coalesced.push(Some(SwitchCase::Single(first)));
+        } else {
+            coalesced.push(Some(SwitchCase::Range(first, last)));
+        }
+        index = end;
+    }
+    (coalesced, nested)
+}
+
+fn normalized_case_value(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    expression: &CHirExpr<'_>,
+    selector_type: CIntegerType,
+) -> Option<i128> {
+    constant_integer(unit, target, expression)
+        .map(|value| value.cast(selector_type).mathematical_value())
 }
 
 fn collect_symbols_switch_item(item: &SwitchSegmentItem<'_>, symbols: &mut BTreeSet<SymbolId>) {
@@ -6648,6 +6784,7 @@ fn contains_targeted_label(statement: &CHirStmt<'_>, names: &BTreeSet<String>) -
         CHirStmt::Switch(_, body, _)
         | CHirStmt::While(_, body, _)
         | CHirStmt::Case(_, body, _)
+        | CHirStmt::CaseRange(_, _, body, _)
         | CHirStmt::DoWhile(body, _, _)
         | CHirStmt::Default(body, _) => contains_targeted_label(body, names),
         CHirStmt::For(_, _, _, body, _) => contains_targeted_label(body, names),
@@ -6681,6 +6818,7 @@ fn collect_goto_names(statement: &CHirStmt<'_>, names: &mut BTreeSet<String>) {
         CHirStmt::Switch(_, body, _)
         | CHirStmt::While(_, body, _)
         | CHirStmt::Case(_, body, _)
+        | CHirStmt::CaseRange(_, _, body, _)
         | CHirStmt::DoWhile(body, _, _)
         | CHirStmt::Label(_, body, _)
         | CHirStmt::Default(body, _) => collect_goto_names(body, names),
@@ -6727,6 +6865,11 @@ fn collect_calls_stmt(statement: &CHirStmt<'_>, calls: &mut CallSites) {
         | CHirStmt::While(expression, body, _)
         | CHirStmt::Case(expression, body, _) => {
             collect_calls_expr(expression, calls);
+            collect_calls_stmt(body, calls);
+        }
+        CHirStmt::CaseRange(first, last, body, _) => {
+            collect_calls_expr(first, calls);
+            collect_calls_expr(last, calls);
             collect_calls_stmt(body, calls);
         }
         CHirStmt::DoWhile(body, expression, _) => {
@@ -6988,6 +7131,11 @@ fn live_before_stmt(
             live_after = live_before_stmt(body, live_after);
             live_before_expr(expression, &mut live_after);
         }
+        CHirStmt::CaseRange(first, last, body, _) => {
+            live_after = live_before_stmt(body, live_after);
+            live_before_expr(last, &mut live_after);
+            live_before_expr(first, &mut live_after);
+        }
         CHirStmt::Label(_, body, _) | CHirStmt::Default(body, _) => {
             live_after = live_before_stmt(body, live_after);
         }
@@ -7138,6 +7286,11 @@ fn collect_symbols_stmt(statement: &CHirStmt<'_>, symbols: &mut BTreeSet<SymbolI
         | CHirStmt::While(expression, body, _)
         | CHirStmt::Case(expression, body, _) => {
             collect_symbols_expr(expression, symbols);
+            collect_symbols_stmt(body, symbols);
+        }
+        CHirStmt::CaseRange(first, last, body, _) => {
+            collect_symbols_expr(first, symbols);
+            collect_symbols_expr(last, symbols);
             collect_symbols_stmt(body, symbols);
         }
         CHirStmt::DoWhile(body, expression, _) => {

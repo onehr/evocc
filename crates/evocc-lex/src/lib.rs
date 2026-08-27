@@ -107,6 +107,8 @@ pub enum TokenKind {
     /// GNU `__auto_type`, promoted only after preprocessing at the parser
     /// boundary so the spelling remains macro-expandable.
     AutoType,
+    /// GNU block-local label declaration, promoted only after preprocessing.
+    LocalLabel,
     /// GNU checked-arithmetic builtins, promoted only after preprocessing.
     BuiltinAddOverflow,
     BuiltinSubOverflow,
