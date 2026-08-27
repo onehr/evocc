@@ -17,7 +17,8 @@
     "P3 preprocessor: a ## result is any C11 preprocessing token including pp-numbers (1_MODULE, 1x, 1.5); E0111 only when such a pp-number is consumed by #if (spec 10.4). Gate: no raw lane stops at autoconf.h",
     "P4 preprocessor: stray characters (backslash, @, backtick, $) are single pp-tokens kept by stringification; .5foo is a pp-number; E0112 at the C lexer for a pp-token with no C form (spec 10.4). Gate: no raw lane stops in sysreg.h",
     "G2 (open 2026-08-27, 6 lanes at E2202 aggregate copy-init) remaining Day 7 debt: aggregate copy-initializer, flexible-array initializer, aggregate assignment and aggregate lvalue assignment, volatile-or-atomic update. Not yet opened; opened when telemetry reaches one or when C1 needs it, whichever first; lowering target: the new EvoIR copy instruction (spec 1.9.14); _Atomic stays E2702",
-    "R static relocation schema (spec 2.1 defers it): pointer-valued static initializers incl. addresses of file-scope compound literals, string literals and globals; not opened; needed by stage C1 and counted in receipts as E3026 until then"
+    "R static relocation schema (spec 2.1 defers it): pointer-valued static initializers incl. addresses of file-scope compound literals, string literals and globals; not opened; needed by stage C1 and counted in receipts as E3026 until then",
+    "J parse closure (spec 1.9.16): empty external declaration; label addresses and computed goto with the conservative successor set (E3028); __auto_type plain-identifier and self-reference refusals; undeclared label E2920; non-constant case-range bound E2916; volatile union and bit-field copies E2922. Gate: dual-oracle parse 16/16, or every remaining lane named with its root cause"
   ],
   "gate": "Kernel parse/preprocess counts published by the script from sealed evidence. Process gate; no predicted number. Counts must be >= 1/16 dual-oracle parse and 0/16 raw preprocess.",
   "order": "A, B, then re-run reconnaissance; C in the order the refreshed first-error sites rank them: typeof + _Generic first (all 30 parse lanes), the rest by the next publication. The list is scope, not sequence.",
@@ -29,7 +30,8 @@
     "builtinsFirst": "2026-08-25: E before the rest of C and before D. Roadmap places builtins on Day 16; the lead ruled that the only kernel number (parse) is stuck on them and moves E forward. Semantics beyond parse-level resolution (branch hints, optimizer-known constants) stay on Day 16.",
     "asmParseLevel": "2026-08-25: asm is accepted and preserved with maximal effects; lowering stays fail-closed (E3021) until Section 4 specifies the operation (stage C1).",
     "stageFUntilSixteen": "2026-08-26: stay on stage F until dual-oracle parse reads 16/16; windows G (core C debt), H (statement expressions, __auto_type, designated initializers, compound literals), I (compile-time builtins). Backend B1 does not start before F1 is green; its specification is written in parallel. F2 (predefined macros) runs on the lead's track.",
-    "preprocessorParallel": "2026-08-26: F2 runs as its own window (P) by the executing agent, parallel to G/H/I; the two tracks touch different crates."
+    "preprocessorParallel": "2026-08-26: F2 runs as its own window (P) by the executing agent, parallel to G/H/I; the two tracks touch different crates.",
+    "parseClosure": "2026-08-28: window J closes stage F1. All 28 remaining lanes stop on the stray semicolon after a macro-expanded static inline function; the rest of J is the debt the aggregate-copy and builtin windows reported. Backend specification (B1 EvoMIR) starts when F1 is green."
   },
   "processRules": [
     "One tests-only commit opens a red window; its failures come from declared missing constructs, never from a build error. No commit widens the declared set; each implementation commit narrows it; the last closes it.",
