@@ -486,6 +486,16 @@ impl TypeInterner {
         self.compatible_with(left, right, false)
     }
 
+    /// C type compatibility after discarding only the qualifiers written on
+    /// the outermost type layer.
+    ///
+    /// This is the predicate required by GNU `__builtin_types_compatible_p`:
+    /// qualifiers nested below a pointer or array layer remain significant.
+    #[must_use]
+    pub fn compatible_ignoring_top_qualifiers(&self, left: TypeId, right: TypeId) -> bool {
+        self.compatible_with(left, right, true)
+    }
+
     fn compatible_with(&self, left: TypeId, right: TypeId, ignore_top_qualifiers: bool) -> bool {
         if left == right {
             return true;

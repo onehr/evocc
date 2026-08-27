@@ -285,6 +285,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__alignof__") => TokenKind::GnuAlignof,
                     Some("__builtin_expect") => TokenKind::BuiltinExpect,
                     Some("__builtin_constant_p") => TokenKind::BuiltinConstantP,
+                    Some("__builtin_choose_expr") => TokenKind::BuiltinChooseExpr,
+                    Some("__builtin_types_compatible_p") => TokenKind::BuiltinTypesCompatibleP,
+                    Some("__builtin_offsetof") => TokenKind::BuiltinOffsetof,
                     Some("__builtin_add_overflow") => TokenKind::BuiltinAddOverflow,
                     Some("__builtin_sub_overflow") => TokenKind::BuiltinSubOverflow,
                     Some("__builtin_mul_overflow") => TokenKind::BuiltinMulOverflow,
@@ -7280,6 +7283,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             TokenKind::Generic => return self.parse_generic_selection(tok),
             TokenKind::BuiltinExpect => return self.parse_builtin_expect(tok),
             TokenKind::BuiltinConstantP => return self.parse_builtin_constant_p(tok),
+            TokenKind::BuiltinChooseExpr => return self.parse_builtin_choose_expr(tok),
+            TokenKind::BuiltinTypesCompatibleP => {
+                return self.parse_builtin_types_compatible_p(tok);
+            }
+            TokenKind::BuiltinOffsetof => return self.parse_builtin_offsetof(tok),
             TokenKind::BuiltinAddOverflow => {
                 return self.parse_checked_arithmetic(tok, CheckedArithmeticOp::Add);
             }
@@ -7381,6 +7389,202 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             },
             span,
         )))
+    }
+
+    fn parse_builtin_choose_expr(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        if self.peek_kind() != Some(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        self.advance();
+        let selector = self.parse_required_constant_assignment()?;
+        let selector_span = selector.span();
+        if !self.match_kind(TokenKind::Comma) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let when_true = self.parse_argument_expression()?;
+        if !self.match_kind(TokenKind::Comma) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let when_false = self.parse_argument_expression()?;
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        self.advance();
+
+        let selected_true = match self.eval_integer_constant_expression(selector) {
+            Ok(value) => value.truth(),
+            Err(()) => {
+                self.report("E2912", "static-assertion-not-constant", selector_span);
+                return None;
+            }
+        };
+        // Both arms are semantically checked, but only the selected C-HIR node
+        // is retained. This preserves its exact type and value category while
+        // making evaluation of the other arm impossible downstream.
+        for arm in [when_true, when_false] {
+            if self.expression_type(arm).is_none() {
+                self.report("E1003", "expected-expression", arm.span());
+                return None;
+            }
+        }
+        Some(if selected_true { when_true } else { when_false })
+    }
+
+    fn parse_builtin_types_compatible_p(
+        &mut self,
+        keyword: Token,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        if self.peek_kind() != Some(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        self.advance();
+        let (left, left_tag) = self.parse_type_name()?;
+        if !self.match_kind(TokenKind::Comma) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let (right, right_tag) = self.parse_type_name()?;
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance().expect("peeked builtin closing parenthesis");
+        let span = self.merge_span(keyword.span, close.span);
+        for event in [left_tag, right_tag].into_iter().flatten() {
+            let declaration = self.finish_tag_event(event, span, Vec::new());
+            self.side_declarations.push(declaration);
+        }
+        let value = self.types.compatible_ignoring_top_qualifiers(left, right);
+        Some(self.alloc_node(CHirExpr::Lit(
+            IntLit {
+                value: u64::from(value),
+                suffix: IntSuffix::None,
+                base: IntBase::Dec,
+            },
+            span,
+        )))
+    }
+
+    fn parse_builtin_offsetof(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        if self.peek_kind() != Some(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        self.advance();
+        let (mut current_ty, tag_event) = self.parse_type_name()?;
+        if !self.match_kind(TokenKind::Comma) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let first = self.advance()?;
+        if first.kind != TokenKind::Identifier {
+            self.report("E2906", "designator-outside-object", first.span);
+            return None;
+        }
+        let mut offset = 0_u64;
+        let mut field_name = Some((self.token_text(&first).to_owned(), first.span));
+        loop {
+            if let Some((name, span)) = field_name.take() {
+                let Some((field_offset, field_ty)) = self.offsetof_field(current_ty, &name) else {
+                    self.report("E2906", "designator-outside-object", span);
+                    return None;
+                };
+                offset = offset.checked_add(field_offset)?;
+                current_ty = field_ty;
+            }
+            match self.peek_kind() {
+                Some(TokenKind::Dot) => {
+                    self.advance();
+                    let member = self.advance()?;
+                    if member.kind != TokenKind::Identifier {
+                        self.report("E2906", "designator-outside-object", member.span);
+                        return None;
+                    }
+                    field_name = Some((self.token_text(&member).to_owned(), member.span));
+                }
+                Some(TokenKind::LBracket) => {
+                    let open = self.advance().expect("peeked subscript");
+                    let index_expression = self.parse_required_constant_conditional()?;
+                    let end = self.expect(TokenKind::RBracket)?;
+                    let span = self.merge_span(open.span, end.span);
+                    let index = self
+                        .eval_integer_constant_expression(index_expression)
+                        .ok()
+                        .and_then(|value| u64::try_from(value.mathematical_value()).ok());
+                    let Some(index) = index else {
+                        self.report("E2906", "designator-outside-object", span);
+                        return None;
+                    };
+                    let Some(TypeKind::Array { element, bound }) =
+                        self.types.get(current_ty).map(|ty| ty.kind.clone())
+                    else {
+                        self.report("E2906", "designator-outside-object", span);
+                        return None;
+                    };
+                    if matches!(bound, ArrayBound::Fixed(size) if index >= size) {
+                        self.report("E2906", "designator-outside-object", span);
+                        return None;
+                    }
+                    let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+                    let Ok(layout) = target.layout_of(&self.types, element) else {
+                        self.report("E2906", "designator-outside-object", span);
+                        return None;
+                    };
+                    offset = offset.checked_add(index.checked_mul(layout.size_bytes)?)?;
+                    current_ty = element;
+                }
+                _ => break,
+            }
+        }
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance().expect("peeked builtin closing parenthesis");
+        let span = self.merge_span(keyword.span, close.span);
+        if let Some(event) = tag_event {
+            let declaration = self.finish_tag_event(event, span, Vec::new());
+            self.side_declarations.push(declaration);
+        }
+        Some(self.alloc_node(CHirExpr::Lit(
+            IntLit {
+                value: offset,
+                suffix: IntSuffix::UL,
+                base: IntBase::Dec,
+            },
+            span,
+        )))
+    }
+
+    fn offsetof_field(&self, record_ty: TypeId, name: &str) -> Option<(u64, TypeId)> {
+        let canonical = self.types.get(record_ty)?;
+        let tag = match canonical.kind {
+            TypeKind::Struct(tag) | TypeKind::Union(tag) => tag,
+            _ => return None,
+        };
+        let definition = self.types.tag(tag)?;
+        let fields = match &definition.state {
+            TagState::Complete(TagDefinition::Struct(fields))
+            | TagState::Complete(TagDefinition::Union(fields)) => fields,
+            TagState::Incomplete | TagState::Complete(TagDefinition::Enum(_)) => return None,
+        };
+        let (field_index, field) = fields
+            .iter()
+            .enumerate()
+            .find(|(_, field)| field.name.as_deref() == Some(name))?;
+        let layout = TargetDataLayout::aarch64_unknown_linux_gnu()
+            .record_layout(&self.types, tag)
+            .ok()?;
+        let placed = layout
+            .fields
+            .iter()
+            .find(|placed| placed.field_index == field_index)?;
+        Some((placed.byte_offset, field.ty))
     }
 
     fn parse_checked_arithmetic(
@@ -7776,6 +7980,9 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::GnuAlignof
             | TokenKind::BuiltinExpect
             | TokenKind::BuiltinConstantP
+            | TokenKind::BuiltinChooseExpr
+            | TokenKind::BuiltinTypesCompatibleP
+            | TokenKind::BuiltinOffsetof
             | TokenKind::BuiltinAddOverflow
             | TokenKind::BuiltinSubOverflow
             | TokenKind::BuiltinMulOverflow
