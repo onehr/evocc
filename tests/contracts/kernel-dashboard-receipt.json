@@ -1,8 +1,8 @@
 {
   "receiptId": "c30.kernel-dashboard",
-  "subjectCommit": "3a201db",
-  "publishedFromRun": "20260826T233030Z-8961",
-  "previousRun": "20260826T210931Z-30859",
+  "subjectCommit": "0d94962",
+  "publishedFromRun": "20260827T070731Z-95986",
+  "previousRun": "20260826T233030Z-8961",
   "cohortSha256": "09d0e2eaf0734949164a491d30df640bf396ff7586ef495f938f565b8879a306",
   "observer": {
     "path": "tests/acceptance/day5-kernel-reductions-observer.py",
@@ -13,7 +13,7 @@
     "environmentSha256": "780d6c98c4c1e32e4d20bb1c577bed670048b661501fcab9e3cad06520584813",
     "returnCode": 0,
     "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "stdoutSha256": "c0f0143a2f207a0e52b1916354f3a681f507f59cab395815f4bfe48c0e9303b4",
+    "stdoutSha256": "a23b261183dc16ef69cedc9936617e6a7b15afd389b425df6a9e8201d3d6608a",
     "timedOut": false
   },
   "command": "tests/acceptance/day5-kernel-reconnaissance.py --timeout 120 --parser-timeout 10 --parser-jobs 4",
@@ -41,16 +41,16 @@
   "regressionsAgainstPrevious": [],
   "artifacts": {
     "results": {
-      "path": ".evidence/day5-kernel-reconnaissance/20260826T233030Z-8961/results.jsonl",
-      "sha256": "f5b420de0cf68ca4f0376e58e804709e7d5652f690c9e69b5dd4a0bf93e2d6c4"
+      "path": ".evidence/day5-kernel-reconnaissance/20260827T070731Z-95986/results.jsonl",
+      "sha256": "448870f9e6642dba654f4f0843fb0a8fc464d7281bfa5873d1de87d277fc4d93"
     },
     "routing": {
-      "path": ".evidence/kernel-dashboard/3a201db/routing.json",
-      "sha256": "e8996e6d576364fe1f90f3474d50da92ecfaf41815f63698d2b586837856d94b"
+      "path": ".evidence/kernel-dashboard/0d94962/routing.json",
+      "sha256": "bd007da5b5ed02f6ecc9e1ab123b33d1d2053447f4ced995f56ba2ea2fb6cbbf"
     },
     "captureStatus": {
-      "path": ".evidence/kernel-dashboard/3a201db/reconnaissance.status",
-      "sha256": "ef7601175e0ee686a0cb76b181a3cdcf6967a5c162a65a0b7538f372ab5bd30d"
+      "path": ".evidence/kernel-dashboard/0d94962/reconnaissance.status",
+      "sha256": "5bf858da777450de551d30dc0df993d4f45c02c52cbe1a193b155e7be7662051"
     }
   }
 }
