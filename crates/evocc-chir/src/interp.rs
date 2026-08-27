@@ -688,6 +688,11 @@ enum MachineTask<'arena> {
         else_expression: &'arena CHirExpr<'arena>,
         result_type: ValueType,
     },
+    SelectElvis {
+        else_expression: &'arena CHirExpr<'arena>,
+        result_type: ValueType,
+        span: SourceSpan,
+    },
     CastValue {
         target: ValueType,
         span: SourceSpan,
@@ -1814,6 +1819,32 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         },
                         allow_root_mutation: false,
                     });
+                    None
+                }
+                MachineTask::SelectElvis {
+                    else_expression,
+                    result_type,
+                    span,
+                } => {
+                    let operand =
+                        expect_machine_integer(pop_machine_value(&mut values, span)?, span)?;
+                    if operand.truth() {
+                        values.push(cast_machine_value(
+                            CValue::Integer(operand),
+                            result_type,
+                            span,
+                            self.unit.types(),
+                        )?);
+                    } else {
+                        tasks.push(MachineTask::CastValue {
+                            target: result_type,
+                            span,
+                        });
+                        tasks.push(MachineTask::EvalExpression {
+                            expression: else_expression,
+                            allow_root_mutation: true,
+                        });
+                    }
                     None
                 }
                 MachineTask::CastValue { target, span } => {
@@ -3043,6 +3074,26 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 tasks.push(MachineTask::EvalExpression {
                     expression: condition,
                     allow_root_mutation: false,
+                });
+            }
+            CHirExpr::Elvis(operand, else_expression, _) => {
+                let operand_type = self.infer_integer_type(operand)?;
+                let else_type = self.infer_integer_type(else_expression)?;
+                let result_type = usual_arithmetic_type(
+                    CInteger::new(0, operand_type).promoted().ty(),
+                    CInteger::new(0, else_type).promoted().ty(),
+                );
+                tasks.push(MachineTask::SelectElvis {
+                    else_expression,
+                    result_type: ValueType::Integer(result_type),
+                    span,
+                });
+                tasks.push(MachineTask::EvalExpression {
+                    expression: operand,
+                    // GNU `a ?: b` evaluates `a` as a full expression.  In
+                    // particular, an update such as `value++` is permitted
+                    // here and its pre-update value is the true result.
+                    allow_root_mutation: true,
                 });
             }
             CHirExpr::Call(callee, arguments, _) => {
@@ -5351,7 +5402,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirExpr::PtrMember(operand, _, _) => self.predeclare_expr(operand)?,
             CHirExpr::Binary(_, left, right, _)
             | CHirExpr::Index(left, right, _)
-            | CHirExpr::Comma(left, right, _) => {
+            | CHirExpr::Comma(left, right, _)
+            | CHirExpr::Elvis(left, right, _) => {
                 self.predeclare_expr(left)?;
                 self.predeclare_expr(right)?;
             }
@@ -6021,6 +6073,23 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 };
                 Ok(selected.cast(result_type))
             }
+            CHirExpr::Elvis(operand, else_expression, _) => {
+                let operand_type = self.infer_integer_type(operand)?;
+                let else_type = self.infer_integer_type(else_expression)?;
+                let result_type = usual_arithmetic_type(
+                    CInteger::new(0, operand_type).promoted().ty(),
+                    CInteger::new(0, else_type).promoted().ty(),
+                );
+                // The omitted middle operand does not turn the controlling
+                // expression into an unevaluated or mutation-free context.
+                let operand_value = self.eval_expr(operand, true)?;
+                let selected = if operand_value.truth() {
+                    operand_value
+                } else {
+                    self.eval_expr(else_expression, true)?
+                };
+                Ok(selected.cast(result_type))
+            }
             CHirExpr::BitBuiltin { op, operand, .. } => {
                 let operand = self.eval_expr(operand, allow_root_mutation)?;
                 eval_bit_builtin(*op, operand)
@@ -6210,6 +6279,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     .promoted()
                     .ty();
                 Ok(usual_arithmetic_type(then_type, else_type))
+            }
+            CHirExpr::Elvis(operand, else_expression, _) => {
+                let operand_type = CInteger::new(0, self.infer_integer_type(operand)?)
+                    .promoted()
+                    .ty();
+                let else_type = CInteger::new(0, self.infer_integer_type(else_expression)?)
+                    .promoted()
+                    .ty();
+                Ok(usual_arithmetic_type(operand_type, else_type))
             }
             CHirExpr::Cast(ty, _, _) => self.integer_type(*ty, span),
             CHirExpr::Call(callee, _, _) => {
@@ -6640,6 +6718,7 @@ fn push_static_initializer_children<'arena>(
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
         | CHirExpr::Comma(left, right, _)
+        | CHirExpr::Elvis(left, right, _)
         | CHirExpr::Assign {
             target: left,
             value: right,
@@ -6819,7 +6898,8 @@ fn collect_expression_symbols<'arena>(
         | CHirExpr::PtrMember(operand, _, _) => collect_expression_symbols(operand, output),
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
-        | CHirExpr::Comma(left, right, _) => {
+        | CHirExpr::Comma(left, right, _)
+        | CHirExpr::Elvis(left, right, _) => {
             collect_expression_symbols(left, output);
             collect_expression_symbols(right, output);
         }
@@ -6987,7 +7067,9 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::SizeOfExpr(operand, _)
         | CHirExpr::BitBuiltin { operand, .. } => expression_requires_memory(unit, operand),
-        CHirExpr::Binary(_, left, right, _) | CHirExpr::Comma(left, right, _) => {
+        CHirExpr::Binary(_, left, right, _)
+        | CHirExpr::Comma(left, right, _)
+        | CHirExpr::Elvis(left, right, _) => {
             expression_requires_memory(unit, left) || expression_requires_memory(unit, right)
         }
         CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
@@ -7237,7 +7319,8 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
         | CHirExpr::BitBuiltin { operand, .. } => expression_contains_call(operand),
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
-        | CHirExpr::Comma(left, right, _) => {
+        | CHirExpr::Comma(left, right, _)
+        | CHirExpr::Elvis(left, right, _) => {
             expression_contains_call(left) || expression_contains_call(right)
         }
         CHirExpr::Ternary(condition, then_expression, else_expression, _) => {

@@ -304,6 +304,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     ) => TokenKind::BuiltinBit,
                     Some("__builtin_unreachable") => TokenKind::BuiltinUnreachable,
                     Some("__builtin_return_address") => TokenKind::BuiltinReturnAddress,
+                    Some("__auto_type") => TokenKind::AutoType,
                     Some("__builtin_add_overflow") => TokenKind::BuiltinAddOverflow,
                     Some("__builtin_sub_overflow") => TokenKind::BuiltinSubOverflow,
                     Some("__builtin_mul_overflow") => TokenKind::BuiltinMulOverflow,
@@ -1052,9 +1053,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         };
         self.parse_declaration_modifiers(&mut storage, &mut inline_spans, &mut attributes);
         let storage = storage.unwrap_or(StorageClass::None);
+        let auto_type_span = match &specifier.surface {
+            TypeSpecifier::AutoType { span, .. } => Some(*span),
+            _ => None,
+        };
 
         if self.peek_kind() == Some(TokenKind::Semicolon) {
             let semi = self.advance().expect("peeked semicolon");
+            if auto_type_span.is_some() {
+                self.report("E2915", "auto-type-misuse", semi.span);
+                return None;
+            }
             let declaration_span = self.merge_span(start_span, semi.span);
             if let Some(span) = inline_spans.first().copied() {
                 self.report("E1401", "inline-specifier-on-non-function", span);
@@ -1077,6 +1086,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E1001", "expected-declaration", self.span());
             return None;
         };
+        if auto_type_span.is_some()
+            && (storage == StorageClass::Typedef
+                || declarator.derived.iter().any(|layer| {
+                    matches!(
+                        layer,
+                        DerivedDeclarator::Array { .. } | DerivedDeclarator::Function { .. }
+                    )
+                }))
+        {
+            self.report("E2915", "auto-type-misuse", declarator.span);
+            return None;
+        }
         let (asm_label, asm_label_span) = self.parse_optional_asm_label()?;
         // Attributes after the declarator attach to it alone. When a function
         // body follows they are in function-definition position; the same
@@ -1209,6 +1230,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             full_type: TypeId,
             symbol: SymbolId,
             initializer: Option<ObjectInitializer<'arena>>,
+            specifier: TypeSpecifier,
             written: WrittenDeclarator,
             attributes: Vec<Attribute>,
             asm_label: Option<String>,
@@ -1229,6 +1251,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             // declarator, so self-references in an initializer resolve to this
             // declaration rather than an outer shadowed name.
             let has_initializer = self.peek_kind() == Some(TokenKind::Assign);
+            if auto_type_span.is_some() && !has_initializer {
+                self.report("E2915", "auto-type-misuse", declarator.span);
+                return None;
+            }
             let symbol = self.declare_symbol(&declarator.name, symbol_data, full_type);
             full_type = self
                 .symbols
@@ -1238,6 +1264,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             if has_initializer && storage != StorageClass::Typedef {
                 self.mark_definition(symbol, &declarator.name);
             }
+            let mut declaration_specifier = specifier.surface.clone();
             let initializer = if self.match_kind(TokenKind::Assign) {
                 let written_initializer = self.parse_written_initializer()?;
                 if storage == StorageClass::Typedef
@@ -1250,7 +1277,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     );
                     return None;
                 }
-                full_type = self.infer_initializer_target_type(full_type, &written_initializer)?;
+                if let Some(span) = auto_type_span {
+                    let base = self.infer_auto_type_base(
+                        &written_initializer,
+                        &declarator.derived,
+                        declarator.span,
+                    )?;
+                    full_type = self.apply_declarator(base, &declarator.derived);
+                    declaration_specifier = TypeSpecifier::AutoType {
+                        resolved: base,
+                        span,
+                    };
+                } else {
+                    full_type =
+                        self.infer_initializer_target_type(full_type, &written_initializer)?;
+                }
                 self.symbols
                     .update_symbol_type(symbol, full_type)
                     .expect("declared symbols belong to the parser symbol table");
@@ -1262,11 +1303,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             } else {
                 None
             };
+            let current_declarator_span = declarator.span;
             pending.push(Pending {
                 declarator,
                 full_type,
                 symbol,
                 initializer,
+                specifier: declaration_specifier,
                 written,
                 attributes,
                 asm_label,
@@ -1274,6 +1317,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             });
             if !self.match_kind(TokenKind::Comma) {
                 break;
+            }
+            if auto_type_span.is_some() {
+                self.report("E2915", "auto-type-misuse", current_declarator_span);
+                return None;
             }
             let mut next_attributes = specifier_attributes.clone();
             next_attributes
@@ -1329,7 +1376,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     symbol: entry.symbol,
                     name: entry.declarator.name,
                     ty: entry.full_type,
-                    specifier: specifier.surface.clone(),
+                    specifier: entry.specifier,
                     written: entry.written,
                     gnu_extension_spans: gnu_extension_spans.clone(),
                     attributes: entry.attributes,
@@ -1340,7 +1387,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     symbol: entry.symbol,
                     name: entry.declarator.name,
                     ty: entry.full_type,
-                    specifier: specifier.surface.clone(),
+                    specifier: entry.specifier,
                     written: entry.written,
                     storage,
                     initializer: entry.initializer,
@@ -1512,6 +1559,45 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
+    /// Resolve the base type denoted by `__auto_type` from its required
+    /// initializer. The converted initializer determines the declared object
+    /// type; written pointer layers are peeled to recover the declaration
+    /// specifier's base and then reapplied by the ordinary declarator path.
+    fn infer_auto_type_base(
+        &mut self,
+        written: &WrittenInitializer<'arena>,
+        derived: &[DerivedDeclarator],
+        declarator_span: SourceSpan,
+    ) -> Option<TypeId> {
+        let WrittenInitializer::Expression(expression) = written else {
+            self.report("E2915", "auto-type-misuse", declarator_span);
+            return None;
+        };
+        let mut inferred = self.generic_controlling_type(expression).or_else(|| {
+            self.report("E2202", "invalid-initializer-type", expression.span());
+            None
+        })?;
+        for layer in derived {
+            let DerivedDeclarator::Pointer { .. } = layer else {
+                // Arrays and functions are rejected at the declarator before
+                // the initializer is parsed; keep this helper total if a
+                // future caller forgets that boundary.
+                self.report("E2915", "auto-type-misuse", declarator_span);
+                return None;
+            };
+            let Some(TypeKind::Pointer(pointee)) = self
+                .types
+                .get(inferred)
+                .map(|canonical| canonical.kind.clone())
+            else {
+                self.report("E2202", "invalid-initializer-type", expression.span());
+                return None;
+            };
+            inferred = pointee;
+        }
+        Some(inferred)
+    }
+
     fn initialized_array_contains_vla(&self, target: TypeId) -> bool {
         match self.types.get(target).map(|canonical| &canonical.kind) {
             Some(TypeKind::Array {
@@ -1598,6 +1684,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 } else {
                     when_false
                 })
+            }
+            CHirExpr::Elvis(operand, fallback, _) => {
+                let Some(truth) = self.constant_arithmetic_truth(operand) else {
+                    return false;
+                };
+                truth || self.is_arithmetic_constant_expression(fallback)
             }
             CHirExpr::Cast(target, operand, _) => {
                 matches!(
@@ -1709,6 +1801,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     when_false
                 };
                 self.eval_real_constant_expression(selected)
+            }
+            CHirExpr::Elvis(operand, fallback, _) => {
+                let operand_value = self.eval_real_constant_expression(operand)?;
+                if operand_value != 0.0 {
+                    Some(operand_value)
+                } else {
+                    self.eval_real_constant_expression(fallback)
+                }
             }
             CHirExpr::Cast(target, operand, _) => {
                 match self.operand_type_class(InferredType::Canonical(*target)) {
@@ -3495,6 +3595,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         &mut self,
         inline_spans: &mut Vec<SourceSpan>,
     ) -> Option<ParsedSpecifier<'arena>> {
+        if self.peek_kind() == Some(TokenKind::AutoType) {
+            let keyword = self.advance().expect("peeked __auto_type");
+            // The real type is installed transactionally after the one
+            // required initializer has been parsed. This placeholder is
+            // never allowed to escape a completed declaration.
+            let placeholder = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
+            return Some(ParsedSpecifier {
+                surface: TypeSpecifier::AutoType {
+                    resolved: placeholder,
+                    span: keyword.span,
+                },
+                tag_event: None,
+            });
+        }
         self.parse_type_specifier_inner(Some(inline_spans))
     }
 
@@ -4262,6 +4376,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     _ => Ok(value),
                 }
             }
+            CHirExpr::Elvis(operand, fallback, _) => {
+                let operand_value = self.eval_integer_constant_expression(operand)?;
+                let selected = if operand_value.truth() {
+                    operand_value
+                } else {
+                    self.eval_integer_constant_expression(fallback)?
+                };
+                let operand_type = CInteger::new(0, self.integer_expression_type(operand)?)
+                    .promoted()
+                    .ty();
+                let fallback_type = CInteger::new(0, self.integer_expression_type(fallback)?)
+                    .promoted()
+                    .ty();
+                Ok(selected.cast(usual_arithmetic_type(operand_type, fallback_type)))
+            }
             CHirExpr::BitBuiltin { op, operand, .. } => {
                 eval_bit_builtin(*op, self.eval_integer_constant_expression(operand)?).ok_or(())
             }
@@ -4382,6 +4511,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     .promoted()
                     .ty();
                 Ok(usual_arithmetic_type(when_true, when_false))
+            }
+            CHirExpr::Elvis(operand, fallback, _) => {
+                let operand = CInteger::new(0, self.integer_expression_type(operand)?)
+                    .promoted()
+                    .ty();
+                let fallback = CInteger::new(0, self.integer_expression_type(fallback)?)
+                    .promoted()
+                    .ty();
+                Ok(usual_arithmetic_type(operand, fallback))
             }
             CHirExpr::Cast(ty, _, _) => self.canonical_integer_type(*ty),
             CHirExpr::CheckedArithmetic { .. } => Ok(CIntegerType::INT),
@@ -5537,6 +5675,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TokenKind::Auto
                 | TokenKind::Extern
                 | TokenKind::GnuExtension
+                | TokenKind::AutoType
                 | TokenKind::Register
                 | TokenKind::Static
                 | TokenKind::ThreadLocal
@@ -6399,6 +6538,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let ty = self.conditional_expression_type(when_true, when_false)?;
                 (ty, ExprCategory::Value)
             }
+            CHirExpr::Elvis(operand, fallback, _) => {
+                let operand = self.converted_expression_type(operand)?;
+                if !is_scalar_class(self.operand_type_class(operand.ty)) {
+                    return None;
+                }
+                let fallback = self.converted_expression_type(fallback)?;
+                let ty = self.conditional_expression_type(operand, fallback)?;
+                (ty, ExprCategory::Value)
+            }
             CHirExpr::Call(callee, _, _) => {
                 let callee = self.converted_expression_type(callee)?;
                 let OperandTypeClass::Pointer(function) = self.operand_type_class(callee.ty) else {
@@ -6871,6 +7019,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let condition = self.parse_binary(1)?;
         if !self.match_kind(TokenKind::Question) {
             return Some(condition);
+        }
+        if self.match_kind(TokenKind::Colon) {
+            let fallback = self.parse_conditional()?;
+            let span = self.merge_span(condition.span(), fallback.span());
+            return Some(self.alloc_node(CHirExpr::Elvis(condition, fallback, span)));
         }
         let when_true = self.parse_expression()?;
         self.expect(TokenKind::Colon)?;
@@ -8363,7 +8516,8 @@ fn collect_jump_regions_expr(
         }
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
-        | CHirExpr::Comma(left, right, _) => {
+        | CHirExpr::Comma(left, right, _)
+        | CHirExpr::Elvis(left, right, _) => {
             collect_jump_regions_expr(left, regions, next_region, labels, gotos);
             collect_jump_regions_expr(right, regions, next_region, labels, gotos);
         }
@@ -8775,6 +8929,7 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
         CHirExpr::Ternary(condition, when_true, when_false, _) => {
             CHirExpr::Ternary(condition, when_true, when_false, paren_span)
         }
+        CHirExpr::Elvis(operand, fallback, _) => CHirExpr::Elvis(operand, fallback, paren_span),
         CHirExpr::Call(callee, arguments, _) => {
             CHirExpr::Call(callee, arguments.clone(), paren_span)
         }

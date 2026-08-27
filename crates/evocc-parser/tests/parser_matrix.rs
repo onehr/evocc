@@ -258,6 +258,11 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
             canonical_expr(left, types),
             canonical_expr(right, types)
         ),
+        CHirExpr::Elvis(operand, fallback, _) => format!(
+            "elvis({},{})",
+            canonical_expr(operand, types),
+            canonical_expr(fallback, types)
+        ),
         CHirExpr::Call(callee, arguments, _) => format!(
             "call({},[{}])",
             canonical_expr(callee, types),

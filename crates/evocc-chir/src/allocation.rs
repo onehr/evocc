@@ -1335,7 +1335,8 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             }
             CHirExpr::Binary(_, left, right, _)
             | CHirExpr::Index(left, right, _)
-            | CHirExpr::Comma(left, right, _) => {
+            | CHirExpr::Comma(left, right, _)
+            | CHirExpr::Elvis(left, right, _) => {
                 work.push(WorkItem::Expression {
                     expression: right,
                     current_function,

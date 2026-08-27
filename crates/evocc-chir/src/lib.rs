@@ -376,6 +376,14 @@ pub enum CHirExpr<'arena> {
         &'arena CHirExpr<'arena>,
         SourceSpan,
     ),
+    /// GNU conditional with an omitted middle operand (`a ?: b`). Consumers
+    /// must evaluate `operand` exactly once and use that same value as both
+    /// the condition and the selected true result.
+    Elvis(
+        &'arena CHirExpr<'arena>,
+        &'arena CHirExpr<'arena>,
+        SourceSpan,
+    ),
     Call(
         &'arena CHirExpr<'arena>,
         Vec<&'arena CHirExpr<'arena>>,
@@ -502,6 +510,7 @@ impl CHirExpr<'_> {
             | Self::Unary(_, _, span)
             | Self::Binary(_, _, _, span)
             | Self::Ternary(_, _, _, span)
+            | Self::Elvis(_, _, span)
             | Self::Call(_, _, span)
             | Self::CheckedArithmetic { span, .. }
             | Self::BitBuiltin { span, .. }
@@ -707,6 +716,14 @@ pub enum TypeSpecifier {
         operand: TypeofOperand,
         span: SourceSpan,
     },
+    /// GNU `__auto_type`, resolved from the initializer after lvalue
+    /// conversion. `resolved` is the base type before the written declarator
+    /// layers are applied, preserving the same source/type split as every
+    /// other declaration specifier.
+    AutoType {
+        resolved: TypeId,
+        span: SourceSpan,
+    },
 }
 
 impl TypeSpecifier {
@@ -714,7 +731,7 @@ impl TypeSpecifier {
     pub fn type_id(&self) -> TypeId {
         match self {
             Self::Builtin { ty, .. } | Self::TypedefName { ty, .. } | Self::Tag { ty, .. } => *ty,
-            Self::Typeof { resolved, .. } => *resolved,
+            Self::Typeof { resolved, .. } | Self::AutoType { resolved, .. } => *resolved,
         }
     }
 
@@ -724,7 +741,8 @@ impl TypeSpecifier {
             Self::Builtin { span, .. }
             | Self::TypedefName { span, .. }
             | Self::Tag { span, .. }
-            | Self::Typeof { span, .. } => *span,
+            | Self::Typeof { span, .. }
+            | Self::AutoType { span, .. } => *span,
         }
     }
 }
@@ -1361,6 +1379,7 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
             CHirExpr::Binary(_, lhs, rhs, _)
             | CHirExpr::Index(lhs, rhs, _)
             | CHirExpr::Comma(lhs, rhs, _)
+            | CHirExpr::Elvis(lhs, rhs, _)
             | CHirExpr::Assign {
                 target: lhs,
                 value: rhs,

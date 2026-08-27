@@ -96,6 +96,22 @@ fn eval_integer_constant(
             };
             eval_integer_constant(selected, types, symbols, target)
         }
+        CHirExpr::Elvis(operand, fallback, _) => {
+            let operand_value = eval_integer_constant(operand, types, symbols, target)?;
+            let selected = if operand_value.truth() {
+                operand_value
+            } else {
+                eval_integer_constant(fallback, types, symbols, target)?
+            };
+            let operand_type = CInteger::new(0, integer_expression_type(operand, types, symbols)?)
+                .promoted()
+                .ty();
+            let fallback_type =
+                CInteger::new(0, integer_expression_type(fallback, types, symbols)?)
+                    .promoted()
+                    .ty();
+            Some(selected.cast(usual_arithmetic_type(operand_type, fallback_type)))
+        }
         CHirExpr::Cast(ty, operand, _) => {
             let target_ty = canonical_integer_type(types, *ty)?;
             if let CHirExpr::FloatLit(literal, _) = operand {
@@ -228,6 +244,7 @@ fn expression_size(
         CHirExpr::Unary(_, _, _)
         | CHirExpr::Binary(_, _, _, _)
         | CHirExpr::Ternary(_, _, _, _)
+        | CHirExpr::Elvis(_, _, _)
         | CHirExpr::Comma(_, _, _) => {
             Some(u64::from(integer_expression_type(expression, types, symbols)?.bits()).div_ceil(8))
         }
@@ -318,6 +335,15 @@ fn integer_expression_type(
                 .promoted()
                 .ty();
             Some(usual_arithmetic_type(when_true, when_false))
+        }
+        CHirExpr::Elvis(operand, fallback, _) => {
+            let operand = CInteger::new(0, integer_expression_type(operand, types, symbols)?)
+                .promoted()
+                .ty();
+            let fallback = CInteger::new(0, integer_expression_type(fallback, types, symbols)?)
+                .promoted()
+                .ty();
+            Some(usual_arithmetic_type(operand, fallback))
         }
         CHirExpr::Cast(ty, _, _) => canonical_integer_type(types, *ty),
         CHirExpr::SizeOf(_, _) | CHirExpr::SizeOfExpr(_, _) | CHirExpr::AlignOf(_, _) => {

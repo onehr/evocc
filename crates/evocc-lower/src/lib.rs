@@ -419,7 +419,8 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             | CHirExpr::PtrMember(operand, _, _) => expression(unit, operand, out),
             CHirExpr::Binary(_, left, right, _)
             | CHirExpr::Index(left, right, _)
-            | CHirExpr::Comma(left, right, _) => {
+            | CHirExpr::Comma(left, right, _)
+            | CHirExpr::Elvis(left, right, _) => {
                 expression(unit, left, out);
                 expression(unit, right, out);
             }
@@ -1173,7 +1174,8 @@ fn prevalidate_expr_for_lowering(
         | CHirExpr::PtrMember(operand, _, _) => prevalidate_expr_for_lowering(unit, operand),
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
-        | CHirExpr::Comma(left, right, _) => {
+        | CHirExpr::Comma(left, right, _)
+        | CHirExpr::Elvis(left, right, _) => {
             prevalidate_expr_for_lowering(unit, left)?;
             prevalidate_expr_for_lowering(unit, right)
         }
@@ -4403,6 +4405,7 @@ impl<'a> FunctionLowerer<'a> {
             CHirExpr::Ternary(condition, then_value, else_value, _) => {
                 self.lower_ternary(condition, then_value, else_value, state)
             }
+            CHirExpr::Elvis(operand, fallback, _) => self.lower_elvis(operand, fallback, state),
             CHirExpr::Call(callee, arguments, span) => self
                 .emit_call(callee, arguments, *span, state)?
                 .ok_or(LowerError::UnsupportedExpression {
@@ -5340,6 +5343,135 @@ impl<'a> FunctionLowerer<'a> {
             integer: result.integer.ok_or(LowerError::InvalidControlFlow {
                 span: condition.span(),
                 reason: "ternary result has no integer type",
+            })?,
+        })
+    }
+
+    fn lower_elvis(
+        &mut self,
+        operand: &'a CHirExpr<'a>,
+        else_expression: &'a CHirExpr<'a>,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        // Retain the one evaluated operand as an explicit edge value. The
+        // true successor consumes that value directly; it never lowers the
+        // source expression a second time.
+        let operand_value = self.lower_expr(operand, state)?;
+        let retained = EnvKey::Temporary(self.next_temporary);
+        self.next_temporary += 1;
+        state.env.insert(
+            retained,
+            BoundValue {
+                value: operand_value.value.clone(),
+                integer: Some(operand_value.integer),
+            },
+        );
+        let predicate = self.lower_condition_value(operand_value, state)?;
+        let all_symbols = state
+            .env
+            .keys()
+            .filter_map(|key| match key {
+                EnvKey::Local(symbol) => Some(*symbol),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
+        let mut keys = self.keys_for(state, &all_symbols, &[]);
+        // Normalize the retained value exactly where an explicit scalar local
+        // initialized from the same SSA value would appear. `keys_for`
+        // otherwise groups all temporaries after locals, which would make the
+        // GNU shorthand observably different in Section 9 text despite
+        // carrying the same edge values.
+        keys.retain(|key| *key != retained);
+        let retained_id = state
+            .env
+            .get(&retained)
+            .ok_or(LowerError::InvalidControlFlow {
+                span: operand.span(),
+                reason: "elvis lowering lost its retained operand",
+            })?
+            .value
+            .id;
+        let insertion = keys
+            .iter()
+            .position(|key| {
+                state
+                    .env
+                    .get(key)
+                    .is_none_or(|bound| bound.value.id > retained_id)
+            })
+            .unwrap_or(keys.len());
+        keys.insert(insertion, retained);
+        let mut then_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
+        let mut else_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
+        let then_arguments = self.edge_values(state, &keys)?;
+        let else_arguments = self.edge_values(state, &keys)?;
+        self.terminate(
+            state,
+            Inst::CondBr(
+                predicate,
+                then_state.block,
+                then_arguments,
+                else_state.block,
+                else_arguments,
+            ),
+        )?;
+        let retained_value =
+            then_state
+                .env
+                .get(&retained)
+                .cloned()
+                .ok_or(LowerError::InvalidControlFlow {
+                    span: operand.span(),
+                    reason: "elvis true edge lost its retained operand",
+                })?;
+        let then_value = ExprValue {
+            value: retained_value.value,
+            integer: retained_value
+                .integer
+                .ok_or(LowerError::InvalidControlFlow {
+                    span: operand.span(),
+                    reason: "elvis retained operand has no integer type",
+                })?,
+        };
+        let else_value = self.lower_expr(else_expression, &mut else_state)?;
+        let common = arithmetic_common_type(then_value.integer, else_value.integer);
+        let then_value = self.cast(then_value, common, &then_state)?;
+        let else_value = self.cast(else_value, common, &else_state)?;
+        let result_key = EnvKey::Temporary(self.next_temporary);
+        self.next_temporary += 1;
+        then_state.env.insert(
+            result_key,
+            BoundValue {
+                value: then_value.value,
+                integer: Some(common),
+            },
+        );
+        else_state.env.insert(
+            result_key,
+            BoundValue {
+                value: else_value.value,
+                integer: Some(common),
+            },
+        );
+        let mut merge_keys = keys;
+        merge_keys.push(result_key);
+        let mut merge = self.new_block_from(&then_state, &merge_keys, BlockRole::Ordinary)?;
+        self.branch(&then_state, merge.block, &merge_keys)?;
+        self.branch(&else_state, merge.block, &merge_keys)?;
+        let result = merge
+            .env
+            .remove(&result_key)
+            .ok_or(LowerError::InvalidControlFlow {
+                span: operand.span(),
+                reason: "elvis merge lost its result",
+            })?;
+        merge.env.remove(&retained);
+        *state = merge;
+        Ok(ExprValue {
+            value: result.value,
+            integer: result.integer.ok_or(LowerError::InvalidControlFlow {
+                span: operand.span(),
+                reason: "elvis result has no integer type",
             })?,
         })
     }
@@ -6681,7 +6813,8 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
         | CHirExpr::PtrMember(operand, _, _) => collect_calls_expr(operand, calls),
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
-        | CHirExpr::Comma(left, right, _) => {
+        | CHirExpr::Comma(left, right, _)
+        | CHirExpr::Elvis(left, right, _) => {
             collect_calls_expr(left, calls);
             collect_calls_expr(right, calls);
         }
@@ -6920,7 +7053,8 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
         }
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
-        | CHirExpr::Comma(left, right, _) => {
+        | CHirExpr::Comma(left, right, _)
+        | CHirExpr::Elvis(left, right, _) => {
             live_before_expr(right, live);
             live_before_expr(left, live);
         }
@@ -7096,7 +7230,8 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
         | CHirExpr::PtrMember(operand, _, _) => collect_symbols_expr(operand, symbols),
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
-        | CHirExpr::Comma(left, right, _) => {
+        | CHirExpr::Comma(left, right, _)
+        | CHirExpr::Elvis(left, right, _) => {
             collect_symbols_expr(left, symbols);
             collect_symbols_expr(right, symbols);
         }

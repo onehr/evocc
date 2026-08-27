@@ -161,8 +161,8 @@ const NEGATIVE_CASES: &[NegativeCase] = &[
         message: "expected-expression",
     },
     NegativeCase {
-        id: "expr.conditional.missing_true",
-        source: "int sink = sink ? : fallback;",
+        id: "expr.conditional.missing_false",
+        source: "int sink = 0 ? 1 :;",
         column: 19,
         code: "E1003",
         message: "expected-expression",

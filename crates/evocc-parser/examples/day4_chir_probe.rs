@@ -221,6 +221,11 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 let else_value = self.expression(&format!("{path}.else"), else_value);
                 format!("ternary({condition},{then_value},{else_value})")
             }
+            CHirExpr::Elvis(operand, fallback, _) => {
+                let operand = self.expression(&format!("{path}.operand"), operand);
+                let fallback = self.expression(&format!("{path}.fallback"), fallback);
+                format!("elvis({operand},{fallback})")
+            }
             CHirExpr::Call(callee, arguments, _) => {
                 let callee = self.expression(&format!("{path}.callee"), callee);
                 let arguments = arguments

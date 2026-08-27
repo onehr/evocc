@@ -96,7 +96,8 @@ fn assert_expr_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         }
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
-        | CHirExpr::Comma(left, right, _) => {
+        | CHirExpr::Comma(left, right, _)
+        | CHirExpr::Elvis(left, right, _) => {
             assert_expr_owned(arena, left);
             assert_expr_owned(arena, right);
         }
