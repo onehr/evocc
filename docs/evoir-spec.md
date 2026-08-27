@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.14** | **Authoritative reference** | **2026-08-27**
+**Revision 1.9.15** | **Authoritative reference** | **2026-08-27**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -811,7 +811,23 @@ EffectSummary {
 | `load volatile` | `{All}` | `{}` | true | false | false | true | false |
 | `store volatile` | `{}` | `{All}` | true | false | false | true | false |
 | `call` | depends on callee | depends on callee | depends | depends | depends | depends | depends |
-| `trap.scalar_function_fell_off_end` | `{}` | `{}` | false | false | false | true | false |
+| `trap.<reason>` | `{}` | `{}` | false | false | false | true | false |
+
+**Trap terminators.** `trap.<reason>` is the zero-operand terminator family.
+It takes no operands, produces no results, has no successors, and reaching it
+reports its reason's diagnostic and ends execution. Two reasons exist:
+
+| Reason | Diagnostic | Emitted for |
+|---|---|---|
+| `scalar_function_fell_off_end` | `E3007` | the reachable end of a non-`main`, non-void function |
+| `unreachable_reached` | `E3024` | `__builtin_unreachable()` (10.1.17) |
+
+A trap terminator is a report, never a licence. No analysis may treat a block
+that ends in one as dead, and no rewrite may use its presence to conclude that
+a predecessor edge is not taken, delete a computation, or strengthen a fact
+elsewhere; the only optimistic transition this profile permits is one a proof
+certificate justifies. Its `may_trap` effect keeps it from being reordered or
+removed, exactly as for the other reason.
 
 Every Day 7 memory effect uses region `All`. Region refinement is not active.
 The pointer guards inspect object metadata in the current snapshot and return
@@ -2136,7 +2152,7 @@ binary_predicate := "signed_add_defined" | "signed_sub_defined"
 shift_predicate  := "shift_count_defined" | "signed_shl_defined"
 ub_reason        := "division_by_zero" | "remainder_by_zero" | "signed_overflow"
                   | "invalid_shift_count" | "invalid_signed_left_shift"
-trap_reason      := "scalar_function_fell_off_end"
+trap_reason      := "scalar_function_fell_off_end" | "unreachable_reached"
 volatile_marker  := ε | " volatile"
 direction        := "add" | "sub"
 index_signedness := "signed" | "unsigned"
@@ -2542,6 +2558,7 @@ before a total operation:
 | signed `x << y` | count obligation; `signed_shl_defined.<signedness>(x, y)` → `ub.assume.invalid_signed_left_shift`; then `shl.bits<N> x, y` |
 | read of an uninitialized scalar local | `uninitialized.bits<N>` is threaded through SSA until a semantic consumer reports `E3001` |
 | reachable end of a non-`main`, non-void function | `trap.scalar_function_fell_off_end` reports `E3007` |
+| `__builtin_unreachable()` | `trap.unreachable_reached` reports `E3024` |
 | pointer arithmetic | `ptr.offset.<direction>.<signedness>` with target scale → `pointer_valid` on current `mem<all>` |
 | `*p` (read) | `access_in_bounds` with target size/alignment → `load` |
 | `*p = v` (write) | `access_in_bounds` with target size/alignment → `store` |
@@ -3069,7 +3086,7 @@ and Clang-19 agree on every row.
   (`not-lowered: bit-builtin`) and fails closed.
 - `__builtin_unreachable()`: a statement-expression of type `void`; reaching
   it is undefined behaviour reported as `E3024` (`unreachable-reached`) by the
-  interpreters and lowered to the EvoIR unreachable terminator.
+  interpreters and lowered to `trap.unreachable_reached` (Section 3).
 - `__builtin_return_address(0)`: type `void *`; accepted by the front end;
   lowering reports `E3025` (`not-lowered: return-address`) and fails closed;
   an argument other than the constant `0` is `E2913`.
@@ -3663,7 +3680,7 @@ certificate and should pass.
 | Control | `br ^target(args...)` | — | block label, values | n/a |
 | | `cond_br %c, ^t(targs), ^e(eargs)` | — | condition, blocks, values | n/a |
 | | `ret values...` | — | return values | n/a |
-| | `trap.scalar_function_fell_off_end` | — | — | yes |
+| | `trap.<reason>` | — | reason (`scalar_function_fell_off_end`, `unreachable_reached`) | yes |
 | Pointer | `func_addr @symbol` | `fnptr<Sig>` | symbol | no |
 | Calls | `call @callee(args..., %m, %w)` | ret values, `mem`, `world` | callee, args, memory, world | depends |
 | | `call %fptr(args..., %m, %w)` | ret values, `mem`, `world` | callee value, args, memory, world | depends |
@@ -3704,6 +3721,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.15 | 2026-08-27 | Names `trap.unreachable_reached` as the second trap reason, with its textual form, effects, appendix row and C-HIR contract row, and states that a trap terminator is a report and never a licence for an optimistic transition. Revision 1.9.14's 10.1.17 referred to an unreachable terminator that Sections 3, 4 and 9 did not define. |
 | 1.9.14 | 2026-08-27 | Adds the `copy` instruction (Section 3, effects, textual form, `E3027`) as the single lowering of C aggregate assignment, copy-initialization, by-value passing and return; states padding and initializedness transfer from measured oracle behaviour; admits file-scope flexible-array-member initializers (`E2919` elsewhere). Opened because six kernel parse lanes stop on aggregate copy-initialization. |
 | 1.9.13 | 2026-08-27 | Closes the fourteen gaps the preprocessing-grammar and statement-expression/initializer windows reported: `E2917`, `E2918`, `E3026`; join-block argument order and exit cleanup for statement expressions; scalar and non-constant designators; incomplete-array bounds and range initializers (measured; one `ORACLE_CONFLICT` resolved by refusal); the `compound_literal` global kind and read-only storage; paste results and `$`; the stale exclusion in 10.1.7. |
 | 1.9.12 | 2026-08-27 | Completes the preprocessing-token grammar: `.5foo` is a pp-number, stray characters such as `\\` are single pp-tokens kept by stringification, and `E0112` is the one diagnostic for a pp-token with no C form when it reaches the C lexer. Measured after every raw kernel lane stopped on `\\sreg` in `sysreg.h`. |
