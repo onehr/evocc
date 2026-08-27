@@ -1,0 +1,130 @@
+{
+  "receiptId": "c30.aggregate-copies.red",
+  "authority": {
+    "specification": "docs/evoir-spec.md revision 1.9.15 sections 3, 9, 10.1.3, and 6.3",
+    "contract": "tests/contracts/day9-acceptance-contract.json scope line G2"
+  },
+  "baseline": "1abaebd711cd83b3b6e2a1851792982458c06d14",
+  "declaredMissingCapabilities": [
+    "evoir-copy-instruction",
+    "record-and-union-assignment",
+    "aggregate-copy-initialization",
+    "file-scope-flexible-array-initializer"
+  ],
+  "redCommand": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --no-fail-fast -p evocc-evoir --test copy_instruction -p evocc-proofcheck --test copy_is_opaque -p evocc-parser --test aggregate_copies -p evocc-chir --test aggregate_copy_values -p evocc-lower --test aggregate_copy_lowering",
+  "fixtureCorrectionVerification": {
+    "reason": "The proof fixture originally omitted the canonical integer type suffix on two add instructions and assumed pre-rewrite value IDs survive Section 8.8 canonical renumbering; memory fixtures also omitted already-required guards after operations that precede copy.",
+    "isolatedBaseline": "0141102be1e4f7efa3c4ca16f5bf94c10e3cf5b7",
+    "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-proofcheck --test copy_is_opaque --quiet",
+    "result": "RED: unknown multi-result Section 9 instruction form at copy; 0 build errors"
+  },
+  "measured": {
+    "passedControls": 3,
+    "failed": 22,
+    "ignored": 0,
+    "rustBuildErrors": 0,
+    "suites": {
+      "evocc-evoir/copy_instruction": { "passed": 1, "failed": 5 },
+      "evocc-proofcheck/copy_is_opaque": { "passed": 0, "failed": 1 },
+      "evocc-parser/aggregate_copies": { "passed": 2, "failed": 6 },
+      "evocc-chir/aggregate_copy_values": { "passed": 0, "failed": 4 },
+      "evocc-lower/aggregate_copy_lowering": { "passed": 0, "failed": 6 }
+    },
+    "failureClasses": {
+      "unknown Section 9 copy form": 6,
+      "E2703 aggregate-assignment": 6,
+      "E2705 aggregate-copy-initializer": 7,
+      "E2201 excess-initializer": 2,
+      "E2202 invalid-initializer-type": 1
+    }
+  },
+  "observations": [
+    {
+      "suite": "evocc-evoir/copy_instruction",
+      "tests": [
+        "copy_has_one_canonical_text_form_and_real_effects",
+        "copy_transfers_initializedness_without_reading_padding",
+        "copying_pointer_bytes_preserves_their_provenance",
+        "identical_ranges_are_allowed_and_partial_overlap_is_typed",
+        "copy_reports_bounds_alignment_and_zero_size_pointer_faults"
+      ],
+      "observed": "unknown multi-result Section 9 instruction form",
+      "reason": "evoir-copy-instruction"
+    },
+    {
+      "suite": "evocc-proofcheck/copy_is_opaque",
+      "test": "copy_is_excluded_reassembled_verbatim_and_replayed_independently",
+      "observed": "unknown multi-result Section 9 instruction form",
+      "reason": "evoir-copy-instruction"
+    },
+    {
+      "suite": "evocc-parser/aggregate_copies",
+      "tests": [
+        "record_union_nested_and_array_members_are_assignable",
+        "assignment_chains_retain_an_aggregate_expression_value",
+        "volatile_record_assignment_is_accepted_for_memberwise_access"
+      ],
+      "observed": "E2703: not-covered-day7: aggregate-assignment",
+      "reason": "record-and-union-assignment"
+    },
+    {
+      "suite": "evocc-parser/aggregate_copies",
+      "test": "copy_initializers_accept_objects_calls_dereferences_globals_and_literals",
+      "observed": "E2705: not-covered-day7: aggregate-copy-initializer",
+      "reason": "aggregate-copy-initialization"
+    },
+    {
+      "suite": "evocc-parser/aggregate_copies",
+      "test": "flexible_array_initializers_are_file_scope_only",
+      "observed": "E2201: excess-initializer",
+      "reason": "file-scope-flexible-array-initializer"
+    },
+    {
+      "suite": "evocc-parser/aggregate_copies",
+      "test": "expanded_kernel_cmpxchg_declaration_parses_verbatim",
+      "observed": "E2202: invalid-initializer-type",
+      "reason": "aggregate-copy-initialization"
+    },
+    {
+      "suite": "evocc-chir/aggregate_copy_values",
+      "tests": [
+        "assignment_copy_initialization_and_expression_values_match",
+        "record_arguments_and_returns_are_copied_by_value",
+        "copied_padding_stays_uninitialized_but_members_are_readable"
+      ],
+      "observed": "E2705: not-covered-day7: aggregate-copy-initializer",
+      "reason": "aggregate-copy-initialization"
+    },
+    {
+      "suite": "evocc-chir/aggregate_copy_values",
+      "test": "self_assignment_and_identical_pointer_ranges_are_defined",
+      "observed": "E2703: not-covered-day7: aggregate-assignment",
+      "reason": "record-and-union-assignment"
+    },
+    {
+      "suite": "evocc-lower/aggregate_copy_lowering",
+      "tests": [
+        "record_and_union_assignments_each_emit_one_opaque_copy",
+        "volatile_aggregate_copy_is_memberwise_and_never_uses_copy"
+      ],
+      "observed": "E2703: not-covered-day7: aggregate-assignment",
+      "reason": "record-and-union-assignment"
+    },
+    {
+      "suite": "evocc-lower/aggregate_copy_lowering",
+      "tests": [
+        "copy_initializers_emit_one_copy_instead_of_member_expansion",
+        "chir_and_evoir_agree_after_copying_a_three_member_record",
+        "by_value_argument_return_and_result_initialization_use_one_mechanism"
+      ],
+      "observed": "E2705: not-covered-day7: aggregate-copy-initializer",
+      "reason": "aggregate-copy-initialization"
+    },
+    {
+      "suite": "evocc-lower/aggregate_copy_lowering",
+      "test": "file_scope_flexible_array_initializer_extends_only_the_object",
+      "observed": "E2201: excess-initializer",
+      "reason": "file-scope-flexible-array-initializer"
+    }
+  ]
+}
