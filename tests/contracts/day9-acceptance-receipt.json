@@ -2,9 +2,9 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "be9409f46c0ff56189ea0bfa6788fff6d0973b7958617a0134e01a17f48d6525"
+    "sha256": "c2f7a995e8e1064d83ee4d7acfe71bf35ac6d217084e3385a91901985b3c6983"
   },
-  "cutLine": "The frozen ten-position A profile, B, the typeof + _Generic portion of C, scope E, scope F, the explicitly measured Unknown-compiler gate of scope P, pasted-pp-number plus pragma-pack scope P2, preprocessing-token paste scope P3, complete preprocessing-token grammar scope P4, core pointer-memory scope G, and the statement-expression/designated-initializer/compound-literal portion of scope C are closed. All 16 raw preprocessing lanes are clean. The __auto_type-dependent cohort fixture and all of D remain deferred to the compile-time inference window. Automatic compound literals have real memory lowering; file-scope compound-literal pointer relocation remains fail-closed because revision 1.9.12 does not define its unnamed global identity or relocation/provenance representation. Checked arithmetic is front-end complete and fails closed in lowering with E3020. GNU asm is preserved in C-HIR and fails closed in execution and lowering with E3021. All named authority gaps are retained under specAmbiguities.",
+  "cutLine": "The frozen ten-position A profile, B, the typeof + _Generic portion of C, scope E, scope F, scope I, the explicitly measured Unknown-compiler gate of scope P, pasted-pp-number plus pragma-pack scope P2, preprocessing-token paste scope P3, complete preprocessing-token grammar scope P4, core pointer-memory scope G, and the statement-expression/designated-initializer/compound-literal portion of scope C are closed. All 16 raw preprocessing lanes are clean. Compile-time selection, type/offset queries, bit builtins, __builtin_unreachable, __builtin_return_address, __auto_type, GNU Elvis, case ranges, and local labels are resolved at the specified front-end boundary; the dashboard now places every remaining parser failure in aggregate initialization/copy scope G2. Automatic compound literals have real memory lowering; file-scope compound-literal pointer relocation remains fail-closed because the specification does not define its unnamed global identity or relocation/provenance representation. Checked arithmetic is front-end complete and fails closed in lowering with E3020. GNU asm is preserved in C-HIR and fails closed in execution and lowering with E3021. All named authority gaps are retained under specAmbiguities.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -174,9 +174,36 @@
     ],
     "dependentFixture": "The verbatim __auto_type cohort shape remains an active dependency on the compile-time inference window; the equivalent typeof fixture is green and no test is disabled."
   },
-  "subjectCommit": "3a201db",
+  "compileTimeBuiltinsRedWindow": {
+    "opened": "532794a (tests only; 22/26 failed for exactly ten declared capabilities, 4/26 were green controls, zero Rust build errors)",
+    "closed": "b8d7a6d",
+    "implementationCommits": [
+      "0d94962",
+      "3476ae9",
+      "4ecd0f6",
+      "b8d7a6d"
+    ],
+    "authorityRevision": "8e9e42c (specification revision 1.9.15)",
+    "diagnostics": {
+      "path": "tests/contracts/compile-time-builtins-red.json",
+      "sha256": "b507980e4654143e5322528bb043ca15e480930651f29897d760751b04266121"
+    },
+    "declaredCapabilities": [
+      "choose-expression",
+      "type-compatibility-builtin",
+      "offset-builtin",
+      "bit-counting-builtins",
+      "unreachable-builtin",
+      "return-address-builtin",
+      "inferred-auto-type",
+      "elvis-operator",
+      "case-ranges",
+      "local-label-declarations"
+    ]
+  },
+  "subjectCommit": "b8d7a6d",
   "gate": {
-    "claim": "2/16 dual-oracle parse, 16/16 raw preprocess clean, zero lanes stopped on statement-expression, designated-initializer, compound-literal, E2901, or E2902 frontiers, real automatic-object lowering and interpreter agreement, and zero regressions against the designated-initializer publication",
+    "claim": "2/16 dual-oracle parse, 16/16 raw preprocess clean, zero lanes stopped on any scope-I construct, 858 workspace tests, byte-identical front-end-resolved EvoIR pairs, typed trap execution for __builtin_unreachable, and zero regressions against every publication in the window",
     "measured": {
       "dualOracleCleanParseTus": "2/16",
       "rawPreprocessClean": "16/16",
@@ -188,14 +215,19 @@
       "designatedInitializerLanesRemaining": 0,
       "compoundLiteralLanesRemaining": 0,
       "retiredE2901AndE2902Occurrences": 0,
+      "compileTimeSelectionLanesRemaining": 0,
+      "bitBuiltinLanesRemaining": 0,
+      "autoTypeLanesRemaining": 0,
+      "caseRangeLanesRemaining": 0,
+      "localLabelLanesRemaining": 0,
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --commit 3a201db --previous .evidence/day5-kernel-reconnaissance/20260826T210931Z-30859/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260827T124256Z-64595/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "7872e0ed20f1cfa79a6bff097911671e47affb377b14669ca481cdbdab6ae3ff",
-      "subjectCommit": "3a201db",
-      "publishedFromRun": "20260826T233030Z-8961"
+      "sha256": "7335ba7b192bfa0d5774e1b299d40b47694bf6e7b7284217f343c5416d5e327b",
+      "subjectCommit": "b8d7a6d",
+      "publishedFromRun": "20260827T134103Z-67070"
     },
     "result": "PASS"
   },
@@ -210,34 +242,10 @@
     },
     "stillFailing": [
       {
-        "count": 10,
-        "lanes": "5 units x {gcc,clang}-preprocessed-parser",
-        "firstError": "E2001 undeclared-identifier: __builtin_ctzl",
-        "rootCause": "measured kernel builtin frontier; compile-time builtins window"
-      },
-      {
-        "count": 8,
-        "lanes": "4 units x {gcc,clang}-preprocessed-parser",
-        "firstError": "E1002 expected-token: :",
-        "rootCause": "measured GNU case-range syntax, including case '0' ... '7'; compile-time inference window"
-      },
-      {
-        "count": 6,
-        "lanes": "3 units x {gcc,clang}-preprocessed-parser",
+        "count": 28,
+        "lanes": "14 units x {gcc,clang}-preprocessed-parser",
         "firstError": "E2202 invalid-initializer-type",
-        "rootCause": "measured aggregate assignment/copy-initialization frontier at arch/arm64/include/asm/atomic_ll_sc.h:332; registered scope G2"
-      },
-      {
-        "count": 2,
-        "lanes": "1 unit x {gcc,clang}-preprocessed-parser",
-        "firstError": "E2001 undeclared-identifier: __auto_type",
-        "rootCause": "declared compile-time inference dependency"
-      },
-      {
-        "count": 2,
-        "lanes": "1 unit x {gcc,clang}-preprocessed-parser",
-        "firstError": "E2001 undeclared-identifier: __builtin_choose_expr",
-        "rootCause": "measured compile-time builtin frontier"
+        "rootCause": "measured aggregate assignment/copy-initialization frontier; registered scope G2"
       }
     ],
     "publicationsThisWindow": [
@@ -345,36 +353,54 @@
         "commit": "3a201db",
         "run": "20260826T233030Z-8961",
         "parseLanesStoppedOn": "raw: 16/16 clean; parser: all three declared construct blockers and E2901/E2902 are 0, 10 __builtin_ctzl, 8 expected-token colon, 6 invalid-initializer-type, 2 __auto_type, 2 __builtin_choose_expr, 4 clean; dual-oracle clean 2/16; 0 regressions"
+      },
+      {
+        "commit": "0d94962",
+        "run": "20260827T070731Z-95986",
+        "parseLanesStoppedOn": "raw: 16/16 clean; parser: choose/type/offset blockers 0, 12 __builtin_ctzl, 8 expected-token colon, 6 invalid-initializer-type, 2 __auto_type, 4 clean; dual-oracle clean 2/16; 0 regressions"
+      },
+      {
+        "commit": "3476ae9",
+        "run": "20260827T095532Z-86596",
+        "parseLanesStoppedOn": "raw: 16/16 clean; parser: bit-builtin and unreachable blockers 0, 18 invalid-initializer-type, 8 expected-token colon, 2 __auto_type, 4 clean; dual-oracle clean 2/16; 0 regressions"
+      },
+      {
+        "commit": "4ecd0f6",
+        "run": "20260827T124256Z-64595",
+        "parseLanesStoppedOn": "raw: 16/16 clean; parser: __auto_type and Elvis blockers 0, 18 invalid-initializer-type, 10 expected-token colon, 4 clean; dual-oracle clean 2/16; 0 regressions"
+      },
+      {
+        "commit": "b8d7a6d",
+        "run": "20260827T134103Z-67070",
+        "parseLanesStoppedOn": "raw: 16/16 clean; parser: all ten scope-I construct blockers 0, 28 invalid-initializer-type, 4 clean; dual-oracle clean 2/16; 0 regressions"
       }
     ]
   },
   "dashboardDelta": {
     "before": {
-      "run": "20260826T180246Z-51365",
-      "subjectCommit": "b7f9775",
+      "run": "20260826T233030Z-8961",
+      "subjectCommit": "3a201db",
       "declaredBlockerLanes": {
-        "statementExpression": 12,
-        "designatedInitializer": 6,
-        "compoundLiteralAtFirstErrorFrontier": 0
+        "compileTimeSelection": 2,
+        "bitBuiltin": 10,
+        "autoType": 2,
+        "caseRange": 8
       },
       "rawPreprocessClean": "16/16",
       "dualOracleCleanParseTus": "2/16"
     },
     "after": {
-      "run": "20260826T233030Z-8961",
-      "subjectCommit": "3a201db",
+      "run": "20260827T134103Z-67070",
+      "subjectCommit": "b8d7a6d",
       "declaredBlockerLanes": {
-        "statementExpression": 0,
-        "designatedInitializer": 0,
-        "compoundLiteral": 0,
-        "E2901OrE2902": 0
+        "compileTimeSelection": 0,
+        "bitBuiltin": 0,
+        "autoType": 0,
+        "caseRange": 0,
+        "localLabel": 0
       },
       "nextFirstErrorClasses": {
-        "E2001 __builtin_ctzl": 10,
-        "E1002 expected-token colon": 8,
-        "E2202 invalid-initializer-type": 6,
-        "E2001 __auto_type": 2,
-        "E2001 __builtin_choose_expr": 2
+        "E2202 invalid-initializer-type": 28
       },
       "rawPreprocessClean": "16/16",
       "dualOracleCleanParseTus": "2/16",
@@ -425,7 +451,7 @@
   },
   "tests": {
     "workspace": {
-      "passed": 834,
+      "passed": 858,
       "failed": 0,
       "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/private/tmp/c30-cargo-test-runner.sh cargo test --workspace --no-fail-fast; the passed count is from the same command with -- --list | rg -c ': test$'"
     },
@@ -487,7 +513,7 @@
         "command": "cargo test -p evocc-parser --test generic_selection"
       },
       "crates/evocc-lower/tests/front_end_resolved_forms.rs": {
-        "passed": 1,
+        "passed": 6,
         "command": "cargo test -p evocc-lower --test front_end_resolved_forms"
       },
       "crates/evocc-parser/tests/checked_arithmetic.rs": {
@@ -507,7 +533,7 @@
         "command": "cargo test -p evocc-chir --test checked_arithmetic_semantics"
       },
       "crates/evocc-lower/tests/fail_closed_forms.rs": {
-        "passed": 3,
+        "passed": 5,
         "command": "cargo test -p evocc-lower --test fail_closed_forms"
       },
       "crates/evocc-parser/tests/gnu_pointer_attributes.rs": {
@@ -557,6 +583,14 @@
       "crates/evocc-lower/tests/statement_expression_lowering.rs": {
         "passed": 5,
         "command": "cargo test -p evocc-lower --test statement_expression_lowering"
+      },
+      "crates/evocc-parser/tests/compile_time_builtins.rs": {
+        "passed": 10,
+        "command": "cargo test -p evocc-parser --test compile_time_builtins"
+      },
+      "crates/evocc-chir/tests/compile_time_builtin_values.rs": {
+        "passed": 6,
+        "command": "cargo test -p evocc-chir --test compile_time_builtin_values"
       }
     },
     "clippy": {
@@ -577,10 +611,10 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "3a201db8887729da5e53a0c559949eac474f0c14",
-    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-h-replay.anAjaN/repo; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/private/tmp/c30-cargo-test-runner.sh cargo test --workspace --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test",
+    "commit": "6b42b414e9853bafd971ca58e7c050ff59e75a7f",
+    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-i-replay.lERNJg/repo; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/private/tmp/c30-cargo-test-runner.sh cargo test --workspace --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test",
     "measured": {
-      "passed": 834,
+      "passed": 858,
       "failed": 0,
       "clippy": 0,
       "fmt": "clean",
@@ -610,7 +644,12 @@
     "H-DESIGNATOR-ICE-DIAGNOSTICS: invalid designator index and range constant expressions have no assigned diagnostic.",
     "H-RANGE-EVALUATION-COUNT: side-effect evaluation multiplicity for GNU range initializers is not specified.",
     "H-INCOMPLETE-ARRAY-DESIGNATED-BOUND: sparse and range designators do not have a frozen incomplete-array bound rule.",
-    "H-CLOSING-EDGE-CLEANUP: statement-expression lifetime closure is required on every exit but the lowering paragraph does not define the cleanup edge form."
+    "H-CLOSING-EDGE-CLEANUP: statement-expression lifetime closure is required on every exit but the lowering paragraph does not define the cleanup edge form.",
+    "I-AUTO-TYPE-DECLARATOR-LAYERS: section 10.1.17 freezes inference from the initializer but does not state how an explicitly written pointer layer composes with the inferred type; the implementation preserves the written layer instead of claiming a broader grammar.",
+    "I-AUTO-TYPE-DECLARATION-POINT: section 10.1.17 does not freeze whether the declared identifier enters scope before its initializer for self-reference diagnostics.",
+    "I-CASE-RANGE-NONCONSTANT: section 10.1.17 requires constant endpoints but E2916 is normatively assigned only to empty and overlapping ranges; the diagnostic for a nonconstant endpoint is not frozen.",
+    "I-LOCAL-LABEL-COMPUTED-USE: section 10.1.17 names computed use of a local label, but no computed-goto expression or statement form is defined elsewhere in the grammar or C-HIR contract.",
+    "I-UNDECLARED-LABEL-DIAGNOSTIC: section 10.1.17 refers to an existing undeclared-label diagnostic, but no such diagnostic code/message appears in the normative diagnostic tables."
   ],
   "processDeviations": [
     "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (adce449), aligned arguments as constant expressions (ed8302b), attribute positions in members, block scope and parameters (eae3e42).",
@@ -636,6 +675,8 @@
     "The verbatim statement-expression cohort shape using __auto_type remains declared as a dependency on the compile-time inference window. An active equivalent fixture uses typeof, and no test is disabled.",
     "The earlier boundary test for compound literals was migrated from expecting E2902 to expecting successful parsing in the same semantic commit that retired the diagnostic; the regression test was not deleted.",
     "The first compound-literal dashboard capture was refused after the restricted sandbox denied container inspection and remains preserved as incomplete evidence. Review then found that static compound-literal lowering fabricated an undefined global_addr. A failing regression test was added, the lowerer was changed to fail closed for this unfrozen relocation, and the successful publication was made from the follow-up subject 3a201db.",
-    "File-scope compound literals are parsed and executed with static/read-only object semantics, but their EvoIR relocation lowering remains fail-closed because sections 10.1.13 and 3 do not define deterministic unnamed global identity or the required static pointer relocation/provenance representation. No representation was invented."
+    "File-scope compound literals are parsed and executed with static/read-only object semantics, but their EvoIR relocation lowering remains fail-closed because sections 10.1.13 and 3 do not define deterministic unnamed global identity or the required static pointer relocation/provenance representation. No representation was invented.",
+    "The initial case-range implementation normalized consecutive ordinary case labels in the parser, which made the new byte-identity test pass but changed a frozen C-HIR fingerprint. The full workspace gate caught it before commit; C-HIR preservation was restored and only lowering now coalesces consecutive label chains after selector conversion.",
+    "Revision 1.9.14 referred to an EvoIR unreachable terminator that did not exist in Sections 3 or 9. Production work stopped until the architecture owner supplied revision 1.9.15; the implementation then added the typed trap reason and verified validator, both interpreters, textual round-trip, proof-checker, and eqopt behavior as one semantic unit."
   ]
 }
