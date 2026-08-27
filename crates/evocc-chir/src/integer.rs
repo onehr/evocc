@@ -8,6 +8,15 @@ use evocc_types::IntRank;
 
 use crate::{BinaryOp, CheckedArithmeticOp, FloatLit, IntBase, IntLit, IntSuffix, UnaryOp};
 
+/// Value operation selected by the GNU bit-counting builtin family.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BitBuiltinOp {
+    FindFirstSet,
+    CountLeadingZeros,
+    CountTrailingZeros,
+    PopulationCount,
+}
+
 /// A C integer type in the Day 5 AArch64 GNU ABI.
 ///
 /// The representation is deliberately private: downstream code selects one
@@ -165,6 +174,39 @@ impl CInteger {
             self
         }
     }
+}
+
+/// Evaluate one GNU bit builtin after its source-level parameter conversion.
+///
+/// `None` is the one typed runtime failure in this family: `clz(0)` or
+/// `ctz(0)`. Every successful result has C type `int` regardless of the
+/// operand width.
+#[must_use]
+pub fn eval_bit_builtin(op: BitBuiltinOp, operand: CInteger) -> Option<CInteger> {
+    let raw = operand.raw_bits();
+    let result = match op {
+        BitBuiltinOp::FindFirstSet => {
+            if raw == 0 {
+                0
+            } else {
+                raw.trailing_zeros() + 1
+            }
+        }
+        BitBuiltinOp::CountLeadingZeros => {
+            if raw == 0 {
+                return None;
+            }
+            raw.leading_zeros() - u32::from(64 - operand.ty().bits())
+        }
+        BitBuiltinOp::CountTrailingZeros => {
+            if raw == 0 {
+                return None;
+            }
+            raw.trailing_zeros()
+        }
+        BitBuiltinOp::PopulationCount => raw.count_ones(),
+    };
+    Some(CInteger::new(u64::from(result), CIntegerType::INT))
 }
 
 /// Evaluate a checked-arithmetic builtin without inheriting host overflow.

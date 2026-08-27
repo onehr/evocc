@@ -279,6 +279,11 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
             canonical_expr(rhs, types),
             canonical_expr(target, types)
         ),
+        CHirExpr::BitBuiltin { op, operand, .. } => {
+            format!("bit_builtin({op:?},{})", canonical_expr(operand, types))
+        }
+        CHirExpr::BuiltinUnreachable { .. } => "builtin_unreachable".into(),
+        CHirExpr::BuiltinReturnAddress { .. } => "builtin_return_address".into(),
         CHirExpr::Cast(ty, operand, _) => {
             format!(
                 "cast({},{})",

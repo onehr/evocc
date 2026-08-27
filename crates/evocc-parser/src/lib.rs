@@ -4,9 +4,9 @@ use std::collections::{HashMap, HashSet};
 use std::num::NonZeroUsize;
 
 use evocc_chir::integer::{
-    enum_integer_type, eval_binary_integer, eval_unary_integer, floating_literal_to_integer,
-    integer_literal_value, integer_type_for_rank, rank_for_integer_type, usual_arithmetic_type,
-    CInteger, CIntegerType,
+    enum_integer_type, eval_binary_integer, eval_bit_builtin, eval_unary_integer,
+    floating_literal_to_integer, integer_literal_value, integer_type_for_rank,
+    rank_for_integer_type, usual_arithmetic_type, BitBuiltinOp, CInteger, CIntegerType,
 };
 use evocc_chir::{
     builtin_constant_p, AppliedAttribute, AsmOperand, AsmStmt, AssignmentOp, Attribute,
@@ -288,6 +288,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__builtin_choose_expr") => TokenKind::BuiltinChooseExpr,
                     Some("__builtin_types_compatible_p") => TokenKind::BuiltinTypesCompatibleP,
                     Some("__builtin_offsetof") => TokenKind::BuiltinOffsetof,
+                    Some(
+                        "__builtin_ffs"
+                        | "__builtin_ffsl"
+                        | "__builtin_ffsll"
+                        | "__builtin_clz"
+                        | "__builtin_clzl"
+                        | "__builtin_clzll"
+                        | "__builtin_ctz"
+                        | "__builtin_ctzl"
+                        | "__builtin_ctzll"
+                        | "__builtin_popcount"
+                        | "__builtin_popcountl"
+                        | "__builtin_popcountll",
+                    ) => TokenKind::BuiltinBit,
+                    Some("__builtin_unreachable") => TokenKind::BuiltinUnreachable,
+                    Some("__builtin_return_address") => TokenKind::BuiltinReturnAddress,
                     Some("__builtin_add_overflow") => TokenKind::BuiltinAddOverflow,
                     Some("__builtin_sub_overflow") => TokenKind::BuiltinSubOverflow,
                     Some("__builtin_mul_overflow") => TokenKind::BuiltinMulOverflow,
@@ -1542,6 +1558,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         match expression {
             CHirExpr::Lit(_, _) | CHirExpr::FloatLit(_, _) | CHirExpr::CharLit(_, _) => true,
+            CHirExpr::BitBuiltin { .. } => {
+                self.eval_integer_constant_expression(expression).is_ok()
+            }
             CHirExpr::MemoryRead { .. } => false,
             CHirExpr::Ident { symbol, .. } => self
                 .symbols
@@ -1597,6 +1616,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::Unary(UnaryOp::AddrOf | UnaryOp::Deref, _, _)
             | CHirExpr::Call(_, _, _)
             | CHirExpr::CheckedArithmetic { .. }
+            | CHirExpr::BuiltinUnreachable { .. }
+            | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::Assign { .. }
             | CHirExpr::MemoryAssign { .. }
             | CHirExpr::Update { .. }
@@ -1623,7 +1644,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         match expression {
             CHirExpr::FloatLit(literal, _) => Some(literal.value),
             CHirExpr::MemoryRead { .. } => None,
-            CHirExpr::Lit(_, _) | CHirExpr::CharLit(_, _) | CHirExpr::Ident { .. } => self
+            CHirExpr::Lit(_, _)
+            | CHirExpr::CharLit(_, _)
+            | CHirExpr::Ident { .. }
+            | CHirExpr::BitBuiltin { .. } => self
                 .eval_integer_constant_expression(expression)
                 .ok()
                 .map(|value| value.mathematical_value() as f64),
@@ -1708,6 +1732,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::StringLit(_, _)
             | CHirExpr::Call(_, _, _)
             | CHirExpr::CheckedArithmetic { .. }
+            | CHirExpr::BuiltinUnreachable { .. }
+            | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::Assign { .. }
             | CHirExpr::MemoryAssign { .. }
             | CHirExpr::Update { .. }
@@ -4236,6 +4262,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     _ => Ok(value),
                 }
             }
+            CHirExpr::BitBuiltin { op, operand, .. } => {
+                eval_bit_builtin(*op, self.eval_integer_constant_expression(operand)?).ok_or(())
+            }
             CHirExpr::Cast(ty, operand, _) => {
                 let target = self.canonical_integer_type(*ty)?;
                 if let CHirExpr::FloatLit(literal, _) = operand {
@@ -4267,6 +4296,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::StringLit(_, _)
             | CHirExpr::Call(_, _, _)
             | CHirExpr::CheckedArithmetic { .. }
+            | CHirExpr::BuiltinUnreachable { .. }
+            | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::Member(_, _, _)
             | CHirExpr::PtrMember(_, _, _)
             | CHirExpr::Index(_, _, _)
@@ -4354,6 +4385,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             CHirExpr::Cast(ty, _, _) => self.canonical_integer_type(*ty),
             CHirExpr::CheckedArithmetic { .. } => Ok(CIntegerType::INT),
+            CHirExpr::BitBuiltin { .. } => Ok(CIntegerType::INT),
             CHirExpr::StatementExpr { facts, .. } => self.canonical_integer_type(facts.ty()),
             CHirExpr::SizeOf(ty, _) | CHirExpr::AlignOf(ty, _) => {
                 TargetDataLayout::aarch64_unknown_linux_gnu()
@@ -4368,6 +4400,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::FloatLit(_, _)
             | CHirExpr::StringLit(_, _)
             | CHirExpr::Call(_, _, _)
+            | CHirExpr::BuiltinUnreachable { .. }
+            | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::Member(_, _, _)
             | CHirExpr::PtrMember(_, _, _)
             | CHirExpr::Index(_, _, _)
@@ -6380,6 +6414,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::CheckedArithmetic { facts, .. } => {
                 (InferredType::Canonical(facts.ty()), ExprCategory::Value)
             }
+            CHirExpr::BitBuiltin { facts, .. }
+            | CHirExpr::BuiltinUnreachable { facts, .. }
+            | CHirExpr::BuiltinReturnAddress { facts, .. } => {
+                (InferredType::Canonical(facts.ty()), ExprCategory::Value)
+            }
             CHirExpr::Cast(ty, _, _) => (InferredType::Canonical(*ty), ExprCategory::Value),
             CHirExpr::SizeOf(_, _) | CHirExpr::SizeOfExpr(_, _) | CHirExpr::AlignOf(_, _) => (
                 InferredType::Integer(CIntegerType::ULONG),
@@ -7288,6 +7327,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 return self.parse_builtin_types_compatible_p(tok);
             }
             TokenKind::BuiltinOffsetof => return self.parse_builtin_offsetof(tok),
+            TokenKind::BuiltinBit => return self.parse_builtin_bit(tok),
+            TokenKind::BuiltinUnreachable => return self.parse_builtin_unreachable(tok),
+            TokenKind::BuiltinReturnAddress => return self.parse_builtin_return_address(tok),
             TokenKind::BuiltinAddOverflow => {
                 return self.parse_checked_arithmetic(tok, CheckedArithmeticOp::Add);
             }
@@ -7585,6 +7627,120 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .iter()
             .find(|placed| placed.field_index == field_index)?;
         Some((placed.byte_offset, field.ty))
+    }
+
+    fn parse_builtin_bit(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        let spelling = self.token_text(&keyword).to_owned();
+        let (op, rank) = match spelling.as_str() {
+            "__builtin_ffs" => (BitBuiltinOp::FindFirstSet, IntRank::Int),
+            "__builtin_ffsl" => (BitBuiltinOp::FindFirstSet, IntRank::Long),
+            "__builtin_ffsll" => (BitBuiltinOp::FindFirstSet, IntRank::LongLong),
+            "__builtin_clz" => (BitBuiltinOp::CountLeadingZeros, IntRank::UInt),
+            "__builtin_clzl" => (BitBuiltinOp::CountLeadingZeros, IntRank::ULong),
+            "__builtin_clzll" => (BitBuiltinOp::CountLeadingZeros, IntRank::ULongLong),
+            "__builtin_ctz" => (BitBuiltinOp::CountTrailingZeros, IntRank::UInt),
+            "__builtin_ctzl" => (BitBuiltinOp::CountTrailingZeros, IntRank::ULong),
+            "__builtin_ctzll" => (BitBuiltinOp::CountTrailingZeros, IntRank::ULongLong),
+            "__builtin_popcount" => (BitBuiltinOp::PopulationCount, IntRank::UInt),
+            "__builtin_popcountl" => (BitBuiltinOp::PopulationCount, IntRank::ULong),
+            "__builtin_popcountll" => (BitBuiltinOp::PopulationCount, IntRank::ULongLong),
+            _ => unreachable!("BuiltinBit is assigned only to the frozen builtin spellings"),
+        };
+        if self.peek_kind() != Some(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        self.advance();
+        if self.peek_kind() == Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let operand = self.parse_argument_expression()?;
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance().expect("peeked builtin closing parenthesis");
+        let Some(inferred) = self.converted_expression_type(operand) else {
+            self.report("E2913", "builtin-operand-not-convertible", operand.span());
+            return None;
+        };
+        if !matches!(
+            self.operand_type_class(inferred.ty),
+            OperandTypeClass::Integer(_)
+        ) {
+            self.report("E2913", "builtin-operand-not-convertible", operand.span());
+            return None;
+        }
+
+        let parameter_ty = self.intern(TypeKind::Int(rank), Qualifiers::default());
+        let parameter_integer = integer_type_for_rank(rank);
+        let span = self.merge_span(keyword.span, close.span);
+        if let Ok(value) = self.eval_integer_constant_expression(operand) {
+            if let Some(result) = eval_bit_builtin(op, value.cast(parameter_integer)) {
+                return Some(self.alloc_node(CHirExpr::Lit(
+                    IntLit {
+                        value: result.raw_bits(),
+                        suffix: IntSuffix::None,
+                        base: IntBase::Dec,
+                    },
+                    span,
+                )));
+            }
+        }
+        let converted = self.alloc_node(CHirExpr::Cast(parameter_ty, operand, operand.span()));
+        let result_ty = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
+        Some(self.alloc_node(CHirExpr::BitBuiltin {
+            op,
+            operand: converted,
+            facts: ExprFacts::value(result_ty),
+            span,
+        }))
+    }
+
+    fn parse_builtin_unreachable(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        if self.peek_kind() != Some(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        self.advance();
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance().expect("peeked builtin closing parenthesis");
+        let void_ty = self.intern(TypeKind::Void, Qualifiers::default());
+        Some(self.alloc_node(CHirExpr::BuiltinUnreachable {
+            facts: ExprFacts::value(void_ty),
+            span: self.merge_span(keyword.span, close.span),
+        }))
+    }
+
+    fn parse_builtin_return_address(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        if self.peek_kind() != Some(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        self.advance();
+        let argument = self.parse_required_constant_assignment()?;
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance().expect("peeked builtin closing parenthesis");
+        if !self
+            .eval_integer_constant_expression(argument)
+            .is_ok_and(|value| value.raw_bits() == 0)
+        {
+            self.report("E2913", "builtin-operand-not-convertible", argument.span());
+            return None;
+        }
+        let void_ty = self.intern(TypeKind::Void, Qualifiers::default());
+        let pointer_ty = self.intern(TypeKind::Pointer(void_ty), Qualifiers::default());
+        Some(self.alloc_node(CHirExpr::BuiltinReturnAddress {
+            facts: ExprFacts::value(pointer_ty),
+            span: self.merge_span(keyword.span, close.span),
+        }))
     }
 
     fn parse_checked_arithmetic(
@@ -7983,6 +8139,9 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::BuiltinChooseExpr
             | TokenKind::BuiltinTypesCompatibleP
             | TokenKind::BuiltinOffsetof
+            | TokenKind::BuiltinBit
+            | TokenKind::BuiltinUnreachable
+            | TokenKind::BuiltinReturnAddress
             | TokenKind::BuiltinAddOverflow
             | TokenKind::BuiltinSubOverflow
             | TokenKind::BuiltinMulOverflow
@@ -8197,6 +8356,7 @@ fn collect_jump_regions_expr(
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
         | CHirExpr::PtrMember(operand, _, _) => {
             collect_jump_regions_expr(operand, regions, next_region, labels, gotos);
@@ -8263,7 +8423,9 @@ fn collect_jump_regions_expr(
         | CHirExpr::StringLit(..)
         | CHirExpr::Ident { .. }
         | CHirExpr::SizeOf(..)
-        | CHirExpr::AlignOf(..) => {}
+        | CHirExpr::AlignOf(..)
+        | CHirExpr::BuiltinUnreachable { .. }
+        | CHirExpr::BuiltinReturnAddress { .. } => {}
     }
 }
 
@@ -8630,6 +8792,22 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
             rhs,
             target,
             target_ty: *target_ty,
+            facts: *facts,
+            span: paren_span,
+        },
+        CHirExpr::BitBuiltin {
+            op, operand, facts, ..
+        } => CHirExpr::BitBuiltin {
+            op: *op,
+            operand,
+            facts: *facts,
+            span: paren_span,
+        },
+        CHirExpr::BuiltinUnreachable { facts, .. } => CHirExpr::BuiltinUnreachable {
+            facts: *facts,
+            span: paren_span,
+        },
+        CHirExpr::BuiltinReturnAddress { facts, .. } => CHirExpr::BuiltinReturnAddress {
             facts: *facts,
             span: paren_span,
         },

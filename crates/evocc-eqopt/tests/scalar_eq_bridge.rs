@@ -1,7 +1,7 @@
 use evocc_eqopt::{ingest_scalar_inst, optimize_scalar_module, ScalarEqBudget, ScalarOperator};
 use evocc_evoir::{
     interpret_module, validate_module, Block, BlockArg, CmpOp, Function, FunctionParam, Inst,
-    InterpreterLimits, Module, RuntimeValue, Value,
+    InterpreterLimits, Module, RuntimeValue, TrapReason, Value,
 };
 use evocc_proof::ProofContext;
 use evocc_types::EvoIRType;
@@ -208,5 +208,78 @@ fn operator_table_is_explicit_for_every_day7_p0_instruction() {
     assert_eq!(
         ingest_scalar_inst(&Inst::ICmp(bit(2), CmpOp::Eq, bits(0), bits(1))).unwrap(),
         ScalarOperator::ICmp(CmpOp::Eq)
+    );
+}
+
+#[test]
+fn a_trapping_successor_never_licenses_predecessor_edge_strengthening() {
+    let input = Module {
+        globals: Vec::new(),
+        functions: vec![Function {
+            name: "branch_to_report".to_owned(),
+            params: vec![
+                FunctionParam {
+                    name: "value".to_owned(),
+                    ty: EvoIRType::Bits(32),
+                },
+                FunctionParam {
+                    name: "take_report".to_owned(),
+                    ty: EvoIRType::Bits(1),
+                },
+            ],
+            ret_tys: vec![EvoIRType::Bits(32)],
+            effects: evocc_evoir::EffectSummary {
+                may_trap: true,
+                ..Default::default()
+            },
+            blocks: vec![
+                Block {
+                    id: 0,
+                    args: vec![
+                        BlockArg {
+                            name: "value".to_owned(),
+                            value: bits(0),
+                        },
+                        BlockArg {
+                            name: "take_report".to_owned(),
+                            value: bit(1),
+                        },
+                    ],
+                    insts: vec![
+                        Inst::Const(bits(2), 0),
+                        Inst::Add(bits(3), bits(0), bits(2)),
+                    ],
+                    terminator: Inst::CondBr(bit(1), 1, Vec::new(), 2, vec![bits(3)]),
+                },
+                Block {
+                    id: 1,
+                    args: Vec::new(),
+                    insts: Vec::new(),
+                    terminator: Inst::Trap(TrapReason::UnreachableReached),
+                },
+                Block {
+                    id: 2,
+                    args: vec![BlockArg {
+                        name: "result".to_owned(),
+                        value: bits(4),
+                    }],
+                    insts: Vec::new(),
+                    terminator: Inst::Ret(vec![bits(4)]),
+                },
+            ],
+        }],
+    };
+    validate_module(&input).expect("input module is valid");
+
+    let outcome = optimize_scalar_module(&input, ScalarEqBudget::new(128, 8));
+    validate_module(&outcome.module).expect("optimized module is valid");
+    assert!(outcome.report.optimized_values >= 1, "{:?}", outcome.report);
+    assert!(matches!(
+        outcome.module.functions[0].blocks[0].terminator,
+        Inst::CondBr(_, 1, _, 2, _)
+    ));
+    assert_eq!(
+        outcome.module.functions[0].blocks[1].terminator,
+        Inst::Trap(TrapReason::UnreachableReached)
     );
 }

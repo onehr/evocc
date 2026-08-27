@@ -132,6 +132,7 @@ fn sentinel_instructions() -> Vec<Inst> {
         Inst::CondBr(bits(1260), 4242, vec![bits(1261)], 4343, vec![bits(1262)]),
         Inst::Ret(vec![bits(1270), mem(1271), world(1272)]),
         Inst::Trap(TrapReason::ScalarFunctionFellOffEnd),
+        Inst::Trap(TrapReason::UnreachableReached),
         Inst::PtrNull(pointer(1280)),
         Inst::GlobalAddr {
             result: value(1290, EvoIRType::Ptr(AddressSpace::Global)),
@@ -748,9 +749,15 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
             UbReason::InvalidSignedLeftShift => "UbReason.InvalidSignedLeftShift",
         });
     }
-    keys.insert(match TrapReason::ScalarFunctionFellOffEnd {
-        TrapReason::ScalarFunctionFellOffEnd => "TrapReason.ScalarFunctionFellOffEnd",
-    });
+    for value in [
+        TrapReason::ScalarFunctionFellOffEnd,
+        TrapReason::UnreachableReached,
+    ] {
+        keys.insert(match value {
+            TrapReason::ScalarFunctionFellOffEnd => "TrapReason.ScalarFunctionFellOffEnd",
+            TrapReason::UnreachableReached => "TrapReason.UnreachableReached",
+        });
+    }
     for value in directions {
         keys.insert(match value {
             OffsetDirection::Add => "OffsetDirection.Add",

@@ -4,8 +4,9 @@ use evocc_common::SourceSpan;
 use evocc_types::{TagDefinition, TagState, TargetDataLayout, TypeId, TypeInterner, TypeKind};
 
 use crate::integer::{
-    enum_integer_type, eval_binary_integer, eval_unary_integer, floating_literal_to_integer,
-    integer_literal_value, integer_type_for_rank, usual_arithmetic_type, CInteger, CIntegerType,
+    enum_integer_type, eval_binary_integer, eval_bit_builtin, eval_unary_integer,
+    floating_literal_to_integer, integer_literal_value, integer_type_for_rank,
+    usual_arithmetic_type, CInteger, CIntegerType,
 };
 use crate::{
     BinaryOp, CHirExpr, CHirUnit, ExprFacts, FloatSuffix, FrontEndBuiltinRecord, StringPrefix,
@@ -114,10 +115,15 @@ fn eval_integer_constant(
             u64::from(target.layout_of(types, *ty).ok()?.align_bytes),
             CIntegerType::ULONG,
         )),
+        CHirExpr::BitBuiltin { op, operand, .. } => {
+            eval_bit_builtin(*op, eval_integer_constant(operand, types, symbols, target)?)
+        }
         CHirExpr::FloatLit(_, _)
         | CHirExpr::StringLit(_, _)
         | CHirExpr::Call(_, _, _)
         | CHirExpr::CheckedArithmetic { .. }
+        | CHirExpr::BuiltinUnreachable { .. }
+        | CHirExpr::BuiltinReturnAddress { .. }
         | CHirExpr::Member(_, _, _)
         | CHirExpr::PtrMember(_, _, _)
         | CHirExpr::Index(_, _, _)
@@ -195,6 +201,9 @@ fn expression_size(
         | CHirExpr::MemoryAssign { facts, .. }
         | CHirExpr::MemoryRead { facts, .. }
         | CHirExpr::CheckedArithmetic { facts, .. }
+        | CHirExpr::BitBuiltin { facts, .. }
+        | CHirExpr::BuiltinUnreachable { facts, .. }
+        | CHirExpr::BuiltinReturnAddress { facts, .. }
         | CHirExpr::Update { facts, .. }
         | CHirExpr::MemoryUpdate { facts, .. }
         | CHirExpr::StatementExpr { facts, .. } => facts_size(*facts, types, target),
@@ -247,6 +256,7 @@ fn integer_expression_type(
         }
         CHirExpr::MemoryRead { facts, .. }
         | CHirExpr::CheckedArithmetic { facts, .. }
+        | CHirExpr::BitBuiltin { facts, .. }
         | CHirExpr::Assign { facts, .. }
         | CHirExpr::MemoryAssign { facts, .. }
         | CHirExpr::Update { facts, .. }
@@ -321,6 +331,7 @@ fn integer_expression_type(
         | CHirExpr::PtrMember(_, _, _)
         | CHirExpr::Index(_, _, _)
         | CHirExpr::CompoundLit(_, _, _) => None,
+        CHirExpr::BuiltinUnreachable { .. } | CHirExpr::BuiltinReturnAddress { .. } => None,
     }
 }
 
@@ -328,6 +339,9 @@ fn expression_type_id(expression: &CHirExpr<'_>) -> Option<TypeId> {
     match expression {
         CHirExpr::Ident { facts, .. }
         | CHirExpr::CheckedArithmetic { facts, .. }
+        | CHirExpr::BitBuiltin { facts, .. }
+        | CHirExpr::BuiltinUnreachable { facts, .. }
+        | CHirExpr::BuiltinReturnAddress { facts, .. }
         | CHirExpr::Assign { facts, .. }
         | CHirExpr::MemoryAssign { facts, .. }
         | CHirExpr::MemoryRead { facts, .. }

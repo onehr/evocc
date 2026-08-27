@@ -818,6 +818,7 @@ fn parse_terminator(body: &str, values: &HashMap<u32, EvoIRType>) -> Result<Inst
     if let Some(reason) = body.strip_prefix("trap.") {
         return Ok(Inst::Trap(match reason {
             "scalar_function_fell_off_end" => TrapReason::ScalarFunctionFellOffEnd,
+            "unreachable_reached" => TrapReason::UnreachableReached,
             _ => return Err("unknown trap reason".to_owned()),
         }));
     }

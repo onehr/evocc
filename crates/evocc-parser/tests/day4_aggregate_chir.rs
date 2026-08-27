@@ -77,10 +77,13 @@ fn assert_expr_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         | CHirExpr::StringLit(..)
         | CHirExpr::Ident { .. }
         | CHirExpr::SizeOf(..)
-        | CHirExpr::AlignOf(..) => {}
+        | CHirExpr::AlignOf(..)
+        | CHirExpr::BuiltinUnreachable { .. }
+        | CHirExpr::BuiltinReturnAddress { .. } => {}
         CHirExpr::Unary(_, child, _)
         | CHirExpr::Cast(_, child, _)
         | CHirExpr::SizeOfExpr(child, _)
+        | CHirExpr::BitBuiltin { operand: child, .. }
         | CHirExpr::Member(child, _, _)
         | CHirExpr::PtrMember(child, _, _) => assert_expr_owned(arena, child),
         CHirExpr::Update { target, .. } => {

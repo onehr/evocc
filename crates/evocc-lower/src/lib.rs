@@ -59,6 +59,12 @@ pub enum LowerError {
     CheckedArithmetic {
         span: SourceSpan,
     },
+    BitBuiltin {
+        span: SourceSpan,
+    },
+    ReturnAddress {
+        span: SourceSpan,
+    },
     Asm {
         span: SourceSpan,
     },
@@ -94,6 +100,8 @@ impl fmt::Display for LowerError {
             Self::CheckedArithmetic { .. } => {
                 formatter.write_str("not-lowered: checked-arithmetic")
             }
+            Self::BitBuiltin { .. } => formatter.write_str("not-lowered: bit-builtin"),
+            Self::ReturnAddress { .. } => formatter.write_str("not-lowered: return-address"),
             Self::Asm { .. } => formatter.write_str("not-lowered: asm"),
             Self::MalformedFunction {
                 function, reason, ..
@@ -118,6 +126,8 @@ impl LowerError {
         match self {
             Self::CheckedArithmetic { .. } => "E3020",
             Self::Asm { .. } => "E3021",
+            Self::BitBuiltin { .. } => "E3023",
+            Self::ReturnAddress { .. } => "E3025",
             _ => "E3101",
         }
     }
@@ -135,6 +145,8 @@ impl LowerError {
             | Self::UnsupportedExpression { span, .. }
             | Self::UnsupportedStatement { span, .. }
             | Self::CheckedArithmetic { span }
+            | Self::BitBuiltin { span }
+            | Self::ReturnAddress { span }
             | Self::Asm { span }
             | Self::MalformedFunction { span, .. }
             | Self::InvalidControlFlow { span, .. }
@@ -402,6 +414,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             CHirExpr::Unary(_, operand, _)
             | CHirExpr::Cast(_, operand, _)
             | CHirExpr::SizeOfExpr(operand, _)
+            | CHirExpr::BitBuiltin { operand, .. }
             | CHirExpr::Member(operand, _, _)
             | CHirExpr::PtrMember(operand, _, _) => expression(unit, operand, out),
             CHirExpr::Binary(_, left, right, _)
@@ -456,7 +469,9 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             | CHirExpr::CharLit(..)
             | CHirExpr::StringLit(..)
             | CHirExpr::SizeOf(..)
-            | CHirExpr::AlignOf(..) => {}
+            | CHirExpr::AlignOf(..)
+            | CHirExpr::BuiltinUnreachable { .. }
+            | CHirExpr::BuiltinReturnAddress { .. } => {}
         }
     }
 
@@ -1177,6 +1192,11 @@ fn prevalidate_expr_for_lowering(
         CHirExpr::CheckedArithmetic { span, .. } => {
             Err(LowerError::CheckedArithmetic { span: *span })
         }
+        CHirExpr::BitBuiltin { span, .. } => Err(LowerError::BitBuiltin { span: *span }),
+        CHirExpr::BuiltinReturnAddress { span, .. } => {
+            Err(LowerError::ReturnAddress { span: *span })
+        }
+        CHirExpr::BuiltinUnreachable { .. } => Ok(()),
         CHirExpr::CompoundLit(_, initializer, _) => {
             for action in initializer.plan().actions() {
                 if let InitAction::StoreScalar { value, .. } = action {
@@ -2310,6 +2330,10 @@ impl<'a> FunctionLowerer<'a> {
             CHirStmt::Asm(assembly) => Err(LowerError::Asm {
                 span: assembly.span,
             }),
+            CHirStmt::Expr(CHirExpr::BuiltinUnreachable { .. }, _) => {
+                self.terminate(&state, Inst::Trap(TrapReason::UnreachableReached))?;
+                Ok(Flow::default())
+            }
             CHirStmt::Expr(expression, _) => {
                 self.lower_discarded_expr(expression, &mut state)?;
                 Ok(Flow {
@@ -4388,6 +4412,14 @@ impl<'a> FunctionLowerer<'a> {
             CHirExpr::CheckedArithmetic { span, .. } => {
                 Err(LowerError::CheckedArithmetic { span: *span })
             }
+            CHirExpr::BitBuiltin { span, .. } => Err(LowerError::BitBuiltin { span: *span }),
+            CHirExpr::BuiltinReturnAddress { span, .. } => {
+                Err(LowerError::ReturnAddress { span: *span })
+            }
+            CHirExpr::BuiltinUnreachable { span, .. } => Err(LowerError::UnsupportedExpression {
+                span: *span,
+                feature: "unreachable builtin must be a discarded expression",
+            }),
             CHirExpr::StatementExpr {
                 body,
                 value,
@@ -6644,6 +6676,7 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
         | CHirExpr::PtrMember(operand, _, _) => collect_calls_expr(operand, calls),
         CHirExpr::Binary(_, left, right, _)
@@ -6694,7 +6727,9 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
         | CHirExpr::StringLit(..)
         | CHirExpr::Ident { .. }
         | CHirExpr::SizeOf(..)
-        | CHirExpr::AlignOf(..) => {}
+        | CHirExpr::AlignOf(..)
+        | CHirExpr::BuiltinUnreachable { .. }
+        | CHirExpr::BuiltinReturnAddress { .. } => {}
     }
 }
 
@@ -6874,6 +6909,7 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
         | CHirExpr::PtrMember(operand, _, _) => live_before_expr(operand, live),
         CHirExpr::Binary(BinaryOp::And | BinaryOp::Or, left, right, _) => {
@@ -6924,7 +6960,9 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
         | CHirExpr::CharLit(..)
         | CHirExpr::StringLit(..)
         | CHirExpr::SizeOf(..)
-        | CHirExpr::AlignOf(..) => {}
+        | CHirExpr::AlignOf(..)
+        | CHirExpr::BuiltinUnreachable { .. }
+        | CHirExpr::BuiltinReturnAddress { .. } => {}
     }
 }
 
@@ -7053,6 +7091,7 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
         | CHirExpr::PtrMember(operand, _, _) => collect_symbols_expr(operand, symbols),
         CHirExpr::Binary(_, left, right, _)
@@ -7092,7 +7131,9 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
         | CHirExpr::CharLit(..)
         | CHirExpr::StringLit(..)
         | CHirExpr::SizeOf(..)
-        | CHirExpr::AlignOf(..) => {}
+        | CHirExpr::AlignOf(..)
+        | CHirExpr::BuiltinUnreachable { .. }
+        | CHirExpr::BuiltinReturnAddress { .. } => {}
     }
 }
 

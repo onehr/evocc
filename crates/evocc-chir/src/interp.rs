@@ -23,9 +23,9 @@ use evocc_types::{
 
 use crate::{
     integer::{
-        enum_integer_type, eval_binary_integer, eval_checked_arithmetic, eval_unary_integer,
-        integer_literal_value, integer_type_for_rank, usual_arithmetic_type, CInteger,
-        CIntegerType, IntegerError,
+        enum_integer_type, eval_binary_integer, eval_bit_builtin, eval_checked_arithmetic,
+        eval_unary_integer, integer_literal_value, integer_type_for_rank, usual_arithmetic_type,
+        BitBuiltinOp, CInteger, CIntegerType, IntegerError,
     },
     AllocationSiteKind, AllocationSiteManifest, AllocationSiteManifestError, AssignmentOp,
     BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit,
@@ -150,6 +150,12 @@ pub enum InterpreterError {
     Asm {
         span: SourceSpan,
     },
+    BitBuiltinZeroOperand {
+        span: SourceSpan,
+    },
+    UnreachableReached {
+        span: SourceSpan,
+    },
     UnsupportedDeclaration {
         feature: &'static str,
         span: SourceSpan,
@@ -256,6 +262,8 @@ impl InterpreterError {
             Self::CallThroughNullFunctionPointer { .. } => "E3015",
             Self::CallThroughNonFunctionPointer { .. } => "E3016",
             Self::Asm { .. } => "E3021",
+            Self::BitBuiltinZeroOperand { .. } => "E3022",
+            Self::UnreachableReached { .. } => "E3024",
             Self::Memory { error, .. } => match error.runtime_diagnostic() {
                 Some(diagnostic) => diagnostic.code,
                 None => "E3007",
@@ -346,6 +354,8 @@ impl InterpreterError {
                 format!("unsupported-interpreter-statement: {feature}")
             }
             Self::Asm { .. } => "not-lowered: asm".to_owned(),
+            Self::BitBuiltinZeroOperand { .. } => "bit-builtin-zero-operand".to_owned(),
+            Self::UnreachableReached { .. } => "unreachable-reached".to_owned(),
             Self::UnsupportedDeclaration { feature, .. } => {
                 format!("unsupported-interpreter-declaration: {feature}")
             }
@@ -385,6 +395,8 @@ impl InterpreterError {
             | Self::UnsupportedExpression { span, .. }
             | Self::UnsupportedStatement { span, .. }
             | Self::Asm { span }
+            | Self::BitBuiltinZeroOperand { span }
+            | Self::UnreachableReached { span }
             | Self::UnsupportedDeclaration { span, .. }
             | Self::MalformedFunctionDeclaration { span, .. }
             | Self::DuplicateFunctionBody { span, .. }
@@ -665,6 +677,10 @@ enum MachineTask<'arena> {
     ApplyCheckedArithmetic {
         operator: CheckedArithmeticOp,
         target_type: TypeId,
+        span: SourceSpan,
+    },
+    ApplyBitBuiltin {
+        operator: BitBuiltinOp,
         span: SourceSpan,
     },
     SelectTernary {
@@ -1767,6 +1783,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         span,
                     )?;
                     values.push(CValue::Integer(CInteger::int(i32::from(overflowed))));
+                    None
+                }
+                MachineTask::ApplyBitBuiltin { operator, span } => {
+                    let operand =
+                        expect_machine_integer(pop_machine_value(&mut values, span)?, span)?;
+                    let value = eval_bit_builtin(operator, operand)
+                        .ok_or(InterpreterError::BitBuiltinZeroOperand { span })?;
+                    values.push(CValue::Integer(value));
                     None
                 }
                 MachineTask::SelectTernary {
@@ -3055,6 +3079,25 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 tasks.push(MachineTask::EvalExpression {
                     expression: lhs,
                     allow_root_mutation: true,
+                });
+            }
+            CHirExpr::BitBuiltin { op, operand, .. } => {
+                tasks.push(MachineTask::ApplyBitBuiltin {
+                    operator: *op,
+                    span,
+                });
+                tasks.push(MachineTask::EvalExpression {
+                    expression: operand,
+                    allow_root_mutation: true,
+                });
+            }
+            CHirExpr::BuiltinUnreachable { .. } => {
+                return Err(InterpreterError::UnreachableReached { span });
+            }
+            CHirExpr::BuiltinReturnAddress { .. } => {
+                return Err(InterpreterError::UnsupportedExpression {
+                    feature: "return-address builtin",
+                    span,
                 });
             }
             CHirExpr::Cast(ty, value, _) => {
@@ -5330,6 +5373,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 self.predeclare_expr(rhs)?;
                 self.predeclare_expr(target)?;
             }
+            CHirExpr::BitBuiltin { operand, .. } => self.predeclare_expr(operand)?,
             CHirExpr::Assign { target, value, .. } => {
                 self.predeclare_expr(target)?;
                 self.predeclare_expr(value)?;
@@ -5360,7 +5404,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirExpr::StringLit(..)
             | CHirExpr::Ident { .. }
             | CHirExpr::SizeOf(..)
-            | CHirExpr::AlignOf(..) => {}
+            | CHirExpr::AlignOf(..)
+            | CHirExpr::BuiltinUnreachable { .. }
+            | CHirExpr::BuiltinReturnAddress { .. } => {}
         }
         Ok(())
     }
@@ -5975,6 +6021,18 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 };
                 Ok(selected.cast(result_type))
             }
+            CHirExpr::BitBuiltin { op, operand, .. } => {
+                let operand = self.eval_expr(operand, allow_root_mutation)?;
+                eval_bit_builtin(*op, operand)
+                    .ok_or(InterpreterError::BitBuiltinZeroOperand { span })
+            }
+            CHirExpr::BuiltinUnreachable { .. } => {
+                Err(InterpreterError::UnreachableReached { span })
+            }
+            CHirExpr::BuiltinReturnAddress { .. } => Err(InterpreterError::UnsupportedExpression {
+                feature: "return-address builtin",
+                span,
+            }),
             CHirExpr::CharLit(literal, _) => {
                 Ok(CInteger::new(u64::from(literal.value), CIntegerType::INT))
             }
@@ -6077,6 +6135,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirExpr::CharLit(_, _) => Ok(CIntegerType::INT),
             CHirExpr::Ident { facts, .. }
             | CHirExpr::CheckedArithmetic { facts, .. }
+            | CHirExpr::BitBuiltin { facts, .. }
             | CHirExpr::Assign { facts, .. }
             | CHirExpr::MemoryAssign { facts, .. }
             | CHirExpr::MemoryRead { facts, .. }
@@ -6176,6 +6235,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirExpr::Comma(_, right, _) => self.infer_integer_type(right),
             CHirExpr::FloatLit(_, _)
             | CHirExpr::StringLit(_, _)
+            | CHirExpr::BuiltinUnreachable { .. }
+            | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::Member(_, _, _)
             | CHirExpr::PtrMember(_, _, _)
             | CHirExpr::Index(_, _, _)
@@ -6570,6 +6631,7 @@ fn push_static_initializer_children<'arena>(
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
         | CHirExpr::PtrMember(operand, _, _)
         | CHirExpr::Update {
@@ -6633,7 +6695,9 @@ fn push_static_initializer_children<'arena>(
         | CHirExpr::CharLit(_, _)
         | CHirExpr::StringLit(_, _)
         | CHirExpr::SizeOf(_, _)
-        | CHirExpr::AlignOf(_, _) => {}
+        | CHirExpr::AlignOf(_, _)
+        | CHirExpr::BuiltinUnreachable { .. }
+        | CHirExpr::BuiltinReturnAddress { .. } => {}
     }
 }
 
@@ -6750,6 +6814,7 @@ fn collect_expression_symbols<'arena>(
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
         | CHirExpr::PtrMember(operand, _, _) => collect_expression_symbols(operand, output),
         CHirExpr::Binary(_, left, right, _)
@@ -6801,7 +6866,9 @@ fn collect_expression_symbols<'arena>(
         | CHirExpr::CharLit(_, _)
         | CHirExpr::StringLit(_, _)
         | CHirExpr::SizeOf(_, _)
-        | CHirExpr::AlignOf(_, _) => {}
+        | CHirExpr::AlignOf(_, _)
+        | CHirExpr::BuiltinUnreachable { .. }
+        | CHirExpr::BuiltinReturnAddress { .. } => {}
     }
 }
 
@@ -6918,7 +6985,8 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         | CHirExpr::CompoundLit(_, _, _) => true,
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
-        | CHirExpr::SizeOfExpr(operand, _) => expression_requires_memory(unit, operand),
+        | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::BitBuiltin { operand, .. } => expression_requires_memory(unit, operand),
         CHirExpr::Binary(_, left, right, _) | CHirExpr::Comma(left, right, _) => {
             expression_requires_memory(unit, left) || expression_requires_memory(unit, right)
         }
@@ -6946,7 +7014,9 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         | CHirExpr::FloatLit(_, _)
         | CHirExpr::CharLit(_, _)
         | CHirExpr::SizeOf(_, _)
-        | CHirExpr::AlignOf(_, _) => false,
+        | CHirExpr::AlignOf(_, _)
+        | CHirExpr::BuiltinUnreachable { .. }
+        | CHirExpr::BuiltinReturnAddress { .. } => false,
     }
 }
 
@@ -7162,9 +7232,9 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
                 || expression_contains_call(rhs)
                 || expression_contains_call(target)
         }
-        CHirExpr::Unary(_, operand, _) | CHirExpr::Cast(_, operand, _) => {
-            expression_contains_call(operand)
-        }
+        CHirExpr::Unary(_, operand, _)
+        | CHirExpr::Cast(_, operand, _)
+        | CHirExpr::BitBuiltin { operand, .. } => expression_contains_call(operand),
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
         | CHirExpr::Comma(left, right, _) => {
@@ -7212,7 +7282,9 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
         | CHirExpr::Ident { .. }
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::SizeOfExpr(_, _)
-        | CHirExpr::AlignOf(_, _) => false,
+        | CHirExpr::AlignOf(_, _)
+        | CHirExpr::BuiltinUnreachable { .. }
+        | CHirExpr::BuiltinReturnAddress { .. } => false,
     }
 }
 

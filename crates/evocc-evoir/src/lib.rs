@@ -127,6 +127,7 @@ impl UbReason {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TrapReason {
     ScalarFunctionFellOffEnd,
+    UnreachableReached,
 }
 
 impl TrapReason {
@@ -135,6 +136,7 @@ impl TrapReason {
     pub const fn diagnostic(self) -> &'static str {
         match self {
             Self::ScalarFunctionFellOffEnd => "E3007",
+            Self::UnreachableReached => "E3024",
         }
     }
 
@@ -143,6 +145,7 @@ impl TrapReason {
     pub const fn message(self) -> &'static str {
         match self {
             Self::ScalarFunctionFellOffEnd => "scalar-function-fell-off-end",
+            Self::UnreachableReached => "unreachable-reached",
         }
     }
 
@@ -151,6 +154,7 @@ impl TrapReason {
     pub const fn mnemonic(self) -> &'static str {
         match self {
             Self::ScalarFunctionFellOffEnd => "scalar_function_fell_off_end",
+            Self::UnreachableReached => "unreachable_reached",
         }
     }
 }
@@ -2802,6 +2806,17 @@ impl fmt::Display for InterpreterError {
 
 impl std::error::Error for InterpreterError {}
 
+fn trap_error(reason: TrapReason, block: BlockId) -> InterpreterError {
+    match reason {
+        TrapReason::ScalarFunctionFellOffEnd => InterpreterError::MissingReturn { block },
+        TrapReason::UnreachableReached => InterpreterError::UndefinedBehavior {
+            block,
+            diagnostic: reason.diagnostic(),
+            message: reason.message(),
+        },
+    }
+}
+
 /// Interpret a validated function with explicit entry arguments and limits.
 ///
 /// Each non-terminator instruction and each terminator costs one step. The
@@ -2933,9 +2948,7 @@ fn interpret_function_in_state(
                     world: state.world,
                 });
             }
-            Inst::Trap(TrapReason::ScalarFunctionFellOffEnd) => {
-                return Err(InterpreterError::MissingReturn { block: block.id });
-            }
+            Inst::Trap(reason) => return Err(trap_error(*reason, block.id)),
             _ => {
                 return Err(InterpreterError::InvalidFunction {
                     message: format!("block {} has a non-terminator", block.id),
@@ -3343,9 +3356,7 @@ fn interpret_module_in_state(
                         });
                     }
                 }
-                Inst::Trap(TrapReason::ScalarFunctionFellOffEnd) => {
-                    return Err(InterpreterError::MissingReturn { block: block_id });
-                }
+                Inst::Trap(reason) => return Err(trap_error(reason, block_id)),
                 _ => {
                     return Err(InterpreterError::InvalidModule {
                         message: format!("block {block_id} has an invalid terminator"),

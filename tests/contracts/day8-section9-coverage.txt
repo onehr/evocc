@@ -88,6 +88,7 @@ Region.Heap|%arg13: mem<heap>
 Region.Stack|%arg12: mem<stack>
 Region.Unknown|%arg10: mem<unknown>
 TrapReason.ScalarFunctionFellOffEnd|trap.scalar_function_fell_off_end
+TrapReason.UnreachableReached|trap.unreachable_reached
 UbReason.DivisionByZero|ub.assume.division_by_zero %v1201
 UbReason.InvalidShiftCount|ub.assume.invalid_shift_count %v1204
 UbReason.InvalidSignedLeftShift|ub.assume.invalid_signed_left_shift %v1200

@@ -392,6 +392,24 @@ pub enum CHirExpr<'arena> {
         facts: ExprFacts,
         span: SourceSpan,
     },
+    /// Front-end-complete GNU bit counting whose operand has already been
+    /// converted to the builtin signature selected by its suffix.
+    BitBuiltin {
+        op: integer::BitBuiltinOp,
+        operand: &'arena CHirExpr<'arena>,
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
+    /// Reaching this expression reports the typed unreachable-code trap.
+    BuiltinUnreachable {
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
+    /// The accepted but deliberately IR-deferred return-address builtin.
+    BuiltinReturnAddress {
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
     Cast(TypeId, &'arena CHirExpr<'arena>, SourceSpan),
     SizeOf(TypeId, SourceSpan),
     SizeOfExpr(&'arena CHirExpr<'arena>, SourceSpan),
@@ -486,6 +504,9 @@ impl CHirExpr<'_> {
             | Self::Ternary(_, _, _, span)
             | Self::Call(_, _, span)
             | Self::CheckedArithmetic { span, .. }
+            | Self::BitBuiltin { span, .. }
+            | Self::BuiltinUnreachable { span, .. }
+            | Self::BuiltinReturnAddress { span, .. }
             | Self::Cast(_, _, span)
             | Self::SizeOf(_, span)
             | Self::SizeOfExpr(_, span)
@@ -1333,6 +1354,7 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
             | CHirExpr::SizeOfExpr(operand, _)
             | CHirExpr::Member(operand, _, _)
             | CHirExpr::PtrMember(operand, _, _)
+            | CHirExpr::BitBuiltin { operand, .. }
             | CHirExpr::Update {
                 target: operand, ..
             } => checked_expression(operand, out, seen),
@@ -1390,7 +1412,9 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
             | CHirExpr::StringLit(_, _)
             | CHirExpr::Ident { .. }
             | CHirExpr::SizeOf(_, _)
-            | CHirExpr::AlignOf(_, _) => {}
+            | CHirExpr::AlignOf(_, _)
+            | CHirExpr::BuiltinUnreachable { .. }
+            | CHirExpr::BuiltinReturnAddress { .. } => {}
         }
     }
 

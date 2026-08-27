@@ -1326,7 +1326,8 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             | CHirExpr::Cast(_, operand, _)
             | CHirExpr::SizeOfExpr(operand, _)
             | CHirExpr::Member(operand, _, _)
-            | CHirExpr::PtrMember(operand, _, _) => {
+            | CHirExpr::PtrMember(operand, _, _)
+            | CHirExpr::BitBuiltin { operand, .. } => {
                 work.push(WorkItem::Expression {
                     expression: operand,
                     current_function,
@@ -1473,7 +1474,9 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             | CHirExpr::CharLit(_, _)
             | CHirExpr::Ident { .. }
             | CHirExpr::SizeOf(_, _)
-            | CHirExpr::AlignOf(_, _) => {}
+            | CHirExpr::AlignOf(_, _)
+            | CHirExpr::BuiltinUnreachable { .. }
+            | CHirExpr::BuiltinReturnAddress { .. } => {}
         }
         Ok(())
     }

@@ -1,6 +1,9 @@
 use evocc_chir::AllocationSiteManifest;
 use evocc_common::{Arena, FileId};
-use evocc_evoir::{render_module, validate_module, Module};
+use evocc_evoir::{
+    interpret_function, parse_section9_module, render_module, validate_module, InterpreterLimits,
+    Module,
+};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_lower::lower_unit;
 use evocc_parser::Parser;
@@ -104,10 +107,25 @@ fn constant_bit_builtins_resolve_before_lowering() {
     assert_pairs(
         &[(
             "int f(void) { return __builtin_ffs(8) + __builtin_popcount(7u); }\n",
-            "int f(void) { return 7; }\n",
+            "int f(void) { return 4 + 3; }\n",
         )],
         110,
     );
+}
+
+#[test]
+fn unreachable_lowers_to_a_round_trippable_typed_trap() {
+    let module = lower("void f(void) { __builtin_unreachable(); }\n", 111);
+    let rendered = render_module(&module);
+    assert!(rendered.contains("may_trap=true"), "{rendered}");
+    assert!(rendered.contains("trap.unreachable_reached"), "{rendered}");
+
+    let reparsed = parse_section9_module(rendered.as_bytes()).expect("Section 9 round trip");
+    assert_eq!(reparsed, module);
+    let error = interpret_function(&reparsed.functions[0], &[], InterpreterLimits::new(4))
+        .expect_err("reaching the report terminator must fail");
+    assert_eq!(error.code(), "E3024");
+    assert_eq!(error.message(), "unreachable-reached");
 }
 
 #[test]

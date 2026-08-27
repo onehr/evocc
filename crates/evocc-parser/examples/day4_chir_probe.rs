@@ -244,6 +244,12 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 let target = self.expression(&format!("{path}.target"), target);
                 format!("checked({op:?},{lhs},{rhs},{target})")
             }
+            CHirExpr::BitBuiltin { op, operand, .. } => {
+                let operand = self.expression(&format!("{path}.operand"), operand);
+                format!("bit_builtin({op:?},{operand})")
+            }
+            CHirExpr::BuiltinUnreachable { .. } => "builtin_unreachable".to_owned(),
+            CHirExpr::BuiltinReturnAddress { .. } => "builtin_return_address".to_owned(),
             CHirExpr::Cast(ty, child, _) => {
                 let ty = self.type_fingerprint(*ty);
                 let child = self.expression(&format!("{path}.operand"), child);
