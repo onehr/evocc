@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.13** | **Authoritative reference** | **2026-08-27**
+**Revision 1.9.14** | **Authoritative reference** | **2026-08-27**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -610,6 +610,32 @@ back into range, and thereby erase the source C undefined behavior.
 | `Type` | The type being loaded. |
 | `volatile` | Optional access marker; absence means ordinary access. |
 
+**Object copy.**
+
+```text
+(%m1, %w1) = copy %m0, %w0, %dst, %src [size=N, align=A]
+```
+
+| Field | Description |
+|---|---|
+| `%m0`, `%w0`, `%m1`, `%w1` | As for `store`. |
+| `%dst`, `%src` | `ptr<AS>` values; both complete ranges `[p, p + N)` must be valid accesses at alignment `A`. |
+| `size=N` | Byte count, a compile-time constant; `N = 0` is a no-op that still validates both pointers. |
+| `align=A` | Access alignment for both ranges. |
+
+`copy` transfers the object representation of `N` bytes from `%src` to `%dst`
+together with each byte's initializedness: an uninitialized source byte makes
+the destination byte uninitialized and reports nothing (Section 5 already
+lets a copy move uninitialized bytes; only a scalar `load` of one reports
+`E3001`). Stored pointer bytes keep their provenance representation. The
+two ranges must be identical or disjoint; any other overlap reports `E3027`.
+Access checks are those of `store` on both ranges (`E3009`-`E3013`). `copy`
+is the lowering of every C aggregate copy: assignment, copy-initialization,
+argument passing and return by value of a record or union (10.1.3); no other
+source form produces it, and no rewrite family may introduce, remove or
+reorder one. It is never `volatile`; a volatile aggregate access is a sequence
+of member accesses (10.1.3).
+
 **Semantics.**
 
 `load(%m0, %w0, %ptr)`: returns the value of type `Type` stored at address
@@ -781,6 +807,7 @@ EffectSummary {
 | `pointer_valid`, `access_in_bounds` | `{All}` | `{}` | false | false | false | true | false |
 | `load` (normal) | `{All}` | `{}` | false | false | false | true | false |
 | `store` (normal) | `{}` | `{All}` | false | false | false | true | false |
+| `copy` | `{All}` | `{All}` | false | false | false | true | false |
 | `load volatile` | `{All}` | `{}` | true | false | false | true | false |
 | `store volatile` | `{}` | `{All}` | true | false | false | true | false |
 | `call` | depends on callee | depends on callee | depends | depends | depends | depends | depends |
@@ -1152,6 +1179,7 @@ each code's meaning and deliberately does not repeat the text.
 | `E3011` | Pointer formation or the complete access range is outside its object, or checked offset arithmetic overflowed. |
 | `E3012` | The byte offset does not satisfy the access alignment. |
 | `E3013` | The provenance is absent/forged or stored pointer bytes lack one complete provenance representation. |
+| `E3027` | `copy` ranges overlap without being identical. |
 | `E3014` | A store targets string-literal storage. |
 | `E3018` | `lifetime.end` names a live base pointer that is not an automatic object owned by the current frame. |
 
@@ -1237,6 +1265,7 @@ twice would let a reader think two conditions are the same finding.
 | `E2916` | `case-range-invalid` | front end |
 | `E2917` | `designator-index-not-constant` | front end |
 | `E2918` | `jump-into-statement-expression` | front end |
+| `E2919` | `flexible-array-initializer-not-static` | front end |
 | `E0102` | `unmatched-conditional` | preprocessor |
 | `E0104` | `error-directive` | preprocessor |
 | `E0105` | `include-not-found` | preprocessor |
@@ -1256,6 +1285,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3024` | `unreachable-reached` | runtime |
 | `E3025` | `not-lowered: return-address` | lowering |
 | `E3026` | `not-lowered: static-relocation` | lowering |
+| `E3027` | `overlapping-copy` | runtime |
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
 symbol selected by that value to the same type. The separation is deliberate:
@@ -2081,6 +2111,9 @@ inst_body :=
         " " value_name ", " value_name ", " value_name " : " type
   | "(" value_name ", " value_name ") = store" volatile_marker
         " " value_name ", " value_name ", " value_name ", " value_name
+  | "(" value_name ", " value_name ") = copy "
+        value_name ", " value_name ", " value_name ", " value_name
+        " [size=" integer ", align=" integer "]"
   | value_name " = ptr.offset." direction "." index_signedness " "
         value_name ", " value_name " [scale=" integer "]"
   | "(" result_list ") = call " callee "(" arg_list ")"
@@ -2452,6 +2485,26 @@ EvoIR lowering consume this same manifest for `ObjectOrigin.site`; neither may
 derive origins from raw declaration count or its own materialized-object
 sequence.
 
+**Aggregate copies.** Assignment of a record or union, copy-initialization of
+an automatic object from another object or from a call result, passing one by
+value and returning one by value each lower to one `copy` of the type's size
+at the type's alignment (Section 3). The C-HIR interpreter performs the same
+byte-and-bitmap transfer. A `volatile`-qualified aggregate is copied member by
+member with `volatile` scalar accesses in declaration order. `_Atomic` objects
+remain outside this profile (`E2702`). The padding bytes of an initialized
+aggregate are uninitialized, and after a copy so are the destination's
+(measured: after `b = a`, GCC-14 leaves `a`'s padding bytes in `b`, Clang-19
+zeros them; both are consistent with "unspecified", so the profile transfers
+initializedness rather than choosing bytes; evidence
+`.evidence/builtin-probes/20260826-2c23684c/g2.out`).
+
+**Flexible array members.** A record whose last member is an array of unknown
+bound may be initialized at file scope with elements for that member; the
+object's storage is the record size plus the elements, `sizeof` the type is
+unchanged (measured: `sizeof` 4, second element readable, both oracles). At
+block scope such an initializer is refused by both oracles and here reports
+`E2919` (`flexible-array-initializer-not-static`) at the initializer.
+
 #### 10.1.4 Sequencing Lowering
 
 C sequence points lower to memory token threading and world token threading.
@@ -2678,6 +2731,7 @@ front end that still emits it is defective.
 | `E2916` | `case a ... b` with `a > b` or overlapping another case |
 | `E2917` | designator index or range bound not an integer constant expression, range with `a > b`, or a range initializer that is not constant |
 | `E2918` | `goto` into a statement expression |
+| `E2919` | initializer for a flexible array member outside file scope |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -3615,6 +3669,7 @@ certificate and should pass.
 | | `call %fptr(args..., %m, %w)` | ret values, `mem`, `world` | callee value, args, memory, world | depends |
 | UB | `ub.assume.<reason> %cond` | — | `%cond` : `bits<1>` | yes |
 | Scalar poison | `uninitialized.bits<N>` | `bits<N>` | — | on consumption |
+| `copy` | `(%m1, %w1) = copy %m0, %w0, %dst, %src [size=N, align=A]` | copy N bytes with initializedness; identical or disjoint ranges |
 
 ---
 
@@ -3649,6 +3704,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.14 | 2026-08-27 | Adds the `copy` instruction (Section 3, effects, textual form, `E3027`) as the single lowering of C aggregate assignment, copy-initialization, by-value passing and return; states padding and initializedness transfer from measured oracle behaviour; admits file-scope flexible-array-member initializers (`E2919` elsewhere). Opened because six kernel parse lanes stop on aggregate copy-initialization. |
 | 1.9.13 | 2026-08-27 | Closes the fourteen gaps the preprocessing-grammar and statement-expression/initializer windows reported: `E2917`, `E2918`, `E3026`; join-block argument order and exit cleanup for statement expressions; scalar and non-constant designators; incomplete-array bounds and range initializers (measured; one `ORACLE_CONFLICT` resolved by refusal); the `compound_literal` global kind and read-only storage; paste results and `$`; the stale exclusion in 10.1.7. |
 | 1.9.12 | 2026-08-27 | Completes the preprocessing-token grammar: `.5foo` is a pp-number, stray characters such as `\\` are single pp-tokens kept by stringification, and `E0112` is the one diagnostic for a pp-token with no C form when it reaches the C lexer. Measured after every raw kernel lane stopped on `\\sreg` in `sysreg.h`. |
 | 1.9.11 | 2026-08-26 | Token pasting yields any preprocessing token, including pp-numbers such as `1_MODULE`; `E0111` for a pp-number that is not an integer in `#if`. Measured after the re-lexer rejected the kernel's `IS_MODULE(1)` expansion in every raw lane. |
