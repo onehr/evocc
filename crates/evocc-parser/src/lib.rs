@@ -243,6 +243,11 @@ pub struct Parser<'src, 'arena> {
     /// immediately, but receive permanent SymbolIds only after the enclosing
     /// function declarator is complete, preserving declaration-point ID order.
     temporary_parameter_shadows: Vec<TemporaryParameterShadow>,
+    /// Parameter syntax retained at the declaration that introduced a
+    /// function-type typedef. Later declarations through that typedef have no
+    /// written function suffix of their own, so this is their source-fidelity
+    /// authority for the inherited prototype.
+    function_typedefs: HashMap<SymbolId, ParameterSyntax>,
     entities: HashMap<SymbolId, EntityState>,
     external_entities: HashMap<String, SymbolId>,
     side_declarations: Vec<&'arena CHirDecl<'arena>>,
@@ -345,6 +350,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             symbols,
             current_scope,
             temporary_parameter_shadows: Vec::new(),
+            function_typedefs: HashMap::new(),
             entities: HashMap::new(),
             external_entities: HashMap::new(),
             side_declarations: Vec::new(),
@@ -1025,6 +1031,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let symbols_checkpoint = self.symbols.checkpoint();
         let entities_checkpoint = self.entities.clone();
         let external_entities_checkpoint = self.external_entities.clone();
+        let function_typedefs_checkpoint = self.function_typedefs.clone();
         let side_checkpoint = self.side_declarations.clone();
         let generic_selection_checkpoint = self.generic_selections.len();
         let front_end_builtin_checkpoint = self.front_end_builtins.len();
@@ -1039,6 +1046,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .expect("parser declaration checkpoints are table-local");
             self.entities = entities_checkpoint;
             self.external_entities = external_entities_checkpoint;
+            self.function_typedefs = function_typedefs_checkpoint;
             self.side_declarations = side_checkpoint;
             self.generic_selections
                 .truncate(generic_selection_checkpoint);
@@ -1139,26 +1147,51 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report_redefinition(&declarator.name);
         }
 
-        if matches!(
-            self.types.get(full_type).map(|ty| &ty.kind),
-            Some(TypeKind::Function { .. })
-        ) {
-            let (mut parameters, parameter_scope) = declarator
-                .derived
-                .iter()
-                .find_map(|layer| match layer {
-                    DerivedDeclarator::Function {
-                        parameters, scope, ..
-                    } => Some((parameters.clone(), *scope)),
-                    _ => None,
-                })
-                .expect("a canonical function type has a written function layer");
+        if storage != StorageClass::Typedef
+            && matches!(
+                self.types.get(full_type).map(|ty| &ty.kind),
+                Some(TypeKind::Function { .. })
+            )
+        {
+            let written_parameters = declarator.derived.iter().find_map(|layer| match layer {
+                DerivedDeclarator::Function {
+                    parameters, scope, ..
+                } => Some((parameters.clone(), *scope)),
+                _ => None,
+            });
+            let inherited_parameters = match &specifier.surface {
+                TypeSpecifier::TypedefName { symbol, .. } => {
+                    self.function_typedefs.get(symbol).cloned()
+                }
+                _ => None,
+            };
+            let inherited_from_typedef = written_parameters.is_none();
+            let (mut parameters, parameter_scope) = if let Some(written) = written_parameters {
+                written
+            } else if let Some(mut inherited) = inherited_parameters {
+                if let ParameterSyntax::Prototype { parameters, .. } = &mut inherited {
+                    for parameter in parameters {
+                        parameter.symbol = None;
+                        parameter.name = None;
+                    }
+                }
+                let scope =
+                    self.create_scope(ScopeKind::FunctionPrototype, Some(declarator.name.span));
+                (inherited, scope)
+            } else {
+                self.report("E1001", "expected-declaration", declarator.name.span);
+                return None;
+            };
             let symbol = self.declare_symbol(
                 &declarator.name,
                 SymbolData::Function { storage },
                 full_type,
             );
             let has_body = self.peek_kind() == Some(TokenKind::LBrace);
+            if has_body && inherited_from_typedef {
+                self.report("E1001", "expected-declaration", self.span());
+                return None;
+            }
             if has_body {
                 self.mark_definition(symbol, &declarator.name);
             }
@@ -1270,12 +1303,36 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2915", "auto-type-misuse", declarator.span);
                 return None;
             }
+            let function_typedef_syntax = if storage == StorageClass::Typedef
+                && matches!(
+                    self.types.get(full_type).map(|ty| &ty.kind),
+                    Some(TypeKind::Function { .. })
+                ) {
+                declarator
+                    .derived
+                    .iter()
+                    .find_map(|layer| match layer {
+                        DerivedDeclarator::Function { parameters, .. } => Some(parameters.clone()),
+                        _ => None,
+                    })
+                    .or_else(|| match &specifier.surface {
+                        TypeSpecifier::TypedefName { symbol, .. } => {
+                            self.function_typedefs.get(symbol).cloned()
+                        }
+                        _ => None,
+                    })
+            } else {
+                None
+            };
             let symbol = self.declare_symbol(&declarator.name, symbol_data, full_type);
             full_type = self
                 .symbols
                 .symbol(symbol)
                 .expect("declared symbols belong to the parser symbol table")
                 .ty();
+            if let Some(parameters) = function_typedef_syntax {
+                self.function_typedefs.insert(symbol, parameters);
+            }
             if has_initializer && storage != StorageClass::Typedef {
                 self.mark_definition(symbol, &declarator.name);
             }
@@ -1359,10 +1416,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .extend(self.parse_attribute_specifiers(AttributePlacement::AfterDeclarator));
             let mut next_type = self.apply_declarator(specifier.surface.type_id(), &next.derived);
             next_type = self.apply_attributes_to_type(next_type, &mut next_attributes);
-            if matches!(
-                self.types.get(next_type).map(|ty| &ty.kind),
-                Some(TypeKind::Function { .. })
-            ) {
+            if storage != StorageClass::Typedef
+                && matches!(
+                    self.types.get(next_type).map(|ty| &ty.kind),
+                    Some(TypeKind::Function { .. })
+                )
+            {
                 // A function declarator inside an init-declarator list is legal
                 // C but has no consumer in this profile; refuse it plainly
                 // rather than mis-declaring it as an object.
@@ -3806,7 +3865,28 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 TokenKind::Enum => TagKind::Enum,
                 _ => unreachable!("tag keyword checked above"),
             };
-            return self.parse_tag_specifier(kind, qualifiers, token.span);
+            let mut parsed = self.parse_tag_specifier(kind, qualifiers, token.span)?;
+            let trailing = self.parse_qualifiers_with_inline(&mut inline_spans);
+            if trailing != Qualifiers::default() {
+                let TypeSpecifier::Tag {
+                    ty,
+                    tag,
+                    kind,
+                    name,
+                    span,
+                } = parsed.surface
+                else {
+                    unreachable!("tag parser returns a tag specifier")
+                };
+                parsed.surface = TypeSpecifier::Tag {
+                    ty: self.qualify_typedef_type(ty, trailing),
+                    tag,
+                    kind,
+                    name,
+                    span,
+                };
+            }
+            return Some(parsed);
         }
 
         if self.peek_kind() == Some(TokenKind::Typeof) {
@@ -4175,6 +4255,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut canonical = Vec::new();
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
             if self.match_kind(TokenKind::Semicolon) {
+                continue;
+            }
+            if self.peek_kind() == Some(TokenKind::StaticAssert) {
+                self.parse_static_assert_declaration()?;
                 continue;
             }
             let start = self.span();
