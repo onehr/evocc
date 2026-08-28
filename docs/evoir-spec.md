@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.16** | **Authoritative reference** | **2026-08-28**
+**Revision 1.9.17** | **Authoritative reference** | **2026-08-28**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1196,7 +1196,7 @@ each code's meaning and deliberately does not repeat the text.
 | `E3012` | The byte offset does not satisfy the access alignment. |
 | `E3013` | The provenance is absent/forged or stored pointer bytes lack one complete provenance representation. |
 | `E3027` | `copy` ranges overlap without being identical. |
-| `E3028` | A computed `goto` operand is not the address of a label whose address is taken in the current function. |
+| `E3029` | A label address is used, or a `goto *`, is lowered. |
 | `E3014` | A store targets string-literal storage. |
 | `E3018` | `lifetime.end` names a live base pointer that is not an automatic object owned by the current frame. |
 
@@ -1305,7 +1305,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3025` | `not-lowered: return-address` | lowering |
 | `E3026` | `not-lowered: static-relocation` | lowering |
 | `E3027` | `overlapping-copy` | runtime |
-| `E3028` | `computed-goto-invalid-target` | runtime |
+| `E3029` | `not-lowered: computed-goto` | lowering |
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
 symbol selected by that value to the same type. The separation is deliberate:
@@ -3136,14 +3136,42 @@ and Clang-19 agree on every row.
 - `__label__ name;` at the start of a block declares a block-local label. A
   `goto` naming a label that no enclosing function scope declares is `E2920`
   (`undeclared-label`) at the label name (both oracles reject it).
-- Computed goto: `&&name` is the address of a label in the current function,
-  of type `void *` and not a constant expression; `goto *expr` transfers control
-  to such an address (both oracles accept; the kernel cohort writes
-  `(unsigned long)&&__here`). A computed `goto` block's successors are exactly
-  the labels of the current function whose address is taken anywhere in it,
-  which is the conservative control-flow graph every analysis must use.
-  Reaching a computed `goto` whose operand is not one of those addresses is
-  undefined behaviour reported as `E3028` (`computed-goto-invalid-target`).
+- Label addresses: `&&name` is the address of a label in the current function,
+  of type `void *`; it is not an address constant, so a static initializer using
+  one reports `E2208`, and `&&name` where no enclosing function scope declares
+  that label reports `E2920`. `goto *expr` transfers control to such an address.
+  Both forms are parsed, type-checked and carried in C-HIR.
+
+  Neither reaches EvoIR in this revision. An indirect branch would need a
+  terminator whose successor set is decided at run time, edge arguments for each
+  successor, validator rules, and proof-checker handling, and no unit of the
+  cohort needs it: the kernel writes `({ __label__ __here; __here:
+  (unsigned long)&&__here; })` to capture an instruction address, whose cast to an
+  integer is `ptrtoint` and already outside this profile (Section 5.3), and
+  writes no `goto *` at all. Lowering and both interpreters therefore report
+  `E3029` (`not-lowered: computed-goto`) for a label address that is used and
+  for `goto *`, and fail closed; the receipt counts each occurrence. The
+  measurement that opens this is a lane whose first error is `E3029`.
+
+#### 10.1.18 C11 declaration forms
+
+The front end accepts the complete C11 declaration grammar, not the subset the
+early milestones happened to exercise. Three forms the kernel cohort needs were
+absent and are named here so their acceptance is checkable:
+
+- **Specifier order is free.** Type qualifiers, storage-class specifiers and
+  function specifiers may appear before or after a type specifier, including
+  after a record or enum specifier: `struct midr_range const *ranges` and
+  `enum e const x` mean exactly what `const struct midr_range *ranges` and
+  `const enum e x` mean. This is 16 of the 28 remaining parse lanes, in 8 units.
+- **A typedef may name a function type.** `typedef int fn(void);` then
+  `extern fn f;` declares `f` a function, and `fn` may also be written
+  parenthesised (`typedef int (fn)(void);`). Such a typedef may not be used to
+  define a function body, and an object declared with it is a function
+  declaration, never an object. This is 10 lanes, in 5 units.
+- **Static assertions are member declarations.** `_Static_assert` may appear in
+  a struct or union member list, including an anonymous one, where it declares
+  no member and contributes nothing to layout. This is 2 lanes, in 1 unit.
 
 ### 10.4 EvoCPP Target Profile
 
@@ -3763,6 +3791,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.17 | 2026-08-28 | Defers computed `goto` and label-address lowering to `E3029` instead of specifying an indirect-branch terminator: the cohort writes no `goto *`, and its only label-address use is a cast to an integer that `ptrtoint` already excludes. Revision 1.9.16 named a lowering that Sections 3 and 9 did not define. Adds 10.1.18, the three C11 declaration forms the remaining 28 parse lanes stop on. |
 | 1.9.16 | 2026-08-28 | Closes the eight gaps the compile-time-builtin and aggregate-copy windows reported and the one blocking every parse lane: the empty external declaration is accepted; `__auto_type` needs a plain identifier and may not reference itself (one `ORACLE_CONFLICT`, refused); computed `goto` and label addresses are specified with their conservative successor set (`E3028`); `E2920` for an undeclared label; a non-constant case-range bound is `E2916`; `volatile` union and bit-field copies fail closed (`E2922`); and records cross calls through memory with a trailing return-destination pointer and reserved synthetic origins. |
 | 1.9.15 | 2026-08-27 | Names `trap.unreachable_reached` as the second trap reason, with its textual form, effects, appendix row and C-HIR contract row, and states that a trap terminator is a report and never a licence for an optimistic transition. Revision 1.9.14's 10.1.17 referred to an unreachable terminator that Sections 3, 4 and 9 did not define. |
 | 1.9.14 | 2026-08-27 | Adds the `copy` instruction (Section 3, effects, textual form, `E3027`) as the single lowering of C aggregate assignment, copy-initialization, by-value passing and return; states padding and initializedness transfer from measured oracle behaviour; admits file-scope flexible-array-member initializers (`E2919` elsewhere). Opened because six kernel parse lanes stop on aggregate copy-initialization. |
