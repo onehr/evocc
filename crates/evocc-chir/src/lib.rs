@@ -363,6 +363,14 @@ pub enum CHirExpr<'arena> {
         facts: ExprFacts,
         span: SourceSpan,
     },
+    /// GNU address of a function-local label (`&&name`). The front end keeps
+    /// this source value, but revision 1.9.17 deliberately provides no EvoIR
+    /// representation for it.
+    LabelAddress {
+        label: SpannedName,
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
     Unary(UnaryOp, &'arena CHirExpr<'arena>, SourceSpan),
     Binary(
         BinaryOp,
@@ -507,6 +515,7 @@ impl CHirExpr<'_> {
             | Self::CharLit(_, span)
             | Self::StringLit(_, span)
             | Self::Ident { span, .. }
+            | Self::LabelAddress { span, .. }
             | Self::Unary(_, _, span)
             | Self::Binary(_, _, _, span)
             | Self::Ternary(_, _, _, span)
@@ -623,6 +632,9 @@ pub enum CHirStmt<'arena> {
     Break(SourceSpan),
     Continue(SourceSpan),
     Goto(SpannedName, SourceSpan),
+    /// GNU indirect control transfer (`goto *expr`). It is preserved for
+    /// diagnostics and fails closed before EvoIR in revision 1.9.17.
+    ComputedGoto(&'arena CHirExpr<'arena>, SourceSpan),
     Label(SpannedName, &'arena CHirStmt<'arena>, SourceSpan),
     Case(
         &'arena CHirExpr<'arena>,
@@ -657,6 +669,7 @@ impl CHirStmt<'_> {
             | Self::Break(span)
             | Self::Continue(span)
             | Self::Goto(_, span)
+            | Self::ComputedGoto(_, span)
             | Self::Label(_, _, span)
             | Self::Case(_, _, span)
             | Self::CaseRange(_, _, _, span)
@@ -1439,6 +1452,7 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
             | CHirExpr::CharLit(_, _)
             | CHirExpr::StringLit(_, _)
             | CHirExpr::Ident { .. }
+            | CHirExpr::LabelAddress { .. }
             | CHirExpr::SizeOf(_, _)
             | CHirExpr::AlignOf(_, _)
             | CHirExpr::BuiltinUnreachable { .. }
@@ -1506,6 +1520,9 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
                 }
             }
             CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
+                checked_expression(expression, out, seen);
+            }
+            CHirStmt::ComputedGoto(expression, _) => {
                 checked_expression(expression, out, seen);
             }
             CHirStmt::If(condition, then_statement, else_statement, _) => {

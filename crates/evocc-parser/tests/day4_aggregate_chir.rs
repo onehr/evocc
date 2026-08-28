@@ -76,6 +76,7 @@ fn assert_expr_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         | CHirExpr::CharLit(..)
         | CHirExpr::StringLit(..)
         | CHirExpr::Ident { .. }
+        | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(..)
         | CHirExpr::AlignOf(..)
         | CHirExpr::BuiltinUnreachable { .. }
@@ -149,6 +150,7 @@ fn assert_stmt_owned(arena: &Arena, statement: &CHirStmt<'_>) {
             }
         }
         CHirStmt::Expr(expression, _) => assert_expr_owned(arena, expression),
+        CHirStmt::ComputedGoto(expression, _) => assert_expr_owned(arena, expression),
         CHirStmt::If(condition, then_branch, else_branch, _) => {
             assert_expr_owned(arena, condition);
             assert_stmt_owned(arena, then_branch);

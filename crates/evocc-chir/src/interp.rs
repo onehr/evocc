@@ -156,6 +156,9 @@ pub enum InterpreterError {
     UnreachableReached {
         span: SourceSpan,
     },
+    ComputedGoto {
+        span: SourceSpan,
+    },
     UnsupportedDeclaration {
         feature: &'static str,
         span: SourceSpan,
@@ -264,6 +267,7 @@ impl InterpreterError {
             Self::Asm { .. } => "E3021",
             Self::BitBuiltinZeroOperand { .. } => "E3022",
             Self::UnreachableReached { .. } => "E3024",
+            Self::ComputedGoto { .. } => "E3029",
             Self::Memory { error, .. } => match error.runtime_diagnostic() {
                 Some(diagnostic) => diagnostic.code,
                 None => "E3007",
@@ -356,6 +360,7 @@ impl InterpreterError {
             Self::Asm { .. } => "not-lowered: asm".to_owned(),
             Self::BitBuiltinZeroOperand { .. } => "bit-builtin-zero-operand".to_owned(),
             Self::UnreachableReached { .. } => "unreachable-reached".to_owned(),
+            Self::ComputedGoto { .. } => "not-lowered: computed-goto".to_owned(),
             Self::UnsupportedDeclaration { feature, .. } => {
                 format!("unsupported-interpreter-declaration: {feature}")
             }
@@ -397,6 +402,7 @@ impl InterpreterError {
             | Self::Asm { span }
             | Self::BitBuiltinZeroOperand { span }
             | Self::UnreachableReached { span }
+            | Self::ComputedGoto { span }
             | Self::UnsupportedDeclaration { span, .. }
             | Self::MalformedFunctionDeclaration { span, .. }
             | Self::DuplicateFunctionBody { span, .. }
@@ -2241,6 +2247,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 self.unwind_goto(tasks, &name.spelling, *span)?;
                 Ok(None)
             }
+            CHirStmt::ComputedGoto(_, span) => Err(InterpreterError::ComputedGoto { span: *span }),
             CHirStmt::Label(_, child, _) => {
                 tasks.push(MachineTask::ExecStatement(child));
                 Ok(None)
@@ -2917,6 +2924,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirStmt::Break(_)
             | CHirStmt::Continue(_)
             | CHirStmt::Goto(_, _)
+            | CHirStmt::ComputedGoto(_, _)
             | CHirStmt::Null(_) => Ok(false),
         }
     }
@@ -3204,6 +3212,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     feature: "return-address builtin",
                     span,
                 });
+            }
+            CHirExpr::LabelAddress { .. } => {
+                return Err(InterpreterError::ComputedGoto { span });
             }
             CHirExpr::Cast(ty, value, _) => {
                 let target = self.value_type(*ty, span)?;
@@ -5867,6 +5878,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
                 self.predeclare_expr(expression)?;
             }
+            CHirStmt::ComputedGoto(expression, _) => {
+                self.predeclare_expr(expression)?;
+            }
             CHirStmt::If(condition, then_statement, else_statement, _) => {
                 self.predeclare_expr(condition)?;
                 self.predeclare_stmt(then_statement)?;
@@ -5996,6 +6010,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirExpr::CharLit(..)
             | CHirExpr::StringLit(..)
             | CHirExpr::Ident { .. }
+            | CHirExpr::LabelAddress { .. }
             | CHirExpr::SizeOf(..)
             | CHirExpr::AlignOf(..)
             | CHirExpr::BuiltinUnreachable { .. }
@@ -6326,6 +6341,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 spelling: name.spelling.clone(),
                 span: *span,
             }),
+            CHirStmt::ComputedGoto(_, span) => Err(InterpreterError::ComputedGoto { span: *span }),
             CHirStmt::Label(_, child, _) => self.exec_stmt(child),
             CHirStmt::Case(_, _, _) | CHirStmt::CaseRange(_, _, _, _) => {
                 Err(InterpreterError::InvalidControlFlow {
@@ -6665,6 +6681,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 feature: "return-address builtin",
                 span,
             }),
+            CHirExpr::LabelAddress { .. } => Err(InterpreterError::ComputedGoto { span }),
             CHirExpr::CharLit(literal, _) => {
                 Ok(CInteger::new(u64::from(literal.value), CIntegerType::INT))
             }
@@ -6876,6 +6893,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirExpr::Comma(_, right, _) => self.infer_integer_type(right),
             CHirExpr::FloatLit(_, _)
             | CHirExpr::StringLit(_, _)
+            | CHirExpr::LabelAddress { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::Member(_, _, _)
@@ -7332,6 +7350,7 @@ fn push_static_initializer_children<'arena>(
         // ordinary constant-expression child.
         CHirExpr::StatementExpr { .. }
         | CHirExpr::Ident { .. }
+        | CHirExpr::LabelAddress { .. }
         | CHirExpr::Lit(_, _)
         | CHirExpr::FloatLit(_, _)
         | CHirExpr::CharLit(_, _)
@@ -7384,6 +7403,9 @@ fn collect_statement_symbols<'arena>(
             }
         }
         CHirStmt::Expr(expression, _) => collect_expression_symbols(expression, output),
+        CHirStmt::ComputedGoto(expression, _) => {
+            collect_expression_symbols(expression, output);
+        }
         CHirStmt::Return(expression, _) => {
             if let Some(expression) = expression {
                 collect_expression_symbols(expression, output);
@@ -7513,6 +7535,7 @@ fn collect_expression_symbols<'arena>(
         | CHirExpr::FloatLit(_, _)
         | CHirExpr::CharLit(_, _)
         | CHirExpr::StringLit(_, _)
+        | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinUnreachable { .. }
@@ -7533,6 +7556,7 @@ fn statement_requires_memory(unit: &CHirUnit<'_>, statement: &CHirStmt<'_>) -> b
     match statement {
         CHirStmt::Asm(_) => true,
         CHirStmt::Expr(expression, _) => expression_requires_memory(unit, expression),
+        CHirStmt::ComputedGoto(expression, _) => expression_requires_memory(unit, expression),
         CHirStmt::If(condition, then_statement, else_statement, _) => {
             expression_requires_memory(unit, condition)
                 || statement_requires_memory(unit, then_statement)
@@ -7665,6 +7689,7 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         CHirExpr::Lit(_, _)
         | CHirExpr::FloatLit(_, _)
         | CHirExpr::CharLit(_, _)
+        | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinUnreachable { .. }
@@ -7754,6 +7779,7 @@ fn collect_statement_object_declarations<'arena>(
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
+        | CHirStmt::ComputedGoto(_, _)
         | CHirStmt::Null(_) => {}
     }
 }
@@ -7788,7 +7814,7 @@ fn function_has_goto(unit: &CHirUnit<'_>, function: SymbolId) -> bool {
 
 fn statement_contains_goto(statement: &CHirStmt<'_>) -> bool {
     match statement {
-        CHirStmt::Goto(_, _) => true,
+        CHirStmt::Goto(_, _) | CHirStmt::ComputedGoto(_, _) => true,
         CHirStmt::Asm(assembly) => assembly.is_goto,
         CHirStmt::If(_, then_statement, else_statement, _) => {
             statement_contains_goto(then_statement)
@@ -7821,7 +7847,9 @@ fn statement_contains_call(statement: &CHirStmt<'_>) -> bool {
             .iter()
             .chain(&assembly.inputs)
             .any(|operand| expression_contains_call(operand.expression)),
-        CHirStmt::Expr(expression, _) => expression_contains_call(expression),
+        CHirStmt::Expr(expression, _) | CHirStmt::ComputedGoto(expression, _) => {
+            expression_contains_call(expression)
+        }
         CHirStmt::If(condition, then_statement, else_statement, _) => {
             expression_contains_call(condition)
                 || statement_contains_call(then_statement)
@@ -7939,6 +7967,7 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
         | CHirExpr::CharLit(_, _)
         | CHirExpr::StringLit(_, _)
         | CHirExpr::Ident { .. }
+        | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::SizeOfExpr(_, _)
         | CHirExpr::AlignOf(_, _)
@@ -8305,6 +8334,7 @@ fn statement_contains_label(statement: &CHirStmt<'_>, spelling: &str) -> bool {
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
+        | CHirStmt::ComputedGoto(_, _)
         | CHirStmt::Null(_) => false,
     }
 }
@@ -8370,6 +8400,7 @@ fn validate_function_labels(
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
+        | CHirStmt::ComputedGoto(_, _)
         | CHirStmt::Null(_) => {}
     }
     Ok(())
@@ -8419,6 +8450,7 @@ fn validate_function_gotos(
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
+        | CHirStmt::ComputedGoto(_, _)
         | CHirStmt::Null(_) => {}
     }
     Ok(())

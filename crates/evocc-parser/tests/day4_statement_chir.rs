@@ -161,6 +161,7 @@ fn assert_expression_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         | CHirExpr::CharLit(..)
         | CHirExpr::StringLit(..)
         | CHirExpr::Ident { .. }
+        | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(..)
         | CHirExpr::AlignOf(..)
         | CHirExpr::BuiltinUnreachable { .. }
@@ -282,6 +283,7 @@ fn assert_statement_owned(arena: &Arena, statement: &CHirStmt<'_>) {
             }
         }
         CHirStmt::Expr(expression, _) => assert_expression_owned(arena, expression),
+        CHirStmt::ComputedGoto(expression, _) => assert_expression_owned(arena, expression),
         CHirStmt::If(condition, then_branch, else_branch, _) => {
             assert_expression_owned(arena, condition);
             assert_statement_owned(arena, then_branch);
@@ -423,6 +425,7 @@ fn statement_kind(statement: &CHirStmt<'_>) -> &'static str {
         CHirStmt::Break(..) => "break",
         CHirStmt::Continue(..) => "continue",
         CHirStmt::Goto(..) => "goto",
+        CHirStmt::ComputedGoto(..) => "computed-goto",
         CHirStmt::Label(..) => "label",
         CHirStmt::Case(..) => "case",
         CHirStmt::CaseRange(..) => "case-range",
@@ -466,6 +469,7 @@ fn collect_statement_spans(statement: &CHirStmt<'_>, facts: &mut Vec<(&'static s
         | CHirStmt::Break(..)
         | CHirStmt::Continue(..)
         | CHirStmt::Goto(..)
+        | CHirStmt::ComputedGoto(..)
         | CHirStmt::Null(..) => {}
     }
 }
@@ -541,6 +545,9 @@ fn statement_fingerprint(statement: &CHirStmt<'_>) -> String {
         CHirStmt::Break(_) => "break".into(),
         CHirStmt::Continue(_) => "continue".into(),
         CHirStmt::Goto(label, _) => format!("goto({})", label.spelling),
+        CHirStmt::ComputedGoto(target, _) => {
+            format!("computed-goto({})", expression_fingerprint(target))
+        }
         CHirStmt::Label(label, nested, _) => format!(
             "label({},{})",
             label.spelling,

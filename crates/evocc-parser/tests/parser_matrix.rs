@@ -217,6 +217,7 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
         CHirExpr::CharLit(_, _) => "char".into(),
         CHirExpr::StringLit(_, _) => "string".into(),
         CHirExpr::Ident { spelling, .. } => format!("id({spelling})"),
+        CHirExpr::LabelAddress { label, .. } => format!("label_address({})", label.spelling),
         CHirExpr::Unary(op, operand, _) => {
             format!(
                 "unary({},{})",

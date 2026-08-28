@@ -1731,6 +1731,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             CHirExpr::SizeOfExpr(operand, _) => self.expression_type(operand).is_some(),
             CHirExpr::Unary(UnaryOp::AddrOf | UnaryOp::Deref, _, _)
+            | CHirExpr::LabelAddress { .. }
             | CHirExpr::Call(_, _, _)
             | CHirExpr::CheckedArithmetic { .. }
             | CHirExpr::BuiltinUnreachable { .. }
@@ -1855,6 +1856,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .ok()
                 .map(|value| value.mathematical_value() as f64),
             CHirExpr::StringLit(_, _)
+            | CHirExpr::LabelAddress { .. }
             | CHirExpr::Call(_, _, _)
             | CHirExpr::CheckedArithmetic { .. }
             | CHirExpr::BuiltinUnreachable { .. }
@@ -3291,9 +3293,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         }
         if let Some(reference) = gotos.into_iter().find(|reference| {
-            labels
-                .get(&reference.name)
-                .is_some_and(|target| !reference.regions.starts_with(target))
+            reference.checks_region_entry
+                && labels
+                    .get(&reference.name)
+                    .is_some_and(|target| !reference.regions.starts_with(target))
         }) {
             // Revision 1.9.12 makes the construct malformed but does not
             // assign a dedicated diagnostic. Keep the established generic
@@ -4600,6 +4603,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             CHirExpr::FloatLit(_, _)
             | CHirExpr::StringLit(_, _)
+            | CHirExpr::LabelAddress { .. }
             | CHirExpr::Call(_, _, _)
             | CHirExpr::CheckedArithmetic { .. }
             | CHirExpr::BuiltinUnreachable { .. }
@@ -4714,6 +4718,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             CHirExpr::FloatLit(_, _)
             | CHirExpr::StringLit(_, _)
+            | CHirExpr::LabelAddress { .. }
             | CHirExpr::Call(_, _, _)
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
@@ -5768,6 +5773,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn parse_goto_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
         let keyword = self.advance().expect("peeked goto");
+        if self.match_kind(TokenKind::Star) {
+            let target = self.parse_expression()?;
+            let semicolon = self.expect(TokenKind::Semicolon)?;
+            let span = self.merge_span(keyword.span, semicolon.span);
+            return Some(self.alloc_node(CHirStmt::ComputedGoto(target, span)));
+        }
         let token = self.expect(TokenKind::Identifier)?;
         let spelling = self.token_text(&token).to_owned();
         let label = SpannedName {
@@ -6970,7 +6981,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             CHirExpr::BitBuiltin { facts, .. }
             | CHirExpr::BuiltinUnreachable { facts, .. }
-            | CHirExpr::BuiltinReturnAddress { facts, .. } => {
+            | CHirExpr::BuiltinReturnAddress { facts, .. }
+            | CHirExpr::LabelAddress { facts, .. } => {
                 (InferredType::Canonical(facts.ty()), ExprCategory::Value)
             }
             CHirExpr::Cast(ty, _, _) => (InferredType::Canonical(*ty), ExprCategory::Value),
@@ -7465,6 +7477,28 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn parse_unary(&mut self) -> Option<&'arena CHirExpr<'arena>> {
+        if self.peek_kind() == Some(TokenKind::AmpAmp) {
+            let operator = self.advance().expect("peeked label-address operator");
+            let token = self.expect(TokenKind::Identifier)?;
+            let spelling = self.token_text(&token).to_owned();
+            if !self.in_function_scope() {
+                self.report("E2920", "undeclared-label", token.span);
+                return None;
+            }
+            let label = SpannedName {
+                spelling: self.resolve_local_label(&spelling).unwrap_or(spelling),
+                span: token.span,
+            };
+            let void = self.intern(TypeKind::Void, Qualifiers::default());
+            let pointer = self.intern(TypeKind::Pointer(void), Qualifiers::default());
+            let span = self.merge_span(operator.span, token.span);
+            return Some(self.alloc_node(CHirExpr::LabelAddress {
+                label,
+                facts: ExprFacts::value(pointer),
+                span,
+            }));
+        }
+
         if matches!(
             self.peek_kind(),
             Some(TokenKind::PlusPlus | TokenKind::MinusMinus)
@@ -8693,6 +8727,7 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::Bang
             | TokenKind::Tilde
             | TokenKind::Amp
+            | TokenKind::AmpAmp
             | TokenKind::Star
             | TokenKind::PlusPlus
             | TokenKind::MinusMinus
@@ -8790,6 +8825,7 @@ fn collect_asm_goto_labels(
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
+        | CHirStmt::ComputedGoto(_, _)
         | CHirStmt::Null(_) => {}
     }
 }
@@ -8799,6 +8835,7 @@ struct JumpRegionReference {
     name: String,
     span: SourceSpan,
     regions: Vec<u32>,
+    checks_region_entry: bool,
 }
 
 fn collect_jump_regions_decl(
@@ -8835,6 +8872,7 @@ fn collect_jump_regions_stmt(
                 name: label.spelling.clone(),
                 span: label.span,
                 regions: regions.clone(),
+                checks_region_entry: true,
             }));
             for operand in assembly.outputs.iter().chain(&assembly.inputs) {
                 collect_jump_regions_expr(operand.expression, regions, next_region, labels, gotos);
@@ -8908,7 +8946,11 @@ fn collect_jump_regions_stmt(
             name: label.spelling.clone(),
             span: label.span,
             regions: regions.clone(),
+            checks_region_entry: true,
         }),
+        CHirStmt::ComputedGoto(target, _) => {
+            collect_jump_regions_expr(target, regions, next_region, labels, gotos);
+        }
         CHirStmt::Return(None, _)
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
@@ -8924,6 +8966,12 @@ fn collect_jump_regions_expr(
     gotos: &mut Vec<JumpRegionReference>,
 ) {
     match expression {
+        CHirExpr::LabelAddress { label, .. } => gotos.push(JumpRegionReference {
+            name: label.spelling.clone(),
+            span: label.span,
+            regions: regions.clone(),
+            checks_region_entry: false,
+        }),
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::SizeOfExpr(operand, _)
@@ -9111,6 +9159,7 @@ fn statement_references_symbol(statement: &CHirStmt<'_>, symbol: SymbolId) -> bo
         CHirStmt::Return(expression, _) => {
             expression.is_some_and(|expression| expression_references_symbol(expression, symbol))
         }
+        CHirStmt::ComputedGoto(target, _) => expression_references_symbol(target, symbol),
         CHirStmt::Compound(items, _) => items.iter().any(|item| match item {
             CHirBlockItem::Declaration(declaration) => {
                 declaration_references_symbol(declaration, symbol)
@@ -9198,6 +9247,7 @@ fn expression_references_symbol(expression: &CHirExpr<'_>, symbol: SymbolId) -> 
         | CHirExpr::FloatLit(..)
         | CHirExpr::CharLit(..)
         | CHirExpr::StringLit(..)
+        | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(..)
         | CHirExpr::AlignOf(..)
         | CHirExpr::BuiltinUnreachable { .. }
@@ -9585,6 +9635,11 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
             span: paren_span,
         },
         CHirExpr::BuiltinReturnAddress { facts, .. } => CHirExpr::BuiltinReturnAddress {
+            facts: *facts,
+            span: paren_span,
+        },
+        CHirExpr::LabelAddress { label, facts, .. } => CHirExpr::LabelAddress {
+            label: label.clone(),
             facts: *facts,
             span: paren_span,
         },

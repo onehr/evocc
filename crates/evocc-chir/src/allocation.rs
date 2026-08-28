@@ -1188,6 +1188,12 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                     current_function: Some(current_function),
                 });
             }
+            CHirStmt::ComputedGoto(expression, _) => {
+                work.push(WorkItem::Expression {
+                    expression,
+                    current_function: Some(current_function),
+                });
+            }
             CHirStmt::If(condition, then_statement, else_statement, _) => {
                 if let Some(else_statement) = else_statement {
                     work.push(WorkItem::Statement {
@@ -1489,6 +1495,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             | CHirExpr::FloatLit(_, _)
             | CHirExpr::CharLit(_, _)
             | CHirExpr::Ident { .. }
+            | CHirExpr::LabelAddress { .. }
             | CHirExpr::SizeOf(_, _)
             | CHirExpr::AlignOf(_, _)
             | CHirExpr::BuiltinUnreachable { .. }

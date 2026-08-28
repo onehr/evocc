@@ -136,6 +136,7 @@ fn eval_integer_constant(
         }
         CHirExpr::FloatLit(_, _)
         | CHirExpr::StringLit(_, _)
+        | CHirExpr::LabelAddress { .. }
         | CHirExpr::Call(_, _, _)
         | CHirExpr::CheckedArithmetic { .. }
         | CHirExpr::BuiltinUnreachable { .. }
@@ -213,6 +214,7 @@ fn expression_size(
                 .checked_mul(unit_bytes)
         }
         CHirExpr::Ident { facts, .. }
+        | CHirExpr::LabelAddress { facts, .. }
         | CHirExpr::Assign { facts, .. }
         | CHirExpr::MemoryAssign { facts, .. }
         | CHirExpr::MemoryRead { facts, .. }
@@ -352,6 +354,7 @@ fn integer_expression_type(
         CHirExpr::Comma(_, right, _) => integer_expression_type(right, types, symbols),
         CHirExpr::FloatLit(_, _)
         | CHirExpr::StringLit(_, _)
+        | CHirExpr::LabelAddress { .. }
         | CHirExpr::Call(_, _, _)
         | CHirExpr::Member(_, _, _)
         | CHirExpr::PtrMember(_, _, _)

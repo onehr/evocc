@@ -174,6 +174,10 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 format!("string({:?},{:?})", value.value, value.prefix)
             }
             CHirExpr::Ident { spelling, .. } => format!("id({spelling})"),
+            CHirExpr::LabelAddress { label, .. } => {
+                self.name(&format!("{path}.label"), label);
+                format!("label_address({})", label.spelling)
+            }
             CHirExpr::Unary(operator, child, _) => {
                 let operator = unary_name(*operator);
                 let child = self.expression(&format!("{path}.operand"), child);
@@ -452,6 +456,10 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 self.name(&format!("{path}.label"), label);
                 format!("goto({})", label.spelling)
             }
+            CHirStmt::ComputedGoto(target, _) => format!(
+                "computed_goto({})",
+                self.expression(&format!("{path}.target"), target)
+            ),
             CHirStmt::Label(label, nested, _) => {
                 self.name(&format!("{path}.label"), label);
                 let nested = self.statement(&format!("{path}.statement"), nested);

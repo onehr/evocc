@@ -65,6 +65,9 @@ pub enum LowerError {
     ReturnAddress {
         span: SourceSpan,
     },
+    ComputedGoto {
+        span: SourceSpan,
+    },
     Asm {
         span: SourceSpan,
     },
@@ -102,6 +105,7 @@ impl fmt::Display for LowerError {
             }
             Self::BitBuiltin { .. } => formatter.write_str("not-lowered: bit-builtin"),
             Self::ReturnAddress { .. } => formatter.write_str("not-lowered: return-address"),
+            Self::ComputedGoto { .. } => formatter.write_str("not-lowered: computed-goto"),
             Self::Asm { .. } => formatter.write_str("not-lowered: asm"),
             Self::MalformedFunction {
                 function, reason, ..
@@ -128,6 +132,7 @@ impl LowerError {
             Self::Asm { .. } => "E3021",
             Self::BitBuiltin { .. } => "E3023",
             Self::ReturnAddress { .. } => "E3025",
+            Self::ComputedGoto { .. } => "E3029",
             _ => "E3101",
         }
     }
@@ -147,6 +152,7 @@ impl LowerError {
             | Self::CheckedArithmetic { span }
             | Self::BitBuiltin { span }
             | Self::ReturnAddress { span }
+            | Self::ComputedGoto { span }
             | Self::Asm { span }
             | Self::MalformedFunction { span, .. }
             | Self::InvalidControlFlow { span, .. }
@@ -489,6 +495,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             | CHirExpr::FloatLit(..)
             | CHirExpr::CharLit(..)
             | CHirExpr::StringLit(..)
+            | CHirExpr::LabelAddress { .. }
             | CHirExpr::SizeOf(..)
             | CHirExpr::AlignOf(..)
             | CHirExpr::BuiltinUnreachable { .. }
@@ -506,6 +513,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             CHirStmt::Expr(expr, _) | CHirStmt::Return(Some(expr), _) => {
                 expression(unit, expr, out)
             }
+            CHirStmt::ComputedGoto(expr, _) => expression(unit, expr, out),
             CHirStmt::If(condition, left, right, _) => {
                 expression(unit, condition, out);
                 statement(unit, left, out);
@@ -619,6 +627,7 @@ fn lower_globals(
             | CHirStmt::Break(_)
             | CHirStmt::Continue(_)
             | CHirStmt::Goto(..)
+            | CHirStmt::ComputedGoto(..)
             | CHirStmt::Null(_) => {}
         }
     }
@@ -1100,6 +1109,7 @@ fn prevalidate_stmt_for_lowering(
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
         | CHirStmt::Null(_) => Ok(()),
+        CHirStmt::ComputedGoto(_, span) => Err(LowerError::ComputedGoto { span: *span }),
     }
 }
 
@@ -1269,6 +1279,7 @@ fn prevalidate_expr_for_lowering(
         CHirExpr::BuiltinReturnAddress { span, .. } => {
             Err(LowerError::ReturnAddress { span: *span })
         }
+        CHirExpr::LabelAddress { span, .. } => Err(LowerError::ComputedGoto { span: *span }),
         CHirExpr::BuiltinUnreachable { .. } => Ok(()),
         CHirExpr::CompoundLit(_, initializer, _) => {
             for action in initializer.plan().actions() {
@@ -2577,6 +2588,7 @@ impl<'a> FunctionLowerer<'a> {
                 }
                 Ok(Flow::default())
             }
+            CHirStmt::ComputedGoto(_, span) => Err(LowerError::ComputedGoto { span: *span }),
             CHirStmt::Label(label, nested, _) => self.lower_label(
                 label.spelling.as_str(),
                 nested,
@@ -4883,6 +4895,7 @@ impl<'a> FunctionLowerer<'a> {
             CHirExpr::BuiltinReturnAddress { span, .. } => {
                 Err(LowerError::ReturnAddress { span: *span })
             }
+            CHirExpr::LabelAddress { span, .. } => Err(LowerError::ComputedGoto { span: *span }),
             CHirExpr::BuiltinUnreachable { span, .. } => Err(LowerError::UnsupportedExpression {
                 span: *span,
                 feature: "unreachable builtin must be a discarded expression",
@@ -7283,6 +7296,7 @@ fn contains_targeted_label(statement: &CHirStmt<'_>, names: &BTreeSet<String>) -
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
+        | CHirStmt::ComputedGoto(_, _)
         | CHirStmt::Null(_) => false,
     }
 }
@@ -7295,6 +7309,7 @@ fn collect_goto_names(statement: &CHirStmt<'_>, names: &mut BTreeSet<String>) {
         CHirStmt::Goto(label, _) => {
             names.insert(label.spelling.clone());
         }
+        CHirStmt::ComputedGoto(_, _) => {}
         CHirStmt::If(_, then_branch, else_branch, _) => {
             collect_goto_names(then_branch, names);
             if let Some(else_branch) = else_branch {
@@ -7340,6 +7355,7 @@ fn collect_calls_stmt(statement: &CHirStmt<'_>, calls: &mut CallSites) {
         CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
             collect_calls_expr(expression, calls)
         }
+        CHirStmt::ComputedGoto(expression, _) => collect_calls_expr(expression, calls),
         CHirStmt::If(condition, then_branch, else_branch, _) => {
             collect_calls_expr(condition, calls);
             collect_calls_stmt(then_branch, calls);
@@ -7492,6 +7508,7 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
         | CHirExpr::CharLit(..)
         | CHirExpr::StringLit(..)
         | CHirExpr::Ident { .. }
+        | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(..)
         | CHirExpr::AlignOf(..)
         | CHirExpr::BuiltinUnreachable { .. }
@@ -7522,6 +7539,10 @@ fn live_before_stmt(
             if let Some(expression) = expression {
                 live_before_expr(expression, &mut live_after);
             }
+        }
+        CHirStmt::ComputedGoto(expression, _) => {
+            live_after.clear();
+            live_before_expr(expression, &mut live_after);
         }
         CHirStmt::Compound(items, _) => {
             for item in items.iter().rev() {
@@ -7737,6 +7758,7 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
         | CHirExpr::FloatLit(..)
         | CHirExpr::CharLit(..)
         | CHirExpr::StringLit(..)
+        | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(..)
         | CHirExpr::AlignOf(..)
         | CHirExpr::BuiltinUnreachable { .. }
@@ -7773,6 +7795,7 @@ fn collect_symbols_stmt(statement: &CHirStmt<'_>, symbols: &mut BTreeSet<SymbolI
         CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
             collect_symbols_expr(expression, symbols)
         }
+        CHirStmt::ComputedGoto(expression, _) => collect_symbols_expr(expression, symbols),
         CHirStmt::If(condition, then_branch, else_branch, _) => {
             collect_symbols_expr(condition, symbols);
             collect_symbols_stmt(then_branch, symbols);
@@ -7918,6 +7941,7 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
         | CHirExpr::FloatLit(..)
         | CHirExpr::CharLit(..)
         | CHirExpr::StringLit(..)
+        | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(..)
         | CHirExpr::AlignOf(..)
         | CHirExpr::BuiltinUnreachable { .. }
