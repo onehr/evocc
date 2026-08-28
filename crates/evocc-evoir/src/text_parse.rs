@@ -242,7 +242,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
         return Err("global bytes must contain complete hexadecimal bytes".to_owned());
     }
     let mut bytes = Vec::with_capacity(byte_text.len() / 2);
-    for pair in byte_text.as_bytes().chunks_exact(2) {
+    for pair in byte_text.as_bytes().as_chunks::<2>().0 {
         let text = std::str::from_utf8(pair).map_err(|_| "invalid global byte".to_owned())?;
         bytes.push(u8::from_str_radix(text, 16).map_err(|_| "invalid global byte".to_owned())?);
     }
