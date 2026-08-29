@@ -299,7 +299,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__signed__") => TokenKind::Signed,
                     Some("__extension__") => TokenKind::GnuExtension,
                     Some("__builtin_va_list") => TokenKind::BuiltinVaList,
-                    Some("__int128") => TokenKind::GnuInt128,
+                    Some("__int128" | "__int128_t" | "__uint128_t") => TokenKind::GnuInt128,
                     Some("__alignof__") => TokenKind::GnuAlignof,
                     Some("__builtin_expect") => TokenKind::BuiltinExpect,
                     Some("__builtin_constant_p") => TokenKind::BuiltinConstantP,
@@ -1115,9 +1115,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E1001", "expected-declaration", self.span());
             return None;
         };
-        if context == DeclarationContext::File {
-            self.validate_file_or_member_array_bounds(&declarator);
-        }
         if auto_type_span.is_some()
             && (storage == StorageClass::Typedef || !declarator.derived.is_empty())
         {
@@ -1302,6 +1299,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             // declarator, so self-references in an initializer resolve to this
             // declaration rather than an outer shadowed name.
             let has_initializer = self.peek_kind() == Some(TokenKind::Assign);
+            if !has_initializer {
+                self.validate_variable_array_bounds(&declarator.derived);
+            }
             if auto_type_span.is_some() && !has_initializer {
                 self.report("E2915", "auto-type-misuse", declarator.span);
                 return None;
@@ -1414,9 +1414,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E1001", "expected-declaration", self.span());
                 return None;
             };
-            if context == DeclarationContext::File {
-                self.validate_file_or_member_array_bounds(&next);
-            }
             let (next_asm_label, next_asm_label_span) = self.parse_optional_asm_label()?;
             next_attributes
                 .extend(self.parse_attribute_specifiers(AttributePlacement::AfterDeclarator));
@@ -1575,11 +1572,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         written: &WrittenInitializer<'arena>,
     ) -> Option<TypeId> {
         if self.initialized_array_contains_vla(target) {
-            self.report(
-                "E2203",
-                "variable-length-object-cannot-be-initialized",
-                written.span(),
-            );
+            self.report("E2203", "variable-length-object", written.span());
             return None;
         }
         let canonical = self.types.get(target)?.clone();
@@ -3087,11 +3080,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 bound: ArrayBound::Variable,
                 ..
             } => {
-                self.report(
-                    "E2203",
-                    "variable-length-object-cannot-be-initialized",
-                    self.span(),
-                );
+                self.report("E2203", "variable-length-object", self.span());
                 None
             }
             TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_) => {
@@ -3998,7 +3987,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             if is_builtin_type_word(kind) {
                 let token = self.advance().expect("peeked builtin type word");
-                words.push(kind);
+                let forced_int128_signedness = match (kind, self.token_text(&token)) {
+                    (TokenKind::GnuInt128, "__int128_t") => Some(GnuInt128Signedness::Signed),
+                    (TokenKind::GnuInt128, "__uint128_t") => Some(GnuInt128Signedness::Unsigned),
+                    _ => None,
+                };
+                words.push(BuiltinTypeWord {
+                    kind,
+                    forced_int128_signedness,
+                });
                 end = Some(token.span);
                 continue;
             }
@@ -4313,7 +4310,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.parse_declarator(false)
                 };
                 if let Some(declarator) = declarator.as_ref() {
-                    self.validate_file_or_member_array_bounds(declarator);
+                    self.validate_variable_array_bounds(&declarator.derived);
                 }
                 let ty = declarator
                     .as_ref()
@@ -4932,7 +4929,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn classify_array_bound(&mut self, expression: &CHirExpr<'_>) -> ArrayBound {
         match self.eval_integer_constant_expression(expression) {
-            Ok(value) if value.mathematical_value() <= 0 => {
+            Ok(value) if value.mathematical_value() < 0 => {
                 self.report("E2923", "invalid-array-bound", expression.span());
                 // Preserve a concrete, non-VLA layer after the diagnostic so
                 // the declaration context cannot replace E2923 with E2203.
@@ -4946,8 +4943,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
-    fn validate_file_or_member_array_bounds(&mut self, declarator: &ParsedDeclarator) {
-        if let Some(span) = declarator.derived.iter().find_map(|layer| match layer {
+    fn validate_variable_array_bounds(&mut self, derived: &[DerivedDeclarator]) {
+        if let Some(span) = derived.iter().find_map(|layer| match layer {
             DerivedDeclarator::Array {
                 bound: ArrayBound::Variable,
                 span,
@@ -5336,6 +5333,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         ),
                     }
                 };
+            self.validate_variable_array_bounds(&derived);
             let unadjusted = self.apply_declarator(specifier.surface.type_id(), &derived);
             let ty = self.adjust_parameter_type(unadjusted);
             let span = self.merge_span(start, end);
@@ -9414,14 +9412,20 @@ fn is_builtin_type_word(kind: TokenKind) -> bool {
     )
 }
 
+#[derive(Debug, Clone, Copy)]
+struct BuiltinTypeWord {
+    kind: TokenKind,
+    forced_int128_signedness: Option<GnuInt128Signedness>,
+}
+
 /// Resolve the order-independent builtin declaration-specifier multiset.
 ///
 /// C permits combinations such as `unsigned const long int`; consuming the
 /// words one at a time as complete types loses that grammar. This resolver
 /// accepts exactly the standard integer, real, and complex families and
 /// rejects contradictory or duplicate words.
-fn resolve_builtin_type(words: &[TokenKind]) -> Option<TypeKind> {
-    let count = |needle| words.iter().filter(|kind| **kind == needle).count();
+fn resolve_builtin_type(words: &[BuiltinTypeWord]) -> Option<TypeKind> {
+    let count = |needle| words.iter().filter(|word| word.kind == needle).count();
     let void = count(TokenKind::Void);
     let builtin_va_list = count(TokenKind::BuiltinVaList);
     let gnu_int128 = count(TokenKind::GnuInt128);
@@ -9459,14 +9463,20 @@ fn resolve_builtin_type(words: &[TokenKind]) -> Option<TypeKind> {
         return (total == 1).then_some(TypeKind::BuiltinVaList);
     }
     if gnu_int128 == 1 {
-        if total != 1 + signed + unsigned {
+        let forced_signedness = words.iter().find_map(|word| word.forced_int128_signedness);
+        if forced_signedness.is_some() && total != 1 {
             return None;
         }
-        return Some(TypeKind::GnuInt128(if unsigned == 1 {
-            GnuInt128Signedness::Unsigned
-        } else {
-            GnuInt128Signedness::Signed
-        }));
+        if forced_signedness.is_none() && total != 1 + signed + unsigned {
+            return None;
+        }
+        return Some(TypeKind::GnuInt128(forced_signedness.unwrap_or({
+            if unsigned == 1 {
+                GnuInt128Signedness::Unsigned
+            } else {
+                GnuInt128Signedness::Signed
+            }
+        })));
     }
     if void == 1 {
         return (total == 1).then_some(TypeKind::Void);
@@ -9976,11 +9986,25 @@ mod tests {
     }
 
     #[test]
-    fn a_written_zero_bound_is_rejected_even_with_an_empty_initializer() {
+    fn a_written_zero_bound_remains_fixed_with_an_empty_initializer() {
         let arena = Arena::default();
-        let (_, diagnostic) = parse_rejected("int fixed[0] = {};", &arena);
-        assert_eq!(diagnostic.code, "E2923");
-        assert_eq!(diagnostic.message, "invalid-array-bound");
+        let unit = parse_unit("int fixed[0] = {};", &arena);
+        let CHirDecl::Object(object) = unit.declarations()[0] else {
+            panic!("expected zero-length object declaration")
+        };
+        assert!(matches!(
+            unit.types().get(object.ty).map(|ty| &ty.kind),
+            Some(TypeKind::Array {
+                bound: ArrayBound::Fixed(0),
+                ..
+            })
+        ));
+        assert!(object
+            .initializer
+            .as_ref()
+            .expect("written empty initializer")
+            .plan()
+            .is_empty());
     }
 
     #[test]
@@ -10015,10 +10039,7 @@ mod tests {
         let source = "int f(int n) { int values[2][n] = { { 1 } }; return 0; }";
         let (_, diagnostic) = parse_rejected(source, &arena);
         assert_eq!(diagnostic.code, "E2203");
-        assert_eq!(
-            diagnostic.message,
-            "variable-length-object-cannot-be-initialized"
-        );
+        assert_eq!(diagnostic.message, "variable-length-object");
         assert_eq!(
             &source[diagnostic.span.byte_start as usize..diagnostic.span.byte_end as usize],
             "{ { 1 } }"

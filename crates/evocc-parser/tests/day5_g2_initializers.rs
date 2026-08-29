@@ -939,7 +939,7 @@ fn unsupported_initializer_forms_keep_their_stable_boundaries() {
         "{ 1 }",
         0,
         "E2203",
-        "variable-length-object-cannot-be-initialized",
+        "variable-length-object",
     );
 }
 

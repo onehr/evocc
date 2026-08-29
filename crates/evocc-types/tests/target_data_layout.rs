@@ -239,6 +239,40 @@ fn a_final_unbounded_array_is_a_zero_sized_flexible_prefix() {
 }
 
 #[test]
+fn zero_length_array_members_add_neither_extent_nor_natural_alignment() {
+    let mut types = TypeInterner::new();
+    let layout = TargetDataLayout::aarch64_unknown_linux_gnu();
+    let char_ty = types.intern(plain(TypeKind::Int(IntRank::Char)));
+    let long_ty = types.intern(plain(TypeKind::Int(IntRank::Long)));
+    let empty_long_array = types.intern(plain(TypeKind::Array {
+        element: long_ty,
+        bound: ArrayBound::Fixed(0),
+    }));
+
+    assert_eq!(
+        layout.layout_of(&types, empty_long_array),
+        Ok(TypeLayout::new(0, 8)),
+        "the complete array type keeps its element alignment outside a record",
+    );
+
+    let (tag, ty) = complete_record(
+        &mut types,
+        TagKind::Struct,
+        vec![
+            field(Some("head"), char_ty),
+            field(Some("empty"), empty_long_array),
+            field(Some("tail"), char_ty),
+        ],
+    );
+    let record = layout.record_layout(&types, tag).unwrap();
+    assert_eq!((record.size_bytes, record.align_bytes), (2, 1));
+    assert_eq!(record.field_offsets(), vec![0, 1, 1]);
+    assert_eq!(record.fields[1].layout, TypeLayout::new(0, 1));
+    assert_eq!(record.flexible_array_padding_bytes, None);
+    assert_eq!(layout.layout_of(&types, ty), Ok(TypeLayout::new(2, 1)));
+}
+
+#[test]
 fn bit_fields_pack_from_the_current_bit_not_an_eagerly_aligned_unit() {
     let mut types = TypeInterner::new();
     let layout = TargetDataLayout::aarch64_unknown_linux_gnu();

@@ -1334,7 +1334,7 @@ impl<'a> LayoutContext<'a> {
                 continue;
             }
 
-            let natural = self.layout_type(field.ty)?;
+            let natural = self.record_member_natural_layout(field.ty)?;
             let field_layout = member_layout(natural, attributes, field.layout);
             let cursor_bytes = bits_to_bytes(cursor_bits)?;
             let offset = checked_align_up(cursor_bytes, u64::from(field_layout.align_bytes))?;
@@ -1417,7 +1417,7 @@ impl<'a> LayoutContext<'a> {
             if self.unbounded_array_element(field.ty)?.is_some() {
                 return Err(LayoutError::FlexibleArrayInUnion { tag, field_index });
             }
-            let natural = self.layout_type(field.ty)?;
+            let natural = self.record_member_natural_layout(field.ty)?;
             let field_layout = member_layout(natural, attributes, field.layout);
             member_extent = member_extent.max(field_layout.size_bytes);
             record_align = record_align.max(field_layout.align_bytes);
@@ -1453,6 +1453,29 @@ impl<'a> LayoutContext<'a> {
             } => Some(element),
             _ => None,
         })
+    }
+
+    fn record_member_natural_layout(&mut self, ty: TypeId) -> Result<TypeLayout, LayoutError> {
+        let natural = self.layout_type(ty)?;
+        let canonical = self.types.get(ty).ok_or(LayoutError::UnknownType(ty))?;
+        if matches!(
+            canonical.kind,
+            TypeKind::Array {
+                bound: ArrayBound::Fixed(0),
+                ..
+            }
+        ) {
+            // A GNU zero-length array remains a complete array type whose own
+            // alignment is its element alignment, but as a record member its
+            // empty extent contributes neither bytes nor natural alignment.
+            // An explicit type-level `aligned` still remains intentional.
+            Ok(TypeLayout::new(
+                0,
+                canonical.qualifiers.aligned.unwrap_or(1),
+            ))
+        } else {
+            Ok(natural)
+        }
     }
 
     fn bit_field_base(
