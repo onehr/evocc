@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.17** | **Authoritative reference** | **2026-08-28**
+**Revision 1.9.18** | **Authoritative reference** | **2026-08-29**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1285,6 +1285,7 @@ twice would let a reader think two conditions are the same finding.
 | `E2919` | `flexible-array-initializer-not-static` | front end |
 | `E2920` | `undeclared-label` | front end |
 | `E2922` | `volatile-aggregate-copy-unsupported` | front end |
+| `E2923` | `invalid-array-bound` | front end |
 | `E0102` | `unmatched-conditional` | preprocessor |
 | `E0104` | `error-directive` | preprocessor |
 | `E0105` | `include-not-found` | preprocessor |
@@ -2772,6 +2773,7 @@ front end that still emits it is defective.
 | `E2919` | initializer for a flexible array member outside file scope |
 | `E2920` | `goto` names a label no enclosing function scope declares |
 | `E2922` | copy of a `volatile` union, or of a `volatile` record with a bit-field member |
+| `E2923` | array bound folds to zero or a negative value |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -3152,6 +3154,53 @@ and Clang-19 agree on every row.
   `E3029` (`not-lowered: computed-goto`) for a label address that is used and
   for `goto *`, and fail closed; the receipt counts each occurrence. The
   measurement that opens this is a lane whose first error is `E3029`.
+
+#### 10.1.19 Integer constant expressions and array bounds
+
+The specification names an integer constant expression in a dozen places
+(`_Static_assert`, `case`, array bounds, bit-field widths, designator indexes,
+`aligned`, enumeration constants, the builtins of 10.1.14 and 10.1.17) without
+ever saying what one is. It is the C11 definition with this profile's
+extensions, and every one of those places uses the same evaluator:
+
+- integer, character and enumeration constants;
+- `sizeof` and `_Alignof` applied **to a type name or to an expression**; the
+  operand expression is not evaluated, only its type is taken, so
+  `sizeof(*(int *)8)` is `4` and `sizeof(i++)` leaves `i` alone;
+- `__builtin_offsetof`, `__builtin_types_compatible_p`, `__builtin_constant_p`,
+  `__builtin_choose_expr` and the constant-operand bit builtins (10.1.14,
+  10.1.17);
+- casts to an integer type, the unary and binary arithmetic, bitwise,
+  relational and logical operators, and the conditional operator, applied to
+  the above.
+
+`sizeof(void)` is `1`, as is `sizeof` of a function type; both are GNU
+extensions the kernel relies on (measured, both oracles).
+
+**Conditional operator with a null pointer constant.** In `c ? a : b` where
+one of `a` and `b` is a null pointer constant and the other is a pointer, the
+result type is the *other* operand's pointer type, not a composite with `void *`
+(C11 6.5.15p6). This is load-bearing: the kernel writes
+
+```c
+#define __is_constexpr(x) \
+    (sizeof(int) == sizeof(*(8 ? ((void *)((long)(x) * 0l)) : (int *)8)))
+```
+
+which reads `4 == 4` when `x` is an integer constant expression, because
+`(void *)((long)(x) * 0l)` is then a null pointer constant and the conditional
+has type `int *`, and reads `4 == 1` otherwise, because the conditional is then
+`void *` and `sizeof(void)` is `1`. Both oracles confirm all three values.
+Getting this rule wrong does not produce a diagnostic; it produces the opposite
+answer in every kernel size and overflow check that uses the macro.
+
+**Array bounds.** A bound is evaluated wherever it is written, not only when an
+initializer follows. A bound that is not an integer constant expression at file
+scope, or on a member, is `E2203` (`variable-length-object`); a bound that folds
+to zero or a negative value is `E2923` (`invalid-array-bound`). Measured defect
+at revision 1.9.17: `int probe[-1];`, `struct s { int a[-1]; };` and a
+file-scope `int probe[n];` were all accepted silently, and only an initializer
+made the bound reachable, so no `sizeof` of such a type meant anything.
 
 #### 10.1.18 C11 declaration forms
 
@@ -3791,6 +3840,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.18 | 2026-08-29 | Adds 10.1.19: what an integer constant expression is, that `sizeof`/`_Alignof` fold over expressions as well as type names, `sizeof(void)` and `sizeof` of a function type are `1`, and the conditional operator's null-pointer-constant rule that the kernel's `__is_constexpr` depends on. Requires array bounds to be evaluated wherever written (`E2203`, new `E2923`) after they were found to be checked only when an initializer followed. |
 | 1.9.17 | 2026-08-28 | Defers computed `goto` and label-address lowering to `E3029` instead of specifying an indirect-branch terminator: the cohort writes no `goto *`, and its only label-address use is a cast to an integer that `ptrtoint` already excludes. Revision 1.9.16 named a lowering that Sections 3 and 9 did not define. Adds 10.1.18, the three C11 declaration forms the remaining 28 parse lanes stop on. |
 | 1.9.16 | 2026-08-28 | Closes the eight gaps the compile-time-builtin and aggregate-copy windows reported and the one blocking every parse lane: the empty external declaration is accepted; `__auto_type` needs a plain identifier and may not reference itself (one `ORACLE_CONFLICT`, refused); computed `goto` and label addresses are specified with their conservative successor set (`E3028`); `E2920` for an undeclared label; a non-constant case-range bound is `E2916`; `volatile` union and bit-field copies fail closed (`E2922`); and records cross calls through memory with a trailing return-destination pointer and reserved synthetic origins. |
 | 1.9.15 | 2026-08-27 | Names `trap.unreachable_reached` as the second trap reason, with its textual form, effects, appendix row and C-HIR contract row, and states that a trap terminator is a report and never a licence for an optimistic transition. Revision 1.9.14's 10.1.17 referred to an unreachable terminator that Sections 3, 4 and 9 did not define. |
