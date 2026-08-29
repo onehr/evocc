@@ -2840,14 +2840,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             match designator {
                 WrittenDesignator::Field(name) => {
                     for current in resolved {
-                        let Some((field_index, field_type)) =
-                            self.designated_field(current.ty, &name.spelling)
-                        else {
+                        let Some(fields) = self.designated_field(current.ty, &name.spelling) else {
                             self.report("E2906", "designator-outside-object", name.span);
                             return None;
                         };
+                        let field_type = fields.last()?.field_ty();
+                        let path = fields.into_iter().fold(current.path, |path, field| {
+                            path.with_field(field.field_index())
+                        });
                         next.push(ResolvedInitializerTarget {
-                            path: current.path.with_field(field_index),
+                            path,
                             ty: field_type,
                         });
                     }
@@ -2889,20 +2891,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some(resolved)
     }
 
-    fn designated_field(&self, target: TypeId, spelling: &str) -> Option<(usize, TypeId)> {
-        let (TypeKind::Struct(tag) | TypeKind::Union(tag)) = self.types.get(target)?.kind else {
-            return None;
-        };
-        let TagState::Complete(TagDefinition::Struct(fields) | TagDefinition::Union(fields)) =
-            &self.types.tag(tag)?.state
-        else {
-            return None;
-        };
-        fields
-            .iter()
-            .enumerate()
-            .find(|(_, field)| field.name.as_deref() == Some(spelling))
-            .map(|(index, field)| (index, field.ty))
+    fn designated_field(&self, target: TypeId, spelling: &str) -> Option<Vec<FieldProjection>> {
+        self.record_member_path(target, spelling)
     }
 
     fn designator_constant_index(
@@ -6308,13 +6298,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }))
     }
 
-    /// Resolve a member name against a record type, yielding the projection
-    /// payload that designates it.
-    ///
-    /// Anonymous members are not searched through: transparent lookup into an
-    /// unnamed struct or union is a separate language feature, and silently
-    /// resolving through one here would designate a different subobject than
-    /// the source names.
+    /// Resolve a member name to its complete projection path. Anonymous record
+    /// members are traversed recursively; two matching anonymous paths are
+    /// ambiguous and return `None`. Member access, initializer designators and
+    /// `__builtin_offsetof` all use this one lookup rule.
     fn record_member_path(&self, record_ty: TypeId, name: &str) -> Option<Vec<FieldProjection>> {
         self.record_member_path_inner(record_ty, name, &mut HashSet::new())
     }
@@ -8341,29 +8328,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn offsetof_field(&self, record_ty: TypeId, name: &str) -> Option<(u64, TypeId)> {
-        let canonical = self.types.get(record_ty)?;
-        let tag = match canonical.kind {
-            TypeKind::Struct(tag) | TypeKind::Union(tag) => tag,
-            _ => return None,
-        };
-        let definition = self.types.tag(tag)?;
-        let fields = match &definition.state {
-            TagState::Complete(TagDefinition::Struct(fields))
-            | TagState::Complete(TagDefinition::Union(fields)) => fields,
-            TagState::Incomplete | TagState::Complete(TagDefinition::Enum(_)) => return None,
-        };
-        let (field_index, field) = fields
-            .iter()
-            .enumerate()
-            .find(|(_, field)| field.name.as_deref() == Some(name))?;
-        let layout = TargetDataLayout::aarch64_unknown_linux_gnu()
-            .record_layout(&self.types, tag)
-            .ok()?;
-        let placed = layout
-            .fields
-            .iter()
-            .find(|placed| placed.field_index == field_index)?;
-        Some((placed.byte_offset, field.ty))
+        let fields = self.record_member_path(record_ty, name)?;
+        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        let mut offset = 0_u64;
+        for field in &fields {
+            let layout = target.record_layout(&self.types, field.tag()).ok()?;
+            let placed = layout
+                .fields
+                .iter()
+                .find(|placed| placed.field_index == field.field_index())?;
+            offset = offset.checked_add(placed.byte_offset)?;
+        }
+        Some((offset, fields.last()?.field_ty()))
     }
 
     fn parse_builtin_bit(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
