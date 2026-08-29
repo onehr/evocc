@@ -1,0 +1,83 @@
+{
+  "receiptId": "c30.anonymous-member-designators.red",
+  "authority": {
+    "specification": "docs/evoir-spec.md revision 1.9.20 section 10.1.6 and section 6.3",
+    "specificationCommit": "b2a4d3e0e6dd6f521b5bd68ce23f99fcb288903a",
+    "specificationSha256": "438acb88e16bebdbf2ccb063eedd51185ee11b38e549a63294f6514b38be3c6b",
+    "contract": "tests/contracts/day9-acceptance-contract.json scope line K3",
+    "contractSha256": "60620ed4cbfb7caa95830d798fd2ddb7c603c64ce03a4f7950d798c1e8ca7134"
+  },
+  "baseline": "b2a4d3e0e6dd6f521b5bd68ce23f99fcb288903a",
+  "declaredMissingCapabilities": [
+    "anonymous-member-promotion-for-designated-initializers-and-builtin-offsetof"
+  ],
+  "redCommand": "cargo test -p evocc-parser --test anonymous_member_designators --no-fail-fast",
+  "measured": {
+    "passedControls": 1,
+    "failed": 4,
+    "ignored": 0,
+    "rustBuildErrors": 0,
+    "failureClasses": {
+      "E2906 designator-outside-object from flat member lookup": 4
+    }
+  },
+  "observations": [
+    {
+      "test": "anonymous_members_have_the_sealed_layout_and_offsets",
+      "observed": "E2906 at sp (bytes 264..266) instead of sizeof 40 and offsets head=0, sp=24, raw=8, tail=32",
+      "reason": "anonymous-member-promotion-for-designated-initializers-and-builtin-offsetof"
+    },
+    {
+      "test": "designated_initializer_records_every_anonymous_member_step",
+      "observed": "E2906 at sp (bytes 132..134) instead of a StoreScalar path [field 1, field 0, field 1] carrying value 7",
+      "reason": "anonymous-member-promotion-for-designated-initializers-and-builtin-offsetof"
+    },
+    {
+      "test": "anonymous_member_resolution_recurses_through_deep_nesting",
+      "observed": "E2906 at q (bytes 125..126) instead of offset 8 and the complete five-step anonymous path",
+      "reason": "anonymous-member-promotion-for-designated-initializers-and-builtin-offsetof"
+    },
+    {
+      "test": "kernel_pt_regs_sp_shape_uses_the_promoted_member",
+      "observed": "E2906 at sp in the cohort's pt_regs anonymous-union/anonymous-struct shape instead of a front-end constant",
+      "reason": "anonymous-member-promotion-for-designated-initializers-and-builtin-offsetof"
+    }
+  ],
+  "greenControl": {
+    "test": "ambiguous_anonymous_members_report_e2906_at_the_name",
+    "observed": "both builtin-offsetof and designated-initializer forms report E2906 designator-outside-object at x",
+    "purpose": "pins the required ambiguity refusal while the positive paths remain RED"
+  },
+  "testSource": {
+    "path": "crates/evocc-parser/tests/anonymous_member_designators.rs",
+    "sha256": "18689812d19c48f941d6dc24e1ec79724ad8566a070dd4e48880c0ea79762b65"
+  },
+  "oracleEvidence": {
+    "imageDigest": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+    "primary": {
+      "source": ".evidence/builtin-probes/20260826-2c23684c/anon.c",
+      "sourceSha256": "5a3b30ed7132286948f4f1ccbcea907f158a7659c18621428392340b5092f823",
+      "output": ".evidence/builtin-probes/20260826-2c23684c/anon.out",
+      "outputSha256": "fe8616fd6fc429028177947bf9170e86376898b294f0e1ec8b5b6497c999b44f"
+    },
+    "ambiguityAndDepth": {
+      "source": ".evidence/builtin-probes/20260826-2c23684c/anon2.c",
+      "sourceSha256": "5f848c3fc556758fb3d9be4b5b1a09c245847bfe4eee64228b7ab6d3d66e709c",
+      "output": ".evidence/builtin-probes/20260826-2c23684c/anon2.out",
+      "outputSha256": "feeb8581dc4de83ab8a72a2773ffdea6758002f85fd76c86d50264a9baaa89a1",
+      "deepSource": ".evidence/builtin-probes/20260826-2c23684c/anon3.c",
+      "deepSourceSha256": "972671bb7a84b9b4b68871e6bec575f06cc9e65d6ffd7de70b3dd7c44dcdf619"
+    },
+    "measuredValues": {
+      "outerSize": 40,
+      "headOffset": 0,
+      "spOffset": 24,
+      "rawOffset": 8,
+      "tailOffset": 32,
+      "designatedSpValue": 7,
+      "deepQOffset": 8
+    },
+    "consensus": "GCC-14 and Clang-19 agree on every accepted value and both reject ambiguous x"
+  },
+  "openSpecificationQuestions": []
+}
