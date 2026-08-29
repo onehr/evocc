@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.20** | **Authoritative reference** | **2026-08-29**
+**Revision 1.9.21** | **Authoritative reference** | **2026-08-29**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2809,6 +2809,25 @@ this profile has no variable-length objects.
 `typeof` produces a type and is fully resolved by the front end; nothing of it
 survives into EvoIR.
 
+`__typeof_unqual__` is `typeof` with the top-level qualifiers removed: `const`,
+`volatile`, `restrict` and `_Atomic` are dropped from the resulting type, and
+nothing else changes. Its operand is a type name or an unevaluated expression,
+exactly as for `typeof`, and it is likewise fully resolved by the front end.
+Measured, both oracles (`.evidence/builtin-probes/20260826-2c23684c/tuq.out`,
+`tuq2.out`): `const int`, `volatile int`, `const volatile int` and `_Atomic int`
+all give `int` and the result is writable; `int *const` gives `int *` while
+`const int *` and `const char *const` keep the pointee qualifier; a `const`
+member of a record stays `const`; the operand is not evaluated. The cohort
+writes it 4,797 times.
+
+`ORACLE_CONFLICT` on an array: for `const int arr[3]`, GCC-14 keeps the element
+qualifier, so a store through `__typeof_unqual__(arr)` is refused, while
+Clang-19 strips it and admits the store. This profile keeps the qualifier,
+which is the direction that refuses a write rather than admitting one.
+
+Only the `__typeof_unqual__` spelling exists in this dialect; the C23 keyword
+`typeof_unqual` is not admitted, as neither oracle admits it under `gnu11`.
+
 `_Generic(controlling-expression, association-list)` is C11 generic selection
 and is resolved by the front end in the same way. The controlling expression
 is not evaluated; its type is taken after lvalue conversion, so qualifiers are
@@ -3884,6 +3903,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.21 | 2026-08-29 | Specifies `__typeof_unqual__` in 10.1.10: `typeof` with top-level `const`, `volatile`, `restrict` and `_Atomic` removed, operand unevaluated, pointee and member qualifiers kept, resolved entirely by the front end. One `ORACLE_CONFLICT` on array element qualifiers resolved by keeping them, the direction that refuses a write. Added after 28 kernel parse lanes stopped on it; the cohort writes it 4,797 times. |
 | 1.9.20 | 2026-08-29 | States in 10.1.6 that a member of an anonymous structure or union is a member of the enclosing record for designators and `__builtin_offsetof` as well as for access, that resolution recurses through anonymous members and records every step, and that a name ambiguous between two of them is `E2906`. Added after 28 kernel parse lanes stopped on `offsetof(struct pt_regs, sp)` while `o.sp` already worked. |
 | 1.9.19 | 2026-08-29 | Corrects 10.1.19: a zero array bound is a valid GNU zero-length array, measured in every record position and at file scope; `E2923` is for a negative bound only, and `E2203` has one message everywhere. Revision 1.9.18 refused zero without probing it, which no cohort unit could have passed. Adds `__int128_t` and `__uint128_t` as spellings, and repairs the dangling `__int128` cross-reference. |
 | 1.9.18 | 2026-08-29 | Adds 10.1.19: what an integer constant expression is, that `sizeof`/`_Alignof` fold over expressions as well as type names, `sizeof(void)` and `sizeof` of a function type are `1`, and the conditional operator's null-pointer-constant rule that the kernel's `__is_constexpr` depends on. Requires array bounds to be evaluated wherever written (`E2203`, new `E2923`) after they were found to be checked only when an initializer followed. |
