@@ -1,0 +1,88 @@
+//! Compiler-provided 128-bit integer spellings fixed by specification 10.1.19.
+
+use evocc_chir::CHirDecl;
+use evocc_common::{Arena, FileId};
+use evocc_lex::{Lexer, TokenKind};
+use evocc_parser::Parser;
+use evocc_types::{GnuInt128Signedness, TargetDataLayout, TypeKind, TypeLayout};
+
+fn parse<'arena>(source: &str, arena: &'arena Arena) -> evocc_chir::CHirUnit<'arena> {
+    let file = FileId::new(10_121);
+    let mut lexer = Lexer::new(file, source);
+    let mut tokens = Vec::new();
+    while let Some(token) = lexer.next() {
+        assert_ne!(token.kind, TokenKind::Error, "lexer rejected {source:?}");
+        tokens.push(token);
+    }
+    let mut parser = Parser::new(tokens, file, source);
+    let unit = parser.parse_translation_unit_in(arena);
+    assert!(
+        parser.diagnostic().is_none(),
+        "source: {source}; diagnostic: {:?}",
+        parser.diagnostic(),
+    );
+    unit
+}
+
+#[test]
+fn compiler_spellings_are_the_underlying_128_bit_types() {
+    let arena = Arena::default();
+    let unit = parse(
+        concat!(
+            "typedef __int128_t signed_spelling;\n",
+            "typedef __int128 signed_underlying;\n",
+            "typedef __uint128_t unsigned_spelling;\n",
+            "typedef unsigned __int128 unsigned_underlying;\n",
+            "_Static_assert(sizeof(__int128_t) == 16, \"signed size\");\n",
+            "_Static_assert(sizeof(__uint128_t) == 16, \"unsigned size\");\n",
+            "_Static_assert(__builtin_types_compatible_p(__int128_t, __int128), \"signed identity\");\n",
+            "_Static_assert(__builtin_types_compatible_p(__uint128_t, unsigned __int128), \"unsigned identity\");\n",
+        ),
+        &arena,
+    );
+    let aliases = unit
+        .declarations()
+        .iter()
+        .filter_map(|declaration| match declaration {
+            CHirDecl::Typedef(alias) => Some(alias),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(aliases.len(), 4);
+    assert_eq!(aliases[0].ty, aliases[1].ty);
+    assert_eq!(aliases[2].ty, aliases[3].ty);
+    assert_eq!(
+        unit.types().get(aliases[0].ty).expect("signed type").kind,
+        TypeKind::GnuInt128(GnuInt128Signedness::Signed),
+    );
+    assert_eq!(
+        unit.types().get(aliases[2].ty).expect("unsigned type").kind,
+        TypeKind::GnuInt128(GnuInt128Signedness::Unsigned),
+    );
+    let layout = TargetDataLayout::aarch64_unknown_linux_gnu();
+    assert_eq!(
+        layout.layout_of(unit.types(), aliases[0].ty),
+        Ok(TypeLayout::new(16, 16)),
+    );
+    assert_eq!(
+        layout.layout_of(unit.types(), aliases[2].ty),
+        Ok(TypeLayout::new(16, 16)),
+    );
+}
+
+#[test]
+fn compiler_spellings_are_contextual_after_preprocessing() {
+    for spelling in ["__int128_t", "__uint128_t"] {
+        let mut lexer = Lexer::new(FileId::new(10_122), spelling);
+        assert_eq!(
+            lexer.next().expect("compiler spelling token").kind,
+            TokenKind::Identifier,
+        );
+    }
+
+    let arena = Arena::default();
+    parse(
+        "extern __int128_t consume(__uint128_t); __uint128_t *pointer;\n",
+        &arena,
+    );
+}

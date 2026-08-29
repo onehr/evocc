@@ -4,6 +4,7 @@ use evocc_chir::CHirUnit;
 use evocc_common::{Arena, FileId};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::{ParseDiagnostic, Parser};
+use evocc_types::{TargetDataLayout, TypeLayout};
 
 fn parse<'arena>(source: &str, arena: &'arena Arena) -> Result<CHirUnit<'arena>, ParseDiagnostic> {
     let file = FileId::new(10_120);
@@ -28,14 +29,46 @@ fn rejects(source: &str, code: &str, message: &str) {
     assert_eq!(error.message, message, "source: {source}");
 }
 
+fn object_layout(source: &str, object: &str) -> TypeLayout {
+    let arena = Arena::default();
+    let unit = parse(source, &arena).expect("layout fixture must parse");
+    let declaration = unit
+        .declarations()
+        .iter()
+        .find_map(|declaration| match declaration {
+            evocc_chir::CHirDecl::Object(declaration) if declaration.name.spelling == object => {
+                Some(declaration)
+            }
+            _ => None,
+        })
+        .expect("named object must be present");
+    TargetDataLayout::aarch64_unknown_linux_gnu()
+        .layout_of(unit.types(), declaration.ty)
+        .expect("object layout must be available")
+}
+
 #[test]
 fn negative_file_scope_array_bound_is_rejected() {
     rejects("int negative[-1];\n", "E2923", "invalid-array-bound");
 }
 
 #[test]
-fn zero_file_scope_array_bound_is_rejected() {
-    rejects("int zero[0];\n", "E2923", "invalid-array-bound");
+fn zero_length_arrays_have_the_sealed_oracle_layouts() {
+    let source = concat!(
+        "struct mid { int a; char d[0]; int b; };\n",
+        "struct last { int a; char d[0]; };\n",
+        "struct comp { char pad[20 - 2 * sizeof(long) - sizeof(unsigned)]; int x; };\n",
+        "struct mid mid; struct last last; struct comp comp; int g[0];\n",
+        "_Static_assert(sizeof(struct mid) == 8, \"mid\");\n",
+        "_Static_assert(sizeof(struct last) == 4, \"last\");\n",
+        "_Static_assert(sizeof(struct comp) == 4, \"comp\");\n",
+        "_Static_assert(__builtin_offsetof(struct comp, x) == 0, \"padoff\");\n",
+        "_Static_assert(sizeof(g) == 0, \"global\");\n",
+    );
+    assert_eq!(object_layout(source, "mid"), TypeLayout::new(8, 4));
+    assert_eq!(object_layout(source, "last"), TypeLayout::new(4, 4));
+    assert_eq!(object_layout(source, "comp"), TypeLayout::new(4, 4));
+    assert_eq!(object_layout(source, "g"), TypeLayout::new(0, 4));
 }
 
 #[test]
@@ -48,21 +81,14 @@ fn negative_record_member_array_bound_is_rejected() {
 }
 
 #[test]
-fn zero_local_array_bound_is_rejected() {
-    rejects(
-        "int local(void) { int value[0]; return 0; }\n",
-        "E2923",
-        "invalid-array-bound",
-    );
-}
-
-#[test]
-fn zero_parameter_array_bound_is_rejected() {
-    rejects(
-        "int parameter(int value[0]);\n",
-        "E2923",
-        "invalid-array-bound",
-    );
+fn zero_length_arrays_are_valid_in_local_parameter_and_abstract_positions() {
+    let arena = Arena::default();
+    parse(
+        "int parameter(int value[0]);\n\
+         int local(void) { int value[0]; return sizeof(int[0]); }\n",
+        &arena,
+    )
+    .expect("a zero bound is valid wherever an array bound is written");
 }
 
 #[test]
@@ -93,28 +119,40 @@ fn a_later_file_declarator_cannot_hide_a_variable_bound() {
 }
 
 #[test]
-fn abstract_array_bounds_are_evaluated_where_written() {
+fn block_scope_variable_length_array_is_rejected_without_an_initializer() {
     rejects(
-        "int value(void) { return sizeof(int[0]); }\n",
-        "E2923",
-        "invalid-array-bound",
+        "int local(int bound) { int object[bound]; return 0; }\n",
+        "E2203",
+        "variable-length-object",
     );
 }
 
 #[test]
-fn positive_constant_bounds_and_permitted_vlas_remain_valid() {
+fn initialized_block_scope_variable_length_array_uses_the_canonical_message() {
+    rejects(
+        "int local(int bound) { int object[bound] = { 1 }; return 0; }\n",
+        "E2203",
+        "variable-length-object",
+    );
+}
+
+#[test]
+fn parameter_variable_length_array_is_rejected() {
+    rejects(
+        "int global_bound; int parameter(int value[global_bound]);\n",
+        "E2203",
+        "variable-length-object",
+    );
+}
+
+#[test]
+fn positive_constant_bounds_remain_valid() {
     let arena = Arena::default();
     parse(
         "_Static_assert(sizeof(int[1 + 2]) == 12, \"bound\");\n\
          int object[3];\n\
-         struct record { int member[2]; };\n\
-         int global_bound;\n\
-         int prototype(int parameter[global_bound]);\n\
-         int local(int bound) {\n\
-             int variable[bound];\n\
-             return 0;\n\
-         }\n",
+         struct record { int member[2]; };\n",
         &arena,
     )
-    .expect("positive constant bounds and block or parameter VLAs remain accepted");
+    .expect("positive constant bounds remain accepted");
 }

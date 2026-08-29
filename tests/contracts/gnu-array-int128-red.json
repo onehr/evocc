@@ -1,0 +1,101 @@
+{
+  "receiptId": "c30.gnu-array-int128.red",
+  "authority": {
+    "specification": "docs/evoir-spec.md revision 1.9.19 section 10.1.19 and section 6.3",
+    "specificationSha256": "765710aacc8a63a34b469dbb8435e4288e8d74c40b4ba1c385dd9963d658f531",
+    "contract": "tests/contracts/day9-acceptance-contract.json scope lines K and K2",
+    "contractSha256": "bd33f3e663b2396a89eb04a06e2845436a553abbcdeea65f17585518366b3a40"
+  },
+  "baseline": "04c7f1c9c77d8754de41725a9484f43e7b40f9c8",
+  "declaredMissingCapabilities": [
+    "gnu-zero-length-array-layout",
+    "uniform-variable-length-object-refusal",
+    "compiler-provided-int128-type-spellings"
+  ],
+  "redCommand": "cargo test -p evocc-parser --test array_bound_validation --test compiler_int128_spellings --no-fail-fast",
+  "measured": {
+    "passedControls": 6,
+    "failed": 7,
+    "ignored": 0,
+    "rustBuildErrors": 0,
+    "suites": {
+      "evocc-parser/array_bound_validation": {
+        "passed": 6,
+        "failed": 5
+      },
+      "evocc-parser/compiler_int128_spellings": {
+        "passed": 0,
+        "failed": 2
+      }
+    },
+    "failureClasses": {
+      "E2923 invalid-array-bound on a valid zero bound": 2,
+      "NO_DIAGNOSTIC forbidden variable-length-object accepted": 2,
+      "E2203 noncanonical variable-length-object message": 1,
+      "E1001 expected-declaration at a compiler-provided int128 spelling": 2
+    }
+  },
+  "observations": [
+    {
+      "test": "zero_length_arrays_have_the_sealed_oracle_layouts",
+      "observed": "E2923 invalid-array-bound at the first zero-length member instead of the measured layouts 8/4, 4/4, 4/4, offset 0, and global size 0",
+      "reason": "gnu-zero-length-array-layout"
+    },
+    {
+      "test": "zero_length_arrays_are_valid_in_local_parameter_and_abstract_positions",
+      "observed": "E2923 invalid-array-bound at the zero-length parameter",
+      "reason": "gnu-zero-length-array-layout"
+    },
+    {
+      "test": "block_scope_variable_length_array_is_rejected_without_an_initializer",
+      "observed": "the forbidden block-scope variable-length object is accepted without a diagnostic",
+      "reason": "uniform-variable-length-object-refusal"
+    },
+    {
+      "test": "parameter_variable_length_array_is_rejected",
+      "observed": "the forbidden variable-bound parameter is accepted without a diagnostic",
+      "reason": "uniform-variable-length-object-refusal"
+    },
+    {
+      "test": "initialized_block_scope_variable_length_array_uses_the_canonical_message",
+      "observed": "E2203 reports variable-length-object-cannot-be-initialized instead of variable-length-object",
+      "reason": "uniform-variable-length-object-refusal"
+    },
+    {
+      "test": "compiler_spellings_are_the_underlying_128_bit_types",
+      "observed": "E1001 expected-declaration at __int128_t",
+      "reason": "compiler-provided-int128-type-spellings"
+    },
+    {
+      "test": "compiler_spellings_are_contextual_after_preprocessing",
+      "observed": "E1001 expected-declaration at __int128_t while the raw lexer control confirms both spellings remain identifiers through preprocessing",
+      "reason": "compiler-provided-int128-type-spellings"
+    }
+  ],
+  "oracleEvidence": {
+    "path": ".evidence/builtin-probes/20260826-2c23684c/zerobound.out",
+    "sha256": "c82304587ce50efd2253e6fcd257c4a630a0cbd2968602b2b649dd964620a5f0",
+    "source": ".evidence/builtin-probes/20260826-2c23684c/zerobound.c",
+    "sourceSha256": "66a1b25ae24ae4b4e2ea96369fb18a8900b3fb4eecdea61a3d563e8666c616c0",
+    "imageDigest": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+    "compilers": {
+      "gcc-14": "fb051a6c58961fb6aec758acf50d7d0375eecff740d0706388092829e3fb7a41",
+      "clang-19": "8bba5d733f54ada0cc50ba7646a87ddc798d5de73f67e397cdefada07297bb65"
+    },
+    "values": {
+      "midSize": 8,
+      "midAlign": 4,
+      "lastSize": 4,
+      "lastAlign": 4,
+      "computedZeroSize": 4,
+      "computedZeroSuccessorOffset": 0,
+      "fileArraySize": 0,
+      "signedInt128Size": 16,
+      "unsignedInt128Size": 16,
+      "unsignedSpellingCompatibleWithUnderlying": 1
+    },
+    "negativeBound": "rejected by both sealed oracles",
+    "blockVla": "accepted by both sealed oracles but refused by the no-variable-length-object project profile"
+  },
+  "openSpecificationQuestions": []
+}
