@@ -1,19 +1,19 @@
 {
   "receiptId": "c30.kernel-dashboard",
-  "subjectCommit": "07009fe",
-  "publishedFromRun": "20260829T123429Z-30856",
-  "previousRun": "20260829T094329Z-72998",
+  "subjectCommit": "cbf084c",
+  "publishedFromRun": "20260829T152145Z-2514",
+  "previousRun": "20260829T123429Z-30856",
   "cohortSha256": "09d0e2eaf0734949164a491d30df640bf396ff7586ef495f938f565b8879a306",
   "observer": {
     "path": "tests/acceptance/day5-kernel-reductions-observer.py",
     "sha256": "ad0716e72c9131177b82e309f939df52bcfaa56d67c6a9ef23a1639e41a90cc7"
   },
   "capture": {
-    "argvSha256": "1491553bac555724088f85732048aef6bc15fb76102841e3c7e17626f16d2feb",
-    "environmentSha256": "81b4ddf0ab451d1e701ec3f5d2019e56c616ae59f6ba56e9843d2adc84604d26",
+    "argvSha256": "55b07f0c8455b84aab67881b55c4a8fc7712f7b1e6bc9dd4c18c031485eb5fe6",
+    "environmentSha256": "487009d2946f6e91ceae6ad46dd15927380c646c28520f69b2fed8eb56bbd99b",
     "returnCode": 0,
     "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "stdoutSha256": "6ed5f922b61b0c339e4afcd6b69e292f0793480a925b1e83d4dccade5bd32068",
+    "stdoutSha256": "599106a5d37e14c747a3ba68d01702aef62db724d5b11180166417faecaea44a",
     "timedOut": false
   },
   "command": "tests/acceptance/day5-kernel-reconnaissance.py --timeout 120 --parser-timeout 10 --parser-jobs 4",
@@ -41,16 +41,16 @@
   "regressionsAgainstPrevious": [],
   "artifacts": {
     "results": {
-      "path": ".evidence/day5-kernel-reconnaissance/20260829T123429Z-30856/results.jsonl",
-      "sha256": "50ecfd0d3d42afa35effe71e73597bebf4bdb9d57db63bc3344642a4e272c231"
+      "path": ".evidence/day5-kernel-reconnaissance/20260829T152145Z-2514/results.jsonl",
+      "sha256": "ece4da23a51aaf9b4389ea395c5edffd7c1e258f6584bda196d77992e60933d0"
     },
     "routing": {
-      "path": ".evidence/kernel-dashboard/07009fe/routing.json",
-      "sha256": "589e4d571fef62c8ad591c3af901628c8b8360631a4f782f255fe71661a1aa30"
+      "path": ".evidence/kernel-dashboard/cbf084c/routing.json",
+      "sha256": "32e6d706198839d6d07055cb471ffaba7c6f49ea17b2abe81f8ec7452fe68636"
     },
     "captureStatus": {
-      "path": ".evidence/kernel-dashboard/07009fe/reconnaissance.status",
-      "sha256": "ea1b5622b612fa442c82683fdf1831acee799b43b89915fec023957b87fc17d0"
+      "path": ".evidence/kernel-dashboard/cbf084c/reconnaissance.status",
+      "sha256": "55ff73072bf720340fd386537dcde4200444f1cb7f8c6e7914f6a028dec82cf9"
     }
   }
 }
