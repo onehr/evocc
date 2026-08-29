@@ -437,7 +437,6 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             }
             CHirExpr::Unary(_, operand, _)
             | CHirExpr::Cast(_, operand, _)
-            | CHirExpr::SizeOfExpr(operand, _)
             | CHirExpr::BitBuiltin { operand, .. }
             | CHirExpr::Member(operand, _, _)
             | CHirExpr::PtrMember(operand, _, _) => expression(unit, operand, out),
@@ -497,6 +496,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             | CHirExpr::StringLit(..)
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::SizeOf(..)
+            | CHirExpr::SizeOfExpr(..)
             | CHirExpr::AlignOf(..)
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. } => {}
@@ -1250,7 +1250,6 @@ fn prevalidate_expr_for_lowering(
             prevalidate_expr_for_lowering(unit, operand)
         }
         CHirExpr::Unary(_, operand, _)
-        | CHirExpr::SizeOfExpr(operand, _)
         | CHirExpr::Member(operand, _, _)
         | CHirExpr::PtrMember(operand, _, _) => prevalidate_expr_for_lowering(unit, operand),
         CHirExpr::Binary(_, left, right, _)
@@ -1295,7 +1294,9 @@ fn prevalidate_expr_for_lowering(
             let mut labels = BTreeMap::new();
             prevalidate_stmt_for_lowering(unit, body, &mut labels)
         }
-        CHirExpr::SizeOf(ty, span) | CHirExpr::AlignOf(ty, span) => {
+        CHirExpr::SizeOf(ty, span)
+        | CHirExpr::SizeOfExpr(_, ty, span)
+        | CHirExpr::AlignOf(ty, span) => {
             if unit.types().get(*ty).is_none() {
                 Err(LowerError::UnknownType {
                     ty: *ty,
@@ -4990,17 +4991,17 @@ impl<'a> FunctionLowerer<'a> {
                 self.lower_discarded_expr(left, state)?;
                 self.lower_expr(right, state)
             }
-            CHirExpr::SizeOf(ty, span) => {
-                let layout = self
+            CHirExpr::SizeOf(ty, span) | CHirExpr::SizeOfExpr(_, ty, span) => {
+                let size = self
                     .target
-                    .layout_of(self.unit.types(), *ty)
+                    .sizeof_type(self.unit.types(), *ty)
                     .map_err(|source| LowerError::Layout {
                         ty: *ty,
                         span: *span,
                         source,
                     })?;
                 let result = self.fresh_value(bits(CIntegerType::ULONG));
-                self.emit(state, Inst::Const(result.clone(), layout.size_bytes))?;
+                self.emit(state, Inst::Const(result.clone(), size))?;
                 Ok(ExprValue {
                     value: result,
                     integer: CIntegerType::ULONG,
@@ -5027,7 +5028,6 @@ impl<'a> FunctionLowerer<'a> {
             }
             CHirExpr::FloatLit(_, span)
             | CHirExpr::StringLit(_, span)
-            | CHirExpr::SizeOfExpr(_, span)
             | CHirExpr::Member(_, _, span)
             | CHirExpr::PtrMember(_, _, span)
             | CHirExpr::Index(_, _, span) => Err(LowerError::UnsupportedExpression {
@@ -7454,7 +7454,6 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
         }
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
-        | CHirExpr::SizeOfExpr(operand, _)
         | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
         | CHirExpr::PtrMember(operand, _, _) => collect_calls_expr(operand, calls),
@@ -7510,6 +7509,7 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
         | CHirExpr::Ident { .. }
         | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(..)
+        | CHirExpr::SizeOfExpr(..)
         | CHirExpr::AlignOf(..)
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. } => {}
@@ -7704,7 +7704,6 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
         }
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
-        | CHirExpr::SizeOfExpr(operand, _)
         | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
         | CHirExpr::PtrMember(operand, _, _) => live_before_expr(operand, live),
@@ -7760,6 +7759,7 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
         | CHirExpr::StringLit(..)
         | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(..)
+        | CHirExpr::SizeOfExpr(..)
         | CHirExpr::AlignOf(..)
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. } => {}
@@ -7898,7 +7898,6 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
         }
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
-        | CHirExpr::SizeOfExpr(operand, _)
         | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
         | CHirExpr::PtrMember(operand, _, _) => collect_symbols_expr(operand, symbols),
@@ -7943,6 +7942,7 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
         | CHirExpr::StringLit(..)
         | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(..)
+        | CHirExpr::SizeOfExpr(..)
         | CHirExpr::AlignOf(..)
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. } => {}

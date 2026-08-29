@@ -8,10 +8,7 @@ use crate::integer::{
     floating_literal_to_integer, integer_literal_value, integer_type_for_rank,
     usual_arithmetic_type, CInteger, CIntegerType,
 };
-use crate::{
-    BinaryOp, CHirExpr, CHirUnit, ExprFacts, FloatSuffix, FrontEndBuiltinRecord, StringPrefix,
-    SymbolKind, SymbolTable,
-};
+use crate::{BinaryOp, CHirExpr, CHirUnit, FrontEndBuiltinRecord, SymbolKind, SymbolTable};
 
 /// The exact conservative predicate frozen for `__builtin_constant_p`.
 ///
@@ -119,12 +116,8 @@ fn eval_integer_constant(
             }
             Some(eval_integer_constant(operand, types, symbols, target)?.cast(target_ty))
         }
-        CHirExpr::SizeOf(ty, _) => Some(CInteger::new(
-            target.layout_of(types, *ty).ok()?.size_bytes,
-            CIntegerType::ULONG,
-        )),
-        CHirExpr::SizeOfExpr(operand, _) => Some(CInteger::new(
-            expression_size(operand, types, symbols, target)?,
+        CHirExpr::SizeOf(ty, _) | CHirExpr::SizeOfExpr(_, ty, _) => Some(CInteger::new(
+            target.sizeof_type(types, *ty).ok()?,
             CIntegerType::ULONG,
         )),
         CHirExpr::AlignOf(ty, _) => Some(CInteger::new(
@@ -176,84 +169,6 @@ fn canonical_integer_type(types: &TypeInterner, ty: TypeId) -> Option<CIntegerTy
             Some(enum_integer_type(minimum, maximum))
         }
         _ => None,
-    }
-}
-
-fn facts_size(facts: ExprFacts, types: &TypeInterner, target: &TargetDataLayout) -> Option<u64> {
-    target
-        .layout_of(types, facts.ty())
-        .ok()
-        .map(|layout| layout.size_bytes)
-}
-
-fn expression_size(
-    expression: &CHirExpr<'_>,
-    types: &TypeInterner,
-    symbols: &SymbolTable,
-    target: &TargetDataLayout,
-) -> Option<u64> {
-    match expression {
-        CHirExpr::Lit(literal, _) => {
-            Some(u64::from(integer_literal_value(*literal).ok()?.ty().bits()).div_ceil(8))
-        }
-        CHirExpr::CharLit(_, _) => Some(4),
-        CHirExpr::FloatLit(literal, _) => Some(match literal.suffix {
-            FloatSuffix::F => 4,
-            FloatSuffix::None => 8,
-            FloatSuffix::L => 16,
-        }),
-        CHirExpr::StringLit(literal, _) => {
-            let unit_bytes = match literal.prefix {
-                StringPrefix::None | StringPrefix::U8 => 1,
-                StringPrefix::U16 => 2,
-                StringPrefix::L | StringPrefix::U => 4,
-            };
-            literal
-                .explicit_unit_count()?
-                .checked_add(1)?
-                .checked_mul(unit_bytes)
-        }
-        CHirExpr::Ident { facts, .. }
-        | CHirExpr::LabelAddress { facts, .. }
-        | CHirExpr::Assign { facts, .. }
-        | CHirExpr::MemoryAssign { facts, .. }
-        | CHirExpr::MemoryRead { facts, .. }
-        | CHirExpr::CheckedArithmetic { facts, .. }
-        | CHirExpr::BitBuiltin { facts, .. }
-        | CHirExpr::BuiltinUnreachable { facts, .. }
-        | CHirExpr::BuiltinReturnAddress { facts, .. }
-        | CHirExpr::Update { facts, .. }
-        | CHirExpr::MemoryUpdate { facts, .. }
-        | CHirExpr::StatementExpr { facts, .. } => facts_size(*facts, types, target),
-        CHirExpr::Cast(ty, _, _) | CHirExpr::CompoundLit(ty, _, _) => target
-            .layout_of(types, *ty)
-            .ok()
-            .map(|layout| layout.size_bytes),
-        CHirExpr::SizeOf(_, _) | CHirExpr::SizeOfExpr(_, _) | CHirExpr::AlignOf(_, _) => {
-            Some(u64::from(CIntegerType::ULONG.bits()).div_ceil(8))
-        }
-        CHirExpr::Unary(crate::UnaryOp::AddrOf, _, _) => Some(target.pointer_layout().size_bytes),
-        CHirExpr::Unary(crate::UnaryOp::Deref, operand, _) => {
-            let pointer = expression_type_id(operand)?;
-            let TypeKind::Pointer(pointee) = types.get(pointer)?.kind else {
-                return None;
-            };
-            target
-                .layout_of(types, pointee)
-                .ok()
-                .map(|layout| layout.size_bytes)
-        }
-        CHirExpr::Unary(_, _, _)
-        | CHirExpr::Binary(_, _, _, _)
-        | CHirExpr::Ternary(_, _, _, _)
-        | CHirExpr::Elvis(_, _, _)
-        | CHirExpr::Comma(_, _, _) => {
-            Some(u64::from(integer_expression_type(expression, types, symbols)?.bits()).div_ceil(8))
-        }
-        CHirExpr::Call(_, _, _)
-        | CHirExpr::Member(_, _, _)
-        | CHirExpr::PtrMember(_, _, _)
-        | CHirExpr::Index(_, _, _) => None,
     }
 }
 
@@ -348,7 +263,7 @@ fn integer_expression_type(
             Some(usual_arithmetic_type(operand, fallback))
         }
         CHirExpr::Cast(ty, _, _) => canonical_integer_type(types, *ty),
-        CHirExpr::SizeOf(_, _) | CHirExpr::SizeOfExpr(_, _) | CHirExpr::AlignOf(_, _) => {
+        CHirExpr::SizeOf(_, _) | CHirExpr::SizeOfExpr(_, _, _) | CHirExpr::AlignOf(_, _) => {
             Some(CIntegerType::ULONG)
         }
         CHirExpr::Comma(_, right, _) => integer_expression_type(right, types, symbols),
@@ -361,26 +276,5 @@ fn integer_expression_type(
         | CHirExpr::Index(_, _, _)
         | CHirExpr::CompoundLit(_, _, _) => None,
         CHirExpr::BuiltinUnreachable { .. } | CHirExpr::BuiltinReturnAddress { .. } => None,
-    }
-}
-
-fn expression_type_id(expression: &CHirExpr<'_>) -> Option<TypeId> {
-    match expression {
-        CHirExpr::Ident { facts, .. }
-        | CHirExpr::CheckedArithmetic { facts, .. }
-        | CHirExpr::BitBuiltin { facts, .. }
-        | CHirExpr::BuiltinUnreachable { facts, .. }
-        | CHirExpr::BuiltinReturnAddress { facts, .. }
-        | CHirExpr::Assign { facts, .. }
-        | CHirExpr::MemoryAssign { facts, .. }
-        | CHirExpr::MemoryRead { facts, .. }
-        | CHirExpr::Update { facts, .. }
-        | CHirExpr::MemoryUpdate { facts, .. }
-        | CHirExpr::StatementExpr { facts, .. } => Some(facts.ty()),
-        CHirExpr::Cast(ty, _, _)
-        | CHirExpr::SizeOf(ty, _)
-        | CHirExpr::AlignOf(ty, _)
-        | CHirExpr::CompoundLit(ty, _, _) => Some(*ty),
-        _ => None,
     }
 }

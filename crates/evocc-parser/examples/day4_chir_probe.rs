@@ -265,7 +265,7 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 format!("cast({ty},{child})")
             }
             CHirExpr::SizeOf(ty, _) => format!("sizeof(type:{})", self.type_fingerprint(*ty)),
-            CHirExpr::SizeOfExpr(child, _) => {
+            CHirExpr::SizeOfExpr(child, _, _) => {
                 let child = self.expression(&format!("{path}.operand"), child);
                 format!("sizeof_expr({child})")
             }

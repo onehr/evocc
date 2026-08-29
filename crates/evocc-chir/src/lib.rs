@@ -428,7 +428,11 @@ pub enum CHirExpr<'arena> {
     },
     Cast(TypeId, &'arena CHirExpr<'arena>, SourceSpan),
     SizeOf(TypeId, SourceSpan),
-    SizeOfExpr(&'arena CHirExpr<'arena>, SourceSpan),
+    /// `sizeof` of an expression retains the unevaluated source operand and
+    /// the front end's resolved operand type. Runtime consumers use only the
+    /// type; retaining the operand keeps source structure reviewable without
+    /// accidentally evaluating it.
+    SizeOfExpr(&'arena CHirExpr<'arena>, TypeId, SourceSpan),
     AlignOf(TypeId, SourceSpan),
     Member(&'arena CHirExpr<'arena>, String, SourceSpan),
     PtrMember(&'arena CHirExpr<'arena>, String, SourceSpan),
@@ -527,7 +531,7 @@ impl CHirExpr<'_> {
             | Self::BuiltinReturnAddress { span, .. }
             | Self::Cast(_, _, span)
             | Self::SizeOf(_, span)
-            | Self::SizeOfExpr(_, span)
+            | Self::SizeOfExpr(_, _, span)
             | Self::AlignOf(_, span)
             | Self::Member(_, _, span)
             | Self::PtrMember(_, _, span)
@@ -1391,7 +1395,7 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
         match expression {
             CHirExpr::Unary(_, operand, _)
             | CHirExpr::Cast(_, operand, _)
-            | CHirExpr::SizeOfExpr(operand, _)
+            | CHirExpr::SizeOfExpr(operand, _, _)
             | CHirExpr::Member(operand, _, _)
             | CHirExpr::PtrMember(operand, _, _)
             | CHirExpr::BitBuiltin { operand, .. }
@@ -1948,7 +1952,7 @@ mod tests {
             arena_expr(&arena, CHirExpr::Call(id, vec![id], s)),
             arena_expr(&arena, CHirExpr::Cast(int_id, id, s)),
             arena_expr(&arena, CHirExpr::SizeOf(int_id, s)),
-            arena_expr(&arena, CHirExpr::SizeOfExpr(id, s)),
+            arena_expr(&arena, CHirExpr::SizeOfExpr(id, int_id, s)),
             arena_expr(&arena, CHirExpr::AlignOf(int_id, s)),
             arena_expr(&arena, CHirExpr::Member(id, "f".into(), s)),
             arena_expr(&arena, CHirExpr::PtrMember(id, "f".into(), s)),

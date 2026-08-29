@@ -639,7 +639,7 @@ fn sizeof_expression_is_unevaluated_and_uses_the_operand_type() {
     let sizeof_span = span(24, 36);
     let sizeof = alloc(
         &arena,
-        CHirExpr::SizeOfExpr(fixture.ident(empty, span(31, 36)), sizeof_span),
+        CHirExpr::SizeOfExpr(fixture.ident(empty, span(31, 36)), fixture.int, sizeof_span),
     );
     let returned = fixture.statement(CHirStmt::Return(Some(sizeof), span(17, 37)));
     let body = fixture.statement(CHirStmt::Compound(

@@ -298,7 +298,7 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
             )
         }
         CHirExpr::SizeOf(ty, _) => format!("sizeof_type({})", canonical_type(*ty, types)),
-        CHirExpr::SizeOfExpr(operand, _) => {
+        CHirExpr::SizeOfExpr(operand, _, _) => {
             format!("sizeof_expr({})", canonical_expr(operand, types))
         }
         CHirExpr::AlignOf(ty, _) => format!("alignof({})", canonical_type(*ty, types)),

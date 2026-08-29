@@ -1345,7 +1345,6 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             }
             CHirExpr::Unary(_, operand, _)
             | CHirExpr::Cast(_, operand, _)
-            | CHirExpr::SizeOfExpr(operand, _)
             | CHirExpr::Member(operand, _, _)
             | CHirExpr::PtrMember(operand, _, _)
             | CHirExpr::BitBuiltin { operand, .. } => {
@@ -1497,6 +1496,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             | CHirExpr::Ident { .. }
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::SizeOf(_, _)
+            | CHirExpr::SizeOfExpr(_, _, _)
             | CHirExpr::AlignOf(_, _)
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. } => {}
@@ -2326,7 +2326,7 @@ mod tests {
             &arena,
             CHirExpr::Unary(UnaryOp::Plus, deeply_nested, span(29)),
         );
-        let sizeof = arena_alloc(&arena, CHirExpr::SizeOfExpr(unary, span(28)));
+        let sizeof = arena_alloc(&arena, CHirExpr::SizeOfExpr(unary, ty, span(28)));
         let condition = arena_alloc(
             &arena,
             CHirExpr::Ternary(
@@ -2352,7 +2352,10 @@ mod tests {
 
         let manifest = AllocationSiteManifest::derive(&unit).unwrap();
         assert!(manifest.string_literal_site(plan_only).is_some());
-        assert!(manifest.string_literal_site(deeply_nested).is_some());
+        assert!(
+            manifest.string_literal_site(deeply_nested).is_none(),
+            "an unevaluated sizeof operand owns no runtime allocation site"
+        );
         assert_eq!(manifest.object_site(local).unwrap().anchor(), span(10));
     }
 

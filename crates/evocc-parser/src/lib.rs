@@ -28,7 +28,7 @@ use evocc_types::{
     ArrayBound, BitFieldSpec, CanonicalType, ComplexBase, EnumConstant, FieldLayoutAttributes,
     FloatKind, FunctionParameters, GnuInt128Signedness, IntRank, Qualifiers, RecordField,
     TagDefinition, TagId, TagKind, TagLayoutAttributes, TagState, TargetDataLayout, TypeId,
-    TypeInterner, TypeKind, TypeLayout,
+    TypeInterner, TypeKind,
 };
 
 #[derive(Debug, Clone)]
@@ -1783,12 +1783,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         | OperandTypeClass::Complex(_)
                 ) && self.is_arithmetic_constant_expression(operand)
             }
-            CHirExpr::SizeOf(ty, _) | CHirExpr::AlignOf(ty, _) => {
-                TargetDataLayout::aarch64_unknown_linux_gnu()
-                    .layout_of(&self.types, *ty)
-                    .is_ok()
-            }
-            CHirExpr::SizeOfExpr(operand, _) => self.expression_type(operand).is_some(),
+            CHirExpr::SizeOf(ty, _) => TargetDataLayout::aarch64_unknown_linux_gnu()
+                .sizeof_type(&self.types, *ty)
+                .is_ok(),
+            CHirExpr::AlignOf(ty, _) => TargetDataLayout::aarch64_unknown_linux_gnu()
+                .layout_of(&self.types, *ty)
+                .is_ok(),
+            CHirExpr::SizeOfExpr(_, ty, _) => TargetDataLayout::aarch64_unknown_linux_gnu()
+                .sizeof_type(&self.types, *ty)
+                .is_ok(),
             CHirExpr::Unary(UnaryOp::AddrOf | UnaryOp::Deref, _, _)
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::Call(_, _, _)
@@ -1910,10 +1913,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     | OperandTypeClass::Other => None,
                 }
             }
-            CHirExpr::SizeOf(_, _) | CHirExpr::SizeOfExpr(_, _) | CHirExpr::AlignOf(_, _) => self
-                .eval_integer_constant_expression(expression)
-                .ok()
-                .map(|value| value.mathematical_value() as f64),
+            CHirExpr::SizeOf(_, _) | CHirExpr::SizeOfExpr(_, _, _) | CHirExpr::AlignOf(_, _) => {
+                self.eval_integer_constant_expression(expression)
+                    .ok()
+                    .map(|value| value.mathematical_value() as f64)
+            }
             CHirExpr::StringLit(_, _)
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::Call(_, _, _)
@@ -4665,12 +4669,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 Ok(self.eval_integer_constant_expression(operand)?.cast(target))
             }
-            CHirExpr::SizeOf(ty, _) => {
-                let layout = TargetDataLayout::aarch64_unknown_linux_gnu()
-                    .layout_of(&self.types, *ty)
-                    .map_err(|_| ())?;
-                Ok(CInteger::new(layout.size_bytes, CIntegerType::ULONG))
-            }
+            CHirExpr::SizeOf(ty, _) | CHirExpr::SizeOfExpr(_, ty, _) => Ok(CInteger::new(
+                TargetDataLayout::aarch64_unknown_linux_gnu()
+                    .sizeof_type(&self.types, *ty)
+                    .map_err(|_| ())?,
+                CIntegerType::ULONG,
+            )),
             CHirExpr::AlignOf(ty, _) => {
                 let layout = TargetDataLayout::aarch64_unknown_linux_gnu()
                     .layout_of(&self.types, *ty)
@@ -4679,11 +4683,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     u64::from(layout.align_bytes),
                     CIntegerType::ULONG,
                 ))
-            }
-            CHirExpr::SizeOfExpr(operand, _) => {
-                let operand_type = self.integer_expression_type(operand)?;
-                let layout = integer_expression_layout(operand_type)?;
-                Ok(CInteger::new(layout.size_bytes, CIntegerType::ULONG))
             }
             CHirExpr::FloatLit(_, _)
             | CHirExpr::StringLit(_, _)
@@ -4790,14 +4789,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::CheckedArithmetic { .. } => Ok(CIntegerType::INT),
             CHirExpr::BitBuiltin { .. } => Ok(CIntegerType::INT),
             CHirExpr::StatementExpr { facts, .. } => self.canonical_integer_type(facts.ty()),
-            CHirExpr::SizeOf(ty, _) | CHirExpr::AlignOf(ty, _) => {
+            CHirExpr::SizeOf(ty, _) | CHirExpr::SizeOfExpr(_, ty, _) => {
                 TargetDataLayout::aarch64_unknown_linux_gnu()
-                    .layout_of(&self.types, *ty)
+                    .sizeof_type(&self.types, *ty)
                     .map_err(|_| ())?;
                 Ok(CIntegerType::ULONG)
             }
-            CHirExpr::SizeOfExpr(operand, _) => {
-                integer_expression_layout(self.integer_expression_type(operand)?)?;
+            CHirExpr::AlignOf(ty, _) => {
+                TargetDataLayout::aarch64_unknown_linux_gnu()
+                    .layout_of(&self.types, *ty)
+                    .map_err(|_| ())?;
                 Ok(CIntegerType::ULONG)
             }
             CHirExpr::FloatLit(_, _)
@@ -7070,7 +7071,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 (InferredType::Canonical(facts.ty()), ExprCategory::Value)
             }
             CHirExpr::Cast(ty, _, _) => (InferredType::Canonical(*ty), ExprCategory::Value),
-            CHirExpr::SizeOf(_, _) | CHirExpr::SizeOfExpr(_, _) | CHirExpr::AlignOf(_, _) => (
+            CHirExpr::SizeOf(_, _) | CHirExpr::SizeOfExpr(_, _, _) | CHirExpr::AlignOf(_, _) => (
                 InferredType::Integer(CIntegerType::ULONG),
                 ExprCategory::Value,
             ),
@@ -7322,6 +7323,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.operand_type_class(when_true.ty),
             self.operand_type_class(when_false.ty),
         ) {
+            (OperandTypeClass::Pointer(_), OperandTypeClass::Pointer(right))
+                if when_true.null_pointer_constant =>
+            {
+                Some(InferredType::Pointer(right))
+            }
+            (OperandTypeClass::Pointer(left), OperandTypeClass::Pointer(_))
+                if when_false.null_pointer_constant =>
+            {
+                Some(InferredType::Pointer(left))
+            }
             (OperandTypeClass::Pointer(left), OperandTypeClass::Pointer(right))
                 if self.pointer_types_compatible(left, right) =>
             {
@@ -7517,10 +7528,31 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn is_null_pointer_constant(&self, expression: &CHirExpr<'_>) -> bool {
-        self.integer_expression_type(expression).is_ok()
+        let integer_zero = || {
+            self.integer_expression_type(expression).is_ok()
+                && self
+                    .eval_integer_constant_expression(expression)
+                    .is_ok_and(|value| value.mathematical_value() == 0)
+        };
+        if integer_zero() {
+            return true;
+        }
+        let CHirExpr::Cast(target, operand, _) = expression else {
+            return false;
+        };
+        let Some(TypeKind::Pointer(pointee)) = self.types.get(*target).map(|ty| &ty.kind) else {
+            return false;
+        };
+        if !matches!(
+            self.types.get(*pointee).map(|ty| &ty.kind),
+            Some(TypeKind::Void)
+        ) {
+            return false;
+        }
+        self.integer_expression_type(operand).is_ok()
             && self
-                .eval_integer_constant_expression(expression)
-                .is_ok_and(|value| value.raw_bits() == 0)
+                .eval_integer_constant_expression(operand)
+                .is_ok_and(|value| value.mathematical_value() == 0)
     }
 
     fn parse_conditional(&mut self) -> Option<&'arena CHirExpr<'arena>> {
@@ -7659,7 +7691,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             let operand = self.parse_unary()?;
             let span = self.merge_span(token.span, operand.span());
-            return Some(self.alloc_node(CHirExpr::SizeOfExpr(operand, span)));
+            let inferred = self.expression_type(operand).or_else(|| {
+                self.report("E1003", "expected-expression", operand.span());
+                None
+            })?;
+            let operand_ty = self.materialize_inferred_type(inferred.ty, Some(operand))?;
+            return Some(self.alloc_node(CHirExpr::SizeOfExpr(operand, operand_ty, span)));
         }
 
         if matches!(
@@ -9058,7 +9095,7 @@ fn collect_jump_regions_expr(
         }),
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
-        | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::SizeOfExpr(operand, _, _)
         | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
         | CHirExpr::PtrMember(operand, _, _) => {
@@ -9283,7 +9320,7 @@ fn expression_references_symbol(expression: &CHirExpr<'_>, symbol: SymbolId) -> 
         } => *referenced == symbol,
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
-        | CHirExpr::SizeOfExpr(operand, _)
+        | CHirExpr::SizeOfExpr(operand, _, _)
         | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
         | CHirExpr::PtrMember(operand, _, _) => expression_references_symbol(operand, symbol),
@@ -9639,18 +9676,6 @@ fn parse_char_literal(text: &str) -> Option<CharLit> {
     Some(CharLit { value, prefix })
 }
 
-fn integer_expression_layout(ty: CIntegerType) -> Result<TypeLayout, ()> {
-    let rank = rank_for_integer_type(ty).ok_or(())?;
-    let mut types = TypeInterner::new();
-    let ty = types.intern(CanonicalType {
-        kind: TypeKind::Int(rank),
-        qualifiers: Qualifiers::default(),
-    });
-    TargetDataLayout::aarch64_unknown_linux_gnu()
-        .layout_of(&types, ty)
-        .map_err(|_| ())
-}
-
 /// When a parenthesized expression appears, preserve its original span.
 fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHirExpr<'arena> {
     match inner {
@@ -9729,7 +9754,7 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
         },
         CHirExpr::Cast(ty, operand, _) => CHirExpr::Cast(*ty, operand, paren_span),
         CHirExpr::SizeOf(ty, _) => CHirExpr::SizeOf(*ty, paren_span),
-        CHirExpr::SizeOfExpr(operand, _) => CHirExpr::SizeOfExpr(operand, paren_span),
+        CHirExpr::SizeOfExpr(operand, ty, _) => CHirExpr::SizeOfExpr(operand, *ty, paren_span),
         CHirExpr::AlignOf(ty, _) => CHirExpr::AlignOf(*ty, paren_span),
         CHirExpr::Member(object, name, _) => CHirExpr::Member(object, name.clone(), paren_span),
         CHirExpr::PtrMember(object, name, _) => {

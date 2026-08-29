@@ -3379,24 +3379,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     allow_root_mutation: true,
                 });
             }
-            CHirExpr::SizeOf(ty, _) => {
-                let layout = self.target.layout_of(self.unit.types(), *ty).map_err(|_| {
-                    InterpreterError::UnsupportedExpression {
+            CHirExpr::SizeOf(ty, _) | CHirExpr::SizeOfExpr(_, ty, _) => {
+                let size = self
+                    .target
+                    .sizeof_type(self.unit.types(), *ty)
+                    .map_err(|_| InterpreterError::UnsupportedExpression {
                         feature: "sizeof incomplete or unsupported type",
                         span,
-                    }
-                })?;
-                values.push(CValue::Integer(CInteger::new(
-                    layout.size_bytes,
-                    CIntegerType::ULONG,
-                )));
-            }
-            CHirExpr::SizeOfExpr(operand, _) => {
-                let operand_type = self.infer_integer_type(operand)?;
-                values.push(CValue::Integer(CInteger::new(
-                    integer_storage_size(operand_type),
-                    CIntegerType::ULONG,
-                )));
+                    })?;
+                values.push(CValue::Integer(CInteger::new(size, CIntegerType::ULONG)));
             }
             CHirExpr::AlignOf(ty, _) => {
                 let layout = self.target.layout_of(self.unit.types(), *ty).map_err(|_| {
@@ -5952,7 +5943,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         match expression {
             CHirExpr::Unary(_, operand, _)
             | CHirExpr::Cast(_, operand, _)
-            | CHirExpr::SizeOfExpr(operand, _)
             | CHirExpr::Member(operand, _, _)
             | CHirExpr::PtrMember(operand, _, _) => self.predeclare_expr(operand)?,
             CHirExpr::Binary(_, left, right, _)
@@ -6012,6 +6002,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirExpr::Ident { .. }
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::SizeOf(..)
+            | CHirExpr::SizeOfExpr(..)
             | CHirExpr::AlignOf(..)
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. } => {}
@@ -6689,21 +6680,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 let target = self.integer_type(*ty, span)?;
                 Ok(self.eval_expr(value, allow_root_mutation)?.cast(target))
             }
-            CHirExpr::SizeOf(ty, _) => {
-                let layout = self.target.layout_of(self.unit.types(), *ty).map_err(|_| {
-                    InterpreterError::UnsupportedExpression {
+            CHirExpr::SizeOf(ty, _) | CHirExpr::SizeOfExpr(_, ty, _) => {
+                let size = self
+                    .target
+                    .sizeof_type(self.unit.types(), *ty)
+                    .map_err(|_| InterpreterError::UnsupportedExpression {
                         feature: "sizeof incomplete or unsupported type",
                         span,
-                    }
-                })?;
-                Ok(CInteger::new(layout.size_bytes, CIntegerType::ULONG))
-            }
-            CHirExpr::SizeOfExpr(operand, _) => {
-                let operand_type = self.infer_integer_type(operand)?;
-                Ok(CInteger::new(
-                    integer_storage_size(operand_type),
-                    CIntegerType::ULONG,
-                ))
+                    })?;
+                Ok(CInteger::new(size, CIntegerType::ULONG))
             }
             CHirExpr::AlignOf(ty, _) => {
                 let layout = self.target.layout_of(self.unit.types(), *ty).map_err(|_| {
@@ -6887,7 +6872,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 };
                 self.integer_type(*return_type, span)
             }
-            CHirExpr::SizeOf(_, _) | CHirExpr::SizeOfExpr(_, _) | CHirExpr::AlignOf(_, _) => {
+            CHirExpr::SizeOf(_, _) | CHirExpr::SizeOfExpr(_, _, _) | CHirExpr::AlignOf(_, _) => {
                 Ok(CIntegerType::ULONG)
             }
             CHirExpr::Comma(_, right, _) => self.infer_integer_type(right),
@@ -7289,7 +7274,6 @@ fn push_static_initializer_children<'arena>(
     match expression {
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
-        | CHirExpr::SizeOfExpr(operand, _)
         | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
         | CHirExpr::PtrMember(operand, _, _)
@@ -7356,6 +7340,7 @@ fn push_static_initializer_children<'arena>(
         | CHirExpr::CharLit(_, _)
         | CHirExpr::StringLit(_, _)
         | CHirExpr::SizeOf(_, _)
+        | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. } => {}
@@ -7482,7 +7467,6 @@ fn collect_expression_symbols<'arena>(
         CHirExpr::Ident { symbol, .. } => output.record(*symbol),
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
-        | CHirExpr::SizeOfExpr(operand, _)
         | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
         | CHirExpr::PtrMember(operand, _, _) => collect_expression_symbols(operand, output),
@@ -7537,6 +7521,7 @@ fn collect_expression_symbols<'arena>(
         | CHirExpr::StringLit(_, _)
         | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(_, _)
+        | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. } => {}
@@ -7659,7 +7644,6 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         | CHirExpr::CompoundLit(_, _, _) => true,
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::Cast(_, operand, _)
-        | CHirExpr::SizeOfExpr(operand, _)
         | CHirExpr::BitBuiltin { operand, .. } => expression_requires_memory(unit, operand),
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Comma(left, right, _)
@@ -7691,6 +7675,7 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         | CHirExpr::CharLit(_, _)
         | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(_, _)
+        | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. } => false,
@@ -7969,7 +7954,7 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
         | CHirExpr::Ident { .. }
         | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(_, _)
-        | CHirExpr::SizeOfExpr(_, _)
+        | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. } => false,

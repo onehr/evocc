@@ -1048,6 +1048,20 @@ impl TargetDataLayout {
         LayoutContext::new(self, types).layout_type(ty)
     }
 
+    /// Compute the GNU C `sizeof` value for a canonical type.
+    ///
+    /// `void` and function types are not object types and deliberately remain
+    /// invalid inputs to [`Self::layout_of`]. GNU C nevertheless defines
+    /// `sizeof` of either as one byte, so that extension lives at this narrow
+    /// query boundary instead of making either type allocatable.
+    pub fn sizeof_type(&self, types: &TypeInterner, ty: TypeId) -> Result<u64, LayoutError> {
+        let canonical = types.get(ty).ok_or(LayoutError::UnknownType(ty))?;
+        match &canonical.kind {
+            TypeKind::Void | TypeKind::Function { .. } => Ok(1),
+            _ => self.layout_of(types, ty).map(|layout| layout.size_bytes),
+        }
+    }
+
     /// Compute source-order field placement and padding for a struct or union.
     pub fn record_layout(
         &self,
@@ -1776,5 +1790,30 @@ mod tests {
         assert_eq!(target.byte_order(), ByteOrder::Little);
         assert_eq!(target.pointer_layout(), TypeLayout::new(8, 8));
         assert_ne!(ByteOrder::Little, ByteOrder::Big);
+    }
+
+    #[test]
+    fn gnu_sizeof_does_not_make_void_or_functions_object_types() {
+        let mut types = TypeInterner::new();
+        let void = types.intern(canonical(TypeKind::Void));
+        let function = types.intern(canonical(TypeKind::Function {
+            return_type: void,
+            parameters: FunctionParameters::Prototype {
+                types: Vec::new(),
+                variadic: false,
+            },
+        }));
+        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+
+        assert_eq!(target.sizeof_type(&types, void), Ok(1));
+        assert_eq!(target.sizeof_type(&types, function), Ok(1));
+        assert_eq!(
+            target.layout_of(&types, void),
+            Err(LayoutError::NonObjectType(void))
+        );
+        assert_eq!(
+            target.layout_of(&types, function),
+            Err(LayoutError::NonObjectType(function))
+        );
     }
 }

@@ -76,6 +76,22 @@ fn front_end_resolved_forms_leave_byte_identical_evoir() {
             "unsigned long f(void) { int i = 0; return __alignof__(i++); }\n",
             "unsigned long f(void) { int i = 0; return (unsigned long)4; }\n",
         ),
+        (
+            "unsigned long f(void) { int i = 0; return sizeof(i++); }\n",
+            "unsigned long f(void) { int i = 0; return (unsigned long)4; }\n",
+        ),
+        (
+            "typedef int function_type(void); unsigned long f(void) { return sizeof(void) + sizeof(function_type); }\n",
+            "typedef int function_type(void); unsigned long f(void) { return (unsigned long)1 + (unsigned long)1; }\n",
+        ),
+        (
+            "unsigned long f(void) { return sizeof(*(8 ? ((void *)((long)(1) * 0l)) : (int *)8)); }\n",
+            "unsigned long f(void) { return (unsigned long)4; }\n",
+        ),
+        (
+            "unsigned long f(int value) { return sizeof(*(8 ? ((void *)((long)(value) * 0l)) : (int *)8)); }\n",
+            "unsigned long f(int value) { return (unsigned long)1; }\n",
+        ),
     ];
 
     assert_pairs(&pairs, 0);
