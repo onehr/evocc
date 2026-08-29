@@ -233,7 +233,7 @@ pub struct Parser<'src, 'arena> {
     error_count: usize,
     error_limit: Option<NonZeroUsize>,
     rollback_error_count: usize,
-    diagnostic: Option<ParseDiagnostic>,
+    diagnostics: Vec<ParseDiagnostic>,
     arena: Option<&'arena Arena>,
     types: TypeInterner,
     symbols: SymbolTable,
@@ -344,7 +344,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             error_count: usize::from(lexical_diagnostic.is_some()),
             error_limit: None,
             rollback_error_count: usize::from(lexical_diagnostic.is_some()),
-            diagnostic: lexical_diagnostic,
+            diagnostics: lexical_diagnostic.into_iter().collect(),
             arena: None,
             types: TypeInterner::new(),
             symbols,
@@ -398,6 +398,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             if let Some(mut parsed) = self.parse_external_declaration() {
                 decls.append(&mut parsed);
             }
+            // Every external declaration starts at file scope. A declaration
+            // that failed part way through a function body leaves the current
+            // scope pointing inside it, and the scope itself may have been
+            // rolled back, so recovery restores the only scope that is always
+            // live before the next declaration is read.
             if self.reached_error_limit() {
                 break;
             }
@@ -424,8 +429,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.had_error
     }
 
+    /// The diagnostic a build reports: the first one found.
     pub fn diagnostic(&self) -> Option<&ParseDiagnostic> {
-        self.diagnostic.as_ref()
+        self.diagnostics.first()
+    }
+
+    /// Every diagnostic found, in source order.
+    ///
+    /// A build stops at the first error, so it needs one round per
+    /// unsupported construct to learn what a body of code requires. A survey
+    /// leaves the error limit unset and reads this instead, enumerating the
+    /// whole set in one pass.
+    pub fn diagnostics(&self) -> &[ParseDiagnostic] {
+        &self.diagnostics
     }
 
     fn reached_error_limit(&self) -> bool {
@@ -508,8 +524,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if code != "E2001" {
             self.rollback_error_count += 1;
         }
-        if self.diagnostic.is_none() {
-            self.diagnostic = Some(ParseDiagnostic {
+        {
+            self.diagnostics.push(ParseDiagnostic {
                 span,
                 code,
                 message: message.into(),
@@ -3916,7 +3932,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     .rollback(checkpoint)
                     .expect("temporary typeof bindings are table-local");
                 let Some((expression, inferred)) = inferred else {
-                    if self.diagnostic.is_none() {
+                    if self.diagnostics.is_empty() {
                         self.report("E1003", "expected-expression", self.span());
                     }
                     return None;

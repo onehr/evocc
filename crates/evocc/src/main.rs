@@ -65,6 +65,12 @@ struct DriverOptions {
     macro_actions: Vec<MacroAction>,
     standard_includes: bool,
     optimize_scalar_evoir: bool,
+    /// Report every diagnostic rather than the first.
+    ///
+    /// A build wants one unambiguous first-error site. Surveying a body of
+    /// code for what it requires wants the whole set, or it takes one build
+    /// per unsupported construct to enumerate.
+    survey: bool,
 }
 
 enum MacroAction {
@@ -186,6 +192,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut macro_actions = Vec::new();
     let mut standard_includes = true;
     let mut optimize_scalar_evoir = false;
+    let mut survey = false;
     let mut index = 0;
 
     while index < args.len() {
@@ -209,6 +216,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
                 let value = &arg["--target=".len()..];
                 set_target(&mut target, parse_target(value)?)?;
             }
+            "--survey" => survey = true,
             "-P" | "-undef" => {}
             "-nostdinc" => standard_includes = false,
             "-I" | "-D" | "-U" | "-include" => {
@@ -282,6 +290,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         macro_actions,
         standard_includes,
         optimize_scalar_evoir,
+        survey,
     })
 }
 
@@ -544,18 +553,31 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
 
     let arena = Arena::default();
     let mut parser = Parser::new(processed, FileId::new(1), &src);
-    parser.set_error_limit(NonZeroUsize::MIN);
+    if !options.survey {
+        parser.set_error_limit(NonZeroUsize::MIN);
+    }
     let unit = parser.parse_translation_unit_in(&arena);
     if parser.had_error() || (unit.is_empty() && !src.trim().is_empty()) {
-        if let Some(diagnostic) = parser.diagnostic() {
-            emit_error(
-                pp.source_path(diagnostic.span.file)
-                    .unwrap_or(options.input.as_str()),
-                diagnostic.span.line_start.max(1),
-                diagnostic.span.column_start.max(1),
-                diagnostic.code,
-                &diagnostic.message,
-            );
+        // A build reports the first diagnostic only. The error limit bounds the
+        // declaration loop, not the reports made while parsing one
+        // declaration, so the first must be selected here rather than assumed.
+        let all = parser.diagnostics();
+        let reported = if options.survey {
+            all
+        } else {
+            &all[..all.len().min(1)]
+        };
+        if !reported.is_empty() {
+            for diagnostic in reported {
+                emit_error(
+                    pp.source_path(diagnostic.span.file)
+                        .unwrap_or(options.input.as_str()),
+                    diagnostic.span.line_start.max(1),
+                    diagnostic.span.column_start.max(1),
+                    diagnostic.code,
+                    &diagnostic.message,
+                );
+            }
         } else {
             emit_error(&options.input, 1, 1, "E1001", "expected-declaration");
         }
