@@ -1,0 +1,95 @@
+{
+  "receiptId": "c30.typeof-unqual.red.v1",
+  "state": "RED",
+  "baselineCommit": "0e28b738b7394c0512be583fcc090fae30f92c0e",
+  "authority": {
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.21",
+      "commit": "0e28b73",
+      "section": "10.1.10",
+      "sha256": "d7a6ec7fbeee4a8befbc95a00c8de170f9c5306425f80770c465716f1f7528cb"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "K4",
+      "sha256": "7643ea63be43cfdb4a61def57d650c931f2becac693254434925126a9c003176"
+    }
+  },
+  "declaredMissingCapabilities": [
+    "__typeof_unqual__"
+  ],
+  "testsOnlyChanges": [
+    {
+      "path": "crates/evocc-parser/tests/gnu_typeof_unqual.rs",
+      "sha256": "3b7ca34457bf3e711a67818b3a4a600a6996bd521138321f6f9130376450953e"
+    },
+    {
+      "path": "crates/evocc-lower/tests/front_end_resolved_forms.rs",
+      "sha256": "2be9da30b2895c3550cb35f083f11f887a0b2d2328c3e28de6c7a462c88228df"
+    }
+  ],
+  "oracleEvidence": {
+    "imageDigest": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+    "files": [
+      {
+        "path": ".evidence/builtin-probes/20260826-2c23684c/tuq.c",
+        "sha256": "026b7fd3bcecab0ffe8ef839602da3332387c717db478faa75e21036625c9cbc"
+      },
+      {
+        "path": ".evidence/builtin-probes/20260826-2c23684c/tuq.out",
+        "sha256": "7fc80844a43e6cb4f7e676ba4f2f33c76f1d312069a5ed65caf245cd48067bf9"
+      },
+      {
+        "path": ".evidence/builtin-probes/20260826-2c23684c/tuq2.c",
+        "sha256": "ab733090bea46e54a7c639b222339fc6e971ca1ba5785e5ea4f3aebbf0c46e67"
+      },
+      {
+        "path": ".evidence/builtin-probes/20260826-2c23684c/tuq2.out",
+        "sha256": "a365cf0d5789117ef6cf6a933d6211b586821f0f8618e68f30b6ea35834f0d9e"
+      },
+      {
+        "path": ".evidence/builtin-probes/20260826-2c23684c/tuq3.c",
+        "sha256": "a17eedce2cdf19406e491673f225bb4d056cad0389b4364ae81465968ab2cafd"
+      },
+      {
+        "path": ".evidence/builtin-probes/20260826-2c23684c/tuq4.c",
+        "sha256": "6e0f90d14aac9ca0ea925c4963fb1f786ac4152a515d921b7e81c12f751a8f40"
+      }
+    ],
+    "arrayRuling": "GCC-14 refuses a store through the result while Clang-19 admits it; revision 1.9.21 keeps the element qualifier and requires refusal"
+  },
+  "focusedRuns": [
+    {
+      "command": "cargo test -p evocc-parser --test gnu_typeof_unqual --no-fail-fast",
+      "passed": 0,
+      "failed": 6,
+      "ignored": 0,
+      "buildErrors": 0,
+      "diagnostics": [
+        "only_the_double_underscore_spelling_is_an_operator: raw token was Identifier",
+        "scalar_top_level_qualifiers_are_removed_for_both_operand_forms: E1001 expected-declaration",
+        "pointer_top_level_qualifiers_are_removed_but_pointee_qualifiers_remain: E1001 expected-declaration",
+        "a_const_record_member_remains_const_after_outer_qualification_is_removed: E1001 instead of E2101",
+        "array_element_qualification_is_kept_in_the_refusal_direction: E1001 instead of E2101",
+        "expression_operand_is_unevaluated: E2001 undeclared-identifier: __typeof_unqual__"
+      ]
+    },
+    {
+      "command": "cargo test -p evocc-lower --test front_end_resolved_forms front_end_resolved_forms_leave_byte_identical_evoir -- --exact",
+      "passed": 0,
+      "failed": 1,
+      "ignored": 0,
+      "buildErrors": 0,
+      "diagnostics": [
+        "front_end_resolved_forms_leave_byte_identical_evoir: E2001 undeclared-identifier: __typeof_unqual__ in pair 10"
+      ]
+    }
+  ],
+  "summary": {
+    "semanticFailures": 7,
+    "unexpectedFailures": 0,
+    "buildErrors": 0,
+    "disabledTests": 0
+  }
+}

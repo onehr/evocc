@@ -92,6 +92,10 @@ fn front_end_resolved_forms_leave_byte_identical_evoir() {
             "unsigned long f(int value) { return sizeof(*(8 ? ((void *)((long)(value) * 0l)) : (int *)8)); }\n",
             "unsigned long f(int value) { return (unsigned long)1; }\n",
         ),
+        (
+            "int f(int i) { const int c = i; __typeof_unqual__(c) j = c + 1; return j; }\n",
+            "int f(int i) { const int c = i; int j = c + 1; return j; }\n",
+        ),
     ];
 
     assert_pairs(&pairs, 0);
