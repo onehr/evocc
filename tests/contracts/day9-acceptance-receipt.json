@@ -2,9 +2,9 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "60620ed4cbfb7caa95830d798fd2ddb7c603c64ce03a4f7950d798c1e8ca7134"
+    "sha256": "7643ea63be43cfdb4a61def57d650c931f2becac693254434925126a9c003176"
   },
-  "cutLine": "Revision 1.9.20's anonymous-member designator ruling is implemented by routing designated initializers and __builtin_offsetof through the existing recursive record-member resolver. The tests-only checkpoint measured four declared semantic failures, one green ambiguity control and zero Rust build errors; the implementation closes all five tests with 941/941 workspace tests, exact base and attributed layout corpora, one isolated locked/offline replay and zero dashboard regressions. All 28 E2906 lanes moved, but Stage F1 remains OPEN at 2/16 dual-oracle clean parse: the same 14 source units now stop in both parser lanes on E2001 undeclared-identifier for __typeof_unqual__ at arch/arm64/include/asm/spectre.h:79. Revision 1.9.20 does not mention __typeof_unqual__; this newly measured frontier is recorded as K3-TYPEOF-UNQUAL and was not resolved in this window.",
+  "cutLine": "Revision 1.9.21's __typeof_unqual__ ruling is implemented by reusing typeof resolution and cloning only the outer canonical type layer with const, volatile, restrict and _Atomic cleared. Nested, member, pointee and array-element qualifiers remain unchanged; expression operands are unevaluated; the C23 spelling stays an identifier; and the resolved form leaves no EvoIR difference. The tests-only checkpoint measured seven semantic failures for the one declared capability and zero Rust build errors; the implementation closes all six parser tests and the byte-identity pair with 947/947 workspace tests, exact base and attributed layout corpora, one isolated locked/offline replay and zero dashboard regressions. All 28 __typeof_unqual__ parser lanes moved, but Stage F1 remains OPEN at 2/16: the same 14 source units now stop in both parser lanes on E2102 invalid-projected-lvalue at two existing lvalue forms covered by Section 10.1.3.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -352,32 +352,58 @@
       "The stale record_member_path comment that denied anonymous traversal was corrected in the implementation commit."
     ]
   },
-  "subjectCommit": "07009fe",
+  "typeofUnqualRedWindow": {
+    "opened": "70a7991 (tests only; 7/7 semantic assertions failed for the single declared capability; zero Rust build errors)",
+    "closed": "cbf084c",
+    "implementationCommits": [
+      "cbf084c"
+    ],
+    "authorityRevision": "0e28b73 (specification revision 1.9.21)",
+    "diagnostics": {
+      "path": "tests/contracts/typeof-unqual-red.json",
+      "sha256": "faaabcaf856c2562a45ab064fd0597c34a6b94ae1b22742259336d6e71ac7aa7"
+    },
+    "declaredCapabilities": [
+      "__typeof_unqual__"
+    ],
+    "oracleEvidence": {
+      "imageDigest": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+      "sources": ".evidence/builtin-probes/20260826-2c23684c/tuq.c, tuq2.c, tuq3.c and tuq4.c; every digest is frozen in tests/contracts/typeof-unqual-red.json",
+      "outputs": ".evidence/builtin-probes/20260826-2c23684c/tuq.out and tuq2.out",
+      "arrayRuling": "GCC-14 keeps the array element qualifier and refuses the write while Clang-19 strips it; revision 1.9.21 selects the refusal direction"
+    },
+    "resolvedPriorQuestions": [
+      "K3-TYPEOF-UNQUAL: revision 1.9.21 defines the exact spelling, top-level-only qualifier removal, unevaluated operand, array refusal direction and front-end-only lowering identity.",
+      "The existing typeof resolver remains the single resolver; the implementation strips one outer canonical qualifier layer before applying qualifiers written around the operator."
+    ]
+  },
+  "subjectCommit": "cbf084c",
   "gate": {
-    "claim": "The revision 1.9.20 implementation closes anonymous-member designator resolution with 941 workspace tests and zero regressions, but stage F1 remains open at 2/16 because all 28 parser lanes now stop at the unspecified __typeof_unqual__ spelling",
+    "claim": "The revision 1.9.21 implementation closes __typeof_unqual__ with 947 workspace tests and zero regressions, but stage F1 remains open at 2/16 because all 28 parser lanes now stop at the already-specified lvalue projection boundary",
     "measured": {
       "dualOracleCleanParseTus": "2/16",
       "rawPreprocessClean": "16/16",
       "stageF1": "OPEN",
       "remainingParserLanes": 28,
       "remainingParserUnits": 14,
-      "remainingFirstError": "E2001 undeclared-identifier: __typeof_unqual__",
+      "remainingFirstError": "E2102 invalid-projected-lvalue",
       "constantExpressionClosureTests": "15/15",
       "gnuArrayInt128Tests": "13/13",
       "anonymousMemberDesignatorTests": "5/5",
-      "workspaceTests": "941/941",
-      "specifiedFrontier": false,
+      "typeofUnqualTests": "6/6",
+      "workspaceTests": "947/947",
+      "specifiedFrontier": true,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
       "computedZeroArrayBoundLanes": 0,
       "explicitZeroArrayBoundLanes": 0,
       "builtinInt128SpellingLanesRemaining": 0,
       "anonymousOffsetofMemberPathLanes": 0,
-      "typeofUnqualLanes": 28,
+      "typeofUnqualLanes": 0,
       "sysregStrayTokenLanesRemaining": 0,
       "preprocessingTokenProductionsMissing": 0,
       "pointerUpdateLanesRemaining": 0,
-      "invalidProjectedLvalueLanesRemaining": 0,
+      "invalidProjectedLvalueLanesRemaining": 28,
       "statementExpressionLanesRemaining": 0,
       "designatedInitializerLanesRemaining": 0,
       "compoundLiteralLanesRemaining": 0,
@@ -393,14 +419,14 @@
       "notCoveredDay7MessagesRemaining": 0,
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260829T094329Z-72998/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous /Users/onehrxn/dev/30days/c30/.evidence/day5-kernel-reconnaissance/20260829T123429Z-30856/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "320f8a2c0070ec666733f6177d22754064c8598a4583d8d64c34ed7f0630910f",
-      "subjectCommit": "07009fe",
-      "publishedFromRun": "20260829T123429Z-30856"
+      "sha256": "74078cbee9cf77271bf40d3608111125e09a009e4008e724ae1d4b57e15055e6",
+      "subjectCommit": "cbf084c",
+      "publishedFromRun": "20260829T152145Z-2514"
     },
-    "result": "MEASURED_SPECIFICATION_GAP"
+    "result": "K4_PASS_STAGE_F1_OPEN"
   },
   "lanes": {
     "clean": {
@@ -431,9 +457,23 @@
           "mm-page-vma-mapped",
           "kernel-bpf-token"
         ],
-        "firstError": "E2001 undeclared-identifier: __typeof_unqual__",
-        "rootCause": "arch/arm64/include/asm/spectre.h:79 expands __typeof_unqual__ inside an asm operand cast; the lexer treats it as an identifier and the parser has no declaration or builtin type-form for it",
-        "specificationCoverage": "K3-TYPEOF-UNQUAL: revision 1.9.20, the acceptance contract and the implementation do not mention __typeof_unqual__; owner ruling required before implementation"
+        "firstError": "E2102 invalid-projected-lvalue",
+        "sourceSites": [
+          {
+            "count": 16,
+            "units": 8,
+            "path": "include/linux/sched.h:1805",
+            "shape": "get_current()->flags / get_current()->nr_cpus_allowed"
+          },
+          {
+            "count": 12,
+            "units": 6,
+            "path": "include/linux/wait.h:176",
+            "shape": "container_of statement-expression initialization and projected fields"
+          }
+        ],
+        "rootCause": "The K4 type operator now resolves, exposing the next existing implementation boundary: scalar field projections rooted in these pointer-valued expressions cannot be converted to a MemoryPlace.",
+        "specificationCoverage": "Covered by revision 1.9.21 Section 10.1.3 lvalue lowering; no new representation or owner ruling is required before a narrow implementation fix. Reduction and repair are outside the K4 window."
       }
     ],
     "publicationsThisWindow": [
@@ -596,6 +636,11 @@
         "commit": "07009fe",
         "run": "20260829T123429Z-30856",
         "parseLanesStoppedOn": "revision 1.9.20 ruling measurement: raw 16/16 clean; anonymous designated-initializer and offsetof paths resolved; 28 E2001 undeclared-identifier lanes at __typeof_unqual__ in arch/arm64/include/asm/spectre.h:79; 4 parser lanes clean; dual-oracle clean 2/16; 0 regressions"
+      },
+      {
+        "commit": "cbf084c",
+        "run": "20260829T152145Z-2514",
+        "parseLanesStoppedOn": "revision 1.9.21 ruling measurement: raw 16/16 clean; all 28 __typeof_unqual__ blockers resolved; 16 E2102 lanes at include/linux/sched.h:1805 and 12 E2102 lanes at include/linux/wait.h:176; 4 parser lanes clean; dual-oracle clean 2/16; 0 regressions"
       }
     ]
   },
@@ -651,7 +696,7 @@
       "regressionsAgainstPrevious": 0,
       "specificationGap": "K2-OFFSETOF-ANONYMOUS-MEMBER-PATH"
     },
-    "after": {
+    "typeofUnqualBefore": {
       "run": "20260829T123429Z-30856",
       "subjectCommit": "07009fe",
       "resolvedFirstErrorClasses": {
@@ -665,6 +710,22 @@
       "stageF1": "OPEN",
       "regressionsAgainstPrevious": 0,
       "specificationGap": "K3-TYPEOF-UNQUAL"
+    },
+    "after": {
+      "run": "20260829T152145Z-2514",
+      "subjectCommit": "cbf084c",
+      "resolvedFirstErrorClasses": {
+        "E2001 undeclared-identifier at __typeof_unqual__": 28
+      },
+      "nextFirstErrorClasses": {
+        "E2102 invalid-projected-lvalue at include/linux/sched.h:1805": 16,
+        "E2102 invalid-projected-lvalue at include/linux/wait.h:176": 12
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "2/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "specificationCoverage": "revision 1.9.21 Section 10.1.3; implementation defect, not a newly measured specification gap"
     }
   },
   "attributes": {
@@ -711,11 +772,15 @@
   },
   "tests": {
     "workspace": {
-      "passed": 941,
+      "passed": 947,
       "failed": 0,
-      "command": "cargo test --workspace --no-fail-fast; cargo test --workspace -- --list | rg -c ': test$' (941)"
+      "command": "cargo test --workspace --no-fail-fast; cargo test --workspace -- --list | rg -c ': test$' (947)"
     },
     "suites": {
+      "crates/evocc-parser/tests/gnu_typeof_unqual.rs": {
+        "passed": 6,
+        "command": "cargo test -p evocc-parser --test gnu_typeof_unqual"
+      },
       "crates/evocc-parser/tests/anonymous_member_designators.rs": {
         "passed": 5,
         "command": "cargo test -p evocc-parser --test anonymous_member_designators"
@@ -947,16 +1012,16 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "07009fe1bc0246ceceaea850d38a1fef78c10bd0",
-    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-anonymous-replay.i9pE5k/repo; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --locked --offline -- --list | rg -c ': test$'",
+    "commit": "cbf084c862c0152610bb81f416a1712b0ec51bf4",
+    "command": "git clone --no-local --branch codex_typeof_unqual /Users/onehrxn/dev/30days/c30 /private/tmp/c30-typeof-unqual-replay.crH8vp/repo; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --locked --offline -- --list | rg -c ': test$'",
     "measured": {
-      "passed": 941,
+      "passed": 947,
       "failed": 0,
       "clippy": 0,
       "fmt": "clean",
       "ruff": "clean",
       "selfTest": "PASS",
-      "countCommand": 941
+      "countCommand": 947
     }
   },
   "specAmbiguities": [
@@ -982,7 +1047,6 @@
     "H-RANGE-EVALUATION-COUNT: side-effect evaluation multiplicity for GNU range initializers is not specified.",
     "H-INCOMPLETE-ARRAY-DESIGNATED-BOUND: sparse and range designators do not have a frozen incomplete-array bound rule.",
     "H-CLOSING-EDGE-CLEANUP: statement-expression lifetime closure is required on every exit but the lowering paragraph does not define the cleanup edge form.",
-    "K3-TYPEOF-UNQUAL: revision 1.9.20, the acceptance contract and the implementation contain no __typeof_unqual__ rule. All 28 remaining parser lanes exercise that spelling at arch/arm64/include/asm/spectre.h:79; its syntax, type qualifiers, unevaluated behavior and lowering identity require an owner ruling and were not inferred from typeof.",
     "G2-VOLATILE-UNION-COPY: section 10.1.3 requires volatile aggregates to lower as memberwise volatile accesses, but a union has overlapping members and the specification provides no selected-member authority. Volatile union copy therefore remains fail-closed rather than reading every overlapping member.",
     "G2-VOLATILE-BIT-FIELD-COPY: section 10.1.3 does not freeze the access width, mask sequence, or trace granularity for a volatile aggregate member that is a bit-field. That form remains fail-closed.",
     "G2-AGGREGATE-CALL-ABI: the specification requires one semantic copy for by-value arguments and returns but does not freeze the hidden return-destination parameter position or deterministic origin identity for caller-owned aggregate temporaries. The implementation uses an address-based internal ABI with the return destination before mem/world tokens and a high-bit function-ordinal origin namespace; no broader ABI claim is made."
@@ -1024,6 +1088,8 @@
     "The first complete workspace gate caught an obsolete unit test that accepted int fixed[0] = {}. Revision 1.9.18 requires E2923 for a written zero bound, while int inferred[] = {} remains legal because no bound is written; the test was split to retain both behaviors before the gate was rerun.",
     "The fold-only F1 publication was retained separately from the final array-bound publication. It proves the 28 E2912 lanes moved to __uint128_t; the final revision 1.9.18 publication proves that enforcing E2923 then exposed the zero-bound authority conflict earlier in the same 14 units.",
     "The initialized-VLA path originally anchored E2203 at the initializer while the new eager bound check anchored it at the declarator bound. The focused regression caught this unintended span change; initialized declarations remain on the established initializer validation path while every path now uses the canonical variable-length-object message.",
-    "The first revision 1.9.19 dashboard publication attempt was refused when the restricted sandbox denied the local container runtime inspect operation. Its incomplete capture is preserved at .evidence/kernel-dashboard/8402eea-sandbox-refused-20260829T093740Z and was not used; the repeated publication on the same commit and lineage sealed 48/48 observations with zero regressions."
+    "The first revision 1.9.19 dashboard publication attempt was refused when the restricted sandbox denied the local container runtime inspect operation. Its incomplete capture is preserved at .evidence/kernel-dashboard/8402eea-sandbox-refused-20260829T093740Z and was not used; the repeated publication on the same commit and lineage sealed 48/48 observations with zero regressions.",
+    "The original unevaluated-operand fixture wrapped sizeof(__typeof_unqual__(side++)) in a void cast, but the existing C-HIR scalar interpreter cannot execute that otherwise unrelated void-cast expression. The GREEN fixture returns side plus the measured sizeof value and subtracts that value, preserving the exact side==0 property without widening K4.",
+    "The first K4 publication attempt was refused before lane execution because the isolated worktree lacked a real, project-contained frozen kernel archive; that failed capture is preserved as .evidence/kernel-dashboard/cbf084c-refused-missing-archive. A second run sealed 48/48 observations but the publisher then raised ValueError while relativizing the shared evidence path to the isolated checkout; that capture is preserved as cbf084c-refused-relative-evidence-path. The authoritative third run used real worktree-local evidence, sealed 48/48 observations, and its byte-verified artifacts were copied into the root evidence tree without changing them."
   ]
 }

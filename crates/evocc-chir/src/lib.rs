@@ -735,8 +735,9 @@ pub enum TypeSpecifier {
         name: Option<SpannedName>,
         span: SourceSpan,
     },
-    /// `typeof(...)`, resolved completely by the front end while retaining
-    /// whether the source operand was a type name or an expression.
+    /// `typeof(...)` or `__typeof_unqual__(...)`, resolved completely by the
+    /// front end while retaining whether the source operand was a type name or
+    /// an expression.
     Typeof {
         resolved: TypeId,
         operand: TypeofOperand,

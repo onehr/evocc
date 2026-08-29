@@ -123,6 +123,7 @@ pub enum TokenKind {
     ThreadLocal,
     // GNU extensions treated as keywords.
     Typeof,
+    TypeofUnqual,
     Attribute,
     // GNU spellings that remain identifiers through preprocessing and are
     // promoted only at the parser boundary when their exact spelling survives.
@@ -223,6 +224,7 @@ const KEYWORDS: &[(&str, TokenKind)] = &[
     ("_Thread_local", TokenKind::ThreadLocal),
     ("__attribute__", TokenKind::Attribute),
     ("__typeof__", TokenKind::Typeof),
+    ("__typeof_unqual__", TokenKind::TypeofUnqual),
     ("auto", TokenKind::Auto),
     ("break", TokenKind::Break),
     ("case", TokenKind::Case),
