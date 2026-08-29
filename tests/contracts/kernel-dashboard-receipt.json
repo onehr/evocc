@@ -1,8 +1,8 @@
 {
   "receiptId": "c30.kernel-dashboard",
-  "subjectCommit": "8402eea",
-  "publishedFromRun": "20260829T094329Z-72998",
-  "previousRun": "20260829T061750Z-7344",
+  "subjectCommit": "07009fe",
+  "publishedFromRun": "20260829T123429Z-30856",
+  "previousRun": "20260829T094329Z-72998",
   "cohortSha256": "09d0e2eaf0734949164a491d30df640bf396ff7586ef495f938f565b8879a306",
   "observer": {
     "path": "tests/acceptance/day5-kernel-reductions-observer.py",
@@ -10,10 +10,10 @@
   },
   "capture": {
     "argvSha256": "1491553bac555724088f85732048aef6bc15fb76102841e3c7e17626f16d2feb",
-    "environmentSha256": "780d6c98c4c1e32e4d20bb1c577bed670048b661501fcab9e3cad06520584813",
+    "environmentSha256": "81b4ddf0ab451d1e701ec3f5d2019e56c616ae59f6ba56e9843d2adc84604d26",
     "returnCode": 0,
     "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "stdoutSha256": "048747ecfc7287b3ebe58213657e8ea805d769e2e686b7bcb9fe4d542f5088c3",
+    "stdoutSha256": "6ed5f922b61b0c339e4afcd6b69e292f0793480a925b1e83d4dccade5bd32068",
     "timedOut": false
   },
   "command": "tests/acceptance/day5-kernel-reconnaissance.py --timeout 120 --parser-timeout 10 --parser-jobs 4",
@@ -41,16 +41,16 @@
   "regressionsAgainstPrevious": [],
   "artifacts": {
     "results": {
-      "path": ".evidence/day5-kernel-reconnaissance/20260829T094329Z-72998/results.jsonl",
-      "sha256": "6ad844eb7f739e33da77fcf6f93ebf1f879b02d5f37fb549cd3ab364537e2953"
+      "path": ".evidence/day5-kernel-reconnaissance/20260829T123429Z-30856/results.jsonl",
+      "sha256": "50ecfd0d3d42afa35effe71e73597bebf4bdb9d57db63bc3344642a4e272c231"
     },
     "routing": {
-      "path": ".evidence/kernel-dashboard/8402eea/routing.json",
-      "sha256": "b302ab1f795b5ecdaaefc04a427bb77b81a42d9bdb93db0067994b6c86bc5d43"
+      "path": ".evidence/kernel-dashboard/07009fe/routing.json",
+      "sha256": "589e4d571fef62c8ad591c3af901628c8b8360631a4f782f255fe71661a1aa30"
     },
     "captureStatus": {
-      "path": ".evidence/kernel-dashboard/8402eea/reconnaissance.status",
-      "sha256": "d59d0579a7f392d0647b89f242004ebd7713514c959a63ce34b3052dbe5fafb9"
+      "path": ".evidence/kernel-dashboard/07009fe/reconnaissance.status",
+      "sha256": "ea1b5622b612fa442c82683fdf1831acee799b43b89915fec023957b87fc17d0"
     }
   }
 }
