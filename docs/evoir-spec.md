@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.19** | **Authoritative reference** | **2026-08-29**
+**Revision 1.9.20** | **Authoritative reference** | **2026-08-29**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2623,6 +2623,27 @@ Bitfields lower to load-modify-store sequences using bitwise operations:
 (%m4, %w2) = store %m3, %w1, %s_addr, %new               ; write back
 ```
 
+**Anonymous members.** A member of an anonymous structure or union is a member
+of the enclosing record for every purpose (C11 6.7.2.1p13): name lookup, `.` and
+`->`, a designator in an initializer, and `__builtin_offsetof`. A name is
+resolved by searching the record's own members, then recursively the members of
+its anonymous members; the resulting `SubobjectPath` records every step it
+traversed, so the byte offset and the initializer plan are the same as if the
+name had been written out in full. A name found in two different anonymous
+members is ambiguous and reports `E2906` at the name (both oracles reject it).
+
+Measured, both oracles, for
+`struct outer { int head; union { struct { long regs[2]; long sp; }; long raw[3]; }; int tail; }`:
+`sizeof` 40, `offsetof(head)` 0, `offsetof(sp)` 24, `offsetof(raw)` 8,
+`offsetof(tail)` 32, and `{ .head = 1, .sp = 7 }` initializes through the
+anonymous path; nesting is unbounded. Evidence
+`.evidence/builtin-probes/20260826-2c23684c/anon.out` and `anon2.out`.
+
+Measured defect at revision 1.9.19: member *access* traversed anonymous members
+while the designator-path resolver did not, so `o.sp` worked but
+`offsetof(struct outer, sp)` and `{ .sp = 7 }` both reported `E2906`. The two
+resolvers are one rule and must share one implementation.
+
 #### 10.1.7 Function Call Lowering
 
 C function calls lower to EvoIR `call` instructions. Attributes (10.1.9) never
@@ -2757,7 +2778,7 @@ front end that still emits it is defective.
 | `E2903` | argument list does not parse, position not in the table, or `aligned` argument not a representable power of two |
 | `E2904` | `typeof` of a variably modified type |
 | `E2905` | `({ ... })` at file scope or where a constant expression is required |
-| `E2906` | designator names a member the type lacks or an index at or beyond a fixed bound |
+| `E2906` | designator names a member the type lacks, a member ambiguous between two anonymous members, or an index at or beyond a fixed bound |
 | `E2907` | two `_Generic` associations name compatible types, or `default` appears twice |
 | `E2908` | `_Generic` has no association compatible with the controlling type and no `default` |
 | `E2909` | `__builtin_expect`, `__builtin_constant_p` or `__alignof__` called with the wrong number of operands |
@@ -3863,6 +3884,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.20 | 2026-08-29 | States in 10.1.6 that a member of an anonymous structure or union is a member of the enclosing record for designators and `__builtin_offsetof` as well as for access, that resolution recurses through anonymous members and records every step, and that a name ambiguous between two of them is `E2906`. Added after 28 kernel parse lanes stopped on `offsetof(struct pt_regs, sp)` while `o.sp` already worked. |
 | 1.9.19 | 2026-08-29 | Corrects 10.1.19: a zero array bound is a valid GNU zero-length array, measured in every record position and at file scope; `E2923` is for a negative bound only, and `E2203` has one message everywhere. Revision 1.9.18 refused zero without probing it, which no cohort unit could have passed. Adds `__int128_t` and `__uint128_t` as spellings, and repairs the dangling `__int128` cross-reference. |
 | 1.9.18 | 2026-08-29 | Adds 10.1.19: what an integer constant expression is, that `sizeof`/`_Alignof` fold over expressions as well as type names, `sizeof(void)` and `sizeof` of a function type are `1`, and the conditional operator's null-pointer-constant rule that the kernel's `__is_constexpr` depends on. Requires array bounds to be evaluated wherever written (`E2203`, new `E2923`) after they were found to be checked only when an initializer followed. |
 | 1.9.17 | 2026-08-28 | Defers computed `goto` and label-address lowering to `E3029` instead of specifying an indirect-branch terminator: the cohort writes no `goto *`, and its only label-address use is a cast to an integer that `ptrtoint` already excludes. Revision 1.9.16 named a lowering that Sections 3 and 9 did not define. Adds 10.1.18, the three C11 declaration forms the remaining 28 parse lanes stop on. |
