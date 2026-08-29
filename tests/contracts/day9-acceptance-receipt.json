@@ -2,9 +2,9 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "7aaf0e394887b628140d8acc91b29fb42c9d4142dd1fee9f77d6aac24561f19d"
+    "sha256": "7ed07af44693fe00c732b1e048e6411ab2ba8a5b0c58d98ae1b76a6d0c1dbc65"
   },
-  "cutLine": "The seven declared parse-closure capabilities are implemented at the revision 1.9.17 boundary: empty declarations, undeclared-label and inferred-type refusals, volatile aggregate refusal, C-HIR label-address and computed-goto preservation with E3029 fail-closed lowering, the three C11 declaration forms, and the already-correct record-call ABI assertions. All 16 raw preprocessing lanes remain clean and the publication has zero regressions. Stage F1 is still OPEN: dual-oracle clean parse remains 2/16 because the other 14 units now stop in both parser lanes at E2912 while folding a member _Static_assert whose operand contains __builtin_choose_expr. Nine units share include/linux/find.h:69 and five share arch/arm64/include/asm/cache.h:74. Sections 10.1.14 and 10.1.17 already specify the required integer-constant-expression behavior, so this is a measured implementation frontier rather than an authority gap or a licence to expand this window. Automatic compound literals have real memory lowering; file-scope compound-literal pointer relocation remains fail-closed because the specification does not define its unnamed global identity or relocation/provenance representation. Checked arithmetic is front-end complete and fails closed in lowering with E3020. GNU asm is preserved in C-HIR and fails closed in execution and lowering with E3021. All named authority gaps are retained under specAmbiguities.",
+  "cutLine": "The three revision 1.9.18 constant-folding capabilities are implemented: sizeof and _Alignof use resolved expression types without evaluating operands, the conditional null-pointer-constant rule produces the measured kernel __is_constexpr values, and every written array bound is classified by the shared integer-constant-expression evaluator with E2203 or E2923 at the specified boundary. The workspace is 932/932, both layout corpora are exact, the isolated locked offline replay is green, all 16 raw lanes remain clean, and both publications report zero regressions. Stage F1 remains OPEN at 2/16 dual-oracle clean parse. The fold-only publication moved all 28 E2912 lanes to the previously hidden compiler-provided __uint128_t spelling; after the required E2923 array rule landed, the same 28 lanes stop earlier on GNU zero-length arrays accepted by both sealed oracles. Thirteen units use a computed-zero padding member in include/uapi/linux/sysinfo.h:22 and one uses data[0] in include/uapi/linux/bpf.h:94. Revision 1.9.18 requires both to fail while scope K requires 16/16 clean parse, so those authorities cannot both be satisfied without an owner ruling; no exception was invented.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -246,17 +246,51 @@
       "c11-declaration-forms"
     ]
   },
-  "subjectCommit": "3f54595",
+  "constantFoldingClosureRedWindow": {
+    "opened": "dbe605b (tests only; 12/13 failed for exactly three declared capabilities, 1/13 was a green control, zero Rust build errors)",
+    "closed": "91bdaa4",
+    "implementationCommits": [
+      "15137f4",
+      "91bdaa4"
+    ],
+    "authorityRevision": "51e740c (specification revision 1.9.18)",
+    "diagnostics": {
+      "path": "tests/contracts/constant-folding-closure-red.json",
+      "sha256": "a3af8e737d55b6e718ec9f94002203eefa612e3d37bea461013db93548ed4c46"
+    },
+    "declaredCapabilities": [
+      "expression-size-and-alignment-folding",
+      "conditional-null-pointer-constant-typing",
+      "array-bound-validation"
+    ],
+    "oracleEvidence": {
+      "path": ".evidence/builtin-probes/20260829-51e740c/npc.out",
+      "sha256": "78a683f15a1f4e05ca9161545afd2146f0fc66ff2a3a05d7e5bfdf64cc16f01f",
+      "imageDigest": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+      "measuredValues": "sizeof-expression 4; alignof-expression 4; operand side effect 0; sizeof-void 1; sizeof-function 1; constant NPC conditional 4; nonconstant conditional 1; GCC-14 and Clang-19 identical"
+    },
+    "resolvedPriorQuestions": [
+      "J-EVOIR-INTERPRETER-E3029-REACHABILITY: C-HIR reports E3029 only when label-address or computed-goto evaluation is reached; an unreached form reports nothing; no EvoIR form is invented.",
+      "J-FUNCTION-TYPEDEF-DEFINITION-DIAGNOSTIC: a definition through a typedef-named function type reports E1001 at the declarator."
+    ]
+  },
+  "subjectCommit": "91bdaa4",
   "gate": {
-    "claim": "The revision 1.9.17 parse-closure implementation is regression-clean, but stage F1 remains open: 2/16 dual-oracle parse, 16/16 raw preprocess clean, 28 parser lanes at specified E2912 integer-constant-expression folding, 915 workspace tests, all 31 focused parse-closure tests green, record-call ABI 3/3 unchanged, and zero regressions against the previous publication",
+    "claim": "The revision 1.9.18 implementation closes all three declared capabilities with 932 workspace tests and zero regressions, but stage F1 remains open at 2/16 because the specification's mandatory E2923 treatment of zero array bounds rejects GNU zero-length arrays in 14 kernel units that both sealed oracles accept",
     "measured": {
       "dualOracleCleanParseTus": "2/16",
       "rawPreprocessClean": "16/16",
       "stageF1": "OPEN",
       "remainingParserLanes": 28,
       "remainingParserUnits": 14,
-      "remainingFirstError": "E2912 static-assertion-not-constant",
+      "remainingFirstError": "E2923 invalid-array-bound",
+      "constantExpressionClosureTests": "15/15",
+      "workspaceTests": "932/932",
       "specifiedFrontier": true,
+      "acceptanceAuthorityConflict": true,
+      "e2912LanesRemaining": 0,
+      "computedZeroArrayBoundLanes": 26,
+      "explicitZeroArrayBoundLanes": 2,
       "sysregStrayTokenLanesRemaining": 0,
       "preprocessingTokenProductionsMissing": 0,
       "pointerUpdateLanesRemaining": 0,
@@ -276,14 +310,14 @@
       "notCoveredDay7MessagesRemaining": 0,
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260827T204731Z-62790/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260829T055139Z-61417/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "591a75661f4be96ac54efad32530fc929161e945b85a2822e21a83ff2d792ba0",
-      "subjectCommit": "3f54595",
-      "publishedFromRun": "20260828T182429Z-91203"
+      "sha256": "1cdfe36bb6a95393a222c447e4ff4eebf2c1342ccc8d53d4054d23bfbb7c9474",
+      "subjectCommit": "91bdaa4",
+      "publishedFromRun": "20260829T061750Z-7344"
     },
-    "result": "MEASURED_FRONTIER"
+    "result": "MEASURED_AUTHORITY_CONFLICT"
   },
   "lanes": {
     "clean": {
@@ -296,36 +330,36 @@
     },
     "stillFailing": [
       {
-        "count": 18,
-        "lanes": "9 units x {gcc,clang}-preprocessed-parser",
+        "count": 26,
+        "lanes": "13 units x {gcc,clang}-preprocessed-parser",
         "units": [
+          "init-do-mounts",
           "init-do-mounts-initrd",
           "init-init-task",
           "init-version-timestamp",
-          "kernel-bpf-token",
+          "kernel-locking-semaphore",
           "kernel-power-console",
+          "kernel-power-main",
+          "lib-crypto-mpi-generic-mpih-lshift",
+          "lib-kstrtox",
           "mm-memtest",
           "mm-mincore",
           "mm-mprotect",
           "mm-page-vma-mapped"
         ],
-        "firstError": "E2912 static-assertion-not-constant",
-        "rootCause": "include/linux/find.h:69: a member _Static_assert uses the kernel __is_constexpr idiom built from sizeof and __builtin_choose_expr around a nonconstant range predicate; the integer-constant-expression evaluator rejects the composed condition",
-        "specificationCoverage": "specified by sections 10.1.14 and 10.1.17; implementation gap, not a specification gap"
+        "firstError": "E2923 invalid-array-bound",
+        "rootCause": "include/uapi/linux/sysinfo.h:22: char _f[20 - 2 * sizeof(__kernel_ulong_t) - sizeof(__u32)] folds to zero on AArch64",
+        "specificationCoverage": "revision 1.9.18 explicitly requires E2923, while both sealed GNU11 oracles accept the construct and scope K simultaneously requires 16/16 clean parse"
       },
       {
-        "count": 10,
-        "lanes": "5 units x {gcc,clang}-preprocessed-parser",
+        "count": 2,
+        "lanes": "1 unit x {gcc,clang}-preprocessed-parser",
         "units": [
-          "init-do-mounts",
-          "kernel-locking-semaphore",
-          "kernel-power-main",
-          "lib-crypto-mpi-generic-mpih-lshift",
-          "lib-kstrtox"
+          "kernel-bpf-token"
         ],
-        "firstError": "E2912 static-assertion-not-constant",
-        "rootCause": "arch/arm64/include/asm/cache.h:74: a member _Static_assert uses the kernel __is_constexpr idiom built from sizeof and __builtin_choose_expr around a constant field-range predicate; the integer-constant-expression evaluator rejects the composed condition",
-        "specificationCoverage": "specified by sections 10.1.14 and 10.1.17; implementation gap, not a specification gap"
+        "firstError": "E2923 invalid-array-bound",
+        "rootCause": "include/uapi/linux/bpf.h:94: struct bpf_lpm_trie_key writes the GNU zero-length member __u8 data[0]",
+        "specificationCoverage": "revision 1.9.18 explicitly requires E2923, while both sealed GNU11 oracles accept the construct and scope K simultaneously requires 16/16 clean parse"
       }
     ],
     "publicationsThisWindow": [
@@ -468,36 +502,54 @@
         "commit": "3f54595",
         "run": "20260828T182429Z-91203",
         "parseLanesStoppedOn": "raw: 16/16 clean; parser: all seven declared parse-closure capabilities resolved at their boundary, 28 E2912 static-assertion-not-constant in the specified kernel __is_constexpr idiom, 4 clean; dual-oracle clean 2/16; 0 regressions"
+      },
+      {
+        "commit": "15137f4",
+        "run": "20260829T055139Z-61417",
+        "parseLanesStoppedOn": "fold-only F1 measurement: raw 16/16 clean; all 28 E2912 lanes resolved; 28 E1001 expected-declaration lanes at the compiler-provided __uint128_t spelling in arch/arm64/include/uapi/asm/ptrace.h:96; 4 parser lanes clean; dual-oracle clean 2/16; 0 regressions"
+      },
+      {
+        "commit": "91bdaa4",
+        "run": "20260829T061750Z-7344",
+        "parseLanesStoppedOn": "final closure measurement: raw 16/16 clean; 26 E2923 lanes at the computed-zero padding member in include/uapi/linux/sysinfo.h:22; 2 E2923 lanes at data[0] in include/uapi/linux/bpf.h:94; 4 parser lanes clean; dual-oracle clean 2/16; 0 regressions; revision 1.9.18 and the scope-K 16/16 gate conflict"
       }
     ]
   },
   "dashboardDelta": {
     "before": {
-      "run": "20260827T204731Z-62790",
-      "subjectCommit": "5b48c18",
-      "nextFirstErrorClasses": {
-        "E1005 unsupported-abstract-declarator": 16,
-        "E1001 expected-declaration": 12
-      },
-      "rawPreprocessClean": "16/16",
-      "dualOracleCleanParseTus": "2/16"
-    },
-    "after": {
       "run": "20260828T182429Z-91203",
       "subjectCommit": "3f54595",
-      "declaredBlockerLanes": {
-        "labelAddressAndComputedGoto": 0,
-        "postTagQualifier": 0,
-        "functionTypeTypedefDeclaration": 0,
-        "memberStaticAssertionSyntax": 0
-      },
       "nextFirstErrorClasses": {
         "E2912 static-assertion-not-constant": 28
       },
       "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "2/16"
+    },
+    "foldPublication": {
+      "run": "20260829T055139Z-61417",
+      "subjectCommit": "15137f4",
+      "resolvedFirstErrorClasses": {
+        "E2912 static-assertion-not-constant": 28
+      },
+      "nextFirstErrorClasses": {
+        "E1001 expected-declaration at __uint128_t": 28
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "2/16",
+      "regressionsAgainstPrevious": 0
+    },
+    "after": {
+      "run": "20260829T061750Z-7344",
+      "subjectCommit": "91bdaa4",
+      "nextFirstErrorClasses": {
+        "E2923 computed-zero array bound": 26,
+        "E2923 explicit zero array bound": 2
+      },
+      "rawPreprocessClean": "16/16",
       "dualOracleCleanParseTus": "2/16",
       "stageF1": "OPEN",
-      "regressionsAgainstPrevious": 0
+      "regressionsAgainstPrevious": 0,
+      "authorityConflict": "revision 1.9.18 requires E2923 for both forms while scope K requires 16/16 and both sealed oracles accept them"
     }
   },
   "attributes": {
@@ -544,11 +596,19 @@
   },
   "tests": {
     "workspace": {
-      "passed": 915,
+      "passed": 932,
       "failed": 0,
-      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet; set -o pipefail; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list | rg -c ': test$' (915)"
+      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet; set -o pipefail; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list | rg -c ': test$' (932)"
     },
     "suites": {
+      "crates/evocc-parser/tests/constant_expression_closure.rs": {
+        "passed": 5,
+        "command": "cargo test -p evocc-parser --test constant_expression_closure"
+      },
+      "crates/evocc-parser/tests/array_bound_validation.rs": {
+        "passed": 10,
+        "command": "cargo test -p evocc-parser --test array_bound_validation"
+      },
       "crates/evocc-cpp/tests/preprocessing_token_grammar.rs": {
         "passed": 7,
         "command": "cargo test -p evocc-cpp --test preprocessing_token_grammar"
@@ -760,10 +820,10 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "3f54595cf0c15ff397796875abdcf604d8324f35",
-    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-parse-replay.W9B49C/repo; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test",
+    "commit": "91bdaa4b878c19cfc5fcd0d2777469a9dd91af8d",
+    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-constant-replay.CJwcqG/repo; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; cargo test --workspace --locked --offline -- --list | rg -c ': test$'",
     "measured": {
-      "passed": 915,
+      "passed": 932,
       "failed": 0,
       "clippy": 0,
       "fmt": "clean",
@@ -794,8 +854,9 @@
     "H-RANGE-EVALUATION-COUNT: side-effect evaluation multiplicity for GNU range initializers is not specified.",
     "H-INCOMPLETE-ARRAY-DESIGNATED-BOUND: sparse and range designators do not have a frozen incomplete-array bound rule.",
     "H-CLOSING-EDGE-CLEANUP: statement-expression lifetime closure is required on every exit but the lowering paragraph does not define the cleanup edge form.",
-    "J-EVOIR-INTERPRETER-E3029-REACHABILITY: section 10.1.17 says lowering and both interpreters report E3029, but computed goto deliberately has no EvoIR representation. The C-HIR interpreter and lowering are tested; no input can carry the construct to the EvoIR interpreter without inventing an IR form.",
-    "J-FUNCTION-TYPEDEF-DEFINITION-DIAGNOSTIC: section 10.1.18 forbids defining a function through a function-type typedef but assigns no diagnostic code, message or span. The parser refuses it with the existing generic E1001 boundary and makes no narrower diagnostic claim.",
+    "K-E2203-MESSAGE: section 10.1.19 names E2203 variable-length-object, while the existing initialized-VLA path uses variable-length-object-cannot-be-initialized and section 6.3 has no canonical E2203 message row. New no-initializer file/member paths use the 10.1.19 wording without rewriting the established initialized path.",
+    "K-BUILTIN-UINT128-TYPE: the fold-only publication reaches the compiler-provided spelling __uint128_t in arch/arm64/include/uapi/asm/ptrace.h:96, but revision 1.9.18 defines __int128 forms and does not define this builtin typedef spelling or how it enters the translation unit.",
+    "K-ZERO-BOUND-GATE-CONFLICT: section 10.1.19 requires E2923 for every zero bound, while scope K requires dual-oracle parse 16/16 and the cohort contains GNU zero-length arrays in all 14 failing units that GCC-14 and Clang-19 accept. No implementation can satisfy both authorities without a ruling.",
     "G2-VOLATILE-UNION-COPY: section 10.1.3 requires volatile aggregates to lower as memberwise volatile accesses, but a union has overlapping members and the specification provides no selected-member authority. Volatile union copy therefore remains fail-closed rather than reading every overlapping member.",
     "G2-VOLATILE-BIT-FIELD-COPY: section 10.1.3 does not freeze the access width, mask sequence, or trace granularity for a volatile aggregate member that is a bit-field. That form remains fail-closed.",
     "G2-AGGREGATE-CALL-ABI: the specification requires one semantic copy for by-value arguments and returns but does not freeze the hidden return-destination parameter position or deterministic origin identity for caller-owned aggregate temporaries. The implementation uses an address-based internal ABI with the return destination before mem/world tokens and a high-bit function-ordinal origin namespace; no broader ABI claim is made."
@@ -832,6 +893,9 @@
     "The G2 publication moved all 28 E2202 aggregate-initializer lanes to E1001 expected-declaration in arch/arm64/include/asm/cmpxchg.h with zero regressions. The new first-error class was retained as unclassified until the parse-closure measurement assigned its concrete declaration forms.",
     "Revision 1.9.17 withdrew the successor-set/E3028 computed-goto contract before production resumed. The tests-only checkpoint was amended first: the front end preserves label addresses and goto *, while the C-HIR interpreter and lowering fail closed with E3029 and no EvoIR instruction is invented.",
     "Rust 1.98 enabled a fixed-size decoder-slice Clippy warning in four pre-existing binary decoders. Commit 5ac26b1 is a behavior-neutral maintenance change that restores the frozen zero-warning gate and is not counted as a parse-closure semantic commit.",
-    "The attributable publication after the three C11 declaration forms had zero regressions but did not close stage F1. All 28 parser lanes moved to E2912 in the already-specified kernel __is_constexpr composition; the receipt records every affected unit and leaves F1 OPEN instead of treating first-error movement as acceptance."
+    "The attributable publication after the three C11 declaration forms had zero regressions but did not close stage F1. All 28 parser lanes moved to E2912 in the already-specified kernel __is_constexpr composition; the receipt records every affected unit and leaves F1 OPEN instead of treating first-error movement as acceptance.",
+    "The first sealed constant-expression probe was rejected even though its container command returned zero: the read-only filesystem made both compilers fail and the runner lacked set -e. Only the rerun with set -eu, a writable output mount, and bound image/compiler/source/runner digests supplied oracle evidence.",
+    "The first complete workspace gate caught an obsolete unit test that accepted int fixed[0] = {}. Revision 1.9.18 requires E2923 for a written zero bound, while int inferred[] = {} remains legal because no bound is written; the test was split to retain both behaviors before the gate was rerun.",
+    "The fold-only F1 publication was retained separately from the final array-bound publication. It proves the 28 E2912 lanes moved to __uint128_t; the final publication proves that enforcing E2923 then exposes the zero-bound authority conflict earlier in the same 14 units."
   ]
 }
