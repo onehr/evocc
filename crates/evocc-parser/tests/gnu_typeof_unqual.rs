@@ -174,7 +174,7 @@ fn array_element_qualification_is_kept_in_the_refusal_direction() {
 fn expression_operand_is_unevaluated() {
     let arena = Arena::default();
     let unit = parse(
-        "int main(void) { int side = 0; (void)sizeof(__typeof_unqual__(side++)); return side; }\n",
+        "int main(void) { int side = 0; return side + (int)sizeof(__typeof_unqual__(side++)) - 4; }\n",
         &arena,
     )
     .expect("unqualified typeof expression must parse");

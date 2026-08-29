@@ -596,6 +596,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
+    fn strip_top_level_qualifiers(&mut self, ty: TypeId) -> TypeId {
+        let canonical = self
+            .types
+            .get(ty)
+            .expect("resolved typeof operands reference interned types")
+            .clone();
+        let qualifiers = Qualifiers {
+            aligned: canonical.qualifiers.aligned,
+            ..Qualifiers::default()
+        };
+        self.intern(canonical.kind, qualifiers)
+    }
+
     fn symbol_in_current_scope(&self, spelling: &str) -> Option<SymbolId> {
         self.symbols
             .scope_symbols(self.current_scope)
@@ -3878,8 +3891,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return Some(parsed);
         }
 
-        if self.peek_kind() == Some(TokenKind::Typeof) {
+        if matches!(
+            self.peek_kind(),
+            Some(TokenKind::Typeof | TokenKind::TypeofUnqual)
+        ) {
             let keyword = self.advance().expect("peeked typeof keyword");
+            let strip_top_level = keyword.kind == TokenKind::TypeofUnqual;
             self.expect(TokenKind::LParen)?;
             let (base, operand, tag_event) = if self
                 .peek()
@@ -3932,6 +3949,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 (ty, TypeofOperand::Expression, None)
             };
             let close = self.expect(TokenKind::RParen)?;
+            let base = if strip_top_level {
+                self.strip_top_level_qualifiers(base)
+            } else {
+                base
+            };
             let trailing = self.parse_qualifiers_with_inline(&mut inline_spans);
             qualifiers = merge_qualifiers(qualifiers, trailing);
             let resolved = self.qualify_typedef_type(base, qualifiers);
@@ -6153,6 +6175,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TokenKind::BuiltinVaList
                 | TokenKind::GnuInt128
                 | TokenKind::Typeof
+                | TokenKind::TypeofUnqual
         )
     }
 
