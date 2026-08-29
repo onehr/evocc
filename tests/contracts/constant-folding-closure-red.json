@@ -1,0 +1,113 @@
+{
+  "receiptId": "c30.constant-folding-closure.red",
+  "authority": {
+    "specification": "docs/evoir-spec.md revision 1.9.18 section 10.1.19 and section 6.3",
+    "specificationSha256": "efc0e34f9461102821734e8bc13b9d82754d4004b01d4a33e753107a167fa0f6",
+    "contract": "tests/contracts/day9-acceptance-contract.json scope line K",
+    "contractSha256": "7ed07af44693fe00c732b1e048e6411ab2ba8a5b0c58d98ae1b76a6d0c1dbc65"
+  },
+  "baseline": "607a5a922662fd60ef0b5c12d5ef4d0522b48d2b",
+  "declaredMissingCapabilities": [
+    "expression-size-and-alignment-folding",
+    "conditional-null-pointer-constant-typing",
+    "array-bound-validation"
+  ],
+  "redCommand": "cargo test -p evocc-parser --test constant_expression_closure --test array_bound_validation --no-fail-fast",
+  "measured": {
+    "passedControls": 1,
+    "failed": 12,
+    "ignored": 0,
+    "rustBuildErrors": 0,
+    "suites": {
+      "evocc-parser/constant_expression_closure": {
+        "passed": 0,
+        "failed": 5
+      },
+      "evocc-parser/array_bound_validation": {
+        "passed": 1,
+        "failed": 7
+      }
+    },
+    "failureClasses": {
+      "E2912 static-assertion-not-constant": 4,
+      "E2911 static-assertion-failed": 1,
+      "NO_DIAGNOSTIC invalid-array-bound accepted": 5,
+      "NO_DIAGNOSTIC variable-length-object accepted": 2
+    }
+  },
+  "observations": [
+    {
+      "test": "sizeof_and_alignof_expression_match_oracle_values_without_evaluation",
+      "observed": "E2912 static-assertion-not-constant at sizeof(*(int *)8)",
+      "reason": "expression-size-and-alignment-folding"
+    },
+    {
+      "test": "sizeof_void_and_function_type_are_one",
+      "observed": "E2912 static-assertion-not-constant at sizeof(void)",
+      "reason": "expression-size-and-alignment-folding"
+    },
+    {
+      "test": "a_pointer_typed_null_pointer_constant_preserves_the_other_pointer_type",
+      "observed": "E2911 static-assertion-failed because the conditional is incorrectly typed void *",
+      "reason": "conditional-null-pointer-constant-typing"
+    },
+    {
+      "test": "the_kernel_constexpr_shape_has_the_measured_constant_operand_value",
+      "observed": "E2912 static-assertion-not-constant instead of the measured value 4",
+      "reason": "expression-size-and-alignment-folding"
+    },
+    {
+      "test": "the_kernel_constexpr_shape_has_the_measured_nonconstant_operand_value",
+      "observed": "E2912 static-assertion-not-constant instead of the measured value 1",
+      "reason": "expression-size-and-alignment-folding"
+    },
+    {
+      "tests": [
+        "negative_file_scope_array_bound_is_rejected",
+        "zero_file_scope_array_bound_is_rejected",
+        "negative_record_member_array_bound_is_rejected",
+        "zero_local_array_bound_is_rejected",
+        "zero_parameter_array_bound_is_rejected"
+      ],
+      "observed": "each invalid bound is accepted without a diagnostic",
+      "reason": "array-bound-validation"
+    },
+    {
+      "tests": [
+        "file_scope_variable_length_array_is_rejected_without_an_initializer",
+        "record_member_variable_length_array_is_rejected"
+      ],
+      "observed": "each forbidden variable-length array is accepted without a diagnostic",
+      "reason": "array-bound-validation"
+    }
+  ],
+  "oracleEvidence": {
+    "path": ".evidence/builtin-probes/20260829-51e740c/npc.out",
+    "sha256": "78a683f15a1f4e05ca9161545afd2146f0fc66ff2a3a05d7e5bfdf64cc16f01f",
+    "sourceSha256": "9c9888be30c53f6acc026924388afd71f7215eab224a317421ff68bb8703d421",
+    "runnerSha256": "0873fdcfff553bdbba21a4ef61c5dc56dedd6d271ee574db27530c402f6abec8",
+    "imageDigest": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+    "compilers": {
+      "gcc-14": "fb051a6c58961fb6aec758acf50d7d0375eecff740d0706388092829e3fb7a41",
+      "clang-19": "8bba5d733f54ada0cc50ba7646a87ddc798d5de73f67e397cdefada07297bb65"
+    },
+    "values": {
+      "sizeofExpression": 4,
+      "alignofExpression": 4,
+      "sizeofExpressionSideEffect": 0,
+      "sizeofVoid": 1,
+      "sizeofFunction": 1,
+      "constantNullPointerConditionalSize": 4,
+      "constantNullPointerEqualsFour": 1,
+      "constantNullPointerEqualsOne": 0,
+      "nonconstantConditionalSize": 1
+    },
+    "arrayObservation": "both GNU11 oracles reject negative object/member bounds and file-scope nonconstant bounds; both accept a zero bound, while the project profile explicitly requires E2923"
+  },
+  "openSpecificationQuestions": [
+    {
+      "id": "K-E2203-MESSAGE",
+      "question": "Section 10.1.19 names E2203 variable-length-object, while the existing E2203 implementation and tests use variable-length-object-cannot-be-initialized and section 6.3 has no canonical E2203 message row. Which message is authoritative?"
+    }
+  ]
+}
