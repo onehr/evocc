@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.18** | **Authoritative reference** | **2026-08-29**
+**Revision 1.9.19** | **Authoritative reference** | **2026-08-29**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2773,7 +2773,7 @@ front end that still emits it is defective.
 | `E2919` | initializer for a flexible array member outside file scope |
 | `E2920` | `goto` names a label no enclosing function scope declares |
 | `E2922` | copy of a `volatile` union, or of a `volatile` record with a bit-field member |
-| `E2923` | array bound folds to zero or a negative value |
+| `E2923` | array bound folds to a negative value |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -2949,8 +2949,8 @@ pointee type, else `0`. Both operands and `p` are evaluated exactly once, left t
 right. The call is never an integer constant expression. A `p` whose pointee is
 `const`-qualified is `E2913` at the third operand (both oracles reject it).
 `__int128` operands or pointee are `E2913` in this profile (both oracles accept
-them; the cohort never uses them, and 10.1.5 keeps `__int128` value semantics
-closed), so the profile fails closed rather than half-implements them. `__builtin_*_overflow_p`
+them; the cohort never uses them there, and 10.1.19 keeps `__int128` value
+semantics closed), so the profile fails closed rather than half-implements them. `__builtin_*_overflow_p`
 is out of this profile (`ORACLE_CONFLICT`: Clang-19 does not provide it; the
 cohort does not use it). Measured in `.evidence/builtin-probes/20260825-2c23684c/`
 (`ovf.c`): `mul(70000, 70000) -> int` is `1` with the wrapped `605032704` stored,
@@ -3177,6 +3177,12 @@ extensions, and every one of those places uses the same evaluator:
 `sizeof(void)` is `1`, as is `sizeof` of a function type; both are GNU
 extensions the kernel relies on (measured, both oracles).
 
+`__int128_t` and `__uint128_t` are compiler-provided spellings of `__int128`
+and `unsigned __int128`, not distinct types: both oracles give them size 16 and
+`__builtin_types_compatible_p(__uint128_t, unsigned __int128)` is `1`. The
+cohort writes `__uint128_t` 102 times. They are type specifiers wherever the
+underlying spelling is one, and carry its value semantics unchanged.
+
 **Conditional operator with a null pointer constant.** In `c ? a : b` where
 one of `a` and `b` is a null pointer constant and the other is a pointer, the
 result type is the *other* operand's pointer type, not a composite with `void *`
@@ -3195,12 +3201,29 @@ Getting this rule wrong does not produce a diagnostic; it produces the opposite
 answer in every kernel size and overflow check that uses the macro.
 
 **Array bounds.** A bound is evaluated wherever it is written, not only when an
-initializer follows. A bound that is not an integer constant expression at file
-scope, or on a member, is `E2203` (`variable-length-object`); a bound that folds
-to zero or a negative value is `E2923` (`invalid-array-bound`). Measured defect
-at revision 1.9.17: `int probe[-1];`, `struct s { int a[-1]; };` and a
-file-scope `int probe[n];` were all accepted silently, and only an initializer
-made the bound reachable, so no `sizeof` of such a type meant anything.
+initializer follows.
+
+A bound of **zero** is valid: a zero-length array is a GNU extension with size
+`0` that contributes no bytes and no alignment, may appear anywhere in a record
+including before other members, and does not make the record flexible.
+Measured, both oracles: `struct { int a; char d[0]; int b; }` is 8,
+`struct { int a; char d[0]; }` is 4, `char pad[20 - 2*sizeof(long) - sizeof(unsigned)]`
+is a valid empty member whose successor is at offset 0, and a file-scope
+`int g[0]` has `sizeof` 0. The kernel writes both the explicit form (`__u8
+data[0]`) and the computed form (`sysinfo._f`); evidence
+`.evidence/builtin-probes/20260826-2c23684c/zerobound.out`.
+
+A bound that folds to a **negative** value is `E2923` (`invalid-array-bound`);
+both oracles reject it. A bound that is not an integer constant expression is
+`E2203` (`variable-length-object`) wherever it appears: at file scope and on a
+member both oracles reject it too, and inside a block they accept it as a C99
+variable-length array, which this profile does not have. `E2203` has one
+message, `variable-length-object`, at every site.
+
+Measured defect at revision 1.9.17: `int probe[-1];`, `struct s { int a[-1]; };`
+and a file-scope `int probe[n];` were all accepted silently, and only an
+initializer made the bound reachable, so no `sizeof` of such a type meant
+anything.
 
 #### 10.1.18 C11 declaration forms
 
@@ -3840,6 +3863,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.19 | 2026-08-29 | Corrects 10.1.19: a zero array bound is a valid GNU zero-length array, measured in every record position and at file scope; `E2923` is for a negative bound only, and `E2203` has one message everywhere. Revision 1.9.18 refused zero without probing it, which no cohort unit could have passed. Adds `__int128_t` and `__uint128_t` as spellings, and repairs the dangling `__int128` cross-reference. |
 | 1.9.18 | 2026-08-29 | Adds 10.1.19: what an integer constant expression is, that `sizeof`/`_Alignof` fold over expressions as well as type names, `sizeof(void)` and `sizeof` of a function type are `1`, and the conditional operator's null-pointer-constant rule that the kernel's `__is_constexpr` depends on. Requires array bounds to be evaluated wherever written (`E2203`, new `E2923`) after they were found to be checked only when an initializer followed. |
 | 1.9.17 | 2026-08-28 | Defers computed `goto` and label-address lowering to `E3029` instead of specifying an indirect-branch terminator: the cohort writes no `goto *`, and its only label-address use is a cast to an integer that `ptrtoint` already excludes. Revision 1.9.16 named a lowering that Sections 3 and 9 did not define. Adds 10.1.18, the three C11 declaration forms the remaining 28 parse lanes stop on. |
 | 1.9.16 | 2026-08-28 | Closes the eight gaps the compile-time-builtin and aggregate-copy windows reported and the one blocking every parse lane: the empty external declaration is accepted; `__auto_type` needs a plain identifier and may not reference itself (one `ORACLE_CONFLICT`, refused); computed `goto` and label addresses are specified with their conservative successor set (`E3028`); `E2920` for an undeclared label; a non-constant case-range bound is `E2916`; `volatile` union and bit-field copies fail closed (`E2922`); and records cross calls through memory with a trailing return-destination pointer and reserved synthetic origins. |
