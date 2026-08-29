@@ -1115,6 +1115,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E1001", "expected-declaration", self.span());
             return None;
         };
+        if context == DeclarationContext::File {
+            self.validate_file_or_member_array_bounds(&declarator);
+        }
         if auto_type_span.is_some()
             && (storage == StorageClass::Typedef || !declarator.derived.is_empty())
         {
@@ -1411,6 +1414,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E1001", "expected-declaration", self.span());
                 return None;
             };
+            if context == DeclarationContext::File {
+                self.validate_file_or_member_array_bounds(&next);
+            }
             let (next_asm_label, next_asm_label_span) = self.parse_optional_asm_label()?;
             next_attributes
                 .extend(self.parse_attribute_specifiers(AttributePlacement::AfterDeclarator));
@@ -4306,6 +4312,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 } else {
                     self.parse_declarator(false)
                 };
+                if let Some(declarator) = declarator.as_ref() {
+                    self.validate_file_or_member_array_bounds(declarator);
+                }
                 let ty = declarator
                     .as_ref()
                     .map_or(specifier.surface.type_id(), |decl| {
@@ -4921,6 +4930,34 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     // ── declarators ────────────────────────────────────────────────────
 
+    fn classify_array_bound(&mut self, expression: &CHirExpr<'_>) -> ArrayBound {
+        match self.eval_integer_constant_expression(expression) {
+            Ok(value) if value.mathematical_value() <= 0 => {
+                self.report("E2923", "invalid-array-bound", expression.span());
+                // Preserve a concrete, non-VLA layer after the diagnostic so
+                // the declaration context cannot replace E2923 with E2203.
+                ArrayBound::Fixed(0)
+            }
+            Ok(value) => ArrayBound::Fixed(
+                u64::try_from(value.mathematical_value())
+                    .expect("positive C integer values fit in u64"),
+            ),
+            Err(()) => ArrayBound::Variable,
+        }
+    }
+
+    fn validate_file_or_member_array_bounds(&mut self, declarator: &ParsedDeclarator) {
+        if let Some(span) = declarator.derived.iter().find_map(|layer| match layer {
+            DerivedDeclarator::Array {
+                bound: ArrayBound::Variable,
+                span,
+            } => Some(*span),
+            _ => None,
+        }) {
+            self.report("E2203", "variable-length-object", span);
+        }
+    }
+
     fn parse_abstract_declarator(&mut self) -> Option<ParsedAbstractDeclarator> {
         self.parse_abstract_declarator_with_vla_error(None)
     }
@@ -4980,22 +5017,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     }
                     let bound = if self.peek_kind() == Some(TokenKind::RBracket) {
                         ArrayBound::Unbounded
-                    } else if self.peek_kind() == Some(TokenKind::IntLiteral) {
-                        let token = self.advance().expect("peeked fixed array bound");
-                        match parse_int_literal(self.token_text(&token)) {
-                            Some(literal) => ArrayBound::Fixed(literal.value),
-                            None => {
-                                self.report("E1006", "invalid-integer-literal", token.span);
-                                ArrayBound::Variable
+                    } else {
+                        let expression = self.parse_assignment()?;
+                        let bound = self.classify_array_bound(expression);
+                        if matches!(bound, ArrayBound::Variable) {
+                            if let Some(span) = vla_error_span {
+                                self.report("E2904", "not-covered: variably-modified-typeof", span);
+                            } else {
+                                self.report(
+                                    "E1005",
+                                    "unsupported-abstract-declarator",
+                                    expression.span(),
+                                );
                             }
                         }
-                    } else {
-                        if let Some(span) = vla_error_span {
-                            self.report("E2904", "not-covered: variably-modified-typeof", span);
-                        } else {
-                            self.report("E1005", "unsupported-abstract-declarator", self.span());
-                        }
-                        ArrayBound::Variable
+                        bound
                     };
                     let close = self.expect(TokenKind::RBracket)?;
                     let layer_span = self.merge_span(open.span, close.span);
@@ -5094,26 +5130,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     }
                     let bound = if self.peek_kind() == Some(TokenKind::RBracket) {
                         ArrayBound::Unbounded
-                    } else if self.peek_kind() == Some(TokenKind::IntLiteral)
-                        && self.tokens.get(self.pos + 1).map(|token| token.kind)
-                            == Some(TokenKind::RBracket)
-                    {
-                        let token = self.advance().unwrap();
-                        match parse_int_literal(self.token_text(&token)) {
-                            Some(literal) => ArrayBound::Fixed(literal.value),
-                            None => {
-                                self.report("E1006", "invalid-integer-literal", token.span);
-                                ArrayBound::Variable
-                            }
-                        }
                     } else {
                         let expression = self.parse_assignment()?;
-                        match self.eval_integer_constant_expression(expression) {
-                            Ok(value) => u64::try_from(value.mathematical_value())
-                                .map(ArrayBound::Fixed)
-                                .unwrap_or(ArrayBound::Variable),
-                            Err(()) => ArrayBound::Variable,
-                        }
+                        self.classify_array_bound(expression)
                     };
                     let close = self.expect(TokenKind::RBracket)?;
                     declarator.derived.push(DerivedDeclarator::Array {
@@ -9925,9 +9944,9 @@ mod tests {
     }
 
     #[test]
-    fn gnu_empty_initializer_completes_zero_bound_arrays() {
+    fn gnu_empty_initializer_completes_an_unbounded_array() {
         let arena = Arena::default();
-        let unit = parse_unit("int inferred[] = {}; int fixed[0] = {};", &arena);
+        let unit = parse_unit("int inferred[] = {};", &arena);
         for declaration in unit.declarations() {
             let CHirDecl::Object(object) = declaration else {
                 panic!("expected object declaration")
@@ -9954,6 +9973,14 @@ mod tests {
             assert!(initializer.plan().is_empty());
             initializer.plan().validate(unit.types()).unwrap();
         }
+    }
+
+    #[test]
+    fn a_written_zero_bound_is_rejected_even_with_an_empty_initializer() {
+        let arena = Arena::default();
+        let (_, diagnostic) = parse_rejected("int fixed[0] = {};", &arena);
+        assert_eq!(diagnostic.code, "E2923");
+        assert_eq!(diagnostic.message, "invalid-array-bound");
     }
 
     #[test]

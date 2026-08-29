@@ -84,8 +84,37 @@ fn record_member_variable_length_array_is_rejected() {
 }
 
 #[test]
-fn positive_constant_bounds_remain_valid_without_initializers() {
+fn a_later_file_declarator_cannot_hide_a_variable_bound() {
+    rejects(
+        "int bound; int fixed[2], variable[bound];\n",
+        "E2203",
+        "variable-length-object",
+    );
+}
+
+#[test]
+fn abstract_array_bounds_are_evaluated_where_written() {
+    rejects(
+        "int value(void) { return sizeof(int[0]); }\n",
+        "E2923",
+        "invalid-array-bound",
+    );
+}
+
+#[test]
+fn positive_constant_bounds_and_permitted_vlas_remain_valid() {
     let arena = Arena::default();
-    parse("int object[3]; struct record { int member[2]; };\n", &arena)
-        .expect("positive bounds remain accepted");
+    parse(
+        "_Static_assert(sizeof(int[1 + 2]) == 12, \"bound\");\n\
+         int object[3];\n\
+         struct record { int member[2]; };\n\
+         int global_bound;\n\
+         int prototype(int parameter[global_bound]);\n\
+         int local(int bound) {\n\
+             int variable[bound];\n\
+             return 0;\n\
+         }\n",
+        &arena,
+    )
+    .expect("positive constant bounds and block or parameter VLAs remain accepted");
 }
