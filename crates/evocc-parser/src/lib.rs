@@ -6714,7 +6714,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::MemoryAssign { facts, .. }
             | CHirExpr::Update { facts, .. }
             | CHirExpr::MemoryUpdate { facts, .. }
-            | CHirExpr::MemoryRead { facts, .. } => facts.ty(),
+            | CHirExpr::MemoryRead { facts, .. }
+            | CHirExpr::StatementExpr { facts, .. } => facts.ty(),
             CHirExpr::Cast(ty, _, _) => *ty,
             CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
                 let pointer_ty = self.canonical_pointer_expression_type(pointer)?;

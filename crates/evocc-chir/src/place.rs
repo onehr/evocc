@@ -768,6 +768,27 @@ fn pointer_expression_type(
     types: &TypeInterner,
     expression: &CHirExpr<'_>,
 ) -> Result<PointerTypeDesc, MemoryPlaceError> {
+    if let CHirExpr::StatementExpr {
+        value: Some(value),
+        facts,
+        ..
+    } = expression
+    {
+        // The producer records the post-lvalue-conversion result type, but a
+        // checked place must not trust that record by itself. Reconstruct the
+        // final expression's pointer descriptor, recursively for nested GNU
+        // statement expressions, and require the two authorities to agree.
+        let derived = pointer_expression_type(types, value)?;
+        let claimed = PointerTypeDesc::from_canonical_pointer(types, facts.ty())?;
+        return (derived == claimed)
+            .then_some(claimed)
+            .ok_or(MemoryPlaceError::PointerExpressionTypeMismatch);
+    }
+    if let CHirExpr::Unary(UnaryOp::AddrOf, addressed, _) = expression {
+        let pointee = addressed_expression_type(types, addressed)?;
+        return PointerTypeDesc::to_object(types, pointee)
+            .ok_or(MemoryPlaceError::UnknownType(pointee));
+    }
     let ty = match expression {
         CHirExpr::Ident { facts, .. }
         | CHirExpr::Assign { facts, .. }
@@ -783,6 +804,28 @@ fn pointer_expression_type(
         _ => return Err(MemoryPlaceError::PointerExpressionTypeUnavailable),
     };
     PointerTypeDesc::from_canonical_pointer(types, ty)
+}
+
+/// The bounded addressable forms needed to validate a pointer yielded by a
+/// statement expression. More complex projected places arrive as a checked
+/// `MemoryRead`; raw projection syntax remains fail-closed here.
+fn addressed_expression_type(
+    types: &TypeInterner,
+    expression: &CHirExpr<'_>,
+) -> Result<TypeId, MemoryPlaceError> {
+    let ty = match expression {
+        CHirExpr::Ident { facts, .. } => facts.ty(),
+        CHirExpr::MemoryRead { place, .. } => place.value_ty(),
+        CHirExpr::CompoundLit(ty, _, _) => *ty,
+        CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
+            pointer_expression_type(types, pointer)?.pointee()
+        }
+        _ => return Err(MemoryPlaceError::PointerExpressionTypeUnavailable),
+    };
+    types
+        .get(ty)
+        .map(|_| ty)
+        .ok_or(MemoryPlaceError::UnknownType(ty))
 }
 
 fn call_expression_return_type(
