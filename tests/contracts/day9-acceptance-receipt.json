@@ -4,7 +4,7 @@
     "path": "tests/contracts/day9-acceptance-contract.json",
     "sha256": "cca54787f673944062ad3208f36cee309627ad7623a8050e4e9d7cf019f4b3dd"
   },
-  "cutLine": "Statement-expression pointer results now remain valid place roots for projection and dereference, and forged C-HIR pointer facts are rejected by independently recomputing the final expression type. The tests-only checkpoint measured exactly three semantic failures and zero build failures; the implementation closes them with 972/972 listed all-target tests, exact 128/128 and 22/22 layout corpora, and a green locked/offline no-local replay. The sealed dashboard resolves all 18 statement-expression-rooted E2102 lanes with zero classified regressions, but 22 parser lanes exceed the unchanged 10-second budget and dual-oracle clean parsing remains 2/16. Stage F1 therefore remains OPEN: semantic correctness moved forward, while the newly exposed parser throughput boundary is not misreported as parse closure.",
+  "cutLine": "Speculative declaration parsing now uses nested LIFO undo logs for parser-owned maps, SymbolTable, and TypeInterner while the independently restorable SymbolTable snapshot contract remains unchanged. The fixed RED measured 4x input causing 14.4527x allocation growth (820263 to 11855017 bytes); GREEN measures 3.9603x (128252 to 507916 bytes), and representative debug kernel parses fall from 16.87 seconds to 5.03 seconds. The implementation is green at 977/977 listed all-target tests, exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. The sealed dashboard converts all 22 prior parser timeouts into typed first errors with zero regressions; dual-oracle clean parsing remains 2/16 and Stage F1 remains OPEN on 24 E1001 lanes, 2 E2906 lanes, and 2 __builtin_object_size lanes.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -469,9 +469,40 @@
     "negativeControl": "({ 1; })->value remains E2102 invalid-projected-lvalue",
     "result": "PASS_STAGE_F1_OPEN"
   },
-  "subjectCommit": "0a53458",
+  "parserCheckpointScalingRedWindow": {
+    "opened": "d188946 (tests only; 972 passed, 1 allocation-scaling failure, 973 listed tests; zero Rust build errors)",
+    "closed": "1697338",
+    "implementationCommits": [
+      "1697338"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/parser-checkpoint-scaling-red.json",
+      "sha256": "d1e9a146840bc2f6f82b19c8abbf4670c1ddc13a36d5e0345cfc5e814f473cc4"
+    },
+    "declaredCapability": "speculative declaration parsing allocates near-linearly while preserving exact SymbolTable snapshot semantics",
+    "redMeasurement": {
+      "smallDeclarations": 32,
+      "smallAllocatedBytes": 820263,
+      "largeDeclarations": 128,
+      "largeAllocatedBytes": 11855017,
+      "growthRatio": 14.4527,
+      "allowedGrowthRatio": 6.0
+    },
+    "greenMeasurement": {
+      "smallDeclarations": 32,
+      "smallAllocatedBytes": 128252,
+      "largeDeclarations": 128,
+      "largeAllocatedBytes": 507916,
+      "growthRatio": 3.9603,
+      "largeAllocationReductionPercent": 95.7156,
+      "command": "cargo test -p evocc-parser --test checkpoint_allocation_scaling -- --nocapture"
+    },
+    "semanticContract": "SymbolTable::checkpoint still restores arbitrary previously captured branches; the parser fast path is a separate table-local nested LIFO transaction with foreign, stale, and out-of-order tokens rejected",
+    "result": "PASS_STAGE_F1_OPEN"
+  },
+  "subjectCommit": "1697338",
   "gate": {
-    "claim": "Statement-expression pointer place roots and the C-HIR corruption guard are closed with 972 listed all-target tests and zero classified dashboard regressions. All 18 prior E2102 lanes moved, but 22 lanes now exceed the unchanged fixed parser budget and dual-oracle clean parsing remains 2/16; Stage F1 remains open.",
+    "claim": "Speculative declaration parsing is near-linear under the fixed allocation gate, the exact snapshot contract is preserved, and all 22 prior fixed-budget parser timeouts now produce typed first errors. The tree has 977 listed all-target tests and zero classified dashboard regressions; dual-oracle clean parsing remains 2/16 and Stage F1 remains open.",
     "measured": {
       "dualOracleCleanParseTus": "2/16",
       "rawPreprocessClean": "16/16",
@@ -479,9 +510,8 @@
       "remainingParserLanes": 28,
       "remainingParserUnits": 14,
       "remainingFirstErrors": {
-        "PARSE_TIMEOUT at fixed parser step budget": 22,
+        "E1001 expected-declaration at include/linux/signal.h:157": 24,
         "E2906 designator-outside-object at include/linux/rbtree_latch.h:72": 2,
-        "E1001 expected-declaration at include/linux/signal.h:157": 2,
         "E2001 undeclared-identifier __builtin_object_size at include/linux/ucopysize.h:47": 2
       },
       "constantExpressionClosureTests": "15/15",
@@ -493,7 +523,10 @@
       "aggregateCopyTests": "9/9",
       "diagnosticSurveyParserTests": "7/7",
       "diagnosticSurveyCliTests": "4/4",
-      "workspaceTests": "972/972",
+      "parserCheckpointScalingTests": "1/1",
+      "symbolTableTransactionTests": "2/2",
+      "typeInternerTransactionTests": "2/2",
+      "workspaceTests": "977/977",
       "specifiedFrontier": false,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
@@ -508,7 +541,7 @@
       "invalidProjectedLvalueLanesRemaining": 0,
       "declaredProjectedPlaceRootFailuresRemaining": 0,
       "invalidUpdateOperandLanesRemaining": 0,
-      "parserTimeoutLanes": 22,
+      "parserTimeoutLanes": 0,
       "surveyUnavailableUnits": 0,
       "unchangedPreviouslyAvailableSurveyRoots": "15/15",
       "statementExpressionLanesRemaining": 0,
@@ -527,14 +560,14 @@
       "notCoveredDay7MessagesRemaining": 0,
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260830T045405Z-23380/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260830T101312Z-14565/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "4911332b0c4b3f5846eb2b6956d6ac61e026c8ff5317ba3ec61ef1236ba2c005",
-      "subjectCommit": "0a53458",
-      "publishedFromRun": "20260830T101312Z-14565"
+      "sha256": "e35b0889ab7cd8f711baac402b9430844c5f698c30b21f382bd845019a4300e6",
+      "subjectCommit": "1697338",
+      "publishedFromRun": "20260830T110658Z-95784"
     },
-    "result": "STATEMENT_EXPRESSION_PLACE_PASS_STAGE_F1_OPEN"
+    "result": "PARSER_CHECKPOINT_SCALING_PASS_STAGE_F1_OPEN"
   },
   "lanes": {
     "clean": {
@@ -547,9 +580,9 @@
     },
     "stillFailing": [
       {
-        "count": 22,
-        "firstError": "PARSE_TIMEOUT process exceeded the fixed 10-second parser budget",
-        "lanes": "11 gcc-preprocessed-parser plus 11 clang-preprocessed-parser",
+        "count": 24,
+        "firstError": "E1001 expected-declaration at include/linux/signal.h:157",
+        "lanes": "12 gcc-preprocessed-parser plus 12 clang-preprocessed-parser",
         "units": [
           "init-init-task",
           "init-do-mounts-initrd",
@@ -561,19 +594,14 @@
           "mm-memtest",
           "mm-mprotect",
           "mm-mincore",
-          "mm-page-vma-mapped"
-        ],
-        "diagnosticSpotCheck": "the release binary completes representative timeout units in 5.2 to 7.5 seconds at E1001 expected-declaration, while the dashboard's fresh debug binary takes longer than 10 seconds; this is diagnostic evidence, not a clean-parse claim"
+          "mm-page-vma-mapped",
+          "kernel-power-console"
+        ]
       },
       {
         "count": 2,
         "firstError": "E2906 designator-outside-object at include/linux/rbtree_latch.h:72",
         "unit": "kernel-bpf-token (gcc and clang)"
-      },
-      {
-        "count": 2,
-        "firstError": "E1001 expected-declaration at include/linux/signal.h:157",
-        "unit": "kernel-power-console (gcc and clang)"
       },
       {
         "count": 2,
@@ -771,6 +799,11 @@
         "commit": "0a53458",
         "run": "20260830T101312Z-14565",
         "parseLanesStoppedOn": "statement-expression place publication: all 18 statement-expression-rooted E2102 lanes resolved; 22 lanes exceeded the unchanged 10-second parser budget, while E2906/E1001/E2001 remain 2 lanes each; raw 16/16 clean; dual-oracle clean 2/16; 0 classified regressions; Stage F1 remains open"
+      },
+      {
+        "commit": "1697338",
+        "run": "20260830T110658Z-95784",
+        "parseLanesStoppedOn": "speculative parser transaction publication: all 22 fixed-budget timeouts resolved without changing the 10-second limit; 24 lanes reach E1001 expected-declaration, 2 reach E2906, and 2 reach __builtin_object_size; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions; Stage F1 remains open"
       }
     ]
   },
@@ -942,6 +975,23 @@
       "stageF1": "OPEN",
       "regressionsAgainstPrevious": 0,
       "timingNote": "the semantic blocker is gone; fresh debug builds now exceed the unchanged budget on 11 units per oracle. Representative release parses complete at the next E1001 in 5.2 to 7.5 seconds, identifying throughput as the next measured boundary without treating that spot check as dashboard evidence."
+    },
+    "parserCheckpointScalingAfter": {
+      "run": "20260830T110658Z-95784",
+      "subjectCommit": "1697338",
+      "resolvedFirstErrorClasses": {
+        "PARSE_TIMEOUT at fixed 10-second parser budget": 22
+      },
+      "nextFirstErrorClasses": {
+        "E1001 expected-declaration": 24,
+        "E2906 designator-outside-object": 2,
+        "E2001 undeclared-identifier __builtin_object_size": 2
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "2/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "timingNote": "the parser timeout budget remains 10 seconds; all 28 failing parser lanes now complete with typed first errors and timedOut=false"
     }
   },
   "attributes": {
@@ -988,11 +1038,23 @@
   },
   "tests": {
     "workspace": {
-      "passed": 972,
+      "passed": 977,
       "failed": 0,
-      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --quiet; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets -- --list | rg -c ': test$' (972)"
+      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --quiet; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets -- --list | rg -c ': test$' (977)"
     },
     "suites": {
+      "crates/evocc-parser/tests/checkpoint_allocation_scaling.rs": {
+        "passed": 1,
+        "command": "cargo test -p evocc-parser --test checkpoint_allocation_scaling -- --nocapture"
+      },
+      "crates/evocc-chir/tests/g2_semantic_schema.rs transaction filters": {
+        "passed": 2,
+        "command": "cargo test -p evocc-chir --test g2_semantic_schema parser_transactions; cargo test -p evocc-chir --test g2_semantic_schema committed_parser_transactions"
+      },
+      "crates/evocc-types/tests/type_interner.rs transaction filters": {
+        "passed": 2,
+        "command": "cargo test -p evocc-types --test type_interner speculative_type_transactions; cargo test -p evocc-types --test type_interner committed_type_transactions"
+      },
       "crates/evocc-parser/tests/diagnostic_survey.rs": {
         "passed": 7,
         "command": "cargo test -p evocc-parser --test diagnostic_survey"
@@ -1248,16 +1310,16 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "0a534583201e521e04749c8f01809fb71b4287f6",
-    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-statement-place-replay.MCd7LM/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$'",
+    "commit": "169733820cba6ccf119ed6f3e67fc7efd105f6bc",
+    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-parser-transaction-replay.psGa8K/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$'",
     "measured": {
-      "passed": 972,
+      "passed": 977,
       "failed": 0,
       "clippy": 0,
       "fmt": "clean",
       "ruff": "clean",
       "selfTest": "PASS",
-      "countCommand": 972,
+      "countCommand": 977,
       "objectsAlternates": "absent"
     }
   },
@@ -1333,6 +1395,7 @@
     "The final scope-M publication cleared all 22 invalid-update-operands lanes and exposed 17 uses of the same E2102 code for a different statement-expression-rooted shape. The frozen M gate is defined by exact target/control expression families, so this newly reachable form is recorded as the next frontier rather than silently expanding the completed scope.",
     "Scope L's contract named init-init-task and mm-mincore as unavailable survey units. A baseline produced before the production edit measured only mm-mincore unavailable; init-init-task already completed with E2102 at line 23018. The receipt preserves that measured correction rather than claiming a 2-to-0 movement.",
     "The recovery dashboard retained zero regressions and 2/16 dual-oracle clean parse, but one clang init-do-mounts lane completed at its existing E2102 instead of timing out under the fixed 10-second budget. The receipt records timeout 5-to-4 and E2102 17-to-18, and does not call the complete 48-lane output byte-identical.",
-    "Closing the statement-expression place defect removed all 18 matching E2102 lanes, but the next fixed-budget publication timed out on 22 lanes and left dual-oracle clean parse at 2/16. The publisher correctly reports zero classified regressions because every prior lane was already failing, but that predicate is not a progress predicate; the receipt records the throughput boundary explicitly and does not widen the timeout or claim Stage F1 closure."
+    "Closing the statement-expression place defect removed all 18 matching E2102 lanes, but the next fixed-budget publication timed out on 22 lanes and left dual-oracle clean parse at 2/16. The publisher correctly reports zero classified regressions because every prior lane was already failing, but that predicate is not a progress predicate; the receipt records the throughput boundary explicitly and does not widen the timeout or claim Stage F1 closure.",
+    "The first parser-throughput publication was refused after all 16 raw lanes succeeded because the restricted sandbox denied sealed oracle container inspection. Its incomplete capture is preserved at .evidence/kernel-dashboard/1697338-sandbox-refused-20260830T110119Z and is not acceptance evidence. The permission-correct rerun used the same subject and previous-run lineage, retained the 10-second parser budget, sealed 48/48 observations, and converted all 22 prior timeouts into typed first errors with zero regressions."
   ]
 }
