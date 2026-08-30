@@ -1,0 +1,23 @@
+{
+  "receiptId": "c30.parser-checkpoint-scaling.red.v1",
+  "baselineCommit": "facfc67",
+  "classification": "tests-only RED",
+  "declaredCapability": "speculative declaration parsing allocates near-linearly while preserving exact SymbolTable snapshot semantics",
+  "focusedCommand": "cargo test -p evocc-parser --test checkpoint_allocation_scaling -- --nocapture",
+  "workspaceCommand": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --quiet",
+  "observed": {
+    "smallDeclarations": 32,
+    "smallAllocatedBytes": 820263,
+    "largeDeclarations": 128,
+    "largeAllocatedBytes": 11855017,
+    "allowedGrowthMultiplier": 6,
+    "observedGrowthRatio": 14.4527,
+    "failure": "speculative semantic checkpoints must remain near-linear",
+    "buildErrors": 0,
+    "workspacePassed": 972,
+    "workspaceFailed": 1,
+    "workspaceListed": 973
+  },
+  "preservedContract": "SymbolTable::checkpoint remains an exact restorable snapshot, including restoration of a previously captured stale branch; parser-only LIFO transactions must not weaken it",
+  "productionEdits": []
+}
