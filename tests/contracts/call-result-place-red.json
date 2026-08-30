@@ -46,9 +46,9 @@
     "command": "cargo test -p evocc-parser --test projected_lvalues arrow_member_projects_through_a_pointer_returned_by_a_call -- --exact"
   },
   "workspaceRed": {
-    "passed": 964,
+    "passed": 963,
     "failed": 1,
-    "total": 965,
+    "total": 964,
     "failedTargets": [
       "-p evocc-parser --test projected_lvalues"
     ],

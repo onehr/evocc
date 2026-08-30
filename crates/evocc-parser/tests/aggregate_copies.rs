@@ -57,6 +57,22 @@ fn record_union_nested_and_array_members_are_assignable() {
 }
 
 #[test]
+fn aggregate_assignment_through_an_immediate_address_and_dereference_is_a_place() {
+    accepts(concat!(
+        "typedef struct { int raw_lock; } spinlock_t; ",
+        "struct maple_tree { spinlock_t ma_lock; }; ",
+        "void direct(struct maple_tree *tree) { ",
+        "tree->ma_lock = (spinlock_t){ .raw_lock = 0 }; }\n",
+    ));
+    accepts(concat!(
+        "typedef struct { int raw_lock; } spinlock_t; ",
+        "struct maple_tree { spinlock_t ma_lock; }; ",
+        "void addressed(struct maple_tree *tree) { ",
+        "*(&tree->ma_lock) = (spinlock_t){ .raw_lock = 0 }; }\n",
+    ));
+}
+
+#[test]
 fn copy_initializers_accept_objects_calls_dereferences_globals_and_literals() {
     accepts(concat!(
         "struct S { int x; long y; }; struct S global; ",

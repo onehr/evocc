@@ -178,6 +178,18 @@ fn arrow_member_projects_through_a_pointer_returned_by_a_call() {
         .expect("a call result must retain the same pointer-rooted place");
 }
 
+#[test]
+fn scalar_assignment_through_an_immediate_address_and_dereference_is_a_place() {
+    let direct = "struct S { int value; }; void assign(struct S *object) { object->value = 23; }";
+    let addressed =
+        "struct S { int value; }; void assign(struct S *object) { *(&object->value) = 23; }";
+    let direct_arena = Arena::default();
+    parse(direct, &direct_arena).expect("direct scalar assignment must parse");
+    let addressed_arena = Arena::default();
+    parse(addressed, &addressed_arena)
+        .expect("an immediate address and dereference must retain the scalar place");
+}
+
 // ---------------------------------------------------------------------------
 // Subscript projections
 // ---------------------------------------------------------------------------
