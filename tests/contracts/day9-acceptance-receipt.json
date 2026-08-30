@@ -4,7 +4,7 @@
     "path": "tests/contracts/day9-acceptance-contract.json",
     "sha256": "cca54787f673944062ad3208f36cee309627ad7623a8050e4e9d7cf019f4b3dd"
   },
-  "cutLine": "Scope M is closed by three tests-first semantic units under revision 1.9.21 Section 10.1.3. Address-rooted reads, call-result-rooted projections, and immediate address/dereference scalar and aggregate updates now retain one checked MemoryPlace; the existing modifiability, atomic and invalid-place refusals remain unchanged. The first publication proved the address-root hypothesis moved zero cohort lanes; the exact call-result RED then moved 28 invalid-projected-lvalue lanes, and the final update RED moved 22 invalid-update-operands lanes, all with zero regressions. The final tree has 966/966 listed all-target tests, exact 128/128 and 22/22 layout corpora, and an isolated locked/offline no-local replay. Stage F1 remains OPEN at 2/16: the newly reachable frontier is 17 E2102 lanes rooted in a statement-expression result, 5 fixed-step parser timeouts, and three two-lane diagnostic classes.",
+  "cutLine": "Scope L closes the parser recovery defect without changing successful declaration parsing or the default one-diagnostic boundary. The tests-only checkpoint measured two runtime failures, both the same UnknownScope(ScopeId(1)) panic after a failed function declaration rolled back its symbol scope. The implementation restores the exact pre-declaration current_scope only in the declaration rollback branch. A frozen 16-unit GCC survey measured unavailable 1 to 0, all 15 previously available roots byte-identical, and mm-mincore newly recoverable at its E2102 root; the reviewer-reported second unavailable unit, init-init-task, was already available at the measured baseline. The default dashboard reports zero regressions, 968/968 listed all-target tests pass, both layout corpora remain exact, and an isolated locked/offline no-local replay is green. Stage F1 remains OPEN at 2/16 on the same semantic frontier; one prior timeout reached E2102 within the fixed 10-second budget, so lane bytes are not falsely claimed identical.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -415,9 +415,44 @@
     ],
     "result": "PASS"
   },
-  "subjectCommit": "e38c168",
+  "parserRecoveryRedWindow": {
+    "opened": "9fbb445 (tests only; 966 passed, 2 failed, 968 listed tests; zero Rust build errors)",
+    "closed": "1bad886",
+    "implementationCommits": [
+      "1bad886"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/parser-recovery-red.json",
+      "sha256": "a0432dbb8d25f8b3a6c51d932fde65e7cb4881c247a37ece95c047ec4db2b9e1"
+    },
+    "declaredCapability": "restore the parser scope cursor from the same failed-declaration transaction checkpoint as the symbol table",
+    "redFailure": "library panic and CLI exit 101: the parser current scope is always live: UnknownScope(ScopeId(1))",
+    "surveyEvidence": {
+      "command": "python3 tools/survey-cohort.py --evocc target/release/evocc --units .evidence/day5-kernel-reconnaissance/20260830T041443Z-30099/parser --glob '*.gcc.c' --json <output>",
+      "before": {
+        "path": ".evidence/parser-recovery/1bad886/before.json",
+        "sha256": "7b215c3790e78f27d143c1493bb193218e2b06259607a09a0a02126cccd2e739",
+        "diagnostics": 8577,
+        "unavailable": [
+          "mm-mincore.gcc"
+        ]
+      },
+      "after": {
+        "path": ".evidence/parser-recovery/1bad886/after.json",
+        "sha256": "392acf740d51f57e8c7afce475582c4f054f4655098ad79e8aecc4479bbb1a86",
+        "diagnostics": 9670,
+        "unavailable": [],
+        "recoveredRoot": "mm-mincore.gcc:22410 E2102 invalid-projected-lvalue"
+      },
+      "previouslyAvailableRoots": "15/15 byte-identical",
+      "reviewerBaselineCorrection": "init-init-task.gcc was already available with E2102 at line 23018; only mm-mincore.gcc was unavailable in the measured baseline"
+    },
+    "acceptanceGuard": "successful declaration paths are untouched; all previously available survey roots are unchanged; default dashboard regressions are zero",
+    "result": "PASS"
+  },
+  "subjectCommit": "1bad886",
   "gate": {
-    "claim": "Scope M's exact target/control pairs are closed with 966 listed all-target tests and zero dashboard regressions. Stage F1 remains open at 2/16 on a newly reachable mixed frontier; no claim is made that every E2102 expression family is implemented.",
+    "claim": "Scope L's failed-declaration recovery is closed with 968 listed all-target tests, zero unavailable survey units and zero dashboard regressions. Stage F1 remains open at 2/16; no parser-frontier capability is claimed by this recovery-only change.",
     "measured": {
       "dualOracleCleanParseTus": "2/16",
       "rawPreprocessClean": "16/16",
@@ -425,8 +460,8 @@
       "remainingParserLanes": 28,
       "remainingParserUnits": 14,
       "remainingFirstErrors": {
-        "E2102 invalid-projected-lvalue at include/linux/page-flags.h:551": 17,
-        "PARSE_TIMEOUT at fixed parser step budget": 5,
+        "E2102 invalid-projected-lvalue at include/linux/page-flags.h:551": 18,
+        "PARSE_TIMEOUT at fixed parser step budget": 4,
         "E2906 designator-outside-object at include/linux/rbtree_latch.h:72": 2,
         "E1001 expected-declaration at include/linux/signal.h:157": 2,
         "E2001 undeclared-identifier __builtin_object_size at include/linux/ucopysize.h:47": 2
@@ -437,7 +472,9 @@
       "typeofUnqualTests": "6/6",
       "projectedLvalueTests": "26/26",
       "aggregateCopyTests": "9/9",
-      "workspaceTests": "966/966",
+      "diagnosticSurveyParserTests": "7/7",
+      "diagnosticSurveyCliTests": "4/4",
+      "workspaceTests": "968/968",
       "specifiedFrontier": false,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
@@ -449,11 +486,14 @@
       "sysregStrayTokenLanesRemaining": 0,
       "preprocessingTokenProductionsMissing": 0,
       "pointerUpdateLanesRemaining": 0,
-      "invalidProjectedLvalueLanesRemaining": 17,
+      "invalidProjectedLvalueLanesRemaining": 18,
       "declaredProjectedPlaceRootFailuresRemaining": 0,
       "invalidUpdateOperandLanesRemaining": 0,
-      "parserTimeoutLanes": 5,
+      "parserTimeoutLanes": 4,
+      "surveyUnavailableUnits": 0,
+      "unchangedPreviouslyAvailableSurveyRoots": "15/15",
       "statementExpressionLanesRemaining": 0,
+      "statementExpressionRootedPlaceLanesRemaining": 18,
       "designatedInitializerLanesRemaining": 0,
       "compoundLiteralLanesRemaining": 0,
       "retiredE2901AndE2902Occurrences": 0,
@@ -468,14 +508,14 @@
       "notCoveredDay7MessagesRemaining": 0,
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260830T035121Z-46924/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260830T041443Z-30099/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "a413ddb64b61b327c30ac7c82e95a7ddb711ed6c286262890342632f0cdc4738",
-      "subjectCommit": "e38c168",
-      "publishedFromRun": "20260830T041443Z-30099"
+      "sha256": "10440520869c95c249109901fb66363a3d3bab0bfe5bf861d5fbcd073ada7a40",
+      "subjectCommit": "1bad886",
+      "publishedFromRun": "20260830T045405Z-23380"
     },
-    "result": "M_PASS_STAGE_F1_OPEN"
+    "result": "L_PASS_STAGE_F1_OPEN"
   },
   "lanes": {
     "clean": {
@@ -488,8 +528,8 @@
     },
     "stillFailing": [
       {
-        "count": 17,
-        "lanes": "9 gcc-preprocessed-parser plus 8 clang-preprocessed-parser",
+        "count": 18,
+        "lanes": "9 gcc-preprocessed-parser plus 9 clang-preprocessed-parser",
         "units": [
           "init-do-mounts",
           "init-init-task",
@@ -506,11 +546,11 @@
         "scopeDisposition": "newly reachable expression family; not one of scope M's frozen address-root, call-result-root or immediate address/dereference update pairs"
       },
       {
-        "count": 5,
+        "count": 4,
         "firstError": "PARSE_TIMEOUT process exceeded the fixed step timeout",
         "lanes": [
           "gcc: init-do-mounts-initrd, init-version-timestamp",
-          "clang: init-do-mounts, init-do-mounts-initrd, init-version-timestamp"
+          "clang: init-do-mounts-initrd, init-version-timestamp"
         ]
       },
       {
@@ -709,6 +749,11 @@
         "commit": "e38c168",
         "run": "20260830T041443Z-30099",
         "parseLanesStoppedOn": "immediate address/dereference update publication: all 22 invalid-update-operands lanes resolved; next frontier is 17 E2102 statement-expression-rooted projection lanes, 5 timeout lanes, and E2906/E1001/E2001 at 2 lanes each; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions"
+      },
+      {
+        "commit": "1bad886",
+        "run": "20260830T045405Z-23380",
+        "parseLanesStoppedOn": "recovery-only publication: no default first-error regressions; raw 16/16 clean; dual-oracle clean 2/16; one fixed-budget timeout reached the existing page-flags E2102, yielding 18 E2102 lanes and 4 timeouts; E2906/E1001/E2001 remain 2 lanes each"
       }
     ]
   },
@@ -824,7 +869,7 @@
       "dualOracleCleanParseTus": "2/16",
       "regressionsAgainstPrevious": 0
     },
-    "after": {
+    "projectedPlaceAfter": {
       "run": "20260830T041443Z-30099",
       "subjectCommit": "e38c168",
       "resolvedFirstErrorClasses": {
@@ -842,6 +887,26 @@
       "stageF1": "OPEN",
       "regressionsAgainstPrevious": 0,
       "scopeM": "PASS"
+    },
+    "after": {
+      "run": "20260830T045405Z-23380",
+      "subjectCommit": "1bad886",
+      "resolvedRecoveryFailures": {
+        "surveyUnavailableUnits": 1
+      },
+      "nextFirstErrorClasses": {
+        "E2102 statement-expression-rooted invalid-projected-lvalue": 18,
+        "PARSE_TIMEOUT": 4,
+        "E2906 designator-outside-object": 2,
+        "E1001 expected-declaration": 2,
+        "E2001 undeclared-identifier __builtin_object_size": 2
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "2/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "scopeL": "PASS",
+      "timingNote": "one prior timeout reached its existing E2102 within the unchanged fixed parser budget; no parse-clean or first-error regression occurred"
     }
   },
   "attributes": {
@@ -888,11 +953,19 @@
   },
   "tests": {
     "workspace": {
-      "passed": 966,
+      "passed": 968,
       "failed": 0,
-      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --quiet; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets -- --list | rg -c ': test$' (966)"
+      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --quiet; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets -- --list | rg -c ': test$' (968)"
     },
     "suites": {
+      "crates/evocc-parser/tests/diagnostic_survey.rs": {
+        "passed": 7,
+        "command": "cargo test -p evocc-parser --test diagnostic_survey"
+      },
+      "crates/evocc/tests/diagnostic_survey_mode.rs": {
+        "passed": 4,
+        "command": "cargo test -p evocc --test diagnostic_survey_mode"
+      },
       "crates/evocc-parser/tests/projected_lvalues.rs": {
         "passed": 26,
         "command": "cargo test -p evocc-parser --test projected_lvalues"
@@ -1136,16 +1209,16 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "e38c16839ff0394b71a9123a97f4dcea8f908cc7",
-    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-place-final-replay.N5OtfH/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$'",
+    "commit": "1bad8860aa1c4b3dff0a08f1dcddeb9ce658e3a2",
+    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-recovery-final-replay.MFbaZu/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$'",
     "measured": {
-      "passed": 966,
+      "passed": 968,
       "failed": 0,
       "clippy": 0,
       "fmt": "clean",
       "ruff": "clean",
       "selfTest": "PASS",
-      "countCommand": 966,
+      "countCommand": 968,
       "objectsAlternates": "absent"
     }
   },
@@ -1218,6 +1291,8 @@
     "The first K4 publication attempt was refused before lane execution because the isolated worktree lacked a real, project-contained frozen kernel archive; that failed capture is preserved as .evidence/kernel-dashboard/cbf084c-refused-missing-archive. A second run sealed 48/48 observations but the publisher then raised ValueError while relativizing the shared evidence path to the isolated checkout; that capture is preserved as cbf084c-refused-relative-evidence-path. The authoritative third run used real worktree-local evidence, sealed 48/48 observations, and its byte-verified artifacts were copied into the root evidence tree without changing them.",
     "The reviewer supplied address-rooted container_of as the measured scope-M blocker. Eight tests proved that form was defective, but the immediate sealed publication moved zero lanes and bound the actual first errors to call-result-rooted projections. Scope M therefore used three separately published RED/GREEN checkpoints instead of reporting the plausible initial diagnosis as measured fact.",
     "The first sandboxed scope-M publication stopped before measurement because the restricted container boundary could not inspect the sealed oracle image. It is preserved at .evidence/kernel-dashboard/60c64f2-sandbox-refused and is not evidence; the authoritative rerun 20260830T030920Z-23375 used the same subject and previous-run lineage.",
-    "The final scope-M publication cleared all 22 invalid-update-operands lanes and exposed 17 uses of the same E2102 code for a different statement-expression-rooted shape. The frozen M gate is defined by exact target/control expression families, so this newly reachable form is recorded as the next frontier rather than silently expanding the completed scope."
+    "The final scope-M publication cleared all 22 invalid-update-operands lanes and exposed 17 uses of the same E2102 code for a different statement-expression-rooted shape. The frozen M gate is defined by exact target/control expression families, so this newly reachable form is recorded as the next frontier rather than silently expanding the completed scope.",
+    "Scope L's contract named init-init-task and mm-mincore as unavailable survey units. A baseline produced before the production edit measured only mm-mincore unavailable; init-init-task already completed with E2102 at line 23018. The receipt preserves that measured correction rather than claiming a 2-to-0 movement.",
+    "The recovery dashboard retained zero regressions and 2/16 dual-oracle clean parse, but one clang init-do-mounts lane completed at its existing E2102 instead of timing out under the fixed 10-second budget. The receipt records timeout 5-to-4 and E2102 17-to-18, and does not call the complete 48-lane output byte-identical."
   ]
 }
