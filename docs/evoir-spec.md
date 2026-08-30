@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.21** | **Authoritative reference** | **2026-08-29**
+**Revision 1.9.22** | **Authoritative reference** | **2026-08-30**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1286,6 +1286,7 @@ twice would let a reader think two conditions are the same finding.
 | `E2920` | `undeclared-label` | front end |
 | `E2922` | `volatile-aggregate-copy-unsupported` | front end |
 | `E2923` | `invalid-array-bound` | front end |
+| `E2924` | `attribute-on-non-null-statement` | front end |
 | `E0102` | `unmatched-conditional` | preprocessor |
 | `E0104` | `error-directive` | preprocessor |
 | `E0105` | `include-not-found` | preprocessor |
@@ -2719,6 +2720,7 @@ accepts them, and each position fixes what the attribute attaches to:
 | after a parameter declarator | that parameter |
 | after a function declarator, before the body | that function |
 | after a label | that label |
+| before a null statement (`__attribute__((...)) ;`) | that null statement |
 | after an enumerator | that enumerator |
 | in a type name | the type being named |
 
@@ -2795,6 +2797,7 @@ front end that still emits it is defective.
 | `E2920` | `goto` names a label no enclosing function scope declares |
 | `E2922` | copy of a `volatile` union, or of a `volatile` record with a bit-field member |
 | `E2923` | array bound folds to a negative value |
+| `E2924` | an attribute specifier precedes a statement that is not a null statement |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -3035,6 +3038,16 @@ names no operand or label, at the template string literal; a qualifier written
 twice, at the second qualifier; an `asm goto` label that does not resolve, at
 the label operand; a labels section without `goto`, at the fourth colon.
 
+**Statement placement.** An attribute specifier may precede a **null statement**
+and no other statement: `__attribute__((__fallthrough__));` is admitted, and an
+attribute before any other statement is `E2924`
+(`attribute-on-non-null-statement`) at the attribute. Both oracles behave that
+way, and all 221 uses in the kernel cohort are null statements. The attribute is
+preserved in C-HIR with its placement and applied to nothing: a null statement
+has no semantics to refine, so `fallthrough` in particular does not change
+control flow, suppress a diagnostic, or reach EvoIR. Evidence
+`.evidence/builtin-probes/20260830-2c23684c-frontier/rulings.out`.
+
 Lossless means: the qualifier spellings and `asm`/`__asm__` spelling as
 written, the template as the single concatenated string the assembler will
 see (the individual string-literal pieces are not kept), every operand's
@@ -3135,10 +3148,20 @@ and Clang-19 agree on every row.
 - `__builtin_types_compatible_p(T1, T2)`: integer constant expression of type
   `int`, `1` when the two type names are compatible after dropping top-level
   qualifiers (`const int` vs `int` is `1`; `int[4]` vs `int[]` is `1`).
-- `__builtin_offsetof(T, designator)`: integer constant expression of type
-  `size_t`; the designator is a member path with `.` and `[constant]` steps
-  (`i` is 4, `arr[2]` is 16, `in.x` is 24 in the probe). A path the type lacks
-  is `E2906`.
+- `__builtin_offsetof(T, designator)`: the designator is a member path with `.`
+  and `[index]` steps (`i` is 4, `arr[2]` is 16, `in.x` is 24 in the probe). A
+  path the type lacks is `E2906`. With every index an integer constant
+  expression the result is an integer constant expression of type `size_t`.
+
+  An index need not be constant. `__builtin_offsetof(T, m[e])` is then the
+  runtime value `offsetof(T, m) + e * sizeof(*m)`, `e` is evaluated exactly
+  once, and the result is **not** an integer constant expression, so each
+  context that requires one reports its own diagnostic (`E2912` in a static
+  assertion, `E2923` or `E2203` in an array bound). The index is not bounds
+  checked: a negative or past-the-end index yields the arithmetic value, which
+  is what both oracles do and what a flexible array member requires
+  (measured: `arr[-1]` is 0 and `arr[9]` is 40 for
+  `struct { int head; int arr[4]; }`).
 - `__builtin_ffs`, `__builtin_ffsl`, `__builtin_ffsll`, `__builtin_clz`,
   `__builtin_clzl`, `__builtin_clzll`, `__builtin_ctz`/`l`/`ll`,
   `__builtin_popcount`/`l`/`ll`: result type `int`; `ffs(0)` is `0`; `clz`/`ctz`
@@ -3152,6 +3175,22 @@ and Clang-19 agree on every row.
 - `__builtin_unreachable()`: a statement-expression of type `void`; reaching
   it is undefined behaviour reported as `E3024` (`unreachable-reached`) by the
   interpreters and lowered to `trap.unreachable_reached` (Section 3).
+- `__builtin_object_size(p, mode)`: `mode` is an integer constant expression in
+  `0..3`. The operand is parsed and type-checked but **never evaluated**
+  (measured, both oracles). This profile performs no object-size analysis and
+  therefore always answers as if the object were unknown: `(size_t) -1` for
+  modes 0 and 1, `0` for modes 2 and 3, as an integer constant expression. That
+  is the answer both oracles give for a genuinely unknown object, and it asserts
+  nothing about storage the compiler has not analysed.
+
+  This is a deliberate profile choice, not a conformance claim: for an object
+  the oracles *can* see, they answer with its size (16 for a known array) and
+  this profile still answers unknown. It also makes a recorded disagreement moot
+  rather than arbitrated — for a side-effecting expression naming a known array,
+  GCC-14 answers `(size_t) -1` and Clang-19 answers `16`. All 42 uses in the
+  kernel cohort are modes 0 and 1 on parameters and none is in a constant
+  context, so nothing in the cohort depends on the difference. A later revision
+  that adds the analysis must say so and re-measure.
 - `__builtin_return_address(0)`: type `void *`; accepted by the front end;
   lowering reports `E3025` (`not-lowered: return-address`) and fails closed;
   an argument other than the constant `0` is `E2913`.
@@ -3903,6 +3942,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.22 | 2026-08-30 | Rules the three frontier constructs. An attribute may precede a null statement and nothing else (`E2924`), is preserved and applied to nothing. `__builtin_offsetof` admits a non-constant index: the result is runtime arithmetic, the index is evaluated once, it is not an integer constant expression, and it is not bounds checked. `__builtin_object_size` never evaluates its operand and always answers unknown, which asserts nothing and makes the recorded GCC/Clang disagreement moot. |
 | 1.9.21 | 2026-08-29 | Specifies `__typeof_unqual__` in 10.1.10: `typeof` with top-level `const`, `volatile`, `restrict` and `_Atomic` removed, operand unevaluated, pointee and member qualifiers kept, resolved entirely by the front end. One `ORACLE_CONFLICT` on array element qualifiers resolved by keeping them, the direction that refuses a write. Added after 28 kernel parse lanes stopped on it; the cohort writes it 4,797 times. |
 | 1.9.20 | 2026-08-29 | States in 10.1.6 that a member of an anonymous structure or union is a member of the enclosing record for designators and `__builtin_offsetof` as well as for access, that resolution recurses through anonymous members and records every step, and that a name ambiguous between two of them is `E2906`. Added after 28 kernel parse lanes stopped on `offsetof(struct pt_regs, sp)` while `o.sp` already worked. |
 | 1.9.19 | 2026-08-29 | Corrects 10.1.19: a zero array bound is a valid GNU zero-length array, measured in every record position and at file scope; `E2923` is for a negative bound only, and `E2203` has one message everywhere. Revision 1.9.18 refused zero without probing it, which no cohort unit could have passed. Adds `__int128_t` and `__uint128_t` as spellings, and repairs the dangling `__int128` cross-reference. |
