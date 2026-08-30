@@ -6480,6 +6480,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 *ty,
             )),
             CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
+                // Taking an address and immediately dereferencing it preserves
+                // the original place identity. Keep that checked root and its
+                // projections instead of turning `&place` into an opaque
+                // pointer-expression root that a later consumer would have to
+                // rediscover from syntax.
+                if let CHirExpr::Unary(UnaryOp::AddrOf, addressed, _) = pointer {
+                    return self.resolve_place_chain(addressed);
+                }
                 let pointer_type = self.pointer_root_descriptor(pointer)?;
                 Some((
                     PlaceRoot::PointerExpression {
@@ -6498,6 +6506,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 Some((root, projections, field_ty))
             }
             CHirExpr::PtrMember(pointer, name, _) => {
+                if let CHirExpr::Unary(UnaryOp::AddrOf, addressed, _) = pointer {
+                    let (root, mut projections, addressed_ty) =
+                        self.resolve_place_chain(addressed)?;
+                    let fields = self.record_member_path(addressed_ty, name)?;
+                    let field_ty = fields.last()?.field_ty();
+                    projections.extend(fields.into_iter().map(PlaceProjection::Field));
+                    return Some((root, projections, field_ty));
+                }
                 let pointer_type = self.pointer_root_descriptor(pointer)?;
                 let fields = self.record_member_path(pointer_type.pointee(), name)?;
                 let field_ty = fields.last()?.field_ty();
