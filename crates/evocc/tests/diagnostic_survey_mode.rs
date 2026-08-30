@@ -51,6 +51,22 @@ fn survey_reports_every_diagnostic() {
 }
 
 #[test]
+fn survey_recovers_after_a_failed_function_scope() {
+    let source = "int a[-1];\nvoid f(void) { goto nowhere; }\nint b[-2];\n";
+    let (code, stderr) = evocc(&["--parse-only", "--survey"], source);
+    assert_eq!(code, 1, "{stderr}");
+    assert!(!stderr.contains("panicked"), "{stderr}");
+    let errors: Vec<&str> = stderr
+        .lines()
+        .filter(|line| line.contains("error["))
+        .collect();
+    assert_eq!(errors.len(), 3, "{stderr}");
+    assert!(errors[0].contains("E2923"), "{stderr}");
+    assert!(errors[1].contains("E2920"), "{stderr}");
+    assert!(errors[2].contains("E2923"), "{stderr}");
+}
+
+#[test]
 fn survey_of_a_clean_unit_succeeds_silently() {
     let (code, stderr) = evocc(&["--parse-only", "--survey"], "int a = 1;\n");
     assert_eq!(code, 0, "{stderr}");

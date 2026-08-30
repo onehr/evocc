@@ -1,0 +1,29 @@
+{
+  "receiptId": "c30.parser-recovery.red",
+  "authority": {
+    "contract": "tests/contracts/day9-acceptance-contract.json scope L",
+    "subjectCommit": "2e35a1c"
+  },
+  "declaredCapability": "a failed declaration transaction restores the parser scope cursor together with the symbol table without changing ordinary first-error behavior",
+  "reproducer": "int a[-1]; void f(void) { goto nowhere; } int b[-2];",
+  "expectedDiagnostics": [
+    "E2923 at line 1",
+    "E2920 at line 2",
+    "E2923 at line 3"
+  ],
+  "red": {
+    "command": "cargo test -p evocc-parser --test diagnostic_survey recovery_restores_the_scope_cursor_after_a_failed_function; cargo test -p evocc --test diagnostic_survey_mode survey_recovers_after_a_failed_function_scope",
+    "expectedFailureClass": "runtime panic after rollback leaves current_scope naming a removed function scope",
+    "observed": {
+      "library": "panicked at crates/evocc-parser/src/lib.rs:631:14: the parser current scope is always live: UnknownScope(ScopeId(1))",
+      "cli": "child exit 101 with the same UnknownScope(ScopeId(1)) panic; expected diagnostic exit 1",
+      "workspace": "966 passed, 2 failed, 968 listed tests",
+      "failedTargets": [
+        "evocc --test diagnostic_survey_mode",
+        "evocc-parser --test diagnostic_survey"
+      ]
+    },
+    "rustBuildErrors": 0
+  },
+  "acceptanceGuard": "The implementation may only restore transaction-local parser state. The default one-diagnostic path and every frozen cohort first-error byte must remain identical."
+}

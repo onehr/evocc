@@ -56,6 +56,19 @@ fn recovery_is_sound_across_external_declarations() {
     assert_eq!(found, vec![("E2923", 1), ("E2923", 3)], "{found:?}");
 }
 
+/// A failed function declaration owns every scope it created. Rolling that
+/// declaration back must also restore the parser's scope cursor before the
+/// next external declaration is parsed.
+#[test]
+fn recovery_restores_the_scope_cursor_after_a_failed_function() {
+    let found = survey("int a[-1];\nvoid f(void) { goto nowhere; }\nint b[-2];\n");
+    assert_eq!(
+        found,
+        vec![("E2923", 1), ("E2920", 2), ("E2923", 3)],
+        "{found:?}"
+    );
+}
+
 /// A refused declaration leaves its name undeclared, so later uses report too.
 /// The parser records the cascade rather than hiding it; ranking the distinct
 /// constructs is the surveying tool's job, not the parser's.
