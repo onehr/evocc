@@ -6648,6 +6648,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         pointer: &'arena CHirExpr<'arena>,
         target_span: SourceSpan,
     ) -> Option<MemoryPlace<'arena>> {
+        if let CHirExpr::Unary(UnaryOp::AddrOf, addressed, _) = pointer {
+            let place = self.resolve_memory_place(addressed).or_else(|| {
+                self.report("E2102", "invalid-update-operands", target_span);
+                None
+            })?;
+            if !place.is_modifiable() {
+                self.report("E2101", "expected-modifiable-lvalue", target_span);
+                return None;
+            }
+            if place.access_qualifiers().is_atomic {
+                self.report("E2702", "atomic-update-unsupported", target_span);
+                return None;
+            }
+            return Some(place);
+        }
         let pointer_ty = self
             .canonical_pointer_expression_type(pointer)
             .or_else(|| {
