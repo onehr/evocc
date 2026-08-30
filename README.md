@@ -2,17 +2,25 @@
 
 **An equality-native C compiler.** EvoCC compiles GNU C to AArch64 without LLVM or GCC anywhere in the pipeline — its own preprocessor, parser, IR, optimizer, and backend. Its distinguishing choice is that **equivalence is persistent compiler state**: optimization accumulates alternative forms of a program in an e-graph rather than destructively rewriting it, and every rewrite emits a proof certificate that a standalone checker replays without trusting the optimizer. The target is not a toy: a pinned Linux 6.18.44 `arm64 virtconfig` kernel that compiles, links, and boots under QEMU, with an EvoCC-built `/init` printing the marker.
 
+![The pipeline](docs/images/architecture.png)
+
 ## Why
 
 Conventional compilers destroy information at every step: each rewrite discards the form it replaced, so later passes cannot recover it and phase ordering becomes a permanent source of missed optimizations. Equality saturation fixes that by keeping every equivalent form until a cost model chooses, but it has stayed largely in research because real languages have effects, undefined behavior, and pointer provenance that an e-graph will happily "optimize" away. The bet here is that this becomes tractable if the semantics are made explicit *before* the e-graph sees the program — memory as tokens, UB as assumptions, provenance as part of pointer identity — and if every union carries a machine-checkable justification. A compiler whose rewrite library will increasingly be written by AI agents needs proofs as a product, not a debugging aid. Booting a real kernel is the only honest test that the semantics survived contact with reality.
+
+![Destructive rewriting versus equality saturation](docs/images/why.png)
 
 ## How
 
 Every claim in this repository is a **measured number with the command that produced it**, replayed from sealed evidence. Layout and language semantics are frozen against a sealed GCC-14.2 / Clang-19.1 container: where the two disagree we record `ORACLE_CONFLICT` and take the answer that refuses rather than voting, and no specification sentence about oracle-observable behavior ships without its probe. Work runs as a loop: freeze the rule in `docs/evoir-spec.md`, open a tests-only RED window whose failures are declared in advance, implement, then publish a kernel-telemetry dashboard from observer-sealed evidence that reports the next first-error site. Kernel telemetry orders work inside a stream; nothing is claimed from intuition, and a specification gap stops execution rather than being guessed at. The specification is authoritative and versioned (currently revision 1.9.21, ~3,900 lines); the acceptance contract records every ruling and every deferral with the error code that counts it.
 
+![How the work is driven](docs/images/loop.png)
+
 ---
 
 ## Roadmap 0.1
+
+![Roadmap status](docs/images/roadmap.png)
 
 Status is measured, not estimated. `DONE` means a gate is green on sealed evidence.
 
@@ -84,8 +92,11 @@ crates/evocc-egraph     e-graph core          crates/evocc-eqopt   rewrites, EVP
 crates/evocc-proof      certificates          crates/evocc-proofcheck  evo-proofcheck
 docs/evoir-spec.md      the authority         tests/contracts/     frozen corpora, receipts
 tests/acceptance/       sealed-oracle harnesses and the dashboard publisher
+tools/                  routing, survey and figure rendering
 ```
 
 ## Verification
 
 Every commit passes the same gate: workspace tests, `clippy -D warnings`, `rustfmt`, Ruff on the Python harnesses, both layout corpora against the sealed oracles, and an isolated offline clone replay. Measured at `b14eccd`, the most recent commit with no open test window: **956 tests passed, 0 failed**, clippy 0, corpora 128/128 and 22/22 at 0 mismatches. A higher count on a later commit may include an open red window, where declared failures are the point; the receipts in `tests/contracts/` say which commit each number came from. Nothing is claimed that these do not measure.
+
+The figures are generated, not drawn: `python3 tools/render-readme-figures.py` re-renders them from the same numbers the receipts carry.

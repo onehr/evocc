@@ -1,11 +1,13 @@
 # Design documents and research notes are internal working material. The
-# normative roadmap and reader-facing implementation notebook are deliberately
-# tracked exceptions.
+# normative roadmap, the reader-facing implementation notebook and the README
+# figures are deliberately tracked exceptions.
 docs/*
 !docs/roadmap.md
 !docs/evoir-spec.md
 !docs/notebook/
 !docs/notebook/**
+!docs/images/
+!docs/images/**
 lessons.md
 
 # Runtime evidence is machine-generated output, not source.
