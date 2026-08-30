@@ -1,0 +1,94 @@
+{
+  "receiptId": "c30.statement-expression-place.red.v1",
+  "state": "RED",
+  "baseline": {
+    "semanticCommit": "46716e16010fb7f8e2a2f6bc34cebfa183612667",
+    "parentCommit": "79cba3a925b19304f773a6b5faaed3f21e861819",
+    "parentDelta": "README.md only; committed concurrently after the semantic baseline gate and before this checkpoint",
+    "dashboardRun": "20260830T045405Z-23380",
+    "dashboardResultsSha256": "887d789eee796a73fcd05c8c12715118e5be907421d751991ae0e473efd1c8d3",
+    "measuredFrontier": "18 parser lanes report E2102 invalid-projected-lvalue at include/linux/page-flags.h:551"
+  },
+  "authority": {
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.21",
+      "sections": [
+        "10.1.3 Lvalue Lowering",
+        "10.1.11 Statement Expressions"
+      ],
+      "sha256": "d7a6ec7fbeee4a8befbc95a00c8de170f9c5306425f80770c465716f1f7528cb"
+    },
+    "acceptanceContract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "sha256": "cca54787f673944062ad3208f36cee309627ad7623a8050e4e9d7cf019f4b3dd",
+      "scopeDisposition": "the construct is already admitted by scope C and Sections 10.1.3/10.1.11; this is a newly measured implementation defect, not an expansion of completed scope M"
+    }
+  },
+  "declaredMissingCapability": "a statement expression's pointer value can be used as an indirect or projected memory-place root without making the statement expression itself an lvalue",
+  "testsOnlyChanges": [
+    {
+      "path": "crates/evocc-parser/tests/projected_lvalues.rs",
+      "sha256": "1aaa0d14c5bbaeba6c139a9ebdf098230e6c2ec1880ef41b4be8c658ce044d2b"
+    },
+    {
+      "path": "crates/evocc-chir/tests/statement_expression_places.rs",
+      "sha256": "2a27830b18ebbfdd5d0cdca8130ab8f804759ccce1d0e497d7b6fc1a37e2a2b9"
+    }
+  ],
+  "focusedRed": {
+    "commands": [
+      "cargo test -p evocc-parser --test projected_lvalues statement_expression -- --nocapture",
+      "cargo test -p evocc-chir --test statement_expression_places -- --nocapture"
+    ],
+    "passed": 1,
+    "failed": 3,
+    "buildErrors": 0,
+    "diagnostics": [
+      "nested statement-expression ->flags.f: E2102 invalid-projected-lvalue",
+      "*({ &value; }) += 3: E2102 invalid-update-operands",
+      "forged statement-expression facts: expected PointerExpressionTypeMismatch, got PointerExpressionTypeUnavailable"
+    ],
+    "negativeControl": "({ 1; })->value remains E2102"
+  },
+  "workspaceRed": {
+    "command": "cargo test --workspace --no-fail-fast --quiet; cargo test --workspace --all-targets -- --list | rg -c ': test$'",
+    "passed": 969,
+    "failed": 3,
+    "listed": 972,
+    "failedTargets": [
+      "evocc-chir/statement_expression_places",
+      "evocc-parser/projected_lvalues"
+    ],
+    "buildErrors": 0
+  },
+  "staticGates": {
+    "clippy": {
+      "result": "PASS; 0 warnings",
+      "command": "cargo clippy --workspace --all-targets -- -D warnings"
+    },
+    "fmt": {
+      "result": "PASS after applying cargo fmt to tests",
+      "command": "cargo fmt --all -- --check"
+    },
+    "ruff": {
+      "result": "PASS",
+      "command": "ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py"
+    },
+    "baseLayout": {
+      "result": "PASS 128/128; ORACLE_CONSENSUS; mismatchCount 0",
+      "command": "bash tests/acceptance/day5-layout-conformance.sh --subject"
+    },
+    "attributedLayout": {
+      "result": "PASS 22/22; ORACLE_CONSENSUS; mismatchCount 0",
+      "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject"
+    }
+  },
+  "evidenceIntegrity": {
+    "discardedAttempt": ".evidence/day5-layout/20260830T095217Z-39196",
+    "reason": "the restricted sandbox denied local container image inspection before any oracle execution; the authoritative rerun used the same inputs and completed both corpora",
+    "concurrentCommit": "79cba3a added README.md while the gates ran; its diff was reviewed as documentation-only and was not modified by this checkpoint"
+  },
+  "specGap": null,
+  "productionChanges": []
+}

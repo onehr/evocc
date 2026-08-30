@@ -190,6 +190,41 @@ fn scalar_assignment_through_an_immediate_address_and_dereference_is_a_place() {
         .expect("an immediate address and dereference must retain the scalar place");
 }
 
+#[test]
+fn statement_expression_pointer_result_roots_a_projected_place() {
+    let bound = "struct Bits { unsigned long f; }; struct Page { struct Bits flags; }; \
+         struct Page *identity(struct Page *page) { return page; } \
+         int probe(struct Page *page) { struct Page *root = identity(page); \
+             return (int)(unsigned long)&root->flags.f; }";
+    let statement_rooted = "struct Bits { unsigned long f; }; struct Page { struct Bits flags; }; \
+         struct Page *identity(struct Page *page) { return page; } \
+         int probe(struct Page *page) { return (int)(unsigned long)&({ \
+             (void)sizeof(0); ({ (void)sizeof(0); (struct Page *)identity(page); }); \
+         })->flags.f; }";
+
+    let bound_arena = Arena::default();
+    parse(bound, &bound_arena).expect("the named-pointer control must parse");
+    let statement_rooted_arena = Arena::default();
+    parse(statement_rooted, &statement_rooted_arena)
+        .expect("a statement-expression pointer value must retain the projected place root");
+}
+
+#[test]
+fn statement_expression_pointer_result_roots_an_indirect_update() {
+    assert_eq!(
+        run("int main(void) { int value = 4; *({ &value; }) += 3; return value; }").unwrap(),
+        7
+    );
+}
+
+#[test]
+fn non_pointer_statement_expression_cannot_root_a_projection() {
+    expect_rejected(
+        "struct S { int value; }; int main(void) { return ({ 1; })->value; }",
+        "E2102",
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Subscript projections
 // ---------------------------------------------------------------------------
