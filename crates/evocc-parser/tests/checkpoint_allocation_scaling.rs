@@ -111,6 +111,7 @@ fn speculative_declaration_allocations_scale_near_linearly() {
     let _ = parse_allocated_bytes(prepare(4));
     let small = parse_allocated_bytes(prepare(32));
     let large = parse_allocated_bytes(prepare(128));
+    eprintln!("checkpoint-allocation-bytes: small={small} large={large}");
 
     assert!(
         large <= small.saturating_mul(6),

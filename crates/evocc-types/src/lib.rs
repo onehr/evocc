@@ -17,7 +17,7 @@
 //! Day 1--3 structural `CType` API; new frontend code must not use it as layout
 //! authority.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 // ---------------------------------------------------------------------------
 // C Type system
@@ -435,17 +435,130 @@ impl std::error::Error for TagCompletionError {}
 /// The vectors are the source of IDs. Hash maps are used only to find an
 /// already-interned key, so randomized hash iteration cannot affect ID
 /// allocation order.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug)]
 pub struct TypeInterner {
+    identity: Arc<TypeInternerIdentity>,
     types: Vec<CanonicalType>,
     canonical: HashMap<CanonicalType, TypeId>,
     tags: Vec<Tag>,
+    undo_log: Vec<TypeInternerUndo>,
+    transaction_markers: Vec<usize>,
+}
+
+#[derive(Debug)]
+struct TypeInternerIdentity;
+
+/// One table-local, last-in-first-out speculative type mutation boundary.
+#[derive(Debug)]
+pub struct TypeInternerTransaction {
+    identity: Arc<TypeInternerIdentity>,
+    undo_marker: usize,
+    depth: usize,
+}
+
+#[derive(Debug)]
+enum TypeInternerUndo {
+    TypeInterned,
+    TagDeclared,
+    TagLayoutUpdated {
+        tag: TagId,
+        previous: TagLayoutAttributes,
+    },
+    TagStateUpdated {
+        tag: TagId,
+        previous: TagState,
+    },
+}
+
+/// A speculative type transaction did not belong to the current LIFO branch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TypeInternerTransactionError;
+
+impl std::fmt::Display for TypeInternerTransactionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("type-interner transaction is foreign, stale, or out of order")
+    }
+}
+
+impl std::error::Error for TypeInternerTransactionError {}
+
+impl Default for TypeInterner {
+    fn default() -> Self {
+        Self {
+            identity: Arc::new(TypeInternerIdentity),
+            types: Vec::new(),
+            canonical: HashMap::new(),
+            tags: Vec::new(),
+            undo_log: Vec::new(),
+            transaction_markers: Vec::new(),
+        }
+    }
+}
+
+impl Clone for TypeInterner {
+    /// Clone canonical contents into an independent transaction lineage.
+    fn clone(&self) -> Self {
+        Self {
+            identity: Arc::new(TypeInternerIdentity),
+            types: self.types.clone(),
+            canonical: self.canonical.clone(),
+            tags: self.tags.clone(),
+            undo_log: Vec::new(),
+            transaction_markers: Vec::new(),
+        }
+    }
 }
 
 impl TypeInterner {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Begin a cheap speculative transaction over canonical types and tags.
+    /// Transactions nest and close in last-in-first-out order.
+    #[must_use]
+    pub fn begin_transaction(&mut self) -> TypeInternerTransaction {
+        let undo_marker = self.undo_log.len();
+        self.transaction_markers.push(undo_marker);
+        TypeInternerTransaction {
+            identity: Arc::clone(&self.identity),
+            undo_marker,
+            depth: self.transaction_markers.len(),
+        }
+    }
+
+    /// Keep all type and tag mutations since the transaction began.
+    pub fn commit_transaction(
+        &mut self,
+        transaction: &TypeInternerTransaction,
+    ) -> Result<(), TypeInternerTransactionError> {
+        self.validate_transaction(transaction)?;
+        self.transaction_markers.pop();
+        if self.transaction_markers.is_empty() {
+            self.undo_log.clear();
+        }
+        Ok(())
+    }
+
+    /// Undo all type and tag mutations since the transaction began.
+    pub fn rollback_transaction(
+        &mut self,
+        transaction: &TypeInternerTransaction,
+    ) -> Result<(), TypeInternerTransactionError> {
+        self.validate_transaction(transaction)?;
+        while self.undo_log.len() > transaction.undo_marker {
+            let undo = self
+                .undo_log
+                .pop()
+                .expect("transaction marker is bounded by the undo log");
+            self.apply_undo(undo);
+        }
+        self.transaction_markers.pop();
+        if self.transaction_markers.is_empty() {
+            self.undo_log.clear();
+        }
+        Ok(())
     }
 
     /// Intern a validated canonical type key.
@@ -470,6 +583,7 @@ impl TypeInterner {
         self.types.push(ty.clone());
         let previous = self.canonical.insert(ty, id);
         debug_assert!(previous.is_none());
+        self.record_undo(TypeInternerUndo::TypeInterned);
         Ok(id)
     }
 
@@ -634,6 +748,7 @@ impl TypeInterner {
             state: TagState::Incomplete,
             layout: TagLayoutAttributes::default(),
         });
+        self.record_undo(TypeInternerUndo::TagDeclared);
         id
     }
 
@@ -644,6 +759,7 @@ impl TypeInterner {
         let Some(tag) = self.tags.get_mut(id.raw() as usize) else {
             return false;
         };
+        let previous = tag.layout;
         tag.layout.packed |= layout.packed;
         tag.layout.aligned = match (tag.layout.aligned, layout.aligned) {
             (Some(a), Some(b)) => Some(a.max(b)),
@@ -653,6 +769,7 @@ impl TypeInterner {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
         };
+        self.record_undo(TypeInternerUndo::TagLayoutUpdated { tag: id, previous });
         true
     }
 
@@ -688,8 +805,55 @@ impl TypeInterner {
             }
         }
 
-        self.tags[id.raw() as usize].state = TagState::Complete(definition);
+        let previous = std::mem::replace(
+            &mut self.tags[id.raw() as usize].state,
+            TagState::Complete(definition),
+        );
+        self.record_undo(TypeInternerUndo::TagStateUpdated { tag: id, previous });
         Ok(())
+    }
+
+    fn record_undo(&mut self, undo: TypeInternerUndo) {
+        if !self.transaction_markers.is_empty() {
+            self.undo_log.push(undo);
+        }
+    }
+
+    fn validate_transaction(
+        &self,
+        transaction: &TypeInternerTransaction,
+    ) -> Result<(), TypeInternerTransactionError> {
+        let is_top = Arc::ptr_eq(&self.identity, &transaction.identity)
+            && self.transaction_markers.len() == transaction.depth
+            && self.transaction_markers.last().copied() == Some(transaction.undo_marker)
+            && self.undo_log.len() >= transaction.undo_marker;
+        if is_top {
+            Ok(())
+        } else {
+            Err(TypeInternerTransactionError)
+        }
+    }
+
+    fn apply_undo(&mut self, undo: TypeInternerUndo) {
+        match undo {
+            TypeInternerUndo::TypeInterned => {
+                let ty = self.types.pop().expect("interned type remains last");
+                let removed = self
+                    .canonical
+                    .remove(&ty)
+                    .expect("interned type remains in the canonical table");
+                debug_assert_eq!(removed.raw() as usize, self.types.len());
+            }
+            TypeInternerUndo::TagDeclared => {
+                self.tags.pop().expect("declared tag remains last");
+            }
+            TypeInternerUndo::TagLayoutUpdated { tag, previous } => {
+                self.tags[tag.raw() as usize].layout = previous;
+            }
+            TypeInternerUndo::TagStateUpdated { tag, previous } => {
+                self.tags[tag.raw() as usize].state = previous;
+            }
+        }
     }
 
     fn validate_type(&self, ty: &CanonicalType) -> Result<(), TypeInternError> {

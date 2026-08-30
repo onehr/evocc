@@ -353,6 +353,95 @@ fn checkpoints_restore_stale_branches_and_reject_foreign_tables() {
 }
 
 #[test]
+fn parser_transactions_are_lifo_and_undo_every_symbol_table_mutation() {
+    let mut types = TypeInterner::new();
+    let int = int_type(&mut types);
+    let long = types.intern(CanonicalType {
+        kind: TypeKind::Int(IntRank::Long),
+        qualifiers: Qualifiers::default(),
+    });
+    let tag = types.declare_tag(TagKind::Struct, Some("temporary".to_owned()));
+    let object = || SymbolData::Object {
+        storage: StorageClass::None,
+    };
+    let mut symbols = SymbolTable::new();
+    let file = symbols.file_scope();
+    let base = symbols
+        .declare(file, "base", object(), int, span(1))
+        .unwrap();
+    let block = symbols
+        .create_scope(file, ScopeKind::Block, Some(span(2)))
+        .unwrap();
+
+    let outer = symbols.begin_transaction();
+    symbols.bind_existing(block, base).unwrap();
+    symbols.update_symbol_type(base, long).unwrap();
+    let added = symbols
+        .declare(file, "added", object(), int, span(3))
+        .unwrap();
+    symbols
+        .declare_tag(file, "temporary", tag, span(4))
+        .unwrap();
+    let nested_scope = symbols
+        .create_scope(block, ScopeKind::For, Some(span(5)))
+        .unwrap();
+
+    let inner = symbols.begin_transaction();
+    symbols
+        .declare(nested_scope, "nested", object(), int, span(6))
+        .unwrap();
+    assert_eq!(
+        symbols.commit_transaction(&outer),
+        Err(SymbolTableError::InvalidCheckpoint)
+    );
+    symbols.commit_transaction(&inner).unwrap();
+    symbols.rollback_transaction(&outer).unwrap();
+
+    assert_eq!(symbols.symbol(base).unwrap().ty(), int);
+    assert_eq!(
+        symbols.symbol(added),
+        Err(SymbolTableError::UnknownSymbol(added))
+    );
+    assert_eq!(symbols.scope_symbols(block).unwrap(), &[]);
+    assert_eq!(symbols.scopes_in_source_order().len(), 2);
+    assert_eq!(symbols.tags_in_source_order(), &[]);
+    assert_eq!(symbols.resolve_tag(file, "temporary").unwrap(), None);
+
+    let foreign = SymbolTable::new().begin_transaction();
+    assert_eq!(
+        symbols.rollback_transaction(&foreign),
+        Err(SymbolTableError::InvalidCheckpoint)
+    );
+}
+
+#[test]
+fn committed_parser_transactions_persist_and_tokens_are_one_shot() {
+    let mut types = TypeInterner::new();
+    let int = int_type(&mut types);
+    let mut symbols = SymbolTable::new();
+    let file = symbols.file_scope();
+    let transaction = symbols.begin_transaction();
+    let kept = symbols
+        .declare(
+            file,
+            "kept",
+            SymbolData::Object {
+                storage: StorageClass::None,
+            },
+            int,
+            span(1),
+        )
+        .unwrap();
+    symbols.commit_transaction(&transaction).unwrap();
+
+    assert_eq!(symbols.resolve(file, "kept").unwrap(), Some(kept));
+    assert_eq!(
+        symbols.rollback_transaction(&transaction),
+        Err(SymbolTableError::InvalidCheckpoint)
+    );
+}
+
+#[test]
 fn linked_aliases_and_composite_type_updates_preserve_identity_and_roll_back() {
     let mut types = TypeInterner::new();
     let int = int_type(&mut types);

@@ -298,6 +298,27 @@ pub struct SymbolTableCheckpoint {
     tags: Vec<TagBinding>,
 }
 
+/// One table-local, last-in-first-out speculative mutation boundary.
+///
+/// Unlike [`SymbolTableCheckpoint`], this token does not own an independently
+/// restorable branch. It is the cheap parser path: nested transactions must be
+/// committed or rolled back in reverse order.
+#[derive(Debug)]
+pub struct SymbolTableTransaction {
+    identity: Arc<SymbolTableIdentity>,
+    undo_marker: usize,
+    depth: usize,
+}
+
+#[derive(Debug)]
+enum SymbolTableUndo {
+    ScopeCreated,
+    SymbolDeclared { scope: ScopeId },
+    ExistingBound { scope: ScopeId },
+    SymbolTypeUpdated { symbol: SymbolId, previous: TypeId },
+    TagDeclared { scope: ScopeId },
+}
+
 /// Deterministic lexical-scope and ordinary-identifier table.
 ///
 /// Vectors, not hash-table iteration, are authoritative for IDs and source
@@ -309,6 +330,8 @@ pub struct SymbolTable {
     scopes: Vec<Scope>,
     symbols: Vec<Symbol>,
     tags: Vec<TagBinding>,
+    undo_log: Vec<SymbolTableUndo>,
+    transaction_markers: Vec<usize>,
 }
 
 impl SymbolTable {
@@ -326,6 +349,8 @@ impl SymbolTable {
             }],
             symbols: Vec::new(),
             tags: Vec::new(),
+            undo_log: Vec::new(),
+            transaction_markers: Vec::new(),
         }
     }
 
@@ -352,6 +377,7 @@ impl SymbolTable {
             symbols: Vec::new(),
             tags: Vec::new(),
         });
+        self.record_undo(SymbolTableUndo::ScopeCreated);
         Ok(id)
     }
 
@@ -391,6 +417,7 @@ impl SymbolTable {
             span,
         });
         self.scopes[scope_index].symbols.push(id);
+        self.record_undo(SymbolTableUndo::SymbolDeclared { scope });
         Ok(id)
     }
 
@@ -427,6 +454,7 @@ impl SymbolTable {
         }
 
         self.scopes[scope_index].symbols.push(symbol);
+        self.record_undo(SymbolTableUndo::ExistingBound { scope });
         Ok(symbol)
     }
 
@@ -437,11 +465,16 @@ impl SymbolTable {
         symbol: SymbolId,
         ty: TypeId,
     ) -> Result<(), SymbolTableError> {
-        let declaration = self
-            .symbols
-            .get_mut(symbol.raw() as usize)
-            .ok_or(SymbolTableError::UnknownSymbol(symbol))?;
-        declaration.ty = ty;
+        let previous = {
+            let declaration = self
+                .symbols
+                .get_mut(symbol.raw() as usize)
+                .ok_or(SymbolTableError::UnknownSymbol(symbol))?;
+            let previous = declaration.ty;
+            declaration.ty = ty;
+            previous
+        };
+        self.record_undo(SymbolTableUndo::SymbolTypeUpdated { symbol, previous });
         Ok(())
     }
 
@@ -475,6 +508,7 @@ impl SymbolTable {
             span,
         });
         self.scopes[scope_index].tags.push(tag);
+        self.record_undo(SymbolTableUndo::TagDeclared { scope });
         Ok(tag)
     }
 
@@ -535,9 +569,60 @@ impl SymbolTable {
         }
     }
 
+    /// Begin a cheap, table-local speculative transaction.
+    ///
+    /// Transactions may nest, but their tokens are linear and must be closed
+    /// in last-in-first-out order. Use [`Self::checkpoint`] when a branch must
+    /// remain independently restorable after another branch is selected.
+    #[must_use]
+    pub fn begin_transaction(&mut self) -> SymbolTableTransaction {
+        let undo_marker = self.undo_log.len();
+        self.transaction_markers.push(undo_marker);
+        SymbolTableTransaction {
+            identity: Arc::clone(&self.identity),
+            undo_marker,
+            depth: self.transaction_markers.len(),
+        }
+    }
+
+    /// Keep all mutations since the matching transaction began.
+    pub fn commit_transaction(
+        &mut self,
+        transaction: &SymbolTableTransaction,
+    ) -> Result<(), SymbolTableError> {
+        self.validate_transaction(transaction)?;
+        self.transaction_markers.pop();
+        if self.transaction_markers.is_empty() {
+            self.undo_log.clear();
+        }
+        Ok(())
+    }
+
+    /// Undo all mutations since the matching transaction began.
+    pub fn rollback_transaction(
+        &mut self,
+        transaction: &SymbolTableTransaction,
+    ) -> Result<(), SymbolTableError> {
+        self.validate_transaction(transaction)?;
+        while self.undo_log.len() > transaction.undo_marker {
+            let undo = self
+                .undo_log
+                .pop()
+                .expect("transaction marker is bounded by the undo log");
+            self.apply_undo(undo);
+        }
+        self.transaction_markers.pop();
+        if self.transaction_markers.is_empty() {
+            self.undo_log.clear();
+        }
+        Ok(())
+    }
+
     /// Restore exact scope and declaration order to a prior checkpoint.
     pub fn rollback(&mut self, checkpoint: SymbolTableCheckpoint) -> Result<(), SymbolTableError> {
-        if !Arc::ptr_eq(&self.identity, &checkpoint.identity) {
+        if !Arc::ptr_eq(&self.identity, &checkpoint.identity)
+            || !self.transaction_markers.is_empty()
+        {
             return Err(SymbolTableError::InvalidCheckpoint);
         }
         self.scopes = checkpoint.scopes;
@@ -604,6 +689,64 @@ impl SymbolTable {
             Err(SymbolTableError::UnknownScope(id))
         }
     }
+
+    fn record_undo(&mut self, undo: SymbolTableUndo) {
+        if !self.transaction_markers.is_empty() {
+            self.undo_log.push(undo);
+        }
+    }
+
+    fn validate_transaction(
+        &self,
+        transaction: &SymbolTableTransaction,
+    ) -> Result<(), SymbolTableError> {
+        let is_top = Arc::ptr_eq(&self.identity, &transaction.identity)
+            && self.transaction_markers.len() == transaction.depth
+            && self.transaction_markers.last().copied() == Some(transaction.undo_marker)
+            && self.undo_log.len() >= transaction.undo_marker;
+        if is_top {
+            Ok(())
+        } else {
+            Err(SymbolTableError::InvalidCheckpoint)
+        }
+    }
+
+    fn apply_undo(&mut self, undo: SymbolTableUndo) {
+        match undo {
+            SymbolTableUndo::ScopeCreated => {
+                let scope = self.scopes.pop().expect("created scope remains last");
+                debug_assert!(scope.symbols.is_empty());
+                debug_assert!(scope.tags.is_empty());
+            }
+            SymbolTableUndo::SymbolDeclared { scope } => {
+                let symbol = self.symbols.pop().expect("declared symbol remains last");
+                debug_assert_eq!(symbol.scope, scope);
+                let bound = self.scopes[scope.raw() as usize]
+                    .symbols
+                    .pop()
+                    .expect("declared symbol remains bound in its scope");
+                debug_assert_eq!(bound, symbol.id);
+            }
+            SymbolTableUndo::ExistingBound { scope } => {
+                self.scopes[scope.raw() as usize]
+                    .symbols
+                    .pop()
+                    .expect("existing symbol binding remains last");
+            }
+            SymbolTableUndo::SymbolTypeUpdated { symbol, previous } => {
+                self.symbols[symbol.raw() as usize].ty = previous;
+            }
+            SymbolTableUndo::TagDeclared { scope } => {
+                let binding = self.tags.pop().expect("declared tag remains last");
+                debug_assert_eq!(binding.scope, scope);
+                let tag = self.scopes[scope.raw() as usize]
+                    .tags
+                    .pop()
+                    .expect("declared tag remains bound in its scope");
+                debug_assert_eq!(tag, binding.tag);
+            }
+        }
+    }
 }
 
 impl Default for SymbolTable {
@@ -621,6 +764,8 @@ impl Clone for SymbolTable {
             scopes: self.scopes.clone(),
             symbols: self.symbols.clone(),
             tags: self.tags.clone(),
+            undo_log: Vec::new(),
+            transaction_markers: Vec::new(),
         }
     }
 }

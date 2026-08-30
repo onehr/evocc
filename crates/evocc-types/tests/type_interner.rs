@@ -1,6 +1,7 @@
 use evocc_types::{
     ArrayBound, CanonicalType, EnumConstant, FunctionParameters, IntRank, Qualifiers, RecordField,
-    TagDefinition, TagId, TagKind, TagState, TypeId, TypeInterner, TypeKind,
+    TagDefinition, TagId, TagKind, TagLayoutAttributes, TagState, TypeId, TypeInterner,
+    TypeInternerTransactionError, TypeKind,
 };
 
 fn plain(kind: TypeKind) -> CanonicalType {
@@ -244,4 +245,73 @@ fn nominal_tags_keep_identity_when_completed_and_allow_recursion() {
         &types.tag(structure).unwrap().state,
         TagState::Complete(TagDefinition::Struct(_))
     ));
+}
+
+#[test]
+fn speculative_type_transactions_are_lifo_and_restore_types_and_tags() {
+    let mut types = TypeInterner::new();
+    let int = types.intern(plain(TypeKind::Int(IntRank::Int)));
+    let outer = types.begin_transaction();
+    let tag = types.declare_tag(TagKind::Struct, Some("temporary".into()));
+    let record = types.intern(plain(TypeKind::Struct(tag)));
+    assert!(types.set_tag_layout(
+        tag,
+        TagLayoutAttributes {
+            packed: true,
+            aligned: Some(8),
+            max_align: Some(2),
+        }
+    ));
+    types
+        .complete_tag(
+            tag,
+            TagDefinition::Struct(vec![RecordField {
+                name: Some("value".into()),
+                ty: int,
+                layout: Default::default(),
+                bit_field: None,
+            }]),
+        )
+        .unwrap();
+
+    let inner = types.begin_transaction();
+    let pointer = types.intern(pointer(record));
+    assert_eq!(
+        types.commit_transaction(&outer),
+        Err(TypeInternerTransactionError)
+    );
+    types.commit_transaction(&inner).unwrap();
+    types.rollback_transaction(&outer).unwrap();
+
+    assert_eq!(types.len(), 1);
+    assert_eq!(types.get(record), None);
+    assert_eq!(types.get(pointer), None);
+    assert_eq!(types.tag(tag), None);
+    let replacement_tag = types.declare_tag(TagKind::Struct, Some("replacement".into()));
+    assert_eq!(replacement_tag, tag, "rolled-back tag IDs are reusable");
+    let replacement_record = types.intern(plain(TypeKind::Struct(replacement_tag)));
+    assert_eq!(
+        replacement_record, record,
+        "rolled-back type IDs are reusable"
+    );
+
+    let foreign = TypeInterner::new().begin_transaction();
+    assert_eq!(
+        types.rollback_transaction(&foreign),
+        Err(TypeInternerTransactionError)
+    );
+}
+
+#[test]
+fn committed_type_transactions_persist_and_tokens_are_one_shot() {
+    let mut types = TypeInterner::new();
+    let transaction = types.begin_transaction();
+    let int = types.intern(plain(TypeKind::Int(IntRank::Int)));
+    types.commit_transaction(&transaction).unwrap();
+
+    assert_eq!(types.get(int), Some(&plain(TypeKind::Int(IntRank::Int))));
+    assert_eq!(
+        types.rollback_transaction(&transaction),
+        Err(TypeInternerTransactionError)
+    );
 }

@@ -36,8 +36,8 @@ pub use place::{
 pub use semantic::{
     AssignmentOp, ExprCategory, ExprFacts, ExprFactsError, NotAssignmentOperator, ScalarPlace,
     ScalarPlaceError, Scope, ScopeId, ScopeKind, Symbol, SymbolData, SymbolId, SymbolKind,
-    SymbolTable, SymbolTableCheckpoint, SymbolTableError, TagBinding, UpdateEffect, UpdateOp,
-    UpdatePlan,
+    SymbolTable, SymbolTableCheckpoint, SymbolTableError, SymbolTableTransaction, TagBinding,
+    UpdateEffect, UpdateOp, UpdatePlan,
 };
 
 use evocc_common::SourceSpan;

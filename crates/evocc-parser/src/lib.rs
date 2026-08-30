@@ -210,6 +210,14 @@ struct EntityState {
     has_definition: bool,
 }
 
+#[derive(Debug)]
+struct DeclarationTransaction {
+    entity_undo: usize,
+    external_entity_undo: usize,
+    function_typedef_undo: usize,
+    side_declarations: usize,
+}
+
 #[derive(Debug, Clone)]
 struct TemporaryParameterShadow {
     scope: ScopeId,
@@ -250,6 +258,10 @@ pub struct Parser<'src, 'arena> {
     function_typedefs: HashMap<SymbolId, ParameterSyntax>,
     entities: HashMap<SymbolId, EntityState>,
     external_entities: HashMap<String, SymbolId>,
+    entity_undo: Vec<(SymbolId, Option<EntityState>)>,
+    external_entity_undo: Vec<(String, Option<SymbolId>)>,
+    function_typedef_undo: Vec<(SymbolId, Option<ParameterSyntax>)>,
+    declaration_transaction_depth: usize,
     side_declarations: Vec<&'arena CHirDecl<'arena>>,
     loop_depth: usize,
     constant_expression_depth: usize,
@@ -353,6 +365,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             function_typedefs: HashMap::new(),
             entities: HashMap::new(),
             external_entities: HashMap::new(),
+            entity_undo: Vec::new(),
+            external_entity_undo: Vec::new(),
+            function_typedef_undo: Vec::new(),
+            declaration_transaction_depth: 0,
             side_declarations: Vec::new(),
             loop_depth: 0,
             constant_expression_depth: 0,
@@ -672,6 +688,100 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         None
     }
 
+    fn begin_declaration_transaction(&mut self) -> DeclarationTransaction {
+        self.declaration_transaction_depth += 1;
+        DeclarationTransaction {
+            entity_undo: self.entity_undo.len(),
+            external_entity_undo: self.external_entity_undo.len(),
+            function_typedef_undo: self.function_typedef_undo.len(),
+            side_declarations: self.side_declarations.len(),
+        }
+    }
+
+    fn commit_declaration_transaction(&mut self, transaction: &DeclarationTransaction) {
+        debug_assert!(self.declaration_transaction_depth > 0);
+        debug_assert!(self.entity_undo.len() >= transaction.entity_undo);
+        debug_assert!(self.external_entity_undo.len() >= transaction.external_entity_undo);
+        debug_assert!(self.function_typedef_undo.len() >= transaction.function_typedef_undo);
+        self.declaration_transaction_depth -= 1;
+        if self.declaration_transaction_depth == 0 {
+            self.entity_undo.clear();
+            self.external_entity_undo.clear();
+            self.function_typedef_undo.clear();
+        }
+    }
+
+    fn rollback_declaration_transaction(&mut self, transaction: &DeclarationTransaction) {
+        while self.entity_undo.len() > transaction.entity_undo {
+            let (symbol, previous) = self.entity_undo.pop().expect("undo marker is bounded");
+            match previous {
+                Some(previous) => {
+                    self.entities.insert(symbol, previous);
+                }
+                None => {
+                    self.entities.remove(&symbol);
+                }
+            }
+        }
+        while self.external_entity_undo.len() > transaction.external_entity_undo {
+            let (spelling, previous) = self
+                .external_entity_undo
+                .pop()
+                .expect("undo marker is bounded");
+            match previous {
+                Some(previous) => {
+                    self.external_entities.insert(spelling, previous);
+                }
+                None => {
+                    self.external_entities.remove(&spelling);
+                }
+            }
+        }
+        while self.function_typedef_undo.len() > transaction.function_typedef_undo {
+            let (symbol, previous) = self
+                .function_typedef_undo
+                .pop()
+                .expect("undo marker is bounded");
+            match previous {
+                Some(previous) => {
+                    self.function_typedefs.insert(symbol, previous);
+                }
+                None => {
+                    self.function_typedefs.remove(&symbol);
+                }
+            }
+        }
+        self.side_declarations
+            .truncate(transaction.side_declarations);
+        self.declaration_transaction_depth -= 1;
+        if self.declaration_transaction_depth == 0 {
+            self.entity_undo.clear();
+            self.external_entity_undo.clear();
+            self.function_typedef_undo.clear();
+        }
+    }
+
+    fn set_entity_state(&mut self, symbol: SymbolId, state: EntityState) {
+        let previous = self.entities.insert(symbol, state);
+        if self.declaration_transaction_depth > 0 {
+            self.entity_undo.push((symbol, previous));
+        }
+    }
+
+    fn set_external_entity(&mut self, spelling: String, symbol: SymbolId) {
+        let previous = self.external_entities.insert(spelling.clone(), symbol);
+        if self.declaration_transaction_depth > 0 {
+            self.external_entity_undo.push((spelling, previous));
+        }
+    }
+
+    fn set_function_typedef(&mut self, symbol: SymbolId, parameters: ParameterSyntax) {
+        let previous = self.function_typedefs.insert(symbol, parameters);
+        if self.declaration_transaction_depth > 0 {
+            self.function_typedef_undo.push((symbol, previous));
+        }
+    }
+
     fn declare_symbol(&mut self, name: &SpannedName, data: SymbolData, ty: TypeId) -> SymbolId {
         let in_current_scope = self.symbol_in_current_scope(&name.spelling);
         let lexically_visible = in_current_scope.or_else(|| {
@@ -716,7 +826,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         {
             Ok(symbol) => {
                 let linkage = self.declaration_linkage(data);
-                self.entities.insert(
+                self.set_entity_state(
                     symbol,
                     EntityState {
                         linkage,
@@ -725,7 +835,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     },
                 );
                 if linkage == EntityLinkage::External {
-                    self.external_entities.insert(name.spelling.clone(), symbol);
+                    self.set_external_entity(name.spelling.clone(), symbol);
                 }
                 symbol
             }
@@ -812,18 +922,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.symbols
             .update_symbol_type(symbol, composite)
             .expect("scope symbol IDs belong to the same table");
-        self.entities.insert(symbol, state);
+        self.set_entity_state(symbol, state);
         true
     }
 
     fn mark_definition(&mut self, symbol: SymbolId, name: &SpannedName) {
-        let Some(state) = self.entities.get_mut(&symbol) else {
+        let Some(mut state) = self.entities.get(&symbol).copied() else {
             return;
         };
         if state.has_definition {
             self.report_redefinition(name);
         } else {
             state.has_definition = true;
+            self.set_entity_state(symbol, state);
         }
     }
 
@@ -1055,34 +1166,37 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         context: DeclarationContext,
     ) -> Option<Vec<&'arena CHirDecl<'arena>>> {
         let scope_checkpoint = self.current_scope;
-        let types_checkpoint = self.types.clone();
-        let symbols_checkpoint = self.symbols.checkpoint();
-        let entities_checkpoint = self.entities.clone();
-        let external_entities_checkpoint = self.external_entities.clone();
-        let function_typedefs_checkpoint = self.function_typedefs.clone();
-        let side_checkpoint = self.side_declarations.clone();
+        let types_transaction = self.types.begin_transaction();
+        let symbols_transaction = self.symbols.begin_transaction();
+        let declaration_transaction = self.begin_declaration_transaction();
         let generic_selection_checkpoint = self.generic_selections.len();
         let front_end_builtin_checkpoint = self.front_end_builtins.len();
         let rollback_error_checkpoint = self.rollback_error_count;
-        let side_start = side_checkpoint.len();
+        let side_start = declaration_transaction.side_declarations;
 
         let result = self.parse_declaration_inner(context, side_start);
         if result.is_none() || self.rollback_error_count != rollback_error_checkpoint {
-            self.types = types_checkpoint;
+            self.types
+                .rollback_transaction(&types_transaction)
+                .expect("parser type transactions are table-local and LIFO");
             self.symbols
-                .rollback(symbols_checkpoint)
-                .expect("parser declaration checkpoints are table-local");
+                .rollback_transaction(&symbols_transaction)
+                .expect("parser declaration transactions are table-local and LIFO");
             self.current_scope = scope_checkpoint;
-            self.entities = entities_checkpoint;
-            self.external_entities = external_entities_checkpoint;
-            self.function_typedefs = function_typedefs_checkpoint;
-            self.side_declarations = side_checkpoint;
+            self.rollback_declaration_transaction(&declaration_transaction);
             self.generic_selections
                 .truncate(generic_selection_checkpoint);
             self.front_end_builtins
                 .truncate(front_end_builtin_checkpoint);
             None
         } else {
+            self.types
+                .commit_transaction(&types_transaction)
+                .expect("parser type transactions are table-local and LIFO");
+            self.symbols
+                .commit_transaction(&symbols_transaction)
+                .expect("parser declaration transactions are table-local and LIFO");
+            self.commit_declaration_transaction(&declaration_transaction);
             result
         }
     }
@@ -1363,7 +1477,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .expect("declared symbols belong to the parser symbol table")
                 .ty();
             if let Some(parameters) = function_typedef_syntax {
-                self.function_typedefs.insert(symbol, parameters);
+                self.set_function_typedef(symbol, parameters);
             }
             if has_initializer && storage != StorageClass::Typedef {
                 self.mark_definition(symbol, &declarator.name);
@@ -3921,7 +4035,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let (ty, tag_event) = self.parse_type_name_with_vla_error(Some(keyword.span))?;
                 (ty, TypeofOperand::TypeName, tag_event)
             } else {
-                let checkpoint = self.symbols.checkpoint();
+                let transaction = self.symbols.begin_transaction();
                 let mut installed = HashSet::new();
                 for shadow in self.temporary_parameter_shadows.clone() {
                     if shadow.scope == self.current_scope
@@ -3946,8 +4060,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         .map(|inferred| (expression, inferred.ty))
                 });
                 self.symbols
-                    .rollback(checkpoint)
-                    .expect("temporary typeof bindings are table-local");
+                    .rollback_transaction(&transaction)
+                    .expect("temporary typeof bindings are table-local and LIFO");
                 let Some((expression, inferred)) = inferred else {
                     if self.diagnostics.is_empty() {
                         self.report("E1003", "expected-expression", self.span());
