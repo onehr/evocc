@@ -159,6 +159,25 @@ fn arrow_member_projects_through_a_pointer_root() {
     );
 }
 
+#[test]
+fn arrow_member_projects_through_a_pointer_returned_by_a_call() {
+    let direct = "struct task_struct { unsigned long flags; int nr_cpus_allowed; }; \
+         struct task_struct task; \
+         static inline struct task_struct *get_current(void) { return &task; } \
+         int is_percpu_thread(void) { struct task_struct *bound = get_current(); \
+             return (bound->flags & 0x04000000) && (bound->nr_cpus_allowed == 1); }";
+    let call_rooted = "struct task_struct { unsigned long flags; int nr_cpus_allowed; }; \
+         struct task_struct task; \
+         static inline struct task_struct *get_current(void) { return &task; } \
+         int is_percpu_thread(void) { return (get_current()->flags & 0x04000000) && \
+             (get_current()->nr_cpus_allowed == 1); }";
+    let direct_arena = Arena::default();
+    parse(direct, &direct_arena).expect("two-step control must parse");
+    let call_rooted_arena = Arena::default();
+    parse(call_rooted, &call_rooted_arena)
+        .expect("a call result must retain the same pointer-rooted place");
+}
+
 // ---------------------------------------------------------------------------
 // Subscript projections
 // ---------------------------------------------------------------------------
