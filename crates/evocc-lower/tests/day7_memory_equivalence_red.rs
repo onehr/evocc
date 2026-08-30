@@ -49,6 +49,12 @@ struct Case {
 }
 
 #[derive(Clone, Copy)]
+struct EquivalentPlacePair {
+    addressed: Case,
+    direct: Case,
+}
+
+#[derive(Clone, Copy)]
 struct InvalidCHirCase {
     id: &'static str,
     source: &'static str,
@@ -104,6 +110,121 @@ const CASES: &[Case] = &[
         source: "struct Node { int value; struct Node *next; }; int main(void) { struct Node a; struct Node b; struct Node c; a.next = &b; b.next = &c; b.value = 1; c.value = 7; struct Node *p = &a; p->next->value = 5; p->next->next->value += 2; return p->next->value * 10 + p->next->next->value; }\n",
         expected: 59,
         expected_volatile_ir_accesses: None,
+    },
+];
+
+const ADDRESS_OF_PLACE_PAIRS: &[EquivalentPlacePair] = &[
+    EquivalentPlacePair {
+        addressed: Case {
+            id: "local_object_through_address",
+            source: "struct Node { int value; }; int main(void) { struct Node node; node.value = 11; return (&node)->value; }\n",
+            expected: 11,
+            expected_volatile_ir_accesses: None,
+        },
+        direct: Case {
+            id: "local_object_direct",
+            source: "struct Node { int value; }; int main(void) { struct Node node; node.value = 11; return node.value; }\n",
+            expected: 11,
+            expected_volatile_ir_accesses: None,
+        },
+    },
+    EquivalentPlacePair {
+        addressed: Case {
+            id: "global_object_through_address",
+            source: "struct Node { int value; }; struct Node node; int main(void) { node.value = 12; return (&node)->value; }\n",
+            expected: 12,
+            expected_volatile_ir_accesses: None,
+        },
+        direct: Case {
+            id: "global_object_direct",
+            source: "struct Node { int value; }; struct Node node; int main(void) { node.value = 12; return node.value; }\n",
+            expected: 12,
+            expected_volatile_ir_accesses: None,
+        },
+    },
+    EquivalentPlacePair {
+        addressed: Case {
+            id: "pointer_member_through_address",
+            source: "struct Node { int value; }; struct Holder { struct Node head; }; int main(void) { struct Holder holder; struct Holder *pointer = &holder; pointer->head.value = 13; return (&pointer->head)->value; }\n",
+            expected: 13,
+            expected_volatile_ir_accesses: None,
+        },
+        direct: Case {
+            id: "pointer_member_direct",
+            source: "struct Node { int value; }; struct Holder { struct Node head; }; int main(void) { struct Holder holder; struct Holder *pointer = &holder; pointer->head.value = 13; return pointer->head.value; }\n",
+            expected: 13,
+            expected_volatile_ir_accesses: None,
+        },
+    },
+    EquivalentPlacePair {
+        addressed: Case {
+            id: "object_member_through_address",
+            source: "struct Node { int value; }; struct Holder { struct Node head; }; int main(void) { struct Holder holder; holder.head.value = 14; return (&holder.head)->value; }\n",
+            expected: 14,
+            expected_volatile_ir_accesses: None,
+        },
+        direct: Case {
+            id: "object_member_direct",
+            source: "struct Node { int value; }; struct Holder { struct Node head; }; int main(void) { struct Holder holder; holder.head.value = 14; return holder.head.value; }\n",
+            expected: 14,
+            expected_volatile_ir_accesses: None,
+        },
+    },
+    EquivalentPlacePair {
+        addressed: Case {
+            id: "cancelled_address_and_deref",
+            source: "struct Node { int value; }; struct Holder { struct Node head; }; int main(void) { struct Holder holder; holder.head.value = 15; return (*&holder.head).value; }\n",
+            expected: 15,
+            expected_volatile_ir_accesses: None,
+        },
+        direct: Case {
+            id: "cancelled_address_and_deref_control",
+            source: "struct Node { int value; }; struct Holder { struct Node head; }; int main(void) { struct Holder holder; holder.head.value = 15; return holder.head.value; }\n",
+            expected: 15,
+            expected_volatile_ir_accesses: None,
+        },
+    },
+    EquivalentPlacePair {
+        addressed: Case {
+            id: "address_of_dereferenced_pointer",
+            source: "struct Node { int value; }; int main(void) { struct Node node; struct Node *pointer = &node; pointer->value = 16; return (&*pointer)->value; }\n",
+            expected: 16,
+            expected_volatile_ir_accesses: None,
+        },
+        direct: Case {
+            id: "dereferenced_pointer_control",
+            source: "struct Node { int value; }; int main(void) { struct Node node; struct Node *pointer = &node; pointer->value = 16; return pointer->value; }\n",
+            expected: 16,
+            expected_volatile_ir_accesses: None,
+        },
+    },
+    EquivalentPlacePair {
+        addressed: Case {
+            id: "array_element_through_address",
+            source: "struct Node { int value; }; int main(void) { struct Node nodes[2]; nodes[1].value = 17; return (&nodes[1])->value; }\n",
+            expected: 17,
+            expected_volatile_ir_accesses: None,
+        },
+        direct: Case {
+            id: "array_element_direct",
+            source: "struct Node { int value; }; int main(void) { struct Node nodes[2]; nodes[1].value = 17; return nodes[1].value; }\n",
+            expected: 17,
+            expected_volatile_ir_accesses: None,
+        },
+    },
+    EquivalentPlacePair {
+        addressed: Case {
+            id: "nested_subobject_through_address",
+            source: "struct Inner { int value; }; struct Middle { struct Inner inner; }; struct Outer { struct Middle middle; }; int main(void) { struct Outer outer; outer.middle.inner.value = 18; return (&outer.middle.inner)->value; }\n",
+            expected: 18,
+            expected_volatile_ir_accesses: None,
+        },
+        direct: Case {
+            id: "nested_subobject_direct",
+            source: "struct Inner { int value; }; struct Middle { struct Inner inner; }; struct Outer { struct Middle middle; }; int main(void) { struct Outer outer; outer.middle.inner.value = 18; return outer.middle.inner.value; }\n",
+            expected: 18,
+            expected_volatile_ir_accesses: None,
+        },
     },
 ];
 
@@ -779,6 +900,69 @@ fn parsed_c_memory_programs_are_equivalent_in_both_interpreters() {
         failures.len(),
         failures.join("\n")
     );
+}
+
+fn assert_addressed_place_pair(index: usize) {
+    assert_eq!(
+        ADDRESS_OF_PLACE_PAIRS.len(),
+        8,
+        "addressed-place denominator changed"
+    );
+    let pair = ADDRESS_OF_PLACE_PAIRS[index];
+    let control_failures = check_case_bounded(pair.direct, 400 + index * 2);
+    assert!(
+        control_failures.is_empty(),
+        "{} control failed:\n{}",
+        pair.direct.id,
+        control_failures.join("\n")
+    );
+    let addressed_failures = check_case_bounded(pair.addressed, 401 + index * 2);
+    assert!(
+        addressed_failures.is_empty(),
+        "{} failed:\n{}",
+        pair.addressed.id,
+        addressed_failures.join("\n")
+    );
+}
+
+#[test]
+fn local_object_address_preserves_the_direct_place() {
+    assert_addressed_place_pair(0);
+}
+
+#[test]
+fn global_object_address_preserves_the_direct_place() {
+    assert_addressed_place_pair(1);
+}
+
+#[test]
+fn pointer_member_address_preserves_the_direct_place() {
+    assert_addressed_place_pair(2);
+}
+
+#[test]
+fn object_member_address_preserves_the_direct_place() {
+    assert_addressed_place_pair(3);
+}
+
+#[test]
+fn adjacent_address_and_dereference_preserve_the_direct_place() {
+    assert_addressed_place_pair(4);
+}
+
+#[test]
+fn address_of_a_dereferenced_pointer_preserves_the_direct_place() {
+    assert_addressed_place_pair(5);
+}
+
+#[test]
+fn array_element_address_preserves_the_direct_place() {
+    assert_addressed_place_pair(6);
+}
+
+#[test]
+fn nested_subobject_address_preserves_the_direct_place() {
+    assert_addressed_place_pair(7);
 }
 
 #[test]
