@@ -776,12 +776,48 @@ fn pointer_expression_type(
         | CHirExpr::MemoryUpdate { facts, .. }
         | CHirExpr::MemoryRead { facts, .. } => facts.ty(),
         CHirExpr::Cast(ty, _, _) => *ty,
+        CHirExpr::Call(callee, _, _) => call_expression_return_type(types, callee)?,
         CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
             pointer_expression_type(types, pointer)?.pointee()
         }
         _ => return Err(MemoryPlaceError::PointerExpressionTypeUnavailable),
     };
     PointerTypeDesc::from_canonical_pointer(types, ty)
+}
+
+fn call_expression_return_type(
+    types: &TypeInterner,
+    callee: &CHirExpr<'_>,
+) -> Result<TypeId, MemoryPlaceError> {
+    let candidate = match callee {
+        CHirExpr::Ident { facts, .. }
+        | CHirExpr::Assign { facts, .. }
+        | CHirExpr::MemoryAssign { facts, .. }
+        | CHirExpr::Update { facts, .. }
+        | CHirExpr::MemoryUpdate { facts, .. }
+        | CHirExpr::MemoryRead { facts, .. } => facts.ty(),
+        CHirExpr::Cast(ty, _, _) => *ty,
+        CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
+            pointer_expression_type(types, pointer)?.pointee()
+        }
+        _ => return Err(MemoryPlaceError::PointerExpressionTypeUnavailable),
+    };
+    let function_ty = match types.get(candidate).map(|ty| &ty.kind) {
+        Some(TypeKind::Function { .. }) => candidate,
+        Some(TypeKind::Pointer(pointee))
+            if matches!(
+                types.get(*pointee).map(|ty| &ty.kind),
+                Some(TypeKind::Function { .. })
+            ) =>
+        {
+            *pointee
+        }
+        _ => return Err(MemoryPlaceError::PointerExpressionTypeUnavailable),
+    };
+    match types.get(function_ty).map(|ty| &ty.kind) {
+        Some(TypeKind::Function { return_type, .. }) => Ok(*return_type),
+        _ => Err(MemoryPlaceError::PointerExpressionTypeUnavailable),
+    }
 }
 
 fn is_object_type(kind: &TypeKind) -> bool {
