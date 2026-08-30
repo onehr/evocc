@@ -398,11 +398,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             if let Some(mut parsed) = self.parse_external_declaration() {
                 decls.append(&mut parsed);
             }
-            // Every external declaration starts at file scope. A declaration
-            // that failed part way through a function body leaves the current
-            // scope pointing inside it, and the scope itself may have been
-            // rolled back, so recovery restores the only scope that is always
-            // live before the next declaration is read.
+            // Failed declaration transactions restore their own scope cursor,
+            // so the next declaration starts in the same live scope that
+            // preceded the failed one.
             if self.reached_error_limit() {
                 break;
             }
@@ -1056,6 +1054,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         &mut self,
         context: DeclarationContext,
     ) -> Option<Vec<&'arena CHirDecl<'arena>>> {
+        let scope_checkpoint = self.current_scope;
         let types_checkpoint = self.types.clone();
         let symbols_checkpoint = self.symbols.checkpoint();
         let entities_checkpoint = self.entities.clone();
@@ -1073,6 +1072,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.symbols
                 .rollback(symbols_checkpoint)
                 .expect("parser declaration checkpoints are table-local");
+            self.current_scope = scope_checkpoint;
             self.entities = entities_checkpoint;
             self.external_entities = external_entities_checkpoint;
             self.function_typedefs = function_typedefs_checkpoint;

@@ -25,13 +25,7 @@ DIAGNOSTIC = re.compile(r":(\d+):(\d+): error\[(E\d{4})\]: ([^\n]*)")
 
 
 def survey_unit(evocc: Path, unit: Path):
-    """Findings for one unit, or None when recovery could not complete.
-
-    Recovery is sound across external declarations but not yet after a
-    declaration fails part way through a function body: the symbol table rolls
-    back a scope the parser is still standing in. A unit that hits that path is
-    reported as unavailable, never as clean.
-    """
+    """Findings for one unit, or None after an unexpected parser panic."""
     out = subprocess.run(
         [str(evocc), "--parse-only", "--survey", str(unit)],
         capture_output=True,
