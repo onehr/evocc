@@ -2,9 +2,9 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "7643ea63be43cfdb4a61def57d650c931f2becac693254434925126a9c003176"
+    "sha256": "cca54787f673944062ad3208f36cee309627ad7623a8050e4e9d7cf019f4b3dd"
   },
-  "cutLine": "Revision 1.9.21's __typeof_unqual__ ruling is implemented by reusing typeof resolution and cloning only the outer canonical type layer with const, volatile, restrict and _Atomic cleared. Nested, member, pointee and array-element qualifiers remain unchanged; expression operands are unevaluated; the C23 spelling stays an identifier; and the resolved form leaves no EvoIR difference. The tests-only checkpoint measured seven semantic failures for the one declared capability and zero Rust build errors; the implementation closes all six parser tests and the byte-identity pair with 947/947 workspace tests, exact base and attributed layout corpora, one isolated locked/offline replay and zero dashboard regressions. All 28 __typeof_unqual__ parser lanes moved, but Stage F1 remains OPEN at 2/16: the same 14 source units now stop in both parser lanes on E2102 invalid-projected-lvalue at two existing lvalue forms covered by Section 10.1.3.",
+  "cutLine": "Scope M is closed by three tests-first semantic units under revision 1.9.21 Section 10.1.3. Address-rooted reads, call-result-rooted projections, and immediate address/dereference scalar and aggregate updates now retain one checked MemoryPlace; the existing modifiability, atomic and invalid-place refusals remain unchanged. The first publication proved the address-root hypothesis moved zero cohort lanes; the exact call-result RED then moved 28 invalid-projected-lvalue lanes, and the final update RED moved 22 invalid-update-operands lanes, all with zero regressions. The final tree has 966/966 listed all-target tests, exact 128/128 and 22/22 layout corpora, and an isolated locked/offline no-local replay. Stage F1 remains OPEN at 2/16: the newly reachable frontier is 17 E2102 lanes rooted in a statement-expression result, 5 fixed-step parser timeouts, and three two-lane diagnostic classes.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -377,22 +377,68 @@
       "The existing typeof resolver remains the single resolver; the implementation strips one outer canonical qualifier layer before applying qualifiers written around the operator."
     ]
   },
-  "subjectCommit": "cbf084c",
+  "projectedPlaceRootRedWindow": {
+    "authorityRevision": "0e28b73 (specification revision 1.9.21, Section 10.1.3)",
+    "checkpoints": [
+      {
+        "opened": "1c67ccd (tests only; 8/8 address-rooted target forms failed with E2102 while controls passed; zero Rust build errors)",
+        "closed": "60c64f2",
+        "diagnostics": {
+          "path": "tests/contracts/address-of-place-red.json",
+          "sha256": "87a80fe58a9feec255955b09c92467c8ecf9cf6d8b2a73ad86910a926871f277"
+        },
+        "dashboardResult": "20260830T030920Z-23375: zero regressions and zero cohort-lane movement; the sealed first-error bytes disproved this as the cohort blocker"
+      },
+      {
+        "opened": "218ab00 (tests only; the call-result target failed with E2102 while the named-pointer control passed; zero Rust build errors)",
+        "closed": "78923a9",
+        "diagnostics": {
+          "path": "tests/contracts/call-result-place-red.json",
+          "sha256": "8868c3ff336dd4229aab287233a3542a99dbf1d59ef4d49045bdde2974674b95"
+        },
+        "dashboardResult": "20260830T035121Z-46924: all 28 call-result-rooted invalid-projected-lvalue lanes moved, exposing 22 invalid-update-operands lanes; zero regressions"
+      },
+      {
+        "opened": "d751615 (tests only; scalar and aggregate immediate address/dereference updates failed while direct controls passed; 964 passed, 2 failed, zero Rust build errors)",
+        "closed": "e38c168",
+        "diagnostics": {
+          "path": "tests/contracts/address-dereference-update-red.json",
+          "sha256": "07922cbf67ce7601b294ee92ed98dd1ca020892500d1cb1f303c8db5d6cbeb16"
+        },
+        "dashboardResult": "20260830T041443Z-30099: all 22 invalid-update-operands lanes moved, exposing the next mixed frontier; zero regressions"
+      }
+    ],
+    "implementationCommits": [
+      "60c64f2",
+      "78923a9",
+      "e38c168"
+    ],
+    "result": "PASS"
+  },
+  "subjectCommit": "e38c168",
   "gate": {
-    "claim": "The revision 1.9.21 implementation closes __typeof_unqual__ with 947 workspace tests and zero regressions, but stage F1 remains open at 2/16 because all 28 parser lanes now stop at the already-specified lvalue projection boundary",
+    "claim": "Scope M's exact target/control pairs are closed with 966 listed all-target tests and zero dashboard regressions. Stage F1 remains open at 2/16 on a newly reachable mixed frontier; no claim is made that every E2102 expression family is implemented.",
     "measured": {
       "dualOracleCleanParseTus": "2/16",
       "rawPreprocessClean": "16/16",
       "stageF1": "OPEN",
       "remainingParserLanes": 28,
       "remainingParserUnits": 14,
-      "remainingFirstError": "E2102 invalid-projected-lvalue",
+      "remainingFirstErrors": {
+        "E2102 invalid-projected-lvalue at include/linux/page-flags.h:551": 17,
+        "PARSE_TIMEOUT at fixed parser step budget": 5,
+        "E2906 designator-outside-object at include/linux/rbtree_latch.h:72": 2,
+        "E1001 expected-declaration at include/linux/signal.h:157": 2,
+        "E2001 undeclared-identifier __builtin_object_size at include/linux/ucopysize.h:47": 2
+      },
       "constantExpressionClosureTests": "15/15",
       "gnuArrayInt128Tests": "13/13",
       "anonymousMemberDesignatorTests": "5/5",
       "typeofUnqualTests": "6/6",
-      "workspaceTests": "947/947",
-      "specifiedFrontier": true,
+      "projectedLvalueTests": "26/26",
+      "aggregateCopyTests": "9/9",
+      "workspaceTests": "966/966",
+      "specifiedFrontier": false,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
       "computedZeroArrayBoundLanes": 0,
@@ -403,7 +449,10 @@
       "sysregStrayTokenLanesRemaining": 0,
       "preprocessingTokenProductionsMissing": 0,
       "pointerUpdateLanesRemaining": 0,
-      "invalidProjectedLvalueLanesRemaining": 28,
+      "invalidProjectedLvalueLanesRemaining": 17,
+      "declaredProjectedPlaceRootFailuresRemaining": 0,
+      "invalidUpdateOperandLanesRemaining": 0,
+      "parserTimeoutLanes": 5,
       "statementExpressionLanesRemaining": 0,
       "designatedInitializerLanesRemaining": 0,
       "compoundLiteralLanesRemaining": 0,
@@ -419,14 +468,14 @@
       "notCoveredDay7MessagesRemaining": 0,
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous /Users/onehrxn/dev/30days/c30/.evidence/day5-kernel-reconnaissance/20260829T123429Z-30856/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260830T035121Z-46924/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "74078cbee9cf77271bf40d3608111125e09a009e4008e724ae1d4b57e15055e6",
-      "subjectCommit": "cbf084c",
-      "publishedFromRun": "20260829T152145Z-2514"
+      "sha256": "a413ddb64b61b327c30ac7c82e95a7ddb711ed6c286262890342632f0cdc4738",
+      "subjectCommit": "e38c168",
+      "publishedFromRun": "20260830T041443Z-30099"
     },
-    "result": "K4_PASS_STAGE_F1_OPEN"
+    "result": "M_PASS_STAGE_F1_OPEN"
   },
   "lanes": {
     "clean": {
@@ -439,41 +488,45 @@
     },
     "stillFailing": [
       {
-        "count": 28,
-        "lanes": "14 units x {gcc,clang}-preprocessed-parser",
+        "count": 17,
+        "lanes": "9 gcc-preprocessed-parser plus 8 clang-preprocessed-parser",
         "units": [
           "init-do-mounts",
-          "init-do-mounts-initrd",
           "init-init-task",
-          "init-version-timestamp",
           "kernel-locking-semaphore",
-          "kernel-power-console",
           "kernel-power-main",
           "lib-crypto-mpi-generic-mpih-lshift",
-          "lib-kstrtox",
           "mm-memtest",
           "mm-mincore",
           "mm-mprotect",
-          "mm-page-vma-mapped",
-          "kernel-bpf-token"
+          "mm-page-vma-mapped"
         ],
-        "firstError": "E2102 invalid-projected-lvalue",
-        "sourceSites": [
-          {
-            "count": 16,
-            "units": 8,
-            "path": "include/linux/sched.h:1805",
-            "shape": "get_current()->flags / get_current()->nr_cpus_allowed"
-          },
-          {
-            "count": 12,
-            "units": 6,
-            "path": "include/linux/wait.h:176",
-            "shape": "container_of statement-expression initialization and projected fields"
-          }
-        ],
-        "rootCause": "The K4 type operator now resolves, exposing the next existing implementation boundary: scalar field projections rooted in these pointer-valued expressions cannot be converted to a MemoryPlace.",
-        "specificationCoverage": "Covered by revision 1.9.21 Section 10.1.3 lvalue lowering; no new representation or owner ruling is required before a narrow implementation fix. Reduction and repair are outside the K4 window."
+        "firstError": "E2102 invalid-projected-lvalue at include/linux/page-flags.h:551",
+        "shape": "a statement expression returns a pointer and its result is immediately projected with ->flags.f inside a constant-expression probe",
+        "scopeDisposition": "newly reachable expression family; not one of scope M's frozen address-root, call-result-root or immediate address/dereference update pairs"
+      },
+      {
+        "count": 5,
+        "firstError": "PARSE_TIMEOUT process exceeded the fixed step timeout",
+        "lanes": [
+          "gcc: init-do-mounts-initrd, init-version-timestamp",
+          "clang: init-do-mounts, init-do-mounts-initrd, init-version-timestamp"
+        ]
+      },
+      {
+        "count": 2,
+        "firstError": "E2906 designator-outside-object at include/linux/rbtree_latch.h:72",
+        "unit": "kernel-bpf-token (gcc and clang)"
+      },
+      {
+        "count": 2,
+        "firstError": "E1001 expected-declaration at include/linux/signal.h:157",
+        "unit": "kernel-power-console (gcc and clang)"
+      },
+      {
+        "count": 2,
+        "firstError": "E2001 undeclared-identifier: __builtin_object_size at include/linux/ucopysize.h:47",
+        "unit": "lib-kstrtox (gcc and clang)"
       }
     ],
     "publicationsThisWindow": [
@@ -641,6 +694,21 @@
         "commit": "cbf084c",
         "run": "20260829T152145Z-2514",
         "parseLanesStoppedOn": "revision 1.9.21 ruling measurement: raw 16/16 clean; all 28 __typeof_unqual__ blockers resolved; 16 E2102 lanes at include/linux/sched.h:1805 and 12 E2102 lanes at include/linux/wait.h:176; 4 parser lanes clean; dual-oracle clean 2/16; 0 regressions"
+      },
+      {
+        "commit": "60c64f2",
+        "run": "20260830T030920Z-23375",
+        "parseLanesStoppedOn": "address-rooted place publication: the eight frozen target/control pairs are green, but the same 28 cohort lanes remain E2102 at exact call-result-rooted first-error sites; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions"
+      },
+      {
+        "commit": "78923a9",
+        "run": "20260830T035121Z-46924",
+        "parseLanesStoppedOn": "call-result-rooted place publication: 28 invalid-projected-lvalue lanes resolved; 22 lanes reach E2102 invalid-update-operands, with one timeout lane and three two-lane diagnostic classes; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions"
+      },
+      {
+        "commit": "e38c168",
+        "run": "20260830T041443Z-30099",
+        "parseLanesStoppedOn": "immediate address/dereference update publication: all 22 invalid-update-operands lanes resolved; next frontier is 17 E2102 statement-expression-rooted projection lanes, 5 timeout lanes, and E2906/E1001/E2001 at 2 lanes each; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions"
       }
     ]
   },
@@ -711,7 +779,7 @@
       "regressionsAgainstPrevious": 0,
       "specificationGap": "K3-TYPEOF-UNQUAL"
     },
-    "after": {
+    "typeofUnqualAfter": {
       "run": "20260829T152145Z-2514",
       "subjectCommit": "cbf084c",
       "resolvedFirstErrorClasses": {
@@ -726,6 +794,54 @@
       "stageF1": "OPEN",
       "regressionsAgainstPrevious": 0,
       "specificationCoverage": "revision 1.9.21 Section 10.1.3; implementation defect, not a newly measured specification gap"
+    },
+    "addressRootAfter": {
+      "run": "20260830T030920Z-23375",
+      "subjectCommit": "60c64f2",
+      "resolvedTargetPairs": 8,
+      "cohortLanesMoved": 0,
+      "nextFirstErrorClasses": {
+        "E2102 call-result-rooted invalid-projected-lvalue": 28
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "2/16",
+      "regressionsAgainstPrevious": 0
+    },
+    "callResultAfter": {
+      "run": "20260830T035121Z-46924",
+      "subjectCommit": "78923a9",
+      "resolvedFirstErrorClasses": {
+        "E2102 call-result-rooted invalid-projected-lvalue": 28
+      },
+      "nextFirstErrorClasses": {
+        "E2102 invalid-update-operands": 22,
+        "PARSE_TIMEOUT": 1,
+        "E2906 designator-outside-object": 2,
+        "E1001 expected-declaration": 2,
+        "E2001 undeclared-identifier __builtin_object_size": 2
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "2/16",
+      "regressionsAgainstPrevious": 0
+    },
+    "after": {
+      "run": "20260830T041443Z-30099",
+      "subjectCommit": "e38c168",
+      "resolvedFirstErrorClasses": {
+        "E2102 invalid-update-operands": 22
+      },
+      "nextFirstErrorClasses": {
+        "E2102 statement-expression-rooted invalid-projected-lvalue": 17,
+        "PARSE_TIMEOUT": 5,
+        "E2906 designator-outside-object": 2,
+        "E1001 expected-declaration": 2,
+        "E2001 undeclared-identifier __builtin_object_size": 2
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "2/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "scopeM": "PASS"
     }
   },
   "attributes": {
@@ -772,11 +888,19 @@
   },
   "tests": {
     "workspace": {
-      "passed": 947,
+      "passed": 966,
       "failed": 0,
-      "command": "cargo test --workspace --no-fail-fast; cargo test --workspace -- --list | rg -c ': test$' (947)"
+      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --quiet; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets -- --list | rg -c ': test$' (966)"
     },
     "suites": {
+      "crates/evocc-parser/tests/projected_lvalues.rs": {
+        "passed": 26,
+        "command": "cargo test -p evocc-parser --test projected_lvalues"
+      },
+      "crates/evocc-parser/tests/aggregate_copies.rs": {
+        "passed": 9,
+        "command": "cargo test -p evocc-parser --test aggregate_copies"
+      },
       "crates/evocc-parser/tests/gnu_typeof_unqual.rs": {
         "passed": 6,
         "command": "cargo test -p evocc-parser --test gnu_typeof_unqual"
@@ -1012,16 +1136,17 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "cbf084c862c0152610bb81f416a1712b0ec51bf4",
-    "command": "git clone --no-local --branch codex_typeof_unqual /Users/onehrxn/dev/30days/c30 /private/tmp/c30-typeof-unqual-replay.crH8vp/repo; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --locked --offline -- --list | rg -c ': test$'",
+    "commit": "e38c16839ff0394b71a9123a97f4dcea8f908cc7",
+    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-place-final-replay.N5OtfH/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$'",
     "measured": {
-      "passed": 947,
+      "passed": 966,
       "failed": 0,
       "clippy": 0,
       "fmt": "clean",
       "ruff": "clean",
       "selfTest": "PASS",
-      "countCommand": 947
+      "countCommand": 966,
+      "objectsAlternates": "absent"
     }
   },
   "specAmbiguities": [
@@ -1090,6 +1215,9 @@
     "The initialized-VLA path originally anchored E2203 at the initializer while the new eager bound check anchored it at the declarator bound. The focused regression caught this unintended span change; initialized declarations remain on the established initializer validation path while every path now uses the canonical variable-length-object message.",
     "The first revision 1.9.19 dashboard publication attempt was refused when the restricted sandbox denied the local container runtime inspect operation. Its incomplete capture is preserved at .evidence/kernel-dashboard/8402eea-sandbox-refused-20260829T093740Z and was not used; the repeated publication on the same commit and lineage sealed 48/48 observations with zero regressions.",
     "The original unevaluated-operand fixture wrapped sizeof(__typeof_unqual__(side++)) in a void cast, but the existing C-HIR scalar interpreter cannot execute that otherwise unrelated void-cast expression. The GREEN fixture returns side plus the measured sizeof value and subtracts that value, preserving the exact side==0 property without widening K4.",
-    "The first K4 publication attempt was refused before lane execution because the isolated worktree lacked a real, project-contained frozen kernel archive; that failed capture is preserved as .evidence/kernel-dashboard/cbf084c-refused-missing-archive. A second run sealed 48/48 observations but the publisher then raised ValueError while relativizing the shared evidence path to the isolated checkout; that capture is preserved as cbf084c-refused-relative-evidence-path. The authoritative third run used real worktree-local evidence, sealed 48/48 observations, and its byte-verified artifacts were copied into the root evidence tree without changing them."
+    "The first K4 publication attempt was refused before lane execution because the isolated worktree lacked a real, project-contained frozen kernel archive; that failed capture is preserved as .evidence/kernel-dashboard/cbf084c-refused-missing-archive. A second run sealed 48/48 observations but the publisher then raised ValueError while relativizing the shared evidence path to the isolated checkout; that capture is preserved as cbf084c-refused-relative-evidence-path. The authoritative third run used real worktree-local evidence, sealed 48/48 observations, and its byte-verified artifacts were copied into the root evidence tree without changing them.",
+    "The reviewer supplied address-rooted container_of as the measured scope-M blocker. Eight tests proved that form was defective, but the immediate sealed publication moved zero lanes and bound the actual first errors to call-result-rooted projections. Scope M therefore used three separately published RED/GREEN checkpoints instead of reporting the plausible initial diagnosis as measured fact.",
+    "The first sandboxed scope-M publication stopped before measurement because the restricted container boundary could not inspect the sealed oracle image. It is preserved at .evidence/kernel-dashboard/60c64f2-sandbox-refused and is not evidence; the authoritative rerun 20260830T030920Z-23375 used the same subject and previous-run lineage.",
+    "The final scope-M publication cleared all 22 invalid-update-operands lanes and exposed 17 uses of the same E2102 code for a different statement-expression-rooted shape. The frozen M gate is defined by exact target/control expression families, so this newly reachable form is recorded as the next frontier rather than silently expanding the completed scope."
   ]
 }
