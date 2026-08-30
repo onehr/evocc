@@ -1,8 +1,8 @@
 {
   "receiptId": "c30.kernel-dashboard",
-  "subjectCommit": "1bad886",
-  "publishedFromRun": "20260830T045405Z-23380",
-  "previousRun": "20260830T041443Z-30099",
+  "subjectCommit": "0a53458",
+  "publishedFromRun": "20260830T101312Z-14565",
+  "previousRun": "20260830T045405Z-23380",
   "cohortSha256": "09d0e2eaf0734949164a491d30df640bf396ff7586ef495f938f565b8879a306",
   "observer": {
     "path": "tests/acceptance/day5-kernel-reductions-observer.py",
@@ -13,7 +13,7 @@
     "environmentSha256": "81b4ddf0ab451d1e701ec3f5d2019e56c616ae59f6ba56e9843d2adc84604d26",
     "returnCode": 0,
     "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "stdoutSha256": "70ff12842850d9854944a7d1751d60e09d73d3727dc52be05e263486d29f0fdc",
+    "stdoutSha256": "508e49f65dc207e7aa8591ac075f51c89629662765c782198437904ea1e793a0",
     "timedOut": false
   },
   "command": "tests/acceptance/day5-kernel-reconnaissance.py --timeout 120 --parser-timeout 10 --parser-jobs 4",
@@ -41,16 +41,16 @@
   "regressionsAgainstPrevious": [],
   "artifacts": {
     "results": {
-      "path": ".evidence/day5-kernel-reconnaissance/20260830T045405Z-23380/results.jsonl",
-      "sha256": "887d789eee796a73fcd05c8c12715118e5be907421d751991ae0e473efd1c8d3"
+      "path": ".evidence/day5-kernel-reconnaissance/20260830T101312Z-14565/results.jsonl",
+      "sha256": "e20fc49700c0eff5165e5ab4a9ab500cf333e76ec4328ae6e11594c45b4fa800"
     },
     "routing": {
-      "path": ".evidence/kernel-dashboard/1bad886/routing.json",
-      "sha256": "d4f5c54d017635c4143a3ecd1720d1bdc3e5b52ba00701f75ed82cafc76b335e"
+      "path": ".evidence/kernel-dashboard/0a53458/routing.json",
+      "sha256": "5780908c2cddfb1d4695c69e9497d3f94a7f37f16023112331e28f349ac1e7dc"
     },
     "captureStatus": {
-      "path": ".evidence/kernel-dashboard/1bad886/reconnaissance.status",
-      "sha256": "21e79b6b71773344f50120a9b290ac2ab1024e3baef17773227cd4789a255c29"
+      "path": ".evidence/kernel-dashboard/0a53458/reconnaissance.status",
+      "sha256": "859d1dc7ff09e8c4146016057cb67050532fd70aaacd13c80a79cbddd48c331b"
     }
   }
 }
