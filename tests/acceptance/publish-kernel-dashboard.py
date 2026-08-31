@@ -38,7 +38,16 @@ ROUTER = ROOT / "tools/route-kernel-failures.py"
 COHORT = ROOT / "tests/contracts/day5-kernel-cohort.json"
 RECEIPT = ROOT / "tests/contracts/kernel-dashboard-receipt.json"
 EXPECTED_OBSERVATIONS = 48
-RECON_ARGS = ["--timeout", "120", "--parser-timeout", "10", "--parser-jobs", "4"]
+RECON_ARGS = [
+    "--timeout",
+    "120",
+    "--parser-timeout",
+    "10",
+    "--parser-jobs",
+    "4",
+    "--subject-profile",
+    "release",
+]
 
 
 def sha256(path: Path) -> str:
@@ -73,6 +82,26 @@ def check_cohort(run_dir: Path) -> None:
     used = run_dir / "kernel-cohort.json"
     if not used.exists() or sha256(used) != frozen:
         raise Refusal("cohort mismatch: the run did not use the frozen cohort")
+
+
+def measurement_configuration(run_dir: Path, root: Path = ROOT) -> dict:
+    path = run_dir / "run-config.json"
+    if not path.is_file():
+        raise Refusal("measurement configuration is absent")
+    config = json.loads(path.read_text())
+    expected = {
+        "subjectBuildProfile": "release",
+        "parserTimeoutSecondsPerTu": 10,
+        "parserJobs": 4,
+    }
+    actual = {name: config.get(name) for name in expected}
+    if actual != expected:
+        raise Refusal(f"measurement configuration mismatch: {actual!r}")
+    return {
+        **actual,
+        "change": "subject compiler changed from debug to release; timeout remained 10 seconds",
+        "runConfig": {"path": str(path.relative_to(root)), "sha256": sha256(path)},
+    }
 
 
 def regressions(current: list[dict], previous: list[dict]) -> list[str]:
@@ -130,6 +159,7 @@ def publish(previous_results: Path, evidence_dir: Path, subject_commit: str) -> 
     status = check_sealed(capture["status"])
     run_dir = run_dir_from_capture(capture["stdout"].read_text())
     check_cohort(run_dir)
+    measurement = measurement_configuration(run_dir)
     results = run_dir / "results.jsonl"
     current = load_results(results)
     previous = load_results(previous_results)
@@ -149,6 +179,7 @@ def publish(previous_results: Path, evidence_dir: Path, subject_commit: str) -> 
         "observer": {"path": str(OBSERVER.relative_to(ROOT)), "sha256": sha256(OBSERVER)},
         "capture": status,
         "command": " ".join(RECON_ARGS and [str(RECON.relative_to(ROOT)), *RECON_ARGS]),
+        "measurementConfiguration": measurement,
         "dashboard": summarize(current),
         "routing": routing["summary"]["byRoute"],
         "regressionsAgainstPrevious": [],
@@ -221,6 +252,35 @@ def self_test() -> int:
             pass
         if run_dir_from_capture("DAY5_KERNEL_RECON observed=48/48 evidence=/x/run-1 summary_sha256=0\n") != Path("/x/run-1"):
             failures.append("evidence line not parsed")
+        config_run = tmp / "configured-run"
+        config_run.mkdir()
+        (config_run / "run-config.json").write_text(
+            json.dumps(
+                {
+                    "subjectBuildProfile": "release",
+                    "parserTimeoutSecondsPerTu": 10,
+                    "parserJobs": 4,
+                }
+            )
+        )
+        try:
+            measurement_configuration(config_run, tmp)
+        except Refusal as error:
+            failures.append(f"release measurement configuration refused: {error}")
+        (config_run / "run-config.json").write_text(
+            json.dumps(
+                {
+                    "subjectBuildProfile": "debug",
+                    "parserTimeoutSecondsPerTu": 10,
+                    "parserJobs": 4,
+                }
+            )
+        )
+        try:
+            measurement_configuration(config_run, tmp)
+            failures.append("debug subject measurement configuration accepted")
+        except Refusal:
+            pass
     for f in failures:
         print("kernel-dashboard: FAIL:", f, file=sys.stderr)
     print("kernel-dashboard self-test:", "PASS" if not failures else "FAIL")

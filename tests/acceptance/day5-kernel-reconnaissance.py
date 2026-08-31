@@ -37,6 +37,7 @@ KERNEL_CONTRACT = PROJECT_ROOT / "contracts/kernel-target.json"
 SOURCE_ROOT = PROJECT_ROOT / ".build/linux-src"
 REFERENCE_ROOT = PROJECT_ROOT / ".build/reference"
 DEFAULT_EVIDENCE_ROOT = PROJECT_ROOT / ".evidence/day5-kernel-reconnaissance"
+SUBJECT_BUILD_PROFILE = "release"
 
 FAMILIES = ("gcc", "clang")
 LANES = ("gcc-lane-1", "gcc-lane-2", "clang-lane-1", "clang-lane-2")
@@ -564,7 +565,6 @@ def raw_projection(evocc: Path, original: list[str], lane: str, source: str) -> 
     projected = [str(evocc), "-E", "-P", "--target=aarch64-unknown-linux-gnu"]
     omitted: list[str] = []
     separate_value = {"-I", "-D", "-U", "-include", "-imacros", "-isystem", "-iquote"}
-    joined_prefixes = ("-I", "-D", "-U", "-include=", "-imacros=", "-isystem=", "-iquote=")
     index = 1
     while index < len(original):
         value = original[index]
@@ -1090,6 +1090,24 @@ def oracle_batches(
     return batches
 
 
+def subject_build_command(cargo: Path, profile: str) -> list[str]:
+    require(profile == SUBJECT_BUILD_PROFILE, f"unsupported subject build profile: {profile}")
+    return [
+        str(cargo),
+        "build",
+        "--locked",
+        "--offline",
+        "--release",
+        "-p",
+        "evocc",
+    ]
+
+
+def subject_binary_path(target_root: Path, profile: str) -> Path:
+    require(profile == SUBJECT_BUILD_PROFILE, f"unsupported subject build profile: {profile}")
+    return (target_root / profile / "evocc").resolve()
+
+
 def resolve_evocc(
     args: argparse.Namespace,
     evidence: Path,
@@ -1110,14 +1128,7 @@ def resolve_evocc(
     target_root = Path(build_environment["CARGO_TARGET_DIR"])
     build_stdout = evidence / "cargo-build.stdout"
     build_stderr = evidence / "cargo-build.stderr"
-    build_command = [
-        str(authority["cargo"]),
-        "build",
-        "--locked",
-        "--offline",
-        "-p",
-        "evocc",
-    ]
+    build_command = subject_build_command(authority["cargo"], args.subject_profile)
     host = build_env["toolchain"]["hostReplay"]
     runtime = build_env["containerRuntime"]
     receipt = {
@@ -1149,6 +1160,7 @@ def resolve_evocc(
             "forbiddenOverrideVariableNames": [],
         },
         "effectiveEnvironment": dict(sorted(build_environment.items())),
+        "subjectBuildProfile": args.subject_profile,
         "command": build_command,
         "buildInputs": artifact(build_inputs_path),
     }
@@ -1161,7 +1173,7 @@ def resolve_evocc(
         env=build_environment,
     )
     require(not timed_out and rc == 0, "cannot freshly build evocc for reconnaissance")
-    binary = (target_root / "debug/evocc").resolve()
+    binary = subject_binary_path(target_root, args.subject_profile)
     require(binary.is_file() and os.access(binary, os.X_OK), f"evocc binary is unavailable: {binary}")
     return binary, build_inputs
 
@@ -1356,6 +1368,7 @@ def summarize(
     controls: dict[str, Any],
     parser_timeout: int,
     parser_jobs: int,
+    subject_profile: str,
 ) -> dict[str, Any]:
     expected = len(contract["translationUnits"]) * 3
     require(len(results) == expected, f"missing observation records: expected {expected}, got {len(results)}")
@@ -1396,6 +1409,7 @@ def summarize(
             "path": str(evocc),
             "sha256": sha256_file(evocc),
             "freshPerRunCargoTarget": True,
+            "buildProfile": subject_profile,
             "buildInputs": artifact(evidence / "evocc-build-inputs.tsv"),
             "controls": controls,
         },
@@ -1597,6 +1611,26 @@ def run_self_tests(contract_path: Path) -> None:
                 fake_cargo_rejected = True
             require(fake_cargo_rejected, f"fake cargo {mutant} mutant bypassed authority")
 
+        release_cargo = Path("/pinned/cargo")
+        require(
+            subject_build_command(release_cargo, SUBJECT_BUILD_PROFILE)
+            == [
+                str(release_cargo),
+                "build",
+                "--locked",
+                "--offline",
+                "--release",
+                "-p",
+                "evocc",
+            ],
+            "reconnaissance release build command drifted",
+        )
+        require(
+            subject_binary_path(Path("/fresh-target"), SUBJECT_BUILD_PROFILE)
+            == Path("/fresh-target/release/evocc"),
+            "reconnaissance release binary path drifted",
+        )
+
         for override in (
             {"RUSTC_WRAPPER": str(temporary / "wrapper")},
             {"RUSTFLAGS": "-C opt-level=3"},
@@ -1643,6 +1677,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout", type=int, default=60)
     parser.add_argument("--parser-timeout", type=int, default=5)
     parser.add_argument("--parser-jobs", type=int, default=4)
+    parser.add_argument(
+        "--subject-profile",
+        choices=(SUBJECT_BUILD_PROFILE,),
+        default=SUBJECT_BUILD_PROFILE,
+    )
     return parser.parse_args()
 
 
@@ -1696,6 +1735,7 @@ def main() -> int:
             "generalTimeoutSeconds": args.timeout,
             "parserTimeoutSecondsPerTu": args.parser_timeout,
             "parserJobs": args.parser_jobs,
+            "subjectBuildProfile": args.subject_profile,
             "runner": {
                 "path": "runner.py",
                 "sha256": sha256_bytes(runner_start),
@@ -1837,6 +1877,7 @@ def main() -> int:
             controls,
             args.parser_timeout,
             args.parser_jobs,
+            args.subject_profile,
         )
         require(runner_path.read_bytes() == runner_start, "reconnaissance runner changed during run")
         require(
