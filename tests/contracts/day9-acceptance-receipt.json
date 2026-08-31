@@ -2,9 +2,14 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "8317e62feaec34595c9a4b6f3d484042e8d4ce67a855322f04cf53cff31e5998"
+    "sha256": "4ab6a29b9fe874436d609cfa568e6891b843401ae3d9ce25c571ca677615b408"
   },
-  "cutLine": "Revision 1.9.24 scope P5 is implemented: a zero integer constant expression cast to void * converts to object or function pointers with Null provenance across initialization, assignment, argument, return and comparison; an address constant survives an integer cast and pointer cast while relocation lowering remains the typed E3026 boundary. The tree is green at 1003/1003 workspace tests (1002/1002 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. The sealed dashboard has raw preprocessing at 16/16, dual-oracle clean parsing at 3/16, and zero regressions; Stage F1 remains OPEN on 15 E2911 packed-enum size assertions and 11 fixed-budget parser timeouts. The E2911 bisection identifies packed enum layout, not enumerator folding, and Section 10.1.9 does not yet specify that layout.",
+  "specification": {
+    "path": "docs/evoir-spec.md",
+    "revision": "1.9.25",
+    "sha256": "f7b2aebe013a45ff18334dd5f7000dcaea84f077194ebf09c2da687fecb63ea2"
+  },
+  "cutLine": "Revision 1.9.25 scopes P6 and P7 are implemented: packed enumerations use the measured smallest signed or unsigned integer mode, retain int enumeration constants, and reject packed plus aligned with E2903. The dashboard now measures the release binary under the unchanged 10-second budget, eliminating all six then-visible timeout artifacts. Profiling identified a quadratic lexical-tag scan; indexed lookup reduced 4x-input growth from 57.826x to 4.19x, and the frozen init-init-task to kernel-bpf-token release ratio is 1.07x. The tree is green at 1012/1012 workspace tests (1011/1011 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. Raw preprocessing is 16/16, dual-oracle clean parsing is 3/16, and there are zero regressions or timeouts. Stage F1 remains OPEN on 13 GCC lanes at E2001 __builtin_has_attribute and 13 Clang lanes at E2001 __builtin_va_start.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -581,9 +586,67 @@
     },
     "result": "PASS_STAGE_F1_OPEN"
   },
-  "subjectCommit": "269cac1",
+  "packedEnumRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.25, commit 30ed2fc; tests/contracts/day9-acceptance-contract.json scope P6",
+    "opened": "0fc1b93 (tests only; 1005 passed, 6 semantic failures, 1011 listed workspace tests; zero Rust build errors)",
+    "closed": "61d7884",
+    "implementationCommits": [
+      "61d7884"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/packed-enum-red.json",
+      "sha256": "5e08247116a8fa5a6a179ae658e4f9a69d0e9d5f77e213de3cd9687cd653ca20"
+    },
+    "declaredCapabilities": [
+      "packed enumeration storage uses the smallest signed or unsigned integer type that represents every enumerator and alignment equals size",
+      "enumeration constants retain type int while the enumeration's underlying signedness remains observable",
+      "packed is accepted before an enum tag or after its closing brace, plain enums remain 4/4, and packed plus aligned is refused with E2903"
+    ],
+    "focusedGreen": {
+      "command": "cargo test -p evocc-parser --test packed_enums -p evocc-types --test target_data_layout",
+      "passed": 17,
+      "failed": 0
+    },
+    "result": "PASS_STAGE_F1_OPEN"
+  },
+  "parserThroughputRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.25, commit 30ed2fc; tests/contracts/day9-acceptance-contract.json scope P7",
+    "measurementCommit": "f642fd7",
+    "opened": "3b83681 (tests only; 1011 passed, 1 scaling failure, 1012 listed workspace tests; zero Rust build errors)",
+    "closed": "d54214f",
+    "implementationCommits": [
+      "f642fd7",
+      "d54214f"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/parser-throughput-red.json",
+      "sha256": "199e5a1972e5def21a4540c3dff778d9f0bf77ec0fca6ba9bad187605ca5d84f"
+    },
+    "measurementConfiguration": {
+      "before": "debug subject binary; 10-second per-TU timeout; 4 parser jobs",
+      "after": "release subject binary; unchanged 10-second per-TU timeout; 4 parser jobs",
+      "publication": "20260831T194743Z-81561",
+      "timeoutsBefore": 6,
+      "timeoutsAfter": 0
+    },
+    "profile": {
+      "hotPath": "Parser::parse_type_specifier_inner -> SymbolTable::resolve_tag, with nested per-scope and per-binding linear scans",
+      "redGrowth": "57.826x elapsed-time growth for 4x generated tag input (128: 3.701791 ms; 512: 214.061375 ms)",
+      "greenGrowth": "4.19x elapsed-time growth for 4x generated tag input (128: 132.959 us; 512: 557.375 us)",
+      "postFixSample": "zero resolve_tag frames in the sampled release parse"
+    },
+    "realCorpus": {
+      "reported": "init-init-task 20.03 s versus kernel-bpf-token 1.15 s",
+      "reproducedBaseline": "at exact 30ed2fc on the frozen inputs: init-init-task 3.09 s, kernel-bpf-token 3.11 s, ratio 0.994x",
+      "reproducedGreen": "after indexed lookup: init-init-task 1.90 s, kernel-bpf-token 1.77 s, ratio 1.07x",
+      "gate": "PASS: 1.07x <= 3x",
+      "claimBoundary": "The reported 17x ratio did not reproduce; the independently profiled quadratic tag-lookup defect did reproduce and is the behavior fixed here."
+    },
+    "result": "PASS_STAGE_F1_OPEN"
+  },
+  "subjectCommit": "d54214f",
   "gate": {
-    "claim": "Both revision 1.9.24 scope-P5 pointer-constant corrections are implemented and their tests are green. The tree has 1003 listed workspace tests (1002 all-target) and zero dashboard regressions; raw preprocessing is 16/16, dual-oracle clean parsing is 3/16, and Stage F1 remains open on the measured packed-enum fold defect and fixed-budget timeouts.",
+    "claim": "Revision 1.9.25 scopes P6 and P7 are implemented and green. Packed-enum layout matches the sealed measurements, the release-profile dashboard has zero timeouts under the unchanged 10-second budget, and indexed lexical tag lookup passes both the synthetic scaling gate and the frozen real-TU ratio gate. The tree has 1012 listed workspace tests (1011 all-target), zero dashboard regressions, raw preprocessing at 16/16 and dual-oracle clean parsing at 3/16. Stage F1 remains open only on the measured E2001 frontier.",
     "measured": {
       "dualOracleCleanParseTus": "3/16",
       "rawPreprocessClean": "16/16",
@@ -591,8 +654,8 @@
       "remainingParserLanes": 26,
       "remainingParserUnits": 13,
       "remainingFirstErrors": {
-        "E2911 static-assertion-failed at include/linux/rw_hint.h:22": 15,
-        "PARSE_TIMEOUT at the fixed 10-second parser budget": 11
+        "gcc-preprocessed-parser E2001 undeclared-identifier: __builtin_has_attribute": 13,
+        "clang-preprocessed-parser E2001 undeclared-identifier: __builtin_va_start": 13
       },
       "constantExpressionClosureTests": "15/15",
       "gnuArrayInt128Tests": "13/13",
@@ -606,8 +669,15 @@
       "parserCheckpointScalingTests": "1/1",
       "symbolTableTransactionTests": "2/2",
       "typeInternerTransactionTests": "2/2",
-      "workspaceTests": "1003/1003",
-      "allTargetTests": "1002/1002",
+      "packedEnumTests": "7/7",
+      "targetDataLayoutTests": "10/10",
+      "tagResolutionScalingTests": "1/1",
+      "tagResolutionFourfoldGrowth": "57.826x RED; 4.19x GREEN",
+      "frozenRealTuRatio": "1.07x <= 3x",
+      "subjectBuildProfile": "release",
+      "parserTimeoutSecondsPerTu": 10,
+      "workspaceTests": "1012/1012",
+      "allTargetTests": "1011/1011",
       "specifiedFrontier": false,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
@@ -624,8 +694,8 @@
       "invalidUpdateOperandLanesRemaining": 0,
       "staticRelocationParserLanesRemaining": 0,
       "nullFunctionPointerConversionLanesRemaining": 0,
-      "staticAssertionFailedLanes": 15,
-      "parserTimeoutLanes": 11,
+      "staticAssertionFailedLanes": 0,
+      "parserTimeoutLanes": 0,
       "surveyUnavailableUnits": 0,
       "unchangedPreviouslyAvailableSurveyRoots": "15/15",
       "statementExpressionLanesRemaining": 0,
@@ -650,14 +720,14 @@
       "invalidObjectSizeModeDiagnosticTests": "2/2",
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260831T070738Z-60065/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260831T194743Z-81561/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "2f0e4241f1cdc4c96599b5336e1bcfd853cec559a96a88c404ee4b9fca9fbf39",
-      "subjectCommit": "269cac1",
-      "publishedFromRun": "20260831T172344Z-47247"
+      "sha256": "b139670e7523e039d110a8c05d160d5dd4b83c6b5e375e4595365ff3565e6bf9",
+      "subjectCommit": "d54214f",
+      "publishedFromRun": "20260831T203043Z-22845"
     },
-    "result": "POINTER_CONSTANT_CONVERSIONS_PASS_STAGE_F1_OPEN"
+    "result": "PACKED_ENUM_AND_PARSER_THROUGHPUT_PASS_STAGE_F1_OPEN"
   },
   "lanes": {
     "clean": {
@@ -671,32 +741,43 @@
     },
     "stillFailing": [
       {
-        "count": 15,
-        "firstError": "E2911 static-assertion-failed at include/linux/rw_hint.h:22 (`sizeof(enum rw_hint) == 1`)",
-        "lanes": "7 gcc-preprocessed-parser plus 8 clang-preprocessed-parser",
-        "units": [
-          "init-do-mounts",
-          "init-do-mounts-initrd",
-          "kernel-power-console",
-          "lib-crypto-mpi-generic-mpih-lshift",
-          "mm-memtest",
-          "mm-mincore",
-          "mm-mprotect",
-          "mm-page-vma-mapped"
-        ],
-        "oracleSplit": "mm-mprotect reaches E2911 in the clang lane and exceeds the fixed budget in the gcc lane; the other seven units reach E2911 in both lanes"
-      },
-      {
-        "count": 11,
-        "firstError": "PARSE_TIMEOUT at the unchanged 10-second parser budget",
-        "lanes": "6 gcc-preprocessed-parser plus 5 clang-preprocessed-parser",
+        "count": 13,
+        "firstError": "E2001 undeclared-identifier: __builtin_has_attribute",
+        "lanes": "gcc-preprocessed-parser",
         "units": [
           "init-init-task",
+          "init-do-mounts-initrd",
           "init-version-timestamp",
-          "kernel-bpf-token",
+          "init-do-mounts",
           "kernel-locking-semaphore",
+          "kernel-bpf-token",
+          "kernel-power-console",
           "kernel-power-main",
-          "mm-mprotect (gcc only)"
+          "lib-crypto-mpi-generic-mpih-lshift",
+          "mm-memtest",
+          "mm-mprotect",
+          "mm-mincore",
+          "mm-page-vma-mapped"
+        ]
+      },
+      {
+        "count": 13,
+        "firstError": "E2001 undeclared-identifier: __builtin_va_start",
+        "lanes": "clang-preprocessed-parser",
+        "units": [
+          "init-init-task",
+          "init-do-mounts-initrd",
+          "init-version-timestamp",
+          "init-do-mounts",
+          "kernel-locking-semaphore",
+          "kernel-bpf-token",
+          "kernel-power-console",
+          "kernel-power-main",
+          "lib-crypto-mpi-generic-mpih-lshift",
+          "mm-memtest",
+          "mm-mprotect",
+          "mm-mincore",
+          "mm-page-vma-mapped"
         ]
       }
     ],
@@ -915,6 +996,21 @@
         "commit": "269cac1",
         "run": "20260831T172344Z-47247",
         "parseLanesStoppedOn": "revision 1.9.24 publication: all 26 null-function-pointer E2102 lanes and both address-constant E2208 lanes are gone; lib-kstrtox becomes the third dual-oracle clean unit; 15 lanes reach E2911 on packed enum size and 11 exceed the unchanged 10-second parser budget; raw 16/16 clean; dual-oracle clean 3/16; 0 regressions; Stage F1 remains open"
+      },
+      {
+        "commit": "61d7884",
+        "run": "20260831T193604Z-13726",
+        "parseLanesStoppedOn": "revision 1.9.25 packed-enum publication: all 15 E2911 lanes are gone; six debug-profile parser lanes time out and the others reach E2001 __builtin_has_attribute or __builtin_va_start; raw 16/16 clean; dual-oracle clean 3/16; 0 regressions; Stage F1 remains open"
+      },
+      {
+        "commit": "f642fd7",
+        "run": "20260831T194743Z-81561",
+        "parseLanesStoppedOn": "release-profile measurement publication: all six debug-profile timeout artifacts disappear under the unchanged 10-second budget; 13 GCC lanes reach E2001 __builtin_has_attribute and 13 Clang lanes reach E2001 __builtin_va_start; raw 16/16 clean; dual-oracle clean 3/16; 0 regressions"
+      },
+      {
+        "commit": "d54214f",
+        "run": "20260831T203043Z-22845",
+        "parseLanesStoppedOn": "indexed lexical-tag lookup publication: the same 13 plus 13 typed E2001 frontier remains, with zero timeouts and zero regressions; synthetic 4x-input growth is 4.19x and the frozen init-init-task to kernel-bpf-token release ratio is 1.07x; raw 16/16 clean; dual-oracle clean 3/16; Stage F1 remains open"
       }
     ]
   },
@@ -1169,6 +1265,54 @@
       "regressionsAgainstPrevious": 0,
       "scopeP5": "PASS",
       "bisection": "enumerator values agree; packed enum is size/alignment 1/1 in GCC-14 and Clang-19 but 4/4 in the subject"
+    },
+    "packedEnumsAfter": {
+      "run": "20260831T193604Z-13726",
+      "subjectCommit": "61d7884",
+      "resolvedFirstErrorClasses": {
+        "E2911 static-assertion-failed at include/linux/rw_hint.h:22": 15
+      },
+      "nextFirstErrorClasses": {
+        "E2001 undeclared-identifier: __builtin_has_attribute or __builtin_va_start": 20,
+        "PARSE_TIMEOUT with debug subject binary": 6
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "3/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "scopeP6": "PASS"
+    },
+    "releaseMeasurementAfter": {
+      "run": "20260831T194743Z-81561",
+      "subjectCommit": "f642fd7",
+      "measurementConfiguration": "release subject binary; unchanged 10-second per-TU timeout; 4 parser jobs",
+      "resolvedFirstErrorClasses": {
+        "PARSE_TIMEOUT with debug subject binary": 6
+      },
+      "nextFirstErrorClasses": {
+        "gcc-preprocessed-parser E2001 undeclared-identifier: __builtin_has_attribute": 13,
+        "clang-preprocessed-parser E2001 undeclared-identifier: __builtin_va_start": 13
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "3/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "scopeP7Measurement": "PASS"
+    },
+    "tagIndexAfter": {
+      "run": "20260831T203043Z-22845",
+      "subjectCommit": "d54214f",
+      "nextFirstErrorClasses": {
+        "gcc-preprocessed-parser E2001 undeclared-identifier: __builtin_has_attribute": 13,
+        "clang-preprocessed-parser E2001 undeclared-identifier: __builtin_va_start": 13
+      },
+      "syntheticScaling": "4x input grows 4.19x after the fix, down from 57.826x",
+      "realTuRatio": "init-init-task 1.90 s / kernel-bpf-token 1.77 s = 1.07x <= 3x",
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "3/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "scopeP7Throughput": "PASS"
     }
   },
   "attributes": {
@@ -1215,13 +1359,13 @@
   },
   "tests": {
     "workspace": {
-      "passed": 1002,
+      "passed": 1011,
       "failed": 0,
-      "command": "CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$' (1002)",
+      "command": "CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$' (1011)",
       "workspaceIncludingDocTests": {
-        "passed": 1003,
+        "passed": 1012,
         "failed": 0,
-        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list | rg -c ': test$' (1003)"
+        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list | rg -c ': test$' (1012)"
       }
     },
     "suites": {
@@ -1278,8 +1422,18 @@
         "command": "cargo test -p evocc-parser --test compiler_int128_spellings"
       },
       "crates/evocc-types/tests/target_data_layout.rs": {
-        "passed": 9,
+        "passed": 10,
         "command": "cargo test -p evocc-types --test target_data_layout"
+      },
+      "crates/evocc-parser/tests/packed_enums.rs": {
+        "passed": 7,
+        "command": "cargo test -p evocc-parser --test packed_enums"
+      },
+      "crates/evocc-chir/tests/tag_resolution_scaling.rs": {
+        "passed": 1,
+        "command": "cargo test -p evocc-chir --test tag_resolution_scaling -- --nocapture",
+        "red": "128 tags 3.701791 ms; 512 tags 214.061375 ms; 57.826x growth",
+        "green": "128 tags 132.959 us; 512 tags 557.375 us; 4.19x growth"
       },
       "crates/evocc-cpp/tests/preprocessing_token_grammar.rs": {
         "passed": 7,
@@ -1488,7 +1642,7 @@
     },
     "ruff": {
       "result": "clean",
-      "command": "ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py"
+      "command": "ruff check tests/acceptance tools"
     },
     "publisherSelfTest": {
       "result": "PASS",
@@ -1496,17 +1650,17 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "269cac153ec32240e9171d0e546218c44a8bc33b",
-    "path": "/private/tmp/c30-p5-replay.txr1ol/repo",
-    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-p5-replay.txr1ol/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$'",
+    "commit": "d54214f7fc74cacd90e565ceeb98095355069cc5",
+    "path": "/private/tmp/c30-p7-replay.GqMfWD/repo",
+    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-p7-replay.GqMfWD/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance tools; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$'",
     "measured": {
-      "passed": 1002,
+      "passed": 1011,
       "failed": 0,
       "clippy": 0,
       "fmt": "clean",
       "ruff": "clean",
       "selfTest": "PASS",
-      "countCommand": 1002,
+      "countCommand": 1011,
       "objectsAlternates": "absent"
     }
   },
@@ -1535,8 +1689,7 @@
     "H-CLOSING-EDGE-CLEANUP: statement-expression lifetime closure is required on every exit but the lowering paragraph does not define the cleanup edge form.",
     "G2-VOLATILE-UNION-COPY: section 10.1.3 requires volatile aggregates to lower as memberwise volatile accesses, but a union has overlapping members and the specification provides no selected-member authority. Volatile union copy therefore remains fail-closed rather than reading every overlapping member.",
     "G2-VOLATILE-BIT-FIELD-COPY: section 10.1.3 does not freeze the access width, mask sequence, or trace granularity for a volatile aggregate member that is a bit-field. That form remains fail-closed.",
-    "G2-AGGREGATE-CALL-ABI: the specification requires one semantic copy for by-value arguments and returns but does not freeze the hidden return-destination parameter position or deterministic origin identity for caller-owned aggregate temporaries. The implementation uses an address-based internal ABI with the return destination before mem/world tokens and a high-bit function-ordinal origin namespace; no broader ABI claim is made.",
-    "P5-PACKED-ENUM-LAYOUT: Section 10.1.9 permits attributes after an enum definition and says packed is one of exactly two applied layout attributes, but defines packed layout only for records and members. The new first error is `_Static_assert(sizeof(enum rw_hint) == 1)`; GCC-14 and Clang-19 measure size/alignment 1/1 while the subject computes 4/4. This receipt names the gap and does not infer the missing enum rule."
+    "G2-AGGREGATE-CALL-ABI: the specification requires one semantic copy for by-value arguments and returns but does not freeze the hidden return-destination parameter position or deterministic origin identity for caller-owned aggregate temporaries. The implementation uses an address-based internal ABI with the return destination before mem/world tokens and a high-bit function-ordinal origin namespace; no broader ABI claim is made."
   ],
   "processDeviations": [
     "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (adce449), aligned arguments as constant expressions (ed8302b), attribute positions in members, block scope and parameters (eae3e42).",
@@ -1590,6 +1743,8 @@
     "The scope-O byte-identity fixture initially called an undefined external function, which the EvoIR validator correctly rejects even in the spelled-out control. The fixture was corrected during GREEN to provide a real definition while retaining the inherited extern redeclaration; the RED still failed first at typeof(function) with E1001 and the corrected pair proves no front-end-only form survives.",
     "A post-fix attempt to run the base and attributed layout observers concurrently was rejected because they share one mutable container identity: one failed deleting the other's running container and the other detected a changing image inventory. Neither result was used; fresh sequential runs produced 128/128 and 22/22 ORACLE_CONSENSUS.",
     "The opening P5 RED proved all five conversion contexts at the parser boundary but executed only assignment and truth testing. Inspection during GREEN found that call and return lowering used a separate function-value mapper that rejected function pointers entirely. The semantic commit therefore adds one weighted dual-interpreter execution case covering initialization, assignment, argument, return and comparison; it refines the declared null-conversion capability and does not open a new one.",
-    "The first two packed-enum bisection probe attempts were rejected as evidence because the sealed read-only container prevented compiler temporary or output files under /tmp. The accepted third run binds TMPDIR and the executable to the writable evidence mount, records both compiler identities, and obtains identical size/alignment 1/1 results; only that output is cited."
+    "The first two packed-enum bisection probe attempts were rejected as evidence because the sealed read-only container prevented compiler temporary or output files under /tmp. The accepted third run binds TMPDIR and the executable to the writable evidence mount, records both compiler identities, and obtains identical size/alignment 1/1 results; only that output is cited.",
+    "The scope-P7 measurement configuration changed explicitly from the debug subject compiler to the release subject compiler while retaining the 10-second per-TU timeout and four parser jobs. The observer argv, run configuration and receipt all bind that change; it was not represented as a silent timeout increase.",
+    "The reported release timing of init-init-task 20.03 seconds versus kernel-bpf-token 1.15 seconds did not reproduce on the frozen byte-identical inputs at exact baseline 30ed2fc: measured medians were 3.09 and 3.11 seconds. That conflict is retained rather than relabelled. Independent sampling and a deterministic scaling RED exposed a real quadratic lexical-tag lookup; the indexed implementation closes that measured defect and yields a 1.07x real-TU ratio."
   ]
 }
