@@ -1,0 +1,100 @@
+{
+  "receiptId": "c30.packed-enum.red.v1",
+  "state": "RED",
+  "baselineCommit": "30ed2fc",
+  "classification": "tests-only RED",
+  "authority": {
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.25",
+      "commit": "30ed2fc",
+      "sections": ["10.1.9", "10.1.14"],
+      "sha256": "f7b2aebe013a45ff18334dd5f7000dcaea84f077194ebf09c2da687fecb63ea2"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "P6",
+      "sha256": "4ab6a29b9fe874436d609cfa568e6891b843401ae3d9ce25c571ca677615b408"
+    },
+    "oracleEvidence": {
+      "source": ".evidence/builtin-probes/20260901-2c23684c/penum.c",
+      "sourceSha256": "dcd51abeeafeec08ac9f22b2b6f9cf4061c218f7bafa0885628cf44f02d22db1",
+      "output": ".evidence/builtin-probes/20260901-2c23684c/penum.out",
+      "outputSha256": "b27720613a6bc0d72c91513ac6c20886066ecbc96e763f94c8cefd000614eda2"
+    }
+  },
+  "declaredMissingCapabilities": [
+    "packed-enumerations-use-the-smallest-signed-or-unsigned-integer-layout-and-refuse-packed-plus-aligned"
+  ],
+  "productionEdits": [],
+  "testsOnlyChanges": [
+    {
+      "path": "crates/evocc-parser/tests/packed_enums.rs",
+      "sha256": "7edd66e07f96d60cf5b5d2a84513297552be4b4b3bc7118d4befefe24b5e895b"
+    },
+    {
+      "path": "crates/evocc-types/tests/target_data_layout.rs",
+      "sha256": "90facc9b0932215cd3c90c2fa0968d00a9660219dfb0701fb976314d69cecef1"
+    }
+  ],
+  "focusedRed": {
+    "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test packed_enums -p evocc-types --test target_data_layout --no-fail-fast",
+    "passed": 11,
+    "failed": 6,
+    "buildErrors": 0,
+    "diagnostics": [
+      "packed_enums_use_the_smallest_unsigned_mode: measured 0..255 layout is 4/4 instead of 1/1",
+      "packed_enums_with_negative_values_use_the_smallest_signed_mode: measured -1..6 layout is 4/4 instead of 1/1",
+      "packed_applies_before_the_tag_and_after_the_closing_brace: prefix attribute layout is 4/4 instead of 1/1",
+      "packed_and_aligned_on_one_enum_is_refused: conflicting combination is accepted instead of E2903",
+      "kernel_rw_hint_size_assertion_holds: E2911 static-assertion-failed because sizeof(enum rw_hint) is 4 instead of 1",
+      "packed_enumerations_use_the_smallest_representable_integer_layout: layout engine returns 4/4 for range 0..255"
+    ],
+    "passingControls": [
+      "plain enum remains 4/4",
+      "enumeration constants remain int and a negative packed enum behaves signed",
+      "all nine pre-existing target-data-layout tests remain green"
+    ]
+  },
+  "workspaceRed": {
+    "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet",
+    "listed": 1011,
+    "listedDerivation": "the verified 1003-test baseline plus seven new packed-enum parser tests and one new target-layout test",
+    "passed": 1005,
+    "failed": 6,
+    "unexpectedFailures": 0,
+    "buildErrors": 0
+  },
+  "nonTestGates": {
+    "clippy": {
+      "command": "cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py",
+      "result": "clean"
+    },
+    "baseLayout": {
+      "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "PASS 128/128; ORACLE_CONSENSUS; mismatchCount 0"
+    },
+    "attributedLayout": {
+      "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "PASS 22/22; ORACLE_CONSENSUS; mismatchCount 0"
+    }
+  },
+  "dashboardBaseline": {
+    "run": "20260831T172344Z-47247",
+    "rawPreprocess": "16/16",
+    "dualOracleCleanParse": "3/16",
+    "firstErrors": {
+      "E2911 static-assertion-failed at include/linux/rw_hint.h:22": 15,
+      "PARSE_TIMEOUT at the fixed 10-second parser budget": 11
+    }
+  },
+  "specGap": null
+}

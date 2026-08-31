@@ -1,7 +1,8 @@
 use evocc_types::{
     ArrayBound, BitFieldSpec, CanonicalType, ComplexBase, EnumConstant, FloatKind,
     FunctionParameters, GnuInt128Signedness, IntRank, LayoutError, Qualifiers, RecordField,
-    TagDefinition, TagKind, TargetDataLayout, TypeInterner, TypeKind, TypeLayout,
+    TagDefinition, TagKind, TagLayoutAttributes, TargetDataLayout, TypeInterner, TypeKind,
+    TypeLayout,
 };
 
 fn plain(kind: TypeKind) -> CanonicalType {
@@ -125,6 +126,51 @@ fn aarch64_lp64_scalar_pointer_array_and_enum_layouts() {
         Ok(TypeLayout::new(8, 8)),
         "a mixed negative/above-INT_MAX enum fits neither int nor unsigned int"
     );
+}
+
+#[test]
+fn packed_enumerations_use_the_smallest_representable_integer_layout() {
+    let cases = [
+        (0, 255, TypeLayout::new(1, 1)),
+        (0, 65_535, TypeLayout::new(2, 2)),
+        (0, 65_536, TypeLayout::new(4, 4)),
+        (0, i64::from(u32::MAX), TypeLayout::new(4, 4)),
+        (-1, 6, TypeLayout::new(1, 1)),
+        (-1, 200, TypeLayout::new(2, 2)),
+    ];
+
+    for (minimum, maximum, expected) in cases {
+        let mut types = TypeInterner::new();
+        let tag = types.declare_tag(TagKind::Enum, None);
+        let ty = types.intern(plain(TypeKind::Enum(tag)));
+        assert!(types.set_tag_layout(
+            tag,
+            TagLayoutAttributes {
+                packed: true,
+                ..TagLayoutAttributes::default()
+            }
+        ));
+        types
+            .complete_tag(
+                tag,
+                TagDefinition::Enum(vec![
+                    EnumConstant {
+                        name: "minimum".into(),
+                        value: minimum,
+                    },
+                    EnumConstant {
+                        name: "maximum".into(),
+                        value: maximum,
+                    },
+                ]),
+            )
+            .unwrap();
+        assert_eq!(
+            TargetDataLayout::aarch64_unknown_linux_gnu().layout_of(&types, ty),
+            Ok(expected),
+            "enumerator range {minimum}..{maximum}"
+        );
+    }
 }
 
 #[test]
