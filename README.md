@@ -1,18 +1,30 @@
 # EvoCC
 
-**An equality-native C compiler.** EvoCC compiles GNU C to AArch64 without LLVM or GCC anywhere in the pipeline — its own preprocessor, parser, IR, optimizer, and backend. Its distinguishing choice is that **equivalence is persistent compiler state**: optimization accumulates alternative forms of a program in an e-graph rather than destructively rewriting it, and every rewrite emits a proof certificate that a standalone checker replays without trusting the optimizer. The target is not a toy: a pinned Linux 6.18.44 `arm64 virtconfig` kernel that compiles, links, and boots under QEMU, with an EvoCC-built `/init` printing the marker.
+**An equality-native C compiler, built to answer four questions.** EvoCC compiles GNU C to AArch64 with no LLVM or GCC anywhere in the pipeline — its own preprocessor, parser, IR, optimizer, and backend. Its distinguishing choice is that **equivalence is persistent compiler state**: optimization accumulates alternative forms of a program in an e-graph rather than destructively rewriting it, and every rewrite emits a proof certificate that a standalone checker replays without trusting the optimizer. The target is a pinned Linux 6.18.44 `arm64 virtconfig` kernel that compiles, links, and boots under QEMU with an EvoCC-built `/init`. The compiler is the instrument; the questions below are the experiment.
 
 ![The pipeline](docs/images/architecture.png)
 
-## Why
+## The questions
 
-Conventional compilers destroy information at every step: each rewrite discards the form it replaced, so later passes cannot recover it and phase ordering becomes a permanent source of missed optimizations. Equality saturation fixes that by keeping every equivalent form until a cost model chooses, but it has stayed largely in research because real languages have effects, undefined behavior, and pointer provenance that an e-graph will happily "optimize" away. The bet here is that this becomes tractable if the semantics are made explicit *before* the e-graph sees the program — memory as tokens, UB as assumptions, provenance as part of pointer identity — and if every union carries a machine-checkable justification. A compiler whose rewrite library will increasingly be written by AI agents needs proofs as a product, not a debugging aid. Booting a real kernel is the only honest test that the semantics survived contact with reality.
+One principle runs through all four: **separate what must be true from what must be found.** Give the first to machines that cannot be persuaded — sealed oracles, proof checkers, interpreters, a specification that cites its probes. Give the second to machines that are good at proposing and bad at being right — language models and evolutionary search. A single structural decision, an e-class whose members are equivalent by construction plus an independent proof checker, serves every question here. It was built for the second; it turned out to be the governance mechanism for the first and the safety boundary for the last.
+
+**Q0 — Can a specification be the sole authority for an AI executor?**
+The claim: an AI executor bound by a versioned specification, sealed oracles, tests-only red windows declared in advance, and the right to *stop* at a specification gap produces a compiler whose errors surface as stops, not as miscompilations. Refuted by a semantic divergence that passes every gate and reaches a published dashboard — or by governance that costs more than the errors it prevents.
+
+**Q1 — Can AI build, from nothing, a compiler that is correct on industrial input?**
+Not "state of the art": *correct on the Linux kernel*, layer by layer — layout bit-exact against sealed GCC and Clang, semantics agreed by two interpreters, every rewrite proof-replayed, and finally a kernel that boots. The expert's role in this is judge and designer of measurement, not source of truth; the data so far says the expert is wrong about one assertion in five, and the oracle catches it. Refuted by a class of construct the loop cannot specify and measure, or — most informatively — by a kernel that compiles, passes every gate, and does not boot.
+
+**Q2 — Can superoptimization replace the pass pipeline?**
+In its literal form this has a known answer: unguided saturation explodes. The falsifiable form: within a *deterministic* budget (iterations and nodes, never wall-clock), can a proof-carrying e-graph replace the scalar and memory optimization pipeline on the frozen kernel, producing code within a fixed margin of GCC `-O2` on code size first and runtime second? The field's prior is that e-graphs replace the scalar mid-end and nothing more; the part beyond that prior is memory rewrites carrying provenance proofs. Refuted by budget exhaustion on a material fraction of kernel functions, by extracted code outside the margin, or by memory rewrites that cannot carry a checkable proof.
+
+**Q3 — Can the optimizer's policy improve itself?**
+The policy is three things — the rule set, the cost model, the schedule — and today all three are hand-written. The question is whether they can be proposed by a language model, selected by evolution, and measured by regression *while correctness stays entirely outside the loop*. The cost model and the schedule search a space that is already verified: every candidate an e-class offers is equivalent by construction, so no tuning can make the compiler wrong. Rules are different — a new rule is a universal claim and must be derived from existing rules, proven, or reviewed before it enters the release set; differential testing alone does not count. Refuted by evolved policies that fail to beat hand-written ones on held-out corpora, or by proposed rules whose survival rate does not justify the cost of verifying them.
 
 ![Rewriting in place versus merging into an e-class](docs/images/why.png)
 
 ## How
 
-Every claim in this repository is a **measured number with the command that produced it**, replayed from sealed evidence. Layout and language semantics are frozen against a sealed GCC-14.2 / Clang-19.1 container: where the two disagree we record `ORACLE_CONFLICT` and take the answer that refuses rather than voting, and no specification sentence about oracle-observable behavior ships without its probe. Work runs as a loop: freeze the rule in `docs/evoir-spec.md`, open a tests-only RED window whose failures are declared in advance, implement, then publish a kernel-telemetry dashboard from observer-sealed evidence that reports the next first-error site. Kernel telemetry orders work inside a stream; nothing is claimed from intuition, and a specification gap stops execution rather than being guessed at. The specification is authoritative and versioned (currently revision 1.9.21, ~3,900 lines); the acceptance contract records every ruling and every deferral with the error code that counts it.
+Every claim in this repository is a **measured number with the command that produced it**, replayed from sealed evidence. Language and layout semantics are frozen against a sealed GCC-14.2 / Clang-19.1 container: where the two disagree the specification records `ORACLE_CONFLICT` and takes the answer that refuses rather than voting, and no sentence about oracle-observable behavior ships without its probe. Work runs as a loop — freeze the rule in `docs/evoir-spec.md`, open a tests-only red window whose failures are declared first, implement, gate, publish a kernel-telemetry dashboard from observer-sealed evidence that names the next first-error site — and a specification gap stops execution rather than being guessed at. The specification is authoritative and versioned (revision 1.9.23); the acceptance contract records every ruling and every deferral with the diagnostic code that counts it.
 
 ![How the work is driven](docs/images/loop.png)
 
@@ -20,7 +32,7 @@ Every claim in this repository is a **measured number with the command that prod
 
 ## Roadmap 0.1
 
-Status is measured, not estimated. `DONE` means a gate is green on sealed evidence.
+Status is measured, not estimated. `done` means a gate is green on sealed evidence.
 
 | Capability | Status | What the gate measures |
 |---|---|---|
@@ -40,67 +52,7 @@ Status is measured, not estimated. `DONE` means a gate is green on sealed eviden
 | ABIs and native flight gates | open | — |
 | Kernel codegen, link, boot | open | — |
 
-The parse count has sat at 2/16 while nine distinct blockers were cleared and
-republished with zero regressions: `__attribute__`, `typeof`/`_Generic`, pointer
-updates, `asm` and the overflow builtins, statement expressions, the
-compile-time builtins, aggregate copies, `__typeof_unqual__`, and places rooted
-at an address-of. A unit is clean only when its *last* blocker falls, so the
-count is a lagging indicator and the frontier is the real one.
-
-### Front end
-
-**EvoCPP — preprocessor · DONE**
-A full C11 preprocessing-token implementation (`crates/evocc-cpp`), not a token approximation: pp-numbers including pasted results like `1_MODULE`, stray characters that survive stringification, `##` re-lexing, and `_Pragma`. It presents itself as the layout oracle's dialect — the sealed GCC-14.2 aarch64-linux predefined set of 421 macros is copied into the crate and digest-checked by a test, and `__has_attribute` / `__has_builtin` / `__has_feature` / `__has_include` answer from measured tables rather than guesses. `#pragma pack` is applied to record layout with its measured numbers. **Gate green: all 16 kernel cohort units preprocess clean (16/16).**
-
-**Lexer and C11 parser · DONE**
-`crates/evocc-lex` and `crates/evocc-parser` cover C11 plus the GNU dialect the kernel actually uses, verified against 142 sealed lexer goldens and a 1,000-snippet generated parse corpus. Implemented and oracle-checked: `__attribute__` in all ten positions with `aligned`/`packed` applied to layout, `typeof`, `__typeof_unqual__`, `_Generic`, statement expressions, designated initializers and compound literals, `asm` including `asm goto`, the compile-time builtin family, `__auto_type`, case ranges, and anonymous-member promotion. Every construct's semantics were measured in the sealed container before implementation.
-
-**Type system and layout · DONE**
-`crates/evocc-types` computes layout for the AArch64 target, checked byte for byte against the sealed GCC/Clang consensus by two frozen corpora — 128 base cases and 22 attributed cases, both at 0 mismatches. Bit-fields, packing, alignment attributes and zero-length arrays are included; the oracle corrected the specification twice during development, and both corrections are recorded in the revision log.
-
-**Kernel parse closure · OPEN**
-_Placeholder._ 2 of 16 cohort units parse clean under both oracles as of the last publication. The remaining blocker measured there is a place expression rooted at an address-of (`(&h->head)->next`), which `container_of` and `list_for_each_entry` expand to — 28 lanes across 14 units.
-
-### Semantics
-
-**C-HIR and the semantic interpreter · DONE**
-`crates/evocc-chir` is a checked high-level IR carrying source spans, an allocation manifest, and a memory model with per-byte initializedness and pointer provenance. Its interpreter is one of the two authorities used for differential testing, and it reports undefined behavior as typed diagnostics rather than by producing a value.
-
-**EvoIR — block-argument SSA · DONE**
-`crates/evocc-evoir` defines a typed SSA IR where memory and observable effects are explicit `mem<all>` and `world` tokens rather than implicit ordering, so a rewrite cannot silently reorder them. It has a validator, an interpreter, and a byte-level textual form that round-trips. `fib`, loops, recursion and calls execute identically in the C-HIR and EvoIR interpreters (day-6 receipt `ACCEPTED`).
-
-**Semantic lowering · DONE**
-`crates/evocc-lower` lowers C-HIR to EvoIR with undefined behavior made explicit as `ub.assume.<reason>` obligations before any optimization runs. Aggregate assignment, copy-initialization and by-value calls lower to a single `copy` instruction that transfers bytes with their initializedness; front-end-resolved constructs (`typeof`, `_Generic`, compile-time builtins) are proven to leave no trace by lowering them beside their hand-written equivalents and requiring byte-identical modules.
-
-**Equality engine and proofs · DONE (v0)**
-`crates/evocc-egraph` provides union-find, hashconsing and congruence with a justification on every union; `crates/evocc-eqopt` applies the reviewed `p0.scalar.v1` rewrite set and emits EVP1 certificates. `evo-proofcheck` is a standalone binary that independently validates every arithmetic rewrite without trusting the optimizer (day-8 receipt `ACCEPTED`). Memory instructions are opaque to the optimizer, and a trap terminator is explicitly a report and never a licence to treat a block as dead.
-
-**Analysis lattices and bounded scheduler · OPEN**
-_Placeholder._ Not started. Budgets must be counted in iterations and nodes, never wall-clock, or the reproducible-build gate is unreachable.
-
-**Randomized semantic gate · OPEN**
-_Placeholder._ Not started: no random EvoIR generator, no Csmith harness, no proof-replay campaign.
-
-### Backend
-
-**EvoMIR, register allocation, AArch64 · OPEN**
-_Placeholder._ Not started. The compiler emits no machine code today.
-
-**Apple and Linux ABIs, native flight gates · OPEN**
-_Placeholder._ Not started.
-
-### Kernel
-
-**Kernel telemetry and publication · DONE**
-A frozen 16-unit cohort from the pinned kernel is compiled through three lanes (raw EvoCPP, GCC-preprocessed, Clang-preprocessed) under a pinned observer that seals stdout, stderr and exit status. `tests/acceptance/publish-kernel-dashboard.py` refuses to publish on any lane regression, on unsealed evidence, or on a cohort mismatch, captures into a per-commit directory, and takes its run directory from its own capture so a stale run cannot be republished. Every refusal path is exercised by `--self-test`. This is what turns "the compiler is getting better" into a number with a command beside it.
-
-**Diagnostic survey · PARTIAL**
-`evocc --parse-only --survey` reports every diagnostic instead of the first, and `tools/survey-cohort.py` aggregates across a corpus so the remaining work can be enumerated rather than discovered one construct per build. Its per-unit roots agree exactly with the published dashboard. Two limits are stated rather than hidden: the aggregate is still dominated by cascades from a single failed declaration, and recovery is not yet sound after a declaration fails inside a function body, so affected units are reported as *unavailable* rather than as clean.
-
-**Full-config sweep, kernel codegen, object gate, boot · OPEN**
-_Placeholder._ Not started. The flight lab itself — ARM64 Linux VM, Kbuild integration, QEMU, initramfs — is also unbuilt.
-
----
+**EvoCPP** is a full C11 preprocessing-token implementation: pp-numbers including pasted results like `1_MODULE`, stray characters that survive stringification, `_Pragma`, `#pragma pack` applied to layout with its measured numbers, and the sealed GCC-14.2 predefined set of 421 macros copied into the crate and digest-checked, with the feature queries answering from measured tables. **The parser** covers C11 plus the GNU dialect the kernel actually uses — attributes in every position, `typeof` and `__typeof_unqual__`, `_Generic`, statement expressions, designated initializers, compound literals, `asm` including `asm goto`, the compile-time builtin family, `__auto_type`, case ranges, anonymous-member promotion — each construct's semantics measured in the sealed container before it was implemented. **EvoIR** makes memory and observable effects explicit `mem<all>` and `world` tokens so a rewrite cannot silently reorder them; aggregate copies lower to one `copy` instruction that transfers bytes with their initializedness. **The equality engine** applies the reviewed `p0.scalar.v1` rewrite set and emits EVP1 certificates that `evo-proofcheck` replays without trusting the optimizer; memory instructions are opaque to it, and a trap terminator is a report, never a licence to treat a block as dead.
 
 ## Layout
 
@@ -120,6 +72,47 @@ tools/                  routing, survey and figure rendering
 
 ## Verification
 
-Every commit passes the same gate: workspace tests, `clippy -D warnings`, `rustfmt`, Ruff on the Python harnesses, both layout corpora against the sealed oracles, and an isolated offline clone replay. Measured at `b14eccd`, the most recent commit with no open test window: **956 tests passed, 0 failed**, clippy 0, corpora 128/128 and 22/22 at 0 mismatches. A higher count on a later commit may include an open red window, where declared failures are the point; the receipts in `tests/contracts/` say which commit each number came from. Nothing is claimed that these do not measure.
+Every commit passes the same gate: workspace tests, `clippy -D warnings`, `rustfmt`, Ruff on the Python harnesses, both layout corpora against the sealed oracles, and an isolated offline clone replay. The receipts in `tests/contracts/` say which commit each published number came from; a count on a commit inside an open red window includes declared failures, and that is the point of the window. Nothing is claimed that these do not measure. The figures are generated, not drawn: `python3 tools/render-readme-figures.py` re-renders them.
 
-The figures are generated, not drawn: `python3 tools/render-readme-figures.py` re-renders them.
+---
+
+## Progress toward the questions
+
+A scoreboard, not a narrative. Each row is what exists today, what is missing, and what observation would settle the question against us.
+
+### Q0 — specification as sole authority
+
+| | |
+|---|---|
+| Evidence | 72 dashboard publications, 0 regressions. The executor has stopped at a specification gap six times rather than guess; the architect's unprobed assertions were overturned five times by the oracle or the executor, and once the executor caught a commit whose message did not match its diff. |
+| Failure taxonomy so far | unprobed assertion; reference to an undefined construct; rule-versus-fact conflation in a diagnostic; one rule implemented along one code path but not another (five instances); a record that does not match the thing it describes; a symptom fix that changes the success path. Each has a mechanical countermeasure that has since fired. |
+| Cost | about one round in five consumed by a specification defect; 23 revisions. The comparison that matters is against debugging a miscompilation inside a kernel that does not boot. |
+| Would refute | a semantic divergence that passes every gate and is published. |
+
+### Q1 — correct on the kernel
+
+| | |
+|---|---|
+| Evidence | preprocess 16/16; dual-oracle parse 2/16 with the frontier at one construct (`E2102 invalid-update-operands`, 26 lanes); layout 128/128 and 22/22 bit-exact; two interpreters agree on the differential corpora; proof replay 100%. The parse count is a conjunction over ~60,000 preprocessed lines per unit, so it lags: twelve distinct blockers have been cleared and republished with zero regressions while it read 2/16. |
+| Missing | any machine code; the full-config sweep (~2,500 units against 16); the flight lab (ARM64 VM, Kbuild, QEMU, initramfs); behavioral differential against a GCC-built kernel. |
+| Open sub-question | whether the frontier loop that converges at 16 units converges at 2,500; the survey mode is the bet that one run yields the whole worklist. |
+| Would refute | a construct class the loop cannot specify and measure; or a kernel that passes every gate and does not boot. |
+
+### Q2 — superoptimization instead of a pipeline
+
+| | |
+|---|---|
+| Evidence | none that bears on the question. The e-graph, the reviewed scalar rule set, EVP1 certificates and the standalone checker exist and are gated; but the cost is "newly emitted instructions", there is no target model, and saturation is same-block only. |
+| Blocked on | a backend and a true cost model. Without them Q2 cannot be measured at all, which makes the backend experimental apparatus rather than a deliverable. |
+| Known hard points | inlining — the kernel depends on it, a single-function e-graph cannot do it, a cross-function one explodes; the persistent equality database is the intended answer and is unbuilt. Constructs the kernel expects to be answered *after* optimization (`__builtin_constant_p` under `statically_true`) are answered in the front end here, correctly and at a performance cost that must be charged to this question. |
+| Margin | the margin against GCC `-O2` is fixed before the first measurement, not after. |
+| Would refute | budget exhaustion on a material share of kernel functions; extracted code outside the margin; memory rewrites that cannot carry a checkable proof. |
+
+### Q3 — a self-improving policy
+
+| | |
+|---|---|
+| Evidence | none. All three components of the policy are hand-written; the rule set is about thirty rules. |
+| Not blocked | learning the cost model and the schedule can start before the backend, with the EvoIR interpreter's dynamic step count as the fitness signal — a measured quantity, not an estimate, which avoids fitting an instruction count to itself. Native timing replaces it when the backend exists, and the correlation between the two is itself a result. |
+| Red lines | no rule enters the release set without machine verification, and differential testing alone is not verification; the kernel cohort is the acceptance gate and never enters a fitness function — training and acceptance corpora are physically separate and the receipt proves it by digest. |
+| Would refute | evolved policies that do not beat hand-written ones on held-out corpora within budget; or a rule survival rate too low to justify verification. |
