@@ -1,0 +1,105 @@
+{
+  "receiptId": "c30.statement-expression-scope.red.v1",
+  "state": "RED",
+  "baselineCommit": "adabc63",
+  "classification": "tests-only RED",
+  "authority": {
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.23",
+      "commit": "adabc63",
+      "sections": ["6.3", "10.1.10", "10.1.11", "10.1.17"],
+      "sha256": "68f5c055e0de71e2209f931276a84fb4ce1cb977175795e73342d3fb95d112ac"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "O",
+      "sha256": "0f4a5dc95106d4062683126266576c99c8697e130af0f3a3cb48a13b452a9f97"
+    },
+    "oracleEvidence": {
+      "directory": ".evidence/builtin-probes/20260831-2c23684c",
+      "statementExpressionOutputSha256": "60efa86528dd08d567b193b6b5e7418983c60d4fb245ef4106ae822e32304202",
+      "invalidObjectSizeModeSourceSha256": "d5deed631d4a76754fccbc39e9fb5791f53e0f31bb2be28116711ad34d50b099",
+      "typeofFunctionSourceSha256": "e3eae5886711d30169d596f2de2f787f69caff746907f20835c3c1ea1a959e1f"
+    }
+  },
+  "declaredMissingCapabilities": [
+    "statement-expression-permitted-throughout-function-definitions",
+    "typeof-function-designator-as-declaration-specifier",
+    "object-size-mode-specific-diagnostic"
+  ],
+  "productionEdits": [],
+  "testsOnlyChanges": [
+    {
+      "path": "crates/evocc-parser/tests/statement_expressions.rs",
+      "sha256": "cba22698b4ec2e7ef108c3ed7b376589a3f068f36399c6dfb716c1bd9f89de03"
+    },
+    {
+      "path": "crates/evocc-parser/tests/function_type_typedef_declarations.rs",
+      "sha256": "5dc4224606de08cbd26457af0bcd12b11d8d169f053061ec6e312746162ae0fd"
+    },
+    {
+      "path": "crates/evocc-parser/tests/compile_time_builtins.rs",
+      "sha256": "eeda36d39b6dabdeed17c827ce23b086cd125b62d497fea43bd5169f1f78a7d8"
+    },
+    {
+      "path": "crates/evocc-lower/tests/front_end_resolved_forms.rs",
+      "sha256": "a7917da0c2d8e1ab0abb41528d3ab17075016dc7f71dd09b9a03b8a17c257769"
+    }
+  ],
+  "focusedRed": {
+    "command": "cargo test -p evocc-parser --test statement_expressions --test function_type_typedef_declarations --test compile_time_builtins -p evocc-lower --test front_end_resolved_forms --no-fail-fast",
+    "passed": 35,
+    "failed": 4,
+    "buildErrors": 0,
+    "diagnostics": [
+      "function_scope_unevaluated_contexts_accept_statement_expressions: E2905 statement-expression-outside-function",
+      "function_scope_value_contexts_report_their_own_constant_diagnostic: E2905 instead of E2912",
+      "typeof_function_designator_declares_the_same_function_type: E1001 expected-declaration",
+      "front_end_resolved_forms_leave_byte_identical_evoir pair 11: E1001 expected-declaration",
+      "builtin_object_size_rejects_invalid_modes_at_the_mode_operand: E2913 instead of E2925"
+    ]
+  },
+  "workspaceRed": {
+    "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet",
+    "listedCommand": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list | rg -c ': test$'",
+    "listed": 994,
+    "passed": 990,
+    "failed": 4,
+    "unexpectedFailures": 0,
+    "buildErrors": 0
+  },
+  "nonTestGates": {
+    "clippy": {
+      "command": "cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py",
+      "result": "clean"
+    },
+    "baseLayout": {
+      "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "PASS 128/128; ORACLE_CONSENSUS; mismatchCount 0"
+    },
+    "attributedLayout": {
+      "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "PASS 22/22; ORACLE_CONSENSUS; mismatchCount 0"
+    }
+  },
+  "dashboardBaseline": {
+    "run": "20260831T040339Z-3286",
+    "resultsSha256": "bfc43aa0521baf7839e5c8130f63f8f857a964692a6f871fe04b523eddfc1757",
+    "rawPreprocess": "16/16",
+    "dualOracleCleanParse": "2/16",
+    "firstErrors": {
+      "E2905 statement-expression-outside-function": 26,
+      "E1001 expected-declaration": 2
+    }
+  },
+  "specGap": null
+}

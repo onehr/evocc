@@ -83,10 +83,34 @@ fn control_flow_may_leave_but_not_enter_the_expression() {
 }
 
 #[test]
-fn file_scope_and_constant_expression_contexts_report_e2905() {
+fn file_scope_statement_expressions_report_e2905() {
     rejects("int g = ({ 1; });\n", "E2905");
     rejects("_Static_assert(({ 1; }), \"\");\n", "E2905");
+    rejects("int values[({ 4; })];\n", "E2905");
     rejects("enum { E = ({ 1; }) };\n", "E2905");
+}
+
+#[test]
+fn function_scope_unevaluated_contexts_accept_statement_expressions() {
+    accepts(concat!(
+        "struct holder { int member; }; ",
+        "void check(struct holder *pointer) { ",
+        "_Static_assert(__builtin_types_compatible_p(",
+        "typeof(*({ const typeof(pointer) same = pointer; same; })), ",
+        "struct holder), \"container type\"); ",
+        "_Static_assert(sizeof(({ int side = 0; side++; })) == sizeof(int), \"size\"); ",
+        "_Static_assert(_Alignof(({ int side = 0; side++; })) == _Alignof(int), \"align\"); ",
+        "}\n",
+    ));
+}
+
+#[test]
+fn function_scope_value_contexts_report_their_own_constant_diagnostic() {
+    rejects(
+        "void check(void) { _Static_assert(({ 1; }), \"value\"); }\n",
+        "E2912",
+    );
+    rejects("void check(void) { int values[({ 4; })]; }\n", "E2203");
 }
 
 #[test]

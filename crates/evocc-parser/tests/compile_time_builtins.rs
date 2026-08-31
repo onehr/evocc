@@ -4,7 +4,7 @@ use evocc_chir::interp::{interpret_scalar_function, InterpreterLimits};
 use evocc_chir::{CHirDecl, CHirUnit, SymbolId};
 use evocc_common::{Arena, FileId, SourceFile};
 use evocc_lex::{Lexer, TokenKind};
-use evocc_parser::Parser;
+use evocc_parser::{ParseDiagnostic, Parser};
 
 fn parse<'arena>(source: &str, arena: &'arena Arena) -> Result<CHirUnit<'arena>, String> {
     let file = SourceFile::new(
@@ -44,6 +44,27 @@ fn rejects(source: &str, code: &str) {
             "expected {code}, got {error}\n  source: {source}"
         ),
     }
+}
+
+fn first_diagnostic(source: &str) -> ParseDiagnostic {
+    let arena = Arena::default();
+    let file = SourceFile::new(
+        FileId::new(10_118),
+        "compile-time-builtin-diagnostic.c".to_owned(),
+        source.to_owned(),
+    );
+    let mut lexer = Lexer::new(file.id, &file.contents);
+    let mut tokens = Vec::new();
+    while let Some(token) = lexer.next() {
+        assert_ne!(token.kind, TokenKind::Error, "fixture must lex");
+        tokens.push(token);
+    }
+    let mut parser = Parser::new(tokens, file.id, &file.contents);
+    parser.parse_translation_unit_in(&arena);
+    parser
+        .diagnostic()
+        .cloned()
+        .expect("fixture must produce a diagnostic")
 }
 
 fn entry(unit: &CHirUnit<'_>) -> SymbolId {
@@ -203,6 +224,32 @@ fn builtin_object_size_never_evaluates_its_operand() {
         .unwrap(),
         1,
     );
+}
+
+#[test]
+fn builtin_object_size_rejects_invalid_modes_at_the_mode_operand() {
+    for (source, mode) in [
+        (
+            "unsigned long size = __builtin_object_size((void *)0, 4);\n",
+            "4",
+        ),
+        (
+            "unsigned long f(int mode) { return __builtin_object_size((void *)0, mode); }\n",
+            "mode",
+        ),
+    ] {
+        let diagnostic = first_diagnostic(source);
+        assert_eq!(diagnostic.code, "E2925", "source: {source}");
+        assert_eq!(
+            diagnostic.message, "builtin-mode-out-of-range",
+            "source: {source}"
+        );
+        assert_eq!(
+            &source[diagnostic.span.byte_start as usize..diagnostic.span.byte_end as usize],
+            mode,
+            "diagnostic must point at the mode operand"
+        );
+    }
 }
 
 #[test]

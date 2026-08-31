@@ -96,6 +96,10 @@ fn front_end_resolved_forms_leave_byte_identical_evoir() {
             "int f(int i) { const int c = i; __typeof_unqual__(c) j = c + 1; return j; }\n",
             "int f(int i) { const int c = i; int j = c + 1; return j; }\n",
         ),
+        (
+            "int declared(int); extern typeof(declared) declared; int f(int x) { return declared(x); }\n",
+            "int declared(int); extern int declared(int); int f(int x) { return declared(x); }\n",
+        ),
     ];
 
     assert_pairs(&pairs, 0);

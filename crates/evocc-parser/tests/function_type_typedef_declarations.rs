@@ -118,3 +118,45 @@ fn function_type_typedef_cannot_define_a_function_body() {
         "a function-type typedef may declare but not define a function"
     );
 }
+
+#[test]
+fn typeof_function_designator_declares_the_same_function_type() {
+    let arena = Arena::default();
+    let source = "int exported(int value); extern typeof(exported) exported;\n";
+    let unit = parse(source, &arena).unwrap_or_else(|diagnostic| {
+        panic!(
+            "typeof(function) declaration must parse, got {}: {}",
+            diagnostic.code, diagnostic.message
+        )
+    });
+    let declarations = unit
+        .iter()
+        .filter_map(|declaration| match declaration {
+            CHirDecl::Function(function) if function.name.spelling == "exported" => Some(function),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(declarations.len(), 2);
+    assert!(declarations.iter().all(|function| function.body.is_none()));
+    assert!(declarations.iter().all(|function| {
+        matches!(
+            &unit.types().get(function.ty).unwrap().kind,
+            TypeKind::Function {
+                parameters: FunctionParameters::Prototype { types, variadic: false },
+                ..
+            } if types.len() == 1
+        )
+    }));
+}
+
+#[test]
+fn typeof_function_type_cannot_define_a_function_body() {
+    let arena = Arena::default();
+    let diagnostic = parse(
+        "int declared(int value); typeof(declared) definition { return 0; }\n",
+        &arena,
+    )
+    .expect_err("an inherited function type may not define a body");
+    assert_eq!(diagnostic.code, "E1001");
+    assert_eq!(diagnostic.message, "expected-declaration");
+}
