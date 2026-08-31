@@ -80,6 +80,7 @@ struct ParsedAbstractDeclarator {
 struct ParsedSpecifier<'arena> {
     surface: TypeSpecifier,
     tag_event: Option<PendingTag<'arena>>,
+    inherited_function_parameters: Option<ParameterSyntax>,
 }
 
 struct PendingTag<'arena> {
@@ -214,7 +215,7 @@ struct EntityState {
 struct DeclarationTransaction {
     entity_undo: usize,
     external_entity_undo: usize,
-    function_typedef_undo: usize,
+    inherited_function_parameter_undo: usize,
     side_declarations: usize,
 }
 
@@ -251,20 +252,19 @@ pub struct Parser<'src, 'arena> {
     /// immediately, but receive permanent SymbolIds only after the enclosing
     /// function declarator is complete, preserving declaration-point ID order.
     temporary_parameter_shadows: Vec<TemporaryParameterShadow>,
-    /// Parameter syntax retained at the declaration that introduced a
-    /// function-type typedef. Later declarations through that typedef have no
-    /// written function suffix of their own, so this is their source-fidelity
-    /// authority for the inherited prototype.
-    function_typedefs: HashMap<SymbolId, ParameterSyntax>,
+    /// Parameter syntax retained for symbols whose declared type is a
+    /// function. Later declarations through a function-type typedef or
+    /// `typeof(function-designator)` have no written function suffix of their
+    /// own, so the named source declaration is their prototype authority.
+    inherited_function_parameters: HashMap<SymbolId, ParameterSyntax>,
     entities: HashMap<SymbolId, EntityState>,
     external_entities: HashMap<String, SymbolId>,
     entity_undo: Vec<(SymbolId, Option<EntityState>)>,
     external_entity_undo: Vec<(String, Option<SymbolId>)>,
-    function_typedef_undo: Vec<(SymbolId, Option<ParameterSyntax>)>,
+    inherited_function_parameter_undo: Vec<(SymbolId, Option<ParameterSyntax>)>,
     declaration_transaction_depth: usize,
     side_declarations: Vec<&'arena CHirDecl<'arena>>,
     loop_depth: usize,
-    constant_expression_depth: usize,
     /// Attributes on labels and type names, which have no declaration node.
     detached_attributes: Vec<Attribute>,
     generic_selections: Vec<GenericSelectionRecord>,
@@ -363,16 +363,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             symbols,
             current_scope,
             temporary_parameter_shadows: Vec::new(),
-            function_typedefs: HashMap::new(),
+            inherited_function_parameters: HashMap::new(),
             entities: HashMap::new(),
             external_entities: HashMap::new(),
             entity_undo: Vec::new(),
             external_entity_undo: Vec::new(),
-            function_typedef_undo: Vec::new(),
+            inherited_function_parameter_undo: Vec::new(),
             declaration_transaction_depth: 0,
             side_declarations: Vec::new(),
             loop_depth: 0,
-            constant_expression_depth: 0,
             detached_attributes: Vec::new(),
             generic_selections: Vec::new(),
             front_end_builtins: Vec::new(),
@@ -694,7 +693,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         DeclarationTransaction {
             entity_undo: self.entity_undo.len(),
             external_entity_undo: self.external_entity_undo.len(),
-            function_typedef_undo: self.function_typedef_undo.len(),
+            inherited_function_parameter_undo: self.inherited_function_parameter_undo.len(),
             side_declarations: self.side_declarations.len(),
         }
     }
@@ -703,12 +702,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         debug_assert!(self.declaration_transaction_depth > 0);
         debug_assert!(self.entity_undo.len() >= transaction.entity_undo);
         debug_assert!(self.external_entity_undo.len() >= transaction.external_entity_undo);
-        debug_assert!(self.function_typedef_undo.len() >= transaction.function_typedef_undo);
+        debug_assert!(
+            self.inherited_function_parameter_undo.len()
+                >= transaction.inherited_function_parameter_undo
+        );
         self.declaration_transaction_depth -= 1;
         if self.declaration_transaction_depth == 0 {
             self.entity_undo.clear();
             self.external_entity_undo.clear();
-            self.function_typedef_undo.clear();
+            self.inherited_function_parameter_undo.clear();
         }
     }
 
@@ -738,17 +740,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
             }
         }
-        while self.function_typedef_undo.len() > transaction.function_typedef_undo {
+        while self.inherited_function_parameter_undo.len()
+            > transaction.inherited_function_parameter_undo
+        {
             let (symbol, previous) = self
-                .function_typedef_undo
+                .inherited_function_parameter_undo
                 .pop()
                 .expect("undo marker is bounded");
             match previous {
                 Some(previous) => {
-                    self.function_typedefs.insert(symbol, previous);
+                    self.inherited_function_parameters.insert(symbol, previous);
                 }
                 None => {
-                    self.function_typedefs.remove(&symbol);
+                    self.inherited_function_parameters.remove(&symbol);
                 }
             }
         }
@@ -758,7 +762,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if self.declaration_transaction_depth == 0 {
             self.entity_undo.clear();
             self.external_entity_undo.clear();
-            self.function_typedef_undo.clear();
+            self.inherited_function_parameter_undo.clear();
         }
     }
 
@@ -776,10 +780,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
-    fn set_function_typedef(&mut self, symbol: SymbolId, parameters: ParameterSyntax) {
-        let previous = self.function_typedefs.insert(symbol, parameters);
+    fn set_inherited_function_parameters(&mut self, symbol: SymbolId, parameters: ParameterSyntax) {
+        let previous = self
+            .inherited_function_parameters
+            .insert(symbol, parameters);
         if self.declaration_transaction_depth > 0 {
-            self.function_typedef_undo.push((symbol, previous));
+            self.inherited_function_parameter_undo
+                .push((symbol, previous));
         }
     }
 
@@ -1303,13 +1310,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 } => Some((parameters.clone(), *scope)),
                 _ => None,
             });
-            let inherited_parameters = match &specifier.surface {
-                TypeSpecifier::TypedefName { symbol, .. } => {
-                    self.function_typedefs.get(symbol).cloned()
-                }
-                _ => None,
-            };
-            let inherited_from_typedef = written_parameters.is_none();
+            let inherited_parameters = specifier.inherited_function_parameters.clone();
+            let inherited_from_specifier = written_parameters.is_none();
             let (mut parameters, parameter_scope) = if let Some(written) = written_parameters {
                 written
             } else if let Some(mut inherited) = inherited_parameters {
@@ -1332,7 +1334,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 full_type,
             );
             let has_body = self.peek_kind() == Some(TokenKind::LBrace);
-            if has_body && inherited_from_typedef {
+            if has_body && inherited_from_specifier {
                 self.report("E1001", "expected-declaration", self.span());
                 return None;
             }
@@ -1359,6 +1361,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.current_scope = outer_scope;
                 None
             };
+            self.set_inherited_function_parameters(symbol, parameters.clone());
             let end_span = if let Some(body) = body {
                 body.span()
             } else {
@@ -1450,7 +1453,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2915", "auto-type-misuse", declarator.span);
                 return None;
             }
-            let function_typedef_syntax = if storage == StorageClass::Typedef
+            let inherited_function_syntax = if storage == StorageClass::Typedef
                 && matches!(
                     self.types.get(full_type).map(|ty| &ty.kind),
                     Some(TypeKind::Function { .. })
@@ -1462,12 +1465,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         DerivedDeclarator::Function { parameters, .. } => Some(parameters.clone()),
                         _ => None,
                     })
-                    .or_else(|| match &specifier.surface {
-                        TypeSpecifier::TypedefName { symbol, .. } => {
-                            self.function_typedefs.get(symbol).cloned()
-                        }
-                        _ => None,
-                    })
+                    .or_else(|| specifier.inherited_function_parameters.clone())
             } else {
                 None
             };
@@ -1477,8 +1475,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .symbol(symbol)
                 .expect("declared symbols belong to the parser symbol table")
                 .ty();
-            if let Some(parameters) = function_typedef_syntax {
-                self.set_function_typedef(symbol, parameters);
+            if let Some(parameters) = inherited_function_syntax {
+                self.set_inherited_function_parameters(symbol, parameters);
             }
             if has_initializer && storage != StorageClass::Typedef {
                 self.mark_definition(symbol, &declarator.name);
@@ -3440,17 +3438,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn parse_required_constant_conditional(&mut self) -> Option<&'arena CHirExpr<'arena>> {
-        self.constant_expression_depth += 1;
-        let expression = self.parse_conditional();
-        self.constant_expression_depth -= 1;
-        expression
+        self.parse_conditional()
     }
 
     fn parse_required_constant_assignment(&mut self) -> Option<&'arena CHirExpr<'arena>> {
-        self.constant_expression_depth += 1;
-        let expression = self.parse_assignment();
-        self.constant_expression_depth -= 1;
-        expression
+        self.parse_assignment()
     }
 
     fn validate_asm_goto_labels(&mut self, body: &CHirStmt<'_>) -> Option<()> {
@@ -3978,6 +3970,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     span: keyword.span,
                 },
                 tag_event: None,
+                inherited_function_parameters: None,
             });
         }
         self.parse_type_specifier_inner(Some(inline_spans))
@@ -4031,12 +4024,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let keyword = self.advance().expect("peeked typeof keyword");
             let strip_top_level = keyword.kind == TokenKind::TypeofUnqual;
             self.expect(TokenKind::LParen)?;
-            let (base, operand, tag_event) = if self
+            let (base, operand, tag_event, inherited_function_parameters) = if self
                 .peek()
                 .is_some_and(|token| self.token_starts_type_name(token))
             {
                 let (ty, tag_event) = self.parse_type_name_with_vla_error(Some(keyword.span))?;
-                (ty, TypeofOperand::TypeName, tag_event)
+                (ty, TypeofOperand::TypeName, tag_event, None)
             } else {
                 let transaction = self.symbols.begin_transaction();
                 let mut installed = HashSet::new();
@@ -4059,13 +4052,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 let expression = self.parse_expression();
                 let inferred = expression.and_then(|expression| {
+                    let inherited = match expression {
+                        CHirExpr::Ident { symbol, .. } => {
+                            self.inherited_function_parameters.get(symbol).cloned()
+                        }
+                        _ => None,
+                    };
                     self.expression_type(expression)
-                        .map(|inferred| (expression, inferred.ty))
+                        .map(|inferred| (expression, inferred.ty, inherited))
                 });
                 self.symbols
                     .rollback_transaction(&transaction)
                     .expect("temporary typeof bindings are table-local and LIFO");
-                let Some((expression, inferred)) = inferred else {
+                let Some((expression, inferred, inherited)) = inferred else {
                     if self.diagnostics.is_empty() {
                         self.report("E1003", "expected-expression", self.span());
                     }
@@ -4079,7 +4078,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         keyword.span,
                     );
                 }
-                (ty, TypeofOperand::Expression, None)
+                (ty, TypeofOperand::Expression, None, inherited)
             };
             let close = self.expect(TokenKind::RParen)?;
             let base = if strip_top_level {
@@ -4097,6 +4096,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     span: self.merge_span(start, close.span),
                 },
                 tag_event,
+                inherited_function_parameters,
             });
         }
 
@@ -4121,6 +4121,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     span: self.merge_span(start, end),
                 },
                 tag_event: None,
+                inherited_function_parameters: self
+                    .inherited_function_parameters
+                    .get(&symbol)
+                    .cloned(),
             });
         }
 
@@ -4176,6 +4180,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 span: self.merge_span(start, end),
             },
             tag_event: None,
+            inherited_function_parameters: None,
         })
     }
 
@@ -4371,6 +4376,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     specifier_span,
                     attributes: tag_attributes,
                 }),
+                inherited_function_parameters: None,
             })
         } else {
             let end = name.as_ref().map_or(keyword_span, |name| name.span);
@@ -4394,6 +4400,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         specifier_span,
                     })
                 },
+                inherited_function_parameters: None,
             })
         }
     }
@@ -7989,7 +7996,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .is_some_and(|token| self.token_starts_type_name(token))
             {
                 self.parse_type_name()
-            } else if is_gnu {
+            } else {
                 let operand = self.parse_expression()?;
                 let inferred = self.expression_type(operand).or_else(|| {
                     self.report("E1003", "expected-expression", operand.span());
@@ -7997,9 +8004,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 })?;
                 let ty = self.materialize_inferred_type(inferred.ty, Some(operand))?;
                 Some((ty, None))
-            } else {
-                self.report("E1003", "expected-expression", self.span());
-                None
             }?;
             if self.peek_kind() != Some(TokenKind::RParen) {
                 self.report(
@@ -8270,7 +8274,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             TokenKind::LParen => {
                 if self.peek_kind() == Some(TokenKind::LBrace) {
-                    if !self.in_function_scope() || self.constant_expression_depth != 0 {
+                    if !self.in_function_scope() {
                         self.report("E2905", "statement-expression-outside-function", tok.span);
                         return None;
                     }
@@ -8690,11 +8694,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .and_then(|value| u8::try_from(value.mathematical_value()).ok())
             .filter(|mode| *mode <= 3)
         else {
-            self.report(
-                "E2913",
-                "builtin-operand-not-convertible",
-                mode_expression.span(),
-            );
+            self.report("E2925", "builtin-mode-out-of-range", mode_expression.span());
             return None;
         };
         let result = if mode <= 1 { u64::MAX } else { 0 };

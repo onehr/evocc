@@ -1834,13 +1834,21 @@ fn written_declarator_matches(
     terminal: TypeId,
     function_syntax: Option<&ParameterSyntax>,
 ) -> bool {
-    if function_syntax.is_some()
-        && !matches!(
+    if let Some(syntax) = function_syntax {
+        if !matches!(
             written.layers.first(),
             Some(WrittenDeclaratorLayer::Function { .. })
-        )
-    {
-        return false;
+        ) {
+            return written.layers.is_empty()
+                && current == terminal
+                && types.get(current).is_some_and(|canonical| {
+                    matches!(
+                        &canonical.kind,
+                        TypeKind::Function { parameters, .. }
+                            if function_parameters_match(parameters, syntax)
+                    )
+                });
+        }
     }
     for (index, layer) in written.layers.iter().enumerate() {
         let Some(canonical) = types.get(current) else {
