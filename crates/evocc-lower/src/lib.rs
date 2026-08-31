@@ -8,8 +8,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 
 use evocc_chir::integer::{
-    enum_integer_type, eval_binary_integer, eval_unary_integer, integer_literal_value,
-    integer_type_for_rank, usual_arithmetic_type, CInteger, CIntegerType,
+    eval_binary_integer, eval_unary_integer, integer_literal_value, integer_type_for_rank,
+    usual_arithmetic_type, CInteger, CIntegerType,
 };
 use evocc_chir::{
     AllocationSiteManifest, AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit,
@@ -25,8 +25,8 @@ use evocc_evoir::{
     OffsetDirection, TrapReason, UbReason, Value,
 };
 use evocc_types::{
-    AddressSpace, ArrayBound, EvoIRType, FunctionParameters, LayoutError, Region, TagDefinition,
-    TagState, TargetDataLayout, TypeId, TypeInterner, TypeKind,
+    enum_integer_rank, AddressSpace, ArrayBound, EvoIRType, FunctionParameters, LayoutError,
+    Region, TagDefinition, TagState, TargetDataLayout, TypeId, TypeInterner, TypeKind,
 };
 
 const BREAK_TARGET_BASE: BlockId = u32::MAX - 1_000_000;
@@ -1786,7 +1786,7 @@ fn canonical_integer(
                     span,
                     feature: "empty enum has no canonical integer representation",
                 })?;
-            enum_integer_type(minimum, maximum)
+            integer_type_for_rank(enum_integer_rank(minimum, maximum, tag.layout.packed))
         }
         _ => {
             return Err(LowerError::UnsupportedType {
@@ -1884,7 +1884,11 @@ fn canonical_integer_for_compatibility(types: &TypeInterner, ty: TypeId) -> Opti
             };
             let minimum = constants.iter().map(|constant| constant.value).min()?;
             let maximum = constants.iter().map(|constant| constant.value).max()?;
-            Some(enum_integer_type(minimum, maximum))
+            Some(integer_type_for_rank(enum_integer_rank(
+                minimum,
+                maximum,
+                tag.layout.packed,
+            )))
         }
         _ => None,
     }

@@ -279,18 +279,61 @@ pub struct FieldLayoutAttributes {
     pub packed: bool,
 }
 
-/// Layout attributes a GNU C source can attach to a whole record.
+/// Layout attributes a GNU C source can attach to a whole tag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct TagLayoutAttributes {
-    /// `packed`: every member is placed at alignment one and the record's
-    /// alignment is one unless `aligned` says otherwise.
+    /// `packed`: record members are placed at alignment one; an enumeration
+    /// selects its smallest representable target integer mode.
     pub packed: bool,
-    /// `aligned(N)`: the record's alignment is at least `N`, and its size is
-    /// rounded up to a multiple of it.
+    /// `aligned(N)`: a record's alignment is at least `N`, and its size is
+    /// rounded up to a multiple of it. The parser refuses this together with
+    /// `packed` on an enumeration.
     pub aligned: Option<u32>,
     /// Active `#pragma pack(N)` when the record was defined. This caps member
     /// alignment after member attributes have been applied.
     pub max_align: Option<u32>,
+}
+
+/// Select the frozen AArch64 GNU integer rank underlying an enumeration.
+///
+/// Plain enumerations retain the target's `-fno-short-enums` behavior. GNU
+/// `packed` selects the smallest signed or unsigned target mode that can
+/// represent the entire enumerator range.
+#[must_use]
+pub fn enum_integer_rank(minimum: i64, maximum: i64, packed: bool) -> IntRank {
+    if !packed {
+        if minimum >= i64::from(i32::MIN) && maximum <= i64::from(i32::MAX) {
+            return IntRank::Int;
+        }
+        if minimum >= 0 && maximum <= i64::from(u32::MAX) {
+            return IntRank::UInt;
+        }
+        return if minimum >= 0 {
+            IntRank::ULong
+        } else {
+            IntRank::Long
+        };
+    }
+
+    if minimum < 0 {
+        if minimum >= i64::from(i8::MIN) && maximum <= i64::from(i8::MAX) {
+            IntRank::SChar
+        } else if minimum >= i64::from(i16::MIN) && maximum <= i64::from(i16::MAX) {
+            IntRank::Short
+        } else if minimum >= i64::from(i32::MIN) && maximum <= i64::from(i32::MAX) {
+            IntRank::Int
+        } else {
+            IntRank::Long
+        }
+    } else if maximum <= i64::from(u8::MAX) {
+        IntRank::UChar
+    } else if maximum <= i64::from(u16::MAX) {
+        IntRank::UShort
+    } else if maximum <= i64::from(u32::MAX) {
+        IntRank::UInt
+    } else {
+        IntRank::ULong
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1312,8 +1355,6 @@ impl<'a> LayoutContext<'a> {
             };
         };
 
-        // GNU C with -fno-short-enums uses at least `int`. Values outside the
-        // 32-bit signed/unsigned domains require an eight-byte integer mode.
         let minimum = constants
             .iter()
             .map(|constant| constant.value)
@@ -1324,13 +1365,11 @@ impl<'a> LayoutContext<'a> {
             .map(|constant| constant.value)
             .max()
             .unwrap_or(0);
-        let fits_signed_int = minimum >= i64::from(i32::MIN) && maximum <= i64::from(i32::MAX);
-        let fits_unsigned_int = minimum >= 0 && maximum <= i64::from(u32::MAX);
-        if fits_signed_int || fits_unsigned_int {
-            Ok(TypeLayout::new(4, 4))
-        } else {
-            Ok(TypeLayout::new(8, 8))
-        }
+        Ok(integer_layout(enum_integer_rank(
+            minimum,
+            maximum,
+            tag.layout.packed,
+        )))
     }
 
     fn layout_record(&mut self, tag_id: TagId) -> Result<RecordLayout, LayoutError> {

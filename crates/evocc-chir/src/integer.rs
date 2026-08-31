@@ -4,7 +4,7 @@
 //! widths, ranks, conversions, and checked operations here prevents the parser
 //! and interpreter from silently acquiring different host-language behavior.
 
-use evocc_types::IntRank;
+use evocc_types::{enum_integer_rank, IntRank};
 
 use crate::{BinaryOp, CheckedArithmeticOp, FloatLit, IntBase, IntLit, IntSuffix, UnaryOp};
 
@@ -387,15 +387,7 @@ pub const fn rank_for_integer_type(ty: CIntegerType) -> Option<IntRank> {
 /// GNU AArch64 enum mode selection for the parser's supported value range.
 #[must_use]
 pub fn enum_integer_type(minimum: i64, maximum: i64) -> CIntegerType {
-    if minimum >= i64::from(i32::MIN) && maximum <= i64::from(i32::MAX) {
-        CIntegerType::INT
-    } else if minimum >= 0 && maximum <= i64::from(u32::MAX) {
-        CIntegerType::UINT
-    } else if minimum >= 0 {
-        CIntegerType::ULONG
-    } else {
-        CIntegerType::LONG
-    }
+    integer_type_for_rank(enum_integer_rank(minimum, maximum, false))
 }
 
 /// Convert an already-rounded floating literal to a target integer type.

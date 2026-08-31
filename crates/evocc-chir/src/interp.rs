@@ -17,15 +17,15 @@ use evocc_memory::{
     WorldLimits, WorldState,
 };
 use evocc_types::{
-    ArrayBound, FunctionParameters, Qualifiers, TagDefinition, TagState, TargetDataLayout, TypeId,
-    TypeInterner, TypeKind,
+    enum_integer_rank, ArrayBound, FunctionParameters, Qualifiers, TagDefinition, TagState,
+    TargetDataLayout, TypeId, TypeInterner, TypeKind,
 };
 
 use crate::{
     integer::{
-        enum_integer_type, eval_binary_integer, eval_bit_builtin, eval_checked_arithmetic,
-        eval_unary_integer, integer_literal_value, integer_type_for_rank, usual_arithmetic_type,
-        BitBuiltinOp, CInteger, CIntegerType, IntegerError,
+        eval_binary_integer, eval_bit_builtin, eval_checked_arithmetic, eval_unary_integer,
+        integer_literal_value, integer_type_for_rank, usual_arithmetic_type, BitBuiltinOp,
+        CInteger, CIntegerType, IntegerError,
     },
     AllocationSiteKind, AllocationSiteManifest, AllocationSiteManifestError, AssignmentOp,
     BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit,
@@ -8357,7 +8357,11 @@ fn canonical_integer_type(types: &TypeInterner, ty: TypeId) -> Option<CIntegerTy
                 .map(|constant| constant.value)
                 .max()
                 .unwrap_or(0);
-            Some(enum_integer_type(minimum, maximum))
+            Some(integer_type_for_rank(enum_integer_rank(
+                minimum,
+                maximum,
+                definition.layout.packed,
+            )))
         }
         _ => None,
     }

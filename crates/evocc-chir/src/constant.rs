@@ -1,12 +1,13 @@
 //! Conservative front-end constant knowledge shared by every C-HIR consumer.
 
 use evocc_common::SourceSpan;
-use evocc_types::{TagDefinition, TagState, TargetDataLayout, TypeId, TypeInterner, TypeKind};
+use evocc_types::{
+    enum_integer_rank, TagDefinition, TagState, TargetDataLayout, TypeId, TypeInterner, TypeKind,
+};
 
 use crate::integer::{
-    enum_integer_type, eval_binary_integer, eval_bit_builtin, eval_unary_integer,
-    floating_literal_to_integer, integer_literal_value, integer_type_for_rank,
-    usual_arithmetic_type, CInteger, CIntegerType,
+    eval_binary_integer, eval_bit_builtin, eval_unary_integer, floating_literal_to_integer,
+    integer_literal_value, integer_type_for_rank, usual_arithmetic_type, CInteger, CIntegerType,
 };
 use crate::{BinaryOp, CHirExpr, CHirUnit, FrontEndBuiltinRecord, SymbolKind, SymbolTable};
 
@@ -179,7 +180,11 @@ fn canonical_integer_type(types: &TypeInterner, ty: TypeId) -> Option<CIntegerTy
                 .map(|constant| constant.value)
                 .max()
                 .unwrap_or(0);
-            Some(enum_integer_type(minimum, maximum))
+            Some(integer_type_for_rank(enum_integer_rank(
+                minimum,
+                maximum,
+                definition.layout.packed,
+            )))
         }
         _ => None,
     }

@@ -25,10 +25,10 @@ use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_cpp::{pragma_pack_action, PragmaPackAction};
 use evocc_lex::{Token, TokenKind, TokenText};
 use evocc_types::{
-    ArrayBound, BitFieldSpec, CanonicalType, ComplexBase, EnumConstant, FieldLayoutAttributes,
-    FloatKind, FunctionParameters, GnuInt128Signedness, IntRank, Qualifiers, RecordField,
-    TagDefinition, TagId, TagKind, TagLayoutAttributes, TagState, TargetDataLayout, TypeId,
-    TypeInterner, TypeKind,
+    enum_integer_rank, ArrayBound, BitFieldSpec, CanonicalType, ComplexBase, EnumConstant,
+    FieldLayoutAttributes, FloatKind, FunctionParameters, GnuInt128Signedness, IntRank, Qualifiers,
+    RecordField, TagDefinition, TagId, TagKind, TagLayoutAttributes, TagState, TargetDataLayout,
+    TypeId, TypeInterner, TypeKind,
 };
 
 #[derive(Debug, Clone)]
@@ -3877,6 +3877,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         self.report("E2903", "malformed-attribute", attribute.span);
                         continue;
                     }
+                    let conflicts = self.types.tag(tag).is_some_and(|definition| {
+                        definition.kind == TagKind::Enum && definition.layout.aligned.is_some()
+                    });
+                    if conflicts {
+                        self.report("E2903", "malformed-attribute", attribute.span);
+                        continue;
+                    }
                     self.types.set_tag_layout(
                         tag,
                         TagLayoutAttributes {
@@ -3889,6 +3896,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 "aligned" => {
                     if let Some(bytes) = self.aligned_bytes(attribute) {
+                        let conflicts = self.types.tag(tag).is_some_and(|definition| {
+                            definition.kind == TagKind::Enum && definition.layout.packed
+                        });
+                        if conflicts {
+                            self.report("E2903", "malformed-attribute", attribute.span);
+                            continue;
+                        }
                         self.types.set_tag_layout(
                             tag,
                             TagLayoutAttributes {
@@ -4738,7 +4752,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     .map(|constant| constant.value)
                     .max()
                     .unwrap_or(0);
-                Ok(enum_integer_type(minimum, maximum))
+                Ok(integer_type_for_rank(enum_integer_rank(
+                    minimum,
+                    maximum,
+                    definition.layout.packed,
+                )))
             }
             TypeKind::Void
             | TypeKind::BuiltinVaList
