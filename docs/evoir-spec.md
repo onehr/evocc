@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.22** | **Authoritative reference** | **2026-08-30**
+**Revision 1.9.23** | **Authoritative reference** | **2026-08-31**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1287,6 +1287,7 @@ twice would let a reader think two conditions are the same finding.
 | `E2922` | `volatile-aggregate-copy-unsupported` | front end |
 | `E2923` | `invalid-array-bound` | front end |
 | `E2924` | `attribute-on-non-null-statement` | front end |
+| `E2925` | `builtin-mode-out-of-range` | front end |
 | `E0102` | `unmatched-conditional` | preprocessor |
 | `E0104` | `error-directive` | preprocessor |
 | `E0105` | `include-not-found` | preprocessor |
@@ -2798,6 +2799,7 @@ front end that still emits it is defective.
 | `E2922` | copy of a `volatile` union, or of a `volatile` record with a bit-field member |
 | `E2923` | array bound folds to a negative value |
 | `E2924` | an attribute specifier precedes a statement that is not a null statement |
+| `E2925` | `__builtin_object_size` mode is not a constant in `0..3` |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -2810,7 +2812,11 @@ would evaluate it, a variably modified type, is rejected with `E2904` because
 this profile has no variable-length objects.
 
 `typeof` produces a type and is fully resolved by the front end; nothing of it
-survives into EvoIR.
+survives into EvoIR. When its operand is a function designator the result is a
+function type, and that type may be used as a declaration specifier exactly as
+a typedef naming a function type may (10.1.18): `extern typeof(g) g;` declares
+`g` a function and may never define one. Both oracles accept it; the kernel's
+`EXPORT_SYMBOL` writes it.
 
 `__typeof_unqual__` is `typeof` with the top-level qualifiers removed: `const`,
 `volatile`, `restrict` and `_Atomic` are dropped from the resulting type, and
@@ -2857,8 +2863,25 @@ Objects declared inside end their lifetime at the closing brace, exactly as for
 any block, so a pointer to one that escapes is dangling under Section 5.2.
 `break`, `continue`, `goto` and `return` may leave a statement expression;
 jumping into one is `E2918` (`jump-into-statement-expression`) at the `goto`
-(both oracles reject it). At file scope, or anywhere a constant expression
-is required, it reports `E2905`.
+(both oracles reject it).
+
+A statement expression is permitted **anywhere inside a function definition**
+and nowhere outside one; outside, it is `E2905`
+(`statement-expression-outside-function`). That is the whole rule, and it is
+what both oracles enforce ("braced-group within expression allowed only inside
+a function"). In particular it is permitted inside `typeof`, `sizeof` and
+`_Alignof`, where the operand is unevaluated and only its type is taken, even
+when that operand sits inside a `_Static_assert` condition: the kernel's
+`container_of` writes exactly that, and 26 lanes stopped on it.
+
+Measured defect at revision 1.9.22: `E2905` also fired wherever a constant
+expression was required, which is not the rule. Both oracles additionally fold a
+statement expression with a constant result where a constant is required
+(`_Static_assert(({ 1; }), "")` and `int a[({ 4; })]` inside a function are
+accepted). This profile does not fold one: where the *value* is required as an
+integer constant expression the context reports its own diagnostic (`E2912` in a
+static assertion, `E2923` or `E2203` in an array bound). That is a deliberate
+deferral, counted rather than silent; a later revision may fold it.
 
 Lowering places the compound statement's blocks into the enclosing function's
 control-flow graph as ordinary blocks. When the statement expression contains no
@@ -3176,7 +3199,9 @@ and Clang-19 agree on every row.
   it is undefined behaviour reported as `E3024` (`unreachable-reached`) by the
   interpreters and lowered to `trap.unreachable_reached` (Section 3).
 - `__builtin_object_size(p, mode)`: `mode` is an integer constant expression in
-  `0..3`. The operand is parsed and type-checked but **never evaluated**
+  `0..3`; any other value, or a non-constant mode, is `E2925`
+  (`builtin-mode-out-of-range`) at the mode operand (both oracles reject it).
+  The operand is parsed and type-checked but **never evaluated**
   (measured, both oracles). This profile performs no object-size analysis and
   therefore always answers as if the object were unknown: `(size_t) -1` for
   modes 0 and 1, `0` for modes 2 and 3, as an integer constant expression. That
@@ -3942,6 +3967,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.23 | 2026-08-31 | Corrects 10.1.11: a statement expression is permitted anywhere inside a function definition and nowhere outside one, `E2905` meaning only the latter. Revision 1.9.22 also fired it wherever a constant expression was required, which stopped 26 lanes on the kernel's `container_of`, where the statement expression sits inside `typeof` and is never evaluated. Records that this profile does not fold a statement expression to a constant although both oracles do. Adds `typeof` of a function designator as a declaration specifier, and `E2925` for an out-of-range `__builtin_object_size` mode. |
 | 1.9.22 | 2026-08-30 | Rules the three frontier constructs. An attribute may precede a null statement and nothing else (`E2924`), is preserved and applied to nothing. `__builtin_offsetof` admits a non-constant index: the result is runtime arithmetic, the index is evaluated once, it is not an integer constant expression, and it is not bounds checked. `__builtin_object_size` never evaluates its operand and always answers unknown, which asserts nothing and makes the recorded GCC/Clang disagreement moot. |
 | 1.9.21 | 2026-08-29 | Specifies `__typeof_unqual__` in 10.1.10: `typeof` with top-level `const`, `volatile`, `restrict` and `_Atomic` removed, operand unevaluated, pointee and member qualifiers kept, resolved entirely by the front end. One `ORACLE_CONFLICT` on array element qualifiers resolved by keeping them, the direction that refuses a write. Added after 28 kernel parse lanes stopped on it; the cohort writes it 4,797 times. |
 | 1.9.20 | 2026-08-29 | States in 10.1.6 that a member of an anonymous structure or union is a member of the enclosing record for designators and `__builtin_offsetof` as well as for access, that resolution recurses through anonymous members and records every step, and that a name ambiguous between two of them is `E2906`. Added after 28 kernel parse lanes stopped on `offsetof(struct pt_regs, sp)` while `o.sp` already worked. |
