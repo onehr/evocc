@@ -2,9 +2,9 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "0f4a5dc95106d4062683126266576c99c8697e130af0f3a3cb48a13b452a9f97"
+    "sha256": "8317e62feaec34595c9a4b6f3d484042e8d4ce67a855322f04cf53cff31e5998"
   },
-  "cutLine": "Revision 1.9.23 scope O is implemented: E2905 now means only a statement expression outside a function definition; function-scope typeof/sizeof/_Alignof uses are admitted while value-required contexts retain E2912/E2203; typeof(function-designator) reuses the existing inherited prototype path; and invalid __builtin_object_size modes report E2925 at the mode operand. The tree is green at 994/994 workspace tests (993/993 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. The sealed dashboard has raw preprocessing at 16/16, dual-oracle clean parsing at 2/16, and zero regressions; Stage F1 remains OPEN on 26 E2102 lanes and 2 E2208 lanes.",
+  "cutLine": "Revision 1.9.24 scope P5 is implemented: a zero integer constant expression cast to void * converts to object or function pointers with Null provenance across initialization, assignment, argument, return and comparison; an address constant survives an integer cast and pointer cast while relocation lowering remains the typed E3026 boundary. The tree is green at 1003/1003 workspace tests (1002/1002 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. The sealed dashboard has raw preprocessing at 16/16, dual-oracle clean parsing at 3/16, and zero regressions; Stage F1 remains OPEN on 15 E2911 packed-enum size assertions and 11 fixed-budget parser timeouts. The E2911 bisection identifies packed enum layout, not enumerator folding, and Section 10.1.9 does not yet specify that layout.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -548,18 +548,51 @@
     },
     "result": "PASS_STAGE_F1_OPEN"
   },
-  "subjectCommit": "9e9ce23",
+  "pointerConstantConversionsRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.24, commit fa58552; tests/contracts/day9-acceptance-contract.json scope P5",
+    "opened": "817b386 (tests only; 994 passed, 8 semantic failures, 1002 listed workspace tests; zero Rust build errors)",
+    "closed": "269cac1",
+    "implementationCommits": [
+      "269cac1"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/pointer-constant-conversions-red.json",
+      "sha256": "e053d68abbf4103efc58d19f4e65f60a99d8bad0c768ae63a5e18bc5653e3e52"
+    },
+    "declaredCapabilities": [
+      "a void-pointer-spelled null pointer constant converts to every object or function pointer type with Null provenance in initialization, assignment, argument, return and comparison",
+      "an address constant cast through an integer type and back remains a valid static initializer form while lowering fails closed with E3026"
+    ],
+    "focusedGreen": {
+      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test pointer_constant_conversions -p evocc-lower --test statement_expression_lowering --no-fail-fast",
+      "passed": 14,
+      "failed": 0,
+      "dualInterpreterConversionContextResult": "15/15 in C-HIR and EvoIR"
+    },
+    "frontierBisection": {
+      "assertion": "sizeof(enum rw_hint) == 1 at include/linux/rw_hint.h:22",
+      "oracleEvidence": ".evidence/builtin-probes/20260901-2c23684c-p5-frontier/rw-hint-fold.out",
+      "oracleEvidenceSha256": "bf20c8eb307c865794a5861f0dbbed18a97583e75893eb45e968be2e95c3ad12",
+      "oracleResult": "GCC-14 and Clang-19: enumerators 0, 5 and 6; sizeof 1; alignof 1; assertion true",
+      "subjectEvidence": ".evidence/builtin-probes/20260901-2c23684c-p5-frontier/subject-bisection.c",
+      "subjectEvidenceSha256": "6d1ed9546b5679817af74da836f40484d7c6a5dca918d8ef4fcaab5525adaf0d",
+      "subjectResult": "enumerators 0, 5 and 6; sizeof 4; alignof 4; parse-only rc 0",
+      "differingSubexpression": "sizeof(enum rw_hint), with the same missing packed-enum layout rule also visible in _Alignof(enum rw_hint)"
+    },
+    "result": "PASS_STAGE_F1_OPEN"
+  },
+  "subjectCommit": "269cac1",
   "gate": {
-    "claim": "All three revision 1.9.23 scope-O corrections are implemented and their tests are green. The tree has 994 listed workspace tests (993 all-target) and zero dashboard regressions; raw preprocessing is 16/16, dual-oracle clean parsing remains 2/16, and Stage F1 remains open on the newly measured first errors.",
+    "claim": "Both revision 1.9.24 scope-P5 pointer-constant corrections are implemented and their tests are green. The tree has 1003 listed workspace tests (1002 all-target) and zero dashboard regressions; raw preprocessing is 16/16, dual-oracle clean parsing is 3/16, and Stage F1 remains open on the measured packed-enum fold defect and fixed-budget timeouts.",
     "measured": {
-      "dualOracleCleanParseTus": "2/16",
+      "dualOracleCleanParseTus": "3/16",
       "rawPreprocessClean": "16/16",
       "stageF1": "OPEN",
-      "remainingParserLanes": 28,
-      "remainingParserUnits": 14,
+      "remainingParserLanes": 26,
+      "remainingParserUnits": 13,
       "remainingFirstErrors": {
-        "E2102 invalid-update-operands at include/linux/delayed_call.h:33": 26,
-        "E2208 non-constant-static-initializer at lib/kstrtox.c:138": 2
+        "E2911 static-assertion-failed at include/linux/rw_hint.h:22": 15,
+        "PARSE_TIMEOUT at the fixed 10-second parser budget": 11
       },
       "constantExpressionClosureTests": "15/15",
       "gnuArrayInt128Tests": "13/13",
@@ -573,8 +606,8 @@
       "parserCheckpointScalingTests": "1/1",
       "symbolTableTransactionTests": "2/2",
       "typeInternerTransactionTests": "2/2",
-      "workspaceTests": "994/994",
-      "allTargetTests": "993/993",
+      "workspaceTests": "1003/1003",
+      "allTargetTests": "1002/1002",
       "specifiedFrontier": false,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
@@ -588,8 +621,11 @@
       "pointerUpdateLanesRemaining": 0,
       "invalidProjectedLvalueLanesRemaining": 0,
       "declaredProjectedPlaceRootFailuresRemaining": 0,
-      "invalidUpdateOperandLanesRemaining": 26,
-      "parserTimeoutLanes": 0,
+      "invalidUpdateOperandLanesRemaining": 0,
+      "staticRelocationParserLanesRemaining": 0,
+      "nullFunctionPointerConversionLanesRemaining": 0,
+      "staticAssertionFailedLanes": 15,
+      "parserTimeoutLanes": 11,
       "surveyUnavailableUnits": 0,
       "unchangedPreviouslyAvailableSurveyRoots": "15/15",
       "statementExpressionLanesRemaining": 0,
@@ -614,49 +650,54 @@
       "invalidObjectSizeModeDiagnosticTests": "2/2",
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260831T040339Z-3286/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260831T070738Z-60065/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "10aae424f7b7593c38367214bd2641c2e5d51f2d7c4f5243adf16b4fea60494d",
-      "subjectCommit": "9e9ce23",
-      "publishedFromRun": "20260831T070738Z-60065"
+      "sha256": "2f0e4241f1cdc4c96599b5336e1bcfd853cec559a96a88c404ee4b9fca9fbf39",
+      "subjectCommit": "269cac1",
+      "publishedFromRun": "20260831T172344Z-47247"
     },
-    "result": "STATEMENT_EXPRESSION_SCOPE_PASS_STAGE_F1_OPEN"
+    "result": "POINTER_CONSTANT_CONVERSIONS_PASS_STAGE_F1_OPEN"
   },
   "lanes": {
     "clean": {
-      "count": 20,
+      "count": 22,
       "units": [
         "all 16 units (evocpp-raw)",
         "lib-bitrev (gcc-preprocessed-parser, clang-preprocessed-parser)",
-        "lib-fdt-wip (gcc-preprocessed-parser, clang-preprocessed-parser)"
+        "lib-fdt-wip (gcc-preprocessed-parser, clang-preprocessed-parser)",
+        "lib-kstrtox (gcc-preprocessed-parser, clang-preprocessed-parser)"
       ]
     },
     "stillFailing": [
       {
-        "count": 26,
-        "firstError": "E2102 invalid-update-operands at include/linux/delayed_call.h:33 (`call->fn = ((void *)0)`)",
-        "lanes": "13 gcc-preprocessed-parser plus 13 clang-preprocessed-parser",
+        "count": 15,
+        "firstError": "E2911 static-assertion-failed at include/linux/rw_hint.h:22 (`sizeof(enum rw_hint) == 1`)",
+        "lanes": "7 gcc-preprocessed-parser plus 8 clang-preprocessed-parser",
         "units": [
           "init-do-mounts",
           "init-do-mounts-initrd",
-          "init-init-task",
-          "init-version-timestamp",
-          "kernel-bpf-token",
-          "kernel-locking-semaphore",
           "kernel-power-console",
-          "kernel-power-main",
           "lib-crypto-mpi-generic-mpih-lshift",
           "mm-memtest",
           "mm-mincore",
           "mm-mprotect",
           "mm-page-vma-mapped"
-        ]
+        ],
+        "oracleSplit": "mm-mprotect reaches E2911 in the clang lane and exceeds the fixed budget in the gcc lane; the other seven units reach E2911 in both lanes"
       },
       {
-        "count": 2,
-        "firstError": "E2208 non-constant-static-initializer at lib/kstrtox.c:138 (EXPORT_SYMBOL function-address relocation)",
-        "unit": "lib-kstrtox (gcc and clang)"
+        "count": 11,
+        "firstError": "PARSE_TIMEOUT at the unchanged 10-second parser budget",
+        "lanes": "6 gcc-preprocessed-parser plus 5 clang-preprocessed-parser",
+        "units": [
+          "init-init-task",
+          "init-version-timestamp",
+          "kernel-bpf-token",
+          "kernel-locking-semaphore",
+          "kernel-power-main",
+          "mm-mprotect (gcc only)"
+        ]
       }
     ],
     "publicationsThisWindow": [
@@ -869,6 +910,11 @@
         "commit": "9e9ce23",
         "run": "20260831T070738Z-60065",
         "parseLanesStoppedOn": "revision 1.9.23 publication: all 26 incorrect E2905 lanes and both typeof(function) E1001 lanes are gone; 26 lanes now reach E2102 on assigning GNU NULL ((void *)0) to a function-pointer member, and 2 reach E2208 on the EXPORT_SYMBOL function-address static initializer; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions; Stage F1 remains open"
+      },
+      {
+        "commit": "269cac1",
+        "run": "20260831T172344Z-47247",
+        "parseLanesStoppedOn": "revision 1.9.24 publication: all 26 null-function-pointer E2102 lanes and both address-constant E2208 lanes are gone; lib-kstrtox becomes the third dual-oracle clean unit; 15 lanes reach E2911 on packed enum size and 11 exceed the unchanged 10-second parser budget; raw 16/16 clean; dual-oracle clean 3/16; 0 regressions; Stage F1 remains open"
       }
     ]
   },
@@ -1105,6 +1151,24 @@
       "stageF1": "OPEN",
       "regressionsAgainstPrevious": 0,
       "scopeO": "PASS"
+    },
+    "pointerConstantsAfter": {
+      "run": "20260831T172344Z-47247",
+      "subjectCommit": "269cac1",
+      "resolvedFirstErrorClasses": {
+        "E2102 invalid-update-operands at include/linux/delayed_call.h:33": 26,
+        "E2208 non-constant-static-initializer at lib/kstrtox.c:138": 2
+      },
+      "nextFirstErrorClasses": {
+        "E2911 static-assertion-failed at include/linux/rw_hint.h:22": 15,
+        "PARSE_TIMEOUT at the fixed 10-second parser budget": 11
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "3/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "scopeP5": "PASS",
+      "bisection": "enumerator values agree; packed enum is size/alignment 1/1 in GCC-14 and Clang-19 but 4/4 in the subject"
     }
   },
   "attributes": {
@@ -1151,13 +1215,13 @@
   },
   "tests": {
     "workspace": {
-      "passed": 993,
+      "passed": 1002,
       "failed": 0,
-      "command": "CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$' (993)",
+      "command": "CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$' (1002)",
       "workspaceIncludingDocTests": {
-        "passed": 994,
+        "passed": 1003,
         "failed": 0,
-        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list | rg -c ': test$' (994)"
+        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list | rg -c ': test$' (1003)"
       }
     },
     "suites": {
@@ -1342,8 +1406,12 @@
         "command": "cargo test -p evocc-chir --test statement_expression_values"
       },
       "crates/evocc-lower/tests/statement_expression_lowering.rs": {
-        "passed": 5,
+        "passed": 8,
         "command": "cargo test -p evocc-lower --test statement_expression_lowering"
+      },
+      "crates/evocc-parser/tests/pointer_constant_conversions.rs": {
+        "passed": 6,
+        "command": "cargo test -p evocc-parser --test pointer_constant_conversions"
       },
       "crates/evocc-parser/tests/compile_time_builtins.rs": {
         "passed": 17,
@@ -1428,17 +1496,17 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "9e9ce233526370a5574730e127a7d51a17842cd4",
-    "path": "/private/tmp/c30-statement-scope-replay.tf00Vl/repo",
-    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-statement-scope-replay.tf00Vl/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$'",
+    "commit": "269cac153ec32240e9171d0e546218c44a8bc33b",
+    "path": "/private/tmp/c30-p5-replay.txr1ol/repo",
+    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-p5-replay.txr1ol/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$'",
     "measured": {
-      "passed": 993,
+      "passed": 1002,
       "failed": 0,
       "clippy": 0,
       "fmt": "clean",
       "ruff": "clean",
       "selfTest": "PASS",
-      "countCommand": 993,
+      "countCommand": 1002,
       "objectsAlternates": "absent"
     }
   },
@@ -1468,7 +1536,7 @@
     "G2-VOLATILE-UNION-COPY: section 10.1.3 requires volatile aggregates to lower as memberwise volatile accesses, but a union has overlapping members and the specification provides no selected-member authority. Volatile union copy therefore remains fail-closed rather than reading every overlapping member.",
     "G2-VOLATILE-BIT-FIELD-COPY: section 10.1.3 does not freeze the access width, mask sequence, or trace granularity for a volatile aggregate member that is a bit-field. That form remains fail-closed.",
     "G2-AGGREGATE-CALL-ABI: the specification requires one semantic copy for by-value arguments and returns but does not freeze the hidden return-destination parameter position or deterministic origin identity for caller-owned aggregate temporaries. The implementation uses an address-based internal ABI with the return destination before mem/world tokens and a high-bit function-ordinal origin namespace; no broader ABI claim is made.",
-    "O-NULL-FUNCTION-POINTER-ASSIGNMENT: Section 10.1.19 freezes the `(void *)0` null-pointer rule for the conditional operator but does not say whether the same GNU null pointer constant is assignment-compatible with a function-pointer member. Both sealed parser lanes now stop at `call->fn = ((void *)0)` in include/linux/delayed_call.h:33; no conversion rule was inferred."
+    "P5-PACKED-ENUM-LAYOUT: Section 10.1.9 permits attributes after an enum definition and says packed is one of exactly two applied layout attributes, but defines packed layout only for records and members. The new first error is `_Static_assert(sizeof(enum rw_hint) == 1)`; GCC-14 and Clang-19 measure size/alignment 1/1 while the subject computes 4/4. This receipt names the gap and does not infer the missing enum rule."
   ],
   "processDeviations": [
     "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (adce449), aligned arguments as constant expressions (ed8302b), attribute positions in members, block scope and parameters (eae3e42).",
@@ -1520,6 +1588,8 @@
     "The first scope-N GREEN publication covered the measured root update index. A deliberate post-GREEN audit then made index++ a child of arithmetic and observed E3007, proving the internal exact-once boundary was too narrow. Commit 270d2d1 scopes mutation permission across the complete generated expression in both interpreter paths; its follow-up publication classified all 48 observations identically with zero regressions.",
     "One pre-commit workspace invocation omitted the established /tmp runner and was interrupted after macOS provenance scanning imposed per-binary delay; it is not acceptance evidence. The recorded canonical all-target locked/offline run completed 988/988 with the runner. A restricted base-layout invocation also returned rc 1 with no evidence and was rejected; the subsequent sequential sealed runs produced 128/128 and 22/22 ORACLE_CONSENSUS.",
     "The scope-O byte-identity fixture initially called an undefined external function, which the EvoIR validator correctly rejects even in the spelled-out control. The fixture was corrected during GREEN to provide a real definition while retaining the inherited extern redeclaration; the RED still failed first at typeof(function) with E1001 and the corrected pair proves no front-end-only form survives.",
-    "A post-fix attempt to run the base and attributed layout observers concurrently was rejected because they share one mutable container identity: one failed deleting the other's running container and the other detected a changing image inventory. Neither result was used; fresh sequential runs produced 128/128 and 22/22 ORACLE_CONSENSUS."
+    "A post-fix attempt to run the base and attributed layout observers concurrently was rejected because they share one mutable container identity: one failed deleting the other's running container and the other detected a changing image inventory. Neither result was used; fresh sequential runs produced 128/128 and 22/22 ORACLE_CONSENSUS.",
+    "The opening P5 RED proved all five conversion contexts at the parser boundary but executed only assignment and truth testing. Inspection during GREEN found that call and return lowering used a separate function-value mapper that rejected function pointers entirely. The semantic commit therefore adds one weighted dual-interpreter execution case covering initialization, assignment, argument, return and comparison; it refines the declared null-conversion capability and does not open a new one.",
+    "The first two packed-enum bisection probe attempts were rejected as evidence because the sealed read-only container prevented compiler temporary or output files under /tmp. The accepted third run binds TMPDIR and the executable to the writable evidence mount, records both compiler identities, and obtains identical size/alignment 1/1 results; only that output is cited."
   ]
 }
