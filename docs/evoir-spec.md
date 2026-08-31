@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.23** | **Authoritative reference** | **2026-08-31**
+**Revision 1.9.24** | **Authoritative reference** | **2026-09-01**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -3287,6 +3287,20 @@ and `unsigned __int128`, not distinct types: both oracles give them size 16 and
 cohort writes `__uint128_t` 102 times. They are type specifiers wherever the
 underlying spelling is one, and carry its value semantics unchanged.
 
+**Null pointer constants.** An integer constant expression with value zero, or
+such an expression cast to `void *`, is a null pointer constant (C11 6.3.2.3p3)
+and converts, in assignment, initialization, argument passing, return and
+comparison, to **any** pointer type — object pointers and function pointers
+alike. Measured defect at revision 1.9.23: `call->fn = ((void *)0);` was
+`E2102` for a function-pointer member while `= 0` was accepted; the kernel
+writes the cast form throughout. The resulting value has `Null` provenance.
+
+**Address constants through integer casts.** An address constant cast to an
+integer type and back to a pointer type, `(void *)(uintptr_t)&f`, is an address
+constant (both oracles fold it; the kernel's `EXPORT_SYMBOL` writes exactly
+this). This admits the *form*; whether the initializer can be lowered is
+still Section 2.1's relocation question, counted as `E3026`.
+
 **Conditional operator with a null pointer constant.** In `c ? a : b` where
 one of `a` and `b` is a null pointer constant and the other is a pointer, the
 result type is the *other* operand's pointer type, not a composite with `void *`
@@ -3967,6 +3981,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.24 | 2026-09-01 | Generalizes the null pointer constant to every conversion context including function pointers, after `(void *)0` into a function-pointer member was refused while `0` was accepted; admits an address constant cast through an integer type and back, as the kernel's symbol exports write it, with lowering still governed by the relocation deferral. Both measured. |
 | 1.9.23 | 2026-08-31 | Corrects 10.1.11: a statement expression is permitted anywhere inside a function definition and nowhere outside one, `E2905` meaning only the latter. Revision 1.9.22 also fired it wherever a constant expression was required, which stopped 26 lanes on the kernel's `container_of`, where the statement expression sits inside `typeof` and is never evaluated. Records that this profile does not fold a statement expression to a constant although both oracles do. Adds `typeof` of a function designator as a declaration specifier, and `E2925` for an out-of-range `__builtin_object_size` mode. |
 | 1.9.22 | 2026-08-30 | Rules the three frontier constructs. An attribute may precede a null statement and nothing else (`E2924`), is preserved and applied to nothing. `__builtin_offsetof` admits a non-constant index: the result is runtime arithmetic, the index is evaluated once, it is not an integer constant expression, and it is not bounds checked. `__builtin_object_size` never evaluates its operand and always answers unknown, which asserts nothing and makes the recorded GCC/Clang disagreement moot. |
 | 1.9.21 | 2026-08-29 | Specifies `__typeof_unqual__` in 10.1.10: `typeof` with top-level `const`, `volatile`, `restrict` and `_Atomic` removed, operand unevaluated, pointee and member qualifiers kept, resolved entirely by the front end. One `ORACLE_CONFLICT` on array element qualifiers resolved by keeping them, the direction that refuses a write. Added after 28 kernel parse lanes stopped on it; the cohort writes it 4,797 times. |
