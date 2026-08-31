@@ -2,9 +2,9 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "cca54787f673944062ad3208f36cee309627ad7623a8050e4e9d7cf019f4b3dd"
+    "sha256": "5082a2b30642840da1240e6e30e1a5dc8c02614fffc086d5fe0d346a3a85fe70"
   },
-  "cutLine": "Speculative declaration parsing now uses nested LIFO undo logs for parser-owned maps, SymbolTable, and TypeInterner while the independently restorable SymbolTable snapshot contract remains unchanged. The fixed RED measured 4x input causing 14.4527x allocation growth (820263 to 11855017 bytes); GREEN measures 3.9603x (128252 to 507916 bytes), and representative debug kernel parses fall from 16.87 seconds to 5.03 seconds. The implementation is green at 977/977 listed all-target tests, exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. The sealed dashboard converts all 22 prior parser timeouts into typed first errors with zero regressions; dual-oracle clean parsing remains 2/16 and Stage F1 remains OPEN on 24 E1001 lanes, 2 E2906 lanes, and 2 __builtin_object_size lanes.",
+  "cutLine": "Revision 1.9.22 scope N is implemented: null-statement attributes are retained and inert, dynamic __builtin_offsetof indexes use unchecked runtime arithmetic and execute exactly once, and __builtin_object_size resolves conservatively to an unknown-size integer constant without evaluating its operand. A post-GREEN audit caught and fixed nested index side effects in both interpreter paths. The tree is green at 988/988 listed all-target tests, exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. The sealed dashboard has raw preprocessing at 16/16, dual-oracle clean parsing at 2/16, and zero regressions; Stage F1 remains OPEN on 26 E2905 lanes and 2 E1001 lanes.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -500,9 +500,34 @@
     "semanticContract": "SymbolTable::checkpoint still restores arbitrary previously captured branches; the parser fast path is a separate table-local nested LIFO transaction with foreign, stale, and out-of-order tokens rejected",
     "result": "PASS_STAGE_F1_OPEN"
   },
-  "subjectCommit": "1697338",
+  "frontierRulingsRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.22, commit 1eebdb7; tests/contracts/day9-acceptance-contract.json scope N",
+    "opened": "ceb4f64 (tests only; 977 passed, 11 semantic failures, zero Rust build errors)",
+    "closed": "270d2d1",
+    "implementationCommits": [
+      "7363568",
+      "270d2d1"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/frontier-rulings-red.json",
+      "sha256": "a33194c529db5777547eeba1fc79c8c33927abdea46c636aae2c096bab3c858e"
+    },
+    "declaredCapabilities": [
+      "attribute specifiers on null statements, with E2924 on non-null statements",
+      "unchecked dynamic __builtin_offsetof indexes evaluated exactly once and excluded from integer constant expressions",
+      "conservative __builtin_object_size modes 0 through 3 as unevaluated integer constant expressions"
+    ],
+    "focusedGreen": {
+      "compileTimeBuiltins": "16/16",
+      "gnuAttributes": "28/28",
+      "frontEndResolvedForms": "9/9"
+    },
+    "postGreenAudit": "A nested index update was first observed RED as E3007 after the initial implementation. Commit 270d2d1 keeps the internal exact-once boundary active across nested arithmetic in both the scalar fast path and the explicit-memory task machine.",
+    "result": "PASS_STAGE_F1_OPEN"
+  },
+  "subjectCommit": "270d2d1",
   "gate": {
-    "claim": "Speculative declaration parsing is near-linear under the fixed allocation gate, the exact snapshot contract is preserved, and all 22 prior fixed-budget parser timeouts now produce typed first errors. The tree has 977 listed all-target tests and zero classified dashboard regressions; dual-oracle clean parsing remains 2/16 and Stage F1 remains open.",
+    "claim": "All three revision 1.9.22 frontier rulings are implemented and scope N tests are green. The tree has 988 listed all-target tests and zero dashboard regressions; raw preprocessing is 16/16, dual-oracle clean parsing remains 2/16, and Stage F1 remains open on the newly measured first errors.",
     "measured": {
       "dualOracleCleanParseTus": "2/16",
       "rawPreprocessClean": "16/16",
@@ -510,9 +535,8 @@
       "remainingParserLanes": 28,
       "remainingParserUnits": 14,
       "remainingFirstErrors": {
-        "E1001 expected-declaration at include/linux/signal.h:157": 24,
-        "E2906 designator-outside-object at include/linux/rbtree_latch.h:72": 2,
-        "E2001 undeclared-identifier __builtin_object_size at include/linux/ucopysize.h:47": 2
+        "E2905 statement-expression-outside-function at include/linux/sched/signal.h:720": 26,
+        "E1001 expected-declaration at lib/kstrtox.c:138": 2
       },
       "constantExpressionClosureTests": "15/15",
       "gnuArrayInt128Tests": "13/13",
@@ -526,7 +550,7 @@
       "parserCheckpointScalingTests": "1/1",
       "symbolTableTransactionTests": "2/2",
       "typeInternerTransactionTests": "2/2",
-      "workspaceTests": "977/977",
+      "workspaceTests": "988/988",
       "specifiedFrontier": false,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
@@ -558,16 +582,19 @@
       "aggregateCopyInitializerLanesRemaining": 0,
       "flexibleArrayInitializerLanesRemaining": 0,
       "notCoveredDay7MessagesRemaining": 0,
+      "nullStatementAttributeLanesRemaining": 0,
+      "dynamicOffsetofLanesRemaining": 0,
+      "builtinObjectSizeLanesRemaining": 0,
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260830T101312Z-14565/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260831T033117Z-44479/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "e35b0889ab7cd8f711baac402b9430844c5f698c30b21f382bd845019a4300e6",
-      "subjectCommit": "1697338",
-      "publishedFromRun": "20260830T110658Z-95784"
+      "sha256": "51b416289081afbe55a8ca9c3a6bc565acd9570e8faa4f762d2e49901ba0ed7b",
+      "subjectCommit": "270d2d1",
+      "publishedFromRun": "20260831T040339Z-3286"
     },
-    "result": "PARSER_CHECKPOINT_SCALING_PASS_STAGE_F1_OPEN"
+    "result": "FRONTIER_RULINGS_PASS_STAGE_F1_OPEN"
   },
   "lanes": {
     "clean": {
@@ -580,32 +607,28 @@
     },
     "stillFailing": [
       {
-        "count": 24,
-        "firstError": "E1001 expected-declaration at include/linux/signal.h:157",
-        "lanes": "12 gcc-preprocessed-parser plus 12 clang-preprocessed-parser",
+        "count": 26,
+        "firstError": "E2905 statement-expression-outside-function at include/linux/sched/signal.h:720",
+        "lanes": "13 gcc-preprocessed-parser plus 13 clang-preprocessed-parser",
         "units": [
-          "init-init-task",
-          "init-do-mounts-initrd",
-          "init-version-timestamp",
           "init-do-mounts",
+          "init-do-mounts-initrd",
+          "init-init-task",
+          "init-version-timestamp",
+          "kernel-bpf-token",
           "kernel-locking-semaphore",
+          "kernel-power-console",
           "kernel-power-main",
           "lib-crypto-mpi-generic-mpih-lshift",
           "mm-memtest",
-          "mm-mprotect",
           "mm-mincore",
-          "mm-page-vma-mapped",
-          "kernel-power-console"
+          "mm-mprotect",
+          "mm-page-vma-mapped"
         ]
       },
       {
         "count": 2,
-        "firstError": "E2906 designator-outside-object at include/linux/rbtree_latch.h:72",
-        "unit": "kernel-bpf-token (gcc and clang)"
-      },
-      {
-        "count": 2,
-        "firstError": "E2001 undeclared-identifier: __builtin_object_size at include/linux/ucopysize.h:47",
+        "firstError": "E1001 expected-declaration at lib/kstrtox.c:138",
         "unit": "lib-kstrtox (gcc and clang)"
       }
     ],
@@ -804,6 +827,16 @@
         "commit": "1697338",
         "run": "20260830T110658Z-95784",
         "parseLanesStoppedOn": "speculative parser transaction publication: all 22 fixed-budget timeouts resolved without changing the 10-second limit; 24 lanes reach E1001 expected-declaration, 2 reach E2906, and 2 reach __builtin_object_size; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions; Stage F1 remains open"
+      },
+      {
+        "commit": "7363568",
+        "run": "20260831T033117Z-44479",
+        "parseLanesStoppedOn": "revision 1.9.22 ruling publication: null-statement attributes, dynamic offsetof and conservative object-size blockers are absent; 26 lanes reach E2905 statement-expression-outside-function and 2 reach E1001 expected-declaration; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions; Stage F1 remains open"
+      },
+      {
+        "commit": "270d2d1",
+        "run": "20260831T040339Z-3286",
+        "parseLanesStoppedOn": "exact-once hardening publication: nested side effects in generated dynamic-offset arithmetic execute once in both interpreter paths; the 48 dashboard observations are byte-classified identically to the preceding scope-N run; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions"
       }
     ]
   },
@@ -992,6 +1025,37 @@
       "stageF1": "OPEN",
       "regressionsAgainstPrevious": 0,
       "timingNote": "the parser timeout budget remains 10 seconds; all 28 failing parser lanes now complete with typed first errors and timedOut=false"
+    },
+    "frontierRulingsAfter": {
+      "run": "20260831T033117Z-44479",
+      "subjectCommit": "7363568",
+      "resolvedFirstErrorClasses": {
+        "E1001 expected-declaration at null-statement attribute": 24,
+        "E2906 dynamic offsetof index": 2,
+        "E2001 undeclared-identifier __builtin_object_size": 2
+      },
+      "nextFirstErrorClasses": {
+        "E2905 statement-expression-outside-function": 26,
+        "E1001 expected-declaration": 2
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "2/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "scopeN": "PASS"
+    },
+    "exactOnceHardeningAfter": {
+      "run": "20260831T040339Z-3286",
+      "subjectCommit": "270d2d1",
+      "nextFirstErrorClasses": {
+        "E2905 statement-expression-outside-function": 26,
+        "E1001 expected-declaration": 2
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "2/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "comparison": "all 48 observations classified identically to 20260831T033117Z-44479"
     }
   },
   "attributes": {
@@ -1038,9 +1102,9 @@
   },
   "tests": {
     "workspace": {
-      "passed": 977,
+      "passed": 988,
       "failed": 0,
-      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --quiet; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets -- --list | rg -c ': test$' (977)"
+      "command": "CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$' (988)"
     },
     "suites": {
       "crates/evocc-parser/tests/checkpoint_allocation_scaling.rs": {
@@ -1156,7 +1220,7 @@
         "command": "cargo test -p evocc-parser --test generic_selection"
       },
       "crates/evocc-lower/tests/front_end_resolved_forms.rs": {
-        "passed": 6,
+        "passed": 9,
         "command": "cargo test -p evocc-lower --test front_end_resolved_forms"
       },
       "crates/evocc-parser/tests/checked_arithmetic.rs": {
@@ -1188,7 +1252,7 @@
         "command": "cargo test -p evocc-parser --test kernel_builtins"
       },
       "crates/evocc-parser/tests/gnu_attributes.rs": {
-        "passed": 26,
+        "passed": 28,
         "command": "cargo test -p evocc-parser --test gnu_attributes"
       },
       "crates/evocc-parser/tests/day4_aggregate_chir.rs": {
@@ -1228,7 +1292,7 @@
         "command": "cargo test -p evocc-lower --test statement_expression_lowering"
       },
       "crates/evocc-parser/tests/compile_time_builtins.rs": {
-        "passed": 10,
+        "passed": 16,
         "command": "cargo test -p evocc-parser --test compile_time_builtins"
       },
       "crates/evocc-chir/tests/compile_time_builtin_values.rs": {
@@ -1294,7 +1358,7 @@
     },
     "clippy": {
       "warnings": 0,
-      "command": "cargo clippy --workspace --all-targets -- -D warnings"
+      "command": "CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings"
     },
     "fmt": {
       "result": "clean",
@@ -1302,7 +1366,7 @@
     },
     "ruff": {
       "result": "clean",
-      "command": "ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py"
+      "command": "ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py"
     },
     "publisherSelfTest": {
       "result": "PASS",
@@ -1310,16 +1374,16 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "169733820cba6ccf119ed6f3e67fc7efd105f6bc",
-    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-parser-transaction-replay.psGa8K/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$'",
+    "commit": "270d2d1029907bdab97ae42409ac73a5a718ebe3",
+    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-frontier-rulings-replay.l4NxHf/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$'",
     "measured": {
-      "passed": 977,
+      "passed": 988,
       "failed": 0,
       "clippy": 0,
       "fmt": "clean",
       "ruff": "clean",
       "selfTest": "PASS",
-      "countCommand": 977,
+      "countCommand": 988,
       "objectsAlternates": "absent"
     }
   },
@@ -1348,7 +1412,8 @@
     "H-CLOSING-EDGE-CLEANUP: statement-expression lifetime closure is required on every exit but the lowering paragraph does not define the cleanup edge form.",
     "G2-VOLATILE-UNION-COPY: section 10.1.3 requires volatile aggregates to lower as memberwise volatile accesses, but a union has overlapping members and the specification provides no selected-member authority. Volatile union copy therefore remains fail-closed rather than reading every overlapping member.",
     "G2-VOLATILE-BIT-FIELD-COPY: section 10.1.3 does not freeze the access width, mask sequence, or trace granularity for a volatile aggregate member that is a bit-field. That form remains fail-closed.",
-    "G2-AGGREGATE-CALL-ABI: the specification requires one semantic copy for by-value arguments and returns but does not freeze the hidden return-destination parameter position or deterministic origin identity for caller-owned aggregate temporaries. The implementation uses an address-based internal ABI with the return destination before mem/world tokens and a high-bit function-ordinal origin namespace; no broader ABI claim is made."
+    "G2-AGGREGATE-CALL-ABI: the specification requires one semantic copy for by-value arguments and returns but does not freeze the hidden return-destination parameter position or deterministic origin identity for caller-owned aggregate temporaries. The implementation uses an address-based internal ABI with the return destination before mem/world tokens and a high-bit function-ordinal origin namespace; no broader ABI claim is made.",
+    "N-OBJECT-SIZE-MODE-DIAGNOSTIC: Section 10.1.17 requires the __builtin_object_size mode to be an integer constant expression in 0..3 but does not assign an exact diagnostic code, message, or span for a non-constant or out-of-range mode. The implementation reuses E2913 for that unfrozen invalid surface; scope N claims only the specified valid modes."
   ],
   "processDeviations": [
     "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (adce449), aligned arguments as constant expressions (ed8302b), attribute positions in members, block scope and parameters (eae3e42).",
@@ -1396,6 +1461,8 @@
     "Scope L's contract named init-init-task and mm-mincore as unavailable survey units. A baseline produced before the production edit measured only mm-mincore unavailable; init-init-task already completed with E2102 at line 23018. The receipt preserves that measured correction rather than claiming a 2-to-0 movement.",
     "The recovery dashboard retained zero regressions and 2/16 dual-oracle clean parse, but one clang init-do-mounts lane completed at its existing E2102 instead of timing out under the fixed 10-second budget. The receipt records timeout 5-to-4 and E2102 17-to-18, and does not call the complete 48-lane output byte-identical.",
     "Closing the statement-expression place defect removed all 18 matching E2102 lanes, but the next fixed-budget publication timed out on 22 lanes and left dual-oracle clean parse at 2/16. The publisher correctly reports zero classified regressions because every prior lane was already failing, but that predicate is not a progress predicate; the receipt records the throughput boundary explicitly and does not widen the timeout or claim Stage F1 closure.",
-    "The first parser-throughput publication was refused after all 16 raw lanes succeeded because the restricted sandbox denied sealed oracle container inspection. Its incomplete capture is preserved at .evidence/kernel-dashboard/1697338-sandbox-refused-20260830T110119Z and is not acceptance evidence. The permission-correct rerun used the same subject and previous-run lineage, retained the 10-second parser budget, sealed 48/48 observations, and converted all 22 prior timeouts into typed first errors with zero regressions."
+    "The first parser-throughput publication was refused after all 16 raw lanes succeeded because the restricted sandbox denied sealed oracle container inspection. Its incomplete capture is preserved at .evidence/kernel-dashboard/1697338-sandbox-refused-20260830T110119Z and is not acceptance evidence. The permission-correct rerun used the same subject and previous-run lineage, retained the 10-second parser budget, sealed 48/48 observations, and converted all 22 prior timeouts into typed first errors with zero regressions.",
+    "The first scope-N GREEN publication covered the measured root update index. A deliberate post-GREEN audit then made index++ a child of arithmetic and observed E3007, proving the internal exact-once boundary was too narrow. Commit 270d2d1 scopes mutation permission across the complete generated expression in both interpreter paths; its follow-up publication classified all 48 observations identically with zero regressions.",
+    "One pre-commit workspace invocation omitted the established /tmp runner and was interrupted after macOS provenance scanning imposed per-binary delay; it is not acceptance evidence. The recorded canonical all-target locked/offline run completed 988/988 with the runner. A restricted base-layout invocation also returned rc 1 with no evidence and was rejected; the subsequent sequential sealed runs produced 128/128 and 22/22 ORACLE_CONSENSUS."
   ]
 }
