@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.24** | **Authoritative reference** | **2026-09-01**
+**Revision 1.9.25** | **Authoritative reference** | **2026-09-01**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2983,6 +2983,21 @@ compilers document as permitted, never a vote.
   is the C11 `_Alignof` with an expression operand admitted, and the same
   target layout answers both.
 
+**`packed` on an enumeration.** `packed` on an enum type selects the smallest
+integer type that represents every enumerator: by value range `0..255` one
+unsigned byte, `0..65535` two, otherwise four; with a negative enumerator the
+smallest *signed* type instead (measured: `-1..6` is 1 byte, `-1..200` is 2,
+because 200 does not fit a signed byte). Alignment equals size. The
+enumeration *constants* keep type `int` regardless (`sizeof(A1)` is 4), and
+the underlying type's signedness is observable (`(enum e5)-1 < 0` is 1). The
+attribute is accepted before the tag and after the closing brace alike. All
+measured, both oracles, `.evidence/builtin-probes/20260901-2c23684c/penum.out`;
+the cohort declares 123 packed enums and 15 lanes stopped on `sizeof(enum
+rw_hint)` folding as 4 instead of 1 inside a static assertion.
+`ORACLE_CONFLICT`: `packed` and `aligned(4)` together on an enum give 1/1 in
+GCC-14 and 1/4 in Clang-19; the cohort never combines them, so the combination
+is refused (`E2903`) rather than arbitrated.
+
 Pointer-declarator attributes (10.1.9, position after `*`) are preserved and
 not applied: `aligned` in that position is `ORACLE_CONFLICT` (GCC-14 applies
 it to the pointer type, Clang-19 does not), so this profile applies nothing
@@ -3981,6 +3996,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.25 | 2026-09-01 | Defines `packed` on enumerations from measured oracle behaviour: smallest representable integer type, signed when a negative enumerator exists, alignment equal to size, constants still `int`; the `packed`+`aligned` combination is refused as an unarbitrated oracle conflict the cohort never uses. Added after the executing agent bisected 15 failing static assertions to `sizeof(enum rw_hint)`. |
 | 1.9.24 | 2026-09-01 | Generalizes the null pointer constant to every conversion context including function pointers, after `(void *)0` into a function-pointer member was refused while `0` was accepted; admits an address constant cast through an integer type and back, as the kernel's symbol exports write it, with lowering still governed by the relocation deferral. Both measured. |
 | 1.9.23 | 2026-08-31 | Corrects 10.1.11: a statement expression is permitted anywhere inside a function definition and nowhere outside one, `E2905` meaning only the latter. Revision 1.9.22 also fired it wherever a constant expression was required, which stopped 26 lanes on the kernel's `container_of`, where the statement expression sits inside `typeof` and is never evaluated. Records that this profile does not fold a statement expression to a constant although both oracles do. Adds `typeof` of a function designator as a declaration specifier, and `E2925` for an out-of-range `__builtin_object_size` mode. |
 | 1.9.22 | 2026-08-30 | Rules the three frontier constructs. An attribute may precede a null statement and nothing else (`E2924`), is preserved and applied to nothing. `__builtin_offsetof` admits a non-constant index: the result is runtime arithmetic, the index is evaluated once, it is not an integer constant expression, and it is not bounds checked. `__builtin_object_size` never evaluates its operand and always answers unknown, which asserts nothing and makes the recorded GCC/Clang disagreement moot. |
