@@ -1,6 +1,7 @@
 //! GNU compile-time builtins and small expression/statement forms.
 
-use evocc_chir::CHirUnit;
+use evocc_chir::interp::{interpret_scalar_function, InterpreterLimits};
+use evocc_chir::{CHirDecl, CHirUnit, SymbolId};
 use evocc_common::{Arena, FileId, SourceFile};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::Parser;
@@ -45,6 +46,31 @@ fn rejects(source: &str, code: &str) {
     }
 }
 
+fn entry(unit: &CHirUnit<'_>) -> SymbolId {
+    unit.iter()
+        .find_map(|declaration| match declaration {
+            CHirDecl::Function(function)
+                if function.body.is_some() && function.name.spelling == "main" =>
+            {
+                Some(function.symbol)
+            }
+            _ => None,
+        })
+        .expect("fixture defines main")
+}
+
+fn evaluate(source: &str) -> Result<i128, String> {
+    let arena = Arena::default();
+    let unit = parse(source, &arena)?;
+    let outcome = interpret_scalar_function(&unit, entry(&unit), InterpreterLimits::new(200_000))
+        .map_err(|error| format!("{}: {}", error.code(), error.message()))?;
+    outcome
+        .return_value
+        .expect("main returns a scalar")
+        .mathematical_value(unit.types())
+        .map_err(|error| error.to_string())
+}
+
 #[test]
 fn choose_expr_preserves_selected_type_value_category_and_constant_status() {
     let source = concat!(
@@ -87,6 +113,75 @@ fn builtin_offsetof_accepts_member_index_and_nested_paths() {
     rejects(
         "struct s { int i; }; unsigned long n = __builtin_offsetof(struct s, missing);\n",
         "E2906",
+    );
+}
+
+#[test]
+fn builtin_offsetof_constant_indexes_are_unchecked_arithmetic() {
+    accepts(concat!(
+        "struct s { int head; int arr[4]; }; ",
+        "_Static_assert(__builtin_offsetof(struct s, arr[-1]) == 0, \"negative\"); ",
+        "_Static_assert(__builtin_offsetof(struct s, arr[9]) == 40, \"past end\");\n",
+    ));
+}
+
+#[test]
+fn builtin_offsetof_dynamic_index_is_evaluated_once() {
+    assert_eq!(
+        evaluate(concat!(
+            "struct s { int head; int arr[4]; }; ",
+            "int main(void) { int index = 2; ",
+            "unsigned long offset = __builtin_offsetof(struct s, arr[index++]); ",
+            "return (int)(offset + 100 * index); }\n",
+        ))
+        .unwrap(),
+        312,
+    );
+}
+
+#[test]
+fn builtin_offsetof_dynamic_index_is_not_an_integer_constant_expression() {
+    rejects(
+        concat!(
+            "struct s { int head; int arr[4]; }; int index; ",
+            "_Static_assert(__builtin_offsetof(struct s, arr[index]) == 4, \"dynamic\");\n",
+        ),
+        "E2912",
+    );
+}
+
+#[test]
+fn builtin_offsetof_dynamic_index_is_not_a_file_scope_array_bound() {
+    rejects(
+        concat!(
+            "struct s { int head; int arr[4]; }; int index; ",
+            "int values[__builtin_offsetof(struct s, arr[index])];\n",
+        ),
+        "E2203",
+    );
+}
+
+#[test]
+fn builtin_object_size_always_returns_the_unknown_size_constant() {
+    accepts(concat!(
+        "int known[4]; ",
+        "_Static_assert(__builtin_object_size(known, 0) == (unsigned long)-1, \"mode 0\"); ",
+        "_Static_assert(__builtin_object_size(known, 1) == (unsigned long)-1, \"mode 1\"); ",
+        "_Static_assert(__builtin_object_size(known, 2) == 0, \"mode 2\"); ",
+        "_Static_assert(__builtin_object_size(known, 3) == 0, \"mode 3\");\n",
+    ));
+}
+
+#[test]
+fn builtin_object_size_never_evaluates_its_operand() {
+    assert_eq!(
+        evaluate(concat!(
+            "int main(void) { int side = 0; int known[4]; ",
+            "unsigned long size = __builtin_object_size((side++, known), 0); ",
+            "return side * 10 + (size == (unsigned long)-1); }\n",
+        ))
+        .unwrap(),
+        1,
     );
 }
 

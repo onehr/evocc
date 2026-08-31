@@ -11,7 +11,7 @@
 //! that run exists these numbers are claims, and the oracle run, not this
 //! file, is the authority if they disagree.
 
-use evocc_chir::{CHirDecl, CHirUnit};
+use evocc_chir::{render_unit_summary, CHirDecl, CHirUnit};
 use evocc_common::{Arena, FileId, SourceFile};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::Parser;
@@ -353,5 +353,37 @@ fn every_attribute_position_parses_in_every_declaration_context() {
     ];
     for source in &sources {
         accepts(source);
+    }
+}
+
+#[test]
+fn statement_attributes_attach_only_to_null_statements_and_remain_observable() {
+    let arena = Arena::default();
+    let source = concat!(
+        "int f(int value) { ",
+        "if (value) __attribute__((unused)); ",
+        "switch (value) { case 0: __attribute__((__fallthrough__)); default: return value; } ",
+        "}\n",
+    );
+    let unit = parse(source, &arena).expect("attributes before null statements must parse");
+    let inventory = unit.attribute_inventory();
+    assert_eq!(inventory.preserved_not_applied.get("unused"), Some(&1));
+    assert_eq!(inventory.preserved_not_applied.get("fallthrough"), Some(&1));
+    let summary = render_unit_summary(&unit);
+    assert_eq!(
+        summary.matches("placement=null-statement").count(),
+        2,
+        "{summary}"
+    );
+}
+
+#[test]
+fn statement_attributes_before_non_null_statements_are_e2924() {
+    for source in [
+        "int f(void) { __attribute__((unused)) return 0; }\n",
+        "int f(int x) { __attribute__((unused)) x++; return x; }\n",
+        "int f(void) { __attribute__((unused)) { return 0; } }\n",
+    ] {
+        rejects(source, "E2924");
     }
 }

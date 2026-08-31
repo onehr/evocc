@@ -1,0 +1,114 @@
+{
+  "receiptId": "c30.frontier-rulings.red.v1",
+  "state": "RED",
+  "baselineCommit": "1eebdb7",
+  "classification": "tests-only RED",
+  "authority": {
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.22",
+      "commit": "1eebdb7",
+      "sections": ["10.1.9", "10.1.17", "6.3"],
+      "sha256": "4ebf83c51f7c753e967770cac4f2e48b30403514c6c3187201e44e328f7813e0"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "N",
+      "sha256": "5082a2b30642840da1240e6e30e1a5dc8c02614fffc086d5fe0d346a3a85fe70"
+    },
+    "oracleEvidence": {
+      "path": ".evidence/builtin-probes/20260830-2c23684c-frontier/rulings.out",
+      "sha256": "265c918e0cb358ffe83aea35bf970e1409ad4b505f3e3a5abda9dd6d001d8ce0",
+      "cohortRun": "20260830T110658Z-95784"
+    }
+  },
+  "declaredMissingCapabilities": [
+    "attribute-before-null-statement",
+    "dynamic-unchecked-offsetof-index",
+    "conservative-builtin-object-size"
+  ],
+  "productionEdits": [],
+  "testsOnlyChanges": [
+    {
+      "path": "crates/evocc-parser/tests/gnu_attributes.rs",
+      "sha256": "016cf305c25038dea35efeb18d05e69625b2428ac1298dbd8dcecc5c65fd98c0"
+    },
+    {
+      "path": "crates/evocc-parser/tests/compile_time_builtins.rs",
+      "sha256": "442c7659f622b1af9edae25720db1d4bd195a2ecf838eb1d8faef258d7872f6d"
+    },
+    {
+      "path": "crates/evocc-lower/tests/front_end_resolved_forms.rs",
+      "sha256": "60e95a44261d0f6393f03af644890d3359f235267f9ddb2506ab570ef842f9ed"
+    }
+  ],
+  "focusedRuns": [
+    {
+      "command": "cargo test -p evocc-parser --test gnu_attributes --test compile_time_builtins --no-fail-fast",
+      "passed": 36,
+      "failed": 8,
+      "buildErrors": 0,
+      "diagnostics": [
+        "statement_attributes_attach_only_to_null_statements_and_remain_observable: E1003 expected-expression",
+        "statement_attributes_before_non_null_statements_are_e2924: E1001 instead of E2924",
+        "builtin_offsetof_constant_indexes_are_unchecked_arithmetic: E2906 designator-outside-object",
+        "builtin_offsetof_dynamic_index_is_evaluated_once: E2906 designator-outside-object",
+        "builtin_offsetof_dynamic_index_is_not_an_integer_constant_expression: E2906 instead of E2912",
+        "builtin_offsetof_dynamic_index_is_not_a_file_scope_array_bound: E2906 instead of E2203",
+        "builtin_object_size_always_returns_the_unknown_size_constant: E2001 undeclared-identifier: __builtin_object_size",
+        "builtin_object_size_never_evaluates_its_operand: E2001 undeclared-identifier: __builtin_object_size"
+      ]
+    },
+    {
+      "command": "cargo test -p evocc-lower --test front_end_resolved_forms --no-fail-fast",
+      "passed": 6,
+      "failed": 3,
+      "buildErrors": 0,
+      "diagnostics": [
+        "attributed_null_statements_do_not_reach_evoir: E1003 expected-expression",
+        "dynamic_offsetof_resolves_to_byte_identical_runtime_arithmetic: E2906 designator-outside-object",
+        "builtin_object_size_resolves_to_unknown_constants: E2001 undeclared-identifier: __builtin_object_size"
+      ]
+    }
+  ],
+  "fullWorkspaceRun": {
+    "command": "cargo test --workspace --no-fail-fast",
+    "passed": 977,
+    "failed": 11,
+    "failedTargets": [
+      "evocc-parser/compile_time_builtins",
+      "evocc-parser/gnu_attributes",
+      "evocc-lower/front_end_resolved_forms"
+    ],
+    "unexpectedFailures": 0,
+    "buildErrors": 0
+  },
+  "nonTestGates": {
+    "clippy": {
+      "command": "cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py",
+      "result": "clean"
+    },
+    "baseLayout": {
+      "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "PASS 128/128, mismatchCount 0"
+    },
+    "attributedLayout": {
+      "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "PASS 22/22, mismatchCount 0"
+    }
+  },
+  "summary": {
+    "semanticFailures": 11,
+    "unexpectedFailures": 0,
+    "buildErrors": 0,
+    "disabledTests": 0
+  }
+}

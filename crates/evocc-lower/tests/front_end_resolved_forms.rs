@@ -123,6 +123,45 @@ fn selection_type_and_offset_builtins_resolve_before_lowering() {
 }
 
 #[test]
+fn dynamic_offsetof_resolves_to_byte_identical_runtime_arithmetic() {
+    assert_pairs(
+        &[(
+            "struct s { int head; int arr[4]; }; unsigned long f(int i) { return __builtin_offsetof(struct s, arr[i]); }\n",
+            "struct s { int head; int arr[4]; }; unsigned long f(int i) { return 4ul + (unsigned long)i * 4ul; }\n",
+        )],
+        103,
+    );
+}
+
+#[test]
+fn builtin_object_size_resolves_to_unknown_constants() {
+    assert_pairs(
+        &[
+            (
+                "unsigned long f(int *p) { return __builtin_object_size(p, 0); }\n",
+                "unsigned long f(int *p) { return (unsigned long)-1; }\n",
+            ),
+            (
+                "unsigned long f(int *p) { return __builtin_object_size(p, 2); }\n",
+                "unsigned long f(int *p) { return 0ul; }\n",
+            ),
+        ],
+        104,
+    );
+}
+
+#[test]
+fn attributed_null_statements_do_not_reach_evoir() {
+    assert_pairs(
+        &[(
+            "int f(int x) { if (x) __attribute__((fallthrough)); return x; }\n",
+            "int f(int x) { if (x) ; return x; }\n",
+        )],
+        105,
+    );
+}
+
+#[test]
 fn constant_bit_builtins_resolve_before_lowering() {
     assert_pairs(
         &[(
