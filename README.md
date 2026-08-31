@@ -8,7 +8,7 @@
 
 Conventional compilers destroy information at every step: each rewrite discards the form it replaced, so later passes cannot recover it and phase ordering becomes a permanent source of missed optimizations. Equality saturation fixes that by keeping every equivalent form until a cost model chooses, but it has stayed largely in research because real languages have effects, undefined behavior, and pointer provenance that an e-graph will happily "optimize" away. The bet here is that this becomes tractable if the semantics are made explicit *before* the e-graph sees the program — memory as tokens, UB as assumptions, provenance as part of pointer identity — and if every union carries a machine-checkable justification. A compiler whose rewrite library will increasingly be written by AI agents needs proofs as a product, not a debugging aid. Booting a real kernel is the only honest test that the semantics survived contact with reality.
 
-![Destructive rewriting versus equality saturation](docs/images/why.png)
+![Rewriting in place versus merging into an e-class](docs/images/why.png)
 
 ## How
 
@@ -20,9 +20,32 @@ Every claim in this repository is a **measured number with the command that prod
 
 ## Roadmap 0.1
 
-![Roadmap status](docs/images/roadmap.png)
-
 Status is measured, not estimated. `DONE` means a gate is green on sealed evidence.
+
+| Capability | Status | What the gate measures |
+|---|---|---|
+| EvoCPP preprocessor | done | 16/16 cohort units preprocess clean |
+| Lexer, C11 + GNU parser | done | 142 sealed lexer goldens, 1,000-snippet parse corpus |
+| Type system and layout | done | 128/128 and 22/22 against the sealed oracles, 0 mismatches |
+| C-HIR and semantic interpreter | done | typed UB, provenance, per-byte initializedness |
+| EvoIR block-argument SSA | done | both interpreters agree on the differential corpus |
+| Semantic lowering | done | UB explicit before any rewrite; front-end forms leave no trace |
+| Equality engine and proofs | done | EVP1 replayed by a standalone `evo-proofcheck` |
+| Kernel telemetry and publication | done | sealed evidence; refuses to publish on a regression |
+| Diagnostic survey | partial | works; cascade ranking and recovery soundness unfinished |
+| Kernel parse closure | open | 2/16 cohort units parse clean under both oracles |
+| Analysis lattices, bounded scheduler | open | — |
+| Randomized semantic gate | open | — |
+| EvoMIR, register allocation, AArch64 | open | — |
+| ABIs and native flight gates | open | — |
+| Kernel codegen, link, boot | open | — |
+
+The parse count has sat at 2/16 while nine distinct blockers were cleared and
+republished with zero regressions: `__attribute__`, `typeof`/`_Generic`, pointer
+updates, `asm` and the overflow builtins, statement expressions, the
+compile-time builtins, aggregate copies, `__typeof_unqual__`, and places rooted
+at an address-of. A unit is clean only when its *last* blocker falls, so the
+count is a lagging indicator and the frontier is the real one.
 
 ### Front end
 
@@ -99,4 +122,4 @@ tools/                  routing, survey and figure rendering
 
 Every commit passes the same gate: workspace tests, `clippy -D warnings`, `rustfmt`, Ruff on the Python harnesses, both layout corpora against the sealed oracles, and an isolated offline clone replay. Measured at `b14eccd`, the most recent commit with no open test window: **956 tests passed, 0 failed**, clippy 0, corpora 128/128 and 22/22 at 0 mismatches. A higher count on a later commit may include an open red window, where declared failures are the point; the receipts in `tests/contracts/` say which commit each number came from. Nothing is claimed that these do not measure.
 
-The figures are generated, not drawn: `python3 tools/render-readme-figures.py` re-renders them from the same numbers the receipts carry.
+The figures are generated, not drawn: `python3 tools/render-readme-figures.py` re-renders them.

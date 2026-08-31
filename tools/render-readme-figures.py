@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Render the README figures.
 
-One palette, one geometry vocabulary, four figures. Built things are solid and
-coloured; unbuilt things are dashed and muted, so a reader can see the shape of
-the compiler and how much of it exists without reading a word.
+Three figures, each showing a mechanism the prose cannot: what the pipeline is
+and how much of it exists, what an e-class does that a replacement cannot undo,
+and the two return edges that decide what gets built next.
+
+Status belongs in a table, not a picture: a rendered list is not selectable,
+not searchable, not diffable, and goes stale in silence.
 
     python3 tools/render-readme-figures.py
 """
@@ -191,50 +194,110 @@ def figure_architecture(out: Path) -> None:
 
 
 # ------------------------------------------------------------------------ why
+def eclass(ax, x, y, w, h, name, nodes, *, colour=PURPLE):
+    """An e-class: a dashed container holding one or more e-nodes."""
+    ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0,rounding_size=1.0",
+                                linewidth=1.5, edgecolor=colour, facecolor="#191426",
+                                linestyle=(0, (5, 3)), zorder=2))
+    ax.text(x + 1.0, y + h + 1.3, name, ha="left", va="center", color=colour,
+            fontsize=7.4, fontfamily=MONO)
+    anchors = {}
+    nw = (w - 1.6 - 1.2 * (len(nodes) - 1)) / len(nodes)
+    for i, label in enumerate(nodes):
+        nx = x + 0.8 + i * (nw + 1.2)
+        ax.add_patch(FancyBboxPatch((nx, y + 0.9), nw, h - 1.8,
+                                    boxstyle="round,pad=0,rounding_size=0.7",
+                                    linewidth=1.3, edgecolor=TEXT, facecolor=PANEL, zorder=3))
+        ax.text(nx + nw / 2, y + h / 2, label, ha="center", va="center", color=TEXT,
+                fontsize=9.5, fontfamily=MONO, zorder=4)
+        anchors[label] = (nx + nw / 2, y, nx + nw / 2, y + h - 0.9)
+    return anchors
+
+
+def tree(ax, nodes, edges, *, dim=False, mark=None):
+    """A small expression tree: (label, x, y) nodes and (parent, child) edges."""
+    pos = {}
+    for label, x, y in nodes:
+        pos[label] = (x, y)
+    for a, b in edges:
+        arrow(ax, (pos[a][0], pos[a][1] - 1.6), (pos[b][0], pos[b][1] + 1.6),
+              colour=FAINT if dim else EDGE, style="-")
+    for label, x, y in nodes:
+        text = label.split("#")[0]
+        hot = mark is not None and label == mark
+        colour = RED if hot else (FAINT if dim else TEXT)
+        ax.add_patch(FancyBboxPatch((x - 2.1, y - 1.6), 4.2, 3.2,
+                                    boxstyle="round,pad=0,rounding_size=0.8",
+                                    linewidth=1.4, edgecolor=colour,
+                                    facecolor=INK if dim else PANEL, zorder=3))
+        ax.text(x, y, text, ha="center", va="center", color=colour,
+                fontsize=9.5, fontfamily=MONO, zorder=4)
+    return pos
+
+
 def figure_why(out: Path) -> None:
-    fig, ax = canvas(13, 6.2)
-    title(ax, 5, 45, "Why keep every form",
-          "A rewrite that discards its input makes phase order permanent.")
+    fig, ax = canvas(13, 6.8)
+    title(ax, 5, 50,
+          "A rewrite that replaces cannot be taken back",
+          "One program, optimized two ways. Only one of them can still reach the answer.")
 
-    # left: destructive
-    ax.add_patch(FancyBboxPatch((4.5, 8.5), 40, 27, boxstyle="round,pad=0,rounding_size=1.4",
+    # ---------------- left: rewriting in place destroys the pattern
+    ax.add_patch(FancyBboxPatch((4.0, 4.5), 40.0, 36.5, boxstyle="round,pad=0,rounding_size=1.4",
                                 linewidth=1.2, edgecolor=EDGE, facecolor="#12171e", zorder=0))
-    caption(ax, 6.5, 32.5, "CONVENTIONAL", colour=RED, size=8.4, mono=True)
-    chain = [("(a + a)", 28.0, TEXT), ("(a << 1)", 22.0, TEXT), ("(a * 2)", 16.0, TEXT)]
-    for i, (label, y, colour) in enumerate(chain):
-        live = i == len(chain) - 1
-        box(ax, 8.0, y - 2.0, 15.0, 4.4, label, colour=BLUE if live else EDGE,
-            built=live, mono=True, fs=9)
-        if i:
-            arrow(ax, (15.5, y + 4.0), (15.5, y + 2.4), colour=FAINT)
-        if not live:
-            ax.text(25.5, y, "discarded", ha="left", va="center", color=FAINT,
-                    fontsize=8, fontfamily=SANS, style="italic")
-    caption(ax, 6.5, 11.5, "one survivor; the choice was made\nbefore the cost was known", colour=FAINT)
+    caption(ax, 6.0, 38.6, "REWRITE IN PLACE", colour=RED, size=8.4, mono=True)
 
-    # right: saturation
-    ax.add_patch(FancyBboxPatch((52.0, 8.5), 43.5, 27, boxstyle="round,pad=0,rounding_size=1.4",
+    tree(ax,
+         [("/", 14.0, 35.0), ("*", 9.0, 30.0), ("2", 19.0, 30.0),
+          ("a", 6.0, 25.0), ("2#a", 12.0, 25.0)],
+         [("/", "*"), ("/", "2"), ("*", "a"), ("*", "2#a")])
+    caption(ax, 24.0, 33.0, "(a * 2) / 2", colour=MUTED, mono=True)
+
+    arrow(ax, (38.0, 29.0), (38.0, 24.0), colour=RED, dashed=True)
+    caption(ax, 24.0, 26.5, "a * 2  ->  a << 1", colour=RED, size=7.8, mono=True)
+
+    tree(ax,
+         [("/", 14.0, 20.0), ("<<", 9.0, 15.0), ("2", 19.0, 15.0),
+          ("a", 6.0, 10.0), ("1", 12.0, 10.0)],
+         [("/", "<<"), ("/", "2"), ("<<", "a"), ("<<", "1")], mark="<<")
+    caption(ax, 24.0, 18.0, "(a << 1) / 2", colour=MUTED, mono=True)
+    ax.text(6.0, 6.4, "the `* 2` that the cancellation matched on is gone.\n"
+                      "`(a * 2) / 2  ->  a` can never fire again.",
+            ha="left", va="center", color=RED, fontsize=7.8, fontfamily=SANS)
+
+    # ---------------- right: the same rewrite as a merge
+    ax.add_patch(FancyBboxPatch((48.0, 4.5), 48.0, 36.5, boxstyle="round,pad=0,rounding_size=1.4",
                                 linewidth=1.2, edgecolor=EDGE, facecolor="#12171e", zorder=0))
-    caption(ax, 54.0, 32.5, "EQUALITY SATURATION", colour=PURPLE, size=8.4, mono=True)
-    ax.add_patch(FancyBboxPatch((56.5, 14.0), 21.0, 15.0, boxstyle="round,pad=0,rounding_size=1.2",
-                                linewidth=1.5, edgecolor=PURPLE, facecolor=PANEL,
-                                linestyle=(0, (5, 3)), zorder=1))
-    caption(ax, 67.0, 30.6, "one e-class", colour=PURPLE, size=8, ha="center", mono=True)
-    for i, label in enumerate(["(a + a)", "(a << 1)", "(a * 2)"]):
-        box(ax, 58.5, 24.0 - i * 4.6, 17.0, 3.8, label, colour=PURPLE, built=True, mono=True, fs=8.6)
-    box(ax, 83.0, 19.0, 10.0, 5.0, "cost pick", colour=GREEN, built=True, fs=8.6)
-    arrow(ax, (77.5, 21.5), (83.0, 21.5), colour=GREEN)
-    caption(ax, 54.0, 11.5, "all forms retained; the cost model chooses last", colour=FAINT)
+    caption(ax, 50.0, 38.6, "MERGE INTO AN E-CLASS", colour=PURPLE, size=8.4, mono=True)
 
-    # the hard part
-    ax.add_patch(FancyBboxPatch((4.5, 0.8), 91.0, 5.2, boxstyle="round,pad=0,rounding_size=1.0",
+    c0 = eclass(ax, 58.0, 30.0, 22.0, 6.0, "c0", ["/", "a"])
+    c1 = eclass(ax, 58.0, 18.0, 22.0, 6.0, "c1", ["*", "<<"])
+    eclass(ax, 86.0, 26.0, 8.0, 5.5, "c2", ["2"])
+    eclass(ax, 86.0, 15.0, 8.0, 5.5, "c3", ["1"])
+
+    arrow(ax, (c0["/"][0] + 1.0, 30.0), (c1["*"][0] + 2.0, 24.0), colour=PURPLE)  # / -> c1
+    arrow(ax, (c0["/"][0] + 3.0, 30.0), (86.0, 29.0), colour=PURPLE, rad=-0.2)  # / -> c2
+    arrow(ax, (c1["*"][0] + 3.0, 18.0), (86.0, 27.5), colour=PURPLE, rad=0.28)  # * -> c2
+    arrow(ax, (c1["<<"][0], 18.0), (86.0, 18.5), colour=PURPLE, rad=-0.18)      # << -> c3
+    arrow(ax, (58.0, 20.5), (58.0, 33.5), colour=TEAL, rad=-0.75, lw=1.6)        # c1 -> c0
+    caption(ax, 51.6, 27.0, "a", colour=TEAL, size=9.5, mono=True)
+
+    caption(ax, 50.0, 12.5, "both e-nodes in c1 take c0's `a` as their left operand",
+            colour=FAINT, size=7.4)
+    ax.text(50.0, 8.6, "the cancellation did not delete the multiply. it merged\n"
+                       "`(a * 2) / 2` into the class that already held `a`.",
+            ha="left", va="center", color=TEAL, fontsize=7.8, fontfamily=SANS)
+    ax.text(50.0, 5.9, "extraction reads `a` straight out of c0.",
+            ha="left", va="center", color=GREEN, fontsize=7.8, fontfamily=SANS)
+
+    # ---------------- the hard part
+    ax.add_patch(FancyBboxPatch((4.0, 0.4), 92.0, 3.2, boxstyle="round,pad=0,rounding_size=0.9",
                                 linewidth=1.2, edgecolor=AMBER, facecolor="#1a1710", zorder=0))
-    ax.text(6.5, 3.4, "Why this is hard on real C:", ha="left", va="center", color=AMBER,
-            fontsize=8.6, fontfamily=SANS, fontweight="bold")
-    ax.text(30.0, 3.4,
-            "effects, undefined behaviour and pointer provenance are things an e-graph will happily "
-            "optimize away  ->  make them explicit before it ever sees the program",
-            ha="left", va="center", color=MUTED, fontsize=8.4, fontfamily=SANS)
+    ax.text(6.0, 2.0, "On real C this only works if", ha="left", va="center", color=AMBER,
+            fontsize=8.0, fontfamily=SANS, fontweight="bold")
+    ax.text(28.0, 2.0,
+            "effects, undefined behaviour and provenance are already explicit -- an e-graph "
+            "merges anything it is told is equal, including things that are not",
+            ha="left", va="center", color=MUTED, fontsize=8.0, fontfamily=SANS)
     fig.savefig(out, facecolor=INK)
     plt.close(fig)
 
@@ -283,113 +346,16 @@ def figure_loop(out: Path) -> None:
     plt.close(fig)
 
 
-# -------------------------------------------------------------------- roadmap
-def figure_roadmap(out: Path, parse_clean: int, preprocess_clean: int, total: int) -> None:
-    fig, ax = canvas(13, 8.0)
-    title(ax, 5, 59, "Roadmap 0.1", "Status is what a gate measures, not an estimate.")
-
-    rows = [
-        ("EvoCPP preprocessor", "done", "16/16 units preprocess clean"),
-        ("Lexer and C11 + GNU parser", "done", "142 goldens, 1,000-snippet corpus"),
-        ("Type system and layout", "done", "128/128 and 22/22 vs sealed oracles"),
-        ("C-HIR and semantic interpreter", "done", "typed UB, provenance, initializedness"),
-        ("EvoIR block-argument SSA", "done", "explicit mem and world tokens"),
-        ("Semantic lowering", "done", "UB explicit before any rewrite"),
-        ("Equality engine and proofs", "done", "EVP1 replayed by evo-proofcheck"),
-        ("Kernel telemetry and publication", "done", "sealed evidence, refuses regressions"),
-        ("Diagnostic survey", "partial", "works; cascades and recovery unfinished"),
-        ("Kernel parse closure", "open", f"{parse_clean}/{total} units parse clean"),
-        ("Analysis lattices, bounded scheduler", "open", ""),
-        ("Randomized semantic gate", "open", ""),
-        ("EvoMIR, register allocation, AArch64", "open", ""),
-        ("ABIs and native flight gates", "open", ""),
-        ("Kernel codegen, link, boot", "open", ""),
-    ]
-    palette = {"done": GREEN, "partial": AMBER, "open": EDGE}
-    y = 52.0
-    for label, state, note in rows:
-        colour = palette[state]
-        ax.add_patch(FancyBboxPatch((5.0, y - 1.15), 2.0, 2.3,
-                                    boxstyle="round,pad=0,rounding_size=0.5",
-                                    linewidth=1.3, edgecolor=colour,
-                                    facecolor=colour if state != "open" else INK,
-                                    linestyle="solid" if state != "open" else (0, (3, 2))))
-        ax.text(9.0, y, label, ha="left", va="center",
-                color=TEXT if state != "open" else FAINT,
-                fontsize=9.2, fontfamily=SANS,
-                fontweight="medium" if state != "open" else "normal")
-        if note:
-            ax.text(46.0, y, note, ha="left", va="center", color=MUTED if state != "open" else FAINT,
-                    fontsize=8.2, fontfamily=SANS)
-        y -= 3.05
-
-    # the one kernel number
-    ax.add_patch(FancyBboxPatch((72.0, 24.0), 24.0, 30.0, boxstyle="round,pad=0,rounding_size=1.3",
-                                linewidth=1.2, edgecolor=EDGE, facecolor="#12171e", zorder=0))
-    ax.text(74.0, 51.0, "THE ONE KERNEL NUMBER", ha="left", va="center", color=TEXT,
-            fontsize=8.4, fontfamily=MONO)
-    ax.text(74.0, 48.0, f"pinned Linux 6.18.44, {total}-unit cohort", ha="left", va="center",
-            color=FAINT, fontsize=7.6, fontfamily=SANS)
-
-    for i, (name, clean, colour) in enumerate(
-        [("preprocess", preprocess_clean, GREEN), ("parse (both oracles)", parse_clean, AMBER)]
-    ):
-        by = 42.0 - i * 9.0
-        ax.text(74.0, by + 2.6, name, ha="left", va="center", color=MUTED,
-                fontsize=8.0, fontfamily=SANS)
-        ax.add_patch(FancyBboxPatch((74.0, by - 0.9), 20.0, 2.4,
-                                    boxstyle="round,pad=0,rounding_size=0.7",
-                                    linewidth=0, facecolor="#21262d"))
-        width = 20.0 * clean / total
-        if width > 0.1:
-            ax.add_patch(FancyBboxPatch((74.0, by - 0.9), width, 2.4,
-                                        boxstyle="round,pad=0,rounding_size=0.7",
-                                        linewidth=0, facecolor=colour))
-        ax.text(74.0, by - 3.4, f"{clean}/{total}", ha="left", va="center", color=colour,
-                fontsize=11, fontfamily=MONO, fontweight="bold")
-
-    ax.text(74.0, 27.5,
-            "every published number carries\nthe command that produced it",
-            ha="left", va="center", color=FAINT, fontsize=7.6, fontfamily=SANS)
-
-    # the frontier is the progress; the count is a lagging conjunction
-    ax.add_patch(FancyBboxPatch((72.0, 3.0), 24.0, 19.5,
-                                boxstyle="round,pad=0,rounding_size=1.3",
-                                linewidth=1.2, edgecolor=EDGE, facecolor="#12171e", zorder=0))
-    ax.text(74.0, 20.6, "WHAT MOVED INSTEAD", ha="left", va="center", color=TEXT,
-            fontsize=8.0, fontfamily=MONO)
-    frontier = ["__attribute__", "typeof / _Generic", "pointer updates", "asm, overflow",
-                "statement expressions", "compile-time builtins", "aggregate copies",
-                "__typeof_unqual__", "address-of places"]
-    for i, item in enumerate(frontier):
-        ax.text(74.6, 18.0 - i * 1.45, f"{i + 1}.", ha="left", va="center", color=FAINT,
-                fontsize=6.8, fontfamily=MONO)
-        ax.text(77.4, 18.0 - i * 1.45, item, ha="left", va="center",
-                color=MUTED if i < len(frontier) - 1 else AMBER,
-                fontsize=7.2, fontfamily=SANS)
-    ax.text(74.0, 4.6, "each cleared, each republished with zero regressions;\n"
-                       "the count only moves when a unit's last one falls",
-            ha="left", va="center", color=FAINT, fontsize=7.0, fontfamily=SANS)
-
-    legend(ax, 5, 5.0, [(GREEN, "done", True), (AMBER, "partial", True), (EDGE, "open", False)])
-    fig.savefig(out, facecolor=INK)
-    plt.close(fig)
-
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, default=Path("docs/images"))
-    parser.add_argument("--parse-clean", type=int, default=2)
-    parser.add_argument("--preprocess-clean", type=int, default=16)
-    parser.add_argument("--cohort", type=int, default=16)
     args = parser.parse_args()
 
     args.out.mkdir(parents=True, exist_ok=True)
     figure_architecture(args.out / "architecture.png")
     figure_why(args.out / "why.png")
     figure_loop(args.out / "loop.png")
-    figure_roadmap(args.out / "roadmap.png", args.parse_clean, args.preprocess_clean, args.cohort)
-    for name in ("architecture", "why", "loop", "roadmap"):
+    for name in ("architecture", "why", "loop"):
         path = args.out / f"{name}.png"
         print(f"{path}  {path.stat().st_size // 1024} KiB")
     return 0
