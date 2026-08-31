@@ -2,9 +2,9 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "5082a2b30642840da1240e6e30e1a5dc8c02614fffc086d5fe0d346a3a85fe70"
+    "sha256": "0f4a5dc95106d4062683126266576c99c8697e130af0f3a3cb48a13b452a9f97"
   },
-  "cutLine": "Revision 1.9.22 scope N is implemented: null-statement attributes are retained and inert, dynamic __builtin_offsetof indexes use unchecked runtime arithmetic and execute exactly once, and __builtin_object_size resolves conservatively to an unknown-size integer constant without evaluating its operand. A post-GREEN audit caught and fixed nested index side effects in both interpreter paths. The tree is green at 988/988 listed all-target tests, exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. The sealed dashboard has raw preprocessing at 16/16, dual-oracle clean parsing at 2/16, and zero regressions; Stage F1 remains OPEN on 26 E2905 lanes and 2 E1001 lanes.",
+  "cutLine": "Revision 1.9.23 scope O is implemented: E2905 now means only a statement expression outside a function definition; function-scope typeof/sizeof/_Alignof uses are admitted while value-required contexts retain E2912/E2203; typeof(function-designator) reuses the existing inherited prototype path; and invalid __builtin_object_size modes report E2925 at the mode operand. The tree is green at 994/994 workspace tests (993/993 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. The sealed dashboard has raw preprocessing at 16/16, dual-oracle clean parsing at 2/16, and zero regressions; Stage F1 remains OPEN on 26 E2102 lanes and 2 E2208 lanes.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -525,9 +525,32 @@
     "postGreenAudit": "A nested index update was first observed RED as E3007 after the initial implementation. Commit 270d2d1 keeps the internal exact-once boundary active across nested arithmetic in both the scalar fast path and the explicit-memory task machine.",
     "result": "PASS_STAGE_F1_OPEN"
   },
-  "subjectCommit": "270d2d1",
+  "statementExpressionScopeRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.23, commit adabc63; tests/contracts/day9-acceptance-contract.json scope O",
+    "opened": "b86ee1b (tests only; 990 passed, 4 semantic failures, 994 listed workspace tests; zero Rust build errors)",
+    "closed": "9e9ce23",
+    "implementationCommits": [
+      "9e9ce23"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/statement-expression-scope-red.json",
+      "sha256": "9f154714f5823ae0002016a1fdce659702cb52f983f127b78e100d19409347f8"
+    },
+    "declaredCapabilities": [
+      "statement expressions are permitted throughout a function definition, including unevaluated and constant-required contexts, while E2905 remains the file-scope diagnostic",
+      "typeof of a function designator supplies an inherited function prototype and leaves byte-identical EvoIR",
+      "invalid or non-constant __builtin_object_size modes report E2925 at the mode operand"
+    ],
+    "focusedGreen": {
+      "command": "cargo test -p evocc-parser --test statement_expressions --test function_type_typedef_declarations --test compile_time_builtins -p evocc-lower --test front_end_resolved_forms --no-fail-fast",
+      "passed": 39,
+      "failed": 0
+    },
+    "result": "PASS_STAGE_F1_OPEN"
+  },
+  "subjectCommit": "9e9ce23",
   "gate": {
-    "claim": "All three revision 1.9.22 frontier rulings are implemented and scope N tests are green. The tree has 988 listed all-target tests and zero dashboard regressions; raw preprocessing is 16/16, dual-oracle clean parsing remains 2/16, and Stage F1 remains open on the newly measured first errors.",
+    "claim": "All three revision 1.9.23 scope-O corrections are implemented and their tests are green. The tree has 994 listed workspace tests (993 all-target) and zero dashboard regressions; raw preprocessing is 16/16, dual-oracle clean parsing remains 2/16, and Stage F1 remains open on the newly measured first errors.",
     "measured": {
       "dualOracleCleanParseTus": "2/16",
       "rawPreprocessClean": "16/16",
@@ -535,8 +558,8 @@
       "remainingParserLanes": 28,
       "remainingParserUnits": 14,
       "remainingFirstErrors": {
-        "E2905 statement-expression-outside-function at include/linux/sched/signal.h:720": 26,
-        "E1001 expected-declaration at lib/kstrtox.c:138": 2
+        "E2102 invalid-update-operands at include/linux/delayed_call.h:33": 26,
+        "E2208 non-constant-static-initializer at lib/kstrtox.c:138": 2
       },
       "constantExpressionClosureTests": "15/15",
       "gnuArrayInt128Tests": "13/13",
@@ -550,7 +573,8 @@
       "parserCheckpointScalingTests": "1/1",
       "symbolTableTransactionTests": "2/2",
       "typeInternerTransactionTests": "2/2",
-      "workspaceTests": "988/988",
+      "workspaceTests": "994/994",
+      "allTargetTests": "993/993",
       "specifiedFrontier": false,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
@@ -564,7 +588,7 @@
       "pointerUpdateLanesRemaining": 0,
       "invalidProjectedLvalueLanesRemaining": 0,
       "declaredProjectedPlaceRootFailuresRemaining": 0,
-      "invalidUpdateOperandLanesRemaining": 0,
+      "invalidUpdateOperandLanesRemaining": 26,
       "parserTimeoutLanes": 0,
       "surveyUnavailableUnits": 0,
       "unchangedPreviouslyAvailableSurveyRoots": "15/15",
@@ -585,16 +609,19 @@
       "nullStatementAttributeLanesRemaining": 0,
       "dynamicOffsetofLanesRemaining": 0,
       "builtinObjectSizeLanesRemaining": 0,
+      "statementExpressionScopeLanesRemaining": 0,
+      "typeofFunctionDeclarationLanesRemaining": 0,
+      "invalidObjectSizeModeDiagnosticTests": "2/2",
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260831T033117Z-44479/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260831T040339Z-3286/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "51b416289081afbe55a8ca9c3a6bc565acd9570e8faa4f762d2e49901ba0ed7b",
-      "subjectCommit": "270d2d1",
-      "publishedFromRun": "20260831T040339Z-3286"
+      "sha256": "10aae424f7b7593c38367214bd2641c2e5d51f2d7c4f5243adf16b4fea60494d",
+      "subjectCommit": "9e9ce23",
+      "publishedFromRun": "20260831T070738Z-60065"
     },
-    "result": "FRONTIER_RULINGS_PASS_STAGE_F1_OPEN"
+    "result": "STATEMENT_EXPRESSION_SCOPE_PASS_STAGE_F1_OPEN"
   },
   "lanes": {
     "clean": {
@@ -608,7 +635,7 @@
     "stillFailing": [
       {
         "count": 26,
-        "firstError": "E2905 statement-expression-outside-function at include/linux/sched/signal.h:720",
+        "firstError": "E2102 invalid-update-operands at include/linux/delayed_call.h:33 (`call->fn = ((void *)0)`)",
         "lanes": "13 gcc-preprocessed-parser plus 13 clang-preprocessed-parser",
         "units": [
           "init-do-mounts",
@@ -628,7 +655,7 @@
       },
       {
         "count": 2,
-        "firstError": "E1001 expected-declaration at lib/kstrtox.c:138",
+        "firstError": "E2208 non-constant-static-initializer at lib/kstrtox.c:138 (EXPORT_SYMBOL function-address relocation)",
         "unit": "lib-kstrtox (gcc and clang)"
       }
     ],
@@ -837,6 +864,11 @@
         "commit": "270d2d1",
         "run": "20260831T040339Z-3286",
         "parseLanesStoppedOn": "exact-once hardening publication: nested side effects in generated dynamic-offset arithmetic execute once in both interpreter paths; the 48 dashboard observations are byte-classified identically to the preceding scope-N run; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions"
+      },
+      {
+        "commit": "9e9ce23",
+        "run": "20260831T070738Z-60065",
+        "parseLanesStoppedOn": "revision 1.9.23 publication: all 26 incorrect E2905 lanes and both typeof(function) E1001 lanes are gone; 26 lanes now reach E2102 on assigning GNU NULL ((void *)0) to a function-pointer member, and 2 reach E2208 on the EXPORT_SYMBOL function-address static initializer; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions; Stage F1 remains open"
       }
     ]
   },
@@ -1056,6 +1088,23 @@
       "stageF1": "OPEN",
       "regressionsAgainstPrevious": 0,
       "comparison": "all 48 observations classified identically to 20260831T033117Z-44479"
+    },
+    "statementExpressionScopeAfter": {
+      "run": "20260831T070738Z-60065",
+      "subjectCommit": "9e9ce23",
+      "resolvedFirstErrorClasses": {
+        "E2905 statement-expression-outside-function": 26,
+        "E1001 expected-declaration at typeof(function-designator)": 2
+      },
+      "nextFirstErrorClasses": {
+        "E2102 invalid-update-operands at include/linux/delayed_call.h:33": 26,
+        "E2208 non-constant-static-initializer at lib/kstrtox.c:138": 2
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "2/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "scopeO": "PASS"
     }
   },
   "attributes": {
@@ -1102,9 +1151,14 @@
   },
   "tests": {
     "workspace": {
-      "passed": 988,
+      "passed": 993,
       "failed": 0,
-      "command": "CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$' (988)"
+      "command": "CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$' (993)",
+      "workspaceIncludingDocTests": {
+        "passed": 994,
+        "failed": 0,
+        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list | rg -c ': test$' (994)"
+      }
     },
     "suites": {
       "crates/evocc-parser/tests/checkpoint_allocation_scaling.rs": {
@@ -1268,7 +1322,7 @@
         "command": "cargo test -p evocc-parser --test day5_gnu_int128"
       },
       "crates/evocc-parser/tests/statement_expressions.rs": {
-        "passed": 5,
+        "passed": 7,
         "command": "cargo test -p evocc-parser --test statement_expressions"
       },
       "crates/evocc-parser/tests/designated_initializers.rs": {
@@ -1292,7 +1346,7 @@
         "command": "cargo test -p evocc-lower --test statement_expression_lowering"
       },
       "crates/evocc-parser/tests/compile_time_builtins.rs": {
-        "passed": 16,
+        "passed": 17,
         "command": "cargo test -p evocc-parser --test compile_time_builtins"
       },
       "crates/evocc-chir/tests/compile_time_builtin_values.rs": {
@@ -1340,7 +1394,7 @@
         "command": "cargo test -p evocc-parser --test specifier_order"
       },
       "crates/evocc-parser/tests/function_type_typedef_declarations.rs": {
-        "passed": 4,
+        "passed": 6,
         "command": "cargo test -p evocc-parser --test function_type_typedef_declarations"
       },
       "crates/evocc-parser/tests/member_static_assertions.rs": {
@@ -1374,16 +1428,17 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "270d2d1029907bdab97ae42409ac73a5a718ebe3",
-    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-frontier-rulings-replay.l4NxHf/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$'",
+    "commit": "9e9ce233526370a5574730e127a7d51a17842cd4",
+    "path": "/private/tmp/c30-statement-scope-replay.tf00Vl/repo",
+    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-statement-scope-replay.tf00Vl/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$'",
     "measured": {
-      "passed": 988,
+      "passed": 993,
       "failed": 0,
       "clippy": 0,
       "fmt": "clean",
       "ruff": "clean",
       "selfTest": "PASS",
-      "countCommand": 988,
+      "countCommand": 993,
       "objectsAlternates": "absent"
     }
   },
@@ -1413,7 +1468,7 @@
     "G2-VOLATILE-UNION-COPY: section 10.1.3 requires volatile aggregates to lower as memberwise volatile accesses, but a union has overlapping members and the specification provides no selected-member authority. Volatile union copy therefore remains fail-closed rather than reading every overlapping member.",
     "G2-VOLATILE-BIT-FIELD-COPY: section 10.1.3 does not freeze the access width, mask sequence, or trace granularity for a volatile aggregate member that is a bit-field. That form remains fail-closed.",
     "G2-AGGREGATE-CALL-ABI: the specification requires one semantic copy for by-value arguments and returns but does not freeze the hidden return-destination parameter position or deterministic origin identity for caller-owned aggregate temporaries. The implementation uses an address-based internal ABI with the return destination before mem/world tokens and a high-bit function-ordinal origin namespace; no broader ABI claim is made.",
-    "N-OBJECT-SIZE-MODE-DIAGNOSTIC: Section 10.1.17 requires the __builtin_object_size mode to be an integer constant expression in 0..3 but does not assign an exact diagnostic code, message, or span for a non-constant or out-of-range mode. The implementation reuses E2913 for that unfrozen invalid surface; scope N claims only the specified valid modes."
+    "O-NULL-FUNCTION-POINTER-ASSIGNMENT: Section 10.1.19 freezes the `(void *)0` null-pointer rule for the conditional operator but does not say whether the same GNU null pointer constant is assignment-compatible with a function-pointer member. Both sealed parser lanes now stop at `call->fn = ((void *)0)` in include/linux/delayed_call.h:33; no conversion rule was inferred."
   ],
   "processDeviations": [
     "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (adce449), aligned arguments as constant expressions (ed8302b), attribute positions in members, block scope and parameters (eae3e42).",
@@ -1463,6 +1518,8 @@
     "Closing the statement-expression place defect removed all 18 matching E2102 lanes, but the next fixed-budget publication timed out on 22 lanes and left dual-oracle clean parse at 2/16. The publisher correctly reports zero classified regressions because every prior lane was already failing, but that predicate is not a progress predicate; the receipt records the throughput boundary explicitly and does not widen the timeout or claim Stage F1 closure.",
     "The first parser-throughput publication was refused after all 16 raw lanes succeeded because the restricted sandbox denied sealed oracle container inspection. Its incomplete capture is preserved at .evidence/kernel-dashboard/1697338-sandbox-refused-20260830T110119Z and is not acceptance evidence. The permission-correct rerun used the same subject and previous-run lineage, retained the 10-second parser budget, sealed 48/48 observations, and converted all 22 prior timeouts into typed first errors with zero regressions.",
     "The first scope-N GREEN publication covered the measured root update index. A deliberate post-GREEN audit then made index++ a child of arithmetic and observed E3007, proving the internal exact-once boundary was too narrow. Commit 270d2d1 scopes mutation permission across the complete generated expression in both interpreter paths; its follow-up publication classified all 48 observations identically with zero regressions.",
-    "One pre-commit workspace invocation omitted the established /tmp runner and was interrupted after macOS provenance scanning imposed per-binary delay; it is not acceptance evidence. The recorded canonical all-target locked/offline run completed 988/988 with the runner. A restricted base-layout invocation also returned rc 1 with no evidence and was rejected; the subsequent sequential sealed runs produced 128/128 and 22/22 ORACLE_CONSENSUS."
+    "One pre-commit workspace invocation omitted the established /tmp runner and was interrupted after macOS provenance scanning imposed per-binary delay; it is not acceptance evidence. The recorded canonical all-target locked/offline run completed 988/988 with the runner. A restricted base-layout invocation also returned rc 1 with no evidence and was rejected; the subsequent sequential sealed runs produced 128/128 and 22/22 ORACLE_CONSENSUS.",
+    "The scope-O byte-identity fixture initially called an undefined external function, which the EvoIR validator correctly rejects even in the spelled-out control. The fixture was corrected during GREEN to provide a real definition while retaining the inherited extern redeclaration; the RED still failed first at typeof(function) with E1001 and the corrected pair proves no front-end-only form survives.",
+    "A post-fix attempt to run the base and attributed layout observers concurrently was rejected because they share one mutable container identity: one failed deleting the other's running container and the other detected a changing image inventory. Neither result was used; fresh sequential runs produced 128/128 and 22/22 ORACLE_CONSENSUS."
   ]
 }
