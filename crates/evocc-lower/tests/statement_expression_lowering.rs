@@ -6,7 +6,7 @@ use evocc_evoir::{
     Module, RuntimeValue,
 };
 use evocc_lex::{Lexer, TokenKind};
-use evocc_lower::{lower_unit, LowerError};
+use evocc_lower::lower_unit;
 use evocc_parser::Parser;
 use evocc_types::{EvoIRType, TargetDataLayout};
 
@@ -178,6 +178,16 @@ fn both_interpreters_agree_on_statement_and_initializer_forms() {
 }
 
 #[test]
+fn a_void_pointer_spelled_null_executes_as_a_null_function_pointer() {
+    let source = concat!(
+        "struct c { void (*fn)(int); }; ",
+        "int main(void) { struct c call; call.fn = ((void *)0); ",
+        "return call.fn ? 0 : 1; }\n",
+    );
+    assert_eq!(observe(source, 32), (1, 1));
+}
+
+#[test]
 fn designated_and_positional_forms_lower_to_identical_bytes() {
     let designated = render_module(&lower(
         "struct pair { int a; int b; }; int main(void) { struct pair p = { .a = 1, .b = 2 }; return p.a + p.b; }\n",
@@ -196,14 +206,20 @@ fn file_scope_compound_pointer_fails_closed_without_a_global_identity() {
     let unit = parse("int *values = (int[]){ 1, 2 };\n", &arena, 32);
     let error = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
         .expect_err("an unspecified relocation identity must not produce dangling global_addr");
-    assert!(
-        matches!(
-            &error,
-            LowerError::UnsupportedExpression {
-                feature: "global initializer is not an admitted integer constant",
-                ..
-            }
-        ),
-        "unexpected fail-closed boundary: {error:?}"
+    assert_eq!(error.code(), "E3026");
+    assert_eq!(error.to_string(), "not-lowered: static-relocation");
+}
+
+#[test]
+fn an_integer_round_trip_address_stops_at_the_static_relocation_boundary() {
+    let arena = Arena::default();
+    let unit = parse(
+        "typedef unsigned long uintptr_t; int k(char *s); static void *p = (void *)(uintptr_t)&k;\n",
+        &arena,
+        33,
     );
+    let error = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+        .expect_err("the deferred relocation must fail closed");
+    assert_eq!(error.code(), "E3026");
+    assert_eq!(error.to_string(), "not-lowered: static-relocation");
 }

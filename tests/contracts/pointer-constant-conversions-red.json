@@ -1,0 +1,100 @@
+{
+  "receiptId": "c30.pointer-constant-conversions.red.v1",
+  "state": "RED",
+  "baselineCommit": "fa58552",
+  "classification": "tests-only RED",
+  "authority": {
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.24",
+      "commit": "fa58552",
+      "sections": ["2.1", "6.3", "10.1.19"],
+      "sha256": "b3853b3f43e82ac846dfa4e43d0d80df5c43b74e27af438f7524f34199222161"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "P5",
+      "sha256": "8317e62feaec34595c9a4b6f3d484042e8d4ce67a855322f04cf53cff31e5998"
+    },
+    "oracleEvidence": {
+      "source": ".evidence/builtin-probes/20260831-2c23684c/next.c",
+      "sourceSha256": "117385d7d790e227ce4e87ec37477eb68d5796385ffa711eccf721a989737944",
+      "output": ".evidence/builtin-probes/20260831-2c23684c/next.out",
+      "outputSha256": "54dedb807c4437f72e045bfe6d129c2b4a475c5d4102d1cd9cd9e1f94c5864e6"
+    }
+  },
+  "declaredMissingCapabilities": [
+    "void-pointer-spelled-null-constant-converts-to-any-pointer-type-with-null-provenance",
+    "address-constant-survives-integer-round-trip-while-relocation-lowering-remains-e3026"
+  ],
+  "productionEdits": [],
+  "testsOnlyChanges": [
+    {
+      "path": "crates/evocc-parser/tests/pointer_constant_conversions.rs",
+      "sha256": "9ddec77e866e97de479aeeb1664d0951e852fc0a2ce6176f83bdcaa8c5f078a2"
+    },
+    {
+      "path": "crates/evocc-lower/tests/statement_expression_lowering.rs",
+      "sha256": "e78513510db0a36387f7f3e5cd9a7151198dfe5ff8331bd86839a325dd206298"
+    }
+  ],
+  "focusedRed": {
+    "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test pointer_constant_conversions -p evocc-lower --test statement_expression_lowering --no-fail-fast",
+    "passed": 5,
+    "failed": 8,
+    "buildErrors": 0,
+    "diagnostics": [
+      "void_pointer_spelled_null_converts_to_a_function_pointer: E2102 invalid-update-operands",
+      "null_pointer_constants_are_admitted_in_every_conversion_context: E2202 invalid-initializer-type",
+      "the_measured_delayed_call_line_is_preserved_verbatim: E2102 invalid-update-operands",
+      "an_address_constant_survives_an_integer_round_trip: E2208 non-constant-static-initializer",
+      "the_measured_export_symbol_line_is_preserved_verbatim: E2208 non-constant-static-initializer",
+      "a_void_pointer_spelled_null_executes_as_a_null_function_pointer: E2102 invalid-update-operands before either interpreter runs",
+      "an_integer_round_trip_address_stops_at_the_static_relocation_boundary: E2208 non-constant-static-initializer before lowering runs",
+      "file_scope_compound_pointer_fails_closed_without_a_global_identity: E3101 instead of the already specified E3026 boundary"
+    ]
+  },
+  "workspaceRed": {
+    "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet",
+    "listedCommand": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list | rg -c ': test$'",
+    "listed": 1002,
+    "passed": 994,
+    "failed": 8,
+    "unexpectedFailures": 0,
+    "buildErrors": 0
+  },
+  "nonTestGates": {
+    "clippy": {
+      "command": "cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance/publish-kernel-dashboard.py tools/route-kernel-failures.py tests/acceptance/day5-layout-corpus.py tools/survey-cohort.py",
+      "result": "clean"
+    },
+    "baseLayout": {
+      "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "PASS 128/128; ORACLE_CONSENSUS; mismatchCount 0"
+    },
+    "attributedLayout": {
+      "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "PASS 22/22; ORACLE_CONSENSUS; mismatchCount 0"
+    }
+  },
+  "dashboardBaseline": {
+    "run": "20260831T070738Z-60065",
+    "resultsSha256": "a76e7b447ffafb1e336fce6efa422b9cc05f0ff0223967998ca4167477990191",
+    "rawPreprocess": "16/16",
+    "dualOracleCleanParse": "2/16",
+    "firstErrors": {
+      "E2102 invalid-update-operands": 26,
+      "E2208 non-constant-static-initializer": 2
+    }
+  },
+  "discardedEnvironmentFailure": "The first focused invocation never executed either test binary because the established temporary runner had expired across the date boundary. Recreating the byte-identical disposable-copy runner and rerunning produced the recorded eight semantic failures; the environment failure is not RED evidence.",
+  "specGap": null
+}
