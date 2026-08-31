@@ -137,6 +137,26 @@ fn builtin_offsetof_dynamic_index_is_evaluated_once() {
         .unwrap(),
         312,
     );
+    assert_eq!(
+        evaluate(concat!(
+            "struct s { int head; int arr[4]; }; ",
+            "int main(void) { int index = 2; ",
+            "unsigned long offset = __builtin_offsetof(struct s, arr[index++ + 0]); ",
+            "return (int)(offset + 100 * index); }\n",
+        ))
+        .unwrap(),
+        312,
+    );
+    assert_eq!(
+        evaluate(concat!(
+            "struct s { int head; int arr[4]; }; ",
+            "int main(void) { int memory[1] = { 0 }; int index = 2; ",
+            "unsigned long offset = __builtin_offsetof(struct s, arr[index++ + 0]); ",
+            "return (int)(offset + 100 * index + memory[0]); }\n",
+        ))
+        .unwrap(),
+        312,
+    );
 }
 
 #[test]

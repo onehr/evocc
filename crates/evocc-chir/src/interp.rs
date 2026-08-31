@@ -589,6 +589,7 @@ enum MachineTask<'arena> {
         span: SourceSpan,
     },
     RestoreFuelAnchor(Option<SourceSpan>),
+    RestoreNestedMutationDepth(usize),
     ExecDeclaration(&'arena CHirDecl<'arena>),
     ExecStatement(&'arena CHirStmt<'arena>),
     ExecSwitchStatement(&'arena CHirStmt<'arena>),
@@ -843,6 +844,7 @@ struct Interpreter<'unit, 'arena> {
     fuel_limit: u64,
     consumed: u64,
     fuel_anchor: Option<SourceSpan>,
+    nested_mutation_depth: usize,
     temporary_origin_site: u64,
 }
 
@@ -879,6 +881,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             fuel_limit: limits.fuel(),
             consumed: 0,
             fuel_anchor: None,
+            nested_mutation_depth: 0,
             temporary_origin_site: 0,
         })
     }
@@ -1372,6 +1375,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
                 MachineTask::RestoreFuelAnchor(previous) => {
                     self.fuel_anchor = previous;
+                    None
+                }
+                MachineTask::RestoreNestedMutationDepth(previous) => {
+                    self.nested_mutation_depth = previous;
                     None
                 }
                 MachineTask::ExecDeclaration(declaration) => {
@@ -2682,6 +2689,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 MachineTask::RestoreSlots(saved) => self.restore_slots(saved),
                 MachineTask::ExitMemoryScope(exit) => self.exit_memory_scope(exit)?,
                 MachineTask::RestoreFuelAnchor(previous) => self.fuel_anchor = previous,
+                MachineTask::RestoreNestedMutationDepth(previous) => {
+                    self.nested_mutation_depth = previous;
+                }
                 _ => {}
             }
         }
@@ -2705,6 +2715,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 MachineTask::RestoreSlots(saved) => self.restore_slots(saved),
                 MachineTask::ExitMemoryScope(exit) => self.exit_memory_scope(exit)?,
                 MachineTask::RestoreFuelAnchor(previous) => self.fuel_anchor = previous,
+                MachineTask::RestoreNestedMutationDepth(previous) => {
+                    self.nested_mutation_depth = previous;
+                }
                 MachineTask::FunctionEnd(end) => {
                     tasks.push(MachineTask::FunctionEnd(end));
                     break;
@@ -2734,6 +2747,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 MachineTask::RestoreSlots(saved) => self.restore_slots(saved),
                 MachineTask::ExitMemoryScope(exit) => self.exit_memory_scope(exit)?,
                 MachineTask::RestoreFuelAnchor(previous) => self.fuel_anchor = previous,
+                MachineTask::RestoreNestedMutationDepth(previous) => {
+                    self.nested_mutation_depth = previous;
+                }
                 MachineTask::FunctionEnd(end) => {
                     tasks.push(MachineTask::FunctionEnd(end));
                     break;
@@ -2778,6 +2794,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 MachineTask::RestoreSlots(saved) => self.restore_slots(saved),
                 MachineTask::ExitMemoryScope(exit) => self.exit_memory_scope(exit)?,
                 MachineTask::RestoreFuelAnchor(previous) => self.fuel_anchor = previous,
+                MachineTask::RestoreNestedMutationDepth(previous) => {
+                    self.nested_mutation_depth = previous;
+                }
                 MachineTask::FunctionEnd(end) => {
                     let body = self.function_definition(end.symbol)?.body.ok_or(
                         InterpreterError::FunctionHasNoBody {
@@ -3112,6 +3131,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 });
             }
             CHirExpr::EvaluateOnce(operand, _) => {
+                let previous = self.nested_mutation_depth;
+                self.nested_mutation_depth = previous.saturating_add(1);
+                tasks.push(MachineTask::RestoreNestedMutationDepth(previous));
                 tasks.push(MachineTask::EvalExpression {
                     expression: operand,
                     allow_root_mutation: true,
@@ -3251,7 +3273,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 value,
                 facts,
                 ..
-            } if allow_root_mutation => {
+            } if self.mutation_allowed(allow_root_mutation) => {
                 if facts.ty() != place.ty() || facts.category() != ExprCategory::Value {
                     return Err(InterpreterError::InvalidScalarPlace {
                         symbol: place.symbol(),
@@ -3293,7 +3315,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 target,
                 facts,
                 ..
-            } if allow_root_mutation => {
+            } if self.mutation_allowed(allow_root_mutation) => {
                 if facts.ty() != place.ty() || facts.category() != ExprCategory::Value {
                     return Err(InterpreterError::InvalidScalarPlace {
                         symbol: place.symbol(),
@@ -3318,7 +3340,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 target_span,
                 facts,
                 ..
-            } if self.memory_mode && allow_root_mutation => {
+            } if self.memory_mode && self.mutation_allowed(allow_root_mutation) => {
                 self.validate_mutable_place(place, *facts, *target_span)?;
                 tasks.push(MachineTask::ApplyIndirectUpdate {
                     operator: *op,
@@ -3340,7 +3362,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 value,
                 facts,
                 ..
-            } if self.memory_mode && allow_root_mutation => {
+            } if self.memory_mode && self.mutation_allowed(allow_root_mutation) => {
                 place
                     .validate_against(self.unit.symbols(), self.unit.types())
                     .map_err(|_| InterpreterError::UnsupportedExpression {
@@ -3455,6 +3477,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
         }
         Ok(())
+    }
+
+    fn mutation_allowed(&self, allow_root_mutation: bool) -> bool {
+        allow_root_mutation || self.nested_mutation_depth != 0
     }
 
     fn start_call(
@@ -6635,7 +6661,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     self.integer_error(error, error_span)
                 })
             }
-            CHirExpr::EvaluateOnce(operand, _) => self.eval_expr(operand, true),
+            CHirExpr::EvaluateOnce(operand, _) => {
+                let previous = self.nested_mutation_depth;
+                self.nested_mutation_depth = previous.saturating_add(1);
+                let result = self.eval_expr(operand, true);
+                self.nested_mutation_depth = previous;
+                result
+            }
             CHirExpr::Binary(operator, left, right, _) => {
                 self.eval_binary(*operator, left, right, span)
             }
@@ -6719,7 +6751,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 value,
                 facts,
                 ..
-            } if allow_root_mutation => {
+            } if self.mutation_allowed(allow_root_mutation) => {
                 if facts.ty() != place.ty() || facts.category() != ExprCategory::Value {
                     return Err(InterpreterError::InvalidScalarPlace {
                         symbol: place.symbol(),
@@ -6734,7 +6766,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 target,
                 facts,
                 ..
-            } if allow_root_mutation => {
+            } if self.mutation_allowed(allow_root_mutation) => {
                 if facts.ty() != place.ty() || facts.category() != ExprCategory::Value {
                     return Err(InterpreterError::InvalidScalarPlace {
                         symbol: place.symbol(),
