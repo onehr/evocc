@@ -188,6 +188,21 @@ fn a_void_pointer_spelled_null_executes_as_a_null_function_pointer() {
 }
 
 #[test]
+fn null_function_pointer_conversions_execute_in_every_conversion_context() {
+    let source = concat!(
+        "typedef void callback(int); typedef callback *callback_ptr; ",
+        "struct holder { callback *fn; }; ",
+        "int is_null(callback *fn) { return fn == (void *)0; } ",
+        "callback_ptr return_null(void) { return (void *)0; } ",
+        "int main(void) { struct holder holder; callback *local = (void *)0; ",
+        "holder.fn = (void *)0; return is_null((void *)0) ",
+        "+ 2 * (local == (void *)0) + 4 * (holder.fn == (void *)0) ",
+        "+ 8 * (return_null() == (void *)0); }\n",
+    );
+    assert_eq!(observe(source, 34), (15, 15));
+}
+
+#[test]
 fn designated_and_positional_forms_lower_to_identical_bytes() {
     let designated = render_module(&lower(
         "struct pair { int a; int b; }; int main(void) { struct pair p = { .a = 1, .b = 2 }; return p.a + p.b; }\n",

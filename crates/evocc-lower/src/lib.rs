@@ -65,6 +65,9 @@ pub enum LowerError {
     ReturnAddress {
         span: SourceSpan,
     },
+    StaticRelocation {
+        span: SourceSpan,
+    },
     ComputedGoto {
         span: SourceSpan,
     },
@@ -105,6 +108,7 @@ impl fmt::Display for LowerError {
             }
             Self::BitBuiltin { .. } => formatter.write_str("not-lowered: bit-builtin"),
             Self::ReturnAddress { .. } => formatter.write_str("not-lowered: return-address"),
+            Self::StaticRelocation { .. } => formatter.write_str("not-lowered: static-relocation"),
             Self::ComputedGoto { .. } => formatter.write_str("not-lowered: computed-goto"),
             Self::Asm { .. } => formatter.write_str("not-lowered: asm"),
             Self::MalformedFunction {
@@ -132,6 +136,7 @@ impl LowerError {
             Self::Asm { .. } => "E3021",
             Self::BitBuiltin { .. } => "E3023",
             Self::ReturnAddress { .. } => "E3025",
+            Self::StaticRelocation { .. } => "E3026",
             Self::ComputedGoto { .. } => "E3029",
             _ => "E3101",
         }
@@ -152,6 +157,7 @@ impl LowerError {
             | Self::CheckedArithmetic { span }
             | Self::BitBuiltin { span }
             | Self::ReturnAddress { span }
+            | Self::StaticRelocation { span }
             | Self::ComputedGoto { span }
             | Self::Asm { span }
             | Self::MalformedFunction { span, .. }
@@ -809,11 +815,19 @@ fn apply_static_initializer(
             target_bytes.copy_from_slice(&decoded[..target_bytes.len()]);
         }
         InitAction::StoreScalar { value, .. } => {
-            let raw =
-                constant_integer_expression(value).ok_or(LowerError::UnsupportedExpression {
-                    span,
-                    feature: "global initializer is not an admitted integer constant",
-                })?;
+            let raw = constant_integer_expression(value).ok_or_else(|| {
+                if matches!(
+                    unit.types().get(destination).map(|ty| &ty.kind),
+                    Some(TypeKind::Pointer(_))
+                ) {
+                    LowerError::StaticRelocation { span }
+                } else {
+                    LowerError::UnsupportedExpression {
+                        span,
+                        feature: "global initializer is not an admitted integer constant",
+                    }
+                }
+            })?;
             let byte_len = target_bytes.len();
             for (index, byte) in target_bytes.iter_mut().enumerate() {
                 let shift = match target.byte_order() {
@@ -1614,6 +1628,18 @@ fn function_value_type(
 ) -> Result<FunctionValueType, LowerError> {
     match types.get(ty).map(|canonical| &canonical.kind) {
         Some(TypeKind::Pointer(pointee))
+            if matches!(
+                types.get(*pointee).map(|ty| &ty.kind),
+                Some(TypeKind::Function { .. })
+            ) =>
+        {
+            Ok(FunctionValueType {
+                source: ty,
+                ir: function_pointer_ir_type(types, target, *pointee, span)?,
+                integer: CIntegerType::ULONG,
+            })
+        }
+        Some(TypeKind::Pointer(pointee))
             if !matches!(
                 types.get(*pointee).map(|ty| &ty.kind),
                 Some(TypeKind::Function { .. })
@@ -1644,6 +1670,80 @@ fn function_value_type(
             feature: "function value type is neither an integer nor object pointer",
         }),
     }
+}
+
+fn function_pointer_ir_type(
+    types: &TypeInterner,
+    target: &TargetDataLayout,
+    function_ty: TypeId,
+    span: SourceSpan,
+) -> Result<EvoIRType, LowerError> {
+    let TypeKind::Function {
+        return_type,
+        parameters,
+    } = &types
+        .get(function_ty)
+        .ok_or(LowerError::UnknownType {
+            ty: function_ty,
+            span,
+        })?
+        .kind
+    else {
+        return Err(LowerError::UnsupportedType {
+            ty: function_ty,
+            span,
+            feature: "fnptr pointee is not a function",
+        });
+    };
+    let parameter_types = match parameters {
+        FunctionParameters::Prototype {
+            types,
+            variadic: false,
+        } => types,
+        _ => {
+            return Err(LowerError::UnsupportedType {
+                ty: function_ty,
+                span,
+                feature: "fnptr requires a non-variadic prototype",
+            });
+        }
+    };
+    let mut params = parameter_types
+        .iter()
+        .map(|ty| function_value_type(types, target, *ty, span).map(|value_type| value_type.ir))
+        .collect::<Result<Vec<_>, _>>()?;
+    let returned = match types.get(*return_type).map(|ty| &ty.kind) {
+        Some(TypeKind::Void) => None,
+        Some(_) => Some(function_value_type(types, target, *return_type, span)?),
+        None => {
+            return Err(LowerError::UnknownType {
+                ty: *return_type,
+                span,
+            });
+        }
+    };
+    if returned
+        .as_ref()
+        .is_some_and(|value_type| is_aggregate_type(types, value_type.source))
+    {
+        params.push(EvoIRType::Ptr(AddressSpace::Generic));
+    }
+    params.push(EvoIRType::Mem(Region::All));
+    params.push(EvoIRType::World);
+    let mut results = returned
+        .filter(|value_type| !is_aggregate_type(types, value_type.source))
+        .map(|value_type| vec![value_type.ir])
+        .unwrap_or_default();
+    results.push(EvoIRType::Mem(Region::All));
+    results.push(EvoIRType::World);
+    Ok(EvoIRType::FnPtr { params, results })
+}
+
+fn is_aggregate_type(types: &TypeInterner, ty: TypeId) -> bool {
+    matches!(
+        types.get(ty).map(|canonical| &canonical.kind),
+        Some(TypeKind::Struct(_) | TypeKind::Union(_))
+    )
 }
 
 fn canonical_integer(
@@ -2507,7 +2607,10 @@ impl<'a> FunctionLowerer<'a> {
                             )?;
                         } else {
                             let lowered = self.lower_expr(expression, &mut state)?;
-                            let lowered = if matches!(expected.ir, EvoIRType::Ptr(_)) {
+                            let lowered = if matches!(
+                                expected.ir,
+                                EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }
+                            ) {
                                 self.coerce_to_object_type(
                                     lowered,
                                     Some(expression),
@@ -2881,75 +2984,7 @@ impl<'a> FunctionLowerer<'a> {
     }
 
     fn fnptr_type(&self, function_ty: TypeId, span: SourceSpan) -> Result<EvoIRType, LowerError> {
-        let TypeKind::Function {
-            return_type,
-            parameters,
-        } = &self
-            .unit
-            .types()
-            .get(function_ty)
-            .ok_or(LowerError::UnknownType {
-                ty: function_ty,
-                span,
-            })?
-            .kind
-        else {
-            return Err(LowerError::UnsupportedType {
-                ty: function_ty,
-                span,
-                feature: "fnptr pointee is not a function",
-            });
-        };
-        let parameter_types = match parameters {
-            FunctionParameters::Prototype {
-                types,
-                variadic: false,
-            } => types,
-            _ => {
-                return Err(LowerError::UnsupportedType {
-                    ty: function_ty,
-                    span,
-                    feature: "fnptr requires a non-variadic prototype",
-                });
-            }
-        };
-        let mut params = parameter_types
-            .iter()
-            .map(|ty| {
-                function_value_type(self.unit.types(), self.target, *ty, span)
-                    .map(|value_type| value_type.ir)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let returned = match self.unit.types().get(*return_type).map(|ty| &ty.kind) {
-            Some(TypeKind::Void) => None,
-            Some(_) => Some(function_value_type(
-                self.unit.types(),
-                self.target,
-                *return_type,
-                span,
-            )?),
-            None => {
-                return Err(LowerError::UnknownType {
-                    ty: *return_type,
-                    span,
-                });
-            }
-        };
-        if returned
-            .as_ref()
-            .is_some_and(|value_type| self.is_aggregate_type(value_type.source))
-        {
-            params.push(EvoIRType::Ptr(AddressSpace::Generic));
-        }
-        params.push(EvoIRType::Mem(Region::All));
-        params.push(EvoIRType::World);
-        let mut results = returned
-            .filter(|value_type| !self.is_aggregate_type(value_type.source))
-            .map(|value_type| vec![value_type.ir])
-            .unwrap_or_default();
-        results.push(EvoIRType::Mem(Region::All));
-        results.push(EvoIRType::World);
-        Ok(EvoIRType::FnPtr { params, results })
+        function_pointer_ir_type(self.unit.types(), self.target, function_ty, span)
     }
 
     fn call_designator_function_type(&self, callee: &CHirExpr<'_>) -> Option<TypeId> {
@@ -3044,10 +3079,7 @@ impl<'a> FunctionLowerer<'a> {
     }
 
     fn is_aggregate_type(&self, ty: TypeId) -> bool {
-        matches!(
-            self.unit.types().get(ty).map(|canonical| &canonical.kind),
-            Some(TypeKind::Struct(_) | TypeKind::Union(_))
-        )
+        is_aggregate_type(self.unit.types(), ty)
     }
 
     fn synthetic_origin(&mut self) -> Result<u64, LowerError> {
@@ -3541,10 +3573,9 @@ impl<'a> FunctionLowerer<'a> {
                 if value.value.ty == expected {
                     return Ok(value);
                 }
-                if source.is_some_and(|source| {
-                    constant_integer(self.unit, self.target, source)
-                        .is_some_and(|constant| !constant.truth())
-                }) {
+                if source
+                    .is_some_and(|source| null_pointer_constant(self.unit, self.target, source))
+                {
                     let pointer = self.fresh_value(expected);
                     self.emit(state, Inst::PtrNull(pointer.clone()))?;
                     return Ok(ExprValue {
@@ -5338,7 +5369,8 @@ impl<'a> FunctionLowerer<'a> {
                 reason: "threaded left operand lost its integer type",
             })?,
         };
-        if matches!(left.value.ty, EvoIRType::Ptr(_)) || matches!(right.value.ty, EvoIRType::Ptr(_))
+        if matches!(left.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. })
+            || matches!(right.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. })
         {
             return self.lower_pointer_binary(
                 operator,
@@ -5435,9 +5467,14 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
-        let left_pointer = matches!(left.value.ty, EvoIRType::Ptr(_));
-        let right_pointer = matches!(right.value.ty, EvoIRType::Ptr(_));
-        if matches!(operator, BinaryOp::Add | BinaryOp::Sub) && left_pointer && !right_pointer {
+        let left_pointer = matches!(left.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. });
+        let right_pointer = matches!(right.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. });
+        let left_object_pointer = matches!(left.value.ty, EvoIRType::Ptr(_));
+        let right_object_pointer = matches!(right.value.ty, EvoIRType::Ptr(_));
+        if matches!(operator, BinaryOp::Add | BinaryOp::Sub)
+            && left_object_pointer
+            && !right_pointer
+        {
             let pointee = self.pointer_pointee_type(left_expression, span)?;
             let layout = self.access_layout(pointee, span)?;
             let promoted_type = integer_promotion(right.integer);
@@ -5463,7 +5500,7 @@ impl<'a> FunctionLowerer<'a> {
                 integer: CIntegerType::ULONG,
             });
         }
-        if operator == BinaryOp::Add && !left_pointer && right_pointer {
+        if operator == BinaryOp::Add && !left_pointer && right_object_pointer {
             let pointee = self.pointer_pointee_type(right_expression, span)?;
             let layout = self.access_layout(pointee, span)?;
             let promoted_type = integer_promotion(left.integer);
@@ -5487,19 +5524,25 @@ impl<'a> FunctionLowerer<'a> {
         }
         if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) {
             let (left, right) = match (left_pointer, right_pointer) {
-                (true, true) => (left.value, right.value),
+                (true, true) if left.value.ty == right.value.ty => (left.value, right.value),
+                (true, true) if null_pointer_constant(self.unit, self.target, left_expression) => {
+                    let null = self.fresh_value(right.value.ty.clone());
+                    self.emit(state, Inst::PtrNull(null.clone()))?;
+                    (null, right.value)
+                }
+                (true, true) if null_pointer_constant(self.unit, self.target, right_expression) => {
+                    let null = self.fresh_value(left.value.ty.clone());
+                    self.emit(state, Inst::PtrNull(null.clone()))?;
+                    (left.value, null)
+                }
                 (true, false)
-                    if constant_integer(self.unit, self.target, right_expression)
-                        .is_some_and(|value| !value.truth()) =>
+                    if null_pointer_constant(self.unit, self.target, right_expression) =>
                 {
                     let null = self.fresh_value(left.value.ty.clone());
                     self.emit(state, Inst::PtrNull(null.clone()))?;
                     (left.value, null)
                 }
-                (false, true)
-                    if constant_integer(self.unit, self.target, left_expression)
-                        .is_some_and(|value| !value.truth()) =>
-                {
+                (false, true) if null_pointer_constant(self.unit, self.target, left_expression) => {
                     let null = self.fresh_value(right.value.ty.clone());
                     self.emit(state, Inst::PtrNull(null.clone()))?;
                     (null, right.value)
@@ -6092,7 +6135,7 @@ impl<'a> FunctionLowerer<'a> {
                 }
             } else {
                 let value = self.lower_expr(argument, state)?;
-                if matches!(expected.ir, EvoIRType::Ptr(_)) {
+                if matches!(expected.ir, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }) {
                     self.coerce_to_object_type(
                         value,
                         Some(argument),
@@ -6780,7 +6823,7 @@ impl<'a> FunctionLowerer<'a> {
         if value.value.ty == EvoIRType::Bits(1) {
             return Ok(value.value);
         }
-        if matches!(value.value.ty, EvoIRType::Ptr(_)) {
+        if matches!(value.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }) {
             let null = self.fresh_value(value.value.ty.clone());
             self.emit(state, Inst::PtrNull(null.clone()))?;
             let condition = self.fresh_value(EvoIRType::Bits(1));
@@ -7196,6 +7239,29 @@ fn constant_truth(
     expression: &CHirExpr<'_>,
 ) -> Option<bool> {
     constant_integer(unit, target, expression).map(CInteger::truth)
+}
+
+fn null_pointer_constant(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    expression: &CHirExpr<'_>,
+) -> bool {
+    if constant_integer(unit, target, expression).is_some_and(|value| !value.truth()) {
+        return true;
+    }
+    let CHirExpr::Cast(pointer, operand, _) = expression else {
+        return false;
+    };
+    let Some(TypeKind::Pointer(pointee)) = unit.types().get(*pointer).map(|ty| &ty.kind) else {
+        return false;
+    };
+    if !matches!(
+        unit.types().get(*pointee).map(|ty| &ty.kind),
+        Some(TypeKind::Void)
+    ) {
+        return false;
+    }
+    constant_integer(unit, target, operand).is_some_and(|value| !value.truth())
 }
 
 fn constant_integer(

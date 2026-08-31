@@ -2106,6 +2106,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 ) =>
             {
                 self.is_static_address_constant(operand)
+                    || self.address_constant_through_integer_cast(operand)
                     || self.eval_integer_constant_expression(operand).is_ok()
             }
             CHirExpr::Ternary(condition, when_true, when_false, _) => self
@@ -2115,6 +2116,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }),
             _ => false,
         }
+    }
+
+    fn address_constant_through_integer_cast(&self, expression: &CHirExpr<'_>) -> bool {
+        let CHirExpr::Cast(target, operand, _) = expression else {
+            return false;
+        };
+        if !matches!(
+            self.types.get(*target).map(|ty| &ty.kind),
+            Some(TypeKind::Int(_) | TypeKind::Enum(_) | TypeKind::GnuInt128(_))
+        ) {
+            return false;
+        }
+        self.is_static_address_constant(operand)
     }
 
     fn lvalue_has_static_address(&self, expression: &CHirExpr<'_>) -> bool {
@@ -6995,8 +7009,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 {
                     UpdateConstraint::Scalar
                 }
-                (OperandTypeClass::Pointer(left), OperandTypeClass::Pointer(right)) => {
-                    if self.pointer_assignment_compatible(left, right) {
+                (OperandTypeClass::Pointer(left), OperandTypeClass::Pointer(right_pointer)) => {
+                    if right.null_pointer_constant
+                        || self.pointer_assignment_compatible(left, right_pointer)
+                    {
                         UpdateConstraint::Scalar
                     } else {
                         UpdateConstraint::Invalid

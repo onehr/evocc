@@ -1839,7 +1839,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     else_expression,
                     result_type,
                 } => {
-                    let condition = expect_machine_integer(
+                    let condition = machine_truth(
                         pop_machine_value(&mut values, then_expression.span())?,
                         then_expression.span(),
                     )?;
@@ -1848,7 +1848,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         span: then_expression.span(),
                     });
                     tasks.push(MachineTask::EvalExpression {
-                        expression: if condition.truth() {
+                        expression: if condition {
                             then_expression
                         } else {
                             else_expression
@@ -5776,27 +5776,43 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ty: right_ty,
                 },
             ) if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) && left_ty == right_ty => {
-                let equal = left == right;
-                Ok(CValue::Integer(CInteger::int(i32::from(
-                    if operator == BinaryOp::Eq {
-                        equal
-                    } else {
-                        !equal
-                    },
-                ))))
+                Ok(machine_equality_result(operator, left == right))
             }
             (CValue::Pointer { value, .. }, CValue::Integer(zero))
             | (CValue::Integer(zero), CValue::Pointer { value, .. })
                 if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) && zero.raw_bits() == 0 =>
             {
-                let equal = value == Pointer::NULL;
-                Ok(CValue::Integer(CInteger::int(i32::from(
-                    if operator == BinaryOp::Eq {
-                        equal
-                    } else {
-                        !equal
-                    },
-                ))))
+                Ok(machine_equality_result(operator, value == Pointer::NULL))
+            }
+            (
+                CValue::FunctionPointer {
+                    value: left,
+                    ty: left_ty,
+                },
+                CValue::FunctionPointer {
+                    value: right,
+                    ty: right_ty,
+                },
+            ) if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) && left_ty == right_ty => {
+                Ok(machine_equality_result(operator, left == right))
+            }
+            (CValue::FunctionPointer { value, .. }, CValue::Pointer { value: null, .. })
+            | (CValue::Pointer { value: null, .. }, CValue::FunctionPointer { value, .. })
+                if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) && null == Pointer::NULL =>
+            {
+                Ok(machine_equality_result(
+                    operator,
+                    value == PointerValue::Null,
+                ))
+            }
+            (CValue::FunctionPointer { value, .. }, CValue::Integer(zero))
+            | (CValue::Integer(zero), CValue::FunctionPointer { value, .. })
+                if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) && zero.raw_bits() == 0 =>
+            {
+                Ok(machine_equality_result(
+                    operator,
+                    value == PointerValue::Null,
+                ))
             }
             _ => Err(InterpreterError::UnsupportedExpression {
                 feature: "unsupported pointer binary operation",
@@ -8045,6 +8061,14 @@ fn machine_truth(value: CValue, _span: SourceSpan) -> Result<bool, InterpreterEr
     }
 }
 
+fn machine_equality_result(operator: BinaryOp, equal: bool) -> CValue {
+    CValue::Integer(CInteger::int(i32::from(if operator == BinaryOp::Eq {
+        equal
+    } else {
+        !equal
+    })))
+}
+
 fn expect_machine_integer(value: CValue, span: SourceSpan) -> Result<CInteger, InterpreterError> {
     match value {
         CValue::Integer(value) => Ok(value),
@@ -8085,6 +8109,14 @@ fn cast_machine_value(
         (CValue::Pointer { value, ty }, ValueType::Pointer(target)) if ty == target => {
             Ok(CValue::Pointer { value, ty: target })
         }
+        (CValue::Pointer { value, .. }, ValueType::Pointer(target))
+            if value == Pointer::NULL && pointer_type_is_function(types, target) =>
+        {
+            Ok(CValue::FunctionPointer {
+                value: PointerValue::Null,
+                ty: target,
+            })
+        }
         (CValue::Pointer { value, ty }, ValueType::Pointer(target))
             if pointer_runtime_conversion(types, ty, target) =>
         {
@@ -8119,10 +8151,17 @@ fn cast_machine_value(
         // settled where the assignment was type checked; only the conversion
         // itself is executed here.
         (CValue::Integer(value), ValueType::Pointer(target)) if value.raw_bits() == 0 => {
-            Ok(CValue::Pointer {
-                value: Pointer::NULL,
-                ty: target,
-            })
+            if pointer_type_is_function(types, target) {
+                Ok(CValue::FunctionPointer {
+                    value: PointerValue::Null,
+                    ty: target,
+                })
+            } else {
+                Ok(CValue::Pointer {
+                    value: Pointer::NULL,
+                    ty: target,
+                })
+            }
         }
         (CValue::Integer(_), ValueType::Pointer(_))
         | (CValue::Pointer { .. }, ValueType::Integer(_))
@@ -8145,6 +8184,13 @@ fn cast_machine_value(
             span,
         }),
     }
+}
+
+fn pointer_type_is_function(types: &TypeInterner, pointer: PointerTypeDesc) -> bool {
+    matches!(
+        types.get(pointer.pointee()).map(|ty| &ty.kind),
+        Some(TypeKind::Function { .. })
+    )
 }
 
 fn pointer_runtime_conversion(
