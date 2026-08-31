@@ -4,7 +4,7 @@
 //! the deterministic identities and checked value objects that such a pass
 //! can populate without changing the existing C-HIR node ABI.
 
-use std::{fmt, sync::Arc};
+use std::{collections::HashMap, fmt, sync::Arc};
 
 use evocc_common::SourceSpan;
 use evocc_types::{TagId, TypeId, TypeInterner, TypeKind};
@@ -194,6 +194,7 @@ pub struct Scope {
     span: Option<SourceSpan>,
     symbols: Vec<SymbolId>,
     tags: Vec<TagId>,
+    tag_names: HashMap<String, TagId>,
 }
 
 impl Scope {
@@ -346,6 +347,7 @@ impl SymbolTable {
                 span: None,
                 symbols: Vec::new(),
                 tags: Vec::new(),
+                tag_names: HashMap::new(),
             }],
             symbols: Vec::new(),
             tags: Vec::new(),
@@ -376,6 +378,7 @@ impl SymbolTable {
             span,
             symbols: Vec::new(),
             tags: Vec::new(),
+            tag_names: HashMap::new(),
         });
         self.record_undo(SymbolTableUndo::ScopeCreated);
         Ok(id)
@@ -488,12 +491,7 @@ impl SymbolTable {
     ) -> Result<TagId, SymbolTableError> {
         let spelling = spelling.into();
         let scope_index = self.scope_index(scope)?;
-        if let Some(existing) = self.scopes[scope_index].tags.iter().copied().find(|id| {
-            self.tags
-                .iter()
-                .find(|binding| binding.tag == *id)
-                .is_some_and(|binding| binding.spelling == spelling)
-        }) {
+        if let Some(existing) = self.scopes[scope_index].tag_names.get(&spelling).copied() {
             return Err(SymbolTableError::DuplicateTagInScope {
                 scope,
                 existing,
@@ -503,11 +501,12 @@ impl SymbolTable {
 
         self.tags.push(TagBinding {
             scope,
-            spelling,
+            spelling: spelling.clone(),
             tag,
             span,
         });
         self.scopes[scope_index].tags.push(tag);
+        self.scopes[scope_index].tag_names.insert(spelling, tag);
         self.record_undo(SymbolTableUndo::TagDeclared { scope });
         Ok(tag)
     }
@@ -545,12 +544,7 @@ impl SymbolTable {
         let mut current = Some(scope);
         while let Some(scope_id) = current {
             let scope = self.scope(scope_id)?;
-            if let Some(tag) = scope.tags.iter().rev().copied().find(|id| {
-                self.tags
-                    .iter()
-                    .find(|binding| binding.tag == *id)
-                    .is_some_and(|binding| binding.spelling == spelling)
-            }) {
+            if let Some(tag) = scope.tag_names.get(spelling).copied() {
                 return Ok(Some(tag));
             }
             current = scope.parent;
@@ -744,6 +738,11 @@ impl SymbolTable {
                     .pop()
                     .expect("declared tag remains bound in its scope");
                 debug_assert_eq!(tag, binding.tag);
+                let named = self.scopes[scope.raw() as usize]
+                    .tag_names
+                    .remove(&binding.spelling)
+                    .expect("declared tag remains indexed in its scope");
+                debug_assert_eq!(named, binding.tag);
             }
         }
     }
