@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "state": "RED",
+  "authority": {
+    "specification": "docs/evoir-spec.md",
+    "revision": "1.9.25",
+    "sha256": "f7b2aebe013a45ff18334dd5f7000dcaea84f077194ebf09c2da687fecb63ea2",
+    "contract": "tests/contracts/day9-acceptance-contract.json",
+    "scope": "P7(b)",
+    "sha256": "4ab6a29b9fe874436d609cfa568e6891b843401ae3d9ce25c571ca677615b408"
+  },
+  "baselineCommit": "f642fd7",
+  "declaredMissingCapability": "near-linear tag declaration and lexical tag resolution",
+  "redTest": {
+    "path": "crates/evocc-chir/tests/tag_resolution_scaling.rs",
+    "command": "cargo test -p evocc-chir --test tag_resolution_scaling -- --nocapture",
+    "result": "FAIL",
+    "buildErrors": 0,
+    "smallTags": 128,
+    "smallElapsed": "3.701791ms",
+    "largeTags": 512,
+    "largeElapsed": "214.061375ms",
+    "observedGrowth": 57.826,
+    "allowedGrowth": 12,
+    "diagnostic": "quadrupling tags took 214.061375ms versus 3.701791ms; tag lookup must not rescan the global binding list"
+  },
+  "profile": {
+    "command": "/usr/bin/sample <evocc-pid> 2 1 -mayDie -fullPaths",
+    "input": ".evidence/day5-kernel-reconnaissance/20260830T110658Z-95784/parser/init-init-task.gcc.c",
+    "mode": "target/release/evocc --parse-only --survey",
+    "samples": 1503,
+    "hotPath": "Parser::parse_type_specifier_inner -> SymbolTable::resolve_tag",
+    "rootCause": "resolve_tag and declare_tag scan the per-scope TagId vector and then rescan the complete TagBinding vector for each candidate"
+  },
+  "corpusReproductionAudit": {
+    "command": "/usr/bin/time -p <baseline-or-current-release-evocc> --parse-only [--survey] <frozen-parser-input>",
+    "inputHashes": {
+      "init-init-task.gcc.c": "3e9e03647aeb769ca8a9d296db1757882f59e1854bf6c464cb0a0062eeea1a3f",
+      "kernel-bpf-token.gcc.c": "eb28e85e9673115637afb0ce966e46a6e6a4feacfce2a5ea4b39f155e507ffc7"
+    },
+    "baseline30ed2fcSurveySeconds": {
+      "init-init-task": 3.09,
+      "kernel-bpf-token": 3.11,
+      "ratio": 0.994
+    },
+    "currentF642fd7SurveySeconds": {
+      "init-init-task": 3.08,
+      "kernel-bpf-token": 3.11,
+      "ratio": 0.990
+    },
+    "finding": "the reported 20.03s versus 1.15s timing did not reproduce on the frozen bytes and commits; the independently observed lookup scaling failure remains RED and is not relabelled as that timing"
+  },
+  "preCommitGates": {
+    "workspace": {
+      "command": "CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --locked --offline",
+      "passed": 1011,
+      "failed": 1,
+      "declaredFailure": "tag_declaration_and_resolution_scale_near_linearly"
+    },
+    "clippy": {
+      "command": "CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings",
+      "warnings": 0
+    },
+    "fmt": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    },
+    "baseLayout": {
+      "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "PASS 128/128; ORACLE_CONSENSUS; mismatchCount 0"
+    },
+    "attributedLayout": {
+      "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "PASS 22/22; ORACLE_CONSENSUS; mismatchCount 0"
+    }
+  }
+}
