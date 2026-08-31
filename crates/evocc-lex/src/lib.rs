@@ -99,6 +99,7 @@ pub enum TokenKind {
     BuiltinChooseExpr,
     BuiltinTypesCompatibleP,
     BuiltinOffsetof,
+    BuiltinObjectSize,
     /// GNU bit operations and control/introspection builtins, promoted only
     /// after preprocessing.
     BuiltinBit,

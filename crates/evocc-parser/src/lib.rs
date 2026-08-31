@@ -318,6 +318,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__builtin_choose_expr") => TokenKind::BuiltinChooseExpr,
                     Some("__builtin_types_compatible_p") => TokenKind::BuiltinTypesCompatibleP,
                     Some("__builtin_offsetof") => TokenKind::BuiltinOffsetof,
+                    Some("__builtin_object_size") => TokenKind::BuiltinObjectSize,
                     Some(
                         "__builtin_ffs"
                         | "__builtin_ffsl"
@@ -1883,6 +1884,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 operand,
                 _,
             ) => self.is_arithmetic_constant_expression(operand),
+            CHirExpr::EvaluateOnce(operand, _) => self.is_arithmetic_constant_expression(operand),
             CHirExpr::Binary(op, left, right, _) => {
                 if *op == BinaryOp::And
                     && self
@@ -1982,6 +1984,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     UnaryOp::BitNot | UnaryOp::AddrOf | UnaryOp::Deref => None,
                 }
             }
+            CHirExpr::EvaluateOnce(operand, _) => self.eval_real_constant_expression(operand),
             CHirExpr::Binary(op, left, right, _) => {
                 let left = self.eval_real_constant_expression(left)?;
                 if *op == BinaryOp::And && left == 0.0 {
@@ -4760,6 +4763,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 eval_unary_integer(*op, self.eval_integer_constant_expression(operand)?)
                     .map_err(|_| ())
             }
+            CHirExpr::EvaluateOnce(operand, _) => self.eval_integer_constant_expression(operand),
             CHirExpr::Binary(op, left, right, _) => {
                 let left = self.eval_integer_constant_expression(left)?;
                 if *op == BinaryOp::And && !left.truth() {
@@ -4879,6 +4883,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 UnaryOp::AddrOf | UnaryOp::Deref => Err(()),
             },
+            CHirExpr::EvaluateOnce(operand, _) => self.integer_expression_type(operand),
             CHirExpr::Binary(op, left, right, _) => {
                 let left = CInteger::new(0, self.integer_expression_type(left)?).promoted();
                 let right = CInteger::new(0, self.integer_expression_type(right)?).promoted();
@@ -5825,6 +5830,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn parse_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
         match self.peek_kind()? {
+            TokenKind::Attribute => {
+                let start = self.span();
+                let attributes = self.parse_attribute_specifiers(AttributePlacement::NullStatement);
+                if self.peek_kind() != Some(TokenKind::Semicolon) {
+                    self.report("E2924", "attribute-on-non-null-statement", start);
+                    return None;
+                }
+                let semicolon = self.advance().expect("peeked semicolon");
+                let span = self.merge_span(start, semicolon.span);
+                Some(self.alloc_node(CHirStmt::AttributedNull(attributes, span)))
+            }
             TokenKind::Asm => {
                 let mut assembly = self.parse_asm_construct()?;
                 let semicolon = self.expect(TokenKind::Semicolon)?;
@@ -6147,6 +6163,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             } else if self.peek_kind() == Some(TokenKind::StaticAssert) {
                 at_block_start = false;
                 self.parse_static_assert_declaration();
+            } else if self.peek_kind() == Some(TokenKind::Attribute)
+                && !self.attribute_sequence_starts_declaration()
+            {
+                at_block_start = false;
+                if let Some(statement) = self.parse_statement() {
+                    items.push(CHirBlockItem::Statement(statement));
+                }
             } else if self.is_declaration_start() || self.peek_kind() == Some(TokenKind::Inline) {
                 at_block_start = false;
                 if let Some(declarations) = self.parse_declaration(DeclarationContext::Block) {
@@ -6232,6 +6255,60 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TokenKind::Restrict
                 | TokenKind::Atomic
         ) || self.token_starts_type_name(token)
+    }
+
+    fn attribute_sequence_starts_declaration(&self) -> bool {
+        let mut position = self.pos;
+        while self.tokens.get(position).map(|token| token.kind) == Some(TokenKind::Attribute) {
+            position += 1;
+            if self.tokens.get(position).map(|token| token.kind) != Some(TokenKind::LParen)
+                || self.tokens.get(position + 1).map(|token| token.kind) != Some(TokenKind::LParen)
+            {
+                return false;
+            }
+            let mut depth = 0_u32;
+            while let Some(token) = self.tokens.get(position) {
+                match token.kind {
+                    TokenKind::LParen => depth += 1,
+                    TokenKind::RParen => {
+                        if depth == 0 {
+                            return false;
+                        }
+                        depth -= 1;
+                        if depth == 0 {
+                            position += 1;
+                            break;
+                        }
+                    }
+                    TokenKind::Eof => return false,
+                    _ => {}
+                }
+                position += 1;
+            }
+            if depth != 0 {
+                return false;
+            }
+        }
+        let Some(token) = self.tokens.get(position) else {
+            return false;
+        };
+        matches!(token.kind, TokenKind::Inline)
+            || matches!(
+                token.kind,
+                TokenKind::Auto
+                    | TokenKind::Extern
+                    | TokenKind::GnuExtension
+                    | TokenKind::AutoType
+                    | TokenKind::Register
+                    | TokenKind::Static
+                    | TokenKind::ThreadLocal
+                    | TokenKind::Typedef
+                    | TokenKind::Const
+                    | TokenKind::Volatile
+                    | TokenKind::Restrict
+                    | TokenKind::Atomic
+            )
+            || self.token_starts_type_name(token)
     }
 
     fn peek_typedef_name(&self) -> Option<(SymbolId, TypeId)> {
@@ -7212,6 +7289,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         (InferredType::Canonical(pointee.pointee), category)
                     }
                 }
+            }
+            CHirExpr::EvaluateOnce(operand, _) => {
+                let inner = self.expression_type(operand)?;
+                (inner.ty, inner.category)
             }
             CHirExpr::Binary(op, left, right, _) => {
                 let left = self.converted_expression_type(left)?;
@@ -8236,6 +8317,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 return self.parse_builtin_types_compatible_p(tok);
             }
             TokenKind::BuiltinOffsetof => return self.parse_builtin_offsetof(tok),
+            TokenKind::BuiltinObjectSize => return self.parse_builtin_object_size(tok),
             TokenKind::BuiltinBit => return self.parse_builtin_bit(tok),
             TokenKind::BuiltinUnreachable => return self.parse_builtin_unreachable(tok),
             TokenKind::BuiltinReturnAddress => return self.parse_builtin_return_address(tok),
@@ -8437,7 +8519,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2906", "designator-outside-object", first.span);
             return None;
         }
-        let mut offset = 0_u64;
+        let mut fixed_offset = 0_u64;
+        let mut runtime_offset = None;
+        let size_ty = self.intern(TypeKind::Int(IntRank::ULong), Qualifiers::default());
         let mut field_name = Some((self.token_text(&first).to_owned(), first.span));
         loop {
             if let Some((name, span)) = field_name.take() {
@@ -8445,7 +8529,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.report("E2906", "designator-outside-object", span);
                     return None;
                 };
-                offset = offset.checked_add(field_offset)?;
+                fixed_offset = fixed_offset.wrapping_add(field_offset);
                 current_ty = field_ty;
             }
             match self.peek_kind() {
@@ -8460,33 +8544,85 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 Some(TokenKind::LBracket) => {
                     let open = self.advance().expect("peeked subscript");
-                    let index_expression = self.parse_required_constant_conditional()?;
+                    let index_expression = self.parse_conditional()?;
                     let end = self.expect(TokenKind::RBracket)?;
                     let span = self.merge_span(open.span, end.span);
-                    let index = self
-                        .eval_integer_constant_expression(index_expression)
-                        .ok()
-                        .and_then(|value| u64::try_from(value.mathematical_value()).ok());
-                    let Some(index) = index else {
-                        self.report("E2906", "designator-outside-object", span);
-                        return None;
-                    };
-                    let Some(TypeKind::Array { element, bound }) =
+                    let Some(TypeKind::Array { element, .. }) =
                         self.types.get(current_ty).map(|ty| ty.kind.clone())
                     else {
                         self.report("E2906", "designator-outside-object", span);
                         return None;
                     };
-                    if matches!(bound, ArrayBound::Fixed(size) if index >= size) {
-                        self.report("E2906", "designator-outside-object", span);
-                        return None;
-                    }
                     let target = TargetDataLayout::aarch64_unknown_linux_gnu();
                     let Ok(layout) = target.layout_of(&self.types, element) else {
                         self.report("E2906", "designator-outside-object", span);
                         return None;
                     };
-                    offset = offset.checked_add(index.checked_mul(layout.size_bytes)?)?;
+                    if let Ok(index) = self.eval_integer_constant_expression(index_expression) {
+                        let scaled = eval_binary_integer(
+                            BinaryOp::Mul,
+                            index.cast(CIntegerType::ULONG),
+                            CInteger::new(layout.size_bytes, CIntegerType::ULONG),
+                        )
+                        .ok()?;
+                        fixed_offset = eval_binary_integer(
+                            BinaryOp::Add,
+                            CInteger::new(fixed_offset, CIntegerType::ULONG),
+                            scaled,
+                        )
+                        .ok()?
+                        .raw_bits();
+                    } else {
+                        let Some(inferred) = self.converted_expression_type(index_expression)
+                        else {
+                            self.report("E2906", "designator-outside-object", span);
+                            return None;
+                        };
+                        if !matches!(
+                            self.operand_type_class(inferred.ty),
+                            OperandTypeClass::Integer(_)
+                        ) {
+                            self.report("E2906", "designator-outside-object", span);
+                            return None;
+                        }
+                        let base = match runtime_offset {
+                            Some(expression) if fixed_offset == 0 => expression,
+                            Some(expression) => {
+                                let fixed = self.size_literal(fixed_offset, span);
+                                self.alloc_node(CHirExpr::Binary(
+                                    BinaryOp::Add,
+                                    expression,
+                                    fixed,
+                                    span,
+                                ))
+                            }
+                            None => self.size_literal(fixed_offset, span),
+                        };
+                        fixed_offset = 0;
+                        let evaluated = self.alloc_node(CHirExpr::EvaluateOnce(
+                            index_expression,
+                            index_expression.span(),
+                        ));
+                        let converted = self.alloc_node(CHirExpr::Cast(
+                            size_ty,
+                            evaluated,
+                            index_expression.span(),
+                        ));
+                        let stride = self.size_literal(layout.size_bytes, span);
+                        let scaled = self.alloc_node(CHirExpr::Binary(
+                            BinaryOp::Mul,
+                            converted,
+                            stride,
+                            span,
+                        ));
+                        runtime_offset = Some(
+                            if matches!(base, CHirExpr::Lit(IntLit { value: 0, .. }, _)) {
+                                scaled
+                            } else {
+                                self.alloc_node(CHirExpr::Binary(BinaryOp::Add, base, scaled, span))
+                            },
+                        );
+                    }
                     current_ty = element;
                 }
                 _ => break,
@@ -8502,14 +8638,88 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let declaration = self.finish_tag_event(event, span, Vec::new());
             self.side_declarations.push(declaration);
         }
-        Some(self.alloc_node(CHirExpr::Lit(
+        Some(match runtime_offset {
+            Some(expression) if fixed_offset == 0 => expression,
+            Some(expression) => {
+                let fixed = self.size_literal(fixed_offset, span);
+                self.alloc_node(CHirExpr::Binary(BinaryOp::Add, expression, fixed, span))
+            }
+            None => self.size_literal(fixed_offset, span),
+        })
+    }
+
+    fn size_literal(&self, value: u64, span: SourceSpan) -> &'arena CHirExpr<'arena> {
+        self.alloc_node(CHirExpr::Lit(
             IntLit {
-                value: offset,
+                value,
                 suffix: IntSuffix::UL,
                 base: IntBase::Dec,
             },
             span,
-        )))
+        ))
+    }
+
+    fn parse_builtin_object_size(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        if self.peek_kind() != Some(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        self.advance();
+        if self.peek_kind() == Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let operand = self.parse_argument_expression()?;
+        if !self.match_kind(TokenKind::Comma) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let mode_expression = self.parse_required_constant_assignment()?;
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance().expect("peeked builtin closing parenthesis");
+        if self.expression_type(operand).is_none() {
+            self.report("E2913", "builtin-operand-not-convertible", operand.span());
+            return None;
+        }
+        let Some(mode) = self
+            .eval_integer_constant_expression(mode_expression)
+            .ok()
+            .and_then(|value| u8::try_from(value.mathematical_value()).ok())
+            .filter(|mode| *mode <= 3)
+        else {
+            self.report(
+                "E2913",
+                "builtin-operand-not-convertible",
+                mode_expression.span(),
+            );
+            return None;
+        };
+        let result = if mode <= 1 { u64::MAX } else { 0 };
+        let span = self.merge_span(keyword.span, close.span);
+        self.front_end_builtins
+            .push(FrontEndBuiltinRecord::ObjectSize {
+                span,
+                operand,
+                mode,
+                result,
+            });
+        if mode >= 2 {
+            return Some(self.size_literal(0, span));
+        }
+        let one = self.alloc_node(CHirExpr::Lit(
+            IntLit {
+                value: 1,
+                suffix: IntSuffix::None,
+                base: IntBase::Dec,
+            },
+            span,
+        ));
+        let negative_one = self.alloc_node(CHirExpr::Unary(UnaryOp::Neg, one, span));
+        let size_ty = self.intern_c_integer_type(CIntegerType::ULONG);
+        Some(self.alloc_node(CHirExpr::Cast(size_ty, negative_one, span)))
     }
 
     fn offsetof_field(&self, record_ty: TypeId, name: &str) -> Option<(u64, TypeId)> {
@@ -9038,6 +9248,7 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::BuiltinChooseExpr
             | TokenKind::BuiltinTypesCompatibleP
             | TokenKind::BuiltinOffsetof
+            | TokenKind::BuiltinObjectSize
             | TokenKind::BuiltinBit
             | TokenKind::BuiltinUnreachable
             | TokenKind::BuiltinReturnAddress
@@ -9125,6 +9336,7 @@ fn collect_asm_goto_labels(
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
         | CHirStmt::ComputedGoto(_, _)
+        | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => {}
     }
 }
@@ -9253,6 +9465,7 @@ fn collect_jump_regions_stmt(
         CHirStmt::Return(None, _)
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
+        | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => {}
     }
 }
@@ -9272,6 +9485,7 @@ fn collect_jump_regions_expr(
             checks_region_entry: false,
         }),
         CHirExpr::Unary(_, operand, _)
+        | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::SizeOfExpr(operand, _, _)
         | CHirExpr::BitBuiltin { operand, .. }
@@ -9473,9 +9687,11 @@ fn statement_references_symbol(statement: &CHirStmt<'_>, symbol: SymbolId) -> bo
                 || expression_references_symbol(last, symbol)
                 || statement_references_symbol(body, symbol)
         }
-        CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {
-            false
-        }
+        CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Goto(_, _)
+        | CHirStmt::AttributedNull(_, _)
+        | CHirStmt::Null(_) => false,
     }
 }
 
@@ -9497,6 +9713,7 @@ fn expression_references_symbol(expression: &CHirExpr<'_>, symbol: SymbolId) -> 
             symbol: referenced, ..
         } => *referenced == symbol,
         CHirExpr::Unary(_, operand, _)
+        | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::SizeOfExpr(operand, _, _)
         | CHirExpr::BitBuiltin { operand, .. }
@@ -9896,6 +10113,7 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
             span: paren_span,
         },
         CHirExpr::Unary(op, operand, _) => CHirExpr::Unary(*op, operand, paren_span),
+        CHirExpr::EvaluateOnce(operand, _) => CHirExpr::EvaluateOnce(operand, paren_span),
         CHirExpr::Binary(op, lhs, rhs, _) => CHirExpr::Binary(*op, lhs, rhs, paren_span),
         CHirExpr::Ternary(condition, when_true, when_false, _) => {
             CHirExpr::Ternary(condition, when_true, when_false, paren_span)

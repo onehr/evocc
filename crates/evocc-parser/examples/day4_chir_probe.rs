@@ -183,6 +183,7 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 let child = self.expression(&format!("{path}.operand"), child);
                 format!("{operator}({child})")
             }
+            CHirExpr::EvaluateOnce(child, _) => self.expression(&format!("{path}.operand"), child),
             CHirExpr::Update {
                 op, target: child, ..
             } => {
@@ -480,7 +481,7 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 let nested = self.statement(&format!("{path}.statement"), nested);
                 format!("default({nested})")
             }
-            CHirStmt::Null(_) => "null".to_owned(),
+            CHirStmt::AttributedNull(_, _) | CHirStmt::Null(_) => "null".to_owned(),
         }
     }
 

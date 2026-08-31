@@ -82,6 +82,7 @@ fn assert_expr_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. } => {}
         CHirExpr::Unary(_, child, _)
+        | CHirExpr::EvaluateOnce(child, _)
         | CHirExpr::Cast(_, child, _)
         | CHirExpr::SizeOfExpr(child, _, _)
         | CHirExpr::BitBuiltin { operand: child, .. }
@@ -211,7 +212,11 @@ fn assert_stmt_owned(arena: &Arena, statement: &CHirStmt<'_>) {
             assert_expr_owned(arena, last);
             assert_stmt_owned(arena, nested);
         }
-        CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {}
+        CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Goto(_, _)
+        | CHirStmt::AttributedNull(_, _)
+        | CHirStmt::Null(_) => {}
     }
 }
 

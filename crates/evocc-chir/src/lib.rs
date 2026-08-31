@@ -427,6 +427,9 @@ pub enum CHirExpr<'arena> {
         span: SourceSpan,
     },
     Cast(TypeId, &'arena CHirExpr<'arena>, SourceSpan),
+    /// A front-end boundary that evaluates its operand exactly once even when
+    /// nested inside generated arithmetic. It is erased before EvoIR.
+    EvaluateOnce(&'arena CHirExpr<'arena>, SourceSpan),
     SizeOf(TypeId, SourceSpan),
     /// `sizeof` of an expression retains the unevaluated source operand and
     /// the front end's resolved operand type. Runtime consumers use only the
@@ -530,6 +533,7 @@ impl CHirExpr<'_> {
             | Self::BuiltinUnreachable { span, .. }
             | Self::BuiltinReturnAddress { span, .. }
             | Self::Cast(_, _, span)
+            | Self::EvaluateOnce(_, span)
             | Self::SizeOf(_, span)
             | Self::SizeOfExpr(_, _, span)
             | Self::AlignOf(_, span)
@@ -654,6 +658,10 @@ pub enum CHirStmt<'arena> {
         SourceSpan,
     ),
     Default(&'arena CHirStmt<'arena>, SourceSpan),
+    /// A null statement carrying GNU attributes written immediately before
+    /// its semicolon. The attributes are source facts only and have no
+    /// executable effect.
+    AttributedNull(Vec<Attribute>, SourceSpan),
     Null(SourceSpan),
 }
 
@@ -678,6 +686,7 @@ impl CHirStmt<'_> {
             | Self::Case(_, _, span)
             | Self::CaseRange(_, _, _, span)
             | Self::Default(_, span)
+            | Self::AttributedNull(_, span)
             | Self::Null(span) => *span,
         }
     }
@@ -822,6 +831,8 @@ pub enum AttributePlacement {
     FunctionDefinition,
     /// After a label.
     Label,
+    /// Immediately before a null statement.
+    NullStatement,
     /// After an enumerator.
     Enumerator,
     /// In a type name.
@@ -843,6 +854,7 @@ impl AttributePlacement {
             Self::Parameter => "parameter",
             Self::FunctionDefinition => "function-definition",
             Self::Label => "label",
+            Self::NullStatement => "null-statement",
             Self::Enumerator => "enumerator",
             Self::TypeName => "type-name",
             Self::PointerDeclarator => "pointer-declarator",
@@ -1085,6 +1097,12 @@ pub enum FrontEndBuiltinRecord<'arena> {
         operand: &'arena CHirExpr<'arena>,
         result: bool,
     },
+    ObjectSize {
+        span: SourceSpan,
+        operand: &'arena CHirExpr<'arena>,
+        mode: u8,
+        result: u64,
+    },
 }
 
 impl CHirDecl<'_> {
@@ -1243,11 +1261,23 @@ fn inventory_of_declaration(declaration: &CHirDecl<'_>, inventory: &mut Attribut
                     }
                 }
             }
+            if let Some(body) = function.body {
+                inventory_of_statement(body, inventory);
+            }
         }
         CHirDecl::Object(object) => {
             inventory_of_written(&object.written, inventory);
             for attribute in &object.attributes {
                 inventory.record(attribute);
+            }
+            if let Some(initializer) = &object.initializer {
+                for action in initializer.plan().actions() {
+                    if let InitAction::StoreScalar { value, .. }
+                    | InitAction::CopyAggregate { value, .. } = action
+                    {
+                        inventory_of_expression(value, inventory);
+                    }
+                }
             }
         }
         CHirDecl::Typedef(typedef) => {
@@ -1267,6 +1297,9 @@ fn inventory_of_declaration(declaration: &CHirDecl<'_>, inventory: &mut Attribut
                         for attribute in &member.attributes {
                             inventory.record(attribute);
                         }
+                        if let Some(width) = member.bit_width {
+                            inventory_of_expression(width, inventory);
+                        }
                     }
                 }
                 TagMembers::Enum(enumerators) => {
@@ -1274,11 +1307,170 @@ fn inventory_of_declaration(declaration: &CHirDecl<'_>, inventory: &mut Attribut
                         for attribute in &enumerator.attributes {
                             inventory.record(attribute);
                         }
+                        if let Some(value) = enumerator.written_value {
+                            inventory_of_expression(value, inventory);
+                        }
                     }
                 }
                 TagMembers::Incomplete => {}
             }
         }
+    }
+}
+
+fn inventory_of_statement(statement: &CHirStmt<'_>, inventory: &mut AttributeInventory) {
+    match statement {
+        CHirStmt::Asm(assembly) => {
+            for operand in assembly.outputs.iter().chain(&assembly.inputs) {
+                inventory_of_expression(operand.expression, inventory);
+            }
+        }
+        CHirStmt::Expr(expression, _)
+        | CHirStmt::Return(Some(expression), _)
+        | CHirStmt::ComputedGoto(expression, _) => inventory_of_expression(expression, inventory),
+        CHirStmt::If(condition, then_statement, else_statement, _) => {
+            inventory_of_expression(condition, inventory);
+            inventory_of_statement(then_statement, inventory);
+            if let Some(else_statement) = else_statement {
+                inventory_of_statement(else_statement, inventory);
+            }
+        }
+        CHirStmt::Switch(expression, body, _)
+        | CHirStmt::While(expression, body, _)
+        | CHirStmt::Case(expression, body, _) => {
+            inventory_of_expression(expression, inventory);
+            inventory_of_statement(body, inventory);
+        }
+        CHirStmt::CaseRange(first, last, body, _) => {
+            inventory_of_expression(first, inventory);
+            inventory_of_expression(last, inventory);
+            inventory_of_statement(body, inventory);
+        }
+        CHirStmt::DoWhile(body, condition, _) => {
+            inventory_of_statement(body, inventory);
+            inventory_of_expression(condition, inventory);
+        }
+        CHirStmt::For(initializer, condition, step, body, _) => {
+            match initializer {
+                CHirForInit::Empty => {}
+                CHirForInit::Expression(expression) => {
+                    inventory_of_expression(expression, inventory);
+                }
+                CHirForInit::Declaration(declarations) => {
+                    for declaration in declarations {
+                        inventory_of_declaration(declaration, inventory);
+                    }
+                }
+            }
+            if let Some(condition) = condition {
+                inventory_of_expression(condition, inventory);
+            }
+            if let Some(step) = step {
+                inventory_of_expression(step, inventory);
+            }
+            inventory_of_statement(body, inventory);
+        }
+        CHirStmt::Compound(items, _) => {
+            for item in items {
+                match item {
+                    CHirBlockItem::Declaration(declaration) => {
+                        inventory_of_declaration(declaration, inventory);
+                    }
+                    CHirBlockItem::Statement(statement) => {
+                        inventory_of_statement(statement, inventory);
+                    }
+                }
+            }
+        }
+        CHirStmt::Label(_, body, _) | CHirStmt::Default(body, _) => {
+            inventory_of_statement(body, inventory);
+        }
+        CHirStmt::AttributedNull(attributes, _) => {
+            for attribute in attributes {
+                inventory.record(attribute);
+            }
+        }
+        CHirStmt::Return(None, _)
+        | CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Goto(_, _)
+        | CHirStmt::Null(_) => {}
+    }
+}
+
+fn inventory_of_expression(expression: &CHirExpr<'_>, inventory: &mut AttributeInventory) {
+    match expression {
+        CHirExpr::Unary(_, operand, _)
+        | CHirExpr::EvaluateOnce(operand, _)
+        | CHirExpr::Cast(_, operand, _)
+        | CHirExpr::SizeOfExpr(operand, _, _)
+        | CHirExpr::Member(operand, _, _)
+        | CHirExpr::PtrMember(operand, _, _)
+        | CHirExpr::BitBuiltin { operand, .. }
+        | CHirExpr::Update {
+            target: operand, ..
+        } => inventory_of_expression(operand, inventory),
+        CHirExpr::Binary(_, left, right, _)
+        | CHirExpr::Index(left, right, _)
+        | CHirExpr::Comma(left, right, _)
+        | CHirExpr::Elvis(left, right, _)
+        | CHirExpr::Assign {
+            target: left,
+            value: right,
+            ..
+        } => {
+            inventory_of_expression(left, inventory);
+            inventory_of_expression(right, inventory);
+        }
+        CHirExpr::Ternary(condition, when_true, when_false, _) => {
+            inventory_of_expression(condition, inventory);
+            inventory_of_expression(when_true, inventory);
+            inventory_of_expression(when_false, inventory);
+        }
+        CHirExpr::Call(callee, arguments, _) => {
+            inventory_of_expression(callee, inventory);
+            for argument in arguments {
+                inventory_of_expression(argument, inventory);
+            }
+        }
+        CHirExpr::CheckedArithmetic {
+            lhs, rhs, target, ..
+        } => {
+            inventory_of_expression(lhs, inventory);
+            inventory_of_expression(rhs, inventory);
+            inventory_of_expression(target, inventory);
+        }
+        CHirExpr::MemoryAssign { place, value, .. } => {
+            for source in place.source_expressions() {
+                inventory_of_expression(source, inventory);
+            }
+            inventory_of_expression(value, inventory);
+        }
+        CHirExpr::MemoryRead { place, .. } | CHirExpr::MemoryUpdate { place, .. } => {
+            for source in place.source_expressions() {
+                inventory_of_expression(source, inventory);
+            }
+        }
+        CHirExpr::StatementExpr { body, .. } => inventory_of_statement(body, inventory),
+        CHirExpr::CompoundLit(_, initializer, _) => {
+            for action in initializer.plan().actions() {
+                if let InitAction::StoreScalar { value, .. }
+                | InitAction::CopyAggregate { value, .. } = action
+                {
+                    inventory_of_expression(value, inventory);
+                }
+            }
+        }
+        CHirExpr::Lit(_, _)
+        | CHirExpr::FloatLit(_, _)
+        | CHirExpr::CharLit(_, _)
+        | CHirExpr::StringLit(_, _)
+        | CHirExpr::Ident { .. }
+        | CHirExpr::LabelAddress { .. }
+        | CHirExpr::SizeOf(_, _)
+        | CHirExpr::AlignOf(_, _)
+        | CHirExpr::BuiltinUnreachable { .. }
+        | CHirExpr::BuiltinReturnAddress { .. } => {}
     }
 }
 
@@ -1289,6 +1481,30 @@ fn inventory_of_written(written: &WrittenDeclarator, inventory: &mut AttributeIn
                 inventory.record(attribute);
             }
         }
+    }
+}
+
+fn render_attribute_lines(out: &mut String, attributes: &[Attribute]) {
+    use std::fmt::Write as _;
+
+    for attribute in attributes {
+        let arguments = attribute
+            .arguments
+            .iter()
+            .map(|argument| argument.text.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let applied = match attribute.applied {
+            Some(AppliedAttribute::Aligned(bytes)) => format!("applied aligned={bytes}"),
+            Some(AppliedAttribute::Packed) => "applied packed".to_owned(),
+            None => "preserved-not-applied".to_owned(),
+        };
+        let _ = writeln!(
+            out,
+            "  attribute {}({arguments}) placement={} {applied}",
+            attribute.name,
+            attribute.placement.spelling()
+        );
     }
 }
 
@@ -1395,6 +1611,7 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
         }
         match expression {
             CHirExpr::Unary(_, operand, _)
+            | CHirExpr::EvaluateOnce(operand, _)
             | CHirExpr::Cast(_, operand, _)
             | CHirExpr::SizeOfExpr(operand, _, _)
             | CHirExpr::Member(operand, _, _)
@@ -1587,6 +1804,9 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
             CHirStmt::Label(_, child, _) | CHirStmt::Default(child, _) => {
                 checked_statement(child, out, seen);
             }
+            CHirStmt::AttributedNull(attributes, _) => {
+                render_attribute_lines(out, attributes);
+            }
             CHirStmt::Return(None, _)
             | CHirStmt::Break(_)
             | CHirStmt::Continue(_)
@@ -1596,31 +1816,10 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
     }
 
     let mut out = String::new();
-    let attribute_lines = |out: &mut String, attributes: &[Attribute]| {
-        for attribute in attributes {
-            let arguments = attribute
-                .arguments
-                .iter()
-                .map(|argument| argument.text.as_str())
-                .collect::<Vec<_>>()
-                .join(", ");
-            let applied = match attribute.applied {
-                Some(AppliedAttribute::Aligned(bytes)) => format!("applied aligned={bytes}"),
-                Some(AppliedAttribute::Packed) => "applied packed".to_owned(),
-                None => "preserved-not-applied".to_owned(),
-            };
-            let _ = writeln!(
-                out,
-                "  attribute {}({arguments}) placement={} {applied}",
-                attribute.name,
-                attribute.placement.spelling()
-            );
-        }
-    };
     let written_attribute_lines = |out: &mut String, written: &WrittenDeclarator| {
         for layer in &written.layers {
             if let WrittenDeclaratorLayer::Pointer { attributes, .. } = layer {
-                attribute_lines(out, attributes);
+                render_attribute_lines(out, attributes);
             }
         }
     };
@@ -1633,14 +1832,14 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
                     let _ = writeln!(out, "  asm-label {label:?}");
                 }
                 written_attribute_lines(&mut out, &function.written);
-                attribute_lines(&mut out, &function.attributes);
+                render_attribute_lines(&mut out, &function.attributes);
                 if let ParameterSyntax::Prototype { parameters, .. } = &function.parameters {
                     for parameter in parameters {
                         if let Some(name) = &parameter.name {
                             let _ = writeln!(out, "  parameter {}", name.spelling);
                         }
                         written_attribute_lines(&mut out, &parameter.written);
-                        attribute_lines(&mut out, &parameter.attributes);
+                        render_attribute_lines(&mut out, &parameter.attributes);
                     }
                 }
             }
@@ -1650,12 +1849,12 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
                     let _ = writeln!(out, "  asm-label {label:?}");
                 }
                 written_attribute_lines(&mut out, &object.written);
-                attribute_lines(&mut out, &object.attributes);
+                render_attribute_lines(&mut out, &object.attributes);
             }
             CHirDecl::Typedef(typedef) => {
                 let _ = writeln!(out, "typedef {}", typedef.name.spelling);
                 written_attribute_lines(&mut out, &typedef.written);
-                attribute_lines(&mut out, &typedef.attributes);
+                render_attribute_lines(&mut out, &typedef.attributes);
             }
             CHirDecl::Tag(tag) => {
                 let name = tag
@@ -1663,7 +1862,7 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
                     .as_ref()
                     .map_or("<anonymous>", |name| name.spelling.as_str());
                 let _ = writeln!(out, "tag {name}");
-                attribute_lines(&mut out, &tag.attributes);
+                render_attribute_lines(&mut out, &tag.attributes);
                 match &tag.members {
                     TagMembers::Struct(members) | TagMembers::Union(members) => {
                         for member in members {
@@ -1673,13 +1872,13 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
                                 .map_or("<anonymous>", |name| name.spelling.as_str());
                             let _ = writeln!(out, "  member {name}");
                             written_attribute_lines(&mut out, &member.written);
-                            attribute_lines(&mut out, &member.attributes);
+                            render_attribute_lines(&mut out, &member.attributes);
                         }
                     }
                     TagMembers::Enum(enumerators) => {
                         for enumerator in enumerators {
                             let _ = writeln!(out, "  enumerator {}", enumerator.name.spelling);
-                            attribute_lines(&mut out, &enumerator.attributes);
+                            render_attribute_lines(&mut out, &enumerator.attributes);
                         }
                     }
                     TagMembers::Incomplete => {}
@@ -1689,7 +1888,7 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
     }
     for attribute in unit.detached_attributes() {
         let _ = writeln!(out, "detached");
-        attribute_lines(&mut out, std::slice::from_ref(attribute));
+        render_attribute_lines(&mut out, std::slice::from_ref(attribute));
     }
     for selection in unit.generic_selections() {
         let _ = writeln!(
@@ -1729,6 +1928,21 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
                     operand.span().byte_start,
                     operand.span().byte_end,
                     u8::from(*result)
+                );
+            }
+            FrontEndBuiltinRecord::ObjectSize {
+                span,
+                operand,
+                mode,
+                result,
+            } => {
+                let _ = writeln!(
+                    out,
+                    "builtin-object-size span={}..{} operand={}..{} mode={mode} result={result}",
+                    span.byte_start,
+                    span.byte_end,
+                    operand.span().byte_start,
+                    operand.span().byte_end,
                 );
             }
         }

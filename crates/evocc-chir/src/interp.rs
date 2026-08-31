@@ -2262,7 +2262,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 flow: "default outside switch",
                 span: statement.span(),
             }),
-            CHirStmt::Null(_) => Ok(None),
+            CHirStmt::AttributedNull(_, _) | CHirStmt::Null(_) => Ok(None),
         }
     }
 
@@ -2925,6 +2925,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirStmt::Continue(_)
             | CHirStmt::Goto(_, _)
             | CHirStmt::ComputedGoto(_, _)
+            | CHirStmt::AttributedNull(_, _)
             | CHirStmt::Null(_) => Ok(false),
         }
     }
@@ -3108,6 +3109,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 tasks.push(MachineTask::EvalExpression {
                     expression: operand,
                     allow_root_mutation: false,
+                });
+            }
+            CHirExpr::EvaluateOnce(operand, _) => {
+                tasks.push(MachineTask::EvalExpression {
+                    expression: operand,
+                    allow_root_mutation: true,
                 });
             }
             CHirExpr::Binary(operator, left, right, _) => {
@@ -5931,6 +5938,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirStmt::Break(_)
             | CHirStmt::Continue(_)
             | CHirStmt::Goto(_, _)
+            | CHirStmt::AttributedNull(_, _)
             | CHirStmt::Null(_) => {}
         }
         Ok(())
@@ -5942,6 +5950,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     ) -> Result<(), InterpreterError> {
         match expression {
             CHirExpr::Unary(_, operand, _)
+            | CHirExpr::EvaluateOnce(operand, _)
             | CHirExpr::Cast(_, operand, _)
             | CHirExpr::Member(operand, _, _)
             | CHirExpr::PtrMember(operand, _, _) => self.predeclare_expr(operand)?,
@@ -6327,7 +6336,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             CHirStmt::Break(span) => Ok(Flow::Break(*span)),
             CHirStmt::Continue(span) => Ok(Flow::Continue(*span)),
-            CHirStmt::Null(_) => Ok(Flow::Normal),
+            CHirStmt::AttributedNull(_, _) | CHirStmt::Null(_) => Ok(Flow::Normal),
             CHirStmt::Goto(name, span) => Ok(Flow::Goto {
                 spelling: name.spelling.clone(),
                 span: *span,
@@ -6626,6 +6635,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     self.integer_error(error, error_span)
                 })
             }
+            CHirExpr::EvaluateOnce(operand, _) => self.eval_expr(operand, true),
             CHirExpr::Binary(operator, left, right, _) => {
                 self.eval_binary(*operator, left, right, span)
             }
@@ -6790,6 +6800,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     })
                 }
             },
+            CHirExpr::EvaluateOnce(operand, _) => self.infer_integer_type(operand),
             CHirExpr::Binary(operator, left, right, _) => match operator {
                 BinaryOp::Lt
                 | BinaryOp::Le
@@ -7273,6 +7284,7 @@ fn push_static_initializer_children<'arena>(
     let mut push = |child: &'arena CHirExpr<'arena>| pending.push((child, child_depth));
     match expression {
         CHirExpr::Unary(_, operand, _)
+        | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
@@ -7455,7 +7467,11 @@ fn collect_statement_symbols<'arena>(
             collect_expression_symbols(last, output);
             collect_statement_symbols(child, output);
         }
-        CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {}
+        CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Goto(_, _)
+        | CHirStmt::AttributedNull(_, _)
+        | CHirStmt::Null(_) => {}
     }
 }
 
@@ -7466,6 +7482,7 @@ fn collect_expression_symbols<'arena>(
     match expression {
         CHirExpr::Ident { symbol, .. } => output.record(*symbol),
         CHirExpr::Unary(_, operand, _)
+        | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
@@ -7580,9 +7597,11 @@ fn statement_requires_memory(unit: &CHirUnit<'_>, statement: &CHirStmt<'_>) -> b
         | CHirStmt::Case(_, child, _)
         | CHirStmt::CaseRange(_, _, child, _)
         | CHirStmt::Default(child, _) => statement_requires_memory(unit, child),
-        CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {
-            false
-        }
+        CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Goto(_, _)
+        | CHirStmt::AttributedNull(_, _)
+        | CHirStmt::Null(_) => false,
     }
 }
 
@@ -7643,6 +7662,7 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         | CHirExpr::Index(_, _, _)
         | CHirExpr::CompoundLit(_, _, _) => true,
         CHirExpr::Unary(_, operand, _)
+        | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::BitBuiltin { operand, .. } => expression_requires_memory(unit, operand),
         CHirExpr::Binary(_, left, right, _)
@@ -7765,6 +7785,7 @@ fn collect_statement_object_declarations<'arena>(
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
         | CHirStmt::ComputedGoto(_, _)
+        | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => {}
     }
 }
@@ -7821,6 +7842,7 @@ fn statement_contains_goto(statement: &CHirStmt<'_>) -> bool {
         | CHirStmt::Return(_, _)
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
+        | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => false,
     }
 }
@@ -7868,9 +7890,11 @@ fn statement_contains_call(statement: &CHirStmt<'_>) -> bool {
         | CHirStmt::Case(_, child, _)
         | CHirStmt::CaseRange(_, _, child, _)
         | CHirStmt::Default(child, _) => statement_contains_call(child),
-        CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {
-            false
-        }
+        CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Goto(_, _)
+        | CHirStmt::AttributedNull(_, _)
+        | CHirStmt::Null(_) => false,
     }
 }
 
@@ -7903,6 +7927,7 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
                 || expression_contains_call(target)
         }
         CHirExpr::Unary(_, operand, _)
+        | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::BitBuiltin { operand, .. } => expression_contains_call(operand),
         CHirExpr::Binary(_, left, right, _)
@@ -8320,6 +8345,7 @@ fn statement_contains_label(statement: &CHirStmt<'_>, spelling: &str) -> bool {
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
         | CHirStmt::ComputedGoto(_, _)
+        | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => false,
     }
 }
@@ -8386,6 +8412,7 @@ fn validate_function_labels(
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
         | CHirStmt::ComputedGoto(_, _)
+        | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => {}
     }
     Ok(())
@@ -8436,6 +8463,7 @@ fn validate_function_gotos(
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
         | CHirStmt::ComputedGoto(_, _)
+        | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => {}
     }
     Ok(())

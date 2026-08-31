@@ -33,14 +33,24 @@ pub fn validate_front_end_builtin_records(
     target: &TargetDataLayout,
 ) -> Result<(), SourceSpan> {
     for record in unit.front_end_builtins() {
-        if let FrontEndBuiltinRecord::ConstantP {
-            span,
-            operand,
-            result,
-        } = record
-        {
-            if builtin_constant_p(operand, unit.types(), unit.symbols(), target) != *result {
-                return Err(*span);
+        match record {
+            FrontEndBuiltinRecord::Expect { .. } => {}
+            FrontEndBuiltinRecord::ConstantP {
+                span,
+                operand,
+                result,
+            } => {
+                if builtin_constant_p(operand, unit.types(), unit.symbols(), target) != *result {
+                    return Err(*span);
+                }
+            }
+            FrontEndBuiltinRecord::ObjectSize {
+                span, mode, result, ..
+            } => {
+                let expected = if *mode <= 1 { u64::MAX } else { 0 };
+                if *mode > 3 || *result != expected {
+                    return Err(*span);
+                }
             }
         }
     }
@@ -74,6 +84,9 @@ fn eval_integer_constant(
             eval_integer_constant(operand, types, symbols, target)?,
         )
         .ok(),
+        CHirExpr::EvaluateOnce(operand, _) => {
+            eval_integer_constant(operand, types, symbols, target)
+        }
         CHirExpr::Binary(operator, left, right, _) => {
             let left = eval_integer_constant(left, types, symbols, target)?;
             if *operator == BinaryOp::And && !left.truth() {
@@ -205,6 +218,7 @@ fn integer_expression_type(
             ),
             crate::UnaryOp::AddrOf | crate::UnaryOp::Deref => None,
         },
+        CHirExpr::EvaluateOnce(operand, _) => integer_expression_type(operand, types, symbols),
         CHirExpr::Binary(operator, left, right, _) => {
             let left = CInteger::new(0, integer_expression_type(left, types, symbols)?)
                 .promoted()

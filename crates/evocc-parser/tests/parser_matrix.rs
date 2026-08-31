@@ -225,6 +225,7 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
                 canonical_expr(operand, types)
             )
         }
+        CHirExpr::EvaluateOnce(operand, _) => canonical_expr(operand, types),
         CHirExpr::Update { op, target, .. } => format!(
             "unary({},{})",
             update_name(*op),

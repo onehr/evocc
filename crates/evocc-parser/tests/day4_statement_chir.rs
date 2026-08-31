@@ -167,6 +167,7 @@ fn assert_expression_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. } => {}
         CHirExpr::Unary(_, child, _)
+        | CHirExpr::EvaluateOnce(child, _)
         | CHirExpr::Cast(_, child, _)
         | CHirExpr::SizeOfExpr(child, _, _)
         | CHirExpr::BitBuiltin { operand: child, .. }
@@ -344,7 +345,11 @@ fn assert_statement_owned(arena: &Arena, statement: &CHirStmt<'_>) {
             assert_expression_owned(arena, last);
             assert_statement_owned(arena, nested);
         }
-        CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {}
+        CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Goto(_, _)
+        | CHirStmt::AttributedNull(_, _)
+        | CHirStmt::Null(_) => {}
     }
 }
 
@@ -430,7 +435,7 @@ fn statement_kind(statement: &CHirStmt<'_>) -> &'static str {
         CHirStmt::Case(..) => "case",
         CHirStmt::CaseRange(..) => "case-range",
         CHirStmt::Default(..) => "default",
-        CHirStmt::Null(..) => "null",
+        CHirStmt::AttributedNull(..) | CHirStmt::Null(..) => "null",
     }
 }
 
@@ -470,6 +475,7 @@ fn collect_statement_spans(statement: &CHirStmt<'_>, facts: &mut Vec<(&'static s
         | CHirStmt::Continue(..)
         | CHirStmt::Goto(..)
         | CHirStmt::ComputedGoto(..)
+        | CHirStmt::AttributedNull(..)
         | CHirStmt::Null(..) => {}
     }
 }
@@ -567,7 +573,7 @@ fn statement_fingerprint(statement: &CHirStmt<'_>) -> String {
         CHirStmt::Default(nested, _) => {
             format!("default({})", statement_fingerprint(nested))
         }
-        CHirStmt::Null(_) => "null".into(),
+        CHirStmt::AttributedNull(_, _) | CHirStmt::Null(_) => "null".into(),
     }
 }
 

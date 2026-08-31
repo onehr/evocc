@@ -436,6 +436,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                 expression(unit, operand, out);
             }
             CHirExpr::Unary(_, operand, _)
+            | CHirExpr::EvaluateOnce(operand, _)
             | CHirExpr::Cast(_, operand, _)
             | CHirExpr::BitBuiltin { operand, .. }
             | CHirExpr::Member(operand, _, _)
@@ -567,6 +568,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             | CHirStmt::Break(_)
             | CHirStmt::Continue(_)
             | CHirStmt::Goto(_, _)
+            | CHirStmt::AttributedNull(_, _)
             | CHirStmt::Null(_) => {}
         }
     }
@@ -628,6 +630,7 @@ fn lower_globals(
             | CHirStmt::Continue(_)
             | CHirStmt::Goto(..)
             | CHirStmt::ComputedGoto(..)
+            | CHirStmt::AttributedNull(_, _)
             | CHirStmt::Null(_) => {}
         }
     }
@@ -1108,6 +1111,7 @@ fn prevalidate_stmt_for_lowering(
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
+        | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => Ok(()),
         CHirStmt::ComputedGoto(_, span) => Err(LowerError::ComputedGoto { span: *span }),
     }
@@ -1250,6 +1254,7 @@ fn prevalidate_expr_for_lowering(
             prevalidate_expr_for_lowering(unit, operand)
         }
         CHirExpr::Unary(_, operand, _)
+        | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::Member(operand, _, _)
         | CHirExpr::PtrMember(operand, _, _) => prevalidate_expr_for_lowering(unit, operand),
         CHirExpr::Binary(_, left, right, _)
@@ -2572,7 +2577,7 @@ impl<'a> FunctionLowerer<'a> {
                 self.branch(&state, target.id, &target.keys)?;
                 Ok(Flow::default())
             }
-            CHirStmt::Null(_) => Ok(Flow {
+            CHirStmt::AttributedNull(_, _) | CHirStmt::Null(_) => Ok(Flow {
                 normal: vec![state],
             }),
             CHirStmt::DoWhile(body, condition, _) => {
@@ -4876,6 +4881,7 @@ impl<'a> FunctionLowerer<'a> {
             CHirExpr::Unary(operator, operand, span) => {
                 self.lower_unary(*operator, operand, *span, state)
             }
+            CHirExpr::EvaluateOnce(operand, _) => self.lower_expr(operand, state),
             CHirExpr::Binary(operator, left, right, span) => {
                 self.lower_binary(*operator, left, right, *span, state)
             }
@@ -7297,6 +7303,7 @@ fn contains_targeted_label(statement: &CHirStmt<'_>, names: &BTreeSet<String>) -
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
         | CHirStmt::ComputedGoto(_, _)
+        | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => false,
     }
 }
@@ -7335,6 +7342,7 @@ fn collect_goto_names(statement: &CHirStmt<'_>, names: &mut BTreeSet<String>) {
         | CHirStmt::Return(_, _)
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
+        | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => {}
     }
 }
@@ -7413,6 +7421,7 @@ fn collect_calls_stmt(statement: &CHirStmt<'_>, calls: &mut CallSites) {
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
+        | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => {}
     }
 }
@@ -7453,6 +7462,7 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
             collect_calls_expr(target, calls);
         }
         CHirExpr::Unary(_, operand, _)
+        | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
@@ -7654,7 +7664,11 @@ fn live_before_stmt(
         CHirStmt::Label(_, body, _) | CHirStmt::Default(body, _) => {
             live_after = live_before_stmt(body, live_after);
         }
-        CHirStmt::Break(_) | CHirStmt::Continue(_) | CHirStmt::Goto(_, _) | CHirStmt::Null(_) => {}
+        CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Goto(_, _)
+        | CHirStmt::AttributedNull(_, _)
+        | CHirStmt::Null(_) => {}
     }
     live_after
 }
@@ -7703,6 +7717,7 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
             }
         }
         CHirExpr::Unary(_, operand, _)
+        | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
@@ -7848,6 +7863,7 @@ fn collect_symbols_stmt(statement: &CHirStmt<'_>, symbols: &mut BTreeSet<SymbolI
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)
+        | CHirStmt::AttributedNull(_, _)
         | CHirStmt::Null(_) => {}
     }
 }
@@ -7897,6 +7913,7 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
             }
         }
         CHirExpr::Unary(_, operand, _)
+        | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)

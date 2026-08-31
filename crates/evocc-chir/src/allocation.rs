@@ -1270,6 +1270,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             | CHirStmt::Break(_)
             | CHirStmt::Continue(_)
             | CHirStmt::Goto(_, _)
+            | CHirStmt::AttributedNull(_, _)
             | CHirStmt::Null(_) => {}
             CHirStmt::Compound(items, _) => {
                 for item in items.iter().rev() {
@@ -1344,6 +1345,7 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                 });
             }
             CHirExpr::Unary(_, operand, _)
+            | CHirExpr::EvaluateOnce(operand, _)
             | CHirExpr::Cast(_, operand, _)
             | CHirExpr::Member(operand, _, _)
             | CHirExpr::PtrMember(operand, _, _)
