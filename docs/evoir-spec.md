@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.30** | **Authoritative reference** | **2026-09-01**
+**Revision 1.9.31** | **Authoritative reference** | **2026-09-01**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1266,6 +1266,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3016` | `call-through-non-function-pointer` | runtime |
 | `E3017` | `indirect-call-signature-mismatch` | module validation |
 | `E2902` | `not-covered: compound-literal` | front end — **retired by revision 1.9**; emitting it after compound literals land is a defect |
+| `E2002` | `incompatible-redeclaration` | front end |
 | `E2903` | `malformed-attribute` | front end |
 | `E2904` | `not-covered: variably-modified-typeof` | front end |
 | `E2905` | `statement-expression-outside-function` | front end |
@@ -2863,8 +2864,9 @@ front end that still emits it is defective.
 
 #### 10.1.10 `typeof` and `_Generic`
 
-`typeof(type-name)` and `typeof(expression)` denote a type. `__typeof__` is the
-same construct. The result of `typeof(expression)` is the type of the expression
+`typeof(type-name)` and `typeof(expression)` denote a type. `__typeof__` and
+`__typeof` are the same construct (both oracles; the kernel's syscall wrappers
+write `__typeof`). The result of `typeof(expression)` is the type of the expression
 before lvalue conversion: an array-typed lvalue yields the array type, not a
 pointer, and qualifiers are retained. The operand expression is not evaluated,
 so `typeof(i++)` names `int` and leaves `i` unchanged; the one case in which C
@@ -2872,7 +2874,14 @@ would evaluate it, a variably modified type, is rejected with `E2904` because
 this profile has no variable-length objects.
 
 `typeof` produces a type and is fully resolved by the front end; nothing of it
-survives into EvoIR. When its operand is a function designator the result is a
+survives into EvoIR. A statement expression inside a `typeof` operand is a
+block of its own: every declaration it makes — objects, tags, and
+declarations with linkage such as `extern void c(void)` — is scoped to it and
+leaves nothing behind. Measured defect at revision 1.9.30: an `extern`
+function declared inside `typeof(({ ... }))` escaped the operand's scope, so a
+later compatible declaration of the same function was refused as a
+redefinition; the kernel's `READ_ONCE` inside `hlist_for_each_entry_rcu`
+writes exactly that pattern (two lanes). When its operand is a function designator the result is a
 function type, and that type may be used as a declaration specifier exactly as
 a typedef naming a function type may (10.1.18): `extern typeof(g) g;` declares
 `g` a function and may never define one. Both oracles accept it; the kernel's
@@ -3519,6 +3528,17 @@ absent and are named here so their acceptance is checkable:
   `typeof(g) h;` was accepted and `typeof(*fp) h;` refused while
   `typeof(*fp) *q` was accepted; the kernel's static-call machinery writes the
   refused form, four lanes in two units.
+- **Redeclaration.** An identifier with linkage — a function, or an object
+  declared `extern` — may be declared any number of times, in the same scope
+  or in nested ones, provided every declaration's type is compatible with the
+  previous ones (C11 6.2.7, 6.7p4); the declared type is their composite.
+  Attributes on a redeclaration accumulate. Declaring it again with an
+  incompatible type is `E2002` (`incompatible-redeclaration`) at the later
+  declarator, as is a second definition of an object or function, or a second
+  declaration of an identifier without linkage in the same scope. Measured,
+  both oracles: repeated compatible block-scope `extern` declarations accepted,
+  `extern int g(int)` then `extern long g(int)` refused. Revision 1.9.30 had
+  used `E2002` without ever defining it.
 - **Static assertions are member declarations.** `_Static_assert` may appear in
   a struct or union member list, including an anonymous one, where it declares
   no member and contributes nothing to layout. This is 2 lanes, in 1 unit.
@@ -4141,6 +4161,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.31 | 2026-09-01 | Admits the `__typeof` spelling; states that a statement expression inside a `typeof` operand scopes every declaration it makes, including ones with linkage, after an `extern` declared there escaped and made a later compatible declaration a redefinition; defines the redeclaration rule and `E2002`, which had been emitted without a definition. Measured. |
 | 1.9.30 | 2026-09-01 | Makes explicit in 10.1.18 that a declarator list may declare several functions and that `typeof` of a dereferenced function pointer names a function type; both were already implied and both were refused by the implementation, the first by a deliberate restriction the kernel turned out to need. |
 | 1.9.29 | 2026-09-01 | Rules the five gaps the wide-enum window named: character pointers of differing signedness convert implicitly (both oracles warn only); `__builtin_frame_address` accepted and fail-closed (`E3031`); signed shifts in constant expressions wrap in the operand width as both oracles do, so `1 << 31` is an enumerator; `void *` difference typed and fail-closed in lowering (`E3032`); 128-bit values accepted throughout the front end and fail-closed in execution (`E3033`). All measured. |
 | 1.9.28 | 2026-09-01 | Enumerators outside `int` widen the enumeration to the smallest representing type (one `ORACLE_CONFLICT` on the other constants' type, resolved to the C23/GCC rule); `__attribute` as a synonym; `void *` arithmetic in update forms; 128-bit assignment. All measured; the last two were one rule on two paths. |
