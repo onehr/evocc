@@ -1,0 +1,71 @@
+{
+  "receiptId": "c30.function-declaration-forms-red.v1",
+  "baseline": "87dacd5",
+  "authority": {
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.30",
+      "sha256": "1769df0672a79935775ad94e0fca8e2ebe86c70bdddd1b53d6349d4616146b53"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "P12",
+      "sha256": "07ad482c70b352f3245574eabbc5bb77a65a41c4b45cff17d2ea767daf339019"
+    },
+    "baselineDashboard": {
+      "path": "tests/contracts/kernel-dashboard-receipt.json",
+      "run": "20260901T140210Z-65904",
+      "sha256": "348422b8a06379544e4ae18844f43b0b05e5844589a1eec275d1c00853ef055f"
+    }
+  },
+  "declaredCapabilities": [
+    "one declaration may list several function declarators, including functions obtained from a typedef, extern functions and directly written function declarators, while a declarator list may not define a function",
+    "typeof of a dereferenced function pointer is the designated function type in the declaration-specifier path, including the kernel static-call member shape"
+  ],
+  "focusedCommand": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test function_type_typedef_declarations --no-fail-fast",
+  "observedRed": [
+    {
+      "test": "function_type_typedef_declares_every_function_in_a_list",
+      "observed": "E1002 expected-token: ;",
+      "reason": "function-declarator-list"
+    },
+    {
+      "test": "written_function_declarators_may_share_a_declaration",
+      "observed": "E1002 expected-token: ;",
+      "reason": "function-declarator-list"
+    },
+    {
+      "test": "typeof_dereferenced_function_pointer_declares_a_function",
+      "observed": "E1001 expected-declaration",
+      "reason": "dereferenced-function-pointer-typeof"
+    },
+    {
+      "test": "typeof_dereferenced_function_pointer_covers_the_static_call_shape",
+      "observed": "E1001 expected-declaration",
+      "reason": "dereferenced-function-pointer-typeof"
+    }
+  ],
+  "alreadyGreenGuards": [
+    "a function declarator list cannot be a function definition",
+    "function-pointer declarators in a list remain object declarations",
+    "typeof of a named function designator still declares the inherited function type",
+    "a pointer to typeof of a dereferenced function pointer remains an object"
+  ],
+  "buildErrors": 0,
+  "focused": {
+    "listed": 11,
+    "passed": 7,
+    "failed": 4
+  },
+  "workspaceIncludingDocTests": {
+    "listed": 1057,
+    "passed": 1053,
+    "failed": 4,
+    "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet"
+  },
+  "allTargetTestCount": {
+    "listed": 1056,
+    "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list --format terse | rg -c ': test$'"
+  },
+  "result": "RED"
+}

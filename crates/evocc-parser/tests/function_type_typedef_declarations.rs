@@ -58,6 +58,36 @@ fn assert_function_declaration(source: &str, name: &str) {
     }));
 }
 
+fn assert_function_declarations(source: &str, names: &[&str], parameter_count: usize) {
+    let arena = Arena::default();
+    let unit = parse(source, &arena).unwrap_or_else(|diagnostic| {
+        panic!(
+            "function declaration list must parse, got {}: {}\nsource: {source}",
+            diagnostic.code, diagnostic.message
+        )
+    });
+    for name in names {
+        let function = unit
+            .iter()
+            .find_map(|declaration| match declaration {
+                CHirDecl::Function(function) if function.name.spelling == *name => Some(function),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{name} must be declared as a function"));
+        assert!(function.body.is_none());
+        assert!(matches!(
+            &unit.types().get(function.ty).unwrap().kind,
+            TypeKind::Function {
+                parameters: FunctionParameters::Prototype { types, variadic: false },
+                ..
+            } if types.len() == parameter_count
+        ));
+        assert!(!unit.iter().any(|declaration| {
+            matches!(declaration, CHirDecl::Object(object) if object.name.spelling == *name)
+        }));
+    }
+}
+
 #[test]
 fn function_type_typedef_declares_an_extern_function() {
     assert_function_declaration("typedef int fn(void); extern fn f;\n", "f");
@@ -66,6 +96,47 @@ fn function_type_typedef_declares_an_extern_function() {
 #[test]
 fn parenthesized_function_type_typedef_declares_an_extern_function() {
     assert_function_declaration("typedef int (fn)(void); extern fn f;\n", "f");
+}
+
+#[test]
+fn function_type_typedef_declares_every_function_in_a_list() {
+    let source = concat!(
+        "typedef int fn(int); ",
+        "fn a, b; ",
+        "extern fn c, d; ",
+        "fn *pa, *pb;\n",
+    );
+    let arena = Arena::default();
+    let unit = parse(source, &arena).unwrap_or_else(|diagnostic| {
+        panic!(
+            "function-type declaration lists must parse, got {}: {}",
+            diagnostic.code, diagnostic.message
+        )
+    });
+    for name in ["a", "b", "c", "d"] {
+        assert!(unit.iter().any(|declaration| {
+            matches!(declaration, CHirDecl::Function(function) if function.name.spelling == name && function.body.is_none())
+        }));
+    }
+    for name in ["pa", "pb"] {
+        assert!(unit.iter().any(|declaration| {
+            matches!(declaration, CHirDecl::Object(object) if object.name.spelling == name)
+        }));
+    }
+}
+
+#[test]
+fn written_function_declarators_may_share_a_declaration() {
+    assert_function_declarations("int f(void), g(void);\n", &["f", "g"], 0);
+}
+
+#[test]
+fn a_function_declarator_list_cannot_be_a_definition() {
+    let arena = Arena::default();
+    assert!(
+        parse("int f(void), g(void) { return 0; }\n", &arena).is_err(),
+        "a function definition cannot contain a declarator list"
+    );
 }
 
 #[test]
@@ -147,6 +218,27 @@ fn typeof_function_designator_declares_the_same_function_type() {
             } if types.len() == 1
         )
     }));
+}
+
+#[test]
+fn typeof_dereferenced_function_pointer_declares_a_function() {
+    let source = concat!(
+        "int target(int value); ",
+        "int (*fp)(int) = target; ",
+        "extern typeof(*fp) inherited; ",
+        "typeof(*fp) *copy = fp;\n",
+    );
+    assert_function_declarations(source, &["inherited"], 1);
+}
+
+#[test]
+fn typeof_dereferenced_function_pointer_covers_the_static_call_shape() {
+    let source = concat!(
+        "struct perf_guest_info_callbacks { unsigned int (*state)(void); }; ",
+        "extern struct perf_guest_info_callbacks *perf_guest_cbs; ",
+        "extern typeof(*perf_guest_cbs->state) __SCT____perf_guest_state;\n",
+    );
+    assert_function_declarations(source, &["__SCT____perf_guest_state"], 0);
 }
 
 #[test]
