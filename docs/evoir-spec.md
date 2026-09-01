@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.29** | **Authoritative reference** | **2026-09-01**
+**Revision 1.9.30** | **Authoritative reference** | **2026-09-01**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -3505,6 +3505,20 @@ absent and are named here so their acceptance is checkable:
   parenthesised (`typedef int (fn)(void);`). Such a typedef may not be used to
   define a function body, and an object declared with it is a function
   declaration, never an object. This is 10 lanes, in 5 units.
+- **A declarator list may declare several functions.** `fn a, b;` with `fn`
+  a typedef naming a function type, and `int f(void), g(void);`, each declare
+  every listed name a function; none of them may be a definition. Measured
+  defect at revision 1.9.29: the list form was refused with `E1002` as a
+  deliberate implementation restriction from the attribute window ("no
+  consumer in this profile"); the kernel's `fs_param_type fs_param_is_bool,
+  fs_param_is_u32, ...` is that consumer, six lanes in three units.
+- **`typeof` of a dereferenced function pointer.** `*fp`, with `fp` a pointer
+  to function, is a function designator, so `typeof(*fp)` is that function
+  type and `extern typeof(*fp) h;` declares `h` a function exactly as
+  `extern typeof(g) h;` does (10.1.10). Measured defect at revision 1.9.29:
+  `typeof(g) h;` was accepted and `typeof(*fp) h;` refused while
+  `typeof(*fp) *q` was accepted; the kernel's static-call machinery writes the
+  refused form, four lanes in two units.
 - **Static assertions are member declarations.** `_Static_assert` may appear in
   a struct or union member list, including an anonymous one, where it declares
   no member and contributes nothing to layout. This is 2 lanes, in 1 unit.
@@ -4127,6 +4141,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.30 | 2026-09-01 | Makes explicit in 10.1.18 that a declarator list may declare several functions and that `typeof` of a dereferenced function pointer names a function type; both were already implied and both were refused by the implementation, the first by a deliberate restriction the kernel turned out to need. |
 | 1.9.29 | 2026-09-01 | Rules the five gaps the wide-enum window named: character pointers of differing signedness convert implicitly (both oracles warn only); `__builtin_frame_address` accepted and fail-closed (`E3031`); signed shifts in constant expressions wrap in the operand width as both oracles do, so `1 << 31` is an enumerator; `void *` difference typed and fail-closed in lowering (`E3032`); 128-bit values accepted throughout the front end and fail-closed in execution (`E3033`). All measured. |
 | 1.9.28 | 2026-09-01 | Enumerators outside `int` widen the enumeration to the smallest representing type (one `ORACLE_CONFLICT` on the other constants' type, resolved to the C23/GCC rule); `__attribute` as a synonym; `void *` arithmetic in update forms; 128-bit assignment. All measured; the last two were one rule on two paths. |
 | 1.9.27 | 2026-09-01 | States that any pointer-typed expression may root a place, with one implementation and no list of admitted forms, after the fourth root form (call results, then conditionals) was refused; specifies `__builtin_strlen` as a constant on a literal and an ordinary call to the in-scope `strlen` otherwise (`E2927`). Measured. |
