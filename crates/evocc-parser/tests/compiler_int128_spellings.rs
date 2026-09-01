@@ -109,6 +109,9 @@ fn wide_integer_initializers_accept_convertible_integer_values() {
             "__int128_t signed_value = -1;\n",
             "__uint128_t unsigned_value = 7;\n",
             "void initialize(void) { __int128 local = 3; unsigned __int128 other = 9; }\n",
+            "_Static_assert((((__uint128_t)1 << 100) + 7) >> 64 == 68719476736UL, \"high half\");\n",
+            "_Static_assert((((( __uint128_t)1 << 100) + 7) * 3) >> 100 == 3, \"wide product\");\n",
+            "_Static_assert(((__int128_t)1 << 127) < 0, \"signed wrap\");\n",
         ),
         &arena,
     );

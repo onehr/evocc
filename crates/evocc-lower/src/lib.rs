@@ -65,6 +65,15 @@ pub enum LowerError {
     ReturnAddress {
         span: SourceSpan,
     },
+    FrameAddress {
+        span: SourceSpan,
+    },
+    PointerDifference {
+        span: SourceSpan,
+    },
+    WideInteger {
+        span: SourceSpan,
+    },
     StaticRelocation {
         span: SourceSpan,
     },
@@ -111,6 +120,11 @@ impl fmt::Display for LowerError {
             }
             Self::BitBuiltin { .. } => formatter.write_str("not-lowered: bit-builtin"),
             Self::ReturnAddress { .. } => formatter.write_str("not-lowered: return-address"),
+            Self::FrameAddress { .. } => formatter.write_str("not-lowered: frame-address"),
+            Self::PointerDifference { .. } => {
+                formatter.write_str("not-lowered: pointer-difference")
+            }
+            Self::WideInteger { .. } => formatter.write_str("not-executed: wide-integer"),
             Self::StaticRelocation { .. } => formatter.write_str("not-lowered: static-relocation"),
             Self::ComputedGoto { .. } => formatter.write_str("not-lowered: computed-goto"),
             Self::Asm { .. } => formatter.write_str("not-lowered: asm"),
@@ -143,6 +157,9 @@ impl LowerError {
             Self::StaticRelocation { .. } => "E3026",
             Self::ComputedGoto { .. } => "E3029",
             Self::VarArgs { .. } => "E3030",
+            Self::FrameAddress { .. } => "E3031",
+            Self::PointerDifference { .. } => "E3032",
+            Self::WideInteger { .. } => "E3033",
             _ => "E3101",
         }
     }
@@ -162,6 +179,9 @@ impl LowerError {
             | Self::CheckedArithmetic { span }
             | Self::BitBuiltin { span }
             | Self::ReturnAddress { span }
+            | Self::FrameAddress { span }
+            | Self::PointerDifference { span }
+            | Self::WideInteger { span }
             | Self::StaticRelocation { span }
             | Self::ComputedGoto { span }
             | Self::Asm { span }
@@ -518,7 +538,8 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
             | CHirExpr::SizeOfExpr(..)
             | CHirExpr::AlignOf(..)
             | CHirExpr::BuiltinUnreachable { .. }
-            | CHirExpr::BuiltinReturnAddress { .. } => {}
+            | CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinFrameAddress { .. } => {}
         }
     }
 
@@ -1310,6 +1331,7 @@ fn prevalidate_expr_for_lowering(
         CHirExpr::BuiltinReturnAddress { span, .. } => {
             Err(LowerError::ReturnAddress { span: *span })
         }
+        CHirExpr::BuiltinFrameAddress { span, .. } => Err(LowerError::FrameAddress { span: *span }),
         CHirExpr::LabelAddress { span, .. } => Err(LowerError::ComputedGoto { span: *span }),
         CHirExpr::BuiltinUnreachable { .. } => Ok(()),
         CHirExpr::CompoundLit(_, initializer, _) => {
@@ -1670,6 +1692,7 @@ fn function_value_type(
                 integer,
             })
         }
+        Some(TypeKind::GnuInt128(_)) => Err(LowerError::WideInteger { span }),
         Some(TypeKind::Struct(_) | TypeKind::Union(_)) => Ok(FunctionValueType {
             source: ty,
             ir: EvoIRType::Ptr(AddressSpace::Generic),
@@ -2997,6 +3020,7 @@ impl<'a> FunctionLowerer<'a> {
                 let integer = canonical_integer(self.unit.types(), self.target, ty, span)?;
                 Ok((bits(integer), integer))
             }
+            Some(TypeKind::GnuInt128(_)) => Err(LowerError::WideInteger { span }),
             _ => Err(LowerError::UnsupportedType {
                 ty,
                 span,
@@ -4852,7 +4876,14 @@ impl<'a> FunctionLowerer<'a> {
                     }
                 })?;
                 let result = self.fresh_value(bits(integer.ty()));
-                self.emit(state, Inst::Const(result.clone(), integer.raw_bits()))?;
+                self.emit(
+                    state,
+                    Inst::Const(
+                        result.clone(),
+                        u64::try_from(integer.raw_bits())
+                            .expect("lowered integer literal is at most 64 bits"),
+                    ),
+                )?;
                 Ok(ExprValue {
                     value: result,
                     integer: integer.ty(),
@@ -4981,6 +5012,9 @@ impl<'a> FunctionLowerer<'a> {
             CHirExpr::BuiltinReturnAddress { span, .. } => {
                 Err(LowerError::ReturnAddress { span: *span })
             }
+            CHirExpr::BuiltinFrameAddress { span, .. } => {
+                Err(LowerError::FrameAddress { span: *span })
+            }
             CHirExpr::LabelAddress { span, .. } => Err(LowerError::ComputedGoto { span: *span }),
             CHirExpr::BuiltinUnreachable { span, .. } => Err(LowerError::UnsupportedExpression {
                 span: *span,
@@ -5033,7 +5067,14 @@ impl<'a> FunctionLowerer<'a> {
                         })?
                         .cast(target);
                     let result = self.fresh_value(bits(target));
-                    self.emit(state, Inst::Const(result.clone(), converted.raw_bits()))?;
+                    self.emit(
+                        state,
+                        Inst::Const(
+                            result.clone(),
+                            u64::try_from(converted.raw_bits())
+                                .expect("lowered integer cast is at most 64 bits"),
+                        ),
+                    )?;
                     return Ok(ExprValue {
                         value: result,
                         integer: target,
@@ -5307,7 +5348,11 @@ impl<'a> FunctionLowerer<'a> {
             UnaryOp::BitNot => {
                 let integer = integer_promotion(operand.integer);
                 let operand = self.cast(operand, integer, state)?;
-                let mask = self.constant(state, integer, integer.mask())?;
+                let mask = self.constant(
+                    state,
+                    integer,
+                    u64::try_from(integer.mask()).expect("lowered integer mask is at most 64 bits"),
+                )?;
                 let result = self.fresh_value(bits(integer));
                 self.emit(state, Inst::Xor(result.clone(), operand.value, mask.value))?;
                 Ok(ExprValue {
@@ -5561,6 +5606,9 @@ impl<'a> FunctionLowerer<'a> {
                 value,
                 integer: CIntegerType::ULONG,
             });
+        }
+        if operator == BinaryOp::Sub && left_object_pointer && right_object_pointer {
+            return Err(LowerError::PointerDifference { span });
         }
         if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) {
             let (left, right) = match (left_pointer, right_pointer) {
@@ -6938,7 +6986,9 @@ impl<'a> FunctionLowerer<'a> {
         raw: u64,
     ) -> Result<ExprValue, LowerError> {
         let result = self.fresh_value(bits(integer));
-        self.emit(state, Inst::Const(result.clone(), raw & integer.mask()))?;
+        let mask =
+            u64::try_from(integer.mask()).expect("lowered integer constant is at most 64 bits");
+        self.emit(state, Inst::Const(result.clone(), raw & mask))?;
         Ok(ExprValue {
             value: result,
             integer,
@@ -7642,7 +7692,8 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
         | CHirExpr::SizeOfExpr(..)
         | CHirExpr::AlignOf(..)
         | CHirExpr::BuiltinUnreachable { .. }
-        | CHirExpr::BuiltinReturnAddress { .. } => {}
+        | CHirExpr::BuiltinReturnAddress { .. }
+        | CHirExpr::BuiltinFrameAddress { .. } => {}
     }
 }
 
@@ -7903,7 +7954,8 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
         | CHirExpr::SizeOfExpr(..)
         | CHirExpr::AlignOf(..)
         | CHirExpr::BuiltinUnreachable { .. }
-        | CHirExpr::BuiltinReturnAddress { .. } => {}
+        | CHirExpr::BuiltinReturnAddress { .. }
+        | CHirExpr::BuiltinFrameAddress { .. } => {}
     }
 }
 
@@ -8094,7 +8146,8 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
         | CHirExpr::SizeOfExpr(..)
         | CHirExpr::AlignOf(..)
         | CHirExpr::BuiltinUnreachable { .. }
-        | CHirExpr::BuiltinReturnAddress { .. } => {}
+        | CHirExpr::BuiltinReturnAddress { .. }
+        | CHirExpr::BuiltinFrameAddress { .. } => {}
     }
 }
 

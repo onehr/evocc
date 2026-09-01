@@ -110,6 +110,7 @@ pub enum TokenKind {
     BuiltinBit,
     BuiltinUnreachable,
     BuiltinReturnAddress,
+    BuiltinFrameAddress,
     /// GNU `__auto_type`, promoted only after preprocessing at the parser
     /// boundary so the spelling remains macro-expandable.
     AutoType,

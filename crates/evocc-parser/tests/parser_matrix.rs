@@ -291,6 +291,7 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
         }
         CHirExpr::BuiltinUnreachable { .. } => "builtin_unreachable".into(),
         CHirExpr::BuiltinReturnAddress { .. } => "builtin_return_address".into(),
+        CHirExpr::BuiltinFrameAddress { .. } => "builtin_frame_address".into(),
         CHirExpr::BuiltinVarArgs {
             op, first, second, ..
         } => format!(

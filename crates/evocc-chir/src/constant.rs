@@ -7,8 +7,9 @@ use evocc_types::{
 };
 
 use crate::integer::{
-    eval_binary_integer, eval_bit_builtin, eval_unary_integer, floating_literal_to_integer,
-    integer_literal_value, integer_type_for_rank, usual_arithmetic_type, CInteger, CIntegerType,
+    eval_bit_builtin, eval_constant_binary_integer, eval_constant_unary_integer,
+    floating_literal_to_integer, integer_literal_value, integer_type_for_rank,
+    usual_arithmetic_type, CInteger, CIntegerType,
 };
 use crate::{
     record_member_path, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt,
@@ -156,6 +157,7 @@ fn attribute_query_expression_type(
         | CHirExpr::BitBuiltin { facts, .. }
         | CHirExpr::BuiltinUnreachable { facts, .. }
         | CHirExpr::BuiltinReturnAddress { facts, .. }
+        | CHirExpr::BuiltinFrameAddress { facts, .. }
         | CHirExpr::BuiltinVarArgs { facts, .. }
         | CHirExpr::Assign { facts, .. }
         | CHirExpr::MemoryAssign { facts, .. }
@@ -452,7 +454,8 @@ fn expression_contains_declaration(
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinUnreachable { .. }
-        | CHirExpr::BuiltinReturnAddress { .. } => false,
+        | CHirExpr::BuiltinReturnAddress { .. }
+        | CHirExpr::BuiltinFrameAddress { .. } => false,
     }
 }
 
@@ -473,12 +476,12 @@ pub(crate) fn eval_integer_constant(
             if symbol.kind() != SymbolKind::Enumerator {
                 return None;
             }
-            Some(CInteger::new(
-                symbol.enumerator_value()? as u64,
+            Some(CInteger::from_raw(
+                symbol.enumerator_value()? as u128,
                 canonical_integer_type(types, symbol.ty())?,
             ))
         }
-        CHirExpr::Unary(operator, operand, _) => eval_unary_integer(
+        CHirExpr::Unary(operator, operand, _) => eval_constant_unary_integer(
             *operator,
             eval_integer_constant(operand, types, symbols, target)?,
         )
@@ -495,7 +498,7 @@ pub(crate) fn eval_integer_constant(
                 return Some(CInteger::int(1));
             }
             let right = eval_integer_constant(right, types, symbols, target)?;
-            eval_binary_integer(*operator, left, right).ok()
+            eval_constant_binary_integer(*operator, left, right).ok()
         }
         CHirExpr::Ternary(condition, when_true, when_false, _) => {
             let selected = if eval_integer_constant(condition, types, symbols, target)?.truth() {
@@ -546,6 +549,7 @@ pub(crate) fn eval_integer_constant(
         | CHirExpr::CheckedArithmetic { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
+        | CHirExpr::BuiltinFrameAddress { .. }
         | CHirExpr::BuiltinVarArgs { .. }
         | CHirExpr::Member(_, _, _)
         | CHirExpr::PtrMember(_, _, _)
@@ -564,6 +568,10 @@ pub(crate) fn eval_integer_constant(
 fn canonical_integer_type(types: &TypeInterner, ty: TypeId) -> Option<CIntegerType> {
     match types.get(ty)?.kind {
         TypeKind::Int(rank) => Some(integer_type_for_rank(rank)),
+        TypeKind::GnuInt128(evocc_types::GnuInt128Signedness::Signed) => Some(CIntegerType::INT128),
+        TypeKind::GnuInt128(evocc_types::GnuInt128Signedness::Unsigned) => {
+            Some(CIntegerType::UINT128)
+        }
         TypeKind::Enum(tag) => {
             let definition = types.tag(tag)?;
             let TagState::Complete(TagDefinition::Enum(constants)) = &definition.state else {
@@ -695,6 +703,7 @@ fn integer_expression_type(
         | CHirExpr::CompoundLit(_, _, _) => None,
         CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
+        | CHirExpr::BuiltinFrameAddress { .. }
         | CHirExpr::BuiltinVarArgs { .. } => None,
     }
 }

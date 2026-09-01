@@ -50,6 +50,8 @@ impl CIntegerType {
     pub const ULONG: Self = Self::new(64, 4, false);
     pub const LONG_LONG: Self = Self::new(64, 5, true);
     pub const ULONG_LONG: Self = Self::new(64, 5, false);
+    pub const INT128: Self = Self::new(128, 6, true);
+    pub const UINT128: Self = Self::new(128, 6, false);
 
     const fn new(bits: u8, rank: u8, signed: bool) -> Self {
         Self { bits, rank, signed }
@@ -79,22 +81,30 @@ impl CIntegerType {
     }
 
     #[must_use]
-    pub const fn mask(self) -> u64 {
-        if self.bits == 64 {
-            u64::MAX
+    pub const fn mask(self) -> u128 {
+        if self.bits == 128 {
+            u128::MAX
         } else {
-            (1_u64 << self.bits) - 1
+            (1_u128 << self.bits) - 1
         }
     }
 
     #[must_use]
     pub const fn signed_min(self) -> i128 {
-        -(1_i128 << (self.bits - 1))
+        if self.bits == 128 {
+            i128::MIN
+        } else {
+            -(1_i128 << (self.bits - 1))
+        }
     }
 
     #[must_use]
     pub const fn signed_max(self) -> i128 {
-        (1_i128 << (self.bits - 1)) - 1
+        if self.bits == 128 {
+            i128::MAX
+        } else {
+            (1_i128 << (self.bits - 1)) - 1
+        }
     }
 }
 
@@ -105,13 +115,21 @@ impl CIntegerType {
 /// Rust's overflow behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CInteger {
-    raw: u64,
+    raw: u128,
     ty: CIntegerType,
 }
 
 impl CInteger {
     #[must_use]
     pub const fn new(raw: u64, ty: CIntegerType) -> Self {
+        Self::from_raw(raw as u128, ty)
+    }
+
+    /// Construct from the full target representation. This is used by the
+    /// front-end constant evaluator for GNU 128-bit integers; execution paths
+    /// retain their explicit E3033 boundary.
+    #[must_use]
+    pub const fn from_raw(raw: u128, ty: CIntegerType) -> Self {
         Self {
             raw: raw & ty.mask(),
             ty,
@@ -124,7 +142,7 @@ impl CInteger {
     }
 
     #[must_use]
-    pub const fn raw_bits(self) -> u64 {
+    pub const fn raw_bits(self) -> u128 {
         self.raw
     }
 
@@ -135,14 +153,26 @@ impl CInteger {
 
     #[must_use]
     pub fn mathematical_value(self) -> i128 {
+        self.try_mathematical_value()
+            .expect("unsigned integer value does not fit i128")
+    }
+
+    /// Return the mathematical value when it is representable by Rust's
+    /// signed 128-bit carrier. Unsigned values above `i128::MAX` remain fully
+    /// usable for target-width operations and comparisons through `raw_bits`.
+    #[must_use]
+    pub fn try_mathematical_value(self) -> Option<i128> {
         if !self.ty.signed {
-            return i128::from(self.raw);
+            return i128::try_from(self.raw).ok();
         }
-        let sign_bit = 1_u64 << (self.ty.bits - 1);
+        if self.ty.bits == 128 {
+            return Some(self.raw as i128);
+        }
+        let sign_bit = 1_u128 << (self.ty.bits - 1);
         if self.raw & sign_bit == 0 {
-            i128::from(self.raw)
+            i128::try_from(self.raw).ok()
         } else {
-            i128::from(self.raw) - (1_i128 << self.ty.bits)
+            Some(i128::try_from(self.raw).ok()? - (1_i128 << self.ty.bits))
         }
     }
 
@@ -159,9 +189,9 @@ impl CInteger {
             return Self::new(u64::from(self.truth()), target);
         }
         if self.ty.signed && target.bits > self.ty.bits && self.mathematical_value() < 0 {
-            return Self::new(self.mathematical_value() as u64, target);
+            return Self::from_raw(self.mathematical_value() as u128, target);
         }
-        Self::new(self.raw, target)
+        Self::from_raw(self.raw, target)
     }
 
     /// Apply the integer promotions for the pinned ABI.
@@ -183,7 +213,7 @@ impl CInteger {
 /// operand width.
 #[must_use]
 pub fn eval_bit_builtin(op: BitBuiltinOp, operand: CInteger) -> Option<CInteger> {
-    let raw = operand.raw_bits();
+    let raw = u64::try_from(operand.raw_bits()).ok()?;
     let result = match op {
         BitBuiltinOp::FindFirstSet => {
             if raw == 0 {
@@ -312,7 +342,7 @@ impl SignedMagnitude {
                 self.magnitude < negative_limit
             }
         } else {
-            !self.negative && self.magnitude <= u128::from(target.mask())
+            !self.negative && self.magnitude <= target.mask()
         }
     }
 
@@ -408,13 +438,13 @@ pub fn floating_literal_to_integer(
         if truncated < -bound || truncated >= bound {
             return Err(IntegerError::ConversionOutOfRange);
         }
-        Ok(CInteger::new((truncated as i64) as u64, target))
+        Ok(CInteger::from_raw((truncated as i128) as u128, target))
     } else {
         let upper_bound = 2_f64.powi(i32::from(target.bits));
         if truncated < 0.0 || truncated >= upper_bound {
             return Err(IntegerError::ConversionOutOfRange);
         }
-        Ok(CInteger::new(truncated as u64, target))
+        Ok(CInteger::from_raw(truncated as u128, target))
     }
 }
 
@@ -459,7 +489,7 @@ pub fn integer_literal_value(literal: IntLit) -> Result<CInteger, IntegerError> 
             if candidate.signed {
                 i128::from(literal.value) <= candidate.signed_max()
             } else {
-                literal.value <= candidate.mask()
+                u128::from(literal.value) <= candidate.mask()
             }
         })
         .map(|ty| CInteger::new(literal.value, ty))
@@ -503,10 +533,10 @@ pub fn integer_from_mathematical(value: i128, ty: CIntegerType) -> Result<CInteg
     if ty.signed && !(ty.signed_min()..=ty.signed_max()).contains(&value) {
         return Err(IntegerError::SignedOverflow);
     }
-    if !ty.signed && !(0..=i128::from(ty.mask())).contains(&value) {
+    if !ty.signed && (value < 0 || u128::try_from(value).map_or(true, |value| value > ty.mask())) {
         return Err(IntegerError::ConversionOutOfRange);
     }
-    Ok(CInteger::new(value as u64, ty))
+    Ok(CInteger::from_raw(value as u128, ty))
 }
 
 /// Evaluate a C integer unary operator after integer promotion.
@@ -521,11 +551,33 @@ pub fn eval_unary_integer(op: UnaryOp, operand: CInteger) -> Result<CInteger, In
                 .ok_or(IntegerError::SignedOverflow)?;
             integer_from_mathematical(value, operand.ty)
         }
-        UnaryOp::Neg => Ok(CInteger::new(0_u64.wrapping_sub(operand.raw), operand.ty)),
+        UnaryOp::Neg => Ok(CInteger::from_raw(
+            0_u128.wrapping_sub(operand.raw),
+            operand.ty,
+        )),
         UnaryOp::Not => Ok(CInteger::int(i32::from(!operand.truth()))),
-        UnaryOp::BitNot => Ok(CInteger::new(!operand.raw, operand.ty)),
+        UnaryOp::BitNot => Ok(CInteger::from_raw(!operand.raw, operand.ty)),
         UnaryOp::AddrOf | UnaryOp::Deref => Err(IntegerError::UnsupportedOperator),
     }
+}
+
+/// Evaluate one unary operator in an integer constant expression.
+///
+/// GNU constant folding uses target-width two's-complement wrap for signed
+/// arithmetic. Runtime evaluation deliberately continues to use
+/// [`eval_unary_integer`], where signed overflow is a typed failure.
+pub fn eval_constant_unary_integer(
+    op: UnaryOp,
+    operand: CInteger,
+) -> Result<CInteger, IntegerError> {
+    let operand = operand.promoted();
+    if op == UnaryOp::Neg && operand.ty.is_signed() {
+        return Ok(CInteger::from_raw(
+            0_u128.wrapping_sub(operand.raw_bits()),
+            operand.ty,
+        ));
+    }
+    eval_unary_integer(op, operand)
 }
 
 /// Evaluate a C integer binary operator. Callers retain responsibility for
@@ -578,9 +630,9 @@ pub fn eval_binary_integer(
             .ok_or(IntegerError::SignedOverflow)?;
             integer_from_mathematical(value, ty)
         }
-        BinaryOp::Add => Ok(CInteger::new(left.raw.wrapping_add(right.raw), ty)),
-        BinaryOp::Sub => Ok(CInteger::new(left.raw.wrapping_sub(right.raw), ty)),
-        BinaryOp::Mul => Ok(CInteger::new(left.raw.wrapping_mul(right.raw), ty)),
+        BinaryOp::Add => Ok(CInteger::from_raw(left.raw.wrapping_add(right.raw), ty)),
+        BinaryOp::Sub => Ok(CInteger::from_raw(left.raw.wrapping_sub(right.raw), ty)),
+        BinaryOp::Mul => Ok(CInteger::from_raw(left.raw.wrapping_mul(right.raw), ty)),
         BinaryOp::Div | BinaryOp::Mod => {
             if right.raw == 0 {
                 return Err(if op == BinaryOp::Div {
@@ -607,7 +659,7 @@ pub fn eval_binary_integer(
                 .ok_or(IntegerError::SignedOverflow)?;
                 integer_from_mathematical(value, ty)
             } else {
-                Ok(CInteger::new(
+                Ok(CInteger::from_raw(
                     if op == BinaryOp::Div {
                         left.raw / right.raw
                     } else {
@@ -617,9 +669,9 @@ pub fn eval_binary_integer(
                 ))
             }
         }
-        BinaryOp::BitAnd => Ok(CInteger::new(left.raw & right.raw, ty)),
-        BinaryOp::BitOr => Ok(CInteger::new(left.raw | right.raw, ty)),
-        BinaryOp::BitXor => Ok(CInteger::new(left.raw ^ right.raw, ty)),
+        BinaryOp::BitAnd => Ok(CInteger::from_raw(left.raw & right.raw, ty)),
+        BinaryOp::BitOr => Ok(CInteger::from_raw(left.raw | right.raw, ty)),
+        BinaryOp::BitXor => Ok(CInteger::from_raw(left.raw ^ right.raw, ty)),
         BinaryOp::Shl
         | BinaryOp::Shr
         | BinaryOp::Lt
@@ -645,6 +697,64 @@ pub fn eval_binary_integer(
     }
 }
 
+/// Evaluate one binary operator in an integer constant expression.
+///
+/// Signed add, subtract, multiply and left shift wrap in the converted
+/// operand width. Division by zero and invalid shift counts remain failures;
+/// `MIN / -1` wraps to `MIN` and its paired remainder is zero. Runtime
+/// evaluation must continue to call [`eval_binary_integer`] so its UB
+/// diagnostics are unchanged.
+pub fn eval_constant_binary_integer(
+    op: BinaryOp,
+    left: CInteger,
+    right: CInteger,
+) -> Result<CInteger, IntegerError> {
+    if op == BinaryOp::Shl {
+        let left = left.promoted();
+        let right = right.promoted();
+        let shift = u32::try_from(right.mathematical_value())
+            .map_err(|_| IntegerError::InvalidShiftCount)?;
+        if shift >= u32::from(left.ty.bits()) {
+            return Err(IntegerError::InvalidShiftCount);
+        }
+        return Ok(CInteger::from_raw(left.raw_bits() << shift, left.ty));
+    }
+
+    if matches!(op, BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul) {
+        let (left, right, ty) = converted_pair(left, right);
+        let raw = match op {
+            BinaryOp::Add => left.raw_bits().wrapping_add(right.raw_bits()),
+            BinaryOp::Sub => left.raw_bits().wrapping_sub(right.raw_bits()),
+            BinaryOp::Mul => left.raw_bits().wrapping_mul(right.raw_bits()),
+            _ => unreachable!(),
+        };
+        return Ok(CInteger::from_raw(raw, ty));
+    }
+
+    if matches!(op, BinaryOp::Div | BinaryOp::Mod) {
+        let (left, right, ty) = converted_pair(left, right);
+        if right.raw_bits() == 0 {
+            return Err(if op == BinaryOp::Div {
+                IntegerError::DivisionByZero
+            } else {
+                IntegerError::RemainderByZero
+            });
+        }
+        if ty.is_signed()
+            && left.mathematical_value() == ty.signed_min()
+            && right.mathematical_value() == -1
+        {
+            return Ok(if op == BinaryOp::Div {
+                CInteger::from_raw(left.raw_bits(), ty)
+            } else {
+                CInteger::new(0, ty)
+            });
+        }
+    }
+
+    eval_binary_integer(op, left, right)
+}
+
 fn eval_integer_shift(
     op: BinaryOp,
     left: CInteger,
@@ -667,14 +777,14 @@ fn eval_integer_shift(
             integer_from_mathematical(value, left.ty)
                 .map_err(|_| IntegerError::InvalidSignedLeftShift)
         }
-        BinaryOp::Shl => Ok(CInteger::new(left.raw << shift, left.ty)),
+        BinaryOp::Shl => Ok(CInteger::from_raw(left.raw << shift, left.ty)),
         BinaryOp::Shr if left.ty.signed => integer_from_mathematical(
             left.mathematical_value()
                 .checked_shr(shift)
                 .ok_or(IntegerError::InvalidShiftCount)?,
             left.ty,
         ),
-        BinaryOp::Shr => Ok(CInteger::new(left.raw >> shift, left.ty)),
+        BinaryOp::Shr => Ok(CInteger::from_raw(left.raw >> shift, left.ty)),
         _ => unreachable!("shift helper called only for shifts"),
     }
 }

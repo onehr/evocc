@@ -162,6 +162,9 @@ pub enum InterpreterError {
     VarArgs {
         span: SourceSpan,
     },
+    WideInteger {
+        span: SourceSpan,
+    },
     UnsupportedDeclaration {
         feature: &'static str,
         span: SourceSpan,
@@ -272,6 +275,7 @@ impl InterpreterError {
             Self::UnreachableReached { .. } => "E3024",
             Self::ComputedGoto { .. } => "E3029",
             Self::VarArgs { .. } => "E3030",
+            Self::WideInteger { .. } => "E3033",
             Self::Memory { error, .. } => match error.runtime_diagnostic() {
                 Some(diagnostic) => diagnostic.code,
                 None => "E3007",
@@ -366,6 +370,7 @@ impl InterpreterError {
             Self::UnreachableReached { .. } => "unreachable-reached".to_owned(),
             Self::ComputedGoto { .. } => "not-lowered: computed-goto".to_owned(),
             Self::VarArgs { .. } => "not-lowered: varargs".to_owned(),
+            Self::WideInteger { .. } => "not-executed: wide-integer".to_owned(),
             Self::UnsupportedDeclaration { feature, .. } => {
                 format!("unsupported-interpreter-declaration: {feature}")
             }
@@ -409,6 +414,7 @@ impl InterpreterError {
             | Self::UnreachableReached { span }
             | Self::ComputedGoto { span }
             | Self::VarArgs { span }
+            | Self::WideInteger { span }
             | Self::UnsupportedDeclaration { span, .. }
             | Self::MalformedFunctionDeclaration { span, .. }
             | Self::DuplicateFunctionBody { span, .. }
@@ -1311,12 +1317,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let return_value = match (flow, return_integer) {
             (Flow::Return(Some(value)), Some(return_integer)) => Some(ScalarValue {
                 ty: return_type,
-                raw_bits: value.cast(return_integer).raw_bits(),
+                raw_bits: u64::try_from(value.cast(return_integer).raw_bits())
+                    .expect("executed integer width is at most 64 bits"),
             }),
             (Flow::Return(None), None) | (Flow::Normal, None) => None,
             (Flow::Normal, Some(return_integer)) if is_main => Some(ScalarValue {
                 ty: return_type,
-                raw_bits: CInteger::int(0).cast(return_integer).raw_bits(),
+                raw_bits: u64::try_from(CInteger::int(0).cast(return_integer).raw_bits())
+                    .expect("executed integer width is at most 64 bits"),
             }),
             (Flow::Return(None), Some(_)) => {
                 return Err(InterpreterError::UnsupportedStatement {
@@ -3243,6 +3251,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span,
                 });
             }
+            CHirExpr::BuiltinFrameAddress { .. } => {
+                return Err(InterpreterError::UnsupportedExpression {
+                    feature: "frame-address builtin",
+                    span,
+                });
+            }
             CHirExpr::BuiltinVarArgs { .. } => {
                 return Err(InterpreterError::VarArgs { span });
             }
@@ -4182,7 +4196,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             let return_value = match return_value {
                 Some(CValue::Integer(value)) => Some(ScalarValue {
                     ty: end.return_type,
-                    raw_bits: value.raw_bits(),
+                    raw_bits: u64::try_from(value.raw_bits())
+                        .expect("executed integer width is at most 64 bits"),
                 }),
                 Some(CValue::Pointer { .. } | CValue::FunctionPointer { .. }) => {
                     return Err(InterpreterError::UnsupportedExpression {
@@ -4215,11 +4230,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn integer_type(&self, ty: TypeId, span: SourceSpan) -> Result<CIntegerType, InterpreterError> {
-        if matches!(
-            self.unit.types().get(ty).map(|canonical| &canonical.kind),
-            Some(TypeKind::BuiltinVaList)
-        ) {
-            return Err(InterpreterError::VarArgs { span });
+        match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
+            Some(TypeKind::BuiltinVaList) => return Err(InterpreterError::VarArgs { span }),
+            Some(TypeKind::GnuInt128(_)) => {
+                return Err(InterpreterError::WideInteger { span });
+            }
+            _ => {}
         }
         canonical_integer_type(self.unit.types(), ty)
             .ok_or(InterpreterError::UnsupportedType { ty, span })
@@ -4441,6 +4457,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 })?;
         if matches!(canonical.kind, TypeKind::BuiltinVaList) {
             return Err(InterpreterError::VarArgs {
+                span: declaration.span,
+            });
+        }
+        if matches!(canonical.kind, TypeKind::GnuInt128(_)) {
+            return Err(InterpreterError::WideInteger {
                 span: declaration.span,
             });
         }
@@ -4944,7 +4965,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     };
                     address
                         .checked_scaled_offset(
-                            u128::from(subscript.raw_bits()),
+                            subscript.raw_bits(),
                             u16::from(subscript.ty().bits()),
                             signedness,
                             OffsetDirection::Add,
@@ -5219,19 +5240,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 if qualifiers.is_volatile {
                     let (memory, world) = self
                         .memory
-                        .volatile_store_integer(
-                            &self.world,
-                            address,
-                            layout,
-                            u128::from(value.raw_bits()),
-                        )
+                        .volatile_store_integer(&self.world, address, layout, value.raw_bits())
                         .map_err(|error| self.memory_error(error, span))?;
                     self.memory = memory;
                     self.world = world;
                 } else {
                     self.memory = self
                         .memory
-                        .store_integer(address, layout, u128::from(value.raw_bits()))
+                        .store_integer(address, layout, value.raw_bits())
                         .map_err(|error| self.memory_error(error, span))?;
                 }
                 Ok(CValue::Integer(value))
@@ -5864,7 +5880,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         };
         let value = pointer
             .checked_scaled_offset(
-                u128::from(index.raw_bits()),
+                index.raw_bits(),
                 u16::from(index.ty().bits()),
                 signedness,
                 direction,
@@ -6147,7 +6163,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirExpr::SizeOfExpr(..)
             | CHirExpr::AlignOf(..)
             | CHirExpr::BuiltinUnreachable { .. }
-            | CHirExpr::BuiltinReturnAddress { .. } => {}
+            | CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinFrameAddress { .. } => {}
         }
         Ok(())
     }
@@ -6821,6 +6838,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 feature: "return-address builtin",
                 span,
             }),
+            CHirExpr::BuiltinFrameAddress { .. } => Err(InterpreterError::UnsupportedExpression {
+                feature: "frame-address builtin",
+                span,
+            }),
             CHirExpr::BuiltinVarArgs { .. } => Err(InterpreterError::VarArgs { span }),
             CHirExpr::LabelAddress { .. } => Err(InterpreterError::ComputedGoto { span }),
             CHirExpr::CharLit(literal, _) => {
@@ -7032,6 +7053,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinFrameAddress { .. }
             | CHirExpr::BuiltinVarArgs { .. }
             | CHirExpr::Member(_, _, _)
             | CHirExpr::PtrMember(_, _, _)
@@ -7502,7 +7524,8 @@ fn push_static_initializer_children<'arena>(
         | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinUnreachable { .. }
-        | CHirExpr::BuiltinReturnAddress { .. } => {}
+        | CHirExpr::BuiltinReturnAddress { .. }
+        | CHirExpr::BuiltinFrameAddress { .. } => {}
     }
 }
 
@@ -7694,7 +7717,8 @@ fn collect_expression_symbols<'arena>(
         | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinUnreachable { .. }
-        | CHirExpr::BuiltinReturnAddress { .. } => {}
+        | CHirExpr::BuiltinReturnAddress { .. }
+        | CHirExpr::BuiltinFrameAddress { .. } => {}
     }
 }
 
@@ -7855,7 +7879,8 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinUnreachable { .. }
-        | CHirExpr::BuiltinReturnAddress { .. } => false,
+        | CHirExpr::BuiltinReturnAddress { .. }
+        | CHirExpr::BuiltinFrameAddress { .. } => false,
     }
 }
 
@@ -8143,7 +8168,8 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
         | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinUnreachable { .. }
-        | CHirExpr::BuiltinReturnAddress { .. } => false,
+        | CHirExpr::BuiltinReturnAddress { .. }
+        | CHirExpr::BuiltinFrameAddress { .. } => false,
     }
 }
 

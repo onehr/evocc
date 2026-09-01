@@ -325,63 +325,42 @@ fn exact_kernel_typedef_parses_and_applies_its_alignment() {
 }
 
 #[test]
-fn gnu_int128_value_semantics_fail_closed() {
-    let cases = [
-        (
-            "__int128 object = 1; int after;\n",
-            "E2202",
-            "invalid-initializer-type",
-            "1",
-        ),
-        (
-            "int f(void) { __int128 x; ++x; } int after;\n",
-            "E2102",
-            "invalid-update-operands",
-            "++x",
-        ),
-        (
-            "enum E { value = (__int128) 1 }; int after;\n",
-            "E1303",
-            "enumerator-value-is-not-an-integer-constant",
-            "(__int128) 1",
-        ),
-        (
-            "struct S { __int128 field : 1; }; int after;\n",
-            "E1305",
-            "bit-field-has-non-integer-type",
-            "__int128",
-        ),
-    ];
+fn gnu_int128_front_end_values_stop_at_the_execution_boundary() {
+    let accepted = SourceFile::new(
+        FileId::new(5_709),
+        "/virtual/day5/gnu-int128-front-end.c".into(),
+        concat!(
+            "__int128 object = 1;\n",
+            "enum E { value = (__int128) 1 };\n",
+            "int update(void) { __int128 x = 0; ++x; return (int)x; }\n",
+        )
+        .into(),
+    );
+    let arena = Arena::default();
+    let (_, diagnostic) = parse(&arena, &accepted);
+    assert!(
+        diagnostic.is_none(),
+        "front-end-complete wide values must parse: {diagnostic:?}",
+    );
 
-    for (index, (contents, code, message, rejected)) in cases.into_iter().enumerate() {
-        let source = SourceFile::new(
-            FileId::new(5_709 + index as u32),
-            format!("/virtual/day5/gnu-int128-fail-closed-{index}.c"),
-            contents.into(),
-        );
-        let arena = Arena::default();
-        let (unit, diagnostic) = parse(&arena, &source);
-        let diagnostic = diagnostic.expect("unsupported value consumer must be diagnosed");
-        assert_eq!(diagnostic.code, code, "source: {contents:?}");
-        assert_eq!(diagnostic.message, message, "source: {contents:?}");
-        assert_eq!(
-            written(&source, diagnostic.span),
-            rejected,
-            "source: {contents:?}",
-        );
-        assert!(
-            unit.declarations().iter().any(|declaration| matches!(
-                declaration,
-                CHirDecl::Object(object) if object.name.spelling == "after"
-            )),
-            "the recovery tail was lost: {contents:?}",
-        );
-    }
+    let refused_bit_field = SourceFile::new(
+        FileId::new(5_710),
+        "/virtual/day5/gnu-int128-bit-field.c".into(),
+        "struct S { __int128 field : 1; }; int after;\n".into(),
+    );
+    let arena = Arena::default();
+    let (unit, diagnostic) = parse(&arena, &refused_bit_field);
+    let diagnostic = diagnostic.expect("wide bit fields remain outside the profile");
+    assert_eq!(diagnostic.code, "E1305");
+    assert_eq!(diagnostic.message, "bit-field-has-non-integer-type");
+    assert_eq!(written(&refused_bit_field, diagnostic.span), "__int128");
+    assert!(unit.declarations().iter().any(|declaration| matches!(
+        declaration,
+        CHirDecl::Object(object) if object.name.spelling == "after"
+    )));
 
-    // Parsing an ordinary expression only preserves syntax in C-HIR; it does
-    // not claim that the Day-5 u64-backed integer engine can execute 128-bit
-    // values. The first actual execution consumer must reject the wide local
-    // before evaluating the expression.
+    // The shared constant kernel is 128-bit, but both execution engines keep
+    // the specification's explicit E3033 boundary.
     let source = SourceFile::new(
         FileId::new(5_713),
         "/virtual/day5/gnu-int128-interpreter-boundary.c".into(),
@@ -405,10 +384,7 @@ fn gnu_int128_value_semantics_fail_closed() {
     assert_eq!(written(&source, wide.specifier.span()), "__int128");
     assert_eq!(
         interpret_scalar_function(&unit, function.symbol, InterpreterLimits::default()),
-        Err(InterpreterError::UnsupportedType {
-            ty: wide.ty,
-            span: wide.span,
-        }),
-        "the u64-backed scalar interpreter must not narrow or execute __int128",
+        Err(InterpreterError::WideInteger { span: wide.span }),
+        "the scalar interpreter must not narrow or execute __int128",
     );
 }

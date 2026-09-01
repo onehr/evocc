@@ -947,9 +947,9 @@ fn pointer_expression_type(
         CHirExpr::Elvis(operand, fallback, _) => {
             conditional_pointer_type(symbols, types, operand, fallback)
         }
-        CHirExpr::LabelAddress { facts, .. } | CHirExpr::BuiltinReturnAddress { facts, .. } => {
-            converted_pointer_type(types, facts.ty())
-        }
+        CHirExpr::LabelAddress { facts, .. }
+        | CHirExpr::BuiltinReturnAddress { facts, .. }
+        | CHirExpr::BuiltinFrameAddress { facts, .. } => converted_pointer_type(types, facts.ty()),
         CHirExpr::Lit(_, _)
         | CHirExpr::FloatLit(_, _)
         | CHirExpr::CharLit(_, _)

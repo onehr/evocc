@@ -4,9 +4,10 @@ use std::collections::{HashMap, HashSet};
 use std::num::NonZeroUsize;
 
 use evocc_chir::integer::{
-    enum_integer_type, eval_binary_integer, eval_bit_builtin, eval_unary_integer,
-    floating_literal_to_integer, integer_literal_value, integer_type_for_rank,
-    rank_for_integer_type, usual_arithmetic_type, BitBuiltinOp, CInteger, CIntegerType,
+    enum_integer_type, eval_binary_integer, eval_bit_builtin, eval_constant_binary_integer,
+    eval_constant_unary_integer, floating_literal_to_integer, integer_literal_value,
+    integer_type_for_rank, rank_for_integer_type, usual_arithmetic_type, BitBuiltinOp, CInteger,
+    CIntegerType,
 };
 use evocc_chir::{
     attribute_query_target, builtin_constant_p, record_member_path, AppliedAttribute, AsmOperand,
@@ -361,6 +362,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     ) => TokenKind::BuiltinBit,
                     Some("__builtin_unreachable") => TokenKind::BuiltinUnreachable,
                     Some("__builtin_return_address") => TokenKind::BuiltinReturnAddress,
+                    Some("__builtin_frame_address") => TokenKind::BuiltinFrameAddress,
                     Some("__auto_type") => TokenKind::AutoType,
                     Some("__label__") => TokenKind::LocalLabel,
                     Some("__builtin_add_overflow") => TokenKind::BuiltinAddOverflow,
@@ -2038,6 +2040,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::CheckedArithmetic { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinFrameAddress { .. }
             | CHirExpr::BuiltinVarArgs { .. }
             | CHirExpr::Assign { .. }
             | CHirExpr::MemoryAssign { .. }
@@ -2167,6 +2170,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::CheckedArithmetic { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinFrameAddress { .. }
             | CHirExpr::BuiltinVarArgs { .. }
             | CHirExpr::Assign { .. }
             | CHirExpr::MemoryAssign { .. }
@@ -2889,18 +2893,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TypeKind::GnuInt128(_),
                 WrittenInitializer::Expression(expression),
             ) => {
-                if matches!(kind, TypeKind::GnuInt128(_))
-                    && !matches!(
-                        self.converted_expression_type(expression),
-                        Some(InferredExpressionType {
-                            ty: InferredType::Canonical(source),
-                            ..
-                        }) if self.same_unqualified_type(target, source)
-                    )
-                {
-                    self.report("E2202", "invalid-initializer-type", expression.span());
-                    return None;
-                }
                 if self.assignment_constraint(AssignmentOp::Simple, target, expression)
                     != UpdateConstraint::Scalar
                 {
@@ -3174,7 +3166,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let index = self
             .eval_integer_constant_expression(expression)
             .ok()
-            .and_then(|value| u64::try_from(value.mathematical_value()).ok());
+            .and_then(CInteger::try_mathematical_value)
+            .and_then(|value| u64::try_from(value).ok());
         let Some(index) = index else {
             self.report("E2906", "designator-outside-object", span);
             return None;
@@ -3866,7 +3859,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         argument.integer = self
             .eval_integer_constant_expression(expression)
             .ok()
-            .and_then(|value| u64::try_from(value.mathematical_value()).ok());
+            .and_then(CInteger::try_mathematical_value)
+            .and_then(|value| u64::try_from(value).ok());
         if argument.integer.is_none() {
             self.report("E2903", "malformed-attribute", argument.span);
             return None;
@@ -4778,9 +4772,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         };
 
-        let width = match self.eval_integer_constant_expression(width_expression) {
-            Ok(width) => width.mathematical_value(),
-            Err(()) => {
+        let width = match self
+            .eval_integer_constant_expression(width_expression)
+            .ok()
+            .and_then(CInteger::try_mathematical_value)
+        {
+            Some(width) => width,
+            None => {
                 self.report(
                     "E1303",
                     "bit-field-width-is-not-an-integer-constant",
@@ -4853,6 +4851,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let canonical = self.types.get(ty).ok_or(())?;
         match canonical.kind {
             TypeKind::Int(rank) => Ok(integer_type_for_rank(rank)),
+            TypeKind::GnuInt128(GnuInt128Signedness::Signed) => Ok(CIntegerType::INT128),
+            TypeKind::GnuInt128(GnuInt128Signedness::Unsigned) => Ok(CIntegerType::UINT128),
             TypeKind::Enum(tag) => {
                 let definition = self.types.tag(tag).ok_or(())?;
                 let TagState::Complete(TagDefinition::Enum(constants)) = &definition.state else {
@@ -4876,7 +4876,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             TypeKind::Void
             | TypeKind::BuiltinVaList
-            | TypeKind::GnuInt128(_)
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
             | TypeKind::Pointer(_)
@@ -4888,9 +4887,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn intern_c_integer_type(&mut self, ty: CIntegerType) -> TypeId {
-        let rank = rank_for_integer_type(ty)
-            .unwrap_or_else(|| unreachable!("unsupported target integer type: {ty:?}"));
-        self.intern(TypeKind::Int(rank), Qualifiers::default())
+        let kind = if ty == CIntegerType::INT128 {
+            TypeKind::GnuInt128(GnuInt128Signedness::Signed)
+        } else if ty == CIntegerType::UINT128 {
+            TypeKind::GnuInt128(GnuInt128Signedness::Unsigned)
+        } else {
+            TypeKind::Int(
+                rank_for_integer_type(ty)
+                    .unwrap_or_else(|| unreachable!("unsupported target integer type: {ty:?}")),
+            )
+        };
+        self.intern(kind, Qualifiers::default())
     }
 
     /// Evaluate the C11 integer constant-expression subset needed by enum
@@ -4909,13 +4916,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let SymbolData::Enumerator { value } = symbol.data() else {
                     return Err(());
                 };
-                Ok(CInteger::new(
-                    value as u64,
+                Ok(CInteger::from_raw(
+                    value as u128,
                     self.canonical_integer_type(symbol.ty())?,
                 ))
             }
             CHirExpr::Unary(op, operand, _) => {
-                eval_unary_integer(*op, self.eval_integer_constant_expression(operand)?)
+                eval_constant_unary_integer(*op, self.eval_integer_constant_expression(operand)?)
                     .map_err(|_| ())
             }
             CHirExpr::EvaluateOnce(operand, _) => self.eval_integer_constant_expression(operand),
@@ -4928,7 +4935,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     return Ok(CInteger::int(1));
                 }
                 let right = self.eval_integer_constant_expression(right)?;
-                eval_binary_integer(*op, left, right).map_err(|_| ())
+                eval_constant_binary_integer(*op, left, right).map_err(|_| ())
             }
             CHirExpr::Ternary(condition, when_true, when_false, _) => {
                 let selected = if self.eval_integer_constant_expression(condition)?.truth() {
@@ -4998,6 +5005,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::CheckedArithmetic { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinFrameAddress { .. }
             | CHirExpr::BuiltinVarArgs { .. }
             | CHirExpr::Member(_, _, _)
             | CHirExpr::PtrMember(_, _, _)
@@ -5116,6 +5124,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::Call(_, _, _)
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinFrameAddress { .. }
             | CHirExpr::BuiltinVarArgs { .. }
             | CHirExpr::Member(_, _, _)
             | CHirExpr::PtrMember(_, _, _)
@@ -5152,7 +5161,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             };
             let mathematical_value = if let Some(expression) = written_value {
                 self.eval_integer_constant_expression(expression)
-                    .map(CInteger::mathematical_value)
+                    .and_then(|value| value.try_mathematical_value().ok_or(()))
             } else {
                 next_value.ok_or(())
             };
@@ -5250,16 +5259,26 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn classify_array_bound(&mut self, expression: &CHirExpr<'_>) -> ArrayBound {
         match self.eval_integer_constant_expression(expression) {
-            Ok(value) if value.mathematical_value() < 0 => {
+            Ok(value)
+                if value
+                    .try_mathematical_value()
+                    .is_some_and(|value| value < 0) =>
+            {
                 self.report("E2923", "invalid-array-bound", expression.span());
                 // Preserve a concrete, non-VLA layer after the diagnostic so
                 // the declaration context cannot replace E2923 with E2203.
                 ArrayBound::Fixed(0)
             }
-            Ok(value) => ArrayBound::Fixed(
-                u64::try_from(value.mathematical_value())
-                    .expect("positive C integer values fit in u64"),
-            ),
+            Ok(value) => match value
+                .try_mathematical_value()
+                .and_then(|value| u64::try_from(value).ok())
+            {
+                Some(value) => ArrayBound::Fixed(value),
+                None => {
+                    self.report("E2923", "invalid-array-bound", expression.span());
+                    ArrayBound::Fixed(0)
+                }
+            },
             Err(()) => ArrayBound::Variable,
         }
     }
@@ -6278,7 +6297,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let converted = selector_type.and_then(|ty| {
             let first = self.eval_integer_constant_expression(first).ok()?.cast(ty);
             let last = self.eval_integer_constant_expression(last).ok()?.cast(ty);
-            Some((first.mathematical_value(), last.mathematical_value()))
+            Some((
+                first.try_mathematical_value()?,
+                last.try_mathematical_value()?,
+            ))
         });
         let Some((first, last)) = converted else {
             if require_constant {
@@ -7163,7 +7185,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn update_constraint(&self, target_ty: TypeId) -> UpdateConstraint {
         match self.operand_type_class(InferredType::Canonical(target_ty)) {
-            OperandTypeClass::Integer(_) | OperandTypeClass::Real(_) => UpdateConstraint::Scalar,
+            OperandTypeClass::Integer(_)
+            | OperandTypeClass::WideInteger { .. }
+            | OperandTypeClass::Real(_) => UpdateConstraint::Scalar,
             OperandTypeClass::Pointer(pointee) => {
                 if self.pointer_arithmetic_is_valid(pointee.pointee) {
                     UpdateConstraint::PointerBoundary
@@ -7171,8 +7195,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     UpdateConstraint::Invalid
                 }
             }
-            OperandTypeClass::WideInteger { .. }
-            | OperandTypeClass::Complex(_)
+            OperandTypeClass::Complex(_)
             | OperandTypeClass::StringPointer(_)
             | OperandTypeClass::Aggregate(_)
             | OperandTypeClass::Void
@@ -7403,6 +7426,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::BitBuiltin { facts, .. }
             | CHirExpr::BuiltinUnreachable { facts, .. }
             | CHirExpr::BuiltinReturnAddress { facts, .. }
+            | CHirExpr::BuiltinFrameAddress { facts, .. }
             | CHirExpr::BuiltinVarArgs { facts, .. }
             | CHirExpr::LabelAddress { facts, .. } => {
                 (InferredType::Canonical(facts.ty()), ExprCategory::Value)
@@ -7855,6 +7879,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if left.kind == right.kind {
             return true;
         }
+        if matches!(
+            (&left.kind, &right.kind),
+            (
+                TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar),
+                TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar)
+            )
+        ) {
+            return true;
+        }
         matches!(
             (&left.kind, &right.kind),
             (TypeKind::Void, right) if is_object_type_kind(right)
@@ -7897,7 +7930,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.integer_expression_type(expression).is_ok()
                 && self
                     .eval_integer_constant_expression(expression)
-                    .is_ok_and(|value| value.mathematical_value() == 0)
+                    .is_ok_and(|value| value.raw_bits() == 0)
         };
         if integer_zero() {
             return true;
@@ -7917,7 +7950,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.integer_expression_type(operand).is_ok()
             && self
                 .eval_integer_constant_expression(operand)
-                .is_ok_and(|value| value.mathematical_value() == 0)
+                .is_ok_and(|value| value.raw_bits() == 0)
     }
 
     fn parse_conditional(&mut self) -> Option<&'arena CHirExpr<'arena>> {
@@ -8424,6 +8457,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             TokenKind::BuiltinBit => return self.parse_builtin_bit(tok),
             TokenKind::BuiltinUnreachable => return self.parse_builtin_unreachable(tok),
             TokenKind::BuiltinReturnAddress => return self.parse_builtin_return_address(tok),
+            TokenKind::BuiltinFrameAddress => return self.parse_builtin_frame_address(tok),
             TokenKind::BuiltinAddOverflow => {
                 return self.parse_checked_arithmetic(tok, CheckedArithmeticOp::Add);
             }
@@ -8668,13 +8702,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                             CInteger::new(layout.size_bytes, CIntegerType::ULONG),
                         )
                         .ok()?;
-                        fixed_offset = eval_binary_integer(
-                            BinaryOp::Add,
-                            CInteger::new(fixed_offset, CIntegerType::ULONG),
-                            scaled,
+                        fixed_offset = u64::try_from(
+                            eval_binary_integer(
+                                BinaryOp::Add,
+                                CInteger::new(fixed_offset, CIntegerType::ULONG),
+                                scaled,
+                            )
+                            .ok()?
+                            .raw_bits(),
                         )
-                        .ok()?
-                        .raw_bits();
+                        .ok()?;
                     } else {
                         let Some(inferred) = self.converted_expression_type(index_expression)
                         else {
@@ -8859,7 +8896,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let Some(mode) = self
             .eval_integer_constant_expression(mode_expression)
             .ok()
-            .and_then(|value| u8::try_from(value.mathematical_value()).ok())
+            .and_then(CInteger::try_mathematical_value)
+            .and_then(|value| u8::try_from(value).ok())
             .filter(|mode| *mode <= 3)
         else {
             self.report("E2925", "builtin-mode-out-of-range", mode_expression.span());
@@ -9124,14 +9162,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let span = self.merge_span(keyword.span, close.span);
         if let Ok(value) = self.eval_integer_constant_expression(operand) {
             if let Some(result) = eval_bit_builtin(op, value.cast(parameter_integer)) {
-                return Some(self.alloc_node(CHirExpr::Lit(
-                    IntLit {
-                        value: result.raw_bits(),
-                        suffix: IntSuffix::None,
-                        base: IntBase::Dec,
-                    },
-                    span,
-                )));
+                return Some(
+                    self.alloc_node(CHirExpr::Lit(
+                        IntLit {
+                            value: u64::try_from(result.raw_bits())
+                                .expect("bit builtin result has type int"),
+                            suffix: IntSuffix::None,
+                            base: IntBase::Dec,
+                        },
+                        span,
+                    )),
+                );
             }
         }
         let converted = self.alloc_node(CHirExpr::Cast(parameter_ty, operand, operand.span()));
@@ -9163,6 +9204,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn parse_builtin_return_address(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        self.parse_builtin_stack_address(keyword, false)
+    }
+
+    fn parse_builtin_frame_address(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        self.parse_builtin_stack_address(keyword, true)
+    }
+
+    fn parse_builtin_stack_address(
+        &mut self,
+        keyword: Token,
+        frame_address: bool,
+    ) -> Option<&'arena CHirExpr<'arena>> {
         if self.peek_kind() != Some(TokenKind::LParen) {
             self.report("E2910", "builtin-not-called", keyword.span);
             return None;
@@ -9174,18 +9227,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         }
         let close = self.advance().expect("peeked builtin closing parenthesis");
-        if !self
+        let valid_argument = self
             .eval_integer_constant_expression(argument)
-            .is_ok_and(|value| value.raw_bits() == 0)
-        {
+            .is_ok_and(|value| frame_address || value.raw_bits() == 0);
+        if !valid_argument {
             self.report("E2913", "builtin-operand-not-convertible", argument.span());
             return None;
         }
         let void_ty = self.intern(TypeKind::Void, Qualifiers::default());
         let pointer_ty = self.intern(TypeKind::Pointer(void_ty), Qualifiers::default());
-        Some(self.alloc_node(CHirExpr::BuiltinReturnAddress {
-            facts: ExprFacts::value(pointer_ty),
-            span: self.merge_span(keyword.span, close.span),
+        let facts = ExprFacts::value(pointer_ty);
+        let span = self.merge_span(keyword.span, close.span);
+        Some(self.alloc_node(if frame_address {
+            CHirExpr::BuiltinFrameAddress { facts, span }
+        } else {
+            CHirExpr::BuiltinReturnAddress { facts, span }
         }))
     }
 
@@ -9611,6 +9667,7 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::BuiltinBit
             | TokenKind::BuiltinUnreachable
             | TokenKind::BuiltinReturnAddress
+            | TokenKind::BuiltinFrameAddress
             | TokenKind::BuiltinAddOverflow
             | TokenKind::BuiltinSubOverflow
             | TokenKind::BuiltinMulOverflow
@@ -9923,7 +9980,8 @@ fn collect_jump_regions_expr(
         | CHirExpr::SizeOf(..)
         | CHirExpr::AlignOf(..)
         | CHirExpr::BuiltinUnreachable { .. }
-        | CHirExpr::BuiltinReturnAddress { .. } => {}
+        | CHirExpr::BuiltinReturnAddress { .. }
+        | CHirExpr::BuiltinFrameAddress { .. } => {}
     }
 }
 
@@ -10136,7 +10194,8 @@ fn expression_references_symbol(expression: &CHirExpr<'_>, symbol: SymbolId) -> 
         | CHirExpr::SizeOf(..)
         | CHirExpr::AlignOf(..)
         | CHirExpr::BuiltinUnreachable { .. }
-        | CHirExpr::BuiltinReturnAddress { .. } => false,
+        | CHirExpr::BuiltinReturnAddress { .. }
+        | CHirExpr::BuiltinFrameAddress { .. } => false,
     }
 }
 
@@ -10521,6 +10580,10 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
             span: paren_span,
         },
         CHirExpr::BuiltinReturnAddress { facts, .. } => CHirExpr::BuiltinReturnAddress {
+            facts: *facts,
+            span: paren_span,
+        },
+        CHirExpr::BuiltinFrameAddress { facts, .. } => CHirExpr::BuiltinFrameAddress {
             facts: *facts,
             span: paren_span,
         },

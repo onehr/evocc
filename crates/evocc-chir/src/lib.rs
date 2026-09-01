@@ -439,6 +439,11 @@ pub enum CHirExpr<'arena> {
         facts: ExprFacts,
         span: SourceSpan,
     },
+    /// The accepted but deliberately IR-deferred frame-address builtin.
+    BuiltinFrameAddress {
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
     /// A GNU variable-argument operation retained until the target calling
     /// convention defines its execution. `second` is the last named parameter
     /// for `Start`, the source object for `Copy`, and absent for `End`.
@@ -555,6 +560,7 @@ impl CHirExpr<'_> {
             | Self::BitBuiltin { span, .. }
             | Self::BuiltinUnreachable { span, .. }
             | Self::BuiltinReturnAddress { span, .. }
+            | Self::BuiltinFrameAddress { span, .. }
             | Self::BuiltinVarArgs { span, .. }
             | Self::Cast(_, _, span)
             | Self::EvaluateOnce(_, span)
@@ -1506,7 +1512,8 @@ fn inventory_of_expression(expression: &CHirExpr<'_>, inventory: &mut AttributeI
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::AlignOf(_, _)
         | CHirExpr::BuiltinUnreachable { .. }
-        | CHirExpr::BuiltinReturnAddress { .. } => {}
+        | CHirExpr::BuiltinReturnAddress { .. }
+        | CHirExpr::BuiltinFrameAddress { .. } => {}
     }
 }
 
@@ -1720,7 +1727,8 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
             | CHirExpr::SizeOf(_, _)
             | CHirExpr::AlignOf(_, _)
             | CHirExpr::BuiltinUnreachable { .. }
-            | CHirExpr::BuiltinReturnAddress { .. } => {}
+            | CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinFrameAddress { .. } => {}
         }
     }
 

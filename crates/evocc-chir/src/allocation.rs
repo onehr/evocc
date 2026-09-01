@@ -1513,7 +1513,8 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             | CHirExpr::SizeOfExpr(_, _, _)
             | CHirExpr::AlignOf(_, _)
             | CHirExpr::BuiltinUnreachable { .. }
-            | CHirExpr::BuiltinReturnAddress { .. } => {}
+            | CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinFrameAddress { .. } => {}
         }
         Ok(())
     }

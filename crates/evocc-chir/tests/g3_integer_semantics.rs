@@ -100,7 +100,7 @@ fn promotions_usual_arithmetic_conversions_and_casts_are_target_typed() {
     let minus_one = CInteger::int(-1);
     assert_eq!(
         minus_one.cast(CIntegerType::UINT).raw_bits(),
-        u64::from(u32::MAX)
+        u128::from(u32::MAX)
     );
     assert_eq!(
         integer(257, CIntegerType::UINT)
@@ -201,7 +201,7 @@ fn unary_and_float_cast_edges_are_checked_by_the_same_kernel() {
         eval_unary_integer(UnaryOp::Neg, integer(1, CIntegerType::UINT))
             .unwrap()
             .raw_bits(),
-        u64::from(u32::MAX)
+        u128::from(u32::MAX)
     );
     assert_eq!(
         floating_literal_to_integer(

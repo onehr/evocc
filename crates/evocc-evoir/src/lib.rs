@@ -2719,6 +2719,7 @@ impl InterpreterError {
             Self::CallThroughNullFunctionPointer { .. } => "E3015",
             Self::CallThroughNonFunctionPointer { .. } => "E3016",
             Self::IndirectCallDynamicSignatureMismatch { .. } => "E3019",
+            Self::UnsupportedBitWidth { width: 128, .. } => "E3033",
             _ => "E3007",
         }
     }
@@ -2752,6 +2753,7 @@ impl InterpreterError {
             Self::IndirectCallDynamicSignatureMismatch { .. } => {
                 "indirect-call-dynamic-signature-mismatch".to_owned()
             }
+            Self::UnsupportedBitWidth { width: 128, .. } => "not-executed: wide-integer".to_owned(),
             _ => self.to_string(),
         }
     }
