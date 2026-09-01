@@ -74,6 +74,9 @@ pub enum LowerError {
     Asm {
         span: SourceSpan,
     },
+    VarArgs {
+        span: SourceSpan,
+    },
     MalformedFunction {
         function: String,
         span: SourceSpan,
@@ -111,6 +114,7 @@ impl fmt::Display for LowerError {
             Self::StaticRelocation { .. } => formatter.write_str("not-lowered: static-relocation"),
             Self::ComputedGoto { .. } => formatter.write_str("not-lowered: computed-goto"),
             Self::Asm { .. } => formatter.write_str("not-lowered: asm"),
+            Self::VarArgs { .. } => formatter.write_str("not-lowered: varargs"),
             Self::MalformedFunction {
                 function, reason, ..
             } => write!(formatter, "malformed function {function}: {reason}"),
@@ -138,6 +142,7 @@ impl LowerError {
             Self::ReturnAddress { .. } => "E3025",
             Self::StaticRelocation { .. } => "E3026",
             Self::ComputedGoto { .. } => "E3029",
+            Self::VarArgs { .. } => "E3030",
             _ => "E3101",
         }
     }
@@ -160,6 +165,7 @@ impl LowerError {
             | Self::StaticRelocation { span }
             | Self::ComputedGoto { span }
             | Self::Asm { span }
+            | Self::VarArgs { span }
             | Self::MalformedFunction { span, .. }
             | Self::InvalidControlFlow { span, .. }
             | Self::Layout { span, .. } => Some(*span),
@@ -471,6 +477,12 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                 expression(unit, lhs, out);
                 expression(unit, rhs, out);
                 expression(unit, target, out);
+            }
+            CHirExpr::BuiltinVarArgs { first, second, .. } => {
+                expression(unit, first, out);
+                if let Some(second) = second {
+                    expression(unit, second, out);
+                }
             }
             CHirExpr::Assign { target, value, .. } => {
                 expression(unit, target, out);
@@ -1294,6 +1306,7 @@ fn prevalidate_expr_for_lowering(
             Err(LowerError::CheckedArithmetic { span: *span })
         }
         CHirExpr::BitBuiltin { span, .. } => Err(LowerError::BitBuiltin { span: *span }),
+        CHirExpr::BuiltinVarArgs { span, .. } => Err(LowerError::VarArgs { span: *span }),
         CHirExpr::BuiltinReturnAddress { span, .. } => {
             Err(LowerError::ReturnAddress { span: *span })
         }
@@ -1509,10 +1522,8 @@ fn function_info(
             variadic: false,
         } => types,
         FunctionParameters::Prototype { variadic: true, .. } => {
-            return Err(LowerError::MalformedFunction {
-                function: function.name.spelling.clone(),
+            return Err(LowerError::VarArgs {
                 span: function.span,
-                reason: "variadic function is outside the Day-6 call contract",
             });
         }
         FunctionParameters::Unspecified if function.body.is_none() => &[],
@@ -1664,6 +1675,7 @@ fn function_value_type(
             ir: EvoIRType::Ptr(AddressSpace::Generic),
             integer: CIntegerType::ULONG,
         }),
+        Some(TypeKind::BuiltinVaList) => Err(LowerError::VarArgs { span }),
         _ => Err(LowerError::UnsupportedType {
             ty,
             span,
@@ -1996,6 +2008,12 @@ fn validate_object_declaration_for_lowering(
     unit: &CHirUnit<'_>,
     object: &ObjectDecl<'_>,
 ) -> Result<(), LowerError> {
+    if matches!(
+        unit.types().get(object.ty).map(|canonical| &canonical.kind),
+        Some(TypeKind::BuiltinVaList)
+    ) {
+        return Err(LowerError::VarArgs { span: object.span });
+    }
     let symbol = unit
         .symbols()
         .symbol(object.symbol)
@@ -4942,6 +4960,7 @@ impl<'a> FunctionLowerer<'a> {
                 Err(LowerError::CheckedArithmetic { span: *span })
             }
             CHirExpr::BitBuiltin { span, .. } => Err(LowerError::BitBuiltin { span: *span }),
+            CHirExpr::BuiltinVarArgs { span, .. } => Err(LowerError::VarArgs { span: *span }),
             CHirExpr::BuiltinReturnAddress { span, .. } => {
                 Err(LowerError::ReturnAddress { span: *span })
             }
@@ -7539,6 +7558,12 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
             collect_calls_expr(rhs, calls);
             collect_calls_expr(target, calls);
         }
+        CHirExpr::BuiltinVarArgs { first, second, .. } => {
+            collect_calls_expr(first, calls);
+            if let Some(second) = second {
+                collect_calls_expr(second, calls);
+            }
+        }
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::Cast(_, operand, _)
@@ -7834,6 +7859,12 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
             live_before_expr(rhs, live);
             live_before_expr(lhs, live);
         }
+        CHirExpr::BuiltinVarArgs { first, second, .. } => {
+            if let Some(second) = second {
+                live_before_expr(second, live);
+            }
+            live_before_expr(first, live);
+        }
         CHirExpr::CompoundLit(_, initializer, _) => {
             for action in initializer.plan().actions().iter().rev() {
                 if let InitAction::StoreScalar { value, .. }
@@ -8020,6 +8051,12 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
             collect_symbols_expr(lhs, symbols);
             collect_symbols_expr(rhs, symbols);
             collect_symbols_expr(target, symbols);
+        }
+        CHirExpr::BuiltinVarArgs { first, second, .. } => {
+            collect_symbols_expr(first, symbols);
+            if let Some(second) = second {
+                collect_symbols_expr(second, symbols);
+            }
         }
         CHirExpr::CompoundLit(_, initializer, _) => {
             for action in initializer.plan().actions() {

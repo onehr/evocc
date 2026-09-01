@@ -260,6 +260,16 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
             }
             CHirExpr::BuiltinUnreachable { .. } => "builtin_unreachable".to_owned(),
             CHirExpr::BuiltinReturnAddress { .. } => "builtin_return_address".to_owned(),
+            CHirExpr::BuiltinVarArgs {
+                op, first, second, ..
+            } => {
+                let first = self.expression(&format!("{path}.first"), first);
+                let second = second.map_or_else(
+                    || "none".to_owned(),
+                    |second| self.expression(&format!("{path}.second"), second),
+                );
+                format!("builtin_varargs({op:?},{first},{second})")
+            }
             CHirExpr::Cast(ty, child, _) => {
                 let ty = self.type_fingerprint(*ty);
                 let child = self.expression(&format!("{path}.operand"), child);

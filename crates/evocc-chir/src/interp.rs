@@ -159,6 +159,9 @@ pub enum InterpreterError {
     ComputedGoto {
         span: SourceSpan,
     },
+    VarArgs {
+        span: SourceSpan,
+    },
     UnsupportedDeclaration {
         feature: &'static str,
         span: SourceSpan,
@@ -268,6 +271,7 @@ impl InterpreterError {
             Self::BitBuiltinZeroOperand { .. } => "E3022",
             Self::UnreachableReached { .. } => "E3024",
             Self::ComputedGoto { .. } => "E3029",
+            Self::VarArgs { .. } => "E3030",
             Self::Memory { error, .. } => match error.runtime_diagnostic() {
                 Some(diagnostic) => diagnostic.code,
                 None => "E3007",
@@ -361,6 +365,7 @@ impl InterpreterError {
             Self::BitBuiltinZeroOperand { .. } => "bit-builtin-zero-operand".to_owned(),
             Self::UnreachableReached { .. } => "unreachable-reached".to_owned(),
             Self::ComputedGoto { .. } => "not-lowered: computed-goto".to_owned(),
+            Self::VarArgs { .. } => "not-lowered: varargs".to_owned(),
             Self::UnsupportedDeclaration { feature, .. } => {
                 format!("unsupported-interpreter-declaration: {feature}")
             }
@@ -403,6 +408,7 @@ impl InterpreterError {
             | Self::BitBuiltinZeroOperand { span }
             | Self::UnreachableReached { span }
             | Self::ComputedGoto { span }
+            | Self::VarArgs { span }
             | Self::UnsupportedDeclaration { span, .. }
             | Self::MalformedFunctionDeclaration { span, .. }
             | Self::DuplicateFunctionBody { span, .. }
@@ -3242,6 +3248,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span,
                 });
             }
+            CHirExpr::BuiltinVarArgs { .. } => {
+                return Err(InterpreterError::VarArgs { span });
+            }
             CHirExpr::LabelAddress { .. } => {
                 return Err(InterpreterError::ComputedGoto { span });
             }
@@ -4211,6 +4220,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn integer_type(&self, ty: TypeId, span: SourceSpan) -> Result<CIntegerType, InterpreterError> {
+        if matches!(
+            self.unit.types().get(ty).map(|canonical| &canonical.kind),
+            Some(TypeKind::BuiltinVaList)
+        ) {
+            return Err(InterpreterError::VarArgs { span });
+        }
         canonical_integer_type(self.unit.types(), ty)
             .ok_or(InterpreterError::UnsupportedType { ty, span })
     }
@@ -4241,6 +4256,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         ty: TypeId,
         span: SourceSpan,
     ) -> Result<AccessLayout, InterpreterError> {
+        if matches!(
+            self.unit.types().get(ty).map(|canonical| &canonical.kind),
+            Some(TypeKind::BuiltinVaList)
+        ) {
+            return Err(InterpreterError::VarArgs { span });
+        }
         self.target
             .layout_of(self.unit.types(), ty)
             .map(AccessLayout::from_type_layout)
@@ -4423,6 +4444,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ty: declaration.ty,
                     span: declaration.span,
                 })?;
+        if matches!(canonical.kind, TypeKind::BuiltinVaList) {
+            return Err(InterpreterError::VarArgs {
+                span: declaration.span,
+            });
+        }
         // Aggregates are storage like any other object here: the interpreter
         // never materialises one as a value, it only ever accesses subobjects
         // through a place, so admitting them costs nothing in the value model.
@@ -6022,6 +6048,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 self.predeclare_expr(target)?;
             }
             CHirExpr::BitBuiltin { operand, .. } => self.predeclare_expr(operand)?,
+            CHirExpr::BuiltinVarArgs { first, second, .. } => {
+                self.predeclare_expr(first)?;
+                if let Some(second) = second {
+                    self.predeclare_expr(second)?;
+                }
+            }
             CHirExpr::Assign { target, value, .. } => {
                 self.predeclare_expr(target)?;
                 self.predeclare_expr(value)?;
@@ -6730,6 +6762,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 feature: "return-address builtin",
                 span,
             }),
+            CHirExpr::BuiltinVarArgs { .. } => Err(InterpreterError::VarArgs { span }),
             CHirExpr::LabelAddress { .. } => Err(InterpreterError::ComputedGoto { span }),
             CHirExpr::CharLit(literal, _) => {
                 Ok(CInteger::new(u64::from(literal.value), CIntegerType::INT))
@@ -6940,6 +6973,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinVarArgs { .. }
             | CHirExpr::Member(_, _, _)
             | CHirExpr::PtrMember(_, _, _)
             | CHirExpr::Index(_, _, _)
@@ -7370,6 +7404,12 @@ fn push_static_initializer_children<'arena>(
             push(rhs);
             push(target);
         }
+        CHirExpr::BuiltinVarArgs { first, second, .. } => {
+            push(first);
+            if let Some(second) = second {
+                push(second);
+            }
+        }
         CHirExpr::CompoundLit(_, initializer, _) => {
             for action in initializer.plan().actions() {
                 if let InitAction::StoreScalar { value, .. } = action {
@@ -7560,6 +7600,12 @@ fn collect_expression_symbols<'arena>(
             collect_expression_symbols(rhs, output);
             collect_expression_symbols(target, output);
         }
+        CHirExpr::BuiltinVarArgs { first, second, .. } => {
+            collect_expression_symbols(first, output);
+            if let Some(second) = second {
+                collect_expression_symbols(second, output);
+            }
+        }
         CHirExpr::StatementExpr { body, .. } => collect_statement_symbols(body, output),
         CHirExpr::CompoundLit(_, initializer, _) => {
             for action in initializer.plan().actions() {
@@ -7733,6 +7779,10 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         // does not overflow, so checked arithmetic always selects the explicit
         // memory task machine.
         CHirExpr::CheckedArithmetic { .. } => true,
+        CHirExpr::BuiltinVarArgs { first, second, .. } => {
+            expression_requires_memory(unit, first)
+                || second.is_some_and(|second| expression_requires_memory(unit, second))
+        }
         CHirExpr::StatementExpr { body, .. } => statement_requires_memory(unit, body),
         CHirExpr::Assign { target, value, .. } => {
             expression_requires_memory(unit, target) || expression_requires_memory(unit, value)
@@ -7973,6 +8023,10 @@ fn expression_contains_call(expression: &CHirExpr<'_>) -> bool {
             expression_contains_call(lhs)
                 || expression_contains_call(rhs)
                 || expression_contains_call(target)
+        }
+        CHirExpr::BuiltinVarArgs { first, second, .. } => {
+            expression_contains_call(first)
+                || second.is_some_and(|second| expression_contains_call(second))
         }
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::EvaluateOnce(operand, _)

@@ -53,6 +53,7 @@ pub fn validate_front_end_builtin_records(
                     return Err(*span);
                 }
             }
+            FrontEndBuiltinRecord::HasAttribute { .. } => {}
         }
     }
     Ok(())
@@ -148,6 +149,7 @@ fn eval_integer_constant(
         | CHirExpr::CheckedArithmetic { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
+        | CHirExpr::BuiltinVarArgs { .. }
         | CHirExpr::Member(_, _, _)
         | CHirExpr::PtrMember(_, _, _)
         | CHirExpr::Index(_, _, _)
@@ -294,6 +296,8 @@ fn integer_expression_type(
         | CHirExpr::PtrMember(_, _, _)
         | CHirExpr::Index(_, _, _)
         | CHirExpr::CompoundLit(_, _, _) => None,
-        CHirExpr::BuiltinUnreachable { .. } | CHirExpr::BuiltinReturnAddress { .. } => None,
+        CHirExpr::BuiltinUnreachable { .. }
+        | CHirExpr::BuiltinReturnAddress { .. }
+        | CHirExpr::BuiltinVarArgs { .. } => None,
     }
 }

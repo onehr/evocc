@@ -100,6 +100,10 @@ pub enum TokenKind {
     BuiltinTypesCompatibleP,
     BuiltinOffsetof,
     BuiltinObjectSize,
+    BuiltinHasAttribute,
+    BuiltinVaStart,
+    BuiltinVaEnd,
+    BuiltinVaCopy,
     /// GNU bit operations and control/introspection builtins, promoted only
     /// after preprocessing.
     BuiltinBit,

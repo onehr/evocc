@@ -43,8 +43,8 @@ fn assert_varargs_error(source: &str) {
     let error =
         interpret_scalar_function(&unit, main_symbol(&unit), InterpreterLimits::new(100_000))
             .expect_err("varargs execution must fail closed");
-    assert_eq!(error.code(), "E3030");
-    assert_eq!(error.message(), "not-lowered: varargs");
+    assert_eq!(error.code(), "E3030", "{error:?}");
+    assert_eq!(error.message(), "not-lowered: varargs", "{error:?}");
 }
 
 #[test]
@@ -52,6 +52,11 @@ fn direct_expression_interpreter_reports_e3030() {
     assert_varargs_error(
         "int main(void) { __builtin_va_list ap; __builtin_va_end(ap); return 0; }\n",
     );
+}
+
+#[test]
+fn variable_argument_objects_fail_before_generic_layout_errors() {
+    assert_varargs_error("int main(void) { __builtin_va_list ap; return 0; }\n");
 }
 
 #[test]

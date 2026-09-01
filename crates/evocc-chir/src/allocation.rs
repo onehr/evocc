@@ -1398,6 +1398,18 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                     });
                 }
             }
+            CHirExpr::BuiltinVarArgs { first, second, .. } => {
+                if let Some(second) = second {
+                    work.push(WorkItem::Expression {
+                        expression: second,
+                        current_function,
+                    });
+                }
+                work.push(WorkItem::Expression {
+                    expression: first,
+                    current_function,
+                });
+            }
             CHirExpr::Assign { target, value, .. } => {
                 for expression in [value, target] {
                     work.push(WorkItem::Expression {

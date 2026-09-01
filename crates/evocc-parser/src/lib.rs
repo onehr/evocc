@@ -19,7 +19,8 @@ use evocc_chir::{
     ScalarPlace, ScopeId, ScopeKind, SpannedName, StorageClass, StringLit, StringPrefix,
     SubobjectPath, SubobjectStep, SymbolData, SymbolId, SymbolKind, SymbolTable, SymbolTableError,
     TagDecl, TagMembers, TypeSpecifier, TypedefDecl, TypeofOperand, UnaryOp, UpdateOp,
-    WrittenDeclarator, WrittenDeclaratorLayer, WrittenDesignator, WrittenInitializer,
+    VarArgsBuiltinOp, WrittenDeclarator, WrittenDeclaratorLayer, WrittenDesignator,
+    WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_cpp::{pragma_pack_action, PragmaPackAction};
@@ -216,8 +217,14 @@ struct DeclarationTransaction {
     entity_undo: usize,
     external_entity_undo: usize,
     inherited_function_parameter_undo: usize,
+    entity_attribute_undo: usize,
+    member_attribute_undo: usize,
     side_declarations: usize,
 }
+
+type AttributeNames = HashSet<String>;
+type MemberAttributeKey = (TagId, usize);
+type MemberAttributeUndo = (MemberAttributeKey, Option<AttributeNames>);
 
 #[derive(Debug, Clone)]
 struct TemporaryParameterShadow {
@@ -257,14 +264,24 @@ pub struct Parser<'src, 'arena> {
     /// `typeof(function-designator)` have no written function suffix of their
     /// own, so the named source declaration is their prototype authority.
     inherited_function_parameters: HashMap<SymbolId, ParameterSyntax>,
+    /// Canonical names of attributes written on ordinary declarations. This
+    /// is a parser-time index over the lossless C-HIR inventory, not a second
+    /// semantic attribute model.
+    entity_attributes: HashMap<SymbolId, AttributeNames>,
+    /// Canonical names of attributes written on record members, keyed by the
+    /// same nominal tag and field index used by `FieldProjection`.
+    member_attributes: HashMap<MemberAttributeKey, AttributeNames>,
     entities: HashMap<SymbolId, EntityState>,
     external_entities: HashMap<String, SymbolId>,
     entity_undo: Vec<(SymbolId, Option<EntityState>)>,
     external_entity_undo: Vec<(String, Option<SymbolId>)>,
     inherited_function_parameter_undo: Vec<(SymbolId, Option<ParameterSyntax>)>,
+    entity_attribute_undo: Vec<(SymbolId, Option<AttributeNames>)>,
+    member_attribute_undo: Vec<MemberAttributeUndo>,
     declaration_transaction_depth: usize,
     side_declarations: Vec<&'arena CHirDecl<'arena>>,
     loop_depth: usize,
+    current_function_parameters: Option<ParameterSyntax>,
     /// Attributes on labels and type names, which have no declaration node.
     detached_attributes: Vec<Attribute>,
     generic_selections: Vec<GenericSelectionRecord>,
@@ -319,6 +336,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__builtin_types_compatible_p") => TokenKind::BuiltinTypesCompatibleP,
                     Some("__builtin_offsetof") => TokenKind::BuiltinOffsetof,
                     Some("__builtin_object_size") => TokenKind::BuiltinObjectSize,
+                    Some("__builtin_has_attribute") => TokenKind::BuiltinHasAttribute,
+                    Some("__builtin_va_start") => TokenKind::BuiltinVaStart,
+                    Some("__builtin_va_end") => TokenKind::BuiltinVaEnd,
+                    Some("__builtin_va_copy") => TokenKind::BuiltinVaCopy,
                     Some(
                         "__builtin_ffs"
                         | "__builtin_ffsl"
@@ -364,14 +385,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             current_scope,
             temporary_parameter_shadows: Vec::new(),
             inherited_function_parameters: HashMap::new(),
+            entity_attributes: HashMap::new(),
+            member_attributes: HashMap::new(),
             entities: HashMap::new(),
             external_entities: HashMap::new(),
             entity_undo: Vec::new(),
             external_entity_undo: Vec::new(),
             inherited_function_parameter_undo: Vec::new(),
+            entity_attribute_undo: Vec::new(),
+            member_attribute_undo: Vec::new(),
             declaration_transaction_depth: 0,
             side_declarations: Vec::new(),
             loop_depth: 0,
+            current_function_parameters: None,
             detached_attributes: Vec::new(),
             generic_selections: Vec::new(),
             front_end_builtins: Vec::new(),
@@ -694,6 +720,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             entity_undo: self.entity_undo.len(),
             external_entity_undo: self.external_entity_undo.len(),
             inherited_function_parameter_undo: self.inherited_function_parameter_undo.len(),
+            entity_attribute_undo: self.entity_attribute_undo.len(),
+            member_attribute_undo: self.member_attribute_undo.len(),
             side_declarations: self.side_declarations.len(),
         }
     }
@@ -706,11 +734,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.inherited_function_parameter_undo.len()
                 >= transaction.inherited_function_parameter_undo
         );
+        debug_assert!(self.entity_attribute_undo.len() >= transaction.entity_attribute_undo);
+        debug_assert!(self.member_attribute_undo.len() >= transaction.member_attribute_undo);
         self.declaration_transaction_depth -= 1;
         if self.declaration_transaction_depth == 0 {
             self.entity_undo.clear();
             self.external_entity_undo.clear();
             self.inherited_function_parameter_undo.clear();
+            self.entity_attribute_undo.clear();
+            self.member_attribute_undo.clear();
         }
     }
 
@@ -756,6 +788,34 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
             }
         }
+        while self.entity_attribute_undo.len() > transaction.entity_attribute_undo {
+            let (symbol, previous) = self
+                .entity_attribute_undo
+                .pop()
+                .expect("undo marker is bounded");
+            match previous {
+                Some(previous) => {
+                    self.entity_attributes.insert(symbol, previous);
+                }
+                None => {
+                    self.entity_attributes.remove(&symbol);
+                }
+            }
+        }
+        while self.member_attribute_undo.len() > transaction.member_attribute_undo {
+            let (field, previous) = self
+                .member_attribute_undo
+                .pop()
+                .expect("undo marker is bounded");
+            match previous {
+                Some(previous) => {
+                    self.member_attributes.insert(field, previous);
+                }
+                None => {
+                    self.member_attributes.remove(&field);
+                }
+            }
+        }
         self.side_declarations
             .truncate(transaction.side_declarations);
         self.declaration_transaction_depth -= 1;
@@ -763,6 +823,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.entity_undo.clear();
             self.external_entity_undo.clear();
             self.inherited_function_parameter_undo.clear();
+            self.entity_attribute_undo.clear();
+            self.member_attribute_undo.clear();
         }
     }
 
@@ -787,6 +849,33 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if self.declaration_transaction_depth > 0 {
             self.inherited_function_parameter_undo
                 .push((symbol, previous));
+        }
+    }
+
+    fn add_entity_attributes(&mut self, symbol: SymbolId, attributes: &[Attribute]) {
+        if attributes.is_empty() {
+            return;
+        }
+        let previous = self.entity_attributes.get(&symbol).cloned();
+        let names = self.entity_attributes.entry(symbol).or_default();
+        names.extend(attributes.iter().map(|attribute| attribute.name.clone()));
+        if self.declaration_transaction_depth > 0 {
+            self.entity_attribute_undo.push((symbol, previous));
+        }
+    }
+
+    fn set_member_attributes(&mut self, tag: TagId, field_index: usize, attributes: &[Attribute]) {
+        let key = (tag, field_index);
+        let previous = self.member_attributes.get(&key).cloned();
+        self.member_attributes.insert(
+            key,
+            attributes
+                .iter()
+                .map(|attribute| attribute.name.clone())
+                .collect(),
+        );
+        if self.declaration_transaction_depth > 0 {
+            self.member_attribute_undo.push((key, previous));
         }
     }
 
@@ -1333,6 +1422,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 SymbolData::Function { storage },
                 full_type,
             );
+            self.add_entity_attributes(symbol, &attributes);
             let has_body = self.peek_kind() == Some(TokenKind::LBrace);
             if has_body && inherited_from_specifier {
                 self.report("E1001", "expected-declaration", self.span());
@@ -1346,7 +1436,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let outer_scope = self.current_scope;
                 self.current_scope = parameter_scope;
                 self.bind_parameters(&mut parameters);
+                let outer_parameters = self.current_function_parameters.replace(parameters.clone());
                 let body = self.parse_function_body();
+                self.current_function_parameters = outer_parameters;
                 self.validate_asm_goto_labels(body)?;
                 self.validate_statement_expression_jumps(body)?;
                 self.current_scope = outer_scope;
@@ -1470,6 +1562,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 None
             };
             let symbol = self.declare_symbol(&declarator.name, symbol_data, full_type);
+            self.add_entity_attributes(symbol, &attributes);
             full_type = self
                 .symbols
                 .symbol(symbol)
@@ -1940,6 +2033,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::CheckedArithmetic { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinVarArgs { .. }
             | CHirExpr::Assign { .. }
             | CHirExpr::MemoryAssign { .. }
             | CHirExpr::Update { .. }
@@ -2067,6 +2161,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::CheckedArithmetic { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinVarArgs { .. }
             | CHirExpr::Assign { .. }
             | CHirExpr::MemoryAssign { .. }
             | CHirExpr::Update { .. }
@@ -3415,13 +3510,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 parameter.symbol = None;
                 continue;
             };
-            parameter.symbol = Some(self.declare_symbol(
+            let symbol = self.declare_symbol(
                 name,
                 SymbolData::Parameter {
                     storage: StorageClass::None,
                 },
                 parameter.ty,
-            ));
+            );
+            self.add_entity_attributes(symbol, &parameter.attributes);
+            parameter.symbol = Some(symbol);
         }
     }
 
@@ -4543,6 +4640,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     },
                     |decl| self.written_declarator(decl),
                 );
+                self.set_member_attributes(containing_tag, canonical.len(), &member_attributes);
                 canonical.push(RecordField {
                     layout: member_layout,
                     name: name.as_ref().map(|name| name.spelling.clone()),
@@ -4882,6 +4980,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::CheckedArithmetic { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinVarArgs { .. }
             | CHirExpr::Member(_, _, _)
             | CHirExpr::PtrMember(_, _, _)
             | CHirExpr::Index(_, _, _)
@@ -4999,6 +5098,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::Call(_, _, _)
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinVarArgs { .. }
             | CHirExpr::Member(_, _, _)
             | CHirExpr::PtrMember(_, _, _)
             | CHirExpr::Index(_, _, _)
@@ -7378,6 +7478,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::BitBuiltin { facts, .. }
             | CHirExpr::BuiltinUnreachable { facts, .. }
             | CHirExpr::BuiltinReturnAddress { facts, .. }
+            | CHirExpr::BuiltinVarArgs { facts, .. }
             | CHirExpr::LabelAddress { facts, .. } => {
                 (InferredType::Canonical(facts.ty()), ExprCategory::Value)
             }
@@ -8356,6 +8457,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             TokenKind::BuiltinOffsetof => return self.parse_builtin_offsetof(tok),
             TokenKind::BuiltinObjectSize => return self.parse_builtin_object_size(tok),
+            TokenKind::BuiltinHasAttribute => return self.parse_builtin_has_attribute(tok),
+            TokenKind::BuiltinVaStart => {
+                return self.parse_builtin_varargs(tok, VarArgsBuiltinOp::Start);
+            }
+            TokenKind::BuiltinVaEnd => {
+                return self.parse_builtin_varargs(tok, VarArgsBuiltinOp::End);
+            }
+            TokenKind::BuiltinVaCopy => {
+                return self.parse_builtin_varargs(tok, VarArgsBuiltinOp::Copy);
+            }
             TokenKind::BuiltinBit => return self.parse_builtin_bit(tok),
             TokenKind::BuiltinUnreachable => return self.parse_builtin_unreachable(tok),
             TokenKind::BuiltinReturnAddress => return self.parse_builtin_return_address(tok),
@@ -8754,6 +8865,218 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let negative_one = self.alloc_node(CHirExpr::Unary(UnaryOp::Neg, one, span));
         let size_ty = self.intern_c_integer_type(CIntegerType::ULONG);
         Some(self.alloc_node(CHirExpr::Cast(size_ty, negative_one, span)))
+    }
+
+    fn parse_builtin_has_attribute(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        if self.peek_kind() != Some(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        self.advance();
+        let is_type_name = self
+            .peek()
+            .is_some_and(|token| self.token_starts_type_name(token));
+        let (operand, tag_event) = if is_type_name {
+            let (_, tag_event) = self.parse_type_name()?;
+            (None, tag_event)
+        } else {
+            (Some(self.parse_argument_expression()?), None)
+        };
+        if !self.match_kind(TokenKind::Comma) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let attribute = self.advance()?;
+        if attribute.kind != TokenKind::Identifier {
+            self.report("E2909", "builtin-arity", attribute.span);
+            return None;
+        }
+        let attribute_name = Attribute::canonical_name(self.token_text(&attribute));
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance().expect("peeked builtin closing parenthesis");
+        let span = self.merge_span(keyword.span, close.span);
+        if let Some(event) = tag_event {
+            let declaration = self.finish_tag_event(event, span, Vec::new());
+            self.side_declarations.push(declaration);
+        }
+        let result = operand.is_some_and(|expression| {
+            self.expression_designates_written_attribute(expression, &attribute_name)
+        });
+        self.front_end_builtins
+            .push(FrontEndBuiltinRecord::HasAttribute {
+                span,
+                operand,
+                attribute: attribute_name,
+                result,
+            });
+
+        let literal = self.alloc_node(CHirExpr::Lit(
+            IntLit {
+                value: u64::from(result),
+                suffix: IntSuffix::None,
+                base: IntBase::Dec,
+            },
+            span,
+        ));
+        let bool_ty = self.intern(TypeKind::Int(IntRank::Bool), Qualifiers::default());
+        Some(self.alloc_node(CHirExpr::Cast(bool_ty, literal, span)))
+    }
+
+    fn expression_designates_written_attribute(
+        &self,
+        expression: &CHirExpr<'arena>,
+        attribute: &str,
+    ) -> bool {
+        match expression {
+            CHirExpr::Ident { symbol, .. } => self
+                .entity_attributes
+                .get(symbol)
+                .is_some_and(|attributes| attributes.contains(attribute)),
+            CHirExpr::Member(base, name, _) => {
+                let Some(InferredType::Canonical(base_ty)) =
+                    self.expression_type(base).map(|inferred| inferred.ty)
+                else {
+                    return false;
+                };
+                self.record_member_path(base_ty, name)
+                    .and_then(|path| path.last().copied())
+                    .is_some_and(|field| {
+                        self.member_attributes
+                            .get(&(field.tag(), field.field_index()))
+                            .is_some_and(|attributes| attributes.contains(attribute))
+                    })
+            }
+            CHirExpr::PtrMember(pointer, name, _) => {
+                let Some(inferred) = self.converted_expression_type(pointer) else {
+                    return false;
+                };
+                let OperandTypeClass::Pointer(pointee) = self.operand_type_class(inferred.ty)
+                else {
+                    return false;
+                };
+                self.record_member_path(pointee.pointee, name)
+                    .and_then(|path| path.last().copied())
+                    .is_some_and(|field| {
+                        self.member_attributes
+                            .get(&(field.tag(), field.field_index()))
+                            .is_some_and(|attributes| attributes.contains(attribute))
+                    })
+            }
+            CHirExpr::MemoryRead { place, .. } => place
+                .projections()
+                .iter()
+                .rev()
+                .find_map(|projection| match projection {
+                    PlaceProjection::Field(field) => Some((field.tag(), field.field_index())),
+                    PlaceProjection::Index(_) => None,
+                })
+                .and_then(|field| self.member_attributes.get(&field))
+                .is_some_and(|attributes| attributes.contains(attribute)),
+            CHirExpr::Cast(_, operand, _) | CHirExpr::EvaluateOnce(operand, _) => {
+                self.expression_designates_written_attribute(operand, attribute)
+            }
+            CHirExpr::Comma(_, right, _) => {
+                self.expression_designates_written_attribute(right, attribute)
+            }
+            _ => false,
+        }
+    }
+
+    fn parse_builtin_varargs(
+        &mut self,
+        keyword: Token,
+        op: VarArgsBuiltinOp,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        if self.peek_kind() != Some(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        self.advance();
+        if self.peek_kind() == Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let first = self.parse_argument_expression()?;
+        let second = match op {
+            VarArgsBuiltinOp::Start | VarArgsBuiltinOp::Copy => {
+                if !self.match_kind(TokenKind::Comma) {
+                    self.report("E2909", "builtin-arity", keyword.span);
+                    return None;
+                }
+                Some(self.parse_argument_expression()?)
+            }
+            VarArgsBuiltinOp::End => None,
+        };
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance().expect("peeked builtin closing parenthesis");
+
+        let mut va_list_operands = vec![first];
+        if op == VarArgsBuiltinOp::Copy {
+            va_list_operands.push(second.expect("copy parsed its source operand"));
+        }
+        if let Some(invalid) = va_list_operands
+            .into_iter()
+            .find(|operand| !self.expression_is_va_list_object(operand))
+        {
+            self.report("E2913", "builtin-operand-not-convertible", invalid.span());
+            return None;
+        }
+
+        if op == VarArgsBuiltinOp::Start {
+            let parameter = second.expect("va_start parsed its parameter operand");
+            let valid_parameter = match (self.current_function_parameters.as_ref(), parameter) {
+                (
+                    Some(ParameterSyntax::Prototype {
+                        parameters,
+                        variadic: true,
+                    }),
+                    CHirExpr::Ident { symbol, .. },
+                ) => parameters
+                    .iter()
+                    .rev()
+                    .find_map(|parameter| parameter.symbol)
+                    .is_some_and(|last| last == *symbol),
+                _ => false,
+            };
+            if !valid_parameter {
+                self.report(
+                    "E2926",
+                    "va-start-outside-variadic-function",
+                    parameter.span(),
+                );
+                return None;
+            }
+        }
+
+        let void_ty = self.intern(TypeKind::Void, Qualifiers::default());
+        Some(self.alloc_node(CHirExpr::BuiltinVarArgs {
+            op,
+            first,
+            second,
+            facts: ExprFacts::value(void_ty),
+            span: self.merge_span(keyword.span, close.span),
+        }))
+    }
+
+    fn expression_is_va_list_object(&self, expression: &CHirExpr<'arena>) -> bool {
+        let Some(InferredExpressionType {
+            ty: InferredType::Canonical(ty),
+            category: ExprCategory::LValue,
+            ..
+        }) = self.expression_type(expression)
+        else {
+            return false;
+        };
+        matches!(
+            self.types.get(ty).map(|ty| &ty.kind),
+            Some(TypeKind::BuiltinVaList)
+        )
     }
 
     fn offsetof_field(&self, record_ty: TypeId, name: &str) -> Option<(u64, TypeId)> {
@@ -9283,6 +9606,10 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::BuiltinTypesCompatibleP
             | TokenKind::BuiltinOffsetof
             | TokenKind::BuiltinObjectSize
+            | TokenKind::BuiltinHasAttribute
+            | TokenKind::BuiltinVaStart
+            | TokenKind::BuiltinVaEnd
+            | TokenKind::BuiltinVaCopy
             | TokenKind::BuiltinBit
             | TokenKind::BuiltinUnreachable
             | TokenKind::BuiltinReturnAddress
@@ -9552,6 +9879,12 @@ fn collect_jump_regions_expr(
             collect_jump_regions_expr(rhs, regions, next_region, labels, gotos);
             collect_jump_regions_expr(target, regions, next_region, labels, gotos);
         }
+        CHirExpr::BuiltinVarArgs { first, second, .. } => {
+            collect_jump_regions_expr(first, regions, next_region, labels, gotos);
+            if let Some(second) = second {
+                collect_jump_regions_expr(second, regions, next_region, labels, gotos);
+            }
+        }
         CHirExpr::Assign { target, value, .. } => {
             collect_jump_regions_expr(target, regions, next_region, labels, gotos);
             collect_jump_regions_expr(value, regions, next_region, labels, gotos);
@@ -9777,6 +10110,10 @@ fn expression_references_symbol(expression: &CHirExpr<'_>, symbol: SymbolId) -> 
             expression_references_symbol(lhs, symbol)
                 || expression_references_symbol(rhs, symbol)
                 || expression_references_symbol(target, symbol)
+        }
+        CHirExpr::BuiltinVarArgs { first, second, .. } => {
+            expression_references_symbol(first, symbol)
+                || second.is_some_and(|second| expression_references_symbol(second, symbol))
         }
         CHirExpr::Assign { target, value, .. } => {
             expression_references_symbol(target, symbol)
@@ -10186,6 +10523,19 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
             span: paren_span,
         },
         CHirExpr::BuiltinReturnAddress { facts, .. } => CHirExpr::BuiltinReturnAddress {
+            facts: *facts,
+            span: paren_span,
+        },
+        CHirExpr::BuiltinVarArgs {
+            op,
+            first,
+            second,
+            facts,
+            ..
+        } => CHirExpr::BuiltinVarArgs {
+            op: *op,
+            first,
+            second: *second,
             facts: *facts,
             span: paren_span,
         },

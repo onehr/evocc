@@ -347,6 +347,16 @@ pub enum CheckedArithmeticOp {
     Mul,
 }
 
+/// Front-end-complete variable-argument operations. Target ABI semantics are
+/// deliberately deferred, so executable consumers must fail closed when one
+/// is reached.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum VarArgsBuiltinOp {
+    Start,
+    End,
+    Copy,
+}
+
 // ---------------------------------------------------------------------------
 // CHirExpr — C expression nodes
 // ---------------------------------------------------------------------------
@@ -423,6 +433,16 @@ pub enum CHirExpr<'arena> {
     },
     /// The accepted but deliberately IR-deferred return-address builtin.
     BuiltinReturnAddress {
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
+    /// A GNU variable-argument operation retained until the target calling
+    /// convention defines its execution. `second` is the last named parameter
+    /// for `Start`, the source object for `Copy`, and absent for `End`.
+    BuiltinVarArgs {
+        op: VarArgsBuiltinOp,
+        first: &'arena CHirExpr<'arena>,
+        second: Option<&'arena CHirExpr<'arena>>,
         facts: ExprFacts,
         span: SourceSpan,
     },
@@ -532,6 +552,7 @@ impl CHirExpr<'_> {
             | Self::BitBuiltin { span, .. }
             | Self::BuiltinUnreachable { span, .. }
             | Self::BuiltinReturnAddress { span, .. }
+            | Self::BuiltinVarArgs { span, .. }
             | Self::Cast(_, _, span)
             | Self::EvaluateOnce(_, span)
             | Self::SizeOf(_, span)
@@ -1085,7 +1106,7 @@ pub struct GenericSelectionRecord {
 /// Source-fidelity record for a front-end-resolved GNU builtin. Executable
 /// C-HIR contains only the resolved expression; operands retained here are
 /// parsed and type-checked source facts, not additional evaluation roots.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum FrontEndBuiltinRecord<'arena> {
     Expect {
         span: SourceSpan,
@@ -1102,6 +1123,12 @@ pub enum FrontEndBuiltinRecord<'arena> {
         operand: &'arena CHirExpr<'arena>,
         mode: u8,
         result: u64,
+    },
+    HasAttribute {
+        span: SourceSpan,
+        operand: Option<&'arena CHirExpr<'arena>>,
+        attribute: String,
+        result: bool,
     },
 }
 
@@ -1440,6 +1467,12 @@ fn inventory_of_expression(expression: &CHirExpr<'_>, inventory: &mut AttributeI
             inventory_of_expression(rhs, inventory);
             inventory_of_expression(target, inventory);
         }
+        CHirExpr::BuiltinVarArgs { first, second, .. } => {
+            inventory_of_expression(first, inventory);
+            if let Some(second) = second {
+                inventory_of_expression(second, inventory);
+            }
+        }
         CHirExpr::MemoryAssign { place, value, .. } => {
             for source in place.source_expressions() {
                 inventory_of_expression(source, inventory);
@@ -1649,6 +1682,12 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
                 checked_expression(lhs, out, seen);
                 checked_expression(rhs, out, seen);
                 checked_expression(target, out, seen);
+            }
+            CHirExpr::BuiltinVarArgs { first, second, .. } => {
+                checked_expression(first, out, seen);
+                if let Some(second) = second {
+                    checked_expression(second, out, seen);
+                }
             }
             CHirExpr::MemoryAssign { place, value, .. } => {
                 for source in place.source_expressions() {
@@ -1943,6 +1982,24 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
                     span.byte_end,
                     operand.span().byte_start,
                     operand.span().byte_end,
+                );
+            }
+            FrontEndBuiltinRecord::HasAttribute {
+                span,
+                operand,
+                attribute,
+                result,
+            } => {
+                let operand = operand.map_or_else(
+                    || "type-name".to_owned(),
+                    |operand| format!("{}..{}", operand.span().byte_start, operand.span().byte_end),
+                );
+                let _ = writeln!(
+                    out,
+                    "builtin-has-attribute span={}..{} operand={operand} attribute={attribute} result={}",
+                    span.byte_start,
+                    span.byte_end,
+                    u8::from(*result)
                 );
             }
         }

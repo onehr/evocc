@@ -166,6 +166,12 @@ fn assert_expression_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         | CHirExpr::AlignOf(..)
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. } => {}
+        CHirExpr::BuiltinVarArgs { first, second, .. } => {
+            assert_expression_owned(arena, first);
+            if let Some(second) = second {
+                assert_expression_owned(arena, second);
+            }
+        }
         CHirExpr::Unary(_, child, _)
         | CHirExpr::EvaluateOnce(child, _)
         | CHirExpr::Cast(_, child, _)

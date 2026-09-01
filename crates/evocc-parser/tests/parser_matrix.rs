@@ -291,6 +291,13 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
         }
         CHirExpr::BuiltinUnreachable { .. } => "builtin_unreachable".into(),
         CHirExpr::BuiltinReturnAddress { .. } => "builtin_return_address".into(),
+        CHirExpr::BuiltinVarArgs {
+            op, first, second, ..
+        } => format!(
+            "builtin_varargs({op:?},{},{})",
+            canonical_expr(first, types),
+            second.map_or_else(|| "none".into(), |second| canonical_expr(second, types))
+        ),
         CHirExpr::Cast(ty, operand, _) => {
             format!(
                 "cast({},{})",
