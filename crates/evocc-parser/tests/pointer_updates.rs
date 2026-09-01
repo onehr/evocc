@@ -132,7 +132,6 @@ fn pointer_members_support_the_same_update_forms_without_double_evaluation() {
 #[test]
 fn non_object_or_non_integer_pointer_updates_remain_typed_rejections() {
     for source in [
-        "int main(void) { void *p = 0; p++; return 0; }",
         "int main(void) { int a[2]; int *p = a; p += 1.5; return 0; }",
         "int f(void) { return 0; } int main(void) { int (*p)(void) = f; ++p; return 0; }",
     ] {

@@ -5116,6 +5116,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut members = Vec::new();
         let mut canonical = Vec::new();
         let mut next_value = Some(0_i128);
+        let mut minimum = 0_i128;
+        let mut maximum = 0_i128;
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
             let Some(token) = self.expect(TokenKind::Identifier) else {
                 break;
@@ -5151,7 +5153,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     break;
                 }
             };
-            let Ok(value) = i64::try_from(mathematical_value) else {
+            let candidate_minimum = minimum.min(mathematical_value);
+            let candidate_maximum = maximum.max(mathematical_value);
+            if !enum_range_is_representable(candidate_minimum, candidate_maximum) {
                 self.report(
                     "E1303",
                     "enumerator-value-is-not-representable",
@@ -5161,7 +5165,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.advance();
                 }
                 break;
-            };
+            }
+            minimum = candidate_minimum;
+            maximum = candidate_maximum;
+            let value = mathematical_value;
             let end = written_value.map_or(name.span, CHirExpr::span);
             let span = self.merge_span(name.span, end);
             canonical.push(EnumConstant {
@@ -5184,6 +5191,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             if !self.match_kind(TokenKind::Comma) {
                 break;
             }
+        }
+        let expression_ty = self.intern(
+            TypeKind::Int(enum_integer_rank(minimum, maximum, false)),
+            Qualifiers::default(),
+        );
+        for member in &members {
+            self.symbols
+                .update_symbol_type(member.symbol, expression_ty)
+                .expect("enumerator symbols belong to the parser symbol table");
         }
         Some((TagMembers::Enum(members), TagDefinition::Enum(canonical)))
     }
@@ -7754,6 +7770,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn pointer_arithmetic_is_valid(&self, pointee: TypeId) -> bool {
+        if matches!(
+            self.types.get(pointee).map(|canonical| &canonical.kind),
+            Some(TypeKind::Void)
+        ) {
+            return true;
+        }
         TargetDataLayout::aarch64_unknown_linux_gnu()
             .layout_of(&self.types, pointee)
             .is_ok()
@@ -9341,6 +9363,15 @@ fn merge_qualifiers(left: Qualifiers, right: Qualifiers) -> Qualifiers {
             (a, b) => a.or(b),
         },
     }
+}
+
+fn enum_range_is_representable(minimum: i128, maximum: i128) -> bool {
+    minimum >= i128::from(i64::MIN)
+        && if minimum < 0 {
+            maximum <= i128::from(i64::MAX)
+        } else {
+            maximum <= i128::from(u64::MAX)
+        }
 }
 
 fn extend_subobject_path(path: SubobjectPath, step: SubobjectStep) -> SubobjectPath {

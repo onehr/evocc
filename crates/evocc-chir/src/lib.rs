@@ -993,7 +993,7 @@ pub struct RecordMember<'arena> {
 pub struct EnumeratorDecl<'arena> {
     pub symbol: SymbolId,
     pub name: SpannedName,
-    pub value: i64,
+    pub value: i128,
     pub written_value: Option<&'arena CHirExpr<'arena>>,
     /// GNU attributes attached here, in source order.
     pub attributes: Vec<Attribute>,

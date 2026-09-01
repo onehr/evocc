@@ -386,7 +386,7 @@ pub const fn rank_for_integer_type(ty: CIntegerType) -> Option<IntRank> {
 
 /// GNU AArch64 enum mode selection for the parser's supported value range.
 #[must_use]
-pub fn enum_integer_type(minimum: i64, maximum: i64) -> CIntegerType {
+pub fn enum_integer_type(minimum: i128, maximum: i128) -> CIntegerType {
     integer_type_for_rank(enum_integer_rank(minimum, maximum, false))
 }
 

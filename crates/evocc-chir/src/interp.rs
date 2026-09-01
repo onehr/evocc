@@ -5789,6 +5789,18 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     value: right,
                     ty: right_ty,
                 },
+            ) if operator == BinaryOp::Sub && left_ty == right_ty => {
+                self.subtract_pointer_values(left, right, left_ty, span)
+            }
+            (
+                CValue::Pointer {
+                    value: left,
+                    ty: left_ty,
+                },
+                CValue::Pointer {
+                    value: right,
+                    ty: right_ty,
+                },
             ) if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) && left_ty == right_ty => {
                 Ok(machine_equality_result(operator, left == right))
             }
@@ -5844,7 +5856,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         span: SourceSpan,
     ) -> Result<CValue, InterpreterError> {
         let index = index.promoted();
-        let layout = self.access_layout(pointer_type.pointee(), span)?;
+        let scale_bytes = self.pointer_arithmetic_scale(pointer_type.pointee(), span)?;
         let signedness = if index.ty().is_signed() {
             IndexSignedness::Signed
         } else {
@@ -5856,7 +5868,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 u16::from(index.ty().bits()),
                 signedness,
                 direction,
-                layout.size_bytes,
+                scale_bytes,
             )
             .map_err(|error| self.memory_error(error, span))?;
         self.memory
@@ -5866,6 +5878,65 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             value,
             ty: pointer_type,
         })
+    }
+
+    fn pointer_arithmetic_scale(
+        &self,
+        pointee: TypeId,
+        span: SourceSpan,
+    ) -> Result<u64, InterpreterError> {
+        if matches!(
+            self.unit
+                .types()
+                .get(pointee)
+                .map(|canonical| &canonical.kind),
+            Some(TypeKind::Void)
+        ) {
+            return Ok(1);
+        }
+        Ok(self.access_layout(pointee, span)?.size_bytes)
+    }
+
+    fn subtract_pointer_values(
+        &self,
+        left: Pointer,
+        right: Pointer,
+        pointer_type: PointerTypeDesc,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        self.memory
+            .check_pointer(left)
+            .map_err(|error| self.memory_error(error, span))?;
+        self.memory
+            .check_pointer(right)
+            .map_err(|error| self.memory_error(error, span))?;
+        if left.object() != right.object() {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "pointer subtraction across distinct objects",
+                span,
+            });
+        }
+        let byte_delta = left.byte_offset().checked_sub(right.byte_offset()).ok_or(
+            InterpreterError::UnsupportedExpression {
+                feature: "pointer subtraction overflow",
+                span,
+            },
+        )?;
+        let scale = i64::try_from(self.pointer_arithmetic_scale(pointer_type.pointee(), span)?)
+            .map_err(|_| InterpreterError::UnsupportedExpression {
+                feature: "pointer subtraction scale is not representable",
+                span,
+            })?;
+        if byte_delta % scale != 0 {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "pointer subtraction is not an exact element difference",
+                span,
+            });
+        }
+        Ok(CValue::Integer(CInteger::new(
+            (byte_delta / scale) as u64,
+            CIntegerType::LONG,
+        )))
     }
 
     #[allow(clippy::too_many_arguments)]

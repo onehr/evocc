@@ -3100,6 +3100,23 @@ impl<'a> FunctionLowerer<'a> {
         Ok(AccessLayout::new(layout.size_bytes, layout.align_bytes))
     }
 
+    fn pointer_arithmetic_scale(
+        &self,
+        pointee: TypeId,
+        span: SourceSpan,
+    ) -> Result<u64, LowerError> {
+        if matches!(
+            self.unit
+                .types()
+                .get(pointee)
+                .map(|canonical| &canonical.kind),
+            Some(TypeKind::Void)
+        ) {
+            return Ok(1);
+        }
+        Ok(self.access_layout(pointee, span)?.size_bytes)
+    }
+
     fn is_aggregate_type(&self, ty: TypeId) -> bool {
         is_aggregate_type(self.unit.types(), ty)
     }
@@ -5499,7 +5516,7 @@ impl<'a> FunctionLowerer<'a> {
             && !right_pointer
         {
             let pointee = self.pointer_pointee_type(left_expression, span)?;
-            let layout = self.access_layout(pointee, span)?;
+            let scale_bytes = self.pointer_arithmetic_scale(pointee, span)?;
             let promoted_type = integer_promotion(right.integer);
             let index = self.cast(right, promoted_type, state)?;
             let value = self.offset_address(
@@ -5515,7 +5532,7 @@ impl<'a> FunctionLowerer<'a> {
                 } else {
                     IndexSignedness::Unsigned
                 },
-                layout.size_bytes,
+                scale_bytes,
                 state,
             )?;
             return Ok(ExprValue {
@@ -5525,7 +5542,7 @@ impl<'a> FunctionLowerer<'a> {
         }
         if operator == BinaryOp::Add && !left_pointer && right_object_pointer {
             let pointee = self.pointer_pointee_type(right_expression, span)?;
-            let layout = self.access_layout(pointee, span)?;
+            let scale_bytes = self.pointer_arithmetic_scale(pointee, span)?;
             let promoted_type = integer_promotion(left.integer);
             let index = self.cast(left, promoted_type, state)?;
             let value = self.offset_address(
@@ -5537,7 +5554,7 @@ impl<'a> FunctionLowerer<'a> {
                 } else {
                     IndexSignedness::Unsigned
                 },
-                layout.size_bytes,
+                scale_bytes,
                 state,
             )?;
             return Ok(ExprValue {
@@ -6648,7 +6665,7 @@ impl<'a> FunctionLowerer<'a> {
                 });
             }
         };
-        let layout = self.access_layout(pointee, span)?;
+        let scale_bytes = self.pointer_arithmetic_scale(pointee, span)?;
         let promoted_type = integer_promotion(index.integer);
         let index = self.cast(index, promoted_type, state)?;
         let value = self.offset_address(
@@ -6660,7 +6677,7 @@ impl<'a> FunctionLowerer<'a> {
             } else {
                 IndexSignedness::Unsigned
             },
-            layout.size_bytes,
+            scale_bytes,
             state,
         )?;
         Ok(ExprValue {

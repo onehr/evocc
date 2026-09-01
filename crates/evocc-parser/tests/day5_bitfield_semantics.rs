@@ -103,7 +103,7 @@ fn bit_field_constraint_failures_have_stable_codes_messages_and_spans() {
         ),
         (
             concat!(
-                "enum Wide { BIG = 4294967296 }; ",
+                "enum Wide { BIG = 0xffffffff00000000ULL }; ",
                 "struct S { unsigned int x : ((enum Wide)-1 < 0); };"
             ),
             "E1304",

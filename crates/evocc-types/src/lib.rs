@@ -300,36 +300,36 @@ pub struct TagLayoutAttributes {
 /// `packed` selects the smallest signed or unsigned target mode that can
 /// represent the entire enumerator range.
 #[must_use]
-pub fn enum_integer_rank(minimum: i64, maximum: i64, packed: bool) -> IntRank {
+pub fn enum_integer_rank(minimum: i128, maximum: i128, packed: bool) -> IntRank {
     if !packed {
-        if minimum >= i64::from(i32::MIN) && maximum <= i64::from(i32::MAX) {
+        if minimum >= i128::from(i32::MIN) && maximum <= i128::from(i32::MAX) {
             return IntRank::Int;
         }
-        if minimum >= 0 && maximum <= i64::from(u32::MAX) {
+        if minimum >= 0 && maximum <= i128::from(u32::MAX) {
             return IntRank::UInt;
         }
-        return if minimum >= 0 {
-            IntRank::ULong
-        } else {
+        return if minimum < 0 || maximum <= i128::from(i64::MAX) {
             IntRank::Long
+        } else {
+            IntRank::ULong
         };
     }
 
     if minimum < 0 {
-        if minimum >= i64::from(i8::MIN) && maximum <= i64::from(i8::MAX) {
+        if minimum >= i128::from(i8::MIN) && maximum <= i128::from(i8::MAX) {
             IntRank::SChar
-        } else if minimum >= i64::from(i16::MIN) && maximum <= i64::from(i16::MAX) {
+        } else if minimum >= i128::from(i16::MIN) && maximum <= i128::from(i16::MAX) {
             IntRank::Short
-        } else if minimum >= i64::from(i32::MIN) && maximum <= i64::from(i32::MAX) {
+        } else if minimum >= i128::from(i32::MIN) && maximum <= i128::from(i32::MAX) {
             IntRank::Int
         } else {
             IntRank::Long
         }
-    } else if maximum <= i64::from(u8::MAX) {
+    } else if maximum <= i128::from(u8::MAX) {
         IntRank::UChar
-    } else if maximum <= i64::from(u16::MAX) {
+    } else if maximum <= i128::from(u16::MAX) {
         IntRank::UShort
-    } else if maximum <= i64::from(u32::MAX) {
+    } else if maximum <= i128::from(u32::MAX) {
         IntRank::UInt
     } else {
         IntRank::ULong
@@ -362,7 +362,7 @@ pub struct BitFieldSpec {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumConstant {
     pub name: String,
-    pub value: i64,
+    pub value: i128,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

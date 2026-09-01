@@ -557,7 +557,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
         parser.set_error_limit(NonZeroUsize::MIN);
     }
     let unit = parser.parse_translation_unit_in(&arena);
-    if parser.had_error() || (unit.is_empty() && !src.trim().is_empty()) {
+    if parser.had_error() {
         // A build reports the first diagnostic only. The error limit bounds the
         // declaration loop, not the reports made while parsing one
         // declaration, so the first must be selected here rather than assumed.

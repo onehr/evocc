@@ -229,6 +229,7 @@ const KEYWORDS: &[(&str, TokenKind)] = &[
     ("_Static_assert", TokenKind::StaticAssert),
     ("_Thread_local", TokenKind::ThreadLocal),
     ("__attribute__", TokenKind::Attribute),
+    ("__attribute", TokenKind::Attribute),
     ("__typeof__", TokenKind::Typeof),
     ("__typeof_unqual__", TokenKind::TypeofUnqual),
     ("auto", TokenKind::Auto),

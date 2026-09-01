@@ -116,7 +116,7 @@ fn aarch64_lp64_scalar_pointer_array_and_enum_layouts() {
                 },
                 EnumConstant {
                     name: "above_int".into(),
-                    value: i64::from(i32::MAX) + 1,
+                    value: i128::from(i32::MAX) + 1,
                 },
             ]),
         )
@@ -134,7 +134,7 @@ fn packed_enumerations_use_the_smallest_representable_integer_layout() {
         (0, 255, TypeLayout::new(1, 1)),
         (0, 65_535, TypeLayout::new(2, 2)),
         (0, 65_536, TypeLayout::new(4, 4)),
-        (0, i64::from(u32::MAX), TypeLayout::new(4, 4)),
+        (0, i128::from(u32::MAX), TypeLayout::new(4, 4)),
         (-1, 6, TypeLayout::new(1, 1)),
         (-1, 200, TypeLayout::new(2, 2)),
     ];

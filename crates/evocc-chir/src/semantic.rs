@@ -62,7 +62,7 @@ pub enum SymbolData {
     Function { storage: StorageClass },
     Parameter { storage: StorageClass },
     Typedef,
-    Enumerator { value: i64 },
+    Enumerator { value: i128 },
 }
 
 impl SymbolData {
@@ -88,7 +88,7 @@ impl SymbolData {
     }
 
     #[must_use]
-    pub fn enumerator_value(self) -> Option<i64> {
+    pub fn enumerator_value(self) -> Option<i128> {
         match self {
             Self::Enumerator { value } => Some(value),
             _ => None,
@@ -139,7 +139,7 @@ impl Symbol {
     }
 
     #[must_use]
-    pub fn enumerator_value(&self) -> Option<i64> {
+    pub fn enumerator_value(&self) -> Option<i128> {
         self.data.enumerator_value()
     }
 
@@ -1019,6 +1019,7 @@ impl ScalarPlace {
                 | TypeKind::Complex(_)
                 | TypeKind::Pointer(_)
                 | TypeKind::Enum(_)
+                | TypeKind::GnuInt128(_)
         ) {
             return Err(ScalarPlaceError::NonScalarType { symbol, ty });
         }
