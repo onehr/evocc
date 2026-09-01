@@ -2,14 +2,14 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "bf29e4d697c8c7461bdf226bea40a85fb8e8c9586bb54476b90cf5787b3d88d0"
+    "sha256": "72ffb6d17d339afaa4c4ae990720456ffdf685bad4964e57da507a7691e1a00c"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
     "revision": "1.9.31",
     "sha256": "1edb938ca7021a52d47c219dcd28ae02c070a8e0e9e36c4af6536f6fc08de33f"
   },
-  "cutLine": "Revision 1.9.31 scope P13 is implemented: __typeof is the third spelling of the existing typeof construct, every declaration side table is rolled back with a typeof expression operand, compatible linkage redeclarations remain accepted, and E2002 consistently reports incompatible-redeclaration without weakening compatibility. The tree is green at 1060/1060 workspace tests (1059/1059 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. Raw preprocessing remains 16/16, dual-oracle clean parsing moves from 13/16 to 14/16, and dashboard regressions are zero. Stage F1 remains OPEN on four parser lanes across mm-mprotect and mm-mincore: both oracle-preprocessed forms reach a nested typeof operand while a prior function parameter shadow named start is already installed and panic instead of parsing. Revision 1.9.31 already covers nested operand scope, so this is a measured implementation defect, not a specification gap.",
+  "cutLine": "Revision 1.9.31 scope P14 is implemented: nested typeof probes reuse an exact already-installed temporary function-parameter shadow instead of declaring it twice, at every measured parameter position and nesting depth. The tree is green at 1065/1065 workspace tests (1064/1064 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. Raw preprocessing, GCC-preprocessed parsing, and Clang-preprocessed parsing are each 16/16 with zero dashboard regressions. The frozen dual-oracle parse gate is therefore 16/16 and Stage F1 is CLOSED by sealed run 20260901T185119Z-83939 on subject 25acb6d.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -826,19 +826,40 @@
     "specAmbiguitiesThisWindow": [],
     "result": "PASS_STAGE_F1_OPEN"
   },
-  "subjectCommit": "88cd9a7",
+  "nestedTypeofParameterRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.31; tests/contracts/day9-acceptance-contract.json scope P14",
+    "opened": "4ef70ec (tests only; 1060 passed, 5 panic failures, 1065 listed workspace tests; zero Rust build errors)",
+    "closed": "25acb6d",
+    "implementationCommits": [
+      "25acb6d"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/nested-typeof-parameter-red.json",
+      "sha256": "c9c98e2dcc6061a529c68ecbbfa259b82d0a98f5299c1c63342f7e78efe54307"
+    },
+    "declaredCapability": "temporary function-parameter shadows are installed idempotently for nested typeof probes at every parameter position and nesting depth while retaining the exact parameter types",
+    "focusedGreen": {
+      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test gnu_typeof -- --nocapture",
+      "passed": 14,
+      "failed": 0
+    },
+    "redAssertionCorrection": "The first GREEN run exposed that four RED fixtures expected __builtin_types_compatible_p to have type _Bool. Revision 1.9.31 specifies int. The tests-only commit was amended before any production commit, then independently replayed as exactly five duplicate-shadow panics and no other failure.",
+    "specAmbiguitiesThisWindow": [],
+    "result": "PASS_STAGE_F1_CLOSED"
+  },
+  "subjectCommit": "25acb6d",
   "gate": {
-    "claim": "Revision 1.9.31 scope P13 is implemented and green. The __typeof spelling is accepted through the common typeof token, typeof expression operands roll back linkage and entity state with their lexical bindings, compatible redeclarations remain accepted, and E2002 uses the specified incompatible-redeclaration message. All six prior P13 first-error lanes moved, zero dashboard regressions were observed, raw preprocessing remains 16/16 and dual-oracle clean parsing advances to 14/16. Stage F1 remains open on four measured parser lanes across two units because nested typeof parsing panics while reinstalling an already-visible function parameter shadow; revision 1.9.31 covers that behavior, so it is an implementation defect rather than a specification gap.",
+    "claim": "Revision 1.9.31 scope P14 is implemented and green. Nested typeof probes reuse only an exact temporary parameter identity already installed by an enclosing probe, so second, third, last, three-level, and earlier-parameter-reference forms retain their specified types without panic. All four prior parser-panic lanes moved, zero dashboard regressions were observed, and raw, GCC-preprocessed, and Clang-preprocessed lanes are each 16/16 clean. The frozen dual-oracle parse gate is 16/16 and Stage F1 is closed by sealed run 20260901T185119Z-83939.",
     "measured": {
-      "dualOracleCleanParseTus": "14/16",
+      "dualOracleCleanParseTus": "16/16",
       "rawPreprocessClean": "16/16",
-      "stageF1": "OPEN",
-      "remainingParserLanes": 4,
-      "remainingParserUnits": 2,
-      "remainingFirstErrors": {
-        "gcc-preprocessed-parser DRIVER_RUST_PANIC reinstalling the nested typeof parameter shadow start": 2,
-        "clang-preprocessed-parser DRIVER_RUST_PANIC reinstalling the nested typeof parameter shadow start": 2
-      },
+      "gccPreprocessedParserClean": "16/16",
+      "clangPreprocessedParserClean": "16/16",
+      "stageF1": "CLOSED",
+      "remainingParserLanes": 0,
+      "remainingParserUnits": 0,
+      "remainingFirstErrors": {},
+      "nestedTypeofParameterTests": "5/5 new cases; 14/14 focused suite",
       "frontEndIntrospectionTests": "27/27",
       "constantExpressionClosureTests": "15/15",
       "gnuArrayInt128Tests": "13/13",
@@ -861,8 +882,8 @@
       "frozenRealTuRatio": "1.07x <= 3x",
       "subjectBuildProfile": "release",
       "parserTimeoutSecondsPerTu": 10,
-      "workspaceTests": "1060/1060",
-      "allTargetTests": "1059/1059",
+      "workspaceTests": "1065/1065",
+      "allTargetTests": "1064/1064",
       "specifiedFrontier": true,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
@@ -924,18 +945,18 @@
       "compatibleBlockExternRedeclarationLanesRemaining": 0,
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260901T145829Z-31164/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260901T162827Z-12206/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "89f71e188c61517b0e048b4b079ab66b2c2bf5acfc22c43867c380b8cf0e5e8c",
-      "subjectCommit": "88cd9a7",
-      "publishedFromRun": "20260901T162827Z-12206"
+      "sha256": "1a1204bce3d27fa51e60b7bca236c3b78e32c5ea2d0209fdc47aa5b6fd955b2c",
+      "subjectCommit": "25acb6d",
+      "publishedFromRun": "20260901T185119Z-83939"
     },
-    "result": "TYPEOF_REDECLARATION_PASS_STAGE_F1_OPEN"
+    "result": "NESTED_TYPEOF_PARAMETER_PASS_STAGE_F1_CLOSED"
   },
   "lanes": {
     "clean": {
-      "count": 44,
+      "count": 48,
       "units": [
         "all 16 units (evocpp-raw)",
         "init-do-mounts-initrd (gcc-preprocessed-parser, clang-preprocessed-parser)",
@@ -951,33 +972,12 @@
         "init-init-task (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "kernel-power-main (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "mm-memtest (gcc-preprocessed-parser, clang-preprocessed-parser)",
-        "mm-page-vma-mapped (gcc-preprocessed-parser, clang-preprocessed-parser)"
+        "mm-page-vma-mapped (gcc-preprocessed-parser, clang-preprocessed-parser)",
+        "mm-mprotect (gcc-preprocessed-parser, clang-preprocessed-parser)",
+        "mm-mincore (gcc-preprocessed-parser, clang-preprocessed-parser)"
       ]
     },
-    "stillFailing": [
-      {
-        "count": 2,
-        "firstError": "DRIVER_RUST_PANIC while nested typeof parsing reinstalls the already-visible function parameter shadow start",
-        "lanes": "gcc-preprocessed-parser",
-        "units": [
-          "mm-mprotect",
-          "mm-mincore"
-        ],
-        "construct": "a typeof expression inside a later function parameter type contains __builtin_choose_expr and __builtin_types_compatible_p with a nested typeof while the earlier parameter start is visible",
-        "specificationCoverage": "revision 1.9.31 Section 10.1.10 covers typeof operand scope; implementation defect, not a specification gap"
-      },
-      {
-        "count": 2,
-        "firstError": "DRIVER_RUST_PANIC while nested typeof parsing reinstalls the already-visible function parameter shadow start",
-        "lanes": "clang-preprocessed-parser",
-        "units": [
-          "mm-mprotect",
-          "mm-mincore"
-        ],
-        "construct": "a typeof expression inside a later function parameter type contains __builtin_choose_expr and __builtin_types_compatible_p with a nested typeof while the earlier parameter start is visible",
-        "specificationCoverage": "revision 1.9.31 Section 10.1.10 covers typeof operand scope; implementation defect, not a specification gap"
-      }
-    ],
+    "stillFailing": [],
     "publicationsThisWindow": [
       {
         "commit": "4a9efc1",
@@ -1248,6 +1248,11 @@
         "commit": "88cd9a7",
         "run": "20260901T162827Z-12206",
         "parseLanesStoppedOn": "revision 1.9.31 publication: all four __typeof E1001 and both compatible-redeclaration E2002 observations are gone; init-do-mounts becomes dual-oracle clean. Raw preprocessing remains 16/16, dual-oracle clean parsing moves to 14/16, and four parser lanes remain across mm-mprotect and mm-mincore, all DRIVER_RUST_PANIC while nested typeof parsing reinstalls an already-visible parameter shadow. Revision 1.9.31 covers that construct; regressions remain zero and Stage F1 remains open"
+      },
+      {
+        "commit": "25acb6d",
+        "run": "20260901T185119Z-83939",
+        "parseLanesStoppedOn": "scope P14 publication: all four nested-typeof DRIVER_RUST_PANIC observations are gone; mm-mprotect and mm-mincore become clean under both oracle preprocessors. Raw preprocessing, GCC-preprocessed parsing, and Clang-preprocessed parsing are each 16/16, dual-oracle clean parsing is 16/16, regressions are zero, and Stage F1 is closed"
       }
     ]
   },
@@ -1726,6 +1731,25 @@
       "stageF1": "OPEN",
       "regressionsAgainstPrevious": 0,
       "scopeP13": "PASS"
+    },
+    "nestedTypeofParameterAfter": {
+      "run": "20260901T185119Z-83939",
+      "subjectCommit": "25acb6d",
+      "baselineRun": "20260901T162827Z-12206",
+      "resolvedFirstErrorClasses": {
+        "gcc-preprocessed-parser DRIVER_RUST_PANIC reinstalling the nested typeof parameter shadow start": 2,
+        "clang-preprocessed-parser DRIVER_RUST_PANIC reinstalling the nested typeof parameter shadow start": 2
+      },
+      "nextFirstErrorClasses": {},
+      "remainingUnits": {},
+      "specificationCoverage": "revision 1.9.31 Section 10.1.10; no new specification ambiguity",
+      "rawPreprocessClean": "16/16",
+      "gccPreprocessedParserClean": "16/16",
+      "clangPreprocessedParserClean": "16/16",
+      "dualOracleCleanParseTus": "16/16",
+      "stageF1": "CLOSED",
+      "regressionsAgainstPrevious": 0,
+      "scopeP14": "PASS"
     }
   },
   "attributes": {
@@ -1772,13 +1796,13 @@
   },
   "tests": {
     "workspace": {
-      "passed": 1059,
+      "passed": 1064,
       "failed": 0,
-      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet (1059/1059)",
+      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet (1064/1064)",
       "workspaceIncludingDocTests": {
-        "passed": 1060,
+        "passed": 1065,
         "failed": 0,
-        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet (1060/1060)"
+        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet (1065/1065)"
       }
     },
     "suites": {
@@ -2091,6 +2115,10 @@
       "crates/evocc-lower/tests/record_call_abi.rs": {
         "passed": 3,
         "command": "cargo test -p evocc-lower --test record_call_abi"
+      },
+      "crates/evocc-parser/tests/gnu_typeof.rs": {
+        "passed": 14,
+        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test gnu_typeof -- --nocapture"
       }
     },
     "clippy": {
@@ -2111,11 +2139,11 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "88cd9a71a1a5fc5fb32e675035b180aa40131590",
-    "path": "/private/tmp/c30-typeof-replay.myc4aQ/replay",
-    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-typeof-replay.myc4aQ/replay; test ! -e .git/objects/info/alternates; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline --quiet",
+    "commit": "25acb6d4685b868c5cbdb4ba154ee9d2a059e76b",
+    "path": "/private/tmp/c30-nested-typeof-replay.BVYV2Q/replay",
+    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-nested-typeof-replay.BVYV2Q/replay; test ! -e .git/objects/info/alternates; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline --quiet; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list --format terse | rg -c ': test$'",
     "measured": {
-      "passed": 1059,
+      "passed": 1064,
       "failed": 0,
       "objectsAlternates": "absent"
     }
@@ -2210,6 +2238,8 @@
     "The first sandboxed P11 layout invocation stopped before sealed container inspection and produced no usable evidence. The authoritative sequential reruns used the same base and attributed commands with the required container permission and produced 128/128 and 22/22 ORACLE_CONSENSUS with zero mismatches.",
     "The P12 RED reached E1001 before its final function-pointer-object guard. GREEN exposed that the guard used the non-constant file-scope initializer copy = fp; it was corrected to the PM-measured already-green form copy = target. Neither failing RED assertion nor declared capability changed, and the correction is recorded rather than hidden in the semantic commit.",
     "The first complete P13 GREEN workspace gate found two historical Day 5 exact-message cases that still expected ordinary-identifier-redefinition. They were added to the same tests-only checkpoint, independently replayed as one failing test with 2/36 mismatches on commit 241f899, and then passed under the production diagnostic change; no second RED window was created.",
-    "The first P13 dashboard capture completed all 16 raw preprocessing lanes but was refused when restricted sandbox access denied sealed oracle inspection. Its incomplete capture is preserved at .evidence/kernel-dashboard/88cd9a7-sandbox-refused and its 16-row run at .evidence/day5-kernel-reconnaissance/20260901T162552Z-5025; neither is acceptance evidence. The permission-correct rerun on the same commit and previous-run lineage sealed 48/48 observations as run 20260901T162827Z-12206."
+    "The first P13 dashboard capture completed all 16 raw preprocessing lanes but was refused when restricted sandbox access denied sealed oracle inspection. Its incomplete capture is preserved at .evidence/kernel-dashboard/88cd9a7-sandbox-refused and its 16-row run at .evidence/day5-kernel-reconnaissance/20260901T162552Z-5025; neither is acceptance evidence. The permission-correct rerun on the same commit and previous-run lineage sealed 48/48 observations as run 20260901T162827Z-12206.",
+    "The opening P14 fixtures initially expected __builtin_types_compatible_p to have type _Bool. The duplicate-shadow panic ran first and masked that test defect. Revision 1.9.31 specifies int, so the tests-only commit was amended before any production commit and independently replayed as exactly five duplicate-shadow panics with the corrected type assertions.",
+    "The independent RED replay briefly shared the main checkout's Cargo target and replaced its focused test binary with the detached-checkout build. That stale derived cache was rejected, only evocc-parser build artifacts were cleaned, GREEN was rebuilt, and the final no-local replay used its own target directory."
   ]
 }
