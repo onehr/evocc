@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.27** | **Authoritative reference** | **2026-09-01**
+**Revision 1.9.28** | **Authoritative reference** | **2026-09-01**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2511,6 +2511,20 @@ EvoIR lowering consume this same manifest for `ObjectOrigin.site`; neither may
 derive origins from raw declaration count or its own materialized-object
 sequence.
 
+**Arithmetic on `void *`.** `void *` participates in pointer arithmetic with
+scale 1 (`sizeof(void)` is 1, 10.1.19), in every form: `p + n`, `p += n`,
+`p++`, `--p`, subtraction of two `void *`. Measured, both oracles: `p += 3`
+advances three bytes. Measured defect at revision 1.9.27: the binary form was
+accepted and the update forms refused — one rule on two paths again.
+
+**128-bit assignment.** `__int128` and `unsigned __int128` objects are
+assigned, loaded and stored exactly as any integer object; 10.1.19's closure
+of `__int128` value semantics applies to the checked-arithmetic builtins, not
+to plain assignment. Measured defect at revision 1.9.27: `__uint128_t tmp;
+tmp = *p;` was refused as not a modifiable lvalue while `__uint128_t tmp =
+*p;` and 64-bit assignment were accepted — the assignment target check
+carried a width list the initializer path did not.
+
 **What may root a place.** Any expression of pointer type may be the root of a
 place through `*`, `->` or `[]`: a variable, a loaded pointer, an address-of,
 a call result, a conditional expression, a statement expression, a cast, a
@@ -3015,6 +3029,23 @@ rw_hint)` folding as 4 instead of 1 inside a static assertion.
 `ORACLE_CONFLICT`: `packed` and `aligned(4)` together on an enum give 1/1 in
 GCC-14 and 1/4 in Clang-19; the cohort never combines them, so the combination
 is refused (`E2903`) rather than arbitrated.
+
+**Enumerators outside `int`.** An enumerator whose value does not fit `int` is
+a GNU (and C23) extension: the enumeration's underlying type becomes the
+smallest of `unsigned int`, `long`, `unsigned long` that represents every
+enumerator, signed when any enumerator is negative (measured: `0xffffffff00000000`
+gives an 8-byte enum whose constant has type `unsigned long`; `-1` with
+`0x100000000` gives an 8-byte enum whose wide constant has type `long`). A
+value that fits no such type is `E1303`. `ORACLE_CONFLICT` on the *other*
+constants of such an enum: GCC-14 gives every constant the underlying type
+(`SMALL` is `unsigned long`), Clang-19 keeps `int` for those that fit. This
+profile follows GCC, which is also the C23 rule (all enumerators take the
+enumerated type once the list is complete); the difference is observable only
+through `_Generic` and `sizeof` on the constant. Evidence
+`.evidence/builtin-probes/20260901-2c23684c/p10.out`.
+
+**`__attribute` spelling.** `__attribute` is a synonym for `__attribute__`
+(both oracles); the kernel writes it. It is read wherever `__attribute__` is.
 
 Pointer-declarator attributes (10.1.9, position after `*`) are preserved and
 not applied: `aligned` in that position is `ORACLE_CONFLICT` (GCC-14 applies
@@ -4053,6 +4084,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.28 | 2026-09-01 | Enumerators outside `int` widen the enumeration to the smallest representing type (one `ORACLE_CONFLICT` on the other constants' type, resolved to the C23/GCC rule); `__attribute` as a synonym; `void *` arithmetic in update forms; 128-bit assignment. All measured; the last two were one rule on two paths. |
 | 1.9.27 | 2026-09-01 | States that any pointer-typed expression may root a place, with one implementation and no list of admitted forms, after the fourth root form (call results, then conditionals) was refused; specifies `__builtin_strlen` as a constant on a literal and an ordinary call to the in-scope `strlen` otherwise (`E2927`). Measured. |
 | 1.9.26 | 2026-09-01 | Specifies `__builtin_has_attribute` as a `_Bool` constant answered from the preserved attribute inventory, the three `va_*` builtins at the front end with fail-closed lowering (`E2926`, `E3030`), and empty records with size zero. All measured; added after 13 GCC lanes stopped on the first and 13 Clang lanes on the second. |
 | 1.9.25 | 2026-09-01 | Defines `packed` on enumerations from measured oracle behaviour: smallest representable integer type, signed when a negative enumerator exists, alignment equal to size, constants still `int`; the `packed`+`aligned` combination is refused as an unarbitrated oracle conflict the cohort never uses. Added after the executing agent bisected 15 failing static assertions to `sizeof(enum rw_hint)`. |
