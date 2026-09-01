@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.28** | **Authoritative reference** | **2026-09-01**
+**Revision 1.9.29** | **Authoritative reference** | **2026-09-01**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1311,6 +1311,9 @@ twice would let a reader think two conditions are the same finding.
 | `E3026` | `not-lowered: static-relocation` | lowering |
 | `E3027` | `overlapping-copy` | runtime |
 | `E3030` | `not-lowered: varargs` | lowering |
+| `E3031` | `not-lowered: frame-address` | lowering |
+| `E3032` | `not-lowered: pointer-difference` | lowering |
+| `E3033` | `not-executed: wide-integer` | lowering |
 | `E3029` | `not-lowered: computed-goto` | lowering |
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
@@ -2525,6 +2528,31 @@ tmp = *p;` was refused as not a modifiable lvalue while `__uint128_t tmp =
 *p;` and 64-bit assignment were accepted — the assignment target check
 carried a width list the initializer path did not.
 
+**Character pointers of differing signedness.** A pointer to `char`, `signed
+char` or `unsigned char` (with or without qualifiers on the pointee) converts
+implicitly to a pointer to any other of the three in initialization,
+assignment, argument passing and return. Both oracles accept every such
+conversion and diagnose it only as a warning under `-Wall` (`pointer-sign`);
+the kernel's `struct qstr` initializer `.name = value` converts `char *` to
+`const unsigned char *`. This profile accepts it without a diagnostic. The
+three pointee types have identical size, alignment and representation, so no
+access changes meaning. Measured defect at revision 1.9.28: six lanes stopped
+on `E2202` for exactly that initializer.
+
+**Difference of two `void *`.** `a - b` on two `void *` has type `long`
+(`ptrdiff_t`) with scale 1 (measured: `10`, type `long`, both oracles). The
+front end accepts it and the C-HIR interpreter executes the same-object form;
+Section 3 has no pointer-difference instruction, so lowering reports `E3032`
+(`not-lowered: pointer-difference`) and fails closed until one is specified.
+
+**128-bit execution boundary.** The front end accepts, types, lays out,
+initializes, assigns and constant-folds `__int128` values completely; the
+C-HIR and EvoIR scalar value models are 64-bit, so *executing* a 128-bit
+arithmetic value — in either interpreter or in lowering — reports `E3033`
+(`not-executed: wide-integer`) and fails closed until `bits<128>` enters
+Section 1. Measured reference for that day: `((__uint128_t)1 << 100) + 7`
+shifted right by 64 is `68719476736`, and `(u * 3) >> 100` is `3`.
+
 **What may root a place.** Any expression of pointer type may be the root of a
 place through `*`, `->` or `[]`: a variable, a loaded pointer, an address-of,
 a call result, a conditional expression, a statement expression, a cast, a
@@ -3319,6 +3347,11 @@ and Clang-19 agree on every row.
   call; no intrinsic reaches EvoIR. Measured: with a user-defined `strlen`
   both oracles call it for a non-literal operand. The cohort's ten uses are
   all `__builtin_strlen(s)` on a parameter, and the kernel declares `strlen`.
+- `__builtin_frame_address(n)`: type `void *`; `n` must be an integer
+  constant expression (both oracles reject a non-constant); accepted by the
+  front end for any constant `n` (both accept `1`), and lowering reports
+  `E3031` (`not-lowered: frame-address`) and fails closed, exactly as for
+  `__builtin_return_address`. The cohort writes `(0)` in four lanes.
 - `__builtin_return_address(0)`: type `void *`; accepted by the front end;
   lowering reports `E3025` (`not-lowered: return-address`) and fails closed;
   an argument other than the constant `0` is `E2913`.
@@ -3383,6 +3416,16 @@ extensions, and every one of those places uses the same evaluator:
 
 `sizeof(void)` is `1`, as is `sizeof` of a function type; both are GNU
 extensions the kernel relies on (measured, both oracles).
+
+**Signed arithmetic in a constant expression** is evaluated in the operand
+type's width with two's-complement wrap-around, as both oracles evaluate it,
+not in host arithmetic and not as a refusal: `1 << 31` is the `int` value
+`-2147483648`, `(1 << 31) < 0` holds in a static assertion, and an enumerator
+`X = 1 << 31` has type `int` in a 4-byte enumeration (measured). This is the
+constant evaluator's arithmetic only; the runtime obligations of 10.1.5 are
+unchanged, so `1 << 31` executed at run time still carries
+`ub.assume.invalid_signed_left_shift`. Measured defect at revision 1.9.28:
+the enumerator was refused as not an integer constant expression.
 
 `__int128_t` and `__uint128_t` are compiler-provided spellings of `__int128`
 and `unsigned __int128`, not distinct types: both oracles give them size 16 and
@@ -4084,6 +4127,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.29 | 2026-09-01 | Rules the five gaps the wide-enum window named: character pointers of differing signedness convert implicitly (both oracles warn only); `__builtin_frame_address` accepted and fail-closed (`E3031`); signed shifts in constant expressions wrap in the operand width as both oracles do, so `1 << 31` is an enumerator; `void *` difference typed and fail-closed in lowering (`E3032`); 128-bit values accepted throughout the front end and fail-closed in execution (`E3033`). All measured. |
 | 1.9.28 | 2026-09-01 | Enumerators outside `int` widen the enumeration to the smallest representing type (one `ORACLE_CONFLICT` on the other constants' type, resolved to the C23/GCC rule); `__attribute` as a synonym; `void *` arithmetic in update forms; 128-bit assignment. All measured; the last two were one rule on two paths. |
 | 1.9.27 | 2026-09-01 | States that any pointer-typed expression may root a place, with one implementation and no list of admitted forms, after the fourth root form (call results, then conditionals) was refused; specifies `__builtin_strlen` as a constant on a literal and an ordinary call to the in-scope `strlen` otherwise (`E2927`). Measured. |
 | 1.9.26 | 2026-09-01 | Specifies `__builtin_has_attribute` as a `_Bool` constant answered from the preserved attribute inventory, the three `va_*` builtins at the front end with fail-closed lowering (`E2926`, `E3030`), and empty records with size zero. All measured; added after 13 GCC lanes stopped on the first and 13 Clang lanes on the second. |
