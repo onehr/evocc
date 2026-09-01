@@ -225,6 +225,83 @@ fn non_pointer_statement_expression_cannot_root_a_projection() {
     );
 }
 
+#[test]
+fn every_pointer_expression_kind_can_root_a_place() {
+    let cases = [
+        (
+            "variable through dereference",
+            "int main(void) { int value = 0; int *p = &value; *p = 1; return value; }",
+            1,
+        ),
+        (
+            "loaded pointer through arrow",
+            "struct node { int value; }; int main(void) { struct node n = { 0 }; \
+             struct node *p = &n; struct node **pp = &p; (*pp)->value = 2; return n.value; }",
+            2,
+        ),
+        (
+            "address-of through subscript",
+            "int main(void) { int value = 0; (&value)[0] = 3; return value; }",
+            3,
+        ),
+        (
+            "call result through dereference",
+            "typedef struct { int raw; } lock_t; lock_t *get(lock_t *p) { return p; } \
+             int main(void) { lock_t lock = { .raw = 9 }; \
+             *get(&lock) = (lock_t){ .raw = 4 }; return lock.raw; }",
+            4,
+        ),
+        (
+            "conditional through arrow",
+            "struct node { int value; }; int main(void) { struct node n = { 5 }; \
+             struct node *p = &n; int c = 1; return (c ? p : (void *)0)->value; }",
+            5,
+        ),
+        (
+            "statement expression through dereference",
+            "int main(void) { int value = 0; *({ &value; }) = 6; return value; }",
+            6,
+        ),
+        (
+            "cast through arrow",
+            "struct node { int value; }; int main(void) { struct node n = { 0 }; \
+             void *raw = &n; ((struct node *)raw)->value = 7; return n.value; }",
+            7,
+        ),
+        (
+            "comma through dereference",
+            "int main(void) { int value = 0; int *p = &value; int side = 0; \
+             *(side++, p) = 8; return side * 10 + value; }",
+            18,
+        ),
+    ];
+
+    let failures = cases
+        .into_iter()
+        .filter_map(|(name, source, expected)| match run(source) {
+            Ok(actual) if actual == expected => None,
+            Ok(actual) => Some(format!("{name}: expected {expected}, returned {actual}")),
+            Err(error) => Some(format!("{name}: {error}")),
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        failures.is_empty(),
+        "pointer-typed roots must use one semantic type test:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn non_pointer_expressions_still_cannot_root_places() {
+    for source in [
+        "int main(void) { *1 = 2; return 0; }",
+        "struct node { int value; }; int main(void) { return 1->value; }",
+        "int main(void) { return 1[0]; }",
+    ] {
+        expect_rejected(source, "E2102");
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Subscript projections
 // ---------------------------------------------------------------------------

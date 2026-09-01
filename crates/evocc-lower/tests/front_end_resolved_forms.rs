@@ -173,6 +173,23 @@ fn attribute_queries_resolve_before_lowering() {
 }
 
 #[test]
+fn builtin_strlen_resolves_to_constants_or_ordinary_calls() {
+    assert_pairs(
+        &[
+            (
+                "typedef unsigned long size_t; size_t f(void) { return __builtin_strlen(\"abc\"); }\n",
+                "typedef unsigned long size_t; size_t f(void) { return 3ul; }\n",
+            ),
+            (
+                "typedef unsigned long size_t; size_t strlen(const char *s) { return 5ul; } size_t f(const char *s) { return __builtin_strlen(s); }\n",
+                "typedef unsigned long size_t; size_t strlen(const char *s) { return 5ul; } size_t f(const char *s) { return strlen(s); }\n",
+            ),
+        ],
+        107,
+    );
+}
+
+#[test]
 fn attributed_null_statements_do_not_reach_evoir() {
     assert_pairs(
         &[(
