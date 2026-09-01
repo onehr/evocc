@@ -2,14 +2,92 @@
 
 use evocc_common::SourceSpan;
 use evocc_types::{
-    enum_integer_rank, TagDefinition, TagState, TargetDataLayout, TypeId, TypeInterner, TypeKind,
+    enum_integer_rank, TagDefinition, TagId, TagState, TargetDataLayout, TypeId, TypeInterner,
+    TypeKind,
 };
 
 use crate::integer::{
     eval_binary_integer, eval_bit_builtin, eval_unary_integer, floating_literal_to_integer,
     integer_literal_value, integer_type_for_rank, usual_arithmetic_type, CInteger, CIntegerType,
 };
-use crate::{BinaryOp, CHirExpr, CHirUnit, FrontEndBuiltinRecord, SymbolKind, SymbolTable};
+use crate::{
+    record_member_path, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt,
+    CHirUnit, FrontEndBuiltinRecord, InitAction, PlaceProjection, SymbolId, SymbolKind,
+    SymbolTable, TagMembers, UnaryOp,
+};
+
+/// Declaration identity designated by a `__builtin_has_attribute` operand.
+///
+/// This is derived from typed C-HIR rather than retained in the builtin record,
+/// so consumers can independently check the producer's constant result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttributeQueryTarget {
+    Entity(SymbolId),
+    Member { tag: TagId, field_index: usize },
+}
+
+/// Resolve the declaration designated by an attribute-query expression.
+#[must_use]
+pub fn attribute_query_target(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+) -> Option<AttributeQueryTarget> {
+    match expression {
+        CHirExpr::Ident { symbol, .. } => Some(AttributeQueryTarget::Entity(*symbol)),
+        CHirExpr::Member(base, name, _) => {
+            let base_ty = attribute_query_expression_type(base, types)?;
+            let field = record_member_path(types, base_ty, name)?.last().copied()?;
+            Some(AttributeQueryTarget::Member {
+                tag: field.tag(),
+                field_index: field.field_index(),
+            })
+        }
+        CHirExpr::PtrMember(pointer, name, _) => {
+            let pointer_ty = attribute_query_expression_type(pointer, types)?;
+            let TypeKind::Pointer(pointee) = types.get(pointer_ty).map(|ty| &ty.kind)? else {
+                return None;
+            };
+            let field = record_member_path(types, *pointee, name)?.last().copied()?;
+            Some(AttributeQueryTarget::Member {
+                tag: field.tag(),
+                field_index: field.field_index(),
+            })
+        }
+        CHirExpr::MemoryRead { place, .. } => place
+            .projections()
+            .iter()
+            .rev()
+            .find_map(|projection| match projection {
+                PlaceProjection::Field(field) => Some(AttributeQueryTarget::Member {
+                    tag: field.tag(),
+                    field_index: field.field_index(),
+                }),
+                PlaceProjection::Index(_) => None,
+            })
+            .or_else(|| place.root_symbol().map(AttributeQueryTarget::Entity)),
+        CHirExpr::Cast(_, operand, _) | CHirExpr::EvaluateOnce(operand, _) => {
+            attribute_query_target(operand, types)
+        }
+        CHirExpr::Comma(_, right, _) => attribute_query_target(right, types),
+        _ => None,
+    }
+}
+
+/// Recompute one front-end-resolved attribute query from the declarations
+/// preserved in C-HIR.
+#[must_use]
+fn builtin_has_attribute(
+    unit: &CHirUnit<'_>,
+    operand: Option<&CHirExpr<'_>>,
+    attribute: &str,
+) -> bool {
+    operand
+        .and_then(|expression| attribute_query_target(expression, unit.types()))
+        .is_some_and(|target| {
+            unit.iter()
+                .any(|declaration| declaration_has_attribute(declaration, target, attribute))
+        })
+}
 
 /// The exact conservative predicate frozen for `__builtin_constant_p`.
 ///
@@ -53,10 +131,329 @@ pub fn validate_front_end_builtin_records(
                     return Err(*span);
                 }
             }
-            FrontEndBuiltinRecord::HasAttribute { .. } => {}
+            FrontEndBuiltinRecord::HasAttribute {
+                span,
+                operand,
+                attribute,
+                result,
+            } => {
+                if builtin_has_attribute(unit, *operand, attribute) != *result {
+                    return Err(*span);
+                }
+            }
         }
     }
     Ok(())
+}
+
+fn attribute_query_expression_type(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+) -> Option<TypeId> {
+    match expression {
+        CHirExpr::Ident { facts, .. }
+        | CHirExpr::CheckedArithmetic { facts, .. }
+        | CHirExpr::BitBuiltin { facts, .. }
+        | CHirExpr::BuiltinUnreachable { facts, .. }
+        | CHirExpr::BuiltinReturnAddress { facts, .. }
+        | CHirExpr::BuiltinVarArgs { facts, .. }
+        | CHirExpr::Assign { facts, .. }
+        | CHirExpr::MemoryAssign { facts, .. }
+        | CHirExpr::MemoryRead { facts, .. }
+        | CHirExpr::Update { facts, .. }
+        | CHirExpr::MemoryUpdate { facts, .. }
+        | CHirExpr::StatementExpr { facts, .. } => Some(facts.ty()),
+        CHirExpr::Cast(ty, _, _) | CHirExpr::CompoundLit(ty, _, _) => Some(*ty),
+        CHirExpr::EvaluateOnce(operand, _) => attribute_query_expression_type(operand, types),
+        CHirExpr::Member(base, name, _) => {
+            let base_ty = attribute_query_expression_type(base, types)?;
+            record_member_path(types, base_ty, name)
+                .and_then(|path| path.last().map(|field| field.field_ty()))
+        }
+        CHirExpr::PtrMember(pointer, name, _) => {
+            let pointer_ty = attribute_query_expression_type(pointer, types)?;
+            let TypeKind::Pointer(pointee) = types.get(pointer_ty).map(|ty| &ty.kind)? else {
+                return None;
+            };
+            record_member_path(types, *pointee, name)
+                .and_then(|path| path.last().map(|field| field.field_ty()))
+        }
+        CHirExpr::Index(base, _, _) => {
+            let base_ty = attribute_query_expression_type(base, types)?;
+            match types.get(base_ty).map(|ty| &ty.kind)? {
+                TypeKind::Array { element, .. } | TypeKind::Pointer(element) => Some(*element),
+                _ => None,
+            }
+        }
+        CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
+            let pointer_ty = attribute_query_expression_type(pointer, types)?;
+            match types.get(pointer_ty).map(|ty| &ty.kind)? {
+                TypeKind::Pointer(pointee) => Some(*pointee),
+                _ => None,
+            }
+        }
+        CHirExpr::Comma(_, right, _) => attribute_query_expression_type(right, types),
+        _ => None,
+    }
+}
+
+fn declaration_has_attribute(
+    declaration: &CHirDecl<'_>,
+    target: AttributeQueryTarget,
+    attribute: &str,
+) -> bool {
+    match declaration {
+        CHirDecl::Asm(assembly) => assembly
+            .outputs
+            .iter()
+            .chain(&assembly.inputs)
+            .any(|operand| expression_contains_declaration(operand.expression, target, attribute)),
+        CHirDecl::Object(object) => {
+            (target == AttributeQueryTarget::Entity(object.symbol)
+                && has_attribute(&object.attributes, attribute))
+                || object.initializer.as_ref().is_some_and(|initializer| {
+                    initializer
+                        .plan()
+                        .actions()
+                        .iter()
+                        .any(|action| match action {
+                            InitAction::StoreScalar { value, .. }
+                            | InitAction::CopyAggregate { value, .. } => {
+                                expression_contains_declaration(value, target, attribute)
+                            }
+                            InitAction::StoreString { .. } | InitAction::ZeroScalar { .. } => false,
+                        })
+                })
+        }
+        CHirDecl::Function(function) => {
+            (target == AttributeQueryTarget::Entity(function.symbol)
+                && has_attribute(&function.attributes, attribute))
+                || match &function.parameters {
+                    crate::ParameterSyntax::Prototype { parameters, .. } => {
+                        parameters.iter().any(|parameter| {
+                            parameter.symbol == entity_target(target)
+                                && has_attribute(&parameter.attributes, attribute)
+                        })
+                    }
+                    crate::ParameterSyntax::Unspecified => false,
+                }
+                || function
+                    .body
+                    .is_some_and(|body| statement_contains_declaration(body, target, attribute))
+        }
+        CHirDecl::Typedef(typedef) => {
+            target == AttributeQueryTarget::Entity(typedef.symbol)
+                && has_attribute(&typedef.attributes, attribute)
+        }
+        CHirDecl::Tag(tag) => match &tag.members {
+            TagMembers::Struct(members) | TagMembers::Union(members) => {
+                let own_member = match target {
+                    AttributeQueryTarget::Member {
+                        tag: target_tag,
+                        field_index,
+                    } if target_tag == tag.tag => members
+                        .get(field_index)
+                        .is_some_and(|member| has_attribute(&member.attributes, attribute)),
+                    AttributeQueryTarget::Entity(_) | AttributeQueryTarget::Member { .. } => false,
+                };
+                own_member
+                    || members.iter().any(|member| {
+                        member.bit_width.is_some_and(|width| {
+                            expression_contains_declaration(width, target, attribute)
+                        })
+                    })
+            }
+            TagMembers::Enum(enumerators) => enumerators.iter().any(|enumerator| {
+                (target == AttributeQueryTarget::Entity(enumerator.symbol)
+                    && has_attribute(&enumerator.attributes, attribute))
+                    || enumerator.written_value.is_some_and(|value| {
+                        expression_contains_declaration(value, target, attribute)
+                    })
+            }),
+            TagMembers::Incomplete => false,
+        },
+    }
+}
+
+fn entity_target(target: AttributeQueryTarget) -> Option<SymbolId> {
+    match target {
+        AttributeQueryTarget::Entity(symbol) => Some(symbol),
+        AttributeQueryTarget::Member { .. } => None,
+    }
+}
+
+fn has_attribute(attributes: &[crate::Attribute], name: &str) -> bool {
+    attributes.iter().any(|attribute| attribute.name == name)
+}
+
+fn statement_contains_declaration(
+    statement: &CHirStmt<'_>,
+    target: AttributeQueryTarget,
+    attribute: &str,
+) -> bool {
+    match statement {
+        CHirStmt::Asm(assembly) => assembly
+            .outputs
+            .iter()
+            .chain(&assembly.inputs)
+            .any(|operand| expression_contains_declaration(operand.expression, target, attribute)),
+        CHirStmt::Expr(expression, _)
+        | CHirStmt::Return(Some(expression), _)
+        | CHirStmt::ComputedGoto(expression, _) => {
+            expression_contains_declaration(expression, target, attribute)
+        }
+        CHirStmt::If(condition, then_statement, else_statement, _) => {
+            expression_contains_declaration(condition, target, attribute)
+                || statement_contains_declaration(then_statement, target, attribute)
+                || else_statement.is_some_and(|statement| {
+                    statement_contains_declaration(statement, target, attribute)
+                })
+        }
+        CHirStmt::Switch(expression, body, _)
+        | CHirStmt::While(expression, body, _)
+        | CHirStmt::Case(expression, body, _) => {
+            expression_contains_declaration(expression, target, attribute)
+                || statement_contains_declaration(body, target, attribute)
+        }
+        CHirStmt::CaseRange(first, last, body, _) => {
+            expression_contains_declaration(first, target, attribute)
+                || expression_contains_declaration(last, target, attribute)
+                || statement_contains_declaration(body, target, attribute)
+        }
+        CHirStmt::DoWhile(body, condition, _) => {
+            statement_contains_declaration(body, target, attribute)
+                || expression_contains_declaration(condition, target, attribute)
+        }
+        CHirStmt::For(initializer, condition, step, body, _) => {
+            let initializer_contains = match initializer {
+                CHirForInit::Empty => false,
+                CHirForInit::Expression(expression) => {
+                    expression_contains_declaration(expression, target, attribute)
+                }
+                CHirForInit::Declaration(declarations) => declarations
+                    .iter()
+                    .any(|declaration| declaration_has_attribute(declaration, target, attribute)),
+            };
+            initializer_contains
+                || condition.is_some_and(|expression| {
+                    expression_contains_declaration(expression, target, attribute)
+                })
+                || step.is_some_and(|expression| {
+                    expression_contains_declaration(expression, target, attribute)
+                })
+                || statement_contains_declaration(body, target, attribute)
+        }
+        CHirStmt::Compound(items, _) => items.iter().any(|item| match item {
+            CHirBlockItem::Declaration(declaration) => {
+                declaration_has_attribute(declaration, target, attribute)
+            }
+            CHirBlockItem::Statement(statement) => {
+                statement_contains_declaration(statement, target, attribute)
+            }
+        }),
+        CHirStmt::Label(_, body, _) | CHirStmt::Default(body, _) => {
+            statement_contains_declaration(body, target, attribute)
+        }
+        CHirStmt::Return(None, _)
+        | CHirStmt::Break(_)
+        | CHirStmt::Continue(_)
+        | CHirStmt::Goto(_, _)
+        | CHirStmt::AttributedNull(_, _)
+        | CHirStmt::Null(_) => false,
+    }
+}
+
+fn expression_contains_declaration(
+    expression: &CHirExpr<'_>,
+    target: AttributeQueryTarget,
+    attribute: &str,
+) -> bool {
+    match expression {
+        CHirExpr::Unary(_, operand, _)
+        | CHirExpr::EvaluateOnce(operand, _)
+        | CHirExpr::Cast(_, operand, _)
+        | CHirExpr::SizeOfExpr(operand, _, _)
+        | CHirExpr::Member(operand, _, _)
+        | CHirExpr::PtrMember(operand, _, _)
+        | CHirExpr::BitBuiltin { operand, .. }
+        | CHirExpr::Update {
+            target: operand, ..
+        } => expression_contains_declaration(operand, target, attribute),
+        CHirExpr::Binary(_, left, right, _)
+        | CHirExpr::Index(left, right, _)
+        | CHirExpr::Comma(left, right, _)
+        | CHirExpr::Elvis(left, right, _)
+        | CHirExpr::Assign {
+            target: left,
+            value: right,
+            ..
+        } => {
+            expression_contains_declaration(left, target, attribute)
+                || expression_contains_declaration(right, target, attribute)
+        }
+        CHirExpr::Ternary(condition, when_true, when_false, _) => {
+            expression_contains_declaration(condition, target, attribute)
+                || expression_contains_declaration(when_true, target, attribute)
+                || expression_contains_declaration(when_false, target, attribute)
+        }
+        CHirExpr::Call(callee, arguments, _) => {
+            expression_contains_declaration(callee, target, attribute)
+                || arguments
+                    .iter()
+                    .any(|argument| expression_contains_declaration(argument, target, attribute))
+        }
+        CHirExpr::CheckedArithmetic {
+            lhs,
+            rhs,
+            target: destination,
+            ..
+        } => {
+            expression_contains_declaration(lhs, target, attribute)
+                || expression_contains_declaration(rhs, target, attribute)
+                || expression_contains_declaration(destination, target, attribute)
+        }
+        CHirExpr::BuiltinVarArgs { first, second, .. } => {
+            expression_contains_declaration(first, target, attribute)
+                || second.is_some_and(|second| {
+                    expression_contains_declaration(second, target, attribute)
+                })
+        }
+        CHirExpr::MemoryAssign { place, value, .. } => {
+            place
+                .source_expressions()
+                .any(|source| expression_contains_declaration(source, target, attribute))
+                || expression_contains_declaration(value, target, attribute)
+        }
+        CHirExpr::MemoryRead { place, .. } | CHirExpr::MemoryUpdate { place, .. } => place
+            .source_expressions()
+            .any(|source| expression_contains_declaration(source, target, attribute)),
+        CHirExpr::StatementExpr { body, .. } => {
+            statement_contains_declaration(body, target, attribute)
+        }
+        CHirExpr::CompoundLit(_, initializer, _) => {
+            initializer
+                .plan()
+                .actions()
+                .iter()
+                .any(|action| match action {
+                    InitAction::StoreScalar { value, .. }
+                    | InitAction::CopyAggregate { value, .. } => {
+                        expression_contains_declaration(value, target, attribute)
+                    }
+                    InitAction::StoreString { .. } | InitAction::ZeroScalar { .. } => false,
+                })
+        }
+        CHirExpr::Lit(_, _)
+        | CHirExpr::FloatLit(_, _)
+        | CHirExpr::CharLit(_, _)
+        | CHirExpr::StringLit(_, _)
+        | CHirExpr::Ident { .. }
+        | CHirExpr::LabelAddress { .. }
+        | CHirExpr::SizeOf(_, _)
+        | CHirExpr::AlignOf(_, _)
+        | CHirExpr::BuiltinUnreachable { .. }
+        | CHirExpr::BuiltinReturnAddress { .. } => false,
+    }
 }
 
 fn eval_integer_constant(

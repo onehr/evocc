@@ -76,6 +76,18 @@ fn attribute_queries_are_boolean_constants_from_written_member_attributes() {
 }
 
 #[test]
+fn attribute_queries_use_the_written_entity_declaration() {
+    let source = concat!(
+        "char tagged[4] __attribute__((nonstring)); char plain[4]; ",
+        "_Static_assert(__builtin_has_attribute(tagged, nonstring) == 1, \"tagged\"); ",
+        "_Static_assert(__builtin_has_attribute(plain, nonstring) == 0, \"plain\"); ",
+        "_Static_assert(__builtin_has_attribute(char[4], nonstring) == 0, \"type\");\n",
+    );
+    let arena = Arena::default();
+    parse_valid(source, &arena);
+}
+
+#[test]
 fn variable_argument_builtins_are_retained_with_void_type() {
     let source = concat!(
         "typedef __builtin_va_list va_list; ",

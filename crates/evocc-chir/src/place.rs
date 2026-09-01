@@ -233,6 +233,77 @@ pub struct FieldProjection {
     field_ty: TypeId,
 }
 
+/// Resolve one named member to its complete projection path.
+///
+/// Anonymous structure and union members are traversed recursively. Two
+/// matching anonymous paths are ambiguous and therefore fail closed. Keeping
+/// this lookup beside the checked projection type gives every producer and
+/// consumer one rule for member access, designators, `offsetof`, and retained
+/// attribute queries.
+#[must_use]
+pub fn record_member_path(
+    types: &TypeInterner,
+    record_ty: TypeId,
+    name: &str,
+) -> Option<Vec<FieldProjection>> {
+    fn resolve(
+        types: &TypeInterner,
+        record_ty: TypeId,
+        name: &str,
+        visiting: &mut HashSet<TypeId>,
+    ) -> Option<Vec<FieldProjection>> {
+        if !visiting.insert(record_ty) {
+            return None;
+        }
+        let canonical = types.get(record_ty)?;
+        let tag = match canonical.kind {
+            TypeKind::Struct(tag) | TypeKind::Union(tag) => tag,
+            _ => return None,
+        };
+        let definition = types.tag(tag)?;
+        let fields = match &definition.state {
+            TagState::Complete(TagDefinition::Struct(fields))
+            | TagState::Complete(TagDefinition::Union(fields)) => fields,
+            TagState::Incomplete | TagState::Complete(TagDefinition::Enum(_)) => return None,
+        };
+        if let Some((index, field)) = fields
+            .iter()
+            .enumerate()
+            .find(|(_, field)| field.name.as_deref() == Some(name))
+        {
+            visiting.remove(&record_ty);
+            return Some(vec![FieldProjection::new(tag, index, field.ty)]);
+        }
+
+        let mut found = None;
+        for (index, field) in fields
+            .iter()
+            .enumerate()
+            .filter(|(_, field)| field.name.is_none() && field.bit_field.is_none())
+        {
+            if !matches!(
+                types.get(field.ty).map(|ty| &ty.kind),
+                Some(TypeKind::Struct(_) | TypeKind::Union(_))
+            ) {
+                continue;
+            }
+            let Some(mut nested) = resolve(types, field.ty, name, visiting) else {
+                continue;
+            };
+            let mut path = vec![FieldProjection::new(tag, index, field.ty)];
+            path.append(&mut nested);
+            if found.replace(path).is_some() {
+                visiting.remove(&record_ty);
+                return None;
+            }
+        }
+        visiting.remove(&record_ty);
+        found
+    }
+
+    resolve(types, record_ty, name, &mut HashSet::new())
+}
+
 impl FieldProjection {
     /// Describe one member step of a place.
     ///

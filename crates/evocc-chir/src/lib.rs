@@ -24,14 +24,17 @@ pub use allocation::{
     AllocationSite, AllocationSiteKind, AllocationSiteManifest, AllocationSiteManifestError,
     AllocationSiteOrdinal,
 };
-pub use constant::{builtin_constant_p, validate_front_end_builtin_records};
+pub use constant::{
+    attribute_query_target, builtin_constant_p, validate_front_end_builtin_records,
+    AttributeQueryTarget,
+};
 pub use initializer::{
     InitAction, InitPlan, InitPlanError, InitializerDesignation, ObjectInitializer, SubobjectPath,
     SubobjectStep, WrittenDesignator, WrittenInitializer,
 };
 pub use place::{
-    FieldProjection, IndexProjection, MemoryPlace, MemoryPlaceError, PlaceProjection, PlaceRoot,
-    PointerTypeDesc,
+    record_member_path, FieldProjection, IndexProjection, MemoryPlace, MemoryPlaceError,
+    PlaceProjection, PlaceRoot, PointerTypeDesc,
 };
 pub use semantic::{
     AssignmentOp, ExprCategory, ExprFacts, ExprFactsError, NotAssignmentOperator, ScalarPlace,

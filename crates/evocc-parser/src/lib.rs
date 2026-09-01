@@ -9,18 +9,18 @@ use evocc_chir::integer::{
     rank_for_integer_type, usual_arithmetic_type, BitBuiltinOp, CInteger, CIntegerType,
 };
 use evocc_chir::{
-    builtin_constant_p, AppliedAttribute, AsmOperand, AsmStmt, AssignmentOp, Attribute,
-    AttributeArgument, AttributePlacement, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr,
-    CHirForInit, CHirStmt, CHirUnit, CharLit, CharPrefix, CheckedArithmeticOp, EnumeratorDecl,
-    ExprCategory, ExprFacts, FieldProjection, FloatLit, FloatSuffix, FrontEndBuiltinRecord,
-    FunctionDecl, GenericSelectionRecord, IndexProjection, InitAction, InitPlan,
-    InitializerDesignation, IntBase, IntLit, IntSuffix, MemoryPlace, ObjectDecl, ObjectInitializer,
-    ParameterDecl, ParameterSyntax, PlaceProjection, PlaceRoot, PointerTypeDesc, RecordMember,
-    ScalarPlace, ScopeId, ScopeKind, SpannedName, StorageClass, StringLit, StringPrefix,
-    SubobjectPath, SubobjectStep, SymbolData, SymbolId, SymbolKind, SymbolTable, SymbolTableError,
-    TagDecl, TagMembers, TypeSpecifier, TypedefDecl, TypeofOperand, UnaryOp, UpdateOp,
-    VarArgsBuiltinOp, WrittenDeclarator, WrittenDeclaratorLayer, WrittenDesignator,
-    WrittenInitializer,
+    attribute_query_target, builtin_constant_p, record_member_path, AppliedAttribute, AsmOperand,
+    AsmStmt, AssignmentOp, Attribute, AttributeArgument, AttributePlacement, AttributeQueryTarget,
+    BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, CharLit,
+    CharPrefix, CheckedArithmeticOp, EnumeratorDecl, ExprCategory, ExprFacts, FieldProjection,
+    FloatLit, FloatSuffix, FrontEndBuiltinRecord, FunctionDecl, GenericSelectionRecord,
+    IndexProjection, InitAction, InitPlan, InitializerDesignation, IntBase, IntLit, IntSuffix,
+    MemoryPlace, ObjectDecl, ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceProjection,
+    PlaceRoot, PointerTypeDesc, RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName,
+    StorageClass, StringLit, StringPrefix, SubobjectPath, SubobjectStep, SymbolData, SymbolId,
+    SymbolKind, SymbolTable, SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl,
+    TypeofOperand, UnaryOp, UpdateOp, VarArgsBuiltinOp, WrittenDeclarator, WrittenDeclaratorLayer,
+    WrittenDesignator, WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_cpp::{pragma_pack_action, PragmaPackAction};
@@ -5170,6 +5170,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let expression_ty = self.intern_c_integer_type(enum_integer_type(value, value));
             let symbol =
                 self.declare_symbol(&name, SymbolData::Enumerator { value }, expression_ty);
+            self.add_entity_attributes(symbol, &enumerator_attributes);
             members.push(EnumeratorDecl {
                 symbol,
                 name,
@@ -6672,62 +6673,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// ambiguous and return `None`. Member access, initializer designators and
     /// `__builtin_offsetof` all use this one lookup rule.
     fn record_member_path(&self, record_ty: TypeId, name: &str) -> Option<Vec<FieldProjection>> {
-        self.record_member_path_inner(record_ty, name, &mut HashSet::new())
-    }
-
-    fn record_member_path_inner(
-        &self,
-        record_ty: TypeId,
-        name: &str,
-        visiting: &mut HashSet<TypeId>,
-    ) -> Option<Vec<FieldProjection>> {
-        if !visiting.insert(record_ty) {
-            return None;
-        }
-        let canonical = self.types.get(record_ty)?;
-        let tag = match canonical.kind {
-            TypeKind::Struct(tag) | TypeKind::Union(tag) => tag,
-            _ => return None,
-        };
-        let definition = self.types.tag(tag)?;
-        let fields = match &definition.state {
-            TagState::Complete(TagDefinition::Struct(fields))
-            | TagState::Complete(TagDefinition::Union(fields)) => fields,
-            TagState::Incomplete | TagState::Complete(TagDefinition::Enum(_)) => return None,
-        };
-        if let Some((index, field)) = fields
-            .iter()
-            .enumerate()
-            .find(|(_, field)| field.name.as_deref() == Some(name))
-        {
-            visiting.remove(&record_ty);
-            return Some(vec![FieldProjection::new(tag, index, field.ty)]);
-        }
-
-        let mut found = None;
-        for (index, field) in fields
-            .iter()
-            .enumerate()
-            .filter(|(_, field)| field.name.is_none() && field.bit_field.is_none())
-        {
-            if !matches!(
-                self.types.get(field.ty).map(|ty| &ty.kind),
-                Some(TypeKind::Struct(_) | TypeKind::Union(_))
-            ) {
-                continue;
-            }
-            let Some(mut nested) = self.record_member_path_inner(field.ty, name, visiting) else {
-                continue;
-            };
-            let mut path = vec![FieldProjection::new(tag, index, field.ty)];
-            path.append(&mut nested);
-            if found.replace(path).is_some() {
-                visiting.remove(&record_ty);
-                return None;
-            }
-        }
-        visiting.remove(&record_ty);
-        found
+        record_member_path(&self.types, record_ty, name)
     }
 
     /// Split a subscript into its pointer-like and integer operands.
@@ -8930,58 +8876,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         expression: &CHirExpr<'arena>,
         attribute: &str,
     ) -> bool {
-        match expression {
-            CHirExpr::Ident { symbol, .. } => self
+        match attribute_query_target(expression, &self.types) {
+            Some(AttributeQueryTarget::Entity(symbol)) => self
                 .entity_attributes
-                .get(symbol)
+                .get(&symbol)
                 .is_some_and(|attributes| attributes.contains(attribute)),
-            CHirExpr::Member(base, name, _) => {
-                let Some(InferredType::Canonical(base_ty)) =
-                    self.expression_type(base).map(|inferred| inferred.ty)
-                else {
-                    return false;
-                };
-                self.record_member_path(base_ty, name)
-                    .and_then(|path| path.last().copied())
-                    .is_some_and(|field| {
-                        self.member_attributes
-                            .get(&(field.tag(), field.field_index()))
-                            .is_some_and(|attributes| attributes.contains(attribute))
-                    })
-            }
-            CHirExpr::PtrMember(pointer, name, _) => {
-                let Some(inferred) = self.converted_expression_type(pointer) else {
-                    return false;
-                };
-                let OperandTypeClass::Pointer(pointee) = self.operand_type_class(inferred.ty)
-                else {
-                    return false;
-                };
-                self.record_member_path(pointee.pointee, name)
-                    .and_then(|path| path.last().copied())
-                    .is_some_and(|field| {
-                        self.member_attributes
-                            .get(&(field.tag(), field.field_index()))
-                            .is_some_and(|attributes| attributes.contains(attribute))
-                    })
-            }
-            CHirExpr::MemoryRead { place, .. } => place
-                .projections()
-                .iter()
-                .rev()
-                .find_map(|projection| match projection {
-                    PlaceProjection::Field(field) => Some((field.tag(), field.field_index())),
-                    PlaceProjection::Index(_) => None,
-                })
-                .and_then(|field| self.member_attributes.get(&field))
+            Some(AttributeQueryTarget::Member { tag, field_index }) => self
+                .member_attributes
+                .get(&(tag, field_index))
                 .is_some_and(|attributes| attributes.contains(attribute)),
-            CHirExpr::Cast(_, operand, _) | CHirExpr::EvaluateOnce(operand, _) => {
-                self.expression_designates_written_attribute(operand, attribute)
-            }
-            CHirExpr::Comma(_, right, _) => {
-                self.expression_designates_written_attribute(right, attribute)
-            }
-            _ => false,
+            None => false,
         }
     }
 
