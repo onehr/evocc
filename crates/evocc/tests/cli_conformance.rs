@@ -83,6 +83,25 @@ fn malformed_inputs_fail_closed() {
 }
 
 #[test]
+fn declaration_free_translation_units_are_valid() {
+    for input in [
+        b"".as_slice(),
+        b"\n".as_slice(),
+        b"_Static_assert(1, \"valid\");\n".as_slice(),
+    ] {
+        let output = stdin_run(&["--parse-only", "/dev/stdin"], input);
+        assert!(
+            output.status.success(),
+            "input={:?}; stderr={}",
+            String::from_utf8_lossy(input),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        assert!(output.stdout.is_empty());
+        assert!(output.stderr.is_empty());
+    }
+}
+
+#[test]
 fn preprocessed_output_does_not_fuse_tokens() {
     for (input, forbidden) in [
         ("int x = left + +right;\n", "left++right"),

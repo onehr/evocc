@@ -86,3 +86,17 @@ fn compiler_spellings_are_contextual_after_preprocessing() {
         &arena,
     );
 }
+
+#[test]
+fn signed_and_unsigned_128_bit_objects_are_modifiable_assignment_targets() {
+    let arena = Arena::default();
+    parse(
+        concat!(
+            "__uint128_t copy_unsigned(__uint128_t *p) { ",
+            "__uint128_t tmp; tmp = *p; *p = tmp; return tmp; }\n",
+            "__int128_t copy_signed(__int128_t *p) { ",
+            "__int128_t tmp; tmp = *p; *p = tmp; return tmp; }\n",
+        ),
+        &arena,
+    );
+}

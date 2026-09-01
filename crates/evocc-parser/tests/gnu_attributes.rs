@@ -357,6 +357,46 @@ fn every_attribute_position_parses_in_every_declaration_context() {
 }
 
 #[test]
+fn single_underscore_attribute_spelling_works_in_every_attribute_position() {
+    let attribute = "__attribute((unused))";
+    let sources = [
+        format!("{attribute} int f0;\n"),
+        format!("int {attribute} f1;\n"),
+        format!("int f2, {attribute} f3;\n"),
+        format!("int * {attribute} pointer;\n"),
+        format!("struct {attribute} s {{ char c; int i; }};\n"),
+        format!("struct t {{ char c; int i; }} {attribute};\n"),
+        format!("struct m {{ int field {attribute}; }};\n"),
+        format!("int parameter(int value {attribute});\n"),
+        format!("int definition(void) {attribute} {{ return 0; }}\n"),
+        format!("int label(void) {{ out: {attribute}; return 0; }}\n"),
+        format!("int statement(void) {{ {attribute}; return 0; }}\n"),
+        format!("enum e {{ E0 {attribute}, E1 }};\n"),
+        format!("int type_name(void) {{ return sizeof(int {attribute}); }}\n"),
+    ];
+    let failures = sources
+        .iter()
+        .filter_map(|source| {
+            parse(source, &Arena::default())
+                .err()
+                .map(|error| (source, error))
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        failures.is_empty(),
+        "single-underscore alias failures: {failures:#?}"
+    );
+
+    assert_eq!(
+        layout_of(
+            "typedef struct { char c; int i; } __attribute((packed)) alias_layout;\n",
+            "alias_layout",
+        ),
+        (5, 1),
+    );
+}
+
+#[test]
 fn statement_attributes_attach_only_to_null_statements_and_remain_observable() {
     let arena = Arena::default();
     let source = concat!(

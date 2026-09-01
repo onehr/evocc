@@ -55,6 +55,58 @@ fn run(source: &str) -> Result<i128, String> {
 }
 
 #[test]
+fn void_pointer_arithmetic_uses_one_byte_steps_in_every_form() {
+    let cases = [
+        (
+            "compound-add",
+            "int main(void) { char a[8] = {10,20,30,40,50,60,70,80}; void *p = a; p += 3; return *(char *)p; }",
+            40,
+        ),
+        (
+            "compound-subtract",
+            "int main(void) { char a[8] = {10,20,30,40,50,60,70,80}; void *p = a + 4; p -= 2; return *(char *)p; }",
+            30,
+        ),
+        (
+            "post-increment",
+            "int main(void) { char a[8] = {10,20,30,40,50,60,70,80}; void *p = a; void *old = p++; return *(char *)old * 10 + *(char *)p; }",
+            120,
+        ),
+        (
+            "post-decrement",
+            "int main(void) { char a[8] = {10,20,30,40,50,60,70,80}; void *p = a + 2; void *old = p--; return *(char *)old * 10 + *(char *)p; }",
+            320,
+        ),
+        (
+            "pre-increment",
+            "int main(void) { char a[8] = {10,20,30,40,50,60,70,80}; void *p = a; void *now = ++p; return *(char *)now; }",
+            20,
+        ),
+        (
+            "pre-decrement",
+            "int main(void) { char a[8] = {10,20,30,40,50,60,70,80}; void *p = a + 2; void *now = --p; return *(char *)now; }",
+            20,
+        ),
+        (
+            "pointer-difference",
+            "int main(void) { char a[8]; void *first = a; void *last = a + 5; return last - first; }",
+            5,
+        ),
+    ];
+
+    let observed = cases
+        .into_iter()
+        .map(|(name, source, expected)| (name, run(source), expected))
+        .collect::<Vec<_>>();
+    assert!(
+        observed
+            .iter()
+            .all(|(_, actual, expected)| actual.as_ref() == Ok(expected)),
+        "every void-pointer form must use byte scale: {observed:#?}",
+    );
+}
+
+#[test]
 fn direct_pointer_updates_preserve_prefix_postfix_and_scaled_offset_semantics() {
     let source = concat!(
         "int main(void) { ",
