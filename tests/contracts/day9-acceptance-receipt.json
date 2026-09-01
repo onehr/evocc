@@ -2,14 +2,14 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "4ab6a29b9fe874436d609cfa568e6891b843401ae3d9ce25c571ca677615b408"
+    "sha256": "b61c6306e37ee446b01c4caf18989d3f7f86de444023deaac51dc3f03d074a45"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.25",
-    "sha256": "f7b2aebe013a45ff18334dd5f7000dcaea84f077194ebf09c2da687fecb63ea2"
+    "revision": "1.9.26",
+    "sha256": "a98b1b7f709cf0d9a8a246439f60bc879d2e1890e7a987996717ad6b019b99fd"
   },
-  "cutLine": "Revision 1.9.25 scopes P6 and P7 are implemented: packed enumerations use the measured smallest signed or unsigned integer mode, retain int enumeration constants, and reject packed plus aligned with E2903. The dashboard now measures the release binary under the unchanged 10-second budget, eliminating all six then-visible timeout artifacts. Profiling identified a quadratic lexical-tag scan; indexed lookup reduced 4x-input growth from 57.826x to 4.19x, and the frozen init-init-task to kernel-bpf-token release ratio is 1.07x. The tree is green at 1012/1012 workspace tests (1011/1011 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. Raw preprocessing is 16/16, dual-oracle clean parsing is 3/16, and there are zero regressions or timeouts. Stage F1 remains OPEN on 13 GCC lanes at E2001 __builtin_has_attribute and 13 Clang lanes at E2001 __builtin_va_start.",
+  "cutLine": "Revision 1.9.26 scope P8 is implemented: __builtin_has_attribute is an unevaluated _Bool integer constant expression answered from declaration/member attribute identity and independently recomputed by C-HIR consumers; __builtin_va_start, __builtin_va_end and __builtin_va_copy are retained in C-HIR with E2926/E2913 front-end validation and E3030 fail-closed execution/lowering; empty records retain their already-green 0/1 layout. The tree is green at 1025/1025 workspace tests (1024/1024 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. Raw preprocessing is 16/16, dual-oracle clean parsing remains 3/16, both declared builtin first-error classes are zero, and dashboard regressions are zero. Stage F1 remains OPEN on 20 E2102 invalid-update-operands lanes, 4 E2001 __builtin_strlen lanes and 2 E2102 invalid-projected-lvalue lanes across the two oracle streams; __builtin_strlen has no revision-1.9.26 semantic contract.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -644,9 +644,52 @@
     },
     "result": "PASS_STAGE_F1_OPEN"
   },
-  "subjectCommit": "d54214f",
+  "frontEndIntrospectionRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.26, commit bafb803; tests/contracts/day9-acceptance-contract.json scope P8",
+    "opened": "8173181 (tests only; 1014 passed, 8 semantic failures, 1022 listed workspace tests; zero Rust build errors)",
+    "closed": "14c43cb",
+    "implementationCommits": [
+      "8a1a623",
+      "14c43cb"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/front-end-introspection-red.json",
+      "sha256": "aa61667ec2463c40c9d2fd57f96e0dbf709c80ffc51fe57b14ccef7b82503a7b"
+    },
+    "declaredCapabilities": [
+      "__builtin_has_attribute is an unevaluated _Bool integer constant expression answered from attributes written on the designated declaration or member",
+      "__builtin_va_start, __builtin_va_end and __builtin_va_copy are retained in C-HIR, validate E2926/E2913 at the front end and fail closed with E3030 in lowering and both interpreter paths",
+      "empty struct and union layout is size zero and alignment one"
+    ],
+    "alreadySatisfiedAtRed": [
+      "empty struct and union layout was already 0/1, including member lists containing only _Static_assert",
+      "__builtin_va_arg remained outside the admitted profile with E2001"
+    ],
+    "focusedGreen": {
+      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test front_end_introspection -p evocc-chir --test varargs_fail_closed -p evocc-lower --test fail_closed_forms --test front_end_resolved_forms --no-fail-fast",
+      "passed": 26,
+      "failed": 0
+    },
+    "postGreenIntegrityAudit": {
+      "finding": "The initial consumer validation branch for HasAttribute was empty, so a forged producer-supplied result could pass lowering and interpretation.",
+      "red": {
+        "command": "cargo test -p evocc-lower --test front_end_builtin_integrity -- --nocapture",
+        "passed": 0,
+        "failed": 1,
+        "diagnostic": "the consumer must recompute the query instead of trusting its retained bit"
+      },
+      "green": {
+        "command": "cargo test -p evocc-lower --test front_end_builtin_integrity -- --nocapture",
+        "passed": 1,
+        "failed": 0
+      },
+      "boundary": "Parser, C-HIR validation, interpreter entry and lowering now share anonymous-member target resolution while each consumer recomputes the written attribute from retained declarations rather than trusting ExprKind::HasAttribute.result."
+    },
+    "result": "PASS_STAGE_F1_OPEN"
+  },
+  "subjectCommit": "14c43cb",
   "gate": {
-    "claim": "Revision 1.9.25 scopes P6 and P7 are implemented and green. Packed-enum layout matches the sealed measurements, the release-profile dashboard has zero timeouts under the unchanged 10-second budget, and indexed lexical tag lookup passes both the synthetic scaling gate and the frozen real-TU ratio gate. The tree has 1012 listed workspace tests (1011 all-target), zero dashboard regressions, raw preprocessing at 16/16 and dual-oracle clean parsing at 3/16. Stage F1 remains open only on the measured E2001 frontier.",
+    "claim": "Revision 1.9.26 scope P8 is implemented and green. Attribute queries resolve from written declaration/member attributes without evaluating their operand, and downstream consumers independently recompute rather than trust the retained result; the three admitted variable-argument builtins are retained in C-HIR and fail closed with E3030; empty-record layout remains 0/1. The tree has 1025 listed workspace tests (1024 all-target), zero dashboard regressions, raw preprocessing at 16/16 and dual-oracle clean parsing at 3/16. Stage F1 remains open on the newly measured mixed E2102/E2001 frontier.",
     "measured": {
       "dualOracleCleanParseTus": "3/16",
       "rawPreprocessClean": "16/16",
@@ -654,9 +697,14 @@
       "remainingParserLanes": 26,
       "remainingParserUnits": 13,
       "remainingFirstErrors": {
-        "gcc-preprocessed-parser E2001 undeclared-identifier: __builtin_has_attribute": 13,
-        "clang-preprocessed-parser E2001 undeclared-identifier: __builtin_va_start": 13
+        "gcc-preprocessed-parser E2102 invalid-update-operands": 10,
+        "clang-preprocessed-parser E2102 invalid-update-operands": 10,
+        "gcc-preprocessed-parser E2001 undeclared-identifier: __builtin_strlen": 2,
+        "clang-preprocessed-parser E2001 undeclared-identifier: __builtin_strlen": 2,
+        "gcc-preprocessed-parser E2102 invalid-projected-lvalue": 1,
+        "clang-preprocessed-parser E2102 invalid-projected-lvalue": 1
       },
+      "frontEndIntrospectionTests": "27/27",
       "constantExpressionClosureTests": "15/15",
       "gnuArrayInt128Tests": "13/13",
       "anonymousMemberDesignatorTests": "5/5",
@@ -676,8 +724,8 @@
       "frozenRealTuRatio": "1.07x <= 3x",
       "subjectBuildProfile": "release",
       "parserTimeoutSecondsPerTu": 10,
-      "workspaceTests": "1012/1012",
-      "allTargetTests": "1011/1011",
+      "workspaceTests": "1025/1025",
+      "allTargetTests": "1024/1024",
       "specifiedFrontier": false,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
@@ -689,9 +737,9 @@
       "sysregStrayTokenLanesRemaining": 0,
       "preprocessingTokenProductionsMissing": 0,
       "pointerUpdateLanesRemaining": 0,
-      "invalidProjectedLvalueLanesRemaining": 0,
+      "invalidProjectedLvalueLanesRemaining": 2,
       "declaredProjectedPlaceRootFailuresRemaining": 0,
-      "invalidUpdateOperandLanesRemaining": 0,
+      "invalidUpdateOperandLanesRemaining": 20,
       "staticRelocationParserLanesRemaining": 0,
       "nullFunctionPointerConversionLanesRemaining": 0,
       "staticAssertionFailedLanes": 0,
@@ -718,16 +766,20 @@
       "statementExpressionScopeLanesRemaining": 0,
       "typeofFunctionDeclarationLanesRemaining": 0,
       "invalidObjectSizeModeDiagnosticTests": "2/2",
+      "builtinHasAttributeLanesRemaining": 0,
+      "variableArgumentBuiltinLanesRemaining": 0,
+      "emptyRecordLayoutFailuresRemaining": 0,
+      "builtinStrlenLanes": 4,
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260831T194743Z-81561/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260901T034625Z-57162/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "b139670e7523e039d110a8c05d160d5dd4b83c6b5e375e4595365ff3565e6bf9",
-      "subjectCommit": "d54214f",
-      "publishedFromRun": "20260831T203043Z-22845"
+      "sha256": "b70c48f36929d3ce5afeafcf479377a714bf9b4a79f6a190fa570ff9b8fbc581",
+      "subjectCommit": "14c43cb",
+      "publishedFromRun": "20260901T054646Z-62929"
     },
-    "result": "PACKED_ENUM_AND_PARSER_THROUGHPUT_PASS_STAGE_F1_OPEN"
+    "result": "FRONT_END_INTROSPECTION_PASS_STAGE_F1_OPEN"
   },
   "lanes": {
     "clean": {
@@ -741,18 +793,15 @@
     },
     "stillFailing": [
       {
-        "count": 13,
-        "firstError": "E2001 undeclared-identifier: __builtin_has_attribute",
+        "count": 10,
+        "firstError": "E2102 invalid-update-operands",
         "lanes": "gcc-preprocessed-parser",
         "units": [
           "init-init-task",
           "init-do-mounts-initrd",
           "init-version-timestamp",
-          "init-do-mounts",
           "kernel-locking-semaphore",
           "kernel-bpf-token",
-          "kernel-power-console",
-          "kernel-power-main",
           "lib-crypto-mpi-generic-mpih-lshift",
           "mm-memtest",
           "mm-mprotect",
@@ -761,23 +810,54 @@
         ]
       },
       {
-        "count": 13,
-        "firstError": "E2001 undeclared-identifier: __builtin_va_start",
+        "count": 10,
+        "firstError": "E2102 invalid-update-operands",
         "lanes": "clang-preprocessed-parser",
         "units": [
           "init-init-task",
           "init-do-mounts-initrd",
           "init-version-timestamp",
-          "init-do-mounts",
           "kernel-locking-semaphore",
           "kernel-bpf-token",
-          "kernel-power-console",
-          "kernel-power-main",
           "lib-crypto-mpi-generic-mpih-lshift",
           "mm-memtest",
           "mm-mprotect",
           "mm-mincore",
           "mm-page-vma-mapped"
+        ]
+      },
+      {
+        "count": 2,
+        "firstError": "E2001 undeclared-identifier: __builtin_strlen",
+        "lanes": "gcc-preprocessed-parser",
+        "units": [
+          "init-do-mounts",
+          "kernel-power-console"
+        ]
+      },
+      {
+        "count": 2,
+        "firstError": "E2001 undeclared-identifier: __builtin_strlen",
+        "lanes": "clang-preprocessed-parser",
+        "units": [
+          "init-do-mounts",
+          "kernel-power-console"
+        ]
+      },
+      {
+        "count": 1,
+        "firstError": "E2102 invalid-projected-lvalue",
+        "lanes": "gcc-preprocessed-parser",
+        "units": [
+          "kernel-power-main"
+        ]
+      },
+      {
+        "count": 1,
+        "firstError": "E2102 invalid-projected-lvalue",
+        "lanes": "clang-preprocessed-parser",
+        "units": [
+          "kernel-power-main"
         ]
       }
     ],
@@ -1011,6 +1091,16 @@
         "commit": "d54214f",
         "run": "20260831T203043Z-22845",
         "parseLanesStoppedOn": "indexed lexical-tag lookup publication: the same 13 plus 13 typed E2001 frontier remains, with zero timeouts and zero regressions; synthetic 4x-input growth is 4.19x and the frozen init-init-task to kernel-bpf-token release ratio is 1.07x; raw 16/16 clean; dual-oracle clean 3/16; Stage F1 remains open"
+      },
+      {
+        "commit": "8a1a623",
+        "run": "20260901T034625Z-57162",
+        "parseLanesStoppedOn": "revision 1.9.26 front-end introspection publication: all 13 GCC __builtin_has_attribute and 13 Clang __builtin_va_start first errors are gone; each oracle stream now has 10 E2102 invalid-update-operands lanes, 2 E2001 __builtin_strlen lanes and 1 E2102 invalid-projected-lvalue lane; raw 16/16 clean; dual-oracle clean 3/16; 0 regressions; Stage F1 remains open"
+      },
+      {
+        "commit": "14c43cb",
+        "run": "20260901T054646Z-62929",
+        "parseLanesStoppedOn": "post-GREEN integrity publication: consumers independently recompute __builtin_has_attribute from retained declaration identity; all 48 observations retain the preceding classification, raw 16/16 clean, dual-oracle clean 3/16 and 0 regressions; Stage F1 remains open"
       }
     ]
   },
@@ -1313,6 +1403,28 @@
       "stageF1": "OPEN",
       "regressionsAgainstPrevious": 0,
       "scopeP7Throughput": "PASS"
+    },
+    "frontEndIntrospectionAfter": {
+      "run": "20260901T054646Z-62929",
+      "subjectCommit": "14c43cb",
+      "resolvedFirstErrorClasses": {
+        "gcc-preprocessed-parser E2001 undeclared-identifier: __builtin_has_attribute": 13,
+        "clang-preprocessed-parser E2001 undeclared-identifier: __builtin_va_start": 13
+      },
+      "nextFirstErrorClasses": {
+        "gcc-preprocessed-parser E2102 invalid-update-operands": 10,
+        "clang-preprocessed-parser E2102 invalid-update-operands": 10,
+        "gcc-preprocessed-parser E2001 undeclared-identifier: __builtin_strlen": 2,
+        "clang-preprocessed-parser E2001 undeclared-identifier: __builtin_strlen": 2,
+        "gcc-preprocessed-parser E2102 invalid-projected-lvalue": 1,
+        "clang-preprocessed-parser E2102 invalid-projected-lvalue": 1
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "3/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "scopeP8": "PASS_WITH_INDEPENDENT_CONSUMER_RECOMPUTATION",
+      "specificationGap": "P8-NEXT-BUILTIN-STRLEN-SEMANTICS"
     }
   },
   "attributes": {
@@ -1359,13 +1471,13 @@
   },
   "tests": {
     "workspace": {
-      "passed": 1011,
+      "passed": 1024,
       "failed": 0,
-      "command": "CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$' (1011)",
+      "command": "CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list --format terse | rg -c ': test$' (1024)",
       "workspaceIncludingDocTests": {
-        "passed": 1012,
+        "passed": 1025,
         "failed": 0,
-        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list | rg -c ': test$' (1012)"
+        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list --format terse | awk -F': ' '$2 == \"test\" { count += 1 } END { print count }' (1025)"
       }
     },
     "suites": {
@@ -1492,7 +1604,7 @@
         "command": "cargo test -p evocc-parser --test generic_selection"
       },
       "crates/evocc-lower/tests/front_end_resolved_forms.rs": {
-        "passed": 9,
+        "passed": 10,
         "command": "cargo test -p evocc-lower --test front_end_resolved_forms"
       },
       "crates/evocc-parser/tests/checked_arithmetic.rs": {
@@ -1512,8 +1624,16 @@
         "command": "cargo test -p evocc-chir --test checked_arithmetic_semantics"
       },
       "crates/evocc-lower/tests/fail_closed_forms.rs": {
-        "passed": 5,
+        "passed": 6,
         "command": "cargo test -p evocc-lower --test fail_closed_forms"
+      },
+      "crates/evocc-parser/tests/front_end_introspection.rs": {
+        "passed": 7,
+        "command": "cargo test -p evocc-parser --test front_end_introspection"
+      },
+      "crates/evocc-chir/tests/varargs_fail_closed.rs": {
+        "passed": 3,
+        "command": "cargo test -p evocc-chir --test varargs_fail_closed"
       },
       "crates/evocc-parser/tests/gnu_pointer_attributes.rs": {
         "passed": 4,
@@ -1650,17 +1770,17 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "d54214f7fc74cacd90e565ceeb98095355069cc5",
-    "path": "/private/tmp/c30-p7-replay.GqMfWD/repo",
-    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-p7-replay.GqMfWD/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance tools; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list | rg -c ': test$'",
+    "commit": "14c43cb40ba7fd596688ac8123012287d44ad156",
+    "path": "/private/tmp/c30-p8-replay.5ScUjf/repo",
+    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-p8-replay.5ScUjf/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance tools; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list --format terse | rg -c ': test$'",
     "measured": {
-      "passed": 1011,
+      "passed": 1024,
       "failed": 0,
       "clippy": 0,
       "fmt": "clean",
       "ruff": "clean",
       "selfTest": "PASS",
-      "countCommand": 1011,
+      "countCommand": 1024,
       "objectsAlternates": "absent"
     }
   },
@@ -1689,7 +1809,8 @@
     "H-CLOSING-EDGE-CLEANUP: statement-expression lifetime closure is required on every exit but the lowering paragraph does not define the cleanup edge form.",
     "G2-VOLATILE-UNION-COPY: section 10.1.3 requires volatile aggregates to lower as memberwise volatile accesses, but a union has overlapping members and the specification provides no selected-member authority. Volatile union copy therefore remains fail-closed rather than reading every overlapping member.",
     "G2-VOLATILE-BIT-FIELD-COPY: section 10.1.3 does not freeze the access width, mask sequence, or trace granularity for a volatile aggregate member that is a bit-field. That form remains fail-closed.",
-    "G2-AGGREGATE-CALL-ABI: the specification requires one semantic copy for by-value arguments and returns but does not freeze the hidden return-destination parameter position or deterministic origin identity for caller-owned aggregate temporaries. The implementation uses an address-based internal ABI with the return destination before mem/world tokens and a high-bit function-ordinal origin namespace; no broader ABI claim is made."
+    "G2-AGGREGATE-CALL-ABI: the specification requires one semantic copy for by-value arguments and returns but does not freeze the hidden return-destination parameter position or deterministic origin identity for caller-owned aggregate temporaries. The implementation uses an address-based internal ABI with the return destination before mem/world tokens and a high-bit function-ordinal origin namespace; no broader ABI claim is made.",
+    "P8-NEXT-BUILTIN-STRLEN-SEMANTICS: revision 1.9.26 does not specify __builtin_strlen, its integer-constant-expression status, unevaluated cases, result type, diagnostics or lowering boundary. The new dashboard exposes it in two units per oracle stream; no semantics were invented in scope P8."
   ],
   "processDeviations": [
     "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (adce449), aligned arguments as constant expressions (ed8302b), attribute positions in members, block scope and parameters (eae3e42).",
@@ -1745,6 +1866,7 @@
     "The opening P5 RED proved all five conversion contexts at the parser boundary but executed only assignment and truth testing. Inspection during GREEN found that call and return lowering used a separate function-value mapper that rejected function pointers entirely. The semantic commit therefore adds one weighted dual-interpreter execution case covering initialization, assignment, argument, return and comparison; it refines the declared null-conversion capability and does not open a new one.",
     "The first two packed-enum bisection probe attempts were rejected as evidence because the sealed read-only container prevented compiler temporary or output files under /tmp. The accepted third run binds TMPDIR and the executable to the writable evidence mount, records both compiler identities, and obtains identical size/alignment 1/1 results; only that output is cited.",
     "The scope-P7 measurement configuration changed explicitly from the debug subject compiler to the release subject compiler while retaining the 10-second per-TU timeout and four parser jobs. The observer argv, run configuration and receipt all bind that change; it was not represented as a silent timeout increase.",
-    "The reported release timing of init-init-task 20.03 seconds versus kernel-bpf-token 1.15 seconds did not reproduce on the frozen byte-identical inputs at exact baseline 30ed2fc: measured medians were 3.09 and 3.11 seconds. That conflict is retained rather than relabelled. Independent sampling and a deterministic scaling RED exposed a real quadratic lexical-tag lookup; the indexed implementation closes that measured defect and yields a 1.07x real-TU ratio."
+    "The reported release timing of init-init-task 20.03 seconds versus kernel-bpf-token 1.15 seconds did not reproduce on the frozen byte-identical inputs at exact baseline 30ed2fc: measured medians were 3.09 and 3.11 seconds. That conflict is retained rather than relabelled. Independent sampling and a deterministic scaling RED exposed a real quadratic lexical-tag lookup; the indexed implementation closes that measured defect and yields a 1.07x real-TU ratio.",
+    "The initial scope-P8 GREEN implementation rendered and executed the measured answers, but a deliberate corrupted-C-HIR audit found that downstream validation accepted a forged HasAttribute result because its match branch was empty. The corruption test failed first, then consumers were changed to recompute declaration/member identity and written attributes through the shared anonymous-member resolver. The follow-up publication retained all 48 lane classifications with zero regressions."
   ]
 }
