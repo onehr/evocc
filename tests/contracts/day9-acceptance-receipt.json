@@ -2,14 +2,14 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "b61c6306e37ee446b01c4caf18989d3f7f86de444023deaac51dc3f03d074a45"
+    "sha256": "f4bbdf307bc11f2b0b6c6ff3b345141db6ac3dce5a31cc39e7e1a93a13c2db29"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.26",
-    "sha256": "a98b1b7f709cf0d9a8a246439f60bc879d2e1890e7a987996717ad6b019b99fd"
+    "revision": "1.9.27",
+    "sha256": "a46e3563c936a2b7efe5e2ae052579f3817b04b4d60b1e94a5a713c36ddaa41b"
   },
-  "cutLine": "Revision 1.9.26 scope P8 is implemented: __builtin_has_attribute is an unevaluated _Bool integer constant expression answered from declaration/member attribute identity and independently recomputed by C-HIR consumers; __builtin_va_start, __builtin_va_end and __builtin_va_copy are retained in C-HIR with E2926/E2913 front-end validation and E3030 fail-closed execution/lowering; empty records retain their already-green 0/1 layout. The tree is green at 1025/1025 workspace tests (1024/1024 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. Raw preprocessing is 16/16, dual-oracle clean parsing remains 3/16, both declared builtin first-error classes are zero, and dashboard regressions are zero. Stage F1 remains OPEN on 20 E2102 invalid-update-operands lanes, 4 E2001 __builtin_strlen lanes and 2 E2102 invalid-projected-lvalue lanes across the two oracle streams; __builtin_strlen has no revision-1.9.26 semantic contract.",
+  "cutLine": "Revision 1.9.27 scope P9 is implemented: one shared pointer-type authority permits every pointer-valued expression to root a place through *, -> or []; __builtin_strlen folds a measured narrow string literal to a size_t integer constant expression and resolves every non-literal operand to an ordinary compatible strlen call, with E2927 otherwise and no intrinsic in EvoIR. The tree is green at 1031/1031 workspace tests (1030/1030 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. Raw preprocessing remains 16/16, dual-oracle clean parsing moves from 3/16 to 9/16, and dashboard regressions are zero. Stage F1 remains OPEN on 14 parser lanes across seven units: eight E2102 invalid-update-operands, two E2101 expected-modifiable-lvalue, two E1303 enumerator-value-is-not-representable and two E1001 expected-declaration lanes across the two oracle streams.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -687,29 +687,56 @@
     },
     "result": "PASS_STAGE_F1_OPEN"
   },
-  "subjectCommit": "14c43cb",
+  "pointerPlaceStrlenRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.27, commit b33ff28; tests/contracts/day9-acceptance-contract.json scope P9",
+    "opened": "af487da (tests only; 1026 passed, 5 semantic failures, 1031 listed workspace tests; zero Rust build errors)",
+    "closed": "9e5a6d9",
+    "implementationCommits": [
+      "9e5a6d9"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/pointer-place-strlen-red.json",
+      "sha256": "096025cffc4d9781d9304f181aba2233999bafab7e7bc05d20efd912f31a9c2d"
+    },
+    "declaredCapabilities": [
+      "one pointer-type test admits every pointer-valued expression as a place root through dereference, arrow or subscript, including variable, loaded-pointer, address-of, call-result, conditional, statement-expression, cast and comma roots",
+      "__builtin_strlen on a measured narrow string literal is a size_t integer constant expression equal to its decoded explicit-unit count",
+      "__builtin_strlen on any non-literal operand becomes an ordinary call to a visible compatible strlen declaration, reports E2927 otherwise, and leaves no intrinsic in EvoIR"
+    ],
+    "focusedGreen": {
+      "command": "cargo test -p evocc-parser --test projected_lvalues --test builtin_strlen -p evocc-lower --test front_end_resolved_forms --no-fail-fast",
+      "passed": 45,
+      "failed": 0
+    },
+    "result": "PASS_STAGE_F1_OPEN"
+  },
+  "subjectCommit": "9e5a6d9",
   "gate": {
-    "claim": "Revision 1.9.26 scope P8 is implemented and green. Attribute queries resolve from written declaration/member attributes without evaluating their operand, and downstream consumers independently recompute rather than trust the retained result; the three admitted variable-argument builtins are retained in C-HIR and fail closed with E3030; empty-record layout remains 0/1. The tree has 1025 listed workspace tests (1024 all-target), zero dashboard regressions, raw preprocessing at 16/16 and dual-oracle clean parsing at 3/16. Stage F1 remains open on the newly measured mixed E2102/E2001 frontier.",
+    "claim": "Revision 1.9.27 scope P9 is implemented and green. Parser, C-HIR validation and interpretation share one pointer-expression type authority rather than enumerating place-root syntax; literal __builtin_strlen folds at the front end, while a non-literal becomes the visible compatible strlen call and E2927 closes missing or incompatible declarations. The tree has 1031 listed workspace tests (1030 all-target), zero dashboard regressions, raw preprocessing at 16/16 and dual-oracle clean parsing at 9/16. Stage F1 remains open on 14 measured parser lanes across seven units.",
     "measured": {
-      "dualOracleCleanParseTus": "3/16",
+      "dualOracleCleanParseTus": "9/16",
       "rawPreprocessClean": "16/16",
       "stageF1": "OPEN",
-      "remainingParserLanes": 26,
-      "remainingParserUnits": 13,
+      "remainingParserLanes": 14,
+      "remainingParserUnits": 7,
       "remainingFirstErrors": {
-        "gcc-preprocessed-parser E2102 invalid-update-operands": 10,
-        "clang-preprocessed-parser E2102 invalid-update-operands": 10,
-        "gcc-preprocessed-parser E2001 undeclared-identifier: __builtin_strlen": 2,
-        "clang-preprocessed-parser E2001 undeclared-identifier: __builtin_strlen": 2,
-        "gcc-preprocessed-parser E2102 invalid-projected-lvalue": 1,
-        "clang-preprocessed-parser E2102 invalid-projected-lvalue": 1
+        "gcc-preprocessed-parser E2102 invalid-update-operands": 4,
+        "clang-preprocessed-parser E2102 invalid-update-operands": 4,
+        "gcc-preprocessed-parser E2101 expected-modifiable-lvalue": 1,
+        "clang-preprocessed-parser E2101 expected-modifiable-lvalue": 1,
+        "gcc-preprocessed-parser E1303 enumerator-value-is-not-representable": 1,
+        "clang-preprocessed-parser E1303 enumerator-value-is-not-representable": 1,
+        "gcc-preprocessed-parser E1001 expected-declaration": 1,
+        "clang-preprocessed-parser E1001 expected-declaration": 1
       },
       "frontEndIntrospectionTests": "27/27",
       "constantExpressionClosureTests": "15/15",
       "gnuArrayInt128Tests": "13/13",
       "anonymousMemberDesignatorTests": "5/5",
       "typeofUnqualTests": "6/6",
-      "projectedLvalueTests": "29/29",
+      "projectedLvalueTests": "31/31",
+      "builtinStrlenTests": "3/3",
+      "frontEndResolvedFormsTests": "11/11",
       "statementExpressionPlaceFactTests": "1/1",
       "aggregateCopyTests": "9/9",
       "diagnosticSurveyParserTests": "7/7",
@@ -724,8 +751,8 @@
       "frozenRealTuRatio": "1.07x <= 3x",
       "subjectBuildProfile": "release",
       "parserTimeoutSecondsPerTu": 10,
-      "workspaceTests": "1025/1025",
-      "allTargetTests": "1024/1024",
+      "workspaceTests": "1031/1031",
+      "allTargetTests": "1030/1030",
       "specifiedFrontier": false,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
@@ -737,9 +764,9 @@
       "sysregStrayTokenLanesRemaining": 0,
       "preprocessingTokenProductionsMissing": 0,
       "pointerUpdateLanesRemaining": 0,
-      "invalidProjectedLvalueLanesRemaining": 2,
+      "invalidProjectedLvalueLanesRemaining": 0,
       "declaredProjectedPlaceRootFailuresRemaining": 0,
-      "invalidUpdateOperandLanesRemaining": 20,
+      "invalidUpdateOperandLanesRemaining": 8,
       "staticRelocationParserLanesRemaining": 0,
       "nullFunctionPointerConversionLanesRemaining": 0,
       "staticAssertionFailedLanes": 0,
@@ -769,84 +796,92 @@
       "builtinHasAttributeLanesRemaining": 0,
       "variableArgumentBuiltinLanesRemaining": 0,
       "emptyRecordLayoutFailuresRemaining": 0,
-      "builtinStrlenLanes": 4,
+      "builtinStrlenLanes": 0,
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260901T034625Z-57162/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260901T054646Z-62929/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "b70c48f36929d3ce5afeafcf479377a714bf9b4a79f6a190fa570ff9b8fbc581",
-      "subjectCommit": "14c43cb",
-      "publishedFromRun": "20260901T054646Z-62929"
+      "sha256": "8b70d144bf30c6191ff1931807312d8cc40a07043ad494803364b6724f1d8806",
+      "subjectCommit": "9e5a6d9",
+      "publishedFromRun": "20260901T093517Z-94633"
     },
-    "result": "FRONT_END_INTROSPECTION_PASS_STAGE_F1_OPEN"
+    "result": "POINTER_PLACES_STRLEN_PASS_STAGE_F1_OPEN"
   },
   "lanes": {
     "clean": {
-      "count": 22,
+      "count": 34,
       "units": [
         "all 16 units (evocpp-raw)",
+        "init-version-timestamp (gcc-preprocessed-parser, clang-preprocessed-parser)",
+        "kernel-locking-semaphore (gcc-preprocessed-parser, clang-preprocessed-parser)",
+        "kernel-power-console (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "lib-bitrev (gcc-preprocessed-parser, clang-preprocessed-parser)",
+        "lib-crypto-mpi-generic-mpih-lshift (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "lib-fdt-wip (gcc-preprocessed-parser, clang-preprocessed-parser)",
-        "lib-kstrtox (gcc-preprocessed-parser, clang-preprocessed-parser)"
+        "lib-kstrtox (gcc-preprocessed-parser, clang-preprocessed-parser)",
+        "mm-memtest (gcc-preprocessed-parser, clang-preprocessed-parser)",
+        "mm-page-vma-mapped (gcc-preprocessed-parser, clang-preprocessed-parser)"
       ]
     },
     "stillFailing": [
       {
-        "count": 10,
+        "count": 4,
         "firstError": "E2102 invalid-update-operands",
         "lanes": "gcc-preprocessed-parser",
         "units": [
-          "init-init-task",
-          "init-do-mounts-initrd",
-          "init-version-timestamp",
-          "kernel-locking-semaphore",
+          "init-do-mounts",
           "kernel-bpf-token",
-          "lib-crypto-mpi-generic-mpih-lshift",
-          "mm-memtest",
           "mm-mprotect",
-          "mm-mincore",
-          "mm-page-vma-mapped"
+          "mm-mincore"
         ]
       },
       {
-        "count": 10,
+        "count": 4,
         "firstError": "E2102 invalid-update-operands",
         "lanes": "clang-preprocessed-parser",
         "units": [
-          "init-init-task",
-          "init-do-mounts-initrd",
-          "init-version-timestamp",
-          "kernel-locking-semaphore",
+          "init-do-mounts",
           "kernel-bpf-token",
-          "lib-crypto-mpi-generic-mpih-lshift",
-          "mm-memtest",
           "mm-mprotect",
-          "mm-mincore",
-          "mm-page-vma-mapped"
-        ]
-      },
-      {
-        "count": 2,
-        "firstError": "E2001 undeclared-identifier: __builtin_strlen",
-        "lanes": "gcc-preprocessed-parser",
-        "units": [
-          "init-do-mounts",
-          "kernel-power-console"
-        ]
-      },
-      {
-        "count": 2,
-        "firstError": "E2001 undeclared-identifier: __builtin_strlen",
-        "lanes": "clang-preprocessed-parser",
-        "units": [
-          "init-do-mounts",
-          "kernel-power-console"
+          "mm-mincore"
         ]
       },
       {
         "count": 1,
-        "firstError": "E2102 invalid-projected-lvalue",
+        "firstError": "E2101 expected-modifiable-lvalue",
+        "lanes": "gcc-preprocessed-parser",
+        "units": [
+          "init-init-task"
+        ]
+      },
+      {
+        "count": 1,
+        "firstError": "E2101 expected-modifiable-lvalue",
+        "lanes": "clang-preprocessed-parser",
+        "units": [
+          "init-init-task"
+        ]
+      },
+      {
+        "count": 1,
+        "firstError": "E1303 enumerator-value-is-not-representable",
+        "lanes": "gcc-preprocessed-parser",
+        "units": [
+          "init-do-mounts-initrd"
+        ]
+      },
+      {
+        "count": 1,
+        "firstError": "E1303 enumerator-value-is-not-representable",
+        "lanes": "clang-preprocessed-parser",
+        "units": [
+          "init-do-mounts-initrd"
+        ]
+      },
+      {
+        "count": 1,
+        "firstError": "E1001 expected-declaration",
         "lanes": "gcc-preprocessed-parser",
         "units": [
           "kernel-power-main"
@@ -854,7 +889,7 @@
       },
       {
         "count": 1,
-        "firstError": "E2102 invalid-projected-lvalue",
+        "firstError": "E1001 expected-declaration",
         "lanes": "clang-preprocessed-parser",
         "units": [
           "kernel-power-main"
@@ -1101,6 +1136,11 @@
         "commit": "14c43cb",
         "run": "20260901T054646Z-62929",
         "parseLanesStoppedOn": "post-GREEN integrity publication: consumers independently recompute __builtin_has_attribute from retained declaration identity; all 48 observations retain the preceding classification, raw 16/16 clean, dual-oracle clean 3/16 and 0 regressions; Stage F1 remains open"
+      },
+      {
+        "commit": "9e5a6d9",
+        "run": "20260901T093517Z-94633",
+        "parseLanesStoppedOn": "revision 1.9.27 publication: the complete pointer-root form matrix and both __builtin_strlen paths are green; six units per oracle stream become newly clean, dual-oracle clean parsing moves from 3/16 to 9/16, raw preprocessing remains 16/16, and regressions remain zero. The remaining 14 parser lanes are eight E2102, two E2101, two E1303 and two E1001 observations across seven units; Stage F1 remains open"
       }
     ]
   },
@@ -1425,6 +1465,39 @@
       "regressionsAgainstPrevious": 0,
       "scopeP8": "PASS_WITH_INDEPENDENT_CONSUMER_RECOMPUTATION",
       "specificationGap": "P8-NEXT-BUILTIN-STRLEN-SEMANTICS"
+    },
+    "pointerPlacesStrlenAfter": {
+      "run": "20260901T093517Z-94633",
+      "subjectCommit": "9e5a6d9",
+      "movedFirstErrorClasses": {
+        "gcc-preprocessed-parser E2102 invalid-update-operands": 6,
+        "clang-preprocessed-parser E2102 invalid-update-operands": 6,
+        "gcc-preprocessed-parser E2001 undeclared-identifier: __builtin_strlen": 2,
+        "clang-preprocessed-parser E2001 undeclared-identifier: __builtin_strlen": 2,
+        "gcc-preprocessed-parser E2102 invalid-projected-lvalue": 1,
+        "clang-preprocessed-parser E2102 invalid-projected-lvalue": 1
+      },
+      "nextFirstErrorClasses": {
+        "gcc-preprocessed-parser E2102 invalid-update-operands": 4,
+        "clang-preprocessed-parser E2102 invalid-update-operands": 4,
+        "gcc-preprocessed-parser E2101 expected-modifiable-lvalue": 1,
+        "clang-preprocessed-parser E2101 expected-modifiable-lvalue": 1,
+        "gcc-preprocessed-parser E1303 enumerator-value-is-not-representable": 1,
+        "clang-preprocessed-parser E1303 enumerator-value-is-not-representable": 1,
+        "gcc-preprocessed-parser E1001 expected-declaration": 1,
+        "clang-preprocessed-parser E1001 expected-declaration": 1
+      },
+      "firstErrorSites": {
+        "E2102 invalid-update-operands": "include/linux/bpfptr.h:44; init-do-mounts, kernel-bpf-token, mm-mprotect and mm-mincore",
+        "E2101 expected-modifiable-lvalue": "arch/arm64/include/asm/checksum.h:29; init-init-task",
+        "E1303 enumerator-value-is-not-representable": "include/uapi/linux/perf_event.h:339; init-do-mounts-initrd",
+        "E1001 expected-declaration": "include/linux/efi.h:1301; kernel-power-main"
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "9/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "scopeP9": "PASS"
     }
   },
   "attributes": {
@@ -1471,13 +1544,13 @@
   },
   "tests": {
     "workspace": {
-      "passed": 1024,
+      "passed": 1030,
       "failed": 0,
-      "command": "CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list --format terse | rg -c ': test$' (1024)",
+      "command": "CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list --format terse | rg -c ': test$' (1030)",
       "workspaceIncludingDocTests": {
-        "passed": 1025,
+        "passed": 1031,
         "failed": 0,
-        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list --format terse | awk -F': ' '$2 == \"test\" { count += 1 } END { print count }' (1025)"
+        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list --format terse | rg -c ': test$' (1031)"
       }
     },
     "suites": {
@@ -1502,8 +1575,12 @@
         "command": "cargo test -p evocc --test diagnostic_survey_mode"
       },
       "crates/evocc-parser/tests/projected_lvalues.rs": {
-        "passed": 29,
+        "passed": 31,
         "command": "cargo test -p evocc-parser --test projected_lvalues"
+      },
+      "crates/evocc-parser/tests/builtin_strlen.rs": {
+        "passed": 3,
+        "command": "cargo test -p evocc-parser --test builtin_strlen"
       },
       "crates/evocc-chir/tests/statement_expression_places.rs": {
         "passed": 1,
@@ -1604,7 +1681,7 @@
         "command": "cargo test -p evocc-parser --test generic_selection"
       },
       "crates/evocc-lower/tests/front_end_resolved_forms.rs": {
-        "passed": 10,
+        "passed": 11,
         "command": "cargo test -p evocc-lower --test front_end_resolved_forms"
       },
       "crates/evocc-parser/tests/checked_arithmetic.rs": {
@@ -1770,17 +1847,17 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "14c43cb40ba7fd596688ac8123012287d44ad156",
-    "path": "/private/tmp/c30-p8-replay.5ScUjf/repo",
-    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-p8-replay.5ScUjf/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance tools; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list --format terse | rg -c ': test$'",
+    "commit": "9e5a6d9118ba236e0fd632f21ea555bc435697a0",
+    "path": "/private/tmp/c30-p9-replay.GnXbLm/repo",
+    "command": "git clone --no-local --branch main /Users/onehrxn/dev/30days/c30 /private/tmp/c30-p9-replay.GnXbLm/repo; test ! -e .git/objects/info/alternates; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet; CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets --locked --offline -- -D warnings; cargo fmt --all -- --check; ruff check tests/acceptance tools; python3 tests/acceptance/publish-kernel-dashboard.py --self-test; CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list --format terse | rg -c ': test$'",
     "measured": {
-      "passed": 1024,
+      "passed": 1030,
       "failed": 0,
       "clippy": 0,
       "fmt": "clean",
       "ruff": "clean",
       "selfTest": "PASS",
-      "countCommand": 1024,
+      "countCommand": 1030,
       "objectsAlternates": "absent"
     }
   },
@@ -1810,7 +1887,7 @@
     "G2-VOLATILE-UNION-COPY: section 10.1.3 requires volatile aggregates to lower as memberwise volatile accesses, but a union has overlapping members and the specification provides no selected-member authority. Volatile union copy therefore remains fail-closed rather than reading every overlapping member.",
     "G2-VOLATILE-BIT-FIELD-COPY: section 10.1.3 does not freeze the access width, mask sequence, or trace granularity for a volatile aggregate member that is a bit-field. That form remains fail-closed.",
     "G2-AGGREGATE-CALL-ABI: the specification requires one semantic copy for by-value arguments and returns but does not freeze the hidden return-destination parameter position or deterministic origin identity for caller-owned aggregate temporaries. The implementation uses an address-based internal ABI with the return destination before mem/world tokens and a high-bit function-ordinal origin namespace; no broader ABI claim is made.",
-    "P8-NEXT-BUILTIN-STRLEN-SEMANTICS: revision 1.9.26 does not specify __builtin_strlen, its integer-constant-expression status, unevaluated cases, result type, diagnostics or lowering boundary. The new dashboard exposes it in two units per oracle stream; no semantics were invented in scope P8."
+    "P9-STRLEN-LITERAL-EDGE: revision 1.9.27 says a string-literal operand folds to the literal's length but does not freeze whether an embedded zero terminates that length or whether prefixed wide, UTF-16, UTF-32 and UTF-8 literals take the constant path. The sealed evidence and positive claim cover ordinary narrow literals without embedded zeros; no broader oracle-conformance claim is made."
   ],
   "processDeviations": [
     "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (adce449), aligned arguments as constant expressions (ed8302b), attribute positions in members, block scope and parameters (eae3e42).",

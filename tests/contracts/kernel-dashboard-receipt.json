@@ -1,8 +1,8 @@
 {
   "receiptId": "c30.kernel-dashboard",
-  "subjectCommit": "14c43cb",
-  "publishedFromRun": "20260901T054646Z-62929",
-  "previousRun": "20260901T034625Z-57162",
+  "subjectCommit": "9e5a6d9",
+  "publishedFromRun": "20260901T093517Z-94633",
+  "previousRun": "20260901T054646Z-62929",
   "cohortSha256": "09d0e2eaf0734949164a491d30df640bf396ff7586ef495f938f565b8879a306",
   "observer": {
     "path": "tests/acceptance/day5-kernel-reductions-observer.py",
@@ -13,7 +13,7 @@
     "environmentSha256": "81b4ddf0ab451d1e701ec3f5d2019e56c616ae59f6ba56e9843d2adc84604d26",
     "returnCode": 0,
     "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "stdoutSha256": "9e3385624d5d28981364555b12a8c5682d6ae02da70c8b65c631650b1a9e883c",
+    "stdoutSha256": "c1cbbfd1bd1cf3dc1cdf8faf9cc2188c8bc56370f64ef24657b01dd62700b32a",
     "timedOut": false
   },
   "command": "tests/acceptance/day5-kernel-reconnaissance.py --timeout 120 --parser-timeout 10 --parser-jobs 4 --subject-profile release",
@@ -23,7 +23,7 @@
     "parserJobs": 4,
     "change": "subject compiler changed from debug to release; timeout remained 10 seconds",
     "runConfig": {
-      "path": ".evidence/day5-kernel-reconnaissance/20260901T054646Z-62929/run-config.json",
+      "path": ".evidence/day5-kernel-reconnaissance/20260901T093517Z-94633/run-config.json",
       "sha256": "b0e05c674acdc96b948c3ea99ef0015e9e933148c6ada5afc15c677f63543907"
     }
   },
@@ -34,33 +34,33 @@
         "failed": 0
       },
       "gcc-preprocessed-parser": {
-        "clean": 3,
-        "failed": 13
+        "clean": 9,
+        "failed": 7
       },
       "clang-preprocessed-parser": {
-        "clean": 3,
-        "failed": 13
+        "clean": 9,
+        "failed": 7
       }
     },
-    "dualOracleCleanParseTus": "3/16"
+    "dualOracleCleanParseTus": "9/16"
   },
   "routing": {
-    "clean": 22,
-    "unclassified": 26
+    "clean": 34,
+    "unclassified": 14
   },
   "regressionsAgainstPrevious": [],
   "artifacts": {
     "results": {
-      "path": ".evidence/day5-kernel-reconnaissance/20260901T054646Z-62929/results.jsonl",
-      "sha256": "d417117eb44ef56b735dd4e2e9bb02415b3f332c1fc29169c9eac65cd2bdf39a"
+      "path": ".evidence/day5-kernel-reconnaissance/20260901T093517Z-94633/results.jsonl",
+      "sha256": "2208b16cf3c753fd75a6022b849293fab4d61c4c6490695ffdc12c8ef28d513b"
     },
     "routing": {
-      "path": ".evidence/kernel-dashboard/14c43cb/routing.json",
-      "sha256": "b767d145ecec4f9365b87b59e5866a2e754016db1e68a1796e62b4ff999bd92d"
+      "path": ".evidence/kernel-dashboard/9e5a6d9/routing.json",
+      "sha256": "d041b0c10cce23648f338f74d7bfe25a90e5131ff1d60c17dfac569f5fe9f417"
     },
     "captureStatus": {
-      "path": ".evidence/kernel-dashboard/14c43cb/reconnaissance.status",
-      "sha256": "6198de414a90c6824d1d40b7c8bbaa8c371cca9989ce558bf40af6361ee1e725"
+      "path": ".evidence/kernel-dashboard/9e5a6d9/reconnaissance.status",
+      "sha256": "458d71bf5ee10f9659e44b57f01355ef01b35f566979cf465cc7411d4f991c34"
     }
   }
 }
