@@ -232,6 +232,7 @@ const KEYWORDS: &[(&str, TokenKind)] = &[
     ("__attribute__", TokenKind::Attribute),
     ("__attribute", TokenKind::Attribute),
     ("__typeof__", TokenKind::Typeof),
+    ("__typeof", TokenKind::Typeof),
     ("__typeof_unqual__", TokenKind::TypeofUnqual),
     ("auto", TokenKind::Auto),
     ("break", TokenKind::Break),

@@ -954,7 +954,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn report_redefinition(&mut self, name: &SpannedName) {
         self.report(
             "E2002",
-            format!("ordinary-identifier-redefinition: {}", name.spelling),
+            format!("incompatible-redeclaration: {}", name.spelling),
             name.span,
         );
     }
@@ -4268,6 +4268,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 (ty, TypeofOperand::TypeName, tag_event, None)
             } else {
                 let transaction = self.symbols.begin_transaction();
+                let declaration_transaction = self.begin_declaration_transaction();
                 let mut installed = HashSet::new();
                 for shadow in self.temporary_parameter_shadows.clone() {
                     if shadow.scope == self.current_scope
@@ -4300,6 +4301,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.symbols
                     .rollback_transaction(&transaction)
                     .expect("temporary typeof bindings are table-local and LIFO");
+                self.rollback_declaration_transaction(&declaration_transaction);
                 let Some((expression, inferred, inherited)) = inferred else {
                     if self.diagnostics.is_empty() {
                         self.report("E1003", "expected-expression", self.span());
