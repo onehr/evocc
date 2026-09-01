@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.25** | **Authoritative reference** | **2026-09-01**
+**Revision 1.9.26** | **Authoritative reference** | **2026-09-01**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1288,6 +1288,7 @@ twice would let a reader think two conditions are the same finding.
 | `E2923` | `invalid-array-bound` | front end |
 | `E2924` | `attribute-on-non-null-statement` | front end |
 | `E2925` | `builtin-mode-out-of-range` | front end |
+| `E2926` | `va-start-outside-variadic-function` | front end |
 | `E0102` | `unmatched-conditional` | preprocessor |
 | `E0104` | `error-directive` | preprocessor |
 | `E0105` | `include-not-found` | preprocessor |
@@ -1308,6 +1309,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3025` | `not-lowered: return-address` | lowering |
 | `E3026` | `not-lowered: static-relocation` | lowering |
 | `E3027` | `overlapping-copy` | runtime |
+| `E3030` | `not-lowered: varargs` | lowering |
 | `E3029` | `not-lowered: computed-goto` | lowering |
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
@@ -2800,6 +2802,7 @@ front end that still emits it is defective.
 | `E2923` | array bound folds to a negative value |
 | `E2924` | an attribute specifier precedes a statement that is not a null statement |
 | `E2925` | `__builtin_object_size` mode is not a constant in `0..3` |
+| `E2926` | `va_start` in a non-variadic function, or naming a parameter other than the last named one |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -3231,6 +3234,36 @@ and Clang-19 agree on every row.
   kernel cohort are modes 0 and 1 on parameters and none is in a constant
   context, so nothing in the cohort depends on the difference. A later revision
   that adds the analysis must say so and re-measure.
+- `__builtin_has_attribute(operand, attribute)`: a GCC builtin; Clang-19 does
+  not provide it, and it appears only in GCC-dialect input, which is what
+  EvoCPP presents itself as (10.4). The result is an integer constant
+  expression of type `_Bool` (measured: `sizeof` 1, usable in
+  `_Static_assert`). The operand is a type name or an expression; an
+  expression is not evaluated, and the answer is `1` exactly when the named
+  attribute was written on the declaration of the entity the expression
+  designates — for `nonstring`, on the array member it names, through `.` or
+  `->` alike — and `0` otherwise, including for a type name and for an entity
+  declared without it. Because 10.1.9 preserves every attribute losslessly, the
+  answer is read from that inventory; no attribute needs a meaning to be
+  queried. The cohort asks only about `nonstring`, 34 times, inside
+  `_Static_assert`. Evidence `.evidence/builtin-probes/20260901-2c23684c/hasattr.out`.
+- **Variable arguments at the front end.** `__builtin_va_start(ap, param)`,
+  `__builtin_va_end(ap)` and `__builtin_va_copy(dst, src)` are accepted with
+  type `void`: `ap`, `dst` and `src` must have type `__builtin_va_list`
+  (10.1.5), `va_start` may appear only in a function whose parameter list ends
+  in `...` (both oracles reject it elsewhere; `E2926`,
+  `va-start-outside-variadic-function`), and `param` must name the last named
+  parameter (both oracles accept another parameter silently and the standard
+  makes it undefined, so this profile refuses it, `E2926` at `param`).
+  `__builtin_va_arg` is not in the cohort and is not admitted. A `va_list`
+  object, `va_start` and `va_end` are kept in C-HIR; lowering and both
+  interpreters report `E3030` (`not-lowered: varargs`) and fail closed until
+  the target calling convention specifies them. The cohort's only use is to
+  start, forward to a `v*printf`-style callee, and end.
+- **Empty records.** A struct or union whose member list declares no member
+  (for instance one containing only a `_Static_assert`) is a GNU extension with
+  `sizeof` 0 and alignment 1 (measured, both oracles); the kernel's
+  `__must_be_cstr` writes `sizeof(struct { _Static_assert(...); })`.
 - `__builtin_return_address(0)`: type `void *`; accepted by the front end;
   lowering reports `E3025` (`not-lowered: return-address`) and fails closed;
   an argument other than the constant `0` is `E2913`.
@@ -3996,6 +4029,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.26 | 2026-09-01 | Specifies `__builtin_has_attribute` as a `_Bool` constant answered from the preserved attribute inventory, the three `va_*` builtins at the front end with fail-closed lowering (`E2926`, `E3030`), and empty records with size zero. All measured; added after 13 GCC lanes stopped on the first and 13 Clang lanes on the second. |
 | 1.9.25 | 2026-09-01 | Defines `packed` on enumerations from measured oracle behaviour: smallest representable integer type, signed when a negative enumerator exists, alignment equal to size, constants still `int`; the `packed`+`aligned` combination is refused as an unarbitrated oracle conflict the cohort never uses. Added after the executing agent bisected 15 failing static assertions to `sizeof(enum rw_hint)`. |
 | 1.9.24 | 2026-09-01 | Generalizes the null pointer constant to every conversion context including function pointers, after `(void *)0` into a function-pointer member was refused while `0` was accepted; admits an address constant cast through an integer type and back, as the kernel's symbol exports write it, with lowering still governed by the relocation deferral. Both measured. |
 | 1.9.23 | 2026-08-31 | Corrects 10.1.11: a statement expression is permitted anywhere inside a function definition and nowhere outside one, `E2905` meaning only the latter. Revision 1.9.22 also fired it wherever a constant expression was required, which stopped 26 lanes on the kernel's `container_of`, where the statement expression sits inside `typeof` and is never evaluated. Records that this profile does not fold a statement expression to a constant although both oracles do. Adds `typeof` of a function designator as a declaration specifier, and `E2925` for an out-of-range `__builtin_object_size` mode. |
