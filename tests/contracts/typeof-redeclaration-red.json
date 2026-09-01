@@ -98,13 +98,13 @@
     "failed": 13
   },
   "workspaceIncludingDocTests": {
-    "listed": 1061,
-    "passed": 1048,
+    "listed": 1060,
+    "passed": 1047,
     "failed": 13,
     "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet"
   },
   "allTargetTestCount": {
-    "listed": 1060,
+    "listed": 1059,
     "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list --format terse | rg -c ': test$'"
   },
   "result": "RED"

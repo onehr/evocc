@@ -2,14 +2,14 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "07ad482c70b352f3245574eabbc5bb77a65a41c4b45cff17d2ea767daf339019"
+    "sha256": "bf29e4d697c8c7461bdf226bea40a85fb8e8c9586bb54476b90cf5787b3d88d0"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.30",
-    "sha256": "1769df0672a79935775ad94e0fca8e2ebe86c70bdddd1b53d6349d4616146b53"
+    "revision": "1.9.31",
+    "sha256": "1edb938ca7021a52d47c219dcd28ae02c070a8e0e9e36c4af6536f6fc08de33f"
   },
-  "cutLine": "Revision 1.9.30 scope P12 is implemented: function declarations and object declarations now share the complete comma-separated declarator-list path, each listed function receives its own FunctionDecl, and a semantic function type supplies an unnamed canonical prototype when no written parameter list exists. The tree is green at 1057/1057 workspace tests (1056/1056 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. Raw preprocessing remains 16/16, dual-oracle clean parsing moves from 11/16 to 13/16, and dashboard regressions are zero. Stage F1 remains OPEN on six parser lanes across three units: four E1001 observations on the unregistered GNU __typeof spelling in syscall-wrapper parameters and two E2002 observations on a repeated compatible block-scope extern function declaration. Both are beyond the explicit revision 1.9.30 rulings and are recorded as specification gaps rather than silently implemented.",
+  "cutLine": "Revision 1.9.31 scope P13 is implemented: __typeof is the third spelling of the existing typeof construct, every declaration side table is rolled back with a typeof expression operand, compatible linkage redeclarations remain accepted, and E2002 consistently reports incompatible-redeclaration without weakening compatibility. The tree is green at 1060/1060 workspace tests (1059/1059 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. Raw preprocessing remains 16/16, dual-oracle clean parsing moves from 13/16 to 14/16, and dashboard regressions are zero. Stage F1 remains OPEN on four parser lanes across mm-mprotect and mm-mincore: both oracle-preprocessed forms reach a nested typeof operand while a prior function parameter shadow named start is already installed and panic instead of parsing. Revision 1.9.31 already covers nested operand scope, so this is a measured implementation defect, not a specification gap.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -795,20 +795,49 @@
     ],
     "result": "PASS_STAGE_F1_OPEN"
   },
-  "subjectCommit": "fe5179b",
+  "typeofRedeclarationRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.31, commit 457a705; tests/contracts/day9-acceptance-contract.json scope P13",
+    "opened": "241f899 (tests only; 1047 passed, 13 semantic failures, 1060 listed workspace tests; zero Rust build errors)",
+    "closed": "88cd9a7",
+    "implementationCommits": [
+      "88cd9a7"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/typeof-redeclaration-red.json",
+      "sha256": "89b5a049ac59a56cf8f6fe7d2ff7dbb97ad2a1a4ffba63768a5edb206c0d3606"
+    },
+    "declaredCapabilities": [
+      "typeof, __typeof__ and __typeof are three spellings of the same front-end construct, with the measured __typeof(x) value case returning 42",
+      "a statement expression inside a typeof operand rolls back every declaration binding it creates, including objects, tags and declarations with linkage",
+      "compatible linkage redeclarations remain accepted while every E2002 case reports incompatible-redeclaration at the later declaration"
+    ],
+    "focusedGreen": {
+      "commands": [
+        "cargo test -p evocc-lex --test gnu_typeof_spellings",
+        "cargo test -p evocc-parser --test gnu_typeof",
+        "cargo test -p evocc-parser --test day5_g2_bindings",
+        "cargo test -p evocc-parser --test day5_g2_typedefs",
+        "cargo test -p evocc --test day5_g2_semantics_red"
+      ],
+      "passed": 55,
+      "failed": 0
+    },
+    "measuredNextDefect": "mm-mprotect and mm-mincore panic in both oracle-preprocessed lanes when nested typeof parsing attempts to install the already-visible function parameter shadow start a second time; revision 1.9.31 covers the construct, so no specification ambiguity is claimed",
+    "specAmbiguitiesThisWindow": [],
+    "result": "PASS_STAGE_F1_OPEN"
+  },
+  "subjectCommit": "88cd9a7",
   "gate": {
-    "claim": "Revision 1.9.30 scope P12 is implemented and green. Function prototypes without bodies now use the same complete declarator-list pipeline as objects and typedefs, and semantic function types reconstruct canonical unnamed parameters when no source parameter list exists. All ten declared P12 lanes moved, zero dashboard regressions were observed, raw preprocessing remains 16/16 and dual-oracle clean parsing advances to 13/16. Stage F1 remains open on six measured parser lanes across three units because the next two forms are not explicitly covered by revision 1.9.30.",
+    "claim": "Revision 1.9.31 scope P13 is implemented and green. The __typeof spelling is accepted through the common typeof token, typeof expression operands roll back linkage and entity state with their lexical bindings, compatible redeclarations remain accepted, and E2002 uses the specified incompatible-redeclaration message. All six prior P13 first-error lanes moved, zero dashboard regressions were observed, raw preprocessing remains 16/16 and dual-oracle clean parsing advances to 14/16. Stage F1 remains open on four measured parser lanes across two units because nested typeof parsing panics while reinstalling an already-visible function parameter shadow; revision 1.9.31 covers that behavior, so it is an implementation defect rather than a specification gap.",
     "measured": {
-      "dualOracleCleanParseTus": "13/16",
+      "dualOracleCleanParseTus": "14/16",
       "rawPreprocessClean": "16/16",
       "stageF1": "OPEN",
-      "remainingParserLanes": 6,
-      "remainingParserUnits": 3,
+      "remainingParserLanes": 4,
+      "remainingParserUnits": 2,
       "remainingFirstErrors": {
-        "gcc-preprocessed-parser E1001 expected-declaration at __typeof spelling": 2,
-        "clang-preprocessed-parser E1001 expected-declaration at __typeof spelling": 2,
-        "gcc-preprocessed-parser E2002 compatible block-scope extern function redeclaration": 1,
-        "clang-preprocessed-parser E2002 compatible block-scope extern function redeclaration": 1
+        "gcc-preprocessed-parser DRIVER_RUST_PANIC reinstalling the nested typeof parameter shadow start": 2,
+        "clang-preprocessed-parser DRIVER_RUST_PANIC reinstalling the nested typeof parameter shadow start": 2
       },
       "frontEndIntrospectionTests": "27/27",
       "constantExpressionClosureTests": "15/15",
@@ -832,9 +861,9 @@
       "frozenRealTuRatio": "1.07x <= 3x",
       "subjectBuildProfile": "release",
       "parserTimeoutSecondsPerTu": 10,
-      "workspaceTests": "1057/1057",
-      "allTargetTests": "1056/1056",
-      "specifiedFrontier": false,
+      "workspaceTests": "1060/1060",
+      "allTargetTests": "1059/1059",
+      "specifiedFrontier": true,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
       "computedZeroArrayBoundLanes": 0,
@@ -891,23 +920,26 @@
       "wideIntegerExecutionBoundaryDiagnosticTests": "3/3",
       "functionDeclaratorListLanesRemaining": 0,
       "dereferencedFunctionPointerTypeofLanesRemaining": 0,
+      "singleTrailingTypeofSpellingLanesRemaining": 0,
+      "compatibleBlockExternRedeclarationLanesRemaining": 0,
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260901T140210Z-65904/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260901T145829Z-31164/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "b23a2a62e8bfc45f041b8ed5e75ff55b09e2c09eb12d523413faa77c0de8eb56",
-      "subjectCommit": "fe5179b",
-      "publishedFromRun": "20260901T145829Z-31164"
+      "sha256": "89f71e188c61517b0e048b4b079ab66b2c2bf5acfc22c43867c380b8cf0e5e8c",
+      "subjectCommit": "88cd9a7",
+      "publishedFromRun": "20260901T162827Z-12206"
     },
-    "result": "FUNCTION_DECLARATION_FORMS_PASS_STAGE_F1_OPEN"
+    "result": "TYPEOF_REDECLARATION_PASS_STAGE_F1_OPEN"
   },
   "lanes": {
     "clean": {
-      "count": 42,
+      "count": 44,
       "units": [
         "all 16 units (evocpp-raw)",
         "init-do-mounts-initrd (gcc-preprocessed-parser, clang-preprocessed-parser)",
+        "init-do-mounts (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "init-version-timestamp (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "kernel-locking-semaphore (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "kernel-power-console (gcc-preprocessed-parser, clang-preprocessed-parser)",
@@ -925,37 +957,25 @@
     "stillFailing": [
       {
         "count": 2,
-        "firstError": "E1001 expected-declaration at the unregistered __typeof spelling in syscall-wrapper parameter declarations",
+        "firstError": "DRIVER_RUST_PANIC while nested typeof parsing reinstalls the already-visible function parameter shadow start",
         "lanes": "gcc-preprocessed-parser",
         "units": [
           "mm-mprotect",
           "mm-mincore"
-        ]
+        ],
+        "construct": "a typeof expression inside a later function parameter type contains __builtin_choose_expr and __builtin_types_compatible_p with a nested typeof while the earlier parameter start is visible",
+        "specificationCoverage": "revision 1.9.31 Section 10.1.10 covers typeof operand scope; implementation defect, not a specification gap"
       },
       {
         "count": 2,
-        "firstError": "E1001 expected-declaration at the unregistered __typeof spelling in syscall-wrapper parameter declarations",
+        "firstError": "DRIVER_RUST_PANIC while nested typeof parsing reinstalls the already-visible function parameter shadow start",
         "lanes": "clang-preprocessed-parser",
         "units": [
           "mm-mprotect",
           "mm-mincore"
-        ]
-      },
-      {
-        "count": 1,
-        "firstError": "E2002 ordinary-identifier-redefinition at a repeated compatible block-scope extern function declaration",
-        "lanes": "gcc-preprocessed-parser",
-        "units": [
-          "init-do-mounts"
-        ]
-      },
-      {
-        "count": 1,
-        "firstError": "E2002 ordinary-identifier-redefinition at a repeated compatible block-scope extern function declaration",
-        "lanes": "clang-preprocessed-parser",
-        "units": [
-          "init-do-mounts"
-        ]
+        ],
+        "construct": "a typeof expression inside a later function parameter type contains __builtin_choose_expr and __builtin_types_compatible_p with a nested typeof while the earlier parameter start is visible",
+        "specificationCoverage": "revision 1.9.31 Section 10.1.10 covers typeof operand scope; implementation defect, not a specification gap"
       }
     ],
     "publicationsThisWindow": [
@@ -1223,6 +1243,11 @@
         "commit": "fe5179b",
         "run": "20260901T145829Z-31164",
         "parseLanesStoppedOn": "revision 1.9.30 publication: all four typeof(*function_pointer) E1001 and all six multi-function-declarator E1002 observations are gone; init-do-mounts-initrd and kernel-power-main become dual-oracle clean. Raw preprocessing remains 16/16, dual-oracle clean parsing moves to 13/16, and six parser lanes remain across three units: four E1001 at the unregistered __typeof spelling and two E2002 at a repeated compatible block-scope extern function declaration. Neither next form is explicitly specified; regressions remain zero and Stage F1 remains open"
+      },
+      {
+        "commit": "88cd9a7",
+        "run": "20260901T162827Z-12206",
+        "parseLanesStoppedOn": "revision 1.9.31 publication: all four __typeof E1001 and both compatible-redeclaration E2002 observations are gone; init-do-mounts becomes dual-oracle clean. Raw preprocessing remains 16/16, dual-oracle clean parsing moves to 14/16, and four parser lanes remain across mm-mprotect and mm-mincore, all DRIVER_RUST_PANIC while nested typeof parsing reinstalls an already-visible parameter shadow. Revision 1.9.31 covers that construct; regressions remain zero and Stage F1 remains open"
       }
     ]
   },
@@ -1676,6 +1701,31 @@
       "stageF1": "OPEN",
       "regressionsAgainstPrevious": 0,
       "scopeP12": "PASS"
+    },
+    "typeofRedeclarationAfter": {
+      "run": "20260901T162827Z-12206",
+      "subjectCommit": "88cd9a7",
+      "baselineRun": "20260901T145829Z-31164",
+      "resolvedFirstErrorClasses": {
+        "gcc-preprocessed-parser E1001 expected-declaration at the unregistered __typeof spelling": 2,
+        "clang-preprocessed-parser E1001 expected-declaration at the unregistered __typeof spelling": 2,
+        "gcc-preprocessed-parser E2002 ordinary-identifier-redefinition at a repeated compatible block-scope extern function declaration": 1,
+        "clang-preprocessed-parser E2002 ordinary-identifier-redefinition at a repeated compatible block-scope extern function declaration": 1
+      },
+      "nextFirstErrorClasses": {
+        "gcc-preprocessed-parser DRIVER_RUST_PANIC reinstalling the nested typeof parameter shadow start": 2,
+        "clang-preprocessed-parser DRIVER_RUST_PANIC reinstalling the nested typeof parameter shadow start": 2
+      },
+      "remainingUnits": {
+        "mm-mprotect": "both oracle-preprocessed lanes panic while parsing nested typeof inside a later function parameter type",
+        "mm-mincore": "both oracle-preprocessed lanes panic while parsing nested typeof inside a later function parameter type"
+      },
+      "specificationCoverage": "revision 1.9.31 Section 10.1.10 covers typeof operand scope; this is an implementation defect, not a specification gap",
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "14/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "scopeP13": "PASS"
     }
   },
   "attributes": {
@@ -1722,13 +1772,13 @@
   },
   "tests": {
     "workspace": {
-      "passed": 1056,
+      "passed": 1059,
       "failed": 0,
-      "command": "CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet (1056/1056)",
+      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet (1059/1059)",
       "workspaceIncludingDocTests": {
-        "passed": 1057,
+        "passed": 1060,
         "failed": 0,
-        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet (1057/1057)"
+        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet (1060/1060)"
       }
     },
     "suites": {
@@ -1859,8 +1909,24 @@
         "command": "cargo test -p evocc --test preprocessor_target_profile"
       },
       "crates/evocc-parser/tests/gnu_typeof.rs": {
-        "passed": 6,
+        "passed": 9,
         "command": "cargo test -p evocc-parser --test gnu_typeof"
+      },
+      "crates/evocc-lex/tests/gnu_typeof_spellings.rs": {
+        "passed": 1,
+        "command": "cargo test -p evocc-lex --test gnu_typeof_spellings"
+      },
+      "crates/evocc-parser/tests/day5_g2_bindings.rs": {
+        "passed": 28,
+        "command": "cargo test -p evocc-parser --test day5_g2_bindings"
+      },
+      "crates/evocc-parser/tests/day5_g2_typedefs.rs": {
+        "passed": 15,
+        "command": "cargo test -p evocc-parser --test day5_g2_typedefs"
+      },
+      "crates/evocc/tests/day5_g2_semantics_red.rs": {
+        "passed": 2,
+        "command": "cargo test -p evocc --test day5_g2_semantics_red"
       },
       "crates/evocc-parser/tests/generic_selection.rs": {
         "passed": 6,
@@ -2045,11 +2111,11 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "fe5179bcd9199263fe3e1976605295ec6c63ce4b",
-    "path": "/private/tmp/c30-function-replay.b2oYn3/replay",
-    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-function-replay.b2oYn3/replay; test ! -e .git/objects/info/alternates; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline --quiet",
+    "commit": "88cd9a71a1a5fc5fb32e675035b180aa40131590",
+    "path": "/private/tmp/c30-typeof-replay.myc4aQ/replay",
+    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-typeof-replay.myc4aQ/replay; test ! -e .git/objects/info/alternates; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline --quiet",
     "measured": {
-      "passed": 1056,
+      "passed": 1059,
       "failed": 0,
       "objectsAlternates": "absent"
     }
@@ -2080,9 +2146,7 @@
     "G2-VOLATILE-UNION-COPY: section 10.1.3 requires volatile aggregates to lower as memberwise volatile accesses, but a union has overlapping members and the specification provides no selected-member authority. Volatile union copy therefore remains fail-closed rather than reading every overlapping member.",
     "G2-VOLATILE-BIT-FIELD-COPY: section 10.1.3 does not freeze the access width, mask sequence, or trace granularity for a volatile aggregate member that is a bit-field. That form remains fail-closed.",
     "G2-AGGREGATE-CALL-ABI: the specification requires one semantic copy for by-value arguments and returns but does not freeze the hidden return-destination parameter position or deterministic origin identity for caller-owned aggregate temporaries. The implementation uses an address-based internal ABI with the return destination before mem/world tokens and a high-bit function-ordinal origin namespace; no broader ABI claim is made.",
-    "P9-STRLEN-LITERAL-EDGE: revision 1.9.27 says a string-literal operand folds to the literal's length but does not freeze whether an embedded zero terminates that length or whether prefixed wide, UTF-16, UTF-32 and UTF-8 literals take the constant path. The sealed evidence and positive claim cover ordinary narrow literals without embedded zeros; no broader oracle-conformance claim is made.",
-    "P12-NEXT-SINGLE-TRAILING-TYPEOF-SPELLING: revision 1.9.30 Section 10.1.10 admits typeof and __typeof__ but not the single-trailing __typeof spelling. Four measured parser lanes stop on that spelling in syscall-wrapper parameter declarations at mm/mprotect.c:1008 and mm/mincore.c:278; it was not admitted without specification authority.",
-    "P12-NEXT-COMPATIBLE-BLOCK-EXTERN-REDECLARATION: two measured parser lanes stop with E2002 when init-do-mounts repeats the same compatible block-scope extern function declaration inside statement-expression expansions at include/net/neighbour.h:315. Revision 1.9.30 does not explicitly freeze that redeclaration/linkage rule, so it was not inferred."
+    "P9-STRLEN-LITERAL-EDGE: revision 1.9.27 says a string-literal operand folds to the literal's length but does not freeze whether an embedded zero terminates that length or whether prefixed wide, UTF-16, UTF-32 and UTF-8 literals take the constant path. The sealed evidence and positive claim cover ordinary narrow literals without embedded zeros; no broader oracle-conformance claim is made."
   ],
   "processDeviations": [
     "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (adce449), aligned arguments as constant expressions (ed8302b), attribute positions in members, block scope and parameters (eae3e42).",
@@ -2144,6 +2208,8 @@
     "One final workspace invocation accidentally omitted the established /tmp runner and was interrupted after multiple individually green test binaries demonstrated the known macOS provenance delay. It is not evidence. The complete 1038/1038 workspace gate and 1037/1037 isolated all-target replay both used the established runner and exited zero.",
     "The P11 constant-expression rules require correct 128-bit reference values while the execution boundary requires E3033. The implementation therefore widened the shared front-end integer kernel to u128 and added explicit checked narrowing only at interpreter and lowering sinks; it did not widen EvoIR or claim 128-bit execution.",
     "The first sandboxed P11 layout invocation stopped before sealed container inspection and produced no usable evidence. The authoritative sequential reruns used the same base and attributed commands with the required container permission and produced 128/128 and 22/22 ORACLE_CONSENSUS with zero mismatches.",
-    "The P12 RED reached E1001 before its final function-pointer-object guard. GREEN exposed that the guard used the non-constant file-scope initializer copy = fp; it was corrected to the PM-measured already-green form copy = target. Neither failing RED assertion nor declared capability changed, and the correction is recorded rather than hidden in the semantic commit."
+    "The P12 RED reached E1001 before its final function-pointer-object guard. GREEN exposed that the guard used the non-constant file-scope initializer copy = fp; it was corrected to the PM-measured already-green form copy = target. Neither failing RED assertion nor declared capability changed, and the correction is recorded rather than hidden in the semantic commit.",
+    "The first complete P13 GREEN workspace gate found two historical Day 5 exact-message cases that still expected ordinary-identifier-redefinition. They were added to the same tests-only checkpoint, independently replayed as one failing test with 2/36 mismatches on commit 241f899, and then passed under the production diagnostic change; no second RED window was created.",
+    "The first P13 dashboard capture completed all 16 raw preprocessing lanes but was refused when restricted sandbox access denied sealed oracle inspection. Its incomplete capture is preserved at .evidence/kernel-dashboard/88cd9a7-sandbox-refused and its 16-row run at .evidence/day5-kernel-reconnaissance/20260901T162552Z-5025; neither is acceptance evidence. The permission-correct rerun on the same commit and previous-run lineage sealed 48/48 observations as run 20260901T162827Z-12206."
   ]
 }
