@@ -1,0 +1,121 @@
+{
+  "receiptId": "c30.front-end-introspection.red.v1",
+  "state": "RED",
+  "baselineCommit": "bafb803",
+  "classification": "tests-only RED",
+  "authority": {
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.26",
+      "commit": "bafb803",
+      "sections": ["6.3", "10.1.9", "10.1.17"],
+      "sha256": "a98b1b7f709cf0d9a8a246439f60bc879d2e1890e7a987996717ad6b019b99fd"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "P8",
+      "sha256": "b61c6306e37ee446b01c4caf18989d3f7f86de444023deaac51dc3f03d074a45"
+    },
+    "oracleEvidence": {
+      "directory": ".evidence/builtin-probes/20260901-2c23684c",
+      "attributeQuerySourceSha256": "4d4648cbc9599b7c9fedf2241ea89eee1244de2939146ff95453a4018ad4407d",
+      "attributeQueryTypeSourceSha256": "c8fef191f78a035044c10e4684aa105fd06f5f29af59943d1683107a3858edac",
+      "attributeQueryOutputSha256": "19bbd47c71e48b0f73f2d09c540d54844a72eaad7cb9901f16f6db2ed1238d18",
+      "varargsSourceSha256": "dfc9cf0df1b6dd6fb22d6b7a1d3eb365d4a440026c988dfc48d53204bd0b41c5",
+      "wrongParameterSourceSha256": "ba31c573a55c766f16a49b096113ddd3f32617f3f319742ed950078a9ae0ce6e",
+      "nonVariadicSourceSha256": "fa3b471b47a8f7058528bb384fd9c2f34e72ded0fa430520817cf9dc07a7b30d",
+      "emptyRecordSourceSha256": "b1bb0cf5701d38ef3a7e5e24d6ce5c3c31be53cac46928e5e3f7c47964d463c6"
+    }
+  },
+  "declaredCapabilities": [
+    "attribute-query-is-a-bool-ice-answered-from-written-declaration-attributes-without-evaluating-its-operand",
+    "va-start-end-and-copy-are-retained-in-c-hir-with-typed-validation-and-fail-closed-e3030-execution-and-lowering",
+    "records-with-no-members-have-size-zero-and-alignment-one"
+  ],
+  "alreadySatisfiedAtRed": [
+    "empty struct and union layout is already 0/1, including a member list containing only _Static_assert",
+    "__builtin_va_arg remains an ordinary undeclared identifier with E2001"
+  ],
+  "productionEdits": [],
+  "testsOnlyChanges": [
+    {
+      "path": "crates/evocc-parser/tests/front_end_introspection.rs",
+      "sha256": "0281df920f0bddad6eee96671f7e822921cf044d63152454199c7c5a8e8d4332"
+    },
+    {
+      "path": "crates/evocc-chir/tests/varargs_fail_closed.rs",
+      "sha256": "fa932c55bd33583ca98246f0ee0f68f2c4b0b147f61a8fd4f25189faabdd455b"
+    },
+    {
+      "path": "crates/evocc-lower/tests/fail_closed_forms.rs",
+      "sha256": "f14e296aa42dd549f6443f8c0f2c93803185dcbfe45efdc55777b9cc8619cc75"
+    },
+    {
+      "path": "crates/evocc-lower/tests/front_end_resolved_forms.rs",
+      "sha256": "a4fb946dc31d3321e48e4ee71e62c55588e125ed75b9e577b54b81c1dd6c366f"
+    }
+  ],
+  "focusedRed": {
+    "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test front_end_introspection -p evocc-chir --test varargs_fail_closed -p evocc-lower --test fail_closed_forms --test front_end_resolved_forms --no-fail-fast",
+    "passed": 16,
+    "failed": 8,
+    "buildErrors": 0,
+    "diagnostics": [
+      "attribute_queries_are_boolean_constants_from_written_member_attributes: E2001 undeclared-identifier: __builtin_has_attribute",
+      "attribute_queries_resolve_before_lowering: E2001 undeclared-identifier: __builtin_has_attribute",
+      "variable_argument_builtins_are_retained_with_void_type: E2001 undeclared-identifier: __builtin_va_start",
+      "va_start_requires_a_variadic_function_and_the_last_named_parameter: E2001 instead of E2926",
+      "every_variable_argument_object_operand_must_be_builtin_va_list: E2001 instead of E2913",
+      "direct_expression_interpreter_reports_e3030: parser E2001 at __builtin_va_end before execution",
+      "call_capable_interpreter_reports_e3030: parser E2001 at __builtin_va_end before execution",
+      "variable_arguments_fail_closed_with_only_e3030: parser E2001 at __builtin_va_end before lowering"
+    ],
+    "passingControls": [
+      "empty struct and union with only _Static_assert have size 0 and alignment 1",
+      "__builtin_va_arg remains outside the admitted profile",
+      "all fourteen pre-existing focused tests remain green"
+    ]
+  },
+  "workspaceRed": {
+    "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet",
+    "listed": 1022,
+    "listedDerivation": "the verified 1012-test baseline plus ten new tests",
+    "passed": 1014,
+    "failed": 8,
+    "unexpectedFailures": 0,
+    "buildErrors": 0
+  },
+  "nonTestGates": {
+    "clippy": {
+      "command": "cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    },
+    "baseLayout": {
+      "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "PASS 128/128; ORACLE_CONSENSUS; mismatchCount 0"
+    },
+    "attributedLayout": {
+      "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "PASS 22/22; ORACLE_CONSENSUS; mismatchCount 0"
+    }
+  },
+  "dashboardBaseline": {
+    "run": "20260831T203043Z-22845",
+    "resultsSha256": "3507d10b1803fccfbb97570ba03361590266a24c993121e9c93f12d3235cfe99",
+    "rawPreprocess": "16/16",
+    "dualOracleCleanParse": "3/16",
+    "firstErrors": {
+      "gcc-preprocessed-parser E2001 undeclared-identifier: __builtin_has_attribute": 13,
+      "clang-preprocessed-parser E2001 undeclared-identifier: __builtin_va_start": 13
+    }
+  },
+  "specGap": null
+}

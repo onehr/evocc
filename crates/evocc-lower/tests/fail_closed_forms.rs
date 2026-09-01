@@ -84,3 +84,13 @@ fn return_address_fails_closed_with_only_e3025() {
         "not-lowered: return-address",
     );
 }
+
+#[test]
+fn variable_arguments_fail_closed_with_only_e3030() {
+    assert_lowering_error(
+        "int main(void) { __builtin_va_list ap; __builtin_va_end(ap); return 0; }\n",
+        5,
+        "E3030",
+        "not-lowered: varargs",
+    );
+}

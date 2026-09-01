@@ -155,6 +155,24 @@ fn builtin_object_size_resolves_to_unknown_constants() {
 }
 
 #[test]
+fn attribute_queries_resolve_before_lowering() {
+    assert_pairs(
+        &[(
+            concat!(
+                "struct s { char text[4] __attribute__((nonstring)); }; ",
+                "int f(void) { struct s value; return ",
+                "__builtin_has_attribute(value.text, nonstring); }\n",
+            ),
+            concat!(
+                "struct s { char text[4] __attribute__((nonstring)); }; ",
+                "int f(void) { struct s value; return (_Bool)1; }\n",
+            ),
+        )],
+        106,
+    );
+}
+
+#[test]
 fn attributed_null_statements_do_not_reach_evoir() {
     assert_pairs(
         &[(
