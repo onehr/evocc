@@ -105,7 +105,7 @@ const G2_CASES: &[Case] = &[
         expected: Expected::RedDiagnostic {
             column: 26,
             code: "E2002",
-            message: "ordinary-identifier-redefinition: x",
+            message: "incompatible-redeclaration: x",
         },
     },
     Case {
@@ -115,7 +115,7 @@ const G2_CASES: &[Case] = &[
         expected: Expected::RedDiagnostic {
             column: 20,
             code: "E2002",
-            message: "ordinary-identifier-redefinition: x",
+            message: "incompatible-redeclaration: x",
         },
     },
     Case {

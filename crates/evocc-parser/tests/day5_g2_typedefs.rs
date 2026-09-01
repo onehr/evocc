@@ -936,14 +936,14 @@ fn typedef_expression_and_ordinary_namespace_conflicts_are_controlled() {
         (
             TYPEDEF_THEN_OBJECT,
             "E2002",
-            "ordinary-identifier-redefinition: T",
+            "incompatible-redeclaration: T",
             "T",
             1,
         ),
         (
             OBJECT_THEN_TYPEDEF,
             "E2002",
-            "ordinary-identifier-redefinition: X",
+            "incompatible-redeclaration: X",
             "X",
             1,
         ),
@@ -1027,7 +1027,7 @@ fn compatible_redeclaration_reuses_identity_and_incompatible_one_rolls_back() {
     let (unit, diagnostic) = parse_without_panic(INCOMPATIBLE_REDECLARATION, &arena);
     let diagnostic = diagnostic.expect("incompatible typedef must diagnose");
     assert_eq!(diagnostic.code, "E2002");
-    assert_eq!(diagnostic.message, "ordinary-identifier-redefinition: T");
+    assert_eq!(diagnostic.message, "incompatible-redeclaration: T");
     assert_eq!(diagnostic.span, span_of(INCOMPATIBLE_REDECLARATION, "T", 1));
     assert_eq!(unit.declarations().len(), 2);
     let retained = typedef(&unit, 0);
