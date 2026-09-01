@@ -2,14 +2,14 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "385cf4b8e2a2970f67b261c1f9c133d27936c7d47b9e37e4c351c4e8a48fa5c7"
+    "sha256": "07ad482c70b352f3245574eabbc5bb77a65a41c4b45cff17d2ea767daf339019"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.29",
-    "sha256": "ca51b4b805aeec824c0d1931a8e65dc7bf0b8c985a15d753b2eee02ff0437e58"
+    "revision": "1.9.30",
+    "sha256": "1769df0672a79935775ad94e0fca8e2ebe86c70bdddd1b53d6349d4616146b53"
   },
-  "cutLine": "Revision 1.9.29 scope P11 is implemented: character pointers of differing signedness share one qualified conversion rule; __builtin_frame_address is carried to its E3031 lowering boundary; signed integer constant arithmetic wraps at target width without weakening run-time UB obligations; void-pointer difference executes in C-HIR and lowers fail-closed with E3032; and the front end carries full 128-bit constants while both interpreters and lowering report E3033 at execution. The tree is green at 1052/1052 workspace tests (1051/1051 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. Raw preprocessing remains 16/16, dual-oracle clean parsing moves from 10/16 to 11/16, and dashboard regressions are zero. Stage F1 remains OPEN on 10 parser lanes across five units: four E1001 observations on typeof of a function pointer used as a declaration specifier and six E1002 observations on multi-declarator function-type typedef declarations. Both frontier forms are already covered by revision 1.9.29.",
+  "cutLine": "Revision 1.9.30 scope P12 is implemented: function declarations and object declarations now share the complete comma-separated declarator-list path, each listed function receives its own FunctionDecl, and a semantic function type supplies an unnamed canonical prototype when no written parameter list exists. The tree is green at 1057/1057 workspace tests (1056/1056 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. Raw preprocessing remains 16/16, dual-oracle clean parsing moves from 11/16 to 13/16, and dashboard regressions are zero. Stage F1 remains OPEN on six parser lanes across three units: four E1001 observations on the unregistered GNU __typeof spelling in syscall-wrapper parameters and two E2002 observations on a repeated compatible block-scope extern function declaration. Both are beyond the explicit revision 1.9.30 rulings and are recorded as specification gaps rather than silently implemented.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -768,20 +768,47 @@
     "specAmbiguitiesThisWindow": [],
     "result": "PASS_STAGE_F1_OPEN"
   },
-  "subjectCommit": "ddc1028",
+  "functionDeclarationFormsRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.30, commit 87dacd5; tests/contracts/day9-acceptance-contract.json scope P12",
+    "opened": "6976b26 (tests only; 1053 passed, 4 semantic failures, 1057 listed workspace tests; zero Rust build errors)",
+    "closed": "fe5179b",
+    "implementationCommits": [
+      "fe5179b"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/function-declaration-forms-red.json",
+      "sha256": "e5b65a704c22a843a60b66d576abc2b487734d5b9f4b8b5b4e0d9a7e257fa202"
+    },
+    "declaredCapabilities": [
+      "a declaration list emits every function declarator as a FunctionDecl, whether its function type is written directly or supplied by a typedef, while function-pointer declarators remain objects and a list cannot define a function",
+      "a function type obtained from dereferencing a function pointer supplies the declaration-specifier path with the same canonical prototype as a named function designator"
+    ],
+    "focusedGreen": {
+      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test function_type_typedef_declarations --no-fail-fast",
+      "passed": 11,
+      "failed": 0
+    },
+    "fixtureCorrection": "The RED reached E1001 before its final pointer-object guard. GREEN exposed that the guard had used the non-constant file-scope initializer copy = fp; it was corrected to the PM's measured already-green form copy = target without changing either RED assertion or declared capability.",
+    "specAmbiguitiesThisWindow": [
+      "P12-NEXT-SINGLE-TRAILING-TYPEOF-SPELLING",
+      "P12-NEXT-COMPATIBLE-BLOCK-EXTERN-REDECLARATION"
+    ],
+    "result": "PASS_STAGE_F1_OPEN"
+  },
+  "subjectCommit": "fe5179b",
   "gate": {
-    "claim": "Revision 1.9.29 scope P11 is implemented and green. Character-pointer signedness conversion is centralized across initialization, assignment, argument and return; constant evaluation uses a full-width target integer kernel distinct from run-time UB enforcement; __builtin_frame_address is carried to E3031; void-pointer difference lowers to E3032; and executed 128-bit values fail closed with E3033 in both interpreters and lowering. The tree has 1052 workspace tests (1051 all-target), zero dashboard regressions, raw preprocessing at 16/16 and dual-oracle clean parsing at 11/16. Stage F1 remains open on 10 measured parser lanes across five units, all at forms already covered by the specification.",
+    "claim": "Revision 1.9.30 scope P12 is implemented and green. Function prototypes without bodies now use the same complete declarator-list pipeline as objects and typedefs, and semantic function types reconstruct canonical unnamed parameters when no source parameter list exists. All ten declared P12 lanes moved, zero dashboard regressions were observed, raw preprocessing remains 16/16 and dual-oracle clean parsing advances to 13/16. Stage F1 remains open on six measured parser lanes across three units because the next two forms are not explicitly covered by revision 1.9.30.",
     "measured": {
-      "dualOracleCleanParseTus": "11/16",
+      "dualOracleCleanParseTus": "13/16",
       "rawPreprocessClean": "16/16",
       "stageF1": "OPEN",
-      "remainingParserLanes": 10,
-      "remainingParserUnits": 5,
+      "remainingParserLanes": 6,
+      "remainingParserUnits": 3,
       "remainingFirstErrors": {
-        "gcc-preprocessed-parser E1001 expected-declaration at typeof(*function_pointer) declarator": 2,
-        "clang-preprocessed-parser E1001 expected-declaration at typeof(*function_pointer) declarator": 2,
-        "gcc-preprocessed-parser E1002 expected-token ; at function-type typedef multi-declarator": 3,
-        "clang-preprocessed-parser E1002 expected-token ; at function-type typedef multi-declarator": 3
+        "gcc-preprocessed-parser E1001 expected-declaration at __typeof spelling": 2,
+        "clang-preprocessed-parser E1001 expected-declaration at __typeof spelling": 2,
+        "gcc-preprocessed-parser E2002 compatible block-scope extern function redeclaration": 1,
+        "clang-preprocessed-parser E2002 compatible block-scope extern function redeclaration": 1
       },
       "frontEndIntrospectionTests": "27/27",
       "constantExpressionClosureTests": "15/15",
@@ -805,9 +832,9 @@
       "frozenRealTuRatio": "1.07x <= 3x",
       "subjectBuildProfile": "release",
       "parserTimeoutSecondsPerTu": 10,
-      "workspaceTests": "1052/1052",
-      "allTargetTests": "1051/1051",
-      "specifiedFrontier": true,
+      "workspaceTests": "1057/1057",
+      "allTargetTests": "1056/1056",
+      "specifiedFrontier": false,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
       "computedZeroArrayBoundLanes": 0,
@@ -862,22 +889,25 @@
       "signedConstantShiftLanesRemaining": 0,
       "voidPointerDifferenceLoweringDiagnosticTests": "1/1",
       "wideIntegerExecutionBoundaryDiagnosticTests": "3/3",
+      "functionDeclaratorListLanesRemaining": 0,
+      "dereferencedFunctionPointerTypeofLanesRemaining": 0,
       "regressionsAgainstPrevious": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260901T115632Z-47898/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260901T140210Z-65904/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "348422b8a06379544e4ae18844f43b0b05e5844589a1eec275d1c00853ef055f",
-      "subjectCommit": "ddc1028",
-      "publishedFromRun": "20260901T140210Z-65904"
+      "sha256": "b23a2a62e8bfc45f041b8ed5e75ff55b09e2c09eb12d523413faa77c0de8eb56",
+      "subjectCommit": "fe5179b",
+      "publishedFromRun": "20260901T145829Z-31164"
     },
-    "result": "POINTER_FRAME_WIDE_PASS_STAGE_F1_OPEN"
+    "result": "FUNCTION_DECLARATION_FORMS_PASS_STAGE_F1_OPEN"
   },
   "lanes": {
     "clean": {
-      "count": 38,
+      "count": 42,
       "units": [
         "all 16 units (evocpp-raw)",
+        "init-do-mounts-initrd (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "init-version-timestamp (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "kernel-locking-semaphore (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "kernel-power-console (gcc-preprocessed-parser, clang-preprocessed-parser)",
@@ -887,6 +917,7 @@
         "lib-fdt-wip (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "lib-kstrtox (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "init-init-task (gcc-preprocessed-parser, clang-preprocessed-parser)",
+        "kernel-power-main (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "mm-memtest (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "mm-page-vma-mapped (gcc-preprocessed-parser, clang-preprocessed-parser)"
       ]
@@ -894,40 +925,36 @@
     "stillFailing": [
       {
         "count": 2,
-        "firstError": "E1001 expected-declaration at typeof(*function_pointer) declarator",
+        "firstError": "E1001 expected-declaration at the unregistered __typeof spelling in syscall-wrapper parameter declarations",
         "lanes": "gcc-preprocessed-parser",
         "units": [
-          "init-do-mounts-initrd",
-          "kernel-power-main"
+          "mm-mprotect",
+          "mm-mincore"
         ]
       },
       {
         "count": 2,
-        "firstError": "E1001 expected-declaration at typeof(*function_pointer) declarator",
+        "firstError": "E1001 expected-declaration at the unregistered __typeof spelling in syscall-wrapper parameter declarations",
         "lanes": "clang-preprocessed-parser",
         "units": [
-          "init-do-mounts-initrd",
-          "kernel-power-main"
+          "mm-mprotect",
+          "mm-mincore"
         ]
       },
       {
-        "count": 3,
-        "firstError": "E1002 expected-token ; at function-type typedef multi-declarator",
+        "count": 1,
+        "firstError": "E2002 ordinary-identifier-redefinition at a repeated compatible block-scope extern function declaration",
         "lanes": "gcc-preprocessed-parser",
         "units": [
-          "init-do-mounts",
-          "mm-mprotect",
-          "mm-mincore"
+          "init-do-mounts"
         ]
       },
       {
-        "count": 3,
-        "firstError": "E1002 expected-token ; at function-type typedef multi-declarator",
+        "count": 1,
+        "firstError": "E2002 ordinary-identifier-redefinition at a repeated compatible block-scope extern function declaration",
         "lanes": "clang-preprocessed-parser",
         "units": [
-          "init-do-mounts",
-          "mm-mprotect",
-          "mm-mincore"
+          "init-do-mounts"
         ]
       }
     ],
@@ -1191,6 +1218,11 @@
         "commit": "ddc1028",
         "run": "20260901T140210Z-65904",
         "parseLanesStoppedOn": "revision 1.9.29 publication: all six character-pointer E2202, four __builtin_frame_address E2001 and two signed-enumerator E1303 observations are gone; init-init-task becomes dual-oracle clean. Raw preprocessing remains 16/16, dual-oracle clean parsing moves to 11/16, and ten parser lanes remain across five units: four E1001 at typeof(*function_pointer) declarators and six E1002 at multi-declarator function-type typedef declarations. Both are already specified; regressions remain zero and Stage F1 remains open"
+      },
+      {
+        "commit": "fe5179b",
+        "run": "20260901T145829Z-31164",
+        "parseLanesStoppedOn": "revision 1.9.30 publication: all four typeof(*function_pointer) E1001 and all six multi-function-declarator E1002 observations are gone; init-do-mounts-initrd and kernel-power-main become dual-oracle clean. Raw preprocessing remains 16/16, dual-oracle clean parsing moves to 13/16, and six parser lanes remain across three units: four E1001 at the unregistered __typeof spelling and two E2002 at a repeated compatible block-scope extern function declaration. Neither next form is explicitly specified; regressions remain zero and Stage F1 remains open"
       }
     ]
   },
@@ -1614,6 +1646,36 @@
       "stageF1": "OPEN",
       "regressionsAgainstPrevious": 0,
       "scopeP11": "PASS"
+    },
+    "functionDeclarationFormsAfter": {
+      "run": "20260901T145829Z-31164",
+      "subjectCommit": "fe5179b",
+      "baselineRun": "20260901T140210Z-65904",
+      "resolvedFirstErrorClasses": {
+        "gcc-preprocessed-parser E1001 expected-declaration at typeof(*function_pointer) declarator": 2,
+        "clang-preprocessed-parser E1001 expected-declaration at typeof(*function_pointer) declarator": 2,
+        "gcc-preprocessed-parser E1002 expected-token ; at function-type typedef multi-declarator": 3,
+        "clang-preprocessed-parser E1002 expected-token ; at function-type typedef multi-declarator": 3
+      },
+      "nextFirstErrorClasses": {
+        "gcc-preprocessed-parser E1001 expected-declaration at the unregistered __typeof spelling": 2,
+        "clang-preprocessed-parser E1001 expected-declaration at the unregistered __typeof spelling": 2,
+        "gcc-preprocessed-parser E2002 ordinary-identifier-redefinition at a repeated compatible block-scope extern function declaration": 1,
+        "clang-preprocessed-parser E2002 ordinary-identifier-redefinition at a repeated compatible block-scope extern function declaration": 1
+      },
+      "firstErrorSites": {
+        "E1001 expected-declaration": "mm/mprotect.c:1008 and mm/mincore.c:278; the syscall-wrapper parameter type uses the single-trailing GNU __typeof spelling",
+        "E2002 ordinary-identifier-redefinition": "include/net/neighbour.h:315; init-do-mounts; __compiletime_assert_819 is declared twice as the same compatible block-scope extern function inside statement-expression expansions"
+      },
+      "specificationGaps": {
+        "P12-NEXT-SINGLE-TRAILING-TYPEOF-SPELLING": "revision 1.9.30 Section 10.1.10 admits typeof and __typeof__ but does not admit __typeof",
+        "P12-NEXT-COMPATIBLE-BLOCK-EXTERN-REDECLARATION": "revision 1.9.30 does not explicitly freeze repeated compatible block-scope extern function declarations or their linkage/redeclaration rule"
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "13/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "scopeP12": "PASS"
     }
   },
   "attributes": {
@@ -1660,13 +1722,13 @@
   },
   "tests": {
     "workspace": {
-      "passed": 1051,
+      "passed": 1056,
       "failed": 0,
-      "command": "CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet (1051/1051)",
+      "command": "CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet (1056/1056)",
       "workspaceIncludingDocTests": {
-        "passed": 1052,
+        "passed": 1057,
         "failed": 0,
-        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet (1052/1052)"
+        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet (1057/1057)"
       }
     },
     "suites": {
@@ -1949,7 +2011,7 @@
         "command": "cargo test -p evocc-parser --test specifier_order"
       },
       "crates/evocc-parser/tests/function_type_typedef_declarations.rs": {
-        "passed": 6,
+        "passed": 11,
         "command": "cargo test -p evocc-parser --test function_type_typedef_declarations"
       },
       "crates/evocc-parser/tests/member_static_assertions.rs": {
@@ -1983,11 +2045,11 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "ddc1028844d9e24a0644e4295c9c0c6616e28344",
-    "path": "/private/tmp/c30-p11-replay.iVTbjM/replay",
-    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-p11-replay.iVTbjM/replay; test ! -e .git/objects/info/alternates; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline --quiet",
+    "commit": "fe5179bcd9199263fe3e1976605295ec6c63ce4b",
+    "path": "/private/tmp/c30-function-replay.b2oYn3/replay",
+    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-function-replay.b2oYn3/replay; test ! -e .git/objects/info/alternates; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline --quiet",
     "measured": {
-      "passed": 1051,
+      "passed": 1056,
       "failed": 0,
       "objectsAlternates": "absent"
     }
@@ -2018,7 +2080,9 @@
     "G2-VOLATILE-UNION-COPY: section 10.1.3 requires volatile aggregates to lower as memberwise volatile accesses, but a union has overlapping members and the specification provides no selected-member authority. Volatile union copy therefore remains fail-closed rather than reading every overlapping member.",
     "G2-VOLATILE-BIT-FIELD-COPY: section 10.1.3 does not freeze the access width, mask sequence, or trace granularity for a volatile aggregate member that is a bit-field. That form remains fail-closed.",
     "G2-AGGREGATE-CALL-ABI: the specification requires one semantic copy for by-value arguments and returns but does not freeze the hidden return-destination parameter position or deterministic origin identity for caller-owned aggregate temporaries. The implementation uses an address-based internal ABI with the return destination before mem/world tokens and a high-bit function-ordinal origin namespace; no broader ABI claim is made.",
-    "P9-STRLEN-LITERAL-EDGE: revision 1.9.27 says a string-literal operand folds to the literal's length but does not freeze whether an embedded zero terminates that length or whether prefixed wide, UTF-16, UTF-32 and UTF-8 literals take the constant path. The sealed evidence and positive claim cover ordinary narrow literals without embedded zeros; no broader oracle-conformance claim is made."
+    "P9-STRLEN-LITERAL-EDGE: revision 1.9.27 says a string-literal operand folds to the literal's length but does not freeze whether an embedded zero terminates that length or whether prefixed wide, UTF-16, UTF-32 and UTF-8 literals take the constant path. The sealed evidence and positive claim cover ordinary narrow literals without embedded zeros; no broader oracle-conformance claim is made.",
+    "P12-NEXT-SINGLE-TRAILING-TYPEOF-SPELLING: revision 1.9.30 Section 10.1.10 admits typeof and __typeof__ but not the single-trailing __typeof spelling. Four measured parser lanes stop on that spelling in syscall-wrapper parameter declarations at mm/mprotect.c:1008 and mm/mincore.c:278; it was not admitted without specification authority.",
+    "P12-NEXT-COMPATIBLE-BLOCK-EXTERN-REDECLARATION: two measured parser lanes stop with E2002 when init-do-mounts repeats the same compatible block-scope extern function declaration inside statement-expression expansions at include/net/neighbour.h:315. Revision 1.9.30 does not explicitly freeze that redeclaration/linkage rule, so it was not inferred."
   ],
   "processDeviations": [
     "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (adce449), aligned arguments as constant expressions (ed8302b), attribute positions in members, block scope and parameters (eae3e42).",
@@ -2079,6 +2143,7 @@
     "The first P10 publication at 3975e88 cleared the declared first-error sites but exposed E2102 on a later 128-bit compound assignment in the same checksum function. A verbatim kernel-shape test was observed RED before b24c7ed replaced the simple-assignment exception with a shared wide-integer operand class; the final publication retains the intermediate run in the single dashboard lineage rather than presenting it as completion.",
     "One final workspace invocation accidentally omitted the established /tmp runner and was interrupted after multiple individually green test binaries demonstrated the known macOS provenance delay. It is not evidence. The complete 1038/1038 workspace gate and 1037/1037 isolated all-target replay both used the established runner and exited zero.",
     "The P11 constant-expression rules require correct 128-bit reference values while the execution boundary requires E3033. The implementation therefore widened the shared front-end integer kernel to u128 and added explicit checked narrowing only at interpreter and lowering sinks; it did not widen EvoIR or claim 128-bit execution.",
-    "The first sandboxed P11 layout invocation stopped before sealed container inspection and produced no usable evidence. The authoritative sequential reruns used the same base and attributed commands with the required container permission and produced 128/128 and 22/22 ORACLE_CONSENSUS with zero mismatches."
+    "The first sandboxed P11 layout invocation stopped before sealed container inspection and produced no usable evidence. The authoritative sequential reruns used the same base and attributed commands with the required container permission and produced 128/128 and 22/22 ORACLE_CONSENSUS with zero mismatches.",
+    "The P12 RED reached E1001 before its final function-pointer-object guard. GREEN exposed that the guard used the non-constant file-scope initializer copy = fp; it was corrected to the PM-measured already-green form copy = target. Neither failing RED assertion nor declared capability changed, and the correction is recorded rather than hidden in the semantic commit."
   ]
 }
