@@ -1,11 +1,11 @@
 //! `typeof` (specification 10.1.10): a type resolved by the front end.
 
 use evocc_chir::interp::{interpret_scalar_function, InterpreterLimits};
-use evocc_chir::{CHirDecl, CHirUnit};
+use evocc_chir::{CHirDecl, CHirUnit, ParameterSyntax};
 use evocc_common::{Arena, FileId, SourceFile};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::Parser;
-use evocc_types::TargetDataLayout;
+use evocc_types::{IntRank, TargetDataLayout, TypeKind};
 
 fn parse<'a>(source: &str, arena: &'a Arena) -> Result<CHirUnit<'a>, String> {
     let file = SourceFile::new(
@@ -33,6 +33,45 @@ fn accepts(source: &str) {
     let arena = Arena::default();
     if let Err(error) = parse(source, &arena) {
         panic!("must parse, got {error}\n  source: {source}");
+    }
+}
+
+fn assert_parameter_ranks_without_panic(source: &str, name: &str, expected: &[IntRank]) {
+    let arena = Arena::default();
+    let parsed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| parse(source, &arena)));
+    let parsed = parsed.unwrap_or_else(|_| {
+        panic!("valid nested typeof parameter declaration must not panic\n  source: {source}")
+    });
+    let unit = parsed.unwrap_or_else(|error| {
+        panic!(
+            "valid nested typeof parameter declaration must parse, got {error}\n  source: {source}"
+        )
+    });
+    let function = unit
+        .iter()
+        .find_map(|declaration| match declaration {
+            CHirDecl::Function(function) if function.name.spelling == name => Some(function),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("{name} must be retained as a function declaration"));
+    let ParameterSyntax::Prototype {
+        parameters,
+        variadic: false,
+    } = &function.parameters
+    else {
+        panic!("{name} must retain a non-variadic prototype")
+    };
+    assert_eq!(parameters.len(), expected.len(), "source: {source}");
+    for (parameter, expected_rank) in parameters.iter().zip(expected) {
+        let canonical = unit
+            .types()
+            .get(parameter.ty)
+            .expect("parameter types are interned");
+        assert_eq!(
+            canonical.kind,
+            TypeKind::Int(*expected_rank),
+            "wrong parameter type in {name}: {source}"
+        );
     }
 }
 
@@ -161,6 +200,51 @@ fn typeof_nests_and_composes_with_declarators() {
     accepts("struct s { typeof(int) m; };\n");
     accepts("int g(void) { return sizeof(typeof(int)); }\n");
     accepts("int h(void) { return (typeof(int))1; }\n");
+}
+
+#[test]
+fn nested_typeof_in_the_second_parameter_is_typed_without_panicking() {
+    assert_parameter_ranks_without_panic(
+        "long second(int a, typeof(__builtin_types_compatible_p(typeof(0L), long)) len);\n",
+        "second",
+        &[IntRank::Int, IntRank::Int],
+    );
+}
+
+#[test]
+fn nested_typeof_in_the_third_nonfinal_parameter_is_typed_without_panicking() {
+    assert_parameter_ranks_without_panic(
+        "long third(int a, long b, typeof(__builtin_types_compatible_p(typeof(0L), long)) len, unsigned int tail);\n",
+        "third",
+        &[IntRank::Int, IntRank::Long, IntRank::Int, IntRank::UInt],
+    );
+}
+
+#[test]
+fn nested_typeof_in_the_last_parameter_is_typed_without_panicking() {
+    assert_parameter_ranks_without_panic(
+        "long last(int a, long b, unsigned int c, typeof(__builtin_types_compatible_p(typeof(0L), long)) len);\n",
+        "last",
+        &[IntRank::Int, IntRank::Long, IntRank::UInt, IntRank::Int],
+    );
+}
+
+#[test]
+fn three_nested_typeof_levels_are_typed_without_panicking() {
+    assert_parameter_ranks_without_panic(
+        "long deep(int a, typeof(__builtin_types_compatible_p(typeof(__builtin_types_compatible_p(typeof(0L), long)), _Bool)) len);\n",
+        "deep",
+        &[IntRank::Int, IntRank::Int],
+    );
+}
+
+#[test]
+fn nested_typeof_may_resolve_an_earlier_parameter_without_panicking() {
+    assert_parameter_ranks_without_panic(
+        "long h(unsigned long start, __typeof(__builtin_choose_expr(__builtin_types_compatible_p(typeof(start), long), 1L, 1UL)) len);\n",
+        "h",
+        &[IntRank::ULong, IntRank::ULong],
+    );
 }
 
 #[test]
