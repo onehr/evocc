@@ -337,6 +337,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__builtin_offsetof") => TokenKind::BuiltinOffsetof,
                     Some("__builtin_object_size") => TokenKind::BuiltinObjectSize,
                     Some("__builtin_has_attribute") => TokenKind::BuiltinHasAttribute,
+                    Some("__builtin_strlen") => TokenKind::BuiltinStrlen,
                     Some("__builtin_va_start") => TokenKind::BuiltinVaStart,
                     Some("__builtin_va_end") => TokenKind::BuiltinVaEnd,
                     Some("__builtin_va_copy") => TokenKind::BuiltinVaCopy,
@@ -6847,10 +6848,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     /// The canonical pointer descriptor of an expression used as a place root.
     fn pointer_root_descriptor(&self, expression: &CHirExpr<'arena>) -> Option<PointerTypeDesc> {
-        let InferredType::Canonical(ty) = self.converted_expression_type(expression)?.ty else {
-            return None;
-        };
-        PointerTypeDesc::from_canonical_pointer(&self.types, ty).ok()
+        PointerTypeDesc::from_expression(&self.symbols, &self.types, expression).ok()
     }
 
     /// The subscript's type after integer promotion, which is what a backend
@@ -6939,19 +6937,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             return Some(place);
         }
-        let pointer_ty = self
-            .canonical_pointer_expression_type(pointer)
-            .or_else(|| {
-                self.report("E2102", "invalid-update-operands", target_span);
-                None
-            })?;
-        let pointer_type = match PointerTypeDesc::from_canonical_pointer(&self.types, pointer_ty) {
-            Ok(pointer_type) => pointer_type,
-            Err(_) => {
-                self.report("E2102", "invalid-update-operands", target_span);
-                return None;
-            }
-        };
+        let pointer_type = self.pointer_root_descriptor(pointer).or_else(|| {
+            self.report("E2102", "invalid-update-operands", target_span);
+            None
+        })?;
         let place = match MemoryPlace::derive(
             &self.symbols,
             &self.types,
@@ -6977,37 +6966,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         }
         Some(place)
-    }
-
-    /// Return the canonical pointer type of the bounded expression forms used
-    /// as indirect-place roots in this slice. Composite/derived pointer values
-    /// remain fail-closed until their structural descriptor is attached by the
-    /// full memory expression pass.
-    fn canonical_pointer_expression_type(&self, expression: &CHirExpr<'_>) -> Option<TypeId> {
-        let ty = match expression {
-            CHirExpr::Ident { facts, .. }
-            | CHirExpr::Assign { facts, .. }
-            | CHirExpr::MemoryAssign { facts, .. }
-            | CHirExpr::Update { facts, .. }
-            | CHirExpr::MemoryUpdate { facts, .. }
-            | CHirExpr::MemoryRead { facts, .. }
-            | CHirExpr::StatementExpr { facts, .. } => facts.ty(),
-            CHirExpr::Cast(ty, _, _) => *ty,
-            CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
-                let pointer_ty = self.canonical_pointer_expression_type(pointer)?;
-                let canonical = self.types.get(pointer_ty)?;
-                let TypeKind::Pointer(pointee) = canonical.kind else {
-                    return None;
-                };
-                pointee
-            }
-            _ => return None,
-        };
-        matches!(
-            self.types.get(ty).map(|ty| &ty.kind),
-            Some(TypeKind::Pointer(_))
-        )
-        .then_some(ty)
     }
 
     fn finish_scalar_update_place(
@@ -8404,6 +8362,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             TokenKind::BuiltinOffsetof => return self.parse_builtin_offsetof(tok),
             TokenKind::BuiltinObjectSize => return self.parse_builtin_object_size(tok),
             TokenKind::BuiltinHasAttribute => return self.parse_builtin_has_attribute(tok),
+            TokenKind::BuiltinStrlen => return self.parse_builtin_strlen(tok),
             TokenKind::BuiltinVaStart => {
                 return self.parse_builtin_varargs(tok, VarArgsBuiltinOp::Start);
             }
@@ -8752,6 +8711,75 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             },
             span,
         ))
+    }
+
+    fn parse_builtin_strlen(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        if self.peek_kind() != Some(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        self.advance();
+        if self.peek_kind() == Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let operand = self.parse_argument_expression()?;
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance().expect("peeked builtin closing parenthesis");
+        let span = self.merge_span(keyword.span, close.span);
+
+        if let CHirExpr::StringLit(literal, _) = operand {
+            let length = literal.explicit_unit_count().or_else(|| {
+                self.report("E1006", "invalid-string-literal", operand.span());
+                None
+            })?;
+            return Some(self.size_literal(length, span));
+        }
+
+        let const_char = self.intern(
+            TypeKind::Int(IntRank::Char),
+            Qualifiers {
+                is_const: true,
+                ..Qualifiers::default()
+            },
+        );
+        let const_char_pointer = self.intern(TypeKind::Pointer(const_char), Qualifiers::default());
+        let size_ty = self.intern(TypeKind::Int(IntRank::ULong), Qualifiers::default());
+        let expected = self.intern(
+            TypeKind::Function {
+                return_type: size_ty,
+                parameters: FunctionParameters::Prototype {
+                    types: vec![const_char_pointer],
+                    variadic: false,
+                },
+            },
+            Qualifiers::default(),
+        );
+        let symbol = self
+            .symbols
+            .resolve(self.current_scope, "strlen")
+            .expect("the parser current scope is always live")
+            .filter(|symbol| {
+                self.symbols.symbol(*symbol).is_ok_and(|declaration| {
+                    declaration.kind() == SymbolKind::Function
+                        && self.types.compatible(declaration.ty(), expected)
+                })
+            })
+            .or_else(|| {
+                self.report("E2927", "builtin-library-function-undeclared", keyword.span);
+                None
+            })?;
+        let facts = self.facts_for_symbol(symbol);
+        let callee = self.alloc_node(CHirExpr::Ident {
+            symbol,
+            spelling: "strlen".to_owned(),
+            facts,
+            span: keyword.span,
+        });
+        Some(self.alloc_node(CHirExpr::Call(callee, vec![operand], span)))
     }
 
     fn parse_builtin_object_size(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
@@ -9511,6 +9539,7 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::BuiltinOffsetof
             | TokenKind::BuiltinObjectSize
             | TokenKind::BuiltinHasAttribute
+            | TokenKind::BuiltinStrlen
             | TokenKind::BuiltinVaStart
             | TokenKind::BuiltinVaEnd
             | TokenKind::BuiltinVaCopy

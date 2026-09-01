@@ -456,7 +456,7 @@ fn expression_contains_declaration(
     }
 }
 
-fn eval_integer_constant(
+pub(crate) fn eval_integer_constant(
     expression: &CHirExpr<'_>,
     types: &TypeInterner,
     symbols: &SymbolTable,

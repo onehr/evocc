@@ -696,6 +696,7 @@ enum MachineTask<'arena> {
         operator: BinaryOp,
         right: &'arena CHirExpr<'arena>,
         span: SourceSpan,
+        allow_root_mutation: bool,
     },
     ApplyBinary {
         operator: BinaryOp,
@@ -715,6 +716,7 @@ enum MachineTask<'arena> {
         then_expression: &'arena CHirExpr<'arena>,
         else_expression: &'arena CHirExpr<'arena>,
         result_type: ValueType,
+        allow_root_mutation: bool,
     },
     SelectElvis {
         else_expression: &'arena CHirExpr<'arena>,
@@ -1756,6 +1758,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     operator,
                     right,
                     span,
+                    allow_root_mutation,
                 } => {
                     let left = pop_machine_value(&mut values, span)?;
                     match operator {
@@ -1768,7 +1771,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         BinaryOp::Comma => {
                             tasks.push(MachineTask::EvalExpression {
                                 expression: right,
-                                allow_root_mutation: false,
+                                allow_root_mutation,
                             });
                         }
                         _ => {
@@ -1844,6 +1847,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     then_expression,
                     else_expression,
                     result_type,
+                    allow_root_mutation,
                 } => {
                     let condition = machine_truth(
                         pop_machine_value(&mut values, then_expression.span())?,
@@ -1859,7 +1863,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         } else {
                             else_expression
                         },
-                        allow_root_mutation: false,
+                        allow_root_mutation,
                     });
                     None
                 }
@@ -1868,11 +1872,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     result_type,
                     span,
                 } => {
-                    let operand =
-                        expect_machine_integer(pop_machine_value(&mut values, span)?, span)?;
-                    if operand.truth() {
+                    let operand = pop_machine_value(&mut values, span)?;
+                    if machine_truth(operand, span)? {
                         values.push(cast_machine_value(
-                            CValue::Integer(operand),
+                            operand,
                             result_type,
                             span,
                             self.unit.types(),
@@ -3150,39 +3153,31 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     operator: *operator,
                     right,
                     span,
+                    allow_root_mutation,
                 });
                 tasks.push(MachineTask::EvalExpression {
                     expression: left,
-                    allow_root_mutation: false,
+                    allow_root_mutation: *operator == BinaryOp::Comma && allow_root_mutation,
                 });
             }
             CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
-                let then_type = self.infer_integer_type(then_expression)?;
-                let else_type = self.infer_integer_type(else_expression)?;
-                let result_type = usual_arithmetic_type(
-                    CInteger::new(0, then_type).promoted().ty(),
-                    CInteger::new(0, else_type).promoted().ty(),
-                );
+                let result_type = self.expression_value_type(expression)?;
                 tasks.push(MachineTask::SelectTernary {
                     then_expression,
                     else_expression,
-                    result_type: ValueType::Integer(result_type),
+                    result_type,
+                    allow_root_mutation,
                 });
                 tasks.push(MachineTask::EvalExpression {
                     expression: condition,
-                    allow_root_mutation: false,
+                    allow_root_mutation,
                 });
             }
             CHirExpr::Elvis(operand, else_expression, _) => {
-                let operand_type = self.infer_integer_type(operand)?;
-                let else_type = self.infer_integer_type(else_expression)?;
-                let result_type = usual_arithmetic_type(
-                    CInteger::new(0, operand_type).promoted().ty(),
-                    CInteger::new(0, else_type).promoted().ty(),
-                );
+                let result_type = self.expression_value_type(expression)?;
                 tasks.push(MachineTask::SelectElvis {
                     else_expression,
-                    result_type: ValueType::Integer(result_type),
+                    result_type,
                     span,
                 });
                 tasks.push(MachineTask::EvalExpression {
@@ -3269,10 +3264,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     operator: BinaryOp::Comma,
                     right,
                     span,
+                    allow_root_mutation,
                 });
                 tasks.push(MachineTask::EvalExpression {
                     expression: left,
-                    allow_root_mutation: false,
+                    allow_root_mutation,
                 });
             }
             CHirExpr::Assign {
@@ -3832,7 +3828,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             || !symbol
                 .storage_class()
                 .is_some_and(|storage| function_storage_compatible(storage, declaration.storage))
-            || declaration.return_specifier.type_id() != *return_type
             || !self.written_declarator_matches(
                 &declaration.written,
                 declaration.ty,
@@ -4702,30 +4697,23 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expression: &CHirExpr<'arena>,
     ) -> Result<PointerTypeDesc, InterpreterError> {
         let span = expression.span();
-        let ty = match expression {
-            CHirExpr::Ident { facts, .. }
-            | CHirExpr::Assign { facts, .. }
-            | CHirExpr::MemoryAssign { facts, .. }
-            | CHirExpr::Update { facts, .. }
-            | CHirExpr::MemoryUpdate { facts, .. }
-            | CHirExpr::MemoryRead { facts, .. } => facts.ty(),
-            CHirExpr::Cast(ty, _, _) => *ty,
-            CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
-                self.pointer_type_of_expression(pointer)?.pointee()
-            }
-            _ => {
-                return Err(InterpreterError::UnsupportedExpression {
-                    feature: "pointer expression type unavailable",
-                    span,
-                });
-            }
-        };
-        PointerTypeDesc::from_canonical_pointer(self.unit.types(), ty).map_err(|_| {
-            InterpreterError::UnsupportedExpression {
+        PointerTypeDesc::from_expression(self.unit.symbols(), self.unit.types(), expression)
+            .map_err(|_| InterpreterError::UnsupportedExpression {
                 feature: "invalid pointer expression type",
                 span,
-            }
-        })
+            })
+    }
+
+    fn expression_value_type(
+        &self,
+        expression: &CHirExpr<'arena>,
+    ) -> Result<ValueType, InterpreterError> {
+        if let Ok(pointer) =
+            PointerTypeDesc::from_expression(self.unit.symbols(), self.unit.types(), expression)
+        {
+            return Ok(ValueType::Pointer(pointer));
+        }
+        self.infer_integer_type(expression).map(ValueType::Integer)
     }
 
     /// Recheck a place against the tables of the unit being executed, and
@@ -4810,7 +4798,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             PlaceRoot::PointerExpression { pointer, .. } => {
                 tasks.push(MachineTask::EvalExpression {
                     expression: pointer,
-                    allow_root_mutation: false,
+                    allow_root_mutation: true,
                 });
             }
             PlaceRoot::Object { symbol } => {

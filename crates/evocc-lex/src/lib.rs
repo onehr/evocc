@@ -101,6 +101,7 @@ pub enum TokenKind {
     BuiltinOffsetof,
     BuiltinObjectSize,
     BuiltinHasAttribute,
+    BuiltinStrlen,
     BuiltinVaStart,
     BuiltinVaEnd,
     BuiltinVaCopy,
