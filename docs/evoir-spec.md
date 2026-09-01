@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.26** | **Authoritative reference** | **2026-09-01**
+**Revision 1.9.27** | **Authoritative reference** | **2026-09-01**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1289,6 +1289,7 @@ twice would let a reader think two conditions are the same finding.
 | `E2924` | `attribute-on-non-null-statement` | front end |
 | `E2925` | `builtin-mode-out-of-range` | front end |
 | `E2926` | `va-start-outside-variadic-function` | front end |
+| `E2927` | `builtin-library-function-undeclared` | front end |
 | `E0102` | `unmatched-conditional` | preprocessor |
 | `E0104` | `error-directive` | preprocessor |
 | `E0105` | `include-not-found` | preprocessor |
@@ -2510,6 +2511,19 @@ EvoIR lowering consume this same manifest for `ObjectOrigin.site`; neither may
 derive origins from raw declaration count or its own materialized-object
 sequence.
 
+**What may root a place.** Any expression of pointer type may be the root of a
+place through `*`, `->` or `[]`: a variable, a loaded pointer, an address-of,
+a call result, a conditional expression, a statement expression, a cast, a
+comma expression. The rule has one implementation; there is no list of
+admitted root forms, because every such list so far has been incomplete.
+Measured defects: places rooted at a loaded pointer (revision 1.9.x, window
+G), at an address-of (window M), and — at revision 1.9.26 — at a call result
+(`*get(p) = (lock_t){ .raw = 0 }`, ten units, the kernel's spinlock
+initialisation) and at a conditional (`(c ? p : (void *)0)->v`, the kernel's
+`to_acpi_data_node`). Both oracles accept every form (evidence
+`.evidence/builtin-probes/20260901-2c23684c/strlen.out`, `call_root`,
+`cond_root`).
+
 **Aggregate copies.** Assignment of a record or union, copy-initialization of
 an automatic object from another object or from a call result, passing one by
 value and returning one by value each lower to one `copy` of the type's size
@@ -2803,6 +2817,7 @@ front end that still emits it is defective.
 | `E2924` | an attribute specifier precedes a statement that is not a null statement |
 | `E2925` | `__builtin_object_size` mode is not a constant in `0..3` |
 | `E2926` | `va_start` in a non-variadic function, or naming a parameter other than the last named one |
+| `E2927` | a library builtin's non-constant form used where the library function is not declared with a compatible type |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -3264,6 +3279,15 @@ and Clang-19 agree on every row.
   (for instance one containing only a `_Static_assert`) is a GNU extension with
   `sizeof` 0 and alignment 1 (measured, both oracles); the kernel's
   `__must_be_cstr` writes `sizeof(struct { _Static_assert(...); })`.
+- `__builtin_strlen(s)`: with a string-literal operand, an integer constant
+  expression of type `size_t` equal to the literal's length (both oracles
+  fold it in `_Static_assert`). With any other operand it is an ordinary call
+  to the function `strlen` visible in scope, which must be declared with a
+  type compatible with `size_t (const char *)` — `E2927`
+  (`builtin-library-function-undeclared`) otherwise — and it lowers as that
+  call; no intrinsic reaches EvoIR. Measured: with a user-defined `strlen`
+  both oracles call it for a non-literal operand. The cohort's ten uses are
+  all `__builtin_strlen(s)` on a parameter, and the kernel declares `strlen`.
 - `__builtin_return_address(0)`: type `void *`; accepted by the front end;
   lowering reports `E3025` (`not-lowered: return-address`) and fails closed;
   an argument other than the constant `0` is `E2913`.
@@ -4029,6 +4053,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.27 | 2026-09-01 | States that any pointer-typed expression may root a place, with one implementation and no list of admitted forms, after the fourth root form (call results, then conditionals) was refused; specifies `__builtin_strlen` as a constant on a literal and an ordinary call to the in-scope `strlen` otherwise (`E2927`). Measured. |
 | 1.9.26 | 2026-09-01 | Specifies `__builtin_has_attribute` as a `_Bool` constant answered from the preserved attribute inventory, the three `va_*` builtins at the front end with fail-closed lowering (`E2926`, `E3030`), and empty records with size zero. All measured; added after 13 GCC lanes stopped on the first and 13 Clang lanes on the second. |
 | 1.9.25 | 2026-09-01 | Defines `packed` on enumerations from measured oracle behaviour: smallest representable integer type, signed when a negative enumerator exists, alignment equal to size, constants still `int`; the `packed`+`aligned` combination is refused as an unarbitrated oracle conflict the cohort never uses. Added after the executing agent bisected 15 failing static assertions to `sizeof(enum rw_hint)`. |
 | 1.9.24 | 2026-09-01 | Generalizes the null pointer constant to every conversion context including function pointers, after `(void *)0` into a function-pointer member was refused while `0` was accepted; admits an address constant cast through an integer type and back, as the kernel's symbol exports write it, with lowering still governed by the relocation deferral. Both measured. |
