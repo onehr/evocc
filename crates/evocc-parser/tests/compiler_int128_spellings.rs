@@ -100,3 +100,27 @@ fn signed_and_unsigned_128_bit_objects_are_modifiable_assignment_targets() {
         &arena,
     );
 }
+
+#[test]
+fn wide_integer_compound_assignments_share_the_integer_assignment_path() {
+    let arena = Arena::default();
+    parse(
+        concat!(
+            "typedef unsigned int u32;\n",
+            "unsigned long checksum(const unsigned char *iph, int ihl) {\n",
+            "  __uint128_t tmp = *(const __uint128_t *)iph;\n",
+            "  unsigned long sum; int n = ihl; iph += 16; n -= 4;\n",
+            "  tmp += ((tmp >> 64) | (tmp << 64));\n",
+            "  sum = tmp >> 64;\n",
+            "  do { sum += *(const u32 *)iph; iph += 4; } while (--n > 0);\n",
+            "  return sum;\n",
+            "}\n",
+            "__int128_t all_compound_forms(__int128_t x, __int128_t y) {\n",
+            "  x += y; x -= y; x *= y; x /= y; x %= y;\n",
+            "  x <<= 1; x >>= 1; x &= y; x |= y; x ^= y;\n",
+            "  return x;\n",
+            "}\n",
+        ),
+        &arena,
+    );
+}

@@ -155,6 +155,10 @@ struct InferredExpressionType {
 #[derive(Debug, Clone, Copy)]
 enum OperandTypeClass {
     Integer(CIntegerType),
+    WideInteger {
+        ty: TypeId,
+        signedness: GnuInt128Signedness,
+    },
     Real(FloatKind),
     Complex(ComplexBase),
     Pointer(InferredPointerType),
@@ -2143,7 +2147,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         .ok()
                         .map(|value| value.mathematical_value() as f64),
                     OperandTypeClass::Real(_) => self.eval_real_constant_expression(operand),
-                    OperandTypeClass::Complex(_)
+                    OperandTypeClass::WideInteger { .. }
+                    | OperandTypeClass::Complex(_)
                     | OperandTypeClass::Pointer(_)
                     | OperandTypeClass::StringPointer(_)
                     | OperandTypeClass::Aggregate(_)
@@ -2884,6 +2889,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TypeKind::GnuInt128(_),
                 WrittenInitializer::Expression(expression),
             ) => {
+                if matches!(kind, TypeKind::GnuInt128(_))
+                    && !matches!(
+                        self.converted_expression_type(expression),
+                        Some(InferredExpressionType {
+                            ty: InferredType::Canonical(source),
+                            ..
+                        }) if self.same_unqualified_type(target, source)
+                    )
+                {
+                    self.report("E2202", "invalid-initializer-type", expression.span());
+                    return None;
+                }
                 if self.assignment_constraint(AssignmentOp::Simple, target, expression)
                     != UpdateConstraint::Scalar
                 {
@@ -7019,19 +7036,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let right_type = right.ty;
         let right_class = self.operand_type_class(right_type);
 
-        if op == AssignmentOp::Simple {
-            if let InferredType::Canonical(right_ty) = right_type {
-                if self.same_unqualified_type(target_ty, right_ty)
-                    && matches!(
-                        self.types.get(target_ty).map(|canonical| &canonical.kind),
-                        Some(TypeKind::GnuInt128(_))
-                    )
-                {
-                    return UpdateConstraint::Scalar;
-                }
-            }
-        }
-
         match op {
             AssignmentOp::Simple => match (left, right_class) {
                 (left, right) if is_arithmetic_class(left) && is_arithmetic_class(right) => {
@@ -7167,7 +7171,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     UpdateConstraint::Invalid
                 }
             }
-            OperandTypeClass::Complex(_)
+            OperandTypeClass::WideInteger { .. }
+            | OperandTypeClass::Complex(_)
             | OperandTypeClass::StringPointer(_)
             | OperandTypeClass::Aggregate(_)
             | OperandTypeClass::Void
@@ -7505,6 +7510,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             OperandTypeClass::Integer(integer) => {
                 InferredType::Integer(CInteger::new(0, integer).promoted().ty())
             }
+            OperandTypeClass::WideInteger { ty, .. } => InferredType::Canonical(ty),
             OperandTypeClass::Real(real) => InferredType::Real(real),
             OperandTypeClass::Complex(complex) => InferredType::Complex(complex),
             OperandTypeClass::Pointer(_)
@@ -7564,25 +7570,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.usual_arithmetic_expression_type(left.ty, right.ty)
             }
             BinaryOp::Mod | BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor => {
-                let (OperandTypeClass::Integer(left), OperandTypeClass::Integer(right)) =
-                    (left_class, right_class)
-                else {
+                if !is_integer_class(left_class) || !is_integer_class(right_class) {
                     return None;
-                };
-                Some(InferredType::Integer(usual_arithmetic_type(
-                    CInteger::new(0, left).promoted().ty(),
-                    CInteger::new(0, right).promoted().ty(),
-                )))
+                }
+                self.usual_arithmetic_expression_type(left.ty, right.ty)
             }
             BinaryOp::Shl | BinaryOp::Shr => {
-                let (OperandTypeClass::Integer(left), OperandTypeClass::Integer(_)) =
-                    (left_class, right_class)
-                else {
+                if !is_integer_class(right_class) {
                     return None;
-                };
-                Some(InferredType::Integer(
-                    CInteger::new(0, left).promoted().ty(),
-                ))
+                }
+                match left_class {
+                    OperandTypeClass::Integer(left) => Some(InferredType::Integer(
+                        CInteger::new(0, left).promoted().ty(),
+                    )),
+                    OperandTypeClass::WideInteger { ty, .. } => Some(InferredType::Canonical(ty)),
+                    _ => None,
+                }
             }
             BinaryOp::Lt
             | BinaryOp::Le
@@ -7720,6 +7723,28 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     CInteger::new(0, right).promoted().ty(),
                 )))
             }
+            (
+                OperandTypeClass::WideInteger {
+                    ty: left_ty,
+                    signedness: left_signedness,
+                },
+                OperandTypeClass::WideInteger {
+                    ty: right_ty,
+                    signedness: right_signedness,
+                },
+            ) => Some(InferredType::Canonical(
+                if left_signedness == GnuInt128Signedness::Unsigned {
+                    left_ty
+                } else if right_signedness == GnuInt128Signedness::Unsigned {
+                    right_ty
+                } else {
+                    left_ty
+                },
+            )),
+            (OperandTypeClass::WideInteger { ty, .. }, OperandTypeClass::Integer(_))
+            | (OperandTypeClass::Integer(_), OperandTypeClass::WideInteger { ty, .. }) => {
+                Some(InferredType::Canonical(ty))
+            }
             (left, right) if is_arithmetic_class(left) && is_arithmetic_class(right) => {
                 let has_complex = matches!(left, OperandTypeClass::Complex(_))
                     || matches!(right, OperandTypeClass::Complex(_));
@@ -7760,10 +7785,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         .unwrap_or(OperandTypeClass::Other),
                     TypeKind::Struct(_) | TypeKind::Union(_) => OperandTypeClass::Aggregate(ty),
                     TypeKind::Void => OperandTypeClass::Void,
+                    TypeKind::GnuInt128(signedness) => {
+                        OperandTypeClass::WideInteger { ty, signedness }
+                    }
                     TypeKind::Array { .. }
                     | TypeKind::Function { .. }
-                    | TypeKind::BuiltinVaList
-                    | TypeKind::GnuInt128(_) => OperandTypeClass::Other,
+                    | TypeKind::BuiltinVaList => OperandTypeClass::Other,
                 }
             }
         }
@@ -9382,13 +9409,19 @@ fn extend_subobject_path(path: SubobjectPath, step: SubobjectStep) -> SubobjectP
 }
 
 fn is_integer_class(class: OperandTypeClass) -> bool {
-    matches!(class, OperandTypeClass::Integer(_))
+    matches!(
+        class,
+        OperandTypeClass::Integer(_) | OperandTypeClass::WideInteger { .. }
+    )
 }
 
 fn is_arithmetic_class(class: OperandTypeClass) -> bool {
     matches!(
         class,
-        OperandTypeClass::Integer(_) | OperandTypeClass::Real(_) | OperandTypeClass::Complex(_)
+        OperandTypeClass::Integer(_)
+            | OperandTypeClass::WideInteger { .. }
+            | OperandTypeClass::Real(_)
+            | OperandTypeClass::Complex(_)
     )
 }
 
@@ -9410,6 +9443,7 @@ fn floating_kind(class: OperandTypeClass) -> Option<FloatKind> {
             ComplexBase::CF128 => FloatKind::F128,
         }),
         OperandTypeClass::Integer(_)
+        | OperandTypeClass::WideInteger { .. }
         | OperandTypeClass::Pointer(_)
         | OperandTypeClass::StringPointer(_)
         | OperandTypeClass::Aggregate(_)
