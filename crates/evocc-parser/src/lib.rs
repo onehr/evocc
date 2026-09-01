@@ -686,6 +686,40 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             })
     }
 
+    fn install_temporary_parameter_shadows(&mut self) {
+        let mut installed = HashSet::new();
+        for shadow in self.temporary_parameter_shadows.clone() {
+            if shadow.scope != self.current_scope || !installed.insert(shadow.spelling.clone()) {
+                continue;
+            }
+            if self
+                .symbol_in_current_scope(&shadow.spelling)
+                .and_then(|symbol| self.symbols.symbol(symbol).ok())
+                .is_some_and(|symbol| {
+                    symbol.data()
+                        == SymbolData::Parameter {
+                            storage: StorageClass::None,
+                        }
+                        && symbol.ty() == shadow.ty
+                        && symbol.span() == shadow.span
+                })
+            {
+                continue;
+            }
+            self.symbols
+                .declare(
+                    shadow.scope,
+                    &shadow.spelling,
+                    SymbolData::Parameter {
+                        storage: StorageClass::None,
+                    },
+                    shadow.ty,
+                    shadow.span,
+                )
+                .expect("temporary parameter spellings are unique per probe");
+        }
+    }
+
     fn linked_symbol_in_parent_scopes(&self, spelling: &str) -> Option<SymbolId> {
         let mut scope = self
             .symbols
@@ -4269,24 +4303,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             } else {
                 let transaction = self.symbols.begin_transaction();
                 let declaration_transaction = self.begin_declaration_transaction();
-                let mut installed = HashSet::new();
-                for shadow in self.temporary_parameter_shadows.clone() {
-                    if shadow.scope == self.current_scope
-                        && installed.insert(shadow.spelling.clone())
-                    {
-                        self.symbols
-                            .declare(
-                                shadow.scope,
-                                &shadow.spelling,
-                                SymbolData::Parameter {
-                                    storage: StorageClass::None,
-                                },
-                                shadow.ty,
-                                shadow.span,
-                            )
-                            .expect("temporary parameter spellings are unique per probe");
-                    }
-                }
+                self.install_temporary_parameter_shadows();
                 let expression = self.parse_expression();
                 let inferred = expression.and_then(|expression| {
                     let inherited = match expression {
