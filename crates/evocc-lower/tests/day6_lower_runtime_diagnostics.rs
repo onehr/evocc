@@ -145,3 +145,14 @@ fn signed_overflow_matches_typed_runtime_diagnostic() {
         "signed-integer-overflow",
     );
 }
+
+#[test]
+fn runtime_signed_left_shift_keeps_its_undefined_behavior_obligation() {
+    assert_typed_runtime_diagnostic(
+        "int main(void) { int one = 1; int count = 31; return one << count; }\n",
+        "one << count",
+        IntegerError::InvalidSignedLeftShift,
+        "E3006",
+        "invalid-signed-left-shift",
+    );
+}

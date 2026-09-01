@@ -1,0 +1,113 @@
+{
+  "receiptId": "c30.pointer-frame-wide-red.v1",
+  "baseline": "c132628",
+  "authority": {
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.29",
+      "sha256": "ca51b4b805aeec824c0d1931a8e65dc7bf0b8c985a15d753b2eee02ff0437e58"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "P11",
+      "sha256": "385cf4b8e2a2970f67b261c1f9c133d27936c7d47b9e37e4c351c4e8a48fa5c7"
+    },
+    "oracleEvidence": [
+      {
+        "path": ".evidence/builtin-probes/20260901-2c23684c/p11.c",
+        "sha256": "0aa12a709a2ee4b5c7a973c515b744ee940ea346e90422b9d92fae2f34bc6586"
+      },
+      {
+        "path": ".evidence/builtin-probes/20260901-2c23684c/p11b.c",
+        "sha256": "935d4285706396d3c72ac448c72ed24dbcd38bf636eaca45ee2d3932ed02aa2c"
+      },
+      {
+        "path": ".evidence/builtin-probes/20260901-2c23684c/p11c.c",
+        "sha256": "32f49da1239006018b044cd3af729522e3fd1c9918019f004aa87c2b0497dabb"
+      },
+      {
+        "path": ".evidence/builtin-probes/20260901-2c23684c/p11.out",
+        "sha256": "e4fe998f603e74ac546e3dca27270c9a1152546bcf2670491c0451fa8d92e576"
+      }
+    ]
+  },
+  "declaredCapabilities": [
+    "character pointers of differing signedness convert in initialization, assignment, argument and return contexts",
+    "__builtin_frame_address accepts an integer constant expression and lowering reports E3031",
+    "signed integer constant evaluation wraps in the operand width while runtime signed-left-shift obligations remain unchanged",
+    "void pointer difference executes in C-HIR with byte scale and lowering reports E3032",
+    "128-bit front-end values initialize and type-check while C-HIR execution, EvoIR execution and lowering report E3033"
+  ],
+  "focusedCommand": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test character_pointer_conversions --test compile_time_builtins --test compiler_int128_spellings --test wide_enumerators -p evocc-lower --test fail_closed_forms --test day6_lower_runtime_diagnostics -p evocc-chir --test wide_integer_boundary -p evocc-evoir --test wide_integer_boundary --no-fail-fast",
+  "observedRed": [
+    {
+      "test": "character_pointer_initializers_accept_signedness_changes",
+      "observed": "E2202 invalid-initializer-type",
+      "reason": "character-pointer-signedness-conversion"
+    },
+    {
+      "test": "character_pointer_assignments_accept_signedness_changes",
+      "observed": "E2102 invalid-update-operands",
+      "reason": "character-pointer-signedness-conversion"
+    },
+    {
+      "test": "builtin_frame_address_accepts_any_integer_constant_expression",
+      "observed": "E2001 undeclared-identifier: __builtin_frame_address",
+      "reason": "frame-address-builtin"
+    },
+    {
+      "test": "frame_address_fails_closed_with_only_e3031",
+      "observed": "E2001 undeclared-identifier: __builtin_frame_address before lowering",
+      "reason": "frame-address-builtin"
+    },
+    {
+      "test": "signed_constant_arithmetic_wraps_in_the_operand_width",
+      "observed": "E1303 enumerator-value-is-not-an-integer-constant",
+      "reason": "signed-constant-wrapping"
+    },
+    {
+      "test": "pointer_difference_fails_closed_with_only_e3032",
+      "observed": "E3101 unsupported pointer binary operation",
+      "reason": "pointer-difference-lowering-boundary"
+    },
+    {
+      "test": "wide_integer_initializers_accept_convertible_integer_values",
+      "observed": "E2202 invalid-initializer-type",
+      "reason": "wide-integer-front-end-boundary"
+    },
+    {
+      "test": "chir_refuses_executed_wide_arithmetic_with_e3033",
+      "observed": "E3007 unsupported-interpreter-type",
+      "reason": "wide-integer-execution-boundary"
+    },
+    {
+      "test": "evoir_refuses_executed_bits128_arithmetic_with_e3033",
+      "observed": "E3007 unsupported bit width 128",
+      "reason": "wide-integer-execution-boundary"
+    },
+    {
+      "test": "wide_integer_execution_fails_closed_with_only_e3033",
+      "observed": "E3101 object subvalue is neither an integer nor pointer",
+      "reason": "wide-integer-execution-boundary"
+    }
+  ],
+  "alreadyGreenGuards": [
+    "character pointer argument and return conversions are accepted",
+    "unrelated object pointer initialization remains E2202",
+    "void pointer difference executes with byte scale in the C-HIR interpreter",
+    "runtime signed left shift continues to report E3006 invalid-signed-left-shift"
+  ],
+  "buildErrors": 0,
+  "workspaceIncludingDocTests": {
+    "listed": 1052,
+    "passed": 1042,
+    "failed": 10,
+    "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet"
+  },
+  "allTargetTestCount": {
+    "listed": 1051,
+    "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list --format terse | rg -c ': test$'"
+  },
+  "failedTests": 10,
+  "result": "RED"
+}

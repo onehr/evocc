@@ -102,6 +102,19 @@ fn signed_and_unsigned_128_bit_objects_are_modifiable_assignment_targets() {
 }
 
 #[test]
+fn wide_integer_initializers_accept_convertible_integer_values() {
+    let arena = Arena::default();
+    parse(
+        concat!(
+            "__int128_t signed_value = -1;\n",
+            "__uint128_t unsigned_value = 7;\n",
+            "void initialize(void) { __int128 local = 3; unsigned __int128 other = 9; }\n",
+        ),
+        &arena,
+    );
+}
+
+#[test]
 fn wide_integer_compound_assignments_share_the_integer_assignment_path() {
     let arena = Arena::default();
     parse(

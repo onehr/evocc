@@ -281,6 +281,20 @@ fn builtin_return_address_accepts_only_constant_zero() {
 }
 
 #[test]
+fn builtin_frame_address_accepts_any_integer_constant_expression() {
+    accepts(concat!(
+        "void *zero(void) { return __builtin_frame_address(0); } ",
+        "void *one(void) { return __builtin_frame_address(1); } ",
+        "_Static_assert(__builtin_types_compatible_p(",
+        "typeof(__builtin_frame_address(1)), void *), \"frame address type\");\n",
+    ));
+    rejects(
+        "void *runtime_level(int level) { return __builtin_frame_address(level); }\n",
+        "E2913",
+    );
+}
+
+#[test]
 fn auto_type_infers_one_initialized_non_array_declarator() {
     accepts(concat!(
         "long f(void) { const long c = 1; __auto_type a = c; return a; } ",

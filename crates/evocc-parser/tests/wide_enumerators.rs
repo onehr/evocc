@@ -53,3 +53,20 @@ fn an_enumerator_outside_every_target_integer_type_is_e1303() {
     .expect_err("implicit successor of ULONG_MAX must be rejected");
     assert_eq!(error, "E1303: enumerator-value-is-not-representable");
 }
+
+#[test]
+fn signed_constant_arithmetic_wraps_in_the_operand_width() {
+    let source = concat!(
+        "enum signed_shift { SIGN_BIT = 1 << 31, AFTER_SIGN_BIT = 2 };\n",
+        "_Static_assert(sizeof(enum signed_shift) == 4, \"enum layout\");\n",
+        "_Static_assert(__builtin_types_compatible_p(typeof(SIGN_BIT), int), \"enum type\");\n",
+        "_Static_assert(SIGN_BIT == (-2147483647 - 1), \"shift wraps\");\n",
+        "_Static_assert((1 << 31) < 0, \"shift is negative\");\n",
+        "_Static_assert((2147483647 + 1) == (-2147483647 - 1), \"add wraps\");\n",
+        "_Static_assert((-2147483647 - 2) == 2147483647, \"subtract wraps\");\n",
+        "_Static_assert((1073741824 * 4) == 0, \"multiply wraps\");\n",
+        "_Static_assert(-(-2147483647 - 1) == (-2147483647 - 1), \"negate wraps\");\n",
+    );
+    let arena = Arena::default();
+    parse(source, &arena).unwrap_or_else(|error| panic!("must parse: {error}"));
+}

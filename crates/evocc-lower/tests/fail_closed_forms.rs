@@ -86,6 +86,40 @@ fn return_address_fails_closed_with_only_e3025() {
 }
 
 #[test]
+fn frame_address_fails_closed_with_only_e3031() {
+    assert_lowering_error(
+        "void *f(void) { return __builtin_frame_address(1); }\n",
+        8,
+        "E3031",
+        "not-lowered: frame-address",
+    );
+}
+
+#[test]
+fn pointer_difference_fails_closed_with_only_e3032() {
+    assert_lowering_error(
+        "long f(void *left, void *right) { return left - right; }\n",
+        9,
+        "E3032",
+        "not-lowered: pointer-difference",
+    );
+}
+
+#[test]
+fn wide_integer_execution_fails_closed_with_only_e3033() {
+    assert_lowering_error(
+        concat!(
+            "unsigned long f(void) { ",
+            "__uint128_t u = ((__uint128_t)1 << 100) + 7; ",
+            "return (unsigned long)((u * 3) >> 100); }\n",
+        ),
+        10,
+        "E3033",
+        "not-executed: wide-integer",
+    );
+}
+
+#[test]
 fn variable_arguments_fail_closed_with_only_e3030() {
     for (ordinal, source) in [
         (
