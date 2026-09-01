@@ -226,7 +226,7 @@ fn typeof_dereferenced_function_pointer_declares_a_function() {
         "int target(int value); ",
         "int (*fp)(int) = target; ",
         "extern typeof(*fp) inherited; ",
-        "typeof(*fp) *copy = fp;\n",
+        "typeof(*fp) *copy = target;\n",
     );
     assert_function_declarations(source, &["inherited"], 1);
 }

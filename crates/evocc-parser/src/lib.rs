@@ -1399,31 +1399,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.types.get(full_type).map(|ty| &ty.kind),
                 Some(TypeKind::Function { .. })
             )
+            && self.peek_kind() == Some(TokenKind::LBrace)
         {
-            let written_parameters = declarator.derived.iter().find_map(|layer| match layer {
-                DerivedDeclarator::Function {
-                    parameters, scope, ..
-                } => Some((parameters.clone(), *scope)),
-                _ => None,
-            });
-            let inherited_parameters = specifier.inherited_function_parameters.clone();
-            let inherited_from_specifier = written_parameters.is_none();
-            let (mut parameters, parameter_scope) = if let Some(written) = written_parameters {
-                written
-            } else if let Some(mut inherited) = inherited_parameters {
-                if let ParameterSyntax::Prototype { parameters, .. } = &mut inherited {
-                    for parameter in parameters {
-                        parameter.symbol = None;
-                        parameter.name = None;
-                    }
-                }
-                let scope =
-                    self.create_scope(ScopeKind::FunctionPrototype, Some(declarator.name.span));
-                (inherited, scope)
-            } else {
-                self.report("E1001", "expected-declaration", declarator.name.span);
-                return None;
-            };
+            let (mut parameters, parameter_scope, inherited_from_specifier) =
+                self.function_declaration_parameters(&declarator, &specifier, full_type)?;
             let symbol = self.declare_symbol(
                 &declarator.name,
                 SymbolData::Function { storage },
@@ -1508,12 +1487,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return Some(declarations);
         }
 
-        let symbol_data = if storage == StorageClass::Typedef {
-            SymbolData::Typedef
-        } else {
-            SymbolData::Object { storage }
-        };
-
         // C11 6.7: one declaration may carry several init-declarators. Each
         // gets its own symbol and initializer in sequence, so a later
         // initializer can refer to an earlier name, and every one receives the
@@ -1524,6 +1497,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             full_type: TypeId,
             symbol: SymbolId,
             initializer: Option<ObjectInitializer<'arena>>,
+            function_parameters: Option<ParameterSyntax>,
             specifier: TypeSpecifier,
             written: WrittenDeclarator,
             attributes: Vec<Attribute>,
@@ -1552,6 +1526,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2915", "auto-type-misuse", declarator.span);
                 return None;
             }
+            let is_function = storage != StorageClass::Typedef
+                && matches!(
+                    self.types.get(full_type).map(|ty| &ty.kind),
+                    Some(TypeKind::Function { .. })
+                );
+            if is_function && has_initializer {
+                self.report("E2202", "invalid-initializer-type", declarator.span);
+                return None;
+            }
+            let parsed_function_parameters = if is_function {
+                Some(self.function_declaration_parameters(&declarator, &specifier, full_type)?)
+            } else {
+                None
+            };
             let inherited_function_syntax = if storage == StorageClass::Typedef
                 && matches!(
                     self.types.get(full_type).map(|ty| &ty.kind),
@@ -1568,6 +1556,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             } else {
                 None
             };
+            let symbol_data = if storage == StorageClass::Typedef {
+                SymbolData::Typedef
+            } else if is_function {
+                SymbolData::Function { storage }
+            } else {
+                SymbolData::Object { storage }
+            };
             let symbol = self.declare_symbol(&declarator.name, symbol_data, full_type);
             self.add_entity_attributes(symbol, &attributes);
             full_type = self
@@ -1575,10 +1570,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .symbol(symbol)
                 .expect("declared symbols belong to the parser symbol table")
                 .ty();
+            let function_parameters =
+                if let Some((mut parameters, parameter_scope, _)) = parsed_function_parameters {
+                    let outer_scope = self.current_scope;
+                    self.current_scope = parameter_scope;
+                    self.bind_parameters(&mut parameters);
+                    self.current_scope = outer_scope;
+                    self.set_inherited_function_parameters(symbol, parameters.clone());
+                    Some(parameters)
+                } else {
+                    None
+                };
             if let Some(parameters) = inherited_function_syntax {
                 self.set_inherited_function_parameters(symbol, parameters);
             }
-            if has_initializer && storage != StorageClass::Typedef {
+            if has_initializer && storage != StorageClass::Typedef && !is_function {
                 self.mark_definition(symbol, &declarator.name);
             }
             let mut declaration_specifier = specifier.surface.clone();
@@ -1636,6 +1642,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 full_type,
                 symbol,
                 initializer,
+                function_parameters,
                 specifier: declaration_specifier,
                 written,
                 attributes,
@@ -1661,18 +1668,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .extend(self.parse_attribute_specifiers(AttributePlacement::AfterDeclarator));
             let mut next_type = self.apply_declarator(specifier.surface.type_id(), &next.derived);
             next_type = self.apply_attributes_to_type(next_type, &mut next_attributes);
-            if storage != StorageClass::Typedef
-                && matches!(
-                    self.types.get(next_type).map(|ty| &ty.kind),
-                    Some(TypeKind::Function { .. })
-                )
-            {
-                // A function declarator inside an init-declarator list is legal
-                // C but has no consumer in this profile; refuse it plainly
-                // rather than mis-declaring it as an object.
-                self.report("E1002", "expected-token: ;", next.name.span);
-                return None;
-            }
             written = self.written_declarator(&next);
             declarator = next;
             full_type = next_type;
@@ -1687,9 +1682,27 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .expect("at least one declarator was parsed");
         let end_span = self.declaration_end(last_name_span);
         let declaration_span = self.merge_span(start_span, end_span);
+        if context == DeclarationContext::ForInitializer {
+            if let Some(entry) = pending
+                .iter()
+                .find(|entry| entry.function_parameters.is_some())
+            {
+                self.report(
+                    "E1206",
+                    "function-declaration-in-for-initializer",
+                    entry.declarator.name.span,
+                );
+                return None;
+            }
+        }
         if let Some(span) = inline_spans.first().copied() {
-            self.report("E1401", "inline-specifier-on-non-function", span);
-            return None;
+            if pending
+                .iter()
+                .any(|entry| entry.function_parameters.is_none())
+            {
+                self.report("E1401", "inline-specifier-on-non-function", span);
+                return None;
+            }
         }
         let mut declarations = self.side_declarations.split_off(side_start);
         if let Some(event) = specifier.tag_event {
@@ -1711,6 +1724,23 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     attributes: entry.attributes,
                     span: declaration_span,
                 })
+            } else if let Some(parameters) = entry.function_parameters {
+                CHirDecl::Function(FunctionDecl {
+                    symbol: entry.symbol,
+                    name: entry.declarator.name,
+                    ty: entry.full_type,
+                    return_specifier: entry.specifier,
+                    written: entry.written,
+                    parameters,
+                    storage,
+                    asm_label: entry.asm_label,
+                    asm_label_span: entry.asm_label_span,
+                    inline_spans: inline_spans.clone(),
+                    gnu_extension_spans: gnu_extension_spans.clone(),
+                    attributes: entry.attributes,
+                    body: None,
+                    span: declaration_span,
+                })
             } else {
                 CHirDecl::Object(ObjectDecl {
                     symbol: entry.symbol,
@@ -1730,6 +1760,75 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             declarations.push(self.alloc_node(declaration));
         }
         Some(declarations)
+    }
+
+    fn function_declaration_parameters(
+        &mut self,
+        declarator: &ParsedDeclarator,
+        specifier: &ParsedSpecifier<'arena>,
+        function_type: TypeId,
+    ) -> Option<(ParameterSyntax, ScopeId, bool)> {
+        if let Some(written) = declarator.derived.iter().find_map(|layer| match layer {
+            DerivedDeclarator::Function {
+                parameters, scope, ..
+            } => Some((parameters.clone(), *scope)),
+            _ => None,
+        }) {
+            return Some((written.0, written.1, false));
+        }
+
+        let inherited = specifier.inherited_function_parameters.clone().or_else(|| {
+            self.parameter_syntax_from_function_type(function_type, specifier.surface.span())
+        });
+        let Some(mut inherited) = inherited else {
+            self.report("E1001", "expected-declaration", declarator.name.span);
+            return None;
+        };
+        if let ParameterSyntax::Prototype { parameters, .. } = &mut inherited {
+            for parameter in parameters {
+                parameter.symbol = None;
+                parameter.name = None;
+            }
+        }
+        let scope = self.create_scope(ScopeKind::FunctionPrototype, Some(declarator.name.span));
+        Some((inherited, scope, true))
+    }
+
+    fn parameter_syntax_from_function_type(
+        &self,
+        function_type: TypeId,
+        span: SourceSpan,
+    ) -> Option<ParameterSyntax> {
+        let TypeKind::Function { parameters, .. } = &self.types.get(function_type)?.kind else {
+            return None;
+        };
+        match parameters {
+            FunctionParameters::Unspecified => Some(ParameterSyntax::Unspecified),
+            FunctionParameters::Prototype { types, variadic } => {
+                let parameters = types
+                    .iter()
+                    .map(|ty| ParameterDecl {
+                        symbol: None,
+                        name: None,
+                        ty: *ty,
+                        // A declaration through a semantic function type has
+                        // no written parameter list of its own. These nodes
+                        // preserve the canonical parameter types only.
+                        specifier: TypeSpecifier::Builtin { ty: *ty, span },
+                        written: WrittenDeclarator {
+                            layers: Vec::new(),
+                            span,
+                        },
+                        attributes: Vec::new(),
+                        span,
+                    })
+                    .collect();
+                Some(ParameterSyntax::Prototype {
+                    parameters,
+                    variadic: *variadic,
+                })
+            }
+        }
     }
 
     fn parse_written_initializer(&mut self) -> Option<WrittenInitializer<'arena>> {
