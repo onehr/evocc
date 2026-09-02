@@ -471,3 +471,69 @@ fn exhausted_fuel_is_counted_on_its_own() {
     assert_eq!(report.mismatched, 0, "{}", report.render());
     assert_eq!(report.compared, 0, "{}", report.render());
 }
+
+/// Which rules of the reviewed registry the campaign actually reaches.
+///
+/// A binding is resolved from the node stream by a path, and `p0_009_double_neg`
+/// is the only rule whose path passes through a second node. A gate that never
+/// fired it would leave that traversal unmeasured while every certificate still
+/// replayed.
+#[test]
+fn the_campaign_reaches_the_registry_rules_it_baits() {
+    let mut fired = BTreeSet::new();
+    for seed in 0..256_u64 {
+        let module = generate_module(seed, config());
+        let outcome = evocc_eqopt::optimize_scalar_module_with_evp1(
+            &module,
+            evocc_eqopt::ScalarEqBudget::new(20_000, 256),
+        );
+        for region in &outcome.certificate.regions {
+            for event in &region.events {
+                if let evocc_proof::EvpEvent::Rewrite(rewrite) = event {
+                    fired.insert(rewrite.rule.clone());
+                }
+            }
+        }
+    }
+    println!(
+        "rulesFired={}",
+        fired.iter().cloned().collect::<Vec<_>>().join(",")
+    );
+
+    // The complete reviewed registry, not a subset: every rule's binding is
+    // resolved by the same path mechanism, and a rule that stopped firing would
+    // silently take its path out of the campaign.
+    let registry = [
+        "p0_001_add_zero_rhs",
+        "p0_002_add_zero_lhs",
+        "p0_003_mul_one_rhs",
+        "p0_004_mul_one_lhs",
+        "p0_005_and_zero_rhs",
+        "p0_006_and_zero_lhs",
+        "p0_007_or_zero_rhs",
+        "p0_008_or_zero_lhs",
+        "p0_009_double_neg",
+        "p0_010_icmp_eq_self",
+        "p0_011_icmp_ne_self",
+        "p0_012_icmp_slt_self",
+        "p0_013_icmp_sle_self",
+        "p0_014_icmp_ult_self",
+        "p0_015_icmp_ule_self",
+        "p0_100_fold_add",
+        "p0_101_fold_sub",
+        "p0_102_fold_mul",
+        "p0_103_fold_and",
+        "p0_104_fold_or",
+        "p0_105_fold_xor",
+        "p0_106_fold_icmp_eq",
+        "p0_107_fold_icmp_ne",
+        "p0_108_fold_icmp_slt",
+        "p0_109_fold_icmp_sle",
+        "p0_110_fold_icmp_ult",
+        "p0_111_fold_icmp_ule",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect::<BTreeSet<_>>();
+    assert_eq!(fired, registry, "the rules the campaign reaches changed");
+}
