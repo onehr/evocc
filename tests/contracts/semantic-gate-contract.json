@@ -52,7 +52,8 @@
     "keptRegionsAreProducerConformance": "2026-09-03: the executor observed that 'a ceiling stop keeps every admitted region' cannot be checked, because 11.2 permits a producer to decline any eligible region. Agreed: it is producer conformance, pinned by a producer-side test, in the same class as saturated and no-new-best.",
     "stageS2dClosed": "2026-09-03: stop reasons come from the scheduler's counters (saturated when the last epoch fired nothing, policy at the producer's own budget); a ceiling stop keeps admitted regions (3 admitted with a generous budget, 1 kept at one epoch, the partial certificate verifies); residual regions are a campaign counter: 20 of 21,000 programs (0.095 percent), one region each, all the 11.6 shape. Wall time +10 percent for the extra measuring transaction. Architect's isolated gate on 8a165c9: 1154/0, clippy 0, fmt clean; merged into main.",
     "stageS2eClosed": "2026-09-03: runs of 8.11 in place with digest chaining (a broken chain is its own mismatch kind); 21,000 programs: 20 runs of two transactions, none longer, none at the ceiling, residual regions after the last transaction 0 for every run; generator now emits recursion, pointers across call boundaries, copy between distinct objects and all five ub.assume reasons; 0 mismatches, 0 refusals. Architect's isolated gate on f1ae24f: 1155/0, clippy 0, fmt clean; merged into main. Open by the executor's list: no produced certificate reaches a profile ceiling or the transaction ceiling; pointers round-tripped through memory across a call; floating point, vectors, tuples, wide integers, mutual recursion.",
-    "tierBGapsRuled": "2026-09-03: all three S3a gaps were real. A registry is admissible only when the specification prints it (Reading A); p0.scalar.v2 is printed with digest c1691808ebe55a3b... and includes v1 unchanged. The premise comparison was stated backwards and is corrected: the checker refuses any premise bit it cannot confirm. The icmp transfer is now an interval procedure with signed comparisons top under an unknown sign bit. The executor's refusal to build a second transfer implementation with no certificate crossing between the two was correct."
+    "tierBGapsRuled": "2026-09-03: all three S3a gaps were real. A registry is admissible only when the specification prints it (Reading A); p0.scalar.v2 is printed with digest c1691808ebe55a3b... and includes v1 unchanged. The premise comparison was stated backwards and is corrected: the checker refuses any premise bit it cannot confirm. The icmp transfer is now an interval procedure with signed comparisons top under an unknown sign bit. The executor's refusal to build a second transfer implementation with no certificate crossing between the two was correct.",
+    "s3aPartial": "2026-09-03: the first executor delivered the known-bits lattice (8.10 rows and the negative surface), the premise record and parser of 11.3, and registry admission by version (evp1: v1; evp2: v1 or v2, name and digest together), then stopped at its context limit with the 18 Tier B rules pinned as an ignored coverage test (0 of 18 reached, because no producer rule reads a fact). Architect's isolated gate on d8797c0: 1172/0 (2 ignored), clippy 0, fmt clean; merged into main. The remaining parts pass to a fresh executor with a self-contained brief."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",
@@ -175,6 +176,17 @@
         "clippy": 0,
         "fmt": "clean"
       }
+    },
+    "s3aPartial": {
+      "branchHead": "d8797c0",
+      "architectGate": {
+        "passed": 1172,
+        "failed": 0,
+        "ignored": 2,
+        "clippy": 0,
+        "fmt": "clean"
+      },
+      "tierBRulesReached": "0 of 18"
     }
   }
 }
