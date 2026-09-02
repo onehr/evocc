@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.36** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.37** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -3979,12 +3979,13 @@ when comparing against a rendered module.
 ```text
 certificate     := header region_block* output_line
 header          := version_line registry_line input_line budget_line?
+                   ; budget_line is absent in evp1 and present in evp2, never otherwise
 version_line    := "evp1" newline | "evp2" newline
 budget_line     := "budget nodes=" quantity " epochs=" quantity " fuel=" quantity
                    " n=" evp_int " stop=" stop_reason newline
 quantity        := evp_int "/" evp_int
                    ; consumed "/" bound, in that order, never the reverse
-stop_reason     := "saturated" | "no-new-best" | "epochs" | "nodes" | "fuel"
+stop_reason     := "saturated" | "no-new-best" | "policy" | "epochs" | "nodes" | "fuel"
 registry_line   := "registry " ident " " digest newline
 input_line      := "input " digest newline
 output_line     := "output " digest newline
@@ -4153,7 +4154,7 @@ an `epoch k` line precedes the events that epoch produced for that region, and
 `k` is strictly increasing within the block. A region touched in no epoch has no
 markers. The checker verifies monotonicity within each block and that no `k`
 exceeds the recorded epoch count; it does not require every epoch to appear in
-every region, since most epochs touch few regions.
+every region, since most epochs touch few regions. Epochs are numbered from 1: with `epochs=c/1024` the legal markers are `1..=c`, so the inequality `k <= c` is tight, and a marker `0` is malformed (status 2). Defined at revision 1.9.37.
 
 **Budget.** Every `quantity` is written consumed `/` bound, in that order:
 `budget nodes=3/100000 epochs=1/1024 fuel=0/256 n=0 stop=saturated` is a
@@ -4173,7 +4174,7 @@ re-derived: a producer that overstates it only widens a box the checker
 still holds it to. `saturated` and `no-new-best` are not verified; they would
 require re-running the scheduler and are telemetry. Defined at revision
 1.9.36 after the randomized gate stopped on the two readings of an unordered
-`a/b` and of a single fuel integer with no bound.
+`a/b` and of a single fuel integer with no bound. A producer that stops by a rule of its own, neither at a profile ceiling nor at saturation, records `stop=policy`; it is telemetry like `saturated` and `no-new-best`, and recording `saturated` for a transaction that did not reach a fixpoint is a false claim even though the checker cannot detect it. An `evp2` header without a budget line, or an `evp1` header with one or with epoch markers, is malformed (status 2).
 
 **Zero regions.** Any compilation that accepts no rewrite produces a certificate
 with a header and an `output` line and no region blocks, whether or not eligible
@@ -4436,6 +4437,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.37 | 2026-09-03 | evp2 produced and verified across 21,000 programs. Epoch markers are numbered from 1; `evp2` requires its budget line and `evp1` forbids it; adds the `policy` stop reason for a producer's own stop rule so that `saturated` is never claimed without a fixpoint (11.3). |
 | 1.9.36 | 2026-09-03 | Second randomized campaign on extended shapes (21,000 programs, 0 mismatches, one producer refusal fixed: alias right-hand sides come from the binding). Fixes the `budget` line: every quantity is consumed/bound, `fuel` carries its bound and the `n` it derives from, and the checker verifies the profile constants and the fuel derivation (11.3). |
 | 1.9.35 | 2026-09-02 | First randomized semantic gate campaign (21,000 programs, 0 semantic mismatches, 12 certificate refusals). Allocates `E3008` `interpreter-fuel-exhausted` as a host-resource stop (6.3, 10.4); defines what a certificate with no region claims and how the checker verifies it; states that rewrite bindings are recomputed from the recorded node children (11.3). The `evp1` versions paragraph already answers the scheduler-record question: budget and epoch lines belong to `evp2`. |
 | 1.9.34 | 2026-09-02 | Third full-configuration survey (2,445 of 2,798 clean). Defines array lvalue decay for members, flexible members and string literals (10.1.3); range designators and inferred bounds (10.1.12); function pointer and `void *` conversions, `_Pragma`, `__inline`, `__restrict` and attribute placement (10.1.18); integer constants cast to pointers and static array decay as address constants (10.1.19); library and GCC-only ctype builtins (10.1.14). Measured. |
