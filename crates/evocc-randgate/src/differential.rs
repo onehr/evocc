@@ -257,14 +257,25 @@ struct Trial {
     proof_text: String,
     regions: usize,
     optimizer_budget_exhausted: bool,
+    /// Set when either interpretation stopped on fuel. Section 10.4 makes that
+    /// stop a limit of the host rather than a property of the program, so it is
+    /// neither an undefined-behaviour discard nor a comparison result, whichever
+    /// side ran out.
+    fuel_exhausted: bool,
     input_undefined: Option<&'static str>,
     refusal: Option<(MismatchKind, String)>,
+}
+
+/// The one place that recognises a fuel stop, so both sides answer alike.
+fn stopped_on_fuel(observation: &Observation) -> bool {
+    matches!(observation, Observation::Undefined { code, .. } if *code == FUEL_EXHAUSTED)
 }
 
 fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker) -> Trial {
     let before_text = render_module(module);
     let arguments = entry_arguments(module, seed);
-    let before_run = match observe(module, &arguments, budget.step_budget) {
+    let before = observe(module, &arguments, budget.step_budget);
+    let before_run = match before {
         Observation::Defined(run) => run,
         Observation::Undefined { code, .. } => {
             return Trial {
@@ -273,6 +284,7 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
                 proof_text: String::new(),
                 regions: 0,
                 optimizer_budget_exhausted: false,
+                fuel_exhausted: code == FUEL_EXHAUSTED,
                 input_undefined: Some(code),
                 refusal: None,
             };
@@ -288,6 +300,7 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
         proof_text,
         regions: outcome.certificate.regions.len(),
         optimizer_budget_exhausted: outcome.report.budget_exhausted,
+        fuel_exhausted: false,
         input_undefined: None,
         refusal: None,
     };
@@ -305,6 +318,10 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
     }
 
     let after_run = observe(&outcome.module, &arguments, budget.step_budget);
+    if stopped_on_fuel(&after_run) {
+        trial.fuel_exhausted = true;
+        return trial;
+    }
     if let Some(refusal) = compare(&before_run, &after_run) {
         trial.refusal = Some(refusal);
         return trial;
@@ -364,12 +381,11 @@ pub fn run_seed(
 ) -> Verdict {
     let module = generate_module(seed, config);
     let trial = judge(&module, seed, budget, checker);
+    if trial.fuel_exhausted {
+        return Verdict::InterpreterBudgetExhausted;
+    }
     if let Some(code) = trial.input_undefined {
-        return if code == FUEL_EXHAUSTED {
-            Verdict::InterpreterBudgetExhausted
-        } else {
-            Verdict::DiscardedUndefined { code }
-        };
+        return Verdict::DiscardedUndefined { code };
     }
     let Some((kind, detail)) = trial.refusal else {
         return Verdict::Compared {
@@ -388,6 +404,7 @@ pub fn run_seed(
     let mut still_refuses = |candidate: &Module| {
         let candidate = judge(candidate, seed, budget, checker);
         candidate.input_undefined.is_none()
+            && !candidate.fuel_exhausted
             && (candidate.regions != 0) == optimized
             && candidate
                 .refusal
