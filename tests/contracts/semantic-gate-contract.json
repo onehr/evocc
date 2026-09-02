@@ -41,7 +41,8 @@
     "aliasRightHandSideFromBinding": "2026-09-03: seed 1592636988 (extended shapes) refused because the alias right-hand side was read from the instruction's operand while 11.3 admits class:cI only for a bare variable bound to cI. Fixed by taking the right-hand side from the binding and choosing a deterministic representative (seeds in manifest order, then nodes in emission order). The checker was right for the thirteenth time.",
     "stageS2aClosed": "2026-09-03: generator coverage extended to pointers across block edges, data-dependent bounded loops, copy, lifetime.end, ptr.null, func_addr with indirect calls and multiple returns, each pinned by the coverage assertion; 21,000 programs on the extended shapes: 0 semantic mismatches, 0 certificate refusals after the alias fix (seed 1592636988 pinned), all 27 scalar rules reached. Architect's isolated gate on b4af227: 1137/0, clippy 0, fmt clean; fast-forwarded into main. Still uncovered by the executor's own list: signed left shift assumptions, recursion, floating point, vectors, pointers as call arguments or returns, ordered pointer comparison, copy across distinct objects, block-merging in the shrinker.",
     "epochMarkersFromOne": "2026-09-03: both S2b gaps ruled. Epoch markers are 1-based, k <= consumed epochs is tight, marker 0 is malformed; evp2 must carry the budget line and evp1 must not. The executor's implementation already matched both readings; the spec now says so.",
-    "saturatedMeansFixpoint": "2026-09-03: the scalar bridge is a single sweep and records stop=saturated. A single sweep is a fixpoint only if re-running it on its own output admits no region; that has not been measured. Until it is, a producer that stops by its own rule records stop=policy (new telemetry reason); claiming saturated without a fixpoint is a false record even though unverifiable."
+    "saturatedMeansFixpoint": "2026-09-03: the scalar bridge is a single sweep and records stop=saturated. A single sweep is a fixpoint only if re-running it on its own output admits no region; that has not been measured. Until it is, a producer that stops by its own rule records stop=policy (new telemetry reason); claiming saturated without a fixpoint is a false record even though unverifiable.",
+    "stageS2bClosed": "2026-09-03: evp2 is produced and verified: budget line from real counters, epoch markers, the six checker properties each pinned by a one-field edit of a real certificate in refusing and holding form, evp1 still read, evp1 with any addition and evp2 without its budget line malformed. 21,000 programs replay evp2 with 0 mismatches and 0 refusals. Architect's isolated gate on 6c18d64: 1147/0, clippy 0, fmt clean; fast-forwarded into main. Open by the executor's own list: no premise or Tier B rule exists yet, every transaction is one epoch, no produced certificate has reached a ceiling."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",
@@ -87,6 +88,23 @@
       },
       "architectGate": {
         "passed": 1137,
+        "failed": 0,
+        "clippy": 0,
+        "fmt": "clean"
+      }
+    },
+    "s2b": {
+      "branchHead": "6c18d64",
+      "campaign": {
+        "programs": 21000,
+        "semanticMismatches": 0,
+        "certificateRefusals": 0,
+        "version": "evp2",
+        "wallSeconds1000Median": 18.238,
+        "wallSeconds20000": 362.347
+      },
+      "architectGate": {
+        "passed": 1147,
         "failed": 0,
         "clippy": 0,
         "fmt": "clean"
