@@ -653,3 +653,53 @@ fn the_campaign_reaches_the_registry_rules_it_baits() {
     .collect::<BTreeSet<_>>();
     assert_eq!(fired, registry, "the rules the campaign reaches changed");
 }
+
+/// The stop reason a transaction records must be the one it earned.
+///
+/// `saturated` asserts a fixpoint, and a transaction is a fixpoint only if a
+/// fresh transaction over its own output admits no region. That is measured
+/// here rather than assumed, and the recorded reason is required to follow the
+/// measurement: `saturated` only when the residual is zero, `policy` otherwise.
+/// A producer that becomes a fixpoint therefore fails this test until it also
+/// stops calling its stop a policy stop, which is the direction the mistake
+/// should be easy to notice in.
+#[test]
+fn the_recorded_stop_reason_follows_the_measured_fixpoint() {
+    let budget = evocc_eqopt::ScalarEqBudget::new(20_000, 256);
+    let mut programs_with_more = 0_u64;
+    let mut regions_admitted = 0_u64;
+    let mut residual_seeds = Vec::new();
+    for offset in 0..GATE_PROGRAMS {
+        let seed = GATE_SEED.wrapping_add(offset);
+        let module = generate_module(seed, config());
+        let first = evocc_eqopt::optimize_scalar_module_with_evp1(&module, budget);
+        let second = evocc_eqopt::optimize_scalar_module_with_evp1(&first.module, budget);
+        let admitted = second.certificate.regions.len() as u64;
+        if admitted != 0 {
+            programs_with_more += 1;
+            regions_admitted += admitted;
+            residual_seeds.push(seed);
+        }
+    }
+    println!("residualPrograms={programs_with_more}");
+    println!("residualRegions={regions_admitted}");
+    println!("residualSeeds={residual_seeds:?}");
+
+    let module = generate_module(GATE_SEED, config());
+    let outcome = evocc_eqopt::optimize_scalar_module_with_evp1(&module, budget);
+    let stop = outcome
+        .certificate
+        .budget
+        .expect("an evp2 certificate carries a budget line")
+        .stop;
+    let expected = if regions_admitted == 0 {
+        evocc_proof::EvpStop::Saturated
+    } else {
+        evocc_proof::EvpStop::Policy
+    };
+    assert_eq!(
+        stop, expected,
+        "{regions_admitted} residual regions over {GATE_PROGRAMS} programs, \
+         so the recorded stop reason must be {expected:?}"
+    );
+}

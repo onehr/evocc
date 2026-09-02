@@ -119,7 +119,7 @@ fn scheduler_record_holds(certificate: &EvpCertificate) -> bool {
         EvpStop::Nodes => budget.nodes.consumed == budget.nodes.bound,
         EvpStop::Epochs => budget.epochs.consumed == budget.epochs.bound,
         EvpStop::Fuel => budget.fuel.consumed == budget.fuel.bound,
-        EvpStop::Saturated | EvpStop::NoNewBest => true,
+        EvpStop::Saturated | EvpStop::NoNewBest | EvpStop::Policy => true,
     }
 }
 

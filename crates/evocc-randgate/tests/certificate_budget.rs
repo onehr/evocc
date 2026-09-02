@@ -352,3 +352,59 @@ fn an_evp1_certificate_is_still_accepted() {
     );
     case.accepts(&downgraded, "evp1 is still read and verified");
 }
+
+/// A rewrite whose match needs an earlier merge belongs to a later epoch.
+///
+/// `or(and(2, 1), 1)` cannot fold until `and(2, 1)` has folded to zero, so the
+/// two rewrites cannot share an epoch: Section 8.11's tiers exist because the
+/// facts one epoch sharpens are what the next one matches on. The markers are
+/// therefore expected to increase *inside* one region block, not merely between
+/// blocks, and the certificate must still verify.
+#[test]
+fn a_region_whose_rewrites_depend_on_each_other_spans_epochs() {
+    let case = Case::new();
+    let mut deepest = 0_u64;
+    for block in case.proof.split("\nregion ") {
+        let markers = block
+            .lines()
+            .filter_map(|line| line.strip_prefix("epoch "))
+            .map(|epoch| epoch.parse::<u64>().expect("an epoch marker is an integer"))
+            .collect::<Vec<_>>();
+        let mut sorted = markers.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(markers, sorted, "markers must strictly increase in a block");
+        deepest = deepest.max(markers.len() as u64);
+    }
+    assert!(
+        deepest > 1,
+        "no region block carried more than one epoch marker:\n{}",
+        case.proof
+    );
+    assert!(
+        case.consumed("epochs") > 1,
+        "a transaction that ran several epochs must record them: {}",
+        case.budget_line()
+    );
+    case.accepts(&case.proof, "a multi-epoch certificate verifies");
+}
+
+/// Fuel is per rule per epoch, so the recorded consumption is the largest
+/// number of firings one rule made in one epoch and never the total.
+#[test]
+fn recorded_fuel_is_the_busiest_rule_in_one_epoch() {
+    let case = Case::new();
+    let mut rewrites = 0_u64;
+    for line in case.proof.lines() {
+        if line.starts_with("rewrite ") {
+            rewrites += 1;
+        }
+    }
+    assert!(
+        case.consumed("fuel") <= rewrites,
+        "fuel {} exceeds the {rewrites} rewrites the certificate records: {}",
+        case.consumed("fuel"),
+        case.budget_line()
+    );
+    assert!(case.consumed("fuel") > 0, "{}", case.budget_line());
+}

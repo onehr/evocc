@@ -43,6 +43,11 @@ pub struct EvpQuantity {
 pub enum EvpStop {
     Saturated,
     NoNewBest,
+    /// A producer stopped by a rule of its own, at neither a profile ceiling
+    /// nor a fixpoint. Telemetry like the two above: recording `saturated`
+    /// instead would claim a fixpoint the transaction did not reach, and a
+    /// checker cannot see the difference.
+    Policy,
     Epochs,
     Nodes,
     Fuel,
@@ -54,6 +59,7 @@ impl EvpStop {
         match self {
             Self::Saturated => "saturated",
             Self::NoNewBest => "no-new-best",
+            Self::Policy => "policy",
             Self::Epochs => "epochs",
             Self::Nodes => "nodes",
             Self::Fuel => "fuel",
@@ -686,6 +692,7 @@ fn parse_budget(line: &str) -> Result<EvpBudget, EvpParseError> {
         stop: match named(budget[5], "stop")? {
             "saturated" => EvpStop::Saturated,
             "no-new-best" => EvpStop::NoNewBest,
+            "policy" => EvpStop::Policy,
             "epochs" => EvpStop::Epochs,
             "nodes" => EvpStop::Nodes,
             "fuel" => EvpStop::Fuel,
