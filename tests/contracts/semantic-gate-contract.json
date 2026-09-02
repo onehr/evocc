@@ -31,7 +31,8 @@
     "S2b restated under 1.9.36: emit evp2 with the budget line and epoch markers; the checker verifies the six properties of 11.3 Budget; evp1 stays readable and verified; the randomized gate replays evp2; a hand-written certificate for each of the six properties in its failing form is refused with status 3 and in its holding form accepted.",
     "S2c bounded scheduler: (1) measure whether the scalar sweep is a fixpoint by re-running it on every optimized module of the 1000-program campaign and counting admitted regions; if any, the record says policy, not saturated; (2) implement the multi-epoch bounded scheduler of 8.11 (epochs until saturation or a ceiling, fuel per rule per epoch, nodes counted over the persistent graph), deterministic for a given input and budget, with truthful stop reasons; the campaigns replay with epoch markers increasing inside a block and at least one hand-constructed input that stops at each of the three ceilings; (3) the shrinker gains the merge-block-into-unique-predecessor reduction.",
     "S2d exhaustion and telemetry: (1) the producer records saturated when its last epoch fired nothing and policy otherwise, from the scheduler's own counters; (2) on any exhaustion the certificate keeps every region admitted before the stop and the checker verifies it like any other; pinned by a test with a budget the test itself sets on the producer's own stop rule (not the profile ceilings, which stay recorded as the box); (3) the campaign table gains the residual-region count (fresh transaction over each optimized module) as a standing metric; (4) no other change.",
-    "S2e runs and coverage: (1) the run of 8.11: chain up to max_transactions = 8 transactions, stop when one admits no region, verify each certificate alone and the chain by input/output digests; the campaign reports transactions per run and residual regions after the last, which must be 0 for every run that stopped before the ceiling; (2) generator coverage: recursion (bounded by a depth argument), pointers as call arguments and return values (in-bounds by construction), copy between two distinct objects (disjoint by construction), and a shape that makes signed_shl_defined true so ub.assume.invalid_signed_left_shift is emitted; each pinned by the coverage assertion; both campaigns re-run."
+    "S2e runs and coverage: (1) the run of 8.11: chain up to max_transactions = 8 transactions, stop when one admits no region, verify each certificate alone and the chain by input/output digests; the campaign reports transactions per run and residual regions after the last, which must be 0 for every run that stopped before the ceiling; (2) generator coverage: recursion (bounded by a depth argument), pointers as call arguments and return values (in-bounds by construction), copy between two distinct objects (disjoint by construction), and a shape that makes signed_shl_defined true so ub.assume.invalid_signed_left_shift is emitted; each pinned by the coverage assertion; both campaigns re-run.",
+    "S3a fact-driven rewrites (Tier B): the known-bits lattice and transfer table of 8.10 as the producer's analysis; a first Tier B rule set in a new registry revision (constant folding through facts, known-bits identities such as and(x, m) -> x when the masked bits are known, or/xor with known bits, shift by a known amount, icmp decided by known bits), each rule carrying its premise in evp2 per 11.3 Premises; the checker recomputes every premise from the region's nodes with its own implementation of the transfers and refuses a premise above the recomputed fact; the randomized gate replays; the coverage assertion names every Tier B rule as reached; a hand-edited certificate with a premise above the fact is refused (status 3). Memory rewrites stay deferred until the architect specifies them."
   ],
   "gate": "cargo test --workspace; cargo clippy --workspace --all-targets -- -D warnings; cargo fmt --all -- --check; the 1000-program gate green; both reproducer tests green; wall time of the 1000-program test reported as the median of three runs on an idle machine.",
   "rulings": {
@@ -47,7 +48,8 @@
     "stageS2bClosed": "2026-09-03: evp2 is produced and verified: budget line from real counters, epoch markers, the six checker properties each pinned by a one-field edit of a real certificate in refusing and holding form, evp1 still read, evp1 with any addition and evp2 without its budget line malformed. 21,000 programs replay evp2 with 0 mismatches and 0 refusals. Architect's isolated gate on 6c18d64: 1147/0, clippy 0, fmt clean; fast-forwarded into main. Open by the executor's own list: no premise or Tier B rule exists yet, every transaction is one epoch, no produced certificate has reached a ceiling.",
     "saturatedIsTheTransactionsOwnFixpoint": "2026-09-03: the executor's SPEC_GAP was right and the architect's 1.9.37 sentence was wrong: saturated means no rule fired in the last epoch (8.11), not that a fresh transaction admits nothing. The residual-region count (1 program in 1000, 1 region, seed 1592591027) is the price of 11.6's before-witness rule for const_like and becomes a standing campaign metric. n is the largest region's starting count; stop=fuel is reserved for larger regions; a ceiling stop keeps admitted regions.",
     "stageS2cClosed": "2026-09-03: bounded multi-epoch scheduler of 8.11 in place: a rewrite belongs to the epoch after the last one that changed a class it matches on, fuel per (rule, epoch), markers increase inside region blocks; 722 of 977 optimized programs run more than one epoch, deepest 6; wall time unchanged within spread (18.097 s). Fixpoint measured: 1 residual region in 1000 programs (seed 1592591027), a registry boundary of 11.6, which corrected the architect's saturation ruling. Shrinker merges a block into its unique predecessor (12 blocks to 5 on a generated module; no pinned reproducer shrinks, all are single-block). The three ceiling stops are verified only on hand-edited certificates because no P0 input can reach a ceiling. Architect's isolated gate on 04833ab: 1153/0, clippy 0, fmt clean; fast-forwarded into main.",
-    "keptRegionsAreProducerConformance": "2026-09-03: the executor observed that 'a ceiling stop keeps every admitted region' cannot be checked, because 11.2 permits a producer to decline any eligible region. Agreed: it is producer conformance, pinned by a producer-side test, in the same class as saturated and no-new-best."
+    "keptRegionsAreProducerConformance": "2026-09-03: the executor observed that 'a ceiling stop keeps every admitted region' cannot be checked, because 11.2 permits a producer to decline any eligible region. Agreed: it is producer conformance, pinned by a producer-side test, in the same class as saturated and no-new-best.",
+    "stageS2dClosed": "2026-09-03: stop reasons come from the scheduler's counters (saturated when the last epoch fired nothing, policy at the producer's own budget); a ceiling stop keeps admitted regions (3 admitted with a generous budget, 1 kept at one epoch, the partial certificate verifies); residual regions are a campaign counter: 20 of 21,000 programs (0.095 percent), one region each, all the 11.6 shape. Wall time +10 percent for the extra measuring transaction. Architect's isolated gate on 8a165c9: 1154/0, clippy 0, fmt clean; merged into main."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",
@@ -129,6 +131,24 @@
       },
       "architectGate": {
         "passed": 1153,
+        "failed": 0,
+        "clippy": 0,
+        "fmt": "clean"
+      }
+    },
+    "s2d": {
+      "branchHead": "8a165c9",
+      "campaign": {
+        "programs": 21000,
+        "semanticMismatches": 0,
+        "certificateRefusals": 0,
+        "residualRegions": 20,
+        "residualPrograms": 20,
+        "wallSeconds1000Median": 19.954,
+        "wallSeconds20000": 403.402
+      },
+      "architectGate": {
+        "passed": 1154,
         "failed": 0,
         "clippy": 0,
         "fmt": "clean"
