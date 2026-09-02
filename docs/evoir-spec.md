@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.39** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.40** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1934,7 +1934,19 @@ defined; anything not listed transfers to top.
 | `xor` | known where both inputs are known |
 | `add`, `sub` | the trailing run of bits that is known in both inputs, computed by ordinary carry propagation until the first unknown bit |
 | `mul` | the trailing known-zero run is the sum of the inputs' trailing known-zero runs; nothing else |
-| `icmp.*` | fully known when the comparison is decidable from the known bits of both operands, top otherwise |
+| `icmp.*` | decided by intervals, as the paragraph below states; top otherwise |
+
+**The `icmp` procedure.** Let `lo(a)` be the fact of `a` with every unknown bit
+zero and `hi(a)` with every unknown bit one, read as unsigned `N`-bit values.
+`eq` is known one when both operands are fully known and equal, known zero
+when some bit is known in both with different values, top otherwise; `ne` is
+its negation. `ult` is known one when `hi(a) < lo(b)`, known zero when
+`lo(a) >= hi(b)`, top otherwise; `ule` the same with `<=` and `>`. `slt` and
+`sle` are decided by the same interval rule with both operands read as
+two's-complement `N`-bit values when the sign bit of each operand is known,
+and are top when either sign bit is unknown. No other case is decided; a
+procedure that decided more would be a stronger analysis than this table
+states. Defined at revision 1.9.40.
 
 The transfers are deliberately weak. Each is a statement a checker can
 recompute from the region's nodes with no search; a stronger analysis that
@@ -4157,8 +4169,12 @@ verify.
 on. Mask and value have the same digit count, which is the class's width in
 bits rounded up to a whole hexadecimal digit; a premise whose two fields differ
 in length, or whose value has a one where the mask has a zero, is malformed. The checker recomputes the fact from the region's nodes with its own
-implementation of the Section 8.10 transfers and refuses the rewrite if the
-recorded premise is not at or below the recomputed fact. Facts are recomputed
+implementation of the Section 8.10 transfers and refuses the rewrite unless
+the recomputed fact is at or below the recorded premise in the order of 8.10,
+that is, unless every bit the premise claims is known to the checker with the
+same value; a premise claiming a bit the checker cannot confirm is refused
+(status 3). Revision 1.9.40 corrected the direction, which had been stated so
+that the strongest premise always passed. Facts are recomputed
 rather than trusted for the reason Section 11.6 gives: a shared analysis that
 was wrong would make producer and checker agree on an unsound rewrite.
 
@@ -4332,6 +4348,82 @@ p0_110_fold_icmp_ult icmp.ult(?a,?b) => fold.icmp.ult(?a,?b) when all_const
 p0_111_fold_icmp_ule icmp.ule(?a,?b) => fold.icmp.ule(?a,?b) when all_const
 ```
 
+**Reviewed registry `p0.scalar.v2`.** This registry is normative for `evp2`
+certificates and includes every rule of `p0.scalar.v1` unchanged, followed by
+the Tier B rules. Its digest is `c1691808ebe55a3b2520a0456345e7c38a23fa2732e0827393dcf12523024bce`, the SHA-256 of the
+bytes of the following code block starting at the first rule id and including
+the newline after the last rule:
+
+```text
+p0_001_add_zero_rhs add(?x,const_like(?x,0)) => ?x when true
+p0_002_add_zero_lhs add(const_like(?x,0),?x) => ?x when true
+p0_003_mul_one_rhs mul(?x,const_like(?x,1)) => ?x when true
+p0_004_mul_one_lhs mul(const_like(?x,1),?x) => ?x when true
+p0_005_and_zero_rhs and(?x,const_like(?x,0)) => const_like(?x,0) when true
+p0_006_and_zero_lhs and(const_like(?x,0),?x) => const_like(?x,0) when true
+p0_007_or_zero_rhs or(?x,const_like(?x,0)) => ?x when true
+p0_008_or_zero_lhs or(const_like(?x,0),?x) => ?x when true
+p0_009_double_neg sub(const_like(?x,0),sub(const_like(?x,0),?x)) => ?x when true
+p0_010_icmp_eq_self icmp.eq(?x,?x) => bool(1) when true
+p0_011_icmp_ne_self icmp.ne(?x,?x) => bool(0) when true
+p0_012_icmp_slt_self icmp.slt(?x,?x) => bool(0) when true
+p0_013_icmp_sle_self icmp.sle(?x,?x) => bool(1) when true
+p0_014_icmp_ult_self icmp.ult(?x,?x) => bool(0) when true
+p0_015_icmp_ule_self icmp.ule(?x,?x) => bool(1) when true
+p0_100_fold_add add(?a,?b) => fold.add(?a,?b) when all_const
+p0_101_fold_sub sub(?a,?b) => fold.sub(?a,?b) when all_const
+p0_102_fold_mul mul(?a,?b) => fold.mul(?a,?b) when all_const
+p0_103_fold_and and(?a,?b) => fold.and(?a,?b) when all_const
+p0_104_fold_or or(?a,?b) => fold.or(?a,?b) when all_const
+p0_105_fold_xor xor(?a,?b) => fold.xor(?a,?b) when all_const
+p0_106_fold_icmp_eq icmp.eq(?a,?b) => fold.icmp.eq(?a,?b) when all_const
+p0_107_fold_icmp_ne icmp.ne(?a,?b) => fold.icmp.ne(?a,?b) when all_const
+p0_108_fold_icmp_slt icmp.slt(?a,?b) => fold.icmp.slt(?a,?b) when all_const
+p0_109_fold_icmp_sle icmp.sle(?a,?b) => fold.icmp.sle(?a,?b) when all_const
+p0_110_fold_icmp_ult icmp.ult(?a,?b) => fold.icmp.ult(?a,?b) when all_const
+p0_111_fold_icmp_ule icmp.ule(?a,?b) => fold.icmp.ule(?a,?b) when all_const
+p1_200_known_and and(?a,?b) => known_const when fully_known
+p1_201_known_or or(?a,?b) => known_const when fully_known
+p1_202_known_xor xor(?a,?b) => known_const when fully_known
+p1_203_known_add add(?a,?b) => known_const when fully_known
+p1_204_known_sub sub(?a,?b) => known_const when fully_known
+p1_205_known_mul mul(?a,?b) => known_const when fully_known
+p1_210_known_icmp_eq icmp.eq(?a,?b) => known_const when fully_known
+p1_211_known_icmp_ne icmp.ne(?a,?b) => known_const when fully_known
+p1_212_known_icmp_slt icmp.slt(?a,?b) => known_const when fully_known
+p1_213_known_icmp_sle icmp.sle(?a,?b) => known_const when fully_known
+p1_214_known_icmp_ult icmp.ult(?a,?b) => known_const when fully_known
+p1_215_known_icmp_ule icmp.ule(?a,?b) => known_const when fully_known
+p1_220_and_cover_rhs and(?x,?m) => ?x when covers(?m,?x)
+p1_221_and_cover_lhs and(?m,?x) => ?x when covers(?m,?x)
+p1_222_or_cover_rhs or(?x,?m) => ?m when covers(?m,?x)
+p1_223_or_cover_lhs or(?m,?x) => ?m when covers(?m,?x)
+p1_224_xor_known_zero_rhs xor(?x,?z) => ?x when known_zero(?z)
+p1_225_xor_known_zero_lhs xor(?z,?x) => ?x when known_zero(?z)
+```
+
+**Registries and revisions.** A registry is admissible only when this
+specification prints its rule block and digest; a producer and a checker may
+not agree on a registry between themselves, because a certificate checked
+against rules it supplied establishes only that its merges follow from its own
+claims. A revision includes every rule of the registry it revises, unchanged
+and in the same order, before its new rules, so a rule id keeps its meaning
+across revisions. `evp1` accepts `p0.scalar.v1` only; `evp2` accepts
+`p0.scalar.v1` and `p0.scalar.v2`. Defined at revision 1.9.40 after the
+randomized gate stopped for want of a procedure.
+
+**Tier B side conditions and builders.** `fully_known` holds when the fact of
+the class of the matched left-hand node, recomputed under 8.10, has every bit
+known; `known_const` then constructs a `const` of that node's sort whose raw
+value is the fact's value. `covers(?m,?x)` holds when every bit that is not
+known zero in the fact of `?x` is known one in the fact of `?m`.
+`known_zero(?z)` holds when the fact of `?z` has every bit known and every
+value bit zero. A Tier B rewrite records as premises, in this order, the fact
+of every class its side condition read: the matched node's class for
+`fully_known`, `?m` then `?x` for `covers`, `?z` for `known_zero`. Every Tier B
+rewrite requires `evp2`, and `known_const` is a right-hand builder and
+therefore requires a `node:` proof reference.
+
 EVP1 accepts no other registry name or digest. The producer and checker each
 implement these rules from this specification; the checker does not import the
 producer's registry table, and the certificate carries only the fixed name and
@@ -4451,6 +4543,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.40 | 2026-09-03 | Prints the reviewed registry `p0.scalar.v2` (18 Tier B rules over the 8.10 facts) with its digest, defines registries and revisions, the Tier B side conditions and premises (11.6); corrects the premise comparison so a claim the checker cannot confirm is refused (11.3); fixes the `icmp` transfer as an interval procedure (8.10). Three gaps the randomized gate stopped on. |
 | 1.9.39 | 2026-09-03 | Defines a run: at most eight chained transactions verified by digest chaining (8.11), after the residual-region measurement of 20 in 21,000. Records that a producer keeping admitted regions at a ceiling stop is conformance the checker cannot observe, since 11.2 permits declining to optimize an eligible region. |
 | 1.9.38 | 2026-09-03 | Bounded scheduler measured (722 of 977 optimized programs run more than one epoch). Corrects `saturated` to the 8.11 meaning, names residual regions as a registry metric, selects the largest region's count as the certificate's `n`, reserves `stop=fuel`, and requires admitted regions to survive a ceiling stop (11.3). |
 | 1.9.37 | 2026-09-03 | evp2 produced and verified across 21,000 programs. Epoch markers are numbered from 1; `evp2` requires its budget line and `evp1` forbids it; adds the `policy` stop reason for a producer's own stop rule so that `saturated` is never claimed without a fixpoint (11.3). |
