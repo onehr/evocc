@@ -3,52 +3,13 @@
 //! Section 11.3, "Versions": `evp1` carries no budget line, no epoch markers
 //! and no premises, so a checker validates it without a scheduler claim;
 //! `evp2` adds the three, and "a reader that does not implement a version
-//! rejects it as malformed rather than guessing".
+//! rejects it as malformed rather than guessing". Both versions are read here;
+//! what the budget line then claims is tested in `certificate_budget.rs`.
 //!
-//! `evp2` is not produced here, and this file records why.
-//!
-//! SPEC_GAP 1 -- the two integers of a `budget` quantity are unordered.
-//! Section 11.3 gives `budget_line := "budget nodes=" evp_int "/" evp_int
-//! " epochs=" evp_int "/" evp_int " fuel=" evp_int " stop=" stop_reason`, which
-//! names neither integer. Section 8.11 "Record" says the certificate "carries
-//! the bounds, the amounts consumed, the stop reason" and Section 11.3
-//! "Budget" says the line "records each bound, the amount consumed, and the
-//! stop reason"; both list bound before consumed in prose and neither says
-//! that is the field order. Reading A: `A/B` is consumed over bound, the usual
-//! spelling of a quantity against its ceiling. Reading B: `A/B` is bound over
-//! consumed, mirroring the prose. Distinguishing input: the certificate
-//! `budget nodes=3/100000 epochs=1/1024 fuel=0 stop=saturated`. Under A it is
-//! well formed and consumed is within bound; under B it claims a node ceiling
-//! of three that a consumption of a hundred thousand exceeds, and the checker
-//! must refuse it with status 3. The specification's own verification -- "the
-//! checker verifies consumed does not exceed bound" -- has no evaluable
-//! meaning until the order is fixed, and the whole point of an independent
-//! checker is lost if each implementation picks one.
-//!
-//! SPEC_GAP 2 -- `fuel=` records one integer for a per-rule, per-epoch quantity
-//! whose bound is derived, not recorded. Section 8.11 "Match fuel": "Each rule
-//! may fire at most `max(256, 8 x n)` times per epoch, where `n` is the number
-//! of nodes the region held when the transaction began. Fuel is per rule per
-//! epoch." Section 11.3 "Budget": "The checker verifies consumed does not
-//! exceed bound ... and that a stop reason of `epochs`, `nodes` or `fuel`
-//! coincides with that quantity having reached its bound." Reading A: the
-//! single integer is the fuel consumed by the one rule and epoch that
-//! exhausted, and the checker recomputes that rule's bound from `n`. Reading B:
-//! it is a scalar summary over the whole transaction, and `stop=fuel` is
-//! telemetry the checker cannot verify, like `saturated`. Distinguishing input:
-//! the certificate `budget nodes=8/100000 epochs=2/1024 fuel=256 stop=fuel`
-//! over a region whose transaction began with `n = 40`, so the derived bound is
-//! `max(256, 320) = 320`. Under A the stop is a lie -- 256 never reached 320 --
-//! and the certificate is invalid; under B nothing is checked and it is valid.
-//! Nothing in Section 8.11 or 11.3 says which rule or which epoch the recorded
-//! integer belongs to, so neither reading can be derived.
-//!
-//! Emitting a `budget` line would mean choosing answers the specification does
-//! not give, and a second implementation that chose differently would disagree
-//! with every certificate this producer wrote. Refusing to guess is the whole
-//! value of a standalone checker, so this file pins the refusal instead: evp1
-//! is produced and verified, carries none of the three additions, and any
-//! version this checker does not implement is malformed rather than guessed.
+//! The two readings this file once recorded as SPEC_GAPs -- the unordered
+//! `a/b` of a budget quantity and the single fuel integer with no bound -- were
+//! ruled in revision 1.9.36: every quantity is consumed `/` bound, and `fuel`
+//! carries both its bound and the `n` that bound derives from.
 
 use std::path::PathBuf;
 
@@ -150,34 +111,65 @@ fn certificate() -> Certificate {
 }
 
 #[test]
-fn evp1_is_produced_and_verified() {
+fn evp2_is_produced_and_verified() {
     let case = certificate();
     assert!(
-        case.proof.starts_with("evp1\n"),
-        "the producer emits evp1: {}",
+        case.proof.starts_with("evp2\n"),
+        "the producer emits evp2: {}",
         case.proof.lines().next().unwrap_or_default()
     );
     assert!(
-        !case.proof.contains("\nbudget "),
-        "evp1 carries no budget line"
-    );
-    assert!(
-        !case.proof.contains("\nepoch "),
-        "evp1 carries no epoch markers"
+        case.proof.contains("\nbudget "),
+        "evp2 carries a budget line"
     );
     assert!(
         !case.proof.contains(" premises "),
-        "evp1 carries no premises"
+        "no Tier B rule exists yet, so no rewrite carries a premise"
     );
     checker()
         .check(&case.before, &case.after, &case.proof)
-        .expect("an evp1 certificate verifies");
+        .expect("an evp2 certificate verifies");
+}
+
+/// An evp1 certificate carries none of the three additions, and a reader that
+/// finds one has been handed a certificate no conforming producer wrote.
+#[test]
+fn evp1_carries_none_of_the_three_additions() {
+    let case = certificate();
+    let downgraded = case
+        .proof
+        .lines()
+        .filter(|line| !line.starts_with("budget ") && !line.starts_with("epoch "))
+        .map(|line| {
+            if line == "evp2" {
+                "evp1\n".to_owned()
+            } else {
+                format!("{line}\n")
+            }
+        })
+        .collect::<String>();
+    checker()
+        .check(&case.before, &case.after, &downgraded)
+        .expect("an evp1 certificate still verifies");
+
+    let smuggled = downgraded.replacen(
+        "evp1\n",
+        "evp1\nbudget nodes=0/100000 epochs=0/1024 fuel=0/256 n=0 stop=saturated\n",
+        1,
+    );
+    let error = checker()
+        .check(&case.before, &case.after, &smuggled)
+        .expect_err("evp1 with a budget line is not a certificate this format defines");
+    assert!(
+        error.contains("malformed"),
+        "an evp1 budget line is malformed input, not a refused claim: {error}"
+    );
 }
 
 #[test]
 fn an_unimplemented_version_is_malformed_rather_than_guessed() {
     let case = certificate();
-    for version in ["evp2", "evp3", "EVP1", "evp"] {
+    for version in ["evp3", "evp9", "EVP1", "evp"] {
         let relabelled = case.proof.replacen("evp1\n", &format!("{version}\n"), 1);
         let error = checker()
             .check(&case.before, &case.after, &relabelled)
