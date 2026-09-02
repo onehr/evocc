@@ -874,3 +874,52 @@ fn the_campaign_runs_more_than_one_epoch() {
         "no program ran more than one epoch, so the tiering is untested"
     );
 }
+
+/// The eighteen Tier B rules of `p0.scalar.v2`, which no transaction yet fires.
+///
+/// The registry is printed and admissible, the premise record is in the format
+/// and the known-bits lattice is implemented, but no producer rule reads a fact
+/// yet, so every rewrite the campaigns emit is Tier A. This test names the
+/// target so the gap lives in the code rather than only in a report; it is
+/// ignored because it states work that has not been done, not work that broke.
+#[test]
+#[ignore = "Tier B rules are not produced yet; see the S3a window report"]
+fn the_campaign_reaches_the_tier_b_rules() {
+    let mut fired = BTreeSet::new();
+    for seed in 0..256_u64 {
+        let module = generate_module(seed, config());
+        let outcome = evocc_eqopt::optimize_scalar_module_with_evp1(
+            &module,
+            evocc_eqopt::ScalarEqBudget::new(20_000, 256),
+        );
+        for region in &outcome.certificate.regions {
+            for event in &region.events {
+                if let evocc_proof::EvpEvent::Rewrite(rewrite) = event {
+                    fired.insert(rewrite.rule.clone());
+                }
+            }
+        }
+    }
+    for rule in [
+        "p1_200_known_and",
+        "p1_201_known_or",
+        "p1_202_known_xor",
+        "p1_203_known_add",
+        "p1_204_known_sub",
+        "p1_205_known_mul",
+        "p1_210_known_icmp_eq",
+        "p1_211_known_icmp_ne",
+        "p1_212_known_icmp_slt",
+        "p1_213_known_icmp_sle",
+        "p1_214_known_icmp_ult",
+        "p1_215_known_icmp_ule",
+        "p1_220_and_cover_rhs",
+        "p1_221_and_cover_lhs",
+        "p1_222_or_cover_rhs",
+        "p1_223_or_cover_lhs",
+        "p1_224_xor_known_zero_rhs",
+        "p1_225_xor_known_zero_lhs",
+    ] {
+        assert!(fired.contains(rule), "{rule} never fired");
+    }
+}

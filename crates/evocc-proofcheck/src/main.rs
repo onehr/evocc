@@ -12,7 +12,12 @@ use eligibility::derive_eligible_regions;
 use reassemble::reassemble;
 use replay::{replay_region, RegionReplacement};
 
-const REGISTRY_NAME: &str = "p0.scalar.v1";
+const REGISTRY_V1: &str = "p0.scalar.v1";
+/// The revision that adds the Tier B rules. Section 11.6 "Registries and
+/// revisions": a revision includes every rule of the registry it revises,
+/// unchanged and in order, so a rule id keeps its meaning across revisions.
+const REGISTRY_V2: &str = "p0.scalar.v2";
+const REGISTRY_V2_SHA256: &str = "c1691808ebe55a3b2520a0456345e7c38a23fa2732e0827393dcf12523024bce";
 /// Section 8.11: the P0 profile's ceilings. A budget line that records anything
 /// else is not describing this profile's scheduler.
 const MAX_NODES: u64 = 100_000;
@@ -51,10 +56,7 @@ fn main() -> ExitCode {
         Err(_) => return ExitCode::from(2),
     };
 
-    if certificate.registry_name != REGISTRY_NAME
-        || certificate.registry_digest != REGISTRY_SHA256
-        || certificate.input_digest != sha256_hex(&before)
-    {
+    if !admissible_registry(&certificate) || certificate.input_digest != sha256_hex(&before) {
         return ExitCode::from(3);
     }
     if !scheduler_record_holds(&certificate) {
@@ -120,6 +122,25 @@ fn scheduler_record_holds(certificate: &EvpCertificate) -> bool {
         EvpStop::Epochs => budget.epochs.consumed == budget.epochs.bound,
         EvpStop::Fuel => budget.fuel.consumed == budget.fuel.bound,
         EvpStop::Saturated | EvpStop::NoNewBest | EvpStop::Policy => true,
+    }
+}
+
+/// Section 11.6: `evp1` accepts `p0.scalar.v1` only; `evp2` accepts
+/// `p0.scalar.v1` and `p0.scalar.v2`.
+///
+/// The digest is checked with the name, because a certificate that named a
+/// registry this checker knows while carrying another's digest would be
+/// claiming rules neither side agreed on.
+fn admissible_registry(certificate: &EvpCertificate) -> bool {
+    let named = (
+        certificate.registry_name.as_str(),
+        certificate.registry_digest.as_str(),
+    );
+    match certificate.version {
+        EvpVersion::Evp1 => named == (REGISTRY_V1, REGISTRY_SHA256),
+        EvpVersion::Evp2 => {
+            named == (REGISTRY_V1, REGISTRY_SHA256) || named == (REGISTRY_V2, REGISTRY_V2_SHA256)
+        }
     }
 }
 

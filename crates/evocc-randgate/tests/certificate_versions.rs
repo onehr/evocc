@@ -187,3 +187,52 @@ fn the_version_check_runs_in_the_standalone_checker() {
     let binary: PathBuf = checker().binary().clone();
     assert!(binary.is_file(), "{} is not a file", binary.display());
 }
+
+/// Which registry each version admits (Section 11.6 "Registries and revisions").
+///
+/// `p0.scalar.v2` includes every rule of v1 unchanged and in order, so a
+/// certificate whose rewrites are all v1 rules is equally a v2 certificate;
+/// what changes is which versions may name it. The digest travels with the
+/// name, because a certificate naming a registry this checker knows while
+/// carrying another's digest would claim rules neither side agreed on.
+#[test]
+fn evp2_admits_both_registries_and_evp1_admits_only_the_first() {
+    const V1: &str =
+        "p0.scalar.v1 ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9";
+    const V2: &str =
+        "p0.scalar.v2 c1691808ebe55a3b2520a0456345e7c38a23fa2732e0827393dcf12523024bce";
+
+    let case = certificate();
+    assert!(case.proof.contains(V1), "the producer still names v1");
+
+    let revised = case.proof.replacen(V1, V2, 1);
+    checker()
+        .check(&case.before, &case.after, &revised)
+        .expect("evp2 admits the revision");
+
+    let crossed = case
+        .proof
+        .replacen("evp2\n", "evp1\n", 1)
+        .replacen(V1, V2, 1);
+    let crossed = crossed
+        .lines()
+        .filter(|line| !line.starts_with("budget ") && !line.starts_with("epoch "))
+        .map(|line| format!("{line}\n"))
+        .collect::<String>();
+    let error = checker()
+        .check(&case.before, &case.after, &crossed)
+        .expect_err("evp1 admits p0.scalar.v1 only");
+    assert!(
+        error.contains("refused"),
+        "a registry the version does not admit is a refused claim, not malformed input: {error}"
+    );
+
+    let forged = case.proof.replacen(
+        "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9",
+        "c1691808ebe55a3b2520a0456345e7c38a23fa2732e0827393dcf12523024bce",
+        1,
+    );
+    checker()
+        .check(&case.before, &case.after, &forged)
+        .expect_err("a name and a digest that do not belong together are refused");
+}

@@ -491,6 +491,9 @@ fn build_region(
             lhs: EvpProofRef::Node(node_id),
             rhs: rhs_ref,
             bindings,
+            // Every rule of `p0.scalar.v1` is `when true` or `when all_const`,
+            // so none reads a fact and none records one.
+            premises: Vec::new(),
         }));
         classes.union(lhs, rhs)?;
         changed.push((result, epoch));

@@ -1058,6 +1058,7 @@ mod tests {
                 .iter()
                 .map(|(name, value)| ((*name).to_owned(), value_classes[value]))
                 .collect(),
+            premises: Vec::new(),
         }));
         (
             EvpRegion {

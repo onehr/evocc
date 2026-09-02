@@ -166,6 +166,20 @@ pub enum EvpProofRef {
     Node(u32),
 }
 
+/// One known-bits fact a Tier B rewrite relied on (Section 11.3 "Premises").
+///
+/// `digits` is the class's width in bits rounded up to a whole hexadecimal
+/// digit, and both fields carry exactly that many. It is stored rather than
+/// derived so a certificate round-trips byte for byte without the format
+/// needing to know the class's sort.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EvpPremise {
+    pub class: u32,
+    pub mask: u64,
+    pub value: u64,
+    pub digits: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvpRewrite {
     pub rule: String,
@@ -175,6 +189,9 @@ pub struct EvpRewrite {
     pub lhs: EvpProofRef,
     pub rhs: EvpProofRef,
     pub bindings: Vec<(String, u32)>,
+    /// The facts the rule's side condition read, in the order Section 11.6
+    /// states for that rule. Empty for every rule of `p0.scalar.v1`.
+    pub premises: Vec<EvpPremise>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -291,6 +308,16 @@ pub fn parse_evp1(bytes: &[u8]) -> Result<EvpCertificate, EvpParseError> {
             .any(|event| matches!(event, EvpEvent::Epoch(_)))
     {
         return Err(EvpParseError::new("evp1 carries no epoch markers"));
+    }
+    if version == EvpVersion::Evp1
+        && regions
+            .iter()
+            .flat_map(|region: &EvpRegion| &region.events)
+            .any(
+                |event| matches!(event, EvpEvent::Rewrite(rewrite) if !rewrite.premises.is_empty()),
+            )
+    {
+        return Err(EvpParseError::new("evp1 carries no premises"));
     }
     let certificate = EvpCertificate {
         version,
@@ -486,7 +513,14 @@ fn parse_node(line: &str) -> Result<(usize, EvpEvent), EvpParseError> {
 }
 
 fn parse_rewrite(line: &str) -> Result<(usize, EvpEvent), EvpParseError> {
-    let rewrite = fields(line, 10, "rewrite")?;
+    // The premise suffix is optional, so the record has one of two field
+    // counts. Splitting on it first keeps the fixed part exact rather than
+    // letting a miscounted line parse as a shorter one.
+    let (head, premises) = match line.split_once(" premises ") {
+        Some((head, tail)) => (head, parse_premises(tail)?),
+        None => (line, Vec::new()),
+    };
+    let rewrite = fields(head, 10, "rewrite")?;
     if rewrite[8] != "bind" {
         return Err(EvpParseError::new("rewrite has no bind field"));
     }
@@ -501,8 +535,72 @@ fn parse_rewrite(line: &str) -> Result<(usize, EvpEvent), EvpParseError> {
             lhs: parse_proof_ref(rewrite[6])?,
             rhs: parse_proof_ref(rewrite[7])?,
             bindings: parse_bindings(rewrite[9])?,
+            premises,
         }),
     ))
+}
+
+fn render_premises(premises: &[EvpPremise]) -> String {
+    if premises.is_empty() {
+        return String::new();
+    }
+    let body = premises
+        .iter()
+        .map(|premise| {
+            format!(
+                "c{}:{:0width$x}:{:0width$x}",
+                premise.class,
+                premise.mask,
+                premise.value,
+                width = premise.digits
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(" premises {body}")
+}
+
+fn parse_premises(text: &str) -> Result<Vec<EvpPremise>, EvpParseError> {
+    if text.is_empty() {
+        return Err(EvpParseError::new("empty premise list"));
+    }
+    text.split(',').map(parse_premise).collect()
+}
+
+fn parse_premise(text: &str) -> Result<EvpPremise, EvpParseError> {
+    let parts = text.split(':').collect::<Vec<_>>();
+    let [class, mask, value] = parts.as_slice() else {
+        return Err(EvpParseError::new("a premise is class:mask:value"));
+    };
+    // Section 11.3: the two fields carry the class's width rounded up to a
+    // whole hexadecimal digit, so a length disagreement is malformed rather
+    // than a fact about a narrower value.
+    if mask.len() != value.len() || mask.is_empty() || mask.len() > 16 {
+        return Err(EvpParseError::new("premise fields disagree in length"));
+    }
+    let mask = parse_hex(mask)?;
+    let value = parse_hex(value)?;
+    if value & !mask != 0 {
+        return Err(EvpParseError::new(
+            "premise value has a bit outside its mask",
+        ));
+    }
+    Ok(EvpPremise {
+        class: parse_prefixed_u32(class, 'c')?,
+        mask,
+        value,
+        digits: parts[1].len(),
+    })
+}
+
+fn parse_hex(text: &str) -> Result<u64, EvpParseError> {
+    if !text
+        .bytes()
+        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(EvpParseError::new("premise field is not lowercase hex"));
+    }
+    u64::from_str_radix(text, 16).map_err(|_| EvpParseError::new("premise field exceeds u64"))
 }
 
 fn parse_congruence(line: &str) -> Result<(usize, EvpEvent), EvpParseError> {
@@ -588,14 +686,15 @@ pub fn render_evp1(certificate: &EvpCertificate) -> String {
                     render_ids(&node.children, 'c')
                 )),
                 EvpEvent::Rewrite(rewrite) => text.push_str(&format!(
-                    "rewrite {index} {} c{} c{} c{} {} {} bind {}\n",
+                    "rewrite {index} {} c{} c{} c{} {} {} bind {}{}\n",
                     rewrite.rule,
                     rewrite.lhs_pre,
                     rewrite.rhs_pre,
                     rewrite.result,
                     render_proof_ref(rewrite.lhs),
                     render_proof_ref(rewrite.rhs),
-                    render_bindings(&rewrite.bindings)
+                    render_bindings(&rewrite.bindings),
+                    render_premises(&rewrite.premises)
                 )),
                 EvpEvent::Congruence(congruence) => text.push_str(&format!(
                     "congruence {index} c{} c{} c{} n{} n{}\n",
