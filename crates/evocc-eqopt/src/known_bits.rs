@@ -174,6 +174,23 @@ impl KnownBits {
         )
     }
 
+    /// Section 11.6 `covers(?m, ?x)`, with `self` the mask `?m`: every bit that
+    /// is not known zero in `?x` is known one in `?m`.
+    ///
+    /// This is a side condition over two facts, not a row of the Section 8.10
+    /// table, so it derives nothing; it only reads what the table already
+    /// established.
+    #[must_use]
+    pub fn covers(self, value: Self) -> bool {
+        self.width == value.width && !value.zeros() & width_mask(self.width) & !self.ones() == 0
+    }
+
+    /// Section 11.6 `known_zero(?z)`: every bit known and every value bit zero.
+    #[must_use]
+    pub fn is_known_zero(self) -> bool {
+        self.is_constant() && self.value == 0
+    }
+
     /// The trailing known-zero run is the sum of the inputs' trailing
     /// known-zero runs; nothing else.
     #[must_use]

@@ -5,12 +5,13 @@ use std::process::ExitCode;
 use evocc_proof::{parse_evp1, sha256_hex, EvpCertificate, EvpEvent, EvpStop, EvpVersion};
 
 mod eligibility;
+mod facts;
 mod reassemble;
 mod replay;
 
 use eligibility::derive_eligible_regions;
 use reassemble::reassemble;
-use replay::{replay_region, RegionReplacement};
+use replay::{replay_region, RegionReplacement, Registry};
 
 const REGISTRY_V1: &str = "p0.scalar.v1";
 /// The revision that adds the Tier B rules. Section 11.6 "Registries and
@@ -56,14 +57,14 @@ fn main() -> ExitCode {
         Err(_) => return ExitCode::from(2),
     };
 
-    if !admissible_registry(&certificate) || certificate.input_digest != sha256_hex(&before) {
+    let Some(registry) = admitted_registry(&certificate) else {
         return ExitCode::from(3);
-    }
-    if !scheduler_record_holds(&certificate) {
+    };
+    if certificate.input_digest != sha256_hex(&before) || !scheduler_record_holds(&certificate) {
         return ExitCode::from(3);
     }
     let eligible = derive_eligible_regions(&before_module);
-    let reassembled_module = match claim(&certificate, &before_module, &eligible) {
+    let reassembled_module = match claim(&certificate, &before_module, &eligible, registry) {
         // Section 11.3: a certificate with no region claims that after.evo is
         // the canonical rendering of the module parsed from before.evo, and
         // nothing else. Comparing against the raw input bytes instead would
@@ -131,16 +132,15 @@ fn scheduler_record_holds(certificate: &EvpCertificate) -> bool {
 /// The digest is checked with the name, because a certificate that named a
 /// registry this checker knows while carrying another's digest would be
 /// claiming rules neither side agreed on.
-fn admissible_registry(certificate: &EvpCertificate) -> bool {
+fn admitted_registry(certificate: &EvpCertificate) -> Option<Registry> {
     let named = (
         certificate.registry_name.as_str(),
         certificate.registry_digest.as_str(),
     );
-    match certificate.version {
-        EvpVersion::Evp1 => named == (REGISTRY_V1, REGISTRY_SHA256),
-        EvpVersion::Evp2 => {
-            named == (REGISTRY_V1, REGISTRY_SHA256) || named == (REGISTRY_V2, REGISTRY_V2_SHA256)
-        }
+    match (certificate.version, named) {
+        (_, (REGISTRY_V1, REGISTRY_SHA256)) => Some(Registry::Reviewed),
+        (EvpVersion::Evp2, (REGISTRY_V2, REGISTRY_V2_SHA256)) => Some(Registry::Revised),
+        _ => None,
     }
 }
 
@@ -157,6 +157,7 @@ fn claim(
     certificate: &EvpCertificate,
     module: &evocc_evoir::Module,
     eligible: &[eligibility::EligibleRegion],
+    registry: Registry,
 ) -> Result<Claim, ()> {
     if certificate.regions.is_empty() {
         return Ok(Claim::Zero);
@@ -172,7 +173,7 @@ fn claim(
             return Err(());
         }
         previous = Some(index);
-        replacements.push(replay_region(module, region, &eligible[index])?);
+        replacements.push(replay_region(module, region, &eligible[index], registry)?);
     }
     Ok(Claim::Regions(replacements))
 }

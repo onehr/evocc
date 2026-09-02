@@ -836,7 +836,8 @@ impl FunctionGen<'_> {
             40..=48 => self.emit_compare(block),
             49..=55 => self.emit_cast(block),
             56..=62 => self.emit_predicate(block),
-            63..=74 => self.emit_bait(block),
+            63..=70 => self.emit_bait(block),
+            71..=74 => self.emit_fact_bait(block),
             75..=80 => self.emit_memory(block),
             81..=84 => self.emit_global(block),
             85..=87 => self.emit_call(block),
@@ -1115,6 +1116,108 @@ impl FunctionGen<'_> {
                 self.record(block, &result);
             }
         }
+    }
+
+    /// The shapes the fact-driven rules match on.
+    ///
+    /// Masking is the only way a generator can put a known bit into a value it
+    /// does not otherwise control: `and(%v, 0x0f)` knows its high half zero and
+    /// `or(%w, 0x0f)` knows its low half one, so one covers the other and their
+    /// conjunction is the masked operand. A value confined to a range below a
+    /// constant decides every comparison the table decides. Without these the
+    /// gate would depend on chance to produce a covering mask or a decidable
+    /// ordering, and the rules that read them would go unmeasured.
+    fn emit_fact_bait(&mut self, block: &mut OpenBlock) {
+        let wide = self
+            .active
+            .iter()
+            .copied()
+            .filter(|width| *width >= 8)
+            .collect::<Vec<_>>();
+        if wide.is_empty() {
+            // Under eight bits a half mask is zero or one, which the canonical
+            // reductions already match; the known-zero identity still applies.
+            self.emit_known_zero_identity(block);
+            return;
+        }
+        let width = *self.rng.pick(&wide);
+        let half = width / 2;
+        let low = (1_u64 << half) - 1;
+        match self.rng.below(3) {
+            0 => self.emit_covering_mask(block, width, low),
+            1 => self.emit_known_zero_identity(block),
+            _ => self.emit_bounded_comparison(block, width, low),
+        }
+    }
+
+    /// A masked value and a mask that covers it, combined in both orders and by
+    /// both operators, which is the complete set of covering rules.
+    fn emit_covering_mask(&mut self, block: &mut OpenBlock, width: u16, low: u64) {
+        let value = self.value_of(block, width);
+        let other = self.value_of(block, width);
+        let mask = self.emit_const(block, width, low);
+        let masked = self.fresh(EvoIRType::Bits(width));
+        block
+            .insts
+            .push(Inst::And(masked.clone(), value, mask.clone()));
+        self.record(block, &masked);
+        let covering = self.fresh(EvoIRType::Bits(width));
+        block.insts.push(Inst::Or(covering.clone(), other, mask));
+        self.record(block, &covering);
+        // Both operators in both operand orders, which is the complete set of
+        // four covering rules. Drawing one of the four at random would leave
+        // the campaign's coverage of the other three to luck.
+        for masked_on_the_left in [true, false] {
+            let (left, right) = if masked_on_the_left {
+                (masked.clone(), covering.clone())
+            } else {
+                (covering.clone(), masked.clone())
+            };
+            for conjunction in [true, false] {
+                let result = self.fresh(EvoIRType::Bits(width));
+                block.insts.push(if conjunction {
+                    Inst::And(result.clone(), left.clone(), right.clone())
+                } else {
+                    Inst::Or(result.clone(), left.clone(), right.clone())
+                });
+                self.record(block, &result);
+            }
+        }
+    }
+
+    /// `xor` against a zero, in both operand orders.
+    fn emit_known_zero_identity(&mut self, block: &mut OpenBlock) {
+        let width = *self.rng.pick(&self.active.clone());
+        let value = self.value_of(block, width);
+        let zero = self.emit_const(block, width, 0);
+        let (left, right) = if self.rng.chance(50) {
+            (value, zero)
+        } else {
+            (zero, value)
+        };
+        let result = self.fresh(EvoIRType::Bits(width));
+        block.insts.push(Inst::Xor(result.clone(), left, right));
+        self.record(block, &result);
+    }
+
+    /// A value confined to `0..=low` compared against `low + 1`.
+    ///
+    /// Every ordering is decided by the interval rule, the sign bit of the
+    /// masked operand is known zero so the signed orderings are decided too,
+    /// and equality is decided by a bit the two disagree on.
+    fn emit_bounded_comparison(&mut self, block: &mut OpenBlock, width: u16, low: u64) {
+        let value = self.value_of(block, width);
+        let mask = self.emit_const(block, width, low);
+        let masked = self.fresh(EvoIRType::Bits(width));
+        block.insts.push(Inst::And(masked.clone(), value, mask));
+        self.record(block, &masked);
+        let bound = self.emit_const(block, width, low + 1);
+        let operation = self.random_comparison();
+        let result = self.fresh(EvoIRType::Bits(1));
+        block
+            .insts
+            .push(Inst::ICmp(result.clone(), operation, masked, bound));
+        self.record(block, &result);
     }
 
     // -- memory -------------------------------------------------------------

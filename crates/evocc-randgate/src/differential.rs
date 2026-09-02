@@ -1,6 +1,7 @@
 //! Differential execution of one generated module before and after the
 //! scalar equality optimizer, judged by the specification's equality criterion.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -174,6 +175,12 @@ pub enum Verdict {
         /// Transactions the run kept. Zero when the first admitted nothing.
         transactions: usize,
         stopped_at_ceiling: bool,
+        /// Regions carrying at least one rewrite that read a fact, and how many
+        /// facts each such rewrite read. Section 11.6 gives every fact-driven
+        /// rule a fixed premise count, so the distribution says which side
+        /// conditions the campaign actually exercised.
+        premised_regions: usize,
+        premise_counts: BTreeMap<usize, u64>,
     },
     /// The input program was undefined; the specification's equality is modulo
     /// undefined behaviour, so nothing is compared.
@@ -270,6 +277,8 @@ struct Trial {
     after_text: String,
     proof_text: String,
     regions: usize,
+    premised_regions: usize,
+    premise_counts: BTreeMap<usize, u64>,
     residual_regions: usize,
     /// Transactions the run executed and kept, each of which admitted at least
     /// one region. The transaction that admits nothing is what ends the run and
@@ -303,6 +312,8 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
                 after_text: String::new(),
                 proof_text: String::new(),
                 regions: 0,
+                premised_regions: 0,
+                premise_counts: BTreeMap::new(),
                 residual_regions: 0,
                 transactions: 0,
                 stopped_at_ceiling: false,
@@ -319,6 +330,8 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
         after_text: before_text.clone(),
         proof_text: String::new(),
         regions: 0,
+        premised_regions: 0,
+        premise_counts: BTreeMap::new(),
         residual_regions: 0,
         transactions: 0,
         stopped_at_ceiling: false,
@@ -353,6 +366,23 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
         let after_text = render_module(&outcome.module);
         let proof_text = render_evp1(&outcome.certificate);
         trial.regions += admitted;
+        for region in &outcome.certificate.regions {
+            let mut premised = false;
+            for event in &region.events {
+                if let evocc_proof::EvpEvent::Rewrite(rewrite) = event {
+                    if !rewrite.premises.is_empty() {
+                        premised = true;
+                        *trial
+                            .premise_counts
+                            .entry(rewrite.premises.len())
+                            .or_default() += 1;
+                    }
+                }
+            }
+            if premised {
+                trial.premised_regions += 1;
+            }
+        }
         trial.transactions += 1;
         trial.optimizer_budget_exhausted |= outcome.report.budget_exhausted;
         trial.after_text = after_text.clone();
@@ -473,6 +503,8 @@ pub fn run_seed(
             regions: trial.regions,
             certificates_replayed: trial.transactions,
             optimizer_budget_exhausted: trial.optimizer_budget_exhausted,
+            premised_regions: trial.premised_regions,
+            premise_counts: trial.premise_counts.clone(),
             residual_regions: trial.residual_regions,
             transactions: trial.transactions,
             stopped_at_ceiling: trial.stopped_at_ceiling,

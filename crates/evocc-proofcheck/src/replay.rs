@@ -1,13 +1,34 @@
-//! Independent replay of the reviewed `p0.scalar.v1` registry.
+//! Independent replay of the reviewed scalar registries.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use crate::eligibility::EligibleRegion;
+use crate::facts::{Comparison, Fact};
 use evocc_evoir::{inst_results, CmpOp, EvoIRType, Inst, Module, Value};
 use evocc_proof::{
     EvpCongruence, EvpEffectClass, EvpEvent, EvpExtractionChoice, EvpNode, EvpNodeSource,
-    EvpProofRef, EvpRegion, EvpRewrite,
+    EvpPremise, EvpProofRef, EvpRegion, EvpRewrite,
 };
+
+/// Which reviewed registry a certificate committed to.
+///
+/// Section 11.6: a certificate cannot extend the registry it names, so a rule
+/// the revision added is not available to a certificate that named the earlier
+/// one, however well formed the rewrite is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Registry {
+    Reviewed,
+    Revised,
+}
+
+/// Every rule the revision adds is printed with a `p1_` identifier and every
+/// rule it inherits with a `p0_` one.
+fn is_revision_rule(rule: &str) -> bool {
+    rule.starts_with("p1_")
+}
+
+const LEFT: usize = 0;
+const RIGHT: usize = 1;
 
 #[derive(Debug, Clone)]
 pub(crate) struct RegionReplacement {
@@ -35,6 +56,7 @@ pub(crate) fn replay_region(
     module: &Module,
     claimed: &EvpRegion,
     derived: &EligibleRegion,
+    registry: Registry,
 ) -> Result<RegionReplacement, ()> {
     if claimed.id != derived.id
         || claimed.root_value != derived.root_value
@@ -43,7 +65,7 @@ pub(crate) fn replay_region(
     {
         return Err(());
     }
-    let mut replay = Replay::new(module, claimed)?;
+    let mut replay = Replay::new(module, claimed, registry)?;
     for event in &claimed.events {
         replay.event(event)?;
     }
@@ -61,10 +83,11 @@ struct Replay<'a> {
     before_count: usize,
     derived_started: bool,
     used_derived: HashSet<u32>,
+    registry: Registry,
 }
 
 impl<'a> Replay<'a> {
-    fn new(module: &'a Module, region: &'a EvpRegion) -> Result<Self, ()> {
+    fn new(module: &'a Module, region: &'a EvpRegion, registry: Registry) -> Result<Self, ()> {
         let mut sorts = Vec::new();
         let mut value_classes = HashMap::new();
         for (index, seed) in region.seeds.iter().enumerate() {
@@ -95,6 +118,7 @@ impl<'a> Replay<'a> {
             before_count: 0,
             derived_started: false,
             used_derived: HashSet::new(),
+            registry,
         })
     }
 
@@ -158,14 +182,115 @@ impl<'a> Replay<'a> {
                 None
             }
         };
-        validate_reviewed_rule(self, rewrite, lhs, rhs_node)?;
+        // Section 11.3: the facts a rewrite relied on are recomputed from the
+        // region's nodes, with the partition as it stands before this union,
+        // and the rule's side condition is decided from those and not from
+        // what the certificate claimed.
+        let facts = self.class_facts()?;
+        self.confirm_premises(&facts, rewrite)?;
+        validate_reviewed_rule(self, rewrite, lhs, rhs_node, &facts)?;
         if let Some(node) = rhs_node {
             if node.source == EvpNodeSource::Derived {
                 self.used_derived.insert(node.node);
             }
         }
         self.union(rewrite.lhs_pre, rewrite.rhs_pre);
+        // Section 8.10: two values that disagree on a bit both know cannot be
+        // equal, so the union is invalid. The check is performed here as well
+        // as by the producer, which is what makes it worth performing.
+        self.class_facts()?;
         Ok(())
+    }
+
+    /// The Section 8.10 fact of every class, from this region's nodes alone.
+    ///
+    /// A class's fact is the meet of the transfers of the nodes it owns; seeds
+    /// contribute nothing, because Section 8.10 gives a block argument no fact.
+    /// The loop runs to a fixed point because a union can sharpen a child's
+    /// fact after the node that reads it was inserted, and facts only ever move
+    /// down.
+    fn class_facts(&self) -> Result<Vec<Fact>, ()> {
+        let mut facts = self
+            .sorts
+            .iter()
+            .map(|sort| bits_width(sort).map(Fact::top).ok_or(()))
+            .collect::<Result<Vec<_>, ()>>()?;
+        loop {
+            let mut changed = false;
+            for node in &self.nodes {
+                let transferred = self.node_fact(node, &facts)?;
+                let root = self.find(node.owner) as usize;
+                let merged = facts
+                    .get(root)
+                    .copied()
+                    .ok_or(())?
+                    .meet(transferred)
+                    .ok_or(())?;
+                if merged != facts[root] {
+                    facts[root] = merged;
+                    changed = true;
+                }
+            }
+            if !changed {
+                return Ok(facts);
+            }
+        }
+    }
+
+    /// One row of the Section 8.10 transfer table, applied to one node.
+    fn node_fact(&self, node: &EvpNode, facts: &[Fact]) -> Result<Fact, ()> {
+        let width = bits_width(&node.sort).ok_or(())?;
+        let child = |index: usize| -> Result<Fact, ()> {
+            let class = self.find(*node.children.get(index).ok_or(())?);
+            facts.get(class as usize).copied().ok_or(())
+        };
+        if let Some(comparison) = Comparison::from_operation(&node.operation) {
+            return Ok(child(LEFT)?.compare(child(RIGHT)?, comparison));
+        }
+        Ok(match node.operation.as_str() {
+            "const" => Fact::constant(width, attribute_value(node)?),
+            "and" => child(LEFT)?.and(child(RIGHT)?),
+            "or" => child(LEFT)?.or(child(RIGHT)?),
+            "xor" => child(LEFT)?.xor(child(RIGHT)?),
+            "add" => child(LEFT)?.add(child(RIGHT)?),
+            "sub" => child(LEFT)?.sub(child(RIGHT)?),
+            "mul" => child(LEFT)?.mul(child(RIGHT)?),
+            _ => return Err(()),
+        })
+    }
+
+    /// Section 11.3 "Premises": refuse unless every bit the premise claims is
+    /// known to the checker with the same value.
+    fn confirm_premises(&self, facts: &[Fact], rewrite: &EvpRewrite) -> Result<(), ()> {
+        for premise in &rewrite.premises {
+            let recomputed = self.premised_fact(facts, premise)?;
+            let width = recomputed.width();
+            let claimed = Fact::from_premise(width, premise.mask, premise.value).ok_or(())?;
+            // The wire form carries the class's width rounded up to a whole
+            // hexadecimal digit; a premise counted for another width is a claim
+            // about another value.
+            if premise.digits != usize::from(width.div_ceil(4))
+                || !recomputed.is_at_or_below(claimed)
+            {
+                return Err(());
+            }
+        }
+        Ok(())
+    }
+
+    fn premised_fact(&self, facts: &[Fact], premise: &EvpPremise) -> Result<Fact, ()> {
+        if !self.class_exists(premise.class) {
+            return Err(());
+        }
+        facts
+            .get(self.find(premise.class) as usize)
+            .copied()
+            .ok_or(())
+    }
+
+    /// The recomputed fact of a class the rewrite bound.
+    fn fact_of(&self, facts: &[Fact], class: u32) -> Result<Fact, ()> {
+        facts.get(self.find(class) as usize).copied().ok_or(())
     }
 
     fn congruence(&mut self, congruence: &EvpCongruence) -> Result<(), ()> {
@@ -188,6 +313,7 @@ impl<'a> Replay<'a> {
             return Err(());
         }
         self.union(congruence.lhs_pre, congruence.rhs_pre);
+        self.class_facts()?;
         Ok(())
     }
 
@@ -351,7 +477,19 @@ fn validate_reviewed_rule(
     rewrite: &EvpRewrite,
     lhs: &EvpNode,
     rhs_node: Option<&EvpNode>,
+    facts: &[Fact],
 ) -> Result<(), ()> {
+    // A rule only the revision prints needs a certificate that named the
+    // revision, and it records the facts its side condition read. A rule the
+    // earlier registry already held reads no fact and records none, so a
+    // premise on one is a claim its rule never makes.
+    if is_revision_rule(&rewrite.rule) {
+        if replay.registry != Registry::Revised || rewrite.premises.is_empty() {
+            return Err(());
+        }
+    } else if !rewrite.premises.is_empty() {
+        return Err(());
+    }
     let bindings = rewrite
         .bindings
         .iter()
@@ -375,6 +513,38 @@ fn validate_reviewed_rule(
         } else {
             Err(())
         }
+    };
+    let masked = || -> Result<(u32, u32), ()> {
+        if bindings.len() == 2 {
+            Ok((*bindings.get("m").ok_or(())?, *bindings.get("x").ok_or(())?))
+        } else {
+            Err(())
+        }
+    };
+    let cleared = || -> Result<(u32, u32), ()> {
+        if bindings.len() == 2 {
+            Ok((*bindings.get("x").ok_or(())?, *bindings.get("z").ok_or(())?))
+        } else {
+            Err(())
+        }
+    };
+    let known = |operation: &str| -> Result<(), ()> {
+        known_constant(replay, rewrite, lhs, rhs_node, operation, binary()?, facts)
+    };
+    let cover = |operation: &'static str, mask: usize, right_is_mask: bool| -> Result<(), ()> {
+        covering(
+            replay,
+            rewrite,
+            lhs,
+            rhs_node,
+            facts,
+            CoverSpec {
+                operation,
+                mask,
+                right_is_mask,
+                bound: masked()?,
+            },
+        )
     };
     match rewrite.rule.as_str() {
         "p0_001_add_zero_rhs" => identity_binary(
@@ -486,8 +656,141 @@ fn validate_reviewed_rule(
         "p0_109_fold_icmp_sle" => fold(replay, lhs, rhs_node, "icmp.sle", binary()?, Fold::SLe),
         "p0_110_fold_icmp_ult" => fold(replay, lhs, rhs_node, "icmp.ult", binary()?, Fold::ULt),
         "p0_111_fold_icmp_ule" => fold(replay, lhs, rhs_node, "icmp.ule", binary()?, Fold::ULe),
+        "p1_200_known_and" => known("and"),
+        "p1_201_known_or" => known("or"),
+        "p1_202_known_xor" => known("xor"),
+        "p1_203_known_add" => known("add"),
+        "p1_204_known_sub" => known("sub"),
+        "p1_205_known_mul" => known("mul"),
+        "p1_210_known_icmp_eq" => known("icmp.eq"),
+        "p1_211_known_icmp_ne" => known("icmp.ne"),
+        "p1_212_known_icmp_slt" => known("icmp.slt"),
+        "p1_213_known_icmp_sle" => known("icmp.sle"),
+        "p1_214_known_icmp_ult" => known("icmp.ult"),
+        "p1_215_known_icmp_ule" => known("icmp.ule"),
+        "p1_220_and_cover_rhs" => cover("and", RIGHT, false),
+        "p1_221_and_cover_lhs" => cover("and", LEFT, false),
+        "p1_222_or_cover_rhs" => cover("or", RIGHT, true),
+        "p1_223_or_cover_lhs" => cover("or", LEFT, true),
+        "p1_224_xor_known_zero_rhs" => {
+            cleared_operand(replay, rewrite, lhs, rhs_node, facts, RIGHT, cleared()?)
+        }
+        "p1_225_xor_known_zero_lhs" => {
+            cleared_operand(replay, rewrite, lhs, rhs_node, facts, LEFT, cleared()?)
+        }
         _ => Err(()),
     }
+}
+
+/// `fully_known`: the matched node's own class has every bit known, and the
+/// right-hand side is the `const` that `known_const` builds from it.
+fn known_constant(
+    replay: &Replay<'_>,
+    rewrite: &EvpRewrite,
+    lhs: &EvpNode,
+    rhs: Option<&EvpNode>,
+    operation: &str,
+    bound: (u32, u32),
+    facts: &[Fact],
+) -> Result<(), ()> {
+    let [left, right] = lhs.children.as_slice() else {
+        return Err(());
+    };
+    if lhs.operation != operation || replay.find(*left) != bound.0 || replay.find(*right) != bound.1
+    {
+        return Err(());
+    }
+    let matched = replay.find(lhs.owner);
+    let fact = replay.fact_of(facts, matched)?;
+    if !fact.is_fully_known() {
+        return Err(());
+    }
+    // Section 11.6 orders the premises: `fully_known` reads the matched node's
+    // class and nothing else.
+    let [premise] = rewrite.premises.as_slice() else {
+        return Err(());
+    };
+    if replay.find(premise.class) != matched {
+        return Err(());
+    }
+    validate_const(rhs.ok_or(())?, &lhs.sort, fact.raw(), None)
+}
+
+struct CoverSpec {
+    operation: &'static str,
+    /// Which child of the matched node `?m` binds.
+    mask: usize,
+    /// Whether the right-hand side is `?m`, as it is for `or`, or `?x`.
+    right_is_mask: bool,
+    /// `?m` then `?x`, the order Section 11.6 fixes.
+    bound: (u32, u32),
+}
+
+/// `covers(?m, ?x)`: every bit not known zero in `?x` is known one in `?m`.
+fn covering(
+    replay: &Replay<'_>,
+    rewrite: &EvpRewrite,
+    lhs: &EvpNode,
+    rhs_node: Option<&EvpNode>,
+    facts: &[Fact],
+    spec: CoverSpec,
+) -> Result<(), ()> {
+    let (mask, value) = spec.bound;
+    if lhs.operation != spec.operation
+        || replay.find(*lhs.children.get(spec.mask).ok_or(())?) != mask
+        || replay.find(*lhs.children.get(1 - spec.mask).ok_or(())?) != value
+    {
+        return Err(());
+    }
+    if !replay
+        .fact_of(facts, mask)?
+        .covers(replay.fact_of(facts, value)?)
+    {
+        return Err(());
+    }
+    let [first, second] = rewrite.premises.as_slice() else {
+        return Err(());
+    };
+    if replay.find(first.class) != mask || replay.find(second.class) != value {
+        return Err(());
+    }
+    let replacement = if spec.right_is_mask { mask } else { value };
+    if rhs_node.is_some() || rewrite.rhs != EvpProofRef::Class(replacement) {
+        return Err(());
+    }
+    Ok(())
+}
+
+/// `known_zero(?z)`: `xor` against an operand every bit of which is known zero.
+fn cleared_operand(
+    replay: &Replay<'_>,
+    rewrite: &EvpRewrite,
+    lhs: &EvpNode,
+    rhs_node: Option<&EvpNode>,
+    facts: &[Fact],
+    zero: usize,
+    bound: (u32, u32),
+) -> Result<(), ()> {
+    let (kept, cleared) = bound;
+    if lhs.operation != "xor"
+        || replay.find(*lhs.children.get(zero).ok_or(())?) != cleared
+        || replay.find(*lhs.children.get(1 - zero).ok_or(())?) != kept
+    {
+        return Err(());
+    }
+    if !replay.fact_of(facts, cleared)?.is_known_zero() {
+        return Err(());
+    }
+    let [premise] = rewrite.premises.as_slice() else {
+        return Err(());
+    };
+    if replay.find(premise.class) != cleared {
+        return Err(());
+    }
+    if rhs_node.is_some() || rewrite.rhs != EvpProofRef::Class(kept) {
+        return Err(());
+    }
+    Ok(())
 }
 
 struct IdentitySpec<'a> {
@@ -1085,7 +1388,7 @@ mod tests {
         bindings: &[(&str, u32)],
     ) {
         let (region, derived) = certificate_region(&module, root, rule, replacement, bindings);
-        let plan = replay_region(&module, &region, &derived)
+        let plan = replay_region(&module, &region, &derived, Registry::Reviewed)
             .unwrap_or_else(|()| panic!("reviewed rule {rule} must replay"));
         reassemble(&module, vec![plan])
             .unwrap_or_else(|()| panic!("reviewed rule {rule} must reassemble"));
@@ -1262,20 +1565,20 @@ mod tests {
             panic!()
         };
         node.attributes[0].1 = 13;
-        assert!(replay_region(&module, &bad_payload, &derived).is_err());
+        assert!(replay_region(&module, &bad_payload, &derived, Registry::Reviewed).is_err());
 
         let mut unknown_rule = valid.clone();
         let EvpEvent::Rewrite(rewrite) = unknown_rule.events.last_mut().unwrap() else {
             panic!()
         };
         rewrite.rule = "producer_supplied_add".to_owned();
-        assert!(replay_region(&module, &unknown_rule, &derived).is_err());
+        assert!(replay_region(&module, &unknown_rule, &derived, Registry::Reviewed).is_err());
 
         let mut wrong_binding = valid;
         let EvpEvent::Rewrite(rewrite) = wrong_binding.events.last_mut().unwrap() else {
             panic!()
         };
         rewrite.bindings[0].1 = 1;
-        assert!(replay_region(&module, &wrong_binding, &derived).is_err());
+        assert!(replay_region(&module, &wrong_binding, &derived, Registry::Reviewed).is_err());
     }
 }

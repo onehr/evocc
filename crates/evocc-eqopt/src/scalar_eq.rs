@@ -10,6 +10,8 @@ use evocc_types::EvoIRType;
 
 use evocc_evoir::{CmpOp, Inst, Module, Value};
 
+use crate::known_bits::{Comparison, KnownBits};
+
 pub(crate) use evocc_evoir::{remap_inst_uses, resolve_alias};
 
 const OP_ADD: OpId = 1;
@@ -127,6 +129,12 @@ pub enum ScalarRewrite {
     DoubleNegation,
     IdentityComparison,
     ConstantFold,
+    /// A class whose every bit the analysis knows, replaced by that constant.
+    KnownConst,
+    /// `and`/`or` against a mask that covers the other operand's live bits.
+    MaskCover,
+    /// `xor` against an operand every bit of which is known zero.
+    XorKnownZero,
 }
 
 impl ScalarRewrite {
@@ -139,6 +147,9 @@ impl ScalarRewrite {
             Self::DoubleNegation => 5,
             Self::IdentityComparison => 6,
             Self::ConstantFold => 7,
+            Self::KnownConst => 8,
+            Self::MaskCover => 9,
+            Self::XorKnownZero => 10,
         }
     }
 }
@@ -204,8 +215,17 @@ pub struct ScalarEqOutcome {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ScalarFact {
     Constant { raw: u64, ty: EvoIRType },
-    Negation { operand: Value },
 }
+
+/// Which value each `sub(0, %v)` negates.
+///
+/// Kept beside the constant environment rather than inside it because a
+/// negation of a constant is both facts at once: `-(-3)` is `3`, and the
+/// double-negation rule of the reviewed registry matches on the shape while
+/// the fold matches on the value. Recording only the value would make the rule
+/// unreachable wherever the inner negation happens to fold, which is exactly
+/// where a C front end writes it.
+pub(crate) type NegationEnv = HashMap<u32, Value>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Replacement {
@@ -231,17 +251,29 @@ pub(crate) struct AppliedRewrite {
     pub(crate) result: Value,
     pub(crate) instruction: Inst,
     pub(crate) facts: HashMap<u32, ScalarFact>,
+    pub(crate) negations: NegationEnv,
+    /// What Section 8.10 knew about each value's bits where the rewrite was
+    /// selected. Recorded beside `facts` rather than folded into it because the
+    /// two answer different questions: one names constants the block wrote,
+    /// the other names bits the lattice derived.
+    pub(crate) known: KnownEnv,
     pub(crate) rule: ScalarRewrite,
     pub(crate) replacement: Replacement,
 }
 
 impl AppliedRewrite {
     pub(crate) fn is_reviewed_instance(&self) -> bool {
-        rewrite_opportunity(&self.instruction, &self.facts).is_some_and(|opportunity| {
-            opportunity.rule == self.rule && opportunity.replacement == self.replacement
-        }) || constant_fold(&self.instruction, &self.facts).is_some_and(|opportunity| {
-            opportunity.rule == self.rule && opportunity.replacement == self.replacement
-        })
+        let instantiates = |candidate: Option<RewriteOpportunity>| {
+            candidate.is_some_and(|opportunity| {
+                opportunity.rule == self.rule && opportunity.replacement == self.replacement
+            })
+        };
+        instantiates(rewrite_opportunity(
+            &self.instruction,
+            &self.facts,
+            &self.negations,
+        )) || instantiates(constant_fold(&self.instruction, &self.facts))
+            || instantiates(fact_driven_opportunity(&self.instruction, &self.known))
     }
 }
 
@@ -349,6 +381,8 @@ pub(crate) fn optimize_scalar_module_with_events(
         for block in &mut function.blocks {
             let mut aliases = HashMap::new();
             let mut facts = HashMap::new();
+            let mut negations = NegationEnv::new();
+            let mut known = KnownEnv::new();
             let mut rewritten = Vec::with_capacity(block.insts.len());
             for original_inst in &block.insts {
                 let mut inst = original_inst.clone();
@@ -359,6 +393,7 @@ pub(crate) fn optimize_scalar_module_with_events(
                 }
                 if matches!(ingest_scalar_inst(&inst), Ok(ScalarOperator::Const)) {
                     record_fact(&inst, &mut facts);
+                    record_known(&inst, &mut known);
                     rewritten.push(inst);
                     continue;
                 }
@@ -367,7 +402,12 @@ pub(crate) fn optimize_scalar_module_with_events(
                     continue;
                 };
                 report.regions_admitted += 1;
-                let opportunity = rewrite_opportunity(&inst, &facts);
+                // Section 8.11 runs the tiers in order, so a canonical
+                // reduction or a fold is preferred and the fact-driven rules
+                // answer only what neither could.
+                record_negation(&inst, &facts, &mut negations);
+                let opportunity = rewrite_opportunity(&inst, &facts, &negations)
+                    .or_else(|| fact_driven_opportunity(&inst, &known));
                 let bridge = bridge_candidate(&inst, &facts, opportunity.as_ref());
                 report.graph_nodes = report.graph_nodes.saturating_add(bridge.node_count);
                 if report.graph_nodes > budget.max_nodes
@@ -380,6 +420,7 @@ pub(crate) fn optimize_scalar_module_with_events(
                 }
                 let Some(receipt) = bridge.receipt else {
                     record_fact(&inst, &mut facts);
+                    record_known(&inst, &mut known);
                     rewritten.push(inst);
                     continue;
                 };
@@ -428,11 +469,13 @@ pub(crate) fn optimize_scalar_module_with_events(
                     Some(Replacement::Constant(raw)) => {
                         let replacement = Inst::Const(result.clone(), raw);
                         record_fact(&replacement, &mut facts);
+                        record_known(&replacement, &mut known);
                         rewritten.push(replacement);
                         Replacement::Constant(raw)
                     }
                     None => {
                         record_fact(&inst, &mut facts);
+                        record_known(&inst, &mut known);
                         rewritten.push(inst);
                         continue;
                     }
@@ -443,6 +486,8 @@ pub(crate) fn optimize_scalar_module_with_events(
                     result: result.clone(),
                     instruction: inst,
                     facts: facts.clone(),
+                    negations: negations.clone(),
+                    known: known.clone(),
                     rule: opportunity
                         .expect("receipt requires a rewrite opportunity")
                         .rule,
@@ -569,9 +614,120 @@ fn extract_cheapest(
         .map(|(_, _, replacement)| replacement)
 }
 
+/// What Section 8.10 knows about each block-local value's bits.
+///
+/// A value absent from the environment is top: nothing known. Nothing outside
+/// the block ever enters it, because a region's seeds are block arguments and
+/// Section 8.10 gives those no fact.
+pub(crate) type KnownEnv = HashMap<u32, KnownBits>;
+
+fn comparison_of(operation: CmpOp) -> Comparison {
+    match operation {
+        CmpOp::Eq => Comparison::Eq,
+        CmpOp::Ne => Comparison::Ne,
+        CmpOp::SLt => Comparison::SLt,
+        CmpOp::SLe => Comparison::SLe,
+        CmpOp::ULt => Comparison::ULt,
+        CmpOp::ULe => Comparison::ULe,
+    }
+}
+
+/// `None` for an operand Section 8.10 has no lattice for. `icmp` admits two
+/// pointers as readily as two bit vectors, and a pointer has no known bits.
+pub(crate) fn known_of(value: &Value, known: &KnownEnv) -> Option<KnownBits> {
+    let width = match value.ty {
+        EvoIRType::Bits(width @ 1..=64) => width,
+        _ => return None,
+    };
+    Some(
+        known
+            .get(&value.id)
+            .copied()
+            .unwrap_or_else(|| KnownBits::top(width)),
+    )
+}
+
+/// The Section 8.10 transfer for one instruction's result. `None` for every
+/// operator the table does not list, which transfers to top.
+pub(crate) fn node_fact(inst: &Inst, known: &KnownEnv) -> Option<KnownBits> {
+    let result = scalar_result(inst)?;
+    let fact = match inst {
+        Inst::Const(_, raw) => {
+            KnownBits::constant(scalar_width(&result.ty)?, mask_raw(*raw, &result.ty))
+        }
+        Inst::And(_, left, right) => known_of(left, known)?.transfer_and(known_of(right, known)?),
+        Inst::Or(_, left, right) => known_of(left, known)?.transfer_or(known_of(right, known)?),
+        Inst::Xor(_, left, right) => known_of(left, known)?.transfer_xor(known_of(right, known)?),
+        Inst::Add(_, left, right) => known_of(left, known)?.transfer_add(known_of(right, known)?),
+        Inst::Sub(_, left, right) => known_of(left, known)?.transfer_sub(known_of(right, known)?),
+        Inst::Mul(_, left, right) => known_of(left, known)?.transfer_mul(known_of(right, known)?),
+        Inst::ICmp(_, operation, left, right) => {
+            known_of(left, known)?.transfer_icmp(known_of(right, known)?, comparison_of(*operation))
+        }
+        _ => return None,
+    };
+    Some(fact)
+}
+
+pub(crate) fn record_known(inst: &Inst, known: &mut KnownEnv) {
+    if let (Some(result), Some(fact)) = (scalar_result(inst), node_fact(inst, known)) {
+        known.insert(result.id, fact);
+    }
+}
+
+/// The fact-driven rules the revision added, in the order the producer fires
+/// them: a class whose every bit is known becomes that constant, and otherwise
+/// a covering mask or a known-zero operand makes the operation an identity.
+///
+/// The order inside the family is a producer choice, not a rule: a class that
+/// is fully known and also covered would be replaced by its constant, which is
+/// never worse than an alias and is what a reader expects to see.
+pub(crate) fn fact_driven_opportunity(inst: &Inst, known: &KnownEnv) -> Option<RewriteOpportunity> {
+    if matches!(inst, Inst::Const(..)) {
+        return None;
+    }
+    let fact = node_fact(inst, known)?;
+    if fact.is_constant() {
+        return constant(ScalarRewrite::KnownConst, fact.value());
+    }
+    match inst {
+        Inst::And(_, left, right) => {
+            let (left_fact, right_fact) = (known_of(left, known)?, known_of(right, known)?);
+            if right_fact.covers(left_fact) {
+                alias(ScalarRewrite::MaskCover, left)
+            } else if left_fact.covers(right_fact) {
+                alias(ScalarRewrite::MaskCover, right)
+            } else {
+                None
+            }
+        }
+        Inst::Or(_, left, right) => {
+            let (left_fact, right_fact) = (known_of(left, known)?, known_of(right, known)?);
+            if right_fact.covers(left_fact) {
+                alias(ScalarRewrite::MaskCover, right)
+            } else if left_fact.covers(right_fact) {
+                alias(ScalarRewrite::MaskCover, left)
+            } else {
+                None
+            }
+        }
+        Inst::Xor(_, left, right) => {
+            if known_of(right, known)?.is_known_zero() {
+                alias(ScalarRewrite::XorKnownZero, left)
+            } else if known_of(left, known)?.is_known_zero() {
+                alias(ScalarRewrite::XorKnownZero, right)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn rewrite_opportunity(
     inst: &Inst,
     facts: &HashMap<u32, ScalarFact>,
+    negations: &NegationEnv,
 ) -> Option<RewriteOpportunity> {
     match inst {
         Inst::Add(_, left, right) => {
@@ -609,7 +765,7 @@ pub(crate) fn rewrite_opportunity(
             }
         }
         Inst::Sub(_, left, right) if is_constant(left, facts, 0) => {
-            if let Some(ScalarFact::Negation { operand }) = facts.get(&right.id) {
+            if let Some(operand) = negations.get(&right.id) {
                 alias(ScalarRewrite::DoubleNegation, operand)
             } else {
                 constant_fold(inst, facts)
@@ -647,19 +803,39 @@ pub(crate) fn constant_fold(
         .map(|value| constant_raw(value, facts))
         .collect::<Option<Vec<_>>>()?;
     let result = scalar_result(inst)?;
-    let folded = match (inst, raw.as_slice()) {
-        (Inst::Add(..), [left, right]) => left.wrapping_add(*right),
-        (Inst::Sub(..), [left, right]) => left.wrapping_sub(*right),
-        (Inst::Mul(..), [left, right]) => left.wrapping_mul(*right),
-        (Inst::And(..), [left, right]) => left & right,
-        (Inst::Or(..), [left, right]) => left | right,
-        (Inst::Xor(..), [left, right]) => left ^ right,
-        (Inst::ICmp(_, comparison, ..), [left, right]) => {
-            u64::from(fold_comparison(*comparison, *left, *right, &operands[0].ty))
-        }
-        _ => return None,
+    let [left, right] = raw.as_slice() else {
+        return None;
     };
-    constant(ScalarRewrite::ConstantFold, mask_raw(folded, &result.ty))
+    let operator = ingest_scalar_inst(inst).ok()?;
+    let folded = fold_raw(operator, *left, *right, &operands[0].ty, &result.ty)?;
+    constant(ScalarRewrite::ConstantFold, folded)
+}
+
+/// The `all_const` result of one P0 operator on two raw operands.
+///
+/// This is the only implementation of the fold table in the producer: the
+/// region builder computes constants from the emitted node stream rather than
+/// from the sweep's environment, and both reach this function.
+pub(crate) fn fold_raw(
+    operator: ScalarOperator,
+    left: u64,
+    right: u64,
+    operand_ty: &EvoIRType,
+    result_ty: &EvoIRType,
+) -> Option<u64> {
+    let folded = match operator {
+        ScalarOperator::Add => left.wrapping_add(right),
+        ScalarOperator::Sub => left.wrapping_sub(right),
+        ScalarOperator::Mul => left.wrapping_mul(right),
+        ScalarOperator::And => left & right,
+        ScalarOperator::Or => left | right,
+        ScalarOperator::Xor => left ^ right,
+        ScalarOperator::ICmp(comparison) => {
+            u64::from(fold_comparison(comparison, left, right, operand_ty))
+        }
+        ScalarOperator::Const => return None,
+    };
+    Some(mask_raw(folded, result_ty))
 }
 
 fn fold_comparison(comparison: CmpOp, left: u64, right: u64, ty: &EvoIRType) -> bool {
@@ -686,25 +862,27 @@ fn signed_value(raw: u64, width: u16) -> i128 {
 }
 
 pub(crate) fn record_fact(inst: &Inst, facts: &mut HashMap<u32, ScalarFact>) {
-    match inst {
-        Inst::Const(result, raw) => {
-            facts.insert(
-                result.id,
-                ScalarFact::Constant {
-                    raw: mask_raw(*raw, &result.ty),
-                    ty: result.ty.clone(),
-                },
-            );
+    if let Inst::Const(result, raw) = inst {
+        facts.insert(
+            result.id,
+            ScalarFact::Constant {
+                raw: mask_raw(*raw, &result.ty),
+                ty: result.ty.clone(),
+            },
+        );
+    }
+}
+
+/// Record the shape of one instruction before any replacement takes its place.
+pub(crate) fn record_negation(
+    inst: &Inst,
+    facts: &HashMap<u32, ScalarFact>,
+    negations: &mut NegationEnv,
+) {
+    if let Inst::Sub(result, left, right) = inst {
+        if is_constant(left, facts, 0) {
+            negations.insert(result.id, right.clone());
         }
-        Inst::Sub(result, left, right) if is_constant(left, facts, 0) => {
-            facts.insert(
-                result.id,
-                ScalarFact::Negation {
-                    operand: right.clone(),
-                },
-            );
-        }
-        _ => {}
     }
 }
 
@@ -762,6 +940,15 @@ pub(crate) fn operator_id(operator: ScalarOperator) -> OpId {
         ScalarOperator::ICmp(CmpOp::SLe) => OP_ICMP_SLE,
         ScalarOperator::ICmp(CmpOp::ULt) => OP_ICMP_ULT,
         ScalarOperator::ICmp(CmpOp::ULe) => OP_ICMP_ULE,
+    }
+}
+
+/// The width Section 8.10 gives a value, or `None` for a type it has no
+/// lattice for.
+pub(crate) fn scalar_width(ty: &EvoIRType) -> Option<u16> {
+    match ty {
+        EvoIRType::Bits(width @ 1..=64) => Some(*width),
+        _ => None,
     }
 }
 

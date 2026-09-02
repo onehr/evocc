@@ -23,6 +23,10 @@ pub struct CampaignReport {
     pub compared: u64,
     pub optimized: u64,
     pub regions: u64,
+    /// Regions carrying at least one fact-driven rewrite, and how many facts
+    /// those rewrites read.
+    pub premised_regions: u64,
+    pub premise_counts: BTreeMap<usize, u64>,
     /// Regions a fresh transaction over an optimized module still admits, and
     /// the programs that have any. Section 11.3 names these a measured quality
     /// metric of the registry: Section 11.6 lets a left-hand `const_like` match
@@ -80,6 +84,14 @@ impl CampaignReport {
         let _ = writeln!(text, "compared={}", self.compared);
         let _ = writeln!(text, "optimized={}", self.optimized);
         let _ = writeln!(text, "regions={}", self.regions);
+        let premises = self
+            .premise_counts
+            .iter()
+            .map(|(count, rewrites)| format!("{count}:{rewrites}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let _ = writeln!(text, "regionsWithPremise={}", self.premised_regions);
+        let _ = writeln!(text, "premiseCounts={premises}");
         let _ = writeln!(text, "residualRegions={}", self.residual_regions);
         let _ = writeln!(text, "residualPrograms={}", self.residual_programs);
         let lengths = self
@@ -126,6 +138,8 @@ pub fn run_campaign(
                 residual_regions,
                 transactions,
                 stopped_at_ceiling,
+                premised_regions,
+                premise_counts,
             } => {
                 report.transactions += transactions as u64;
                 *report.run_lengths.entry(transactions).or_default() += 1;
@@ -134,6 +148,10 @@ pub fn run_campaign(
                 }
                 report.compared += 1;
                 report.regions += regions as u64;
+                report.premised_regions += premised_regions as u64;
+                for (count, rewrites) in premise_counts {
+                    *report.premise_counts.entry(count).or_default() += rewrites;
+                }
                 report.residual_regions += residual_regions as u64;
                 if residual_regions != 0 {
                     report.residual_programs += 1;

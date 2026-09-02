@@ -5,19 +5,31 @@ use std::collections::{HashMap, HashSet};
 use evocc_evoir::{inst_results, render_module, validate_module, CmpOp, Inst, Module, Value};
 use evocc_proof::{
     sha256_hex, EvpBudget, EvpCertificate, EvpEffectClass, EvpEvent, EvpExtraction,
-    EvpExtractionChoice, EvpNode, EvpNodeSource, EvpProofRef, EvpQuantity, EvpRegion, EvpRegionId,
-    EvpRewrite, EvpSeed, EvpSeedOrigin, EvpStop, EvpVersion,
+    EvpExtractionChoice, EvpNode, EvpNodeSource, EvpPremise, EvpProofRef, EvpQuantity, EvpRegion,
+    EvpRegionId, EvpRewrite, EvpSeed, EvpSeedOrigin, EvpStop, EvpVersion,
 };
 use evocc_types::EvoIRType;
 
+use crate::known_bits::{Comparison, KnownBits};
 use crate::scalar_eq::{
-    constant_fold, ingest_scalar_inst, mask_raw, optimize_scalar_module_with_events,
-    remap_inst_uses, resolve_alias, scalar_operands, AppliedRewrite, Replacement,
-    RewriteOpportunity, ScalarFact,
+    fold_raw, ingest_scalar_inst, mask_raw, optimize_scalar_module_with_events, remap_inst_uses,
+    resolve_alias, scalar_operands, AppliedRewrite, NegationEnv, Replacement, RewriteOpportunity,
+    ScalarFact, ScalarOperator,
 };
 use crate::{ProofAuthority, ScalarEqBudget, ScalarEqReport, ScalarRewrite};
 
-const REGISTRY_NAME: &str = "p0.scalar.v1";
+/// The two reviewed registries of Section 11.6.
+///
+/// A certificate commits to one registry and cannot extend it, and Section 11.6
+/// admits either under `evp2`, because the revision includes every rule of the
+/// earlier one unchanged and in order. The producer names the narrowest one
+/// that contains every rule it actually fired: that is the smaller claim, and
+/// it leaves a premise-free certificate readable by a checker that knows only
+/// the earlier registry.
+const REGISTRY_V1: &str = "p0.scalar.v1";
+const REGISTRY_V1_SHA256: &str = "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9";
+const REGISTRY_V2: &str = "p0.scalar.v2";
+const REGISTRY_V2_SHA256: &str = "c1691808ebe55a3b2520a0456345e7c38a23fa2732e0827393dcf12523024bce";
 /// Section 8.11: the P0 profile's ceilings. A budget line records these and no
 /// producer-local ones; a tighter `ScalarEqBudget` is this producer's own stop
 /// rule, not the profile's box, and recording it would make the checker refuse
@@ -27,7 +39,6 @@ const MAX_EPOCHS: u64 = 1_024;
 /// The floor of the per-rule fuel bound, `max(256, 8 * n)`.
 const FUEL_FLOOR: u64 = 256;
 
-const REGISTRY_SHA256: &str = "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9";
 pub(crate) type ValueRemap = HashMap<(String, u32), u32>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,7 +76,7 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
     report.merges = 0;
     report.optimized_values = 0;
     report.proof_authority = ProofAuthority::Reviewed {
-        registry: REGISTRY_NAME,
+        registry: REGISTRY_V1,
     };
     if report.fell_back {
         return zero_transaction(module, input, report);
@@ -147,13 +158,17 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
     report.epochs = regions.len();
     report.merges = regions.len();
     report.optimized_values = regions.len();
+    let (registry_name, registry_digest) = registry_for(&regions);
+    report.proof_authority = ProofAuthority::Reviewed {
+        registry: registry_name,
+    };
     CertifiedScalarEqTransaction {
         outcome: CertifiedScalarEqOutcome {
             module: output,
             certificate: EvpCertificate {
                 version: EvpVersion::Evp2,
-                registry_name: REGISTRY_NAME.to_owned(),
-                registry_digest: REGISTRY_SHA256.to_owned(),
+                registry_name: registry_name.to_owned(),
+                registry_digest: registry_digest.to_owned(),
                 input_digest: sha256_hex(input.as_bytes()),
                 budget: Some(scheduler_record(&regions, report.budget_exhausted)),
                 regions,
@@ -163,6 +178,21 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
         },
         events,
         value_remap,
+    }
+}
+
+/// The registry a set of region blocks commits to.
+///
+/// Every rule the revision adds is printed with a `p1_` identifier and every
+/// rule it inherits with a `p0_` one, so the prefix is the whole test.
+fn registry_for(regions: &[EvpRegion]) -> (&'static str, &'static str) {
+    let revised = regions.iter().flat_map(|region| &region.events).any(
+        |event| matches!(event, EvpEvent::Rewrite(rewrite) if rewrite.rule.starts_with("p1_")),
+    );
+    if revised {
+        (REGISTRY_V2, REGISTRY_V2_SHA256)
+    } else {
+        (REGISTRY_V1, REGISTRY_V1_SHA256)
     }
 }
 
@@ -252,8 +282,8 @@ fn zero(module: &Module, input: String, mut report: ScalarEqReport) -> Certified
         module: module.clone(),
         certificate: EvpCertificate {
             version: EvpVersion::Evp2,
-            registry_name: REGISTRY_NAME.to_owned(),
-            registry_digest: REGISTRY_SHA256.to_owned(),
+            registry_name: REGISTRY_V1.to_owned(),
+            registry_digest: REGISTRY_V1_SHA256.to_owned(),
             input_digest: sha256_hex(input.as_bytes()),
             budget: Some(scheduler_record(&[], report.budget_exhausted)),
             regions: Vec::new(),
@@ -351,6 +381,13 @@ fn build_region(
     let root_node = *value_nodes.get(&root_event.result.id)?;
     let replacement_root = nodes.get(root_node as usize)?.owner;
     let mut classes = LocalClasses::new(seeds.len() + nodes.len())?;
+    // One width per class, in class order, so a fact can be started at top
+    // without consulting a node that may not exist yet.
+    let mut widths = seeds
+        .iter()
+        .map(|seed| sort_width(&seed.sort))
+        .chain(nodes.iter().map(|node| sort_width(&node.sort)))
+        .collect::<Option<Vec<_>>>()?;
     // The before nodes are the region as the transaction found it, produced by
     // no epoch, so they precede the first marker.
     let mut events = nodes
@@ -374,24 +411,55 @@ fn build_region(
     }) {
         let node_id = *value_nodes.get(&event.result.id)?;
         let lhs = classes.find(nodes.get(node_id as usize)?.owner)?;
-        let opportunity = normalize_opportunity(event, &nodes, &value_classes, &classes)?;
+        // Section 8.10 as the checker will recompute it: from the region's own
+        // nodes, after the merges recorded so far. Reading the sweep's
+        // environment instead would let the producer state a premise nobody
+        // else derives.
+        let facts = RegionFacts::compute(&nodes, &widths, &classes)?;
+        let derived = region_rewrite(event, &nodes, &value_classes, &classes, &facts, node_id)?;
+        let opportunity = derived.opportunity;
+        let rule = derived.rule;
         let normalized_event = AppliedRewrite {
             function: event.function.clone(),
             block: event.block,
             result: event.result.clone(),
             instruction: event.instruction.clone(),
             facts: event.facts.clone(),
+            negations: event.negations.clone(),
+            known: event.known.clone(),
             rule: opportunity.rule,
             replacement: opportunity.replacement.clone(),
         };
-        let (rule, binding_paths) = exact_rule(&event.instruction, &event.facts, &opportunity)?;
-        let bindings = binding_paths
+        let bindings = derived
+            .bindings
             .iter()
             .map(|(name, path)| {
                 Some((
                     (*name).to_owned(),
                     binding_class(&nodes, &classes, node_id, *path)?,
                 ))
+            })
+            .collect::<Option<Vec<_>>>()?;
+        // Section 11.6 fixes which class each side condition read and in what
+        // order; the fact recorded is the one this region's nodes give it.
+        let premises = derived
+            .premises
+            .iter()
+            .map(|source| {
+                let class = match source {
+                    PremiseSource::Matched => lhs,
+                    PremiseSource::Variable(name) => bindings
+                        .iter()
+                        .find(|(bound, _)| bound == name)
+                        .map(|(_, class)| *class)?,
+                };
+                let fact = facts.of(class, &classes)?;
+                Some(EvpPremise {
+                    class,
+                    mask: fact.mask(),
+                    value: fact.value(),
+                    digits: usize::from(fact.width().div_ceil(4)),
+                })
             })
             .collect::<Option<Vec<_>>>()?;
         // Section 8.11: an epoch runs the tiers in order because the facts one
@@ -428,9 +496,10 @@ fn build_region(
                 // replacement in the same witness closure point it at a
                 // different class holding an equal constant, which is the defect
                 // the bindings themselves already had.
+                let named = derived.right_hand_variable?;
                 let rhs = bindings
                     .iter()
-                    .find(|(name, _)| name == "x")
+                    .find(|(name, _)| name == named)
                     .map(|(_, class)| *class)?;
                 let (selected, replacement) =
                     alias_representative(&seed_values, &nodes, &node_values, &classes, rhs)?;
@@ -458,7 +527,8 @@ fn build_region(
                 } else {
                     let node = u32::try_from(nodes.len()).ok()?;
                     let owner = classes.push()?;
-                    let derived = EvpNode {
+                    widths.push(sort_width(&sort)?);
+                    let fresh = EvpNode {
                         node,
                         owner,
                         source: EvpNodeSource::Derived,
@@ -468,8 +538,8 @@ fn build_region(
                         attributes: vec![("value".to_owned(), raw)],
                         children: Vec::new(),
                     };
-                    nodes.push(derived.clone());
-                    events.push(EvpEvent::Node(derived));
+                    nodes.push(fresh.clone());
+                    events.push(EvpEvent::Node(fresh));
                     (
                         owner,
                         EvpProofRef::Node(node),
@@ -491,9 +561,7 @@ fn build_region(
             lhs: EvpProofRef::Node(node_id),
             rhs: rhs_ref,
             bindings,
-            // Every rule of `p0.scalar.v1` is `when true` or `when all_const`,
-            // so none reads a fact and none records one.
-            premises: Vec::new(),
+            premises,
         }));
         classes.union(lhs, rhs)?;
         changed.push((result, epoch));
@@ -579,7 +647,75 @@ impl LocalClasses {
     }
 }
 
-fn normalize_opportunity(
+/// Which rule of the reviewed registry a recorded rewrite instantiates in this
+/// region, with its bindings and the premises its side condition reads.
+struct RegionRewrite {
+    opportunity: RewriteOpportunity,
+    rule: &'static str,
+    bindings: Vec<(&'static str, BindingPath)>,
+    /// The bare variable the right-hand side names, or `None` when the
+    /// right-hand side is a builder and needs a `node:` reference.
+    right_hand_variable: Option<&'static str>,
+    premises: Vec<PremiseSource>,
+}
+
+/// Which class one premise names, resolved once the bindings are known.
+#[derive(Clone, Copy)]
+enum PremiseSource {
+    /// `fully_known` reads the class of the matched left-hand node.
+    Matched,
+    /// `covers` reads `?m` then `?x`; `known_zero` reads `?z`.
+    Variable(&'static str),
+}
+
+/// The rule this region states for one recorded rewrite.
+///
+/// Section 8.11 fixes that the canonical reductions run before the fact-driven
+/// rules. The remaining order inside the fact-driven tier is a producer choice
+/// and this is it: a fold whose constants the before witness closure already
+/// holds is stated without any fact at all, then the fact-driven rules state
+/// what the analysis knows, and last the fold on a constant this transaction
+/// derived. The last step is not redundant: `mul` is the one operator whose
+/// Section 8.10 transfer keeps only a trailing zero run, so a product of two
+/// constants has no fact and only the fold can state it.
+fn region_rewrite(
+    event: &AppliedRewrite,
+    nodes: &[EvpNode],
+    value_classes: &HashMap<u32, u32>,
+    classes: &LocalClasses,
+    facts: &RegionFacts,
+    node_id: u32,
+) -> Option<RegionRewrite> {
+    let matched = nodes.get(node_id as usize)?;
+    if let Some(opportunity) = canonical_reduction(event, nodes, value_classes, classes) {
+        if let Some((rule, bindings)) = exact_rule(
+            &event.instruction,
+            &event.facts,
+            &event.negations,
+            &opportunity,
+        ) {
+            let right_hand_variable =
+                matches!(opportunity.replacement, Replacement::Alias(_)).then_some("x");
+            return Some(RegionRewrite {
+                opportunity,
+                rule,
+                bindings,
+                right_hand_variable,
+                premises: Vec::new(),
+            });
+        }
+    }
+    fold_rewrite(event, matched, nodes, classes, true)
+        .or_else(|| fact_rewrite(event, matched, classes, facts))
+        .or_else(|| fold_rewrite(event, matched, nodes, classes, false))
+}
+
+/// A canonical reduction of Section 8.11, re-derived against this region.
+///
+/// Section 11.6 lets a left-hand `const_like` match only a node already in the
+/// before witness closure, so a reduction whose constant this transaction
+/// derived is not this rule, whatever the sweep called it.
+fn canonical_reduction(
     event: &AppliedRewrite,
     nodes: &[EvpNode],
     value_classes: &HashMap<u32, u32>,
@@ -619,15 +755,308 @@ fn normalize_opportunity(
             }
             values
         }
-        _ => return Some(original),
+        (_, ScalarRewrite::DoubleNegation | ScalarRewrite::IdentityComparison, _) => {
+            return Some(original);
+        }
+        _ => return None,
     };
-    if required_before_constants.into_iter().any(|(value, raw)| {
-        class_has_before_constant(value, raw, nodes, value_classes, classes).unwrap_or(false)
-    }) {
-        Some(original)
-    } else {
-        constant_fold(&event.instruction, &event.facts)
+    required_before_constants
+        .into_iter()
+        .any(|(value, raw)| {
+            class_has_before_constant(value, raw, nodes, value_classes, classes).unwrap_or(false)
+        })
+        .then_some(original)
+}
+
+/// `all_const` over the emitted node stream.
+///
+/// `before_only` restricts the constants to the before witness closure, which
+/// is what separates the two places this is tried.
+fn fold_rewrite(
+    event: &AppliedRewrite,
+    matched: &EvpNode,
+    nodes: &[EvpNode],
+    classes: &LocalClasses,
+    before_only: bool,
+) -> Option<RegionRewrite> {
+    let operator = ingest_scalar_inst(&event.instruction).ok()?;
+    let [left_class, right_class] = matched.children.as_slice() else {
+        return None;
+    };
+    let operand_ty = scalar_operands(&event.instruction).first()?.ty.clone();
+    let sort = packed_type(&operand_ty)?;
+    let left = class_constant(nodes, classes, *left_class, &sort, before_only)?;
+    let right = class_constant(nodes, classes, *right_class, &sort, before_only)?;
+    let folded = fold_raw(operator, left, right, &operand_ty, &event.result.ty)?;
+    Some(RegionRewrite {
+        opportunity: RewriteOpportunity {
+            rule: ScalarRewrite::ConstantFold,
+            replacement: Replacement::Constant(folded),
+        },
+        rule: fold_rule(operator)?,
+        bindings: operand_bindings(),
+        right_hand_variable: None,
+        premises: Vec::new(),
+    })
+}
+
+/// The fact-driven rules of Section 11.6, decided by this region's facts.
+fn fact_rewrite(
+    event: &AppliedRewrite,
+    matched: &EvpNode,
+    classes: &LocalClasses,
+    facts: &RegionFacts,
+) -> Option<RegionRewrite> {
+    let operator = ingest_scalar_inst(&event.instruction).ok()?;
+    let fact = facts.of(classes.find(matched.owner)?, classes)?;
+    if fact.is_constant() {
+        return Some(RegionRewrite {
+            opportunity: RewriteOpportunity {
+                rule: ScalarRewrite::KnownConst,
+                replacement: Replacement::Constant(fact.value()),
+            },
+            rule: known_const_rule(operator)?,
+            bindings: operand_bindings(),
+            right_hand_variable: None,
+            premises: vec![PremiseSource::Matched],
+        });
     }
+    let [left_class, right_class] = matched.children.as_slice() else {
+        return None;
+    };
+    let left_fact = facts.of(*left_class, classes)?;
+    let right_fact = facts.of(*right_class, classes)?;
+    let operands = scalar_operands(&event.instruction);
+    let [left, right] = operands.as_slice() else {
+        return None;
+    };
+    match operator {
+        ScalarOperator::And if right_fact.covers(left_fact) => Some(cover_rewrite(
+            "p1_220_and_cover_rhs",
+            RIGHT,
+            LEFT,
+            "x",
+            left,
+        )),
+        ScalarOperator::And if left_fact.covers(right_fact) => Some(cover_rewrite(
+            "p1_221_and_cover_lhs",
+            LEFT,
+            RIGHT,
+            "x",
+            right,
+        )),
+        ScalarOperator::Or if right_fact.covers(left_fact) => Some(cover_rewrite(
+            "p1_222_or_cover_rhs",
+            RIGHT,
+            LEFT,
+            "m",
+            right,
+        )),
+        ScalarOperator::Or if left_fact.covers(right_fact) => {
+            Some(cover_rewrite("p1_223_or_cover_lhs", LEFT, RIGHT, "m", left))
+        }
+        ScalarOperator::Xor if right_fact.is_known_zero() => {
+            Some(zero_rewrite("p1_224_xor_known_zero_rhs", LEFT, RIGHT, left))
+        }
+        ScalarOperator::Xor if left_fact.is_known_zero() => Some(zero_rewrite(
+            "p1_225_xor_known_zero_lhs",
+            RIGHT,
+            LEFT,
+            right,
+        )),
+        _ => None,
+    }
+}
+
+/// One `covers` rule: `?m` at child `mask`, `?x` at child `value`, and the
+/// operand the right-hand side names.
+fn cover_rewrite(
+    rule: &'static str,
+    mask: usize,
+    value: usize,
+    right_hand_variable: &'static str,
+    result: &Value,
+) -> RegionRewrite {
+    RegionRewrite {
+        opportunity: RewriteOpportunity {
+            rule: ScalarRewrite::MaskCover,
+            replacement: Replacement::Alias(result.clone()),
+        },
+        rule,
+        bindings: vec![
+            ("m", BindingPath::child(mask)),
+            ("x", BindingPath::child(value)),
+        ],
+        right_hand_variable: Some(right_hand_variable),
+        premises: vec![PremiseSource::Variable("m"), PremiseSource::Variable("x")],
+    }
+}
+
+/// One `known_zero` rule: `?x` at child `kept`, `?z` at child `zero`.
+fn zero_rewrite(rule: &'static str, kept: usize, zero: usize, result: &Value) -> RegionRewrite {
+    RegionRewrite {
+        opportunity: RewriteOpportunity {
+            rule: ScalarRewrite::XorKnownZero,
+            replacement: Replacement::Alias(result.clone()),
+        },
+        rule,
+        bindings: vec![
+            ("x", BindingPath::child(kept)),
+            ("z", BindingPath::child(zero)),
+        ],
+        right_hand_variable: Some("x"),
+        premises: vec![PremiseSource::Variable("z")],
+    }
+}
+
+fn operand_bindings() -> Vec<(&'static str, BindingPath)> {
+    vec![
+        ("a", BindingPath::child(LEFT)),
+        ("b", BindingPath::child(RIGHT)),
+    ]
+}
+
+fn fold_rule(operator: ScalarOperator) -> Option<&'static str> {
+    Some(match operator {
+        ScalarOperator::Add => "p0_100_fold_add",
+        ScalarOperator::Sub => "p0_101_fold_sub",
+        ScalarOperator::Mul => "p0_102_fold_mul",
+        ScalarOperator::And => "p0_103_fold_and",
+        ScalarOperator::Or => "p0_104_fold_or",
+        ScalarOperator::Xor => "p0_105_fold_xor",
+        ScalarOperator::ICmp(CmpOp::Eq) => "p0_106_fold_icmp_eq",
+        ScalarOperator::ICmp(CmpOp::Ne) => "p0_107_fold_icmp_ne",
+        ScalarOperator::ICmp(CmpOp::SLt) => "p0_108_fold_icmp_slt",
+        ScalarOperator::ICmp(CmpOp::SLe) => "p0_109_fold_icmp_sle",
+        ScalarOperator::ICmp(CmpOp::ULt) => "p0_110_fold_icmp_ult",
+        ScalarOperator::ICmp(CmpOp::ULe) => "p0_111_fold_icmp_ule",
+        ScalarOperator::Const => return None,
+    })
+}
+
+fn known_const_rule(operator: ScalarOperator) -> Option<&'static str> {
+    Some(match operator {
+        ScalarOperator::And => "p1_200_known_and",
+        ScalarOperator::Or => "p1_201_known_or",
+        ScalarOperator::Xor => "p1_202_known_xor",
+        ScalarOperator::Add => "p1_203_known_add",
+        ScalarOperator::Sub => "p1_204_known_sub",
+        ScalarOperator::Mul => "p1_205_known_mul",
+        ScalarOperator::ICmp(CmpOp::Eq) => "p1_210_known_icmp_eq",
+        ScalarOperator::ICmp(CmpOp::Ne) => "p1_211_known_icmp_ne",
+        ScalarOperator::ICmp(CmpOp::SLt) => "p1_212_known_icmp_slt",
+        ScalarOperator::ICmp(CmpOp::SLe) => "p1_213_known_icmp_sle",
+        ScalarOperator::ICmp(CmpOp::ULt) => "p1_214_known_icmp_ult",
+        ScalarOperator::ICmp(CmpOp::ULe) => "p1_215_known_icmp_ule",
+        ScalarOperator::Const => return None,
+    })
+}
+
+/// The one constant a class holds of `sort`, if it holds exactly one.
+///
+/// A class holding two different constants is not a choice: Section 11.6 makes
+/// it invalid, so this answers `None` rather than picking.
+fn class_constant(
+    nodes: &[EvpNode],
+    classes: &LocalClasses,
+    class: u32,
+    sort: &str,
+    before_only: bool,
+) -> Option<u64> {
+    let root = classes.find(class)?;
+    let mut found: Option<u64> = None;
+    for node in nodes {
+        if node.operation != "const"
+            || node.sort != sort
+            || classes.find(node.owner) != Some(root)
+            || (before_only && node.source != EvpNodeSource::Before)
+        {
+            continue;
+        }
+        let [(name, raw)] = node.attributes.as_slice() else {
+            return None;
+        };
+        if name != "value" || found.is_some_and(|earlier| earlier != *raw) {
+            return None;
+        }
+        found = Some(*raw);
+    }
+    found
+}
+
+/// The Section 8.10 fact of every class of one region, recomputed from its
+/// nodes.
+///
+/// A class's fact is the meet of the transfers of the nodes it owns, and a meet
+/// that disagrees with itself on a known bit is an invalid union rather than a
+/// fact, so the whole region is abandoned. The producer computes this the way
+/// the checker will, from the node stream and nothing else: a premise derived
+/// from the sweep's own environment would be a claim only the producer could
+/// make.
+struct RegionFacts {
+    facts: Vec<KnownBits>,
+}
+
+impl RegionFacts {
+    fn compute(nodes: &[EvpNode], widths: &[u16], classes: &LocalClasses) -> Option<Self> {
+        let mut facts = widths
+            .iter()
+            .map(|width| KnownBits::top(*width))
+            .collect::<Vec<_>>();
+        loop {
+            let mut changed = false;
+            for node in nodes {
+                let transferred = node_transfer(node, &facts, classes)?;
+                let root = classes.find(node.owner)? as usize;
+                let merged = facts.get(root).copied()?.meet(transferred)?;
+                if merged != facts[root] {
+                    facts[root] = merged;
+                    changed = true;
+                }
+            }
+            if !changed {
+                return Some(Self { facts });
+            }
+        }
+    }
+
+    fn of(&self, class: u32, classes: &LocalClasses) -> Option<KnownBits> {
+        self.facts.get(classes.find(class)? as usize).copied()
+    }
+}
+
+/// One row of the Section 8.10 transfer table, applied to one node.
+fn node_transfer(node: &EvpNode, facts: &[KnownBits], classes: &LocalClasses) -> Option<KnownBits> {
+    let width = sort_width(&node.sort)?;
+    let child = |index: usize| -> Option<KnownBits> {
+        let class = classes.find(*node.children.get(index)?)?;
+        facts.get(class as usize).copied()
+    };
+    let fact = match node.operation.as_str() {
+        "const" => {
+            let [(name, raw)] = node.attributes.as_slice() else {
+                return None;
+            };
+            if name != "value" {
+                return None;
+            }
+            KnownBits::constant(width, *raw)
+        }
+        "and" => child(LEFT)?.transfer_and(child(RIGHT)?),
+        "or" => child(LEFT)?.transfer_or(child(RIGHT)?),
+        "xor" => child(LEFT)?.transfer_xor(child(RIGHT)?),
+        "add" => child(LEFT)?.transfer_add(child(RIGHT)?),
+        "sub" => child(LEFT)?.transfer_sub(child(RIGHT)?),
+        "mul" => child(LEFT)?.transfer_mul(child(RIGHT)?),
+        "icmp.eq" => child(LEFT)?.transfer_icmp(child(RIGHT)?, Comparison::Eq),
+        "icmp.ne" => child(LEFT)?.transfer_icmp(child(RIGHT)?, Comparison::Ne),
+        "icmp.slt" => child(LEFT)?.transfer_icmp(child(RIGHT)?, Comparison::SLt),
+        "icmp.sle" => child(LEFT)?.transfer_icmp(child(RIGHT)?, Comparison::SLe),
+        "icmp.ult" => child(LEFT)?.transfer_icmp(child(RIGHT)?, Comparison::ULt),
+        "icmp.ule" => child(LEFT)?.transfer_icmp(child(RIGHT)?, Comparison::ULe),
+        _ => return None,
+    };
+    Some(fact)
 }
 
 fn class_has_before_constant(
@@ -774,6 +1203,7 @@ fn binding_class(
 fn exact_rule(
     instruction: &Inst,
     facts: &HashMap<u32, ScalarFact>,
+    negations: &NegationEnv,
     opportunity: &RewriteOpportunity,
 ) -> Option<(&'static str, Vec<(&'static str, BindingPath)>)> {
     let x = |child: usize| vec![("x", BindingPath::child(child))];
@@ -785,39 +1215,79 @@ fn exact_rule(
     };
     match (instruction, opportunity.rule, &opportunity.replacement) {
         (Inst::Add(_, left, right), ScalarRewrite::AddZero, Replacement::Alias(value)) => {
-            if value == left { Some(("p0_001_add_zero_rhs", x(LEFT))) }
-            else if value == right { Some(("p0_002_add_zero_lhs", x(RIGHT))) } else { None }
+            if value == left {
+                Some(("p0_001_add_zero_rhs", x(LEFT)))
+            } else if value == right {
+                Some(("p0_002_add_zero_lhs", x(RIGHT)))
+            } else {
+                None
+            }
         }
         (Inst::Mul(_, left, right), ScalarRewrite::MulOne, Replacement::Alias(value)) => {
-            if value == left { Some(("p0_003_mul_one_rhs", x(LEFT))) }
-            else if value == right { Some(("p0_004_mul_one_lhs", x(RIGHT))) } else { None }
+            if value == left {
+                Some(("p0_003_mul_one_rhs", x(LEFT)))
+            } else if value == right {
+                Some(("p0_004_mul_one_lhs", x(RIGHT)))
+            } else {
+                None
+            }
         }
         (Inst::And(_, left, right), ScalarRewrite::AndZero, Replacement::Constant(0)) => {
-            if is_constant(right, facts, 0) { Some(("p0_005_and_zero_rhs", x(LEFT))) }
-            else if is_constant(left, facts, 0) { Some(("p0_006_and_zero_lhs", x(RIGHT))) } else { None }
+            if is_constant(right, facts, 0) {
+                Some(("p0_005_and_zero_rhs", x(LEFT)))
+            } else if is_constant(left, facts, 0) {
+                Some(("p0_006_and_zero_lhs", x(RIGHT)))
+            } else {
+                None
+            }
         }
         (Inst::Or(_, left, right), ScalarRewrite::OrZero, Replacement::Alias(value)) => {
-            if value == left { Some(("p0_007_or_zero_rhs", x(LEFT))) }
-            else if value == right { Some(("p0_008_or_zero_lhs", x(RIGHT))) } else { None }
+            if value == left {
+                Some(("p0_007_or_zero_rhs", x(LEFT)))
+            } else if value == right {
+                Some(("p0_008_or_zero_lhs", x(RIGHT)))
+            } else {
+                None
+            }
         }
         (Inst::Sub(_, _, right), ScalarRewrite::DoubleNegation, Replacement::Alias(value)) => {
-            matches!(facts.get(&right.id), Some(ScalarFact::Negation { operand }) if operand == value)
-                .then(|| ("p0_009_double_neg", vec![("x", BindingPath::nested(RIGHT, "sub", RIGHT))]))
+            negations
+                .get(&right.id)
+                .is_some_and(|operand| operand == value)
+                .then(|| {
+                    (
+                        "p0_009_double_neg",
+                        vec![("x", BindingPath::nested(RIGHT, "sub", RIGHT))],
+                    )
+                })
         }
-        (Inst::ICmp(_, comparison, left, right), ScalarRewrite::IdentityComparison, Replacement::Constant(_)) if left == right => {
-            Some((match comparison {
-                CmpOp::Eq => "p0_010_icmp_eq_self", CmpOp::Ne => "p0_011_icmp_ne_self",
-                CmpOp::SLt => "p0_012_icmp_slt_self", CmpOp::SLe => "p0_013_icmp_sle_self",
-                CmpOp::ULt => "p0_014_icmp_ult_self", CmpOp::ULe => "p0_015_icmp_ule_self",
-            }, x(LEFT)))
-        }
+        (
+            Inst::ICmp(_, comparison, left, right),
+            ScalarRewrite::IdentityComparison,
+            Replacement::Constant(_),
+        ) if left == right => Some((
+            match comparison {
+                CmpOp::Eq => "p0_010_icmp_eq_self",
+                CmpOp::Ne => "p0_011_icmp_ne_self",
+                CmpOp::SLt => "p0_012_icmp_slt_self",
+                CmpOp::SLe => "p0_013_icmp_sle_self",
+                CmpOp::ULt => "p0_014_icmp_ult_self",
+                CmpOp::ULe => "p0_015_icmp_ule_self",
+            },
+            x(LEFT),
+        )),
         (instruction, ScalarRewrite::ConstantFold, Replacement::Constant(_)) => {
             let operands = scalar_operands(instruction);
-            let [_left, _right] = operands.as_slice() else { return None; };
+            let [_left, _right] = operands.as_slice() else {
+                return None;
+            };
             let rule = match instruction {
-                Inst::Add(..) => "p0_100_fold_add", Inst::Sub(..) => "p0_101_fold_sub",
-                Inst::Mul(..) => "p0_102_fold_mul", Inst::And(..) => "p0_103_fold_and",
-                Inst::Or(..) => "p0_104_fold_or", Inst::Xor(..) => "p0_105_fold_xor",
+                Inst::Add(..) => "p0_100_fold_add",
+                Inst::Sub(..) => "p0_101_fold_sub",
+                Inst::Mul(..) => "p0_102_fold_mul",
+                Inst::And(..) => "p0_103_fold_and",
+                Inst::Or(..) => "p0_104_fold_or",
+                Inst::Xor(..) => "p0_105_fold_xor",
                 Inst::ICmp(_, CmpOp::Eq, ..) => "p0_106_fold_icmp_eq",
                 Inst::ICmp(_, CmpOp::Ne, ..) => "p0_107_fold_icmp_ne",
                 Inst::ICmp(_, CmpOp::SLt, ..) => "p0_108_fold_icmp_slt",
@@ -1181,6 +1651,16 @@ fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
             values
         }
     }
+}
+
+/// The width a packed `bits<N>` sort names.
+fn sort_width(sort: &str) -> Option<u16> {
+    let width = sort
+        .strip_prefix("bits<")?
+        .strip_suffix('>')?
+        .parse()
+        .ok()?;
+    (1..=64).contains(&width).then_some(width)
 }
 
 fn packed_type(ty: &EvoIRType) -> Option<String> {

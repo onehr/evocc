@@ -471,7 +471,7 @@ pub fn optimize_scalar_module_certified_persistent(
     budget: ScalarEqBudget,
 ) -> CertifiedScalarEqOutcome {
     let transaction = optimize_scalar_module_with_evp1_transaction(module, budget);
-    let mut outcome = transaction.outcome;
+    let outcome = transaction.outcome;
     if outcome.report.fell_back {
         return outcome;
     }
@@ -511,9 +511,6 @@ pub fn optimize_scalar_module_certified_persistent(
         staged.revision = staged.revision.saturating_add(1);
         *state = staged;
     }
-    outcome.report.proof_authority = ProofAuthority::Reviewed {
-        registry: REVIEWED_REGISTRY,
-    };
     outcome
 }
 
@@ -581,9 +578,6 @@ pub fn optimize_scalar_module_persistent(
         staged.revision = staged.revision.saturating_add(1);
         *state = staged;
     }
-    outcome.report.proof_authority = ProofAuthority::Reviewed {
-        registry: REVIEWED_REGISTRY,
-    };
     outcome
 }
 

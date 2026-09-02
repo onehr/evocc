@@ -199,22 +199,37 @@ fn a_known_zero_product_folds_through_its_fact() {
     assert_fully_known(&only_rewrite(&module), "p1_205_known_mul", WIDTH, 0);
 }
 
-/// `and(?x, ?p)` where `?p`'s class holds only a constant this transaction
-/// derived. Section 11.6 lets a left-hand `const_like` match a before-witness
-/// constant only, so `p0_005` cannot state this and the fact rule must.
-#[test]
-fn an_and_with_a_derived_zero_folds_through_its_fact() {
-    let zero = bits(4);
-    let product = bits(5);
-    let masked = bits(6);
-    let module = probe(
+/// Two values with complementary known-zero nibbles.
+///
+/// `and(%x, 0x0f)` knows bits four to seven zero and `and(%y, 0xf0)` knows bits
+/// zero to three zero, so their conjunction is known zero on every bit while no
+/// class in sight holds a constant of its own. It is the shape in which the
+/// analysis derives a constant the before witness closure does not contain, and
+/// every case below that needs such a constant starts from it.
+fn complementary_masks() -> (Vec<Inst>, Value) {
+    let low_mask = bits(4);
+    let high_mask = bits(5);
+    let low = bits(6);
+    let high = bits(7);
+    let product = bits(8);
+    (
         vec![
-            Inst::Const(zero.clone(), 0),
-            Inst::Mul(product.clone(), bits(0), zero),
-            Inst::And(masked.clone(), bits(1), product),
+            Inst::Const(low_mask.clone(), 0x0f),
+            Inst::Const(high_mask.clone(), 0xf0),
+            Inst::And(low.clone(), bits(0), low_mask),
+            Inst::And(high.clone(), bits(1), high_mask),
+            Inst::And(product.clone(), low, high),
         ],
-        masked,
-    );
+        product,
+    )
+}
+
+/// `and(?a, ?b)` where each operand knows the bits the other leaves unknown to
+/// be zero. Nothing here is a constant, and the conjunction is still known.
+#[test]
+fn an_and_of_complementary_masks_folds_through_its_fact() {
+    let (insts, product) = complementary_masks();
+    let module = probe(insts, product);
     assert_fully_known(&only_rewrite(&module), "p1_200_known_and", WIDTH, 0);
 }
 
@@ -234,62 +249,47 @@ fn an_or_with_all_ones_folds_through_its_fact() {
 }
 
 /// `xor`, `add` and `sub` are fully known only when both operands are, so each
-/// case pairs a before-witness constant with a class whose constant this
-/// transaction derived. `all_const` still holds there, and the producer prefers
-/// the premise-free fold whenever every operand class carries a before-witness
+/// case pairs a before-witness constant with a class whose constant only the
+/// analysis produced. `all_const` holds there too, and the producer states the
+/// premise-free fold whenever every operand class carries a before-witness
 /// constant; here one does not.
+fn against_a_derived_constant(build: fn(Value, Value, Value) -> Inst) -> EvpRewrite {
+    let (mut insts, product) = complementary_masks();
+    let five = bits(9);
+    let result = bits(10);
+    insts.push(Inst::Const(five.clone(), 5));
+    insts.push(build(result.clone(), product, five));
+    only_rewrite(&probe(insts, result))
+}
+
 #[test]
 fn a_xor_of_a_derived_constant_folds_through_its_fact() {
-    let zero = bits(4);
-    let product = bits(5);
-    let five = bits(6);
-    let result = bits(7);
-    let module = probe(
-        vec![
-            Inst::Const(zero.clone(), 0),
-            Inst::Mul(product.clone(), bits(0), zero),
-            Inst::Const(five.clone(), 5),
-            Inst::Xor(result.clone(), product, five),
-        ],
-        result,
+    assert_fully_known(
+        &against_a_derived_constant(Inst::Xor),
+        "p1_202_known_xor",
+        WIDTH,
+        5,
     );
-    assert_fully_known(&only_rewrite(&module), "p1_202_known_xor", WIDTH, 5);
 }
 
 #[test]
 fn an_add_of_a_derived_constant_folds_through_its_fact() {
-    let zero = bits(4);
-    let product = bits(5);
-    let five = bits(6);
-    let result = bits(7);
-    let module = probe(
-        vec![
-            Inst::Const(zero.clone(), 0),
-            Inst::Mul(product.clone(), bits(0), zero),
-            Inst::Const(five.clone(), 5),
-            Inst::Add(result.clone(), product, five),
-        ],
-        result,
+    assert_fully_known(
+        &against_a_derived_constant(Inst::Add),
+        "p1_203_known_add",
+        WIDTH,
+        5,
     );
-    assert_fully_known(&only_rewrite(&module), "p1_203_known_add", WIDTH, 5);
 }
 
 #[test]
 fn a_sub_of_a_derived_constant_folds_through_its_fact() {
-    let zero = bits(4);
-    let product = bits(5);
-    let five = bits(6);
-    let result = bits(7);
-    let module = probe(
-        vec![
-            Inst::Const(zero.clone(), 0),
-            Inst::Mul(product.clone(), bits(0), zero),
-            Inst::Const(five.clone(), 5),
-            Inst::Sub(result.clone(), five, product),
-        ],
-        result,
+    assert_fully_known(
+        &against_a_derived_constant(|result, product, five| Inst::Sub(result, five, product)),
+        "p1_204_known_sub",
+        WIDTH,
+        5,
     );
-    assert_fully_known(&only_rewrite(&module), "p1_204_known_sub", WIDTH, 5);
 }
 
 // -- fully_known over the comparisons ---------------------------------------

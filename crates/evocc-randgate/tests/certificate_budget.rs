@@ -181,13 +181,11 @@ fn the_producer_emits_evp2_with_a_budget_line_and_epoch_markers() {
         "an evp2 certificate carries epoch markers:\n{}",
         case.proof
     );
-    // `mul(%sum, 3)` reads a constant this transaction derived, so the rule it
-    // instantiates is the fact-driven one and carries its premise. The budget
-    // line is unaffected: a premise is a claim about a class, not about the
-    // scheduler's box.
+    // Every rule this module instantiates is a canonical reduction or a fold,
+    // and neither reads a fact, so the budget line is the only record here.
     assert!(
-        case.proof.contains(" premises "),
-        "a fact-driven rewrite records its premise:\n{}",
+        !case.proof.contains(" premises "),
+        "a rule that reads no fact records none:\n{}",
         case.proof
     );
 

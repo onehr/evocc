@@ -757,9 +757,11 @@ fn the_campaign_reaches_the_registry_rules_it_baits() {
         fired.iter().cloned().collect::<Vec<_>>().join(",")
     );
 
-    // The complete reviewed registry, not a subset: every rule's binding is
+    // The complete earlier registry, every rule of it: each rule's binding is
     // resolved by the same path mechanism, and a rule that stopped firing would
-    // silently take its path out of the campaign.
+    // silently take its path out of the campaign. The rules the revision adds
+    // have their own assertion below, so this one is a containment rather than
+    // an equality.
     let registry = [
         "p0_001_add_zero_rhs",
         "p0_002_add_zero_lhs",
@@ -792,7 +794,12 @@ fn the_campaign_reaches_the_registry_rules_it_baits() {
     .into_iter()
     .map(str::to_owned)
     .collect::<BTreeSet<_>>();
-    assert_eq!(fired, registry, "the rules the campaign reaches changed");
+    let missing = registry.difference(&fired).cloned().collect::<Vec<_>>();
+    assert!(
+        missing.is_empty(),
+        "the campaign stopped reaching {}",
+        missing.join(",")
+    );
 }
 
 /// The stop reason a transaction records must be the one its own scheduler
