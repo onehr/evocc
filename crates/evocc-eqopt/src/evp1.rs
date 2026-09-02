@@ -75,7 +75,7 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
     let mut accepted = Vec::new();
     let mut events = Vec::new();
     let mut proof_nodes = 0_usize;
-    for (function_index, function) in module.functions.iter().enumerate() {
+    'admit: for (function_index, function) in module.functions.iter().enumerate() {
         for (block_index, block) in function.blocks.iter().enumerate() {
             for (instruction_index, instruction) in block.insts.iter().enumerate() {
                 let Some(root_event) = applied.iter().find(|event| {
@@ -105,9 +105,12 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
                 if regions.len() >= budget.max_epochs
                     || proof_nodes.saturating_add(new_nodes) > budget.max_nodes
                 {
+                    // Section 11.3: hitting any ceiling keeps every region
+                    // admitted before the stop. Answering exhaustion with a
+                    // zero-region certificate is non-conforming, because it
+                    // discards work a checker would have verified.
                     report.budget_exhausted = true;
-                    report.fell_back = true;
-                    return zero_transaction(module, input, report);
+                    break 'admit;
                 }
                 proof_nodes += new_nodes;
                 accepted.push(Accepted {
@@ -152,7 +155,7 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
                 registry_name: REGISTRY_NAME.to_owned(),
                 registry_digest: REGISTRY_SHA256.to_owned(),
                 input_digest: sha256_hex(input.as_bytes()),
-                budget: Some(scheduler_record(&regions)),
+                budget: Some(scheduler_record(&regions, report.budget_exhausted)),
                 regions,
                 output_digest: sha256_hex(output_text.as_bytes()),
             },
@@ -169,7 +172,7 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
 /// began: the tightest declaration that still bounds every region's per-rule
 /// allowance. Section 11.3 permits overstating it, and understating it is what
 /// a checker would catch.
-fn scheduler_record(regions: &[EvpRegion]) -> EvpBudget {
+fn scheduler_record(regions: &[EvpRegion], exhausted: bool) -> EvpBudget {
     let mut nodes = 0_u64;
     let mut widest = 0_u64;
     let mut epochs = 0_u64;
@@ -213,15 +216,20 @@ fn scheduler_record(regions: &[EvpRegion]) -> EvpBudget {
             bound: FUEL_FLOOR.max(widest.saturating_mul(8)),
         },
         n: widest,
-        // Measured, not assumed: a fresh transaction over this producer's own
-        // output still admits a region for 1 of the standing campaign's 1000
-        // programs, so a transaction is not a fixpoint and `saturated` would be
-        // a false claim. The stop is this producer's own rule, and `policy` is
-        // the reason for exactly that. Section 11.6 is why the residual is out
-        // of reach: a left-hand `const_like` matches only a node already in the
-        // before witness closure, so an identity rule can never consume a
-        // constant an earlier epoch derived, however many epochs run.
-        stop: EvpStop::Policy,
+        // Section 8.11 as restored at revision 1.9.38: `saturated` means no
+        // rule fired in the last epoch, which is why the sweep ended, and says
+        // nothing about a fresh transaction over the output. That a fresh one
+        // may still admit *residual regions* is a property of the registry --
+        // Section 11.6 lets a left-hand `const_like` match only a constant
+        // already in the before witness closure -- and is measured beside the
+        // campaign rather than recorded here. A stop at this producer's own
+        // budget is neither saturation nor a profile ceiling, and `policy` is
+        // the reason for exactly that.
+        stop: if exhausted {
+            EvpStop::Policy
+        } else {
+            EvpStop::Saturated
+        },
     }
 }
 
@@ -247,7 +255,7 @@ fn zero(module: &Module, input: String, mut report: ScalarEqReport) -> Certified
             registry_name: REGISTRY_NAME.to_owned(),
             registry_digest: REGISTRY_SHA256.to_owned(),
             input_digest: sha256_hex(input.as_bytes()),
-            budget: Some(scheduler_record(&[])),
+            budget: Some(scheduler_record(&[], report.budget_exhausted)),
             regions: Vec::new(),
             output_digest: sha256_hex(input.as_bytes()),
         },

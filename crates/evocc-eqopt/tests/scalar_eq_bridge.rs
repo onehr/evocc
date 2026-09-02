@@ -162,7 +162,7 @@ fn p0_rewrites_extract_cheaper_evoir_and_every_merge_replays_independently() {
 }
 
 #[test]
-fn explicit_budget_exhaustion_returns_the_original_module() {
+fn a_budget_reached_before_the_first_rewrite_changes_nothing() {
     let input = module(
         vec![
             Inst::Const(bits(1), 0),
@@ -174,7 +174,11 @@ fn explicit_budget_exhaustion_returns_the_original_module() {
     let outcome = optimize_scalar_module(&input, ScalarEqBudget::new(1, 1));
     assert_eq!(outcome.module, input);
     assert!(outcome.report.budget_exhausted);
-    assert!(outcome.report.fell_back);
+    // The stop lands before the only candidate, so nothing was admitted and
+    // nothing is discarded. Section 8.11 makes a ceiling a successful stop that
+    // keeps what it had; falling back would throw away work a checker would
+    // have verified, so the sweep no longer reports one.
+    assert!(!outcome.report.fell_back);
     assert_eq!(outcome.report.merges, 0);
     assert!(outcome.report.receipts.is_empty());
 }

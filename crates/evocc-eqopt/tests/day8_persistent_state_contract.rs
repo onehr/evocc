@@ -147,7 +147,11 @@ fn main() {
         &mut fallback,
         ScalarEqBudget::new(0, 0),
     );
-    assert!(outcome.report.fell_back);
+    // Section 11.3, revision 1.9.38: a ceiling stop keeps every region admitted
+    // before it. This budget stops before the first one, so nothing is kept and
+    // nothing is discarded; the transaction did not fall back.
+    assert!(outcome.report.budget_exhausted);
+    assert!(!outcome.report.fell_back);
     assert_eq!(outcome.module, input);
     assert!(outcome.certificate.regions.is_empty());
     assert_eq!(

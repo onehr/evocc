@@ -164,6 +164,10 @@ pub enum Verdict {
         regions: usize,
         certificates_replayed: usize,
         optimizer_budget_exhausted: bool,
+        /// Regions a fresh transaction over the optimized module still admits.
+        /// Section 11.3 calls these a quality metric of the registry rather
+        /// than a defect, so they are counted and never refused.
+        residual_regions: usize,
     },
     /// The input program was undefined; the specification's equality is modulo
     /// undefined behaviour, so nothing is compared.
@@ -256,6 +260,7 @@ struct Trial {
     after_text: String,
     proof_text: String,
     regions: usize,
+    residual_regions: usize,
     optimizer_budget_exhausted: bool,
     /// Set when either interpretation stopped on fuel. Section 10.4 makes that
     /// stop a limit of the host rather than a property of the program, so it is
@@ -283,6 +288,7 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
                 after_text: String::new(),
                 proof_text: String::new(),
                 regions: 0,
+                residual_regions: 0,
                 optimizer_budget_exhausted: false,
                 fuel_exhausted: code == FUEL_EXHAUSTED,
                 input_undefined: Some(code),
@@ -299,6 +305,10 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
         after_text,
         proof_text,
         regions: outcome.certificate.regions.len(),
+        residual_regions: optimize_scalar_module_with_evp1(&outcome.module, budget.scalar)
+            .certificate
+            .regions
+            .len(),
         optimizer_budget_exhausted: outcome.report.budget_exhausted,
         fuel_exhausted: false,
         input_undefined: None,
@@ -392,6 +402,7 @@ pub fn run_seed(
             regions: trial.regions,
             certificates_replayed: 1,
             optimizer_budget_exhausted: trial.optimizer_budget_exhausted,
+            residual_regions: trial.residual_regions,
         };
     };
 

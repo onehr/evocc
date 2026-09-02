@@ -115,11 +115,16 @@ fn producer_emits_canonical_reviewed_multi_region_evp1() {
 }
 
 #[test]
-fn certified_budget_exhaustion_is_a_valid_zero_region_fallback() {
+fn a_budget_reached_before_anything_was_admitted_yields_no_region() {
     let before = input();
     let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::new(0, 0));
     assert_eq!(outcome.module, before);
-    assert!(outcome.report.fell_back);
+    assert!(outcome.report.budget_exhausted);
+    // Section 11.3, revision 1.9.38: a ceiling stop keeps every region admitted
+    // before it. This budget stops before the first one, so there is nothing to
+    // keep and the certificate claims no region -- which is a different thing
+    // from falling back and discarding what had been admitted.
+    assert!(!outcome.report.fell_back);
     assert!(outcome.certificate.regions.is_empty());
     assert_eq!(
         outcome.certificate.input_digest,

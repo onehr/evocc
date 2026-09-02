@@ -339,6 +339,11 @@ pub(crate) fn optimize_scalar_module_with_events(
     let mut optimized = module.clone();
     let mut report = ScalarEqReport::default();
     let mut applied = Vec::new();
+    // Section 8.11: hitting a ceiling is a successful stop. Once it is reached
+    // the sweep stops admitting and copies the rest of the module through
+    // unchanged, so everything already admitted survives; discarding it would
+    // throw away work a checker would have verified.
+    let mut stopped = false;
 
     for function in &mut optimized.functions {
         for block in &mut function.blocks {
@@ -348,6 +353,10 @@ pub(crate) fn optimize_scalar_module_with_events(
             for original_inst in &block.insts {
                 let mut inst = original_inst.clone();
                 remap_inst_uses(&mut inst, &aliases);
+                if stopped {
+                    rewritten.push(inst);
+                    continue;
+                }
                 if matches!(ingest_scalar_inst(&inst), Ok(ScalarOperator::Const)) {
                     record_fact(&inst, &mut facts);
                     rewritten.push(inst);
@@ -365,17 +374,9 @@ pub(crate) fn optimize_scalar_module_with_events(
                     || (opportunity.is_some() && report.epochs >= budget.max_epochs)
                 {
                     report.budget_exhausted = true;
-                    report.fell_back = true;
-                    report.receipts.clear();
-                    report.merges = 0;
-                    report.optimized_values = 0;
-                    return (
-                        ScalarEqOutcome {
-                            module: original,
-                            report,
-                        },
-                        Vec::new(),
-                    );
+                    stopped = true;
+                    rewritten.push(inst);
+                    continue;
                 }
                 let Some(receipt) = bridge.receipt else {
                     record_fact(&inst, &mut facts);

@@ -23,6 +23,13 @@ pub struct CampaignReport {
     pub compared: u64,
     pub optimized: u64,
     pub regions: u64,
+    /// Regions a fresh transaction over an optimized module still admits, and
+    /// the programs that have any. Section 11.3 names these a measured quality
+    /// metric of the registry: Section 11.6 lets a left-hand `const_like` match
+    /// only a constant already in the before witness closure, so a constant an
+    /// earlier transaction derived becomes matchable only in the next one.
+    pub residual_regions: u64,
+    pub residual_programs: u64,
     pub certificates_replayed: u64,
     pub mismatched: u64,
     pub mismatches: Vec<Mismatch>,
@@ -67,6 +74,8 @@ impl CampaignReport {
         let _ = writeln!(text, "compared={}", self.compared);
         let _ = writeln!(text, "optimized={}", self.optimized);
         let _ = writeln!(text, "regions={}", self.regions);
+        let _ = writeln!(text, "residualRegions={}", self.residual_regions);
+        let _ = writeln!(text, "residualPrograms={}", self.residual_programs);
         let _ = writeln!(text, "certificatesReplayed={}", self.certificates_replayed);
         let _ = writeln!(text, "mismatched={}", self.mismatched);
         let _ = writeln!(text, "mismatchedSeeds={seeds}");
@@ -99,9 +108,14 @@ pub fn run_campaign(
                 regions,
                 certificates_replayed,
                 optimizer_budget_exhausted,
+                residual_regions,
             } => {
                 report.compared += 1;
                 report.regions += regions as u64;
+                report.residual_regions += residual_regions as u64;
+                if residual_regions != 0 {
+                    report.residual_programs += 1;
+                }
                 report.certificates_replayed += certificates_replayed as u64;
                 if regions > 0 {
                     report.optimized += 1;
