@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.31** | **Authoritative reference** | **2026-09-01**
+**Revision 1.9.32** | **Authoritative reference** | **2026-09-02**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -3498,6 +3498,37 @@ and a file-scope `int probe[n];` were all accepted silently, and only an
 initializer made the bound reachable, so no `sizeof` of such a type meant
 anything.
 
+#### 10.1.20 Source locations
+
+Every token the preprocessor hands to the parser carries two spans. Its
+spelling span is the range of the characters that spell it, in the file where
+they were written; for a token produced by macro expansion that is the
+replacement list or the argument that spelled it. Its expansion span is the
+range, in the file the preprocessor was reading when the token was produced,
+of the outermost macro invocation that produced it, from the macro name
+through the closing parenthesis of its arguments; a token that no expansion
+produced has an expansion span equal to its spelling span. Tokens from an
+included or `-include`d file carry that file's identity in both spans.
+
+The parser composes node spans from expansion spans only. A composite node's
+span is the expansion span of its first token, extended to the end of the
+expansion span of its last token when both lie in the same file and the last
+does not precede the first; otherwise it is the expansion span of the first
+token alone. Composition is total: it never fails and never yields a span
+whose end precedes its start. A span is a range in exactly one file; nothing
+indexes a file buffer with a span from another file, and the parser never
+obtains a token's text by slicing a source buffer: it uses the token's own
+spelling. Diagnostics report the expansion span (the use site) and may add the
+spelling span as a note.
+
+Measured defect at revision 1.9.31: the parser merged spelling spans and
+sliced the main file's buffer with spans that named headers. The
+full-configuration survey (run `20260902T023241Z-87371`) recorded 2,768 of
+2,832 units panicking at those two places, and the three-line file
+`#define TAG s` / `struct s { int x; };` / `struct TAG v;` reproduces the
+first. The sixteen cohort units had parsed clean only because their parse
+lanes consume oracle-preprocessed text, where every span lies in one file.
+
 #### 10.1.18 C11 declaration forms
 
 The front end accepts the complete C11 declaration grammar, not the subset the
@@ -3658,6 +3689,45 @@ argument form are `E0107` (`pragma-pack-unsupported`). A poisoned identifier
 used later is `E0108` (`poisoned-identifier-used`) at the use.
 Any other pragma is ignored-safe; the acceptance receipt lists the ignored
 pragma names it met.
+
+**Whitespace flag and stringization.** Every pp-token carries one flag:
+preceded by white space. A token spelled in a file has the flag when white
+space, a comment, or a line break inside a macro argument separates it from
+the previous token. A token produced by macro expansion keeps the flag its
+spelling had in the replacement list or argument, except that the first token
+of an expansion takes the flag of the macro name that began the invocation;
+when an expansion produces no tokens, the token that follows the invocation
+takes the flag if the macro name had it. Stringization (`#`) writes the
+spellings of the argument's tokens with exactly one space before each token
+whose flag is set, dropping leading and trailing white space. Measured
+(evidence `p15.out`, both oracles): with `A` = `a`, `B` = `b`, `E` empty and
+`F(x)` = `x`, `__stringify(A/B)` is `"a/b"`, `__stringify(A / B)` is
+`"a / b"`, `__stringify(A E B)` is `"a b"`, `__stringify(A E/B)` is `"a /b"`,
+`__stringify(F(A)B)` is `"ab"`, `__stringify(F( A )/B)` is `"a/b"`, and the
+kernel's `define_trace.h` computed include
+`__stringify(TRACE_INCLUDE_PATH/system.h)` is `"./trace_arm.h"`. The same
+flag decides the spelling of `-E` output; that output is a convenience, not
+an acceptance surface, because the parser and the survey consume the token
+stream. Measured defect at revision 1.9.31: a space was written before every
+expanded token, so the computed include named `. / trace_arm .h` and 56
+units of the full configuration failed with `E0105`.
+
+**Rescanning.** After a macro's replacement list has its arguments
+substituted, it is rescanned for further macro names together with the
+tokens that follow it in the sequence it was expanded in: the rest of the
+source file, the rest of the enclosing replacement list, or the rest of the
+enclosing argument. A function-like macro name that ends an expansion is
+invoked when the next token of that outer sequence is `(`, across line
+breaks. The name of the macro being replaced is not expanded during its own
+rescan (C11 6.10.3.4). Measured (evidence `p16.out`, both oracles): with
+`smp()` = `Z` and `G` = `smp`, `G()` is `Z`; `G` followed by `()` on the next
+line is `Z`; `H(1)()` with `H(x)` = `x smp` is `1 Z`; `K(G)()` with `K(x)` =
+`x` is `Z`. The kernel relies on this in `linux/atomic.h`, where
+`__atomic_acquire_fence` is defined as `smp_mb__after_atomic` and invoked as
+`__atomic_acquire_fence()`. Measured defect at revision 1.9.31: rescanning
+stopped at the end of the replacement list, leaving `smp_mb__after_atomic()`
+unexpanded in every unit that includes `linux/atomic.h`; the parse then
+reports `E2001`.
 
 Diagnostics of this section are front-end (preprocessor) diagnostics: `E0102`
 `unmatched-conditional`, `E0104` `error-directive`, `E0105`
@@ -4161,6 +4231,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.32 | 2026-09-02 | Defines source locations: spelling and expansion spans, total span composition from expansion spans, no buffer slicing (10.1.20); defines the whitespace flag, stringization spacing, and rescanning into the outer token sequence (10.4). Three measured defects behind the full-configuration survey's 2,768 panics and 56 `E0105` units. Measured. |
 | 1.9.31 | 2026-09-01 | Admits the `__typeof` spelling; states that a statement expression inside a `typeof` operand scopes every declaration it makes, including ones with linkage, after an `extern` declared there escaped and made a later compatible declaration a redefinition; defines the redeclaration rule and `E2002`, which had been emitted without a definition. Measured. |
 | 1.9.30 | 2026-09-01 | Makes explicit in 10.1.18 that a declarator list may declare several functions and that `typeof` of a dereferenced function pointer names a function type; both were already implied and both were refused by the implementation, the first by a deliberate restriction the kernel turned out to need. |
 | 1.9.29 | 2026-09-01 | Rules the five gaps the wide-enum window named: character pointers of differing signedness convert implicitly (both oracles warn only); `__builtin_frame_address` accepted and fail-closed (`E3031`); signed shifts in constant expressions wrap in the operand width as both oracles do, so `1 << 31` is an enumerator; `void *` difference typed and fail-closed in lowering (`E3032`); 128-bit values accepted throughout the front end and fail-closed in execution (`E3033`). All measured. |

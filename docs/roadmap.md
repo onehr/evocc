@@ -1502,7 +1502,7 @@ second executor exists; with one executor, run them in the listed order.
 ```text
                  F: front end            B: backend               K: kernel lab
 F1 parse cohort 16/16 [CLOSED 2026-09-02, run 20260901T185119Z-83939] ──┐         B1 EvoMIR + RA            K1 flight lab (VM, Kbuild, QEMU, initramfs)
-F2 preprocess 16/16 ────┤         B2 Mac scalar ABI              │
+F2 preprocess 16/16 (no diagnostics; fidelity measured by F3) ┤         B2 Mac scalar ABI              │
                         │         B3 spills, globals, fnptr      │
                         │         B4 aggregates, varargs         │
                         │         B5 MAC FLIGHT GATE (Csmith)    │
