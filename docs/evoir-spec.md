@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.37** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.38** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -4174,7 +4174,7 @@ re-derived: a producer that overstates it only widens a box the checker
 still holds it to. `saturated` and `no-new-best` are not verified; they would
 require re-running the scheduler and are telemetry. Defined at revision
 1.9.36 after the randomized gate stopped on the two readings of an unordered
-`a/b` and of a single fuel integer with no bound. A producer that stops by a rule of its own, neither at a profile ceiling nor at saturation, records `stop=policy`; it is telemetry like `saturated` and `no-new-best`, and recording `saturated` for a transaction that did not reach a fixpoint is a false claim even though the checker cannot detect it. An `evp2` header without a budget line, or an `evp1` header with one or with epoch markers, is malformed (status 2).
+`a/b` and of a single fuel integer with no bound. A producer that stops by a rule of its own, neither at a profile ceiling nor at saturation, records `stop=policy`; it is telemetry like `saturated` and `no-new-best`. `saturated` has exactly the meaning of 8.11: no rule fired in the transaction's last epoch. It says nothing about a fresh transaction over the output, which may admit regions because 11.6 lets a left-hand `const_like` match only a constant present in the before witness closure, never one an earlier epoch derived; such *residual regions* are a measured quality metric of the registry, not a false record (revision 1.9.37 conflated the two; corrected at 1.9.38 after the executor produced the distinguishing input, seed 1592591027). For a certificate covering several regions, `n` is the largest starting node count among them. With P0 regions the fuel bound's floor of 256 is not reachable, so `stop=fuel` is reserved for a profile with larger regions; the grammar keeps it. Hitting any ceiling keeps every region admitted before the stop (8.11): a producer that answers its own budget exhaustion with a zero-region certificate is non-conforming, because it discards work the checker would have verified. An `evp2` header without a budget line, or an `evp1` header with one or with epoch markers, is malformed (status 2).
 
 **Zero regions.** Any compilation that accepts no rewrite produces a certificate
 with a header and an `output` line and no region blocks, whether or not eligible
@@ -4437,6 +4437,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.38 | 2026-09-03 | Bounded scheduler measured (722 of 977 optimized programs run more than one epoch). Corrects `saturated` to the 8.11 meaning, names residual regions as a registry metric, selects the largest region's count as the certificate's `n`, reserves `stop=fuel`, and requires admitted regions to survive a ceiling stop (11.3). |
 | 1.9.37 | 2026-09-03 | evp2 produced and verified across 21,000 programs. Epoch markers are numbered from 1; `evp2` requires its budget line and `evp1` forbids it; adds the `policy` stop reason for a producer's own stop rule so that `saturated` is never claimed without a fixpoint (11.3). |
 | 1.9.36 | 2026-09-03 | Second randomized campaign on extended shapes (21,000 programs, 0 mismatches, one producer refusal fixed: alias right-hand sides come from the binding). Fixes the `budget` line: every quantity is consumed/bound, `fuel` carries its bound and the `n` it derives from, and the checker verifies the profile constants and the fuel derivation (11.3). |
 | 1.9.35 | 2026-09-02 | First randomized semantic gate campaign (21,000 programs, 0 semantic mismatches, 12 certificate refusals). Allocates `E3008` `interpreter-fuel-exhausted` as a host-resource stop (6.3, 10.4); defines what a certificate with no region claims and how the checker verifies it; states that rewrite bindings are recomputed from the recorded node children (11.3). The `evp1` versions paragraph already answers the scheduler-record question: budget and epoch lines belong to `evp2`. |
