@@ -492,6 +492,14 @@ fn the_gate_finds_no_mismatch_in_one_thousand_random_programs() {
         report.optimized
     );
     assert!(report.regions > 0);
+    // Residual regions are a quality metric of the registry rather than a
+    // failure (11.3), so the campaign counts them and says so instead of
+    // leaving a reader to rerun the optimizer to find out.
+    assert!(
+        report.render().contains("residualRegions="),
+        "the measurement table must carry the residual count:\n{}",
+        report.render()
+    );
 }
 
 #[test]
@@ -654,54 +662,45 @@ fn the_campaign_reaches_the_registry_rules_it_baits() {
     assert_eq!(fired, registry, "the rules the campaign reaches changed");
 }
 
-/// The stop reason a transaction records must be the one it earned.
+/// The stop reason a transaction records must be the one its own scheduler
+/// earned.
 ///
-/// `saturated` asserts a fixpoint, and a transaction is a fixpoint only if a
-/// fresh transaction over its own output admits no region. That is measured
-/// here rather than assumed, and the recorded reason is required to follow the
-/// measurement: `saturated` only when the residual is zero, `policy` otherwise.
-/// A producer that becomes a fixpoint therefore fails this test until it also
-/// stops calling its stop a policy stop, which is the direction the mistake
-/// should be easy to notice in.
+/// Section 8.11, restored at revision 1.9.38: `saturated` means no rule fired
+/// in the transaction's last epoch, and says nothing about a fresh transaction
+/// over the output. A fresh transaction may still admit *residual regions*,
+/// because Section 11.6 lets a left-hand `const_like` match only a constant
+/// already in the before witness closure and never one an earlier epoch
+/// derived. Those are a quality metric of the registry, not a false record, so
+/// they are measured and reported here and they do not change the stop reason.
 #[test]
-fn the_recorded_stop_reason_follows_the_measured_fixpoint() {
+fn a_transaction_that_ran_out_of_matches_records_saturation() {
     let budget = evocc_eqopt::ScalarEqBudget::new(20_000, 256);
-    let mut programs_with_more = 0_u64;
-    let mut regions_admitted = 0_u64;
-    let mut residual_seeds = Vec::new();
+    let mut residual_regions = 0_u64;
+    let mut residual_programs = 0_u64;
     for offset in 0..GATE_PROGRAMS {
         let seed = GATE_SEED.wrapping_add(offset);
         let module = generate_module(seed, config());
-        let first = evocc_eqopt::optimize_scalar_module_with_evp1(&module, budget);
-        let second = evocc_eqopt::optimize_scalar_module_with_evp1(&first.module, budget);
-        let admitted = second.certificate.regions.len() as u64;
+        let outcome = evocc_eqopt::optimize_scalar_module_with_evp1(&module, budget);
+        let recorded = outcome
+            .certificate
+            .budget
+            .expect("an evp2 certificate carries a budget line")
+            .stop;
+        assert_eq!(
+            recorded,
+            evocc_proof::EvpStop::Saturated,
+            "seed {seed} stopped with nothing left to fire and must record saturation"
+        );
+
+        let fresh = evocc_eqopt::optimize_scalar_module_with_evp1(&outcome.module, budget);
+        let admitted = fresh.certificate.regions.len() as u64;
         if admitted != 0 {
-            programs_with_more += 1;
-            regions_admitted += admitted;
-            residual_seeds.push(seed);
+            residual_programs += 1;
+            residual_regions += admitted;
         }
     }
-    println!("residualPrograms={programs_with_more}");
-    println!("residualRegions={regions_admitted}");
-    println!("residualSeeds={residual_seeds:?}");
-
-    let module = generate_module(GATE_SEED, config());
-    let outcome = evocc_eqopt::optimize_scalar_module_with_evp1(&module, budget);
-    let stop = outcome
-        .certificate
-        .budget
-        .expect("an evp2 certificate carries a budget line")
-        .stop;
-    let expected = if regions_admitted == 0 {
-        evocc_proof::EvpStop::Saturated
-    } else {
-        evocc_proof::EvpStop::Policy
-    };
-    assert_eq!(
-        stop, expected,
-        "{regions_admitted} residual regions over {GATE_PROGRAMS} programs, \
-         so the recorded stop reason must be {expected:?}"
-    );
+    println!("residualPrograms={residual_programs}");
+    println!("residualRegions={residual_regions}");
 }
 
 /// How deep the campaign's schedules actually run.

@@ -429,3 +429,62 @@ fn recorded_fuel_is_the_busiest_rule_in_one_epoch() {
     );
     assert!(case.consumed("fuel") > 0, "{}", case.budget_line());
 }
+
+/// A producer that stops at its own ceiling keeps the work it had done.
+///
+/// Section 11.3, revision 1.9.38: "Hitting any ceiling keeps every region
+/// admitted before the stop (8.11): a producer that answers its own budget
+/// exhaustion with a zero-region certificate is non-conforming, because it
+/// discards work the checker would have verified." The box the certificate
+/// records stays the profile's; only the reason changes, because a producer's
+/// own budget is not a profile ceiling.
+#[test]
+fn a_budget_stop_keeps_the_regions_admitted_before_it() {
+    let before = module();
+    validate_module(&before).expect("the module is valid EvoIR");
+
+    let generous = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::new(20_000, 256));
+    let admitted = generous.certificate.regions.len();
+    assert!(
+        admitted > 1,
+        "the input must admit several regions, or a partial stop proves nothing"
+    );
+
+    // One epoch of the producer's own allowance: enough to admit something,
+    // not enough to admit everything.
+    let stopped = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::new(20_000, 1));
+    let kept = stopped.certificate.regions.len();
+    println!("regionsAdmitted={admitted}");
+    println!("regionsKeptAfterBudgetStop={kept}");
+    assert!(
+        kept > 0,
+        "a budget stop discarded every region it had already admitted"
+    );
+    assert!(
+        kept < admitted,
+        "the tight budget did not actually stop the producer early"
+    );
+
+    let budget = stopped
+        .certificate
+        .budget
+        .expect("an evp2 certificate carries a budget line");
+    assert_eq!(
+        budget.stop,
+        evocc_proof::EvpStop::Policy,
+        "a producer's own budget is not a profile ceiling"
+    );
+    assert_eq!(budget.nodes.bound, MAX_NODES, "the box stays the profile's");
+    assert_eq!(
+        budget.epochs.bound, MAX_EPOCHS,
+        "the box stays the profile's"
+    );
+
+    let before_text = render_module(&before);
+    let after_text = render_module(&stopped.module);
+    let proof_text = render_evp1(&stopped.certificate);
+    validate_module(&stopped.module).expect("a partial optimization is still valid EvoIR");
+    checker()
+        .check(&before_text, &after_text, &proof_text)
+        .unwrap_or_else(|error| panic!("a partial certificate must verify: {error}\n{proof_text}"));
+}
