@@ -306,14 +306,21 @@ fn build_region(
             })
             .collect::<Option<Vec<_>>>()?;
         let (rhs, rhs_ref, event_selected, event_output) = match &opportunity.replacement {
-            Replacement::Alias(value) => {
-                let rhs = classes.find(*value_classes.get(&value.id)?)?;
-                (
-                    rhs,
-                    EvpProofRef::Class(rhs),
-                    SelectedSource::Value(value.id),
-                    Replacement::Alias(value.clone()),
-                )
+            Replacement::Alias(_) => {
+                // Section 11.3: `class:cI` is admissible only when that side of
+                // the instantiated rule is a bare variable bound to `cI`, so the
+                // right-hand side is the binding and not the instruction's
+                // operand. Reading the operand instead lets an earlier
+                // replacement in the same witness closure point it at a
+                // different class holding an equal constant, which is the defect
+                // the bindings themselves already had.
+                let rhs = bindings
+                    .iter()
+                    .find(|(name, _)| name == "x")
+                    .map(|(_, class)| *class)?;
+                let (selected, replacement) =
+                    alias_representative(&seed_values, &nodes, &node_values, &classes, rhs)?;
+                (rhs, EvpProofRef::Class(rhs), selected, replacement)
             }
             Replacement::Constant(raw) => {
                 let sort = packed_type(&event.result.ty)?;
@@ -714,6 +721,38 @@ fn is_constant(value: &Value, facts: &HashMap<u32, ScalarFact>, raw: u64) -> boo
 enum SelectedSource {
     Value(u32),
     Node(u32),
+}
+
+/// A deterministic representative of the class an alias rewrite replaces with.
+///
+/// Seeds in manifest order, then nodes in emission order. The order is fixed
+/// rather than convenient because a producer and a checker that never share a
+/// data structure must still agree on the extraction this choice implies.
+fn alias_representative(
+    seed_values: &[Value],
+    nodes: &[EvpNode],
+    node_values: &HashMap<u32, Value>,
+    classes: &LocalClasses,
+    class: u32,
+) -> Option<(SelectedSource, Replacement)> {
+    for (index, value) in seed_values.iter().enumerate() {
+        if classes.find(u32::try_from(index).ok()?) == Some(class) {
+            return Some((
+                SelectedSource::Value(value.id),
+                Replacement::Alias(value.clone()),
+            ));
+        }
+    }
+    for node in nodes {
+        if classes.find(node.owner) == Some(class) {
+            let value = node_values.get(&node.node)?;
+            return Some((
+                SelectedSource::Node(node.node),
+                Replacement::Alias(value.clone()),
+            ));
+        }
+    }
+    None
 }
 
 fn extraction_manifest(
