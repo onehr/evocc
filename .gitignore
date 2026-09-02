@@ -27,6 +27,7 @@ lessons.md
 
 # Rust build artifacts.
 target/
+target-*/
 
 # OS noise.
 .DS_Store

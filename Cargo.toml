@@ -26,6 +26,7 @@ members = [
     "crates/evocc-egraph",
     "crates/evocc-proof",
     "crates/evocc-proofcheck",
+    "crates/evocc-randgate",
     "crates/evocc-parser",
     "crates/evocc-lower",
 ]
