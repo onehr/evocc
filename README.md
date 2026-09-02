@@ -112,12 +112,12 @@ Other useful flags: `-E` (preprocess), `--parse-only`, `--emit=c-hir`, and `--su
 
 ## Status
 
-**What the kernel says today:** **16 of 16 cohort units parse clean under both reference compilers** on oracle-preprocessed input — that stage of the launch chain is closed, on sealed evidence, with zero regressions across the whole campaign. The full-configuration sweep (2,832 units through EvoCC's own preprocessor) first found a path no gate had covered: 2,768 units panicked on one token-location rule. With that rule and two preprocessor rules fixed, 1,292 of 2,832 units parse clean, and the remaining 1,540 sort into a short list of typed rules, eight of which cover about 1,380 units. Twenty-odd distinct constructs stood between 0/16 and 16/16; each got a measured rule, a declared red window, and a publication.
+**What the kernel says today:** **16 of 16 cohort units parse clean under both reference compilers** on oracle-preprocessed input — that stage of the launch chain is closed, on sealed evidence, with zero regressions across the whole campaign. The full-configuration sweep now enumerates 2,798 target C units through EvoCC's own preprocessor, after excluding 34 HOSTCC programs from the former 2,832-unit denominator. **2,445 of 2,798 parse clean**; the other 353 stop on typed diagnostics, with zero panic, timeout, or unavailable units. The latest parser rule set moved exactly 793 units from diagnosed to clean and regressed none. Twenty-odd distinct constructs stood between 0/16 and 16/16; each got a measured rule, a declared red window, and a publication.
 
 | Capability | Status |
 |---|---|
-| Preprocessor — full C11 pp-token grammar, GCC-compatible predefined set, feature queries, `#pragma pack` | partial: stringization spacing and rescanning open |
-| Parser — C11 plus the GNU dialect the kernel uses: attributes, `typeof`, `_Generic`, statement expressions, `asm` and `asm goto`, builtins, designated initializers, `__auto_type`, case ranges | done |
+| Preprocessor — full C11 pp-token grammar, GCC-compatible predefined set, feature queries, `#pragma pack` | cohort done; full-configuration typed frontier open |
+| Parser — C11 plus the GNU dialect the kernel uses: attributes, `typeof`, `_Generic`, statement expressions, `asm` and `asm goto`, builtins, designated initializers, `__auto_type`, case ranges | cohort done; full-configuration typed frontier open |
 | Layout — bit-exact against sealed GCC and Clang on 150 frozen cases | done |
 | Checked high-level IR and interpreter — typed UB, provenance, per-byte initializedness | done |
 | EvoIR block-argument SSA, semantic lowering, second interpreter | done |
@@ -125,7 +125,7 @@ Other useful flags: `-E` (preprocess), `--parse-only`, `--emit=c-hir`, and `--su
 | Kernel telemetry and sealed publication | done |
 | Diagnostic survey mode | partial |
 | Kernel parse closure (cohort, oracle-preprocessed input) | done |
-| Full-configuration sweep, 2,832 units, own preprocessor | in progress: 1,292 of 2,832 clean, 0 panic |
+| Full-configuration sweep, 2,798 target C units, own preprocessor | in progress: 2,445 clean, 353 typed-diagnosed, 0 panic/timeout/unavailable |
 | Analysis lattices, bounded scheduler | not started |
 | Randomized semantic gate | not started |
 | EvoMIR, register allocation, AArch64 | not started |

@@ -2,14 +2,14 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "c6669636459c7b522e4e3c2b37e0464b45292daaf929c1b50e02eb10b3061118"
+    "sha256": "ad14d91530efed11b661af605e90c6240e95bc20d6d1fc27dd0714413c8724c1"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.32",
-    "sha256": "0cf1c41f6e9c078e6b9642b88c2e8612f66a5ed458bda1d7dc382d59dfae13aa"
+    "revision": "1.9.33",
+    "sha256": "77d904c53b48e0f0db1512c61d60cfcf50095492bad0aa0296e2b26d77507811"
   },
-  "cutLine": "Revision 1.9.32 scope T is implemented at fc21cd3. Token spelling and expansion locations, preprocessing-token whitespace during stringization, and replacement-list/outer-sequence rescanning pass their declared RED-to-GREEN tests. The tree is green at 1083/1083 workspace tests, exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. Dashboard run 20260902T051401Z-89830 retains 16/16 raw, GCC-preprocessed, and Clang-preprocessed lanes with zero regressions. Full-configuration integration survey 20260902T051739Z-447 measures 1292 clean, 1540 typed-diagnosed, and zero unavailable, timeout, or panic among 2832 C units; the typed frontier remains open and was not modified.",
+  "cutLine": "Revision 1.9.33 scopes U and V are implemented at 6cc7820 and 486519f. Conditional directives and empty variadic arguments survive macro-argument collection, HOSTCC programs are excluded from the target denominator, and six parser semantic rules pass their declared RED-to-GREEN tests. The tree is green at 1118/1118 workspace tests, exact 128/128 and 22/22 layout corpora, and locked/offline no-local replays. Dashboard run 20260902T111559Z-80486 retains 16/16 raw, GCC-preprocessed, and Clang-preprocessed lanes with zero regressions. Full-configuration integration survey 20260902T113345Z-48715 measures 2445 clean, 353 typed-diagnosed, and zero unavailable, timeout, or panic among 2798 target C units; exactly 793 units moved from diagnosed to clean and the remaining frontier was not modified.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -885,9 +885,64 @@
     "specAmbiguitiesThisWindow": [],
     "result": "PASS_WITH_TYPED_SURVEY_FRONTIER"
   },
-  "subjectCommit": "fc21cd3",
+  "preprocessorMacroArgumentRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.33 section 10.4; tests/contracts/day9-acceptance-contract.json scope U",
+    "opened": "0ac7b38 (tests only; 1087 passed, 7 declared semantic failures, zero build errors)",
+    "closed": "6cc7820",
+    "implementationCommits": [
+      "6cc7820"
+    ],
+    "redDiagnostics": {
+      "path": "tests/contracts/preprocessor-macro-argument-red.json",
+      "sha256": "e8e30443ea2ed0fdd6489838f91afaf2a25cf6d5fb11705c6c815780b4bc1f19"
+    },
+    "acceptanceReceipt": {
+      "path": "tests/contracts/preprocessor-macro-argument-receipt.json",
+      "sha256": "e43d71c5da3b96299bca987aa5301e79f2bc284151b114f85ea57a387193eda5"
+    },
+    "declaredCapabilities": [
+      "conditional directives inside function-like macro arguments contribute only selected-branch tokens while non-admitted directives fail closed with E0113",
+      "empty arguments and variadic forwarding preserve the exact token and comma sequence through nested substitution and rescan",
+      "HOSTCC command records are excluded from the target translation-unit denominator"
+    ],
+    "focusedGreen": "11/11",
+    "dashboardRun": "20260902T074011Z-8961; 48/48 clean; zero regressions",
+    "fullConfigurationSurvey": "20260902T074727Z-61593; 1652/2798 clean, 1146 diagnosed, zero unavailable/timeout/panic",
+    "specAmbiguitiesThisWindow": [],
+    "result": "PASS_WITH_TYPED_SURVEY_FRONTIER"
+  },
+  "parserRuleClosureRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.33 sections 10.1.3, 10.1.17, 10.1.18, and 10.1.19; tests/contracts/day9-acceptance-contract.json scope V",
+    "opened": "272e537 (tests only; 1099 passed, 17 declared semantic failures, zero build errors)",
+    "closed": "486519f",
+    "implementationCommits": [
+      "486519f"
+    ],
+    "redDiagnostics": {
+      "path": "tests/contracts/parser-rule-closure-red.json",
+      "sha256": "b8fa8ede7e6dcd7a493b7e86563fdecfa450b4ed2407260f92cc871b97257746"
+    },
+    "acceptanceReceipt": {
+      "path": "tests/contracts/parser-rule-closure-receipt.json",
+      "sha256": "21b55823f353c7382501c1beb8ecdaab96dd9eacda56feafafb4489e756d7d46"
+    },
+    "declaredCapabilities": [
+      "function-local __func__ and __FUNCTION__ objects with __PRETTY_FUNCTION__ refused as E2921",
+      "labeled terminal statements preserve a statement expression's value and type",
+      "array parameters adjust once to pointers",
+      "corresponding signed/unsigned integer-pointer conversions use one rule across conversion contexts",
+      "one modifiable-lvalue predicate governs every assignment and update path",
+      "address constants compose through member and index chains, decay, strings, __func__, and safe casts"
+    ],
+    "focusedGreen": "23/23 parser assertions plus 1/1 dual-interpreter execution regression",
+    "dashboardRun": "20260902T111559Z-80486; 48/48 clean; zero regressions",
+    "fullConfigurationSurvey": "20260902T113345Z-48715; 2445/2798 clean, 353 diagnosed, zero unavailable/timeout/panic; exact transitions 1652 clean-to-clean, 793 diagnosed-to-clean, 353 diagnosed-to-diagnosed",
+    "specAmbiguitiesThisWindow": [],
+    "result": "PASS_WITH_TYPED_SURVEY_FRONTIER"
+  },
+  "subjectCommit": "6bbeaf4",
   "gate": {
-    "claim": "Revision 1.9.32 scope T is implemented and green. Macro-expanded tokens carry distinct spelling and expansion locations, parser span composition is total, stringization follows preprocessing-token whitespace, and rescanning crosses the replacement-list boundary only through an actual outer invocation. The 16-unit dashboard remains 48/48 clean with zero regression. The first full-configuration raw-to-EvoCPP-to-parser measurement completes all 2832 C units without panic, timeout, or unavailable classification; 1540 typed-diagnosed units remain an explicitly open frontier.",
+    "claim": "Revision 1.9.33 scopes U and V are implemented and green. Macro-argument directives and empty variadic forwarding preserve their specified token sequences, HOSTCC programs are outside the target denominator, and the six declared parser rules use shared semantic predicates. The 16-unit dashboard remains 48/48 clean with zero regression. The full-configuration raw-to-EvoCPP-to-parser measurement completes all 2798 target C units without panic, timeout, or unavailable classification; 2445 are clean and 353 typed-diagnosed units remain an explicitly open frontier.",
     "measured": {
       "dualOracleCleanParseTus": "16/16",
       "rawPreprocessClean": "16/16",
@@ -920,7 +975,7 @@
       "frozenRealTuRatio": "1.07x <= 3x",
       "subjectBuildProfile": "release",
       "parserTimeoutSecondsPerTu": 10,
-      "workspaceTests": "1083/1083",
+      "workspaceTests": "1118/1118",
       "specifiedFrontier": true,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
@@ -984,21 +1039,26 @@
       "tokenLocationTests": "3/3",
       "stringizationWhitespaceTests": "10/10",
       "outerSequenceRescanningTests": "5/5",
-      "fullConfigurationSurveyRun": "20260902T051739Z-447",
-      "fullConfigurationClean": 1292,
-      "fullConfigurationDiagnosed": 1540,
+      "macroArgumentDirectiveAndForwardingTests": "11/11",
+      "parserRuleClosureTests": "23/23",
+      "labeledStatementExpressionExecutionTests": "1/1",
+      "fullConfigurationSurveyRun": "20260902T113345Z-48715",
+      "fullConfigurationTargetUnits": 2798,
+      "fullConfigurationClean": 2445,
+      "fullConfigurationDiagnosed": 353,
       "fullConfigurationUnavailable": 0,
       "fullConfigurationTimeout": 0,
-      "fullConfigurationPanic": 0
+      "fullConfigurationPanic": 0,
+      "fullConfigurationDiagnosedToClean": 793
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260901T185119Z-83939/results.jsonl --evidence /Users/onehrxn/dev/30days/c30/.evidence/kernel-dashboard-runtime-absolute",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260902T074011Z-8961/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "7e3ef861c490031e21c164f7ef30cbaaac6ccc382e2cdae696df545168371d31",
-      "subjectCommit": "fc21cd3",
-      "publishedFromRun": "20260902T051401Z-89830"
+      "sha256": "ee302e5c531cbe9433afd49040ed0525d9669534b9e820078825a5c8baea5bef",
+      "subjectCommit": "486519f",
+      "publishedFromRun": "20260902T111559Z-80486"
     },
-    "result": "TOKEN_LOCATION_PREPROCESSOR_PASS_WITH_TYPED_SURVEY_FRONTIER"
+    "result": "PREPROCESSOR_AND_PARSER_RULE_CLOSURE_PASS_WITH_TYPED_SURVEY_FRONTIER"
   },
   "lanes": {
     "clean": {
@@ -1863,11 +1923,35 @@
       "baseLayoutCorpus": "128/128 ORACLE_CONSENSUS; 0 mismatches",
       "attributedLayoutCorpus": "22/22 ORACLE_CONSENSUS; 0 mismatches"
     },
+    "preprocessorAndParserRuleClosureAcceptance": {
+      "workspace": {
+        "passed": 1118,
+        "failed": 0,
+        "ignored": 0,
+        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast"
+      },
+      "clippy": {
+        "warnings": 0,
+        "command": "cargo clippy --workspace --all-targets -- -D warnings"
+      },
+      "format": {
+        "result": "clean",
+        "command": "cargo fmt --all -- --check"
+      },
+      "ruff": {
+        "result": "clean",
+        "command": "ruff check tests/acceptance tools"
+      },
+      "baseLayoutCorpus": "128/128 ORACLE_CONSENSUS; 0 mismatches",
+      "attributedLayoutCorpus": "22/22 ORACLE_CONSENSUS; 0 mismatches",
+      "dashboard": "20260902T111559Z-80486; 48/48 clean; zero regressions",
+      "fullConfigurationSurvey": "20260902T113345Z-48715; 2445/2798 clean; 353 diagnosed; zero unavailable/timeout/panic"
+    },
     "workspace": {
-      "passed": 1083,
+      "passed": 1118,
       "failed": 0,
       "ignored": 0,
-      "command": "cargo test --workspace --no-fail-fast (1083/1083)"
+      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast (1118/1118)"
     },
     "suites": {
       "crates/evocc-parser/tests/checkpoint_allocation_scaling.rs": {
@@ -2203,11 +2287,11 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "fc21cd3024e079cd68078cb3eca4303a49d89a26",
-    "path": "/tmp/c30-token-replay.D04X4A/repo",
-    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /tmp/c30-token-replay.D04X4A/repo; test ! -e .git/objects/info/alternates; cargo test --workspace --no-fail-fast --locked --offline",
+    "commit": "6bbeaf444c7adcc9fb34a093f4944e927a71d7ae",
+    "path": "/tmp/c30-v-replay.uGdwaB/repo",
+    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /tmp/c30-v-replay.uGdwaB/repo; test ! -e .git/objects/info/alternates; CARGO_TARGET_DIR=/tmp/c30-v-replay.uGdwaB/target cargo test --workspace --no-fail-fast --locked --offline",
     "measured": {
-      "passed": 1083,
+      "passed": 1118,
       "failed": 0,
       "ignored": 0,
       "objectsAlternates": "absent"
@@ -2308,6 +2392,10 @@
     "The independent RED replay briefly shared the main checkout's Cargo target and replaced its focused test binary with the detached-checkout build. That stale derived cache was rejected, only evocc-parser build artifacts were cleaned, GREEN was rebuilt, and the final no-local replay used its own target directory.",
     "The scope-T token-location test initially carried an unobserved expected invocation column of 35; GREEN first fixed the declared text and panic failures, then exposed the measured column as 34. The assertion was corrected in the semantic commit and the deviation is retained rather than hidden.",
     "The first scope-T layout attempt could not inspect the sealed local container image inside the restricted sandbox and was rejected. Sequential permission-correct reruns produced 128/128 and 22/22 ORACLE_CONSENSUS with zero mismatches.",
-    "The first scope-T dashboard attempt stopped before measurement because sealed-image inspection was denied. The second measured all 48 lanes clean but failed final receipt construction because a relative evidence path could not be relativized against the absolute repository root. The accepted third run used the same subject and lineage with an absolute evidence path and sealed run 20260902T051401Z-89830."
+    "The first scope-T dashboard attempt stopped before measurement because sealed-image inspection was denied. The second measured all 48 lanes clean but failed final receipt construction because a relative evidence path could not be relativized against the absolute repository root. The accepted third run used the same subject and lineage with an absolute evidence path and sealed run 20260902T051401Z-89830.",
+    "The first scope-V __func__ implementation allocated an implicit object identity in every function, including functions that did not use the identifier. The full workspace gate caught fourteen frozen identity and fingerprint regressions before commit. The accepted implementation first scans the body and materializes the object only when lexically required; a regression test pins declaration and SymbolId order.",
+    "An exploratory scope-V change executed goto while testing labeled statement-expression results, but goto execution exceeded the declared parser rule and lacked the matching EvoIR path. It was removed before commit; the accepted shared terminal-value query only recurses through labels.",
+    "One scope-V layout attempt failed restricted container inspection and a later successful command in the same shell masked the status. It was rejected. Fresh sequential permission-correct runs produced 128/128 and 22/22 ORACLE_CONSENSUS.",
+    "The final scope-V documentation gate was first started without the established temporary runner. Every completed target was green, but macOS provenance scanning imposed the known per-binary delay; the run was interrupted and is not evidence. The complete 1118/1118 rerun used the isolated /private/tmp runner and exited zero."
   ]
 }
