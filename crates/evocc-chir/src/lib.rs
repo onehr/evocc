@@ -33,8 +33,8 @@ pub use initializer::{
     SubobjectStep, WrittenDesignator, WrittenInitializer,
 };
 pub use place::{
-    record_member_path, FieldProjection, IndexProjection, MemoryPlace, MemoryPlaceError,
-    PlaceProjection, PlaceRoot, PointerTypeDesc,
+    is_modifiable_object_type, record_member_path, FieldProjection, IndexProjection, MemoryPlace,
+    MemoryPlaceError, PlaceProjection, PlaceRoot, PointerTypeDesc,
 };
 pub use semantic::{
     AssignmentOp, ExprCategory, ExprFacts, ExprFactsError, NotAssignmentOperator, ScalarPlace,
@@ -722,6 +722,22 @@ impl CHirStmt<'_> {
     }
 }
 
+/// Return the expression that supplies a GNU statement expression's value.
+///
+/// An ordinary label changes control-flow identity but not the type or value
+/// of the statement it prefixes. Keeping this rule beside C-HIR gives every
+/// consumer one recursive authority for the terminal-statement shape.
+#[must_use]
+pub fn statement_expression_value<'arena>(
+    statement: &'arena CHirStmt<'arena>,
+) -> Option<&'arena CHirExpr<'arena>> {
+    match statement {
+        CHirStmt::Expr(expression, _) => Some(*expression),
+        CHirStmt::Label(_, nested, _) => statement_expression_value(nested),
+        _ => None,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // CHirDecl — C declaration nodes
 // ---------------------------------------------------------------------------
@@ -824,6 +840,14 @@ pub enum WrittenDeclaratorLayer {
     },
     Array {
         bound: ArrayBound,
+        /// Qualifiers written between the brackets of an array parameter.
+        /// They qualify the pointer produced by parameter adjustment, not the
+        /// array element type.
+        parameter_qualifiers: Qualifiers,
+        /// Whether `static` was written between the brackets. This is a
+        /// source fact; the canonical parameter type is still the one-time
+        /// adjusted pointer type.
+        static_bound: bool,
         span: SourceSpan,
     },
     Function {

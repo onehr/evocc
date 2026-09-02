@@ -59,6 +59,29 @@ fn function_name_is_one_unevaluated_address_constant_in_nested_scopes() {
 }
 
 #[test]
+fn implicit_object_identity_precedes_explicit_locals_only_when_referenced() {
+    let arena = Arena::default();
+    let unit = parse(
+        concat!(
+            "void unused(void) { int only = 1; (void)only; } ",
+            "void used(void) { int before = 1; (void)__func__; int after = before; (void)after; }\n",
+        ),
+        &arena,
+    )
+    .expect("both function bodies must parse");
+    let spellings = unit
+        .symbols()
+        .symbols_in_source_order()
+        .iter()
+        .map(|symbol| symbol.spelling())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        spellings,
+        ["unused", "only", "used", "__func__", "before", "after"]
+    );
+}
+
+#[test]
 fn pretty_function_uses_the_conflict_diagnostic() {
     let arena = Arena::default();
     let error = parse("void pretty(void) { (void)__PRETTY_FUNCTION__; }\n", &arena)

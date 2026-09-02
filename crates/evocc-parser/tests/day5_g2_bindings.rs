@@ -536,7 +536,7 @@ fn assert_unnamed_parameter(source: &str, expected: UnnamedParameterShape) {
         }
         UnnamedParameterShape::Array => {
             assert_eq!(span_text(source, parameter.span), "int [3]");
-            let [WrittenDeclaratorLayer::Array { bound, span }] =
+            let [WrittenDeclaratorLayer::Array { bound, span, .. }] =
                 parameter.written.layers.as_slice()
             else {
                 panic!("unnamed array must retain exactly one written array layer");

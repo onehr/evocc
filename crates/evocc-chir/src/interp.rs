@@ -27,12 +27,12 @@ use crate::{
         integer_literal_value, integer_type_for_rank, usual_arithmetic_type, BitBuiltinOp,
         CInteger, CIntegerType, IntegerError,
     },
-    AllocationSiteKind, AllocationSiteManifest, AllocationSiteManifestError, AssignmentOp,
-    BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit,
-    CheckedArithmeticOp, ExprCategory, ExprFacts, FunctionDecl, InitAction, MemoryPlace,
-    ObjectDecl, ParameterSyntax, PlaceProjection, PlaceRoot, PointerTypeDesc, ScalarPlace,
-    ScopeKind, StorageClass, SubobjectPath, SubobjectStep, SymbolId, SymbolKind, UnaryOp, UpdateOp,
-    WrittenDeclarator, WrittenDeclaratorLayer,
+    statement_expression_value, AllocationSiteKind, AllocationSiteManifest,
+    AllocationSiteManifestError, AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr,
+    CHirForInit, CHirStmt, CHirUnit, CheckedArithmeticOp, ExprCategory, ExprFacts, FunctionDecl,
+    InitAction, MemoryPlace, ObjectDecl, ParameterSyntax, PlaceProjection, PlaceRoot,
+    PointerTypeDesc, ScalarPlace, ScopeKind, StorageClass, SubobjectPath, SubobjectStep, SymbolId,
+    SymbolKind, UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
 };
 
 const DEFAULT_FUEL: u64 = 100_000;
@@ -1432,11 +1432,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span,
                 } => {
                     if let Some(item) = items.get(index) {
-                        let is_value = matches!(
-                            (item, value),
-                            (CHirBlockItem::Statement(CHirStmt::Expr(expression, _)), Some(value))
-                                if std::ptr::eq(*expression, value)
-                        );
+                        let item_value = match item {
+                            CHirBlockItem::Statement(statement) => {
+                                statement_expression_value(statement)
+                            }
+                            CHirBlockItem::Declaration(_) => None,
+                        };
+                        let is_value = matches!((item_value, value), (Some(item), Some(value)) if std::ptr::eq(item, value));
                         if index + 1 < items.len() {
                             tasks.push(MachineTask::StatementExpressionContinue {
                                 items,
@@ -1446,10 +1448,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                             });
                         }
                         if is_value {
-                            let CHirBlockItem::Statement(CHirStmt::Expr(expression, _)) = item
-                            else {
-                                unreachable!("the value predicate checked this shape")
-                            };
+                            let expression = item_value.expect(
+                                "the statement-expression value predicate checked this shape",
+                            );
                             tasks.push(MachineTask::EvalExpression {
                                 expression,
                                 allow_root_mutation: true,
@@ -3063,8 +3064,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         };
         let result_matches = match (value, items.last()) {
             (None, _) => true,
-            (Some(value), Some(CHirBlockItem::Statement(CHirStmt::Expr(expression, _)))) => {
-                std::ptr::eq(value, *expression)
+            (Some(value), Some(CHirBlockItem::Statement(statement))) => {
+                statement_expression_value(statement)
+                    .is_some_and(|expression| std::ptr::eq(value, expression))
             }
             (Some(_), _) => false,
         };

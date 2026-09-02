@@ -12,11 +12,11 @@ use evocc_chir::integer::{
     usual_arithmetic_type, CInteger, CIntegerType,
 };
 use evocc_chir::{
-    AllocationSiteManifest, AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit,
-    CHirStmt, CHirUnit, ExprCategory, ExprFacts, FunctionDecl, InitAction, MemoryPlace, ObjectDecl,
-    ObjectInitializer, ParameterSyntax, PlaceProjection, PlaceRoot, ScalarPlace, ScopeKind,
-    StorageClass, SubobjectPath, SubobjectStep, SymbolId, SymbolKind, UnaryOp, UpdateOp,
-    WrittenDeclarator, WrittenDeclaratorLayer,
+    statement_expression_value, AllocationSiteManifest, AssignmentOp, BinaryOp, CHirBlockItem,
+    CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, ExprCategory, ExprFacts, FunctionDecl,
+    InitAction, MemoryPlace, ObjectDecl, ObjectInitializer, ParameterSyntax, PlaceProjection,
+    PlaceRoot, ScalarPlace, ScopeKind, StorageClass, SubobjectPath, SubobjectStep, SymbolId,
+    SymbolKind, UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
 };
 use evocc_common::SourceSpan;
 use evocc_evoir::{
@@ -5196,14 +5196,19 @@ impl<'a> FunctionLowerer<'a> {
             });
         };
         let prefix = if let Some(value) = value {
-            let Some(CHirBlockItem::Statement(CHirStmt::Expr(final_value, _))) = items.last()
-            else {
+            let Some(CHirBlockItem::Statement(final_statement)) = items.last() else {
                 return Err(LowerError::UnsupportedExpression {
                     span,
                     feature: "statement expression value is not its final expression statement",
                 });
             };
-            if !std::ptr::eq(*final_value, value) {
+            let Some(final_value) = statement_expression_value(final_statement) else {
+                return Err(LowerError::UnsupportedExpression {
+                    span,
+                    feature: "statement expression value is not its final expression statement",
+                });
+            };
+            if !std::ptr::eq(final_value, value) {
                 return Err(LowerError::UnsupportedExpression {
                     span,
                     feature: "statement expression value identity is not authoritative",
