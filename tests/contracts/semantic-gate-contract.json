@@ -55,7 +55,8 @@
     "stageS2eClosed": "2026-09-03: runs of 8.11 in place with digest chaining (a broken chain is its own mismatch kind); 21,000 programs: 20 runs of two transactions, none longer, none at the ceiling, residual regions after the last transaction 0 for every run; generator now emits recursion, pointers across call boundaries, copy between distinct objects and all five ub.assume reasons; 0 mismatches, 0 refusals. Architect's isolated gate on f1ae24f: 1155/0, clippy 0, fmt clean; merged into main. Open by the executor's list: no produced certificate reaches a profile ceiling or the transaction ceiling; pointers round-tripped through memory across a call; floating point, vectors, tuples, wide integers, mutual recursion.",
     "tierBGapsRuled": "2026-09-03: all three S3a gaps were real. A registry is admissible only when the specification prints it (Reading A); p0.scalar.v2 is printed with digest c1691808ebe55a3b... and includes v1 unchanged. The premise comparison was stated backwards and is corrected: the checker refuses any premise bit it cannot confirm. The icmp transfer is now an interval procedure with signed comparisons top under an unknown sign bit. The executor's refusal to build a second transfer implementation with no certificate crossing between the two was correct.",
     "s3aPartial": "2026-09-03: the first executor delivered the known-bits lattice (8.10 rows and the negative surface), the premise record and parser of 11.3, and registry admission by version (evp1: v1; evp2: v1 or v2, name and digest together), then stopped at its context limit with the 18 Tier B rules pinned as an ignored coverage test (0 of 18 reached, because no producer rule reads a fact). Architect's isolated gate on d8797c0: 1172/0 (2 ignored), clippy 0, fmt clean; merged into main. The remaining parts pass to a fresh executor with a self-contained brief.",
-    "tierBReadingsRatified": "2026-09-03: the second executor's four readings are ratified in 1.9.41 (folds carry no premise; premise classes resolve through the partition; a premise on a premise-free rule is invalid; a wrong digit count is invalid). Its registry naming (narrowest reviewed registry containing the fired rules) is now the rule. Its rule priority is overruled in one step: within a tier the first applicable rule in registry order wins, so a premise-free fold precedes a fact rule and p1_202/p1_203/p1_204 are dominated and counted as such, not fired by preference. The nested-pattern binding defect (p0_009, 8 seeds in 20,000) was the checker's sixteenth correct refusal."
+    "tierBReadingsRatified": "2026-09-03: the second executor's four readings are ratified in 1.9.41 (folds carry no premise; premise classes resolve through the partition; a premise on a premise-free rule is invalid; a wrong digit count is invalid). Its registry naming (narrowest reviewed registry containing the fired rules) is now the rule. Its rule priority is overruled in one step: within a tier the first applicable rule in registry order wins, so a premise-free fold precedes a fact rule and p1_202/p1_203/p1_204 are dominated and counted as such, not fired by preference. The nested-pattern binding defect (p0_009, 8 seeds in 20,000) was the checker's sixteenth correct refusal.",
+    "stageS3aClosed": "2026-09-03: Tier B fact-driven rewrites in place against p0.scalar.v2: producer facts from the 8.10 transfers, premises in the stated order, an independent checker recomputation that refuses unconfirmable bits; 45 of 45 rules reached over 256 seeds (p1_202/203/204 now counted as dominated under 1.9.41); 21,000 programs, 0 mismatches; 772 of 7,900 regions in the 1000-program gate carry a premise; residual regions 20 to 0. One producer defect (p0_009 nested-pattern binding, 8 seeds) found by the checker and fixed. Architect's isolated gate on 88d7253: 1190/0, clippy 0, fmt clean; merged into main."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",
@@ -189,6 +190,25 @@
         "fmt": "clean"
       },
       "tierBRulesReached": "0 of 18"
+    },
+    "s3a": {
+      "branchHead": "88d7253",
+      "campaign": {
+        "programs": 21000,
+        "semanticMismatches": 0,
+        "certificateRefusalsAfterFix": 0,
+        "regionsWithPremise1000": 772,
+        "regionsWithPremise20000": 17079,
+        "residualRegions": 0,
+        "wallSeconds1000Median": 22.285,
+        "wallSeconds20000": 456.599
+      },
+      "architectGate": {
+        "passed": 1190,
+        "failed": 0,
+        "clippy": 0,
+        "fmt": "clean"
+      }
     }
   }
 }
