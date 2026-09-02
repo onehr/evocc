@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.38** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.39** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1986,6 +1986,20 @@ that consumed does not exceed bound, that no epoch marker exceeds the declared
 epoch count, and that an exhaustion reason is consistent with the
 recorded consumption. It does not re-run the scheduler; a schedule is a choice,
 and what is verified is that the choice stayed inside the declared box.
+
+**Runs.** A run is a sequence of at most `max_transactions = 8` transactions
+over one module, each transaction taking the previous one's output as its
+input. The driver stops the run when a transaction admits no region or at
+the ceiling. Each transaction's certificate stands alone and is verified
+alone; the run is verified by digest chaining, the `output` digest of one
+certificate being the `input` digest of the next, and a chain that breaks
+anywhere fails the run. A run exists because 11.6 lets a left-hand
+`const_like` match only a constant present in the before witness closure, so
+a constant one transaction derives becomes matchable only in the next;
+measured at revision 1.9.38, 20 of 21,000 random programs admitted a region
+on a second transaction (0.095 percent), one region each. The count of
+transactions a run took, and the residual regions after its last, are
+telemetry the campaign reports.
 
 ---
 
@@ -4437,6 +4451,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.39 | 2026-09-03 | Defines a run: at most eight chained transactions verified by digest chaining (8.11), after the residual-region measurement of 20 in 21,000. Records that a producer keeping admitted regions at a ceiling stop is conformance the checker cannot observe, since 11.2 permits declining to optimize an eligible region. |
 | 1.9.38 | 2026-09-03 | Bounded scheduler measured (722 of 977 optimized programs run more than one epoch). Corrects `saturated` to the 8.11 meaning, names residual regions as a registry metric, selects the largest region's count as the certificate's `n`, reserves `stop=fuel`, and requires admitted regions to survive a ceiling stop (11.3). |
 | 1.9.37 | 2026-09-03 | evp2 produced and verified across 21,000 programs. Epoch markers are numbered from 1; `evp2` requires its budget line and `evp1` forbids it; adds the `policy` stop reason for a producer's own stop rule so that `saturated` is never claimed without a fixpoint (11.3). |
 | 1.9.36 | 2026-09-03 | Second randomized campaign on extended shapes (21,000 programs, 0 mismatches, one producer refusal fixed: alias right-hand sides come from the binding). Fixes the `budget` line: every quantity is consumed/bound, `fuel` carries its bound and the `n` it derives from, and the checker verifies the profile constants and the fuel derivation (11.3). |
