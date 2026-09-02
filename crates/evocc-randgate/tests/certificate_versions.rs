@@ -5,12 +5,50 @@
 //! `evp2` adds the three, and "a reader that does not implement a version
 //! rejects it as malformed rather than guessing".
 //!
-//! `evp2` is not produced here. Its `budget` line is undecidable as the grammar
-//! stands -- see the SPEC_GAP recorded against revision 1.9.35 -- so emitting
-//! one would mean choosing a field order the specification does not fix, and a
-//! second implementation that chose the other order would disagree with every
-//! certificate this producer wrote. Refusing to guess is the whole value of a
-//! standalone checker, so this file pins the refusal instead.
+//! `evp2` is not produced here, and this file records why.
+//!
+//! SPEC_GAP 1 -- the two integers of a `budget` quantity are unordered.
+//! Section 11.3 gives `budget_line := "budget nodes=" evp_int "/" evp_int
+//! " epochs=" evp_int "/" evp_int " fuel=" evp_int " stop=" stop_reason`, which
+//! names neither integer. Section 8.11 "Record" says the certificate "carries
+//! the bounds, the amounts consumed, the stop reason" and Section 11.3
+//! "Budget" says the line "records each bound, the amount consumed, and the
+//! stop reason"; both list bound before consumed in prose and neither says
+//! that is the field order. Reading A: `A/B` is consumed over bound, the usual
+//! spelling of a quantity against its ceiling. Reading B: `A/B` is bound over
+//! consumed, mirroring the prose. Distinguishing input: the certificate
+//! `budget nodes=3/100000 epochs=1/1024 fuel=0 stop=saturated`. Under A it is
+//! well formed and consumed is within bound; under B it claims a node ceiling
+//! of three that a consumption of a hundred thousand exceeds, and the checker
+//! must refuse it with status 3. The specification's own verification -- "the
+//! checker verifies consumed does not exceed bound" -- has no evaluable
+//! meaning until the order is fixed, and the whole point of an independent
+//! checker is lost if each implementation picks one.
+//!
+//! SPEC_GAP 2 -- `fuel=` records one integer for a per-rule, per-epoch quantity
+//! whose bound is derived, not recorded. Section 8.11 "Match fuel": "Each rule
+//! may fire at most `max(256, 8 x n)` times per epoch, where `n` is the number
+//! of nodes the region held when the transaction began. Fuel is per rule per
+//! epoch." Section 11.3 "Budget": "The checker verifies consumed does not
+//! exceed bound ... and that a stop reason of `epochs`, `nodes` or `fuel`
+//! coincides with that quantity having reached its bound." Reading A: the
+//! single integer is the fuel consumed by the one rule and epoch that
+//! exhausted, and the checker recomputes that rule's bound from `n`. Reading B:
+//! it is a scalar summary over the whole transaction, and `stop=fuel` is
+//! telemetry the checker cannot verify, like `saturated`. Distinguishing input:
+//! the certificate `budget nodes=8/100000 epochs=2/1024 fuel=256 stop=fuel`
+//! over a region whose transaction began with `n = 40`, so the derived bound is
+//! `max(256, 320) = 320`. Under A the stop is a lie -- 256 never reached 320 --
+//! and the certificate is invalid; under B nothing is checked and it is valid.
+//! Nothing in Section 8.11 or 11.3 says which rule or which epoch the recorded
+//! integer belongs to, so neither reading can be derived.
+//!
+//! Emitting a `budget` line would mean choosing answers the specification does
+//! not give, and a second implementation that chose differently would disagree
+//! with every certificate this producer wrote. Refusing to guess is the whole
+//! value of a standalone checker, so this file pins the refusal instead: evp1
+//! is produced and verified, carries none of the three additions, and any
+//! version this checker does not implement is malformed rather than guessed.
 
 use std::path::PathBuf;
 
