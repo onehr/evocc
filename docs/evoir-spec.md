@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.40** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.41** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1953,8 +1953,8 @@ recompute from the region's nodes with no search; a stronger analysis that
 needed one would move the judgment into shared code, which Section 11.6
 reserves for cases that fail safe.
 
-**Use.** A rewrite may name a fact as a premise. A constant fold's premise is
-the operand's `ConstValue`; a known-bits identity such as `and(x, m) -> x` when
+**Use.** A rewrite may name a fact as a premise. A constant fold (`all_const`) reads
+its constants from the nodes and carries no premise; a known-bits identity such as `and(x, m) -> x` when
 every bit of `m` known one covers every bit of `x` known nonzero has the two
 facts as premises. Premises appear in the certificate and are recomputed by the
 checker under Section 11.3.
@@ -4412,6 +4412,26 @@ across revisions. `evp1` accepts `p0.scalar.v1` only; `evp2` accepts
 `p0.scalar.v1` and `p0.scalar.v2`. Defined at revision 1.9.40 after the
 randomized gate stopped for want of a procedure.
 
+**Which registry a certificate names, and rule order within a tier.** A
+certificate names a reviewed registry that contains every rule it fires; the
+producer names the narrowest such registry, so a certificate that fired no
+`p1_` rule names `p0.scalar.v1` and stays readable by a checker that admits
+only it. Within a tier the producer applies the first applicable rule in
+registry order, so a premise-free fold on a node precedes a fact-driven rule
+on the same node. Under the 8.10 transfers `fully_known` on `xor`, `add` and
+`sub` holds only when both operands are fully known, which is exactly when
+`all_const` holds, so `p1_202`, `p1_203` and `p1_204` are dominated by
+`p0_105`, `p0_100` and `p0_101` and no conforming producer fires them; they
+stay printed so rule ids keep their meaning, and a coverage claim counts them
+as dominated rather than reached. Premise classes are resolved through the
+partition at the rewrite that consumes them, like binding classes. A premise
+on a rule whose side condition reads no class is invalid (status 3), and so is
+a premise whose digit count disagrees with its class's width. Measured at
+revision 1.9.40: with the fact-driven rules the residual-region count of 8.11
+fell from 20 in 21,000 programs to 0, because the facts state in one
+transaction what the before-witness rule of `const_like` had left for the
+next. Defined at revision 1.9.41.
+
 **Tier B side conditions and builders.** `fully_known` holds when the fact of
 the class of the matched left-hand node, recomputed under 8.10, has every bit
 known; `known_const` then constructs a `const` of that node's sort whose raw
@@ -4543,6 +4563,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.41 | 2026-09-03 | Fact-driven rewrites measured (772 of 7,900 regions carry a premise; residual regions 20 to 0). Settles four readings: folds carry no premise (8.10), a certificate names the narrowest reviewed registry containing its rules, rule order within a tier is registry order so three Tier B rules are dominated, premise classes resolve through the partition, and a premise on a premise-free rule or with the wrong digit count is invalid (11.6). |
 | 1.9.40 | 2026-09-03 | Prints the reviewed registry `p0.scalar.v2` (18 Tier B rules over the 8.10 facts) with its digest, defines registries and revisions, the Tier B side conditions and premises (11.6); corrects the premise comparison so a claim the checker cannot confirm is refused (11.3); fixes the `icmp` transfer as an interval procedure (8.10). Three gaps the randomized gate stopped on. |
 | 1.9.39 | 2026-09-03 | Defines a run: at most eight chained transactions verified by digest chaining (8.11), after the residual-region measurement of 20 in 21,000. Records that a producer keeping admitted regions at a ceiling stop is conformance the checker cannot observe, since 11.2 permits declining to optimize an eligible region. |
 | 1.9.38 | 2026-09-03 | Bounded scheduler measured (722 of 977 optimized programs run more than one epoch). Corrects `saturated` to the 8.11 meaning, names residual regions as a registry metric, selects the largest region's count as the certificate's `n`, reserves `stop=fuel`, and requires admitted regions to survive a ceiling stop (11.3). |
