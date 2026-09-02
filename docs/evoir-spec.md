@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.41** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.42** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -4184,7 +4184,7 @@ an `epoch k` line precedes the events that epoch produced for that region, and
 `k` is strictly increasing within the block. A region touched in no epoch has no
 markers. The checker verifies monotonicity within each block and that no `k`
 exceeds the recorded epoch count; it does not require every epoch to appear in
-every region, since most epochs touch few regions. Epochs are numbered from 1: with `epochs=c/1024` the legal markers are `1..=c`, so the inequality `k <= c` is tight, and a marker `0` is malformed (status 2). Defined at revision 1.9.37.
+every region, since most epochs touch few regions. Epochs are numbered from 1: with `epochs=c/1024` the legal markers are `1..=c`, so the inequality `k <= c` is tight, and a marker `0` is malformed (status 2). Defined at revision 1.9.37. A congruence that holds as its two nodes are inserted was produced by no epoch and precedes every marker, like the node inserts; a congruence a merge enabled follows the marker of the epoch whose merge enabled it. A rewrite whose union would join a class with itself, because an earlier merge already placed the root where the rewrite would, is not recorded; the replacement it would have justified stands on the recorded merges alone, which the checker verifies as it verifies any replacement. Defined at revision 1.9.42 after congruence closure was measured: regions rose 14.7 percent (7,900 to 9,062 in the 1000-program gate) and 197 of them are justified by a congruence with no rewrite of their own.
 
 **Budget.** Every `quantity` is written consumed `/` bound, in that order:
 `budget nodes=3/100000 epochs=1/1024 fuel=0/256 n=0 stop=saturated` is a
@@ -4563,6 +4563,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.42 | 2026-09-03 | Congruence closure measured. Places a congruence that holds at insertion before every epoch marker and one a merge enabled after that epoch's marker; states that a rewrite joining a class with itself is not recorded and the replacement stands on the recorded merges (11.3). |
 | 1.9.41 | 2026-09-03 | Fact-driven rewrites measured (772 of 7,900 regions carry a premise; residual regions 20 to 0). Settles four readings: folds carry no premise (8.10), a certificate names the narrowest reviewed registry containing its rules, rule order within a tier is registry order so three Tier B rules are dominated, premise classes resolve through the partition, and a premise on a premise-free rule or with the wrong digit count is invalid (11.6). |
 | 1.9.40 | 2026-09-03 | Prints the reviewed registry `p0.scalar.v2` (18 Tier B rules over the 8.10 facts) with its digest, defines registries and revisions, the Tier B side conditions and premises (11.6); corrects the premise comparison so a claim the checker cannot confirm is refused (11.3); fixes the `icmp` transfer as an interval procedure (8.10). Three gaps the randomized gate stopped on. |
 | 1.9.39 | 2026-09-03 | Defines a run: at most eight chained transactions verified by digest chaining (8.11), after the residual-region measurement of 20 in 21,000. Records that a producer keeping admitted regions at a ceiling stop is conformance the checker cannot observe, since 11.2 permits declining to optimize an eligible region. |
