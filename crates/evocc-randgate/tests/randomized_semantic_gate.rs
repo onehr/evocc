@@ -187,6 +187,96 @@ fn every_value_definition_in_a_module_is_unique_and_block_local() {
     }
 }
 
+/// Structural shapes a family name cannot express.
+///
+/// A pointer block argument that nothing reads, a loop whose limit is written
+/// into its own entry edge as a constant, or a second return value no function
+/// ever declares would all leave the family list satisfied while the shape the
+/// gate is supposed to exercise was gone.
+#[derive(Default)]
+struct Shapes {
+    pointer_crosses_an_edge: bool,
+    several_ordinary_returns: bool,
+    loop_limit_is_a_block_argument: bool,
+    loop_limit_is_data_dependent: bool,
+}
+
+impl Shapes {
+    fn observe(&mut self, module: &Module) {
+        for function in &module.functions {
+            if function.ret_tys.len() > 3 {
+                self.several_ordinary_returns = true;
+            }
+            for block in &function.blocks {
+                let pointers = block
+                    .args
+                    .iter()
+                    .filter(|arg| matches!(arg.value.ty, evocc_types::EvoIRType::Ptr(_)))
+                    .map(|arg| arg.value.id)
+                    .collect::<BTreeSet<_>>();
+                for inst in &block.insts {
+                    let reads_a_carried_pointer = matches!(
+                        inst,
+                        Inst::AccessInBounds { .. }
+                            | Inst::PointerValid { .. }
+                            | Inst::Load { .. }
+                            | Inst::Store { .. }
+                            | Inst::Copy { .. }
+                            | Inst::PtrOffset { .. }
+                    ) && evocc_evoir::inst_uses(inst)
+                        .iter()
+                        .any(|used| pointers.contains(&used.id));
+                    if reads_a_carried_pointer {
+                        self.pointer_crosses_an_edge = true;
+                    }
+                }
+                self.observe_loop(function, block);
+            }
+        }
+    }
+
+    /// A loop header compares its counter against a limit. Both are block
+    /// arguments once the limit is threaded, and the value the entry edge puts
+    /// in the limit position says whether the bound was a constant or was
+    /// derived from the program.
+    fn observe_loop(&mut self, function: &evocc_evoir::Function, block: &evocc_evoir::Block) {
+        let Inst::CondBr(condition, ..) = &block.terminator else {
+            return;
+        };
+        let Some(Inst::ICmp(_, evocc_evoir::CmpOp::ULt, counter, limit)) =
+            block.insts.iter().find(|inst| {
+                inst_results(inst)
+                    .first()
+                    .is_some_and(|r| r.id == condition.id)
+            })
+        else {
+            return;
+        };
+        let position = |id: u32| block.args.iter().position(|arg| arg.value.id == id);
+        let (Some(_), Some(limit_position)) = (position(counter.id), position(limit.id)) else {
+            return;
+        };
+        self.loop_limit_is_a_block_argument = true;
+
+        for source in &function.blocks {
+            let arguments = match &source.terminator {
+                Inst::Br(target, arguments) if *target == block.id => arguments,
+                _ => continue,
+            };
+            let Some(incoming) = arguments.get(limit_position) else {
+                continue;
+            };
+            let constant = source
+                .insts
+                .iter()
+                .any(|inst| matches!(inst, Inst::Const(result, _) if result.id == incoming.id));
+            if !constant {
+                self.loop_limit_is_data_dependent = true;
+            }
+        }
+    }
+}
+
 #[test]
 fn generated_programs_cover_the_declared_instruction_families() {
     let mut seen = BTreeSet::new();
@@ -194,10 +284,12 @@ fn generated_programs_cover_the_declared_instruction_families() {
     let mut block_argument_counts = BTreeSet::new();
     let mut reasons = BTreeSet::new();
     let mut back_edges = 0_usize;
+    let mut shapes = Shapes::default();
 
     for seed in 0..512_u64 {
         let module = generate_module(seed, config());
         seen.extend(families(&module));
+        shapes.observe(&module);
         for function in &module.functions {
             for block in &function.blocks {
                 block_argument_counts.insert(block.args.len());
@@ -235,15 +327,20 @@ fn generated_programs_cover_the_declared_instruction_families() {
         "call",
         "cond_br",
         "const",
+        "copy",
         "divisor_nonzero",
+        "func_addr",
         "global_addr",
         "icmp",
+        "indirect_call",
+        "lifetime.end",
         "load",
         "load.volatile",
         "lshr",
         "mul",
         "or",
         "pointer_valid",
+        "ptr.null",
         "ptr.offset",
         "ret",
         "sdiv",
@@ -286,6 +383,22 @@ fn generated_programs_cover_the_declared_instruction_families() {
         "no block ever carried an ordinary block argument"
     );
     assert!(back_edges > 0, "no generated function contained a loop");
+    assert!(
+        shapes.pointer_crosses_an_edge,
+        "no pointer created in one block was used through a block argument in another"
+    );
+    assert!(
+        shapes.several_ordinary_returns,
+        "every generated function returned exactly one ordinary value"
+    );
+    assert!(
+        shapes.loop_limit_is_a_block_argument,
+        "no loop compared its counter against a threaded limit"
+    );
+    assert!(
+        shapes.loop_limit_is_data_dependent,
+        "every loop bound was a constant written into the loop entry edge"
+    );
 
     // The exact set, not a subset: a `ub.assume` may only be emitted for a
     // condition the surrounding shape has already made true, so this equality
