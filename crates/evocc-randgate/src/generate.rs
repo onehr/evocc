@@ -3,10 +3,12 @@
 //! Freedom from undefined behaviour is a property of the *shapes* emitted here,
 //! not of a filter applied afterwards. A divisor is sanitized into `[1, 2^(N-1))`
 //! before it reaches a division, a shift amount is masked below the shifted
-//! width, every allocated byte is stored before anything loads it, and every
-//! formed pointer stays inside its object. The gate still discards and counts a
-//! program the interpreter reports as undefined, because a generator defect must
-//! show up as a number rather than as a silently weakened comparison.
+//! width, every allocated byte is stored before anything loads it, every formed
+//! pointer stays inside its object, a null pointer is only ever compared, and a
+//! lifetime is only ever ended for an object nothing can reach afterwards. The
+//! gate still discards and counts a program the interpreter reports as
+//! undefined, because a generator defect must show up as a number rather than
+//! as a silently weakened comparison.
 
 use std::collections::BTreeMap;
 
@@ -31,6 +33,14 @@ pub const WIDTHS: [u16; 14] = [1, 2, 3, 5, 7, 8, 13, 16, 17, 31, 32, 33, 47, 64]
 /// layout its object was allocated with.
 const MEMORY_WIDTHS: [u16; 4] = [8, 16, 32, 64];
 
+/// The object every block carries across its outgoing edges.
+///
+/// One shape, so a successor never has to ask what it received: eight bytes,
+/// eight-byte aligned, every byte stored before the edge is taken, and owned by
+/// the current frame, which keeps it live until the function returns.
+const CARRIER: AccessLayout = AccessLayout::new(8, 8);
+const CARRIER_WIDTH: u16 = 64;
+
 /// The shape ceilings one generated module stays within.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GeneratorConfig {
@@ -46,6 +56,8 @@ pub struct GeneratorConfig {
     pub max_blocks: u32,
     /// The largest trip count a generated loop may run.
     pub max_loop_trips: u64,
+    /// Ordinary return values one function may declare.
+    pub max_results: u32,
 }
 
 impl Default for GeneratorConfig {
@@ -57,6 +69,7 @@ impl Default for GeneratorConfig {
             max_region_depth: 2,
             max_blocks: 24,
             max_loop_trips: 4,
+            max_results: 3,
         }
     }
 }
@@ -76,7 +89,7 @@ pub fn generate_module(seed: u64, config: GeneratorConfig) -> Module {
     let mut signatures: Vec<Signature> = Vec::new();
     let mut functions: Vec<Function> = Vec::new();
     for index in 0..helpers {
-        let signature = random_signature(&mut rng, format!("h{index}"));
+        let signature = random_signature(&mut rng, config, format!("h{index}"));
         let function = generate_function(
             &mut rng,
             config,
@@ -88,7 +101,7 @@ pub fn generate_module(seed: u64, config: GeneratorConfig) -> Module {
         signatures.push(signature);
         functions.push(function);
     }
-    let entry = random_signature(&mut rng, "main".to_owned());
+    let entry = random_signature(&mut rng, config, "main".to_owned());
     functions.push(generate_function(
         &mut rng,
         config,
@@ -170,7 +183,7 @@ fn generate_globals(
                 origin,
                 kind: GlobalKind::File,
                 visibility,
-                layout: AccessLayout::new(8, 8),
+                layout: CARRIER,
                 bytes,
                 initialized: vec![true; 8],
             }
@@ -183,17 +196,37 @@ fn generate_globals(
 struct Signature {
     name: String,
     params: Vec<u16>,
-    result: u16,
+    results: Vec<u16>,
 }
 
-fn random_signature(rng: &mut Rng, name: String) -> Signature {
-    let count = rng.below(4);
-    let params = (0..count).map(|_| *rng.pick(&WIDTHS)).collect();
-    let result = *rng.pick(&WIDTHS);
+impl Signature {
+    /// The complete lowered signature `func_addr` must write.
+    fn pointer_type(&self) -> EvoIRType {
+        EvoIRType::FnPtr {
+            params: self
+                .params
+                .iter()
+                .map(|width| EvoIRType::Bits(*width))
+                .chain([memory_type(), world_type()])
+                .collect(),
+            results: self
+                .results
+                .iter()
+                .map(|width| EvoIRType::Bits(*width))
+                .chain([memory_type(), world_type()])
+                .collect(),
+        }
+    }
+}
+
+fn random_signature(rng: &mut Rng, config: GeneratorConfig, name: String) -> Signature {
+    let params = (0..rng.below(4)).map(|_| *rng.pick(&WIDTHS)).collect();
+    let count = 1 + rng.below(u64::from(config.max_results));
+    let results = (0..count).map(|_| *rng.pick(&WIDTHS)).collect();
     Signature {
         name,
         params,
-        result,
+        results,
     }
 }
 
@@ -210,13 +243,26 @@ struct OpenBlock {
     id: BlockId,
     args: Vec<BlockArg>,
     insts: Vec<Inst>,
-    /// The enclosing loop counters, outermost first. Every edge forwards these
-    /// unchanged; only a loop's own back edge increments its innermost one.
+    /// Two per enclosing loop: the counter and the limit it is compared
+    /// against. Every edge forwards them unchanged; only a loop's own back edge
+    /// increments its counter, and only its entry edge chooses its limit.
     ivs: Vec<Value>,
     pool: BTreeMap<u16, Vec<Value>>,
     buffers: Vec<Buffer>,
+    /// The pointer this block hands to its successors.
+    carrier: Value,
     mem: Value,
     world: Value,
+}
+
+impl OpenBlock {
+    fn carrier_buffer(carrier: &Value) -> Buffer {
+        Buffer {
+            elements: vec![carrier.clone()],
+            width: CARRIER_WIDTH,
+            layout: CARRIER,
+        }
+    }
 }
 
 struct FunctionGen<'a> {
@@ -239,7 +285,8 @@ fn generate_function(
     globals: &[String],
     origins: &mut u64,
 ) -> Function {
-    let mut active = vec![1_u16, 64, signature.result];
+    let mut active = vec![1_u16, 64];
+    active.extend(signature.results.iter().copied());
     let extra = 1 + rng.below(3);
     for _ in 0..extra {
         let width = if !signature.params.is_empty() && rng.chance(50) {
@@ -266,18 +313,24 @@ fn generate_function(
 
     let (params, entry) = generator.open_entry(signature);
     let mut block = generator.emit_region(entry, config.max_region_depth);
-    let result = generator.value_of(&mut block, signature.result);
-    let terminator = Inst::Ret(vec![result, block.mem.clone(), block.world.clone()]);
-    generator.close(block, terminator);
+    let mut returned = Vec::new();
+    for width in signature.results.clone() {
+        let value = generator.value_of(&mut block, width);
+        returned.push(value);
+    }
+    returned.push(block.mem.clone());
+    returned.push(block.world.clone());
+    generator.close(block, Inst::Ret(returned));
 
     Function {
         name: signature.name.clone(),
         params,
-        ret_tys: vec![
-            EvoIRType::Bits(signature.result),
-            memory_type(),
-            world_type(),
-        ],
+        ret_tys: signature
+            .results
+            .iter()
+            .map(|width| EvoIRType::Bits(*width))
+            .chain([memory_type(), world_type()])
+            .collect(),
         effects: EffectSummary::default(),
         blocks: generator.blocks,
     }
@@ -296,6 +349,12 @@ impl FunctionGen<'_> {
         id
     }
 
+    fn take_origin(&mut self) -> u64 {
+        let origin = *self.origins;
+        *self.origins += 1;
+        origin
+    }
+
     fn record(&mut self, block: &mut OpenBlock, value: &Value) {
         if let EvoIRType::Bits(width) = value.ty {
             block.pool.entry(width).or_default().push(value.clone());
@@ -311,6 +370,13 @@ impl FunctionGen<'_> {
         });
     }
 
+    fn binder(value: &Value) -> BlockArg {
+        BlockArg {
+            name: format!("v{}", value.id),
+            value: value.clone(),
+        }
+    }
+
     fn open_entry(&mut self, signature: &Signature) -> (Vec<FunctionParam>, OpenBlock) {
         let id = self.fresh_block();
         let mut params = Vec::new();
@@ -322,10 +388,7 @@ impl FunctionGen<'_> {
                 name: format!("arg{}", params.len()),
                 ty: value.ty.clone(),
             });
-            args.push(BlockArg {
-                name: format!("v{}", value.id),
-                value: value.clone(),
-            });
+            args.push(Self::binder(&value));
             pool.entry(*width).or_default().push(value);
         }
         let mem = self.fresh(memory_type());
@@ -333,32 +396,31 @@ impl FunctionGen<'_> {
             name: format!("arg{}", params.len()),
             ty: memory_type(),
         });
-        args.push(BlockArg {
-            name: format!("v{}", mem.id),
-            value: mem.clone(),
-        });
+        args.push(Self::binder(&mem));
         let world = self.fresh(world_type());
         params.push(FunctionParam {
             name: format!("arg{}", params.len()),
             ty: world_type(),
         });
-        args.push(BlockArg {
-            name: format!("v{}", world.id),
-            value: world.clone(),
-        });
-        (
-            params,
-            OpenBlock {
-                id,
-                args,
-                insts: Vec::new(),
-                ivs: Vec::new(),
-                pool,
-                buffers: Vec::new(),
-                mem,
-                world,
-            },
-        )
+        args.push(Self::binder(&world));
+
+        let mut block = OpenBlock {
+            id,
+            args,
+            insts: Vec::new(),
+            ivs: Vec::new(),
+            pool,
+            buffers: Vec::new(),
+            carrier: mem.clone(),
+            mem,
+            world,
+        };
+        // The entry block owns the first carrier, so every block after it can
+        // assume one exists without asking where it came from.
+        let carrier = self.emit_carrier_object(&mut block);
+        block.buffers.push(OpenBlock::carrier_buffer(&carrier));
+        block.carrier = carrier;
+        (params, block)
     }
 
     fn open_block(&mut self, id: BlockId, iv_count: usize) -> OpenBlock {
@@ -367,47 +429,40 @@ impl FunctionGen<'_> {
         let mut ivs = Vec::new();
         for _ in 0..iv_count {
             let value = self.fresh(EvoIRType::Bits(64));
-            args.push(BlockArg {
-                name: format!("v{}", value.id),
-                value: value.clone(),
-            });
+            args.push(Self::binder(&value));
             pool.entry(64).or_default().push(value.clone());
             ivs.push(value);
         }
+        let carrier = self.fresh(pointer_type());
+        args.push(Self::binder(&carrier));
         for width in self.active.clone() {
             let value = self.fresh(EvoIRType::Bits(width));
-            args.push(BlockArg {
-                name: format!("v{}", value.id),
-                value: value.clone(),
-            });
+            args.push(Self::binder(&value));
             pool.entry(width).or_default().push(value);
         }
         let mem = self.fresh(memory_type());
-        args.push(BlockArg {
-            name: format!("v{}", mem.id),
-            value: mem.clone(),
-        });
+        args.push(Self::binder(&mem));
         let world = self.fresh(world_type());
-        args.push(BlockArg {
-            name: format!("v{}", world.id),
-            value: world.clone(),
-        });
+        args.push(Self::binder(&world));
         OpenBlock {
             id,
             args,
             insts: Vec::new(),
             ivs,
             pool,
-            buffers: Vec::new(),
+            buffers: vec![OpenBlock::carrier_buffer(&carrier)],
+            carrier,
             mem,
             world,
         }
     }
 
-    /// The values one edge carries: the enclosing loop counters, one value per
-    /// active width, then the current memory and world tokens.
+    /// The values one edge carries: the enclosing loop counters and limits, the
+    /// carried pointer, one value per active width, then the current memory and
+    /// world tokens.
     fn edge_args(&mut self, block: &mut OpenBlock, ivs: &[Value]) -> Vec<Value> {
         let mut values = ivs.to_vec();
+        values.push(block.carrier.clone());
         for width in self.active.clone() {
             let value = self.value_of(block, width);
             values.push(value);
@@ -430,7 +485,7 @@ impl FunctionGen<'_> {
     fn emit_random_const(&mut self, block: &mut OpenBlock, width: u16) -> Value {
         // Zero and one are drawn far more often than chance would give them:
         // they are the operands every P0 identity matches on, and a gate that
-        // never produces them would never exercise the rules it exists to guard.
+        // never produced them would never exercise the rules it exists to guard.
         let raw = if self.rng.chance(45) {
             self.rng.below(2)
         } else {
@@ -504,29 +559,42 @@ impl FunctionGen<'_> {
         self.open_block(join_id, ivs.len())
     }
 
-    /// A counted loop whose trip count no generated value can influence.
+    /// A counted loop whose limit is threaded rather than written into the
+    /// header.
     ///
-    /// The counter is a dedicated block argument appended for the duration of
-    /// the loop and dropped on the exit edge, so a nested loop adds its own
-    /// slot instead of clobbering the enclosing one. That is what bounds the
-    /// total iteration count by the product of the declared trip counts rather
-    /// than leaving termination to the interpreter's fuel.
+    /// The counter and its limit are a pair of block arguments appended for the
+    /// duration of the loop and dropped on the exit edge, so a nested loop adds
+    /// its own pair instead of clobbering the enclosing one. The limit may be
+    /// derived from a generated value, but it is masked below the configured
+    /// ceiling before it reaches the edge: the trip count is data-dependent and
+    /// still bounded by construction rather than by interpreter fuel.
     fn emit_loop(&mut self, mut block: OpenBlock, depth: u32) -> OpenBlock {
-        let trips = 1 + self.rng.below(self.config.max_loop_trips);
         let header_id = self.fresh_block();
         let body_id = self.fresh_block();
         let exit_id = self.fresh_block();
         let outer = block.ivs.clone();
 
         let zero = self.emit_const(&mut block, 64, 0);
+        let limit = if self.rng.chance(50) {
+            let trips = 1 + self.rng.below(self.config.max_loop_trips);
+            self.emit_const(&mut block, 64, trips)
+        } else {
+            let raw = self.value_of(&mut block, 64);
+            let ceiling = self.emit_const(&mut block, 64, self.config.max_loop_trips - 1);
+            let clamped = self.fresh(EvoIRType::Bits(64));
+            block.insts.push(Inst::And(clamped.clone(), raw, ceiling));
+            self.record(&mut block, &clamped);
+            clamped
+        };
         let mut entry_ivs = outer.clone();
         entry_ivs.push(zero);
+        entry_ivs.push(limit);
         let args = self.edge_args(&mut block, &entry_ivs);
         self.close(block, Inst::Br(header_id, args));
 
-        let mut header = self.open_block(header_id, outer.len() + 1);
-        let counter = header.ivs.last().cloned().expect("the loop counter");
-        let limit = self.emit_const(&mut header, 64, trips);
+        let mut header = self.open_block(header_id, outer.len() + 2);
+        let counter = header.ivs[header.ivs.len() - 2].clone();
+        let limit = header.ivs[header.ivs.len() - 1].clone();
         let condition = self.fresh(EvoIRType::Bits(1));
         header
             .insts
@@ -534,22 +602,24 @@ impl FunctionGen<'_> {
         self.record(&mut header, &condition);
         let header_ivs = header.ivs.clone();
         let body_args = self.edge_args(&mut header, &header_ivs);
-        let exit_args = self.edge_args(&mut header, &header_ivs[..header_ivs.len() - 1]);
+        let exit_args = self.edge_args(&mut header, &header_ivs[..header_ivs.len() - 2]);
         self.close(
             header,
             Inst::CondBr(condition, body_id, body_args, exit_id, exit_args),
         );
 
-        let body = self.open_block(body_id, outer.len() + 1);
+        let body = self.open_block(body_id, outer.len() + 2);
         let mut body = self.emit_region(body, depth);
         let body_ivs = body.ivs.clone();
-        let inner = body_ivs.last().cloned().expect("the loop counter");
+        let counter = body_ivs[body_ivs.len() - 2].clone();
+        let limit = body_ivs[body_ivs.len() - 1].clone();
         let one = self.emit_const(&mut body, 64, 1);
         let next = self.fresh(EvoIRType::Bits(64));
-        body.insts.push(Inst::Add(next.clone(), inner, one));
+        body.insts.push(Inst::Add(next.clone(), counter, one));
         self.record(&mut body, &next);
-        let mut back = body_ivs[..body_ivs.len() - 1].to_vec();
+        let mut back = body_ivs[..body_ivs.len() - 2].to_vec();
         back.push(next);
+        back.push(limit);
         let args = self.edge_args(&mut body, &back);
         self.close(body, Inst::Br(header_id, args));
 
@@ -560,20 +630,25 @@ impl FunctionGen<'_> {
 
     fn emit_instruction(&mut self, block: &mut OpenBlock) {
         match self.rng.below(100) {
-            0..=8 => {
+            0..=7 => {
                 let width = *self.rng.pick(&self.active.clone());
                 self.emit_random_const(block, width);
             }
-            9..=27 => self.emit_binary(block),
-            28..=35 => self.emit_shift(block),
-            36..=44 => self.emit_div_rem(block),
-            45..=54 => self.emit_compare(block),
-            55..=62 => self.emit_cast(block),
-            63..=70 => self.emit_predicate(block),
-            71..=83 => self.emit_bait(block),
-            84..=90 => self.emit_memory(block),
-            91..=95 => self.emit_global(block),
-            _ => self.emit_call(block),
+            8..=24 => self.emit_binary(block),
+            25..=31 => self.emit_shift(block),
+            32..=39 => self.emit_div_rem(block),
+            40..=48 => self.emit_compare(block),
+            49..=55 => self.emit_cast(block),
+            56..=62 => self.emit_predicate(block),
+            63..=74 => self.emit_bait(block),
+            75..=80 => self.emit_memory(block),
+            81..=84 => self.emit_global(block),
+            85..=87 => self.emit_call(block),
+            88..=90 => self.emit_indirect_call(block),
+            91..=92 => self.emit_copy(block),
+            93..=94 => self.emit_lifetime_end(block),
+            95..=96 => self.emit_null_comparison(block),
+            _ => self.emit_carrier_rebind(block),
         }
     }
 
@@ -706,19 +781,23 @@ impl FunctionGen<'_> {
         let width = *self.rng.pick(&self.active.clone());
         let lhs = self.value_of(block, width);
         let rhs = self.value_of(block, width);
-        let operation = match self.rng.below(6) {
+        let operation = self.random_comparison();
+        let result = self.fresh(EvoIRType::Bits(1));
+        block
+            .insts
+            .push(Inst::ICmp(result.clone(), operation, lhs, rhs));
+        self.record(block, &result);
+    }
+
+    fn random_comparison(&mut self) -> CmpOp {
+        match self.rng.below(6) {
             0 => CmpOp::Eq,
             1 => CmpOp::Ne,
             2 => CmpOp::SLt,
             3 => CmpOp::SLe,
             4 => CmpOp::ULt,
             _ => CmpOp::ULe,
-        };
-        let result = self.fresh(EvoIRType::Bits(1));
-        block
-            .insts
-            .push(Inst::ICmp(result.clone(), operation, lhs, rhs));
-        self.record(block, &result);
+        }
     }
 
     fn emit_cast(&mut self, block: &mut OpenBlock) {
@@ -828,10 +907,11 @@ impl FunctionGen<'_> {
                 self.record(block, &result);
             }
             _ => {
+                let operation = self.random_comparison();
                 let result = self.fresh(EvoIRType::Bits(1));
                 block.insts.push(Inst::ICmp(
                     result.clone(),
-                    CmpOp::Eq,
+                    operation,
                     operand.clone(),
                     operand,
                 ));
@@ -840,17 +920,14 @@ impl FunctionGen<'_> {
         }
     }
 
-    fn emit_memory(&mut self, block: &mut OpenBlock) {
-        if !block.buffers.is_empty() && self.rng.chance(55) {
-            self.emit_buffer_access(block);
-            return;
-        }
-        let width = *self.rng.pick(&MEMORY_WIDTHS);
+    // -- memory -------------------------------------------------------------
+
+    /// Allocate one object of `count` elements and store every element, so no
+    /// later load can read an uninitialized byte.
+    fn emit_buffer(&mut self, block: &mut OpenBlock, width: u16, count: u64) -> Buffer {
         let bytes = u64::from(width / 8);
         let align = u32::try_from(bytes).expect("a memory width is at most eight bytes");
-        let count = 1 + self.rng.below(3);
-        let origin = *self.origins;
-        *self.origins += 1;
+        let origin = self.take_origin();
 
         let pointer = self.fresh(pointer_type());
         let mem_out = self.fresh(memory_type());
@@ -889,18 +966,38 @@ impl FunctionGen<'_> {
             elements.push(element);
         }
 
-        // Every byte is written before anything reads the object, so no later
-        // load can report an uninitialized byte.
         let layout = AccessLayout::new(bytes, align);
         for element in elements.clone() {
             let value = self.value_of(block, width);
             self.emit_store(block, &element, &value, layout, false);
         }
-        block.buffers.push(Buffer {
+        let buffer = Buffer {
             elements,
             width,
             layout,
-        });
+        };
+        block.buffers.push(buffer.clone());
+        buffer
+    }
+
+    /// A fresh, fully initialized carrier object.
+    fn emit_carrier_object(&mut self, block: &mut OpenBlock) -> Value {
+        self.emit_buffer(block, CARRIER_WIDTH, 1).elements[0].clone()
+    }
+
+    fn emit_carrier_rebind(&mut self, block: &mut OpenBlock) {
+        let carrier = self.emit_carrier_object(block);
+        block.carrier = carrier;
+    }
+
+    fn emit_memory(&mut self, block: &mut OpenBlock) {
+        if self.rng.chance(55) {
+            self.emit_buffer_access(block);
+            return;
+        }
+        let width = *self.rng.pick(&MEMORY_WIDTHS);
+        let count = 1 + self.rng.below(3);
+        self.emit_buffer(block, width, count);
     }
 
     fn emit_buffer_access(&mut self, block: &mut OpenBlock) {
@@ -928,13 +1025,103 @@ impl FunctionGen<'_> {
             result: pointer.clone(),
             symbol,
         });
-        let layout = AccessLayout::new(8, 8);
         block.buffers.push(Buffer {
             elements: vec![pointer],
-            width: 64,
-            layout,
+            width: CARRIER_WIDTH,
+            layout: CARRIER,
         });
         self.emit_buffer_access(block);
+    }
+
+    /// A copy between two ranges of one object.
+    ///
+    /// The destination and source are either the same element or two different
+    /// elements of a two-element object, so the ranges are identical or
+    /// disjoint and never the partial overlap that reports `E3027`.
+    fn emit_copy(&mut self, block: &mut OpenBlock) {
+        let width = *self.rng.pick(&MEMORY_WIDTHS);
+        let buffer = self.emit_buffer(block, width, 2);
+        let destination = buffer.elements[0].clone();
+        let source = if self.rng.chance(30) {
+            destination.clone()
+        } else {
+            buffer.elements[1].clone()
+        };
+        let mem_out = self.fresh(memory_type());
+        let world_out = self.fresh(world_type());
+        block.insts.push(Inst::Copy {
+            destination,
+            source,
+            mem_in: block.mem.clone(),
+            world_in: block.world.clone(),
+            mem_out: mem_out.clone(),
+            world_out: world_out.clone(),
+            layout: buffer.layout,
+        });
+        block.mem = mem_out;
+        block.world = world_out;
+    }
+
+    /// End the lifetime of an object nothing can reach afterwards.
+    ///
+    /// The object is allocated for this purpose and never recorded as a buffer
+    /// or handed to a successor, so no later access and no frame cleanup can
+    /// find it alive. Ending a carrier instead would make every access in every
+    /// successor a dangling one.
+    fn emit_lifetime_end(&mut self, block: &mut OpenBlock) {
+        let origin = self.take_origin();
+        let pointer = self.fresh(pointer_type());
+        let mem_out = self.fresh(memory_type());
+        let world_out = self.fresh(world_type());
+        block.insts.push(Inst::Alloca {
+            result: pointer.clone(),
+            mem_in: block.mem.clone(),
+            world_in: block.world.clone(),
+            mem_out: mem_out.clone(),
+            world_out: world_out.clone(),
+            origin,
+            layout: CARRIER,
+        });
+        block.mem = mem_out;
+        block.world = world_out;
+
+        let mem_after = self.fresh(memory_type());
+        let world_after = self.fresh(world_type());
+        block.insts.push(Inst::LifetimeEnd {
+            mem_in: block.mem.clone(),
+            world_in: block.world.clone(),
+            pointer,
+            mem_out: mem_after.clone(),
+            world_out: world_after.clone(),
+        });
+        block.mem = mem_after;
+        block.world = world_after;
+    }
+
+    /// A null pointer that is compared and never dereferenced.
+    ///
+    /// Pointer equality is total and compares provenance and offset, so this is
+    /// defined. The value is not recorded anywhere a later access could reach
+    /// it, and it never becomes a carrier: forming an offset from it or reading
+    /// through it would be `E3009`.
+    fn emit_null_comparison(&mut self, block: &mut OpenBlock) {
+        let null = self.fresh(pointer_type());
+        block.insts.push(Inst::PtrNull(null.clone()));
+        let other = if self.rng.chance(50) {
+            block.carrier.clone()
+        } else {
+            null.clone()
+        };
+        let operation = if self.rng.chance(50) {
+            CmpOp::Eq
+        } else {
+            CmpOp::Ne
+        };
+        let result = self.fresh(EvoIRType::Bits(1));
+        block
+            .insts
+            .push(Inst::ICmp(result.clone(), operation, null, other));
+        self.record(block, &result);
     }
 
     fn emit_store(
@@ -1001,6 +1188,26 @@ impl FunctionGen<'_> {
         self.record(block, &result);
     }
 
+    // -- calls --------------------------------------------------------------
+
+    fn call_arguments(&mut self, block: &mut OpenBlock, signature: &Signature) -> Vec<Value> {
+        signature
+            .params
+            .clone()
+            .into_iter()
+            .map(|width| self.value_of(block, width))
+            .collect()
+    }
+
+    fn call_results(&mut self, signature: &Signature) -> Vec<Value> {
+        signature
+            .results
+            .clone()
+            .into_iter()
+            .map(|width| self.fresh(EvoIRType::Bits(width)))
+            .collect()
+    }
+
     fn emit_call(&mut self, block: &mut OpenBlock) {
         if self.callees.is_empty() {
             self.emit_binary(block);
@@ -1008,16 +1215,12 @@ impl FunctionGen<'_> {
         }
         let index = self.rng.below(self.callees.len() as u64) as usize;
         let signature = self.callees[index].clone();
-        let mut args = Vec::new();
-        for width in &signature.params {
-            let value = self.value_of(block, *width);
-            args.push(value);
-        }
-        let result = self.fresh(EvoIRType::Bits(signature.result));
+        let args = self.call_arguments(block, &signature);
+        let results = self.call_results(&signature);
         let mem_out = self.fresh(memory_type());
         let world_out = self.fresh(world_type());
         block.insts.push(Inst::Call {
-            results: vec![result.clone()],
+            results: results.clone(),
             callee: signature.name.clone(),
             args,
             mem_in: block.mem.clone(),
@@ -1027,6 +1230,45 @@ impl FunctionGen<'_> {
         });
         block.mem = mem_out;
         block.world = world_out;
-        self.record(block, &result);
+        for result in &results {
+            self.record(block, result);
+        }
+    }
+
+    /// A call through the address of a function this module defines.
+    ///
+    /// The written signature is the callee's complete lowered interface, so
+    /// module validation accepts it and the runtime provenance check finds the
+    /// symbol it named.
+    fn emit_indirect_call(&mut self, block: &mut OpenBlock) {
+        if self.callees.is_empty() {
+            self.emit_binary(block);
+            return;
+        }
+        let index = self.rng.below(self.callees.len() as u64) as usize;
+        let signature = self.callees[index].clone();
+        let callee = self.fresh(signature.pointer_type());
+        block.insts.push(Inst::FuncAddr {
+            result: callee.clone(),
+            symbol: signature.name.clone(),
+        });
+        let args = self.call_arguments(block, &signature);
+        let results = self.call_results(&signature);
+        let mem_out = self.fresh(memory_type());
+        let world_out = self.fresh(world_type());
+        block.insts.push(Inst::IndirectCall {
+            results: results.clone(),
+            callee,
+            args,
+            mem_in: block.mem.clone(),
+            world_in: block.world.clone(),
+            mem_out: mem_out.clone(),
+            world_out: world_out.clone(),
+        });
+        block.mem = mem_out;
+        block.world = world_out;
+        for result in &results {
+            self.record(block, result);
+        }
     }
 }
