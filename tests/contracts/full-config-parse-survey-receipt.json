@@ -1,119 +1,130 @@
 {
-  "schemaVersion": 2,
-  "receiptId": "c30.full-configuration-parse-survey.v2",
+  "schemaVersion": 3,
+  "receiptId": "c30.full-configuration-parse-survey.v3",
   "status": "MEASURED_NO_PANIC_WITH_DIAGNOSTIC_FRONTIER",
   "authority": {
     "contract": "tests/contracts/day9-acceptance-contract.json",
-    "authorityCommit": "8562deb",
-    "scope": "T token locations and preprocessor conformance; F3 measure-only rerun",
-    "rulings": ["surveyMeasuredAnUnmeasuredPath", "fullConfigSurveyIsMeasureOnly"],
-    "contractSha256": "c6669636459c7b522e4e3c2b37e0464b45292daaf929c1b50e02eb10b3061118",
+    "authorityCommit": "8f9a59d94f85e107788b40a1815fab88531e86db",
+    "scope": "U preprocessor conformance from the second survey; F3 measure-only rerun",
+    "rulings": [
+      "pragmaInsideMacroArgumentConflict",
+      "secondSurveyRanking",
+      "fullConfigSurveyIsMeasureOnly"
+    ],
+    "contractSha256": "ad14d91530efed11b661af605e90c6240e95bc20d6d1fc27dd0714413c8724c1",
     "specification": "docs/evoir-spec.md",
-    "specificationRevision": "1.9.32",
-    "specificationSha256": "0cf1c41f6e9c078e6b9642b88c2e8612f66a5ed458bda1d7dc382d59dfae13aa"
+    "specificationRevision": "1.9.33",
+    "specificationSha256": "77d904c53b48e0f0db1512c61d60cfcf50095492bad0aa0296e2b26d77507811"
   },
-  "implementationCommit": "fc21cd3024e079cd68078cb3eca4303a49d89a26",
-  "subjectCommit": "ce845bb1976d90389863806d988b6084da39f04e",
+  "implementationCommit": "6cc7820557a3b91caed52a037ab5ce51315d778a",
+  "subjectCommit": "5f9216ad5a462d1a8104d2ca5d72acabac2855b1",
   "subjectQualification": "The survey subject is the implementation commit plus its dashboard receipt only; no production or specification change intervened.",
   "surveyRunChangedProductionOrSpecification": false,
   "harness": {
-    "commit": "5b78c08",
+    "commit": "6cc7820557a3b91caed52a037ab5ce51315d778a",
     "path": "tools/survey-cohort.py",
-    "sha256": "3f17ca42fac993858df9d2de31ddb23ac25ef31b7e31450f858450ce34a1da43",
+    "sha256": "9371f30ba3e8bd7011ee50004f96c3e532737778d827aeeae45c02208c4741fc",
+    "change": "gcc HOSTCC records are classified as host-compiler-program and excluded from the target translation-unit denominator",
     "projectionAuthority": {
       "path": "tests/acceptance/day5-kernel-reconnaissance.py",
       "sha256": "0df0707e49270f494e7fccaf3fc651558ecc5ffaea3be2e0dfb0fdb899387957",
-      "reusedFunctions": ["first_saved_command", "source_declaration", "raw_projection", "argv_sha256"]
+      "reusedFunctions": [
+        "first_saved_command",
+        "source_declaration",
+        "raw_projection",
+        "argv_sha256"
+      ]
     }
   },
   "run": {
-    "id": "20260902T051739Z-447",
-    "capture": ".evidence/full-config-parse-survey/20260902T051739Z-447",
+    "id": "20260902T074727Z-61593",
+    "capture": ".evidence/full-config-parse-survey/20260902T074727Z-61593",
     "command": "python3 tools/survey-cohort.py --evocc target/release/evocc --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --jobs 4 --timeout 60",
     "returnCode": 0,
-    "releaseBinarySha256": "96a5584449aa2ef2be4f2335825be5cc10871b51b189a753e46d86ed15289249"
+    "releaseBinarySha256": "09c2568ab0d470e4d71317581051d1745692687287549b9989ec0fe08cfdaedd"
   },
   "enumeration": {
     "source": ".build/reference/gcc-lane-1/**/*.o.cmd",
     "commandRecords": 2944,
-    "includedCTranslationUnits": 2832,
-    "excluded": 112,
+    "includedCTranslationUnits": 2798,
+    "excluded": 146,
     "excludedByReason": {
       "assembly-source": 67,
+      "host-compiler-program": 34,
       "link-or-binary-transform": 43,
       "vmlinux-synthetic-target": 2
     },
     "evidence": "enumeration.jsonl"
   },
   "classifications": {
-    "clean": 1292,
-    "diagnosed": 1540,
+    "clean": 1652,
+    "diagnosed": 1146,
     "unavailable": 0,
     "timeout": 0,
     "panic": 0,
-    "sum": 2832,
+    "sum": 2798,
     "evidence": "results.jsonl"
   },
   "previousSurveyComparison": {
-    "runId": "20260902T023241Z-87371",
-    "clean": 5,
-    "diagnosed": 59,
-    "unavailable": 0,
-    "timeout": 0,
-    "panic": 2768,
-    "interpretation": "The token-location repair removed the runtime-panic frontier. Diagnosed units remain typed next-frontier evidence and were not fixed here."
+    "runId": "20260902T051739Z-447",
+    "previousIncluded": 2832,
+    "previousClean": 1292,
+    "previousDiagnosed": 1540,
+    "hostCompilerUnitsRemovedFromDenominator": 34,
+    "sharedTargetUnitsMovedFromDiagnosedToClean": 360,
+    "interpretation": "The host-compiler exclusion accounts for 34 prior diagnosed units. On the shared target-unit denominator, the two preprocessor rules move 360 units from diagnosed to clean. Remaining typed diagnostics are the next measured frontier and were not fixed during the survey."
   },
   "atRootFirstDiagnosticTop15": [
-    {"rank": 1, "finding": "E1001 expected-declaration", "units": 576, "exampleUnit": "arch/arm64/kernel/cpu_errata.c", "exampleRecord": "arch/arm64/kernel/.cpu_errata.o.cmd"},
-    {"rank": 2, "finding": "E2001 undeclared-identifier", "units": 526, "exampleUnit": "arch/arm64/kernel/efi.c", "exampleRecord": "arch/arm64/kernel/.efi.o.cmd"},
-    {"rank": 3, "finding": "E2202 invalid-initializer-type", "units": 121, "exampleUnit": "arch/arm64/kernel/paravirt.c", "exampleRecord": "arch/arm64/kernel/.paravirt.o.cmd"},
-    {"rank": 4, "finding": "E1003 expected-expression", "units": 61, "exampleUnit": "arch/arm64/kernel/sys.c", "exampleRecord": "arch/arm64/kernel/.sys.o.cmd"},
-    {"rank": 5, "finding": "E2208 non-constant-static-initializer", "units": 54, "exampleUnit": "arch/arm64/kvm/config.c", "exampleRecord": "arch/arm64/kvm/.config.o.cmd"},
-    {"rank": 6, "finding": "E2102 invalid-update-operands", "units": 41, "exampleUnit": "arch/arm64/kernel/alternative.c", "exampleRecord": "arch/arm64/kernel/.alternative.o.cmd"},
-    {"rank": 7, "finding": "E2101 expected-modifiable-lvalue", "units": 40, "exampleUnit": "arch/arm64/kernel/cpu_ops.c", "exampleRecord": "arch/arm64/kernel/.cpu_ops.o.cmd"},
-    {"rank": 8, "finding": "E0105 include-not-found", "units": 34, "exampleUnit": "scripts/dtc/checks.c", "exampleRecord": "scripts/dtc/.checks.o.cmd"},
-    {"rank": 9, "finding": "E2102 invalid-projected-lvalue", "units": 34, "exampleUnit": "arch/arm64/kernel/acpi.c", "exampleRecord": "arch/arm64/kernel/.acpi.o.cmd"},
-    {"rank": 10, "finding": "E2906 designator-outside-object", "units": 34, "exampleUnit": "arch/arm64/kernel/cpuinfo.c", "exampleRecord": "arch/arm64/kernel/.cpuinfo.o.cmd"},
-    {"rank": 11, "finding": "E1002 expected-token", "units": 12, "exampleUnit": "arch/arm64/crypto/aes-ce-ccm-glue.c", "exampleRecord": "arch/arm64/crypto/.aes-ce-ccm-glue.o.cmd"},
-    {"rank": 12, "finding": "E0102 unmatched-conditional", "units": 2, "exampleUnit": "kernel/module/main.c", "exampleRecord": "kernel/module/.main.o.cmd"},
-    {"rank": 13, "finding": "E2205 not-covered-day5", "units": 2, "exampleUnit": "drivers/firmware/efi/libstub/file.c", "exampleRecord": "drivers/firmware/efi/libstub/.file.o.cmd"},
-    {"rank": 14, "finding": "E0110 invalid-token-paste", "units": 1, "exampleUnit": "net/core/filter.c", "exampleRecord": "net/core/.filter.o.cmd"},
-    {"rank": 15, "finding": "E1006 invalid-character-literal", "units": 1, "exampleUnit": "lib/string_helpers.c", "exampleRecord": "lib/.string_helpers.o.cmd"}
+    {"rank": 1, "finding": "E2001 undeclared-identifier", "units": 632, "exampleUnit": "arch/arm64/kernel/efi.c", "exampleRecord": "arch/arm64/kernel/.efi.o.cmd"},
+    {"rank": 2, "finding": "E2202 invalid-initializer-type", "units": 139, "exampleUnit": "arch/arm64/kernel/paravirt.c", "exampleRecord": "arch/arm64/kernel/.paravirt.o.cmd"},
+    {"rank": 3, "finding": "E2102 invalid-projected-lvalue", "units": 112, "exampleUnit": "arch/arm64/kernel/acpi.c", "exampleRecord": "arch/arm64/kernel/.acpi.o.cmd"},
+    {"rank": 4, "finding": "E2208 non-constant-static-initializer", "units": 67, "exampleUnit": "arch/arm64/kvm/config.c", "exampleRecord": "arch/arm64/kvm/.config.o.cmd"},
+    {"rank": 5, "finding": "E2102 invalid-update-operands", "units": 52, "exampleUnit": "arch/arm64/kernel/alternative.c", "exampleRecord": "arch/arm64/kernel/.alternative.o.cmd"},
+    {"rank": 6, "finding": "E2101 expected-modifiable-lvalue", "units": 51, "exampleUnit": "arch/arm64/kernel/cpu_ops.c", "exampleRecord": "arch/arm64/kernel/.cpu_ops.o.cmd"},
+    {"rank": 7, "finding": "E2906 designator-outside-object", "units": 46, "exampleUnit": "arch/arm64/kernel/cpuinfo.c", "exampleRecord": "arch/arm64/kernel/.cpuinfo.o.cmd"},
+    {"rank": 8, "finding": "E1001 expected-declaration", "units": 18, "exampleUnit": "arch/arm64/kernel/cpu_errata.c", "exampleRecord": "arch/arm64/kernel/.cpu_errata.o.cmd"},
+    {"rank": 9, "finding": "E1002 expected-token", "units": 12, "exampleUnit": "arch/arm64/crypto/aes-ce-ccm-glue.c", "exampleRecord": "arch/arm64/crypto/.aes-ce-ccm-glue.o.cmd"},
+    {"rank": 10, "finding": "E1003 expected-expression", "units": 10, "exampleUnit": "drivers/tty/tty_io.c", "exampleRecord": "drivers/tty/.tty_io.o.cmd"},
+    {"rank": 11, "finding": "E0102 unmatched-conditional", "units": 2, "exampleUnit": "kernel/module/main.c", "exampleRecord": "kernel/module/.main.o.cmd"},
+    {"rank": 12, "finding": "E2205 not-covered-day5", "units": 2, "exampleUnit": "drivers/firmware/efi/libstub/file.c", "exampleRecord": "drivers/firmware/efi/libstub/.file.o.cmd"},
+    {"rank": 13, "finding": "E0110 invalid-token-paste", "units": 1, "exampleUnit": "net/core/filter.c", "exampleRecord": "net/core/.filter.o.cmd"},
+    {"rank": 14, "finding": "E1006 invalid-character-literal", "units": 1, "exampleUnit": "lib/string_helpers.c", "exampleRecord": "lib/.string_helpers.o.cmd"},
+    {"rank": 15, "finding": "E2201 excess-initializer", "units": 1, "exampleUnit": "drivers/xen/xenfs/super.c", "exampleRecord": "drivers/xen/xenfs/.super.o.cmd"}
   ],
   "timing": {
     "parallelism": 4,
     "perUnitTimeoutSeconds": 60,
-    "medianWallMilliseconds": 2171.837,
-    "maximumWallMilliseconds": 17618.217,
+    "medianWallMilliseconds": 2342.094,
+    "maximumWallMilliseconds": 20134.198,
     "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c",
     "qualification": "Per-process wall time was observed under concurrent host load; it is coarse telemetry, not a benchmark."
   },
   "sealedEvidence": {
-    "seal": {"path": ".evidence/full-config-parse-survey/20260902T051739Z-447/seal.json", "sha256": "1fcb0ea90234e6b7f6212d9c168d47a9413afb05fe8435844a1e0cedeaa5d4d5", "bytes": 705},
-    "captureManifest": {"files": 5671, "bytes": 221027647, "path": "capture-files.tsv", "sha256": "4d37dc5a512fc90b4a99a5656c005a0a1d1896bdd61cfdd20a8794f56594c33a"},
-    "summarySha256": "ea5102db37ee68f4722799f73ca298201293da27aea4b5520aaad6161f033cf8",
-    "resultsSha256": "83dd7bda2d3021569c05c0526abee7bde3e87a983964e0bb7d9e8c2e00440557",
-    "enumerationSha256": "a59d3f25789e52e80f30101069f482ada4b2600b3741ed71e344545676cddf2e",
-    "argvSha256": "d925193edf7ac95c879319ad0a1379b9960a9414538b55b202cfa297dfc26e56",
-    "independentVerification": "All 5671 manifest rows were re-hashed; all byte counts and SHA-256 digests matched. Classification sum was 2832 and exclusion sum was 112."
+    "seal": {"path": ".evidence/full-config-parse-survey/20260902T074727Z-61593/seal.json", "sha256": "a0899f1b6825577903532d6e29b07e4634562251f65a4601d398183048628caa", "bytes": 704},
+    "captureManifest": {"files": 5603, "bytes": 41350653, "path": "capture-files.tsv", "sha256": "a846d314aaa285195d699b642941ee8c2f2ca553ae12ef9c57561bbf11d52800"},
+    "summarySha256": "3744c7209fdc1245f2e552c085bfae176896df180267dbc3386cc4f35c530e8f",
+    "resultsSha256": "4894f3184be04d5fb922076ae7c914491a26956fca546c9a320af7276c70d867",
+    "enumerationSha256": "a87c93dc3a6e77add3db9e93cb74471418e26ddab2207b60a06b8681f6cfd930",
+    "argvSha256": "e470edd0562830bc462e870c33963037a577f5d6a1334dde234be75e0029fcab",
+    "independentVerification": "All 5603 manifest rows were re-hashed with shasum -a 256 -c; all byte counts and SHA-256 digests matched. Classification sum is 2798 and exclusion sum is 146."
   },
   "acceptanceGuard": {
-    "runId": "20260902T051401Z-89830",
+    "runId": "20260902T074011Z-8961",
     "rawPreprocessClean": "16/16",
     "gccPreprocessedParserClean": "16/16",
     "clangPreprocessedParserClean": "16/16",
     "dualOracleClean": "16/16",
     "regressionsAgainstPrevious": 0,
-    "resultsSha256": "0cc8f5f49aaabc2538c763528a02cde1bb77f68587f48e28a81b7499e4aa1ab6"
+    "resultsSha256": "c0a7a26b34f0c447c7f2066eeedac8ed217b711e462ce363e76af74b4b320a70"
   },
   "gates": {
-    "workspace": {"command": "cargo test --workspace --no-fail-fast", "passed": 1083, "failed": 0, "ignored": 0},
+    "workspace": {"command": "cargo test --workspace --no-fail-fast", "passed": 1094, "failed": 0, "ignored": 0},
     "clippy": {"command": "cargo clippy --workspace --all-targets -- -D warnings", "warnings": 0},
     "format": {"command": "cargo fmt --all -- --check", "result": "clean"},
     "ruff": {"command": "ruff check tests/acceptance tools", "result": "clean"},
     "baseLayoutCorpus": "128/128 ORACLE_CONSENSUS; 0 mismatches",
     "attributedLayoutCorpus": "22/22 ORACLE_CONSENSUS; 0 mismatches",
-    "offlineNoLocalReplay": "1083 passed / 0 failed / 0 ignored at fc21cd3024e079cd68078cb3eca4303a49d89a26",
+    "offlineNoLocalReplay": "1094 passed / 0 failed / 0 ignored at 5f9216ad5a462d1a8104d2ca5d72acabac2855b1; objects alternates absent",
     "diffCheck": "clean"
   },
   "specGap": null,
