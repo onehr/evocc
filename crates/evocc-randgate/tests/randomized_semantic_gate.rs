@@ -524,13 +524,15 @@ fn the_extended_campaign_finds_no_mismatch() {
     assert_eq!(report.generated, LONG_PROGRAMS);
 }
 
-/// Every seed whose certificate the first campaign refused.
+/// Every seed whose certificate a campaign has refused.
 ///
-/// One came from the thousand-program gate and eleven from the twenty-thousand
-/// program run. They are written down rather than rediscovered: a rule that is
-/// exercised only when a random draw happens to reach it is not a regression
-/// test.
-const REFUSED_SEEDS: [u64; 12] = [
+/// Twelve come from the first campaign and one from the second. The first
+/// twelve no longer name the modules they named then -- the generator has
+/// grown since -- so they are a spot check rather than a pin; the shapes
+/// themselves are pinned by the hand-written reproducers in
+/// `certificate_binding_refusal.rs`, which no generator change can move.
+/// Rediscovering any of them by chance is not a regression test either way.
+const REFUSED_SEEDS: [u64; 13] = [
     1_592_591_013,
     1_592_627_955,
     1_592_629_865,
@@ -543,6 +545,7 @@ const REFUSED_SEEDS: [u64; 12] = [
     1_592_645_302,
     1_592_645_787,
     1_592_646_750,
+    1_592_636_988,
 ];
 
 #[test]
