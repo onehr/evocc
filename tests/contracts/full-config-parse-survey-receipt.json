@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "c30.full-configuration-parse-survey.v1",
+  "status": "MEASURED_WITH_WIDESPREAD_PANIC",
+  "authority": {
+    "contract": "tests/contracts/day9-acceptance-contract.json",
+    "authorityCommit": "a303fc6",
+    "scope": "F3 full-configuration parse survey",
+    "ruling": "fullConfigSurveyIsMeasureOnly",
+    "sha256": "f01075bbe3ba1dcab74d8867556282c0be820205708a455737e07edb240c8f65"
+  },
+  "baselineCommit": "a303fc6",
+  "subjectCommit": "5b78c086a931e921b893da00152c8b4e0334bbd9",
+  "productionOrSpecificationChanged": false,
+  "harnessCommit": {
+    "commit": "5b78c08",
+    "message": "tools: seal full-configuration parser surveys",
+    "path": "tools/survey-cohort.py",
+    "sha256": "3f17ca42fac993858df9d2de31ddb23ac25ef31b7e31450f858450ce34a1da43"
+  },
+  "run": {
+    "id": "20260902T023241Z-87371",
+    "capture": ".evidence/full-config-parse-survey/20260902T023241Z-87371",
+    "command": "python3 tools/survey-cohort.py --evocc target/release/evocc --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --jobs 4 --timeout 60",
+    "returnCode": 0,
+    "releaseBinarySha256": "480a95654a67d1a55c0d07e92bac42e134bd6f77ca4f60ece5214a491e08fc8e",
+    "projectionAuthority": {
+      "path": "tests/acceptance/day5-kernel-reconnaissance.py",
+      "sha256": "0df0707e49270f494e7fccaf3fc651558ecc5ffaea3be2e0dfb0fdb899387957",
+      "reusedFunctions": [
+        "first_saved_command",
+        "source_declaration",
+        "raw_projection",
+        "argv_sha256"
+      ]
+    }
+  },
+  "enumeration": {
+    "source": ".build/reference/gcc-lane-1/**/*.o.cmd",
+    "commandRecords": 2944,
+    "includedCTranslationUnits": 2832,
+    "excluded": 112,
+    "excludedByReason": {
+      "assembly-source": 67,
+      "link-or-binary-transform": 43,
+      "vmlinux-synthetic-target": 2
+    },
+    "evidence": "enumeration.jsonl"
+  },
+  "classifications": {
+    "clean": 5,
+    "diagnosed": 59,
+    "unavailable": 0,
+    "timeout": 0,
+    "panic": 2768,
+    "sum": 2832,
+    "evidence": "results.jsonl"
+  },
+  "atRootFirstDiagnosticTop15": [
+    {
+      "rank": 1,
+      "finding": "E0105 include-not-found",
+      "units": 56,
+      "exampleUnit": "arch/arm64/kvm/arm.c",
+      "exampleRecord": "arch/arm64/kvm/.arm.o.cmd"
+    },
+    {
+      "rank": 2,
+      "finding": "E0102 unmatched-conditional",
+      "units": 2,
+      "exampleUnit": "kernel/module/main.c",
+      "exampleRecord": "kernel/module/.main.o.cmd"
+    },
+    {
+      "rank": 3,
+      "finding": "E0110 invalid-token-paste",
+      "units": 1,
+      "exampleUnit": "net/core/filter.c",
+      "exampleRecord": "net/core/.filter.o.cmd"
+    }
+  ],
+  "top15Note": "Only three at-root first-diagnostic classes exist among the 59 diagnosed units; the other 2768 non-clean units are classified separately as panic and are not relabelled as diagnostics.",
+  "panicFamilies": [
+    {
+      "units": 1984,
+      "message": "crates/evocc-common/src/lib.rs:64:9: assertion failed: byte_start <= byte_end"
+    },
+    {
+      "units": 781,
+      "message": "crates/evocc-parser/src/lib.rs:4010:31: start byte index N is out of bounds for string of length M"
+    },
+    {
+      "units": 3,
+      "message": "crates/evocc-parser/src/lib.rs:4010:31: end byte index N is out of bounds for string of length M"
+    }
+  ],
+  "timing": {
+    "parallelism": 4,
+    "perUnitTimeoutSeconds": 60,
+    "medianWallMilliseconds": 1041.571,
+    "maximumWallMilliseconds": 3612.741,
+    "maximumUnit": "kernel/audit.c",
+    "qualification": "Per-process wall time was observed under concurrent host load; it is coarse telemetry, not a benchmark."
+  },
+  "sealedEvidence": {
+    "seal": {
+      "path": ".evidence/full-config-parse-survey/20260902T023241Z-87371/seal.json",
+      "sha256": "bbcd9b80e9aed30edf466241226883f9f2cc4740786a0ea0e6e415dd461d6501"
+    },
+    "captureManifest": {
+      "files": 5671,
+      "bytes": 23167853,
+      "path": "capture-files.tsv",
+      "sha256": "33288dab1fa323b91424a5ac139100ae37bc213930fbac26d61d0956b2230d5c"
+    },
+    "summarySha256": "06c0e0a83519eadc527e81d1311e2a6868a0e2b56c20c55728568705d6b8328f",
+    "resultsSha256": "3966a58e4ee6e48511396bb5e1629499daa912a7f3474ebaedc1916939a66627",
+    "enumerationSha256": "a59d3f25789e52e80f30101069f482ada4b2600b3741ed71e344545676cddf2e",
+    "argvSha256": "d925193edf7ac95c879319ad0a1379b9960a9414538b55b202cfa297dfc26e56",
+    "independentVerification": "All 5671 manifest rows were re-hashed; all byte counts and SHA-256 digests matched. Classification sum was 2832 and exclusion sum was 112."
+  },
+  "gates": {
+    "workspace": {
+      "command": "cargo test --workspace --no-fail-fast",
+      "passed": 1065,
+      "failed": 0
+    },
+    "clippy": {
+      "command": "cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    },
+    "diffCheck": "clean"
+  },
+  "scopeDiscipline": "No surveyed problem was fixed. The panic and diagnostic distributions are inputs to later scoped windows."
+}
