@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.34** | **Authoritative reference** | **2026-09-02**
+**Revision 1.9.35** | **Authoritative reference** | **2026-09-02**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1256,6 +1256,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3005` | `invalid-shift-count` | runtime |
 | `E3006` | `invalid-signed-left-shift` | runtime |
 | `E3007` | `scalar-function-fell-off-end` | runtime |
+| `E3008` | `interpreter-fuel-exhausted` | host resource |
 | `E3009` | `null-pointer-access` | runtime |
 | `E3010` | `dangling-pointer-access` | runtime |
 | `E3011` | `out-of-bounds-memory-access` | runtime |
@@ -3308,6 +3309,15 @@ produce a placeholder value.
 
 ---
 
+**Fuel.** An interpreter that exhausts its shared step budget stops with
+`E3008` (`interpreter-fuel-exhausted`). That stop is a limit of the host, not a
+property of the program: it is neither undefined behaviour nor a comparison
+result. A differential trial that hits it on either side is counted on its own
+and is never folded into the undefined-behaviour discard count or the
+mismatch count. Defined at revision 1.9.35 after the randomized gate found the
+interpreter emitting the code without an allocation (0 of 21,000 trials hit
+it under a 200,000-step budget).
+
 #### 10.1.17 Compile-time builtins, `__auto_type` and small GNU forms
 
 All measured in `.evidence/builtin-probes/20260826-2c23684c/win_i.out`; GCC-14
@@ -4176,6 +4186,29 @@ certificate that parses but violates identity allocation, node shape, replay,
 extraction, registry, digest, or module binding is well-formed but invalid.
 Section 11.4 gives each category its own exit status.
 
+**A certificate with no region.** A certificate that admits no region block
+claims that `after.evo` is the canonical rendering (Section 9.4, consecutive
+identifiers in Section 8.6 order) of the module parsed from `before.evo`, and
+nothing else. The checker verifies it by rendering the parsed `before.evo`
+itself and comparing byte for byte; it does not compare against the raw input
+bytes, which need not be canonical (identifiers in a hand-written or reduced
+module may have gaps). A producer that admits no region emits that canonical
+rendering. Measured defect at revision 1.9.34: the checker compared against
+the raw bytes and refused every gapped input the producer had merely
+renumbered.
+
+**Bindings are recomputed from the recorded children.** The substitution a
+rewrite line records must equal the one the checker derives from the
+operation and children of the node the rewrite names, after the merges
+recorded before it; a producer therefore computes each binding from the
+node stream it emitted, never from an operand remapped by a later
+replacement in the same witness closure. Measured defect at revision 1.9.34:
+seven of eight reduced refusals from the randomized gate (rules
+`p0_010_icmp_eq_self`, `p0_100_fold_add`, `p0_103_fold_and`,
+`p0_104_fold_or`, `p0_109_fold_icmp_sle`) bound a class equal in content to
+the child's class but never unified with it; the checker's refusal was
+correct.
+
 ### 11.4 Exit Statuses
 
 ```text
@@ -4387,6 +4420,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.35 | 2026-09-02 | First randomized semantic gate campaign (21,000 programs, 0 semantic mismatches, 12 certificate refusals). Allocates `E3008` `interpreter-fuel-exhausted` as a host-resource stop (6.3, 10.4); defines what a certificate with no region claims and how the checker verifies it; states that rewrite bindings are recomputed from the recorded node children (11.3). The `evp1` versions paragraph already answers the scheduler-record question: budget and epoch lines belong to `evp2`. |
 | 1.9.34 | 2026-09-02 | Third full-configuration survey (2,445 of 2,798 clean). Defines array lvalue decay for members, flexible members and string literals (10.1.3); range designators and inferred bounds (10.1.12); function pointer and `void *` conversions, `_Pragma`, `__inline`, `__restrict` and attribute placement (10.1.18); integer constants cast to pointers and static array decay as address constants (10.1.19); library and GCC-only ctype builtins (10.1.14). Measured. |
 | 1.9.33 | 2026-09-02 | Second full-configuration survey (1,292 of 2,832 clean). Defines directives inside macro arguments (`E0113` for `#pragma`, an oracle conflict) and empty-argument variadic forwarding (10.4); `__func__` and `__FUNCTION__`, `E2921` for `__PRETTY_FUNCTION__` (oracle conflict), labeled last statements in statement expressions (10.1.17); array parameter adjustment and pointer sign in conversions (10.1.18); modifiable lvalues as one predicate (10.1.3); address constants through casts and nested aggregates (10.1.19). Measured. |
 | 1.9.32 | 2026-09-02 | Defines source locations: spelling and expansion spans, total span composition from expansion spans, no buffer slicing (10.1.20); defines the whitespace flag, stringization spacing, and rescanning into the outer token sequence (10.4). Three measured defects behind the full-configuration survey's 2,768 panics and 56 `E0105` units. Measured. |

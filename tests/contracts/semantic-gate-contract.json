@@ -1,0 +1,53 @@
+{
+  "contractId": "semantic-gate",
+  "state": "open",
+  "whatAContractIs": "The middle-end stream's frozen scope, gate and rulings. The specification is the only authority; this file records what the stream is allowed to change and what it must measure.",
+  "authority": {
+    "spec": "docs/evoir-spec.md",
+    "revision": "1.9.35",
+    "crates": [
+      "evocc-egraph",
+      "evocc-eqopt",
+      "evocc-proof",
+      "evocc-proofcheck",
+      "evocc-evoir",
+      "evocc-randgate"
+    ],
+    "mustNotTouch": [
+      "evocc-cpp",
+      "evocc-lex",
+      "evocc-parser",
+      "evocc-chir",
+      "evocc-lower",
+      "tests/contracts/day9-acceptance-contract.json"
+    ]
+  },
+  "scope": [
+    "S1 randomized semantic gate: deterministic generator of validator-clean EvoIR, differential interpretation of original versus scalar-optimized module under an explicit budget, EVP1 replay through evo-proofcheck for every trial, shrinker to a minimal reproducer. Gate: 1000 programs in the workspace test with 0 mismatches and 0 refusals; 20,000 in the ignored long run.",
+    "S1a producer binding: each rewrite binding is computed from the recorded node children (11.3), pinned by the reduced reproducer test; the seeds 1592591013 and the eleven long-run seeds replay with status 0.",
+    "S1b zero-region claim: the checker compares after.evo with the canonical rendering of the parsed before.evo (11.3); the producer emits that rendering when it admits no region; pinned by the one-instruction gapped module.",
+    "S1c fuel: E3008 is counted on its own, never as undefined behaviour (10.4)."
+  ],
+  "gate": "cargo test --workspace; cargo clippy --workspace --all-targets -- -D warnings; cargo fmt --all -- --check; the 1000-program gate green; both reproducer tests green; wall time of the 1000-program test reported as the median of three runs on an idle machine.",
+  "rulings": {
+    "schedulerRecordIsNotAGap": "2026-09-02: the executor reported that 8.11 requires budget and epoch lines while 11.3 makes them optional. The Versions paragraph of 11.3 settles it: evp1 carries no budget line, no epoch markers and no premises, and a checker validates it without a scheduler claim; evp2 adds the three. Every certificate produced today is evp1 and is valid. The bounded-scheduler record is the evp2 stage, not a defect.",
+    "checkerIsRightProducerIsWrong": "2026-09-02: 12 refusals in 21,000 trials, 0 semantic mismatches. Seven of eight reduced refusals are one producer defect (bindings taken from remapped operands); the eighth is the zero-region renumbering. The checker refused correctly in every case, which is the property the standalone checker exists to have.",
+    "fuelIsAHostLimit": "2026-09-02: E3008 allocated; a fuel-exhausted trial is neither undefined behaviour nor a comparison. The executor's separate counter was the right choice and is now the rule."
+  },
+  "receipt": {
+    "branch": "worktree-agent-aa51d196760578511",
+    "commits": [
+      "493ac05",
+      "02585c9",
+      "743b63d",
+      "d2c7a73",
+      "2626dd1"
+    ],
+    "campaign": {
+      "programs": 21000,
+      "semanticMismatches": 0,
+      "certificateRefusals": 12,
+      "wallSeconds1000Median": 34.064
+    }
+  }
+}
