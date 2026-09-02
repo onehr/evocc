@@ -38,8 +38,8 @@ use std::path::PathBuf;
 
 use evocc_eqopt::{optimize_scalar_module_with_evp1, ScalarEqBudget};
 use evocc_evoir::{
-    render_module, validate_module, Block, BlockArg, CmpOp, EffectSummary, Function, FunctionParam,
-    Inst, Module, Value,
+    parse_section9_module, render_module, validate_module, Block, BlockArg, CmpOp, EffectSummary,
+    Function, FunctionParam, Inst, Module, Value,
 };
 use evocc_proof::render_evp1;
 use evocc_randgate::ProofChecker;
@@ -194,17 +194,18 @@ fn sparsely_numbered_module() -> Module {
 ///
 /// `xor(x, x)` on an opaque operand matches no rule in `p0.scalar.v1`, so the
 /// producer admits no region and emits a certificate with no `region` block.
-/// The checker reads that as the claim "nothing was replaced" and requires
-/// `after.evo` to be `before.evo` byte for byte
-/// (`crates/evocc-proofcheck/src/main.rs`, `Claim::Zero`). The producer
-/// nonetheless renumbers every value densely on its way out, so the two files
-/// differ and the claim is refused.
+/// Section 11.3, "A certificate with no region", says what that claims:
+/// `after.evo` is the canonical rendering of the module parsed from
+/// `before.evo`, and nothing else. The module may therefore be renumbered; it
+/// may not be otherwise changed, and the checker verifies the claim by
+/// rendering the parsed input itself rather than comparing raw bytes, which
+/// need not be canonical.
 ///
-/// A densely numbered input hides this, which is why a randomized generator
-/// alone would not have found it: the gate's own shrinker produced the gapped
-/// module that did.
+/// A densely numbered input hides the disagreement entirely, which is why a
+/// randomized generator alone would not have reached it: the gate's own
+/// shrinker produced the gapped module that did.
 #[test]
-fn a_certificate_claiming_no_region_must_leave_the_module_untouched() {
+fn a_certificate_with_no_region_claims_the_canonical_rendering_of_its_input() {
     let before = sparsely_numbered_module();
     validate_module(&before).expect("a gapped but valid module");
     let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::new(20_000, 256));
@@ -217,9 +218,11 @@ fn a_certificate_claiming_no_region_must_leave_the_module_untouched() {
         outcome.certificate.regions.is_empty(),
         "this module must admit no region, or it pins nothing:\n{before_text}"
     );
+    let canonical =
+        render_module(&parse_section9_module(before_text.as_bytes()).expect("the input parses"));
     assert_eq!(
-        before_text, after_text,
-        "a certificate claiming no region must not have changed the module"
+        canonical, after_text,
+        "a no-region claim must be the canonical rendering of its own input"
     );
     checker()
         .check(&before_text, &after_text, &proof_text)

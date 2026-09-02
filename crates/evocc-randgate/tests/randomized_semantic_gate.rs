@@ -11,8 +11,8 @@ use evocc_evoir::{
     inst_results, parse_section9_module, render_module, validate_module, Inst, Module,
 };
 use evocc_randgate::{
-    entry_arguments, generate_module, observe, run_campaign, shrink_module, GateBudget,
-    GeneratorConfig, Observation, ProofChecker, Rng, WIDTHS,
+    entry_arguments, generate_module, observe, run_campaign, run_seed, shrink_module, GateBudget,
+    GeneratorConfig, Observation, ProofChecker, Rng, Verdict, WIDTHS,
 };
 
 /// The seed the standing gate runs from. Changing it changes which thousand
@@ -409,4 +409,65 @@ fn the_extended_campaign_finds_no_mismatch() {
     println!("wallTimeSeconds={:.3}", started.elapsed().as_secs_f64());
     assert_eq!(report.mismatched, 0, "{:#?}", report.mismatches.first());
     assert_eq!(report.generated, LONG_PROGRAMS);
+}
+
+/// Every seed whose certificate the first campaign refused.
+///
+/// One came from the thousand-program gate and eleven from the twenty-thousand
+/// program run. They are written down rather than rediscovered: a rule that is
+/// exercised only when a random draw happens to reach it is not a regression
+/// test.
+const REFUSED_SEEDS: [u64; 12] = [
+    1_592_591_013,
+    1_592_627_955,
+    1_592_629_865,
+    1_592_631_625,
+    1_592_632_596,
+    1_592_639_902,
+    1_592_640_996,
+    1_592_641_595,
+    1_592_645_031,
+    1_592_645_302,
+    1_592_645_787,
+    1_592_646_750,
+];
+
+#[test]
+fn the_seeds_the_first_campaign_refused_now_replay() {
+    let checker = ProofChecker::locate().expect("evo-proofcheck");
+    let mut refused = Vec::new();
+    for seed in REFUSED_SEEDS {
+        match run_seed(seed, config(), budget(), &checker) {
+            Verdict::Compared { .. } => {}
+            other => refused.push((seed, other)),
+        }
+    }
+    assert!(
+        refused.is_empty(),
+        "seeds still refused: {:#?}",
+        refused.first()
+    );
+}
+
+/// Fuel is a limit of the host, not a property of the program (10.4). A trial
+/// that runs out of it is counted on its own and is never folded into the
+/// undefined-behaviour discards or the mismatches, whichever side stopped.
+#[test]
+fn exhausted_fuel_is_counted_on_its_own() {
+    let checker = ProofChecker::locate().expect("evo-proofcheck");
+    let starved = GateBudget {
+        step_budget: 1,
+        ..budget()
+    };
+    let report = run_campaign(GATE_SEED, 32, config(), starved, &checker);
+
+    assert_eq!(
+        report.interpreter_budget_exhausted,
+        32,
+        "{}",
+        report.render()
+    );
+    assert_eq!(report.discarded_undefined, 0, "{}", report.render());
+    assert_eq!(report.mismatched, 0, "{}", report.render());
+    assert_eq!(report.compared, 0, "{}", report.render());
 }
