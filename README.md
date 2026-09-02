@@ -112,7 +112,7 @@ Other useful flags: `-E` (preprocess), `--parse-only`, `--emit=c-hir`, and `--su
 
 ## Status
 
-**What the kernel says today:** 16 of 16 cohort units preprocess clean; 2 of 16 parse clean under both reference compilers. That second number lags badly — a unit counts only when its *last* unsupported construct falls, and more than ten distinct blockers have been cleared with zero regressions while it read 2/16. The current one is a single lvalue form, 26 lanes wide.
+**What the kernel says today:** 16 of 16 cohort units preprocess clean, and **16 of 16 parse clean under both reference compilers** — the front-end stage of the launch chain is closed, on sealed evidence, with zero regressions across the whole campaign. Twenty-odd distinct constructs stood between 0/16 and 16/16; each got a measured rule, a declared red window, and a publication.
 
 | Capability | Status |
 |---|---|
@@ -124,7 +124,7 @@ Other useful flags: `-E` (preprocess), `--parse-only`, `--emit=c-hir`, and `--su
 | E-graph, reviewed scalar rewrite set, EVP1 certificates, standalone checker | done |
 | Kernel telemetry and sealed publication | done |
 | Diagnostic survey mode | partial |
-| Kernel parse closure | in progress |
+| Kernel parse closure | done |
 | Analysis lattices, bounded scheduler | not started |
 | Randomized semantic gate | not started |
 | EvoMIR, register allocation, AArch64 | not started |
@@ -153,7 +153,7 @@ Every commit passes workspace tests, `clippy -D warnings`, `rustfmt`, Ruff, both
 
 **1. Spec as sole authority — the only one with real evidence so far.** 72 dashboard publications, zero regressions. Six executor stops at spec gaps; five architect errors overturned by an oracle or the executor before they became code; one commit whose message did not match its diff, caught by the executor reviewing upstream. A failure taxonomy is emerging — the unprobed assertion, the reference to a construct nobody defined, one rule implemented on one code path but not another — and each entry has a mechanical countermeasure that has since fired. The cost is real too: roughly one round in five went to fixing the spec.
 
-**2. Correct on the kernel — partial.** Preprocessing is closed. Parsing is one construct from closed. Layout is bit-exact. Two interpreters agree on every corpus. Missing: any machine code, the full ~2,500-unit sweep, and the flight lab that boots the result. The open bet is whether a loop that converges on 16 units converges on 2,500.
+**2. Correct on the kernel — partial.** Preprocessing is closed. Parsing is closed: 16/16 under both oracles. Layout is bit-exact. Two interpreters agree on every corpus. Missing: any machine code, the full ~2,500-unit sweep, and the flight lab that boots the result. The open bet is whether a loop that converges on 16 units converges on 2,500.
 
 **3. E-graph instead of a pipeline — not yet measurable.** The e-graph, the rule set, and the checker exist, but the cost model counts instructions and there is no target. This question is blocked on the backend, which makes the backend an instrument rather than a deliverable. Two hard points are already on the record: inlining, which the kernel depends on and a single-function e-graph cannot do; and constructs the kernel expects answered *after* optimization, which EvoCC answers conservatively in the front end.
 
