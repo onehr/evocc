@@ -452,17 +452,16 @@ fn decoded_tokens(source: &str) -> Result<Vec<evocc_lex::Token>, String> {
         if token.kind == TokenKind::Error {
             return Err("invalid token in macro replacement".into());
         }
-        let text = match token.text {
-            evocc_lex::TokenText::Decoded(text) => text,
+        let text = match &token.text {
+            evocc_lex::TokenText::Decoded(text) => text.clone(),
             evocc_lex::TokenText::Borrowed => source
                 .get(token.span.byte_start as usize..token.span.byte_end as usize)
                 .ok_or_else(|| "invalid macro replacement span".to_string())?
                 .to_owned(),
         };
         tokens.push(evocc_lex::Token {
-            kind: token.kind,
-            span: token.span,
             text: evocc_lex::TokenText::Decoded(text),
+            ..token
         });
     }
     Ok(tokens)

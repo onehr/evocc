@@ -249,7 +249,7 @@ pub struct Parser<'src, 'arena> {
     tokens: Vec<Token>,
     pos: usize,
     file: FileId,
-    source: &'src str,
+    _source_lifetime: std::marker::PhantomData<&'src str>,
     had_error: bool,
     error_count: usize,
     error_limit: Option<NonZeroUsize>,
@@ -304,7 +304,7 @@ pub struct Parser<'src, 'arena> {
 }
 
 impl<'src, 'arena> Parser<'src, 'arena> {
-    pub fn new(mut tokens: Vec<Token>, file: FileId, source: &'src str) -> Self {
+    pub fn new(mut tokens: Vec<Token>, file: FileId, _source: &'src str) -> Self {
         // Preprocessing numbers and `other` characters remain available to
         // macro expansion through translation phase 4. If either survives to
         // this phase-7 boundary, it has no C-token form and is diagnosed at
@@ -324,9 +324,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         for token in &mut tokens {
             let spelling = match &token.text {
                 TokenText::Decoded(text) => Some(text.as_str()),
-                TokenText::Borrowed => {
-                    source.get(token.span.byte_start as usize..token.span.byte_end as usize)
-                }
+                TokenText::Borrowed => None,
             };
             if token.kind == TokenKind::Identifier {
                 token.kind = match spelling {
@@ -380,7 +378,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             tokens,
             pos: 0,
             file,
-            source,
+            _source_lifetime: std::marker::PhantomData,
             had_error: lexical_diagnostic.is_some(),
             error_count: usize::from(lexical_diagnostic.is_some()),
             error_limit: None,
@@ -584,9 +582,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if let evocc_lex::TokenText::Decoded(text) = &tok.text {
             return text;
         }
-        self.source
-            .get(tok.span.byte_start as usize..tok.span.byte_end as usize)
-            .unwrap_or("")
+        ""
     }
 
     fn span(&self) -> SourceSpan {
@@ -607,7 +603,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         // provenance model, fail closed to the start token as the node's
         // primary origin. Combining offsets from different files would create
         // a range that is valid in neither source.
-        if start.file != end.file {
+        if start.file != end.file || end.byte_start < start.byte_start {
             return start;
         }
         SourceSpan::new(
@@ -3919,8 +3915,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     ) -> Option<(Vec<AttributeArgument>, SourceSpan)> {
         let mut arguments = Vec::new();
         let mut depth = 0_usize;
-        let mut first: Option<SourceSpan> = None;
-        let mut last: Option<SourceSpan> = None;
+        let mut argument_start: Option<usize> = None;
         loop {
             let Some(kind) = self.peek_kind() else {
                 self.report("E2903", "malformed-attribute", open);
@@ -3929,8 +3924,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             match kind {
                 TokenKind::RParen if depth == 0 => {
                     let close = self.advance().expect("peeked close").span;
-                    if let (Some(start), Some(end)) = (first, last) {
-                        arguments.push(self.attribute_argument(start, end));
+                    if let Some(start) = argument_start {
+                        arguments.push(self.attribute_argument(&self.tokens[start..self.pos - 1]));
                     } else if !arguments.is_empty() {
                         // `aligned(4,)` -- a trailing separator with nothing after it.
                         self.report("E2903", "malformed-attribute", close);
@@ -3940,17 +3935,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 TokenKind::Comma if depth == 0 => {
                     let comma = self.advance().expect("peeked comma").span;
-                    match (first, last) {
-                        (Some(start), Some(end)) => {
-                            arguments.push(self.attribute_argument(start, end))
-                        }
-                        _ => {
+                    match argument_start {
+                        Some(start) => arguments
+                            .push(self.attribute_argument(&self.tokens[start..self.pos - 1])),
+                        None => {
                             self.report("E2903", "malformed-attribute", comma);
                             return None;
                         }
                     }
-                    first = None;
-                    last = None;
+                    argument_start = None;
                 }
                 TokenKind::Semicolon | TokenKind::LBrace | TokenKind::RBrace => {
                     // An argument list cannot contain these; the list was never
@@ -3960,14 +3953,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     return None;
                 }
                 _ => {
+                    let token_index = self.pos;
                     let token = self.advance().expect("peeked argument token");
                     match token.kind {
                         TokenKind::LParen => depth += 1,
                         TokenKind::RParen => depth -= 1,
                         _ => {}
                     }
-                    first.get_or_insert(token.span);
-                    last = Some(token.span);
+                    argument_start.get_or_insert(token_index);
                 }
             }
         }
@@ -3986,9 +3979,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2903", "malformed-attribute", self.span());
             return None;
         }
+        let argument_start = self.pos;
         let expression = self.parse_required_constant_conditional()?;
-        let span = expression.span();
-        let mut argument = self.attribute_argument(span, span);
+        let mut argument = self.attribute_argument(&self.tokens[argument_start..self.pos]);
         argument.integer = self
             .eval_integer_constant_expression(expression)
             .ok()
@@ -4006,11 +3999,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some((vec![argument], close))
     }
 
-    fn attribute_argument(&self, start: SourceSpan, end: SourceSpan) -> AttributeArgument {
-        let text = self.source[start.byte_start as usize..end.byte_end as usize].to_owned();
+    fn attribute_argument(&self, tokens: &[Token]) -> AttributeArgument {
+        let first = tokens.first().expect("attribute argument is non-empty");
+        let last = tokens.last().expect("attribute argument is non-empty");
+        let mut text = String::new();
+        for (index, token) in tokens.iter().enumerate() {
+            if index > 0 && token.preceded_by_whitespace {
+                text.push(' ');
+            }
+            text.push_str(self.token_text(token));
+        }
         AttributeArgument {
             text,
-            span: self.merge_span(start, end),
+            span: self.merge_span(first.span, last.span),
             integer: None,
         }
     }

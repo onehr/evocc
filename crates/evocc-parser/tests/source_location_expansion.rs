@@ -148,6 +148,6 @@ fn macro_expanded_attribute_keeps_spelling_text_and_invocation_location() {
     assert_eq!(argument.text, "8");
     assert_eq!(
         argument.span,
-        SourceSpan::new(FileId::new(92_001), start, start + 9, 2, 35)
+        SourceSpan::new(FileId::new(92_001), start, start + 9, 2, 34)
     );
 }

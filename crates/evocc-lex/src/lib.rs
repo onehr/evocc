@@ -24,15 +24,24 @@ use evocc_common::{FileId, SourceSpan};
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
+    /// The characters that spelled this token, in the file where they were
+    /// written. Macro expansion never changes this origin.
+    pub spelling_span: SourceSpan,
+    /// The outermost macro invocation that produced this token. Tokens not
+    /// produced by expansion use their spelling span here as well.
     pub span: SourceSpan,
-    /// The original source text of this token, as a slice of the source file
-    /// buffer. Lifetimes tie the token to the source; the slice is the
-    /// authoritative text and can be used for identifier interning.
+    /// Whether preprocessing whitespace preceded this token. Comments count
+    /// as whitespace; the flag is propagated through macro substitution.
+    pub preceded_by_whitespace: bool,
+    /// The authoritative spelling of this token. The production lexer
+    /// materializes it so downstream consumers never index a different
+    /// source buffer with this token's location.
     pub text: TokenText,
 }
 
-/// Token text is either a direct reference into the source buffer (most
-/// tokens) or a processed form (string literals with escape translation).
+/// Token text is materialized in production. `Borrowed` remains only as a
+/// compatibility representation for callers constructing legacy test tokens;
+/// it is not emitted by [`Lexer`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenText {
     Borrowed,
@@ -209,7 +218,13 @@ pub enum TokenKind {
 impl Token {
     #[must_use]
     pub fn new(kind: TokenKind, span: SourceSpan, text: TokenText) -> Self {
-        Self { kind, span, text }
+        Self {
+            kind,
+            spelling_span: span,
+            span,
+            preceded_by_whitespace: false,
+            text,
+        }
     }
 }
 
@@ -493,6 +508,7 @@ pub struct Lexer<'src> {
     line: u32,
     col: u32,
     eof_emitted: bool,
+    preceded_by_whitespace: bool,
 }
 
 fn splice_physical_lines(source: &str) -> (Cow<'_, str>, Vec<LineSplice>) {
@@ -564,6 +580,7 @@ impl<'src> Lexer<'src> {
             line: 1,
             col: 1,
             eof_emitted: false,
+            preceded_by_whitespace: false,
         }
     }
 
@@ -597,13 +614,7 @@ impl<'src> Lexer<'src> {
         };
         let (line, column) = self.physical_line_col(physical_start);
         let logical_text = &self.source[logical_start..logical_end];
-        let physical_text = &self.raw_source[physical_start..physical_end];
-        let text = if logical_text == physical_text {
-            TokenText::Borrowed
-        } else {
-            TokenText::Decoded(logical_text.to_owned())
-        };
-        Token::new(
+        let mut token = Token::new(
             kind,
             SourceSpan::new(
                 self.file,
@@ -612,12 +623,15 @@ impl<'src> Lexer<'src> {
                 line,
                 column,
             ),
-            text,
-        )
+            TokenText::Decoded(logical_text.to_owned()),
+        );
+        token.preceded_by_whitespace = self.preceded_by_whitespace;
+        token
     }
 
     /// Produce the next token, or `None` if EOF has already been returned.
     pub fn next(&mut self) -> Option<Token> {
+        self.preceded_by_whitespace = false;
         if let Some(error) = self.skip_whitespace_and_comments() {
             return Some(error);
         }
@@ -827,6 +841,7 @@ impl<'src> Lexer<'src> {
             // Whitespace
             while self.pos < bytes.len() && matches!(bytes[self.pos], b' ' | b'\t' | b'\r' | b'\n')
             {
+                self.preceded_by_whitespace = true;
                 if bytes[self.pos] == b'\n' {
                     self.line += 1;
                     self.col = 1;
@@ -838,6 +853,7 @@ impl<'src> Lexer<'src> {
             // Line comments
             if self.pos + 1 < bytes.len() && bytes[self.pos] == b'/' && bytes[self.pos + 1] == b'/'
             {
+                self.preceded_by_whitespace = true;
                 self.pos += 2;
                 self.col += 2;
                 while self.pos < bytes.len() && bytes[self.pos] != b'\n' {
@@ -849,6 +865,7 @@ impl<'src> Lexer<'src> {
             // Block comments
             if self.pos + 1 < bytes.len() && bytes[self.pos] == b'/' && bytes[self.pos + 1] == b'*'
             {
+                self.preceded_by_whitespace = true;
                 let start_pos = self.pos;
                 self.pos += 2;
                 self.col += 2;
