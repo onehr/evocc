@@ -370,13 +370,11 @@ impl MacroMap {
         if text == "__VA_ARGS__" && m.variadic {
             let va_start = m.params.len();
             let mut combined: Vec<Token> = Vec::new();
-            for (idx, arg) in args.iter().enumerate() {
-                if idx >= va_start {
-                    if !combined.is_empty() {
-                        combined.push(make_comma_token());
-                    }
-                    combined.extend(arg.clone());
+            for (offset, arg) in args.iter().skip(va_start).enumerate() {
+                if offset > 0 {
+                    combined.push(make_comma_token());
                 }
+                combined.extend(arg.clone());
             }
             return Some(combined);
         }
@@ -882,6 +880,238 @@ impl Preprocessor {
         }
     }
 
+    fn install_define_directive(&mut self, tokens: &[Token], i: &mut usize, source: &str) {
+        let (name, body, is_function_like) = parse_define(tokens, i, source);
+        if name.is_empty() {
+            return;
+        }
+        let (params, variadic, variadic_param_name) = if is_function_like {
+            let (params, variadic, variadic_name) = extract_params(&body, source);
+            (params, variadic, variadic_name)
+        } else {
+            (Vec::new(), false, None)
+        };
+        let body_tokens = if !is_function_like {
+            body
+        } else {
+            let mut depth = 0u32;
+            let mut split_at = 0usize;
+            for (index, token) in body.iter().enumerate() {
+                match token.kind {
+                    TokenKind::LParen => depth += 1,
+                    TokenKind::RParen => {
+                        depth -= 1;
+                        if depth == 0 {
+                            split_at = index + 1;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            body.get(split_at..).unwrap_or_default().to_vec()
+        };
+        let body_tokens = body_tokens
+            .into_iter()
+            .map(|token| {
+                let lexeme = token_lexeme(&token, source);
+                let text = if lexeme.is_empty() {
+                    format_placeholder(token.kind)
+                } else {
+                    lexeme.to_owned()
+                };
+                Token {
+                    text: TokenText::Decoded(text),
+                    ..token
+                }
+            })
+            .collect();
+        self.builtin_feature_queries.remove(&name);
+        if is_function_like {
+            self.macros.define_function_like(
+                name,
+                params,
+                variadic,
+                variadic_param_name,
+                body_tokens,
+            );
+        } else {
+            self.define(name, body_tokens);
+        }
+    }
+
+    fn process_macro_argument_directive(
+        &mut self,
+        tokens: &[Token],
+        i: &mut usize,
+        source: &str,
+        expanding: &mut HashSet<String>,
+        conditional_floor: usize,
+    ) {
+        let directive_span = tokens[*i].span;
+        *i += 1;
+        let directive = if *i < tokens.len()
+            && !has_logical_newline_between(&tokens[*i - 1], &tokens[*i], source)
+        {
+            let name = token_lexeme(&tokens[*i], source).to_owned();
+            *i += 1;
+            name
+        } else {
+            String::new()
+        };
+
+        match directive.as_str() {
+            "define" => {
+                if self.cond_active() {
+                    self.install_define_directive(tokens, i, source);
+                }
+            }
+            "undef" => {
+                if self.cond_active() && *i < tokens.len() {
+                    let name = token_lexeme(&tokens[*i], source).to_owned();
+                    self.undefine(&name);
+                }
+            }
+            "ifdef" | "ifndef" => {
+                let name = if *i < tokens.len() {
+                    token_lexeme(&tokens[*i], source).to_owned()
+                } else {
+                    String::new()
+                };
+                let mut selected = self.is_defined(&name);
+                if directive == "ifndef" {
+                    selected = !selected;
+                }
+                self.push_cond(selected, directive_span);
+            }
+            "if" => {
+                let expression = collect_line_tokens(tokens, i, source);
+                let selected = self.cond_active()
+                    && self.evaluate_conditional_expression(&expression, source, expanding);
+                self.push_cond(selected, directive_span);
+            }
+            "elif" => {
+                if self.cond_stack.len() <= conditional_floor {
+                    self.push_unmatched_conditional(directive_span);
+                } else {
+                    let mut state = self
+                        .cond_stack
+                        .pop()
+                        .expect("conditional stack was checked above");
+                    let outer_active = self.cond_active();
+                    if state.had_true {
+                        state.in_true = false;
+                    } else {
+                        let expression = collect_line_tokens(tokens, i, source);
+                        let selected = outer_active
+                            && self.evaluate_conditional_expression(&expression, source, expanding);
+                        state.in_true = selected;
+                        state.had_true = selected;
+                    }
+                    self.cond_stack.push(state);
+                }
+            }
+            "else" => {
+                if self.cond_stack.len() <= conditional_floor {
+                    self.push_unmatched_conditional(directive_span);
+                } else {
+                    let last = self.cond_stack.len() - 1;
+                    let outer_active = self.cond_stack[..last].iter().all(|state| state.in_true);
+                    let state = &mut self.cond_stack[last];
+                    state.in_true = !state.had_true && outer_active;
+                    state.had_true |= state.in_true;
+                }
+            }
+            "endif" => {
+                if self.cond_stack.len() <= conditional_floor {
+                    self.push_unmatched_conditional(directive_span);
+                } else {
+                    self.cond_stack.pop();
+                }
+            }
+            _ => {
+                if self.cond_active() {
+                    self.errors.push(PreprocessError {
+                        code: "E0113",
+                        span: directive_span,
+                        message: "directive-in-macro-argument".into(),
+                    });
+                }
+            }
+        }
+        skip_line(tokens, i, source);
+    }
+
+    fn collect_macro_arguments(
+        &mut self,
+        tokens: &[Token],
+        start: usize,
+        source: &str,
+        expanding: &mut HashSet<String>,
+    ) -> (Vec<Vec<Token>>, Vec<Token>, usize) {
+        let conditional_floor = self.cond_stack.len();
+        let mut args = Vec::new();
+        let mut current_arg = Vec::new();
+        let mut depth = 1u32;
+        let mut index = start;
+
+        while index < tokens.len() && depth > 0 {
+            if is_directive_hash(tokens[index].kind) && is_start_of_line(tokens, index, source) {
+                self.process_macro_argument_directive(
+                    tokens,
+                    &mut index,
+                    source,
+                    expanding,
+                    conditional_floor,
+                );
+                continue;
+            }
+            if !self.cond_active() {
+                index += 1;
+                continue;
+            }
+
+            let lexeme = token_lexeme(&tokens[index], source);
+            let text = if lexeme.is_empty() {
+                format_placeholder(tokens[index].kind)
+            } else {
+                lexeme.to_owned()
+            };
+            let decoded = Token {
+                text: TokenText::Decoded(text),
+                ..tokens[index].clone()
+            };
+            match tokens[index].kind {
+                TokenKind::LParen => {
+                    depth += 1;
+                    current_arg.push(decoded);
+                }
+                TokenKind::RParen => {
+                    depth -= 1;
+                    if depth > 0 {
+                        current_arg.push(decoded);
+                    }
+                }
+                TokenKind::Comma if depth == 1 => {
+                    args.push(std::mem::take(&mut current_arg));
+                }
+                _ => current_arg.push(decoded),
+            }
+            index += 1;
+        }
+
+        let unmatched = self
+            .cond_stack
+            .drain(conditional_floor..)
+            .map(|state| state.opening_span)
+            .collect::<Vec<_>>();
+        for span in unmatched {
+            self.push_unmatched_conditional(span);
+        }
+
+        (args, current_arg, index)
+    }
+
     fn process_impl(
         &mut self,
         tokens: TokenStream,
@@ -913,70 +1143,7 @@ impl Preprocessor {
                 match dir_name.as_str() {
                     "define" => {
                         if self.cond_active() {
-                            let (name, body, is_function_like) = parse_define(&raw, &mut i, source);
-                            if !name.is_empty() {
-                                let (params, variadic, variadic_param_name) = if is_function_like {
-                                    let (p, v, vn) = extract_params(&body, source);
-                                    (p, v, vn)
-                                } else {
-                                    (vec![], false, None)
-                                };
-                                let body_tokens = if !is_function_like {
-                                    body
-                                } else {
-                                    // Find the matching ')' that ends the param
-                                    // list and keep only tokens after it.
-                                    let mut depth = 0u32;
-                                    let mut split_at = 0usize;
-                                    for (j, t) in body.iter().enumerate() {
-                                        match t.kind {
-                                            TokenKind::LParen => depth += 1,
-                                            TokenKind::RParen => {
-                                                depth -= 1;
-                                                if depth == 0 {
-                                                    split_at = j + 1;
-                                                    break;
-                                                }
-                                            }
-                                            _ => {}
-                                        }
-                                    }
-                                    if split_at < body.len() {
-                                        body[split_at..].to_vec()
-                                    } else {
-                                        vec![]
-                                    }
-                                };
-                                // Convert body tokens to Decoded so resolve_arg can read
-                                // parameter names in nested expansions.
-                                let body_tokens: Vec<Token> = body_tokens
-                                    .into_iter()
-                                    .map(|t| {
-                                        let lexeme = token_lexeme(&t, source);
-                                        let text = if lexeme.is_empty() {
-                                            format_placeholder(t.kind)
-                                        } else {
-                                            lexeme.to_owned()
-                                        };
-                                        Token {
-                                            text: TokenText::Decoded(text),
-                                            ..t
-                                        }
-                                    })
-                                    .collect();
-                                self.builtin_feature_queries.remove(&name);
-                                if is_function_like {
-                                    self.macros_mut().define_function_like(
-                                        name,
-                                        params,
-                                        variadic,
-                                        variadic_param_name,
-                                        body_tokens,
-                                    );
-                                } else {
-                                    self.define(name, body_tokens);
-                                }
-                            }
+                            self.install_define_directive(&raw, &mut i, source);
                         }
                         skip_line(&raw, &mut i, source);
                     }
@@ -1277,43 +1444,8 @@ impl Preprocessor {
                         if i + 1 < len && raw[i + 1].kind == TokenKind::LParen {
                             let saved_i = i;
                             i += 2; // skip name and '('
-                            let mut j = i;
-                            let mut args: Vec<Vec<Token>> = Vec::new();
-                            let mut current_arg: Vec<Token> = Vec::new();
-                            let mut depth = 1u32;
-                            while j < len && depth > 0 {
-                                let lexeme = token_lexeme(&raw[j], source);
-                                let text = if lexeme.is_empty() {
-                                    format_placeholder(raw[j].kind)
-                                } else {
-                                    lexeme.to_owned()
-                                };
-                                let decoded = Token {
-                                    text: TokenText::Decoded(text),
-                                    ..raw[j].clone()
-                                };
-                                match raw[j].kind {
-                                    TokenKind::LParen => {
-                                        depth += 1;
-                                        if depth > 1 {
-                                            current_arg.push(decoded);
-                                        }
-                                    }
-                                    TokenKind::RParen => {
-                                        depth -= 1;
-                                        if depth > 0 {
-                                            current_arg.push(decoded);
-                                        }
-                                    }
-                                    TokenKind::Comma if depth == 1 => {
-                                        args.push(std::mem::take(&mut current_arg));
-                                    }
-                                    _ => {
-                                        current_arg.push(decoded);
-                                    }
-                                }
-                                j += 1;
-                            }
+                            let (mut args, current_arg, j) =
+                                self.collect_macro_arguments(&raw, i, source, expanding);
                             let expects_named_argument = self
                                 .macros
                                 .get(&name)

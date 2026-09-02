@@ -40,7 +40,8 @@ DIAGNOSTIC = re.compile(
     r"error\[(?P<code>[^]]+)\]: (?P<message>.*)$"
 )
 PANIC_MARKERS = ("panicked at", "panic in a function", "fatal runtime error")
-COMPILERS = frozenset({"gcc", "gcc-14"})
+TARGET_COMPILERS = frozenset({"gcc-14"})
+HOST_COMPILERS = frozenset({"gcc"})
 SOURCE_OPTION_ARGUMENTS = frozenset(
     {
         "-D",
@@ -325,7 +326,9 @@ def inventory(
             suffix = Path(source_token).suffix
             if suffix in ASSEMBLY_SUFFIXES:
                 reason = "assembly-source"
-            elif suffix != ".c" or tool not in COMPILERS or "-c" not in argv:
+            elif suffix == ".c" and tool in HOST_COMPILERS and "-c" in argv:
+                reason = "host-compiler-program"
+            elif suffix != ".c" or tool not in TARGET_COMPILERS or "-c" not in argv:
                 reason = "link-or-binary-transform"
 
         base: dict[str, Any] = {
