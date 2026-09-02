@@ -85,11 +85,17 @@ pub fn generate_module(seed: u64, config: GeneratorConfig) -> Module {
     let globals = generate_globals(&mut rng, config, &mut origins);
     let symbols: Vec<String> = globals.iter().map(|global| global.symbol.clone()).collect();
 
-    let helpers = rng.below(u64::from(config.max_helper_functions) + 1);
     let mut signatures: Vec<Signature> = Vec::new();
     let mut functions: Vec<Function> = Vec::new();
+    if rng.chance(45) {
+        let (signature, function) = recursive_helper(&mut rng);
+        signatures.push(signature);
+        functions.push(function);
+    }
+
+    let helpers = rng.below(u64::from(config.max_helper_functions) + 1);
     for index in 0..helpers {
-        let signature = random_signature(&mut rng, config, format!("h{index}"));
+        let signature = random_signature(&mut rng, config, format!("h{index}"), &symbols, false);
         let function = generate_function(
             &mut rng,
             config,
@@ -101,7 +107,7 @@ pub fn generate_module(seed: u64, config: GeneratorConfig) -> Module {
         signatures.push(signature);
         functions.push(function);
     }
-    let entry = random_signature(&mut rng, config, "main".to_owned());
+    let entry = random_signature(&mut rng, config, "main".to_owned(), &symbols, true);
     functions.push(generate_function(
         &mut rng,
         config,
@@ -195,8 +201,12 @@ fn generate_globals(
 #[derive(Debug, Clone)]
 struct Signature {
     name: String,
-    params: Vec<u16>,
-    results: Vec<u16>,
+    params: Vec<EvoIRType>,
+    results: Vec<EvoIRType>,
+    /// The function calls itself, guarded by a depth parameter it decrements.
+    /// A caller must therefore hand it a small constant rather than an
+    /// arbitrary value, which is what bounds the recursion.
+    recursive: bool,
 }
 
 impl Signature {
@@ -206,28 +216,191 @@ impl Signature {
             params: self
                 .params
                 .iter()
-                .map(|width| EvoIRType::Bits(*width))
+                .cloned()
                 .chain([memory_type(), world_type()])
                 .collect(),
             results: self
                 .results
                 .iter()
-                .map(|width| EvoIRType::Bits(*width))
+                .cloned()
                 .chain([memory_type(), world_type()])
                 .collect(),
         }
     }
 }
 
-fn random_signature(rng: &mut Rng, config: GeneratorConfig, name: String) -> Signature {
-    let params = (0..rng.below(4)).map(|_| *rng.pick(&WIDTHS)).collect();
+/// The depth a recursive call starts from. Small enough that a call inside a
+/// nested loop still finishes well inside the interpreter's fuel.
+const MAX_RECURSION_DEPTH: u64 = 3;
+const DEPTH_WIDTH: u16 = 8;
+
+fn random_signature(
+    rng: &mut Rng,
+    config: GeneratorConfig,
+    name: String,
+    globals: &[String],
+    // `@main` is entered by the module driver, which starts from the
+    // declaration-order memory snapshot and an empty world (2.1) and has no
+    // pointer to hand in. A pointer parameter is therefore a shape only a
+    // called function can have.
+    entry: bool,
+) -> Signature {
+    let params = (0..rng.below(4))
+        .map(|_| {
+            if !entry && rng.chance(20) {
+                pointer_type()
+            } else {
+                EvoIRType::Bits(*rng.pick(&WIDTHS))
+            }
+        })
+        .collect();
     let count = 1 + rng.below(u64::from(config.max_results));
-    let results = (0..count).map(|_| *rng.pick(&WIDTHS)).collect();
+    let results = (0..count)
+        .map(|_| {
+            // A returned pointer is a global's address, so a signature may only
+            // declare one when the module has a global to name. Returning a
+            // pointer to the callee's own frame would dangle the moment the
+            // return ended its lifetime. `@main` is excluded for the same
+            // reason as its parameters: the driver hands its results back as
+            // public values, and Section 10.4 gives no runtime spelling for a
+            // pointer there.
+            if !entry && !globals.is_empty() && rng.chance(15) {
+                pointer_type()
+            } else {
+                EvoIRType::Bits(*rng.pick(&WIDTHS))
+            }
+        })
+        .collect();
     Signature {
         name,
         params,
         results,
+        recursive: false,
     }
+}
+
+/// A function that calls itself, bounded by the depth it was handed.
+///
+/// It is written out rather than drawn, because the one property that matters
+/// is the one a random body cannot be trusted with: the recursive edge is taken
+/// only when the depth is nonzero and is entered with that depth minus one, so
+/// the chain is exactly as long as the constant the caller passed.
+fn recursive_helper(rng: &mut Rng) -> (Signature, Function) {
+    let bits = EvoIRType::Bits(DEPTH_WIDTH);
+    let mut next = 0_u32;
+    let mut fresh = |ty: EvoIRType| {
+        let id = next;
+        next += 1;
+        Value { id, ty }
+    };
+    let binder = |value: &Value| BlockArg {
+        name: format!("v{}", value.id),
+        value: value.clone(),
+    };
+
+    let depth = fresh(bits.clone());
+    let memory = fresh(memory_type());
+    let world = fresh(world_type());
+    let zero = fresh(bits.clone());
+    let at_base = fresh(EvoIRType::Bits(1));
+
+    let base_depth = fresh(bits.clone());
+    let base_memory = fresh(memory_type());
+    let base_world = fresh(world_type());
+
+    let deep_depth = fresh(bits.clone());
+    let deep_memory = fresh(memory_type());
+    let deep_world = fresh(world_type());
+    let one = fresh(bits.clone());
+    let next_depth = fresh(bits.clone());
+    let returned = fresh(bits.clone());
+    let call_memory = fresh(memory_type());
+    let call_world = fresh(world_type());
+    let bump = fresh(bits.clone());
+    let total = fresh(bits.clone());
+
+    let addend = u64::from(rng.next_u64() as u8);
+
+    let function = Function {
+        name: "r0".to_owned(),
+        params: vec![
+            FunctionParam {
+                name: "arg0".to_owned(),
+                ty: bits.clone(),
+            },
+            FunctionParam {
+                name: "arg1".to_owned(),
+                ty: memory_type(),
+            },
+            FunctionParam {
+                name: "arg2".to_owned(),
+                ty: world_type(),
+            },
+        ],
+        ret_tys: vec![bits.clone(), memory_type(), world_type()],
+        effects: EffectSummary::default(),
+        blocks: vec![
+            Block {
+                id: 0,
+                args: vec![binder(&depth), binder(&memory), binder(&world)],
+                insts: vec![
+                    Inst::Const(zero.clone(), 0),
+                    Inst::ICmp(at_base.clone(), CmpOp::Eq, depth.clone(), zero),
+                ],
+                terminator: Inst::CondBr(
+                    at_base,
+                    1,
+                    vec![depth.clone(), memory.clone(), world.clone()],
+                    2,
+                    vec![depth, memory, world],
+                ),
+            },
+            Block {
+                id: 1,
+                args: vec![
+                    binder(&base_depth),
+                    binder(&base_memory),
+                    binder(&base_world),
+                ],
+                insts: Vec::new(),
+                terminator: Inst::Ret(vec![base_depth, base_memory, base_world]),
+            },
+            Block {
+                id: 2,
+                args: vec![
+                    binder(&deep_depth),
+                    binder(&deep_memory),
+                    binder(&deep_world),
+                ],
+                insts: vec![
+                    Inst::Const(one.clone(), 1),
+                    Inst::Sub(next_depth.clone(), deep_depth, one.clone()),
+                    Inst::Call {
+                        results: vec![returned.clone()],
+                        callee: "r0".to_owned(),
+                        args: vec![next_depth],
+                        mem_in: deep_memory,
+                        world_in: deep_world,
+                        mem_out: call_memory.clone(),
+                        world_out: call_world.clone(),
+                    },
+                    Inst::Const(bump.clone(), addend),
+                    Inst::Add(total.clone(), returned, bump),
+                ],
+                terminator: Inst::Ret(vec![total, call_memory, call_world]),
+            },
+        ],
+    };
+
+    (
+        Signature {
+            name: "r0".to_owned(),
+            params: vec![bits.clone()],
+            results: vec![bits],
+            recursive: true,
+        },
+        function,
+    )
 }
 
 /// One allocated object and the block-local pointers naming its elements.
@@ -286,11 +459,22 @@ fn generate_function(
     origins: &mut u64,
 ) -> Function {
     let mut active = vec![1_u16, 64];
-    active.extend(signature.results.iter().copied());
+    active.extend(signature.results.iter().filter_map(|ty| match ty {
+        EvoIRType::Bits(width) => Some(*width),
+        _ => None,
+    }));
     let extra = 1 + rng.below(3);
     for _ in 0..extra {
-        let width = if !signature.params.is_empty() && rng.chance(50) {
-            *rng.pick(&signature.params)
+        let scalars = signature
+            .params
+            .iter()
+            .filter_map(|ty| match ty {
+                EvoIRType::Bits(width) => Some(*width),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let width = if !scalars.is_empty() && rng.chance(50) {
+            *rng.pick(&scalars)
         } else {
             *rng.pick(&WIDTHS)
         };
@@ -314,8 +498,14 @@ fn generate_function(
     let (params, entry) = generator.open_entry(signature);
     let mut block = generator.emit_region(entry, config.max_region_depth);
     let mut returned = Vec::new();
-    for width in signature.results.clone() {
-        let value = generator.value_of(&mut block, width);
+    for ty in signature.results.clone() {
+        let value = match ty {
+            EvoIRType::Bits(width) => generator.value_of(&mut block, width),
+            // A pointer result is a global's address: static storage, so it
+            // outlives the frame that returns it. A pointer into this frame
+            // would be dangling the moment the return ended its lifetime.
+            _ => generator.emit_global_address(&mut block),
+        };
         returned.push(value);
     }
     returned.push(block.mem.clone());
@@ -328,7 +518,7 @@ fn generate_function(
         ret_tys: signature
             .results
             .iter()
-            .map(|width| EvoIRType::Bits(*width))
+            .cloned()
             .chain([memory_type(), world_type()])
             .collect(),
         effects: EffectSummary::default(),
@@ -382,14 +572,20 @@ impl FunctionGen<'_> {
         let mut params = Vec::new();
         let mut args = Vec::new();
         let mut pool: BTreeMap<u16, Vec<Value>> = BTreeMap::new();
-        for width in &signature.params {
-            let value = self.fresh(EvoIRType::Bits(*width));
+        let mut incoming = Vec::new();
+        for ty in &signature.params {
+            let value = self.fresh(ty.clone());
             params.push(FunctionParam {
                 name: format!("arg{}", params.len()),
-                ty: value.ty.clone(),
+                ty: ty.clone(),
             });
             args.push(Self::binder(&value));
-            pool.entry(*width).or_default().push(value);
+            match ty {
+                EvoIRType::Bits(width) => pool.entry(*width).or_default().push(value),
+                // The caller hands over a live, fully initialized carrier, so
+                // the callee may read and write it exactly like one of its own.
+                _ => incoming.push(OpenBlock::carrier_buffer(&value)),
+            }
         }
         let mem = self.fresh(memory_type());
         params.push(FunctionParam {
@@ -410,7 +606,7 @@ impl FunctionGen<'_> {
             insts: Vec::new(),
             ivs: Vec::new(),
             pool,
-            buffers: Vec::new(),
+            buffers: incoming,
             carrier: mem.clone(),
             mem,
             world,
@@ -648,6 +844,7 @@ impl FunctionGen<'_> {
             91..=92 => self.emit_copy(block),
             93..=94 => self.emit_lifetime_end(block),
             95..=96 => self.emit_null_comparison(block),
+            97..=98 => self.emit_defined_left_shift(block),
             _ => self.emit_carrier_rebind(block),
         }
     }
@@ -990,6 +1187,65 @@ impl FunctionGen<'_> {
         block.carrier = carrier;
     }
 
+    /// A signed left shift the C obligation admits.
+    ///
+    /// `signed_shl_defined` is false for an invalid count, a negative left
+    /// operand, or a result that does not fit the signed width. Masking the
+    /// operand down to its low bit and shifting by one satisfies all three at
+    /// every width of at least four, so the assumption this emits is true by
+    /// the shape rather than by luck. It is the last of the five undefined-
+    /// behaviour obligations the gate had never asserted.
+    fn emit_defined_left_shift(&mut self, block: &mut OpenBlock) {
+        let widths: Vec<u16> = self
+            .active
+            .iter()
+            .copied()
+            .filter(|width| *width >= 4)
+            .collect();
+        if widths.is_empty() {
+            self.emit_binary(block);
+            return;
+        }
+        let width = *self.rng.pick(&widths);
+        let raw = self.value_of(block, width);
+        let mask = self.emit_const(block, width, 1);
+        let operand = self.fresh(EvoIRType::Bits(width));
+        block
+            .insts
+            .push(Inst::And(operand.clone(), raw, mask.clone()));
+        self.record(block, &operand);
+        let amount = self.emit_const(block, width, 1);
+
+        let counted = self.fresh(EvoIRType::Bits(1));
+        block.insts.push(Inst::ShiftCountDefined {
+            result: counted.clone(),
+            shifted: operand.clone(),
+            amount: amount.clone(),
+            amount_signed: false,
+        });
+        self.record(block, &counted);
+        block
+            .insts
+            .push(Inst::UbAssume(counted, UbReason::InvalidShiftCount));
+
+        let representable = self.fresh(EvoIRType::Bits(1));
+        block.insts.push(Inst::SignedShlDefined {
+            result: representable.clone(),
+            shifted: operand.clone(),
+            amount: amount.clone(),
+            amount_signed: false,
+        });
+        self.record(block, &representable);
+        block.insts.push(Inst::UbAssume(
+            representable,
+            UbReason::InvalidSignedLeftShift,
+        ));
+
+        let result = self.fresh(EvoIRType::Bits(width));
+        block.insts.push(Inst::Shl(result.clone(), operand, amount));
+        self.record(block, &result);
+    }
+
     fn emit_memory(&mut self, block: &mut OpenBlock) {
         if self.rng.chance(55) {
             self.emit_buffer_access(block);
@@ -1044,8 +1300,13 @@ impl FunctionGen<'_> {
         let destination = buffer.elements[0].clone();
         let source = if self.rng.chance(30) {
             destination.clone()
-        } else {
+        } else if self.rng.chance(50) {
             buffer.elements[1].clone()
+        } else {
+            // Two separate objects cannot overlap at all, which is the other
+            // way Section 3.8 admits a copy. Every byte of the second is
+            // written by `emit_buffer` before the copy reads it.
+            self.emit_buffer(block, width, 1).elements[0].clone()
         };
         let mem_out = self.fresh(memory_type());
         let world_out = self.fresh(world_type());
@@ -1191,12 +1452,23 @@ impl FunctionGen<'_> {
     // -- calls --------------------------------------------------------------
 
     fn call_arguments(&mut self, block: &mut OpenBlock, signature: &Signature) -> Vec<Value> {
-        signature
-            .params
-            .clone()
-            .into_iter()
-            .map(|width| self.value_of(block, width))
-            .collect()
+        let mut arguments = Vec::new();
+        for (index, ty) in signature.params.clone().into_iter().enumerate() {
+            let value = match ty {
+                // A recursive callee decrements its first parameter until it
+                // reaches zero, so the chain is exactly as long as the constant
+                // handed to it. An arbitrary value would still terminate, but
+                // its length would be a draw rather than a bound.
+                EvoIRType::Bits(width) if signature.recursive && index == 0 => {
+                    let depth = self.rng.below(MAX_RECURSION_DEPTH + 1);
+                    self.emit_const(block, width, depth)
+                }
+                EvoIRType::Bits(width) => self.value_of(block, width),
+                _ => block.carrier.clone(),
+            };
+            arguments.push(value);
+        }
+        arguments
     }
 
     fn call_results(&mut self, signature: &Signature) -> Vec<Value> {
@@ -1204,8 +1476,34 @@ impl FunctionGen<'_> {
             .results
             .clone()
             .into_iter()
-            .map(|width| self.fresh(EvoIRType::Bits(width)))
+            .map(|ty| self.fresh(ty))
             .collect()
+    }
+
+    /// Register a pointer a call returned, so something reads it.
+    ///
+    /// It is a global's address by construction, which is eight initialized
+    /// bytes of static storage, so the carrier shape applies to it unchanged.
+    fn adopt_results(&mut self, block: &mut OpenBlock, results: &[Value]) {
+        for result in results {
+            if matches!(result.ty, EvoIRType::Ptr(_)) {
+                block.buffers.push(OpenBlock::carrier_buffer(result));
+            } else {
+                self.record(block, result);
+            }
+        }
+    }
+
+    /// The address of one module global.
+    fn emit_global_address(&mut self, block: &mut OpenBlock) -> Value {
+        let index = self.rng.below(self.globals.len() as u64) as usize;
+        let symbol = self.globals[index].clone();
+        let pointer = self.fresh(pointer_type());
+        block.insts.push(Inst::GlobalAddr {
+            result: pointer.clone(),
+            symbol,
+        });
+        pointer
     }
 
     fn emit_call(&mut self, block: &mut OpenBlock) {
@@ -1230,9 +1528,7 @@ impl FunctionGen<'_> {
         });
         block.mem = mem_out;
         block.world = world_out;
-        for result in &results {
-            self.record(block, result);
-        }
+        self.adopt_results(block, &results);
     }
 
     /// A call through the address of a function this module defines.
@@ -1267,8 +1563,6 @@ impl FunctionGen<'_> {
         });
         block.mem = mem_out;
         block.world = world_out;
-        for result in &results {
-            self.record(block, result);
-        }
+        self.adopt_results(block, &results);
     }
 }

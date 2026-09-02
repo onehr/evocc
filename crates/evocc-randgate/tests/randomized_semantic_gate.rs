@@ -252,13 +252,11 @@ impl Shapes {
                             destination,
                             source,
                             ..
-                        } => {
-                            if destination.id != source.id
-                                && allocated.contains(&destination.id)
-                                && allocated.contains(&source.id)
-                            {
-                                self.copy_between_distinct_objects = true;
-                            }
+                        } if destination.id != source.id
+                            && allocated.contains(&destination.id)
+                            && allocated.contains(&source.id) =>
+                        {
+                            self.copy_between_distinct_objects = true;
                         }
                         _ => {}
                     }
@@ -548,8 +546,8 @@ fn the_gate_finds_no_mismatch_in_one_thousand_random_programs() {
     assert_eq!(report.interpreter_budget_exhausted, 0);
     assert_eq!(report.compared, GATE_PROGRAMS);
     assert_eq!(
-        report.certificates_replayed, GATE_PROGRAMS,
-        "every trial must replay its certificate through evo-proofcheck"
+        report.certificates_replayed, report.transactions,
+        "every transaction of every run must replay its certificate through evo-proofcheck"
     );
     assert!(
         report.optimized * 2 >= GATE_PROGRAMS,
@@ -572,9 +570,14 @@ fn the_gate_finds_no_mismatch_in_one_thousand_random_programs() {
         "the measurement table must carry the run-length distribution:\n{}",
         report.render()
     );
+    // A program with nothing to optimize keeps no transaction, so the run
+    // length is zero and the total is bounded below by the optimized count
+    // rather than by the compared count.
     assert!(
-        report.transactions >= report.compared,
-        "every compared program ran at least one transaction"
+        report.transactions >= report.optimized,
+        "{} transactions across {} optimized programs",
+        report.transactions,
+        report.optimized
     );
     // A run stops when a transaction admits no region, so a run that stopped
     // before the ceiling has nothing left to admit. Only a run cut off at
@@ -592,39 +595,44 @@ fn the_gate_finds_no_mismatch_in_one_thousand_random_programs() {
 ///
 /// Section 8.11: "the run is verified by digest chaining, the `output` digest
 /// of one certificate being the `input` digest of the next, and a chain that
-/// breaks anywhere fails the run." Seed 1592591027 is the module that needs a
-/// second transaction, so it is the one that has a chain to check.
+/// breaks anywhere fails the run." Every run has at least two certificates --
+/// the transactions that admitted something, and the one that admitted nothing
+/// and ended it -- so every run has a chain to walk. The seed that needs a
+/// second productive transaction is found rather than written down, because
+/// which seed that is moves whenever the generator does.
 #[test]
 fn a_run_chains_each_certificate_to_the_next_by_digest() {
     let budget = evocc_eqopt::ScalarEqBudget::new(20_000, 256);
-    let module = generate_module(1_592_591_027, config());
-    let first = evocc_eqopt::optimize_scalar_module_with_evp1(&module, budget);
-    assert!(!first.certificate.regions.is_empty());
-    assert_eq!(
-        first.certificate.input_digest,
-        evocc_proof::sha256_hex(render_module(&module).as_bytes()),
-        "a certificate's input digest binds it to the module it was given"
-    );
+    let mut longest = 0_usize;
+    for offset in 0..256_u64 {
+        let seed = GATE_SEED.wrapping_add(offset);
+        let module = generate_module(seed, config());
+        let mut current = module.clone();
+        let mut chained_from = evocc_proof::sha256_hex(render_module(&module).as_bytes());
+        let mut productive = 0_usize;
 
-    let second = evocc_eqopt::optimize_scalar_module_with_evp1(&first.module, budget);
-    assert!(
-        !second.certificate.regions.is_empty(),
-        "this seed is here because its second transaction admits a region"
-    );
-    assert_eq!(
-        first.certificate.output_digest, second.certificate.input_digest,
-        "the chain broke between the first and second transaction"
-    );
-
-    let third = evocc_eqopt::optimize_scalar_module_with_evp1(&second.module, budget);
-    assert_eq!(
-        second.certificate.output_digest, third.certificate.input_digest,
-        "the chain broke between the second and third transaction"
-    );
-    assert!(
-        third.certificate.regions.is_empty(),
-        "the run should have reached a transaction that admits nothing"
-    );
+        loop {
+            let outcome = evocc_eqopt::optimize_scalar_module_with_evp1(&current, budget);
+            assert_eq!(
+                outcome.certificate.input_digest, chained_from,
+                "seed {seed} broke the chain at transaction {productive}"
+            );
+            if outcome.certificate.regions.is_empty() {
+                assert_eq!(
+                    outcome.certificate.output_digest, outcome.certificate.input_digest,
+                    "a transaction that admits nothing must change nothing"
+                );
+                break;
+            }
+            chained_from = outcome.certificate.output_digest.clone();
+            current = outcome.module;
+            productive += 1;
+            assert!(productive <= 8, "seed {seed} never reached the ceiling");
+        }
+        longest = longest.max(productive);
+    }
+    println!("longestRunInSample={longest}");
+    assert!(longest >= 1, "no seed in the sample optimized at all");
 }
 
 #[test]

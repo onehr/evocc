@@ -11,7 +11,7 @@ use evocc_evoir::{
     interpret_module, render_module, validate_module, InterpreterLimits, Module, RuntimeValue,
 };
 use evocc_memory::{AccessLayout, MemoryState, ObjectOrigin, ObjectOwner, Pointer, VolatileEvent};
-use evocc_proof::render_evp1;
+use evocc_proof::{render_evp1, sha256_hex};
 use evocc_types::EvoIRType;
 
 use crate::generate::{entry_arguments, generate_module, GeneratorConfig};
@@ -129,6 +129,9 @@ fn static_observations(memory: &MemoryState) -> Vec<StaticObservation> {
 /// Which comparison refused the optimizer's claim.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MismatchKind {
+    /// A transaction of a run names an input digest that is not the previous
+    /// transaction's output digest (8.11).
+    BrokenChain,
     /// The optimizer's output module does not validate.
     OptimizedModuleInvalid,
     /// The producer itself reported that its proof did not replay.
@@ -168,6 +171,9 @@ pub enum Verdict {
         /// Section 11.3 calls these a quality metric of the registry rather
         /// than a defect, so they are counted and never refused.
         residual_regions: usize,
+        /// Transactions the run kept. Zero when the first admitted nothing.
+        transactions: usize,
+        stopped_at_ceiling: bool,
     },
     /// The input program was undefined; the specification's equality is modulo
     /// undefined behaviour, so nothing is compared.
@@ -254,6 +260,10 @@ impl ProofChecker {
     }
 }
 
+/// Section 8.11: a run is a chain of at most this many transactions over one
+/// module. The ceiling exists so a run that never settles still ends.
+pub const MAX_TRANSACTIONS: usize = 8;
+
 /// One complete before/after judgement of a single module.
 struct Trial {
     before_text: String,
@@ -261,6 +271,11 @@ struct Trial {
     proof_text: String,
     regions: usize,
     residual_regions: usize,
+    /// Transactions the run executed and kept, each of which admitted at least
+    /// one region. The transaction that admits nothing is what ends the run and
+    /// changes no module, so it is the residual measurement rather than a step.
+    transactions: usize,
+    stopped_at_ceiling: bool,
     optimizer_budget_exhausted: bool,
     /// Set when either interpretation stopped on fuel. Section 10.4 makes that
     /// stop a limit of the host rather than a property of the program, so it is
@@ -289,6 +304,8 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
                 proof_text: String::new(),
                 regions: 0,
                 residual_regions: 0,
+                transactions: 0,
+                stopped_at_ceiling: false,
                 optimizer_budget_exhausted: false,
                 fuel_exhausted: code == FUEL_EXHAUSTED,
                 input_undefined: Some(code),
@@ -297,49 +314,103 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
         }
     };
 
-    let outcome = optimize_scalar_module_with_evp1(module, budget.scalar);
-    let after_text = render_module(&outcome.module);
-    let proof_text = render_evp1(&outcome.certificate);
     let mut trial = Trial {
-        before_text,
-        after_text,
-        proof_text,
-        regions: outcome.certificate.regions.len(),
-        residual_regions: optimize_scalar_module_with_evp1(&outcome.module, budget.scalar)
-            .certificate
-            .regions
-            .len(),
-        optimizer_budget_exhausted: outcome.report.budget_exhausted,
+        before_text: before_text.clone(),
+        after_text: before_text.clone(),
+        proof_text: String::new(),
+        regions: 0,
+        residual_regions: 0,
+        transactions: 0,
+        stopped_at_ceiling: false,
+        optimizer_budget_exhausted: false,
         fuel_exhausted: false,
         input_undefined: None,
         refusal: None,
     };
 
-    if outcome.report.proof_replay_failed {
-        trial.refusal = Some((
-            MismatchKind::ProducerReplayFailed,
-            "the producer reported its own proof did not replay".to_owned(),
-        ));
-        return trial;
-    }
-    if let Err(error) = validate_module(&outcome.module) {
-        trial.refusal = Some((MismatchKind::OptimizedModuleInvalid, error));
-        return trial;
+    // The run of Section 8.11. Each transaction takes the previous output, each
+    // certificate is verified alone, and the chain is verified by the digests
+    // the certificates already carry: a producer that optimized a module other
+    // than the one it was handed breaks the chain even when every certificate
+    // is individually sound.
+    let mut current = module.clone();
+    let mut current_text = before_text;
+    let mut chained_from = sha256_hex(current_text.as_bytes());
+
+    for step in 0..MAX_TRANSACTIONS {
+        let outcome = optimize_scalar_module_with_evp1(&current, budget.scalar);
+        let admitted = outcome.certificate.regions.len();
+        if admitted == 0 {
+            // Nothing left to admit: this transaction ends the run and leaves
+            // the module alone, which is what a residual of zero means.
+            trial.residual_regions = 0;
+            return finish(trial, &before_run, checker);
+        }
+        if step + 1 == MAX_TRANSACTIONS {
+            trial.stopped_at_ceiling = true;
+        }
+
+        let after_text = render_module(&outcome.module);
+        let proof_text = render_evp1(&outcome.certificate);
+        trial.regions += admitted;
+        trial.transactions += 1;
+        trial.optimizer_budget_exhausted |= outcome.report.budget_exhausted;
+        trial.after_text = after_text.clone();
+        trial.proof_text = proof_text.clone();
+
+        if outcome.report.proof_replay_failed {
+            trial.refusal = Some((
+                MismatchKind::ProducerReplayFailed,
+                "the producer reported its own proof did not replay".to_owned(),
+            ));
+            return trial;
+        }
+        if outcome.certificate.input_digest != chained_from {
+            trial.refusal = Some((
+                MismatchKind::BrokenChain,
+                format!(
+                    "transaction {step} names input digest {} after {chained_from}",
+                    outcome.certificate.input_digest
+                ),
+            ));
+            return trial;
+        }
+        chained_from = outcome.certificate.output_digest.clone();
+
+        if let Err(error) = validate_module(&outcome.module) {
+            trial.refusal = Some((MismatchKind::OptimizedModuleInvalid, error));
+            return trial;
+        }
+        let after_run = observe(&outcome.module, &arguments, budget.step_budget);
+        if stopped_on_fuel(&after_run) {
+            trial.fuel_exhausted = true;
+            return trial;
+        }
+        if let Some(refusal) = compare(&before_run, &after_run) {
+            trial.refusal = Some(refusal);
+            return trial;
+        }
+        if let Err(error) = checker.check(&current_text, &after_text, &proof_text) {
+            trial.refusal = Some((MismatchKind::ProofReplay, error));
+            return trial;
+        }
+
+        current = outcome.module;
+        current_text = after_text;
     }
 
-    let after_run = observe(&outcome.module, &arguments, budget.step_budget);
-    if stopped_on_fuel(&after_run) {
-        trial.fuel_exhausted = true;
-        return trial;
-    }
-    if let Some(refusal) = compare(&before_run, &after_run) {
-        trial.refusal = Some(refusal);
-        return trial;
-    }
+    // The ceiling stopped the run, so what a further transaction would admit is
+    // the residual this run leaves behind.
+    trial.residual_regions = optimize_scalar_module_with_evp1(&current, budget.scalar)
+        .certificate
+        .regions
+        .len();
+    finish(trial, &before_run, checker)
+}
 
-    if let Err(error) = checker.check(&trial.before_text, &trial.after_text, &trial.proof_text) {
-        trial.refusal = Some((MismatchKind::ProofReplay, error));
-    }
+/// Nothing is left to check once the run has ended; this exists so the two exit
+/// paths cannot drift.
+fn finish(trial: Trial, _before: &DefinedRun, _checker: &ProofChecker) -> Trial {
     trial
 }
 
@@ -400,9 +471,11 @@ pub fn run_seed(
     let Some((kind, detail)) = trial.refusal else {
         return Verdict::Compared {
             regions: trial.regions,
-            certificates_replayed: 1,
+            certificates_replayed: trial.transactions,
             optimizer_budget_exhausted: trial.optimizer_budget_exhausted,
             residual_regions: trial.residual_regions,
+            transactions: trial.transactions,
+            stopped_at_ceiling: trial.stopped_at_ceiling,
         };
     };
 

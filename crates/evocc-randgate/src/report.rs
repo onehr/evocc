@@ -124,7 +124,14 @@ pub fn run_campaign(
                 certificates_replayed,
                 optimizer_budget_exhausted,
                 residual_regions,
+                transactions,
+                stopped_at_ceiling,
             } => {
+                report.transactions += transactions as u64;
+                *report.run_lengths.entry(transactions).or_default() += 1;
+                if stopped_at_ceiling {
+                    report.runs_at_ceiling += 1;
+                }
                 report.compared += 1;
                 report.regions += regions as u64;
                 report.residual_regions += residual_regions as u64;
