@@ -43,11 +43,14 @@ fn argument(value: &Value) -> BlockArg {
     }
 }
 
-/// `%low = and(%x, 0x0f)`, `%high = or(%y, 0x0f)`, `%r = and(%low, %high)`.
+/// `%low = and(%x, 0x0f)`, `%high = or(%y, 0x0f)`, `%r = and(%low, %high)`,
+/// and a fold of two constants beside them.
 ///
-/// The last is `p1_220_and_cover_rhs`: every bit not known zero in `%low` is
+/// The third is `p1_220_and_cover_rhs`: every bit not known zero in `%low` is
 /// known one in `%high`. Two premises are recorded, `?m` then `?x`, and neither
 /// class is fully known, so both fields of both premises carry real content.
+/// The fold reads no fact and records none, which is what the last case here
+/// needs.
 fn covering_module() -> Module {
     let x = bits(0);
     let y = bits(1);
@@ -63,6 +66,11 @@ fn covering_module() -> Module {
     let low = bits(5);
     let high = bits(6);
     let result = bits(7);
+    // A fold beside the covering rewrite, so the certificate carries a
+    // premise-free rule as well as a premised one.
+    let three = bits(8);
+    let four = bits(9);
+    let seven = bits(10);
 
     let function = Function {
         name: "main".to_owned(),
@@ -103,6 +111,9 @@ fn covering_module() -> Module {
                 Inst::And(low.clone(), x, mask.clone()),
                 Inst::Or(high.clone(), y, mask),
                 Inst::And(result.clone(), low, high),
+                Inst::Const(three.clone(), 3),
+                Inst::Const(four.clone(), 4),
+                Inst::Add(seven.clone(), three, four),
             ],
             terminator: Inst::Ret(vec![result, memory, world]),
         }],
@@ -288,5 +299,51 @@ fn a_v1_certificate_may_not_use_a_revised_rule() {
     case.refuses(
         &case.proof.replacen(REGISTRY_V2, REGISTRY_V1, 1),
         "a v1 certificate carrying a v2 rule must be refused",
+    );
+}
+
+/// A premise on a rule whose side condition reads no class is invalid.
+///
+/// Section 11.6 ratified this at revision 1.9.41: a rule records the facts its
+/// side condition read, and `all_const` reads its constants from the nodes. The
+/// premise added here is one the checker can confirm -- it is the covering
+/// mask's own fact -- so the only thing wrong with the certificate is that the
+/// rule never makes that claim.
+#[test]
+fn a_premise_on_a_rule_that_reads_no_fact_is_invalid() {
+    let case = Case::new();
+    let confirmable = case.premises()[0].clone();
+    let line = case
+        .proof
+        .lines()
+        .find(|line| line.starts_with("rewrite ") && !line.contains(" premises "))
+        .expect("the probe carries a premise-free rewrite too")
+        .to_owned();
+    case.refuses(
+        &case
+            .proof
+            .replacen(&line, &format!("{line} premises {confirmable}"), 1),
+        "a premise-free rule may not carry a premise",
+    );
+}
+
+/// A premise whose digit count disagrees with its class's width is invalid.
+///
+/// The format cannot catch this: Section 11.3 makes only a length disagreement
+/// between the two fields and a value bit outside the mask malformed, and a
+/// reader of the grammar alone does not know the class's sort. It is therefore
+/// the checker that holds the width, and it refuses rather than reinterpreting.
+#[test]
+fn a_premise_counted_for_another_width_is_invalid() {
+    let case = Case::new();
+    let premises = case.premises();
+    let (class, fact) = premises[1]
+        .split_once(':')
+        .expect("a premise is class:mask:value");
+    assert_eq!(fact, "f0:00", "the masked value knows its high nibble zero");
+    // The same fact about the same class, written for a sixteen-bit one.
+    case.refuses(
+        &case.with_premises(&format!("{},{class}:00f0:0000", premises[0])),
+        "a premise counted for another width must be refused",
     );
 }

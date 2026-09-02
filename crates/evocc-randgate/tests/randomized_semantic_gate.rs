@@ -894,12 +894,15 @@ fn the_campaign_runs_more_than_one_epoch() {
     );
 }
 
-/// The eighteen fact-driven rules the revision added.
+/// The fact-driven rules the revision added: fifteen reached, three dominated.
 ///
 /// A rule the campaign never fires is a rule whose premise recording, whose
 /// side condition and whose builder are all unmeasured, however carefully they
-/// are written. The list is the complete set rather than a sample for the same
-/// reason the reviewed-registry coverage above is.
+/// are written. Section 11.6 exempts exactly three: `fully_known` on `xor`,
+/// `add` and `sub` holds only when both operands are fully known, which is
+/// when `all_const` holds, and registry order puts the premise-free fold
+/// first. Those three are asserted absent rather than present, so a producer
+/// that started firing them would fail this test rather than pass it quietly.
 #[test]
 fn the_campaign_reaches_the_tier_b_rules() {
     let mut fired = BTreeSet::new();
@@ -920,9 +923,6 @@ fn the_campaign_reaches_the_tier_b_rules() {
     for rule in [
         "p1_200_known_and",
         "p1_201_known_or",
-        "p1_202_known_xor",
-        "p1_203_known_add",
-        "p1_204_known_sub",
         "p1_205_known_mul",
         "p1_210_known_icmp_eq",
         "p1_211_known_icmp_ne",
@@ -938,5 +938,11 @@ fn the_campaign_reaches_the_tier_b_rules() {
         "p1_225_xor_known_zero_lhs",
     ] {
         assert!(fired.contains(rule), "{rule} never fired");
+    }
+    for dominated in ["p1_202_known_xor", "p1_203_known_add", "p1_204_known_sub"] {
+        assert!(
+            !fired.contains(dominated),
+            "{dominated} is dominated by its fold and no conforming producer fires it"
+        );
     }
 }

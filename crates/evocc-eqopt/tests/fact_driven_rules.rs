@@ -248,11 +248,12 @@ fn an_or_with_all_ones_folds_through_its_fact() {
     assert_fully_known(&only_rewrite(&module), "p1_201_known_or", WIDTH, 0xff);
 }
 
-/// `xor`, `add` and `sub` are fully known only when both operands are, so each
-/// case pairs a before-witness constant with a class whose constant only the
-/// analysis produced. `all_const` holds there too, and the producer states the
-/// premise-free fold whenever every operand class carries a before-witness
-/// constant; here one does not.
+/// `xor`, `add` and `sub` are fully known only when both operands are, which
+/// under the Section 8.10 transfers is exactly when `all_const` holds. Section
+/// 11.6 makes the producer apply the first applicable rule in registry order,
+/// so the premise-free fold always precedes the fact rule on such a node and
+/// `p1_202`, `p1_203` and `p1_204` are dominated: printed so their ids keep
+/// their meaning, and fired by no conforming producer.
 fn against_a_derived_constant(build: fn(Value, Value, Value) -> Inst) -> EvpRewrite {
     let (mut insts, product) = complementary_masks();
     let five = bits(9);
@@ -263,33 +264,26 @@ fn against_a_derived_constant(build: fn(Value, Value, Value) -> Inst) -> EvpRewr
 }
 
 #[test]
-fn a_xor_of_a_derived_constant_folds_through_its_fact() {
-    assert_fully_known(
-        &against_a_derived_constant(Inst::Xor),
-        "p1_202_known_xor",
-        WIDTH,
-        5,
-    );
-}
-
-#[test]
-fn an_add_of_a_derived_constant_folds_through_its_fact() {
-    assert_fully_known(
-        &against_a_derived_constant(Inst::Add),
-        "p1_203_known_add",
-        WIDTH,
-        5,
-    );
-}
-
-#[test]
-fn a_sub_of_a_derived_constant_folds_through_its_fact() {
-    assert_fully_known(
-        &against_a_derived_constant(|result, product, five| Inst::Sub(result, five, product)),
-        "p1_204_known_sub",
-        WIDTH,
-        5,
-    );
+fn the_fold_dominates_the_fact_rule_on_xor_add_and_sub() {
+    for (build, rule) in [
+        (
+            Inst::Xor as fn(Value, Value, Value) -> Inst,
+            "p0_105_fold_xor",
+        ),
+        (Inst::Add, "p0_100_fold_add"),
+        (
+            (|result, product, five| Inst::Sub(result, five, product))
+                as fn(Value, Value, Value) -> Inst,
+            "p0_101_fold_sub",
+        ),
+    ] {
+        let rewrite = against_a_derived_constant(build);
+        assert_eq!(rewrite.rule, rule, "registry order puts the fold first");
+        assert!(
+            rewrite.premises.is_empty(),
+            "a fold reads its constants from the nodes and carries no premise"
+        );
+    }
 }
 
 // -- fully_known over the comparisons ---------------------------------------
