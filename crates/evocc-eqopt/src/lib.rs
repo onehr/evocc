@@ -5,6 +5,7 @@
 //! interpretation.
 
 mod evp1;
+pub mod known_bits;
 mod persistent;
 mod scalar_eq;
 
