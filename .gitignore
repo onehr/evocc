@@ -30,3 +30,4 @@ target/
 
 # OS noise.
 .DS_Store
+.claude/worktrees/
