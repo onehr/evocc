@@ -379,9 +379,16 @@ pub fn run_seed(
         };
     };
 
+    // A reduction must keep refusing for the same reason. The kind alone is too
+    // coarse: a reduction that removes every admitted region turns "this
+    // optimization is not justified" into "this no-op claim does not hold",
+    // which is a different defect, and a reproducer that has drifted onto one
+    // sends its reader to the wrong place.
+    let optimized = trial.regions != 0;
     let mut still_refuses = |candidate: &Module| {
         let candidate = judge(candidate, seed, budget, checker);
         candidate.input_undefined.is_none()
+            && (candidate.regions != 0) == optimized
             && candidate
                 .refusal
                 .as_ref()

@@ -141,8 +141,93 @@ fn a_binding_must_name_the_class_the_certificates_own_node_children_name() {
     }
 }
 
+/// A module with nothing to optimize whose SSA value identifiers are not dense.
+///
+/// Value identities are function-unique but need not be consecutive: nothing in
+/// Section 2.4 requires it, and a module that has had an instruction removed --
+/// by this crate's shrinker, or by any earlier pass -- has gaps.
+fn sparsely_numbered_module() -> Module {
+    let input = value(4, EvoIRType::Bits(32));
+    let memory = value(9, EvoIRType::Mem(Region::All));
+    let world = value(11, EvoIRType::World);
+    let result = value(6, EvoIRType::Bits(32));
+
+    let function = Function {
+        name: "main".to_owned(),
+        params: vec![
+            FunctionParam {
+                name: "arg0".to_owned(),
+                ty: EvoIRType::Bits(32),
+            },
+            FunctionParam {
+                name: "arg1".to_owned(),
+                ty: EvoIRType::Mem(Region::All),
+            },
+            FunctionParam {
+                name: "arg2".to_owned(),
+                ty: EvoIRType::World,
+            },
+        ],
+        ret_tys: vec![
+            EvoIRType::Bits(32),
+            EvoIRType::Mem(Region::All),
+            EvoIRType::World,
+        ],
+        effects: EffectSummary::default(),
+        blocks: vec![Block {
+            id: 0,
+            args: vec![argument(&input), argument(&memory), argument(&world)],
+            insts: vec![Inst::Xor(result.clone(), input.clone(), input)],
+            terminator: Inst::Ret(vec![result, memory, world]),
+        }],
+    };
+
+    let mut module = Module {
+        globals: Vec::new(),
+        functions: vec![function],
+    };
+    module.recompute_effect_summaries();
+    module
+}
+
+/// The second refusal the gate found, and a different defect from the first.
+///
+/// `xor(x, x)` on an opaque operand matches no rule in `p0.scalar.v1`, so the
+/// producer admits no region and emits a certificate with no `region` block.
+/// The checker reads that as the claim "nothing was replaced" and requires
+/// `after.evo` to be `before.evo` byte for byte
+/// (`crates/evocc-proofcheck/src/main.rs`, `Claim::Zero`). The producer
+/// nonetheless renumbers every value densely on its way out, so the two files
+/// differ and the claim is refused.
+///
+/// A densely numbered input hides this, which is why a randomized generator
+/// alone would not have found it: the gate's own shrinker produced the gapped
+/// module that did.
+#[test]
+fn a_certificate_claiming_no_region_must_leave_the_module_untouched() {
+    let before = sparsely_numbered_module();
+    validate_module(&before).expect("a gapped but valid module");
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::new(20_000, 256));
+
+    let before_text = render_module(&before);
+    let after_text = render_module(&outcome.module);
+    let proof_text = render_evp1(&outcome.certificate);
+
+    assert!(
+        outcome.certificate.regions.is_empty(),
+        "this module must admit no region, or it pins nothing:\n{before_text}"
+    );
+    assert_eq!(
+        before_text, after_text,
+        "a certificate claiming no region must not have changed the module"
+    );
+    checker()
+        .check(&before_text, &after_text, &proof_text)
+        .expect("a no-op claim must replay");
+}
+
 /// The located checker is a real separate process, not a library call into the
-/// optimizer's own code. Without this the test above could pass by construction.
+/// optimizer's own code. Without this the tests above could pass by construction.
 #[test]
 fn the_checker_is_the_standalone_binary() {
     let binary: PathBuf = checker().binary().clone();
