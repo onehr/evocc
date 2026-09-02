@@ -341,3 +341,85 @@ fn the_checker_is_the_standalone_binary() {
         binary.display()
     );
 }
+
+/// The fourth refusal the campaign found, and a nested left pattern.
+///
+/// `p0_009_double_neg` is the only rule of the reviewed registry whose left
+/// pattern passes through a second node: `sub(0, sub(0, ?x)) => ?x`. Resolving
+/// `?x` means finding that inner `sub` in the class the outer one names, and a
+/// class can own more than one `sub` once merges have run. In the module below
+/// the class that holds the inner negation also holds `sub(1, 1)`, folded to
+/// the same zero, and taking `?x` from that node binds the class of `1` while
+/// the checker recomputes the class of the negation. Twenty thousand programs
+/// produced eight of these; the reduction is five instructions.
+///
+/// The fix is to match the whole pattern rather than its operator: the node the
+/// rule matched is the one whose remaining child is the zero the pattern writes
+/// there.
+fn nested_negation_module() -> Module {
+    let one = value(0, EvoIRType::Bits(64));
+    let zeroed = value(1, EvoIRType::Bits(64));
+    let zero = value(2, EvoIRType::Bits(64));
+    let negated = value(3, EvoIRType::Bits(64));
+    let restored = value(4, EvoIRType::Bits(64));
+    let memory = value(5, EvoIRType::Mem(Region::All));
+    let world = value(6, EvoIRType::World);
+
+    let function = Function {
+        name: "main".to_owned(),
+        params: vec![
+            FunctionParam {
+                name: "arg0".to_owned(),
+                ty: EvoIRType::Mem(Region::All),
+            },
+            FunctionParam {
+                name: "arg1".to_owned(),
+                ty: EvoIRType::World,
+            },
+        ],
+        ret_tys: vec![
+            EvoIRType::Bits(64),
+            EvoIRType::Mem(Region::All),
+            EvoIRType::World,
+        ],
+        effects: EffectSummary::default(),
+        blocks: vec![Block {
+            id: 0,
+            args: vec![argument(&memory), argument(&world)],
+            insts: vec![
+                Inst::Const(one.clone(), 1),
+                // Folds to zero, and its class then holds the same constant the
+                // inner negation's class holds.
+                Inst::Sub(zeroed.clone(), one.clone(), one),
+                Inst::Const(zero.clone(), 0),
+                Inst::Sub(negated.clone(), zero.clone(), zeroed),
+                Inst::Sub(restored.clone(), zero, negated),
+            ],
+            terminator: Inst::Ret(vec![restored, memory, world]),
+        }],
+    };
+
+    let mut module = Module {
+        globals: Vec::new(),
+        functions: vec![function],
+    };
+    module.recompute_effect_summaries();
+    module
+}
+
+#[test]
+fn a_nested_left_pattern_binds_the_node_the_rule_matched() {
+    let before = nested_negation_module();
+    validate_module(&before).expect("the reduced module is valid EvoIR");
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::new(20_000, 256));
+    let before_text = render_module(&before);
+    let after_text = render_module(&outcome.module);
+    let proof_text = render_evp1(&outcome.certificate);
+    assert!(
+        proof_text.contains("p0_009_double_neg"),
+        "the reduction must reach the nested rule:\n{proof_text}"
+    );
+    checker()
+        .check(&before_text, &after_text, &proof_text)
+        .unwrap_or_else(|error| panic!("{error}\n{proof_text}"));
+}

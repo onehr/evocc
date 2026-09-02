@@ -667,13 +667,14 @@ fn the_extended_campaign_finds_no_mismatch() {
 
 /// Every seed whose certificate a campaign has refused.
 ///
-/// Twelve come from the first campaign and one from the second. The first
+/// Twelve come from the first campaign, one from the second and eight from the
+/// long run over the fact-driven rules. The first
 /// twelve no longer name the modules they named then -- the generator has
 /// grown since -- so they are a spot check rather than a pin; the shapes
 /// themselves are pinned by the hand-written reproducers in
 /// `certificate_binding_refusal.rs`, which no generator change can move.
 /// Rediscovering any of them by chance is not a regression test either way.
-const REFUSED_SEEDS: [u64; 13] = [
+const REFUSED_SEEDS: [u64; 21] = [
     1_592_591_013,
     1_592_627_955,
     1_592_629_865,
@@ -687,6 +688,17 @@ const REFUSED_SEEDS: [u64; 13] = [
     1_592_645_787,
     1_592_646_750,
     1_592_636_988,
+    // The eight the long run refused once the double-negation rule could fire
+    // through a folded inner negation: one nested left pattern resolved
+    // against the wrong node of a merged class.
+    1_592_629_328,
+    1_592_631_555,
+    1_592_635_798,
+    1_592_641_195,
+    1_592_644_260,
+    1_592_644_319,
+    1_592_645_150,
+    1_592_645_621,
 ];
 
 #[test]

@@ -1153,9 +1153,24 @@ fn before_node(
 #[derive(Clone, Copy)]
 struct BindingPath {
     child: usize,
-    /// For a nested left pattern, the operation of the node the pattern passes
-    /// through and the child of that node the variable names.
-    through: Option<(&'static str, usize)>,
+    through: Option<Nested>,
+}
+
+/// A left pattern that passes through a second node on the way to a variable.
+///
+/// The whole pattern has to be matched, not just its operator: a class may own
+/// several nodes of the same operation once merges have run, and only the one
+/// whose remaining child holds the constant the pattern writes there is the
+/// node the rule matched. Resolving the variable from any other is a binding
+/// the checker recomputes differently and refuses.
+#[derive(Clone, Copy)]
+struct Nested {
+    operation: &'static str,
+    /// The child of that node the variable names.
+    inner: usize,
+    /// The child the pattern fixes, and the constant it fixes it to.
+    fixed: usize,
+    constant: u64,
 }
 
 const LEFT: usize = 0;
@@ -1169,10 +1184,10 @@ impl BindingPath {
         }
     }
 
-    const fn nested(child: usize, operation: &'static str, inner: usize) -> Self {
+    const fn nested(child: usize, through: Nested) -> Self {
         Self {
             child,
-            through: Some((operation, inner)),
+            through: Some(through),
         }
     }
 }
@@ -1187,17 +1202,45 @@ fn binding_class(
 ) -> Option<u32> {
     let named = nodes.get(node as usize)?;
     let class = classes.find(*named.children.get(path.child)?)?;
-    let Some((operation, inner)) = path.through else {
+    let Some(nested) = path.through else {
         return Some(class);
     };
     nodes
         .iter()
         .filter(|candidate| {
             candidate.source == EvpNodeSource::Before
-                && candidate.operation == operation
+                && candidate.operation == nested.operation
+                && candidate.sort == named.sort
                 && classes.find(candidate.owner) == Some(class)
         })
-        .find_map(|candidate| classes.find(*candidate.children.get(inner)?))
+        .find_map(|candidate| {
+            let fixed = *candidate.children.get(nested.fixed)?;
+            if !class_holds_before_constant(nodes, classes, fixed, &candidate.sort, nested.constant)
+            {
+                return None;
+            }
+            classes.find(*candidate.children.get(nested.inner)?)
+        })
+}
+
+/// Whether a class owns a before-witness `const` of `sort` and `raw`.
+fn class_holds_before_constant(
+    nodes: &[EvpNode],
+    classes: &LocalClasses,
+    class: u32,
+    sort: &str,
+    raw: u64,
+) -> bool {
+    let Some(root) = classes.find(class) else {
+        return false;
+    };
+    nodes.iter().any(|node| {
+        node.source == EvpNodeSource::Before
+            && node.operation == "const"
+            && node.sort == sort
+            && classes.find(node.owner) == Some(root)
+            && matches!(node.attributes.as_slice(), [(name, value)] if name == "value" && *value == raw)
+    })
 }
 
 fn exact_rule(
@@ -1257,7 +1300,18 @@ fn exact_rule(
                 .then(|| {
                     (
                         "p0_009_double_neg",
-                        vec![("x", BindingPath::nested(RIGHT, "sub", RIGHT))],
+                        vec![(
+                            "x",
+                            BindingPath::nested(
+                                RIGHT,
+                                Nested {
+                                    operation: "sub",
+                                    inner: RIGHT,
+                                    fixed: LEFT,
+                                    constant: 0,
+                                },
+                            ),
+                        )],
                     )
                 })
         }
