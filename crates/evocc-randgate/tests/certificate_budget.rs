@@ -185,6 +185,19 @@ fn the_producer_emits_evp2_with_a_budget_line_and_epoch_markers() {
         !case.proof.contains(" premises "),
         "no Tier B rule exists yet, so no rewrite carries a premise"
     );
+
+    // Counters, not placeholders. A record of all zeroes would satisfy every
+    // check below while describing no transaction at all.
+    println!("budgetLine={}", case.budget_line());
+    assert!(case.consumed("nodes") > 0, "{}", case.budget_line());
+    assert!(case.consumed("epochs") > 0, "{}", case.budget_line());
+    assert!(case.consumed("fuel") > 0, "{}", case.budget_line());
+    assert!(
+        case.field("n").parse::<u64>().expect("n is an integer") > 0,
+        "{}",
+        case.budget_line()
+    );
+
     case.accepts(&case.proof, "the producer's own certificate verifies");
 }
 

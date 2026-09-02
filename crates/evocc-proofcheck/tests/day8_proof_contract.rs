@@ -3,7 +3,10 @@ use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use evocc_proof::{parse_evp1, render_evp1, sha256_hex, EvpCertificate, EvpEvent, EvpNodeSource};
+use evocc_proof::{
+    parse_evp1, render_evp1, sha256_hex, EvpBudget, EvpCertificate, EvpEvent, EvpNodeSource,
+    EvpQuantity,
+};
 
 const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 const REGISTRY_SHA256: &str = "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9";
@@ -423,9 +426,27 @@ fn optimizer_output_mutation_campaign_exercises_the_independent_boundary() {
 
     let digest = sha256_hex(&before);
     let disabled = EvpCertificate {
+        version: baseline.version,
         registry_name: baseline.registry_name,
         registry_digest: baseline.registry_digest,
         input_digest: digest.clone(),
+        // A transaction that admitted nothing still declares the box it ran in.
+        budget: baseline.budget.map(|budget| EvpBudget {
+            nodes: EvpQuantity {
+                consumed: 0,
+                ..budget.nodes
+            },
+            epochs: EvpQuantity {
+                consumed: 0,
+                ..budget.epochs
+            },
+            fuel: EvpQuantity {
+                consumed: 0,
+                bound: 256,
+            },
+            n: 0,
+            stop: budget.stop,
+        }),
         regions: Vec::new(),
         output_digest: digest,
     };

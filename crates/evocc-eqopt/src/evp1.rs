@@ -4,9 +4,9 @@ use std::collections::{HashMap, HashSet};
 
 use evocc_evoir::{inst_results, render_module, validate_module, CmpOp, Inst, Module, Value};
 use evocc_proof::{
-    sha256_hex, EvpCertificate, EvpEffectClass, EvpEvent, EvpExtraction, EvpExtractionChoice,
-    EvpNode, EvpNodeSource, EvpProofRef, EvpRegion, EvpRegionId, EvpRewrite, EvpSeed,
-    EvpSeedOrigin,
+    sha256_hex, EvpBudget, EvpCertificate, EvpEffectClass, EvpEvent, EvpExtraction,
+    EvpExtractionChoice, EvpNode, EvpNodeSource, EvpProofRef, EvpQuantity, EvpRegion, EvpRegionId,
+    EvpRewrite, EvpSeed, EvpSeedOrigin, EvpStop, EvpVersion,
 };
 use evocc_types::EvoIRType;
 
@@ -18,6 +18,19 @@ use crate::scalar_eq::{
 use crate::{ProofAuthority, ScalarEqBudget, ScalarEqReport, ScalarRewrite};
 
 const REGISTRY_NAME: &str = "p0.scalar.v1";
+/// Section 8.11: the P0 profile's ceilings. A budget line records these and no
+/// producer-local ones; a tighter `ScalarEqBudget` is this producer's own stop
+/// rule, not the profile's box, and recording it would make the checker refuse
+/// every certificate for disagreeing with the profile.
+const MAX_NODES: u64 = 100_000;
+const MAX_EPOCHS: u64 = 1_024;
+/// The floor of the per-rule fuel bound, `max(256, 8 * n)`.
+const FUEL_FLOOR: u64 = 256;
+/// The scalar bridge proposes everything it can in a single sweep, so a
+/// transaction that admitted any region ran exactly one epoch, and its markers
+/// are numbered from one so that a marker and the count it is checked against
+/// mean the same thing.
+const SINGLE_EPOCH: u64 = 1;
 const REGISTRY_SHA256: &str = "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9";
 pub(crate) type ValueRemap = HashMap<(String, u32), u32>;
 
@@ -139,9 +152,11 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
         outcome: CertifiedScalarEqOutcome {
             module: output,
             certificate: EvpCertificate {
+                version: EvpVersion::Evp2,
                 registry_name: REGISTRY_NAME.to_owned(),
                 registry_digest: REGISTRY_SHA256.to_owned(),
                 input_digest: sha256_hex(input.as_bytes()),
+                budget: Some(scheduler_record(&regions)),
                 regions,
                 output_digest: sha256_hex(output_text.as_bytes()),
             },
@@ -149,6 +164,57 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
         },
         events,
         value_remap,
+    }
+}
+
+/// The scheduler's record for one completed transaction.
+///
+/// `n` is the largest node count any admitted region held when the transaction
+/// began: the tightest declaration that still bounds every region's per-rule
+/// allowance. Section 11.3 permits overstating it, and understating it is what
+/// a checker would catch.
+fn scheduler_record(regions: &[EvpRegion]) -> EvpBudget {
+    let mut nodes = 0_u64;
+    let mut widest = 0_u64;
+    let mut firings: HashMap<&str, u64> = HashMap::new();
+    for region in regions {
+        let mut before = 0_u64;
+        for event in &region.events {
+            match event {
+                EvpEvent::Node(node) => {
+                    nodes += 1;
+                    if node.source == EvpNodeSource::Before {
+                        before += 1;
+                    }
+                }
+                EvpEvent::Rewrite(rewrite) => {
+                    *firings.entry(rewrite.rule.as_str()).or_default() += 1;
+                }
+                _ => {}
+            }
+        }
+        widest = widest.max(before);
+    }
+    let epochs = if regions.is_empty() { 0 } else { SINGLE_EPOCH };
+    EvpBudget {
+        nodes: EvpQuantity {
+            consumed: nodes,
+            bound: MAX_NODES,
+        },
+        epochs: EvpQuantity {
+            consumed: epochs,
+            bound: MAX_EPOCHS,
+        },
+        fuel: EvpQuantity {
+            consumed: firings.values().copied().max().unwrap_or(0),
+            bound: FUEL_FLOOR.max(widest.saturating_mul(8)),
+        },
+        n: widest,
+        // The sweep ends because it has proposed everything it can, never
+        // because a profile ceiling was reached. `saturated` is telemetry the
+        // checker does not verify, which is exactly what makes it the honest
+        // answer here rather than a claim about a bound.
+        stop: EvpStop::Saturated,
     }
 }
 
@@ -170,9 +236,11 @@ fn zero(module: &Module, input: String, mut report: ScalarEqReport) -> Certified
     CertifiedScalarEqOutcome {
         module: module.clone(),
         certificate: EvpCertificate {
+            version: EvpVersion::Evp2,
             registry_name: REGISTRY_NAME.to_owned(),
             registry_digest: REGISTRY_SHA256.to_owned(),
             input_digest: sha256_hex(input.as_bytes()),
+            budget: Some(scheduler_record(&[])),
             regions: Vec::new(),
             output_digest: sha256_hex(input.as_bytes()),
         },
@@ -268,11 +336,10 @@ fn build_region(
     let root_node = *value_nodes.get(&root_event.result.id)?;
     let replacement_root = nodes.get(root_node as usize)?.owner;
     let mut classes = LocalClasses::new(seeds.len() + nodes.len())?;
-    let mut events = nodes
-        .iter()
-        .cloned()
-        .map(EvpEvent::Node)
-        .collect::<Vec<_>>();
+    // Section 11.3: the marker precedes the events that epoch produced for this
+    // region. One sweep means one epoch, so one marker opens every block.
+    let mut events = vec![EvpEvent::Epoch(SINGLE_EPOCH)];
+    events.extend(nodes.iter().cloned().map(EvpEvent::Node));
     let mut selected = None;
     let mut normalized_root = None;
     let mut output_replacement = None;

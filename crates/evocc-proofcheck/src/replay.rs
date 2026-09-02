@@ -103,6 +103,10 @@ impl<'a> Replay<'a> {
             EvpEvent::Node(node) => self.insert_node(node),
             EvpEvent::Rewrite(rewrite) => self.rewrite(rewrite),
             EvpEvent::Congruence(congruence) => self.congruence(congruence),
+            // A marker says which epoch produced what follows. It changes no
+            // class and proves nothing on its own; its ordering is a parse
+            // rule and its value is checked against the recorded epoch count.
+            EvpEvent::Epoch(_) => Ok(()),
         }
     }
 

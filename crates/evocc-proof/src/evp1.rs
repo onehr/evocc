@@ -5,11 +5,83 @@
 
 use std::fmt;
 
+/// The interchange version a certificate is written in.
+///
+/// Section 11.3 "Versions": `evp1` carries no budget line, no epoch markers and
+/// no premises, and is validated without a scheduler claim; `evp2` adds the
+/// three. A reader that does not implement a version rejects it as malformed
+/// rather than guessing, which is why this enum has no catch-all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EvpVersion {
+    Evp1,
+    Evp2,
+}
+
+impl EvpVersion {
+    #[must_use]
+    pub const fn mnemonic(self) -> &'static str {
+        match self {
+            Self::Evp1 => "evp1",
+            Self::Evp2 => "evp2",
+        }
+    }
+}
+
+/// One bounded quantity of the scheduler, written consumed `/` bound.
+///
+/// The order is fixed by Section 11.3 and never the reverse: a reader that took
+/// the fields the other way round would accept a transaction that overran its
+/// ceiling and refuse one that did not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EvpQuantity {
+    pub consumed: u64,
+    pub bound: u64,
+}
+
+/// Why saturation stopped (Section 8.11).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EvpStop {
+    Saturated,
+    NoNewBest,
+    Epochs,
+    Nodes,
+    Fuel,
+}
+
+impl EvpStop {
+    #[must_use]
+    pub const fn mnemonic(self) -> &'static str {
+        match self {
+            Self::Saturated => "saturated",
+            Self::NoNewBest => "no-new-best",
+            Self::Epochs => "epochs",
+            Self::Nodes => "nodes",
+            Self::Fuel => "fuel",
+        }
+    }
+}
+
+/// The bounded scheduler's record for one transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EvpBudget {
+    pub nodes: EvpQuantity,
+    pub epochs: EvpQuantity,
+    pub fuel: EvpQuantity,
+    /// The node count the fuel bound derives from. Declared, not re-derived:
+    /// Section 11.3 says a producer that overstates it only widens a box the
+    /// checker still holds it to.
+    pub n: u64,
+    pub stop: EvpStop,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvpCertificate {
+    pub version: EvpVersion,
     pub registry_name: String,
     pub registry_digest: String,
     pub input_digest: String,
+    /// Present exactly for `evp2`.
+    pub budget: Option<EvpBudget>,
     pub regions: Vec<EvpRegion>,
     pub output_digest: String,
 }
@@ -51,6 +123,10 @@ pub enum EvpEvent {
     Node(EvpNode),
     Rewrite(EvpRewrite),
     Congruence(EvpCongruence),
+    /// An `epoch k` marker. Section 11.3 numbers only nodes, rewrites and
+    /// congruences, so a marker carries no event number and does not advance
+    /// the shared counter.
+    Epoch(u64),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -144,9 +220,14 @@ pub fn parse_evp1(bytes: &[u8]) -> Result<EvpCertificate, EvpParseError> {
         return Err(EvpParseError::new("EVP1 violates its byte envelope"));
     }
     let lines = text.lines().collect::<Vec<_>>();
-    if lines.len() < 4 || lines[0] != "evp1" {
-        return Err(EvpParseError::new("missing EVP1 header"));
+    if lines.len() < 4 {
+        return Err(EvpParseError::new("missing EVP header"));
     }
+    let version = match lines[0] {
+        "evp1" => EvpVersion::Evp1,
+        "evp2" => EvpVersion::Evp2,
+        _ => return Err(EvpParseError::new("unimplemented EVP version")),
+    };
     let registry = fields(lines[1], 3, "registry")?;
     validate_ident(registry[1])?;
     validate_digest(registry[2])?;
@@ -154,6 +235,28 @@ pub fn parse_evp1(bytes: &[u8]) -> Result<EvpCertificate, EvpParseError> {
     validate_digest(input[1])?;
 
     let mut position = 3;
+    let budget = if lines
+        .get(position)
+        .is_some_and(|line| line.starts_with("budget "))
+    {
+        position += 1;
+        Some(parse_budget(lines[position - 1])?)
+    } else {
+        None
+    };
+    // Section 11.3 "Versions" is what makes the optional production in the
+    // grammar decidable: the budget line belongs to evp2 and to no other
+    // version, so its presence is checked against the header rather than left
+    // to a reader's taste.
+    match (version, budget.is_some()) {
+        (EvpVersion::Evp1, true) => {
+            return Err(EvpParseError::new("evp1 carries no budget line"));
+        }
+        (EvpVersion::Evp2, false) => {
+            return Err(EvpParseError::new("evp2 requires a budget line"));
+        }
+        _ => {}
+    }
     let mut regions = Vec::new();
     while lines
         .get(position)
@@ -175,15 +278,25 @@ pub fn parse_evp1(bytes: &[u8]) -> Result<EvpCertificate, EvpParseError> {
     if position != lines.len() {
         return Err(EvpParseError::new("records follow EVP1 output"));
     }
+    if version == EvpVersion::Evp1
+        && regions
+            .iter()
+            .flat_map(|region: &EvpRegion| &region.events)
+            .any(|event| matches!(event, EvpEvent::Epoch(_)))
+    {
+        return Err(EvpParseError::new("evp1 carries no epoch markers"));
+    }
     let certificate = EvpCertificate {
+        version,
         registry_name: registry[1].to_owned(),
         registry_digest: registry[2].to_owned(),
         input_digest: input[1].to_owned(),
+        budget,
         regions,
         output_digest: output[1].to_owned(),
     };
     if render_evp1(&certificate).as_bytes() != bytes {
-        return Err(EvpParseError::new("EVP1 is not canonical"));
+        return Err(EvpParseError::new("EVP certificate is not canonical"));
     }
     Ok(certificate)
 }
@@ -249,10 +362,24 @@ fn parse_region(lines: &[&str]) -> Result<(EvpRegion, usize), EvpParseError> {
 
     let mut events = Vec::new();
     let mut event_number = 0;
+    let mut previous_epoch: Option<u64> = None;
     while lines.get(position).is_some_and(|line| {
-        line.starts_with("node ") || line.starts_with("rewrite ") || line.starts_with("congruence ")
+        line.starts_with("node ")
+            || line.starts_with("rewrite ")
+            || line.starts_with("congruence ")
+            || line.starts_with("epoch ")
     }) {
         let line = lines[position];
+        if line.starts_with("epoch ") {
+            let epoch = canonical_u64(fields(line, 2, "epoch")?[1])?;
+            if previous_epoch.is_some_and(|previous| previous >= epoch) {
+                return Err(EvpParseError::new("epoch markers are not increasing"));
+            }
+            previous_epoch = Some(epoch);
+            events.push(EvpEvent::Epoch(epoch));
+            position += 1;
+            continue;
+        }
         let (number, event) = if line.starts_with("node ") {
             parse_node(line)?
         } else if line.starts_with("rewrite ") {
@@ -390,9 +517,22 @@ fn parse_congruence(line: &str) -> Result<(usize, EvpEvent), EvpParseError> {
 #[must_use]
 pub fn render_evp1(certificate: &EvpCertificate) -> String {
     let mut text = format!(
-        "evp1\nregistry {} {}\ninput {}\n",
-        certificate.registry_name, certificate.registry_digest, certificate.input_digest
+        "{}\nregistry {} {}\ninput {}\n",
+        certificate.version.mnemonic(),
+        certificate.registry_name,
+        certificate.registry_digest,
+        certificate.input_digest
     );
+    if let Some(budget) = &certificate.budget {
+        text.push_str(&format!(
+            "budget nodes={} epochs={} fuel={} n={} stop={}\n",
+            render_quantity(budget.nodes),
+            render_quantity(budget.epochs),
+            render_quantity(budget.fuel),
+            budget.n,
+            budget.stop.mnemonic()
+        ));
+    }
     for region in &certificate.regions {
         text.push_str(&format!(
             "region {} root %v{} witnesses {} seeds {}\n",
@@ -416,7 +556,12 @@ pub fn render_evp1(certificate: &EvpCertificate) -> String {
                 seed.class
             ));
         }
-        for (index, event) in region.events.iter().enumerate() {
+        let mut index = 0_usize;
+        for event in &region.events {
+            if let EvpEvent::Epoch(epoch) = event {
+                text.push_str(&format!("epoch {epoch}\n"));
+                continue;
+            }
             match event {
                 EvpEvent::Node(node) => text.push_str(&format!(
                     "node {index} n{} c{} source={} op={} sort={} effect={} attrs={} children={}\n",
@@ -454,7 +599,9 @@ pub fn render_evp1(certificate: &EvpCertificate) -> String {
                     congruence.lhs_node,
                     congruence.rhs_node
                 )),
+                EvpEvent::Epoch(_) => unreachable!("epoch markers are emitted above"),
             }
+            index += 1;
         }
         for (index, extraction) in region.extractions.iter().enumerate() {
             let choice = match extraction.choice {
@@ -513,6 +660,38 @@ fn render_bindings(bindings: &[(String, u32)]) -> String {
             .collect::<Vec<_>>()
             .join(",")
     }
+}
+
+fn render_quantity(quantity: EvpQuantity) -> String {
+    format!("{}/{}", quantity.consumed, quantity.bound)
+}
+
+fn parse_quantity(text: &str) -> Result<EvpQuantity, EvpParseError> {
+    let (consumed, bound) = text
+        .split_once('/')
+        .ok_or_else(|| EvpParseError::new("a budget quantity is consumed/bound"))?;
+    Ok(EvpQuantity {
+        consumed: canonical_u64(consumed)?,
+        bound: canonical_u64(bound)?,
+    })
+}
+
+fn parse_budget(line: &str) -> Result<EvpBudget, EvpParseError> {
+    let budget = fields(line, 6, "budget")?;
+    Ok(EvpBudget {
+        nodes: parse_quantity(named(budget[1], "nodes")?)?,
+        epochs: parse_quantity(named(budget[2], "epochs")?)?,
+        fuel: parse_quantity(named(budget[3], "fuel")?)?,
+        n: canonical_u64(named(budget[4], "n")?)?,
+        stop: match named(budget[5], "stop")? {
+            "saturated" => EvpStop::Saturated,
+            "no-new-best" => EvpStop::NoNewBest,
+            "epochs" => EvpStop::Epochs,
+            "nodes" => EvpStop::Nodes,
+            "fuel" => EvpStop::Fuel,
+            _ => return Err(EvpParseError::new("unknown stop reason")),
+        },
+    })
 }
 
 fn fields<'a>(line: &'a str, count: usize, record: &str) -> Result<Vec<&'a str>, EvpParseError> {

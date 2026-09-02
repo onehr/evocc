@@ -170,7 +170,7 @@ fn evp1_carries_none_of_the_three_additions() {
 fn an_unimplemented_version_is_malformed_rather_than_guessed() {
     let case = certificate();
     for version in ["evp3", "evp9", "EVP1", "evp"] {
-        let relabelled = case.proof.replacen("evp1\n", &format!("{version}\n"), 1);
+        let relabelled = case.proof.replacen("evp2\n", &format!("{version}\n"), 1);
         let error = checker()
             .check(&case.before, &case.after, &relabelled)
             .expect_err("a version this checker does not implement must be refused");

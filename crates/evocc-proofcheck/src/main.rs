@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
 
-use evocc_proof::{parse_evp1, sha256_hex, EvpCertificate};
+use evocc_proof::{parse_evp1, sha256_hex, EvpCertificate, EvpEvent, EvpStop, EvpVersion};
 
 mod eligibility;
 mod reassemble;
@@ -13,6 +13,12 @@ use reassemble::reassemble;
 use replay::{replay_region, RegionReplacement};
 
 const REGISTRY_NAME: &str = "p0.scalar.v1";
+/// Section 8.11: the P0 profile's ceilings. A budget line that records anything
+/// else is not describing this profile's scheduler.
+const MAX_NODES: u64 = 100_000;
+const MAX_EPOCHS: u64 = 1_024;
+/// The floor of the per-rule fuel bound, `max(256, 8 * n)`.
+const FUEL_FLOOR: u64 = 256;
 const REGISTRY_SHA256: &str = "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9";
 
 fn main() -> ExitCode {
@@ -51,6 +57,9 @@ fn main() -> ExitCode {
     {
         return ExitCode::from(3);
     }
+    if !scheduler_record_holds(&certificate) {
+        return ExitCode::from(3);
+    }
     let eligible = derive_eligible_regions(&before_module);
     let reassembled_module = match claim(&certificate, &before_module, &eligible) {
         // Section 11.3: a certificate with no region claims that after.evo is
@@ -69,6 +78,49 @@ fn main() -> ExitCode {
         return ExitCode::from(3);
     }
     ExitCode::SUCCESS
+}
+
+/// Section 11.3 "Budget": what a reader can check about a schedule without
+/// re-running it.
+///
+/// The scheduler is not replayed. What is verified is that the box the producer
+/// declared is this profile's box, that it stayed inside it, that the fuel bound
+/// is the one its declared node count implies, and that an exhaustion it claims
+/// is an exhaustion the numbers show. `saturated` and `no-new-best` are not
+/// verified: deciding either would mean running the scheduler again, so they
+/// are telemetry and are read but not judged.
+fn scheduler_record_holds(certificate: &EvpCertificate) -> bool {
+    let Some(budget) = certificate.budget else {
+        // Only `evp2` carries a record, and the parser has already refused an
+        // `evp2` without one and an `evp1` with one.
+        return certificate.version == EvpVersion::Evp1;
+    };
+    if budget.nodes.bound != MAX_NODES || budget.epochs.bound != MAX_EPOCHS {
+        return false;
+    }
+    if budget.nodes.consumed > budget.nodes.bound
+        || budget.epochs.consumed > budget.epochs.bound
+        || budget.fuel.consumed > budget.fuel.bound
+    {
+        return false;
+    }
+    if budget.fuel.bound != FUEL_FLOOR.max(budget.n.saturating_mul(8)) {
+        return false;
+    }
+    let marker_beyond_the_epochs_that_ran = certificate
+        .regions
+        .iter()
+        .flat_map(|region| &region.events)
+        .any(|event| matches!(event, EvpEvent::Epoch(epoch) if *epoch > budget.epochs.consumed));
+    if marker_beyond_the_epochs_that_ran {
+        return false;
+    }
+    match budget.stop {
+        EvpStop::Nodes => budget.nodes.consumed == budget.nodes.bound,
+        EvpStop::Epochs => budget.epochs.consumed == budget.epochs.bound,
+        EvpStop::Fuel => budget.fuel.consumed == budget.fuel.bound,
+        EvpStop::Saturated | EvpStop::NoNewBest => true,
+    }
 }
 
 fn read(path: &impl AsRef<Path>) -> Result<Vec<u8>, ()> {
