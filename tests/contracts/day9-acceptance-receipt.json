@@ -2,14 +2,14 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "72ffb6d17d339afaa4c4ae990720456ffdf685bad4964e57da507a7691e1a00c"
+    "sha256": "c6669636459c7b522e4e3c2b37e0464b45292daaf929c1b50e02eb10b3061118"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.31",
-    "sha256": "1edb938ca7021a52d47c219dcd28ae02c070a8e0e9e36c4af6536f6fc08de33f"
+    "revision": "1.9.32",
+    "sha256": "0cf1c41f6e9c078e6b9642b88c2e8612f66a5ed458bda1d7dc382d59dfae13aa"
   },
-  "cutLine": "Revision 1.9.31 scope P14 is implemented: nested typeof probes reuse an exact already-installed temporary function-parameter shadow instead of declaring it twice, at every measured parameter position and nesting depth. The tree is green at 1065/1065 workspace tests (1064/1064 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. Raw preprocessing, GCC-preprocessed parsing, and Clang-preprocessed parsing are each 16/16 with zero dashboard regressions. The frozen dual-oracle parse gate is therefore 16/16 and Stage F1 is CLOSED by sealed run 20260901T185119Z-83939 on subject 25acb6d.",
+  "cutLine": "Revision 1.9.32 scope T is implemented at fc21cd3. Token spelling and expansion locations, preprocessing-token whitespace during stringization, and replacement-list/outer-sequence rescanning pass their declared RED-to-GREEN tests. The tree is green at 1083/1083 workspace tests, exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. Dashboard run 20260902T051401Z-89830 retains 16/16 raw, GCC-preprocessed, and Clang-preprocessed lanes with zero regressions. Full-configuration integration survey 20260902T051739Z-447 measures 1292 clean, 1540 typed-diagnosed, and zero unavailable, timeout, or panic among 2832 C units; the typed frontier remains open and was not modified.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -847,9 +847,47 @@
     "specAmbiguitiesThisWindow": [],
     "result": "PASS_STAGE_F1_CLOSED"
   },
-  "subjectCommit": "25acb6d",
+  "tokenLocationPreprocessorRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.32 sections 10.1.20 and 10.4; tests/contracts/day9-acceptance-contract.json scope T",
+    "opened": "4106205 (tests only; 1069 passed, 14 declared semantic failures, 1083 workspace tests; zero build errors)",
+    "closed": "fc21cd3",
+    "implementationCommits": [
+      "fc21cd3"
+    ],
+    "redDiagnostics": {
+      "path": "tests/contracts/token-location-preprocessor-red.json",
+      "sha256": "3d8ce1303fd18a2993acde4543b71d457aa6b30e2803d848102ca608613e562e"
+    },
+    "acceptanceReceipt": {
+      "path": "tests/contracts/token-location-preprocessor-receipt.json",
+      "sha256": "e4e3a373a1589ff302166afda9c0cb2bb07c57462b12552868ebad60122f7a05"
+    },
+    "declaredCapabilities": [
+      "tokens retain spelling and expansion locations and parser span composition is total without slicing unrelated source buffers",
+      "stringization reproduces preprocessing-token whitespace rather than inserting a space before every expanded token",
+      "replacement-list rescanning continues through an actual following parenthesized invocation in the outer token sequence"
+    ],
+    "focusedGreen": {
+      "tokenLocations": "3/3",
+      "stringizationWhitespace": "10/10",
+      "outerSequenceRescanning": "5/5"
+    },
+    "fullConfigurationSurvey": {
+      "receipt": "tests/contracts/full-config-parse-survey-receipt.json",
+      "run": "20260902T051739Z-447",
+      "clean": 1292,
+      "diagnosed": 1540,
+      "unavailable": 0,
+      "timeout": 0,
+      "panic": 0,
+      "previousPanic": 2768
+    },
+    "specAmbiguitiesThisWindow": [],
+    "result": "PASS_WITH_TYPED_SURVEY_FRONTIER"
+  },
+  "subjectCommit": "fc21cd3",
   "gate": {
-    "claim": "Revision 1.9.31 scope P14 is implemented and green. Nested typeof probes reuse only an exact temporary parameter identity already installed by an enclosing probe, so second, third, last, three-level, and earlier-parameter-reference forms retain their specified types without panic. All four prior parser-panic lanes moved, zero dashboard regressions were observed, and raw, GCC-preprocessed, and Clang-preprocessed lanes are each 16/16 clean. The frozen dual-oracle parse gate is 16/16 and Stage F1 is closed by sealed run 20260901T185119Z-83939.",
+    "claim": "Revision 1.9.32 scope T is implemented and green. Macro-expanded tokens carry distinct spelling and expansion locations, parser span composition is total, stringization follows preprocessing-token whitespace, and rescanning crosses the replacement-list boundary only through an actual outer invocation. The 16-unit dashboard remains 48/48 clean with zero regression. The first full-configuration raw-to-EvoCPP-to-parser measurement completes all 2832 C units without panic, timeout, or unavailable classification; 1540 typed-diagnosed units remain an explicitly open frontier.",
     "measured": {
       "dualOracleCleanParseTus": "16/16",
       "rawPreprocessClean": "16/16",
@@ -882,8 +920,7 @@
       "frozenRealTuRatio": "1.07x <= 3x",
       "subjectBuildProfile": "release",
       "parserTimeoutSecondsPerTu": 10,
-      "workspaceTests": "1065/1065",
-      "allTargetTests": "1064/1064",
+      "workspaceTests": "1083/1083",
       "specifiedFrontier": true,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
@@ -943,16 +980,25 @@
       "dereferencedFunctionPointerTypeofLanesRemaining": 0,
       "singleTrailingTypeofSpellingLanesRemaining": 0,
       "compatibleBlockExternRedeclarationLanesRemaining": 0,
-      "regressionsAgainstPrevious": 0
+      "regressionsAgainstPrevious": 0,
+      "tokenLocationTests": "3/3",
+      "stringizationWhitespaceTests": "10/10",
+      "outerSequenceRescanningTests": "5/5",
+      "fullConfigurationSurveyRun": "20260902T051739Z-447",
+      "fullConfigurationClean": 1292,
+      "fullConfigurationDiagnosed": 1540,
+      "fullConfigurationUnavailable": 0,
+      "fullConfigurationTimeout": 0,
+      "fullConfigurationPanic": 0
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260901T162827Z-12206/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260901T185119Z-83939/results.jsonl --evidence /Users/onehrxn/dev/30days/c30/.evidence/kernel-dashboard-runtime-absolute",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "1a1204bce3d27fa51e60b7bca236c3b78e32c5ea2d0209fdc47aa5b6fd955b2c",
-      "subjectCommit": "25acb6d",
-      "publishedFromRun": "20260901T185119Z-83939"
+      "sha256": "7e3ef861c490031e21c164f7ef30cbaaac6ccc382e2cdae696df545168371d31",
+      "subjectCommit": "fc21cd3",
+      "publishedFromRun": "20260902T051401Z-89830"
     },
-    "result": "NESTED_TYPEOF_PARAMETER_PASS_STAGE_F1_CLOSED"
+    "result": "TOKEN_LOCATION_PREPROCESSOR_PASS_WITH_TYPED_SURVEY_FRONTIER"
   },
   "lanes": {
     "clean": {
@@ -1795,15 +1841,33 @@
     ]
   },
   "tests": {
-    "workspace": {
-      "passed": 1064,
-      "failed": 0,
-      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet (1064/1064)",
-      "workspaceIncludingDocTests": {
-        "passed": 1065,
+    "tokenLocationPreprocessorAcceptance": {
+      "workspace": {
+        "passed": 1083,
         "failed": 0,
-        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet (1065/1065)"
-      }
+        "ignored": 0,
+        "command": "cargo test --workspace --no-fail-fast"
+      },
+      "clippy": {
+        "warnings": 0,
+        "command": "cargo clippy --workspace --all-targets -- -D warnings"
+      },
+      "format": {
+        "result": "clean",
+        "command": "cargo fmt --all -- --check"
+      },
+      "ruff": {
+        "result": "clean",
+        "command": "ruff check tests/acceptance tools"
+      },
+      "baseLayoutCorpus": "128/128 ORACLE_CONSENSUS; 0 mismatches",
+      "attributedLayoutCorpus": "22/22 ORACLE_CONSENSUS; 0 mismatches"
+    },
+    "workspace": {
+      "passed": 1083,
+      "failed": 0,
+      "ignored": 0,
+      "command": "cargo test --workspace --no-fail-fast (1083/1083)"
     },
     "suites": {
       "crates/evocc-parser/tests/checkpoint_allocation_scaling.rs": {
@@ -2139,12 +2203,13 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "25acb6d4685b868c5cbdb4ba154ee9d2a059e76b",
-    "path": "/private/tmp/c30-nested-typeof-replay.BVYV2Q/replay",
-    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-nested-typeof-replay.BVYV2Q/replay; test ! -e .git/objects/info/alternates; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline --quiet; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list --format terse | rg -c ': test$'",
+    "commit": "fc21cd3024e079cd68078cb3eca4303a49d89a26",
+    "path": "/tmp/c30-token-replay.D04X4A/repo",
+    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /tmp/c30-token-replay.D04X4A/repo; test ! -e .git/objects/info/alternates; cargo test --workspace --no-fail-fast --locked --offline",
     "measured": {
-      "passed": 1064,
+      "passed": 1083,
       "failed": 0,
+      "ignored": 0,
       "objectsAlternates": "absent"
     }
   },
@@ -2240,6 +2305,9 @@
     "The first complete P13 GREEN workspace gate found two historical Day 5 exact-message cases that still expected ordinary-identifier-redefinition. They were added to the same tests-only checkpoint, independently replayed as one failing test with 2/36 mismatches on commit 241f899, and then passed under the production diagnostic change; no second RED window was created.",
     "The first P13 dashboard capture completed all 16 raw preprocessing lanes but was refused when restricted sandbox access denied sealed oracle inspection. Its incomplete capture is preserved at .evidence/kernel-dashboard/88cd9a7-sandbox-refused and its 16-row run at .evidence/day5-kernel-reconnaissance/20260901T162552Z-5025; neither is acceptance evidence. The permission-correct rerun on the same commit and previous-run lineage sealed 48/48 observations as run 20260901T162827Z-12206.",
     "The opening P14 fixtures initially expected __builtin_types_compatible_p to have type _Bool. The duplicate-shadow panic ran first and masked that test defect. Revision 1.9.31 specifies int, so the tests-only commit was amended before any production commit and independently replayed as exactly five duplicate-shadow panics with the corrected type assertions.",
-    "The independent RED replay briefly shared the main checkout's Cargo target and replaced its focused test binary with the detached-checkout build. That stale derived cache was rejected, only evocc-parser build artifacts were cleaned, GREEN was rebuilt, and the final no-local replay used its own target directory."
+    "The independent RED replay briefly shared the main checkout's Cargo target and replaced its focused test binary with the detached-checkout build. That stale derived cache was rejected, only evocc-parser build artifacts were cleaned, GREEN was rebuilt, and the final no-local replay used its own target directory.",
+    "The scope-T token-location test initially carried an unobserved expected invocation column of 35; GREEN first fixed the declared text and panic failures, then exposed the measured column as 34. The assertion was corrected in the semantic commit and the deviation is retained rather than hidden.",
+    "The first scope-T layout attempt could not inspect the sealed local container image inside the restricted sandbox and was rejected. Sequential permission-correct reruns produced 128/128 and 22/22 ORACLE_CONSENSUS with zero mismatches.",
+    "The first scope-T dashboard attempt stopped before measurement because sealed-image inspection was denied. The second measured all 48 lanes clean but failed final receipt construction because a relative evidence path could not be relativized against the absolute repository root. The accepted third run used the same subject and lineage with an absolute evidence path and sealed run 20260902T051401Z-89830."
   ]
 }
