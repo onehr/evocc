@@ -192,6 +192,7 @@ fn generated_programs_cover_the_declared_instruction_families() {
     let mut seen = BTreeSet::new();
     let mut widths = BTreeSet::new();
     let mut block_argument_counts = BTreeSet::new();
+    let mut reasons = BTreeSet::new();
     let mut back_edges = 0_usize;
 
     for seed in 0..512_u64 {
@@ -200,6 +201,11 @@ fn generated_programs_cover_the_declared_instruction_families() {
         for function in &module.functions {
             for block in &function.blocks {
                 block_argument_counts.insert(block.args.len());
+                for inst in &block.insts {
+                    if let Inst::UbAssume(_, reason) = inst {
+                        reasons.insert(reason.mnemonic());
+                    }
+                }
                 for value in block.args.iter().map(|arg| arg.value.clone()).chain(
                     block.insts.iter().flat_map(|inst| {
                         inst_results(inst).into_iter().cloned().collect::<Vec<_>>()
@@ -280,6 +286,24 @@ fn generated_programs_cover_the_declared_instruction_families() {
         "no block ever carried an ordinary block argument"
     );
     assert!(back_edges > 0, "no generated function contained a loop");
+
+    // The exact set, not a subset: a `ub.assume` may only be emitted for a
+    // condition the surrounding shape has already made true, so this equality
+    // is simultaneously the coverage claim and the record of what the gate does
+    // not yet reach. `invalid_signed_left_shift` is absent because no shape here
+    // makes `signed_shl_defined` true by construction.
+    assert_eq!(
+        reasons,
+        [
+            "division_by_zero",
+            "invalid_shift_count",
+            "remainder_by_zero",
+            "signed_overflow",
+        ]
+        .into_iter()
+        .collect::<BTreeSet<_>>(),
+        "the undefined-behaviour obligations the generator emits changed"
+    );
 }
 
 #[test]
