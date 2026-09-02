@@ -1,7 +1,15 @@
 //! Campaign counters. Every number here is produced by a run, never predicted.
 
-use crate::differential::{GateBudget, Mismatch, ProofChecker};
+use std::collections::BTreeMap;
+use std::fmt::Write as _;
+
+use crate::differential::{run_seed, GateBudget, Mismatch, ProofChecker, Verdict};
 use crate::generate::GeneratorConfig;
+
+/// How many minimized reproducers one report keeps. A campaign that refuses a
+/// thousand times has one defect, not a thousand, and the seed list below
+/// names every one of them.
+const RETAINED_REPRODUCERS: usize = 8;
 
 /// The measured outcome of a contiguous run of seeds.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -18,6 +26,8 @@ pub struct CampaignReport {
     pub certificates_replayed: u64,
     pub mismatched: u64,
     pub mismatches: Vec<Mismatch>,
+    /// Every seed that refused, in campaign order.
+    pub mismatched_seeds: Vec<u64>,
     /// Diagnostic codes that caused a discard, with their counts, sorted by
     /// code so the line is stable between runs.
     pub undefined_codes: Vec<(&'static str, u64)>,
@@ -27,7 +37,41 @@ impl CampaignReport {
     /// The measurement table, one `key=value` per line.
     #[must_use]
     pub fn render(&self) -> String {
-        todo!("render the measurement table")
+        let codes = self
+            .undefined_codes
+            .iter()
+            .map(|(code, count)| format!("{code}:{count}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let seeds = self
+            .mismatched_seeds
+            .iter()
+            .map(u64::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
+        let mut text = String::new();
+        let _ = writeln!(text, "firstSeed={}", self.first_seed);
+        let _ = writeln!(text, "count={}", self.count);
+        let _ = writeln!(text, "generated={}", self.generated);
+        let _ = writeln!(text, "discardedUndefined={}", self.discarded_undefined);
+        let _ = writeln!(
+            text,
+            "interpreterBudgetExhausted={}",
+            self.interpreter_budget_exhausted
+        );
+        let _ = writeln!(
+            text,
+            "optimizerBudgetExhausted={}",
+            self.optimizer_budget_exhausted
+        );
+        let _ = writeln!(text, "compared={}", self.compared);
+        let _ = writeln!(text, "optimized={}", self.optimized);
+        let _ = writeln!(text, "regions={}", self.regions);
+        let _ = writeln!(text, "certificatesReplayed={}", self.certificates_replayed);
+        let _ = writeln!(text, "mismatched={}", self.mismatched);
+        let _ = writeln!(text, "mismatchedSeeds={seeds}");
+        let _ = writeln!(text, "undefinedCodes={codes}");
+        text
     }
 }
 
@@ -40,6 +84,49 @@ pub fn run_campaign(
     budget: GateBudget,
     checker: &ProofChecker,
 ) -> CampaignReport {
-    let _ = (first_seed, count, config, budget, checker);
-    todo!("run one campaign")
+    let mut report = CampaignReport {
+        first_seed,
+        count,
+        ..CampaignReport::default()
+    };
+    let mut codes: BTreeMap<&'static str, u64> = BTreeMap::new();
+
+    for offset in 0..count {
+        let seed = first_seed.wrapping_add(offset);
+        report.generated += 1;
+        match run_seed(seed, config, budget, checker) {
+            Verdict::Compared {
+                regions,
+                certificates_replayed,
+                optimizer_budget_exhausted,
+            } => {
+                report.compared += 1;
+                report.regions += regions as u64;
+                report.certificates_replayed += certificates_replayed as u64;
+                if regions > 0 {
+                    report.optimized += 1;
+                }
+                if optimizer_budget_exhausted {
+                    report.optimizer_budget_exhausted += 1;
+                }
+            }
+            Verdict::DiscardedUndefined { code } => {
+                report.discarded_undefined += 1;
+                *codes.entry(code).or_default() += 1;
+            }
+            Verdict::InterpreterBudgetExhausted => {
+                report.interpreter_budget_exhausted += 1;
+            }
+            Verdict::Mismatch(mismatch) => {
+                report.mismatched += 1;
+                report.mismatched_seeds.push(seed);
+                if report.mismatches.len() < RETAINED_REPRODUCERS {
+                    report.mismatches.push(*mismatch);
+                }
+            }
+        }
+    }
+
+    report.undefined_codes = codes.into_iter().collect();
+    report
 }

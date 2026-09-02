@@ -67,9 +67,13 @@ fn family(inst: &Inst) -> &'static str {
         Inst::LifetimeEnd { .. } => "lifetime.end",
         Inst::PointerValid { .. } => "pointer_valid",
         Inst::AccessInBounds { .. } => "access_in_bounds",
-        Inst::Load { volatile: false, .. } => "load",
+        Inst::Load {
+            volatile: false, ..
+        } => "load",
         Inst::Load { volatile: true, .. } => "load.volatile",
-        Inst::Store { volatile: false, .. } => "store",
+        Inst::Store {
+            volatile: false, ..
+        } => "store",
         Inst::Store { volatile: true, .. } => "store.volatile",
         Inst::Copy { .. } => "copy",
         Inst::PtrOffset { .. } => "ptr.offset",
@@ -147,7 +151,11 @@ fn generated_modules_validate_and_render_canonically() {
         let text = render_module(&module);
         let reparsed = parse_section9_module(text.as_bytes())
             .unwrap_or_else(|error| panic!("seed {seed}: {error}"));
-        assert_eq!(render_module(&reparsed), text, "seed {seed} is not canonical");
+        assert_eq!(
+            render_module(&reparsed),
+            text,
+            "seed {seed} is not canonical"
+        );
     }
 }
 
@@ -192,14 +200,11 @@ fn generated_programs_cover_the_declared_instruction_families() {
         for function in &module.functions {
             for block in &function.blocks {
                 block_argument_counts.insert(block.args.len());
-                for value in block
-                    .args
-                    .iter()
-                    .map(|arg| arg.value.clone())
-                    .chain(block.insts.iter().flat_map(|inst| {
+                for value in block.args.iter().map(|arg| arg.value.clone()).chain(
+                    block.insts.iter().flat_map(|inst| {
                         inst_results(inst).into_iter().cloned().collect::<Vec<_>>()
-                    }))
-                {
+                    }),
+                ) {
                     if let evocc_types::EvoIRType::Bits(width) = value.ty {
                         widths.insert(width);
                     }
