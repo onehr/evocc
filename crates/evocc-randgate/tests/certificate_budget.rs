@@ -181,9 +181,14 @@ fn the_producer_emits_evp2_with_a_budget_line_and_epoch_markers() {
         "an evp2 certificate carries epoch markers:\n{}",
         case.proof
     );
+    // `mul(%sum, 3)` reads a constant this transaction derived, so the rule it
+    // instantiates is the fact-driven one and carries its premise. The budget
+    // line is unaffected: a premise is a claim about a class, not about the
+    // scheduler's box.
     assert!(
-        !case.proof.contains(" premises "),
-        "no Tier B rule exists yet, so no rewrite carries a premise"
+        case.proof.contains(" premises "),
+        "a fact-driven rewrite records its premise:\n{}",
+        case.proof
     );
 
     // Counters, not placeholders. A record of all zeroes would satisfy every

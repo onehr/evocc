@@ -875,15 +875,13 @@ fn the_campaign_runs_more_than_one_epoch() {
     );
 }
 
-/// The eighteen Tier B rules of `p0.scalar.v2`, which no transaction yet fires.
+/// The eighteen fact-driven rules the revision added.
 ///
-/// The registry is printed and admissible, the premise record is in the format
-/// and the known-bits lattice is implemented, but no producer rule reads a fact
-/// yet, so every rewrite the campaigns emit is Tier A. This test names the
-/// target so the gap lives in the code rather than only in a report; it is
-/// ignored because it states work that has not been done, not work that broke.
+/// A rule the campaign never fires is a rule whose premise recording, whose
+/// side condition and whose builder are all unmeasured, however carefully they
+/// are written. The list is the complete set rather than a sample for the same
+/// reason the reviewed-registry coverage above is.
 #[test]
-#[ignore = "Tier B rules are not produced yet; see the S3a window report"]
 fn the_campaign_reaches_the_tier_b_rules() {
     let mut fired = BTreeSet::new();
     for seed in 0..256_u64 {
