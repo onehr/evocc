@@ -200,6 +200,11 @@ pub struct ScalarEqReport {
     pub epochs: usize,
     pub merges: usize,
     pub optimized_values: usize,
+    /// Congruence events the transaction recorded (Section 7.4), and the
+    /// regions whose root is replaced on the strength of one with no rewrite of
+    /// its own -- the regions closing congruence is what buys.
+    pub congruences: usize,
+    pub congruent_roots: usize,
     pub budget_exhausted: bool,
     pub proof_replay_failed: bool,
     pub fell_back: bool,

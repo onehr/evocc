@@ -27,6 +27,10 @@ pub struct CampaignReport {
     /// those rewrites read.
     pub premised_regions: u64,
     pub premise_counts: BTreeMap<usize, u64>,
+    /// Congruence events per transaction, and the regions whose root a
+    /// congruence alone replaced.
+    pub congruence_counts: BTreeMap<usize, u64>,
+    pub congruent_roots: u64,
     /// Regions a fresh transaction over an optimized module still admits, and
     /// the programs that have any. Section 11.3 names these a measured quality
     /// metric of the registry: Section 11.6 lets a left-hand `const_like` match
@@ -92,6 +96,14 @@ impl CampaignReport {
             .join(",");
         let _ = writeln!(text, "regionsWithPremise={}", self.premised_regions);
         let _ = writeln!(text, "premiseCounts={premises}");
+        let congruences = self
+            .congruence_counts
+            .iter()
+            .map(|(events, transactions)| format!("{events}:{transactions}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let _ = writeln!(text, "congruenceCounts={congruences}");
+        let _ = writeln!(text, "congruentRoots={}", self.congruent_roots);
         let _ = writeln!(text, "residualRegions={}", self.residual_regions);
         let _ = writeln!(text, "residualPrograms={}", self.residual_programs);
         let lengths = self
@@ -140,6 +152,8 @@ pub fn run_campaign(
                 stopped_at_ceiling,
                 premised_regions,
                 premise_counts,
+                congruence_counts,
+                congruent_roots,
             } => {
                 report.transactions += transactions as u64;
                 *report.run_lengths.entry(transactions).or_default() += 1;
@@ -152,6 +166,10 @@ pub fn run_campaign(
                 for (count, rewrites) in premise_counts {
                     *report.premise_counts.entry(count).or_default() += rewrites;
                 }
+                for (events, transactions) in congruence_counts {
+                    *report.congruence_counts.entry(events).or_default() += transactions;
+                }
+                report.congruent_roots += congruent_roots as u64;
                 report.residual_regions += residual_regions as u64;
                 if residual_regions != 0 {
                     report.residual_programs += 1;

@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use evocc_evoir::{inst_results, render_module, validate_module, CmpOp, Inst, Module, Value};
 use evocc_proof::{
-    sha256_hex, EvpBudget, EvpCertificate, EvpEffectClass, EvpEvent, EvpExtraction,
+    sha256_hex, EvpBudget, EvpCertificate, EvpCongruence, EvpEffectClass, EvpEvent, EvpExtraction,
     EvpExtractionChoice, EvpNode, EvpNodeSource, EvpPremise, EvpProofRef, EvpQuantity, EvpRegion,
     EvpRegionId, EvpRewrite, EvpSeed, EvpSeedOrigin, EvpStop, EvpVersion,
 };
@@ -98,16 +98,21 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
                 }) else {
                     continue;
                 };
-                let Some((region, normalized_event, output_replacement)) = build_region(
-                    module,
-                    function_index,
-                    block_index,
-                    instruction_index,
-                    &applied,
-                    root_event,
-                ) else {
+                let Some((region, normalized_event, output_replacement, congruent_root)) =
+                    build_region(
+                        module,
+                        function_index,
+                        block_index,
+                        instruction_index,
+                        &applied,
+                        root_event,
+                    )
+                else {
                     continue;
                 };
+                if congruent_root {
+                    report.congruent_roots += 1;
+                }
                 let new_nodes = region
                     .events
                     .iter()
@@ -158,6 +163,11 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
     report.epochs = regions.len();
     report.merges = regions.len();
     report.optimized_values = regions.len();
+    report.congruences = regions
+        .iter()
+        .flat_map(|region| &region.events)
+        .filter(|event| matches!(event, EvpEvent::Congruence(_)))
+        .count();
     let (registry_name, registry_digest) = registry_for(&regions);
     report.proof_authority = ProofAuthority::Reviewed {
         registry: registry_name,
@@ -309,7 +319,7 @@ fn build_region(
     instruction_index: usize,
     applied: &[AppliedRewrite],
     root_event: &AppliedRewrite,
-) -> Option<(EvpRegion, AppliedRewrite, Replacement)> {
+) -> Option<(EvpRegion, AppliedRewrite, Replacement, bool)> {
     let function = &module.functions[function_index];
     let block = &function.blocks[block_index];
     let instruction = &block.insts[instruction_index];
@@ -399,9 +409,17 @@ fn build_region(
     // earlier rewrite merged is placed after it rather than beside it.
     let mut changed: Vec<(u32, u64)> = Vec::new();
     let mut marker = 0_u64;
+    // Section 7.4: nodes that are congruent as they are inserted are already one
+    // class, and no epoch produced that. Two `const` nodes with the same payload
+    // are the whole of this case in the P0 profile, and they are the two classes
+    // holding one constant that the first campaign's refusals were reduced to.
+    close_congruences(&nodes, &mut classes, &mut events, marker, &mut changed)?;
     let mut selected = None;
     let mut normalized_root = None;
     let mut output_replacement = None;
+    // Whether the root instruction is replaced on the strength of a congruence
+    // alone, with no rewrite of its own.
+    let mut congruent_root = false;
     for event in applied.iter().filter(|event| {
         event.function == function.name
             && event.block == block.id
@@ -483,10 +501,6 @@ fn build_region(
         // rule later is a schedule a scheduler may choose; claiming it fired
         // before the merge it matches on would not be.
         let epoch = (depth + 1).max(marker);
-        if epoch > marker {
-            events.push(EvpEvent::Epoch(epoch));
-            marker = epoch;
-        }
         let (rhs, rhs_ref, event_selected, event_output) = match &opportunity.replacement {
             Replacement::Alias(_) => {
                 // Section 11.3: `class:cI` is admissible only when that side of
@@ -549,22 +563,40 @@ fn build_region(
                 }
             }
         };
-        if lhs == rhs {
-            return None;
+        // Section 11.3 requires a union's endpoints to be two distinct canonical
+        // roots. When congruence has already put them in one class the rewrite
+        // proves nothing and is not recorded -- but what it would have proved
+        // still holds, so the replacement it names stands and the region keeps
+        // it. Dropping the region here instead would make closing congruence a
+        // net loss: the merge that established the equality would also be the
+        // reason the equality went unused.
+        if lhs != rhs {
+            let result = lhs.min(rhs);
+            if epoch > marker {
+                events.push(EvpEvent::Epoch(epoch));
+                marker = epoch;
+            }
+            events.push(EvpEvent::Rewrite(EvpRewrite {
+                rule: rule.to_owned(),
+                lhs_pre: lhs,
+                rhs_pre: rhs,
+                result,
+                lhs: EvpProofRef::Node(node_id),
+                rhs: rhs_ref,
+                bindings,
+                premises,
+            }));
+            classes.union(lhs, rhs)?;
+            changed.push((result, epoch));
+            // Section 8.4 repairs congruence after a merge, so what this merge
+            // made congruent belongs to the epoch that made it.
+            close_congruences(&nodes, &mut classes, &mut events, epoch, &mut changed)?;
+        } else if event.result.id == root_event.result.id {
+            // The root's own replacement rests on a congruence rather than on a
+            // rule. Counted, because it is the measure of what closing
+            // congruence buys.
+            congruent_root = true;
         }
-        let result = lhs.min(rhs);
-        events.push(EvpEvent::Rewrite(EvpRewrite {
-            rule: rule.to_owned(),
-            lhs_pre: lhs,
-            rhs_pre: rhs,
-            result,
-            lhs: EvpProofRef::Node(node_id),
-            rhs: rhs_ref,
-            bindings,
-            premises,
-        }));
-        classes.union(lhs, rhs)?;
-        changed.push((result, epoch));
         if event.result.id == root_event.result.id {
             selected = Some(event_selected);
             normalized_root = Some(normalized_event);
@@ -602,7 +634,76 @@ fn build_region(
         },
         normalized_root?,
         output_replacement?,
+        congruent_root,
     ))
+}
+
+/// Section 7.4: equality is a congruence, so two nodes with the same operation
+/// whose children are pairwise in one class are themselves one class. Section
+/// 11.3 gives each such merge its own event, because "a format carrying only
+/// rewrites cannot reproduce the partition": a reader replaying the stream has
+/// to reach the classes the producer reached.
+///
+/// The scan is ascending by node pair and restarts after every merge, so which
+/// events a region emits is a function of its node stream and nothing else.
+///
+/// A congruence cannot contradict a fact. Two congruent nodes have the same
+/// operation and pairwise equal children, so Section 8.10 transfers them to the
+/// same fact, and the meet of a fact with itself is itself. What their classes
+/// hold besides those two nodes is checked where every other union is checked,
+/// when the facts are next recomputed.
+fn close_congruences(
+    nodes: &[EvpNode],
+    classes: &mut LocalClasses,
+    events: &mut Vec<EvpEvent>,
+    epoch: u64,
+    changed: &mut Vec<(u32, u64)>,
+) -> Option<()> {
+    'closure: loop {
+        for left_index in 0..nodes.len() {
+            for right_index in (left_index + 1)..nodes.len() {
+                let left = nodes.get(left_index)?;
+                let right = nodes.get(right_index)?;
+                let lhs_pre = classes.find(left.owner)?;
+                let rhs_pre = classes.find(right.owner)?;
+                if lhs_pre == rhs_pre || !congruent(left, right, classes)? {
+                    continue;
+                }
+                let result = lhs_pre.min(rhs_pre);
+                events.push(EvpEvent::Congruence(EvpCongruence {
+                    lhs_pre,
+                    rhs_pre,
+                    result,
+                    lhs_node: left.node,
+                    rhs_node: right.node,
+                }));
+                classes.union(lhs_pre, rhs_pre)?;
+                changed.push((result, epoch));
+                continue 'closure;
+            }
+        }
+        return Some(());
+    }
+}
+
+/// Identical operator, sort, effect class, attributes and arity, and every pair
+/// of corresponding children already in one class -- the exact conditions
+/// Section 11.3 makes a reader verify.
+fn congruent(left: &EvpNode, right: &EvpNode, classes: &LocalClasses) -> Option<bool> {
+    if left.operation != right.operation
+        || left.sort != right.sort
+        || left.effect != right.effect
+        || left.attributes != right.attributes
+        || left.children.len() != right.children.len()
+    {
+        return Some(false);
+    }
+    for (one, other) in left.children.iter().zip(&right.children) {
+        if classes.find(*one)? != classes.find(*other)? {
+            return Some(false);
+        }
+    }
+    Some(true)
 }
 
 struct LocalClasses {
@@ -670,14 +771,12 @@ enum PremiseSource {
 
 /// The rule this region states for one recorded rewrite.
 ///
-/// Section 8.11 fixes that the canonical reductions run before the fact-driven
-/// rules. The remaining order inside the fact-driven tier is a producer choice
-/// and this is it: a fold whose constants the before witness closure already
-/// holds is stated without any fact at all, then the fact-driven rules state
-/// what the analysis knows, and last the fold on a constant this transaction
-/// derived. The last step is not redundant: `mul` is the one operator whose
-/// Section 8.10 transfer keeps only a trailing zero run, so a product of two
-/// constants has no fact and only the fold can state it.
+/// Section 11.6 as fixed at revision 1.9.41: within a tier the producer applies
+/// the first applicable rule in registry order, so a premise-free fold on a
+/// node precedes a fact-driven rule on the same node. That is what makes
+/// `p1_202`, `p1_203` and `p1_204` dominated: `fully_known` on `xor`, `add` and
+/// `sub` holds only when both operands are fully known, which is exactly when
+/// `all_const` holds.
 fn region_rewrite(
     event: &AppliedRewrite,
     nodes: &[EvpNode],
@@ -705,9 +804,8 @@ fn region_rewrite(
             });
         }
     }
-    fold_rewrite(event, matched, nodes, classes, true)
+    fold_rewrite(event, matched, nodes, classes)
         .or_else(|| fact_rewrite(event, matched, classes, facts))
-        .or_else(|| fold_rewrite(event, matched, nodes, classes, false))
 }
 
 /// A canonical reduction of Section 8.11, re-derived against this region.
@@ -770,14 +868,14 @@ fn canonical_reduction(
 
 /// `all_const` over the emitted node stream.
 ///
-/// `before_only` restricts the constants to the before witness closure, which
-/// is what separates the two places this is tried.
+/// Section 11.6 puts no before-witness restriction on `all_const`, unlike the
+/// `const_like` a canonical reduction matches: a class holds one unambiguous
+/// constant of the required sort or it does not, whoever put it there.
 fn fold_rewrite(
     event: &AppliedRewrite,
     matched: &EvpNode,
     nodes: &[EvpNode],
     classes: &LocalClasses,
-    before_only: bool,
 ) -> Option<RegionRewrite> {
     let operator = ingest_scalar_inst(&event.instruction).ok()?;
     let [left_class, right_class] = matched.children.as_slice() else {
@@ -785,8 +883,8 @@ fn fold_rewrite(
     };
     let operand_ty = scalar_operands(&event.instruction).first()?.ty.clone();
     let sort = packed_type(&operand_ty)?;
-    let left = class_constant(nodes, classes, *left_class, &sort, before_only)?;
-    let right = class_constant(nodes, classes, *right_class, &sort, before_only)?;
+    let left = class_constant(nodes, classes, *left_class, &sort)?;
+    let right = class_constant(nodes, classes, *right_class, &sort)?;
     let folded = fold_raw(operator, left, right, &operand_ty, &event.result.ty)?;
     Some(RegionRewrite {
         opportunity: RewriteOpportunity {
@@ -961,15 +1059,11 @@ fn class_constant(
     classes: &LocalClasses,
     class: u32,
     sort: &str,
-    before_only: bool,
 ) -> Option<u64> {
     let root = classes.find(class)?;
     let mut found: Option<u64> = None;
     for node in nodes {
-        if node.operation != "const"
-            || node.sort != sort
-            || classes.find(node.owner) != Some(root)
-            || (before_only && node.source != EvpNodeSource::Before)
+        if node.operation != "const" || node.sort != sort || classes.find(node.owner) != Some(root)
         {
             continue;
         }

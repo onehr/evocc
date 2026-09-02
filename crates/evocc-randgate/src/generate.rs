@@ -1143,11 +1143,53 @@ impl FunctionGen<'_> {
         let width = *self.rng.pick(&wide);
         let half = width / 2;
         let low = (1_u64 << half) - 1;
-        match self.rng.below(3) {
+        // Drawn rather than taken in turn: a generator is built per function,
+        // so a counter would give the last group only to functions with four
+        // bait sites, and most have fewer.
+        match self.rng.below(4) {
             0 => self.emit_covering_mask(block, width, low),
             1 => self.emit_known_zero_identity(block),
-            _ => self.emit_bounded_comparison(block, width, low),
+            2 => self.emit_bounded_comparison(block, width, low),
+            _ => self.emit_known_constants(block, width, low),
         }
+    }
+
+    /// The shapes whose every bit the analysis knows without any operand being
+    /// a constant class of its own.
+    fn emit_known_constants(&mut self, block: &mut OpenBlock, width: u16, low: u64) {
+        let value = self.value_of(block, width);
+        let other = self.value_of(block, width);
+        let low_mask = self.emit_const(block, width, low);
+        let high_mask = self.emit_const(block, width, mask(width) & !low);
+        let cleared = self.fresh(EvoIRType::Bits(width));
+        block
+            .insts
+            .push(Inst::And(cleared.clone(), value.clone(), low_mask));
+        self.record(block, &cleared);
+        let raised = self.fresh(EvoIRType::Bits(width));
+        block
+            .insts
+            .push(Inst::And(raised.clone(), other, high_mask));
+        self.record(block, &raised);
+        // Every bit is known zero, because one operand or the other knows it,
+        // while neither operand's own class is known.
+        let vanished = self.fresh(EvoIRType::Bits(width));
+        block
+            .insts
+            .push(Inst::And(vanished.clone(), cleared, raised));
+        self.record(block, &vanished);
+        // Every bit is known one.
+        let ones = self.emit_const(block, width, mask(width));
+        let saturated = self.fresh(EvoIRType::Bits(width));
+        block
+            .insts
+            .push(Inst::Or(saturated.clone(), value.clone(), ones));
+        self.record(block, &saturated);
+        // A product with a known zero is known zero whatever it multiplies.
+        let zero = self.emit_const(block, width, 0);
+        let product = self.fresh(EvoIRType::Bits(width));
+        block.insts.push(Inst::Mul(product.clone(), value, zero));
+        self.record(block, &product);
     }
 
     /// A masked value and a mask that covers it, combined in both orders and by
@@ -1190,14 +1232,18 @@ impl FunctionGen<'_> {
         let width = *self.rng.pick(&self.active.clone());
         let value = self.value_of(block, width);
         let zero = self.emit_const(block, width, 0);
-        let (left, right) = if self.rng.chance(50) {
-            (value, zero)
-        } else {
-            (zero, value)
-        };
-        let result = self.fresh(EvoIRType::Bits(width));
-        block.insts.push(Inst::Xor(result.clone(), left, right));
-        self.record(block, &result);
+        // Both orders, for the reason the covering bait emits all four of its
+        // combinations: one of the two rules would otherwise be left to luck.
+        for zero_on_the_left in [false, true] {
+            let (left, right) = if zero_on_the_left {
+                (zero.clone(), value.clone())
+            } else {
+                (value.clone(), zero.clone())
+            };
+            let result = self.fresh(EvoIRType::Bits(width));
+            block.insts.push(Inst::Xor(result.clone(), left, right));
+            self.record(block, &result);
+        }
     }
 
     /// A value confined to `0..=low` compared against `low + 1`.
@@ -1212,12 +1258,27 @@ impl FunctionGen<'_> {
         block.insts.push(Inst::And(masked.clone(), value, mask));
         self.record(block, &masked);
         let bound = self.emit_const(block, width, low + 1);
-        let operation = self.random_comparison();
-        let result = self.fresh(EvoIRType::Bits(1));
-        block
-            .insts
-            .push(Inst::ICmp(result.clone(), operation, masked, bound));
-        self.record(block, &result);
+        // All six comparisons against the same bound, for the reason the
+        // covering bait emits all four of its combinations: drawing one would
+        // leave the campaign's coverage of the other five to luck, and a
+        // region is admitted only when its whole closure is scalar.
+        for operation in [
+            CmpOp::Eq,
+            CmpOp::Ne,
+            CmpOp::SLt,
+            CmpOp::SLe,
+            CmpOp::ULt,
+            CmpOp::ULe,
+        ] {
+            let result = self.fresh(EvoIRType::Bits(1));
+            block.insts.push(Inst::ICmp(
+                result.clone(),
+                operation,
+                masked.clone(),
+                bound.clone(),
+            ));
+            self.record(block, &result);
+        }
     }
 
     // -- memory -------------------------------------------------------------

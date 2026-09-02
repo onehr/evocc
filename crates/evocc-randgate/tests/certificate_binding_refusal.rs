@@ -347,23 +347,30 @@ fn the_checker_is_the_standalone_binary() {
 /// `p0_009_double_neg` is the only rule of the reviewed registry whose left
 /// pattern passes through a second node: `sub(0, sub(0, ?x)) => ?x`. Resolving
 /// `?x` means finding that inner `sub` in the class the outer one names, and a
-/// class can own more than one `sub` once merges have run. In the module below
-/// the class that holds the inner negation also holds `sub(1, 1)`, folded to
-/// the same zero, and taking `?x` from that node binds the class of `1` while
-/// the checker recomputes the class of the negation. Twenty thousand programs
-/// produced eight of these; the reduction is five instructions.
+/// class can own more than one `sub` once merges have run. Twenty thousand
+/// programs produced eight of these.
 ///
-/// The fix is to match the whole pattern rather than its operator: the node the
-/// rule matched is the one whose remaining child is the zero the pattern writes
-/// there.
+/// Here `2 - 5` and `0 - 3` are both `253` in eight bits, so folding each puts
+/// both `sub` nodes in the class of that constant while their children stay
+/// apart -- they are equal, not congruent. Taking `?x` from the first of them
+/// binds the class of `5`; the rule matched the second, whose remaining child
+/// is the zero the pattern writes there, and the checker recomputes that one.
+/// The subtraction that is not the rule's comes first in the block, so the
+/// order a scan finds them in is the order that gets it wrong.
+///
+/// The outer negation is folded into a sum, because the whole ambiguity only
+/// exists in a region whose witness closure holds both subtractions.
 fn nested_negation_module() -> Module {
-    let one = value(0, EvoIRType::Bits(64));
-    let zeroed = value(1, EvoIRType::Bits(64));
-    let zero = value(2, EvoIRType::Bits(64));
-    let negated = value(3, EvoIRType::Bits(64));
-    let restored = value(4, EvoIRType::Bits(64));
-    let memory = value(5, EvoIRType::Mem(Region::All));
-    let world = value(6, EvoIRType::World);
+    let zero = value(0, EvoIRType::Bits(8));
+    let three = value(1, EvoIRType::Bits(8));
+    let two = value(2, EvoIRType::Bits(8));
+    let five = value(3, EvoIRType::Bits(8));
+    let decoy = value(4, EvoIRType::Bits(8));
+    let negated = value(5, EvoIRType::Bits(8));
+    let restored = value(6, EvoIRType::Bits(8));
+    let total = value(7, EvoIRType::Bits(8));
+    let memory = value(8, EvoIRType::Mem(Region::All));
+    let world = value(9, EvoIRType::World);
 
     let function = Function {
         name: "main".to_owned(),
@@ -378,7 +385,7 @@ fn nested_negation_module() -> Module {
             },
         ],
         ret_tys: vec![
-            EvoIRType::Bits(64),
+            EvoIRType::Bits(8),
             EvoIRType::Mem(Region::All),
             EvoIRType::World,
         ],
@@ -387,15 +394,16 @@ fn nested_negation_module() -> Module {
             id: 0,
             args: vec![argument(&memory), argument(&world)],
             insts: vec![
-                Inst::Const(one.clone(), 1),
-                // Folds to zero, and its class then holds the same constant the
-                // inner negation's class holds.
-                Inst::Sub(zeroed.clone(), one.clone(), one),
                 Inst::Const(zero.clone(), 0),
-                Inst::Sub(negated.clone(), zero.clone(), zeroed),
+                Inst::Const(three.clone(), 3),
+                Inst::Const(two.clone(), 2),
+                Inst::Const(five.clone(), 5),
+                Inst::Sub(decoy.clone(), two, five),
+                Inst::Sub(negated.clone(), zero.clone(), three),
                 Inst::Sub(restored.clone(), zero, negated),
+                Inst::Add(total.clone(), restored, decoy),
             ],
-            terminator: Inst::Ret(vec![restored, memory, world]),
+            terminator: Inst::Ret(vec![total, memory, world]),
         }],
     };
 
@@ -415,9 +423,35 @@ fn a_nested_left_pattern_binds_the_node_the_rule_matched() {
     let before_text = render_module(&before);
     let after_text = render_module(&outcome.module);
     let proof_text = render_evp1(&outcome.certificate);
-    assert!(
-        proof_text.contains("p0_009_double_neg"),
-        "the reduction must reach the nested rule:\n{proof_text}"
+
+    // The sum is the only root whose witness closure holds both subtractions,
+    // so it is the only region in which the variable can be resolved from the
+    // wrong one. Resolving it there from the wrong node binds the class of `5`,
+    // the sum folds to `2` instead of `0`, and the region is abandoned rather
+    // than admitted -- which is why its presence, not the certificate's, is
+    // what this pins.
+    let ambiguous = outcome
+        .certificate
+        .regions
+        .iter()
+        .find(|region| region.witnesses.len() == 8)
+        .unwrap_or_else(|| {
+            panic!("the region holding both subtractions was abandoned:\n{proof_text}")
+        });
+    let rule = ambiguous
+        .events
+        .iter()
+        .find_map(|event| match event {
+            evocc_proof::EvpEvent::Rewrite(rewrite) if rewrite.rule == "p0_009_double_neg" => {
+                Some(rewrite.clone())
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("that region must reach the nested rule:\n{proof_text}"));
+    assert_eq!(
+        rule.bindings.len(),
+        1,
+        "the nested rule binds one variable: {rule:?}"
     );
     checker()
         .check(&before_text, &after_text, &proof_text)

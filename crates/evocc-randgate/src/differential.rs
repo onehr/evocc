@@ -181,6 +181,11 @@ pub enum Verdict {
         /// conditions the campaign actually exercised.
         premised_regions: usize,
         premise_counts: BTreeMap<usize, u64>,
+        /// How many congruence events each transaction recorded, and the
+        /// regions whose root is replaced on the strength of one with no
+        /// rewrite of its own -- what closing congruence bought.
+        congruence_counts: BTreeMap<usize, u64>,
+        congruent_roots: usize,
     },
     /// The input program was undefined; the specification's equality is modulo
     /// undefined behaviour, so nothing is compared.
@@ -279,6 +284,8 @@ struct Trial {
     regions: usize,
     premised_regions: usize,
     premise_counts: BTreeMap<usize, u64>,
+    congruence_counts: BTreeMap<usize, u64>,
+    congruent_roots: usize,
     residual_regions: usize,
     /// Transactions the run executed and kept, each of which admitted at least
     /// one region. The transaction that admits nothing is what ends the run and
@@ -314,6 +321,8 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
                 regions: 0,
                 premised_regions: 0,
                 premise_counts: BTreeMap::new(),
+                congruence_counts: BTreeMap::new(),
+                congruent_roots: 0,
                 residual_regions: 0,
                 transactions: 0,
                 stopped_at_ceiling: false,
@@ -332,6 +341,8 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
         regions: 0,
         premised_regions: 0,
         premise_counts: BTreeMap::new(),
+        congruence_counts: BTreeMap::new(),
+        congruent_roots: 0,
         residual_regions: 0,
         transactions: 0,
         stopped_at_ceiling: false,
@@ -383,6 +394,11 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
                 trial.premised_regions += 1;
             }
         }
+        *trial
+            .congruence_counts
+            .entry(outcome.report.congruences)
+            .or_default() += 1;
+        trial.congruent_roots += outcome.report.congruent_roots;
         trial.transactions += 1;
         trial.optimizer_budget_exhausted |= outcome.report.budget_exhausted;
         trial.after_text = after_text.clone();
@@ -505,6 +521,8 @@ pub fn run_seed(
             optimizer_budget_exhausted: trial.optimizer_budget_exhausted,
             premised_regions: trial.premised_regions,
             premise_counts: trial.premise_counts.clone(),
+            congruence_counts: trial.congruence_counts.clone(),
+            congruent_roots: trial.congruent_roots,
             residual_regions: trial.residual_regions,
             transactions: trial.transactions,
             stopped_at_ceiling: trial.stopped_at_ceiling,
