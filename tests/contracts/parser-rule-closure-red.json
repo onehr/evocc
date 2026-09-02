@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "c30.parser-rule-closure.red.v1",
+  "status": "RED_AS_DECLARED",
+  "authority": {
+    "baselineCommit": "8f9a59d94f85e107788b40a1815fab88531e86db",
+    "windowBaselineCommit": "18cf79707655840be105cb9818df3c7ba1da20a0",
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.33",
+      "sections": [
+        "10.1.17 Function names",
+        "10.1.17 Labeled last statement",
+        "10.1.18 Array parameters",
+        "10.1.18 Pointer sign in conversions",
+        "10.1.3 Modifiable lvalues",
+        "10.1.19 Address constants"
+      ],
+      "sha256": "77d904c53b48e0f0db1512c61d60cfcf50095492bad0aa0296e2b26d77507811"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "V",
+      "rulings": [
+        "prettyFunctionConflict",
+        "incompatiblePointerTypesConflict",
+        "secondSurveyRanking"
+      ],
+      "sha256": "ad14d91530efed11b661af605e90c6240e95bc20d6d1fc27dd0714413c8724c1"
+    }
+  },
+  "declaredCapabilities": {
+    "functionLocalIdentifiers": {
+      "test": "crates/evocc-parser/tests/function_local_identifiers.rs",
+      "testSha256": "247592f7d0e62e2fde2b825259ac3a31704446ec7c57c061dc3e548aa3fc58d6",
+      "forms": 4,
+      "passed": 0,
+      "failed": 4,
+      "buildErrors": 0,
+      "diagnostics": [
+        "__func__ is E2001 undeclared-identifier instead of one implicit static const char[N] object",
+        "__FUNCTION__ is E2001 undeclared-identifier instead of the same object form",
+        "nested and static-initializer uses of __func__ are E2001 instead of address constants",
+        "__PRETTY_FUNCTION__ is E2001 instead of E2921 pretty-function-unsupported"
+      ]
+    },
+    "labeledStatementExpressionResult": {
+      "test": "crates/evocc-parser/tests/statement_expression_labels.rs",
+      "testSha256": "a595e2eb6e6d19a883adbd42d5ad202ef814a0dd3ae3be1ce074ac9a9b56ffaf",
+      "forms": 3,
+      "passed": 0,
+      "failed": 3,
+      "buildErrors": 0,
+      "diagnostic": "a labeled final expression is typed as void and produces E2202 invalid-initializer-type"
+    },
+    "arrayParameterAdjustment": {
+      "test": "crates/evocc-parser/tests/parameter_and_pointer_sign_conversions.rs",
+      "testSha256": "d5c51b6f1a1ef5af9a99a01a4cdb9d494bd494d4b66de26085c04a47525d9b8c",
+      "forms": 3,
+      "passed": 1,
+      "failed": 2,
+      "buildErrors": 0,
+      "diagnostics": [
+        "an adjusted array parameter is E2202 invalid-initializer-type when its element type carries qualifiers",
+        "qualifiers and static inside parameter brackets are E1003 expected-expression"
+      ]
+    },
+    "pointerSignConversions": {
+      "test": "crates/evocc-parser/tests/parameter_and_pointer_sign_conversions.rs",
+      "testSha256": "d5c51b6f1a1ef5af9a99a01a4cdb9d494bd494d4b66de26085c04a47525d9b8c",
+      "forms": 5,
+      "passed": 3,
+      "failed": 2,
+      "buildErrors": 0,
+      "diagnostics": [
+        "signedness-only pointer initialization is E2202 invalid-initializer-type",
+        "signedness-only pointer assignment is E2102 invalid-update-operands"
+      ],
+      "negativeControl": "pointers to distinct record types remain E2202"
+    },
+    "modifiableLvaluePredicate": {
+      "test": "crates/evocc-parser/tests/modifiable_lvalue_types.rs",
+      "testSha256": "0a1e8fbe27b265020c1e850f897496b75cdbaf70876c9ab74e828af397086fee",
+      "forms": 4,
+      "passed": 1,
+      "failed": 3,
+      "buildErrors": 0,
+      "diagnostic": "pointer objects whose pointee is qualified are E2101 expected-modifiable-lvalue",
+      "negativeControls": "a const pointer object and a record containing a const member remain nonmodifiable"
+    },
+    "staticAddressConstants": {
+      "test": "crates/evocc-parser/tests/static_address_constants.rs",
+      "testSha256": "0384058b41309cd58e956962a35c872619ff6f9eb3c4aaecc61756eb228122e6",
+      "forms": 3,
+      "passed": 0,
+      "failed": 3,
+      "buildErrors": 0,
+      "diagnostic": "constant member and array-element addresses, including nested aggregate uses, are E2208 non-constant-static-initializer"
+    }
+  },
+  "focusedRed": {
+    "command": "cargo test -p evocc-parser --test function_local_identifiers --test statement_expression_labels --test parameter_and_pointer_sign_conversions --test modifiable_lvalue_types --test static_address_constants -- --nocapture",
+    "passed": 5,
+    "failed": 17,
+    "ignored": 0,
+    "buildErrors": 0,
+    "unexpectedFailures": 0
+  },
+  "workspaceRed": {
+    "command": "cargo test --workspace --no-fail-fast",
+    "passed": 1099,
+    "failed": 17,
+    "ignored": 0,
+    "buildErrors": 0,
+    "unexpectedFailures": 0,
+    "failedTargets": [
+      "evocc-parser::function_local_identifiers",
+      "evocc-parser::modifiable_lvalue_types",
+      "evocc-parser::parameter_and_pointer_sign_conversions",
+      "evocc-parser::statement_expression_labels",
+      "evocc-parser::static_address_constants"
+    ]
+  },
+  "staticGates": {
+    "clippy": {
+      "command": "cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    },
+    "diffCheck": "clean"
+  },
+  "sealedOracleProbes": [
+    {
+      "source": ".evidence/builtin-probes/20260902-2c23684c/p17.c",
+      "sourceSha256": "0f190f5d2c3e61355da5adec1020e3d027964074590f284349508dbe12fc30e5",
+      "output": ".evidence/builtin-probes/20260902-2c23684c/p17.out",
+      "outputSha256": "380fc6182983ccb8f06fe5b911b6c11ea6f0eada1e0df99341f98809fc9b245d",
+      "oracleConsensus": "__func__ and __FUNCTION__; __PRETTY_FUNCTION__ conflict is resolved to E2921"
+    },
+    {
+      "source": ".evidence/builtin-probes/20260902-2c23684c/p19.c",
+      "sourceSha256": "39324e3335f006c92ec0448292f7971c98d7d82c26ed3ef9952d449cfa67d7ef",
+      "output": ".evidence/builtin-probes/20260902-2c23684c/p19-p20.out",
+      "outputSha256": "9ace96a6d52081fcea3d5cf220e5dc7bf0d53f5864de700459979b4bddd14289",
+      "oracleConsensus": true
+    },
+    {
+      "source": ".evidence/builtin-probes/20260902-2c23684c/p21.c",
+      "sourceSha256": "a6ed77536c3417bb062c6b19dbb44c73bc2ffc282736a05f77cb628fa57cc821",
+      "output": ".evidence/builtin-probes/20260902-2c23684c/p21.out",
+      "outputSha256": "e74b38891bb9b5b919fc279eae617e27614c50ceee867dc6a4a035da2e0ba452",
+      "oracleConsensus": "signedness-only pointer conversions; incompatible pointer conflict is resolved to E2202"
+    }
+  ],
+  "claimCeiling": "Only the six declared parser rules are exposed. No production code changes are present, every failure is semantic rather than a build error, and no post-implementation dashboard or full-configuration result is claimed."
+}
