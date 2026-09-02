@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "c30.preprocessor-macro-argument.red.v1",
+  "status": "RED_AS_DECLARED",
+  "authority": {
+    "baselineCommit": "8f9a59d94f85e107788b40a1815fab88531e86db",
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.33",
+      "sections": [
+        "10.4 Directives inside macro arguments",
+        "10.4 Empty arguments and variadic forwarding"
+      ],
+      "sha256": "77d904c53b48e0f0db1512c61d60cfcf50095492bad0aa0296e2b26d77507811"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "U",
+      "rulings": [
+        "pragmaInsideMacroArgumentConflict",
+        "secondSurveyRanking"
+      ],
+      "sha256": "ad14d91530efed11b661af605e90c6240e95bc20d6d1fc27dd0714413c8724c1"
+    }
+  },
+  "declaredCapabilities": {
+    "directivesInsideMacroArguments": {
+      "test": "crates/evocc-cpp/tests/macro_argument_directives.rs",
+      "testSha256": "5c7f0d9f9c151cb98d198fe50a973f4c804b637f52f013aac68b52048a5c6621",
+      "passed": 0,
+      "failed": 5,
+      "buildErrors": 0,
+      "diagnostics": [
+        "conditional directive tokens are emitted literally instead of selecting the active argument branch",
+        "a directive in a later argument is emitted literally instead of preserving the argument boundary",
+        "#define and #undef are emitted literally and LATER is not expanded",
+        "#pragma produces no E0113 directive-in-macro-argument diagnostic",
+        "#line produces no E0113 directive-in-macro-argument diagnostic"
+      ]
+    },
+    "emptyArgumentsAndVariadicForwarding": {
+      "test": "crates/evocc-cpp/tests/variadic_empty_arguments.rs",
+      "testSha256": "13e6ff8b7675f64ed9ff6b8d6eff282eda85bfd44e4d2bf3ec60abf2bfdebf6c",
+      "passed": 4,
+      "failed": 1,
+      "buildErrors": 0,
+      "diagnostic": "kernel __MAP expansion is h(,r0,,,,) instead of h(,r0,,r1,,r2) because empty variadic arguments erase separators"
+    },
+    "hostCompilerInventoryExclusion": {
+      "test": "crates/evocc/tests/full_configuration_inventory.rs",
+      "selftest": "tests/acceptance/full-config-survey-inventory-selftest.py",
+      "testSha256": "b644b7a6aacc2ae3bfc7b34cee6ca344a004e28804dc728f3ea2c5abee5b0b5f",
+      "selftestSha256": "b4aa078980a0c6271753f938604a029fdc54c8e0c533453b9c4978713719db3a",
+      "passed": 0,
+      "failed": 1,
+      "buildErrors": 0,
+      "diagnostic": "a gcc HOSTCC record is included as a target translation unit instead of excluded as host-compiler-program"
+    }
+  },
+  "focusedCommands": [
+    {
+      "command": "cargo test -p evocc-cpp --test macro_argument_directives -- --nocapture",
+      "passed": 0,
+      "failed": 5,
+      "buildErrors": 0
+    },
+    {
+      "command": "cargo test -p evocc-cpp --test variadic_empty_arguments -- --nocapture",
+      "passed": 4,
+      "failed": 1,
+      "buildErrors": 0
+    },
+    {
+      "command": "cargo test -p evocc --test full_configuration_inventory -- --nocapture",
+      "passed": 0,
+      "failed": 1,
+      "buildErrors": 0
+    }
+  ],
+  "workspaceRed": {
+    "command": "cargo test --workspace --no-fail-fast",
+    "passed": 1087,
+    "failed": 7,
+    "ignored": 0,
+    "buildErrors": 0,
+    "unexpectedFailures": 0,
+    "failedTargets": [
+      "evocc::full_configuration_inventory",
+      "evocc-cpp::macro_argument_directives",
+      "evocc-cpp::variadic_empty_arguments"
+    ]
+  },
+  "staticGates": {
+    "clippy": {
+      "command": "cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    }
+  },
+  "sealedOracleProbes": [
+    {
+      "source": ".evidence/builtin-probes/20260902-2c23684c/p18.c",
+      "sourceSha256": "18c81cca928579ebc860ffb2d70788e1003f2f6226567d7bbd4b220f4c4da353",
+      "output": ".evidence/builtin-probes/20260902-2c23684c/p18.out",
+      "outputSha256": "8f13be2eb205f2df56811d2041a4f5f8892b30e48ea61789de08f90068d0ca09",
+      "oracleConsensus": true
+    },
+    {
+      "sources": [
+        ".evidence/builtin-probes/20260902-2c23684c/p20.c",
+        ".evidence/builtin-probes/20260902-2c23684c/p20b.c",
+        ".evidence/builtin-probes/20260902-2c23684c/p20c.c"
+      ],
+      "sourceSha256": [
+        "4c579547d82d5b74e2dea84db6d6abaa692cdd2e8437c066057300fe83efd336",
+        "f5af94be74aa2c8d81a118990e6acbafd92a35b23fe082ea830d0e69b8c69a4c",
+        "9d097927b1caae9ded4da1ed1934e734d8bfee550de88433480d1f306492461f"
+      ],
+      "output": ".evidence/builtin-probes/20260902-2c23684c/p19-p20.out",
+      "outputSha256": "9ace96a6d52081fcea3d5cf220e5dc7bf0d53f5864de700459979b4bddd14289",
+      "oracleConsensus": "conditional directives and #define/#undef; #pragma conflict is resolved to E0113"
+    }
+  ],
+  "claimCeiling": "Only the three declared gaps are exposed. No production code changes are present and no full-configuration result is claimed from this RED window."
+}

@@ -178,6 +178,25 @@ fn both_interpreters_agree_on_statement_and_initializer_forms() {
 }
 
 #[test]
+fn labeled_terminal_expressions_execute_in_both_interpreters() {
+    let cases = [
+        (
+            "int main(void) { return ({ int value = 4; out: value; }); }\n",
+            4,
+        ),
+        (
+            "int main(void) { return ({ int value = 7; first: second: value; }); }\n",
+            7,
+        ),
+    ];
+    for (ordinal, (source, expected)) in cases.into_iter().enumerate() {
+        let (chir, evoir) = observe(source, 40 + ordinal as u32);
+        assert_eq!(chir, expected, "C-HIR labeled case {ordinal}");
+        assert_eq!(evoir, expected, "EvoIR labeled case {ordinal}");
+    }
+}
+
+#[test]
 fn a_void_pointer_spelled_null_executes_as_a_null_function_pointer() {
     let source = concat!(
         "struct c { void (*fn)(int); }; ",

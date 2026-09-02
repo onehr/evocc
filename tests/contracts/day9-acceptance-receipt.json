@@ -2,14 +2,14 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "edf5ddc5b38266f502248d192a799c589533ece004458ffd1dac054de98c7705"
+    "sha256": "ad14d91530efed11b661af605e90c6240e95bc20d6d1fc27dd0714413c8724c1"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.28",
-    "sha256": "88bb523395fb9e796a3f1e3cca35035596e41bd8345fdf6ad98d1c4e5bd2e908"
+    "revision": "1.9.33",
+    "sha256": "77d904c53b48e0f0db1512c61d60cfcf50095492bad0aa0296e2b26d77507811"
   },
-  "cutLine": "Revision 1.9.28 scope P10 is implemented at its front-end and measured execution boundaries: void-pointer arithmetic uses byte scale in every named form; signed and unsigned 128-bit assignment targets and compound-assignment type propagation are accepted without opening 128-bit interpreter execution; wide enumerations select one completed-list target type; __attribute aliases __attribute__; and declaration-free translation units are valid. The tree is green at 1038/1038 workspace tests (1037/1037 all-target tests), exact 128/128 and 22/22 layout corpora, and a locked/offline no-local replay. Raw preprocessing remains 16/16, dual-oracle clean parsing moves from 9/16 to 10/16, and dashboard regressions are zero. Stage F1 remains OPEN on 12 parser lanes across six units: six E2202 invalid-initializer-type, four E2001 undeclared-identifier at __builtin_frame_address, and two E1303 enumerator-value-is-not-an-integer-constant observations across the two oracle streams.",
+  "cutLine": "Revision 1.9.33 scopes U and V are implemented at 6cc7820 and 486519f. Conditional directives and empty variadic arguments survive macro-argument collection, HOSTCC programs are excluded from the target denominator, and six parser semantic rules pass their declared RED-to-GREEN tests. The tree is green at 1118/1118 workspace tests, exact 128/128 and 22/22 layout corpora, and locked/offline no-local replays. Dashboard run 20260902T111559Z-80486 retains 16/16 raw, GCC-preprocessed, and Clang-preprocessed lanes with zero regressions. Full-configuration integration survey 20260902T113345Z-48715 measures 2445 clean, 353 typed-diagnosed, and zero unavailable, timeout, or panic among 2798 target C units; exactly 793 units moved from diagnosed to clean and the remaining frontier was not modified.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "eae3e42",
@@ -742,23 +742,217 @@
     },
     "result": "PASS_STAGE_F1_OPEN"
   },
-  "subjectCommit": "b24c7ed",
+  "pointerFrameWideRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.29, commit c132628; tests/contracts/day9-acceptance-contract.json scope P11",
+    "opened": "595f34b (tests only; 1042 passed, 10 semantic failures, 1052 listed workspace tests; zero Rust build errors)",
+    "closed": "ddc1028",
+    "implementationCommits": [
+      "ddc1028"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/pointer-frame-wide-red.json",
+      "sha256": "46a86270b7f6f6dff403b168d5d1b68f60a618a48453ca1d87f5782b6b1a2e50"
+    },
+    "declaredCapabilities": [
+      "character pointers of differing signedness convert in initialization, assignment, argument and return contexts while pointee qualifiers and unrelated-pointer refusals remain intact",
+      "__builtin_frame_address accepts any integer constant expression and lowering reports E3031 without conflating it with __builtin_return_address",
+      "signed constant arithmetic wraps at the operand width while run-time signed-left-shift obligations remain unchanged",
+      "void-pointer difference executes in C-HIR at byte scale and lowering reports E3032",
+      "128-bit values are accepted, typed, initialized, assigned and folded at the front end while C-HIR execution, EvoIR execution and lowering report E3033"
+    ],
+    "focusedGreen": {
+      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test character_pointer_conversions --test compile_time_builtins --test compiler_int128_spellings --test wide_enumerators -p evocc-lower --test fail_closed_forms --test day6_lower_runtime_diagnostics -p evocc-chir --test wide_integer_boundary -p evocc-evoir --test wide_integer_boundary --no-fail-fast",
+      "passed": 45,
+      "failed": 0
+    },
+    "specAmbiguitiesThisWindow": [],
+    "result": "PASS_STAGE_F1_OPEN"
+  },
+  "functionDeclarationFormsRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.30, commit 87dacd5; tests/contracts/day9-acceptance-contract.json scope P12",
+    "opened": "6976b26 (tests only; 1053 passed, 4 semantic failures, 1057 listed workspace tests; zero Rust build errors)",
+    "closed": "fe5179b",
+    "implementationCommits": [
+      "fe5179b"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/function-declaration-forms-red.json",
+      "sha256": "e5b65a704c22a843a60b66d576abc2b487734d5b9f4b8b5b4e0d9a7e257fa202"
+    },
+    "declaredCapabilities": [
+      "a declaration list emits every function declarator as a FunctionDecl, whether its function type is written directly or supplied by a typedef, while function-pointer declarators remain objects and a list cannot define a function",
+      "a function type obtained from dereferencing a function pointer supplies the declaration-specifier path with the same canonical prototype as a named function designator"
+    ],
+    "focusedGreen": {
+      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test function_type_typedef_declarations --no-fail-fast",
+      "passed": 11,
+      "failed": 0
+    },
+    "fixtureCorrection": "The RED reached E1001 before its final pointer-object guard. GREEN exposed that the guard had used the non-constant file-scope initializer copy = fp; it was corrected to the PM's measured already-green form copy = target without changing either RED assertion or declared capability.",
+    "specAmbiguitiesThisWindow": [
+      "P12-NEXT-SINGLE-TRAILING-TYPEOF-SPELLING",
+      "P12-NEXT-COMPATIBLE-BLOCK-EXTERN-REDECLARATION"
+    ],
+    "result": "PASS_STAGE_F1_OPEN"
+  },
+  "typeofRedeclarationRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.31, commit 457a705; tests/contracts/day9-acceptance-contract.json scope P13",
+    "opened": "241f899 (tests only; 1047 passed, 13 semantic failures, 1060 listed workspace tests; zero Rust build errors)",
+    "closed": "88cd9a7",
+    "implementationCommits": [
+      "88cd9a7"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/typeof-redeclaration-red.json",
+      "sha256": "89b5a049ac59a56cf8f6fe7d2ff7dbb97ad2a1a4ffba63768a5edb206c0d3606"
+    },
+    "declaredCapabilities": [
+      "typeof, __typeof__ and __typeof are three spellings of the same front-end construct, with the measured __typeof(x) value case returning 42",
+      "a statement expression inside a typeof operand rolls back every declaration binding it creates, including objects, tags and declarations with linkage",
+      "compatible linkage redeclarations remain accepted while every E2002 case reports incompatible-redeclaration at the later declaration"
+    ],
+    "focusedGreen": {
+      "commands": [
+        "cargo test -p evocc-lex --test gnu_typeof_spellings",
+        "cargo test -p evocc-parser --test gnu_typeof",
+        "cargo test -p evocc-parser --test day5_g2_bindings",
+        "cargo test -p evocc-parser --test day5_g2_typedefs",
+        "cargo test -p evocc --test day5_g2_semantics_red"
+      ],
+      "passed": 55,
+      "failed": 0
+    },
+    "measuredNextDefect": "mm-mprotect and mm-mincore panic in both oracle-preprocessed lanes when nested typeof parsing attempts to install the already-visible function parameter shadow start a second time; revision 1.9.31 covers the construct, so no specification ambiguity is claimed",
+    "specAmbiguitiesThisWindow": [],
+    "result": "PASS_STAGE_F1_OPEN"
+  },
+  "nestedTypeofParameterRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.31; tests/contracts/day9-acceptance-contract.json scope P14",
+    "opened": "4ef70ec (tests only; 1060 passed, 5 panic failures, 1065 listed workspace tests; zero Rust build errors)",
+    "closed": "25acb6d",
+    "implementationCommits": [
+      "25acb6d"
+    ],
+    "diagnostics": {
+      "path": "tests/contracts/nested-typeof-parameter-red.json",
+      "sha256": "c9c98e2dcc6061a529c68ecbbfa259b82d0a98f5299c1c63342f7e78efe54307"
+    },
+    "declaredCapability": "temporary function-parameter shadows are installed idempotently for nested typeof probes at every parameter position and nesting depth while retaining the exact parameter types",
+    "focusedGreen": {
+      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test gnu_typeof -- --nocapture",
+      "passed": 14,
+      "failed": 0
+    },
+    "redAssertionCorrection": "The first GREEN run exposed that four RED fixtures expected __builtin_types_compatible_p to have type _Bool. Revision 1.9.31 specifies int. The tests-only commit was amended before any production commit, then independently replayed as exactly five duplicate-shadow panics and no other failure.",
+    "specAmbiguitiesThisWindow": [],
+    "result": "PASS_STAGE_F1_CLOSED"
+  },
+  "tokenLocationPreprocessorRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.32 sections 10.1.20 and 10.4; tests/contracts/day9-acceptance-contract.json scope T",
+    "opened": "4106205 (tests only; 1069 passed, 14 declared semantic failures, 1083 workspace tests; zero build errors)",
+    "closed": "fc21cd3",
+    "implementationCommits": [
+      "fc21cd3"
+    ],
+    "redDiagnostics": {
+      "path": "tests/contracts/token-location-preprocessor-red.json",
+      "sha256": "3d8ce1303fd18a2993acde4543b71d457aa6b30e2803d848102ca608613e562e"
+    },
+    "acceptanceReceipt": {
+      "path": "tests/contracts/token-location-preprocessor-receipt.json",
+      "sha256": "e4e3a373a1589ff302166afda9c0cb2bb07c57462b12552868ebad60122f7a05"
+    },
+    "declaredCapabilities": [
+      "tokens retain spelling and expansion locations and parser span composition is total without slicing unrelated source buffers",
+      "stringization reproduces preprocessing-token whitespace rather than inserting a space before every expanded token",
+      "replacement-list rescanning continues through an actual following parenthesized invocation in the outer token sequence"
+    ],
+    "focusedGreen": {
+      "tokenLocations": "3/3",
+      "stringizationWhitespace": "10/10",
+      "outerSequenceRescanning": "5/5"
+    },
+    "fullConfigurationSurvey": {
+      "receipt": "tests/contracts/full-config-parse-survey-receipt.json",
+      "run": "20260902T051739Z-447",
+      "clean": 1292,
+      "diagnosed": 1540,
+      "unavailable": 0,
+      "timeout": 0,
+      "panic": 0,
+      "previousPanic": 2768
+    },
+    "specAmbiguitiesThisWindow": [],
+    "result": "PASS_WITH_TYPED_SURVEY_FRONTIER"
+  },
+  "preprocessorMacroArgumentRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.33 section 10.4; tests/contracts/day9-acceptance-contract.json scope U",
+    "opened": "0ac7b38 (tests only; 1087 passed, 7 declared semantic failures, zero build errors)",
+    "closed": "6cc7820",
+    "implementationCommits": [
+      "6cc7820"
+    ],
+    "redDiagnostics": {
+      "path": "tests/contracts/preprocessor-macro-argument-red.json",
+      "sha256": "e8e30443ea2ed0fdd6489838f91afaf2a25cf6d5fb11705c6c815780b4bc1f19"
+    },
+    "acceptanceReceipt": {
+      "path": "tests/contracts/preprocessor-macro-argument-receipt.json",
+      "sha256": "e43d71c5da3b96299bca987aa5301e79f2bc284151b114f85ea57a387193eda5"
+    },
+    "declaredCapabilities": [
+      "conditional directives inside function-like macro arguments contribute only selected-branch tokens while non-admitted directives fail closed with E0113",
+      "empty arguments and variadic forwarding preserve the exact token and comma sequence through nested substitution and rescan",
+      "HOSTCC command records are excluded from the target translation-unit denominator"
+    ],
+    "focusedGreen": "11/11",
+    "dashboardRun": "20260902T074011Z-8961; 48/48 clean; zero regressions",
+    "fullConfigurationSurvey": "20260902T074727Z-61593; 1652/2798 clean, 1146 diagnosed, zero unavailable/timeout/panic",
+    "specAmbiguitiesThisWindow": [],
+    "result": "PASS_WITH_TYPED_SURVEY_FRONTIER"
+  },
+  "parserRuleClosureRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.33 sections 10.1.3, 10.1.17, 10.1.18, and 10.1.19; tests/contracts/day9-acceptance-contract.json scope V",
+    "opened": "272e537 (tests only; 1099 passed, 17 declared semantic failures, zero build errors)",
+    "closed": "486519f",
+    "implementationCommits": [
+      "486519f"
+    ],
+    "redDiagnostics": {
+      "path": "tests/contracts/parser-rule-closure-red.json",
+      "sha256": "b8fa8ede7e6dcd7a493b7e86563fdecfa450b4ed2407260f92cc871b97257746"
+    },
+    "acceptanceReceipt": {
+      "path": "tests/contracts/parser-rule-closure-receipt.json",
+      "sha256": "21b55823f353c7382501c1beb8ecdaab96dd9eacda56feafafb4489e756d7d46"
+    },
+    "declaredCapabilities": [
+      "function-local __func__ and __FUNCTION__ objects with __PRETTY_FUNCTION__ refused as E2921",
+      "labeled terminal statements preserve a statement expression's value and type",
+      "array parameters adjust once to pointers",
+      "corresponding signed/unsigned integer-pointer conversions use one rule across conversion contexts",
+      "one modifiable-lvalue predicate governs every assignment and update path",
+      "address constants compose through member and index chains, decay, strings, __func__, and safe casts"
+    ],
+    "focusedGreen": "23/23 parser assertions plus 1/1 dual-interpreter execution regression",
+    "dashboardRun": "20260902T111559Z-80486; 48/48 clean; zero regressions",
+    "fullConfigurationSurvey": "20260902T113345Z-48715; 2445/2798 clean, 353 diagnosed, zero unavailable/timeout/panic; exact transitions 1652 clean-to-clean, 793 diagnosed-to-clean, 353 diagnosed-to-diagnosed",
+    "specAmbiguitiesThisWindow": [],
+    "result": "PASS_WITH_TYPED_SURVEY_FRONTIER"
+  },
+  "subjectCommit": "6bbeaf4",
   "gate": {
-    "claim": "Revision 1.9.28 scope P10 is implemented and green at its stated front-end boundary. Pointer updates and executable C-HIR pointer difference use one target-derived scale authority with void mapped to one byte; wide enumeration values retain mathematical precision until one completed-list target type is selected; both attribute spellings share one token; and driver success follows parser diagnostics rather than declaration count. The first publication exposed a remaining wide compound-assignment classification path, which a verbatim checksum regression closed before the final publication. The tree has 1038 listed workspace tests (1037 all-target), zero dashboard regressions, raw preprocessing at 16/16 and dual-oracle clean parsing at 10/16. Stage F1 remains open on 12 measured parser lanes across six units.",
+    "claim": "Revision 1.9.33 scopes U and V are implemented and green. Macro-argument directives and empty variadic forwarding preserve their specified token sequences, HOSTCC programs are outside the target denominator, and the six declared parser rules use shared semantic predicates. The 16-unit dashboard remains 48/48 clean with zero regression. The full-configuration raw-to-EvoCPP-to-parser measurement completes all 2798 target C units without panic, timeout, or unavailable classification; 2445 are clean and 353 typed-diagnosed units remain an explicitly open frontier.",
     "measured": {
-      "dualOracleCleanParseTus": "10/16",
+      "dualOracleCleanParseTus": "16/16",
       "rawPreprocessClean": "16/16",
-      "stageF1": "OPEN",
-      "remainingParserLanes": 12,
-      "remainingParserUnits": 6,
-      "remainingFirstErrors": {
-        "gcc-preprocessed-parser E2202 invalid-initializer-type": 3,
-        "clang-preprocessed-parser E2202 invalid-initializer-type": 3,
-        "gcc-preprocessed-parser E2001 undeclared-identifier: __builtin_frame_address": 2,
-        "clang-preprocessed-parser E2001 undeclared-identifier: __builtin_frame_address": 2,
-        "gcc-preprocessed-parser E1303 enumerator-value-is-not-an-integer-constant": 1,
-        "clang-preprocessed-parser E1303 enumerator-value-is-not-an-integer-constant": 1
-      },
+      "gccPreprocessedParserClean": "16/16",
+      "clangPreprocessedParserClean": "16/16",
+      "stageF1": "CLOSED",
+      "remainingParserLanes": 0,
+      "remainingParserUnits": 0,
+      "remainingFirstErrors": {},
+      "nestedTypeofParameterTests": "5/5 new cases; 14/14 focused suite",
       "frontEndIntrospectionTests": "27/27",
       "constantExpressionClosureTests": "15/15",
       "gnuArrayInt128Tests": "13/13",
@@ -781,9 +975,8 @@
       "frozenRealTuRatio": "1.07x <= 3x",
       "subjectBuildProfile": "release",
       "parserTimeoutSecondsPerTu": 10,
-      "workspaceTests": "1038/1038",
-      "allTargetTests": "1037/1037",
-      "specifiedFrontier": false,
+      "workspaceTests": "1118/1118",
+      "specifiedFrontier": true,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
       "computedZeroArrayBoundLanes": 0,
@@ -833,22 +1026,47 @@
       "wideEnumeratorRepresentabilityLanesRemaining": 0,
       "singleUnderscoreAttributeLanesRemaining": 0,
       "declarationFreeUnitLanesRemaining": 0,
-      "regressionsAgainstPrevious": 0
+      "characterPointerSignednessLanesRemaining": 0,
+      "frameAddressLanesRemaining": 0,
+      "signedConstantShiftLanesRemaining": 0,
+      "voidPointerDifferenceLoweringDiagnosticTests": "1/1",
+      "wideIntegerExecutionBoundaryDiagnosticTests": "3/3",
+      "functionDeclaratorListLanesRemaining": 0,
+      "dereferencedFunctionPointerTypeofLanesRemaining": 0,
+      "singleTrailingTypeofSpellingLanesRemaining": 0,
+      "compatibleBlockExternRedeclarationLanesRemaining": 0,
+      "regressionsAgainstPrevious": 0,
+      "tokenLocationTests": "3/3",
+      "stringizationWhitespaceTests": "10/10",
+      "outerSequenceRescanningTests": "5/5",
+      "macroArgumentDirectiveAndForwardingTests": "11/11",
+      "parserRuleClosureTests": "23/23",
+      "labeledStatementExpressionExecutionTests": "1/1",
+      "fullConfigurationSurveyRun": "20260902T113345Z-48715",
+      "fullConfigurationTargetUnits": 2798,
+      "fullConfigurationClean": 2445,
+      "fullConfigurationDiagnosed": 353,
+      "fullConfigurationUnavailable": 0,
+      "fullConfigurationTimeout": 0,
+      "fullConfigurationPanic": 0,
+      "fullConfigurationDiagnosedToClean": 793
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260901T111541Z-55835/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260902T074011Z-8961/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "e03f533498cf96cf9f5fb076fab39b6484c4a76ebb103ef90530737bf21e7bcc",
-      "subjectCommit": "b24c7ed",
-      "publishedFromRun": "20260901T115632Z-47898"
+      "sha256": "ee302e5c531cbe9433afd49040ed0525d9669534b9e820078825a5c8baea5bef",
+      "subjectCommit": "486519f",
+      "publishedFromRun": "20260902T111559Z-80486"
     },
-    "result": "WIDE_ENUM_POINTER_PASS_STAGE_F1_OPEN"
+    "result": "PREPROCESSOR_AND_PARSER_RULE_CLOSURE_PASS_WITH_TYPED_SURVEY_FRONTIER"
   },
   "lanes": {
     "clean": {
-      "count": 36,
+      "count": 48,
       "units": [
         "all 16 units (evocpp-raw)",
+        "init-do-mounts-initrd (gcc-preprocessed-parser, clang-preprocessed-parser)",
+        "init-do-mounts (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "init-version-timestamp (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "kernel-locking-semaphore (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "kernel-power-console (gcc-preprocessed-parser, clang-preprocessed-parser)",
@@ -857,66 +1075,15 @@
         "lib-crypto-mpi-generic-mpih-lshift (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "lib-fdt-wip (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "lib-kstrtox (gcc-preprocessed-parser, clang-preprocessed-parser)",
+        "init-init-task (gcc-preprocessed-parser, clang-preprocessed-parser)",
+        "kernel-power-main (gcc-preprocessed-parser, clang-preprocessed-parser)",
         "mm-memtest (gcc-preprocessed-parser, clang-preprocessed-parser)",
-        "mm-page-vma-mapped (gcc-preprocessed-parser, clang-preprocessed-parser)"
+        "mm-page-vma-mapped (gcc-preprocessed-parser, clang-preprocessed-parser)",
+        "mm-mprotect (gcc-preprocessed-parser, clang-preprocessed-parser)",
+        "mm-mincore (gcc-preprocessed-parser, clang-preprocessed-parser)"
       ]
     },
-    "stillFailing": [
-      {
-        "count": 3,
-        "firstError": "E2202 invalid-initializer-type",
-        "lanes": "gcc-preprocessed-parser",
-        "units": [
-          "init-do-mounts",
-          "mm-mprotect",
-          "mm-mincore"
-        ]
-      },
-      {
-        "count": 3,
-        "firstError": "E2202 invalid-initializer-type",
-        "lanes": "clang-preprocessed-parser",
-        "units": [
-          "init-do-mounts",
-          "mm-mprotect",
-          "mm-mincore"
-        ]
-      },
-      {
-        "count": 2,
-        "firstError": "E2001 undeclared-identifier: __builtin_frame_address",
-        "lanes": "gcc-preprocessed-parser",
-        "units": [
-          "init-do-mounts-initrd",
-          "kernel-power-main"
-        ]
-      },
-      {
-        "count": 2,
-        "firstError": "E2001 undeclared-identifier: __builtin_frame_address",
-        "lanes": "clang-preprocessed-parser",
-        "units": [
-          "init-do-mounts-initrd",
-          "kernel-power-main"
-        ]
-      },
-      {
-        "count": 1,
-        "firstError": "E1303 enumerator-value-is-not-an-integer-constant",
-        "lanes": "gcc-preprocessed-parser",
-        "units": [
-          "init-init-task"
-        ]
-      },
-      {
-        "count": 1,
-        "firstError": "E1303 enumerator-value-is-not-an-integer-constant",
-        "lanes": "clang-preprocessed-parser",
-        "units": [
-          "init-init-task"
-        ]
-      }
-    ],
+    "stillFailing": [],
     "publicationsThisWindow": [
       {
         "commit": "4a9efc1",
@@ -1172,6 +1339,26 @@
         "commit": "b24c7ed",
         "run": "20260901T115632Z-47898",
         "parseLanesStoppedOn": "final revision 1.9.28 publication: the wide compound-assignment E2102 is gone; init-init-task advances to E1303 on the GNU enumerator expression 1 << 31. Raw preprocessing remains 16/16, dual-oracle clean parsing remains 10/16, twelve parser lanes remain across six units, and regressions remain zero; Stage F1 remains open"
+      },
+      {
+        "commit": "ddc1028",
+        "run": "20260901T140210Z-65904",
+        "parseLanesStoppedOn": "revision 1.9.29 publication: all six character-pointer E2202, four __builtin_frame_address E2001 and two signed-enumerator E1303 observations are gone; init-init-task becomes dual-oracle clean. Raw preprocessing remains 16/16, dual-oracle clean parsing moves to 11/16, and ten parser lanes remain across five units: four E1001 at typeof(*function_pointer) declarators and six E1002 at multi-declarator function-type typedef declarations. Both are already specified; regressions remain zero and Stage F1 remains open"
+      },
+      {
+        "commit": "fe5179b",
+        "run": "20260901T145829Z-31164",
+        "parseLanesStoppedOn": "revision 1.9.30 publication: all four typeof(*function_pointer) E1001 and all six multi-function-declarator E1002 observations are gone; init-do-mounts-initrd and kernel-power-main become dual-oracle clean. Raw preprocessing remains 16/16, dual-oracle clean parsing moves to 13/16, and six parser lanes remain across three units: four E1001 at the unregistered __typeof spelling and two E2002 at a repeated compatible block-scope extern function declaration. Neither next form is explicitly specified; regressions remain zero and Stage F1 remains open"
+      },
+      {
+        "commit": "88cd9a7",
+        "run": "20260901T162827Z-12206",
+        "parseLanesStoppedOn": "revision 1.9.31 publication: all four __typeof E1001 and both compatible-redeclaration E2002 observations are gone; init-do-mounts becomes dual-oracle clean. Raw preprocessing remains 16/16, dual-oracle clean parsing moves to 14/16, and four parser lanes remain across mm-mprotect and mm-mincore, all DRIVER_RUST_PANIC while nested typeof parsing reinstalls an already-visible parameter shadow. Revision 1.9.31 covers that construct; regressions remain zero and Stage F1 remains open"
+      },
+      {
+        "commit": "25acb6d",
+        "run": "20260901T185119Z-83939",
+        "parseLanesStoppedOn": "scope P14 publication: all four nested-typeof DRIVER_RUST_PANIC observations are gone; mm-mprotect and mm-mincore become clean under both oracle preprocessors. Raw preprocessing, GCC-preprocessed parsing, and Clang-preprocessed parsing are each 16/16, dual-oracle clean parsing is 16/16, regressions are zero, and Stage F1 is closed"
       }
     ]
   },
@@ -1563,6 +1750,112 @@
       "stageF1": "OPEN",
       "regressionsAgainstPrevious": 0,
       "scopeP10": "PASS_AT_DECLARED_FRONT_END_BOUNDARY"
+    },
+    "pointerFrameWideAfter": {
+      "run": "20260901T140210Z-65904",
+      "subjectCommit": "ddc1028",
+      "baselineRun": "20260901T115632Z-47898",
+      "resolvedFirstErrorClasses": {
+        "gcc-preprocessed-parser E2202 invalid-initializer-type at include/linux/fs_context.h:142": 3,
+        "clang-preprocessed-parser E2202 invalid-initializer-type at include/linux/fs_context.h:142": 3,
+        "gcc-preprocessed-parser E2001 undeclared-identifier: __builtin_frame_address at include/linux/perf_event.h:1589": 2,
+        "clang-preprocessed-parser E2001 undeclared-identifier: __builtin_frame_address at include/linux/perf_event.h:1589": 2,
+        "gcc-preprocessed-parser E1303 enumerator-value-is-not-an-integer-constant at include/linux/skbuff.h:715": 1,
+        "clang-preprocessed-parser E1303 enumerator-value-is-not-an-integer-constant at include/linux/skbuff.h:715": 1
+      },
+      "nextFirstErrorClasses": {
+        "gcc-preprocessed-parser E1001 expected-declaration at typeof(*function_pointer) declarator": 2,
+        "clang-preprocessed-parser E1001 expected-declaration at typeof(*function_pointer) declarator": 2,
+        "gcc-preprocessed-parser E1002 expected-token ; at function-type typedef multi-declarator": 3,
+        "clang-preprocessed-parser E1002 expected-token ; at function-type typedef multi-declarator": 3
+      },
+      "firstErrorSites": {
+        "E1001 expected-declaration": "include/linux/perf_event.h:1678; init-do-mounts-initrd and kernel-power-main; typeof(*perf_guest_cbs->state) supplies a function type to a function declaration",
+        "E1002 expected-token ;": "include/linux/fs_parser.h:29; init-do-mounts, mm-mprotect and mm-mincore; one function-type typedef names multiple function declarators"
+      },
+      "specificationCoverage": {
+        "E1001 typeof function declaration": "revision 1.9.29 Section 10.1.10; implementation defect, not a specification gap",
+        "E1002 function-type typedef declaration list": "revision 1.9.29 Section 10.1.18; implementation defect, not a specification gap"
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "11/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "scopeP11": "PASS"
+    },
+    "functionDeclarationFormsAfter": {
+      "run": "20260901T145829Z-31164",
+      "subjectCommit": "fe5179b",
+      "baselineRun": "20260901T140210Z-65904",
+      "resolvedFirstErrorClasses": {
+        "gcc-preprocessed-parser E1001 expected-declaration at typeof(*function_pointer) declarator": 2,
+        "clang-preprocessed-parser E1001 expected-declaration at typeof(*function_pointer) declarator": 2,
+        "gcc-preprocessed-parser E1002 expected-token ; at function-type typedef multi-declarator": 3,
+        "clang-preprocessed-parser E1002 expected-token ; at function-type typedef multi-declarator": 3
+      },
+      "nextFirstErrorClasses": {
+        "gcc-preprocessed-parser E1001 expected-declaration at the unregistered __typeof spelling": 2,
+        "clang-preprocessed-parser E1001 expected-declaration at the unregistered __typeof spelling": 2,
+        "gcc-preprocessed-parser E2002 ordinary-identifier-redefinition at a repeated compatible block-scope extern function declaration": 1,
+        "clang-preprocessed-parser E2002 ordinary-identifier-redefinition at a repeated compatible block-scope extern function declaration": 1
+      },
+      "firstErrorSites": {
+        "E1001 expected-declaration": "mm/mprotect.c:1008 and mm/mincore.c:278; the syscall-wrapper parameter type uses the single-trailing GNU __typeof spelling",
+        "E2002 ordinary-identifier-redefinition": "include/net/neighbour.h:315; init-do-mounts; __compiletime_assert_819 is declared twice as the same compatible block-scope extern function inside statement-expression expansions"
+      },
+      "specificationGaps": {
+        "P12-NEXT-SINGLE-TRAILING-TYPEOF-SPELLING": "revision 1.9.30 Section 10.1.10 admits typeof and __typeof__ but does not admit __typeof",
+        "P12-NEXT-COMPATIBLE-BLOCK-EXTERN-REDECLARATION": "revision 1.9.30 does not explicitly freeze repeated compatible block-scope extern function declarations or their linkage/redeclaration rule"
+      },
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "13/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "scopeP12": "PASS"
+    },
+    "typeofRedeclarationAfter": {
+      "run": "20260901T162827Z-12206",
+      "subjectCommit": "88cd9a7",
+      "baselineRun": "20260901T145829Z-31164",
+      "resolvedFirstErrorClasses": {
+        "gcc-preprocessed-parser E1001 expected-declaration at the unregistered __typeof spelling": 2,
+        "clang-preprocessed-parser E1001 expected-declaration at the unregistered __typeof spelling": 2,
+        "gcc-preprocessed-parser E2002 ordinary-identifier-redefinition at a repeated compatible block-scope extern function declaration": 1,
+        "clang-preprocessed-parser E2002 ordinary-identifier-redefinition at a repeated compatible block-scope extern function declaration": 1
+      },
+      "nextFirstErrorClasses": {
+        "gcc-preprocessed-parser DRIVER_RUST_PANIC reinstalling the nested typeof parameter shadow start": 2,
+        "clang-preprocessed-parser DRIVER_RUST_PANIC reinstalling the nested typeof parameter shadow start": 2
+      },
+      "remainingUnits": {
+        "mm-mprotect": "both oracle-preprocessed lanes panic while parsing nested typeof inside a later function parameter type",
+        "mm-mincore": "both oracle-preprocessed lanes panic while parsing nested typeof inside a later function parameter type"
+      },
+      "specificationCoverage": "revision 1.9.31 Section 10.1.10 covers typeof operand scope; this is an implementation defect, not a specification gap",
+      "rawPreprocessClean": "16/16",
+      "dualOracleCleanParseTus": "14/16",
+      "stageF1": "OPEN",
+      "regressionsAgainstPrevious": 0,
+      "scopeP13": "PASS"
+    },
+    "nestedTypeofParameterAfter": {
+      "run": "20260901T185119Z-83939",
+      "subjectCommit": "25acb6d",
+      "baselineRun": "20260901T162827Z-12206",
+      "resolvedFirstErrorClasses": {
+        "gcc-preprocessed-parser DRIVER_RUST_PANIC reinstalling the nested typeof parameter shadow start": 2,
+        "clang-preprocessed-parser DRIVER_RUST_PANIC reinstalling the nested typeof parameter shadow start": 2
+      },
+      "nextFirstErrorClasses": {},
+      "remainingUnits": {},
+      "specificationCoverage": "revision 1.9.31 Section 10.1.10; no new specification ambiguity",
+      "rawPreprocessClean": "16/16",
+      "gccPreprocessedParserClean": "16/16",
+      "clangPreprocessedParserClean": "16/16",
+      "dualOracleCleanParseTus": "16/16",
+      "stageF1": "CLOSED",
+      "regressionsAgainstPrevious": 0,
+      "scopeP14": "PASS"
     }
   },
   "attributes": {
@@ -1608,15 +1901,57 @@
     ]
   },
   "tests": {
-    "workspace": {
-      "passed": 1037,
-      "failed": 0,
-      "command": "CARGO_NET_OFFLINE=true CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --no-fail-fast --locked --offline --quiet (1037/1037)",
-      "workspaceIncludingDocTests": {
-        "passed": 1038,
+    "tokenLocationPreprocessorAcceptance": {
+      "workspace": {
+        "passed": 1083,
         "failed": 0,
-        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet (1038/1038)"
-      }
+        "ignored": 0,
+        "command": "cargo test --workspace --no-fail-fast"
+      },
+      "clippy": {
+        "warnings": 0,
+        "command": "cargo clippy --workspace --all-targets -- -D warnings"
+      },
+      "format": {
+        "result": "clean",
+        "command": "cargo fmt --all -- --check"
+      },
+      "ruff": {
+        "result": "clean",
+        "command": "ruff check tests/acceptance tools"
+      },
+      "baseLayoutCorpus": "128/128 ORACLE_CONSENSUS; 0 mismatches",
+      "attributedLayoutCorpus": "22/22 ORACLE_CONSENSUS; 0 mismatches"
+    },
+    "preprocessorAndParserRuleClosureAcceptance": {
+      "workspace": {
+        "passed": 1118,
+        "failed": 0,
+        "ignored": 0,
+        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast"
+      },
+      "clippy": {
+        "warnings": 0,
+        "command": "cargo clippy --workspace --all-targets -- -D warnings"
+      },
+      "format": {
+        "result": "clean",
+        "command": "cargo fmt --all -- --check"
+      },
+      "ruff": {
+        "result": "clean",
+        "command": "ruff check tests/acceptance tools"
+      },
+      "baseLayoutCorpus": "128/128 ORACLE_CONSENSUS; 0 mismatches",
+      "attributedLayoutCorpus": "22/22 ORACLE_CONSENSUS; 0 mismatches",
+      "dashboard": "20260902T111559Z-80486; 48/48 clean; zero regressions",
+      "fullConfigurationSurvey": "20260902T113345Z-48715; 2445/2798 clean; 353 diagnosed; zero unavailable/timeout/panic"
+    },
+    "workspace": {
+      "passed": 1118,
+      "failed": 0,
+      "ignored": 0,
+      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast (1118/1118)"
     },
     "suites": {
       "crates/evocc-parser/tests/checkpoint_allocation_scaling.rs": {
@@ -1672,12 +2007,16 @@
         "command": "cargo test -p evocc-parser --test array_bound_validation"
       },
       "crates/evocc-parser/tests/compiler_int128_spellings.rs": {
-        "passed": 4,
+        "passed": 5,
         "command": "cargo test -p evocc-parser --test compiler_int128_spellings"
       },
       "crates/evocc-parser/tests/wide_enumerators.rs": {
-        "passed": 2,
+        "passed": 3,
         "command": "cargo test -p evocc-parser --test wide_enumerators"
+      },
+      "crates/evocc-parser/tests/character_pointer_conversions.rs": {
+        "passed": 4,
+        "command": "cargo test -p evocc-parser --test character_pointer_conversions"
       },
       "crates/evocc-types/tests/target_data_layout.rs": {
         "passed": 10,
@@ -1742,8 +2081,24 @@
         "command": "cargo test -p evocc --test preprocessor_target_profile"
       },
       "crates/evocc-parser/tests/gnu_typeof.rs": {
-        "passed": 6,
+        "passed": 9,
         "command": "cargo test -p evocc-parser --test gnu_typeof"
+      },
+      "crates/evocc-lex/tests/gnu_typeof_spellings.rs": {
+        "passed": 1,
+        "command": "cargo test -p evocc-lex --test gnu_typeof_spellings"
+      },
+      "crates/evocc-parser/tests/day5_g2_bindings.rs": {
+        "passed": 28,
+        "command": "cargo test -p evocc-parser --test day5_g2_bindings"
+      },
+      "crates/evocc-parser/tests/day5_g2_typedefs.rs": {
+        "passed": 15,
+        "command": "cargo test -p evocc-parser --test day5_g2_typedefs"
+      },
+      "crates/evocc/tests/day5_g2_semantics_red.rs": {
+        "passed": 2,
+        "command": "cargo test -p evocc --test day5_g2_semantics_red"
       },
       "crates/evocc-parser/tests/generic_selection.rs": {
         "passed": 6,
@@ -1770,8 +2125,20 @@
         "command": "cargo test -p evocc-chir --test checked_arithmetic_semantics"
       },
       "crates/evocc-lower/tests/fail_closed_forms.rs": {
-        "passed": 6,
+        "passed": 9,
         "command": "cargo test -p evocc-lower --test fail_closed_forms"
+      },
+      "crates/evocc-lower/tests/day6_lower_runtime_diagnostics.rs": {
+        "passed": 4,
+        "command": "cargo test -p evocc-lower --test day6_lower_runtime_diagnostics"
+      },
+      "crates/evocc-chir/tests/wide_integer_boundary.rs": {
+        "passed": 1,
+        "command": "cargo test -p evocc-chir --test wide_integer_boundary"
+      },
+      "crates/evocc-evoir/tests/wide_integer_boundary.rs": {
+        "passed": 1,
+        "command": "cargo test -p evocc-evoir --test wide_integer_boundary"
       },
       "crates/evocc-parser/tests/front_end_introspection.rs": {
         "passed": 7,
@@ -1834,7 +2201,7 @@
         "command": "cargo test -p evocc-parser --test pointer_constant_conversions"
       },
       "crates/evocc-parser/tests/compile_time_builtins.rs": {
-        "passed": 17,
+        "passed": 18,
         "command": "cargo test -p evocc-parser --test compile_time_builtins"
       },
       "crates/evocc-chir/tests/compile_time_builtin_values.rs": {
@@ -1882,7 +2249,7 @@
         "command": "cargo test -p evocc-parser --test specifier_order"
       },
       "crates/evocc-parser/tests/function_type_typedef_declarations.rs": {
-        "passed": 6,
+        "passed": 11,
         "command": "cargo test -p evocc-parser --test function_type_typedef_declarations"
       },
       "crates/evocc-parser/tests/member_static_assertions.rs": {
@@ -1896,6 +2263,10 @@
       "crates/evocc-lower/tests/record_call_abi.rs": {
         "passed": 3,
         "command": "cargo test -p evocc-lower --test record_call_abi"
+      },
+      "crates/evocc-parser/tests/gnu_typeof.rs": {
+        "passed": 14,
+        "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test gnu_typeof -- --nocapture"
       }
     },
     "clippy": {
@@ -1916,12 +2287,13 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "b24c7ed27f32df5cff13ab29831822e7aa2da66e",
-    "path": "/private/tmp/c30-p10-replay.JjCu62/replay",
-    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-p10-replay.JjCu62/replay; test ! -e .git/objects/info/alternates; CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline --quiet",
+    "commit": "6bbeaf444c7adcc9fb34a093f4944e927a71d7ae",
+    "path": "/tmp/c30-v-replay.uGdwaB/repo",
+    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /tmp/c30-v-replay.uGdwaB/repo; test ! -e .git/objects/info/alternates; CARGO_TARGET_DIR=/tmp/c30-v-replay.uGdwaB/target cargo test --workspace --no-fail-fast --locked --offline",
     "measured": {
-      "passed": 1037,
+      "passed": 1118,
       "failed": 0,
+      "ignored": 0,
       "objectsAlternates": "absent"
     }
   },
@@ -1951,12 +2323,7 @@
     "G2-VOLATILE-UNION-COPY: section 10.1.3 requires volatile aggregates to lower as memberwise volatile accesses, but a union has overlapping members and the specification provides no selected-member authority. Volatile union copy therefore remains fail-closed rather than reading every overlapping member.",
     "G2-VOLATILE-BIT-FIELD-COPY: section 10.1.3 does not freeze the access width, mask sequence, or trace granularity for a volatile aggregate member that is a bit-field. That form remains fail-closed.",
     "G2-AGGREGATE-CALL-ABI: the specification requires one semantic copy for by-value arguments and returns but does not freeze the hidden return-destination parameter position or deterministic origin identity for caller-owned aggregate temporaries. The implementation uses an address-based internal ABI with the return destination before mem/world tokens and a high-bit function-ordinal origin namespace; no broader ABI claim is made.",
-    "P9-STRLEN-LITERAL-EDGE: revision 1.9.27 says a string-literal operand folds to the literal's length but does not freeze whether an embedded zero terminates that length or whether prefixed wide, UTF-16, UTF-32 and UTF-8 literals take the constant path. The sealed evidence and positive claim cover ordinary narrow literals without embedded zeros; no broader oracle-conformance claim is made.",
-    "P10-VOID-POINTER-DIFFERENCE-EVOIR: section 10.1.3 requires subtraction of two void pointers with byte scale, while Section 3 has no pointer-difference instruction and the Day-7 lowering profile excludes pointer subtraction. The C-HIR interpreter executes the measured same-object form; lowering remains fail closed rather than inventing an EvoIR operation.",
-    "P10-INT128-EXECUTION-BOUNDARY: section 10.1.3 says 128-bit objects are assigned, loaded and stored like any integer object, but the C-HIR and EvoIR scalar value models are still at most 64 bits and the older normative boundary explicitly rejects 128-bit execution. This window proves front-end modifiable-place and compound-assignment typing only; no interpreter or lowering execution claim is made.",
-    "P10-NEXT-ENUM-SIGNED-SHIFT: revision 1.9.28 defines completed-list typing for values outside int but does not define whether the GNU enumerator expression 1 << 31 is an integer constant expression or how its mathematical value is obtained without host signed overflow. It is the first error in two lanes at include/linux/skbuff.h:715.",
-    "P10-NEXT-BUILTIN-FRAME-ADDRESS: __builtin_frame_address is absent from revision 1.9.28. It is the first error in four lanes across init-do-mounts-initrd and kernel-power-main.",
-    "P10-NEXT-POINTER-SIGNEDNESS-CONVERSION: revision 1.9.28 does not freeze the GNU pointer-sign conversion used by .name = value from char * to const unsigned char * inside a compound literal. It is the first E2202 in six lanes across init-do-mounts, mm-mprotect and mm-mincore."
+    "P9-STRLEN-LITERAL-EDGE: revision 1.9.27 says a string-literal operand folds to the literal's length but does not freeze whether an embedded zero terminates that length or whether prefixed wide, UTF-16, UTF-32 and UTF-8 literals take the constant path. The sealed evidence and positive claim cover ordinary narrow literals without embedded zeros; no broader oracle-conformance claim is made."
   ],
   "processDeviations": [
     "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (adce449), aligned arguments as constant expressions (ed8302b), attribute positions in members, block scope and parameters (eae3e42).",
@@ -2015,6 +2382,20 @@
     "The reported release timing of init-init-task 20.03 seconds versus kernel-bpf-token 1.15 seconds did not reproduce on the frozen byte-identical inputs at exact baseline 30ed2fc: measured medians were 3.09 and 3.11 seconds. That conflict is retained rather than relabelled. Independent sampling and a deterministic scaling RED exposed a real quadratic lexical-tag lookup; the indexed implementation closes that measured defect and yields a 1.07x real-TU ratio.",
     "The initial scope-P8 GREEN implementation rendered and executed the measured answers, but a deliberate corrupted-C-HIR audit found that downstream validation accepted a forged HasAttribute result because its match branch was empty. The corruption test failed first, then consumers were changed to recompute declaration/member identity and written attributes through the shared anonymous-member resolver. The follow-up publication retained all 48 lane classifications with zero regressions.",
     "The first P10 publication at 3975e88 cleared the declared first-error sites but exposed E2102 on a later 128-bit compound assignment in the same checksum function. A verbatim kernel-shape test was observed RED before b24c7ed replaced the simple-assignment exception with a shared wide-integer operand class; the final publication retains the intermediate run in the single dashboard lineage rather than presenting it as completion.",
-    "One final workspace invocation accidentally omitted the established /tmp runner and was interrupted after multiple individually green test binaries demonstrated the known macOS provenance delay. It is not evidence. The complete 1038/1038 workspace gate and 1037/1037 isolated all-target replay both used the established runner and exited zero."
+    "One final workspace invocation accidentally omitted the established /tmp runner and was interrupted after multiple individually green test binaries demonstrated the known macOS provenance delay. It is not evidence. The complete 1038/1038 workspace gate and 1037/1037 isolated all-target replay both used the established runner and exited zero.",
+    "The P11 constant-expression rules require correct 128-bit reference values while the execution boundary requires E3033. The implementation therefore widened the shared front-end integer kernel to u128 and added explicit checked narrowing only at interpreter and lowering sinks; it did not widen EvoIR or claim 128-bit execution.",
+    "The first sandboxed P11 layout invocation stopped before sealed container inspection and produced no usable evidence. The authoritative sequential reruns used the same base and attributed commands with the required container permission and produced 128/128 and 22/22 ORACLE_CONSENSUS with zero mismatches.",
+    "The P12 RED reached E1001 before its final function-pointer-object guard. GREEN exposed that the guard used the non-constant file-scope initializer copy = fp; it was corrected to the PM-measured already-green form copy = target. Neither failing RED assertion nor declared capability changed, and the correction is recorded rather than hidden in the semantic commit.",
+    "The first complete P13 GREEN workspace gate found two historical Day 5 exact-message cases that still expected ordinary-identifier-redefinition. They were added to the same tests-only checkpoint, independently replayed as one failing test with 2/36 mismatches on commit 241f899, and then passed under the production diagnostic change; no second RED window was created.",
+    "The first P13 dashboard capture completed all 16 raw preprocessing lanes but was refused when restricted sandbox access denied sealed oracle inspection. Its incomplete capture is preserved at .evidence/kernel-dashboard/88cd9a7-sandbox-refused and its 16-row run at .evidence/day5-kernel-reconnaissance/20260901T162552Z-5025; neither is acceptance evidence. The permission-correct rerun on the same commit and previous-run lineage sealed 48/48 observations as run 20260901T162827Z-12206.",
+    "The opening P14 fixtures initially expected __builtin_types_compatible_p to have type _Bool. The duplicate-shadow panic ran first and masked that test defect. Revision 1.9.31 specifies int, so the tests-only commit was amended before any production commit and independently replayed as exactly five duplicate-shadow panics with the corrected type assertions.",
+    "The independent RED replay briefly shared the main checkout's Cargo target and replaced its focused test binary with the detached-checkout build. That stale derived cache was rejected, only evocc-parser build artifacts were cleaned, GREEN was rebuilt, and the final no-local replay used its own target directory.",
+    "The scope-T token-location test initially carried an unobserved expected invocation column of 35; GREEN first fixed the declared text and panic failures, then exposed the measured column as 34. The assertion was corrected in the semantic commit and the deviation is retained rather than hidden.",
+    "The first scope-T layout attempt could not inspect the sealed local container image inside the restricted sandbox and was rejected. Sequential permission-correct reruns produced 128/128 and 22/22 ORACLE_CONSENSUS with zero mismatches.",
+    "The first scope-T dashboard attempt stopped before measurement because sealed-image inspection was denied. The second measured all 48 lanes clean but failed final receipt construction because a relative evidence path could not be relativized against the absolute repository root. The accepted third run used the same subject and lineage with an absolute evidence path and sealed run 20260902T051401Z-89830.",
+    "The first scope-V __func__ implementation allocated an implicit object identity in every function, including functions that did not use the identifier. The full workspace gate caught fourteen frozen identity and fingerprint regressions before commit. The accepted implementation first scans the body and materializes the object only when lexically required; a regression test pins declaration and SymbolId order.",
+    "An exploratory scope-V change executed goto while testing labeled statement-expression results, but goto execution exceeded the declared parser rule and lacked the matching EvoIR path. It was removed before commit; the accepted shared terminal-value query only recurses through labels.",
+    "One scope-V layout attempt failed restricted container inspection and a later successful command in the same shell masked the status. It was rejected. Fresh sequential permission-correct runs produced 128/128 and 22/22 ORACLE_CONSENSUS.",
+    "The final scope-V documentation gate was first started without the established temporary runner. Every completed target was green, but macOS provenance scanning imposed the known per-binary delay; the run was interrupted and is not evidence. The complete 1118/1118 rerun used the isolated /private/tmp runner and exited zero."
   ]
 }

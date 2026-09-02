@@ -268,7 +268,9 @@ impl MacroMap {
                     if next.kind == TokenKind::Identifier {
                         if let Some(arg) = self.resolve_arg(next, m, args) {
                             let text = tokens_to_string(&arg);
-                            let str_tok = make_string_token(&text);
+                            let mut str_tok = make_string_token(&text);
+                            str_tok.spelling_span = tok.spelling_span;
+                            str_tok.preceded_by_whitespace = tok.preceded_by_whitespace;
                             if let Some(pt) = pending_paste.take() {
                                 result.push(paste_tokens(&pt.left, &str_tok, pt.operator_span));
                             } else {
@@ -368,13 +370,11 @@ impl MacroMap {
         if text == "__VA_ARGS__" && m.variadic {
             let va_start = m.params.len();
             let mut combined: Vec<Token> = Vec::new();
-            for (idx, arg) in args.iter().enumerate() {
-                if idx >= va_start {
-                    if !combined.is_empty() {
-                        combined.push(make_comma_token());
-                    }
-                    combined.extend(arg.clone());
+            for (offset, arg) in args.iter().skip(va_start).enumerate() {
+                if offset > 0 {
+                    combined.push(make_comma_token());
                 }
+                combined.extend(arg.clone());
             }
             return Some(combined);
         }
@@ -785,9 +785,8 @@ impl Preprocessor {
             if token.kind != TokenKind::Eof {
                 let text = token_lexeme(&token, &content).to_owned();
                 tokens.push(Token {
-                    kind: token.kind,
-                    span: token.span,
                     text: TokenText::Decoded(text),
+                    ..token
                 });
             }
         }
@@ -881,6 +880,238 @@ impl Preprocessor {
         }
     }
 
+    fn install_define_directive(&mut self, tokens: &[Token], i: &mut usize, source: &str) {
+        let (name, body, is_function_like) = parse_define(tokens, i, source);
+        if name.is_empty() {
+            return;
+        }
+        let (params, variadic, variadic_param_name) = if is_function_like {
+            let (params, variadic, variadic_name) = extract_params(&body, source);
+            (params, variadic, variadic_name)
+        } else {
+            (Vec::new(), false, None)
+        };
+        let body_tokens = if !is_function_like {
+            body
+        } else {
+            let mut depth = 0u32;
+            let mut split_at = 0usize;
+            for (index, token) in body.iter().enumerate() {
+                match token.kind {
+                    TokenKind::LParen => depth += 1,
+                    TokenKind::RParen => {
+                        depth -= 1;
+                        if depth == 0 {
+                            split_at = index + 1;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            body.get(split_at..).unwrap_or_default().to_vec()
+        };
+        let body_tokens = body_tokens
+            .into_iter()
+            .map(|token| {
+                let lexeme = token_lexeme(&token, source);
+                let text = if lexeme.is_empty() {
+                    format_placeholder(token.kind)
+                } else {
+                    lexeme.to_owned()
+                };
+                Token {
+                    text: TokenText::Decoded(text),
+                    ..token
+                }
+            })
+            .collect();
+        self.builtin_feature_queries.remove(&name);
+        if is_function_like {
+            self.macros.define_function_like(
+                name,
+                params,
+                variadic,
+                variadic_param_name,
+                body_tokens,
+            );
+        } else {
+            self.define(name, body_tokens);
+        }
+    }
+
+    fn process_macro_argument_directive(
+        &mut self,
+        tokens: &[Token],
+        i: &mut usize,
+        source: &str,
+        expanding: &mut HashSet<String>,
+        conditional_floor: usize,
+    ) {
+        let directive_span = tokens[*i].span;
+        *i += 1;
+        let directive = if *i < tokens.len()
+            && !has_logical_newline_between(&tokens[*i - 1], &tokens[*i], source)
+        {
+            let name = token_lexeme(&tokens[*i], source).to_owned();
+            *i += 1;
+            name
+        } else {
+            String::new()
+        };
+
+        match directive.as_str() {
+            "define" => {
+                if self.cond_active() {
+                    self.install_define_directive(tokens, i, source);
+                }
+            }
+            "undef" => {
+                if self.cond_active() && *i < tokens.len() {
+                    let name = token_lexeme(&tokens[*i], source).to_owned();
+                    self.undefine(&name);
+                }
+            }
+            "ifdef" | "ifndef" => {
+                let name = if *i < tokens.len() {
+                    token_lexeme(&tokens[*i], source).to_owned()
+                } else {
+                    String::new()
+                };
+                let mut selected = self.is_defined(&name);
+                if directive == "ifndef" {
+                    selected = !selected;
+                }
+                self.push_cond(selected, directive_span);
+            }
+            "if" => {
+                let expression = collect_line_tokens(tokens, i, source);
+                let selected = self.cond_active()
+                    && self.evaluate_conditional_expression(&expression, source, expanding);
+                self.push_cond(selected, directive_span);
+            }
+            "elif" => {
+                if self.cond_stack.len() <= conditional_floor {
+                    self.push_unmatched_conditional(directive_span);
+                } else {
+                    let mut state = self
+                        .cond_stack
+                        .pop()
+                        .expect("conditional stack was checked above");
+                    let outer_active = self.cond_active();
+                    if state.had_true {
+                        state.in_true = false;
+                    } else {
+                        let expression = collect_line_tokens(tokens, i, source);
+                        let selected = outer_active
+                            && self.evaluate_conditional_expression(&expression, source, expanding);
+                        state.in_true = selected;
+                        state.had_true = selected;
+                    }
+                    self.cond_stack.push(state);
+                }
+            }
+            "else" => {
+                if self.cond_stack.len() <= conditional_floor {
+                    self.push_unmatched_conditional(directive_span);
+                } else {
+                    let last = self.cond_stack.len() - 1;
+                    let outer_active = self.cond_stack[..last].iter().all(|state| state.in_true);
+                    let state = &mut self.cond_stack[last];
+                    state.in_true = !state.had_true && outer_active;
+                    state.had_true |= state.in_true;
+                }
+            }
+            "endif" => {
+                if self.cond_stack.len() <= conditional_floor {
+                    self.push_unmatched_conditional(directive_span);
+                } else {
+                    self.cond_stack.pop();
+                }
+            }
+            _ => {
+                if self.cond_active() {
+                    self.errors.push(PreprocessError {
+                        code: "E0113",
+                        span: directive_span,
+                        message: "directive-in-macro-argument".into(),
+                    });
+                }
+            }
+        }
+        skip_line(tokens, i, source);
+    }
+
+    fn collect_macro_arguments(
+        &mut self,
+        tokens: &[Token],
+        start: usize,
+        source: &str,
+        expanding: &mut HashSet<String>,
+    ) -> (Vec<Vec<Token>>, Vec<Token>, usize) {
+        let conditional_floor = self.cond_stack.len();
+        let mut args = Vec::new();
+        let mut current_arg = Vec::new();
+        let mut depth = 1u32;
+        let mut index = start;
+
+        while index < tokens.len() && depth > 0 {
+            if is_directive_hash(tokens[index].kind) && is_start_of_line(tokens, index, source) {
+                self.process_macro_argument_directive(
+                    tokens,
+                    &mut index,
+                    source,
+                    expanding,
+                    conditional_floor,
+                );
+                continue;
+            }
+            if !self.cond_active() {
+                index += 1;
+                continue;
+            }
+
+            let lexeme = token_lexeme(&tokens[index], source);
+            let text = if lexeme.is_empty() {
+                format_placeholder(tokens[index].kind)
+            } else {
+                lexeme.to_owned()
+            };
+            let decoded = Token {
+                text: TokenText::Decoded(text),
+                ..tokens[index].clone()
+            };
+            match tokens[index].kind {
+                TokenKind::LParen => {
+                    depth += 1;
+                    current_arg.push(decoded);
+                }
+                TokenKind::RParen => {
+                    depth -= 1;
+                    if depth > 0 {
+                        current_arg.push(decoded);
+                    }
+                }
+                TokenKind::Comma if depth == 1 => {
+                    args.push(std::mem::take(&mut current_arg));
+                }
+                _ => current_arg.push(decoded),
+            }
+            index += 1;
+        }
+
+        let unmatched = self
+            .cond_stack
+            .drain(conditional_floor..)
+            .map(|state| state.opening_span)
+            .collect::<Vec<_>>();
+        for span in unmatched {
+            self.push_unmatched_conditional(span);
+        }
+
+        (args, current_arg, index)
+    }
+
     fn process_impl(
         &mut self,
         tokens: TokenStream,
@@ -890,7 +1121,7 @@ impl Preprocessor {
         conditional_floor: usize,
     ) -> TokenStream {
         let mut output: Vec<Token> = Vec::new();
-        let raw = tokens.into_vec();
+        let mut raw = tokens.into_vec();
         let len = raw.len();
         let mut i: usize = 0;
 
@@ -912,71 +1143,7 @@ impl Preprocessor {
                 match dir_name.as_str() {
                     "define" => {
                         if self.cond_active() {
-                            let (name, body, is_function_like) = parse_define(&raw, &mut i, source);
-                            if !name.is_empty() {
-                                let (params, variadic, variadic_param_name) = if is_function_like {
-                                    let (p, v, vn) = extract_params(&body, source);
-                                    (p, v, vn)
-                                } else {
-                                    (vec![], false, None)
-                                };
-                                let body_tokens = if !is_function_like {
-                                    body
-                                } else {
-                                    // Find the matching ')' that ends the param
-                                    // list and keep only tokens after it.
-                                    let mut depth = 0u32;
-                                    let mut split_at = 0usize;
-                                    for (j, t) in body.iter().enumerate() {
-                                        match t.kind {
-                                            TokenKind::LParen => depth += 1,
-                                            TokenKind::RParen => {
-                                                depth -= 1;
-                                                if depth == 0 {
-                                                    split_at = j + 1;
-                                                    break;
-                                                }
-                                            }
-                                            _ => {}
-                                        }
-                                    }
-                                    if split_at < body.len() {
-                                        body[split_at..].to_vec()
-                                    } else {
-                                        vec![]
-                                    }
-                                };
-                                // Convert body tokens to Decoded so resolve_arg can read
-                                // parameter names in nested expansions.
-                                let body_tokens: Vec<Token> = body_tokens
-                                    .into_iter()
-                                    .map(|t| {
-                                        let lexeme = token_lexeme(&t, source);
-                                        let text = if lexeme.is_empty() {
-                                            format_placeholder(t.kind)
-                                        } else {
-                                            lexeme.to_owned()
-                                        };
-                                        Token {
-                                            kind: t.kind,
-                                            span: t.span,
-                                            text: TokenText::Decoded(text),
-                                        }
-                                    })
-                                    .collect();
-                                self.builtin_feature_queries.remove(&name);
-                                if is_function_like {
-                                    self.macros_mut().define_function_like(
-                                        name,
-                                        params,
-                                        variadic,
-                                        variadic_param_name,
-                                        body_tokens,
-                                    );
-                                } else {
-                                    self.define(name, body_tokens);
-                                }
-                            }
+                            self.install_define_directive(&raw, &mut i, source);
                         }
                         skip_line(&raw, &mut i, source);
                     }
@@ -1197,18 +1364,35 @@ impl Preprocessor {
                     if name == "__COUNTER__" {
                         let value = self.counter;
                         self.counter = self.counter.wrapping_add(1);
-                        output.push(make_int_token(i64::from(value)));
+                        output.push(synthetic_expansion_token(
+                            make_int_token(i64::from(value)),
+                            tok,
+                            tok.span,
+                        ));
                         i += 1;
                         continue;
                     }
                     if let Some((answer, next_index)) = self.expand_feature_query(&raw, i, source) {
-                        output.push(make_int_token(answer));
+                        let expansion_span = raw
+                            .get(next_index.saturating_sub(1))
+                            .map_or(tok.span, |close| {
+                                compose_expansion_span(tok.span, close.span)
+                            });
+                        output.push(synthetic_expansion_token(
+                            make_int_token(answer),
+                            tok,
+                            expansion_span,
+                        ));
                         i = next_index;
                         continue;
                     }
                     if name == "__FILE__" {
                         let displayed_file = self.mapped_file_name();
-                        let file_str = make_string_token(&displayed_file);
+                        let file_str = synthetic_expansion_token(
+                            make_string_token(&displayed_file),
+                            tok,
+                            tok.span,
+                        );
                         let sub_stream = TokenStream::new(vec![file_str]);
                         let processed = self.process_impl(sub_stream, source, expanding, false, 0);
                         output.extend(processed.into_vec());
@@ -1217,7 +1401,11 @@ impl Preprocessor {
                     }
                     if name == "__LINE__" {
                         let line_num = tok.span.line_start;
-                        let line_tok = make_int_token(line_num as i64);
+                        let line_tok = synthetic_expansion_token(
+                            make_int_token(line_num as i64),
+                            tok,
+                            tok.span,
+                        );
                         let sub_stream = TokenStream::new(vec![line_tok]);
                         let processed = self.process_impl(sub_stream, source, expanding, false, 0);
                         output.extend(processed.into_vec());
@@ -1226,58 +1414,38 @@ impl Preprocessor {
                     }
                     if !expanding.contains(&name) {
                         // Try object-like macro first.
-                        if let Some(body) = self.macros.expand_object_like(&name) {
+                        if let Some(mut body) = self.macros.expand_object_like(&name) {
+                            let invocation_whitespace = tok.preceded_by_whitespace;
+                            if body.is_empty() {
+                                if let Some(next) = raw.get_mut(i + 1) {
+                                    next.preceded_by_whitespace |= invocation_whitespace;
+                                }
+                                i += 1;
+                                continue;
+                            }
+                            stamp_macro_expansion(&mut body, tok.span, invocation_whitespace);
                             expanding.insert(name.clone());
                             let sub_stream = TokenStream::new(body);
-                            let processed =
-                                self.process_impl(sub_stream, source, expanding, false, 0);
-                            output.extend(processed.into_vec());
+                            let processed = self
+                                .process_impl(sub_stream, source, expanding, false, 0)
+                                .into_vec();
+                            let (processed, consumed) = self.rescan_with_following_invocations(
+                                processed,
+                                &raw[i + 1..],
+                                source,
+                                expanding,
+                            );
+                            output.extend(processed);
                             expanding.remove(&name);
-                            i += 1;
+                            i += 1 + consumed;
                             continue;
                         }
                         // Try function-like macro: name followed by '('
                         if i + 1 < len && raw[i + 1].kind == TokenKind::LParen {
                             let saved_i = i;
                             i += 2; // skip name and '('
-                            let mut j = i;
-                            let mut args: Vec<Vec<Token>> = Vec::new();
-                            let mut current_arg: Vec<Token> = Vec::new();
-                            let mut depth = 1u32;
-                            while j < len && depth > 0 {
-                                let lexeme = token_lexeme(&raw[j], source);
-                                let text = if lexeme.is_empty() {
-                                    format_placeholder(raw[j].kind)
-                                } else {
-                                    lexeme.to_owned()
-                                };
-                                let decoded = Token {
-                                    kind: raw[j].kind,
-                                    span: raw[j].span,
-                                    text: TokenText::Decoded(text),
-                                };
-                                match raw[j].kind {
-                                    TokenKind::LParen => {
-                                        depth += 1;
-                                        if depth > 1 {
-                                            current_arg.push(decoded);
-                                        }
-                                    }
-                                    TokenKind::RParen => {
-                                        depth -= 1;
-                                        if depth > 0 {
-                                            current_arg.push(decoded);
-                                        }
-                                    }
-                                    TokenKind::Comma if depth == 1 => {
-                                        args.push(std::mem::take(&mut current_arg));
-                                    }
-                                    _ => {
-                                        current_arg.push(decoded);
-                                    }
-                                }
-                                j += 1;
-                            }
+                            let (mut args, current_arg, j) =
+                                self.collect_macro_arguments(&raw, i, source, expanding);
                             let expects_named_argument = self
                                 .macros
                                 .get(&name)
@@ -1311,17 +1479,41 @@ impl Preprocessor {
                                 }
                             }
 
-                            if let Some(body) = self.macros.expand_macro_with_prescanned_args(
+                            if let Some(mut body) = self.macros.expand_macro_with_prescanned_args(
                                 &name,
                                 &args,
                                 &prescanned_args,
                             ) {
+                                let invocation_whitespace = tok.preceded_by_whitespace;
+                                if body.is_empty() {
+                                    if let Some(next) = raw.get_mut(i) {
+                                        next.preceded_by_whitespace |= invocation_whitespace;
+                                    }
+                                    continue;
+                                }
+                                let invocation_span =
+                                    raw.get(j.saturating_sub(1)).map_or(tok.span, |close| {
+                                        compose_expansion_span(tok.span, close.span)
+                                    });
+                                stamp_macro_expansion(
+                                    &mut body,
+                                    invocation_span,
+                                    invocation_whitespace,
+                                );
                                 expanding.insert(name.clone());
                                 let sub_stream = TokenStream::new(body);
-                                let processed =
-                                    self.process_impl(sub_stream, source, expanding, false, 0);
-                                output.extend(processed.into_vec());
+                                let processed = self
+                                    .process_impl(sub_stream, source, expanding, false, 0)
+                                    .into_vec();
+                                let (processed, consumed) = self.rescan_with_following_invocations(
+                                    processed,
+                                    &raw[i..],
+                                    source,
+                                    expanding,
+                                );
+                                output.extend(processed);
                                 expanding.remove(&name);
+                                i += consumed;
                                 continue;
                             }
                             // If expansion returned None (arity mismatch etc.),
@@ -1351,6 +1543,44 @@ impl Preprocessor {
         }
 
         TokenStream::new(output)
+    }
+
+    /// Complete translation-phase-4 rescanning at a replacement-list
+    /// boundary. If rescanning leaves a function-like macro name at the end,
+    /// its argument list may begin in the surrounding token sequence. Consume
+    /// only those invocation tokens; unrelated following tokens remain in the
+    /// caller where the currently expanding macro is enabled again.
+    fn rescan_with_following_invocations(
+        &mut self,
+        mut replacement: Vec<Token>,
+        following: &[Token],
+        source: &str,
+        expanding: &mut HashSet<String>,
+    ) -> (Vec<Token>, usize) {
+        let mut consumed = 0;
+        while let Some(last) = replacement.last() {
+            if last.kind != TokenKind::Identifier {
+                break;
+            }
+            let name = token_lexeme(last, source).to_owned();
+            if expanding.contains(&name)
+                || !self
+                    .macros
+                    .get(&name)
+                    .is_some_and(|macro_def| macro_def.is_function)
+            {
+                break;
+            }
+            let Some(invocation_len) = complete_parenthesized_prefix(&following[consumed..]) else {
+                break;
+            };
+            replacement.extend_from_slice(&following[consumed..consumed + invocation_len]);
+            consumed += invocation_len;
+            replacement = self
+                .process_impl(TokenStream::new(replacement), source, expanding, false, 0)
+                .into_vec();
+        }
+        (replacement, consumed)
     }
 
     fn expand_feature_query(
@@ -1590,12 +1820,76 @@ fn token_lexeme<'a>(tok: &'a Token, source: &'a str) -> &'a str {
     if let TokenText::Decoded(text) = &tok.text {
         return text;
     }
-    let start = tok.span.byte_start as usize;
-    let end = tok.span.byte_end as usize;
+    let start = tok.spelling_span.byte_start as usize;
+    let end = tok.spelling_span.byte_end as usize;
     if start >= source.len() || end > source.len() || start > end {
         return "";
     }
     &source[start..end]
+}
+
+/// Compose parser-visible expansion locations with the same total rule used
+/// for C-HIR nodes. Cross-file or reversed endpoints keep the first span.
+fn compose_expansion_span(first: SourceSpan, last: SourceSpan) -> SourceSpan {
+    if first.file != last.file || last.byte_start < first.byte_start {
+        return first;
+    }
+    SourceSpan::new(
+        first.file,
+        first.byte_start,
+        last.byte_end,
+        first.line_start,
+        first.column_start,
+    )
+}
+
+fn complete_parenthesized_prefix(tokens: &[Token]) -> Option<usize> {
+    if tokens.first().map(|token| token.kind) != Some(TokenKind::LParen) {
+        return None;
+    }
+    let mut depth = 0_u32;
+    for (index, token) in tokens.iter().enumerate() {
+        match token.kind {
+            TokenKind::LParen => depth += 1,
+            TokenKind::RParen => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(index + 1);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn stamp_macro_expansion(
+    tokens: &mut [Token],
+    expansion_span: SourceSpan,
+    invocation_preceded_by_whitespace: bool,
+) {
+    for token in tokens.iter_mut() {
+        // An invalid paste is consumed as a preprocessor diagnostic at the
+        // written `##` operator; it never crosses the parser boundary as an
+        // expanded token.
+        if invalid_paste_spelling(token).is_none() {
+            token.span = expansion_span;
+        }
+    }
+    if let Some(first) = tokens.first_mut() {
+        first.preceded_by_whitespace = invocation_preceded_by_whitespace;
+    }
+}
+
+fn synthetic_expansion_token(
+    mut token: Token,
+    invocation: &Token,
+    expansion_span: SourceSpan,
+) -> Token {
+    token.spelling_span = invocation.spelling_span;
+    token.span = expansion_span;
+    token.preceded_by_whitespace = invocation.preceded_by_whitespace;
+    token
 }
 
 /// Check whether a token kind marks the start of a preprocessor directive line.
@@ -1608,10 +1902,10 @@ fn is_directive_hash(kind: TokenKind) -> bool {
 /// preprocessor directive, even though the following token has a different
 /// physical `line_start`.
 fn has_logical_newline_between(previous: &Token, current: &Token, source: &str) -> bool {
-    let start = previous.span.byte_end as usize;
-    let end = current.span.byte_start as usize;
+    let start = previous.spelling_span.byte_end as usize;
+    let end = current.spelling_span.byte_start as usize;
     if start > end || end > source.len() {
-        return previous.span.line_start != current.span.line_start;
+        return previous.spelling_span.line_start != current.spelling_span.line_start;
     }
 
     let gap = &source.as_bytes()[start..end];
@@ -1638,8 +1932,8 @@ fn has_logical_newline_between(previous: &Token, current: &Token, source: &str) 
 /// adjacent to the macro name; ordinary whitespace and comments prevent that,
 /// while a spliced physical newline does not.
 fn tokens_are_logically_adjacent(previous: &Token, current: &Token, source: &str) -> bool {
-    let start = previous.span.byte_end as usize;
-    let end = current.span.byte_start as usize;
+    let start = previous.spelling_span.byte_end as usize;
+    let end = current.spelling_span.byte_start as usize;
     if start > end || end > source.len() {
         return false;
     }
@@ -1899,9 +2193,8 @@ fn lex_decoded_tokens(file: FileId, source: &str) -> Vec<Token> {
         }
         let spelling = token_lexeme(&token, source).to_owned();
         tokens.push(Token {
-            kind: token.kind,
-            span: token.span,
             text: TokenText::Decoded(spelling),
+            ..token
         });
     }
     tokens
@@ -2449,7 +2742,7 @@ fn str_text(tok: &Token) -> String {
 fn tokens_to_string(tokens: &[Token]) -> String {
     let mut result = String::new();
     for (index, token) in tokens.iter().enumerate() {
-        if index > 0 && tokens_need_stringify_space(&tokens[index - 1], token) {
+        if index > 0 && token.preceded_by_whitespace {
             result.push(' ');
         }
         let spelling = token_text(token);
@@ -2468,13 +2761,6 @@ fn tokens_to_string(tokens: &[Token]) -> String {
         }
     }
     result
-}
-
-fn tokens_need_stringify_space(left: &Token, right: &Token) -> bool {
-    left.span.file == FileId::DUMMY
-        || right.span.file == FileId::DUMMY
-        || left.span.file != right.span.file
-        || left.span.byte_end != right.span.byte_start
 }
 
 /// Re-lex a token-paste result. The production lexer recognizes complete C
@@ -2504,7 +2790,13 @@ fn paste_tokens(left: &Token, right: &Token, operator_span: SourceSpan) -> Token
     } else {
         (left.span, TokenText::Decoded(combined))
     };
-    Token::new(kind, span, text)
+    let mut pasted = Token::new(kind, span, text);
+    if kind != TokenKind::Error {
+        pasted.spelling_span = left.spelling_span;
+        pasted.span = left.span;
+        pasted.preceded_by_whitespace = left.preceded_by_whitespace;
+    }
+    pasted
 }
 
 fn invalid_paste_spelling(token: &Token) -> Option<&str> {

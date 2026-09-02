@@ -1,0 +1,83 @@
+{
+  "receiptId": "c30.nested-typeof-parameter-red.v1",
+  "baseline": "52a5a59",
+  "authority": {
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.31",
+      "sha256": "1edb938ca7021a52d47c219dcd28ae02c070a8e0e9e36c4af6536f6fc08de33f"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "P14",
+      "sha256": "72ffb6d17d339afaa4c4ae990720456ffdf685bad4964e57da507a7691e1a00c"
+    },
+    "baselineDashboard": {
+      "path": "tests/contracts/kernel-dashboard-receipt.json",
+      "run": "20260901T162827Z-12206",
+      "sha256": "89f71e188c61517b0e048b4b079ab66b2c2bf5acfc22c43867c380b8cf0e5e8c"
+    },
+    "oracleEvidence": {
+      "source": {
+        "path": ".evidence/builtin-probes/20260902-2c23684c/p14.c",
+        "sha256": "aedc037cbd0e82b02a6ec62d0b065011e2d09d6050008b7833602d2612bee235"
+      },
+      "result": {
+        "path": ".evidence/builtin-probes/20260902-2c23684c/p14.out",
+        "sha256": "bf62199f1574ac11e3f1dd2bf09a5dda017d8b15417e665b8b7bcb0481198f0d",
+        "measured": "gcc-14 exit 0; clang-19 exit 0"
+      }
+    }
+  },
+  "declaredCapability": "temporary function-parameter shadows are installed idempotently for nested typeof probes at every parameter position and nesting depth while retaining the exact parameter types",
+  "focusedCommand": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test gnu_typeof -- --nocapture",
+  "observedRed": [
+    {
+      "test": "nested_typeof_in_the_second_parameter_is_typed_without_panicking",
+      "observed": "panic: DuplicateInScope for a",
+      "reason": "nested-typeof-parameter-shadow-reinstallation"
+    },
+    {
+      "test": "nested_typeof_in_the_third_nonfinal_parameter_is_typed_without_panicking",
+      "observed": "panic: DuplicateInScope for a",
+      "reason": "nested-typeof-parameter-shadow-reinstallation"
+    },
+    {
+      "test": "nested_typeof_in_the_last_parameter_is_typed_without_panicking",
+      "observed": "panic: DuplicateInScope for a",
+      "reason": "nested-typeof-parameter-shadow-reinstallation"
+    },
+    {
+      "test": "three_nested_typeof_levels_are_typed_without_panicking",
+      "observed": "panic: DuplicateInScope for a",
+      "reason": "nested-typeof-parameter-shadow-reinstallation"
+    },
+    {
+      "test": "nested_typeof_may_resolve_an_earlier_parameter_without_panicking",
+      "observed": "panic: DuplicateInScope for start",
+      "reason": "nested-typeof-parameter-shadow-reinstallation"
+    }
+  ],
+  "assertionsPerCase": [
+    "the valid declaration parses without a process panic",
+    "every retained parameter has the measured canonical integer rank"
+  ],
+  "failureDirection": "a panic on valid input stops compilation and is not a miscompilation, but remains an acceptance failure",
+  "buildErrors": 0,
+  "focused": {
+    "listed": 14,
+    "passed": 9,
+    "failed": 5
+  },
+  "workspaceIncludingDocTests": {
+    "listed": 1065,
+    "passed": 1060,
+    "failed": 5,
+    "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet"
+  },
+  "allTargetTestCount": {
+    "listed": 1064,
+    "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --all-targets --locked --offline -- --list --format terse | rg -c ': test$'"
+  },
+  "result": "RED"
+}

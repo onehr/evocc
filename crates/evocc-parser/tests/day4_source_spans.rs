@@ -25,9 +25,8 @@ fn decoded_tokens(file: &SourceFile, keep_eof: bool) -> Vec<Token> {
                 [token.span.byte_start as usize..token.span.byte_end as usize]
                 .to_owned();
             tokens.push(Token {
-                kind: token.kind,
-                span: token.span,
                 text: TokenText::Decoded(spelling),
+                ..token
             });
         }
     }

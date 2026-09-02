@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "c30.token-location-preprocessor.acceptance.v1",
+  "status": "PASS_WITH_TYPED_SURVEY_FRONTIER",
+  "authority": {
+    "baselineCommit": "8562deb9da04c7d993b39a24afc76f4aeeb1f176",
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.32",
+      "sections": [
+        "10.1.20 Source locations",
+        "10.4 Whitespace flag and stringization",
+        "10.4 Rescanning"
+      ],
+      "sha256": "0cf1c41f6e9c078e6b9642b88c2e8612f66a5ed458bda1d7dc382d59dfae13aa"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "T",
+      "ruling": "surveyMeasuredAnUnmeasuredPath",
+      "sha256": "c6669636459c7b522e4e3c2b37e0464b45292daaf929c1b50e02eb10b3061118"
+    }
+  },
+  "commits": {
+    "testsOnlyRed": {
+      "commit": "4106205",
+      "message": "test: expose macro location and expansion defects"
+    },
+    "implementation": {
+      "commit": "fc21cd3024e079cd68078cb3eca4303a49d89a26",
+      "message": "fix: preserve macro token origins and rescanning"
+    },
+    "dashboardReceipt": {
+      "commit": "ce845bb1976d90389863806d988b6084da39f04e",
+      "message": "docs: publish a clean kernel front-end dashboard"
+    }
+  },
+  "redWindow": {
+    "receipt": {
+      "path": "tests/contracts/token-location-preprocessor-red.json",
+      "sha256": "3d8ce1303fd18a2993acde4543b71d457aa6b30e2803d848102ca608613e562e"
+    },
+    "workspace": {
+      "command": "cargo test --workspace --no-fail-fast",
+      "passed": 1069,
+      "failed": 14,
+      "ignored": 0,
+      "buildErrors": 0,
+      "unexpectedFailures": 0
+    },
+    "declaredFailures": {
+      "tokenLocations": {
+        "passed": 0,
+        "failed": 3,
+        "reasons": [
+          "same-file macro tag violated the ordered SourceSpan invariant",
+          "header macro tag retained the header spelling extent instead of the invocation extent",
+          "expanded attribute text came from a source-buffer slice and produced t instead of 8"
+        ]
+      },
+      "stringizationWhitespace": {
+        "passed": 4,
+        "failed": 6,
+        "reason": "stringization inserted spaces before every expanded token instead of reproducing preprocessing-token whitespace"
+      },
+      "outerSequenceRescanning": {
+        "passed": 0,
+        "failed": 5,
+        "reason": "the replacement-list boundary left smp followed by parentheses instead of rescanning the joined outer sequence to Z"
+      }
+    }
+  },
+  "sealedOracleProbes": [
+    {
+      "source": ".evidence/builtin-probes/20260902-2c23684c/p15.c",
+      "sourceSha256": "6944656a313fed3952780d083918dcd088f114012dea2a39ad41583935c848fe",
+      "output": ".evidence/builtin-probes/20260902-2c23684c/p15.out",
+      "outputSha256": "39a16c54d07efbbad5412d3a785256d813b84ca229bb58db650641073fe1da65",
+      "oracleConsensus": true
+    },
+    {
+      "source": ".evidence/builtin-probes/20260902-2c23684c/p16.c",
+      "sourceSha256": "02b324c32f6b45f86182271576c6ed83d22aa2eb56338c84c1320f970e9ed2be",
+      "output": ".evidence/builtin-probes/20260902-2c23684c/p16.out",
+      "outputSha256": "4a7d18814f5123df1930cf5f6482caef2dd7b391cd49525f73066abd61c54591",
+      "oracleConsensus": true
+    }
+  ],
+  "semanticAcceptance": {
+    "tokenLocations": {
+      "test": "crates/evocc-parser/tests/source_location_expansion.rs",
+      "testSha256": "b9126ea5f487eb7f35c7d9d02dfc19260954af7080ccddda0328f6a9bda60edb",
+      "command": "cargo test -p evocc-parser --test source_location_expansion -- --nocapture",
+      "passed": 3,
+      "failed": 0
+    },
+    "stringizationWhitespace": {
+      "test": "crates/evocc-cpp/tests/stringization_whitespace.rs",
+      "testSha256": "140988351967c1ecd32aae8c296ef74c1c46378735e81fd36df34f575232a3e6",
+      "command": "cargo test -p evocc-cpp --test stringization_whitespace -- --nocapture",
+      "passed": 10,
+      "failed": 0
+    },
+    "outerSequenceRescanning": {
+      "test": "crates/evocc-cpp/tests/outer_sequence_rescanning.rs",
+      "testSha256": "4b86e4453b043fe99bf747d37fa1a89d15f4432bcf3acd2aa7e9805c63128772",
+      "command": "cargo test -p evocc-cpp --test outer_sequence_rescanning -- --nocapture",
+      "passed": 5,
+      "failed": 0
+    },
+    "implementationFacts": [
+      "Each token retains spelling_span and an expansion span; lexer spelling text is materialized on the token.",
+      "Parser node-span composition is total: ordered same-file spans extend, otherwise the first token expansion span is retained.",
+      "Parser contextual text comes from token spelling and never from indexing an unrelated source buffer.",
+      "Stringization uses the preprocessing-token whitespace flag.",
+      "Rescanning may join a replacement-list result with the actual following parenthesized invocation while the current macro remains disabled."
+    ]
+  },
+  "standardGate": {
+    "workspace": {
+      "command": "cargo test --workspace --no-fail-fast",
+      "passed": 1083,
+      "failed": 0,
+      "ignored": 0
+    },
+    "clippy": {
+      "command": "cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    },
+    "baseLayoutCorpus": {
+      "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "128/128 ORACLE_CONSENSUS",
+      "mismatches": 0
+    },
+    "attributedLayoutCorpus": {
+      "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "22/22 ORACLE_CONSENSUS",
+      "mismatches": 0
+    },
+    "diffCheck": "clean"
+  },
+  "acceptanceDiffGuard": {
+    "receipt": "tests/contracts/kernel-dashboard-receipt.json",
+    "receiptSha256": "7e3ef861c490031e21c164f7ef30cbaaac6ccc382e2cdae696df545168371d31",
+    "previousRun": "20260901T185119Z-83939",
+    "publishedRun": "20260902T051401Z-89830",
+    "subjectCommit": "fc21cd3",
+    "rawPreprocess": "16/16 clean",
+    "gccPreprocessedParser": "16/16 clean",
+    "clangPreprocessedParser": "16/16 clean",
+    "dualOracleParse": "16/16 clean",
+    "regressions": 0,
+    "qualification": "This dashboard is the required regression guard. The raw-to-EvoCPP-to-parser integration claim is established separately by the full-configuration survey."
+  },
+  "isolatedOfflineReplay": {
+    "clone": "/tmp/c30-token-replay.D04X4A/repo",
+    "cloneMode": "git clone --no-local",
+    "alternatesFile": "absent",
+    "commit": "fc21cd3024e079cd68078cb3eca4303a49d89a26",
+    "command": "cargo test --workspace --no-fail-fast --locked --offline",
+    "passed": 1083,
+    "failed": 0,
+    "ignored": 0
+  },
+  "fullConfigurationSurvey": {
+    "receipt": "tests/contracts/full-config-parse-survey-receipt.json",
+    "receiptSha256": "726fd204e943fdf7a5cb6f5d0b5b44e65dcc35d092e1f6a40bada91485a1f96f",
+    "runId": "20260902T051739Z-447",
+    "capture": ".evidence/full-config-parse-survey/20260902T051739Z-447",
+    "includedCTranslationUnits": 2832,
+    "clean": 1292,
+    "diagnosed": 1540,
+    "unavailable": 0,
+    "timeout": 0,
+    "panic": 0,
+    "previousPanic": 2768,
+    "scopeDiscipline": "The rerun was measure-only; none of its typed diagnostic frontier was fixed."
+  },
+  "processDeviations": [
+    "The hidden expected invocation column in one token-location assertion was corrected from 35 to the measured 34 during GREEN; the RED run had already failed on expanded text before reaching that assertion.",
+    "A sandboxed base-layout attempt could not inspect the sealed container image and was rejected. The authoritative base and attributed corpora were rerun sequentially with the required container permission.",
+    "The first dashboard attempt was rejected before measurement because the sandbox could not inspect the sealed image. A second attempt measured all 48 lanes clean but the publisher rejected a relative evidence path at final receipt construction. The accepted publication used the same subject and an absolute evidence path."
+  ],
+  "specGap": null,
+  "claimCeiling": "The token-location, stringization-whitespace, and outer-sequence-rescan obligations pass. The full survey has zero panic, timeout, or unavailable units; its 1540 diagnosed units are an open typed frontier, not general parser conformance."
+}

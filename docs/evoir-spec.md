@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.29** | **Authoritative reference** | **2026-09-01**
+**Revision 1.9.35** | **Authoritative reference** | **2026-09-02**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1256,6 +1256,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3005` | `invalid-shift-count` | runtime |
 | `E3006` | `invalid-signed-left-shift` | runtime |
 | `E3007` | `scalar-function-fell-off-end` | runtime |
+| `E3008` | `interpreter-fuel-exhausted` | host resource |
 | `E3009` | `null-pointer-access` | runtime |
 | `E3010` | `dangling-pointer-access` | runtime |
 | `E3011` | `out-of-bounds-memory-access` | runtime |
@@ -1266,6 +1267,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3016` | `call-through-non-function-pointer` | runtime |
 | `E3017` | `indirect-call-signature-mismatch` | module validation |
 | `E2902` | `not-covered: compound-literal` | front end — **retired by revision 1.9**; emitting it after compound literals land is a defect |
+| `E2002` | `incompatible-redeclaration` | front end |
 | `E2903` | `malformed-attribute` | front end |
 | `E2904` | `not-covered: variably-modified-typeof` | front end |
 | `E2905` | `statement-expression-outside-function` | front end |
@@ -2603,6 +2605,26 @@ unchanged (measured: `sizeof` 4, second element readable, both oracles). At
 block scope such an initializer is refused by both oracles and here reports
 `E2919` (`flexible-array-initializer-not-static`) at the initializer.
 
+**Modifiable lvalues.** An lvalue is modifiable unless its own type is
+const-qualified, is an array type, or is a structure or union with a
+const-qualified member at any depth. Qualifiers of a pointed-to type never
+qualify the pointer: `const char * const *p` is modifiable and `*p` is not.
+The test is one predicate on the lvalue's type, applied at every assignment
+and update site, with no list of admitted forms (evidence `p19.c`, `m3`).
+Measured defect at revision 1.9.32: `init.pn = pnames` with `const char *
+const *pn` was `E2101` in 40 units.
+
+**Array lvalues.** Every expression of array type that is an lvalue decays
+to a pointer to its first element wherever an array expression may: a named
+object, an array-typed member of a structure or union reached through `.` or
+`->` (fixed-size, zero-length or flexible), an element of an array of arrays,
+a string literal, and a compound literal. One decay rule serves them all, so
+`buf->head->iov_len` with `struct kvec head[1]`, `f->fib6_nh->fam` with a
+flexible `fib6_nh[]`, `p->buf` with `char buf[0]`, and `"RSDTZW"[i]` are
+valid (evidence `p27-array-lvalues.c`, both oracles compile). Measured defect
+at revision 1.9.33: these were `E2102` (`invalid-projected-lvalue`) in about
+100 units (`WARN_ON` in `sunrpc/svc.h`, `ip6_route.h`, `binfmt_elf.c`).
+
 #### 10.1.4 Sequencing Lowering
 
 C sequence points lower to memory token threading and world token threading.
@@ -2863,8 +2885,9 @@ front end that still emits it is defective.
 
 #### 10.1.10 `typeof` and `_Generic`
 
-`typeof(type-name)` and `typeof(expression)` denote a type. `__typeof__` is the
-same construct. The result of `typeof(expression)` is the type of the expression
+`typeof(type-name)` and `typeof(expression)` denote a type. `__typeof__` and
+`__typeof` are the same construct (both oracles; the kernel's syscall wrappers
+write `__typeof`). The result of `typeof(expression)` is the type of the expression
 before lvalue conversion: an array-typed lvalue yields the array type, not a
 pointer, and qualifiers are retained. The operand expression is not evaluated,
 so `typeof(i++)` names `int` and leaves `i` unchanged; the one case in which C
@@ -2872,7 +2895,14 @@ would evaluate it, a variably modified type, is rejected with `E2904` because
 this profile has no variable-length objects.
 
 `typeof` produces a type and is fully resolved by the front end; nothing of it
-survives into EvoIR. When its operand is a function designator the result is a
+survives into EvoIR. A statement expression inside a `typeof` operand is a
+block of its own: every declaration it makes — objects, tags, and
+declarations with linkage such as `extern void c(void)` — is scoped to it and
+leaves nothing behind. Measured defect at revision 1.9.30: an `extern`
+function declared inside `typeof(({ ... }))` escaped the operand's scope, so a
+later compatible declaration of the same function was refused as a
+redefinition; the kernel's `READ_ONCE` inside `hlist_for_each_entry_rcu`
+writes exactly that pattern (two lanes). When its operand is a function designator the result is a
 function type, and that type may be used as a declaration specifier exactly as
 a typedef naming a function type may (10.1.18): `extern typeof(g) g;` declares
 `g` a function and may never define one. Both oracles accept it; the kernel's
@@ -2988,6 +3018,18 @@ Nothing changes below the plan: lowering consumes `InitAction`s exactly as
 before, so an initializer that arrives through designators is
 indistinguishable, in EvoIR, from one written positionally.
 
+**Range designators and inferred bounds.** `[lo ... hi]` designates every
+element from `lo` to `hi` inclusive; `lo` and `hi` are integer constant
+expressions with `lo <= hi`. An array declared without a bound takes as its
+size the larger of the positional count and one more than the largest index
+any designator or range names, at any nesting depth of the same array. A
+later initializer for an element already initialized replaces it (Clang-19
+warns `-Winitializer-overrides`, both oracles accept; evidence
+`p22-designators.c`, whose `check1..3` arrays make the sizes compile-time
+assertions). Measured defect at revision 1.9.33: range designators were
+`E1001` and designators past the positional count in an unbounded array were
+`E2906` in 64 units.
+
 #### 10.1.13 Compound Literals
 
 `(type-name){ initializer-list }` denotes an object of that type, initialized
@@ -3094,6 +3136,23 @@ evaluates to zero is `E2911` (`static-assertion-failed`) at the `_Static_assert`
 keyword. `__builtin_constant_p` and `__builtin_types_compatible_p` are integer
 constant expressions in that position; `__builtin_*_overflow` is not (both
 oracles reject it in a static assertion).
+
+**Library builtins.** `__builtin_memset`, `__builtin_memcpy`,
+`__builtin_memcmp`, `__builtin_strcmp`, `__builtin_strncmp` and
+`__builtin_strlen` have the prototypes of the library functions they name
+(`memset` returns `void *`, `strlen` returns `size_t`); `__builtin_alloca(n)`
+returns `void *`; `__builtin_va_list`, `__builtin_va_start`,
+`__builtin_va_arg(ap, T)` (of type `T`) and `__builtin_va_end` are typed by the
+front end while their execution stays `E3030`. `__builtin_isdigit`,
+`__builtin_isalpha`, `__builtin_isspace`, `__builtin_toupper` and
+`__builtin_tolower` exist only in GCC-14; Clang-19 has no such builtins
+(evidence `p26-builtins.c`), and the kernel's `ctype.h` selects them with
+`__has_builtin`, which the profile answers as GCC does. They return `int`
+with C-locale semantics over the value of their `int` argument; the full
+tables over 0..255 and the answers for -1 and 0x130 (both 0) are recorded in
+`p28-table.out` (digest `39c6154f...cb09`), and the implementation must
+reproduce that file. Measured defect at revision 1.9.33: these were `E2001`
+in 27 units.
 
 #### 10.1.15 Checked arithmetic builtins
 
@@ -3250,6 +3309,15 @@ produce a placeholder value.
 
 ---
 
+**Fuel.** An interpreter that exhausts its shared step budget stops with
+`E3008` (`interpreter-fuel-exhausted`). That stop is a limit of the host, not a
+property of the program: it is neither undefined behaviour nor a comparison
+result. A differential trial that hits it on either side is counted on its own
+and is never folded into the undefined-behaviour discard count or the
+mismatch count. Defined at revision 1.9.35 after the randomized gate found the
+interpreter emitting the code without an allocation (0 of 21,000 trials hit
+it under a 200,000-step budget).
+
 #### 10.1.17 Compile-time builtins, `__auto_type` and small GNU forms
 
 All measured in `.evidence/builtin-probes/20260826-2c23684c/win_i.out`; GCC-14
@@ -3395,6 +3463,26 @@ and Clang-19 agree on every row.
   for `goto *`, and fail closed; the receipt counts each occurrence. The
   measurement that opens this is a lane whose first error is `E3029`.
 
+**Function names.** Inside every function body the identifiers `__func__`
+and `__FUNCTION__` denote one implicitly declared object of type
+`static const char[N]` holding the function's name: `sizeof __func__` is N,
+`_Generic` sees `const char *` after decay, `&__func__` is
+`const char (*)[N]`, and its address is an address constant (`static const
+char *p = __func__;` is accepted). `__builtin_constant_p(__func__[0])`
+follows the constant rule of this section and answers 0, which makes the
+oracles' disagreement on it (GCC-14 0, Clang-19 1) moot. `__PRETTY_FUNCTION__`
+is `E2921` (`pretty-function-unsupported`): `ORACLE_CONFLICT`, GCC-14
+spells it `main`, Clang-19 `int main(void)` (evidence `p17.out`); the pinned
+configuration builds no unit that uses it. Measured defect at revision
+1.9.32: `__func__` was `E2001` in 508 units.
+
+**Labeled last statement.** The value and type of a statement expression whose
+last statement is a labeled statement are those of the statement the label
+prefixes, recursively; `__label__` declarations inside the statement
+expression do not change its type (evidence `p19.c`, `ll`, both oracles
+compile `r = ({ __label__ out; ...; out: q; })`). Measured defect at revision
+1.9.32: the kernel's `___wait_event` was `E2102` in 41 units.
+
 #### 10.1.19 Integer constant expressions and array bounds
 
 The specification names an integer constant expression in a dozen places
@@ -3489,6 +3577,57 @@ and a file-scope `int probe[n];` were all accepted silently, and only an
 initializer made the bound reachable, so no `sizeof` of such a type meant
 anything.
 
+**Address constants.** `&E` is an address constant when `E` designates an
+object of static storage duration or a function, or an element or member of
+such an object reached through constant subscripts and member access
+(`&vals[1]`, `&s.m`, `&s.a[2]`); so are an array or function name that
+decays, a string literal, and `__func__`. An address constant converted by a
+cast to any pointer type or to an integer type at least as wide as a pointer
+stays an address constant. This holds in every static initializer position,
+nested aggregate members included (evidence `p19.c`, `tt` and `pv`).
+Measured defect at revision 1.9.32: `(void *)&sysctl_vals[0]` (`SYSCTL_ZERO`)
+was `E2208` in 54 units.
+
+**Integer constants as pointers; decay in static objects.** An integer
+constant expression converted by a cast to a pointer type is an address
+constant (`(void *) 2`, the kernel's `TIMER_ENTRY_STATIC`). The decay of any
+array lvalue that designates part of an object with static storage duration
+is an address constant as well: `init_s.x`, `arr2[1]`,
+`init_files.close_on_exec_init` (evidence `p25-static-init.c`, both oracles
+compile). Measured defect at revision 1.9.33: `DEFINE_STATIC_SRCU`,
+`DEFINE_KFIFO` and array-member initializers were `E2208` in 21 units.
+
+#### 10.1.20 Source locations
+
+Every token the preprocessor hands to the parser carries two spans. Its
+spelling span is the range of the characters that spell it, in the file where
+they were written; for a token produced by macro expansion that is the
+replacement list or the argument that spelled it. Its expansion span is the
+range, in the file the preprocessor was reading when the token was produced,
+of the outermost macro invocation that produced it, from the macro name
+through the closing parenthesis of its arguments; a token that no expansion
+produced has an expansion span equal to its spelling span. Tokens from an
+included or `-include`d file carry that file's identity in both spans.
+
+The parser composes node spans from expansion spans only. A composite node's
+span is the expansion span of its first token, extended to the end of the
+expansion span of its last token when both lie in the same file and the last
+does not precede the first; otherwise it is the expansion span of the first
+token alone. Composition is total: it never fails and never yields a span
+whose end precedes its start. A span is a range in exactly one file; nothing
+indexes a file buffer with a span from another file, and the parser never
+obtains a token's text by slicing a source buffer: it uses the token's own
+spelling. Diagnostics report the expansion span (the use site) and may add the
+spelling span as a note.
+
+Measured defect at revision 1.9.31: the parser merged spelling spans and
+sliced the main file's buffer with spans that named headers. The
+full-configuration survey (run `20260902T023241Z-87371`) recorded 2,768 of
+2,832 units panicking at those two places, and the three-line file
+`#define TAG s` / `struct s { int x; };` / `struct TAG v;` reproduces the
+first. The sixteen cohort units had parsed clean only because their parse
+lanes consume oracle-preprocessed text, where every span lies in one file.
+
 #### 10.1.18 C11 declaration forms
 
 The front end accepts the complete C11 declaration grammar, not the subset the
@@ -3505,9 +3644,75 @@ absent and are named here so their acceptance is checkable:
   parenthesised (`typedef int (fn)(void);`). Such a typedef may not be used to
   define a function body, and an object declared with it is a function
   declaration, never an object. This is 10 lanes, in 5 units.
+- **A declarator list may declare several functions.** `fn a, b;` with `fn`
+  a typedef naming a function type, and `int f(void), g(void);`, each declare
+  every listed name a function; none of them may be a definition. Measured
+  defect at revision 1.9.29: the list form was refused with `E1002` as a
+  deliberate implementation restriction from the attribute window ("no
+  consumer in this profile"); the kernel's `fs_param_type fs_param_is_bool,
+  fs_param_is_u32, ...` is that consumer, six lanes in three units.
+- **`typeof` of a dereferenced function pointer.** `*fp`, with `fp` a pointer
+  to function, is a function designator, so `typeof(*fp)` is that function
+  type and `extern typeof(*fp) h;` declares `h` a function exactly as
+  `extern typeof(g) h;` does (10.1.10). Measured defect at revision 1.9.29:
+  `typeof(g) h;` was accepted and `typeof(*fp) h;` refused while
+  `typeof(*fp) *q` was accepted; the kernel's static-call machinery writes the
+  refused form, four lanes in two units.
+- **Redeclaration.** An identifier with linkage — a function, or an object
+  declared `extern` — may be declared any number of times, in the same scope
+  or in nested ones, provided every declaration's type is compatible with the
+  previous ones (C11 6.2.7, 6.7p4); the declared type is their composite.
+  Attributes on a redeclaration accumulate. Declaring it again with an
+  incompatible type is `E2002` (`incompatible-redeclaration`) at the later
+  declarator, as is a second definition of an object or function, or a second
+  declaration of an identifier without linkage in the same scope. Measured,
+  both oracles: repeated compatible block-scope `extern` declarations accepted,
+  `extern int g(int)` then `extern long g(int)` refused. Revision 1.9.30 had
+  used `E2002` without ever defining it.
 - **Static assertions are member declarations.** `_Static_assert` may appear in
   a struct or union member list, including an anonymous one, where it declares
   no member and contributes nothing to layout. This is 2 lanes, in 1 unit.
+
+**Array parameters.** A parameter declared with array type, whatever the
+bound and whatever qualifiers or `static` stand inside the brackets, has the
+adjusted pointer type in the function's type and at every use of the
+parameter name. The adjustment happens once, when the declarator is built,
+and no other code path sees the array type (evidence `p19.c`, `m1`). Measured
+defect at revision 1.9.32: an initializer taken from an array parameter was
+`E2202` in 64 units (`pm_opp.h`).
+
+**Pointer sign in conversions.** In initialization, assignment, argument
+passing and `return`, a pointer to an integer type converts to a pointer to
+the same type with the other signedness, or between `char`, `signed char`
+and `unsigned char`; the conversion is accepted without a diagnostic (both
+oracles warn under `-Wpointer-sign`, which the kernel disables; evidence
+`p21.out`). Pointers to otherwise incompatible types stay `E2202`, which is
+`ORACLE_CONFLICT` resolved toward the refusal: GCC-14 makes
+`-Wincompatible-pointer-types` an error, Clang-19 a warning (the probe's
+swapped struct order measured that case as well). Measured defect at revision
+1.9.32: `DEFINE_CLASS(_gpiochip_for_each_data, ...)`, whose constructor takes
+`int *i` for an `unsigned int *` member, was `E2202` in 20 units.
+
+**Function pointers and `void *`.** A pointer to function converts to and
+from `void *` in initialization, assignment, argument passing, `return`,
+casts and both arms of the conditional operator; `(fn_t)0` and `(void *)0`
+are null pointer constants there, and `cond ? impl : (void *)0` has the
+function pointer type. Arithmetic on a `void *` operand follows 10.1.3 and
+its result may be converted to a function pointer the same way (evidence
+`p23-function-pointers.c`, both oracles compile). Measured defect at revision
+1.9.33: `_OF_DECLARE`, `SIMPLE_DEV_PM_OPS`, `DEFINE_STATIC_CALL`, `bd_holder`
+and `__pa_symbol` assignments were `E2202`, `E2102` or `E1003` in about 60
+units.
+
+**`_Pragma`, spellings and attribute placement.** `_Pragma("...")` is handled
+exactly where `#pragma` would be, including at file scope between
+declarations and inside a macro expansion; `__inline` and `__inline__` spell
+`inline`; `__restrict` and `__restrict__` spell `restrict`; an attribute may
+stand between any two declaration specifiers, as in `static const
+__attribute__((unused)) struct r` (evidence `p24-spellings.c`, both oracles
+compile). Measured defect at revision 1.9.33: `__bpf_kfunc_start_defs()`,
+`MEM_STATIC`, `__maybe_unused` between specifiers and `__restrict` parameters
+were `E1001` or `E1002` in 37 units.
 
 ### 10.4 EvoCPP Target Profile
 
@@ -3625,12 +3830,77 @@ used later is `E0108` (`poisoned-identifier-used`) at the use.
 Any other pragma is ignored-safe; the acceptance receipt lists the ignored
 pragma names it met.
 
+**Whitespace flag and stringization.** Every pp-token carries one flag:
+preceded by white space. A token spelled in a file has the flag when white
+space, a comment, or a line break inside a macro argument separates it from
+the previous token. A token produced by macro expansion keeps the flag its
+spelling had in the replacement list or argument, except that the first token
+of an expansion takes the flag of the macro name that began the invocation;
+when an expansion produces no tokens, the token that follows the invocation
+takes the flag if the macro name had it. Stringization (`#`) writes the
+spellings of the argument's tokens with exactly one space before each token
+whose flag is set, dropping leading and trailing white space. Measured
+(evidence `p15.out`, both oracles): with `A` = `a`, `B` = `b`, `E` empty and
+`F(x)` = `x`, `__stringify(A/B)` is `"a/b"`, `__stringify(A / B)` is
+`"a / b"`, `__stringify(A E B)` is `"a b"`, `__stringify(A E/B)` is `"a /b"`,
+`__stringify(F(A)B)` is `"ab"`, `__stringify(F( A )/B)` is `"a/b"`, and the
+kernel's `define_trace.h` computed include
+`__stringify(TRACE_INCLUDE_PATH/system.h)` is `"./trace_arm.h"`. The same
+flag decides the spelling of `-E` output; that output is a convenience, not
+an acceptance surface, because the parser and the survey consume the token
+stream. Measured defect at revision 1.9.31: a space was written before every
+expanded token, so the computed include named `. / trace_arm .h` and 56
+units of the full configuration failed with `E0105`.
+
+**Rescanning.** After a macro's replacement list has its arguments
+substituted, it is rescanned for further macro names together with the
+tokens that follow it in the sequence it was expanded in: the rest of the
+source file, the rest of the enclosing replacement list, or the rest of the
+enclosing argument. A function-like macro name that ends an expansion is
+invoked when the next token of that outer sequence is `(`, across line
+breaks. The name of the macro being replaced is not expanded during its own
+rescan (C11 6.10.3.4). Measured (evidence `p16.out`, both oracles): with
+`smp()` = `Z` and `G` = `smp`, `G()` is `Z`; `G` followed by `()` on the next
+line is `Z`; `H(1)()` with `H(x)` = `x smp` is `1 Z`; `K(G)()` with `K(x)` =
+`x` is `Z`. The kernel relies on this in `linux/atomic.h`, where
+`__atomic_acquire_fence` is defined as `smp_mb__after_atomic` and invoked as
+`__atomic_acquire_fence()`. Measured defect at revision 1.9.31: rescanning
+stopped at the end of the replacement list, leaving `smp_mb__after_atomic()`
+unexpanded in every unit that includes `linux/atomic.h`; the parse then
+reports `E2001`.
+
+**Directives inside macro arguments.** A conditional directive (`#if`,
+`#ifdef`, `#ifndef`, `#elif`, `#else`, `#endif`) met while the arguments of a
+function-like macro are being collected is processed as a directive, and the
+tokens of the branch taken join the argument; `#define` and `#undef` there are
+processed as well (evidence `p19-p20.out`, both oracles: `p20`, `p20b`).
+`#pragma` inside an argument is `E0113` (`directive-in-macro-argument`):
+`ORACLE_CONFLICT`, GCC-14 processes it ahead of the expansion, Clang-19
+refuses (`p20c`). Any other directive there is `E0113` too. Measured defect
+at revision 1.9.32: the directive lines were emitted as ordinary tokens
+(`#ifdef 1`), so `struct_group` in `skbuff.h`, whose member list carries
+`#ifdef CONFIG_NET_CLS_ACT`, failed with `E1001` in 562 units of the full
+configuration.
+
+**Empty arguments and variadic forwarding.** An argument may be empty. A
+named variadic parameter (`args...`) and `__VA_ARGS__` denote the exact
+sequence of the remaining arguments, empty ones and their separating commas
+included; when that sequence is substituted into a nested invocation and
+rescanned, the nested invocation's arguments are collected from the
+substituted tokens exactly as spelled. Measured (evidence `p18.out`, both
+oracles): `E(,)` is `[|]`, `V(,2)` is `[|2]`, `N()` is `[|]`, and
+`__MAP(3,__SC_ARGS,,r0,,r1,,r2)` through the kernel's `__MAP` chain yields
+`, r0 , r1 , r2`. Measured defect at revision 1.9.32: the chain dropped every
+argument after the first empty one (`h(,regs->regs[0],,,,)`), so
+`SYSCALL_DEFINEn` failed with `E1003` in about 50 units.
+
 Diagnostics of this section are front-end (preprocessor) diagnostics: `E0102`
 `unmatched-conditional`, `E0104` `error-directive`, `E0105`
 `include-not-found`, `E0106` `feature-query-malformed`, `E0107`
 `pragma-pack-unsupported`, `E0108` `poisoned-identifier-used`, `E0109`
 `counter-overflow`, `E0110` `invalid-token-paste`, `E0111`
-`conditional-operand-not-integer`, `E0112` `stray-token`.
+`conditional-operand-not-integer`, `E0112` `stray-token`, `E0113`
+`directive-in-macro-argument`.
 
 ## 11. Proof Checking Interface
 
@@ -3916,6 +4186,29 @@ certificate that parses but violates identity allocation, node shape, replay,
 extraction, registry, digest, or module binding is well-formed but invalid.
 Section 11.4 gives each category its own exit status.
 
+**A certificate with no region.** A certificate that admits no region block
+claims that `after.evo` is the canonical rendering (Section 9.4, consecutive
+identifiers in Section 8.6 order) of the module parsed from `before.evo`, and
+nothing else. The checker verifies it by rendering the parsed `before.evo`
+itself and comparing byte for byte; it does not compare against the raw input
+bytes, which need not be canonical (identifiers in a hand-written or reduced
+module may have gaps). A producer that admits no region emits that canonical
+rendering. Measured defect at revision 1.9.34: the checker compared against
+the raw bytes and refused every gapped input the producer had merely
+renumbered.
+
+**Bindings are recomputed from the recorded children.** The substitution a
+rewrite line records must equal the one the checker derives from the
+operation and children of the node the rewrite names, after the merges
+recorded before it; a producer therefore computes each binding from the
+node stream it emitted, never from an operand remapped by a later
+replacement in the same witness closure. Measured defect at revision 1.9.34:
+seven of eight reduced refusals from the randomized gate (rules
+`p0_010_icmp_eq_self`, `p0_100_fold_add`, `p0_103_fold_and`,
+`p0_104_fold_or`, `p0_109_fold_icmp_sle`) bound a class equal in content to
+the child's class but never unified with it; the checker's refusal was
+correct.
+
 ### 11.4 Exit Statuses
 
 ```text
@@ -4127,6 +4420,12 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.35 | 2026-09-02 | First randomized semantic gate campaign (21,000 programs, 0 semantic mismatches, 12 certificate refusals). Allocates `E3008` `interpreter-fuel-exhausted` as a host-resource stop (6.3, 10.4); defines what a certificate with no region claims and how the checker verifies it; states that rewrite bindings are recomputed from the recorded node children (11.3). The `evp1` versions paragraph already answers the scheduler-record question: budget and epoch lines belong to `evp2`. |
+| 1.9.34 | 2026-09-02 | Third full-configuration survey (2,445 of 2,798 clean). Defines array lvalue decay for members, flexible members and string literals (10.1.3); range designators and inferred bounds (10.1.12); function pointer and `void *` conversions, `_Pragma`, `__inline`, `__restrict` and attribute placement (10.1.18); integer constants cast to pointers and static array decay as address constants (10.1.19); library and GCC-only ctype builtins (10.1.14). Measured. |
+| 1.9.33 | 2026-09-02 | Second full-configuration survey (1,292 of 2,832 clean). Defines directives inside macro arguments (`E0113` for `#pragma`, an oracle conflict) and empty-argument variadic forwarding (10.4); `__func__` and `__FUNCTION__`, `E2921` for `__PRETTY_FUNCTION__` (oracle conflict), labeled last statements in statement expressions (10.1.17); array parameter adjustment and pointer sign in conversions (10.1.18); modifiable lvalues as one predicate (10.1.3); address constants through casts and nested aggregates (10.1.19). Measured. |
+| 1.9.32 | 2026-09-02 | Defines source locations: spelling and expansion spans, total span composition from expansion spans, no buffer slicing (10.1.20); defines the whitespace flag, stringization spacing, and rescanning into the outer token sequence (10.4). Three measured defects behind the full-configuration survey's 2,768 panics and 56 `E0105` units. Measured. |
+| 1.9.31 | 2026-09-01 | Admits the `__typeof` spelling; states that a statement expression inside a `typeof` operand scopes every declaration it makes, including ones with linkage, after an `extern` declared there escaped and made a later compatible declaration a redefinition; defines the redeclaration rule and `E2002`, which had been emitted without a definition. Measured. |
+| 1.9.30 | 2026-09-01 | Makes explicit in 10.1.18 that a declarator list may declare several functions and that `typeof` of a dereferenced function pointer names a function type; both were already implied and both were refused by the implementation, the first by a deliberate restriction the kernel turned out to need. |
 | 1.9.29 | 2026-09-01 | Rules the five gaps the wide-enum window named: character pointers of differing signedness convert implicitly (both oracles warn only); `__builtin_frame_address` accepted and fail-closed (`E3031`); signed shifts in constant expressions wrap in the operand width as both oracles do, so `1 << 31` is an enumerator; `void *` difference typed and fail-closed in lowering (`E3032`); 128-bit values accepted throughout the front end and fail-closed in execution (`E3033`). All measured. |
 | 1.9.28 | 2026-09-01 | Enumerators outside `int` widen the enumeration to the smallest representing type (one `ORACLE_CONFLICT` on the other constants' type, resolved to the C23/GCC rule); `__attribute` as a synonym; `void *` arithmetic in update forms; 128-bit assignment. All measured; the last two were one rule on two paths. |
 | 1.9.27 | 2026-09-01 | States that any pointer-typed expression may root a place, with one implementation and no list of admitted forms, after the fourth root form (call results, then conditionals) was refused; specifies `__builtin_strlen` as a constant on a literal and an ordinary call to the in-scope `strlen` otherwise (`E2927`). Measured. |

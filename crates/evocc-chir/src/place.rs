@@ -587,8 +587,7 @@ impl<'arena> MemoryPlace<'arena> {
                 actual: value_ty,
             });
         }
-        let modifiable =
-            !access_qualifiers.is_const && is_complete_modifiable_type(types, value_ty);
+        let modifiable = !access_qualifiers.is_const && is_modifiable_object_type(types, value_ty);
 
         Ok(Self {
             root,
@@ -1096,7 +1095,10 @@ fn is_object_type(kind: &TypeKind) -> bool {
     !matches!(kind, TypeKind::Void | TypeKind::Function { .. })
 }
 
-fn is_complete_modifiable_type(types: &TypeInterner, ty: TypeId) -> bool {
+/// Whether an object type itself is modifiable under C's recursive aggregate
+/// rule. Qualifiers below a pointer never qualify the pointer object.
+#[must_use]
+pub fn is_modifiable_object_type(types: &TypeInterner, ty: TypeId) -> bool {
     let Some(canonical) = types.get(ty) else {
         return false;
     };

@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 4,
+  "receiptId": "c30.full-configuration-parse-survey.v4",
+  "status": "MEASURED_NO_PANIC_WITH_DIAGNOSTIC_FRONTIER",
+  "authority": {
+    "contract": "tests/contracts/day9-acceptance-contract.json",
+    "authorityCommit": "8f9a59d94f85e107788b40a1815fab88531e86db",
+    "scope": "V parser semantic closure; F3 measure-only rerun",
+    "rulings": [
+      "prettyFunctionConflict",
+      "incompatiblePointerTypesConflict",
+      "secondSurveyRanking",
+      "fullConfigSurveyIsMeasureOnly"
+    ],
+    "contractSha256": "ad14d91530efed11b661af605e90c6240e95bc20d6d1fc27dd0714413c8724c1",
+    "specification": "docs/evoir-spec.md",
+    "specificationRevision": "1.9.33",
+    "specificationSha256": "77d904c53b48e0f0db1512c61d60cfcf50095492bad0aa0296e2b26d77507811"
+  },
+  "implementationCommit": "486519f75f81062f92bd60c446f696eada858fc6",
+  "subjectCommit": "6bbeaf444c7adcc9fb34a093f4944e927a71d7ae",
+  "subjectQualification": "The survey subject is the parser implementation commit plus its dashboard receipt only; no production or specification change intervened.",
+  "surveyRunChangedProductionOrSpecification": false,
+  "harness": {
+    "commit": "6cc7820557a3b91caed52a037ab5ce51315d778a",
+    "path": "tools/survey-cohort.py",
+    "sha256": "9371f30ba3e8bd7011ee50004f96c3e532737778d827aeeae45c02208c4741fc",
+    "changeSincePreviousSurvey": "none",
+    "projectionAuthority": {
+      "path": "tests/acceptance/day5-kernel-reconnaissance.py",
+      "sha256": "0df0707e49270f494e7fccaf3fc651558ecc5ffaea3be2e0dfb0fdb899387957",
+      "reusedFunctions": [
+        "first_saved_command",
+        "source_declaration",
+        "raw_projection",
+        "argv_sha256"
+      ]
+    }
+  },
+  "run": {
+    "id": "20260902T113345Z-48715",
+    "capture": ".evidence/full-config-parse-survey/20260902T113345Z-48715",
+    "command": "python3 tools/survey-cohort.py --evocc target/release/evocc --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --jobs 4 --timeout 60",
+    "returnCode": 0,
+    "releaseBinarySha256": "df67d701abc56180d5704fb22f3661fd98ce0b9856536f3ec8b8e3b51b0bdb4d"
+  },
+  "enumeration": {
+    "source": ".build/reference/gcc-lane-1/**/*.o.cmd",
+    "commandRecords": 2944,
+    "includedCTranslationUnits": 2798,
+    "excluded": 146,
+    "excludedByReason": {
+      "assembly-source": 67,
+      "host-compiler-program": 34,
+      "link-or-binary-transform": 43,
+      "vmlinux-synthetic-target": 2
+    },
+    "evidence": "enumeration.jsonl"
+  },
+  "classifications": {
+    "clean": 2445,
+    "diagnosed": 353,
+    "unavailable": 0,
+    "timeout": 0,
+    "panic": 0,
+    "sum": 2798,
+    "evidence": "results.jsonl"
+  },
+  "previousSurveyComparison": {
+    "runId": "20260902T074727Z-61593",
+    "sharedTargetUnits": 2798,
+    "transitions": {
+      "clean-to-clean": 1652,
+      "diagnosed-to-clean": 793,
+      "diagnosed-to-diagnosed": 353
+    },
+    "otherTransitions": 0,
+    "cleanDelta": 793,
+    "diagnosedDelta": -793,
+    "interpretation": "The six parser rules move exactly 793 shared target translation units from typed-diagnosed to clean. No clean unit regressed, no unit changed into panic, timeout, or unavailable, and the remaining typed diagnostics were not fixed during the survey."
+  },
+  "atRootFirstDiagnosticTop15": [
+    {"rank": 1, "finding": "E2102 invalid-projected-lvalue", "units": 127, "exampleUnit": "arch/arm64/kernel/acpi.c", "exampleRecord": "arch/arm64/kernel/.acpi.o.cmd"},
+    {"rank": 2, "finding": "E2906 designator-outside-object", "units": 64, "exampleUnit": "arch/arm64/kernel/cpuinfo.c", "exampleRecord": "arch/arm64/kernel/.cpuinfo.o.cmd"},
+    {"rank": 3, "finding": "E2202 invalid-initializer-type", "units": 34, "exampleUnit": "arch/arm64/kernel/paravirt.c", "exampleRecord": "arch/arm64/kernel/.paravirt.o.cmd"},
+    {"rank": 4, "finding": "E2102 invalid-update-operands", "units": 28, "exampleUnit": "arch/arm64/kernel/alternative.c", "exampleRecord": "arch/arm64/kernel/.alternative.o.cmd"},
+    {"rank": 5, "finding": "E2001 undeclared-identifier", "units": 27, "exampleUnit": "arch/arm64/kernel/pi/idreg-override.c", "exampleRecord": "arch/arm64/kernel/pi/.idreg-override.o.cmd"},
+    {"rank": 6, "finding": "E1001 expected-declaration", "units": 25, "exampleUnit": "arch/arm64/kernel/cpu_errata.c", "exampleRecord": "arch/arm64/kernel/.cpu_errata.o.cmd"},
+    {"rank": 7, "finding": "E2208 non-constant-static-initializer", "units": 21, "exampleUnit": "drivers/acpi/apei/ghes.c", "exampleRecord": "drivers/acpi/apei/.ghes.o.cmd"},
+    {"rank": 8, "finding": "E1002 expected-token", "units": 12, "exampleUnit": "arch/arm64/crypto/aes-ce-ccm-glue.c", "exampleRecord": "arch/arm64/crypto/.aes-ce-ccm-glue.o.cmd"},
+    {"rank": 9, "finding": "E1003 expected-expression", "units": 4, "exampleUnit": "drivers/usb/host/ohci-hcd.c", "exampleRecord": "drivers/usb/host/.ohci-hcd.o.cmd"},
+    {"rank": 10, "finding": "E2101 expected-modifiable-lvalue", "units": 3, "exampleUnit": "arch/arm64/kernel/fpsimd.c", "exampleRecord": "arch/arm64/kernel/.fpsimd.o.cmd"},
+    {"rank": 11, "finding": "E0102 unmatched-conditional", "units": 2, "exampleUnit": "kernel/module/main.c", "exampleRecord": "kernel/module/.main.o.cmd"},
+    {"rank": 12, "finding": "E2205 not-covered-day5", "units": 2, "exampleUnit": "drivers/firmware/efi/libstub/file.c", "exampleRecord": "drivers/firmware/efi/libstub/.file.o.cmd"},
+    {"rank": 13, "finding": "E0110 invalid-token-paste", "units": 1, "exampleUnit": "net/core/filter.c", "exampleRecord": "net/core/.filter.o.cmd"},
+    {"rank": 14, "finding": "E1005 invalid-declarator", "units": 1, "exampleUnit": "kernel/panic.c", "exampleRecord": "kernel/.panic.o.cmd"},
+    {"rank": 15, "finding": "E1006 invalid-character-literal", "units": 1, "exampleUnit": "lib/string_helpers.c", "exampleRecord": "lib/.string_helpers.o.cmd"}
+  ],
+  "timing": {
+    "parallelism": 4,
+    "perUnitTimeoutSeconds": 60,
+    "medianWallMilliseconds": 2221.246,
+    "maximumWallMilliseconds": 17531.316,
+    "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c",
+    "qualification": "Per-process wall time was observed under concurrent host load; it is coarse telemetry, not a benchmark."
+  },
+  "sealedEvidence": {
+    "seal": {"path": ".evidence/full-config-parse-survey/20260902T113345Z-48715/seal.json", "sha256": "f7fa5d32d4ef32146e46091df918261a56419d764a7153cbd1cee895fff7dfaa", "bytes": 704},
+    "captureManifest": {"files": 5603, "bytes": 29285897, "path": "capture-files.tsv", "sha256": "d655e6f775b8ec6c3b918d685f05176e6e4fce87bd054d42613b18ca5fb50a19"},
+    "summarySha256": "1d27e2d9655ac17e29d7cbcad253bc93fd4169f58a965c3ab0890fe9d1800820",
+    "resultsSha256": "2a8191551fab0707be2d3b38fef6151d7fc15d6a6ddaf31efc2cfbfcfac82d8e",
+    "enumerationSha256": "a87c93dc3a6e77add3db9e93cb74471418e26ddab2207b60a06b8681f6cfd930",
+    "argvSha256": "e470edd0562830bc462e870c33963037a577f5d6a1334dde234be75e0029fcab",
+    "independentVerification": "All 5603 manifest rows were re-hashed and every byte count and SHA-256 digest matched. Classification sum is 2798 and exclusion sum is 146."
+  },
+  "acceptanceGuard": {
+    "runId": "20260902T111559Z-80486",
+    "rawPreprocessClean": "16/16",
+    "gccPreprocessedParserClean": "16/16",
+    "clangPreprocessedParserClean": "16/16",
+    "dualOracleClean": "16/16",
+    "regressionsAgainstPrevious": 0,
+    "receiptSha256": "ee302e5c531cbe9433afd49040ed0525d9669534b9e820078825a5c8baea5bef",
+    "resultsSha256": "7fb9f0329a5eb34a920261f2e75d96d3c4a911547611946bd97ba396db1b9bc8"
+  },
+  "gates": {
+    "workspace": {"command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast", "passed": 1118, "failed": 0, "ignored": 0},
+    "clippy": {"command": "cargo clippy --workspace --all-targets -- -D warnings", "warnings": 0},
+    "format": {"command": "cargo fmt --all -- --check", "result": "clean"},
+    "ruff": {"command": "ruff check tests/acceptance tools", "result": "clean"},
+    "baseLayoutCorpus": "128/128 ORACLE_CONSENSUS; 0 mismatches",
+    "attributedLayoutCorpus": "22/22 ORACLE_CONSENSUS; 0 mismatches",
+    "offlineNoLocalReplay": "1118 passed / 0 failed / 0 ignored at 6bbeaf444c7adcc9fb34a093f4944e927a71d7ae; objects alternates absent",
+    "diffCheck": "clean"
+  },
+  "specGap": null,
+  "scopeDiscipline": "No problem discovered by the rerun was fixed. The 353-unit typed diagnostic distribution is input to later scoped windows, not part of this implementation."
+}

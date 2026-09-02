@@ -1,0 +1,136 @@
+{
+  "receiptId": "c30.token-location-preprocessor.red.v1",
+  "state": "RED",
+  "baseline": {
+    "commit": "8562deb9da04c7d993b39a24afc76f4aeeb1f176",
+    "description": "source-location, stringization-whitespace, and outer-sequence-rescan contracts specified; production behavior unchanged"
+  },
+  "authority": {
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.32",
+      "sections": [
+        "10.1.20 Source locations",
+        "10.4 Whitespace flag and stringization",
+        "10.4 Rescanning"
+      ],
+      "sha256": "0cf1c41f6e9c078e6b9642b88c2e8612f66a5ed458bda1d7dc382d59dfae13aa"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "T",
+      "ruling": "surveyMeasuredAnUnmeasuredPath",
+      "sha256": "c6669636459c7b522e4e3c2b37e0464b45292daaf929c1b50e02eb10b3061118"
+    }
+  },
+  "sealedOracleProbes": [
+    {
+      "source": ".evidence/builtin-probes/20260902-2c23684c/p15.c",
+      "sourceSha256": "6944656a313fed3952780d083918dcd088f114012dea2a39ad41583935c848fe",
+      "output": ".evidence/builtin-probes/20260902-2c23684c/p15.out",
+      "outputSha256": "39a16c54d07efbbad5412d3a785256d813b84ca229bb58db650641073fe1da65",
+      "oracleConsensus": true
+    },
+    {
+      "source": ".evidence/builtin-probes/20260902-2c23684c/p16.c",
+      "sourceSha256": "02b324c32f6b45f86182271576c6ed83d22aa2eb56338c84c1320f970e9ed2be",
+      "output": ".evidence/builtin-probes/20260902-2c23684c/p16.out",
+      "outputSha256": "4a7d18814f5123df1930cf5f6482caef2dd7b391cd49525f73066abd61c54591",
+      "oracleConsensus": true
+    }
+  ],
+  "declaredMissingCapabilities": [
+    {
+      "name": "token spelling and expansion locations",
+      "test": "crates/evocc-parser/tests/source_location_expansion.rs",
+      "command": "cargo test -p evocc-parser --test source_location_expansion -- --nocapture",
+      "passed": 0,
+      "failed": 3,
+      "buildErrors": 0,
+      "diagnostics": [
+        "same-file macro tag panics at SourceSpan::new because the spelling end precedes the expansion use",
+        "header macro tag retains the header spelling extent rather than the main-file invocation extent",
+        "expanded attribute text is recovered by slicing the main-file buffer at a header span and yields t instead of 8"
+      ]
+    },
+    {
+      "name": "preprocessing-token whitespace and stringization",
+      "test": "crates/evocc-cpp/tests/stringization_whitespace.rs",
+      "command": "cargo test -p evocc-cpp --test stringization_whitespace -- --nocapture",
+      "passed": 4,
+      "failed": 6,
+      "buildErrors": 0,
+      "failingRows": [
+        {
+          "row": 0,
+          "actual": "\". / trace_arm .h\"",
+          "expected": "\"./trace_arm.h\""
+        },
+        {
+          "row": 1,
+          "actual": "\"a / b\"",
+          "expected": "\"a/b\""
+        },
+        {
+          "row": 5,
+          "actual": "\"a / b\"",
+          "expected": "\"a /b\""
+        },
+        {
+          "row": 6,
+          "actual": "\"a b\"",
+          "expected": "\"ab\""
+        },
+        {
+          "row": 7,
+          "actual": "\"a / b\"",
+          "expected": "\"a/b\""
+        },
+        {
+          "row": 9,
+          "actual": "\"a .h\"",
+          "expected": "\"a.h\""
+        }
+      ]
+    },
+    {
+      "name": "macro replacement rescanning with the outer token sequence",
+      "test": "crates/evocc-cpp/tests/outer_sequence_rescanning.rs",
+      "command": "cargo test -p evocc-cpp --test outer_sequence_rescanning -- --nocapture",
+      "passed": 0,
+      "failed": 5,
+      "buildErrors": 0,
+      "diagnostic": "all five rows leave smp followed by parentheses instead of rescanning the joined sequence to Z"
+    }
+  ],
+  "workspaceRed": {
+    "command": "cargo test --workspace --no-fail-fast",
+    "passed": 1069,
+    "failed": 14,
+    "total": 1083,
+    "ignored": 0,
+    "buildErrors": 0,
+    "unexpectedFailures": 0,
+    "failedTargets": [
+      "-p evocc-cpp --test outer_sequence_rescanning",
+      "-p evocc-cpp --test stringization_whitespace",
+      "-p evocc-parser --test source_location_expansion"
+    ]
+  },
+  "staticGates": {
+    "clippy": {
+      "command": "cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "fmt": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    }
+  },
+  "specGap": null,
+  "productionChanges": []
+}

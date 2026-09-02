@@ -536,7 +536,7 @@ fn assert_unnamed_parameter(source: &str, expected: UnnamedParameterShape) {
         }
         UnnamedParameterShape::Array => {
             assert_eq!(span_text(source, parameter.span), "int [3]");
-            let [WrittenDeclaratorLayer::Array { bound, span }] =
+            let [WrittenDeclaratorLayer::Array { bound, span, .. }] =
                 parameter.written.layers.as_slice()
             else {
                 panic!("unnamed array must retain exactly one written array layer");
@@ -1091,7 +1091,7 @@ fn duplicate_e2002_rolls_back_without_a_ghost_symbol() {
     let (unit, diagnostic) = parse_without_panic(DUPLICATE_ROLLBACK, &arena);
     let diagnostic = diagnostic.expect("duplicate declaration diagnostic");
     assert_eq!(diagnostic.code, "E2002");
-    assert_eq!(diagnostic.message, "ordinary-identifier-redefinition: same");
+    assert_eq!(diagnostic.message, "incompatible-redeclaration: same");
     assert_eq!(diagnostic.span, span_of(DUPLICATE_ROLLBACK, "same", 1));
 
     let symbols = unit.symbols();
@@ -1584,7 +1584,7 @@ fn incompatible_storage_and_linkage_sequences_are_exact_e2002() {
         assert_eq!(diagnostic.code, "E2002", "{source:?}");
         assert_eq!(
             diagnostic.message,
-            format!("ordinary-identifier-redefinition: {name}"),
+            format!("incompatible-redeclaration: {name}"),
             "{source:?}"
         );
         assert_eq!(diagnostic.span, span_of(source, name, 1), "{source:?}");
@@ -1938,7 +1938,7 @@ fn same_scope_auto_then_extern_is_exact_e2002_and_rolls_back_function() {
     let (unit, diagnostic) = parse_without_panic(SAME_SCOPE_AUTO_EXTERN_CONFLICT, &arena);
     let diagnostic = diagnostic.expect("same-scope auto/extern conflict must diagnose");
     assert_eq!(diagnostic.code, "E2002");
-    assert_eq!(diagnostic.message, "ordinary-identifier-redefinition: x");
+    assert_eq!(diagnostic.message, "incompatible-redeclaration: x");
     assert_eq!(
         diagnostic.span,
         span_of(SAME_SCOPE_AUTO_EXTERN_CONFLICT, "x", 1)
@@ -1971,7 +1971,7 @@ fn unnamed_pointer_and_scalar_parameter_redeclarations_conflict_in_both_orders()
         let diagnostic = diagnostic.expect("incompatible function redeclaration must diagnose");
         assert_eq!(diagnostic.code, "E2002", "{source:?}");
         assert_eq!(
-            diagnostic.message, "ordinary-identifier-redefinition: f",
+            diagnostic.message, "incompatible-redeclaration: f",
             "{source:?}"
         );
         assert_eq!(diagnostic.span, span_of(source, "f", 1), "{source:?}");
@@ -2070,7 +2070,7 @@ fn top_qualified_parameters_are_compatible_but_unspecified_to_char_is_not() {
     let (unit, diagnostic) = parse_without_panic(UNSPECIFIED_THEN_CHAR, &arena);
     let diagnostic = diagnostic.expect("unspecified-to-char prototype must diagnose");
     assert_eq!(diagnostic.code, "E2002");
-    assert_eq!(diagnostic.message, "ordinary-identifier-redefinition: f");
+    assert_eq!(diagnostic.message, "incompatible-redeclaration: f");
     assert_eq!(diagnostic.span, span_of(UNSPECIFIED_THEN_CHAR, "f", 1));
     assert_eq!(unit.declarations().len(), 1);
     let first = function(&unit, 0);
@@ -2098,7 +2098,7 @@ fn conflicting_redeclarations_are_exact_e2002_and_leave_no_ghost_event() {
         assert_eq!(diagnostic.code, "E2002", "{source:?}");
         assert_eq!(
             diagnostic.message,
-            format!("ordinary-identifier-redefinition: {name}"),
+            format!("incompatible-redeclaration: {name}"),
             "{source:?}"
         );
         assert_eq!(diagnostic.span, span_of(source, name, 1), "{source:?}");

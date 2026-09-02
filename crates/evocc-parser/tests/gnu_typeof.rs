@@ -1,10 +1,11 @@
 //! `typeof` (specification 10.1.10): a type resolved by the front end.
 
-use evocc_chir::CHirUnit;
+use evocc_chir::interp::{interpret_scalar_function, InterpreterLimits};
+use evocc_chir::{CHirDecl, CHirUnit, ParameterSyntax};
 use evocc_common::{Arena, FileId, SourceFile};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::Parser;
-use evocc_types::TargetDataLayout;
+use evocc_types::{IntRank, TargetDataLayout, TypeKind};
 
 fn parse<'a>(source: &str, arena: &'a Arena) -> Result<CHirUnit<'a>, String> {
     let file = SourceFile::new(
@@ -35,6 +36,45 @@ fn accepts(source: &str) {
     }
 }
 
+fn assert_parameter_ranks_without_panic(source: &str, name: &str, expected: &[IntRank]) {
+    let arena = Arena::default();
+    let parsed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| parse(source, &arena)));
+    let parsed = parsed.unwrap_or_else(|_| {
+        panic!("valid nested typeof parameter declaration must not panic\n  source: {source}")
+    });
+    let unit = parsed.unwrap_or_else(|error| {
+        panic!(
+            "valid nested typeof parameter declaration must parse, got {error}\n  source: {source}"
+        )
+    });
+    let function = unit
+        .iter()
+        .find_map(|declaration| match declaration {
+            CHirDecl::Function(function) if function.name.spelling == name => Some(function),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("{name} must be retained as a function declaration"));
+    let ParameterSyntax::Prototype {
+        parameters,
+        variadic: false,
+    } = &function.parameters
+    else {
+        panic!("{name} must retain a non-variadic prototype")
+    };
+    assert_eq!(parameters.len(), expected.len(), "source: {source}");
+    for (parameter, expected_rank) in parameters.iter().zip(expected) {
+        let canonical = unit
+            .types()
+            .get(parameter.ty)
+            .expect("parameter types are interned");
+        assert_eq!(
+            canonical.kind,
+            TypeKind::Int(*expected_rank),
+            "wrong parameter type in {name}: {source}"
+        );
+    }
+}
+
 fn rejects(source: &str, code: &str) {
     let arena = Arena::default();
     match parse(source, &arena) {
@@ -61,11 +101,71 @@ fn layout_of(source: &str, name: &str) -> (u64, u32) {
     (layout.size_bytes, layout.align_bytes)
 }
 
+fn run_main(source: &str) -> i128 {
+    let arena = Arena::default();
+    let unit = parse(source, &arena).unwrap_or_else(|error| panic!("must parse, got {error}"));
+    let main = unit
+        .iter()
+        .find_map(|declaration| match declaration {
+            CHirDecl::Function(function)
+                if function.body.is_some() && function.name.spelling == "main" =>
+            {
+                Some(function.symbol)
+            }
+            _ => None,
+        })
+        .expect("fixture defines main");
+    interpret_scalar_function(&unit, main, InterpreterLimits::new(200_000))
+        .expect("fixture executes")
+        .return_value
+        .expect("main returns a value")
+        .mathematical_value(unit.types())
+        .expect("main returns an integer")
+}
+
 #[test]
 fn typeof_of_a_type_name_is_that_type() {
     assert_eq!(layout_of("typeof(int) x;\n", "x"), (4, 4));
     assert_eq!(layout_of("__typeof__(long) x;\n", "x"), (8, 8));
     assert_eq!(layout_of("typeof(char *) x;\n", "x"), (8, 8));
+}
+
+#[test]
+fn single_trailing_underscore_typeof_has_the_measured_value_semantics() {
+    assert_eq!(
+        run_main("int main(void) { int x = 41; __typeof(x) y = x + 1; return y; }\n"),
+        42,
+    );
+}
+
+#[test]
+fn statement_expression_typeof_scope_discards_every_declaration_kind() {
+    accepts(concat!(
+        "void f(void) { ",
+        "typeof(({ int local = 1; struct hidden { int x; }; ",
+        "extern void linked(void); local; })) value; ",
+        "int local = 2; struct hidden { long y; }; extern void linked(void); ",
+        "(void)value; (void)local; }\n",
+    ));
+}
+
+#[test]
+fn compatible_linkage_redeclarations_are_accepted_and_conflicts_are_exact_e2002() {
+    for source in [
+        "void f(void) { extern void c(void); extern void c(void); }\n",
+        "void f(void) { extern void c(void); { extern void c(void); } }\n",
+        "void f(void) { ({ extern void c(void); 1; }); ({ extern void c(void); 1; }); }\n",
+        "void f(void) { do { extern void c(void); } while (0); do { extern void c(void); } while (0); }\n",
+        "void f(void) { extern void c(void) __attribute__((unused)); extern void c(void); }\n",
+        "void f(void) { extern void c(void); extern void c(void) __attribute__((unused)); }\n",
+    ] {
+        accepts(source);
+    }
+
+    let arena = Arena::default();
+    let error = parse("extern int g(int); extern long g(int);\n", &arena)
+        .expect_err("incompatible redeclaration must be rejected");
+    assert_eq!(error, "E2002: incompatible-redeclaration: g");
 }
 
 #[test]
@@ -100,6 +200,51 @@ fn typeof_nests_and_composes_with_declarators() {
     accepts("struct s { typeof(int) m; };\n");
     accepts("int g(void) { return sizeof(typeof(int)); }\n");
     accepts("int h(void) { return (typeof(int))1; }\n");
+}
+
+#[test]
+fn nested_typeof_in_the_second_parameter_is_typed_without_panicking() {
+    assert_parameter_ranks_without_panic(
+        "long second(int a, typeof(__builtin_types_compatible_p(typeof(0L), long)) len);\n",
+        "second",
+        &[IntRank::Int, IntRank::Int],
+    );
+}
+
+#[test]
+fn nested_typeof_in_the_third_nonfinal_parameter_is_typed_without_panicking() {
+    assert_parameter_ranks_without_panic(
+        "long third(int a, long b, typeof(__builtin_types_compatible_p(typeof(0L), long)) len, unsigned int tail);\n",
+        "third",
+        &[IntRank::Int, IntRank::Long, IntRank::Int, IntRank::UInt],
+    );
+}
+
+#[test]
+fn nested_typeof_in_the_last_parameter_is_typed_without_panicking() {
+    assert_parameter_ranks_without_panic(
+        "long last(int a, long b, unsigned int c, typeof(__builtin_types_compatible_p(typeof(0L), long)) len);\n",
+        "last",
+        &[IntRank::Int, IntRank::Long, IntRank::UInt, IntRank::Int],
+    );
+}
+
+#[test]
+fn three_nested_typeof_levels_are_typed_without_panicking() {
+    assert_parameter_ranks_without_panic(
+        "long deep(int a, typeof(__builtin_types_compatible_p(typeof(__builtin_types_compatible_p(typeof(0L), long)), _Bool)) len);\n",
+        "deep",
+        &[IntRank::Int, IntRank::Int],
+    );
+}
+
+#[test]
+fn nested_typeof_may_resolve_an_earlier_parameter_without_panicking() {
+    assert_parameter_ranks_without_panic(
+        "long h(unsigned long start, __typeof(__builtin_choose_expr(__builtin_types_compatible_p(typeof(start), long), 1L, 1UL)) len);\n",
+        "h",
+        &[IntRank::ULong, IntRank::ULong],
+    );
 }
 
 #[test]

@@ -10,18 +10,19 @@ use evocc_chir::integer::{
     CIntegerType,
 };
 use evocc_chir::{
-    attribute_query_target, builtin_constant_p, record_member_path, AppliedAttribute, AsmOperand,
-    AsmStmt, AssignmentOp, Attribute, AttributeArgument, AttributePlacement, AttributeQueryTarget,
-    BinaryOp, CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, CharLit,
-    CharPrefix, CheckedArithmeticOp, EnumeratorDecl, ExprCategory, ExprFacts, FieldProjection,
-    FloatLit, FloatSuffix, FrontEndBuiltinRecord, FunctionDecl, GenericSelectionRecord,
-    IndexProjection, InitAction, InitPlan, InitializerDesignation, IntBase, IntLit, IntSuffix,
-    MemoryPlace, ObjectDecl, ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceProjection,
-    PlaceRoot, PointerTypeDesc, RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName,
-    StorageClass, StringLit, StringPrefix, SubobjectPath, SubobjectStep, SymbolData, SymbolId,
-    SymbolKind, SymbolTable, SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl,
-    TypeofOperand, UnaryOp, UpdateOp, VarArgsBuiltinOp, WrittenDeclarator, WrittenDeclaratorLayer,
-    WrittenDesignator, WrittenInitializer,
+    attribute_query_target, builtin_constant_p, is_modifiable_object_type, record_member_path,
+    statement_expression_value, AppliedAttribute, AsmOperand, AsmStmt, AssignmentOp, Attribute,
+    AttributeArgument, AttributePlacement, AttributeQueryTarget, BinaryOp, CHirBlockItem, CHirDecl,
+    CHirExpr, CHirForInit, CHirStmt, CHirUnit, CharLit, CharPrefix, CheckedArithmeticOp,
+    EnumeratorDecl, ExprCategory, ExprFacts, FieldProjection, FloatLit, FloatSuffix,
+    FrontEndBuiltinRecord, FunctionDecl, GenericSelectionRecord, IndexProjection, InitAction,
+    InitPlan, InitializerDesignation, IntBase, IntLit, IntSuffix, MemoryPlace, ObjectDecl,
+    ObjectInitializer, ParameterDecl, ParameterSyntax, PlaceProjection, PlaceRoot, PointerTypeDesc,
+    RecordMember, ScalarPlace, ScopeId, ScopeKind, SpannedName, StorageClass, StringLit,
+    StringPrefix, SubobjectPath, SubobjectStep, SymbolData, SymbolId, SymbolKind, SymbolTable,
+    SymbolTableError, TagDecl, TagMembers, TypeSpecifier, TypedefDecl, TypeofOperand, UnaryOp,
+    UpdateOp, VarArgsBuiltinOp, WrittenDeclarator, WrittenDeclaratorLayer, WrittenDesignator,
+    WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_cpp::{pragma_pack_action, PragmaPackAction};
@@ -49,6 +50,8 @@ enum DerivedDeclarator {
     },
     Array {
         bound: ArrayBound,
+        parameter_qualifiers: Qualifiers,
+        static_bound: bool,
         span: SourceSpan,
     },
     Function {
@@ -249,7 +252,7 @@ pub struct Parser<'src, 'arena> {
     tokens: Vec<Token>,
     pos: usize,
     file: FileId,
-    source: &'src str,
+    _source_lifetime: std::marker::PhantomData<&'src str>,
     had_error: bool,
     error_count: usize,
     error_limit: Option<NonZeroUsize>,
@@ -304,7 +307,7 @@ pub struct Parser<'src, 'arena> {
 }
 
 impl<'src, 'arena> Parser<'src, 'arena> {
-    pub fn new(mut tokens: Vec<Token>, file: FileId, source: &'src str) -> Self {
+    pub fn new(mut tokens: Vec<Token>, file: FileId, _source: &'src str) -> Self {
         // Preprocessing numbers and `other` characters remain available to
         // macro expansion through translation phase 4. If either survives to
         // this phase-7 boundary, it has no C-token form and is diagnosed at
@@ -324,9 +327,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         for token in &mut tokens {
             let spelling = match &token.text {
                 TokenText::Decoded(text) => Some(text.as_str()),
-                TokenText::Borrowed => {
-                    source.get(token.span.byte_start as usize..token.span.byte_end as usize)
-                }
+                TokenText::Borrowed => None,
             };
             if token.kind == TokenKind::Identifier {
                 token.kind = match spelling {
@@ -380,7 +381,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             tokens,
             pos: 0,
             file,
-            source,
+            _source_lifetime: std::marker::PhantomData,
             had_error: lexical_diagnostic.is_some(),
             error_count: usize::from(lexical_diagnostic.is_some()),
             error_limit: None,
@@ -584,9 +585,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if let evocc_lex::TokenText::Decoded(text) = &tok.text {
             return text;
         }
-        self.source
-            .get(tok.span.byte_start as usize..tok.span.byte_end as usize)
-            .unwrap_or("")
+        ""
     }
 
     fn span(&self) -> SourceSpan {
@@ -607,7 +606,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         // provenance model, fail closed to the start token as the node's
         // primary origin. Combining offsets from different files would create
         // a range that is valid in neither source.
-        if start.file != end.file {
+        if start.file != end.file || end.byte_start < start.byte_start {
             return start;
         }
         SourceSpan::new(
@@ -684,6 +683,40 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     .symbol(*symbol)
                     .is_ok_and(|symbol| symbol.spelling() == spelling)
             })
+    }
+
+    fn install_temporary_parameter_shadows(&mut self) {
+        let mut installed = HashSet::new();
+        for shadow in self.temporary_parameter_shadows.clone() {
+            if shadow.scope != self.current_scope || !installed.insert(shadow.spelling.clone()) {
+                continue;
+            }
+            if self
+                .symbol_in_current_scope(&shadow.spelling)
+                .and_then(|symbol| self.symbols.symbol(symbol).ok())
+                .is_some_and(|symbol| {
+                    symbol.data()
+                        == SymbolData::Parameter {
+                            storage: StorageClass::None,
+                        }
+                        && symbol.ty() == shadow.ty
+                        && symbol.span() == shadow.span
+                })
+            {
+                continue;
+            }
+            self.symbols
+                .declare(
+                    shadow.scope,
+                    &shadow.spelling,
+                    SymbolData::Parameter {
+                        storage: StorageClass::None,
+                    },
+                    shadow.ty,
+                    shadow.span,
+                )
+                .expect("temporary parameter spellings are unique per probe");
+        }
     }
 
     fn linked_symbol_in_parent_scopes(&self, spelling: &str) -> Option<SymbolId> {
@@ -954,7 +987,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn report_redefinition(&mut self, name: &SpannedName) {
         self.report(
             "E2002",
-            format!("ordinary-identifier-redefinition: {}", name.spelling),
+            format!("incompatible-redeclaration: {}", name.spelling),
             name.span,
         );
     }
@@ -1227,15 +1260,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             SymbolKind::Function => ExprFacts::function_designator(symbol.ty()),
             SymbolKind::Enumerator => ExprFacts::value(symbol.ty()),
             SymbolKind::Object | SymbolKind::Parameter => {
-                let canonical = self
-                    .types
-                    .get(symbol.ty())
-                    .expect("symbol types are interned before binding");
-                let modifiable = !canonical.qualifiers.is_const
-                    && !matches!(
-                        canonical.kind,
-                        TypeKind::Array { .. } | TypeKind::Function { .. }
-                    );
+                let modifiable = is_modifiable_object_type(&self.types, symbol.ty());
                 let addressable = symbol.storage_class() != Some(StorageClass::Register);
                 ExprFacts::lvalue(symbol.ty(), modifiable, addressable)
                     .expect("ordinary object facts are internally consistent")
@@ -1362,6 +1387,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E1001", "expected-declaration", self.span());
             return None;
         };
+        self.validate_array_parameter_modifiers(&declarator.derived, false);
         if auto_type_span.is_some()
             && (storage == StorageClass::Typedef || !declarator.derived.is_empty())
         {
@@ -1399,31 +1425,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.types.get(full_type).map(|ty| &ty.kind),
                 Some(TypeKind::Function { .. })
             )
+            && self.peek_kind() == Some(TokenKind::LBrace)
         {
-            let written_parameters = declarator.derived.iter().find_map(|layer| match layer {
-                DerivedDeclarator::Function {
-                    parameters, scope, ..
-                } => Some((parameters.clone(), *scope)),
-                _ => None,
-            });
-            let inherited_parameters = specifier.inherited_function_parameters.clone();
-            let inherited_from_specifier = written_parameters.is_none();
-            let (mut parameters, parameter_scope) = if let Some(written) = written_parameters {
-                written
-            } else if let Some(mut inherited) = inherited_parameters {
-                if let ParameterSyntax::Prototype { parameters, .. } = &mut inherited {
-                    for parameter in parameters {
-                        parameter.symbol = None;
-                        parameter.name = None;
-                    }
-                }
-                let scope =
-                    self.create_scope(ScopeKind::FunctionPrototype, Some(declarator.name.span));
-                (inherited, scope)
-            } else {
-                self.report("E1001", "expected-declaration", declarator.name.span);
-                return None;
-            };
+            let (mut parameters, parameter_scope, inherited_from_specifier) =
+                self.function_declaration_parameters(&declarator, &specifier, full_type)?;
             let symbol = self.declare_symbol(
                 &declarator.name,
                 SymbolData::Function { storage },
@@ -1444,7 +1449,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.current_scope = parameter_scope;
                 self.bind_parameters(&mut parameters);
                 let outer_parameters = self.current_function_parameters.replace(parameters.clone());
-                let body = self.parse_function_body();
+                let body = self.parse_function_body(&declarator.name);
                 self.current_function_parameters = outer_parameters;
                 self.validate_asm_goto_labels(body)?;
                 self.validate_statement_expression_jumps(body)?;
@@ -1508,12 +1513,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return Some(declarations);
         }
 
-        let symbol_data = if storage == StorageClass::Typedef {
-            SymbolData::Typedef
-        } else {
-            SymbolData::Object { storage }
-        };
-
         // C11 6.7: one declaration may carry several init-declarators. Each
         // gets its own symbol and initializer in sequence, so a later
         // initializer can refer to an earlier name, and every one receives the
@@ -1524,6 +1523,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             full_type: TypeId,
             symbol: SymbolId,
             initializer: Option<ObjectInitializer<'arena>>,
+            function_parameters: Option<ParameterSyntax>,
             specifier: TypeSpecifier,
             written: WrittenDeclarator,
             attributes: Vec<Attribute>,
@@ -1552,6 +1552,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2915", "auto-type-misuse", declarator.span);
                 return None;
             }
+            let is_function = storage != StorageClass::Typedef
+                && matches!(
+                    self.types.get(full_type).map(|ty| &ty.kind),
+                    Some(TypeKind::Function { .. })
+                );
+            if is_function && has_initializer {
+                self.report("E2202", "invalid-initializer-type", declarator.span);
+                return None;
+            }
+            let parsed_function_parameters = if is_function {
+                Some(self.function_declaration_parameters(&declarator, &specifier, full_type)?)
+            } else {
+                None
+            };
             let inherited_function_syntax = if storage == StorageClass::Typedef
                 && matches!(
                     self.types.get(full_type).map(|ty| &ty.kind),
@@ -1568,6 +1582,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             } else {
                 None
             };
+            let symbol_data = if storage == StorageClass::Typedef {
+                SymbolData::Typedef
+            } else if is_function {
+                SymbolData::Function { storage }
+            } else {
+                SymbolData::Object { storage }
+            };
             let symbol = self.declare_symbol(&declarator.name, symbol_data, full_type);
             self.add_entity_attributes(symbol, &attributes);
             full_type = self
@@ -1575,10 +1596,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .symbol(symbol)
                 .expect("declared symbols belong to the parser symbol table")
                 .ty();
+            let function_parameters =
+                if let Some((mut parameters, parameter_scope, _)) = parsed_function_parameters {
+                    let outer_scope = self.current_scope;
+                    self.current_scope = parameter_scope;
+                    self.bind_parameters(&mut parameters);
+                    self.current_scope = outer_scope;
+                    self.set_inherited_function_parameters(symbol, parameters.clone());
+                    Some(parameters)
+                } else {
+                    None
+                };
             if let Some(parameters) = inherited_function_syntax {
                 self.set_inherited_function_parameters(symbol, parameters);
             }
-            if has_initializer && storage != StorageClass::Typedef {
+            if has_initializer && storage != StorageClass::Typedef && !is_function {
                 self.mark_definition(symbol, &declarator.name);
             }
             let mut declaration_specifier = specifier.surface.clone();
@@ -1636,6 +1668,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 full_type,
                 symbol,
                 initializer,
+                function_parameters,
                 specifier: declaration_specifier,
                 written,
                 attributes,
@@ -1656,23 +1689,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E1001", "expected-declaration", self.span());
                 return None;
             };
+            self.validate_array_parameter_modifiers(&next.derived, false);
             let (next_asm_label, next_asm_label_span) = self.parse_optional_asm_label()?;
             next_attributes
                 .extend(self.parse_attribute_specifiers(AttributePlacement::AfterDeclarator));
             let mut next_type = self.apply_declarator(specifier.surface.type_id(), &next.derived);
             next_type = self.apply_attributes_to_type(next_type, &mut next_attributes);
-            if storage != StorageClass::Typedef
-                && matches!(
-                    self.types.get(next_type).map(|ty| &ty.kind),
-                    Some(TypeKind::Function { .. })
-                )
-            {
-                // A function declarator inside an init-declarator list is legal
-                // C but has no consumer in this profile; refuse it plainly
-                // rather than mis-declaring it as an object.
-                self.report("E1002", "expected-token: ;", next.name.span);
-                return None;
-            }
             written = self.written_declarator(&next);
             declarator = next;
             full_type = next_type;
@@ -1687,9 +1709,27 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .expect("at least one declarator was parsed");
         let end_span = self.declaration_end(last_name_span);
         let declaration_span = self.merge_span(start_span, end_span);
+        if context == DeclarationContext::ForInitializer {
+            if let Some(entry) = pending
+                .iter()
+                .find(|entry| entry.function_parameters.is_some())
+            {
+                self.report(
+                    "E1206",
+                    "function-declaration-in-for-initializer",
+                    entry.declarator.name.span,
+                );
+                return None;
+            }
+        }
         if let Some(span) = inline_spans.first().copied() {
-            self.report("E1401", "inline-specifier-on-non-function", span);
-            return None;
+            if pending
+                .iter()
+                .any(|entry| entry.function_parameters.is_none())
+            {
+                self.report("E1401", "inline-specifier-on-non-function", span);
+                return None;
+            }
         }
         let mut declarations = self.side_declarations.split_off(side_start);
         if let Some(event) = specifier.tag_event {
@@ -1711,6 +1751,23 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     attributes: entry.attributes,
                     span: declaration_span,
                 })
+            } else if let Some(parameters) = entry.function_parameters {
+                CHirDecl::Function(FunctionDecl {
+                    symbol: entry.symbol,
+                    name: entry.declarator.name,
+                    ty: entry.full_type,
+                    return_specifier: entry.specifier,
+                    written: entry.written,
+                    parameters,
+                    storage,
+                    asm_label: entry.asm_label,
+                    asm_label_span: entry.asm_label_span,
+                    inline_spans: inline_spans.clone(),
+                    gnu_extension_spans: gnu_extension_spans.clone(),
+                    attributes: entry.attributes,
+                    body: None,
+                    span: declaration_span,
+                })
             } else {
                 CHirDecl::Object(ObjectDecl {
                     symbol: entry.symbol,
@@ -1730,6 +1787,75 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             declarations.push(self.alloc_node(declaration));
         }
         Some(declarations)
+    }
+
+    fn function_declaration_parameters(
+        &mut self,
+        declarator: &ParsedDeclarator,
+        specifier: &ParsedSpecifier<'arena>,
+        function_type: TypeId,
+    ) -> Option<(ParameterSyntax, ScopeId, bool)> {
+        if let Some(written) = declarator.derived.iter().find_map(|layer| match layer {
+            DerivedDeclarator::Function {
+                parameters, scope, ..
+            } => Some((parameters.clone(), *scope)),
+            _ => None,
+        }) {
+            return Some((written.0, written.1, false));
+        }
+
+        let inherited = specifier.inherited_function_parameters.clone().or_else(|| {
+            self.parameter_syntax_from_function_type(function_type, specifier.surface.span())
+        });
+        let Some(mut inherited) = inherited else {
+            self.report("E1001", "expected-declaration", declarator.name.span);
+            return None;
+        };
+        if let ParameterSyntax::Prototype { parameters, .. } = &mut inherited {
+            for parameter in parameters {
+                parameter.symbol = None;
+                parameter.name = None;
+            }
+        }
+        let scope = self.create_scope(ScopeKind::FunctionPrototype, Some(declarator.name.span));
+        Some((inherited, scope, true))
+    }
+
+    fn parameter_syntax_from_function_type(
+        &self,
+        function_type: TypeId,
+        span: SourceSpan,
+    ) -> Option<ParameterSyntax> {
+        let TypeKind::Function { parameters, .. } = &self.types.get(function_type)?.kind else {
+            return None;
+        };
+        match parameters {
+            FunctionParameters::Unspecified => Some(ParameterSyntax::Unspecified),
+            FunctionParameters::Prototype { types, variadic } => {
+                let parameters = types
+                    .iter()
+                    .map(|ty| ParameterDecl {
+                        symbol: None,
+                        name: None,
+                        ty: *ty,
+                        // A declaration through a semantic function type has
+                        // no written parameter list of its own. These nodes
+                        // preserve the canonical parameter types only.
+                        specifier: TypeSpecifier::Builtin { ty: *ty, span },
+                        written: WrittenDeclarator {
+                            layers: Vec::new(),
+                            span,
+                        },
+                        attributes: Vec::new(),
+                        span,
+                    })
+                    .collect();
+                Some(ParameterSyntax::Prototype {
+                    parameters,
+                    variadic: *variadic,
+                })
+            }
+        }
     }
 
     fn parse_written_initializer(&mut self) -> Option<WrittenInitializer<'arena>> {
@@ -2214,6 +2340,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     || self.address_constant_through_integer_cast(operand)
                     || self.eval_integer_constant_expression(operand).is_ok()
             }
+            CHirExpr::Cast(_, _, _) if self.address_constant_through_integer_cast(expression) => {
+                true
+            }
             CHirExpr::Ternary(condition, when_true, when_false, _) => self
                 .constant_arithmetic_truth(condition)
                 .is_some_and(|condition| {
@@ -2227,18 +2356,29 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let CHirExpr::Cast(target, operand, _) = expression else {
             return false;
         };
-        if !matches!(
-            self.types.get(*target).map(|ty| &ty.kind),
-            Some(TypeKind::Int(_) | TypeKind::Enum(_) | TypeKind::GnuInt128(_))
-        ) {
+        if !self.integer_type_can_hold_pointer(*target) {
             return false;
         }
         self.is_static_address_constant(operand)
     }
 
+    fn integer_type_can_hold_pointer(&self, ty: TypeId) -> bool {
+        if !matches!(
+            self.types.get(ty).map(|ty| &ty.kind),
+            Some(TypeKind::Int(_) | TypeKind::Enum(_) | TypeKind::GnuInt128(_))
+        ) {
+            return false;
+        }
+        let layout = TargetDataLayout::aarch64_unknown_linux_gnu();
+        layout
+            .layout_of(&self.types, ty)
+            .is_ok_and(|integer| integer.size_bytes >= layout.pointer_layout().size_bytes)
+    }
+
     fn lvalue_has_static_address(&self, expression: &CHirExpr<'_>) -> bool {
         match expression {
             CHirExpr::Ident { symbol, .. } => self.symbol_has_static_address(*symbol),
+            CHirExpr::MemoryRead { place, .. } => self.memory_place_has_static_address(place),
             CHirExpr::Member(base, _, _) => self.lvalue_has_static_address(base),
             CHirExpr::Index(base, index, _) => {
                 self.is_static_address_constant(base)
@@ -2248,6 +2388,26 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::CompoundLit(_, _, _) => self.current_scope == self.symbols.file_scope(),
             _ => false,
         }
+    }
+
+    fn memory_place_has_static_address(&self, place: &MemoryPlace<'_>) -> bool {
+        let root_is_static = match place.root() {
+            PlaceRoot::Object { symbol } => self.symbol_has_static_address(*symbol),
+            PlaceRoot::PointerExpression { pointer, .. } => {
+                self.is_static_address_constant(pointer)
+            }
+            PlaceRoot::CompoundLiteral { .. } => self.current_scope == self.symbols.file_scope(),
+        };
+        root_is_static
+            && place
+                .projections()
+                .iter()
+                .all(|projection| match projection {
+                    PlaceProjection::Index(index) => {
+                        self.eval_integer_constant_expression(index.index()).is_ok()
+                    }
+                    PlaceProjection::Field(_) => true,
+                })
     }
 
     fn symbol_has_static_address(&self, symbol: SymbolId) -> bool {
@@ -3533,15 +3693,128 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
-    fn parse_function_body(&mut self) -> &'arena CHirStmt<'arena> {
+    fn parse_function_body(&mut self, function_name: &SpannedName) -> &'arena CHirStmt<'arena> {
         let outer_loop_depth = std::mem::replace(&mut self.loop_depth, 0);
         let outer_switch_depth = std::mem::replace(&mut self.switch_depth, 0);
+        let implicit_function_name = self
+            .function_body_mentions_implicit_name()
+            .then(|| self.declare_implicit_function_name(function_name));
         // The function's outer compound statement and its parameters share
         // one function scope. Nested compounds create block scopes normally.
-        let body = self.parse_compound_statement(false);
+        let parsed_body = self.parse_compound_statement(false);
         self.loop_depth = outer_loop_depth;
         self.switch_depth = outer_switch_depth;
-        body
+        let Some((_, function_name_declaration)) = implicit_function_name else {
+            return parsed_body;
+        };
+        let CHirStmt::Compound(items, span) = parsed_body else {
+            unreachable!("a function body is one compound statement")
+        };
+        let mut with_function_name = Vec::with_capacity(items.len() + 1);
+        with_function_name.push(CHirBlockItem::Declaration(function_name_declaration));
+        with_function_name.extend(items.iter().cloned());
+        self.alloc_node(CHirStmt::Compound(with_function_name, *span))
+    }
+
+    fn function_body_mentions_implicit_name(&self) -> bool {
+        let mut brace_depth = 0_u32;
+        for token in &self.tokens[self.pos..] {
+            match token.kind {
+                TokenKind::LBrace => brace_depth = brace_depth.saturating_add(1),
+                TokenKind::RBrace => {
+                    if brace_depth == 0 {
+                        return false;
+                    }
+                    brace_depth -= 1;
+                    if brace_depth == 0 {
+                        return false;
+                    }
+                }
+                TokenKind::Identifier if brace_depth > 0 => {
+                    if matches!(self.token_text(token), "__func__" | "__FUNCTION__") {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    fn declare_implicit_function_name(
+        &mut self,
+        function_name: &SpannedName,
+    ) -> (SymbolId, &'arena CHirDecl<'arena>) {
+        let literal = StringLit::single(function_name.spelling.clone(), StringPrefix::None);
+        let bound = literal
+            .explicit_unit_count()
+            .and_then(|count| count.checked_add(1))
+            .expect("a C identifier has a representable narrow string length");
+        let character = self.intern(
+            TypeKind::Int(IntRank::Char),
+            Qualifiers {
+                is_const: true,
+                ..Qualifiers::default()
+            },
+        );
+        let array = self.intern(
+            TypeKind::Array {
+                element: character,
+                bound: ArrayBound::Fixed(bound),
+            },
+            Qualifiers::default(),
+        );
+        let name = SpannedName {
+            spelling: "__func__".to_owned(),
+            span: function_name.span,
+        };
+        let symbol = self.declare_symbol(
+            &name,
+            SymbolData::Object {
+                storage: StorageClass::Static,
+            },
+            array,
+        );
+        self.mark_definition(symbol, &name);
+        let value = self.alloc_node(CHirExpr::StringLit(literal.clone(), function_name.span));
+        let initializer = ObjectInitializer::new(
+            WrittenInitializer::Expression(value),
+            InitPlan::new(
+                array,
+                vec![InitAction::store_string(
+                    SubobjectPath::root(),
+                    array,
+                    literal,
+                    function_name.span,
+                )],
+            ),
+        );
+        let declaration = self.alloc_node(CHirDecl::Object(ObjectDecl {
+            symbol,
+            name,
+            ty: array,
+            specifier: TypeSpecifier::Builtin {
+                ty: character,
+                span: function_name.span,
+            },
+            written: WrittenDeclarator {
+                layers: vec![WrittenDeclaratorLayer::Array {
+                    bound: ArrayBound::Fixed(bound),
+                    parameter_qualifiers: Qualifiers::default(),
+                    static_bound: false,
+                    span: function_name.span,
+                }],
+                span: function_name.span,
+            },
+            storage: StorageClass::Static,
+            initializer: Some(initializer),
+            asm_label: None,
+            asm_label_span: None,
+            gnu_extension_spans: Vec::new(),
+            attributes: Vec::new(),
+            span: function_name.span,
+        }));
+        (symbol, declaration)
     }
 
     fn in_function_scope(&self) -> bool {
@@ -3786,8 +4059,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     ) -> Option<(Vec<AttributeArgument>, SourceSpan)> {
         let mut arguments = Vec::new();
         let mut depth = 0_usize;
-        let mut first: Option<SourceSpan> = None;
-        let mut last: Option<SourceSpan> = None;
+        let mut argument_start: Option<usize> = None;
         loop {
             let Some(kind) = self.peek_kind() else {
                 self.report("E2903", "malformed-attribute", open);
@@ -3796,8 +4068,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             match kind {
                 TokenKind::RParen if depth == 0 => {
                     let close = self.advance().expect("peeked close").span;
-                    if let (Some(start), Some(end)) = (first, last) {
-                        arguments.push(self.attribute_argument(start, end));
+                    if let Some(start) = argument_start {
+                        arguments.push(self.attribute_argument(&self.tokens[start..self.pos - 1]));
                     } else if !arguments.is_empty() {
                         // `aligned(4,)` -- a trailing separator with nothing after it.
                         self.report("E2903", "malformed-attribute", close);
@@ -3807,17 +4079,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 TokenKind::Comma if depth == 0 => {
                     let comma = self.advance().expect("peeked comma").span;
-                    match (first, last) {
-                        (Some(start), Some(end)) => {
-                            arguments.push(self.attribute_argument(start, end))
-                        }
-                        _ => {
+                    match argument_start {
+                        Some(start) => arguments
+                            .push(self.attribute_argument(&self.tokens[start..self.pos - 1])),
+                        None => {
                             self.report("E2903", "malformed-attribute", comma);
                             return None;
                         }
                     }
-                    first = None;
-                    last = None;
+                    argument_start = None;
                 }
                 TokenKind::Semicolon | TokenKind::LBrace | TokenKind::RBrace => {
                     // An argument list cannot contain these; the list was never
@@ -3827,14 +4097,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     return None;
                 }
                 _ => {
+                    let token_index = self.pos;
                     let token = self.advance().expect("peeked argument token");
                     match token.kind {
                         TokenKind::LParen => depth += 1,
                         TokenKind::RParen => depth -= 1,
                         _ => {}
                     }
-                    first.get_or_insert(token.span);
-                    last = Some(token.span);
+                    argument_start.get_or_insert(token_index);
                 }
             }
         }
@@ -3853,9 +4123,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2903", "malformed-attribute", self.span());
             return None;
         }
+        let argument_start = self.pos;
         let expression = self.parse_required_constant_conditional()?;
-        let span = expression.span();
-        let mut argument = self.attribute_argument(span, span);
+        let mut argument = self.attribute_argument(&self.tokens[argument_start..self.pos]);
         argument.integer = self
             .eval_integer_constant_expression(expression)
             .ok()
@@ -3873,11 +4143,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some((vec![argument], close))
     }
 
-    fn attribute_argument(&self, start: SourceSpan, end: SourceSpan) -> AttributeArgument {
-        let text = self.source[start.byte_start as usize..end.byte_end as usize].to_owned();
+    fn attribute_argument(&self, tokens: &[Token]) -> AttributeArgument {
+        let first = tokens.first().expect("attribute argument is non-empty");
+        let last = tokens.last().expect("attribute argument is non-empty");
+        let mut text = String::new();
+        for (index, token) in tokens.iter().enumerate() {
+            if index > 0 && token.preceded_by_whitespace {
+                text.push(' ');
+            }
+            text.push_str(self.token_text(token));
+        }
         AttributeArgument {
             text,
-            span: self.merge_span(start, end),
+            span: self.merge_span(first.span, last.span),
             integer: None,
         }
     }
@@ -4169,24 +4447,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 (ty, TypeofOperand::TypeName, tag_event, None)
             } else {
                 let transaction = self.symbols.begin_transaction();
-                let mut installed = HashSet::new();
-                for shadow in self.temporary_parameter_shadows.clone() {
-                    if shadow.scope == self.current_scope
-                        && installed.insert(shadow.spelling.clone())
-                    {
-                        self.symbols
-                            .declare(
-                                shadow.scope,
-                                &shadow.spelling,
-                                SymbolData::Parameter {
-                                    storage: StorageClass::None,
-                                },
-                                shadow.ty,
-                                shadow.span,
-                            )
-                            .expect("temporary parameter spellings are unique per probe");
-                    }
-                }
+                let declaration_transaction = self.begin_declaration_transaction();
+                self.install_temporary_parameter_shadows();
                 let expression = self.parse_expression();
                 let inferred = expression.and_then(|expression| {
                     let inherited = match expression {
@@ -4201,6 +4463,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.symbols
                     .rollback_transaction(&transaction)
                     .expect("temporary typeof bindings are table-local and LIFO");
+                self.rollback_declaration_transaction(&declaration_transaction);
                 let Some((expression, inferred, inherited)) = inferred else {
                     if self.diagnostics.is_empty() {
                         self.report("E1003", "expected-expression", self.span());
@@ -4599,6 +4862,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.parse_declarator(false)
                 };
                 if let Some(declarator) = declarator.as_ref() {
+                    self.validate_array_parameter_modifiers(&declarator.derived, false);
                     self.validate_variable_array_bounds(&declarator.derived);
                 }
                 let ty = declarator
@@ -5248,6 +5512,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         } else {
             Vec::new()
         };
+        self.validate_array_parameter_modifiers(&derived, false);
         let mut type_attributes = self.parse_attribute_specifiers(AttributePlacement::TypeName);
         let ty = self.apply_declarator(specifier.surface.type_id(), &derived);
         let ty = self.apply_attributes_to_type(ty, &mut type_attributes);
@@ -5288,10 +5553,35 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             DerivedDeclarator::Array {
                 bound: ArrayBound::Variable,
                 span,
+                ..
             } => Some(*span),
             _ => None,
         }) {
             self.report("E2203", "variable-length-object", span);
+        }
+    }
+
+    fn parse_array_parameter_modifiers(&mut self) -> (Qualifiers, bool) {
+        let before_static = self.parse_qualifiers();
+        let static_bound = self.match_kind(TokenKind::Static);
+        let after_static = self.parse_qualifiers();
+        (merge_qualifiers(before_static, after_static), static_bound)
+    }
+
+    fn validate_array_parameter_modifiers(&mut self, derived: &[DerivedDeclarator], allowed: bool) {
+        if allowed {
+            return;
+        }
+        if let Some(span) = derived.iter().find_map(|layer| match layer {
+            DerivedDeclarator::Array {
+                parameter_qualifiers,
+                static_bound,
+                span,
+                ..
+            } if *static_bound || *parameter_qualifiers != Qualifiers::default() => Some(*span),
+            _ => None,
+        }) {
+            self.report("E1005", "invalid-declarator", span);
         }
     }
 
@@ -5352,7 +5642,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     ) {
                         self.report("E1005", "invalid-declarator", open.span);
                     }
+                    let (parameter_qualifiers, static_bound) =
+                        self.parse_array_parameter_modifiers();
                     let bound = if self.peek_kind() == Some(TokenKind::RBracket) {
+                        if static_bound {
+                            self.report("E1005", "invalid-declarator", open.span);
+                        }
                         ArrayBound::Unbounded
                     } else {
                         let expression = self.parse_assignment()?;
@@ -5374,6 +5669,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let layer_span = self.merge_span(open.span, close.span);
                     declarator.derived.push(DerivedDeclarator::Array {
                         bound,
+                        parameter_qualifiers,
+                        static_bound,
                         span: layer_span,
                     });
                     declarator.span = self.merge_span(declarator.span, layer_span);
@@ -5408,7 +5705,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if let Some(pointer) = pointers.first() {
             declarator.span = self.merge_span(derived_declarator_span(pointer), declarator.span);
         }
-        declarator.derived.extend(pointers);
+        declarator.derived.extend(pointers.into_iter().rev());
         if declarator.derived.is_empty() {
             self.report("E1005", "unsupported-abstract-declarator", self.span());
             None
@@ -5465,7 +5762,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     ) {
                         self.report("E1005", "invalid-declarator", open.span);
                     }
+                    let (parameter_qualifiers, static_bound) =
+                        self.parse_array_parameter_modifiers();
                     let bound = if self.peek_kind() == Some(TokenKind::RBracket) {
+                        if static_bound {
+                            self.report("E1005", "invalid-declarator", open.span);
+                        }
                         ArrayBound::Unbounded
                     } else {
                         let expression = self.parse_assignment()?;
@@ -5474,6 +5776,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let close = self.expect(TokenKind::RBracket)?;
                     declarator.derived.push(DerivedDeclarator::Array {
                         bound,
+                        parameter_qualifiers,
+                        static_bound,
                         span: self.merge_span(open.span, close.span),
                     });
                     declarator.span = self.merge_span(declarator.span, close.span);
@@ -5514,7 +5818,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             };
             declarator.span = self.merge_span(pointer_span, declarator.span);
         }
-        declarator.derived.extend(pointers);
+        declarator.derived.extend(pointers.into_iter().rev());
         Some(declarator)
     }
 
@@ -5675,7 +5979,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 };
             self.validate_variable_array_bounds(&derived);
             let unadjusted = self.apply_declarator(specifier.surface.type_id(), &derived);
-            let ty = self.adjust_parameter_type(unadjusted);
+            let ty = self.adjust_parameter_type(unadjusted, &derived);
             let span = self.merge_span(start, end);
             if let Some(event) = specifier.tag_event {
                 let declaration = self.finish_tag_event(event, span, Vec::new());
@@ -5728,10 +6032,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .is_some_and(|token| self.typedef_name(token).is_some())
     }
 
-    fn adjust_parameter_type(&mut self, ty: TypeId) -> TypeId {
+    fn adjust_parameter_type(&mut self, ty: TypeId, derived: &[DerivedDeclarator]) -> TypeId {
         match self.types.get(ty).map(|ty| ty.kind.clone()) {
             Some(TypeKind::Array { element, .. }) => {
-                self.intern(TypeKind::Pointer(element), Qualifiers::default())
+                let qualifiers = derived
+                    .first()
+                    .and_then(|layer| match layer {
+                        DerivedDeclarator::Array {
+                            parameter_qualifiers,
+                            ..
+                        } => Some(*parameter_qualifiers),
+                        _ => None,
+                    })
+                    .unwrap_or_default();
+                self.intern(TypeKind::Pointer(element), qualifiers)
             }
             Some(TypeKind::Function { .. }) => {
                 self.intern(TypeKind::Pointer(ty), Qualifiers::default())
@@ -5806,8 +6120,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         attributes: attributes.clone(),
                         span: *span,
                     },
-                    DerivedDeclarator::Array { bound, span } => WrittenDeclaratorLayer::Array {
+                    DerivedDeclarator::Array {
+                        bound,
+                        parameter_qualifiers,
+                        static_bound,
+                        span,
+                    } => WrittenDeclaratorLayer::Array {
                         bound: bound.clone(),
+                        parameter_qualifiers: *parameter_qualifiers,
+                        static_bound: *static_bound,
                         span: *span,
                     },
                     DerivedDeclarator::Function { span, .. } => {
@@ -7859,11 +8180,47 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         target: InferredPointerType,
         source: InferredPointerType,
     ) -> bool {
-        self.pointer_types_compatible(target, source)
+        self.pointer_conversion_types_compatible(target, source)
             && qualifiers_include(
                 target.qualifiers.compatibility(),
                 source.qualifiers.compatibility(),
             )
+    }
+
+    fn pointer_conversion_types_compatible(
+        &self,
+        left: InferredPointerType,
+        right: InferredPointerType,
+    ) -> bool {
+        if self.pointer_types_compatible(left, right) {
+            return true;
+        }
+        let (Some(left), Some(right)) =
+            (self.types.get(left.pointee), self.types.get(right.pointee))
+        else {
+            return false;
+        };
+        matches!(
+            (&left.kind, &right.kind),
+            (
+                TypeKind::Int(IntRank::Short),
+                TypeKind::Int(IntRank::UShort)
+            ) | (
+                TypeKind::Int(IntRank::UShort),
+                TypeKind::Int(IntRank::Short)
+            ) | (TypeKind::Int(IntRank::Int), TypeKind::Int(IntRank::UInt))
+                | (TypeKind::Int(IntRank::UInt), TypeKind::Int(IntRank::Int))
+                | (TypeKind::Int(IntRank::Long), TypeKind::Int(IntRank::ULong))
+                | (TypeKind::Int(IntRank::ULong), TypeKind::Int(IntRank::Long))
+                | (
+                    TypeKind::Int(IntRank::LongLong),
+                    TypeKind::Int(IntRank::ULongLong)
+                )
+                | (
+                    TypeKind::Int(IntRank::ULongLong),
+                    TypeKind::Int(IntRank::LongLong)
+                )
+        )
     }
 
     fn pointer_types_compatible(
@@ -8316,9 +8673,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             TokenKind::Identifier => {
                 let spelling = self.token_text(&tok).to_owned();
+                if spelling == "__PRETTY_FUNCTION__" {
+                    self.report("E2921", "pretty-function-unsupported", tok.span);
+                    return None;
+                }
+                let resolved_spelling = if spelling == "__FUNCTION__" {
+                    "__func__"
+                } else {
+                    &spelling
+                };
                 let Some(symbol) = self
                     .symbols
-                    .resolve(self.current_scope, &spelling)
+                    .resolve(self.current_scope, resolved_spelling)
                     .expect("the parser current scope is always live")
                 else {
                     self.report(
@@ -8345,7 +8711,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let facts = self.facts_for_symbol(symbol);
                 CHirExpr::Ident {
                     symbol,
-                    spelling,
+                    spelling: resolved_spelling.to_owned(),
                     facts,
                     span: tok.span,
                 }
@@ -8403,10 +8769,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let close = self.expect(TokenKind::RParen)?;
                     let value = match body {
                         CHirStmt::Compound(items, _) => items.last().and_then(|item| match item {
-                            CHirBlockItem::Statement(CHirStmt::Expr(expression, _)) => {
-                                Some(*expression)
+                            CHirBlockItem::Statement(statement) => {
+                                statement_expression_value(statement)
                             }
-                            CHirBlockItem::Declaration(_) | CHirBlockItem::Statement(_) => None,
+                            CHirBlockItem::Declaration(_) => None,
                         }),
                         _ => unreachable!("statement expression parses one compound statement"),
                     };

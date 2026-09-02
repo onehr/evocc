@@ -1,0 +1,111 @@
+{
+  "receiptId": "c30.typeof-redeclaration-red.v1",
+  "baseline": "457a705",
+  "authority": {
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.31",
+      "sha256": "1edb938ca7021a52d47c219dcd28ae02c070a8e0e9e36c4af6536f6fc08de33f"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "P13",
+      "sha256": "bf29e4d697c8c7461bdf226bea40a85fb8e8c9586bb54476b90cf5787b3d88d0"
+    },
+    "baselineDashboard": {
+      "path": "tests/contracts/kernel-dashboard-receipt.json",
+      "run": "20260901T145829Z-31164",
+      "sha256": "b23a2a62e8bfc45f041b8ed5e75ff55b09e2c09eb12d523413faa77c0de8eb56"
+    }
+  },
+  "declaredCapabilities": [
+    "typeof, __typeof__ and __typeof are three spellings of the same front-end construct, with the measured __typeof(x) value case returning 42",
+    "a statement expression inside a typeof operand rolls back every declaration binding it creates, including objects, tags and declarations with linkage",
+    "compatible linkage redeclarations remain accepted while every E2002 case reports incompatible-redeclaration at the later declaration"
+  ],
+  "focusedCommands": [
+    "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-lex --test gnu_typeof_spellings -- --nocapture",
+    "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test gnu_typeof -- --nocapture",
+    "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test day5_g2_bindings -- --nocapture",
+    "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc-parser --test day5_g2_typedefs -- --nocapture",
+    "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc --test day5_g2_semantics_red -- --nocapture"
+  ],
+  "observedRed": [
+    {
+      "target": "evocc-lex/gnu_typeof_spellings",
+      "tests": [
+        "every_gnu_typeof_spelling_uses_the_same_token"
+      ],
+      "failed": 1,
+      "observed": "__typeof lexed as Identifier instead of Typeof",
+      "reason": "single-trailing-typeof-spelling"
+    },
+    {
+      "target": "evocc-parser/gnu_typeof",
+      "tests": [
+        "single_trailing_underscore_typeof_has_the_measured_value_semantics",
+        "statement_expression_typeof_scope_discards_every_declaration_kind",
+        "compatible_linkage_redeclarations_are_accepted_and_conflicts_are_exact_e2002"
+      ],
+      "failed": 3,
+      "observed": "E2001 undeclared-identifier: __typeof; E2002 ordinary-identifier-redefinition: linked; E2002 ordinary-identifier-redefinition: g",
+      "reason": "spelling, typeof-operand-scope and E2002-message"
+    },
+    {
+      "target": "evocc-parser/day5_g2_bindings",
+      "tests": [
+        "conflicting_redeclarations_are_exact_e2002_and_leave_no_ghost_event",
+        "duplicate_e2002_rolls_back_without_a_ghost_symbol",
+        "incompatible_storage_and_linkage_sequences_are_exact_e2002",
+        "same_scope_auto_then_extern_is_exact_e2002_and_rolls_back_function",
+        "top_qualified_parameters_are_compatible_but_unspecified_to_char_is_not",
+        "unnamed_pointer_and_scalar_parameter_redeclarations_conflict_in_both_orders"
+      ],
+      "failed": 6,
+      "observed": "E2002 retained the obsolete ordinary-identifier-redefinition message",
+      "reason": "E2002-message"
+    },
+    {
+      "target": "evocc-parser/day5_g2_typedefs",
+      "tests": [
+        "compatible_redeclaration_reuses_identity_and_incompatible_one_rolls_back",
+        "typedef_expression_and_ordinary_namespace_conflicts_are_controlled"
+      ],
+      "failed": 2,
+      "observed": "E2002 retained the obsolete ordinary-identifier-redefinition message",
+      "reason": "E2002-message"
+    },
+    {
+      "target": "evocc/day5_g2_semantics_red",
+      "tests": [
+        "day5_g2_contract_is_behaviorally_red"
+      ],
+      "failed": 1,
+      "observed": "2 of 36 cases retained the obsolete ordinary-identifier-redefinition message",
+      "reason": "E2002-message"
+    }
+  ],
+  "alreadyGreenGuards": [
+    "six measured compatible block-scope extern redeclaration variants parse before the exact incompatible-message assertion runs",
+    "the object and tag redeclarations following the typeof operand parse before the leaked linkage declaration fails",
+    "the existing typeof and __typeof__ spellings remain covered by the same lexer and parser suites",
+    "no redeclaration comparison is weakened to accommodate the typeof scope leak"
+  ],
+  "buildErrors": 0,
+  "focused": {
+    "listed": 55,
+    "passed": 42,
+    "failed": 13
+  },
+  "workspaceIncludingDocTests": {
+    "listed": 1060,
+    "passed": 1047,
+    "failed": 13,
+    "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet"
+  },
+  "allTargetTestCount": {
+    "listed": 1059,
+    "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace -- --list --format terse | rg -c ': test$'"
+  },
+  "result": "RED"
+}

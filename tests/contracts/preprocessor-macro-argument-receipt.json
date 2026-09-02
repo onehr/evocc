@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "c30.preprocessor-macro-argument.acceptance.v1",
+  "status": "PASS_WITH_TYPED_SURVEY_FRONTIER",
+  "authority": {
+    "baselineCommit": "8f9a59d94f85e107788b40a1815fab88531e86db",
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.33",
+      "sections": [
+        "10.4 Directives inside macro arguments",
+        "10.4 Empty arguments and variadic forwarding"
+      ],
+      "sha256": "77d904c53b48e0f0db1512c61d60cfcf50095492bad0aa0296e2b26d77507811"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "U",
+      "rulings": [
+        "pragmaInsideMacroArgumentConflict",
+        "secondSurveyRanking"
+      ],
+      "sha256": "ad14d91530efed11b661af605e90c6240e95bc20d6d1fc27dd0714413c8724c1"
+    }
+  },
+  "commits": {
+    "testsOnlyRed": {
+      "commit": "0ac7b387b5e689a67372165166168f8e52963ede",
+      "message": "test: expose macro argument conformance gaps"
+    },
+    "implementation": {
+      "commit": "6cc7820557a3b91caed52a037ab5ce51315d778a",
+      "message": "fix: preserve directives and empty macro arguments"
+    },
+    "dashboardReceipt": {
+      "commit": "5f9216ad5a462d1a8104d2ca5d72acabac2855b1",
+      "message": "docs: publish a clean macro expansion dashboard"
+    }
+  },
+  "redWindow": {
+    "receipt": {
+      "path": "tests/contracts/preprocessor-macro-argument-red.json",
+      "sha256": "e8e30443ea2ed0fdd6489838f91afaf2a25cf6d5fb11705c6c815780b4bc1f19"
+    },
+    "workspace": {
+      "command": "cargo test --workspace --no-fail-fast",
+      "passed": 1087,
+      "failed": 7,
+      "ignored": 0,
+      "buildErrors": 0,
+      "unexpectedFailures": 0
+    },
+    "declaredFailures": {
+      "directivesInsideMacroArguments": 5,
+      "emptyArgumentsAndVariadicForwarding": 1,
+      "hostCompilerInventoryExclusion": 1
+    }
+  },
+  "semanticAcceptance": {
+    "directivesInsideMacroArguments": {
+      "command": "cargo test -p evocc-cpp --test macro_argument_directives -- --nocapture",
+      "passed": 5,
+      "failed": 0
+    },
+    "emptyArgumentsAndVariadicForwarding": {
+      "command": "cargo test -p evocc-cpp --test variadic_empty_arguments -- --nocapture",
+      "passed": 5,
+      "failed": 0
+    },
+    "hostCompilerInventoryExclusion": {
+      "command": "cargo test -p evocc --test full_configuration_inventory -- --nocapture",
+      "passed": 1,
+      "failed": 0
+    },
+    "implementationFacts": [
+      "Function-like macro argument collection processes conditional directives and keeps only selected-branch tokens.",
+      "#define and #undef inside an argument update the shared macro environment; #pragma and every other directive fail closed with E0113.",
+      "Variadic substitution preserves every empty argument and every separating comma by argument position, not by whether prior arguments emitted tokens.",
+      "Full-configuration inventory distinguishes gcc HOSTCC programs from gcc-14 target translation units using the recorded compiler actor."
+    ]
+  },
+  "standardGate": {
+    "workspace": {
+      "command": "cargo test --workspace --no-fail-fast",
+      "passed": 1094,
+      "failed": 0,
+      "ignored": 0
+    },
+    "clippy": {
+      "command": "cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    },
+    "baseLayoutCorpus": {
+      "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "128/128 ORACLE_CONSENSUS",
+      "mismatches": 0
+    },
+    "attributedLayoutCorpus": {
+      "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "22/22 ORACLE_CONSENSUS",
+      "mismatches": 0
+    },
+    "diffCheck": "clean"
+  },
+  "acceptanceDiffGuard": {
+    "receipt": "tests/contracts/kernel-dashboard-receipt.json",
+    "receiptSha256": "2146c1b4dcbe6eb783339d603a8257758fac272b51da584e3e046e2dc7aa9427",
+    "previousRun": "20260902T051401Z-89830",
+    "publishedRun": "20260902T074011Z-8961",
+    "subjectCommit": "6cc7820",
+    "rawPreprocess": "16/16 clean",
+    "gccPreprocessedParser": "16/16 clean",
+    "clangPreprocessedParser": "16/16 clean",
+    "dualOracleParse": "16/16 clean",
+    "regressions": 0
+  },
+  "isolatedOfflineReplay": {
+    "clone": "/tmp/c30-u-replay.q7a5KD/repo",
+    "cloneMode": "git clone --no-local",
+    "alternatesFile": "absent",
+    "commit": "5f9216ad5a462d1a8104d2ca5d72acabac2855b1",
+    "command": "CARGO_TARGET_DIR=/tmp/c30-u-replay.q7a5KD/target cargo test --workspace --no-fail-fast --locked --offline",
+    "passed": 1094,
+    "failed": 0,
+    "ignored": 0
+  },
+  "fullConfigurationSurvey": {
+    "receipt": "tests/contracts/full-config-parse-survey-receipt.json",
+    "runId": "20260902T074727Z-61593",
+    "capture": ".evidence/full-config-parse-survey/20260902T074727Z-61593",
+    "commandRecords": 2944,
+    "includedTargetCUnits": 2798,
+    "excluded": 146,
+    "hostCompilerProgramsExcluded": 34,
+    "clean": 1652,
+    "diagnosed": 1146,
+    "unavailable": 0,
+    "timeout": 0,
+    "panic": 0,
+    "sharedTargetUnitsMovedToClean": 360,
+    "scopeDiscipline": "The rerun was measure-only; none of its new typed diagnostic frontier was fixed."
+  },
+  "processDeviations": [],
+  "specGap": null,
+  "claimCeiling": "The two preprocessor rules and HOSTCC inventory classification pass. The full target-unit survey has zero panic, timeout, or unavailable units; its 1146 diagnosed units are an open typed frontier, not general parser conformance."
+}
