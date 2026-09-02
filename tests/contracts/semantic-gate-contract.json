@@ -47,7 +47,8 @@
     "stageS2bClosed": "2026-09-03: evp2 is produced and verified: budget line from real counters, epoch markers, the six checker properties each pinned by a one-field edit of a real certificate in refusing and holding form, evp1 still read, evp1 with any addition and evp2 without its budget line malformed. 21,000 programs replay evp2 with 0 mismatches and 0 refusals. Architect's isolated gate on 6c18d64: 1147/0, clippy 0, fmt clean; fast-forwarded into main. Open by the executor's own list: no premise or Tier B rule exists yet, every transaction is one epoch, no produced certificate has reached a ceiling.",
     "saturatedIsTheTransactionsOwnFixpoint": "2026-09-03: the executor's SPEC_GAP was right and the architect's 1.9.37 sentence was wrong: saturated means no rule fired in the last epoch (8.11), not that a fresh transaction admits nothing. The residual-region count (1 program in 1000, 1 region, seed 1592591027) is the price of 11.6's before-witness rule for const_like and becomes a standing campaign metric. n is the largest region's starting count; stop=fuel is reserved for larger regions; a ceiling stop keeps admitted regions.",
     "stageS2cClosed": "2026-09-03: bounded multi-epoch scheduler of 8.11 in place: a rewrite belongs to the epoch after the last one that changed a class it matches on, fuel per (rule, epoch), markers increase inside region blocks; 722 of 977 optimized programs run more than one epoch, deepest 6; wall time unchanged within spread (18.097 s). Fixpoint measured: 1 residual region in 1000 programs (seed 1592591027), a registry boundary of 11.6, which corrected the architect's saturation ruling. Shrinker merges a block into its unique predecessor (12 blocks to 5 on a generated module; no pinned reproducer shrinks, all are single-block). The three ceiling stops are verified only on hand-edited certificates because no P0 input can reach a ceiling. Architect's isolated gate on 04833ab: 1153/0, clippy 0, fmt clean; fast-forwarded into main.",
-    "keptRegionsAreProducerConformance": "2026-09-03: the executor observed that 'a ceiling stop keeps every admitted region' cannot be checked, because 11.2 permits a producer to decline any eligible region. Agreed: it is producer conformance, pinned by a producer-side test, in the same class as saturated and no-new-best."
+    "keptRegionsAreProducerConformance": "2026-09-03: the executor observed that 'a ceiling stop keeps every admitted region' cannot be checked, because 11.2 permits a producer to decline any eligible region. Agreed: it is producer conformance, pinned by a producer-side test, in the same class as saturated and no-new-best.",
+    "stageS2dClosed": "2026-09-03: stop reasons come from the scheduler's counters (saturated when the last epoch fired nothing, policy at the producer's own budget); a ceiling stop keeps admitted regions (3 admitted with a generous budget, 1 kept at one epoch, the partial certificate verifies); residual regions are a campaign counter: 20 of 21,000 programs (0.095 percent), one region each, all the 11.6 shape. Wall time +10 percent for the extra measuring transaction. Architect's isolated gate on 8a165c9: 1154/0, clippy 0, fmt clean; merged into main."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",
@@ -129,6 +130,24 @@
       },
       "architectGate": {
         "passed": 1153,
+        "failed": 0,
+        "clippy": 0,
+        "fmt": "clean"
+      }
+    },
+    "s2d": {
+      "branchHead": "8a165c9",
+      "campaign": {
+        "programs": 21000,
+        "semanticMismatches": 0,
+        "certificateRefusals": 0,
+        "residualRegions": 20,
+        "residualPrograms": 20,
+        "wallSeconds1000Median": 19.954,
+        "wallSeconds20000": 403.402
+      },
+      "architectGate": {
+        "passed": 1154,
         "failed": 0,
         "clippy": 0,
         "fmt": "clean"
