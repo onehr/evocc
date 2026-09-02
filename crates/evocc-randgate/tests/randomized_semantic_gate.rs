@@ -199,6 +199,10 @@ struct Shapes {
     several_ordinary_returns: bool,
     loop_limit_is_a_block_argument: bool,
     loop_limit_is_data_dependent: bool,
+    recursion: bool,
+    pointer_call_argument: bool,
+    pointer_result: bool,
+    copy_between_distinct_objects: bool,
 }
 
 impl Shapes {
@@ -207,7 +211,58 @@ impl Shapes {
             if function.ret_tys.len() > 3 {
                 self.several_ordinary_returns = true;
             }
+            if function
+                .ret_tys
+                .iter()
+                .any(|ty| matches!(ty, evocc_types::EvoIRType::Ptr(_)))
+            {
+                self.pointer_result = true;
+            }
             for block in &function.blocks {
+                let allocated = block
+                    .insts
+                    .iter()
+                    .filter_map(|inst| match inst {
+                        Inst::Alloca { result, .. } => Some(result.id),
+                        _ => None,
+                    })
+                    .collect::<BTreeSet<_>>();
+                for inst in &block.insts {
+                    match inst {
+                        Inst::Call { callee, args, .. } => {
+                            if callee == &function.name {
+                                self.recursion = true;
+                            }
+                            if args
+                                .iter()
+                                .any(|arg| matches!(arg.ty, evocc_types::EvoIRType::Ptr(_)))
+                            {
+                                self.pointer_call_argument = true;
+                            }
+                        }
+                        Inst::IndirectCall { args, .. } => {
+                            if args
+                                .iter()
+                                .any(|arg| matches!(arg.ty, evocc_types::EvoIRType::Ptr(_)))
+                            {
+                                self.pointer_call_argument = true;
+                            }
+                        }
+                        Inst::Copy {
+                            destination,
+                            source,
+                            ..
+                        } => {
+                            if destination.id != source.id
+                                && allocated.contains(&destination.id)
+                                && allocated.contains(&source.id)
+                            {
+                                self.copy_between_distinct_objects = true;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
                 let pointers = block
                     .args
                     .iter()
@@ -399,17 +454,27 @@ fn generated_programs_cover_the_declared_instruction_families() {
         shapes.loop_limit_is_data_dependent,
         "every loop bound was a constant written into the loop entry edge"
     );
+    assert!(shapes.recursion, "no generated function called itself");
+    assert!(
+        shapes.pointer_call_argument,
+        "no pointer was ever passed to a call"
+    );
+    assert!(shapes.pointer_result, "no function ever returned a pointer");
+    assert!(
+        shapes.copy_between_distinct_objects,
+        "every copy stayed inside one object"
+    );
 
     // The exact set, not a subset: a `ub.assume` may only be emitted for a
     // condition the surrounding shape has already made true, so this equality
-    // is simultaneously the coverage claim and the record of what the gate does
-    // not yet reach. `invalid_signed_left_shift` is absent because no shape here
-    // makes `signed_shl_defined` true by construction.
+    // is simultaneously the coverage claim and the record of what the gate
+    // reaches. All five reasons are now emitted.
     assert_eq!(
         reasons,
         [
             "division_by_zero",
             "invalid_shift_count",
+            "invalid_signed_left_shift",
             "remainder_by_zero",
             "signed_overflow",
         ]
@@ -499,6 +564,66 @@ fn the_gate_finds_no_mismatch_in_one_thousand_random_programs() {
         report.render().contains("residualRegions="),
         "the measurement table must carry the residual count:\n{}",
         report.render()
+    );
+    // A run is a sequence of transactions (8.11), so its length is telemetry
+    // the campaign reports rather than a number a reader has to reconstruct.
+    assert!(
+        report.render().contains("runLengths="),
+        "the measurement table must carry the run-length distribution:\n{}",
+        report.render()
+    );
+    assert!(
+        report.transactions >= report.compared,
+        "every compared program ran at least one transaction"
+    );
+    // A run stops when a transaction admits no region, so a run that stopped
+    // before the ceiling has nothing left to admit. Only a run cut off at
+    // `max_transactions` may leave one behind.
+    if report.runs_at_ceiling == 0 {
+        assert_eq!(
+            report.residual_regions, 0,
+            "a run that stopped short of the ceiling left {} regions unadmitted",
+            report.residual_regions
+        );
+    }
+}
+
+/// Digest chaining is what makes a sequence of certificates one run.
+///
+/// Section 8.11: "the run is verified by digest chaining, the `output` digest
+/// of one certificate being the `input` digest of the next, and a chain that
+/// breaks anywhere fails the run." Seed 1592591027 is the module that needs a
+/// second transaction, so it is the one that has a chain to check.
+#[test]
+fn a_run_chains_each_certificate_to_the_next_by_digest() {
+    let budget = evocc_eqopt::ScalarEqBudget::new(20_000, 256);
+    let module = generate_module(1_592_591_027, config());
+    let first = evocc_eqopt::optimize_scalar_module_with_evp1(&module, budget);
+    assert!(!first.certificate.regions.is_empty());
+    assert_eq!(
+        first.certificate.input_digest,
+        evocc_proof::sha256_hex(render_module(&module).as_bytes()),
+        "a certificate's input digest binds it to the module it was given"
+    );
+
+    let second = evocc_eqopt::optimize_scalar_module_with_evp1(&first.module, budget);
+    assert!(
+        !second.certificate.regions.is_empty(),
+        "this seed is here because its second transaction admits a region"
+    );
+    assert_eq!(
+        first.certificate.output_digest, second.certificate.input_digest,
+        "the chain broke between the first and second transaction"
+    );
+
+    let third = evocc_eqopt::optimize_scalar_module_with_evp1(&second.module, budget);
+    assert_eq!(
+        second.certificate.output_digest, third.certificate.input_digest,
+        "the chain broke between the second and third transaction"
+    );
+    assert!(
+        third.certificate.regions.is_empty(),
+        "the run should have reached a transaction that admits nothing"
     );
 }
 

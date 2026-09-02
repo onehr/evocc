@@ -30,6 +30,12 @@ pub struct CampaignReport {
     /// earlier transaction derived becomes matchable only in the next one.
     pub residual_regions: u64,
     pub residual_programs: u64,
+    /// Transactions executed across every run, and how many runs took each
+    /// length. A run is Section 8.11's chain of transactions over one module.
+    pub transactions: u64,
+    pub run_lengths: BTreeMap<usize, u64>,
+    /// Runs cut off at `max_transactions` rather than by admitting nothing.
+    pub runs_at_ceiling: u64,
     pub certificates_replayed: u64,
     pub mismatched: u64,
     pub mismatches: Vec<Mismatch>,
@@ -76,6 +82,15 @@ impl CampaignReport {
         let _ = writeln!(text, "regions={}", self.regions);
         let _ = writeln!(text, "residualRegions={}", self.residual_regions);
         let _ = writeln!(text, "residualPrograms={}", self.residual_programs);
+        let lengths = self
+            .run_lengths
+            .iter()
+            .map(|(length, count)| format!("{length}:{count}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let _ = writeln!(text, "transactions={}", self.transactions);
+        let _ = writeln!(text, "runLengths={lengths}");
+        let _ = writeln!(text, "runsAtCeiling={}", self.runs_at_ceiling);
         let _ = writeln!(text, "certificatesReplayed={}", self.certificates_replayed);
         let _ = writeln!(text, "mismatched={}", self.mismatched);
         let _ = writeln!(text, "mismatchedSeeds={seeds}");
