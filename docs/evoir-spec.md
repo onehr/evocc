@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.35** | **Authoritative reference** | **2026-09-02**
+**Revision 1.9.36** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -3980,8 +3980,10 @@ when comparing against a rendered module.
 certificate     := header region_block* output_line
 header          := version_line registry_line input_line budget_line?
 version_line    := "evp1" newline | "evp2" newline
-budget_line     := "budget nodes=" evp_int "/" evp_int " epochs=" evp_int "/" evp_int
-                   " fuel=" evp_int " stop=" stop_reason newline
+budget_line     := "budget nodes=" quantity " epochs=" quantity " fuel=" quantity
+                   " n=" evp_int " stop=" stop_reason newline
+quantity        := evp_int "/" evp_int
+                   ; consumed "/" bound, in that order, never the reverse
 stop_reason     := "saturated" | "no-new-best" | "epochs" | "nodes" | "fuel"
 registry_line   := "registry " ident " " digest newline
 input_line      := "input " digest newline
@@ -4153,11 +4155,25 @@ markers. The checker verifies monotonicity within each block and that no `k`
 exceeds the recorded epoch count; it does not require every epoch to appear in
 every region, since most epochs touch few regions.
 
-**Budget.** The budget line records each bound, the amount consumed, and the
-stop reason. The checker verifies consumed does not exceed bound, that no epoch
-marker exceeds the recorded epoch count, and that a stop reason of `epochs`,
-`nodes` or `fuel` coincides with that quantity having reached its bound. It does not verify `saturated` or `no-new-best`, which would require
-re-running the scheduler; those are telemetry.
+**Budget.** Every `quantity` is written consumed `/` bound, in that order:
+`budget nodes=3/100000 epochs=1/1024 fuel=0/256 n=0 stop=saturated` is a
+transaction that inserted three nodes into a graph bounded at one hundred
+thousand, ran one epoch of a possible 1024, and stopped because nothing new
+could be proposed. The `nodes` and `epochs` bounds are the profile's
+constants (8.11), and the checker verifies that the recorded bounds equal
+them. `fuel` is the per-rule, per-epoch quantity of 8.11: `n` is the number
+of nodes the region held when the transaction began, the fuel bound is
+`max(256, 8 * n)`, and the fuel consumed is the largest number of firings any
+single rule made in any single epoch. The checker verifies that each consumed
+does not exceed its bound, that the fuel bound equals `max(256, 8 * n)` for
+the recorded `n`, that no epoch marker exceeds the consumed epoch count, and
+that a stop reason of `epochs`, `nodes` or `fuel` coincides with that
+quantity's consumed equalling its bound. `n` itself is declared, not
+re-derived: a producer that overstates it only widens a box the checker
+still holds it to. `saturated` and `no-new-best` are not verified; they would
+require re-running the scheduler and are telemetry. Defined at revision
+1.9.36 after the randomized gate stopped on the two readings of an unordered
+`a/b` and of a single fuel integer with no bound.
 
 **Zero regions.** Any compilation that accepts no rewrite produces a certificate
 with a header and an `output` line and no region blocks, whether or not eligible
@@ -4420,6 +4436,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.36 | 2026-09-03 | Second randomized campaign on extended shapes (21,000 programs, 0 mismatches, one producer refusal fixed: alias right-hand sides come from the binding). Fixes the `budget` line: every quantity is consumed/bound, `fuel` carries its bound and the `n` it derives from, and the checker verifies the profile constants and the fuel derivation (11.3). |
 | 1.9.35 | 2026-09-02 | First randomized semantic gate campaign (21,000 programs, 0 semantic mismatches, 12 certificate refusals). Allocates `E3008` `interpreter-fuel-exhausted` as a host-resource stop (6.3, 10.4); defines what a certificate with no region claims and how the checker verifies it; states that rewrite bindings are recomputed from the recorded node children (11.3). The `evp1` versions paragraph already answers the scheduler-record question: budget and epoch lines belong to `evp2`. |
 | 1.9.34 | 2026-09-02 | Third full-configuration survey (2,445 of 2,798 clean). Defines array lvalue decay for members, flexible members and string literals (10.1.3); range designators and inferred bounds (10.1.12); function pointer and `void *` conversions, `_Pragma`, `__inline`, `__restrict` and attribute placement (10.1.18); integer constants cast to pointers and static array decay as address constants (10.1.19); library and GCC-only ctype builtins (10.1.14). Measured. |
 | 1.9.33 | 2026-09-02 | Second full-configuration survey (1,292 of 2,832 clean). Defines directives inside macro arguments (`E0113` for `#pragma`, an oracle conflict) and empty-argument variadic forwarding (10.4); `__func__` and `__FUNCTION__`, `E2921` for `__PRETTY_FUNCTION__` (oracle conflict), labeled last statements in statement expressions (10.1.17); array parameter adjustment and pointer sign in conversions (10.1.18); modifiable lvalues as one predicate (10.1.3); address constants through casts and nested aggregates (10.1.19). Measured. |
