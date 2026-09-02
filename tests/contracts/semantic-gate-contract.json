@@ -37,7 +37,8 @@
     "fuelIsAHostLimit": "2026-09-02: E3008 allocated; a fuel-exhausted trial is neither undefined behaviour nor a comparison. The executor's separate counter was the right choice and is now the rule.",
     "stageS1Closed": "2026-09-03: the randomized semantic gate is closed on branch head eaf7c6b, fast-forwarded into main. 21,000 programs: 0 semantic mismatches, 0 certificate refusals, all 27 scalar rules reached, the twelve formerly refusing seeds pinned as a replay test. The architect's isolated gate: 1133/0, clippy 0, fmt clean. Not covered yet and recorded by the executor: pointers across block edges, data-dependent loop bounds, copy, lifetime.end, ptr.null, func_addr and indirect calls, multiple returns, recursion, floating point and vectors; the shrinker lacks block merging.",
     "budgetLineDefined": "2026-09-03: both S2b gaps were real. Every budget quantity is consumed/bound in that order; fuel is written consumed/bound with n declared, bound = max(256, 8*n), consumed = the most firings of one rule in one epoch; the checker verifies bounds equal the profile constants, consumed within bound, the fuel derivation, epoch markers within the consumed count, and stop-reason consistency; saturated and no-new-best are telemetry. Recorded in 11.3 with an example line.",
-    "aliasRightHandSideFromBinding": "2026-09-03: seed 1592636988 (extended shapes) refused because the alias right-hand side was read from the instruction's operand while 11.3 admits class:cI only for a bare variable bound to cI. Fixed by taking the right-hand side from the binding and choosing a deterministic representative (seeds in manifest order, then nodes in emission order). The checker was right for the thirteenth time."
+    "aliasRightHandSideFromBinding": "2026-09-03: seed 1592636988 (extended shapes) refused because the alias right-hand side was read from the instruction's operand while 11.3 admits class:cI only for a bare variable bound to cI. Fixed by taking the right-hand side from the binding and choosing a deterministic representative (seeds in manifest order, then nodes in emission order). The checker was right for the thirteenth time.",
+    "stageS2aClosed": "2026-09-03: generator coverage extended to pointers across block edges, data-dependent bounded loops, copy, lifetime.end, ptr.null, func_addr with indirect calls and multiple returns, each pinned by the coverage assertion; 21,000 programs on the extended shapes: 0 semantic mismatches, 0 certificate refusals after the alias fix (seed 1592636988 pinned), all 27 scalar rules reached. Architect's isolated gate on b4af227: 1137/0, clippy 0, fmt clean; fast-forwarded into main. Still uncovered by the executor's own list: signed left shift assumptions, recursion, floating point, vectors, pointers as call arguments or returns, ordered pointer comparison, copy across distinct objects, block-merging in the shrinker."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",
@@ -70,6 +71,23 @@
       "failed": 0,
       "clippy": 0,
       "fmt": "clean"
+    },
+    "s2a": {
+      "branchHead": "b4af227",
+      "campaign": {
+        "programs": 21000,
+        "semanticMismatches": 0,
+        "certificateRefusals": 0,
+        "regions": 146510,
+        "wallSeconds1000Median": 18.046,
+        "wallSeconds20000": 359.189
+      },
+      "architectGate": {
+        "passed": 1137,
+        "failed": 0,
+        "clippy": 0,
+        "fmt": "clean"
+      }
     }
   }
 }
