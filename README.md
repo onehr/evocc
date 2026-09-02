@@ -106,13 +106,13 @@ Other useful flags: `-E` (preprocess), `--parse-only`, `--emit=c-hir`, and `--su
 
 ![How the work is driven](docs/images/loop.png)
 
-- The specification (`docs/evoir-spec.md`, revision 1.9.32) is the only authority. Any rule about observable behaviour is measured in a sealed GCC-14.2 / Clang-19.1 container *before* it is written down. Where the two compilers disagree, the spec records it and takes the answer that refuses rather than voting.
+- The specification (`docs/evoir-spec.md`, revision 1.9.33) is the only authority. Any rule about observable behaviour is measured in a sealed GCC-14.2 / Clang-19.1 container *before* it is written down. Where the two compilers disagree, the spec records it and takes the answer that refuses rather than voting.
 - Every change opens with a tests-only commit whose failures are declared in advance, and closes with a dashboard published from observer-sealed evidence. The dashboard names the next thing the kernel needs.
 - An AI executor that hits a gap in the spec stops and asks. That has happened six times; five times the gap was an error by the architect, caught by a machine before it became code.
 
 ## Status
 
-**What the kernel says today:** **16 of 16 cohort units parse clean under both reference compilers** on oracle-preprocessed input — that stage of the launch chain is closed, on sealed evidence, with zero regressions across the whole campaign. The first full-configuration sweep (2,832 units through EvoCC's own preprocessor) then measured a path no gate had covered: 2,768 units panic on one token-location rule, and the preprocessor has two conformance defects the oracles settle. Those are the next windows. Twenty-odd distinct constructs stood between 0/16 and 16/16; each got a measured rule, a declared red window, and a publication.
+**What the kernel says today:** **16 of 16 cohort units parse clean under both reference compilers** on oracle-preprocessed input — that stage of the launch chain is closed, on sealed evidence, with zero regressions across the whole campaign. The full-configuration sweep (2,832 units through EvoCC's own preprocessor) first found a path no gate had covered: 2,768 units panicked on one token-location rule. With that rule and two preprocessor rules fixed, 1,292 of 2,832 units parse clean, and the remaining 1,540 sort into a short list of typed rules, eight of which cover about 1,380 units. Twenty-odd distinct constructs stood between 0/16 and 16/16; each got a measured rule, a declared red window, and a publication.
 
 | Capability | Status |
 |---|---|
@@ -125,7 +125,7 @@ Other useful flags: `-E` (preprocess), `--parse-only`, `--emit=c-hir`, and `--su
 | Kernel telemetry and sealed publication | done |
 | Diagnostic survey mode | partial |
 | Kernel parse closure (cohort, oracle-preprocessed input) | done |
-| Full-configuration sweep, 2,832 units, own preprocessor | in progress: 5 clean, 2,768 panic on one root cause |
+| Full-configuration sweep, 2,832 units, own preprocessor | in progress: 1,292 of 2,832 clean, 0 panic |
 | Analysis lattices, bounded scheduler | not started |
 | Randomized semantic gate | not started |
 | EvoMIR, register allocation, AArch64 | not started |
@@ -154,7 +154,7 @@ Every commit passes workspace tests, `clippy -D warnings`, `rustfmt`, Ruff, both
 
 **1. Spec as sole authority — the only one with real evidence so far.** 72 dashboard publications, zero regressions. Six executor stops at spec gaps; five architect errors overturned by an oracle or the executor before they became code; one commit whose message did not match its diff, caught by the executor reviewing upstream. A failure taxonomy is emerging — the unprobed assertion, the reference to a construct nobody defined, one rule implemented on one code path but not another — and each entry has a mechanical countermeasure that has since fired. The cost is real too: roughly one round in five went to fixing the spec.
 
-**2. Correct on the kernel — partial.** Parsing is closed on the cohort: 16/16 under both oracles. Preprocessing raises no diagnostics on the cohort; its fidelity is measured by the full sweep, which found two defects and one parser rule that never met a header. Layout is bit-exact. Two interpreters agree on every corpus. Missing: any machine code, the full ~2,500-unit sweep, and the flight lab that boots the result. The open bet is whether a loop that converges on 16 units converges on 2,500.
+**2. Correct on the kernel — partial.** Parsing is closed on the cohort: 16/16 under both oracles. Preprocessing raises no diagnostics on the cohort; its fidelity is measured by the full sweep, which so far has found five preprocessor rules the spec had not stated and the oracles settle. Layout is bit-exact. Two interpreters agree on every corpus. Missing: any machine code, the full ~2,500-unit sweep, and the flight lab that boots the result. The open bet is whether a loop that converges on 16 units converges on 2,500.
 
 **3. E-graph instead of a pipeline — not yet measurable.** The e-graph, the rule set, and the checker exist, but the cost model counts instructions and there is no target. This question is blocked on the backend, which makes the backend an instrument rather than a deliverable. Two hard points are already on the record: inlining, which the kernel depends on and a single-function e-graph cannot do; and constructs the kernel expects answered *after* optimization, which EvoCC answers conservatively in the front end.
 

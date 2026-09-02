@@ -1509,7 +1509,7 @@ F2 preprocess 16/16 (no diagnostics; fidelity measured by F3) ┤         B2 Mac
                         │         B6 Linux ELF/ABI               │
                         │         B7 LINUX USERSPACE GATE        │
                         └────────────┬───────────────────────────┘
-                     F3 full-config parse N/N, preprocess N/N   (Kbuild-driven telemetry replaces the cohort)
+                     F3 full-config parse 1,292/2,832, 0 panic (run 20260902T051739Z-447; Kbuild-driven telemetry replaces the cohort)
                      C1 kernel codegen: asm, asm goto, atomics, sections, relocations
                      C2 KERNEL OBJECT GATE: TUs compiling N/N, vmlinux links (baseline extraction)
                      G1 BASELINE BOOT: marker printed under QEMU

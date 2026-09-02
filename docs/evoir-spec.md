@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.32** | **Authoritative reference** | **2026-09-02**
+**Revision 1.9.33** | **Authoritative reference** | **2026-09-02**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2604,6 +2604,15 @@ unchanged (measured: `sizeof` 4, second element readable, both oracles). At
 block scope such an initializer is refused by both oracles and here reports
 `E2919` (`flexible-array-initializer-not-static`) at the initializer.
 
+**Modifiable lvalues.** An lvalue is modifiable unless its own type is
+const-qualified, is an array type, or is a structure or union with a
+const-qualified member at any depth. Qualifiers of a pointed-to type never
+qualify the pointer: `const char * const *p` is modifiable and `*p` is not.
+The test is one predicate on the lvalue's type, applied at every assignment
+and update site, with no list of admitted forms (evidence `p19.c`, `m3`).
+Measured defect at revision 1.9.32: `init.pn = pnames` with `const char *
+const *pn` was `E2101` in 40 units.
+
 #### 10.1.4 Sequencing Lowering
 
 C sequence points lower to memory token threading and world token threading.
@@ -3404,6 +3413,26 @@ and Clang-19 agree on every row.
   for `goto *`, and fail closed; the receipt counts each occurrence. The
   measurement that opens this is a lane whose first error is `E3029`.
 
+**Function names.** Inside every function body the identifiers `__func__`
+and `__FUNCTION__` denote one implicitly declared object of type
+`static const char[N]` holding the function's name: `sizeof __func__` is N,
+`_Generic` sees `const char *` after decay, `&__func__` is
+`const char (*)[N]`, and its address is an address constant (`static const
+char *p = __func__;` is accepted). `__builtin_constant_p(__func__[0])`
+follows the constant rule of this section and answers 0, which makes the
+oracles' disagreement on it (GCC-14 0, Clang-19 1) moot. `__PRETTY_FUNCTION__`
+is `E2921` (`pretty-function-unsupported`): `ORACLE_CONFLICT`, GCC-14
+spells it `main`, Clang-19 `int main(void)` (evidence `p17.out`); the pinned
+configuration builds no unit that uses it. Measured defect at revision
+1.9.32: `__func__` was `E2001` in 508 units.
+
+**Labeled last statement.** The value and type of a statement expression whose
+last statement is a labeled statement are those of the statement the label
+prefixes, recursively; `__label__` declarations inside the statement
+expression do not change its type (evidence `p19.c`, `ll`, both oracles
+compile `r = ({ __label__ out; ...; out: q; })`). Measured defect at revision
+1.9.32: the kernel's `___wait_event` was `E2102` in 41 units.
+
 #### 10.1.19 Integer constant expressions and array bounds
 
 The specification names an integer constant expression in a dozen places
@@ -3498,6 +3527,17 @@ and a file-scope `int probe[n];` were all accepted silently, and only an
 initializer made the bound reachable, so no `sizeof` of such a type meant
 anything.
 
+**Address constants.** `&E` is an address constant when `E` designates an
+object of static storage duration or a function, or an element or member of
+such an object reached through constant subscripts and member access
+(`&vals[1]`, `&s.m`, `&s.a[2]`); so are an array or function name that
+decays, a string literal, and `__func__`. An address constant converted by a
+cast to any pointer type or to an integer type at least as wide as a pointer
+stays an address constant. This holds in every static initializer position,
+nested aggregate members included (evidence `p19.c`, `tt` and `pv`).
+Measured defect at revision 1.9.32: `(void *)&sysctl_vals[0]` (`SYSCTL_ZERO`)
+was `E2208` in 54 units.
+
 #### 10.1.20 Source locations
 
 Every token the preprocessor hands to the parser carries two spans. Its
@@ -3573,6 +3613,26 @@ absent and are named here so their acceptance is checkable:
 - **Static assertions are member declarations.** `_Static_assert` may appear in
   a struct or union member list, including an anonymous one, where it declares
   no member and contributes nothing to layout. This is 2 lanes, in 1 unit.
+
+**Array parameters.** A parameter declared with array type, whatever the
+bound and whatever qualifiers or `static` stand inside the brackets, has the
+adjusted pointer type in the function's type and at every use of the
+parameter name. The adjustment happens once, when the declarator is built,
+and no other code path sees the array type (evidence `p19.c`, `m1`). Measured
+defect at revision 1.9.32: an initializer taken from an array parameter was
+`E2202` in 64 units (`pm_opp.h`).
+
+**Pointer sign in conversions.** In initialization, assignment, argument
+passing and `return`, a pointer to an integer type converts to a pointer to
+the same type with the other signedness, or between `char`, `signed char`
+and `unsigned char`; the conversion is accepted without a diagnostic (both
+oracles warn under `-Wpointer-sign`, which the kernel disables; evidence
+`p21.out`). Pointers to otherwise incompatible types stay `E2202`, which is
+`ORACLE_CONFLICT` resolved toward the refusal: GCC-14 makes
+`-Wincompatible-pointer-types` an error, Clang-19 a warning (the probe's
+swapped struct order measured that case as well). Measured defect at revision
+1.9.32: `DEFINE_CLASS(_gpiochip_for_each_data, ...)`, whose constructor takes
+`int *i` for an `unsigned int *` member, was `E2202` in 20 units.
 
 ### 10.4 EvoCPP Target Profile
 
@@ -3729,12 +3789,38 @@ stopped at the end of the replacement list, leaving `smp_mb__after_atomic()`
 unexpanded in every unit that includes `linux/atomic.h`; the parse then
 reports `E2001`.
 
+**Directives inside macro arguments.** A conditional directive (`#if`,
+`#ifdef`, `#ifndef`, `#elif`, `#else`, `#endif`) met while the arguments of a
+function-like macro are being collected is processed as a directive, and the
+tokens of the branch taken join the argument; `#define` and `#undef` there are
+processed as well (evidence `p19-p20.out`, both oracles: `p20`, `p20b`).
+`#pragma` inside an argument is `E0113` (`directive-in-macro-argument`):
+`ORACLE_CONFLICT`, GCC-14 processes it ahead of the expansion, Clang-19
+refuses (`p20c`). Any other directive there is `E0113` too. Measured defect
+at revision 1.9.32: the directive lines were emitted as ordinary tokens
+(`#ifdef 1`), so `struct_group` in `skbuff.h`, whose member list carries
+`#ifdef CONFIG_NET_CLS_ACT`, failed with `E1001` in 562 units of the full
+configuration.
+
+**Empty arguments and variadic forwarding.** An argument may be empty. A
+named variadic parameter (`args...`) and `__VA_ARGS__` denote the exact
+sequence of the remaining arguments, empty ones and their separating commas
+included; when that sequence is substituted into a nested invocation and
+rescanned, the nested invocation's arguments are collected from the
+substituted tokens exactly as spelled. Measured (evidence `p18.out`, both
+oracles): `E(,)` is `[|]`, `V(,2)` is `[|2]`, `N()` is `[|]`, and
+`__MAP(3,__SC_ARGS,,r0,,r1,,r2)` through the kernel's `__MAP` chain yields
+`, r0 , r1 , r2`. Measured defect at revision 1.9.32: the chain dropped every
+argument after the first empty one (`h(,regs->regs[0],,,,)`), so
+`SYSCALL_DEFINEn` failed with `E1003` in about 50 units.
+
 Diagnostics of this section are front-end (preprocessor) diagnostics: `E0102`
 `unmatched-conditional`, `E0104` `error-directive`, `E0105`
 `include-not-found`, `E0106` `feature-query-malformed`, `E0107`
 `pragma-pack-unsupported`, `E0108` `poisoned-identifier-used`, `E0109`
 `counter-overflow`, `E0110` `invalid-token-paste`, `E0111`
-`conditional-operand-not-integer`, `E0112` `stray-token`.
+`conditional-operand-not-integer`, `E0112` `stray-token`, `E0113`
+`directive-in-macro-argument`.
 
 ## 11. Proof Checking Interface
 
@@ -4231,6 +4317,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.33 | 2026-09-02 | Second full-configuration survey (1,292 of 2,832 clean). Defines directives inside macro arguments (`E0113` for `#pragma`, an oracle conflict) and empty-argument variadic forwarding (10.4); `__func__` and `__FUNCTION__`, `E2921` for `__PRETTY_FUNCTION__` (oracle conflict), labeled last statements in statement expressions (10.1.17); array parameter adjustment and pointer sign in conversions (10.1.18); modifiable lvalues as one predicate (10.1.3); address constants through casts and nested aggregates (10.1.19). Measured. |
 | 1.9.32 | 2026-09-02 | Defines source locations: spelling and expansion spans, total span composition from expansion spans, no buffer slicing (10.1.20); defines the whitespace flag, stringization spacing, and rescanning into the outer token sequence (10.4). Three measured defects behind the full-configuration survey's 2,768 panics and 56 `E0105` units. Measured. |
 | 1.9.31 | 2026-09-01 | Admits the `__typeof` spelling; states that a statement expression inside a `typeof` operand scopes every declaration it makes, including ones with linkage, after an `extern` declared there escaped and made a later compatible declaration a redefinition; defines the redeclaration rule and `E2002`, which had been emitted without a definition. Measured. |
 | 1.9.30 | 2026-09-01 | Makes explicit in 10.1.18 that a declarator list may declare several functions and that `typeof` of a dereferenced function pointer names a function type; both were already implied and both were refused by the implementation, the first by a deliberate restriction the kernel turned out to need. |
