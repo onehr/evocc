@@ -106,7 +106,7 @@ Other useful flags: `-E` (preprocess), `--parse-only`, `--emit=c-hir`, and `--su
 
 ![How the work is driven](docs/images/loop.png)
 
-- The specification (`docs/evoir-spec.md`, revision 1.9.33) is the only authority. Any rule about observable behaviour is measured in a sealed GCC-14.2 / Clang-19.1 container *before* it is written down. Where the two compilers disagree, the spec records it and takes the answer that refuses rather than voting.
+- The specification (`docs/evoir-spec.md`, revision 1.9.34) is the only authority. Any rule about observable behaviour is measured in a sealed GCC-14.2 / Clang-19.1 container *before* it is written down. Where the two compilers disagree, the spec records it and takes the answer that refuses rather than voting.
 - Every change opens with a tests-only commit whose failures are declared in advance, and closes with a dashboard published from observer-sealed evidence. The dashboard names the next thing the kernel needs.
 - An AI executor that hits a gap in the spec stops and asks. That has happened six times; five times the gap was an error by the architect, caught by a machine before it became code.
 

@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.33** | **Authoritative reference** | **2026-09-02**
+**Revision 1.9.34** | **Authoritative reference** | **2026-09-02**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2613,6 +2613,17 @@ and update site, with no list of admitted forms (evidence `p19.c`, `m3`).
 Measured defect at revision 1.9.32: `init.pn = pnames` with `const char *
 const *pn` was `E2101` in 40 units.
 
+**Array lvalues.** Every expression of array type that is an lvalue decays
+to a pointer to its first element wherever an array expression may: a named
+object, an array-typed member of a structure or union reached through `.` or
+`->` (fixed-size, zero-length or flexible), an element of an array of arrays,
+a string literal, and a compound literal. One decay rule serves them all, so
+`buf->head->iov_len` with `struct kvec head[1]`, `f->fib6_nh->fam` with a
+flexible `fib6_nh[]`, `p->buf` with `char buf[0]`, and `"RSDTZW"[i]` are
+valid (evidence `p27-array-lvalues.c`, both oracles compile). Measured defect
+at revision 1.9.33: these were `E2102` (`invalid-projected-lvalue`) in about
+100 units (`WARN_ON` in `sunrpc/svc.h`, `ip6_route.h`, `binfmt_elf.c`).
+
 #### 10.1.4 Sequencing Lowering
 
 C sequence points lower to memory token threading and world token threading.
@@ -3006,6 +3017,18 @@ Nothing changes below the plan: lowering consumes `InitAction`s exactly as
 before, so an initializer that arrives through designators is
 indistinguishable, in EvoIR, from one written positionally.
 
+**Range designators and inferred bounds.** `[lo ... hi]` designates every
+element from `lo` to `hi` inclusive; `lo` and `hi` are integer constant
+expressions with `lo <= hi`. An array declared without a bound takes as its
+size the larger of the positional count and one more than the largest index
+any designator or range names, at any nesting depth of the same array. A
+later initializer for an element already initialized replaces it (Clang-19
+warns `-Winitializer-overrides`, both oracles accept; evidence
+`p22-designators.c`, whose `check1..3` arrays make the sizes compile-time
+assertions). Measured defect at revision 1.9.33: range designators were
+`E1001` and designators past the positional count in an unbounded array were
+`E2906` in 64 units.
+
 #### 10.1.13 Compound Literals
 
 `(type-name){ initializer-list }` denotes an object of that type, initialized
@@ -3112,6 +3135,23 @@ evaluates to zero is `E2911` (`static-assertion-failed`) at the `_Static_assert`
 keyword. `__builtin_constant_p` and `__builtin_types_compatible_p` are integer
 constant expressions in that position; `__builtin_*_overflow` is not (both
 oracles reject it in a static assertion).
+
+**Library builtins.** `__builtin_memset`, `__builtin_memcpy`,
+`__builtin_memcmp`, `__builtin_strcmp`, `__builtin_strncmp` and
+`__builtin_strlen` have the prototypes of the library functions they name
+(`memset` returns `void *`, `strlen` returns `size_t`); `__builtin_alloca(n)`
+returns `void *`; `__builtin_va_list`, `__builtin_va_start`,
+`__builtin_va_arg(ap, T)` (of type `T`) and `__builtin_va_end` are typed by the
+front end while their execution stays `E3030`. `__builtin_isdigit`,
+`__builtin_isalpha`, `__builtin_isspace`, `__builtin_toupper` and
+`__builtin_tolower` exist only in GCC-14; Clang-19 has no such builtins
+(evidence `p26-builtins.c`), and the kernel's `ctype.h` selects them with
+`__has_builtin`, which the profile answers as GCC does. They return `int`
+with C-locale semantics over the value of their `int` argument; the full
+tables over 0..255 and the answers for -1 and 0x130 (both 0) are recorded in
+`p28-table.out` (digest `39c6154f...cb09`), and the implementation must
+reproduce that file. Measured defect at revision 1.9.33: these were `E2001`
+in 27 units.
 
 #### 10.1.15 Checked arithmetic builtins
 
@@ -3538,6 +3578,15 @@ nested aggregate members included (evidence `p19.c`, `tt` and `pv`).
 Measured defect at revision 1.9.32: `(void *)&sysctl_vals[0]` (`SYSCTL_ZERO`)
 was `E2208` in 54 units.
 
+**Integer constants as pointers; decay in static objects.** An integer
+constant expression converted by a cast to a pointer type is an address
+constant (`(void *) 2`, the kernel's `TIMER_ENTRY_STATIC`). The decay of any
+array lvalue that designates part of an object with static storage duration
+is an address constant as well: `init_s.x`, `arr2[1]`,
+`init_files.close_on_exec_init` (evidence `p25-static-init.c`, both oracles
+compile). Measured defect at revision 1.9.33: `DEFINE_STATIC_SRCU`,
+`DEFINE_KFIFO` and array-member initializers were `E2208` in 21 units.
+
 #### 10.1.20 Source locations
 
 Every token the preprocessor hands to the parser carries two spans. Its
@@ -3633,6 +3682,27 @@ oracles warn under `-Wpointer-sign`, which the kernel disables; evidence
 swapped struct order measured that case as well). Measured defect at revision
 1.9.32: `DEFINE_CLASS(_gpiochip_for_each_data, ...)`, whose constructor takes
 `int *i` for an `unsigned int *` member, was `E2202` in 20 units.
+
+**Function pointers and `void *`.** A pointer to function converts to and
+from `void *` in initialization, assignment, argument passing, `return`,
+casts and both arms of the conditional operator; `(fn_t)0` and `(void *)0`
+are null pointer constants there, and `cond ? impl : (void *)0` has the
+function pointer type. Arithmetic on a `void *` operand follows 10.1.3 and
+its result may be converted to a function pointer the same way (evidence
+`p23-function-pointers.c`, both oracles compile). Measured defect at revision
+1.9.33: `_OF_DECLARE`, `SIMPLE_DEV_PM_OPS`, `DEFINE_STATIC_CALL`, `bd_holder`
+and `__pa_symbol` assignments were `E2202`, `E2102` or `E1003` in about 60
+units.
+
+**`_Pragma`, spellings and attribute placement.** `_Pragma("...")` is handled
+exactly where `#pragma` would be, including at file scope between
+declarations and inside a macro expansion; `__inline` and `__inline__` spell
+`inline`; `__restrict` and `__restrict__` spell `restrict`; an attribute may
+stand between any two declaration specifiers, as in `static const
+__attribute__((unused)) struct r` (evidence `p24-spellings.c`, both oracles
+compile). Measured defect at revision 1.9.33: `__bpf_kfunc_start_defs()`,
+`MEM_STATIC`, `__maybe_unused` between specifiers and `__restrict` parameters
+were `E1001` or `E1002` in 37 units.
 
 ### 10.4 EvoCPP Target Profile
 
@@ -4317,6 +4387,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.34 | 2026-09-02 | Third full-configuration survey (2,445 of 2,798 clean). Defines array lvalue decay for members, flexible members and string literals (10.1.3); range designators and inferred bounds (10.1.12); function pointer and `void *` conversions, `_Pragma`, `__inline`, `__restrict` and attribute placement (10.1.18); integer constants cast to pointers and static array decay as address constants (10.1.19); library and GCC-only ctype builtins (10.1.14). Measured. |
 | 1.9.33 | 2026-09-02 | Second full-configuration survey (1,292 of 2,832 clean). Defines directives inside macro arguments (`E0113` for `#pragma`, an oracle conflict) and empty-argument variadic forwarding (10.4); `__func__` and `__FUNCTION__`, `E2921` for `__PRETTY_FUNCTION__` (oracle conflict), labeled last statements in statement expressions (10.1.17); array parameter adjustment and pointer sign in conversions (10.1.18); modifiable lvalues as one predicate (10.1.3); address constants through casts and nested aggregates (10.1.19). Measured. |
 | 1.9.32 | 2026-09-02 | Defines source locations: spelling and expansion spans, total span composition from expansion spans, no buffer slicing (10.1.20); defines the whitespace flag, stringization spacing, and rescanning into the outer token sequence (10.4). Three measured defects behind the full-configuration survey's 2,768 panics and 56 `E0105` units. Measured. |
 | 1.9.31 | 2026-09-01 | Admits the `__typeof` spelling; states that a statement expression inside a `typeof` operand scopes every declaration it makes, including ones with linkage, after an `extern` declared there escaped and made a later compatible declaration a redefinition; defines the redeclaration rule and `E2002`, which had been emitted without a definition. Measured. |
