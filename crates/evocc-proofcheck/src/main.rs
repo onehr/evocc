@@ -53,7 +53,12 @@ fn main() -> ExitCode {
     }
     let eligible = derive_eligible_regions(&before_module);
     let reassembled_module = match claim(&certificate, &before_module, &eligible) {
-        Ok(Claim::Zero) => before.clone(),
+        // Section 11.3: a certificate with no region claims that after.evo is
+        // the canonical rendering of the module parsed from before.evo, and
+        // nothing else. Comparing against the raw input bytes instead would
+        // refuse every gapped or otherwise non-canonical input the producer had
+        // merely rendered.
+        Ok(Claim::Zero) => evocc_evoir::render_module(&before_module).into_bytes(),
         Ok(Claim::Regions(replacements)) => match reassemble(&before_module, replacements) {
             Ok(module) => evocc_evoir::render_module(&module).into_bytes(),
             Err(()) => return ExitCode::from(3),

@@ -113,6 +113,14 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
             }
         }
     }
+    if regions.is_empty() {
+        // Section 11.3: a certificate with no region block claims that the
+        // output is the canonical rendering of the parsed input and nothing
+        // else. Renumbering a module on the way out of a transaction that
+        // admitted nothing would make that claim false while the optimizer
+        // believed it had done no work.
+        return zero_transaction(module, input, report);
+    }
     let (output, value_remap) = match apply(module, &accepted) {
         Ok(output) => output,
         Err(()) => {
