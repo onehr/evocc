@@ -287,13 +287,13 @@ fn build_region(
             rule: opportunity.rule,
             replacement: opportunity.replacement.clone(),
         };
-        let (rule, binding_values) = exact_rule(&event.instruction, &event.facts, &opportunity)?;
-        let bindings = binding_values
+        let (rule, binding_paths) = exact_rule(&event.instruction, &event.facts, &opportunity)?;
+        let bindings = binding_paths
             .iter()
-            .map(|(name, value)| {
+            .map(|(name, path)| {
                 Some((
                     (*name).to_owned(),
-                    classes.find(*value_classes.get(&value.id)?)?,
+                    binding_class(&nodes, &classes, node_id, *path)?,
                 ))
             })
             .collect::<Option<Vec<_>>>()?;
@@ -580,44 +580,107 @@ fn before_node(
     })
 }
 
-fn exact_rule<'a>(
+/// Where the node stream puts one rule variable.
+///
+/// Section 11.3 requires a binding to equal the class a checker derives from
+/// the operation and children of the node the rewrite names, after the merges
+/// recorded before it. A path into that node is therefore the only admissible
+/// description of a variable; an operand of the instruction is not, because a
+/// later replacement in the same witness closure may have remapped it onto a
+/// different class holding an equal constant.
+#[derive(Clone, Copy)]
+struct BindingPath {
+    child: usize,
+    /// For a nested left pattern, the operation of the node the pattern passes
+    /// through and the child of that node the variable names.
+    through: Option<(&'static str, usize)>,
+}
+
+const LEFT: usize = 0;
+const RIGHT: usize = 1;
+
+impl BindingPath {
+    const fn child(child: usize) -> Self {
+        Self {
+            child,
+            through: None,
+        }
+    }
+
+    const fn nested(child: usize, operation: &'static str, inner: usize) -> Self {
+        Self {
+            child,
+            through: Some((operation, inner)),
+        }
+    }
+}
+
+/// Resolve one variable against the emitted node stream and the partition as it
+/// stands before this rewrite.
+fn binding_class(
+    nodes: &[EvpNode],
+    classes: &LocalClasses,
+    node: u32,
+    path: BindingPath,
+) -> Option<u32> {
+    let named = nodes.get(node as usize)?;
+    let class = classes.find(*named.children.get(path.child)?)?;
+    let Some((operation, inner)) = path.through else {
+        return Some(class);
+    };
+    nodes
+        .iter()
+        .filter(|candidate| {
+            candidate.source == EvpNodeSource::Before
+                && candidate.operation == operation
+                && classes.find(candidate.owner) == Some(class)
+        })
+        .find_map(|candidate| classes.find(*candidate.children.get(inner)?))
+}
+
+fn exact_rule(
     instruction: &Inst,
     facts: &HashMap<u32, ScalarFact>,
     opportunity: &RewriteOpportunity,
-) -> Option<(&'static str, Vec<(&'a str, Value)>)> {
-    let x = |value: &Value| vec![("x", value.clone())];
-    let ab = |left: &Value, right: &Value| vec![("a", left.clone()), ("b", right.clone())];
+) -> Option<(&'static str, Vec<(&'static str, BindingPath)>)> {
+    let x = |child: usize| vec![("x", BindingPath::child(child))];
+    let ab = || {
+        vec![
+            ("a", BindingPath::child(LEFT)),
+            ("b", BindingPath::child(RIGHT)),
+        ]
+    };
     match (instruction, opportunity.rule, &opportunity.replacement) {
         (Inst::Add(_, left, right), ScalarRewrite::AddZero, Replacement::Alias(value)) => {
-            if value == left { Some(("p0_001_add_zero_rhs", x(left))) }
-            else if value == right { Some(("p0_002_add_zero_lhs", x(right))) } else { None }
+            if value == left { Some(("p0_001_add_zero_rhs", x(LEFT))) }
+            else if value == right { Some(("p0_002_add_zero_lhs", x(RIGHT))) } else { None }
         }
         (Inst::Mul(_, left, right), ScalarRewrite::MulOne, Replacement::Alias(value)) => {
-            if value == left { Some(("p0_003_mul_one_rhs", x(left))) }
-            else if value == right { Some(("p0_004_mul_one_lhs", x(right))) } else { None }
+            if value == left { Some(("p0_003_mul_one_rhs", x(LEFT))) }
+            else if value == right { Some(("p0_004_mul_one_lhs", x(RIGHT))) } else { None }
         }
         (Inst::And(_, left, right), ScalarRewrite::AndZero, Replacement::Constant(0)) => {
-            if is_constant(right, facts, 0) { Some(("p0_005_and_zero_rhs", x(left))) }
-            else if is_constant(left, facts, 0) { Some(("p0_006_and_zero_lhs", x(right))) } else { None }
+            if is_constant(right, facts, 0) { Some(("p0_005_and_zero_rhs", x(LEFT))) }
+            else if is_constant(left, facts, 0) { Some(("p0_006_and_zero_lhs", x(RIGHT))) } else { None }
         }
         (Inst::Or(_, left, right), ScalarRewrite::OrZero, Replacement::Alias(value)) => {
-            if value == left { Some(("p0_007_or_zero_rhs", x(left))) }
-            else if value == right { Some(("p0_008_or_zero_lhs", x(right))) } else { None }
+            if value == left { Some(("p0_007_or_zero_rhs", x(LEFT))) }
+            else if value == right { Some(("p0_008_or_zero_lhs", x(RIGHT))) } else { None }
         }
         (Inst::Sub(_, _, right), ScalarRewrite::DoubleNegation, Replacement::Alias(value)) => {
             matches!(facts.get(&right.id), Some(ScalarFact::Negation { operand }) if operand == value)
-                .then(|| ("p0_009_double_neg", x(value)))
+                .then(|| ("p0_009_double_neg", vec![("x", BindingPath::nested(RIGHT, "sub", RIGHT))]))
         }
         (Inst::ICmp(_, comparison, left, right), ScalarRewrite::IdentityComparison, Replacement::Constant(_)) if left == right => {
             Some((match comparison {
                 CmpOp::Eq => "p0_010_icmp_eq_self", CmpOp::Ne => "p0_011_icmp_ne_self",
                 CmpOp::SLt => "p0_012_icmp_slt_self", CmpOp::SLe => "p0_013_icmp_sle_self",
                 CmpOp::ULt => "p0_014_icmp_ult_self", CmpOp::ULe => "p0_015_icmp_ule_self",
-            }, x(left)))
+            }, x(LEFT)))
         }
         (instruction, ScalarRewrite::ConstantFold, Replacement::Constant(_)) => {
             let operands = scalar_operands(instruction);
-            let [left, right] = operands.as_slice() else { return None; };
+            let [_left, _right] = operands.as_slice() else { return None; };
             let rule = match instruction {
                 Inst::Add(..) => "p0_100_fold_add", Inst::Sub(..) => "p0_101_fold_sub",
                 Inst::Mul(..) => "p0_102_fold_mul", Inst::And(..) => "p0_103_fold_and",
@@ -630,7 +693,7 @@ fn exact_rule<'a>(
                 Inst::ICmp(_, CmpOp::ULe, ..) => "p0_111_fold_icmp_ule",
                 _ => return None,
             };
-            Some((rule, ab(left, right)))
+            Some((rule, ab()))
         }
         _ => None,
     }
