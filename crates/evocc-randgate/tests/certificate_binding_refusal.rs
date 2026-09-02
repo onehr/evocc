@@ -229,6 +229,104 @@ fn a_certificate_with_no_region_claims_the_canonical_rendering_of_its_input() {
         .expect("a no-op claim must replay");
 }
 
+/// The same disagreement one field further along: the right-hand side.
+///
+/// Section 11.3 says a `class:cI` proof reference "is permitted only when that
+/// side of the instantiated rule is a bare variable bound to `cI`". An alias
+/// rule such as `mul(?x, 1) -> ?x` has exactly that shape, so its right-hand
+/// side must name the class `?x` is bound to. The producer took it from the
+/// instruction's operand instead, and an earlier replacement in the same
+/// witness closure had pointed that operand at a different class holding an
+/// equal constant -- so the binding said `c1` and the right-hand side said
+/// `c3`, and the checker, which requires them to agree, refused.
+///
+/// Found by the twenty-thousand-program campaign at seed 1592636988, on a
+/// module the extended generator produces and the earlier one did not.
+///
+/// ```text
+/// %v0 = const.bits<2> 2
+/// %v1 = const.bits<2> 1
+/// %v2 = and.bits<2> %v0, %v1
+/// %v3 = const.bits<2> 1
+/// %v4 = or.bits<2> %v2, %v3
+/// %v5 = mul.bits<2> %v4, %v1
+/// ```
+fn aliasing_module() -> Module {
+    let two = value(0, EvoIRType::Bits(2));
+    let one = value(1, EvoIRType::Bits(2));
+    let masked = value(2, EvoIRType::Bits(2));
+    let other_one = value(3, EvoIRType::Bits(2));
+    let merged = value(4, EvoIRType::Bits(2));
+    let scaled = value(5, EvoIRType::Bits(2));
+    let memory = value(6, EvoIRType::Mem(Region::All));
+    let world = value(7, EvoIRType::World);
+
+    let function = Function {
+        name: "main".to_owned(),
+        params: vec![
+            FunctionParam {
+                name: "arg0".to_owned(),
+                ty: EvoIRType::Mem(Region::All),
+            },
+            FunctionParam {
+                name: "arg1".to_owned(),
+                ty: EvoIRType::World,
+            },
+        ],
+        ret_tys: vec![
+            EvoIRType::Bits(2),
+            EvoIRType::Mem(Region::All),
+            EvoIRType::World,
+        ],
+        effects: EffectSummary::default(),
+        blocks: vec![Block {
+            id: 0,
+            args: vec![argument(&memory), argument(&world)],
+            insts: vec![
+                Inst::Const(two.clone(), 2),
+                Inst::Const(one.clone(), 1),
+                Inst::And(masked.clone(), two, one.clone()),
+                Inst::Const(other_one.clone(), 1),
+                Inst::Or(merged.clone(), masked, other_one),
+                Inst::Mul(scaled.clone(), merged, one),
+            ],
+            terminator: Inst::Ret(vec![scaled, memory.clone(), world.clone()]),
+        }],
+    };
+
+    let mut module = Module {
+        globals: Vec::new(),
+        functions: vec![function],
+    };
+    module.recompute_effect_summaries();
+    module
+}
+
+#[test]
+fn an_alias_right_hand_side_must_name_the_class_its_variable_is_bound_to() {
+    let before = aliasing_module();
+    validate_module(&before).expect("the reduced module is valid EvoIR");
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::new(20_000, 256));
+    validate_module(&outcome.module).expect("the optimized module is valid EvoIR");
+
+    let before_text = render_module(&before);
+    let after_text = render_module(&outcome.module);
+    let proof_text = render_evp1(&outcome.certificate);
+
+    assert!(
+        !outcome.certificate.regions.is_empty(),
+        "the reduced module must still be optimized, or it pins nothing:\n{before_text}"
+    );
+
+    if let Err(error) = checker().check(&before_text, &after_text, &proof_text) {
+        panic!(
+            "the standalone checker refused a semantically correct optimization: {error}\n\
+             --- before.evo ---\n{before_text}\n--- after.evo ---\n{after_text}\n\
+             --- proof.evp ---\n{proof_text}"
+        );
+    }
+}
+
 /// The located checker is a real separate process, not a library call into the
 /// optimizer's own code. Without this the tests above could pass by construction.
 #[test]
