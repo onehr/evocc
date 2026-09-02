@@ -287,27 +287,48 @@ fn an_epoch_marker_may_not_exceed_the_consumed_epoch_count() {
     );
 }
 
+/// Each of the three exhaustion reasons, in a form that holds and one that does
+/// not.
+///
+/// The certificates are hand-edited rather than produced. No input this
+/// producer can be given reaches a profile ceiling: the node and epoch bounds
+/// are fixed at a hundred thousand and 1024, and the fuel bound is
+/// `max(256, 8n)`, so one rule would have to fire 256 times inside a single
+/// region's single epoch. What is testable is therefore the checking half, and
+/// that is what these are.
 #[test]
 fn an_exhaustion_stop_must_coincide_with_its_bound() {
     let case = Case::new();
     let epochs = case.consumed("epochs");
     let fuel = case.consumed("fuel");
+    let nodes = case.consumed("nodes");
 
-    let exhausted = format!(
-        "budget nodes={MAX_NODES}/{MAX_NODES} epochs={epochs}/{MAX_EPOCHS} fuel={fuel}/256 n=0 stop=nodes"
-    );
-    case.accepts(
-        &case.with_budget(&exhausted),
-        "stop=nodes holds when the node consumption reached its bound",
-    );
-
-    let claimed = format!(
-        "budget nodes=1/{MAX_NODES} epochs={epochs}/{MAX_EPOCHS} fuel={fuel}/256 n=0 stop=nodes"
-    );
-    case.refuses(
-        &case.with_budget(&claimed),
-        "stop=nodes must be refused when the node consumption is below its bound",
-    );
+    for (holds, refused, why) in [
+        (
+            format!("budget nodes={MAX_NODES}/{MAX_NODES} epochs={epochs}/{MAX_EPOCHS} fuel={fuel}/256 n=0 stop=nodes"),
+            format!("budget nodes=1/{MAX_NODES} epochs={epochs}/{MAX_EPOCHS} fuel={fuel}/256 n=0 stop=nodes"),
+            "nodes",
+        ),
+        (
+            format!("budget nodes={nodes}/{MAX_NODES} epochs={MAX_EPOCHS}/{MAX_EPOCHS} fuel={fuel}/256 n=0 stop=epochs"),
+            format!("budget nodes={nodes}/{MAX_NODES} epochs={epochs}/{MAX_EPOCHS} fuel={fuel}/256 n=0 stop=epochs"),
+            "epochs",
+        ),
+        (
+            format!("budget nodes={nodes}/{MAX_NODES} epochs={epochs}/{MAX_EPOCHS} fuel=256/256 n=0 stop=fuel"),
+            format!("budget nodes={nodes}/{MAX_NODES} epochs={epochs}/{MAX_EPOCHS} fuel={fuel}/256 n=0 stop=fuel"),
+            "fuel",
+        ),
+    ] {
+        case.accepts(
+            &case.with_budget(&holds),
+            &format!("stop={why} holds when that quantity reached its bound"),
+        );
+        case.refuses(
+            &case.with_budget(&refused),
+            &format!("stop={why} must be refused when that quantity is below its bound"),
+        );
+    }
 }
 
 #[test]

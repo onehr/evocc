@@ -703,3 +703,42 @@ fn the_recorded_stop_reason_follows_the_measured_fixpoint() {
          so the recorded stop reason must be {expected:?}"
     );
 }
+
+/// How deep the campaign's schedules actually run.
+///
+/// An epoch count is only worth recording if it varies, so this measures the
+/// distribution rather than asserting a constant, and requires only that more
+/// than one epoch is genuinely reached.
+#[test]
+fn the_campaign_runs_more_than_one_epoch() {
+    let budget = evocc_eqopt::ScalarEqBudget::new(20_000, 256);
+    let mut multi = 0_u64;
+    let mut deepest = 0_u64;
+    let mut optimized = 0_u64;
+    for offset in 0..GATE_PROGRAMS {
+        let seed = GATE_SEED.wrapping_add(offset);
+        let module = generate_module(seed, config());
+        let outcome = evocc_eqopt::optimize_scalar_module_with_evp1(&module, budget);
+        if outcome.certificate.regions.is_empty() {
+            continue;
+        }
+        optimized += 1;
+        let epochs = outcome
+            .certificate
+            .budget
+            .expect("an evp2 certificate carries a budget line")
+            .epochs
+            .consumed;
+        deepest = deepest.max(epochs);
+        if epochs > 1 {
+            multi += 1;
+        }
+    }
+    println!("optimizedPrograms={optimized}");
+    println!("multiEpochPrograms={multi}");
+    println!("deepestEpoch={deepest}");
+    assert!(
+        multi > 0,
+        "no program ran more than one epoch, so the tiering is untested"
+    );
+}

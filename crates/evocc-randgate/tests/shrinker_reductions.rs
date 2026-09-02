@@ -179,8 +179,12 @@ fn a_block_with_several_predecessors_is_left_alone() {
     let mut always = |candidate: &Module| validate_module(candidate).is_ok();
     let reduced = shrink_module(&module, &mut always, 16);
     validate_module(&reduced).expect("a reduction must still validate");
+    println!("blocksBefore={}", blocks(&module));
+    println!("blocksAfter={}", blocks(&reduced));
     assert!(
-        blocks(&reduced) <= blocks(&module),
-        "shrinking added blocks"
+        blocks(&reduced) < blocks(&module),
+        "merging reached no block of a generated module: {} stayed {}",
+        blocks(&module),
+        blocks(&reduced)
     );
 }

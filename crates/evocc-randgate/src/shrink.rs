@@ -1,8 +1,8 @@
 //! Minimization of a refusing module.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
-use evocc_evoir::{validate_module, Function, Inst, Module};
+use evocc_evoir::{remap_inst_uses, validate_module, Block, Function, Inst, Module};
 
 /// Delete instructions, blocks and functions for as long as `still_refuses`
 /// keeps answering true and the reduced module still validates.
@@ -24,6 +24,7 @@ pub fn shrink_module(
         let mut changed = false;
         changed |= drop_functions(&mut best, still_refuses);
         changed |= collapse_branches(&mut best, still_refuses);
+        changed |= merge_blocks(&mut best, still_refuses);
         changed |= drop_instructions(&mut best, still_refuses);
         if !changed {
             break;
@@ -111,6 +112,82 @@ fn drop_instructions(best: &mut Module, still_refuses: &mut dyn FnMut(&Module) -
         }
     }
     changed
+}
+
+/// Fold a block into the one block that branches to it.
+///
+/// Neither deleting instructions nor collapsing a conditional branch can
+/// shorten a straight-line chain: every block in one is reachable from a
+/// predecessor whose terminator is already unconditional. This is the reduction
+/// that reaches them, and it is the only one here that rewrites operands, since
+/// the successor's block arguments become the values its predecessor passed.
+///
+/// A block with two predecessors is left alone. Merging it would mean copying
+/// it into both, which grows the module before it shrinks it and is a different
+/// reduction with a different risk.
+fn merge_blocks(best: &mut Module, still_refuses: &mut dyn FnMut(&Module) -> bool) -> bool {
+    let mut changed = false;
+    let mut function = best.functions.len();
+    while function > 0 {
+        function -= 1;
+        let mut block = best.functions[function].blocks.len();
+        while block > 0 {
+            block -= 1;
+            let mut candidate = best.clone();
+            if merge_one(&mut candidate.functions[function], block).is_none() {
+                continue;
+            }
+            changed |= accept(best, candidate, still_refuses);
+        }
+    }
+    changed
+}
+
+/// Merge the block at `index` into its unique predecessor, if it has one.
+fn merge_one(function: &mut Function, index: usize) -> Option<()> {
+    let target = function.blocks.get(index)?.id;
+    if function.blocks.first()?.id == target {
+        return None;
+    }
+    let mut predecessors =
+        function
+            .blocks
+            .iter()
+            .enumerate()
+            .filter(|(_, block)| match &block.terminator {
+                Inst::Br(successor, _) => *successor == target,
+                Inst::CondBr(_, first, _, second, _) => *first == target || *second == target,
+                _ => false,
+            });
+    let (source, predecessor) = predecessors.next()?;
+    if predecessors.next().is_some() || source == index {
+        return None;
+    }
+    let Inst::Br(_, arguments) = &predecessor.terminator else {
+        return None;
+    };
+
+    let merged = function.blocks.get(index)?.clone();
+    if merged.args.len() != arguments.len() {
+        return None;
+    }
+    let bindings: HashMap<u32, evocc_evoir::Value> = merged
+        .args
+        .iter()
+        .zip(arguments)
+        .map(|(argument, incoming)| (argument.value.id, incoming.clone()))
+        .collect();
+
+    let source_block: &mut Block = function.blocks.get_mut(source)?;
+    for mut inst in merged.insts {
+        remap_inst_uses(&mut inst, &bindings);
+        source_block.insts.push(inst);
+    }
+    let mut terminator = merged.terminator;
+    remap_inst_uses(&mut terminator, &bindings);
+    source_block.terminator = terminator;
+    function.blocks.remove(index);
+    Some(())
 }
 
 fn prune_unreachable(function: &mut Function) {

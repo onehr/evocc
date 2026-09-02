@@ -26,11 +26,7 @@ const MAX_NODES: u64 = 100_000;
 const MAX_EPOCHS: u64 = 1_024;
 /// The floor of the per-rule fuel bound, `max(256, 8 * n)`.
 const FUEL_FLOOR: u64 = 256;
-/// The scalar bridge proposes everything it can in a single sweep, so a
-/// transaction that admitted any region ran exactly one epoch, and its markers
-/// are numbered from one so that a marker and the count it is checked against
-/// mean the same thing.
-const SINGLE_EPOCH: u64 = 1;
+
 const REGISTRY_SHA256: &str = "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9";
 pub(crate) type ValueRemap = HashMap<(String, u32), u32>;
 
@@ -176,9 +172,13 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
 fn scheduler_record(regions: &[EvpRegion]) -> EvpBudget {
     let mut nodes = 0_u64;
     let mut widest = 0_u64;
-    let mut firings: HashMap<&str, u64> = HashMap::new();
+    let mut epochs = 0_u64;
+    // Fuel is per rule per epoch, so a rule that fires in two epochs has not
+    // spent twice the fuel of one; the consumption is the busiest single pair.
+    let mut firings: HashMap<(&str, u64), u64> = HashMap::new();
     for region in regions {
         let mut before = 0_u64;
+        let mut epoch = 0_u64;
         for event in &region.events {
             match event {
                 EvpEvent::Node(node) => {
@@ -188,14 +188,17 @@ fn scheduler_record(regions: &[EvpRegion]) -> EvpBudget {
                     }
                 }
                 EvpEvent::Rewrite(rewrite) => {
-                    *firings.entry(rewrite.rule.as_str()).or_default() += 1;
+                    *firings.entry((rewrite.rule.as_str(), epoch)).or_default() += 1;
                 }
-                _ => {}
+                EvpEvent::Epoch(marker) => {
+                    epoch = *marker;
+                    epochs = epochs.max(*marker);
+                }
+                EvpEvent::Congruence(_) => {}
             }
         }
         widest = widest.max(before);
     }
-    let epochs = if regions.is_empty() { 0 } else { SINGLE_EPOCH };
     EvpBudget {
         nodes: EvpQuantity {
             consumed: nodes,
@@ -210,11 +213,15 @@ fn scheduler_record(regions: &[EvpRegion]) -> EvpBudget {
             bound: FUEL_FLOOR.max(widest.saturating_mul(8)),
         },
         n: widest,
-        // The sweep ends because it has proposed everything it can, never
-        // because a profile ceiling was reached. `saturated` is telemetry the
-        // checker does not verify, which is exactly what makes it the honest
-        // answer here rather than a claim about a bound.
-        stop: EvpStop::Saturated,
+        // Measured, not assumed: a fresh transaction over this producer's own
+        // output still admits a region for 1 of the standing campaign's 1000
+        // programs, so a transaction is not a fixpoint and `saturated` would be
+        // a false claim. The stop is this producer's own rule, and `policy` is
+        // the reason for exactly that. Section 11.6 is why the residual is out
+        // of reach: a left-hand `const_like` matches only a node already in the
+        // before witness closure, so an identity rule can never consume a
+        // constant an earlier epoch derived, however many epochs run.
+        stop: EvpStop::Policy,
     }
 }
 
@@ -336,10 +343,17 @@ fn build_region(
     let root_node = *value_nodes.get(&root_event.result.id)?;
     let replacement_root = nodes.get(root_node as usize)?.owner;
     let mut classes = LocalClasses::new(seeds.len() + nodes.len())?;
-    // Section 11.3: the marker precedes the events that epoch produced for this
-    // region. One sweep means one epoch, so one marker opens every block.
-    let mut events = vec![EvpEvent::Epoch(SINGLE_EPOCH)];
-    events.extend(nodes.iter().cloned().map(EvpEvent::Node));
+    // The before nodes are the region as the transaction found it, produced by
+    // no epoch, so they precede the first marker.
+    let mut events = nodes
+        .iter()
+        .cloned()
+        .map(EvpEvent::Node)
+        .collect::<Vec<_>>();
+    // Which epoch last changed a class, so a rewrite that matches on a class an
+    // earlier rewrite merged is placed after it rather than beside it.
+    let mut changed: Vec<(u32, u64)> = Vec::new();
+    let mut marker = 0_u64;
     let mut selected = None;
     let mut normalized_root = None;
     let mut output_replacement = None;
@@ -372,6 +386,31 @@ fn build_region(
                 ))
             })
             .collect::<Option<Vec<_>>>()?;
+        // Section 8.11: an epoch runs the tiers in order because the facts one
+        // sharpens are what the next matches on. A rewrite therefore belongs to
+        // the epoch after the last one that changed a class it matches on.
+        let mut depth = 0_u64;
+        let matched = nodes.get(node_id as usize)?.children.clone();
+        for class in matched
+            .into_iter()
+            .chain(bindings.iter().map(|(_, class)| *class))
+        {
+            let root = classes.find(class)?;
+            for (recorded, epoch) in &changed {
+                if classes.find(*recorded) == Some(root) {
+                    depth = depth.max(*epoch);
+                }
+            }
+        }
+        // Markers strictly increase within a block, so a rewrite that was ready
+        // earlier is recorded in the epoch the block has reached. Firing a ready
+        // rule later is a schedule a scheduler may choose; claiming it fired
+        // before the merge it matches on would not be.
+        let epoch = (depth + 1).max(marker);
+        if epoch > marker {
+            events.push(EvpEvent::Epoch(epoch));
+            marker = epoch;
+        }
         let (rhs, rhs_ref, event_selected, event_output) = match &opportunity.replacement {
             Replacement::Alias(_) => {
                 // Section 11.3: `class:cI` is admissible only when that side of
@@ -446,6 +485,7 @@ fn build_region(
             bindings,
         }));
         classes.union(lhs, rhs)?;
+        changed.push((result, epoch));
         if event.result.id == root_event.result.id {
             selected = Some(event_selected);
             normalized_root = Some(normalized_event);
