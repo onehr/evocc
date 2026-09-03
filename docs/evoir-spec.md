@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.43** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.44** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1640,6 +1640,15 @@ earlier instruction in the same block and that instruction is itself on the
 operator allowlist below. The closure contains the root and every instruction
 reached that way. Stop at a block argument, a definition in another block, or a
 definition whose instruction is not allowlisted; that value is a seed.
+The closure additionally contains every allowlisted instruction of the same
+block, earlier than the root, that is a *structural duplicate* of an
+instruction already in the closure: the same operation and attributes, with
+operands that are pairwise the same values; duplicates of duplicates join in
+turn, to a fixed point, and each joins with its own operand cone by the rule
+above. This is what lets a region record, through congruence alone, that its
+root is an earlier instruction's twin and extract the earlier value (admitted
+at revision 1.9.44, after 16 of 16 duplicates in 256 random programs had twins
+outside their closures).
 
 Only the replacement root is changed during reassembly. Witness instructions
 remain where they were, even when they become dead, and two regions may have
@@ -1654,18 +1663,23 @@ exercise it.
 
 ```text
 const, add, sub, mul, and, or, xor,
-icmp.eq, icmp.ne, icmp.slt, icmp.sle, icmp.ult, icmp.ule
+icmp.eq, icmp.ne, icmp.slt, icmp.sle, icmp.ult, icmp.ule,
+shl, lshr, ashr, zext, sext, trunc
 ```
 
-Everything else is ineligible, including division and remainder, every shift,
-every extension and truncation, every UB predicate, `ub.assume`, all pointer and
+The shifts and width changes were admitted at revision 1.9.44: none of them
+may trap (Appendix A), the shift's definedness guard is a separate predicate
+that stays excluded, and a shift's amount operand is a witness or seed of its
+own sort. Everything else is ineligible, including division and remainder,
+every UB predicate, `ub.assume`, all pointer and
 memory forms, `call`, and all terminators. An instruction absent from this list
 is ineligible even if some future analysis would prove it total: the list is the
 authority, not the reasoning behind it.
 
 Every root and witness result in this profile has type `bits<N>` with
-`1 <= N <= 64`. Comparisons may consume one common `bits<N>` sort and produce
-`bits<1>`. Wider scalar equality is a later registry revision; silently
+`1 <= N <= 64`. Comparisons consume one common `bits<N>` sort and produce
+`bits<1>`; a shift consumes its amount in any `bits<M>`; a width change
+consumes one sort and produces another, both within the bound. Wider scalar equality is a later registry revision; silently
 truncating a wider constant to the host's integer width is invalid.
 
 **Poison and effect exclusion.** A value is *tainted* when it is the result of
@@ -4059,6 +4073,7 @@ node_source     := "before" | "derived"
 op_id           := "const" | "add" | "sub" | "mul" | "and" | "or" | "xor"
                  | "icmp.eq" | "icmp.ne" | "icmp.slt" | "icmp.sle"
                  | "icmp.ult" | "icmp.ule"
+                 | "shl" | "lshr" | "ashr" | "zext" | "sext" | "trunc"
 sort            := packed_type
 effect_class    := "pure" | "guard" | "effectful"
 node_id         := "n" evp_int
@@ -4408,6 +4423,65 @@ p1_224_xor_known_zero_rhs xor(?x,?z) => ?x when known_zero(?z)
 p1_225_xor_known_zero_lhs xor(?z,?x) => ?x when known_zero(?z)
 ```
 
+**Reviewed registry `p0.scalar.v3`.** This registry is normative for `evp2`
+certificates and includes every rule of `p0.scalar.v2` unchanged, followed by
+the fact-driven folds for the shifts and width changes admitted at revision
+1.9.44. Its digest is `aca1f15b47e602ce18c593e06d77008862947c7c7252a9f76bb823c71f53fb15`, computed as for the earlier registries:
+
+```text
+p0_001_add_zero_rhs add(?x,const_like(?x,0)) => ?x when true
+p0_002_add_zero_lhs add(const_like(?x,0),?x) => ?x when true
+p0_003_mul_one_rhs mul(?x,const_like(?x,1)) => ?x when true
+p0_004_mul_one_lhs mul(const_like(?x,1),?x) => ?x when true
+p0_005_and_zero_rhs and(?x,const_like(?x,0)) => const_like(?x,0) when true
+p0_006_and_zero_lhs and(const_like(?x,0),?x) => const_like(?x,0) when true
+p0_007_or_zero_rhs or(?x,const_like(?x,0)) => ?x when true
+p0_008_or_zero_lhs or(const_like(?x,0),?x) => ?x when true
+p0_009_double_neg sub(const_like(?x,0),sub(const_like(?x,0),?x)) => ?x when true
+p0_010_icmp_eq_self icmp.eq(?x,?x) => bool(1) when true
+p0_011_icmp_ne_self icmp.ne(?x,?x) => bool(0) when true
+p0_012_icmp_slt_self icmp.slt(?x,?x) => bool(0) when true
+p0_013_icmp_sle_self icmp.sle(?x,?x) => bool(1) when true
+p0_014_icmp_ult_self icmp.ult(?x,?x) => bool(0) when true
+p0_015_icmp_ule_self icmp.ule(?x,?x) => bool(1) when true
+p0_100_fold_add add(?a,?b) => fold.add(?a,?b) when all_const
+p0_101_fold_sub sub(?a,?b) => fold.sub(?a,?b) when all_const
+p0_102_fold_mul mul(?a,?b) => fold.mul(?a,?b) when all_const
+p0_103_fold_and and(?a,?b) => fold.and(?a,?b) when all_const
+p0_104_fold_or or(?a,?b) => fold.or(?a,?b) when all_const
+p0_105_fold_xor xor(?a,?b) => fold.xor(?a,?b) when all_const
+p0_106_fold_icmp_eq icmp.eq(?a,?b) => fold.icmp.eq(?a,?b) when all_const
+p0_107_fold_icmp_ne icmp.ne(?a,?b) => fold.icmp.ne(?a,?b) when all_const
+p0_108_fold_icmp_slt icmp.slt(?a,?b) => fold.icmp.slt(?a,?b) when all_const
+p0_109_fold_icmp_sle icmp.sle(?a,?b) => fold.icmp.sle(?a,?b) when all_const
+p0_110_fold_icmp_ult icmp.ult(?a,?b) => fold.icmp.ult(?a,?b) when all_const
+p0_111_fold_icmp_ule icmp.ule(?a,?b) => fold.icmp.ule(?a,?b) when all_const
+p1_200_known_and and(?a,?b) => known_const when fully_known
+p1_201_known_or or(?a,?b) => known_const when fully_known
+p1_202_known_xor xor(?a,?b) => known_const when fully_known
+p1_203_known_add add(?a,?b) => known_const when fully_known
+p1_204_known_sub sub(?a,?b) => known_const when fully_known
+p1_205_known_mul mul(?a,?b) => known_const when fully_known
+p1_210_known_icmp_eq icmp.eq(?a,?b) => known_const when fully_known
+p1_211_known_icmp_ne icmp.ne(?a,?b) => known_const when fully_known
+p1_212_known_icmp_slt icmp.slt(?a,?b) => known_const when fully_known
+p1_213_known_icmp_sle icmp.sle(?a,?b) => known_const when fully_known
+p1_214_known_icmp_ult icmp.ult(?a,?b) => known_const when fully_known
+p1_215_known_icmp_ule icmp.ule(?a,?b) => known_const when fully_known
+p1_220_and_cover_rhs and(?x,?m) => ?x when covers(?m,?x)
+p1_221_and_cover_lhs and(?m,?x) => ?x when covers(?m,?x)
+p1_222_or_cover_rhs or(?x,?m) => ?m when covers(?m,?x)
+p1_223_or_cover_lhs or(?m,?x) => ?m when covers(?m,?x)
+p1_224_xor_known_zero_rhs xor(?x,?z) => ?x when known_zero(?z)
+p1_225_xor_known_zero_lhs xor(?z,?x) => ?x when known_zero(?z)
+p1_206_known_shl shl(?a,?k) => known_const when fully_known
+p1_207_known_lshr lshr(?a,?k) => known_const when fully_known
+p1_208_known_ashr ashr(?a,?k) => known_const when fully_known
+p1_230_known_zext zext(?a) => known_const when fully_known
+p1_231_known_sext sext(?a) => known_const when fully_known
+p1_232_known_trunc trunc(?a) => known_const when fully_known
+```
+
 **Registries and revisions.** A registry is admissible only when this
 specification prints its rule block and digest; a producer and a checker may
 not agree on a registry between themselves, because a certificate checked
@@ -4415,7 +4489,7 @@ against rules it supplied establishes only that its merges follow from its own
 claims. A revision includes every rule of the registry it revises, unchanged
 and in the same order, before its new rules, so a rule id keeps its meaning
 across revisions. `evp1` accepts `p0.scalar.v1` only; `evp2` accepts
-`p0.scalar.v1` and `p0.scalar.v2`. Defined at revision 1.9.40 after the
+`p0.scalar.v1`, `p0.scalar.v2` and `p0.scalar.v3`. Defined at revision 1.9.40 after the
 randomized gate stopped for want of a procedure.
 
 **Which registry a certificate names, and rule order within a tier.** A
@@ -4569,6 +4643,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.44 | 2026-09-03 | Admits shifts and width changes as region roots and witnesses (8.5) and in the certificate's `op_id` (11.3), after the 1.9.43 transfer rows were measured to enable zero premised rewrites while excluded from regions; extends the witness closure to structural duplicates so a common subexpression is a region proved by congruence alone (8.5); prints `p0.scalar.v3` with six fact-driven folds for the new operators (11.6). |
 | 1.9.43 | 2026-09-03 | Class-based matching measured (+25 regions, +26 merge-enabled matches over 256 seeds). Extends the 8.10 transfer table with `shl`, `lshr`, `ashr` under a fully known in-range amount and with `zext`, `sext`, `trunc`; the registry is unchanged, the new facts feed the existing Tier B rules. |
 | 1.9.42 | 2026-09-03 | Congruence closure measured. Places a congruence that holds at insertion before every epoch marker and one a merge enabled after that epoch's marker; states that a rewrite joining a class with itself is not recorded and the replacement stands on the recorded merges (11.3). |
 | 1.9.41 | 2026-09-03 | Fact-driven rewrites measured (772 of 7,900 regions carry a premise; residual regions 20 to 0). Settles four readings: folds carry no premise (8.10), a certificate names the narrowest reviewed registry containing its rules, rule order within a tier is registry order so three Tier B rules are dominated, premise classes resolve through the partition, and a premise on a premise-free rule or with the wrong digit count is invalid (11.6). |
