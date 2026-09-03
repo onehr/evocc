@@ -116,10 +116,7 @@ fn mul_two_lhs() -> Module {
 /// `%r = add %x, %x`, which `p2_302_add_self_shl` rewrites to `shl(%x, 1)`.
 fn add_self() -> Module {
     let result = bits(3);
-    module_of(
-        vec![Inst::Add(result.clone(), bits(0), bits(0))],
-        result,
-    )
+    module_of(vec![Inst::Add(result.clone(), bits(0), bits(0))], result)
 }
 
 /// `%r = shl %x, 1`, which `p2_303_shl_one_add` rewrites to `add(%x, %x)`.
@@ -190,7 +187,9 @@ fn each_emitting_rule_fires_under_a_policy_that_keeps_it() {
     for (rule, module, policy, emitted) in cases {
         let fired = fire(&module, policy);
         assert!(
-            fired.proof.contains(&format!("registry p0.scalar.v4 {REGISTRY_V4}")),
+            fired
+                .proof
+                .contains(&format!("registry p0.scalar.v4 {REGISTRY_V4}")),
             "{rule} must commit to the narrowest registry that prints it:\n{}",
             fired.proof
         );
@@ -254,7 +253,9 @@ fn an_emitting_right_hand_side_writes_a_constant_operand() {
         .unwrap_or_else(|| panic!("no derived shl:\n{}", fired.proof));
     println!("shift: {shift}");
     assert!(
-        !fired.rewrite("p2_302_add_self_shl").contains(&format!("node:{id} ")),
+        !fired
+            .rewrite("p2_302_add_self_shl")
+            .contains(&format!("node:{id} ")),
         "the constant is used through its parent, never named by the rewrite"
     );
     assert!(

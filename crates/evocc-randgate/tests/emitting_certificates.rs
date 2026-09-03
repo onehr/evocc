@@ -249,7 +249,11 @@ fn a_replacement_that_is_not_cheaper_is_accepted() {
         .filter(|line| line.starts_with("node ") && line.contains("source=derived"))
         .filter(|line| !line.contains("op=const"))
         .count();
-    assert_eq!(emitted, 1, "one non-constant node replaces one:\n{}", case.proof);
+    assert_eq!(
+        emitted, 1,
+        "one non-constant node replaces one:\n{}",
+        case.proof
+    );
     case.accepts(
         &case.proof,
         "a tie under the default cost is producer policy, not a checker verdict",
@@ -311,9 +315,7 @@ fn an_extraction_that_returns_the_original_root_is_refused() {
         .to_owned();
     let vacuous = case.proof.replacen(
         &extraction,
-        &format!(
-            "extract 0 {seed_class} seed:0\nextract 1 {root_class} node:{root_node}"
-        ),
+        &format!("extract 0 {seed_class} seed:0\nextract 1 {root_class} node:{root_node}"),
         1,
     );
     assert_ne!(vacuous, case.proof, "the extraction line must be present");

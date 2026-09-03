@@ -377,7 +377,10 @@ impl AppliedRewrite {
 #[derive(Debug, Clone)]
 enum GraphTerm {
     Input(Value),
-    Constant { raw: u64, ty: EvoIRType },
+    Constant {
+        raw: u64,
+        ty: EvoIRType,
+    },
     Operation,
     /// A node an emitting right-hand side built, and the pattern it was built
     /// from. Extraction selects it only when the class holds nothing cheaper,
@@ -752,13 +755,13 @@ fn bridge_candidate(
                     .iter()
                     .map(|operand| match operand {
                         EmittedOperand::Bound(value) => bridge.input(value).0,
-                        EmittedOperand::Constant(raw) => {
-                            bridge.constant(*raw, &term.result_ty).0
-                        }
+                        EmittedOperand::Constant(raw) => bridge.constant(*raw, &term.result_ty).0,
                     })
                     .collect::<Vec<_>>();
                 let emitted = operator_id(term.operator);
-                bridge.terms.insert(emitted, GraphTerm::Emitted(term.clone()));
+                bridge
+                    .terms
+                    .insert(emitted, GraphTerm::Emitted(term.clone()));
                 let inserted = bridge.graph.insert_with_node(emitted, children);
                 (inserted.eclass, inserted.node)
             }

@@ -1191,7 +1191,9 @@ fn emitting_rewrite(
 
 /// The operand of the sweep's instruction one child position names.
 fn event_bound(event: &AppliedRewrite, child: usize) -> Option<Value> {
-    scalar_operands(&event.instruction).get(child).map(|value| (*value).clone())
+    scalar_operands(&event.instruction)
+        .get(child)
+        .map(|value| (*value).clone())
 }
 
 /// A canonical reduction of Section 8.11, re-derived against this region.
@@ -2232,9 +2234,7 @@ fn apply(module: &Module, accepted: &[Accepted]) -> Result<(Module, ValueRemap),
                             let mut operands = Vec::new();
                             for operand in &term.operands {
                                 let value = match operand {
-                                    EmittedOperand::Bound(value) => {
-                                        resolve_alias(value, &aliases)
-                                    }
+                                    EmittedOperand::Bound(value) => resolve_alias(value, &aliases),
                                     EmittedOperand::Constant(raw) => {
                                         let constant = Value {
                                             id: next,

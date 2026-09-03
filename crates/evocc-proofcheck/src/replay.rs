@@ -87,7 +87,10 @@ const EMITTING: [&str; 4] = [
 /// printed by a revision. A checker that inferred the requirement from the
 /// registry name would refuse every emitting rewrite for carrying no premise.
 fn reads_facts(rule: &str) -> bool {
-    matches!(first_printed_by(rule), Registry::Revised | Registry::Widened)
+    matches!(
+        first_printed_by(rule),
+        Registry::Revised | Registry::Widened
+    )
 }
 
 /// Whether a certificate naming `named` may use a rule `printed` first prints.
