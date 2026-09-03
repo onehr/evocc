@@ -498,14 +498,11 @@ fn a_frame_slot_is_a_fresh_object_on_every_execution() {
 
 #[test]
 fn an_unmasked_comparison_reads_the_bits_above_a_narrow_value() {
-    // The counterexample to Section 3's first row. It lists icmp.eq and icmp.ne
-    // among the operations that need no inserted extension, "the low N bits of
-    // the result depend only on the low N bits of the operands". Two bits<3>
-    // values whose low three bits are both 0b101 compare unequal under a plain
-    // cmp.w, because trunc inserts nothing and the bits above bit 2 survive.
-    // The lowering therefore gives equality the same zero-extension as an
-    // unsigned ordered comparison; this test pins what the literal reading
-    // would produce.
+    // Revision 0.2 moved icmp.eq and icmp.ne into Section 3's zero-extended
+    // row and prints this input as the reason: "a comparison reads every bit
+    // of the register, so trunc.bits<3> of 0xffffffff compared with the
+    // constant 7 answered 0 where EvoIR answers 1". This pins what the row it
+    // was moved out of would still produce.
     let unmasked = run(
         vec![w(0), w(1)],
         vec![
@@ -839,4 +836,236 @@ fn mem_copy_of_an_uninitialized_source_moves_representation_not_values() {
         }],
     };
     assert!(interpret_module(&module, "main", &[], MirLimits::new(1000)).is_ok());
+}
+
+// ---------------------------------------------------------------------------
+// The three rows of Section 5 that are written for a value filling its
+// register. Each demonstration is the machine sequence the row states, run on
+// the input that separates it from what EvoIR answers.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn the_overflow_flag_reports_the_register_not_the_source_width() {
+    // Section 5: "`signed_add_defined %a, %b` | `adds`/`subs` into a scratch,
+    // then `cset vc`". Two three-bit threes sum to six, which is outside the
+    // range of bits<3>, so EvoIR answers 0; the sign-extended operands do not
+    // overflow a 32-bit register, so the row answers 1.
+    let literal = run(
+        vec![w(0), w(1)],
+        vec![
+            MInst::Bfx {
+                signed: true,
+                dst: w(2),
+                src: w(0),
+                lsb: 0,
+                bits: 3,
+                width: Width::W,
+            },
+            MInst::Bfx {
+                signed: true,
+                dst: w(3),
+                src: w(1),
+                lsb: 0,
+                bits: 3,
+                width: Width::W,
+            },
+            MInst::FlagBinary {
+                op: evocc_mir::FlagOp::Adds,
+                dst: w(4),
+                flags: f(5),
+                lhs: w(2),
+                rhs: w(3),
+                width: Width::W,
+            },
+            MInst::Cset {
+                dst: w(6),
+                flags: f(5),
+                cond: Cond::Vc,
+            },
+        ],
+        MTerm::Ret { values: vec![w(6)] },
+        &[int(3), int(3)],
+    );
+    assert_eq!(bits(literal), 1, "the register did not overflow");
+
+    // The bitfield comparison the multiply row already states, read at three
+    // bits instead of thirty-two, answers what EvoIR answers.
+    let closed = run(
+        vec![w(0), w(1)],
+        vec![
+            MInst::Bfx {
+                signed: true,
+                dst: w(2),
+                src: w(0),
+                lsb: 0,
+                bits: 3,
+                width: Width::W,
+            },
+            MInst::Bfx {
+                signed: true,
+                dst: w(3),
+                src: w(1),
+                lsb: 0,
+                bits: 3,
+                width: Width::W,
+            },
+            MInst::Binary {
+                op: BinOp::Add,
+                dst: w(4),
+                lhs: w(2),
+                rhs: w(3),
+                width: Width::W,
+            },
+            MInst::Bfx {
+                signed: true,
+                dst: w(7),
+                src: w(4),
+                lsb: 0,
+                bits: 3,
+                width: Width::W,
+            },
+            MInst::Cmp {
+                dst: f(5),
+                lhs: w(4),
+                rhs: w(7),
+                width: Width::W,
+            },
+            MInst::Cset {
+                dst: w(6),
+                flags: f(5),
+                cond: Cond::Eq,
+            },
+        ],
+        MTerm::Ret { values: vec![w(6)] },
+        &[int(3), int(3)],
+    );
+    assert_eq!(bits(closed), 0, "six does not fit in three signed bits");
+}
+
+#[test]
+fn the_left_shift_round_trip_admits_a_negative_operand() {
+    // Section 5: "`signed_shl_defined.<s> %x, %amt` | `shift_count_defined` as
+    // above, and `(x << amt) >> amt == x` with an arithmetic right shift".
+    // EvoIR Section 3.3.1 is also "false for ... a negative left operand".
+    // Minus one shifted by zero returns minus one, so the round trip holds and
+    // the row answers 1 where EvoIR answers 0.
+    let round_trip = run(
+        vec![w(0), w(1)],
+        vec![
+            MInst::Binary {
+                op: BinOp::Lsl,
+                dst: w(2),
+                lhs: w(0),
+                rhs: w(1),
+                width: Width::W,
+            },
+            MInst::Binary {
+                op: BinOp::Asr,
+                dst: w(3),
+                lhs: w(2),
+                rhs: w(1),
+                width: Width::W,
+            },
+            MInst::Cmp {
+                dst: f(4),
+                lhs: w(3),
+                rhs: w(0),
+                width: Width::W,
+            },
+            MInst::Cset {
+                dst: w(5),
+                flags: f(4),
+                cond: Cond::Eq,
+            },
+        ],
+        MTerm::Ret { values: vec![w(5)] },
+        &[int(0xffff_ffff), int(0)],
+    );
+    assert_eq!(bits(round_trip), 1, "minus one shifted by zero round-trips");
+
+    // The condition the row omits.
+    let non_negative = run(
+        vec![w(0)],
+        vec![
+            MInst::MovImm { dst: w(1), imm: 0 },
+            MInst::Cmp {
+                dst: f(2),
+                lhs: w(0),
+                rhs: w(1),
+                width: Width::W,
+            },
+            MInst::Cset {
+                dst: w(3),
+                flags: f(2),
+                cond: Cond::Ge,
+            },
+        ],
+        MTerm::Ret { values: vec![w(3)] },
+        &[int(0xffff_ffff)],
+    );
+    assert_eq!(bits(non_negative), 0, "minus one is a negative operand");
+}
+
+#[test]
+fn a_zero_extended_signed_shift_amount_loses_its_sign() {
+    // Section 5: "`shift_count_defined.<s> %x, %amt` | zero-extend `%amt` per
+    // Section 3, `cmp` with `#N`, `cset lo`". A one-bit signed amount of 1
+    // decodes as minus one, which EvoIR puts outside `[0, N)`; zero-extended
+    // it is 1 and compares below a bound of 3.
+    let zero_extended = run(
+        vec![w(0)],
+        vec![
+            MInst::BinaryImm {
+                op: BinOp::And,
+                dst: w(1),
+                lhs: w(0),
+                imm: 1,
+                width: Width::W,
+            },
+            MInst::CmpImm {
+                dst: f(2),
+                lhs: w(1),
+                imm: 3,
+                width: Width::W,
+            },
+            MInst::Cset {
+                dst: w(3),
+                flags: f(2),
+                cond: Cond::Lo,
+            },
+        ],
+        MTerm::Ret { values: vec![w(3)] },
+        &[int(1)],
+    );
+    assert_eq!(bits(zero_extended), 1, "one is below three");
+
+    // Extending by the declared signedness puts every negative amount above
+    // the bound when the comparison is unsigned.
+    let sign_extended = run(
+        vec![w(0)],
+        vec![
+            MInst::Bfx {
+                signed: true,
+                dst: w(1),
+                src: w(0),
+                lsb: 0,
+                bits: 1,
+                width: Width::W,
+            },
+            MInst::CmpImm {
+                dst: f(2),
+                lhs: w(1),
+                imm: 3,
+                width: Width::W,
+            },
+            MInst::Cset {
+                dst: w(3),
+                flags: f(2),
+                cond: Cond::Lo,
+            },
+        ],
+        MTerm::Ret { values: vec![w(3)] },
+        &[int(1)],
+    );
+    assert_eq!(bits(sign_extended), 0, "minus one is not a defined count");
 }
