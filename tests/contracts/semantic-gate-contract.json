@@ -4,7 +4,7 @@
   "whatAContractIs": "The middle-end stream's frozen scope, gate and rulings. The specification is the only authority; this file records what the stream is allowed to change and what it must measure.",
   "authority": {
     "spec": "docs/evoir-spec.md",
-    "revision": "1.9.51",
+    "revision": "1.9.52",
     "crates": [
       "evocc-egraph",
       "evocc-eqopt",
@@ -79,7 +79,9 @@
     "costIsAPolicy": "2026-09-03: 1.9.50 states that extraction cost is a producer policy the checker never verifies; the certificate format is unchanged. This is what lets the fourth question's cost model and schedule be replaced and measured, and it keeps the red lines: the kernel cohort never enters any policy's fitness, and no rule enters a release registry without the spec printing it.",
     "redLinesLiveInDay9Contract": "2026-09-03: the executor noted that no ruling named selfImprovementRedLines exists in this file; it lives in tests/contracts/day9-acceptance-contract.json (rulings.selfImprovementRedLines) and is restated in costIsAPolicy here. Both files bind this stream.",
     "checkerDoesNotJudgeCost": "2026-09-03: the executor's SPEC_GAP was real and is ruled for Reading B at 1.9.51: the checker verifies equivalence, non-vacuity and structure, never improvement; improvement under the declared policy is producer conformance. The measured fact behind it: 0 of 1,000 programs differ between two all-positive cost functions, because every P0 replacement is an alias or a constant; the zero-multiply control (697 of 1,000 differ) proved the instrument falsifiable. p0.scalar.v4 (digest 1a5391603386e18e...) adds the first emitting rules so that extraction becomes a choice.",
-    "stageS4aClosed": "2026-09-03: the policy evaluation harness (crates/evocc-policy, binary evo-policy-eval) measures a (registry, cost function, schedule) policy over a corpus deterministically: dynamic steps, instructions, regions, transactions, wall, 100 percent certificate replay, corpus digest, kernel-cohort path refusal pinned. Two all-positive cost functions optimize 0 of 1,000 programs differently under the P0 registries; a zero-multiply control differs on 697, proving the instrument falsifiable. 3,500 certificates replayed, 0 refusals. Architect's isolated gate on 91c6a3c: middle-end crates 248/0 (the 16 failures were the front-end team's declared red), clippy 0, fmt clean; merged into main."
+    "stageS4aClosed": "2026-09-03: the policy evaluation harness (crates/evocc-policy, binary evo-policy-eval) measures a (registry, cost function, schedule) policy over a corpus deterministically: dynamic steps, instructions, regions, transactions, wall, 100 percent certificate replay, corpus digest, kernel-cohort path refusal pinned. Two all-positive cost functions optimize 0 of 1,000 programs differently under the P0 registries; a zero-multiply control differs on 697, proving the instrument falsifiable. 3,500 certificates replayed, 0 refusals. Architect's isolated gate on 91c6a3c: middle-end crates 248/0 (the 16 failures were the front-end team's declared red), clippy 0, fmt clean; merged into main.",
+    "derivedChildrenAreUsed": "2026-09-03: the executor's SPEC_GAP was real: 11.3's 'unused derived nodes are invalid' had no notion of a derived node used through its parent. Ruled for Reading B at 1.9.52. The distinguishing certificate (seed 9324 shrunk: a derived const 1 under a derived shl) is now valid.",
+    "architectRemovedALiveWorktree": "2026-09-03: the architect removed the policy executor's worktree while it was mid-window, believing the window closed; the executor's uncommitted emitting-rewrite work was lost, and its report and this ruling are the record. Rules from now on: an executor commits after every green increment, and the architect never removes a worktree whose agent has not reported completion of its current window."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",

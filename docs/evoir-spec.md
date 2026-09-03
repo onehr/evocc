@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.51** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.52** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -4246,7 +4246,13 @@ corresponds to witness `I`, and its owner class is the initial class of that
 instruction's single result. Every derived node must
 be named by a later rewrite as its right-hand `node:` proof reference; unused derived nodes are
 invalid. This prevents an event stream from manufacturing an unproved
-representation and relying on extraction to select it.
+representation and relying on extraction to select it. A derived node is used
+when a rewrite names it or when it is a child, at any depth, of a derived
+node a rewrite names: the `const_like` operand that an emitting right-hand
+side such as `shl(?x,const_like(?x,1))` writes is used through the `shl`
+that names it, and the checker recomputes its payload from the pattern
+exactly as for a named constant (revision 1.9.52, after the first emitting
+rule stopped on the unqualified sentence).
 
 Extraction entries count from zero and are topological. A selected
 `source=before` witness that is not the replacement root is a terminal reuse:
@@ -4826,6 +4832,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.52 | 2026-09-03 | States that a derived node reachable as a child of a named derived node is used, so an emitting right-hand side may write a `const_like` operand (11.3); the executor stopped `p2_302` on the unqualified sentence. |
 | 1.9.51 | 2026-09-03 | The checker stops judging cost: strict improvement is producer conformance under the declared policy (11.3), after the policy harness measured that no all-positive cost function can differ from another in the P0 profile. Defines emitting right-hand sides and `width_min` (11.6) and prints `p0.scalar.v4` with the doubling rules `mul(x,2) = add(x,x) = shl(x,1)`, the first rewrites whose extraction is a genuine choice. |
 | 1.9.50 | 2026-09-03 | States that extraction cost is a producer policy the checker does not verify, so cost functions and schedules may be replaced and measured without a format change (7.5). |
 | 1.9.49 | 2026-09-03 | Corrects the 10.1.17 label-address entry, which had denied address-constant status without a probe and contradicted the measured rule of 1.9.48; the executor stopped on the contradiction. |
