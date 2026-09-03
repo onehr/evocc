@@ -48,7 +48,7 @@ const MAX_REGISTER_ARGUMENTS: usize = 8;
 
 /// Section 6: "an EvoMIR function returns up to eight integer or pointer
 /// results in `x0` to `x7` in order ... A ninth result is `E4013`."
-const MAX_REGISTER_RESULTS: usize = 1;
+const MAX_REGISTER_RESULTS: usize = 8;
 
 /// Lower a whole module, or report every refusal it contains.
 pub fn lower_module(module: &Module) -> Result<MModule, Vec<Refusal>> {
@@ -308,14 +308,7 @@ fn scan_inst(
                 report(E4009, block, index, detail);
             }
         }
-        Inst::Copy { .. } => {
-            report(
-                E4009,
-                block,
-                index,
-                "the mem.copy row is pending".to_owned(),
-            );
-        }
+        Inst::Copy { .. } => {}
         Inst::Call {
             results,
             args,
@@ -364,21 +357,15 @@ fn scan_inst(
                 );
             }
         }
-        // The predicate rows of revision 0.2 are not implemented yet.
+        // Revision 0.2 gives every undefined-behaviour predicate a row, and
+        // they "lower whether or not a `ub.assume` consumes them".
         Inst::DivisorNonZero(..)
         | Inst::SignedDivRemNoOverflow(..)
         | Inst::SignedAddDefined(..)
         | Inst::SignedSubDefined(..)
         | Inst::SignedMulDefined(..)
         | Inst::ShiftCountDefined { .. }
-        | Inst::SignedShlDefined { .. } => {
-            report(
-                E4009,
-                block,
-                index,
-                "the predicate row is pending".to_owned(),
-            );
-        }
+        | Inst::SignedShlDefined { .. } => {}
     }
 }
 
