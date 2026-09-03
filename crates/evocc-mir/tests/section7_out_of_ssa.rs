@@ -148,8 +148,8 @@ fn a_swap_uses_one_scratch_register() {
     let sequence: Vec<(u32, u32)> = after.blocks.iter().flat_map(moves).collect();
     assert_eq!(
         sequence.len(),
-        5,
-        "two on the entry edge, three on the swap: {sequence:?}"
+        6,
+        "two on the entry edge, three on the swap, one on the exit: {sequence:?}"
     );
 }
 
