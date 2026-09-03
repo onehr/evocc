@@ -1,0 +1,91 @@
+//! The `evo-policy-eval` binary, exercised as a separate process.
+//!
+//! The library tests pin the rules; these pin that the binary is wired to
+//! them, because a red line enforced in a library the command line never
+//! reaches would protect nothing.
+
+use std::path::PathBuf;
+use std::process::Command;
+
+fn binary() -> PathBuf {
+    let mut directory = std::env::current_exe().expect("the running test binary");
+    directory.pop();
+    if directory.ends_with("deps") {
+        directory.pop();
+    }
+    let path = directory.join(format!("evo-policy-eval{}", std::env::consts::EXE_SUFFIX));
+    assert!(
+        path.is_file(),
+        "{} does not exist; build the workspace",
+        path.display()
+    );
+    path
+}
+
+fn run(arguments: &[&str]) -> (i32, String, String) {
+    let output = Command::new(binary())
+        .args(arguments)
+        .output()
+        .expect("run evo-policy-eval");
+    (
+        output.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn a_forbidden_corpus_path_is_refused_on_the_command_line() {
+    for path in [
+        ".build/corpus",
+        ".evidence/day7",
+        "tests/contracts/day5-kernel-cohort.json",
+    ] {
+        let (status, stdout, stderr) = run(&[
+            "--policy",
+            "instruction-count",
+            "--seed",
+            "1",
+            "--corpus",
+            path,
+        ]);
+        assert_eq!(status, 2, "{path} was not refused");
+        assert!(stdout.is_empty(), "{path} produced a report");
+        assert!(stderr.contains("refused corpus path"), "{path}: {stderr}");
+    }
+}
+
+#[test]
+fn an_unknown_policy_names_the_ones_that_ship() {
+    let (status, _, stderr) = run(&[
+        "--policy",
+        "learned-v1",
+        "--seed",
+        "1",
+        "--generated",
+        "1:1",
+    ]);
+    assert_eq!(status, 2);
+    assert!(stderr.contains("instruction-count"), "{stderr}");
+    assert!(stderr.contains("weighted-operators"), "{stderr}");
+}
+
+#[test]
+fn the_binary_report_is_deterministic_with_timing_elided() {
+    let arguments = [
+        "--policy",
+        "weighted-operators",
+        "--seed",
+        "4",
+        "--generated",
+        "700:6",
+        "--elide-timing",
+    ];
+    let (first_status, first, _) = run(&arguments);
+    let (second_status, second, _) = run(&arguments);
+    assert_eq!(first_status, 0);
+    assert_eq!(second_status, 0);
+    assert_eq!(first, second);
+    assert!(first.contains("\"corpusDigest\""));
+    assert!(first.contains("\"optimizerWallNanos\": null"));
+}

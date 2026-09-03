@@ -108,6 +108,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "evocc-policy"
+version = "0.0.0"
+dependencies = [
+ "evocc-eqopt",
+ "evocc-evoir",
+ "evocc-proof",
+ "evocc-randgate",
+]
+
+[[package]]
 name = "evocc-proof"
 version = "0.0.0"
 

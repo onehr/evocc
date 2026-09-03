@@ -12,6 +12,7 @@ use evocc_types::EvoIRType;
 
 use crate::eligibility::Admission;
 use crate::known_bits::{Comparison, KnownBits};
+use crate::policy::{CostModel, ExtractionPolicy, RegistryCeiling, SchedulePolicy};
 use crate::scalar_eq::{
     fold_raw, ingest_scalar_inst, mask_raw, optimize_scalar_module_with_events, remap_inst_uses,
     resolve_alias, scalar_operands, AppliedRewrite, NegationEnv, Replacement, RewriteOpportunity,
@@ -98,13 +99,41 @@ pub fn optimize_scalar_module_with_evp1(
     module: &Module,
     budget: ScalarEqBudget,
 ) -> CertifiedScalarEqOutcome {
-    optimize_scalar_module_with_evp1_transaction(module, budget).outcome
+    optimize_scalar_module_with_policy(module, &policy_for(budget))
+}
+
+/// Section 7.5's default policy under an explicit pair of scheduler bounds.
+///
+/// The `max_transactions` parameter belongs to a run rather than to one
+/// transaction, so the value here is the profile default and is never read by
+/// the call above.
+pub(crate) fn policy_for(budget: ScalarEqBudget) -> ExtractionPolicy {
+    ExtractionPolicy::default().with_schedule(SchedulePolicy {
+        max_nodes: budget.max_nodes,
+        max_epochs: budget.max_epochs,
+        ..SchedulePolicy::default()
+    })
+}
+
+/// One transaction under an explicit producer policy.
+///
+/// Section 7.5 makes the cost function a producer policy the checker never
+/// verifies, so this differs from the call above only in which regions the
+/// producer is willing to keep. The certificate format does not change and the
+/// policy name is reported, not certified.
+#[must_use]
+pub fn optimize_scalar_module_with_policy(
+    module: &Module,
+    policy: &ExtractionPolicy,
+) -> CertifiedScalarEqOutcome {
+    optimize_scalar_module_with_evp1_transaction(module, policy).outcome
 }
 
 pub(crate) fn optimize_scalar_module_with_evp1_transaction(
     module: &Module,
-    budget: ScalarEqBudget,
+    policy: &ExtractionPolicy,
 ) -> CertifiedScalarEqTransaction {
+    let budget = policy.schedule().budget();
     let input = render_module(module);
     let (transient, applied) = optimize_scalar_module_with_events(module, budget);
     let mut report = transient.report;
@@ -159,6 +188,13 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
                 else {
                     continue;
                 };
+                if !policy_keeps(policy, instruction, &output_replacement, &region) {
+                    // Section 7.5 and Section 8.7: a region the policy's own
+                    // cost does not make strictly cheaper, or whose rules
+                    // reach past the policy's registry, is declined. Declining
+                    // is always available to a producer and always sound.
+                    continue;
+                }
                 if congruent_root {
                     report.congruent_roots += 1;
                 }
@@ -237,6 +273,51 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
         },
         events,
         value_remap,
+    }
+}
+
+/// Whether `policy` keeps the region rooted at `instruction`.
+///
+/// Two independent reasons to decline. The first is Section 7.5's strict
+/// improvement rule applied to the policy's own costs: the replacement must
+/// cost strictly less than the root, and a policy that charges nothing for the
+/// root's operator therefore keeps nothing rooted at it. The second is the
+/// registry ceiling: a rewrite naming a rule from a wider registry than the
+/// policy draws from is not this policy's to fire.
+fn policy_keeps(
+    policy: &ExtractionPolicy,
+    instruction: &Inst,
+    replacement: &Replacement,
+    region: &EvpRegion,
+) -> bool {
+    let Ok(operator) = ingest_scalar_inst(instruction) else {
+        return false;
+    };
+    let root_cost = policy.cost().operator_cost(operator);
+    // Both replacement shapes the P0 profile can emit are free: an alias
+    // names a value the block already computes, and a constant costs zero by
+    // Section 7.5's semantic convention.
+    let replacement_cost = match replacement {
+        Replacement::Alias(_) => 0,
+        Replacement::Constant(_) => policy.cost().operator_cost(ScalarOperator::Const),
+    };
+    if replacement_cost >= root_cost {
+        return false;
+    }
+    region.events.iter().all(|event| match event {
+        EvpEvent::Rewrite(rewrite) => rule_within(rewrite.rule.as_str(), policy.registry()),
+        _ => true,
+    })
+}
+
+/// Whether `rule` belongs to the registry `ceiling` names or to one it
+/// contains. Every rule a revision adds is printed with a `p1_` identifier, so
+/// the two added-rule tables above are the whole test.
+fn rule_within(rule: &str, ceiling: RegistryCeiling) -> bool {
+    match ceiling {
+        RegistryCeiling::V1 => !V2_RULES.contains(&rule) && !V3_RULES.contains(&rule),
+        RegistryCeiling::V2 => !V3_RULES.contains(&rule),
+        RegistryCeiling::V3 => true,
     }
 }
 
