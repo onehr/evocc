@@ -968,3 +968,106 @@ fn the_campaign_reaches_the_tier_b_rules() {
         );
     }
 }
+
+/// The third lane of the EvoMIR specification's Section 9.1: EvoIR before,
+/// EvoIR after optimization, EvoMIR after lowering.
+///
+/// A refusal is counted, not compared. Every optimized module therefore either
+/// lowered and was judged, or carries the Section 10 codes that stopped it, and
+/// the two accounts add up to the programs the gate compared.
+#[test]
+fn the_third_lane_lowers_or_refuses_every_compared_program() {
+    let checker = ProofChecker::locate().expect("evo-proofcheck");
+    let report = run_campaign(GATE_SEED, 256, config(), budget(), &checker);
+
+    assert_eq!(
+        report.lowered + report.refused,
+        report.compared,
+        "{}",
+        report.render()
+    );
+    assert!(
+        report.machine_compared + report.machine_budget_exhausted <= report.lowered,
+        "{}",
+        report.render()
+    );
+    assert_eq!(report.mismatched, 0, "{}", report.render());
+    for code in report.refusal_codes.keys() {
+        assert!(
+            matches!(
+                *code,
+                "E4001"
+                    | "E4002"
+                    | "E4003"
+                    | "E4004"
+                    | "E4005"
+                    | "E4006"
+                    | "E4007"
+                    | "E4008"
+                    | "E4009"
+                    | "E4010"
+                    | "E4011"
+                    | "E4012"
+                    | "E4013"
+            ),
+            "{code} is not a Section 10 diagnostic"
+        );
+    }
+}
+
+/// How much of the corpus the lowering table reaches, measured.
+///
+/// Revision 0.1 refused nineteen of every twenty programs, all of them for two
+/// rows it did not have. Revision 0.2 has them, so the table is expected to
+/// reach the whole corpus and any refusal that remains names a form Sections 5
+/// and 10 still exclude on purpose.
+#[test]
+fn the_lowering_table_reaches_the_corpus() {
+    let checker = ProofChecker::locate().expect("evo-proofcheck");
+    let report = run_campaign(GATE_SEED, 256, config(), budget(), &checker);
+
+    assert!(report.compared > 0, "{}", report.render());
+    assert_eq!(report.refused, 0, "{}", report.render());
+    assert_eq!(report.lowered, report.compared, "{}", report.render());
+    assert_eq!(
+        report.machine_compared,
+        report.lowered,
+        "{}",
+        report.render()
+    );
+    assert_eq!(report.machine_budget_exhausted, 0, "{}", report.render());
+    assert_eq!(report.mismatched, 0, "{}", report.render());
+}
+
+/// Which forms the table still excludes, over the generated corpus.
+///
+/// The generator writes no floating point, no vector, no integer wider than
+/// sixty-four bits, no tuple and no function of nine arguments or nine
+/// results, so the count is expected to be zero and is measured rather than
+/// assumed: a generator that grew one of those shapes would show up here as a
+/// refusal rather than as a silently unjudged program.
+#[test]
+fn the_forms_the_table_still_excludes_are_measured() {
+    const CORPUS: u64 = 2_000;
+    let mut refused = 0_u64;
+    let mut codes: std::collections::BTreeMap<&'static str, u64> =
+        std::collections::BTreeMap::new();
+
+    for offset in 0..CORPUS {
+        let module = generate_module(GATE_SEED.wrapping_add(offset), config());
+        let Err(refusals) = evocc_mir::lower_module(&module) else {
+            continue;
+        };
+        refused += 1;
+        for refusal in &refusals {
+            *codes.entry(refusal.code).or_default() += 1;
+        }
+    }
+
+    println!("corpus={CORPUS}");
+    println!("refused={refused}");
+    for (code, count) in &codes {
+        println!("{code}={count}");
+    }
+    assert_eq!(refused, 0, "{codes:?}");
+}

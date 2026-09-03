@@ -51,6 +51,17 @@ pub struct CampaignReport {
     /// Runs cut off at `max_transactions` rather than by admitting nothing.
     pub runs_at_ceiling: u64,
     pub certificates_replayed: u64,
+    /// The third lane. `lowered` counts optimized modules every function of
+    /// which had a row in the Section 5 table; `refused` counts the rest, with
+    /// `refusal_codes` naming how many modules each Section 10 code stopped.
+    /// `machine_compared` counts the lowered modules the EvoMIR interpreter ran
+    /// to completion and whose observations were judged against the other two
+    /// lanes.
+    pub lowered: u64,
+    pub refused: u64,
+    pub refusal_codes: BTreeMap<&'static str, u64>,
+    pub machine_compared: u64,
+    pub machine_budget_exhausted: u64,
     pub mismatched: u64,
     pub mismatches: Vec<Mismatch>,
     /// Every seed that refused, in campaign order.
@@ -139,6 +150,21 @@ impl CampaignReport {
         let _ = writeln!(text, "runLengths={lengths}");
         let _ = writeln!(text, "runsAtCeiling={}", self.runs_at_ceiling);
         let _ = writeln!(text, "certificatesReplayed={}", self.certificates_replayed);
+        let codes_refused = self
+            .refusal_codes
+            .iter()
+            .map(|(code, count)| format!("{code}:{count}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let _ = writeln!(text, "lowered={}", self.lowered);
+        let _ = writeln!(text, "refused={}", self.refused);
+        let _ = writeln!(text, "refusedByCode={codes_refused}");
+        let _ = writeln!(text, "machineCompared={}", self.machine_compared);
+        let _ = writeln!(
+            text,
+            "machineBudgetExhausted={}",
+            self.machine_budget_exhausted
+        );
         let _ = writeln!(text, "mismatched={}", self.mismatched);
         let _ = writeln!(text, "mismatchedSeeds={seeds}");
         let _ = writeln!(text, "undefinedCodes={codes}");
@@ -179,7 +205,25 @@ pub fn run_campaign(
                 congruent_roots,
                 premises_asserting_a_seed,
                 seed_fact_work_items,
+                lowered,
+                refusal_codes,
+                machine_compared,
+                machine_budget_exhausted,
             } => {
+                if lowered {
+                    report.lowered += 1;
+                } else {
+                    report.refused += 1;
+                }
+                for code in refusal_codes {
+                    *report.refusal_codes.entry(code).or_default() += 1;
+                }
+                if machine_compared {
+                    report.machine_compared += 1;
+                }
+                if machine_budget_exhausted {
+                    report.machine_budget_exhausted += 1;
+                }
                 report.premises_asserting_a_seed += premises_asserting_a_seed as u64;
                 for (items, transactions) in seed_fact_work_items {
                     *report.seed_fact_work_items.entry(items).or_default() += transactions;

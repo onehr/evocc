@@ -12,6 +12,7 @@ use evocc_evoir::{
     interpret_module, render_module, validate_module, InterpreterLimits, Module, RuntimeValue,
 };
 use evocc_memory::{AccessLayout, MemoryState, ObjectOrigin, ObjectOwner, Pointer, VolatileEvent};
+use evocc_mir::{lane, lower_module, validate_module as validate_machine, MirError, MirLimits};
 use evocc_proof::{render_evp1, sha256_hex};
 use evocc_types::EvoIRType;
 
@@ -144,6 +145,14 @@ pub enum MismatchKind {
     StaticMemory,
     /// `evo-proofcheck` refused the certificate.
     ProofReplay,
+    /// The Section 5 lowering produced EvoMIR its own Section 2 verifier
+    /// refuses.
+    MachineModuleInvalid,
+    /// The machine lane stopped where the EvoIR lane did not, or the reverse.
+    MachineTrapBehaviour,
+    MachineReturnValues,
+    MachineVolatileTrace,
+    MachineStaticMemory,
 }
 
 /// A refused claim together with the smallest input that still refuses it.
@@ -190,6 +199,13 @@ pub enum Verdict {
         /// the Section 8.10 seed fixed point took in each transaction.
         premises_asserting_a_seed: usize,
         seed_fact_work_items: BTreeMap<usize, u64>,
+        /// The third lane. Either the optimized module lowered and the EvoMIR
+        /// interpreter agreed with the other two, or the Section 5 table
+        /// declined it and these codes say which rows it wanted.
+        lowered: bool,
+        refusal_codes: Vec<&'static str>,
+        machine_compared: bool,
+        machine_budget_exhausted: bool,
     },
     /// The input program was undefined; the specification's equality is modulo
     /// undefined behaviour, so nothing is compared.
@@ -306,6 +322,15 @@ struct Trial {
     fuel_exhausted: bool,
     input_undefined: Option<&'static str>,
     refusal: Option<(MismatchKind, String)>,
+    /// The third lane. `lowered` is set when every function of the optimized
+    /// module had a row in the Section 5 table; otherwise `refusal_codes`
+    /// holds the distinct Section 10 codes that stopped it, and nothing is
+    /// compared. `machine_compared` is set when the EvoMIR interpreter ran to
+    /// completion and its observations were judged.
+    lowered: bool,
+    refusal_codes: Vec<&'static str>,
+    machine_compared: bool,
+    machine_budget_exhausted: bool,
 }
 
 /// The one place that recognises a fuel stop, so both sides answer alike.
@@ -338,6 +363,10 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
                 fuel_exhausted: code == FUEL_EXHAUSTED,
                 input_undefined: Some(code),
                 refusal: None,
+                lowered: false,
+                refusal_codes: Vec::new(),
+                machine_compared: false,
+                machine_budget_exhausted: false,
             };
         }
     };
@@ -360,6 +389,10 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
         fuel_exhausted: false,
         input_undefined: None,
         refusal: None,
+        lowered: false,
+        refusal_codes: Vec::new(),
+        machine_compared: false,
+        machine_budget_exhausted: false,
     };
 
     // The run of Section 8.11. Each transaction takes the previous output, each
@@ -378,7 +411,7 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
             // Nothing left to admit: this transaction ends the run and leaves
             // the module alone, which is what a residual of zero means.
             trial.residual_regions = 0;
-            return finish(trial, &before_run, checker);
+            return finish(trial, &before_run, &current, &arguments, budget);
         }
         if step + 1 == MAX_TRANSACTIONS {
             trial.stopped_at_ceiling = true;
@@ -476,12 +509,115 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
         .certificate
         .regions
         .len();
-    finish(trial, &before_run, checker)
+    finish(trial, &before_run, &current, &arguments, budget)
 }
 
-/// Nothing is left to check once the run has ended; this exists so the two exit
-/// paths cannot drift.
-fn finish(trial: Trial, _before: &DefinedRun, _checker: &ProofChecker) -> Trial {
+/// The step budget the machine lane runs under, as a multiple of the EvoIR
+/// lane's.
+///
+/// One EvoIR instruction becomes several EvoMIR instructions -- an extension,
+/// a divide and its `msub`, an address pair -- and every one of them charges a
+/// step, so a machine execution of the same program takes more fuel than the
+/// EvoIR execution it is compared with. The multiple is generous enough that a
+/// program the EvoIR lane finished is not stopped here by arithmetic.
+const MACHINE_FUEL_MULTIPLE: u64 = 16;
+
+/// The third lane: the EvoMIR interpreter on the lowering of the optimized
+/// module, judged against the same observations as the other two.
+///
+/// EvoMIR Section 9.1: "The randomized semantic gate of the middle end gains a
+/// third lane: EvoIR before, EvoIR after optimization, EvoMIR after lowering,
+/// all three agreeing or the program is a mismatch to shrink. This lane exists
+/// before any native run, so lowering defects are found without an assembler in
+/// the loop."
+///
+/// A refusal is counted, not compared: Section 1 makes a form outside the
+/// Section 5 table fail closed, so a module the lowering declines is a
+/// measurement of the table's reach rather than a disagreement.
+fn finish(
+    mut trial: Trial,
+    before: &DefinedRun,
+    optimized: &Module,
+    arguments: &[RuntimeValue],
+    budget: GateBudget,
+) -> Trial {
+    let machine = match lower_module(optimized) {
+        Ok(machine) => machine,
+        Err(refusals) => {
+            let mut codes: Vec<&'static str> =
+                refusals.iter().map(|refusal| refusal.code).collect();
+            codes.sort_unstable();
+            codes.dedup();
+            trial.refusal_codes = codes;
+            return trial;
+        }
+    };
+    trial.lowered = true;
+    if let Err(error) = validate_machine(&machine) {
+        trial.refusal = Some((MismatchKind::MachineModuleInvalid, error));
+        return trial;
+    }
+
+    let result_types: Vec<EvoIRType> = optimized
+        .functions
+        .iter()
+        .find(|function| function.name == "main")
+        .map(|function| {
+            function
+                .ret_tys
+                .iter()
+                .filter(|ty| !matches!(ty, EvoIRType::Mem(_) | EvoIRType::World))
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let limits = MirLimits::new(budget.step_budget.saturating_mul(MACHINE_FUEL_MULTIPLE));
+    let run = match lane::observe_entry(&machine, "main", arguments, &result_types, limits) {
+        Ok(run) => run,
+        Err(MirError::BudgetExhausted) => {
+            trial.machine_budget_exhausted = true;
+            return trial;
+        }
+        Err(error) => {
+            trial.refusal = Some((
+                MismatchKind::MachineTrapBehaviour,
+                format!(
+                    "a defined execution became {} {} on the machine",
+                    error.code(),
+                    error.message()
+                ),
+            ));
+            return trial;
+        }
+    };
+
+    trial.machine_compared = true;
+    if before.returns != run.returns {
+        trial.refusal = Some((
+            MismatchKind::MachineReturnValues,
+            format!("{:?} became {:?}", before.returns, run.returns),
+        ));
+        return trial;
+    }
+    if before.volatile != run.world.volatile_trace() {
+        trial.refusal = Some((
+            MismatchKind::MachineVolatileTrace,
+            format!(
+                "{} volatile events became {}",
+                before.volatile.len(),
+                run.world.volatile_trace().len()
+            ),
+        ));
+        return trial;
+    }
+    let statics = static_observations(&run.memory);
+    if before.statics != statics {
+        trial.refusal = Some((
+            MismatchKind::MachineStaticMemory,
+            "surviving static memory differs on the machine".to_owned(),
+        ));
+    }
     trial
 }
 
@@ -553,6 +689,10 @@ pub fn run_seed(
             residual_regions: trial.residual_regions,
             transactions: trial.transactions,
             stopped_at_ceiling: trial.stopped_at_ceiling,
+            lowered: trial.lowered,
+            refusal_codes: trial.refusal_codes.clone(),
+            machine_compared: trial.machine_compared,
+            machine_budget_exhausted: trial.machine_budget_exhausted,
         };
     };
 

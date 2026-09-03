@@ -13,5 +13,6 @@ path = "src/main.rs"
 evocc-eqopt = { path = "../evocc-eqopt" }
 evocc-evoir = { path = "../evocc-evoir" }
 evocc-memory = { path = "../evocc-memory" }
+evocc-mir = { path = "../evocc-mir" }
 evocc-proof = { path = "../evocc-proof" }
 evocc-types = { path = "../evocc-types" }
