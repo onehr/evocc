@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.1** | **Authoritative reference** | **2026-09-04**
+**Revision 0.2** | **Authoritative reference** | **2026-09-04**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -12,7 +12,9 @@ specification, and where the two meet, the EvoIR specification wins.
 This document follows the rules of its parent: a sentence about observable
 behaviour is measured before it is written, a construct it does not admit is
 refused with a named diagnostic rather than guessed, and an executor that
-finds it silent stops and reports the gap.
+finds it silent stops and reports the gap. Revision 0.1 was implemented once
+and stopped thirteen times; revision 0.2 rules every stop and records which
+sentence was wrong.
 
 ## 1. Purpose and Position
 
@@ -38,21 +40,29 @@ because a backend is where they are most easily lost:
   not lower has a diagnostic in Section 10, reported at the instruction, and
   the driver produces no assembly for that function.
 
+The EvoIR specification's Section 10.2 invariant governs every EvoMIR form:
+it implements the abstract semantics of its EvoIR source for **all defined
+executions**. Where a machine instruction's behaviour outside defined
+executions differs from EvoIR's (a shift by an out-of-range amount, a
+wrapping address computation, an unmasked comparison), the difference is
+admissible only when an EvoIR obligation the program has already asserted
+makes it unobservable; Section 5 names each such case.
+
 The revision 0.x series covers what the roadmap calls B1 through B4: EvoMIR
 itself, a linear-scan register allocator, the Darwin arm64 scalar ABI, and
-the native test suite. The EvoMIR representations do not yet enter e-classes;
-the invariant of EvoIR Section 10.2 applies the day they do and is not
-exercised before.
+the native test suite. EvoMIR representations do not yet enter e-classes.
 
 ## 2. Values, Registers and Classes
 
 An EvoMIR function is a list of basic blocks in the order of its EvoIR
-source, each holding instructions in order and ending in a terminator.
-Before register allocation, operands are **virtual registers** `%vN` in
-block-argument SSA form, the same discipline as EvoIR Section 2, so that a
-block's arguments are its only inputs and every value has one definition.
-After register allocation, operands are **physical registers** and **frame
-slots**, and block arguments are gone (Section 7).
+source, the entry block first (block 0), each holding instructions in order
+and ending in a terminator. Before register allocation, operands are
+**virtual registers** `%vN` in block-argument SSA form, the same discipline
+as EvoIR Section 2: a block's arguments are its only inputs, every value has
+one definition, and every edge lists the values it passes. Block arguments
+survive lowering and are removed by the out-of-SSA pass of Section 7, which
+runs before allocation. After allocation, operands are **physical
+registers** and **frame slots**.
 
 Every virtual register has exactly one **register class**:
 
@@ -60,7 +70,7 @@ Every virtual register has exactly one **register class**:
 |---|---|---|
 | `gpr32` | `bits<N>` with `1 <= N <= 32` | `w0` to `w30` |
 | `gpr64` | `bits<N>` with `33 <= N <= 64`, every pointer | `x0` to `x30` |
-| `flags` | the result of a comparison, consumed by the next conditional | `nzcv` |
+| `flags` | the result of a comparison or a flag-setting arithmetic form, consumed by the next conditional | `nzcv` |
 
 `gpr32` and `gpr64` name the same physical register file viewed at two
 widths; the allocator assigns one physical register per virtual register and
@@ -69,58 +79,77 @@ revision; `f32`, `f64` and `vec` values are refused (Section 10).
 
 A `flags` value may be consumed only by the instruction that immediately
 follows its producer in the same block, and nothing between them may write
-flags. This is a legality rule the verifier of Section 9 checks, not a hint.
+flags. This is a legality rule the verifier of Section 9 checks.
 
 **Reserved physical registers.** `x18` is reserved by the platform on Darwin
 and is never allocated; `x16` and `x17` are the intra-procedure-call
-scratch registers and are used only by emitted call sequences and never
-hold a live value across an instruction the allocator did not emit; `x29`
-is the frame pointer and `x30` the link register, both saved in every
-prologue (Section 6); `sp` is not a general register. `x31` is `sp` or the
-zero register `xzr`/`wzr` by position; the zero register is an operand,
-never a destination.
+scratch registers, used only by emitted sequences and never live across an
+instruction the allocator did not emit; `x29` is the frame pointer and
+`x30` the link register, both saved in every prologue (Section 6); `sp` is
+not a general register. The zero register `xzr`/`wzr` is an operand, never a
+destination.
 
 ## 3. Sub-width Values
 
 EvoIR values of width `N < 32` live in `gpr32` registers with the bits above
-`N` **unspecified**. An instruction that reads such a value reads only the
-low `N` bits, except that the following operations first bring the value
-into the form they need, and the lowering inserts the extension explicitly:
+`N` **unspecified** (`N < 64` in `gpr64` likewise). The EvoMIR interpreter
+models those bits as unspecified, not as zero: an implementation that fills
+them from a seeded source is conforming, and a lowering that reads them is
+thereby caught. An instruction that reads such a value reads only its low
+`N` bits, except that the following operations need a normalized form,
+which the lowering inserts explicitly:
 
-| Operation on `bits<N>`, `N < 32` (or `N < 64` in `gpr64`) | Form needed | Inserted before |
+| Operation on `bits<N>` below the register width | Form needed | Inserted before |
 |---|---|---|
-| `add`, `sub`, `mul`, `and`, `or`, `xor`, `shl`, `trunc`, `icmp.eq`, `icmp.ne` | none: the low `N` bits of the result depend only on the low `N` bits of the operands | nothing |
-| `lshr`, `udiv`, `urem`, `icmp.ult`, `icmp.ule`, `zext` | zero-extended to the register width | `and` with the mask `2^N - 1` (`uxtb`/`uxth` when `N` is 8 or 16) |
-| `ashr`, `sdiv`, `srem`, `icmp.slt`, `icmp.sle`, `sext` | sign-extended to the register width | `sbfx` from bit `N - 1` (`sxtb`/`sxth` when `N` is 8 or 16) |
-| shift amount operand `bits<M>` | zero-extended, then masked to the width of the shifted value by the instruction itself | `and` with `2^M - 1` when `M < 32` |
+| `add`, `sub`, `mul`, `and`, `or`, `xor`, `shl`, `trunc` | none: the low `N` bits of the result depend only on the low `N` bits of the operands | nothing |
+| `icmp.eq`, `icmp.ne`, `lshr`, `udiv`, `urem`, `icmp.ult`, `icmp.ule`, `zext` | zero-extended to the register width | `and` with the mask `2^N - 1` (`uxtb`/`uxth` when `N` is 8 or 16); both operands of a comparison |
+| `ashr`, `sdiv`, `srem`, `icmp.slt`, `icmp.sle`, `sext` | sign-extended to the register width | `sbfx` from bit `N - 1` (`sxtb`/`sxth` when `N` is 8 or 16); both operands of a comparison |
+| shift amount operand `bits<M>` | the low `M` bits are the amount | `and` with `2^M - 1` when `M` is below the register width |
 | a value stored with `store` of width `N` | none: the store writes `ceil(N / 8)` bytes and the bits above `N` in the last byte are those of the value, which EvoIR Section 5 defines as the representation | nothing |
 | `cond_br` on `bits<1>` | bit 0 only | nothing: `tbnz`/`tbz` on bit 0 |
 
-`bits<1>` therefore lives in a `gpr32` with bit 0 significant. Comparisons
-produce their `bits<1>` result with `cset`, which writes 0 or 1 into the
-whole register; a `bits<1>` produced by `trunc` or `and` has unspecified
-upper bits, and the table above is what makes that safe.
+Revision 0.1 listed `icmp.eq` and `icmp.ne` in the first row; that was
+wrong (a comparison reads every bit of the register, so `trunc.bits<3>` of
+`0xffffffff` compared with the constant 7 answered 0 where EvoIR answers 1)
+and the executor found it by hand before the campaign could.
+
+**Shift amounts.** A 32-bit machine shift masks its amount modulo 32 and a
+64-bit one modulo 64, never modulo the EvoIR width `N` of a narrower value.
+EvoIR's raw shifts are total and answer 0 (or the sign fill) for an amount
+of `N` or more, so the machine and EvoIR differ there. The difference is
+unobservable in a defined execution because the front end asserts
+`shift_count_defined` as an obligation before every shift (EvoIR Section
+6); the lowering therefore inserts nothing beyond the mask of the row above,
+and this is the first of the admissible differences Section 1 names.
+
+`bits<1>` lives in a `gpr32` with bit 0 significant. Comparisons produce
+their `bits<1>` result with `cset`, which writes 0 or 1 into the whole
+register; a `bits<1>` produced by `trunc` or `and` has unspecified upper
+bits, and the table above is what makes that safe.
 
 Widths above 64 are not lowered (`E4003`).
 
 ## 4. Instruction Set
 
 An EvoMIR instruction names an AArch64 operation, its destination register
-class and its operands. The forms this revision emits are exactly these; an
-operation absent from the table is not part of EvoMIR and the lowering
-never produces it. Each row states the semantics the EvoMIR interpreter
-(Section 9) implements, so that the table is executable, not descriptive.
+class and its operands, or one of the four pseudo-forms this section marks
+as such, which emission expands. The forms this revision admits are exactly
+these; an operation absent from the table is not part of EvoMIR. Each row
+states the semantics the EvoMIR interpreter (Section 9) implements, so that
+the table is executable, not descriptive.
 
 **Data movement.**
 
 | Form | Semantics |
 |---|---|
 | `mov rd, rn` | `rd := rn` |
-| `mov rd, #imm` (`movz`/`movk`/`movn` sequence) | `rd := imm`, any 32- or 64-bit constant, at most four instructions |
-| `adrp rd, sym@PAGE` + `add rd, rd, sym@PAGEOFF` | `rd := address of the global sym` (Darwin spelling; Linux uses `:pg_hi21:` and `:lo12:`) |
+| `mov rd, #imm` (`movz`/`movk`/`movn` sequence at emission) | `rd := imm`, any 32- or 64-bit constant |
+| `adrp rd, @g@PAGE` + `add rd, rd, @g@PAGEOFF` | `rd := address of the global g`; `@f@FUNCPAGE` / `@f@FUNCPAGEOFF` for a function symbol, since EvoIR keeps globals and functions in two tables that may share a name and Section 8 gives both one platform prefix (Darwin spelling; Linux uses `:pg_hi21:` and `:lo12:`) |
 | `ldr rd, [rn, #off]` / `ldrb` / `ldrh` / `ldrsb` / `ldrsh` / `ldrsw` | `rd := memory[rn + off]` of 8, 4, 2 or 1 bytes, zero- or sign-extended as the mnemonic says; `off` is a scaled unsigned 12-bit immediate or a signed 9-bit immediate |
-| `str rd, [rn, #off]` / `strb` / `strh` | `memory[rn + off] := low bytes of rd` |
-| `ldp`/`stp rt1, rt2, [rn, #off]` | two registers, prologue and epilogue only |
+| `ldr.p rd, [rn, #off]` / `ldr.pf` / `str.p rt, [rn, #off]` | an eight-byte load or store whose value is an object pointer (`ldr.p`), a function pointer (`ldr.pf`) or a stored pointer (`str.p`); emitted as `ldr`/`str`, but distinguished so that the interpreter reconstructs provenance exactly as EvoIR Sections 5.3 and 5.4 do and reports `E3013` on a partial shadow |
+| `str rt, [rn, #off]` / `strb` / `strh` | `memory[rn + off] := low bytes of rt` |
+| `ldp`/`stp rt1, rt2, [rn, #off]` | two registers, prologue and epilogue only (Section 6) |
+| ` volatile` marker on any load or store | the access appears in the volatile trace (EvoIR Section 4.3); it adds nothing else on this target and forbids merging with a neighbouring access, which this revision never does |
 
 **Arithmetic and logic.** Every form has a 32-bit (`w`) and a 64-bit (`x`)
 spelling chosen by the destination class.
@@ -129,9 +158,11 @@ spelling chosen by the destination class.
 |---|---|
 | `add rd, rn, rm` / `add rd, rn, #imm12` | wrapping addition |
 | `sub rd, rn, rm` / `sub rd, rn, #imm12` | wrapping subtraction |
+| `adds`, `subs rd, rn, rm` | as `add`/`sub`, and write `nzcv`; `v` is the signed-overflow flag, `c` the carry |
 | `mul rd, rn, rm` | wrapping multiplication, low bits |
+| `smull xd, wn, wm` / `smulh xd, xn, xm` | signed 32x32 to 64 product / the high 64 bits of a signed 64x64 product |
 | `msub rd, rn, rm, ra` | `rd := ra - rn * rm` (remainders) |
-| `sdiv rd, rn, rm` / `udiv rd, rn, rm` | signed / unsigned quotient; division by zero yields 0 on the machine, which is why EvoIR's `divisor_nonzero` guard must have been asserted before this instruction is reached (Section 5) |
+| `sdiv rd, rn, rm` / `udiv rd, rn, rm` | signed / unsigned quotient; division by zero yields 0 on the machine, an admissible difference because `divisor_nonzero` has been asserted before (Section 5) |
 | `and`, `orr`, `eor rd, rn, rm` / `#bitmask` | bitwise; the immediate form only for encodable bitmask immediates |
 | `lsl`, `lsr`, `asr rd, rn, rm` / `#imm` | shifts; the register form uses the low 5 or 6 bits of `rm` |
 | `sxtb`, `sxth`, `sxtw`, `uxtb`, `uxth` | extensions |
@@ -140,60 +171,79 @@ spelling chosen by the destination class.
 | `cset rd, cond` | `rd := 1` if `cond` holds on `nzcv`, else 0 |
 | `csel rd, rn, rm, cond` | `rd := cond ? rn : rm` |
 
-**Control.**
+**Control.** Pre-allocation EvoMIR has no fall-through: every conditional
+form names both successors with their argument lists, and emission lays the
+second successor out as the fall-through where block order allows.
 
 | Form | Semantics |
 |---|---|
-| `b label` | unconditional branch |
-| `b.cond label` | branch on `nzcv` |
-| `cbz`/`cbnz rn, label` | branch on zero / nonzero |
-| `tbz`/`tbnz rn, #bit, label` | branch on one bit |
-| `bl sym` / `blr rn` | call; writes `x30` |
-| `ret` | return through `x30` |
-| `brk #imm16` | trap; the immediate names the EvoIR trap or assumption reason (Section 5) |
+| `b ^target(args)` | unconditional branch |
+| `b.cond ^then(args), ^else(args)` | branch on `nzcv` |
+| `cbz`/`cbnz rn, ^then(args), ^else(args)` | branch on zero / nonzero |
+| `tbz`/`tbnz rn, #bit, ^then(args), ^else(args)` | branch on one bit |
+| `bl @f(args) -> results` / `blr rn(args) -> results` | call; the argument and result registers are explicit operands so the allocator sees them as fixed (Section 7); writes `x30` |
+| `ret rs...` | return with the result registers listed |
+| `brk #imm16` | trap; the immediate is the decimal part of the EvoIR diagnostic the trap or assumption reason carries (`trap.unreachable_reached` is `brk #3024`), which fits sixteen bits and is an authority both documents share |
 
 Condition codes used: `eq`, `ne`, `lt`, `le`, `gt`, `ge` (signed), `lo`,
-`ls`, `hi`, `hs` (unsigned).
+`ls`, `hi`, `hs` (unsigned), `vs`, `vc` (signed overflow set / clear),
+`cs`, `cc` (carry).
+
+**Pseudo-forms.** Emission expands these; the interpreter executes them as
+stated.
+
+| Form | Semantics |
+|---|---|
+| `frame.slot rd [origin=O, size=S, align=A]` | `rd := the address of a fresh object of S bytes at alignment A`, one per dynamic execution of the instruction, as EvoIR Section 3.7 requires of `alloca`; after allocation the slot is a fixed frame offset (Section 6), and the reuse of that memory by a re-executed `alloca` is sound because EvoIR ends the previous object's lifetime before the site is reached again |
+| `mem.copy [dst], [src], #size, #align` | copies `size` bytes from `src` to `dst`, transferring per-byte initializedness and pointer fragments exactly as EvoIR Section 3.8's `copy` does (identical or disjoint ranges); emission expands it to `ldr`/`str` pairs of the largest aligned width, unrolled up to 64 bytes and a counted loop above; the loads of the expansion never report an uninitialized read, because they move representation, not values |
 
 ## 5. Lowering: EvoIR to EvoMIR
 
 Lowering maps each extracted EvoIR instruction to a sequence of EvoMIR
-instructions by the table below, in block order, and never reorders memory
-operations: EvoIR's `mem` and `world` tokens are consumed here, and the
-order they imposed becomes program order. A form not in the table is refused
-with the diagnostic named in Section 10.
+instructions by the table below, in block order, keeping block arguments,
+and never reorders memory operations: EvoIR's `mem` and `world` tokens are
+consumed here, and the order they imposed becomes program order. A form not
+in the table is refused with the diagnostic named in Section 10.
 
 | EvoIR | EvoMIR |
 |---|---|
 | `const.bits<N>` | `mov #imm` |
 | `add`, `sub`, `mul`, `and`, `or`, `xor`, `shl`, `lshr`, `ashr` on `bits<N>`, `N <= 64` | the operation, with the extensions of Section 3 |
-| `sdiv`, `udiv`, `srem`, `urem` | `sdiv`/`udiv`, remainders by `msub`; the EvoIR program has asserted `divisor_nonzero` and `signed_div_rem_no_overflow` before (they are `ub.assume` obligations and lower as such) |
+| `sdiv`, `udiv`, `srem`, `urem` | `sdiv`/`udiv`, remainders by `msub`; `divisor_nonzero` and `signed_div_rem_no_overflow` have been asserted before, which makes the machine's answers for the excluded operands unobservable |
+| `divisor_nonzero %d` | `cmp %d, #0` then `cset ne` |
+| `signed_div_rem_no_overflow %a, %b` | `cmp %a, #INT_MIN` (materialized), `cset ne` into `%p`; `cmp %b, #-1`, `cset ne` into `%q`; `orr %p, %q` |
+| `signed_add_defined %a, %b` / `signed_sub_defined` | `adds`/`subs` into a scratch, then `cset vc` |
+| `signed_mul_defined %a, %b` | 32-bit: `smull` the sign-extended operands, compare with the sign extension of its low 32 bits, `cset eq`; 64-bit: `mul` and `smulh`, compare the high word with `asr` of the low word by 63, `cset eq`; narrower widths sign-extend to 32 first |
+| `shift_count_defined.<s> %x, %amt` | zero-extend `%amt` per Section 3, `cmp` with `#N`, `cset lo` |
+| `signed_shl_defined.<s> %x, %amt` | `shift_count_defined` as above, and `(x << amt) >> amt == x` with an arithmetic right shift, `and` of the two `bits<1>` |
 | `sext`, `zext`, `trunc` | the extension of Section 3, or nothing for `trunc` |
-| `icmp.*` on integers | `cmp` then `cset`; when the only consumer is a `cond_br` in the same block, `cmp` then `b.cond` with no `cset` |
-| `icmp.eq`/`ne` on pointers | the same, 64-bit |
+| `icmp.*` on integers | the extensions of Section 3, `cmp`, then `cset`; when the only consumer is a `cond_br` in the same block, `cmp` then `b.cond` with no `cset` |
+| `icmp.eq`/`ne` on pointers | the same, 64-bit, no extension |
 | `ptr.null` | `mov #0` |
-| `global_addr @g` | `adrp` + `add` (Section 8 names the relocation) |
-| `func_addr @f` | `adrp` + `add` of the function symbol |
-| `ptr.offset` | `add` (scale by `lsl` first when the scale is a power of two, `mul` otherwise); the in-bounds guard has been asserted before |
-| `alloca` (static size and alignment) | a frame slot (Section 6); the pointer is `add rd, x29, #slot` |
+| `global_addr @g` / `func_addr @f` | `adrp` + `add` with the symbol spellings of Section 4 |
+| `ptr.offset.<direction>.<signedness>` | the index extended per the signedness, scaled by `lsl` when the scale is a power of two and `mul` otherwise, then `add` for the add direction and `sub` for the subtract direction; the machine wraps where EvoIR computes in unbounded arithmetic and reports `E3011`, an admissible difference because the pointer-formation guard has been asserted before |
+| `alloca` (static size and alignment) | `frame.slot` at the instruction's program point |
 | `lifetime.end` | nothing |
-| `pointer_valid`, `access_in_bounds` | nothing: these are the guards the front end already lowered into `ub.assume` obligations; the instruction itself has no machine effect |
-| `load [volatile]` of `bits<N>`, `N <= 64`, or a pointer | `ldr` of the matching width; `volatile` adds nothing on this target but forbids merging with a neighbouring access (which this revision never does) |
-| `store [volatile]` | `str` of the matching width |
-| `copy` with static size | a loop of `ldr`/`str` pairs of the largest aligned width, unrolled up to 64 bytes, a counted loop above |
-| `br ^b(args)` | parallel copies for the block arguments (Section 7) then `b` |
-| `cond_br %c, ^t(...), ^e(...)` | `tbnz %c, #0` (or the `b.cond` fusion above), copies on each edge |
-| `ret v...` | move results into `x0`.. (Section 6) then epilogue and `ret` |
-| `trap.<reason>` | `brk #imm` with the reason's number |
-| `ub.assume.<reason> %c` | checked profile: `tbz %c, #0, trap_label` where the label holds `brk #imm` for the reason; unchecked profile: nothing. The profile is a driver flag recorded in the receipt, default checked |
-| `call @f(args, %m, %w)` / `call %p(...)` | argument moves, `bl`/`blr`, result moves (Section 6) |
+| `pointer_valid`, `access_in_bounds` | nothing: the guards are the obligations the front end already lowered into `ub.assume`; the instruction itself has no machine effect |
+| `load [volatile]` of `bits<N>`, `N <= 64` | `ldr` of the matching width, with the marker |
+| `load [volatile]` of a pointer | `ldr.p` / `ldr.pf` |
+| `store [volatile]` | `str` of the matching width, `str.p` for a pointer |
+| `copy` with static size | `mem.copy` |
+| `br ^b(args)` | `b ^b(args)` |
+| `cond_br %c, ^t(...), ^e(...)` | `tbnz %c, #0, ^t(...), ^e(...)` (or the `b.cond` fusion above) |
+| `ret v...` | `ret` listing the results |
+| `trap.<reason>` | `brk` with the reason's number |
+| `ub.assume.<reason> %c` | checked profile: `tbz %c, #0, ^trap_reason(), ^continue(live...)`, where `^continue` is a fresh block whose arguments are exactly the registers the rest of the source block still reads, ordered by register number, and `^trap_reason` holds `brk` for the reason; one trap block per reason, appended after the source blocks in order of first use. Unchecked profile: nothing. The profile is a driver flag recorded in the receipt, default checked |
+| `call @f(args, %m, %w)` / `call %p(...)` | `bl`/`blr` with explicit argument and result registers (Section 6) |
 | `uninitialized.bits<N>` | `mov #0` (any value is permitted; zero is chosen so the output is deterministic) |
 
-Every other EvoIR form is refused: division and shift guards that were not
-asserted are not a lowering concern (they are the program's), but wide
-integers, floating point, vectors, tuples, varargs, computed goto, frame
-address, aggregate arguments and results, and pointer difference each have a
-code in Section 10.
+The UB predicates were absent from revision 0.1's table, which refused
+19,410 of 20,000 generated functions; they are ordinary boolean
+computations and lower whether or not a `ub.assume` consumes them.
+
+Every other EvoIR form is refused: wide integers, floating point, vectors,
+tuples, varargs, computed goto, frame address, aggregate arguments and
+results, and pointer difference each have a code in Section 10.
 
 ## 6. Frame and Calling Convention (Darwin arm64, scalar)
 
@@ -206,10 +256,14 @@ in the low bits of its register with the upper bits unspecified, and the
 callee applies Section 3 before reading it as anything but a low-`N`-bit
 value. A ninth integer argument is refused (`E4010`); an aggregate argument
 or result is refused (`E4011`); a variadic call or callee is refused
-(`E4012`, the EvoIR `E3030` boundary). A single integer or pointer result
-returns in `x0`; a function with more than one ordinary result is refused
-(`E4013`). Measured against the reference compilers before this revision is
-first used for a call across the boundary (Section 9 names the probe).
+(`E4012`, the EvoIR `E3030` boundary). **Results:** an EvoMIR function
+returns up to eight integer or pointer results in `x0` to `x7` in order.
+C lowering never produces more than one, so the C ABI is unaffected; the
+convention exists so that the machine lane of Section 9 can execute the
+multi-result functions the randomized generator writes (revision 0.1's
+single-result rule refused 16,926 of 20,000). A ninth result is `E4013`.
+Measured against the reference compilers before this revision is first
+used for a call across the boundary (Section 9 names the probe).
 
 **Preserved registers.** `x19` to `x28`, `x29`, `x30` and `sp` are
 callee-saved; `x0` to `x17` are caller-saved; `x18` is untouchable.
@@ -224,9 +278,9 @@ stp/str of each used callee-saved register into its slot
 ```
 
 and the epilogue reverses it. Below the saved pair, in order: the
-callee-saved save area, then one slot per `alloca` (its declared size,
-rounded to its declared alignment, laid out in declaration order from the
-top of the frame downward), then the spill area (one 8-byte slot per spilled
+callee-saved save area, then one slot per `frame.slot` (its declared size,
+rounded to its declared alignment, laid out in origin order from the top of
+the frame downward), then the spill area (one 8-byte slot per spilled
 virtual register), then outgoing stack arguments (none in this revision).
 `sp` stays 16-byte aligned at every call. The frame is static: no dynamic
 `alloca` exists in EvoIR.
@@ -241,8 +295,8 @@ rule enters with the measurement that enables it.
 parallel copy from the values the terminator passes to the target's
 arguments, resolved into a sequence of moves with at most one scratch
 register (`x16`) for cycles. Critical edges are split by inserting a block.
-This happens before allocation, on virtual registers, so the allocator sees
-ordinary moves.
+This happens before allocation, on virtual registers, as its own pass; the
+lowering of Section 5 does not do it.
 
 **Linear scan.** Instructions are numbered in block order (the order of
 Section 2); a virtual register's live interval is from its definition to
@@ -279,12 +333,13 @@ Three instruments, each independent of the lowering:
 
 1. **The EvoMIR interpreter.** Every Section 4 form has executable
    semantics; an interpreter executes an EvoMIR function on the same inputs
-   as the EvoIR interpreter and the two must agree on results and on the
-   volatile trace. The randomized semantic gate of the middle end gains a
+   as the EvoIR interpreter and the two must agree on results, traps and the
+   volatile trace. The randomized semantic gate of the middle end runs a
    third lane: EvoIR before, EvoIR after optimization, EvoMIR after
-   lowering, all three agreeing or the program is a mismatch to shrink.
-   This lane exists before any native run, so lowering defects are found
-   without an assembler in the loop.
+   lowering, all three agreeing or the program is a mismatch to shrink. A
+   lowering refusal is counted by code, not compared. This lane exists
+   before any native run, so lowering defects are found without an
+   assembler in the loop.
 2. **The allocation verifier.** A separate pass over the allocated function
    checks the three properties of Section 7 by dataflow; the allocator does
    not certify itself.
@@ -303,7 +358,11 @@ revision admits, and vice versa, and the receipt names it.
 ## 10. Diagnostics
 
 All are reported at the EvoIR instruction that could not be lowered; the
-driver emits no assembly for a function with any of them.
+driver emits no assembly for a function with any of them. Five codes
+(`E4005` to `E4008`, `E4012`) name forms a validated EvoIR module cannot
+contain at revision 1.9.56, because EvoIR's own fail-closed codes exclude
+them earlier; they are defined so that the boundary is named from both
+sides, and are never emitted today.
 
 | Code | Name | Meaning |
 |---|---|---|
@@ -319,12 +378,37 @@ driver emits no assembly for a function with any of them.
 | `E4010` | `abi: too-many-register-arguments` | more than eight integer arguments |
 | `E4011` | `abi: aggregate-by-value` | aggregate argument or result |
 | `E4012` | `abi: variadic` | variadic callee or caller |
-| `E4013` | `abi: multiple-results` | more than one ordinary result |
+| `E4013` | `abi: too-many-results` | more than eight ordinary results |
 | `E4020` | `allocation: verifier-refused` | the allocation verifier found a violation; internal, must never reach a user of a released build |
 
 ## Appendix A. Textual Form
 
-Before allocation:
+The textual form is canonical (one rendering per function, the EvoIR
+Section 9.4 byte rules: four-space indent, `", "` between operands, one
+blank line between blocks and between functions, one final newline) and
+round-trips through a parser, so that tests can state EvoMIR by hand and
+the receipt can digest it.
+
+```text
+function        := "func @" ident " {" newline block+ "}" newline
+block           := "^" ident "(" params ")" ":" newline (indent instruction newline)* indent terminator newline
+params          := [ "%v" int ":" class ("," " " "%v" int ":" class)* ]
+class           := "gpr32" | "gpr64" | "flags"
+instruction     := "%v" int ":" class " = " op operands
+                 | "%v" int ":" class " = " op ".w"|".x" operands        ; width suffix on two-width forms
+                 | "%v" int ":" class " = frame.slot [origin=" ident ", size=" int ", align=" int "]"
+                 | "mem.copy [" reg "], [" reg "], #" int ", #" int
+                 | store-form [" volatile"]
+                 | call-form
+terminator      := "b ^" ident "(" args ")"
+                 | ("b." cond | "cbz " reg | "cbnz " reg | "tbz " reg ", #" int | "tbnz " reg ", #" int) ", ^" ident "(" args ")" ", ^" ident "(" args ")"
+                 | "ret" [" " reg ("," " " reg)*]
+                 | "brk #" int
+call-form       := "bl @" ident "(" args ")" [" -> " results] | "blr " reg "(" args ")" [" -> " results]
+symbol          := "@" ident "@PAGE" | "@" ident "@PAGEOFF" | "@" ident "@FUNCPAGE" | "@" ident "@FUNCPAGEOFF"
+```
+
+Before allocation (the entry block's label is spelled, as every block's is):
 
 ```text
 func @dot {
@@ -349,12 +433,9 @@ entry:
 }
 ```
 
-The textual form is canonical (one rendering per function) and round-trips
-through a parser, so that tests can state EvoMIR by hand and the receipt can
-digest it.
-
 ## Appendix B. Revision History
 
 | Revision | Date | Change |
 |---|---|---|
-| 0.1 | 2026-09-04 | First statement: purpose, register classes, sub-width representation, the AArch64 scalar instruction subset with executable semantics, the lowering table with fail-closed boundaries, the Darwin arm64 scalar calling convention and frame layout, out-of-SSA and linear scan, emission, three verification instruments, and the `E4xxx` diagnostics. Nothing implemented yet; the calling-convention sentences are to be probed before first use. |
+| 0.2 | 2026-09-04 | Rules the thirteen stops of the first implementation: lowering rows for every UB predicate; `icmp.eq`/`ne` moved to the zero-extended row after a measured counterexample; `frame.slot` as a per-execution pseudo-form reconciling `alloca` with EvoIR 3.7; `ldr.p`/`ldr.pf`/`str.p` for provenance; a grammar for the textual form with the executor's spellings (symbols, the volatile marker, explicit call registers, two-successor conditionals, spelled entry labels); the `ub.assume` continuation-block construction; `brk` immediates as the diagnostic's decimal part; shift amounts and `ptr.offset` wrapping as obligation-covered differences; `mem.copy` as a pseudo-form transferring initializedness and provenance; block arguments kept until the Section 7 pass; up to eight results in `x0`..`x7` for the machine lane; the five unreachable codes named as such. |
+| 0.1 | 2026-09-04 | First statement: purpose, register classes, sub-width representation, the AArch64 scalar instruction subset with executable semantics, the lowering table with fail-closed boundaries, the Darwin arm64 scalar calling convention and frame layout, out-of-SSA and linear scan, emission, three verification instruments, and the `E4xxx` diagnostics. |

@@ -7,13 +7,13 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-fn binary() -> PathBuf {
+fn binary(name: &str) -> PathBuf {
     let mut directory = std::env::current_exe().expect("the running test binary");
     directory.pop();
     if directory.ends_with("deps") {
         directory.pop();
     }
-    let path = directory.join(format!("evo-policy-eval{}", std::env::consts::EXE_SUFFIX));
+    let path = directory.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
     assert!(
         path.is_file(),
         "{} does not exist; build the workspace",
@@ -23,7 +23,11 @@ fn binary() -> PathBuf {
 }
 
 fn run(arguments: &[&str]) -> (i32, String, String) {
-    let output = Command::new(binary())
+    run_binary("evo-policy-eval", arguments)
+}
+
+fn run_binary(name: &str, arguments: &[&str]) -> (i32, String, String) {
+    let output = Command::new(binary(name))
         .args(arguments)
         .output()
         .expect("run evo-policy-eval");
@@ -88,4 +92,84 @@ fn the_binary_report_is_deterministic_with_timing_elided() {
     assert_eq!(first, second);
     assert!(first.contains("\"corpusDigest\""));
     assert!(first.contains("\"optimizerWallNanos\": null"));
+}
+
+#[test]
+fn a_weight_vector_measures_through_the_same_command() {
+    let weights = evocc_policy::SEARCHED_WEIGHTS.render();
+    let (status, report, stderr) = run(&[
+        "--weights",
+        &weights,
+        "--seed",
+        "4",
+        "--generated",
+        "700:6",
+        "--elide-timing",
+    ]);
+    assert_eq!(status, 0, "{stderr}");
+    assert!(
+        report.contains(evocc_policy::SEARCHED_POLICY_NAME),
+        "a searched weighting must name itself in the report: {report}"
+    );
+    assert!(
+        report.contains("mul=3"),
+        "and carry its weights into it: {report}"
+    );
+
+    // A cost function is named exactly once, by a shipped name or by a
+    // vector, never by both and never by neither.
+    for arguments in [
+        vec!["--seed", "4", "--generated", "700:6"],
+        vec![
+            "--policy",
+            "prefer-add",
+            "--weights",
+            weights.as_str(),
+            "--seed",
+            "4",
+            "--generated",
+            "700:6",
+        ],
+    ] {
+        let (status, stdout, stderr) = run(&arguments);
+        assert_eq!(status, 2, "{stderr}");
+        assert!(stdout.is_empty());
+        assert!(stderr.contains("exactly one of --policy and --weights"));
+    }
+
+    let (status, _, stderr) = run(&[
+        "--weights",
+        "add=1,mul=2",
+        "--seed",
+        "4",
+        "--generated",
+        "700:6",
+    ]);
+    assert_eq!(status, 2);
+    assert!(stderr.contains("13 fields"), "{stderr}");
+}
+
+/// The search must not be able to train on the corpus that judges it, and the
+/// command line is where a caller would try.
+#[test]
+fn the_search_refuses_to_train_on_the_held_out_range() {
+    let (first, count) = evocc_policy::HELD_OUT_RANGE;
+    let overlapping = format!("{}:{count}", first + count / 2);
+    let (status, stdout, stderr) = run_binary(
+        "evo-cost-search",
+        &["--generated", &overlapping, "--generations", "0"],
+    );
+    assert_eq!(status, 2, "{stderr}");
+    assert!(stdout.is_empty());
+    assert!(stderr.contains("held-out"), "{stderr}");
+
+    // The search reads no path at all -- its only corpus is a generated seed
+    // range -- so no acceptance corpus can reach it even by mistake.
+    let (status, stdout, stderr) = run_binary(
+        "evo-cost-search",
+        &["--corpus", ".build/corpus", "--generations", "0"],
+    );
+    assert_eq!(status, 2, "{stderr}");
+    assert!(stdout.is_empty());
+    assert!(stderr.contains("usage: evo-cost-search"), "{stderr}");
 }

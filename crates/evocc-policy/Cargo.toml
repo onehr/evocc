@@ -9,6 +9,14 @@ description = "Deterministic evaluation of one optimizer policy over a corpus"
 name = "evo-policy-eval"
 path = "src/main.rs"
 
+[[bin]]
+name = "evo-cost-search"
+path = "src/search_main.rs"
+
+[[bin]]
+name = "evo-cost-axes"
+path = "src/axes_main.rs"
+
 [dependencies]
 evocc-eqopt = { path = "../evocc-eqopt" }
 evocc-evoir = { path = "../evocc-evoir" }
