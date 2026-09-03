@@ -634,6 +634,7 @@ def run_full_configuration(args: argparse.Namespace) -> int:
     require(source_root.is_dir(), f"source root is absent: {source_root}")
     tracked_status = git_output("status", "--porcelain", "--untracked-files=no")
     require(not tracked_status, "tracked worktree must be clean before a sealed survey")
+    subject = git_output("rev-parse", "HEAD")
 
     run_id = args.run_id or (
         f"{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{os.getpid()}"
@@ -670,7 +671,6 @@ def run_full_configuration(args: argparse.Namespace) -> int:
             for unit in units
         ],
     )
-    subject = git_output("rev-parse", "HEAD")
     config = {
         "schema": f"evocc.full-configuration-{args.action}-survey.config.v1",
         "runId": run_id,
@@ -733,6 +733,7 @@ def run_full_configuration(args: argparse.Namespace) -> int:
         git_output("status", "--porcelain", "--untracked-files=no") == "",
         "tracked worktree changed during the survey",
     )
+    require(git_output("rev-parse", "HEAD") == subject, "HEAD changed during the survey")
     require(sha256_file(evocc) == config["releaseBinary"]["sha256"], "release binary changed")
     require(sha256_file(contract) == config["contract"]["sha256"], "contract changed")
     require(sha256_file(Path(__file__)) == config["runnerSha256"], "survey runner changed")
