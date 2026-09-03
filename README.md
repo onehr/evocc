@@ -112,7 +112,7 @@ Other useful flags: `-E` (preprocess), `--parse-only`, `--emit=c-hir`, and `--su
 
 ## Status
 
-**What the kernel says today:** **16 of 16 cohort units parse clean under both reference compilers** on oracle-preprocessed input — that stage of the launch chain is closed, on sealed evidence, with zero regressions across the whole campaign. The full-configuration sweep now enumerates 2,798 target C units through EvoCC's own preprocessor, after excluding 34 HOSTCC programs from the former 2,832-unit denominator. **2,760 of 2,798 parse clean**; the other 38 stop on typed diagnostics, with zero panic, timeout, or unavailable units. The latest parser rule set moved exactly 793 units from diagnosed to clean and regressed none. Twenty-odd distinct constructs stood between 0/16 and 16/16; each got a measured rule, a declared red window, and a publication.
+**What the kernel says today:** **16 of 16 cohort units parse clean under both reference compilers** on oracle-preprocessed input — that stage of the launch chain is closed, on sealed evidence, with zero regressions across the whole campaign. The full-configuration sweep now enumerates 2,798 target C units through EvoCC's own preprocessor, after excluding 34 HOSTCC programs from the former 2,832-unit denominator. **2,798 of 2,798 parse clean**, with zero panic, timeout, or unavailable units. The latest parser rule set moved exactly 793 units from diagnosed to clean and regressed none. Twenty-odd distinct constructs stood between 0/16 and 16/16; each got a measured rule, a declared red window, and a publication.
 
 | Capability | Status |
 |---|---|
@@ -125,7 +125,7 @@ Other useful flags: `-E` (preprocess), `--parse-only`, `--emit=c-hir`, and `--su
 | Kernel telemetry and sealed publication | done |
 | Diagnostic survey mode | partial |
 | Kernel parse closure (cohort, oracle-preprocessed input) | done |
-| Full-configuration sweep, 2,798 target C units, own preprocessor | in progress: 2,760 clean, 38 typed-diagnosed, 0 panic/timeout/unavailable |
+| Full-configuration sweep, 2,798 target C units, own preprocessor | done: 2,798 of 2,798 clean |
 | Analysis lattices, bounded scheduler | not started |
 | Randomized semantic gate | not started |
 | EvoMIR, register allocation, AArch64 | not started |

@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.53** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.54** | **Authoritative reference** | **2026-09-04**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1292,6 +1292,7 @@ twice would let a reader think two conditions are the same finding.
 | `E2925` | `builtin-mode-out-of-range` | front end |
 | `E2926` | `va-start-outside-variadic-function` | front end |
 | `E2927` | `builtin-library-declaration-incompatible` | front end |
+| `E2928` | `address-of-register-object` | front end |
 | `E0102` | `unmatched-conditional` | preprocessor |
 | `E0104` | `error-directive` | preprocessor |
 | `E0105` | `include-not-found` | preprocessor |
@@ -1316,6 +1317,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3031` | `not-lowered: frame-address` | lowering |
 | `E3032` | `not-lowered: pointer-difference` | lowering |
 | `E3033` | `not-executed: wide-integer` | lowering |
+| `E3034` | `not-lowered: function-pointer-arithmetic` | lowering |
 | `E3029` | `not-lowered: computed-goto` | lowering |
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
@@ -2974,6 +2976,7 @@ front end that still emits it is defective.
 | `E2925` | `__builtin_object_size` mode is not a constant in `0..3` |
 | `E2926` | `va_start` in a non-variadic function, or naming a parameter other than the last named one |
 | `E2927` | a library builtin's non-constant form used where a visible declaration of the library function has an incompatible type |
+| `E2928` | the address of a `register` object is taken |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -3711,7 +3714,9 @@ Measured defect at revision 1.9.52: `E2208` in ten units.
 
 **Initializer plans have no size cap.** A plan records the entries an
 initializer writes and the zero fill of the rest; its cost is bounded by the
-number of entries, never by the object's size, and no diagnostic refuses an
+number of entries, never by the object's size: a range designator `[lo ... hi]` is one entry
+of the plan (its expansion to elements in 10.1.12 is a description of
+meaning, not of representation), and no diagnostic refuses an
 object for being large (`_printk_rb_static_infos[4096]` with two designated
 entries). `E2207` (`initializer-plan-too-large`), which the implementation
 emitted without a definition, is withdrawn at revision 1.9.53.
@@ -3857,7 +3862,7 @@ were `E1001` or `E1002` in 37 units.
 
 **Storage class `register`, va_list objects, 128-bit places.** `register` is
 accepted on parameters and block-scope objects and has no effect beyond
-forbidding `&` on the object. `__builtin_va_list` is an object type that may
+forbidding `&` on the object, which is `E2928` (`address-of-register-object`) at the `&` (both oracles reject it). `__builtin_va_list` is an object type that may
 be a member, an array element or a typedef target; on the target it occupies
 32 bytes at alignment 8 (evidence `p31-residue.c`: a structure holding one
 pointer and one `va_list` is 40 bytes at 8). An element of an array of
@@ -3870,7 +3875,7 @@ of both stays `E3033` and `E3030`. Measured defect at revision 1.9.52:
 affect compatibility (C11 6.7.6.3p15): `int (*)(const clockid_t, struct ts *)`
 and `int (*)(clockid_t, struct ts *)` are compatible (evidence
 `p31-residue.c`, `o`). Function pointer arithmetic `p + n`, `p - n` and the
-compound forms scale by one (GNU; evidence `fnarith`). Measured defect at
+compound forms scale by one at the front end (GNU; evidence `fnarith`); because Function provenance admits only offset zero (Section 4), lowering reports `E3034` (`not-lowered: function-pointer-arithmetic`) at the operation and fails closed. Measured defect at
 revision 1.9.52: `E2202` in three units and `E2102` in one.
 
 **The `\e` escape.** `'\e'` is the GNU escape for 27 (evidence
@@ -4911,6 +4916,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.54 | 2026-09-04 | The configured kernel's every translation unit parses clean (2,798 of 2,798). Assigns `E2928` to the address of a `register` object, `E3034` to the lowering of function-pointer arithmetic, and states that a range designator is one plan entry; the three edges the front-end executor named. |
 | 1.9.53 | 2026-09-03 | Fifth full-configuration survey (2,760 of 2,798). Defines the sixteen rules behind the remaining 38 units: one conditional stack across argument collection, empty `##` operands, comments across continued definitions, `__VA_OPT__`, keyword parameter names, `-fshort-wchar` wide strings (10.4); `register`, `va_list` objects, 128-bit and `va_arg` places, parameter compatibility, function-pointer arithmetic, `\e` (10.1.18); literal addresses, null comparisons in conditionals, no initializer size cap with `E2207` withdrawn (10.1.19); string literals at every site (10.1.3). All measured. |
 | 1.9.52 | 2026-09-03 | States that a derived node reachable as a child of a named derived node is used, so an emitting right-hand side may write a `const_like` operand (11.3); the executor stopped `p2_302` on the unqualified sentence. |
 | 1.9.51 | 2026-09-03 | The checker stops judging cost: strict improvement is producer conformance under the declared policy (11.3), after the policy harness measured that no all-positive cost function can differ from another in the P0 profile. Defines emitting right-hand sides and `width_min` (11.6) and prints `p0.scalar.v4` with the doubling rules `mul(x,2) = add(x,x) = shl(x,1)`, the first rewrites whose extraction is a genuine choice. |
