@@ -117,14 +117,6 @@ fn significant_bits(ty: &EvoIRType) -> u16 {
     }
 }
 
-fn mask_of(bits: u16) -> u64 {
-    if bits >= 64 {
-        u64::MAX
-    } else {
-        (1_u64 << bits) - 1
-    }
-}
-
 fn width_of(class: RegClass) -> Width {
     match class {
         RegClass::Gpr64 => Width::X,
@@ -1267,20 +1259,21 @@ fn lower_inst(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Res
             let width = width_of(class);
             let left = lowerer.reg(lhs)?;
             let right = lowerer.reg(rhs)?;
-            let left = lowerer.zero_extend(insts, left, bits, width);
-            let right = lowerer.zero_extend(insts, right, bits, width);
-            // The two patterns compared against are the N-bit representations
-            // of INT_MIN and of -1, materialized as Section 5 says.
+            // Section 5: "sign-extend both per Section 3; `cmp %a, #INT_MIN_N`
+            // (the minimum of `bits<N>`, materialized), `cset ne` into `%p`;
+            // `cmp %b, #-1`, `cset ne` into `%q`; `orr %p, %q`".
+            let left = lowerer.sign_extend(insts, left, bits, width);
+            let right = lowerer.sign_extend(insts, right, bits, width);
             let minimum = lowerer.fresh(class);
             insts.push(MInst::MovImm {
                 dst: minimum,
-                imm: 1_u64 << (bits - 1),
+                imm: (1_u64 << (bits - 1)).wrapping_neg() & width.mask(),
             });
             let low = lowerer.compare_into(insts, left, minimum, width, Cond::Ne);
             let ones = lowerer.fresh(class);
             insts.push(MInst::MovImm {
                 dst: ones,
-                imm: mask_of(bits),
+                imm: width.mask(),
             });
             let high = lowerer.compare_into(insts, right, ones, width, Cond::Ne);
             let dst = lowerer.fresh(RegClass::Gpr32);
