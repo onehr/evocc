@@ -101,6 +101,20 @@ pub fn optimize_scalar_module_with_evp1(
     optimize_scalar_module_with_evp1_transaction(module, budget).outcome
 }
 
+/// One transaction under an explicit producer policy.
+///
+/// Section 7.5 makes the cost function a producer policy the checker never
+/// verifies, so this differs from the call above only in which regions the
+/// producer is willing to keep. The certificate format does not change and the
+/// policy name is reported, not certified.
+#[must_use]
+pub fn optimize_scalar_module_with_policy(
+    _module: &Module,
+    _policy: &crate::policy::ExtractionPolicy,
+) -> CertifiedScalarEqOutcome {
+    todo!("the producer does not read an extraction policy yet")
+}
+
 pub(crate) fn optimize_scalar_module_with_evp1_transaction(
     module: &Module,
     budget: ScalarEqBudget,

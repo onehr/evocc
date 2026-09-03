@@ -29,6 +29,7 @@ members = [
     "crates/evocc-randgate",
     "crates/evocc-parser",
     "crates/evocc-lower",
+    "crates/evocc-policy",
 ]
 
 [workspace.package]

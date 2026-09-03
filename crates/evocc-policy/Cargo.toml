@@ -1,0 +1,16 @@
+[package]
+name = "evocc-policy"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+description = "Deterministic evaluation of one optimizer policy over a corpus"
+
+[[bin]]
+name = "evo-policy-eval"
+path = "src/main.rs"
+
+[dependencies]
+evocc-eqopt = { path = "../evocc-eqopt" }
+evocc-evoir = { path = "../evocc-evoir" }
+evocc-proof = { path = "../evocc-proof" }
+evocc-randgate = { path = "../evocc-randgate" }
