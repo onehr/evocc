@@ -66,8 +66,8 @@ fn assert_expands(source: &str, expansion: &str) {
 fn conditional_state_crosses_the_macro_argument_boundary() {
     assert_expands(
         concat!(
-            "#define WARN(x) x\n",
-            "#define ERR(x) x\n",
+            "#define WARN(x) warn x\n",
+            "#define ERR(x) error x\n",
             "#ifdef NEVER\n",
             "WARN(\n",
             "#else\n",
@@ -75,7 +75,7 @@ fn conditional_state_crosses_the_macro_argument_boundary() {
             "#endif\n",
             "7)\n",
         ),
-        "7",
+        "error 7",
     );
 }
 
@@ -89,6 +89,13 @@ fn an_empty_paste_operand_preserves_the_literal_operand() {
             "INC(3)\n",
         ),
         "0; 3",
+    );
+    assert_expands(
+        concat!(
+            "#define PASTE(left, right) left##right\n",
+            "PASTE(, right) PASTE(left, ) PASTE(, )\n",
+        ),
+        "right left",
     );
 }
 
@@ -121,9 +128,9 @@ fn va_opt_tracks_whether_variadic_tokens_are_present() {
 fn macro_parameter_names_may_use_c_keyword_spellings() {
     assert_expands(
         concat!(
-            "#define read_roothub(hc, register, mask) ((hc)[register] & (mask))\n",
+            "#define read_roothub(hc, register, mask) ((hc)[register] & (mask)), \"register\"\n",
             "read_roothub(base, index, 15)\n",
         ),
-        "((base)[index] & (15))",
+        "((base)[index] & (15)), \"register\"",
     );
 }

@@ -61,7 +61,9 @@ pub struct MacroMap {
 
 #[derive(Debug)]
 struct PendingPaste {
-    left: Token,
+    /// `None` is the placemarker produced by an empty parameter immediately
+    /// to the left of `##`. It must not fall back to an earlier emitted token.
+    left: Option<Token>,
     operator_span: SourceSpan,
 }
 
@@ -94,13 +96,10 @@ impl MacroMap {
     ) {
         if let Some(ref vname) = variadic_param_name {
             for tok in body.iter_mut() {
-                if tok.kind != TokenKind::Identifier {
-                    continue;
-                }
-                if let TokenText::Decoded(s) = &tok.text {
-                    if s == vname {
-                        tok.text = TokenText::Decoded("__VA_ARGS__".to_owned());
-                    }
+                if preprocessing_identifier(tok)
+                    && matches!(&tok.text, TokenText::Decoded(s) if s == vname)
+                {
+                    tok.text = TokenText::Decoded("__VA_ARGS__".to_owned());
                 }
             }
         }
@@ -158,7 +157,7 @@ impl MacroMap {
 
         let mut mask = vec![false; arg_count];
         for (index, token) in macro_def.body.iter().enumerate() {
-            if token.kind != TokenKind::Identifier {
+            if !preprocessing_identifier(token) {
                 continue;
             }
             let spelling = token_text(token);
@@ -237,9 +236,20 @@ impl MacroMap {
             return None;
         }
 
+        let body = if m.variadic {
+            expand_va_opt_tokens(
+                &m.body,
+                args.iter()
+                    .skip(m.params.len())
+                    .any(|argument| !argument.is_empty()),
+            )
+        } else {
+            m.body.clone()
+        };
         let mut result: Vec<Token> = Vec::new();
         let mut pending_paste: Option<PendingPaste> = None;
-        let body = &m.body;
+        let mut empty_left_for_paste = false;
+        let body = &body;
         let mut i = 0;
 
         while i < body.len() {
@@ -251,12 +261,18 @@ impl MacroMap {
                     i += 1;
                     continue;
                 }
-                if let Some(last) = result.pop() {
+                if empty_left_for_paste {
                     pending_paste = Some(PendingPaste {
-                        left: last,
+                        left: None,
+                        operator_span: tok.span,
+                    });
+                } else if let Some(last) = result.pop() {
+                    pending_paste = Some(PendingPaste {
+                        left: Some(last),
                         operator_span: tok.span,
                     });
                 }
+                empty_left_for_paste = false;
                 i += 1;
                 continue;
             }
@@ -265,19 +281,19 @@ impl MacroMap {
             if tok.kind == TokenKind::Hash {
                 if i + 1 < body.len() {
                     let next = &body[i + 1];
-                    if next.kind == TokenKind::Identifier {
-                        if let Some(arg) = self.resolve_arg(next, m, args) {
-                            let text = tokens_to_string(&arg);
-                            let mut str_tok = make_string_token(&text);
-                            str_tok.spelling_span = tok.spelling_span;
-                            str_tok.preceded_by_whitespace = tok.preceded_by_whitespace;
-                            if let Some(pt) = pending_paste.take() {
-                                result.push(paste_tokens(&pt.left, &str_tok, pt.operator_span));
+                    if let Some(arg) = self.resolve_arg(next, m, args) {
+                        let text = tokens_to_string(&arg);
+                        let mut str_tok = make_string_token(&text);
+                        str_tok.spelling_span = tok.spelling_span;
+                        str_tok.preceded_by_whitespace = tok.preceded_by_whitespace;
+                        if let Some(pt) = pending_paste.take() {
+                            if let Some(left) = pt.left {
+                                result.push(paste_tokens(&left, &str_tok, pt.operator_span));
                             } else {
                                 result.push(str_tok);
                             }
                         } else {
-                            // Unresolvable identifier after #, skip both
+                            result.push(str_tok);
                         }
                         i += 2;
                         continue;
@@ -285,7 +301,9 @@ impl MacroMap {
                 }
                 // # not followed by identifier: just emit
                 if let Some(pt) = pending_paste.take() {
-                    result.push(pt.left);
+                    if let Some(left) = pt.left {
+                        result.push(left);
+                    }
                 }
                 result.push(tok.clone());
                 i += 1;
@@ -293,7 +311,7 @@ impl MacroMap {
             }
 
             // Identifier — possible parameter reference
-            if tok.kind == TokenKind::Identifier {
+            if self.resolve_arg(tok, m, args).is_some() {
                 let gnu_comma_variadic = m.variadic
                     && token_text(tok) == "__VA_ARGS__"
                     && parameter_uses_gnu_comma_elision(body, i);
@@ -313,7 +331,11 @@ impl MacroMap {
                             .take()
                             .expect("GNU comma elision has a preceding paste operand");
                         if args.len() > m.params.len() {
-                            result.push(comma.left);
+                            result.push(
+                                comma
+                                    .left
+                                    .expect("GNU comma elision has a literal comma operand"),
+                            );
                             result.append(&mut arg);
                         }
                         i += 1;
@@ -323,12 +345,19 @@ impl MacroMap {
                         // An empty paste operand is a placemarker: the other
                         // operand survives unchanged.
                         if let Some(pt) = pending_paste.take() {
-                            result.push(pt.left);
+                            if let Some(left) = pt.left {
+                                result.push(left);
+                            }
+                        } else if parameter_is_followed_by_paste(body, i) {
+                            empty_left_for_paste = true;
                         }
                     } else {
                         if let Some(pt) = pending_paste.take() {
-                            // Paste preceding token with first expanded token
-                            result.push(paste_tokens(&pt.left, &arg[0], pt.operator_span));
+                            if let Some(left) = pt.left {
+                                result.push(paste_tokens(&left, &arg[0], pt.operator_span));
+                            } else {
+                                result.push(arg[0].clone());
+                            }
                             result.extend_from_slice(&arg[1..]);
                         } else {
                             result.append(&mut arg);
@@ -341,7 +370,11 @@ impl MacroMap {
 
             // General fallthrough: emit literally, with token pasting.
             if let Some(pt) = pending_paste.take() {
-                result.push(paste_tokens(&pt.left, tok, pt.operator_span));
+                if let Some(left) = pt.left {
+                    result.push(paste_tokens(&left, tok, pt.operator_span));
+                } else {
+                    result.push(tok.clone());
+                }
             } else {
                 result.push(tok.clone());
             }
@@ -350,7 +383,9 @@ impl MacroMap {
 
         // Flush any dangling pending paste
         if let Some(pt) = pending_paste.take() {
-            result.push(pt.left);
+            if let Some(left) = pt.left {
+                result.push(left);
+            }
         }
 
         Some(result)
@@ -359,6 +394,9 @@ impl MacroMap {
     /// If `tok` refers to a parameter (including __VA_ARGS__), return the
     /// corresponding argument tokens. Otherwise return `None`.
     fn resolve_arg(&self, tok: &Token, m: &Macro, args: &[Vec<Token>]) -> Option<Vec<Token>> {
+        if !preprocessing_identifier(tok) {
+            return None;
+        }
         let text = match &tok.text {
             TokenText::Decoded(s) => s.as_str(),
             TokenText::Borrowed => return None,
@@ -383,6 +421,53 @@ impl MacroMap {
         }
         None
     }
+}
+
+fn preprocessing_identifier(token: &Token) -> bool {
+    token.kind == TokenKind::Identifier
+        || match &token.text {
+            TokenText::Decoded(spelling) => evocc_lex::try_keyword(spelling).is_some(),
+            TokenText::Borrowed => false,
+        }
+}
+
+/// Resolve a C23 `__VA_OPT__` group before ordinary parameter substitution.
+/// Retained tokens then share the normal `#`, `##`, whitespace and rescan
+/// machinery with tokens written directly in the replacement list.
+fn expand_va_opt_tokens(body: &[Token], variadic_tokens_present: bool) -> Vec<Token> {
+    let mut output = Vec::with_capacity(body.len());
+    let mut index = 0;
+    while index < body.len() {
+        if !preprocessing_identifier(&body[index])
+            || token_text(&body[index]) != "__VA_OPT__"
+            || body.get(index + 1).map(|token| token.kind) != Some(TokenKind::LParen)
+        {
+            output.push(body[index].clone());
+            index += 1;
+            continue;
+        }
+
+        let mut depth = 1_u32;
+        let mut close = index + 2;
+        while close < body.len() && depth > 0 {
+            match body[close].kind {
+                TokenKind::LParen => depth += 1,
+                TokenKind::RParen => depth -= 1,
+                _ => {}
+            }
+            close += 1;
+        }
+        if depth != 0 {
+            output.push(body[index].clone());
+            index += 1;
+            continue;
+        }
+        if variadic_tokens_present {
+            output.extend(expand_va_opt_tokens(&body[index + 2..close - 1], true));
+        }
+        index = close;
+    }
+    output
 }
 
 fn hash_token_is_paste(body: &[Token], index: usize) -> bool {
@@ -1086,8 +1171,8 @@ impl Preprocessor {
         start: usize,
         source: &str,
         expanding: &mut HashSet<String>,
+        conditional_floor: usize,
     ) -> (Vec<Vec<Token>>, Vec<Token>, usize) {
-        let conditional_floor = self.cond_stack.len();
         let mut args = Vec::new();
         let mut current_arg = Vec::new();
         let mut depth = 1u32;
@@ -1136,15 +1221,6 @@ impl Preprocessor {
                 _ => current_arg.push(decoded),
             }
             index += 1;
-        }
-
-        let unmatched = self
-            .cond_stack
-            .drain(conditional_floor..)
-            .map(|state| state.opening_span)
-            .collect::<Vec<_>>();
-        for span in unmatched {
-            self.push_unmatched_conditional(span);
         }
 
         (args, current_arg, index)
@@ -1482,8 +1558,13 @@ impl Preprocessor {
                         if i + 1 < len && raw[i + 1].kind == TokenKind::LParen {
                             let saved_i = i;
                             i += 2; // skip name and '('
-                            let (mut args, current_arg, j) =
-                                self.collect_macro_arguments(&raw, i, source, expanding);
+                            let (mut args, current_arg, j) = self.collect_macro_arguments(
+                                &raw,
+                                i,
+                                source,
+                                expanding,
+                                conditional_floor,
+                            );
                             let expects_named_argument = self
                                 .macros
                                 .get(&name)
@@ -1956,6 +2037,34 @@ fn has_logical_newline_between(previous: &Token, current: &Token, source: &str) 
             && gap.get(index + 2) == Some(&b'\n')
         {
             index += 3;
+        } else if gap[index..].starts_with(b"/*") {
+            // Translation phase 3 replaces the complete block comment with
+            // one space. Newlines inside it therefore do not terminate a
+            // preprocessing directive, even when the comment spans physical
+            // lines between two phase-2 continuations.
+            index += 2;
+            while index + 1 < gap.len() && !gap[index..].starts_with(b"*/") {
+                index += 1;
+            }
+            index = (index + 2).min(gap.len());
+        } else if gap[index..].starts_with(b"//") {
+            // A line comment is replaced without consuming its terminating
+            // newline. Phase-2 splices inside it still disappear first.
+            index += 2;
+            while index < gap.len() {
+                if gap[index] == b'\\' && gap.get(index + 1) == Some(&b'\n') {
+                    index += 2;
+                } else if gap[index] == b'\\'
+                    && gap.get(index + 1) == Some(&b'\r')
+                    && gap.get(index + 2) == Some(&b'\n')
+                {
+                    index += 3;
+                } else if gap[index] == b'\n' {
+                    return true;
+                } else {
+                    index += 1;
+                }
+            }
         } else if gap[index] == b'\n' {
             return true;
         } else {

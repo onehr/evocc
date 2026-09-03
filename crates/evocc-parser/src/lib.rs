@@ -180,8 +180,6 @@ enum UpdateConstraint {
     Invalid,
 }
 
-const MAX_INITIALIZER_SUBOBJECTS: u64 = 65_536;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InitializerPreflightError {
     TooLarge,
@@ -189,21 +187,15 @@ enum InitializerPreflightError {
     InvalidObject,
 }
 
+fn checked_initializer_action_add(left: u64, right: u64) -> Result<u64, InitializerPreflightError> {
+    left.checked_add(right)
+        .ok_or(InitializerPreflightError::TooLarge)
+}
+
 #[derive(Debug, Clone)]
 struct ResolvedInitializerTarget {
     path: SubobjectPath,
     ty: TypeId,
-}
-
-fn checked_initializer_action_add(left: u64, right: u64) -> Result<u64, InitializerPreflightError> {
-    let total = left
-        .checked_add(right)
-        .ok_or(InitializerPreflightError::TooLarge)?;
-    if total > MAX_INITIALIZER_SUBOBJECTS {
-        Err(InitializerPreflightError::TooLarge)
-    } else {
-        Ok(total)
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1858,6 +1850,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         symbol: None,
                         name: None,
                         ty: *ty,
+                        storage: StorageClass::None,
                         // A declaration through a semantic function type has
                         // no written parameter list of its own. These nodes
                         // preserve the canonical parameter types only.
@@ -1973,7 +1966,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             ArrayBound::Unbounded => {
                 let count = match written {
                     WrittenInitializer::Expression(CHirExpr::StringLit(literal, span)) => {
-                        if !matches!(literal.prefix, StringPrefix::None | StringPrefix::U8) {
+                        if !matches!(
+                            literal.prefix,
+                            StringPrefix::None | StringPrefix::U8 | StringPrefix::L
+                        ) {
                             self.report(
                                 "E2205",
                                 "not-covered-day5: wide-string-initializer",
@@ -1981,7 +1977,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                             );
                             return None;
                         }
-                        if !self.is_narrow_character_type(element) {
+                        if !self.string_literal_element_matches(element, literal.prefix) {
                             self.report("E2202", "invalid-initializer-type", *span);
                             return None;
                         }
@@ -2001,7 +1997,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                             literal_span,
                         ))) = elements.first()
                         {
-                            if !matches!(literal.prefix, StringPrefix::None | StringPrefix::U8) {
+                            if !matches!(
+                                literal.prefix,
+                                StringPrefix::None | StringPrefix::U8 | StringPrefix::L
+                            ) {
                                 self.report(
                                     "E2205",
                                     "not-covered-day5: wide-string-initializer",
@@ -2009,7 +2008,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                                 );
                                 return None;
                             }
-                            if self.is_narrow_character_type(element) {
+                            if self.string_literal_element_matches(element, literal.prefix) {
                                 if elements.len() > 1 {
                                     self.report("E2201", "excess-initializer", elements[1].span());
                                     return None;
@@ -2451,6 +2450,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn lvalue_has_static_address(&self, expression: &CHirExpr<'_>) -> bool {
         match expression {
+            CHirExpr::StringLit(_, _) => true,
             CHirExpr::Ident { symbol, .. } => self.symbol_has_static_address(*symbol),
             CHirExpr::MemoryRead { place, .. } => self.memory_place_has_static_address(place),
             CHirExpr::Member(base, _, _) => self.lvalue_has_static_address(base),
@@ -2566,12 +2566,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let segment = &elements[source_cursor..next_designation];
             let next = match self.initializer_stream_action_count(element, segment, 0) {
                 Ok((next, _)) => next,
-                Err(InitializerPreflightError::TooLarge) => {
-                    self.report("E2207", "initializer-plan-too-large", span);
-                    return None;
-                }
                 Err(
-                    InitializerPreflightError::RecursiveObject
+                    InitializerPreflightError::TooLarge
+                    | InitializerPreflightError::RecursiveObject
                     | InitializerPreflightError::InvalidObject,
                 ) => {
                     self.report("E2202", "invalid-initializer-type", span);
@@ -2632,30 +2629,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     ) -> Option<InitPlan<'arena>> {
         match self.validate_initializer_object_graph(target, &mut HashSet::new()) {
             Ok(()) => {}
-            Err(InitializerPreflightError::TooLarge) => {
-                unreachable!("graph validation does not count actions")
-            }
             Err(
-                InitializerPreflightError::RecursiveObject
-                | InitializerPreflightError::InvalidObject,
-            ) => {
-                self.report("E2202", "invalid-initializer-type", written.span());
-                return None;
-            }
-        }
-        let action_count = if self.written_initializer_has_designations(written) {
-            self.initializer_subobject_count(target, &mut HashSet::new())
-        } else {
-            self.initializer_action_count(target, written)
-        };
-        match action_count {
-            Ok(_) => {}
-            Err(InitializerPreflightError::TooLarge) => {
-                self.report("E2207", "initializer-plan-too-large", written.span());
-                return None;
-            }
-            Err(
-                InitializerPreflightError::RecursiveObject
+                InitializerPreflightError::TooLarge
+                | InitializerPreflightError::RecursiveObject
                 | InitializerPreflightError::InvalidObject,
             ) => {
                 self.report("E2202", "invalid-initializer-type", written.span());
@@ -2664,34 +2640,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         let mut actions = Vec::new();
         self.normalize_initializer_value(target, SubobjectPath::root(), written, &mut actions)?;
-        if actions.len() > MAX_INITIALIZER_SUBOBJECTS as usize {
-            self.report("E2207", "initializer-plan-too-large", written.span());
-            return None;
-        }
         let flexible_array_elements = self.flexible_initializer_element_count(target, &actions);
-        let plan = InitPlan::with_last_write_wins(target, actions, &self.types)
+        let mut plan = InitPlan::with_last_write_wins(target, actions, &self.types)
             .with_flexible_array_elements(flexible_array_elements);
+        if matches!(
+            self.types.get(target).map(|canonical| &canonical.kind),
+            Some(TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_))
+        ) {
+            plan = plan.with_zero_fill_unwritten();
+        }
         if plan.validate(&self.types).is_err() {
             self.report("E2202", "invalid-initializer-type", written.span());
             return None;
         }
         Some(plan)
-    }
-
-    fn written_initializer_has_designations(&self, written: &WrittenInitializer<'arena>) -> bool {
-        match written {
-            WrittenInitializer::Expression(_) => false,
-            WrittenInitializer::List {
-                elements,
-                designations,
-                ..
-            } => {
-                designations.iter().any(Option::is_some)
-                    || elements
-                        .iter()
-                        .any(|element| self.written_initializer_has_designations(element))
-            }
-        }
     }
 
     fn validate_initializer_object_graph(
@@ -2968,17 +2930,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 element,
                 bound: ArrayBound::Fixed(bound),
             } => {
-                if bound > MAX_INITIALIZER_SUBOBJECTS {
-                    return Err(InitializerPreflightError::TooLarge);
-                }
                 let element_count = self.initializer_subobject_count(element, visiting)?;
-                let count = bound
+                bound
                     .checked_mul(element_count)
-                    .ok_or(InitializerPreflightError::TooLarge)?;
-                if count > MAX_INITIALIZER_SUBOBJECTS {
-                    return Err(InitializerPreflightError::TooLarge);
-                }
-                Ok(count)
+                    .ok_or(InitializerPreflightError::TooLarge)
             }
             TypeKind::Array {
                 bound: ArrayBound::Unbounded,
@@ -3024,10 +2979,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     count = count
                         .checked_add(self.initializer_subobject_count(field.ty, visiting)?)
                         .ok_or(InitializerPreflightError::TooLarge)?;
-                    if count > MAX_INITIALIZER_SUBOBJECTS {
-                        visiting.remove(&target);
-                        return Err(InitializerPreflightError::TooLarge);
-                    }
                     if is_union {
                         break;
                     }
@@ -3276,8 +3227,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let child_path = extend_subobject_path(path.clone(), step);
             if cursor < elements.len() {
                 self.normalize_stream_subobject(child, child_path, elements, &mut cursor, actions)?;
-            } else {
-                self.zero_fill_initializer(child, child_path, actions)?;
             }
         }
         if diagnose_excess {
@@ -3331,10 +3280,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         };
 
-        // Establish the same complete-object zero state as a positional
-        // initializer. Explicit source writes follow it and are canonicalized
-        // with last-write-wins when the plan is constructed.
-        self.zero_fill_initializer(target, path.clone(), actions)?;
         let mut cursor = 0_usize;
         for (element, designation) in elements.iter().zip(designations) {
             if let Some(designation) = designation {
@@ -3410,13 +3355,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let last = self.designator_constant_index(last, *span)?;
                     if first > last {
                         self.report("E2917", "designator-index-not-constant", *span);
-                        return None;
-                    }
-                    if last
-                        .checked_sub(first)
-                        .is_none_or(|width| width >= MAX_INITIALIZER_SUBOBJECTS)
-                    {
-                        self.report("E2207", "initializer-plan-too-large", *span);
                         return None;
                     }
                     for current in resolved {
@@ -3590,49 +3528,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some(())
     }
 
-    fn zero_fill_initializer(
-        &mut self,
-        target: TypeId,
-        path: SubobjectPath,
-        actions: &mut Vec<InitAction<'arena>>,
-    ) -> Option<()> {
-        let kind = self.types.get(target)?.kind.clone();
-        match kind {
-            TypeKind::Int(_)
-            | TypeKind::Float(_)
-            | TypeKind::Complex(_)
-            | TypeKind::Pointer(_)
-            | TypeKind::Enum(_)
-            | TypeKind::GnuInt128(_) => {
-                actions.push(InitAction::zero_scalar(path, target));
-                Some(())
-            }
-            TypeKind::Array {
-                bound: ArrayBound::Unbounded,
-                ..
-            } => Some(()),
-            TypeKind::Array {
-                bound: ArrayBound::Variable,
-                ..
-            } => {
-                self.report("E2203", "variable-length-object", self.span());
-                None
-            }
-            TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_) => {
-                let children = self.aggregate_initializer_children(target)?;
-                for (step, child) in children {
-                    self.zero_fill_initializer(
-                        child,
-                        extend_subobject_path(path.clone(), step),
-                        actions,
-                    )?;
-                }
-                Some(())
-            }
-            TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. } => None,
-        }
-    }
-
     fn normalize_string_initializer(
         &mut self,
         target: TypeId,
@@ -3641,7 +3536,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         span: SourceSpan,
         actions: &mut Vec<InitAction<'arena>>,
     ) -> Option<()> {
-        if !matches!(literal.prefix, StringPrefix::None | StringPrefix::U8) {
+        if !matches!(
+            literal.prefix,
+            StringPrefix::None | StringPrefix::U8 | StringPrefix::L
+        ) {
             self.report("E2205", "not-covered-day5: wide-string-initializer", span);
             return None;
         }
@@ -3650,7 +3548,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2202", "invalid-initializer-type", span);
             return None;
         };
-        if !self.is_narrow_character_type(*element) {
+        let element_matches = self.string_literal_element_matches(*element, literal.prefix);
+        if !element_matches {
             self.report("E2202", "invalid-initializer-type", span);
             return None;
         }
@@ -3783,6 +3682,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         })
     }
 
+    fn string_literal_element_matches(&self, target: TypeId, prefix: StringPrefix) -> bool {
+        match prefix {
+            StringPrefix::None | StringPrefix::U8 => self.is_narrow_character_type(target),
+            StringPrefix::L => self.types.get(target).is_some_and(|canonical| {
+                !canonical.qualifiers.is_atomic
+                    && matches!(canonical.kind, TypeKind::Int(IntRank::UShort))
+            }),
+            StringPrefix::U16 | StringPrefix::U => false,
+        }
+    }
+
     fn string_initializes_array_directly(&self, target: TypeId, literal: &StringLit) -> bool {
         if !matches!(literal.prefix, StringPrefix::None | StringPrefix::U8) {
             return true;
@@ -3805,7 +3715,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let symbol = self.declare_symbol(
                 name,
                 SymbolData::Parameter {
-                    storage: StorageClass::None,
+                    storage: parameter.storage,
                 },
                 parameter.ty,
             );
@@ -5147,7 +5057,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return false;
         };
         match kind {
-            TypeKind::GnuInt128(_)
+            TypeKind::BuiltinVaList
+            | TypeKind::GnuInt128(_)
             | TypeKind::Int(_)
             | TypeKind::Float(_)
             | TypeKind::Complex(_)
@@ -5175,7 +5086,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .types
                 .tag(tag)
                 .is_some_and(|tag| matches!(tag.state, TagState::Complete(TagDefinition::Enum(_)))),
-            TypeKind::Void | TypeKind::BuiltinVaList | TypeKind::Function { .. } => false,
+            TypeKind::Void | TypeKind::Function { .. } => false,
         }
     }
 
@@ -6035,6 +5946,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 variadic = true;
                 break;
             }
+            let storage_span = self.peek().map(|token| token.span);
+            let storage = self.parse_storage_class();
+            if !matches!(storage, StorageClass::None | StorageClass::Register) {
+                self.report(
+                    "E1001",
+                    "expected-declaration",
+                    storage_span.unwrap_or_else(|| self.span()),
+                );
+            }
             while self.peek_kind() == Some(TokenKind::Inline) {
                 let token = self.advance().expect("peeked inline specifier");
                 self.report(
@@ -6155,6 +6075,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 symbol: None,
                 name,
                 ty,
+                storage,
                 specifier: specifier.surface,
                 written,
                 span,
@@ -7515,7 +7436,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn is_loadable_scalar(&self, ty: TypeId) -> bool {
         matches!(
             self.types.get(ty).map(|canonical| &canonical.kind),
-            Some(TypeKind::Int(_) | TypeKind::Enum(_) | TypeKind::Pointer(_) | TypeKind::Float(_))
+            Some(
+                TypeKind::Int(_)
+                    | TypeKind::Enum(_)
+                    | TypeKind::GnuInt128(_)
+                    | TypeKind::Pointer(_)
+                    | TypeKind::Float(_)
+            )
         )
     }
 
@@ -7797,7 +7724,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn string_element_type(&mut self, prefix: StringPrefix) -> TypeId {
         let rank = match prefix {
             StringPrefix::None | StringPrefix::U8 => IntRank::Char,
-            StringPrefix::L => IntRank::Int,
+            StringPrefix::L => IntRank::UShort,
             StringPrefix::U16 => IntRank::UShort,
             StringPrefix::U => IntRank::UInt,
         };
@@ -8046,7 +7973,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     OperandTypeClass::StringPointer(prefix) => {
                         InferredType::Integer(integer_type_for_rank(match prefix {
                             StringPrefix::None | StringPrefix::U8 => IntRank::Char,
-                            StringPrefix::L => IntRank::Int,
+                            StringPrefix::L => IntRank::UShort,
                             StringPrefix::U16 => IntRank::UShort,
                             StringPrefix::U => IntRank::UInt,
                         }))
@@ -8381,7 +8308,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn pointer_arithmetic_is_valid(&self, pointee: TypeId) -> bool {
         if matches!(
             self.types.get(pointee).map(|canonical| &canonical.kind),
-            Some(TypeKind::Void)
+            Some(TypeKind::Void | TypeKind::Function { .. })
         ) {
             return true;
         }
@@ -8404,8 +8331,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     (prefix, &pointee.kind),
                     (
                         StringPrefix::None | StringPrefix::U8,
-                        TypeKind::Int(IntRank::Char)
-                    ) | (StringPrefix::L, TypeKind::Int(IntRank::Int))
+                        TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar)
+                    ) | (StringPrefix::L, TypeKind::Int(IntRank::UShort))
                         | (StringPrefix::U16, TypeKind::Int(IntRank::UShort))
                         | (StringPrefix::U, TypeKind::Int(IntRank::UInt))
                 )
@@ -8483,12 +8410,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         left: InferredPointerType,
         right: InferredPointerType,
     ) -> bool {
+        let left_pointee = left.pointee;
+        let right_pointee = right.pointee;
         let (Some(left), Some(right)) =
-            (self.types.get(left.pointee), self.types.get(right.pointee))
+            (self.types.get(left_pointee), self.types.get(right_pointee))
         else {
             return false;
         };
-        if left.kind == right.kind {
+        if left.kind == right.kind || self.types.compatible(left_pointee, right_pointee) {
             return true;
         }
         if matches!(
@@ -8553,10 +8482,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let Some(TypeKind::Pointer(_)) = self.types.get(*target).map(|ty| &ty.kind) else {
             return false;
         };
-        self.integer_expression_type(operand).is_ok()
+        (self.integer_expression_type(operand).is_ok()
             && self
                 .eval_integer_constant_expression(operand)
-                .is_ok_and(|value| value.raw_bits() == 0)
+                .is_ok_and(|value| value.raw_bits() == 0))
+            || self.is_null_pointer_constant(operand)
     }
 
     fn parse_conditional(&mut self) -> Option<&'arena CHirExpr<'arena>> {
@@ -11333,6 +11263,7 @@ fn parse_char_literal(text: &str) -> Option<CharLit> {
             "r" => 13,
             "t" => 9,
             "v" => 11,
+            "e" => 27,
             _ if escape.starts_with('x') => {
                 let digits = &escape[1..];
                 if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_hexdigit()) {
@@ -11938,8 +11869,8 @@ mod tests {
             })
         ));
         let plan = values[1].initializer.as_ref().unwrap().plan();
-        assert_eq!(plan.actions().len(), 3);
-        assert!(matches!(plan.actions()[2], InitAction::ZeroScalar { .. }));
+        assert_eq!(plan.actions().len(), 2);
+        assert!(plan.zero_fills_unwritten());
 
         let other = unit
             .declarations()
@@ -11995,7 +11926,7 @@ mod tests {
     }
 
     #[test]
-    fn initializer_plan_budget_counts_actions_and_keeps_string_stores_compact() {
+    fn initializer_plan_size_tracks_written_entries_and_keeps_string_stores_compact() {
         let arena = Arena::default();
         let unit = parse_unit(
             "char direct[1000000] = \"x\"; \
@@ -12017,25 +11948,14 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(action_counts, [1, 2, 1]);
 
-        for source in [
-            "int keep; int huge[65537] = { 1 }; long after;",
-            "int keep; int huge[][18446744073709551615ULL] = { 1 }; long after;",
-        ] {
-            let arena = Arena::default();
-            let (unit, diagnostic) = parse_rejected(source, &arena);
-            assert_eq!(diagnostic.code, "E2207");
-            assert_eq!(diagnostic.message, "initializer-plan-too-large");
-            assert_eq!(diagnostic_text(source, &diagnostic), "{ 1 }");
-            assert_eq!(
-                unit.symbols().resolve(unit.symbols().file_scope(), "huge"),
-                Ok(None)
-            );
-            assert!(unit
-                .symbols()
-                .resolve(unit.symbols().file_scope(), "after")
-                .unwrap()
-                .is_some());
-        }
+        let arena = Arena::default();
+        let unit = parse_unit("int huge[65537] = { 1 }; long after;", &arena);
+        let CHirDecl::Object(huge) = unit.declarations()[0] else {
+            panic!("expected the large array declaration")
+        };
+        let plan = huge.initializer.as_ref().unwrap().plan();
+        assert_eq!(plan.actions().len(), 1);
+        assert!(plan.zero_fills_unwritten());
     }
 
     #[test]
@@ -12122,10 +12042,9 @@ mod tests {
         let CHirDecl::Object(object) = unit.declarations()[0] else {
             panic!("expected atomic character array")
         };
-        assert_eq!(
-            object.initializer.as_ref().unwrap().plan().actions().len(),
-            2
-        );
+        let plan = object.initializer.as_ref().unwrap().plan();
+        assert_eq!(plan.actions().len(), 1);
+        assert!(plan.zero_fills_unwritten());
     }
 
     #[test]

@@ -945,7 +945,8 @@ fn pointer_expression_type(
         CHirExpr::Elvis(operand, fallback, _) => {
             conditional_pointer_type(symbols, types, operand, fallback)
         }
-        CHirExpr::LabelAddress { facts, .. }
+        CHirExpr::BuiltinVarArgs { facts, .. }
+        | CHirExpr::LabelAddress { facts, .. }
         | CHirExpr::BuiltinReturnAddress { facts, .. }
         | CHirExpr::BuiltinFrameAddress { facts, .. } => converted_pointer_type(types, facts.ty()),
         CHirExpr::Member(_, _, _) | CHirExpr::PtrMember(_, _, _) | CHirExpr::Index(_, _, _) => {
@@ -963,7 +964,6 @@ fn pointer_expression_type(
         | CHirExpr::CheckedArithmetic { .. }
         | CHirExpr::BitBuiltin { .. }
         | CHirExpr::BuiltinUnreachable { .. }
-        | CHirExpr::BuiltinVarArgs { .. }
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::AlignOf(_, _)
@@ -1021,10 +1021,14 @@ fn string_literal_matches(
         (prefix, &pointee.kind),
         (
             crate::StringPrefix::None | crate::StringPrefix::U8,
-            TypeKind::Int(evocc_types::IntRank::Char)
+            TypeKind::Int(
+                evocc_types::IntRank::Char
+                    | evocc_types::IntRank::SChar
+                    | evocc_types::IntRank::UChar
+            )
         ) | (
             crate::StringPrefix::L,
-            TypeKind::Int(evocc_types::IntRank::Int)
+            TypeKind::Int(evocc_types::IntRank::UShort)
         ) | (
             crate::StringPrefix::U16,
             TypeKind::Int(evocc_types::IntRank::UShort)

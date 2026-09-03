@@ -318,10 +318,10 @@ fn validation_rejects_union_sibling_writes_and_unsupported_wide_strings() {
     );
     assert_eq!(
         plan.validate(&types),
-        Err(InitPlanError::UnsupportedStringPrefix {
+        Err(InitPlanError::StringDestinationIsNotCharacterArray {
             action: 0,
             path: SubobjectPath::root(),
-            prefix: StringPrefix::L,
+            destination: char_array,
         })
     );
 }

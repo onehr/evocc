@@ -999,7 +999,8 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             if !matches!(
                 canonical.storage,
                 Some(StorageClass::None | StorageClass::Register)
-            ) {
+            ) || canonical.storage != Some(parameter.storage)
+            {
                 return Err(AllocationSiteManifestError::ParameterStorageMismatch {
                     function: function.symbol,
                     symbol,
@@ -1905,6 +1906,7 @@ mod tests {
             symbol,
             name: spelling.map(|spelling| name(spelling, at)),
             ty,
+            storage: StorageClass::None,
             specifier: specifier(ty, at),
             written: written(at),
             span: span(at),

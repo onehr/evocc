@@ -233,6 +233,7 @@ fn parameter(symbol: SymbolId, spelling: &str, ty: TypeId, at: SourceSpan) -> Pa
             span: at,
         }),
         ty,
+        storage: StorageClass::None,
         specifier: TypeSpecifier::Builtin { ty, span: at },
         written: WrittenDeclarator {
             layers: Vec::new(),
@@ -265,6 +266,7 @@ enum AddFault {
     UnnamedParameter,
     ForgedDesignator,
     ForgedWrittenDeclarator,
+    ForgedParameterStorage,
     FileScopeParameter,
     DuplicateParameterSpelling,
 }
@@ -705,6 +707,7 @@ fn program_with_options(
                             symbol: None,
                             name: None,
                             ty: left_ty,
+                            storage: StorageClass::None,
                             specifier: TypeSpecifier::Builtin {
                                 ty: left_ty,
                                 span: span(0, 1),
@@ -720,6 +723,7 @@ fn program_with_options(
                             symbol: None,
                             name: None,
                             ty: uint,
+                            storage: StorageClass::None,
                             specifier: TypeSpecifier::Builtin {
                                 ty: uint,
                                 span: span(2, 3),
@@ -775,6 +779,9 @@ fn program_with_options(
                 if matches!(fault, AddFault::UnnamedParameter) {
                     left_parameter.symbol = None;
                     left_parameter.name = None;
+                }
+                if matches!(fault, AddFault::ForgedParameterStorage) {
+                    left_parameter.storage = StorageClass::Register;
                 }
                 left_parameter.ty = left_ty;
                 left_parameter.specifier = TypeSpecifier::Builtin {
@@ -2712,6 +2719,7 @@ fn call_execution_fails_closed_on_non_direct_or_unsupported_function_contracts()
         AddFault::UnnamedParameter,
         AddFault::ForgedDesignator,
         AddFault::ForgedWrittenDeclarator,
+        AddFault::ForgedParameterStorage,
     ] {
         let arena = Arena::default();
         let program = program_with_add_fault(&arena, fault);
@@ -2743,6 +2751,11 @@ fn call_execution_fails_closed_on_non_direct_or_unsupported_function_contracts()
                 "unsupported-interpreter-function-signature",
                 span(0, 39),
             ),
+            AddFault::ForgedParameterStorage => (
+                "E3007",
+                "unsupported-interpreter-function-signature",
+                span(8, 12),
+            ),
             AddFault::None
             | AddFault::FileScopeParameter
             | AddFault::DuplicateParameterSpelling => unreachable!(),
@@ -2766,7 +2779,9 @@ fn call_execution_fails_closed_on_non_direct_or_unsupported_function_contracts()
             AddFault::VariadicDefinition => {
                 assert!(matches!(error, InterpreterError::VarArgs { .. }))
             }
-            AddFault::UnnamedParameter | AddFault::ForgedWrittenDeclarator => assert!(matches!(
+            AddFault::UnnamedParameter
+            | AddFault::ForgedWrittenDeclarator
+            | AddFault::ForgedParameterStorage => assert!(matches!(
                 error,
                 InterpreterError::UnsupportedFunctionSignature { .. }
             )),

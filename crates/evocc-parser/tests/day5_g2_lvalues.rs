@@ -73,7 +73,7 @@ const DAY7_STRUCT_ASSIGN: &str = concat!(
     "struct S { int x; }; int f(void) { ",
     "struct S left; struct S right; left = right; return 0; }\n",
 );
-const INVALID_FUNCTION_POINTER_UPDATE: &str = "int f(void) { int (*p)(void); p++; return 0; }\n";
+const GNU_FUNCTION_POINTER_UPDATE: &str = "int f(void) { int (*p)(void); p++; return 0; }\n";
 const INVALID_INCOMPLETE_POINTER_UPDATE: &str =
     "struct S; int f(void) { struct S *p; p++; return 0; }\n";
 const DAY7_POINTER_PREFIX: &str = "int f(int *p) { ++p; return 0; }\n";
@@ -83,7 +83,7 @@ const STRING_POINTER_CONTROL: &str = "int f(void) { char *p; p = \"x\"; return 0
 const FAILED_UPDATE_ROLLBACK: &str =
     "int keep; int bad(void) { int *p; p *= 2; return 0; } long after;\n";
 const PREFIXED_STRING_CONTROLS: &str = concat!(
-    "int f(void) { char *c; int *w; unsigned short *s; unsigned int *u32; void *v; ",
+    "int f(void) { char *c; unsigned short *w; unsigned short *s; unsigned int *u32; void *v; ",
     "c = u8\"a\"; w = L\"b\"; s = u\"c\"; u32 = U\"d\"; v = U\"e\"; return 0; }\n",
 );
 const INVALID_WIDE_TO_CHAR: &str = "int f(void) { char *p; p = L\"x\"; return 0; }\n";
@@ -91,7 +91,7 @@ const INVALID_U16_TO_INT: &str = "int f(void) { int *p; p = u\"x\"; return 0; }\
 const INVALID_U32_TO_U16: &str = "int f(void) { unsigned short *p; p = U\"x\"; return 0; }\n";
 const INVALID_U8_TO_U32: &str = "int f(void) { unsigned int *p; p = u8\"x\"; return 0; }\n";
 const STRING_EXPRESSION_CONTROLS: &str = concat!(
-    "int f(int c) { char *p; char *q; int *w; int x = 0; ",
+    "int f(int c) { char *p; char *q; unsigned short *w; int x = 0; ",
     "p = c ? \"a\" : 0; p = c ? 0 : \"b\"; ",
     "q = c ? \"c\" : p; q = c ? p : \"d\"; ",
     "w = c ? L\"e\" : 0; x = \"f\" != 0; return x; }\n",
@@ -232,8 +232,8 @@ const SOURCES: &[SourceCase] = &[
         source: DAY7_STRUCT_ASSIGN,
     },
     SourceCase {
-        id: "invalid.function-pointer-update",
-        source: INVALID_FUNCTION_POINTER_UPDATE,
+        id: "gnu.function-pointer-update",
+        source: GNU_FUNCTION_POINTER_UPDATE,
     },
     SourceCase {
         id: "invalid.incomplete-pointer-update",
@@ -764,7 +764,6 @@ fn invalid_update_operands_report_exact_e2102() {
         (INVALID_COMPLEX_UPDATE, "z++"),
         (INVALID_POINTER_ASSIGNMENT, "p = q"),
         (INVALID_STRUCT_COMPOUND, "left += right"),
-        (INVALID_FUNCTION_POINTER_UPDATE, "p++"),
         (INVALID_INCOMPLETE_POINTER_UPDATE, "p++"),
     ] {
         assert_diagnostic(source, target, 0, "E2102", "invalid-update-operands");
@@ -837,6 +836,7 @@ fn valid_pointer_updates_produce_typed_chir() {
         DAY7_POINTER_UPDATE,
         DAY7_POINTER_PREFIX,
         DAY7_POINTER_SUBTRACT,
+        GNU_FUNCTION_POINTER_UPDATE,
     ] {
         let arena = Arena::default();
         let unit = parse_valid(source, &arena);

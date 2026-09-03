@@ -831,21 +831,72 @@ fn apply_static_initializer(
     match action {
         InitAction::ZeroScalar { .. } => target_bytes.fill(0),
         InitAction::StoreString { literal, .. } => {
+            let TypeKind::Array {
+                element,
+                bound: ArrayBound::Fixed(count),
+            } = unit
+                .types()
+                .get(destination)
+                .ok_or(LowerError::UnknownType {
+                    ty: destination,
+                    span,
+                })?
+                .kind
+            else {
+                return Err(LowerError::UnsupportedType {
+                    ty: destination,
+                    span,
+                    feature: "string initializer destination is not a fixed array",
+                });
+            };
+            let width = usize::try_from(
+                target
+                    .layout_of(unit.types(), element)
+                    .map_err(|source| LowerError::Layout {
+                        ty: element,
+                        span,
+                        source,
+                    })?
+                    .size_bytes,
+            )
+            .map_err(|_| LowerError::UnsupportedType {
+                ty: element,
+                span,
+                feature: "string code unit exceeds host representation",
+            })?;
+            let count = usize::try_from(count).map_err(|_| LowerError::UnsupportedType {
+                ty: destination,
+                span,
+                feature: "string destination length exceeds host representation",
+            })?;
             let mut decoded = literal
                 .decoded_units()
                 .ok_or(LowerError::UnsupportedStatement {
                     span,
                     feature: "invalid string initializer",
-                })?
-                .into_iter()
-                .map(u8::try_from)
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|_| LowerError::UnsupportedStatement {
-                    span,
-                    feature: "wide string initializer is unsupported",
                 })?;
-            decoded.resize(target_bytes.len(), 0);
-            target_bytes.copy_from_slice(&decoded[..target_bytes.len()]);
+            decoded.resize(count, 0);
+            if width == 0 || width > 4 || target_bytes.len() != count.saturating_mul(width) {
+                return Err(LowerError::UnsupportedType {
+                    ty: destination,
+                    span,
+                    feature: "string code unit layout is unsupported",
+                });
+            }
+            for (unit, bytes) in decoded
+                .into_iter()
+                .zip(target_bytes.chunks_exact_mut(width))
+            {
+                let encoded = match target.byte_order() {
+                    evocc_types::ByteOrder::Little => unit.to_le_bytes(),
+                    evocc_types::ByteOrder::Big => unit.to_be_bytes(),
+                };
+                let source = match target.byte_order() {
+                    evocc_types::ByteOrder::Little => &encoded[..width],
+                    evocc_types::ByteOrder::Big => &encoded[4 - width..],
+                };
+                bytes.copy_from_slice(source);
+            }
         }
         InitAction::StoreScalar { value, .. } => {
             let raw = constant_integer_expression(value).ok_or_else(|| {
@@ -1614,6 +1665,7 @@ fn function_info(
                             symbol.storage_class(),
                             Some(StorageClass::None | StorageClass::Register)
                         )
+                        || symbol.storage_class() != Some(parameter.storage)
                         || !scope_is_valid
                         || !ids.insert(parameter_symbol)
                         || !spellings.insert(parameter_name.spelling.clone())
@@ -3663,6 +3715,176 @@ impl<'a> FunctionLowerer<'a> {
         }
     }
 
+    fn emit_zero_initializer_at(
+        &mut self,
+        address: Value,
+        ty: TypeId,
+        path: SubobjectPath,
+        actions: &[InitAction<'a>],
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
+        if actions
+            .iter()
+            .any(|action| path.steps().starts_with(action.path().steps()))
+        {
+            return Ok(());
+        }
+        let kind = self
+            .unit
+            .types()
+            .get(ty)
+            .ok_or(LowerError::UnknownType { ty, span })?
+            .kind
+            .clone();
+        match kind {
+            TypeKind::Int(_)
+            | TypeKind::Enum(_)
+            | TypeKind::GnuInt128(_)
+            | TypeKind::Float(_)
+            | TypeKind::Complex(_)
+            | TypeKind::Pointer(_) => {
+                let zero = match kind {
+                    TypeKind::Pointer(_) => {
+                        let pointer = self.fresh_value(self.c_value_type(ty, span)?.0);
+                        self.emit(state, Inst::PtrNull(pointer.clone()))?;
+                        ExprValue {
+                            value: pointer,
+                            integer: CIntegerType::ULONG,
+                        }
+                    }
+                    _ => {
+                        let integer = canonical_integer(self.unit.types(), self.target, ty, span)?;
+                        self.constant(state, integer, 0)?
+                    }
+                };
+                self.emit_memory_store(address, zero, ty, false, span, state)?;
+                Ok(())
+            }
+            TypeKind::Array {
+                element,
+                bound: ArrayBound::Fixed(count),
+            } => {
+                let element_layout = self.access_layout(element, span)?;
+                for index in 0..count {
+                    let offset = index.checked_mul(element_layout.size_bytes).ok_or(
+                        LowerError::UnsupportedType {
+                            ty,
+                            span,
+                            feature: "zero initializer element offset overflow",
+                        },
+                    )?;
+                    let element_address =
+                        self.constant_offset_address(address.clone(), offset, state)?;
+                    self.emit_zero_initializer_at(
+                        element_address,
+                        element,
+                        path.clone().with_index(index),
+                        actions,
+                        span,
+                        state,
+                    )?;
+                }
+                Ok(())
+            }
+            TypeKind::Array {
+                bound: ArrayBound::Unbounded,
+                ..
+            } => Ok(()),
+            TypeKind::Array {
+                bound: ArrayBound::Variable,
+                ..
+            }
+            | TypeKind::Void
+            | TypeKind::BuiltinVaList
+            | TypeKind::Function { .. } => Err(LowerError::UnsupportedType {
+                ty,
+                span,
+                feature: "object cannot be zero-initialized",
+            }),
+            TypeKind::Struct(tag) | TypeKind::Union(tag) => {
+                let is_union = matches!(kind, TypeKind::Union(_));
+                let definition = self
+                    .unit
+                    .types()
+                    .tag(tag)
+                    .ok_or(LowerError::UnsupportedType {
+                        ty,
+                        span,
+                        feature: "zero initializer record tag is absent",
+                    })?;
+                let fields = match &definition.state {
+                    TagState::Complete(
+                        TagDefinition::Struct(fields) | TagDefinition::Union(fields),
+                    ) => fields.clone(),
+                    _ => {
+                        return Err(LowerError::UnsupportedType {
+                            ty,
+                            span,
+                            feature: "zero initializer record is incomplete",
+                        });
+                    }
+                };
+                let record_layout = self
+                    .target
+                    .record_layout(self.unit.types(), tag)
+                    .map_err(|source| LowerError::Layout { ty, span, source })?;
+                let selected_union_field = is_union.then(|| {
+                    actions.iter().find_map(|action| {
+                        let suffix = action.path().steps().strip_prefix(path.steps())?;
+                        match suffix.first()? {
+                            SubobjectStep::Field { field_index } => Some(*field_index),
+                            SubobjectStep::Index { .. } => None,
+                        }
+                    })
+                });
+                for (field_index, field) in fields.iter().enumerate() {
+                    if selected_union_field
+                        .flatten()
+                        .is_some_and(|selected| selected != field_index)
+                    {
+                        continue;
+                    }
+                    if field.name.is_none() && field.bit_field.is_some() {
+                        continue;
+                    }
+                    let Some(layout) = record_layout
+                        .fields
+                        .iter()
+                        .find(|layout| layout.field_index == field_index)
+                    else {
+                        return Err(LowerError::UnsupportedType {
+                            ty,
+                            span,
+                            feature: "zero initializer field has no layout",
+                        });
+                    };
+                    if layout.bit_field.is_some() {
+                        return Err(LowerError::UnsupportedType {
+                            ty: field.ty,
+                            span,
+                            feature: "bit-field zero initialization is outside lowering",
+                        });
+                    }
+                    let field_address =
+                        self.constant_offset_address(address.clone(), layout.byte_offset, state)?;
+                    self.emit_zero_initializer_at(
+                        field_address,
+                        field.ty,
+                        path.clone().with_field(field_index),
+                        actions,
+                        span,
+                        state,
+                    )?;
+                    if is_union {
+                        break;
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+
     fn lower_memory_declaration(
         &mut self,
         object: &'a ObjectDecl<'a>,
@@ -3726,6 +3948,16 @@ impl<'a> FunctionLowerer<'a> {
         let Some(initializer) = &object.initializer else {
             return Ok(());
         };
+        if initializer.plan().zero_fills_unwritten() {
+            self.emit_zero_initializer_at(
+                address.clone(),
+                object.ty,
+                SubobjectPath::root(),
+                initializer.plan().actions(),
+                object.span,
+                state,
+            )?;
+        }
         for action in initializer.plan().actions() {
             let action_span = action.span().unwrap_or(object.span);
             let (offset, actual_ty) = subobject_offset(
@@ -3827,19 +4059,13 @@ impl<'a> FunctionLowerer<'a> {
                                 });
                             }
                         };
-                    let mut units = literal
-                        .decoded_units()
-                        .ok_or(LowerError::UnsupportedStatement {
-                            span: action_span,
-                            feature: "string initializer decoding failed",
-                        })?
-                        .into_iter()
-                        .map(u8::try_from)
-                        .collect::<Result<Vec<_>, _>>()
-                        .map_err(|_| LowerError::UnsupportedStatement {
-                            span: action_span,
-                            feature: "wide string unit is outside Day 7",
-                        })?;
+                    let mut units =
+                        literal
+                            .decoded_units()
+                            .ok_or(LowerError::UnsupportedStatement {
+                                span: action_span,
+                                feature: "string initializer decoding failed",
+                            })?;
                     let count =
                         usize::try_from(count).map_err(|_| LowerError::UnsupportedType {
                             ty: *destination_type,
@@ -3848,7 +4074,7 @@ impl<'a> FunctionLowerer<'a> {
                         })?;
                     units.resize(count, 0);
                     let element_layout = self.access_layout(element, action_span)?;
-                    for (index, byte) in units.into_iter().take(count).enumerate() {
+                    for (index, unit) in units.into_iter().take(count).enumerate() {
                         let address = self.constant_offset_address(
                             action_address.clone(),
                             u64::try_from(index)
@@ -3867,7 +4093,7 @@ impl<'a> FunctionLowerer<'a> {
                             element,
                             action_span,
                         )?;
-                        let value = self.constant(state, integer, u64::from(byte))?;
+                        let value = self.constant(state, integer, u64::from(unit))?;
                         self.emit_memory_store(address, value, element, false, action_span, state)?;
                     }
                 }
@@ -3906,6 +4132,16 @@ impl<'a> FunctionLowerer<'a> {
         object_span: SourceSpan,
         state: &mut State,
     ) -> Result<(), LowerError> {
+        if initializer.plan().zero_fills_unwritten() {
+            self.emit_zero_initializer_at(
+                address.clone(),
+                object_ty,
+                SubobjectPath::root(),
+                initializer.plan().actions(),
+                object_span,
+                state,
+            )?;
+        }
         for action in initializer.plan().actions() {
             let action_span = action.span().unwrap_or(object_span);
             let (offset, actual_ty) = subobject_offset(
@@ -4007,19 +4243,13 @@ impl<'a> FunctionLowerer<'a> {
                                 });
                             }
                         };
-                    let mut units = literal
-                        .decoded_units()
-                        .ok_or(LowerError::UnsupportedStatement {
-                            span: action_span,
-                            feature: "string initializer decoding failed",
-                        })?
-                        .into_iter()
-                        .map(u8::try_from)
-                        .collect::<Result<Vec<_>, _>>()
-                        .map_err(|_| LowerError::UnsupportedStatement {
-                            span: action_span,
-                            feature: "wide string unit is outside Day 7",
-                        })?;
+                    let mut units =
+                        literal
+                            .decoded_units()
+                            .ok_or(LowerError::UnsupportedStatement {
+                                span: action_span,
+                                feature: "string initializer decoding failed",
+                            })?;
                     let count =
                         usize::try_from(count).map_err(|_| LowerError::UnsupportedType {
                             ty: *destination_type,
@@ -4028,7 +4258,7 @@ impl<'a> FunctionLowerer<'a> {
                         })?;
                     units.resize(count, 0);
                     let element_layout = self.access_layout(element, action_span)?;
-                    for (index, byte) in units.into_iter().take(count).enumerate() {
+                    for (index, unit) in units.into_iter().take(count).enumerate() {
                         let address = self.constant_offset_address(
                             action_address.clone(),
                             u64::try_from(index)
@@ -4047,7 +4277,7 @@ impl<'a> FunctionLowerer<'a> {
                             element,
                             action_span,
                         )?;
-                        let value = self.constant(state, integer, u64::from(byte))?;
+                        let value = self.constant(state, integer, u64::from(unit))?;
                         self.emit_memory_store(address, value, element, false, action_span, state)?;
                     }
                 }

@@ -277,7 +277,14 @@ fn push_encoded_character(output: &mut Vec<u32>, character: char, prefix: String
                 .copied()
                 .map(u32::from),
         ),
-        StringPrefix::L | StringPrefix::U => output.push(u32::from(character)),
+        StringPrefix::L => output.extend(
+            character
+                .encode_utf16(&mut [0_u16; 2])
+                .iter()
+                .copied()
+                .map(u32::from),
+        ),
+        StringPrefix::U => output.push(u32::from(character)),
     }
 }
 
@@ -285,7 +292,8 @@ fn push_numeric_unit(output: &mut Vec<u32>, value: u32, prefix: StringPrefix) ->
     let maximum = match prefix {
         StringPrefix::None | StringPrefix::U8 => u32::from(u8::MAX),
         StringPrefix::U16 => u32::from(u16::MAX),
-        StringPrefix::L | StringPrefix::U => u32::MAX,
+        StringPrefix::L => u32::from(u16::MAX),
+        StringPrefix::U => u32::MAX,
     };
     if value > maximum {
         return None;
@@ -994,6 +1002,8 @@ pub struct ParameterDecl {
     pub symbol: Option<SymbolId>,
     pub name: Option<SpannedName>,
     pub ty: TypeId,
+    /// The only storage class admitted on a parameter is `register`.
+    pub storage: StorageClass,
     pub specifier: TypeSpecifier,
     pub written: WrittenDeclarator,
     /// GNU attributes attached here, in source order.

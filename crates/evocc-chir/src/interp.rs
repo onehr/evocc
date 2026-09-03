@@ -31,8 +31,8 @@ use crate::{
     AllocationSiteManifestError, AssignmentOp, BinaryOp, CHirBlockItem, CHirDecl, CHirExpr,
     CHirForInit, CHirStmt, CHirUnit, CheckedArithmeticOp, ExprCategory, ExprFacts, FunctionDecl,
     InitAction, MemoryPlace, ObjectDecl, ParameterSyntax, PlaceProjection, PlaceRoot,
-    PointerTypeDesc, ScalarPlace, ScopeKind, StorageClass, SubobjectPath, SubobjectStep, SymbolId,
-    SymbolKind, UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
+    PointerTypeDesc, ScalarPlace, ScopeKind, StorageClass, StringLit, SubobjectPath, SubobjectStep,
+    SymbolId, SymbolKind, UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
 };
 
 const DEFAULT_FUEL: u64 = 100_000;
@@ -1125,31 +1125,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     literal,
                     ..
                 } => {
-                    let layout = self.access_layout(*destination_type, span)?;
-                    let mut bytes = literal
-                        .decoded_units()
-                        .ok_or(InterpreterError::UnsupportedExpression {
-                            feature: "invalid static string initializer",
-                            span,
-                        })?
-                        .into_iter()
-                        .map(u8::try_from)
-                        .collect::<Result<Vec<_>, _>>()
-                        .map_err(|_| InterpreterError::UnsupportedExpression {
-                            feature: "wide static string initializer",
-                            span,
-                        })?;
-                    bytes.resize(
-                        usize::try_from(layout.size_bytes).map_err(|_| {
-                            InterpreterError::UnsupportedType {
-                                ty: *destination_type,
-                                span,
-                            }
-                        })?,
-                        0,
-                    );
-                    let value = ByteSequence::try_from_bytes(bytes)
-                        .map_err(|error| self.memory_error(error, span))?;
+                    let (layout, value) =
+                        self.string_initializer_bytes(*destination_type, literal, span)?;
                     self.memory = self
                         .memory
                         .store_bytes(address, layout, &value)
@@ -2421,7 +2398,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let Some(initializer) = &declaration.initializer else {
             return Ok(());
         };
-        if initializer.plan().actions().is_empty() {
+        if initializer.plan().zero_fills_unwritten() {
+            let binding = self.require_memory_binding(declaration.symbol, declaration.span)?;
+            self.zero_initialize_subobjects(
+                binding.address,
+                declaration.ty,
+                SubobjectPath::root(),
+                initializer.plan().actions(),
+                declaration.span,
+            )?;
+        }
+        if initializer.plan().actions().is_empty() && !initializer.plan().zero_fills_unwritten() {
             return Err(InterpreterError::InvalidInitializerPlan {
                 symbol: declaration.symbol,
                 span: initializer.span(),
@@ -2583,26 +2570,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 if actual_type != *destination_type {
                     return Err(invalid_initializer_target(target, *span));
                 }
-                let layout = self.access_layout(*destination_type, *span)?;
-                let mut bytes = literal
-                    .decoded_units()
-                    .ok_or_else(|| invalid_initializer_target(target, *span))?
-                    .into_iter()
-                    .map(u8::try_from)
-                    .collect::<Result<Vec<_>, _>>()
+                let (layout, value) = self
+                    .string_initializer_bytes(*destination_type, literal, *span)
                     .map_err(|_| invalid_initializer_target(target, *span))?;
-                let destination_len = usize::try_from(layout.size_bytes).map_err(|_| {
-                    InterpreterError::UnsupportedType {
-                        ty: *destination_type,
-                        span: *span,
-                    }
-                })?;
-                if bytes.len() > destination_len {
-                    return Err(invalid_initializer_target(target, *span));
-                }
-                bytes.resize(destination_len, 0);
-                let value = ByteSequence::try_from_bytes(bytes)
-                    .map_err(|error| self.memory_error(error, *span))?;
                 self.memory = self
                     .memory
                     .store_bytes(address, layout, &value)
@@ -3988,6 +3958,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                             symbol.storage_class(),
                             Some(StorageClass::None | StorageClass::Register)
                         )
+                        || symbol.storage_class() != Some(parameter.storage)
                         || !scope_is_valid
                         || !parameter_ids.insert(parameter_symbol)
                         || !parameter_spellings.insert(parameter_name.spelling.clone())
@@ -4611,6 +4582,213 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         Ok(())
     }
 
+    fn zero_initialize_subobjects(
+        &mut self,
+        address: Pointer,
+        ty: TypeId,
+        path: SubobjectPath,
+        actions: &[InitAction<'arena>],
+        span: SourceSpan,
+    ) -> Result<(), InterpreterError> {
+        if actions
+            .iter()
+            .any(|action| path.steps().starts_with(action.path().steps()))
+        {
+            return Ok(());
+        }
+        let kind = self
+            .unit
+            .types()
+            .get(ty)
+            .ok_or(InterpreterError::UnsupportedType { ty, span })?
+            .kind
+            .clone();
+        match kind {
+            TypeKind::Int(_)
+            | TypeKind::Enum(_)
+            | TypeKind::GnuInt128(_)
+            | TypeKind::Float(_)
+            | TypeKind::Complex(_)
+            | TypeKind::Pointer(_)
+            | TypeKind::BuiltinVaList => {
+                let value = self.zero_value(ty, span)?;
+                self.store_memory_value(address, ty, Qualifiers::default(), value, span)?;
+                Ok(())
+            }
+            TypeKind::Array {
+                element,
+                bound: ArrayBound::Fixed(count),
+            } => {
+                let element_layout = self.access_layout(element, span)?;
+                for index in 0..count {
+                    let offset = index
+                        .checked_mul(element_layout.size_bytes)
+                        .ok_or(InterpreterError::UnsupportedType { ty, span })?;
+                    let offset = i64::try_from(offset)
+                        .map_err(|_| InterpreterError::UnsupportedType { ty, span })?;
+                    let element_address = address
+                        .checked_offset(offset)
+                        .map_err(|error| self.memory_error(error, span))?;
+                    self.zero_initialize_subobjects(
+                        element_address,
+                        element,
+                        path.clone().with_index(index),
+                        actions,
+                        span,
+                    )?;
+                }
+                Ok(())
+            }
+            TypeKind::Array {
+                bound: ArrayBound::Unbounded,
+                ..
+            } => Ok(()),
+            TypeKind::Array {
+                bound: ArrayBound::Variable,
+                ..
+            }
+            | TypeKind::Void
+            | TypeKind::Function { .. } => Err(InterpreterError::UnsupportedType { ty, span }),
+            TypeKind::Struct(tag) | TypeKind::Union(tag) => {
+                let is_union = matches!(kind, TypeKind::Union(_));
+                let definition = self
+                    .unit
+                    .types()
+                    .tag(tag)
+                    .ok_or(InterpreterError::UnsupportedType { ty, span })?;
+                let fields = match &definition.state {
+                    TagState::Complete(
+                        TagDefinition::Struct(fields) | TagDefinition::Union(fields),
+                    ) => fields.clone(),
+                    _ => return Err(InterpreterError::UnsupportedType { ty, span }),
+                };
+                let layout = self
+                    .target
+                    .record_layout(self.unit.types(), tag)
+                    .map_err(|_| InterpreterError::UnsupportedType { ty, span })?;
+                let selected_union_field = is_union.then(|| {
+                    actions.iter().find_map(|action| {
+                        let suffix = action.path().steps().strip_prefix(path.steps())?;
+                        match suffix.first()? {
+                            SubobjectStep::Field { field_index } => Some(*field_index),
+                            SubobjectStep::Index { .. } => None,
+                        }
+                    })
+                });
+                for (field_index, field) in fields.iter().enumerate() {
+                    if selected_union_field
+                        .flatten()
+                        .is_some_and(|selected| selected != field_index)
+                    {
+                        continue;
+                    }
+                    if field.name.is_none() && field.bit_field.is_some() {
+                        continue;
+                    }
+                    let field_layout = layout
+                        .fields
+                        .iter()
+                        .find(|layout| layout.field_index == field_index)
+                        .ok_or(InterpreterError::UnsupportedType { ty, span })?;
+                    if field_layout.bit_field.is_some() {
+                        return Err(InterpreterError::UnsupportedExpression {
+                            feature: "bit-field zero initialization",
+                            span,
+                        });
+                    }
+                    let offset = i64::try_from(field_layout.byte_offset)
+                        .map_err(|_| InterpreterError::UnsupportedType { ty, span })?;
+                    let field_address = address
+                        .checked_offset(offset)
+                        .map_err(|error| self.memory_error(error, span))?;
+                    self.zero_initialize_subobjects(
+                        field_address,
+                        field.ty,
+                        path.clone().with_field(field_index),
+                        actions,
+                        span,
+                    )?;
+                    if is_union {
+                        break;
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+
+    fn string_initializer_bytes(
+        &self,
+        destination_type: TypeId,
+        literal: &StringLit,
+        span: SourceSpan,
+    ) -> Result<(AccessLayout, ByteSequence), InterpreterError> {
+        let (element, count) = match self
+            .unit
+            .types()
+            .get(destination_type)
+            .map(|canonical| &canonical.kind)
+        {
+            Some(TypeKind::Array {
+                element,
+                bound: ArrayBound::Fixed(count),
+            }) => (*element, *count),
+            _ => {
+                return Err(InterpreterError::UnsupportedType {
+                    ty: destination_type,
+                    span,
+                });
+            }
+        };
+        let destination = self.access_layout(destination_type, span)?;
+        let element = self.access_layout(element, span)?;
+        let width =
+            usize::try_from(element.size_bytes).map_err(|_| InterpreterError::UnsupportedType {
+                ty: destination_type,
+                span,
+            })?;
+        let count = usize::try_from(count).map_err(|_| InterpreterError::UnsupportedType {
+            ty: destination_type,
+            span,
+        })?;
+        if width == 0
+            || width > 4
+            || count.checked_mul(width) != usize::try_from(destination.size_bytes).ok()
+        {
+            return Err(InterpreterError::UnsupportedType {
+                ty: destination_type,
+                span,
+            });
+        }
+        let mut units = literal
+            .decoded_units()
+            .ok_or(InterpreterError::UnsupportedExpression {
+                feature: "invalid string initializer",
+                span,
+            })?;
+        if units.len() > count {
+            return Err(InterpreterError::UnsupportedExpression {
+                feature: "string initializer exceeds destination",
+                span,
+            });
+        }
+        units.resize(count, 0);
+        let mut bytes = Vec::with_capacity(count.saturating_mul(width));
+        for unit in units {
+            let encoded = match self.target.byte_order() {
+                evocc_types::ByteOrder::Little => unit.to_le_bytes(),
+                evocc_types::ByteOrder::Big => unit.to_be_bytes(),
+            };
+            match self.target.byte_order() {
+                evocc_types::ByteOrder::Little => bytes.extend_from_slice(&encoded[..width]),
+                evocc_types::ByteOrder::Big => bytes.extend_from_slice(&encoded[4 - width..]),
+            }
+        }
+        let value =
+            ByteSequence::try_from_bytes(bytes).map_err(|error| self.memory_error(error, span))?;
+        Ok((destination, value))
+    }
+
     fn zero_value(&self, ty: TypeId, span: SourceSpan) -> Result<CValue, InterpreterError> {
         match self.value_type(ty, span)? {
             ValueType::Integer(integer) => Ok(CValue::Integer(CInteger::new(0, integer))),
@@ -4973,6 +5151,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             self.memory = memory;
             MemoryBinding { address, ty: *ty }
         };
+        if !static_storage && initializer.plan().zero_fills_unwritten() {
+            self.zero_initialize_subobjects(
+                binding.address,
+                *ty,
+                SubobjectPath::root(),
+                initializer.plan().actions(),
+                *span,
+            )?;
+        }
         tasks.push(MachineTask::YieldCompoundLiteral {
             binding,
             as_address,
@@ -6330,7 +6517,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let plan = initializer.plan();
         if plan.target_type() != declaration.ty
             || plan.validate(self.unit.types()).is_err()
-            || plan.actions().is_empty()
+            || (plan.actions().is_empty() && !plan.zero_fills_unwritten())
         {
             return Err(InterpreterError::InvalidInitializerPlan {
                 symbol: declaration.symbol,
@@ -6379,8 +6566,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         if !valid {
             return Err(InterpreterError::InvalidInitializerPlan {
                 symbol: declaration.symbol,
-                span: plan.actions()[0]
-                    .span()
+                span: plan
+                    .actions()
+                    .first()
+                    .and_then(InitAction::span)
                     .unwrap_or_else(|| initializer.span()),
             });
         }

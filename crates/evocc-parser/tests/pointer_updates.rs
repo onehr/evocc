@@ -130,13 +130,9 @@ fn pointer_members_support_the_same_update_forms_without_double_evaluation() {
 }
 
 #[test]
-fn non_object_or_non_integer_pointer_updates_remain_typed_rejections() {
-    for source in [
-        "int main(void) { int a[2]; int *p = a; p += 1.5; return 0; }",
-        "int f(void) { return 0; } int main(void) { int (*p)(void) = f; ++p; return 0; }",
-    ] {
-        let arena = Arena::default();
-        let error = parse(source, &arena).expect_err("invalid pointer update must be rejected");
-        assert_eq!(error, "E2102: invalid-update-operands");
-    }
+fn non_integer_pointer_updates_remain_typed_rejections() {
+    let source = "int main(void) { int a[2]; int *p = a; p += 1.5; return 0; }";
+    let arena = Arena::default();
+    let error = parse(source, &arena).expect_err("invalid pointer update must be rejected");
+    assert_eq!(error, "E2102: invalid-update-operands");
 }

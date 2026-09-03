@@ -3,7 +3,7 @@ use evocc_common::{Arena, FileId, SourceFile, SourceSpan};
 use evocc_cpp::{Preprocessor, TokenStream};
 use evocc_lex::{Lexer, Token, TokenKind, TokenText};
 use evocc_parser::{ParseDiagnostic, Parser};
-use evocc_types::{IntRank, LayoutError, TargetDataLayout, TypeKind};
+use evocc_types::{IntRank, TargetDataLayout, TypeKind, TypeLayout};
 
 fn parse<'arena>(
     arena: &'arena Arena,
@@ -259,8 +259,8 @@ fn builtin_va_list_has_one_canonical_type_and_source_faithful_specifiers() {
     );
     assert_eq!(
         TargetDataLayout::aarch64_unknown_linux_gnu().layout_of(unit.types(), aliases[0].ty),
-        Err(LayoutError::UnsupportedBuiltinType(aliases[0].ty)),
-        "Day 5 must fail closed rather than inventing a va-list ABI layout",
+        Ok(TypeLayout::new(32, 8)),
+        "the target profile gives va_list its measured object layout",
     );
 }
 

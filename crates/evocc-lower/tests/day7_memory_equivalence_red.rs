@@ -902,6 +902,38 @@ fn parsed_c_memory_programs_are_equivalent_in_both_interpreters() {
     );
 }
 
+#[test]
+fn compact_initializer_plans_preserve_recursive_zero_fill() {
+    let cases = [
+        Case {
+            id: "sparse_array_and_record_zero_fill",
+            source: "struct Pair { int left; int right; }; int main(void) { int values[4] = { [2] = 7 }; struct Pair pair = { .right = 5 }; return values[0] + values[1] + values[2] * 10 + values[3] + pair.left + pair.right; }\n",
+            expected: 75,
+            expected_volatile_ir_accesses: None,
+        },
+        Case {
+            id: "selected_union_member_zero_fill",
+            source: "union Value { struct { int high; int low; } pair; long raw; }; int main(void) { union Value value = { .pair = { .low = 3 } }; return value.pair.high * 10 + value.pair.low; }\n",
+            expected: 3,
+            expected_volatile_ir_accesses: None,
+        },
+    ];
+    let failures = cases
+        .into_iter()
+        .enumerate()
+        .flat_map(|(ordinal, case)| {
+            check_case_bounded(case, 500 + ordinal)
+                .into_iter()
+                .map(move |failure| format!("{}: {failure}", case.id))
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        failures.is_empty(),
+        "compact initializer execution failures:\n{}",
+        failures.join("\n")
+    );
+}
+
 fn assert_addressed_place_pair(index: usize) {
     assert_eq!(
         ADDRESS_OF_PLACE_PAIRS.len(),

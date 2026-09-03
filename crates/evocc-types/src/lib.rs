@@ -1314,7 +1314,7 @@ impl<'a> LayoutContext<'a> {
     fn layout_kind(&mut self, ty: TypeId, kind: TypeKind) -> Result<TypeLayout, LayoutError> {
         match kind {
             TypeKind::Void | TypeKind::Function { .. } => Err(LayoutError::NonObjectType(ty)),
-            TypeKind::BuiltinVaList => Err(LayoutError::UnsupportedBuiltinType(ty)),
+            TypeKind::BuiltinVaList => Ok(TypeLayout::new(32, 8)),
             TypeKind::GnuInt128(_) => Ok(TypeLayout::new(16, 16)),
             TypeKind::Int(rank) => Ok(integer_layout(rank)),
             TypeKind::Float(kind) => Ok(float_layout(kind)),

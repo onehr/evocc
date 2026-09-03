@@ -453,7 +453,7 @@ fn scalar_initializers_preserve_every_brace_and_share_the_plan_expression() {
 }
 
 #[test]
-fn arrays_infer_bounds_and_emit_depth_first_store_then_zero_paths() {
+fn arrays_infer_bounds_and_keep_zero_fill_compact() {
     let arena = Arena::default();
     let unit = parse_valid(ARRAY_PARTIAL, &arena);
     let values = object(&unit, "values");
@@ -461,7 +461,8 @@ fn arrays_infer_bounds_and_emit_depth_first_store_then_zero_paths() {
     assert_eq!(bound, ArrayBound::Fixed(3));
     assert_int(&unit, int, IntRank::Int);
     let plan = assert_joined_plan(&unit, values);
-    assert_eq!(plan.actions().len(), 3);
+    assert_eq!(plan.actions().len(), 2);
+    assert!(plan.zero_fills_unwritten());
     assert_store(
         ARRAY_PARTIAL,
         &plan.actions()[0],
@@ -476,11 +477,6 @@ fn arrays_infer_bounds_and_emit_depth_first_store_then_zero_paths() {
         int,
         "2",
     );
-    assert_zero(
-        &plan.actions()[2],
-        &[SubobjectStep::Index { index: 2 }],
-        int,
-    );
 
     let arena = Arena::default();
     let unit = parse_valid(ARRAY_INFERRED, &arena);
@@ -493,6 +489,7 @@ fn arrays_infer_bounds_and_emit_depth_first_store_then_zero_paths() {
     );
     let plan = assert_joined_plan(&unit, values);
     assert_eq!(plan.actions().len(), 3);
+    assert!(plan.zero_fills_unwritten());
     for (index, value) in ["1", "2", "3"].iter().enumerate() {
         assert_store(
             ARRAY_INFERRED,
@@ -518,18 +515,22 @@ fn assert_two_by_two(
     assert_eq!(outer_bound, expected_outer_bound);
     assert_eq!(inner_bound, ArrayBound::Fixed(2));
     let plan = assert_joined_plan(unit, object);
-    assert_eq!(plan.actions().len(), 4);
-    for (action_index, value) in expected_values.into_iter().enumerate() {
-        let outer = (action_index / 2) as u64;
-        let inner = (action_index % 2) as u64;
+    assert_eq!(
+        plan.actions().len(),
+        expected_values.iter().flatten().count()
+    );
+    assert!(plan.zero_fills_unwritten());
+    let mut action_index = 0;
+    for (value_index, value) in expected_values.into_iter().enumerate() {
+        let outer = (value_index / 2) as u64;
+        let inner = (value_index % 2) as u64;
         let path = [
             SubobjectStep::Index { index: outer },
             SubobjectStep::Index { index: inner },
         ];
         if let Some(value) = value {
             assert_store(source, &plan.actions()[action_index], &path, int, value);
-        } else {
-            assert_zero(&plan.actions()[action_index], &path, int);
+            action_index += 1;
         }
     }
 }
@@ -564,7 +565,7 @@ fn record_field_types(unit: &evocc_chir::CHirUnit<'_>, ty: TypeId) -> Vec<TypeId
 }
 
 #[test]
-fn struct_union_and_nested_zero_fill_use_declared_field_order() {
+fn struct_union_and_nested_zero_fill_stays_implicit() {
     let arena = Arena::default();
     let unit = parse_valid(STRUCT_PARTIAL, &arena);
     let pair = object(&unit, "pair");
@@ -575,18 +576,14 @@ fn struct_union_and_nested_zero_fill_use_declared_field_order() {
         "unnamed bit-field must retain its physical slot"
     );
     let plan = assert_joined_plan(&unit, pair);
-    assert_eq!(plan.actions().len(), 2);
+    assert_eq!(plan.actions().len(), 1);
+    assert!(plan.zero_fills_unwritten());
     assert_store(
         STRUCT_PARTIAL,
         &plan.actions()[0],
         &[SubobjectStep::Field { field_index: 1 }],
         fields[1],
         "1",
-    );
-    assert_zero(
-        &plan.actions()[1],
-        &[SubobjectStep::Field { field_index: 2 }],
-        fields[2],
     );
 
     let arena = Arena::default();
@@ -601,6 +598,7 @@ fn struct_union_and_nested_zero_fill_use_declared_field_order() {
         2,
         "inactive union fields must not be zeroed"
     );
+    assert!(plan.zero_fills_unwritten());
     assert_store(
         UNION_FIRST,
         &plan.actions()[0],
@@ -629,7 +627,8 @@ fn struct_union_and_nested_zero_fill_use_declared_field_order() {
     let (int, bound) = array_type(&unit, fields[0]);
     assert_eq!(bound, ArrayBound::Fixed(2));
     let plan = assert_joined_plan(&unit, packet);
-    assert_eq!(plan.actions().len(), 3);
+    assert_eq!(plan.actions().len(), 2);
+    assert!(plan.zero_fills_unwritten());
     assert_store(
         NESTED_ZERO_ORDER,
         &plan.actions()[0],
@@ -640,17 +639,9 @@ fn struct_union_and_nested_zero_fill_use_declared_field_order() {
         int,
         "1",
     );
-    assert_zero(
-        &plan.actions()[1],
-        &[
-            SubobjectStep::Field { field_index: 0 },
-            SubobjectStep::Index { index: 1 },
-        ],
-        int,
-    );
     assert_store(
         NESTED_ZERO_ORDER,
-        &plan.actions()[2],
+        &plan.actions()[1],
         &[SubobjectStep::Field { field_index: 1 }],
         fields[1],
         "2",
@@ -790,7 +781,7 @@ fn gnu11_empty_braces_recursively_zero_fill_without_fabricated_written_elements(
     assert_zero(&scalar_plan.actions()[0], &[], scalar.ty);
 
     let values = object(&unit, "values");
-    let (int, bound) = array_type(&unit, values.ty);
+    let (_int, bound) = array_type(&unit, values.ty);
     assert_eq!(bound, ArrayBound::Fixed(2));
     let values_initializer = initializer(values);
     assert_eq!(
@@ -799,17 +790,8 @@ fn gnu11_empty_braces_recursively_zero_fill_without_fabricated_written_elements(
     );
     assert!(list(values_initializer.written()).is_empty());
     let values_plan = assert_joined_plan(&unit, values);
-    assert_eq!(values_plan.actions().len(), 2);
-    assert_zero(
-        &values_plan.actions()[0],
-        &[SubobjectStep::Index { index: 0 }],
-        int,
-    );
-    assert_zero(
-        &values_plan.actions()[1],
-        &[SubobjectStep::Index { index: 1 }],
-        int,
-    );
+    assert!(values_plan.actions().is_empty());
+    assert!(values_plan.zero_fills_unwritten());
 }
 
 #[test]
@@ -931,8 +913,8 @@ fn unsupported_initializer_forms_keep_their_stable_boundaries() {
         WIDE_STRING_BOUNDARY,
         "L\"x\"",
         0,
-        "E2205",
-        "not-covered-day5: wide-string-initializer",
+        "E2202",
+        "invalid-initializer-type",
     );
     assert_diagnostic(
         VLA_INITIALIZER_BOUNDARY,

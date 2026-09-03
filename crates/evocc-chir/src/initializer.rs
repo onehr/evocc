@@ -299,6 +299,10 @@ impl<'arena> InitAction<'arena> {
 pub struct InitPlan<'arena> {
     target_type: TypeId,
     actions: Vec<InitAction<'arena>>,
+    /// C initialization zeroes every subobject not named by an explicit
+    /// action. Keeping that fact once on the plan makes plan size depend on
+    /// source entries rather than on the destination object's extent.
+    zero_fills_unwritten: bool,
     flexible_array_elements: u64,
 }
 
@@ -308,6 +312,7 @@ impl<'arena> InitPlan<'arena> {
         Self {
             target_type,
             actions,
+            zero_fills_unwritten: false,
             flexible_array_elements: 0,
         }
     }
@@ -339,6 +344,17 @@ impl<'arena> InitPlan<'arena> {
     #[must_use]
     pub fn actions(&self) -> &[InitAction<'arena>] {
         &self.actions
+    }
+
+    #[must_use]
+    pub fn zero_fills_unwritten(&self) -> bool {
+        self.zero_fills_unwritten
+    }
+
+    #[must_use]
+    pub fn with_zero_fill_unwritten(mut self) -> Self {
+        self.zero_fills_unwritten = true;
+        self
     }
 
     /// Number of explicitly materialized elements in a final flexible array
@@ -639,7 +655,10 @@ fn validate_string_destination(
     destination_kind: &TypeKind,
     literal: &StringLit,
 ) -> Result<(), InitPlanError> {
-    if !matches!(literal.prefix, StringPrefix::None | StringPrefix::U8) {
+    if !matches!(
+        literal.prefix,
+        StringPrefix::None | StringPrefix::U8 | StringPrefix::L
+    ) {
         return Err(InitPlanError::UnsupportedStringPrefix {
             action,
             path: path.clone(),
@@ -655,10 +674,16 @@ fn validate_string_destination(
     };
     let is_character = types.get(*element).is_some_and(|element_type| {
         !element_type.qualifiers.is_atomic
-            && matches!(
-                element_type.kind,
-                TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar)
-            )
+            && match literal.prefix {
+                StringPrefix::None | StringPrefix::U8 => matches!(
+                    element_type.kind,
+                    TypeKind::Int(IntRank::Char | IntRank::SChar | IntRank::UChar)
+                ),
+                StringPrefix::L => {
+                    matches!(element_type.kind, TypeKind::Int(IntRank::UShort))
+                }
+                StringPrefix::U16 | StringPrefix::U => false,
+            }
     });
     if !is_character {
         return Err(InitPlanError::StringDestinationIsNotCharacterArray {
