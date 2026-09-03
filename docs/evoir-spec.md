@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.52** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.53** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2711,6 +2711,12 @@ valid (evidence `p27-array-lvalues.c`, both oracles compile). Measured defect
 at revision 1.9.33: these were `E2102` (`invalid-projected-lvalue`) in about
 100 units (`WARN_ON` in `sunrpc/svc.h`, `ip6_route.h`, `binfmt_elf.c`).
 
+**String literals at every site.** A string literal decays to `char *` and
+then converts under the pointer-sign rule of 10.1.18 at every site: assigning
+`"unsupported"` to `unsigned char *` and initializing `const unsigned char
+*name` from `""` are accepted (evidence `p31-residue.c`, `strs` and `e`).
+Measured defect at revision 1.9.52: `E2102` and `E2202` in five units.
+
 #### 10.1.4 Sequencing Lowering
 
 C sequence points lower to memory token threading and world token threading.
@@ -3694,6 +3700,22 @@ is an address constant as well: `init_s.x`, `arr2[1]`,
 compile). Measured defect at revision 1.9.33: `DEFINE_STATIC_SRCU`,
 `DEFINE_KFIFO` and array-member initializers were `E2208` in 21 units.
 
+**More address constants.** `&"literal"` is an address constant (the address
+of the literal's array), so `(kernel_ulong_t)&"PARPORT_SERIAL"` is one under
+the integer-cast rule. A comparison of an address constant with a null
+pointer constant is a constant expression (`impl == (fn_t)0` is 0,
+`impl != 0` is 1), so the `_OF_DECLARE` conditional
+`(fn == (fn_type)NULL) ? fn : fn` is an address constant under the
+conditional rule of 10.1.18 (evidence `p31-residue.c`, `ids` and `tbl`).
+Measured defect at revision 1.9.52: `E2208` in ten units.
+
+**Initializer plans have no size cap.** A plan records the entries an
+initializer writes and the zero fill of the rest; its cost is bounded by the
+number of entries, never by the object's size, and no diagnostic refuses an
+object for being large (`_printk_rb_static_infos[4096]` with two designated
+entries). `E2207` (`initializer-plan-too-large`), which the implementation
+emitted without a definition, is withdrawn at revision 1.9.53.
+
 #### 10.1.20 Source locations
 
 Every token the preprocessor hands to the parser carries two spans. Its
@@ -3832,6 +3854,27 @@ __attribute__((unused)) struct r` (evidence `p24-spellings.c`, both oracles
 compile). Measured defect at revision 1.9.33: `__bpf_kfunc_start_defs()`,
 `MEM_STATIC`, `__maybe_unused` between specifiers and `__restrict` parameters
 were `E1001` or `E1002` in 37 units.
+
+**Storage class `register`, va_list objects, 128-bit places.** `register` is
+accepted on parameters and block-scope objects and has no effect beyond
+forbidding `&` on the object. `__builtin_va_list` is an object type that may
+be a member, an array element or a typedef target; on the target it occupies
+32 bytes at alignment 8 (evidence `p31-residue.c`: a structure holding one
+pointer and one `va_list` is 40 bytes at 8). An element of an array of
+`__uint128_t` or `__int128_t` is a modifiable lvalue like any element, and
+`*__builtin_va_arg(ap, T *)` is a modifiable lvalue of type `T`; execution
+of both stays `E3033` and `E3030`. Measured defect at revision 1.9.52:
+`E1001`, `E1005`, `E2101` and `E2102` in six units.
+
+**Parameter compatibility.** Top-level qualifiers on parameter types do not
+affect compatibility (C11 6.7.6.3p15): `int (*)(const clockid_t, struct ts *)`
+and `int (*)(clockid_t, struct ts *)` are compatible (evidence
+`p31-residue.c`, `o`). Function pointer arithmetic `p + n`, `p - n` and the
+compound forms scale by one (GNU; evidence `fnarith`). Measured defect at
+revision 1.9.52: `E2202` in three units and `E2102` in one.
+
+**The `\e` escape.** `'\e'` is the GNU escape for 27 (evidence
+`p31-residue.c`, `esc`). Measured defect at revision 1.9.52: `E1006`.
 
 ### 10.4 EvoCPP Target Profile
 
@@ -3992,6 +4035,42 @@ with `STR(GCC diagnostic s)`, `D(push)` is `"GCC diagnostic push"`, `E(x)`
 with `STR(a s b)` is `"a x b"`, and `G(name)` with `STR(s.h)` is `"name.h"`).
 Measured defect at revision 1.9.47: the flag was dropped and the pragma
 text read `GCC diagnosticpush`.
+
+**One conditional stack.** Conditional directives form one stack whether they
+are met at directive level or while the arguments of a function-like macro
+are being collected: a branch opened before an invocation may close inside
+its arguments and the reverse, and the tokens of the branch not taken never
+reach the argument collector (evidence `p31-residue.c`, `cond`, the kernel's
+`#ifdef ... pr_warn( #else pr_err( #endif` shape, both oracles). Measured
+defect at revision 1.9.52: `E0102` in two units.
+
+**Empty operands of `##`.** When either operand of `##` is empty, the result
+is the other operand unchanged, whether that operand is a parameter or a
+token of the replacement list (`mod##SNMP_INC` with `mod` empty is
+`SNMP_INC`; evidence `p31-residue.c`, `paste`). Measured defect at revision
+1.9.52: `E0110` when the right operand was a literal token.
+
+**Comments across continued definition lines.** A block comment inside a
+`#define` whose lines continue with `\` is white space, including when the
+comment itself spans continued lines (evidence `p31-residue.c`, `RES_MAXSZ`
+is 20). Measured defect at revision 1.9.52: `E1001` in `callback_xdr.c`.
+
+**`__VA_OPT__`.** `__VA_OPT__ ( tokens )` in a variadic replacement list
+expands to `tokens` when the variable arguments contain at least one token
+and to nothing otherwise (C23 6.10.4.1; both oracles accept it in gnu11;
+evidence `p31-residue.c`, `vaopt` is 4).
+
+**Parameter names.** A macro parameter is any identifier, keywords included
+(`register` in the kernel's `read_roothub`); the preprocessor knows no
+keywords (evidence `p31-residue.c`, `kw`). Measured defect at revision
+1.9.52: `E1003` in three units.
+
+**Wide strings under the profile.** The kernel's command line carries
+`-fshort-wchar`: `wchar_t` is `unsigned short`, `L"..."` has type
+`unsigned short[N]` counting a terminating zero, and a wide literal
+concatenated with a narrow one is wide (`L"" "abc"` is `unsigned short[4]`;
+evidence `p31-residue.c`, both 8 bytes). Measured defect at revision
+1.9.52: `E2205` in two units.
 
 **Rescanning.** After a macro's replacement list has its arguments
 substituted, it is rescanned for further macro names together with the
@@ -4832,6 +4911,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.53 | 2026-09-03 | Fifth full-configuration survey (2,760 of 2,798). Defines the sixteen rules behind the remaining 38 units: one conditional stack across argument collection, empty `##` operands, comments across continued definitions, `__VA_OPT__`, keyword parameter names, `-fshort-wchar` wide strings (10.4); `register`, `va_list` objects, 128-bit and `va_arg` places, parameter compatibility, function-pointer arithmetic, `\e` (10.1.18); literal addresses, null comparisons in conditionals, no initializer size cap with `E2207` withdrawn (10.1.19); string literals at every site (10.1.3). All measured. |
 | 1.9.52 | 2026-09-03 | States that a derived node reachable as a child of a named derived node is used, so an emitting right-hand side may write a `const_like` operand (11.3); the executor stopped `p2_302` on the unqualified sentence. |
 | 1.9.51 | 2026-09-03 | The checker stops judging cost: strict improvement is producer conformance under the declared policy (11.3), after the policy harness measured that no all-positive cost function can differ from another in the P0 profile. Defines emitting right-hand sides and `width_min` (11.6) and prints `p0.scalar.v4` with the doubling rules `mul(x,2) = add(x,x) = shl(x,1)`, the first rewrites whose extraction is a genuine choice. |
 | 1.9.50 | 2026-09-03 | States that extraction cost is a producer policy the checker does not verify, so cost functions and schedules may be replaced and measured without a format change (7.5). |
