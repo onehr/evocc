@@ -21,7 +21,7 @@ pub mod search;
 pub use search::{
     candidate_fitness, held_out_corpus, search_cost_weights, searched_policy, training_corpus,
     SearchConfig, SearchEvaluation, SearchOutcome, HELD_OUT_RANGE, SEARCHED_POLICY_NAME,
-    TRAINING_RANGE,
+    SEARCHED_WEIGHTS, TRAINING_RANGE,
 };
 
 use std::fmt::Write as _;

@@ -51,6 +51,20 @@ pub const TRAINING_RANGE: (u64, u64) = (1_000_000, 256);
 /// than assumes.
 pub const HELD_OUT_RANGE: (u64, u64) = (2_000_000, 256);
 
+/// What the first search over this space found, recorded so it can be
+/// re-measured rather than re-derived.
+///
+/// It is the result of [`SearchConfig::default`] over [`TRAINING_RANGE`] at
+/// harness seed 7 and a 200000-step budget: training corpus digest
+/// `831c4a20e3ce48ce46f6b01cde821563132d06dc5829de3613d87a573b316968`,
+/// best training fitness 37183, 83 evaluations, 0 candidates discarded. The
+/// search was shown no hand-written function, and what it found orders
+/// `add` below `mul` below `shl` -- so on the held-out range it extracts
+/// exactly what `prefer-add` extracts, program for program, which
+/// `cost_search.rs` pins.
+pub const SEARCHED_WEIGHTS: OperatorWeights =
+    OperatorWeights::from_values([1, 1, 3, 7, 1, 6, 7, 4, 5, 1, 2, 3, 7]);
+
 /// A policy that differs from the shipped ones only in its cost vector.
 #[must_use]
 pub fn searched_policy(weights: OperatorWeights) -> ExtractionPolicy {
@@ -261,7 +275,12 @@ pub fn search_cost_weights(
                     .discards
                     .push(format!("{}: {reason}", candidate.render()));
             } else if let Ok(value) = &fitness {
-                if *value < outcome.best_fitness {
+                // The same order the population is ranked by, so "best" means
+                // one thing in this module: fitness first, coordinates to
+                // break a tie. Many vectors reach the same fitness, and a tie
+                // broken by evaluation order would make the answer depend on
+                // the walk rather than on the space.
+                if (*value, candidate.values()) < (outcome.best_fitness, outcome.best.values()) {
                     outcome.best_fitness = *value;
                     outcome.best = *candidate;
                 }

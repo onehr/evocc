@@ -16,7 +16,7 @@ use evocc_evoir::render_module;
 use evocc_policy::{
     candidate_fitness, evaluate, held_out_corpus, search_cost_weights, searched_policy,
     training_corpus, Aggregate, Corpus, CorpusRefusal, PolicyReport, ProgramMeasurement,
-    ProgramOutcome, SearchConfig, TimingMode, HELD_OUT_RANGE, TRAINING_RANGE,
+    ProgramOutcome, SearchConfig, TimingMode, HELD_OUT_RANGE, SEARCHED_WEIGHTS, TRAINING_RANGE,
 };
 use evocc_proof::render_evp1;
 use evocc_randgate::{generate_module, GeneratorConfig, ProofChecker};
@@ -240,6 +240,38 @@ fn the_search_corpora_cannot_come_from_an_acceptance_path() {
         training_corpus().source(),
         evocc_policy::CorpusSource::Generated { .. }
     ));
+}
+
+/// The measured result of the first search, kept as a test rather than as a
+/// sentence: the weighting the search found was never shown a hand-written
+/// function, orders `add` below `mul` below `shl`, and extracts on the
+/// held-out range exactly what `prefer-add` extracts.
+#[test]
+fn the_searched_weighting_extracts_what_prefer_add_extracts() {
+    let searched = searched_policy(SEARCHED_WEIGHTS);
+    let hand_written = evocc_eqopt::policy_by_name("prefer-add").expect("a shipped policy");
+    assert_ne!(
+        SEARCHED_WEIGHTS,
+        hand_written.cost().weights(),
+        "the search did not simply reproduce the vector; it reproduced the behaviour"
+    );
+    assert!(
+        SEARCHED_WEIGHTS.get(CostAxis::Add) < SEARCHED_WEIGHTS.get(CostAxis::Mul)
+            && SEARCHED_WEIGHTS.get(CostAxis::Mul) < SEARCHED_WEIGHTS.get(CostAxis::Shl),
+        "the ordering that decides a doubling is what the search found: {}",
+        SEARCHED_WEIGHTS.render()
+    );
+
+    let (first, _) = HELD_OUT_RANGE;
+    for offset in 0..64 {
+        let module = generate_module(first + offset, GeneratorConfig::default());
+        assert_eq!(
+            render_module(&optimize_scalar_module_with_policy(&module, &searched).module),
+            render_module(&optimize_scalar_module_with_policy(&module, &hand_written).module),
+            "the searched weighting and prefer-add part on held-out seed {}",
+            first + offset
+        );
+    }
 }
 
 #[test]
