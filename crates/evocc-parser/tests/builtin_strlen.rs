@@ -82,13 +82,22 @@ fn non_literal_length_is_an_ordinary_call_to_visible_strlen() {
 }
 
 #[test]
-fn non_literal_length_requires_the_compatible_library_declaration() {
-    for source in [
+fn non_literal_length_uses_the_builtin_prototype_without_a_visible_declaration() {
+    let arena = Arena::default();
+    parse(
         "typedef unsigned long size_t; size_t f(char *s) { return __builtin_strlen(s); }",
+        &arena,
+    )
+    .expect("the builtin supplies the external call prototype");
+}
+
+#[test]
+fn non_literal_length_rejects_an_incompatible_visible_declaration() {
+    let arena = Arena::default();
+    let error = parse(
         "typedef unsigned long size_t; int strlen(int); size_t f(char *s) { return __builtin_strlen(s); }",
-    ] {
-        let arena = Arena::default();
-        let error = parse(source, &arena).expect_err("missing or incompatible strlen must fail");
-        assert_eq!(error, "E2927: builtin-library-function-undeclared");
-    }
+        &arena,
+    )
+    .expect_err("an incompatible visible declaration must fail");
+    assert_eq!(error, "E2927: builtin-library-declaration-incompatible");
 }

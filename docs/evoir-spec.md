@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.46** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.47** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1948,12 +1948,15 @@ checker as well as the producer.
 
 **Facts of seeds.** A seed of origin `input` carries a fact computed once per
 function, before regions are formed, by a forward fixed point over the
-function in Section 8.6 order: the fact of a block argument is the meet of
-the facts of the values passed to it on every edge entering the block, a
+function in Section 8.6 order: the fact of a block argument is the *join* of
+the facts of the values passed to it on every edge entering the block, the
+join keeping only the bits every edge knows with the same value (the class
+merge of the paragraph above combines knowledge and is the other operation;
+revision 1.9.47 named them apart after the two had been called by one word), a
 passed value's fact being the transfer of its defining instruction over the
 facts of its operands (an unlisted instruction's result, a pointer, and any
 excluded value being top); every edge counts, none is pruned by a fact, and
-a block argument not yet visited contributes the meet's identity. Iteration
+a block argument not yet visited contributes the join's identity. Iteration
 stops when no fact changes; the lattice is finite and every step only loses
 knowledge, so it terminates, and the order of visits does not change the
 result. Entry block arguments are top. A premise may name a seed's class;
@@ -4530,12 +4533,14 @@ producer names the narrowest such registry, so a certificate that fired no
 `p1_` rule names `p0.scalar.v1` and stays readable by a checker that admits
 only it. Within a tier the producer applies the first applicable rule in
 registry order, so a premise-free fold on a node precedes a fact-driven rule
-on the same node. Under the 8.10 transfers `fully_known` on `xor`, `add` and
-`sub` holds only when both operands are fully known, which is exactly when
-`all_const` holds, so `p1_202`, `p1_203` and `p1_204` are dominated by
-`p0_105`, `p0_100` and `p0_101` and no conforming producer fires them; they
-stay printed so rule ids keep their meaning, and a coverage claim counts them
-as dominated rather than reached. Premise classes are resolved through the
+on the same node. When both operands of `xor`, `add` or `sub` are
+constant nodes, `all_const` holds and the fold `p0_105`, `p0_100` or `p0_101`
+precedes `p1_202`, `p1_203` or `p1_204` in registry order; the fact rules fire
+only when the operands are fully known without being constant nodes, which
+the facts of seeds (8.10, revision 1.9.46) make possible for a block argument.
+Before revision 1.9.46 that could not happen and the three were dominated;
+revision 1.9.47 lifted the sentence that forbade firing them, and a coverage
+claim counts them as reached when such an input exists. Premise classes are resolved through the
 partition at the rewrite that consumes them, like binding classes. A premise
 on a rule whose side condition reads no class is invalid (status 3), and so is
 a premise whose digit count disagrees with its class's width. Measured at
@@ -4675,6 +4680,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.47 | 2026-09-03 | Names the edge combination of seed facts a join, distinct from the class merge, after both had been called a meet (8.10); lifts the sentence that made `p1_202`-`p1_204` unfireable, since a fully known block argument now satisfies `fully_known` without `all_const` (11.6). Both gaps found by the executor implementing facts of seeds. |
 | 1.9.46 | 2026-09-03 | Regions admitted in every block (12,913 to 27,195 in the 1000-program gate). Rules that an instruction outside the sort bound is absent from the allowlist, records that `definition` seeds cannot arise in this profile (8.5, 8.7), and defines facts of seeds across block edges by a forward fixed point the checker recomputes (8.10). |
 | 1.9.45 | 2026-09-03 | Admits `__builtin_va_arg` at the front end as a typed C-HIR node under the same fail-closed lowering, and makes a library builtin's prototype the call's type whether or not the library function is declared, `E2927` now naming an incompatible visible declaration; both sentences had contradicted 1.9.34 and stopped the front-end executor. |
 | 1.9.44 | 2026-09-03 | Admits shifts and width changes as region roots and witnesses (8.5) and in the certificate's `op_id` (11.3), after the 1.9.43 transfer rows were measured to enable zero premised rewrites while excluded from regions; extends the witness closure to structural duplicates so a common subexpression is a region proved by congruence alone (8.5); prints `p0.scalar.v3` with six fact-driven folds for the new operators (11.6). |
