@@ -70,7 +70,8 @@
     "stageS3eClosed": "2026-09-03: shifts, width changes and structural duplicates in regions on both sides; p0.scalar.v3 in producer and checker; over 256 seeds the six transfer rows now enable 950 additional premised rewrites (114 to 1,064) where the previous window measured zero; duplicates with twins in their closure 0 of 16 to 21 of 21; congruence-only regions still 1 of 21 because the producer admits only entry-block arguments as seeds while 8.7 also admits definition-origin seeds. The checker refused an identity truncation whose width check the executor had written wrongly (seventeenth correct refusal). Quadratic congruence and per-root duplicate scans were replaced by grouped and per-block computations after the gate stopped finishing. One expectation outside the executor's boundary (evocc-lower's scalar corpus naming p0.scalar.v1) was updated by the architect to v3. Merged into main at 54d7c99; the architect's gate on 5bd4144 follows.",
     "definitionSeedsUnreachable": "2026-09-03: the third executor showed that under the only self-consistent reading of 8.5 a definition-origin seed cannot arise in this profile, and that the producer's real restriction was block_index == 0, not seed origin; lifting it doubled the regions (12,913 to 27,195) with 0 mismatches over 21,000 programs and every seed origin recomputed by the checker. Ruled at 1.9.46: Reading A is the rule, the definition origin is reserved.",
     "stageS3fClosed": "2026-09-03: regions admitted in every block: 12,913 to 27,195 in the 1000-program gate, congruence-only 226 to 568, duplicates without a region 16 of 21 to 1 of 21 (the one correctly refused by the exclusion fixed point); 21,000 programs, 0 mismatches, 0 refusals, every seed origin recomputed by the checker. Architect's isolated gate on 68a8104: 1228/0, clippy 0, fmt clean; merged into main.",
-    "joinVersusMerge": "2026-09-03: both S3g gaps were real. The edge combination of seed facts is a join (bits every edge agrees on), the class merge combines knowledge; the executor's separate naming on both sides is the rule. The 11.6 sentence that forbade p1_202/203/204 rested on a premise 1.9.46 falsified; it is lifted and the three fire when a fully known non-constant operand exists (measured cost of the restraint: 313 regions and 336 premised rewrites over 256 seeds)."
+    "joinVersusMerge": "2026-09-03: both S3g gaps were real. The edge combination of seed facts is a join (bits every edge agrees on), the class merge combines knowledge; the executor's separate naming on both sides is the rule. The 11.6 sentence that forbade p1_202/203/204 rested on a premise 1.9.46 falsified; it is lifted and the three fire when a fully known non-constant operand exists (measured cost of the restraint: 313 regions and 336 premised rewrites over 256 seeds).",
+    "stageS3gClosed": "2026-09-03: facts of seeds across block edges in both producer and checker with the join named apart from the merge; regions 27,195 to 37,813 (1000-program) and 553,820 to 772,255 (20,000-program), premises naming a seed 0 to 1,228 and 24,918; 21,000 programs, 0 mismatches after five refusals (seeds pinned, 26 in the replay list) that were the checker's eighteenth to twenty-second correct refusals: the identity-comparison reduction trusted the sweep's rewritten stream instead of the region's partition, and now re-derives. Fixed point cost: up to 191 passes on one function in 20,000; a worklist is the licensed follow-up. Architect's isolated gate on 0f79e99: 1263/0, clippy 0, fmt clean; merged into main. Open by the executor's list: DoubleNegation still takes the unconditional path; wall time noisy on the shared host."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",
@@ -316,6 +317,27 @@
       },
       "architectGate": {
         "passed": 1228,
+        "failed": 0,
+        "clippy": 0,
+        "fmt": "clean"
+      }
+    },
+    "s3g": {
+      "branchHead": "0f79e99",
+      "campaign": {
+        "programs": 21000,
+        "semanticMismatches": 0,
+        "certificateRefusalsAfterFix": 0,
+        "regions1000": 37813,
+        "regions20000": 772255,
+        "seedPremises1000": 1228,
+        "seedPremises20000": 24918,
+        "maxFixedPointPasses20000": 191,
+        "wallSeconds1000Median": 68.928,
+        "wallSeconds20000": 1372.139
+      },
+      "architectGate": {
+        "passed": 1263,
         "failed": 0,
         "clippy": 0,
         "fmt": "clean"
