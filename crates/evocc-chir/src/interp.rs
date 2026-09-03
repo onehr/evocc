@@ -1282,6 +1282,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span: declaration.span,
             });
         };
+        if matches!(
+            parameters,
+            FunctionParameters::Prototype { variadic: true, .. }
+        ) {
+            return Err(InterpreterError::VarArgs {
+                span: declaration.span,
+            });
+        }
         let zero_parameters = match parameters {
             FunctionParameters::Unspecified => true,
             FunctionParameters::Prototype { types, variadic } => types.is_empty() && !variadic,
@@ -2068,14 +2076,19 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                                 ..
                             } if facts.category() == ExprCategory::FunctionDesignator
                         ) {
-                            self.start_call(
+                            let value_base = values.len();
+                            if let Some(result) = self.start_call(
                                 callee,
                                 arguments_so_far,
                                 span,
                                 expects_value,
                                 &mut tasks,
-                                values.len(),
-                            )?;
+                                value_base,
+                            )? {
+                                if expects_value {
+                                    values.push(CValue::Integer(result));
+                                }
+                            }
                         } else {
                             if self.call_designator_function_type(callee).is_none() {
                                 return Err(InterpreterError::UnsupportedExpression {
@@ -3512,7 +3525,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expects_value: bool,
         tasks: &mut Vec<MachineTask<'arena>>,
         value_base: usize,
-    ) -> Result<(), InterpreterError> {
+    ) -> Result<Option<CInteger>, InterpreterError> {
         self.tick(callee.span())?;
         let CHirExpr::Ident {
             symbol,
@@ -3543,6 +3556,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             });
         }
 
+        if let Some(result) =
+            self.evaluate_external_ctype(*symbol, spelling, &arguments, call_span)?
+        {
+            return Ok(Some(result));
+        }
+
         let caller_slots = std::mem::take(&mut self.slots);
         let caller_fuel_anchor = self.fuel_anchor.take();
         self.enter_function(
@@ -3554,7 +3573,53 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             expects_value,
             value_base,
             tasks,
-        )
+        )?;
+        Ok(None)
+    }
+
+    fn evaluate_external_ctype(
+        &self,
+        symbol: SymbolId,
+        spelling: &str,
+        arguments: &[CValue],
+        span: SourceSpan,
+    ) -> Result<Option<CInteger>, InterpreterError> {
+        if !matches!(
+            spelling,
+            "isdigit" | "isalpha" | "isspace" | "toupper" | "tolower"
+        ) || self.unit.iter().any(|declaration| {
+            matches!(
+                declaration,
+                CHirDecl::Function(function)
+                    if function.symbol == symbol && function.body.is_some()
+            )
+        }) {
+            return Ok(None);
+        }
+        let [argument] = arguments else {
+            return Err(InterpreterError::UnsupportedFunctionSignature { symbol, span });
+        };
+        let value = match *argument {
+            CValue::Integer(value) => value.cast(CIntegerType::INT).mathematical_value(),
+            _ => {
+                return Err(InterpreterError::UnsupportedFunctionSignature { symbol, span });
+            }
+        };
+        let result = match spelling {
+            "isdigit" => i32::from((48..=57).contains(&value)),
+            "isalpha" => i32::from((65..=90).contains(&value) || (97..=122).contains(&value)),
+            "isspace" => i32::from((9..=13).contains(&value) || value == 32),
+            "toupper" if (97..=122).contains(&value) => {
+                i32::try_from(value - 32).expect("an ASCII upper-case code point fits int")
+            }
+            "tolower" if (65..=90).contains(&value) => {
+                i32::try_from(value + 32).expect("an ASCII lower-case code point fits int")
+            }
+            "toupper" | "tolower" => i32::try_from(value)
+                .map_err(|_| InterpreterError::UnsupportedFunctionSignature { symbol, span })?,
+            _ => unreachable!("ctype spelling checked above"),
+        };
+        Ok(Some(CInteger::int(result)))
     }
 
     fn start_indirect_call(
@@ -3838,6 +3903,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span: declaration.span,
             });
         };
+        if matches!(
+            canonical_parameters,
+            FunctionParameters::Prototype { variadic: true, .. }
+        ) {
+            return Err(InterpreterError::VarArgs {
+                span: declaration.span,
+            });
+        }
         if symbol.kind() != SymbolKind::Function
             || symbol.spelling() != declaration.name.spelling
             || !self.function_types_compatible(symbol.ty(), declaration.ty)

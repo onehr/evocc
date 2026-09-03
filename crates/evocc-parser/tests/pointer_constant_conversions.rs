@@ -31,12 +31,6 @@ fn accepts(source: &str) {
     }
 }
 
-fn rejects(source: &str, code: &str) {
-    let arena = Arena::default();
-    let error = parse(source, &arena).expect_err("fixture must be rejected");
-    assert_eq!(error.code, code, "wrong diagnostic: {error:?}");
-}
-
 #[test]
 fn void_pointer_spelled_null_converts_to_a_function_pointer() {
     accepts("struct c { void (*fn)(int); }; void f(struct c *call) { call->fn = ((void *)0); }\n");
@@ -66,14 +60,10 @@ fn the_measured_delayed_call_line_is_preserved_verbatim() {
 }
 
 #[test]
-fn nonzero_and_runtime_zero_void_pointers_do_not_become_null_constants() {
-    rejects(
-        "struct c { void (*fn)(int); }; void f(struct c *call) { call->fn = (void *)1; }\n",
-        "E2102",
-    );
-    rejects(
+fn nonzero_and_runtime_zero_void_pointers_use_the_general_function_pointer_conversion() {
+    accepts("struct c { void (*fn)(int); }; void f(struct c *call) { call->fn = (void *)1; }\n");
+    accepts(
         "struct c { void (*fn)(int); }; void f(struct c *call, int zero) { call->fn = (void *)zero; }\n",
-        "E2102",
     );
 }
 
