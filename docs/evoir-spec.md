@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.48** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.49** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -3528,10 +3528,13 @@ and Clang-19 agree on every row.
   `goto` naming a label that no enclosing function scope declares is `E2920`
   (`undeclared-label`) at the label name (both oracles reject it).
 - Label addresses: `&&name` is the address of a label in the current function,
-  of type `void *`; it is not an address constant, so a static initializer using
-  one reports `E2208`, and `&&name` where no enclosing function scope declares
-  that label reports `E2920`. `goto *expr` transfers control to such an address.
-  Both forms are parsed, type-checked and carried in C-HIR.
+  of type `void *`; it is an address constant (10.1.18 "Label addresses",
+  measured at revision 1.9.48 under both oracles), so a static initializer
+  may use it, and `&&name` where no enclosing function scope declares that
+  label reports `E2920`. `goto *expr` transfers control to such an address.
+  Both forms are parsed, type-checked and carried in C-HIR; lowering reports
+  `E3029`. Revision 1.9.49 corrected this entry, which had said the opposite
+  since 1.9.17 without a probe.
 
   Neither reaches EvoIR in this revision. An indirect branch would need a
   terminator whose successor set is decided at run time, edge arguments for each
@@ -4724,6 +4727,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.49 | 2026-09-03 | Corrects the 10.1.17 label-address entry, which had denied address-constant status without a probe and contradicted the measured rule of 1.9.48; the executor stopped on the contradiction. |
 | 1.9.48 | 2026-09-03 | Fourth full-configuration survey (2,694 of 2,798 clean). Defines the `_Pragma` operator through expansion and the whitespace flag of a substituted argument (10.4); qualified `void *` to function pointer, conditional and label address constants, and three more library builtins (10.1.14, 10.1.18). |
 | 1.9.47 | 2026-09-03 | Names the edge combination of seed facts a join, distinct from the class merge, after both had been called a meet (8.10); lifts the sentence that made `p1_202`-`p1_204` unfireable, since a fully known block argument now satisfies `fully_known` without `all_const` (11.6). Both gaps found by the executor implementing facts of seeds. |
 | 1.9.46 | 2026-09-03 | Regions admitted in every block (12,913 to 27,195 in the 1000-program gate). Rules that an instruction outside the sort bound is absent from the allowlist, records that `definition` seeds cannot arise in this profile (8.5, 8.7), and defines facts of seeds across block edges by a forward fixed point the checker recomputes (8.10). |
