@@ -16,8 +16,10 @@
 //! `tests/contracts/day5-kernel-cohort.json`, and refuses any module whose
 //! canonical text digest appears in a denylist file.
 
+pub mod axes;
 pub mod search;
 
+pub use axes::{axis_sensitivity, AxisSensitivity, AxisSweep};
 pub use search::{
     candidate_fitness, held_out_corpus, search_cost_weights, searched_policy, training_corpus,
     SearchConfig, SearchEvaluation, SearchOutcome, HELD_OUT_RANGE, SEARCHED_POLICY_NAME,
@@ -635,25 +637,35 @@ pub(crate) fn json_string(value: &str) -> String {
     text
 }
 
-/// Programs whose optimized module text differs between two reports.
+/// Which programs' optimized module text differs between two reports.
 ///
 /// The two reports must name the same corpus, or the comparison is meaningless
-/// and this returns `None`.
+/// and this returns `None`. The names come back in corpus order, so a caller
+/// that wants the union over several comparisons can take one.
 #[must_use]
-pub fn differing_programs(left: &PolicyReport, right: &PolicyReport) -> Option<u64> {
+pub fn differing_program_names<'a>(
+    left: &'a PolicyReport,
+    right: &PolicyReport,
+) -> Option<Vec<&'a str>> {
     if left.corpus_digest != right.corpus_digest || left.programs.len() != right.programs.len() {
         return None;
     }
-    let mut differing = 0;
+    let mut differing = Vec::new();
     for (one, other) in left.programs.iter().zip(&right.programs) {
         if one.name != other.name {
             return None;
         }
         if one.output_digest != other.output_digest {
-            differing += 1;
+            differing.push(one.name.as_str());
         }
     }
     Some(differing)
+}
+
+/// How many programs' optimized module text differs between two reports.
+#[must_use]
+pub fn differing_programs(left: &PolicyReport, right: &PolicyReport) -> Option<u64> {
+    differing_program_names(left, right).map(|names| names.len() as u64)
 }
 
 /// Evaluate `policy` over `corpus`, replaying every certificate through
