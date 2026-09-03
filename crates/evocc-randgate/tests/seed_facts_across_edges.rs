@@ -492,3 +492,113 @@ fn a_xor_of_two_fully_known_arguments_folds_on_its_fact() {
         outcome.after
     );
 }
+
+/// A comparison the sweep saw as an identity is not one to the region.
+///
+/// Reduced from seed 1592634837 of the long campaign, which the checker
+/// refused.
+///
+/// ```text
+/// ^entry(%0, %1, %2):
+///   %3 = const.bits<64> 0
+///   br ^b(%3, %1, %2)
+/// ^b(%4, %5, %6):
+///   %7 = mul %4, %4        -- the seed is known zero, so this folds
+///   %8 = or %4, %7         -- the sweep sees or(%4, 0) and aliases it to %4
+///   %9 = icmp.sle %4, %8   -- so the sweep reads icmp.sle(%4, %4)
+/// ```
+///
+/// The sweep works on its own rewritten stream, where `%7` has become a
+/// constant node and `%8` an alias of `%4`, so `icmp.sle(?x, ?x)` matches. The
+/// region is built from `before.evo`, where the comparison's operands are the
+/// seed's class and the disjunction's class; the disjunction joins the
+/// multiplication and the derived zero, and nothing ever joins the seed to
+/// them, because a seed carries a fact rather than a node and no rule turns a
+/// fully known fact into a constant class. `p0_013_icmp_sle_self` is therefore
+/// a claim the region cannot support, and the fact-driven comparison is the
+/// rule that can.
+#[test]
+fn a_comparison_the_sweep_folded_is_stated_as_the_rule_the_region_can_prove() {
+    let wide = |id: u32| Value {
+        id,
+        ty: EvoIRType::Bits(64),
+    };
+    let zero = wide(3);
+    let carried = wide(4);
+    let squared = wide(7);
+    let joined = wide(8);
+    let compared = Value {
+        id: 9,
+        ty: EvoIRType::Bits(1),
+    };
+    let function = Function {
+        name: "main".to_owned(),
+        params: vec![
+            FunctionParam {
+                name: "x".to_owned(),
+                ty: EvoIRType::Bits(64),
+            },
+            FunctionParam {
+                name: "arg1".to_owned(),
+                ty: EvoIRType::Mem(Region::All),
+            },
+            FunctionParam {
+                name: "arg2".to_owned(),
+                ty: EvoIRType::World,
+            },
+        ],
+        ret_tys: vec![
+            EvoIRType::Bits(1),
+            EvoIRType::Mem(Region::All),
+            EvoIRType::World,
+        ],
+        effects: EffectSummary::default(),
+        blocks: vec![
+            Block {
+                id: 0,
+                args: vec![
+                    argument(&wide(0)),
+                    argument(&memory(1)),
+                    argument(&world(2)),
+                ],
+                insts: vec![Inst::Const(zero.clone(), 0)],
+                terminator: Inst::Br(1, vec![zero, memory(1), world(2)]),
+            },
+            Block {
+                id: 1,
+                args: vec![
+                    argument(&carried),
+                    argument(&memory(5)),
+                    argument(&world(6)),
+                ],
+                insts: vec![
+                    Inst::Mul(squared.clone(), carried.clone(), carried.clone()),
+                    Inst::Or(joined.clone(), carried.clone(), squared),
+                    Inst::ICmp(compared.clone(), evocc_evoir::CmpOp::SLe, carried, joined),
+                ],
+                terminator: Inst::Ret(vec![compared, memory(5), world(6)]),
+            },
+        ],
+    };
+    let mut module = Module {
+        globals: Vec::new(),
+        functions: vec![function],
+    };
+    module.recompute_effect_summaries();
+    validate_module(&module).expect("the probe is valid EvoIR");
+    // `optimize` sends the whole transaction through evo-proofcheck, so a
+    // certificate claiming the identity is refused here rather than counted.
+    let outcome = optimize(&module);
+    assert!(
+        !outcome.rules.contains(&"p0_013_icmp_sle_self".to_owned()),
+        "the region cannot join the seed's class to the disjunction's: {:?}\n{}",
+        outcome.rules,
+        outcome.proof
+    );
+    assert!(
+        outcome.rules.contains(&"p1_213_known_icmp_sle".to_owned()),
+        "the facts decide the comparison, and that is the rule to state: {:?}\n{}",
+        outcome.rules,
+        outcome.proof
+    );
+}

@@ -902,7 +902,7 @@ fn region_rewrite(
     node_id: u32,
 ) -> Option<RegionRewrite> {
     let matched = nodes.get(node_id as usize)?;
-    if let Some(opportunity) = canonical_reduction(event, nodes, value_classes, classes) {
+    if let Some(opportunity) = canonical_reduction(event, matched, nodes, value_classes, classes) {
         if let Some((rule, bindings)) = exact_rule(
             &event.instruction,
             &event.facts,
@@ -931,6 +931,7 @@ fn region_rewrite(
 /// derived is not this rule, whatever the sweep called it.
 fn canonical_reduction(
     event: &AppliedRewrite,
+    matched: &EvpNode,
     nodes: &[EvpNode],
     value_classes: &HashMap<u32, u32>,
     classes: &LocalClasses,
@@ -969,7 +970,22 @@ fn canonical_reduction(
             }
             values
         }
-        (_, ScalarRewrite::DoubleNegation | ScalarRewrite::IdentityComparison, _) => {
+        (_, ScalarRewrite::IdentityComparison, _) => {
+            // `icmp.*(?x, ?x)` is a claim about one class, not about two
+            // values the sweep happened to give one name. The sweep matches on
+            // its own rewritten stream, where an earlier alias may already have
+            // replaced one operand by the other; the region is built from
+            // `before.evo`, and there the two operands are whatever classes
+            // they are. A seed whose fact is fully known is still its own
+            // class -- a fact is not a node, and no rule in this profile joins
+            // a class to the constant its fact names -- so the identity has to
+            // be read off the partition rather than off the instruction.
+            let [left, right] = matched.children.as_slice() else {
+                return None;
+            };
+            return (classes.find(*left)? == classes.find(*right)?).then_some(original);
+        }
+        (_, ScalarRewrite::DoubleNegation, _) => {
             return Some(original);
         }
         _ => return None,
