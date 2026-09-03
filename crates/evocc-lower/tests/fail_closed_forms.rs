@@ -106,6 +106,62 @@ fn pointer_difference_fails_closed_with_only_e3032() {
 }
 
 #[test]
+fn function_pointer_arithmetic_fails_closed_with_only_e3034() {
+    let cases = [
+        "typedef int (*fn)(void); fn f(fn pointer, long offset) { return pointer + offset; }\n",
+        "typedef int (*fn)(void); fn f(fn pointer, long offset) { return offset + pointer; }\n",
+        "typedef int (*fn)(void); fn f(fn pointer, long offset) { return pointer - offset; }\n",
+        "typedef int (*fn)(void); fn f(fn pointer, long offset) { pointer += offset; return pointer; }\n",
+        "typedef int (*fn)(void); fn f(fn pointer, long offset) { pointer -= offset; return pointer; }\n",
+        "typedef int (*fn)(void); fn f(fn pointer) { return ++pointer; }\n",
+        "typedef int (*fn)(void); fn f(fn pointer) { return pointer--; }\n",
+        concat!(
+            "typedef int (*fn)(void); struct holder { fn pointer; }; ",
+            "fn f(struct holder *holder, long offset) { holder->pointer += offset; return holder->pointer; }\n",
+        ),
+    ];
+    let failures = cases
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, source)| {
+            let arena = Arena::default();
+            let file = FileId::new(9_700 + index as u32);
+            let mut lexer = Lexer::new(file, source);
+            let mut tokens = Vec::new();
+            while let Some(token) = lexer.next() {
+                assert_ne!(token.kind, TokenKind::Error, "lexer rejected case {index}");
+                tokens.push(token);
+            }
+            let mut parser = Parser::new(tokens, file, source);
+            let unit = parser.parse_translation_unit_in(&arena);
+            if let Some(diagnostic) = parser.diagnostic() {
+                return Some(format!(
+                    "parser rejected case {index}: {} {}",
+                    diagnostic.code, diagnostic.message
+                ));
+            }
+            match lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()) {
+                Err(error)
+                    if error.code() == "E3034"
+                        && error.to_string() == "not-lowered: function-pointer-arithmetic" =>
+                {
+                    None
+                }
+                Err(error) => Some(format!(
+                    "case {index}: expected E3034, got {} {error}",
+                    error.code()
+                )),
+                Ok(_) => Some(format!("case {index}: lowering unexpectedly succeeded")),
+            }
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        failures.is_empty(),
+        "function-pointer lowering failures: {failures:#?}"
+    );
+}
+
+#[test]
 fn wide_integer_execution_fails_closed_with_only_e3033() {
     assert_lowering_error(
         concat!(

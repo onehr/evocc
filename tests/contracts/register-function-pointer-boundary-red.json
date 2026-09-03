@@ -1,0 +1,88 @@
+{
+  "receiptId": "c30.register-function-pointer-boundary.red.v1",
+  "state": "RED",
+  "openedAt": "2026-09-04T02:02:46+08:00",
+  "baseline": {
+    "commit": "9f7d0243c5f138bd67b9803ed5a8df04bc5d3ae7",
+    "description": "source-column indexing optimization on top of specification revision 1.9.54; neither declared diagnostic is implemented"
+  },
+  "authority": {
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.54",
+      "sha256": "f0ac2dc7c8648521736a7d552ddb59c00aad64c648340ab555428f259b641de8",
+      "sections": [
+        "6.3 E2928 and E3034 diagnostics",
+        "10.1.18 Storage class register, va_list objects, 128-bit places",
+        "10.1.18 Parameter compatibility"
+      ]
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "Z2",
+      "sha256": "ac17a51fac720949b9311c4f79c22d503604435ba029537ca78b9033fbd5fef5"
+    },
+    "sealedOracleProbe": {
+      "source": ".evidence/builtin-probes/20260902-2c23684c/p31-residue.c",
+      "sourceSha256": "8610494d4ef1a87e82e434312922f2a357e3f8e30c376ad8b9c61e913ef38b96",
+      "output": ".evidence/builtin-probes/20260902-2c23684c/p31-residue.out",
+      "outputSha256": "6a8ab1715cbea76a46c8111e712a2b8e81e1566729dc66b2c3e53fbd310adbb8"
+    }
+  },
+  "declaredFailures": [
+    {
+      "test": "final_profile_conformance::taking_the_address_of_a_register_object_is_e2928_at_the_operator",
+      "reason": "address-of-register-object",
+      "cases": 4,
+      "observed": "all four direct, parameter, member and array-element forms were accepted without a diagnostic"
+    },
+    {
+      "test": "fail_closed_forms::function_pointer_arithmetic_fails_closed_with_only_e3034",
+      "reason": "function-pointer-arithmetic lowering boundary",
+      "cases": 8,
+      "observed": [
+        "three binary forms reported E3101 unsupported pointer binary operation",
+        "two compound forms reported E3101 pointer assignment operands disagree with C-HIR types",
+        "two update forms reported E3101 integer expression has a non-bit-vector EvoIR value",
+        "the projected compound form reported E3101 non-integer scalar type is outside Day 6"
+      ]
+    }
+  ],
+  "focusedRun": {
+    "command": "CARGO_TARGET_DIR=/private/tmp/c30-z-red-target cargo test -p evocc-parser --test final_profile_conformance -p evocc-lower --test fail_closed_forms --no-fail-fast -- --nocapture",
+    "passed": 20,
+    "failed": 2,
+    "ignored": 0,
+    "buildErrors": 0,
+    "unexpectedFailures": 0
+  },
+  "workspaceRun": {
+    "command": "CARGO_TARGET_DIR=/private/tmp/c30-z-red-target cargo test --workspace --no-fail-fast",
+    "passed": 1328,
+    "failed": 2,
+    "ignored": 1,
+    "buildErrors": 0,
+    "unexpectedFailures": 0
+  },
+  "staticGates": {
+    "clippy": {
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-z-red-clippy cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    },
+    "baseLayoutCorpus": "128/128 ORACLE_CONSENSUS; 0 mismatches",
+    "attributedLayoutCorpus": "22/22 ORACLE_CONSENSUS; 0 mismatches",
+    "commitReferences": "231 rewritten, 66 resolved unchanged, 139 other hexadecimal tokens",
+    "diffCheck": "clean"
+  },
+  "productionChanges": [],
+  "specGap": null,
+  "claimCeiling": "This checkpoint proves exactly two independently executable diagnostic gaps across twelve source forms. It makes no implementation or lowering-survey claim."
+}

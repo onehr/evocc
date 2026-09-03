@@ -56,6 +56,49 @@ fn register_is_accepted_for_parameters_and_block_objects() {
 }
 
 #[test]
+fn taking_the_address_of_a_register_object_is_e2928_at_the_operator() {
+    let cases = [
+        "void f(void) { register int value = 0; int *pointer = &value; }\n",
+        "void f(register int value) { int *pointer = &value; }\n",
+        concat!(
+            "struct pair { int first; int second; }; ",
+            "void f(void) { register struct pair value; int *pointer = &value.second; }\n",
+        ),
+        "void f(void) { register int values[2]; int *pointer = &values[1]; }\n",
+    ];
+    let failures = cases
+        .into_iter()
+        .filter_map(|source| {
+            let arena = Arena::default();
+            let expected_start =
+                source.find('&').expect("fixture contains address operator") as u32;
+            match parse(source, &arena) {
+                Err(diagnostic)
+                    if diagnostic.code == "E2928"
+                        && diagnostic.message == "address-of-register-object"
+                        && diagnostic.span.byte_start == expected_start
+                        && diagnostic.span.byte_end == expected_start + 1 =>
+                {
+                    None
+                }
+                Err(diagnostic) => Some(format!(
+                    "expected E2928 at &: got {} {} at {}..{} for {source:?}",
+                    diagnostic.code,
+                    diagnostic.message,
+                    diagnostic.span.byte_start,
+                    diagnostic.span.byte_end,
+                )),
+                Ok(_) => Some(format!("accepted address of register object: {source:?}")),
+            }
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        failures.is_empty(),
+        "register address failures: {failures:#?}"
+    );
+}
+
+#[test]
 fn va_list_is_an_object_type_with_target_layout() {
     accepts(concat!(
         "typedef __builtin_va_list saved_args; ",
