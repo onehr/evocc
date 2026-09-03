@@ -651,41 +651,45 @@ fn a_comparison_the_sweep_folded_is_stated_as_the_rule_the_region_can_prove() {
     );
 }
 
-/// A block whose double negation the sweep reads off two zeros of its own.
+/// A double negation over a zero the sweep and the region disagree about.
+///
+/// Reduced from seed 1592635637 of the long campaign, where `sub(%x, %x)` on a
+/// fully known argument was the zero that both subtractions read.
 ///
 /// ```text
 /// ^entry(%0, %1, %2):
-///   %3 = const.bits<8> 0
-///   br ^b(%3, %0, %1, %2)
-/// ^b(%4, %5, %6, %7):        -- %4 is known zero by the seed fixed point
-///   <lead>                   -- the zero the two subtractions share
-///   %9  = sub <zero>, %5     -- the inner negation
-///   %10 = mul %4, %4         -- fully known: a zero the transaction derived
-///   %11 = sub <outer>, %9    -- the double negation
+///   %3 = const.bits<8> 5
+///   br ^b(%3, %1, %2)
+/// ^b(%4, %5, %6):       -- %4 is fully known by the seed fixed point
+///   %7 = sub %4, %4     -- derived: a zero with no `const` node before it
+///   %7 = const.bits<8> 0 -- written: the same zero, put there by the witness
+///   %8 = sub %7, %7     -- the inner negation
+///   %9 = sub %7, %8     -- the double negation
 /// ```
 ///
-/// `derived` decides where the shared zero comes from. With it set, the only
-/// zero in the block is the one `mul(%4, %4)` folds to, and the region holds no
-/// `const` node the before witness put there. Without it, a written
-/// `const.bits<8> 0` leads the block and both subtractions read it.
+/// `derived` decides where the shared zero comes from. With it set the sweep's
+/// constant environment holds a zero for `%7` -- the fact of `sub(%4, %4)` is
+/// fully known -- while the region has no `const` node the before witness put
+/// in that class. Without it a written `const.bits<8> 0` leads the block and
+/// the same class is one the witness spoke for.
 fn double_negation(derived: bool) -> Module {
-    let written = bits(8);
-    let squared = bits(10);
+    let zero = bits(8);
     let negated = bits(9);
-    let restored = bits(11);
-    let zero = if derived {
-        squared.clone()
+    let restored = bits(10);
+    // The derived zero is `sub(%4, %4)` on the fully known argument, and the
+    // inner negation reads that same zero; the written one leads the block and
+    // the inner negation reads the opaque argument the entry block forwards.
+    let (lead, inner) = if derived {
+        (
+            Inst::Sub(zero.clone(), bits(4), bits(4)),
+            Inst::Sub(negated.clone(), zero.clone(), zero.clone()),
+        )
     } else {
-        written.clone()
+        (
+            Inst::Const(zero.clone(), 0),
+            Inst::Sub(negated.clone(), zero.clone(), bits(5)),
+        )
     };
-    let mut body = Vec::new();
-    if derived {
-        body.push(Inst::Mul(squared, bits(4), bits(4)));
-    } else {
-        body.push(Inst::Const(written, 0));
-    }
-    body.push(Inst::Sub(negated.clone(), zero.clone(), bits(5)));
-    body.push(Inst::Sub(restored.clone(), zero, negated));
     let function = Function {
         name: "main".to_owned(),
         params: vec![
@@ -716,7 +720,7 @@ fn double_negation(derived: bool) -> Module {
                     argument(&memory(1)),
                     argument(&world(2)),
                 ],
-                insts: vec![Inst::Const(bits(3), 0)],
+                insts: vec![Inst::Const(bits(3), 5)],
                 terminator: Inst::Br(1, vec![bits(3), bits(0), memory(1), world(2)]),
             },
             Block {
@@ -727,7 +731,7 @@ fn double_negation(derived: bool) -> Module {
                     argument(&memory(6)),
                     argument(&world(7)),
                 ],
-                insts: body,
+                insts: vec![lead, inner, Inst::Sub(restored.clone(), zero, negated)],
                 terminator: Inst::Ret(vec![restored, memory(6), world(7)]),
             },
         ],
@@ -741,17 +745,21 @@ fn double_negation(derived: bool) -> Module {
     module
 }
 
-/// A double negation over a zero no before witness wrote states no rule.
+/// A double negation over a zero no before witness wrote states another rule.
 ///
-/// `p0_009_double_neg` is written over `const_like` zeros, and Section 11.6
-/// lets a left-hand `const_like` match only a node already in the before
-/// witness closure. The sweep does not read the region's partition: it reads
-/// its own constant environment, where the fold of `mul(%4, %4)` on a seed
-/// known zero has put a zero that the region has only as a node this
-/// transaction derived. The rule is therefore not the one the region can state,
-/// and the region says nothing rather than saying it.
+/// `p0_009_double_neg` is `sub(const_like(?x,0),sub(const_like(?x,0),?x))`, and
+/// Section 11.6 lets a left-hand `const_like` match only a node the before
+/// witness closure already held. The sweep reads its own constant environment
+/// instead, where the fold of `sub(%4, %4)` on a fully known argument has put a
+/// zero the region has only as a node this transaction derived, so the rule the
+/// sweep names is one the region cannot state.
+///
+/// Before the producer re-derived the reduction, the region resolved no binding
+/// for it and was dropped whole: the outer subtraction survived the transaction
+/// and a second one was needed to answer it. The facts answer it here, in the
+/// transaction that has them.
 #[test]
-fn a_double_negation_over_a_derived_zero_states_no_rule() {
+fn a_double_negation_over_a_derived_zero_states_the_rule_the_region_can_prove() {
     let module = double_negation(true);
     let outcome = optimize(&module);
     assert!(
@@ -761,8 +769,8 @@ fn a_double_negation_over_a_derived_zero_states_no_rule() {
         outcome.proof
     );
     assert!(
-        outcome.after.contains("sub.bits<8>"),
-        "a rule the region cannot state must leave the subtraction alone:\n{}",
+        !outcome.after.contains("sub.bits<8>"),
+        "the facts decide every subtraction of the block:\n{}",
         outcome.after
     );
 }
@@ -771,9 +779,7 @@ fn a_double_negation_over_a_derived_zero_states_no_rule() {
 ///
 /// This is the other half: the reduction is a real one whenever the partition
 /// puts a before-witness zero in both subtractions' zero operand, and it must
-/// keep firing there. The fold of `mul(%4, %4)` still happens, and its result
-/// joins the class the written zero already owns, which is exactly why the
-/// outer subtraction's zero operand is a class the before witness spoke for.
+/// keep firing there.
 #[test]
 fn a_double_negation_over_a_written_zero_is_stated_and_replayed() {
     let module = double_negation(false);
@@ -783,10 +789,5 @@ fn a_double_negation_over_a_written_zero_is_stated_and_replayed() {
         "a written zero is what the rule is about: {:?}\n{}",
         outcome.rules,
         outcome.proof
-    );
-    assert!(
-        outcome.after.contains("ret %v5"),
-        "the double negation returns what it negated twice:\n{}",
-        outcome.after
     );
 }
