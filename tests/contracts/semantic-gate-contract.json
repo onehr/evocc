@@ -58,7 +58,8 @@
     "s3aPartial": "2026-09-03: the first executor delivered the known-bits lattice (8.10 rows and the negative surface), the premise record and parser of 11.3, and registry admission by version (evp1: v1; evp2: v1 or v2, name and digest together), then stopped at its context limit with the 18 Tier B rules pinned as an ignored coverage test (0 of 18 reached, because no producer rule reads a fact). Architect's isolated gate on d8797c0: 1172/0 (2 ignored), clippy 0, fmt clean; merged into main. The remaining parts pass to a fresh executor with a self-contained brief.",
     "tierBReadingsRatified": "2026-09-03: the second executor's four readings are ratified in 1.9.41 (folds carry no premise; premise classes resolve through the partition; a premise on a premise-free rule is invalid; a wrong digit count is invalid). Its registry naming (narrowest reviewed registry containing the fired rules) is now the rule. Its rule priority is overruled in one step: within a tier the first applicable rule in registry order wins, so a premise-free fold precedes a fact rule and p1_202/p1_203/p1_204 are dominated and counted as such, not fired by preference. The nested-pattern binding defect (p0_009, 8 seeds in 20,000) was the checker's sixteenth correct refusal.",
     "stageS3aClosed": "2026-09-03: Tier B fact-driven rewrites in place against p0.scalar.v2: producer facts from the 8.10 transfers, premises in the stated order, an independent checker recomputation that refuses unconfirmable bits; 45 of 45 rules reached over 256 seeds (p1_202/203/204 now counted as dominated under 1.9.41); 21,000 programs, 0 mismatches; 772 of 7,900 regions in the 1000-program gate carry a premise; residual regions 20 to 0. One producer defect (p0_009 nested-pattern binding, 8 seeds) found by the checker and fixed. Architect's isolated gate on 88d7253: 1190/0, clippy 0, fmt clean; merged into main.",
-    "congruencePlacementRatified": "2026-09-03: the executor's Reading A for congruence placement among epoch markers is now the rule, and the unrecorded vacuous rewrite is stated explicitly: a replacement may stand on recorded merges alone. 'Regions existing only by congruence' means a region whose root is replaced on the strength of a congruence with no rewrite of its own."
+    "congruencePlacementRatified": "2026-09-03: the executor's Reading A for congruence placement among epoch markers is now the rule, and the unrecorded vacuous rewrite is stated explicitly: a replacement may stand on recorded merges alone. 'Regions existing only by congruence' means a region whose root is replaced on the strength of a congruence with no rewrite of its own.",
+    "stageS3bClosed": "2026-09-03: congruence closure produced and verified: regions 7,900 to 9,062 in the 1000-program gate (+14.7 percent), 197 justified by a congruence alone; premised regions 772 to 232 under registry-order priority; p1_202/203/204 asserted absent; 21,000 programs, 0 mismatches, 0 refusals; the eight p0_009 seeds replay clean. Architect's isolated gate on 0c0ec2d: 1194/0, clippy 0, fmt clean; merged into main. Open by the executor's list: matching is still value-based, facts and congruence are block-local, no produced certificate reaches a ceiling."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",
@@ -207,6 +208,25 @@
       },
       "architectGate": {
         "passed": 1190,
+        "failed": 0,
+        "clippy": 0,
+        "fmt": "clean"
+      }
+    },
+    "s3b": {
+      "branchHead": "0c0ec2d",
+      "campaign": {
+        "programs": 21000,
+        "semanticMismatches": 0,
+        "certificateRefusals": 0,
+        "regions1000": 9062,
+        "regionsOnlyByCongruence1000": 197,
+        "regionsWithPremise1000": 232,
+        "wallSeconds1000Median": 22.988,
+        "wallSeconds20000": 468.471
+      },
+      "architectGate": {
+        "passed": 1194,
         "failed": 0,
         "clippy": 0,
         "fmt": "clean"
