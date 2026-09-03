@@ -2,14 +2,14 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "ab812f0e13b5ccd10c28707cb0056695bc96ff5360b361dda9765086a57f2727"
+    "sha256": "7339d9a5b18d09572d7694c47c737606a96bd64c4cf9ef01f8946ea8347cab84"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.51",
-    "sha256": "efaade04f3d2823d6c46ada41dee1aa9a1b988ef1074b0920007519a409bb631"
+    "revision": "1.9.53",
+    "sha256": "e89cb6148512700a35114f0694325ff84cb2a01f6ce22a5b8447d073aea75592"
   },
-  "cutLine": "Revision 1.9.49 scope X is implemented at 597bb76 and published at b3a2af6. Six measured front-end rule families pass one tests-only RED-to-GREEN window: expanded _Pragma and substituted whitespace, qualified void/function-pointer conversions, conditional and label address constants, three library builtins, and general conditional-array decay. Dashboard run 20260903T115135Z-31973 remains 48/48 clean with zero regressions. Full-configuration survey 20260903T115834Z-66704 measures 2760 clean and 38 typed-diagnosed among 2798 target C units, with zero unavailable, timeout, or panic; the exact transition is 2694 clean-to-clean, 66 diagnosed-to-clean, and 38 diagnosed-to-diagnosed. Revisions 1.9.50-1.9.51 affect equality/proof sections only and do not alter this front-end claim.",
+  "cutLine": "Revision 1.9.53 scope Y is implemented at 0c5db21 and published at 76c7077. Sixteen independently executable RED failures closed through shared preprocessing, type, place, constant-expression, initializer-plan, and pointer-conversion authorities. Dashboard run 20260903T161450Z-34865 remains 48/48 clean with zero regressions. Full-configuration survey 20260903T162825Z-96918 measures all 2798 target C units clean with zero diagnosed, unavailable, timeout, or panic; the exact transition is 2760 clean-to-clean and 38 diagnosed-to-clean. The single-line .i diagnostic measurement identifies quadratic source-position accounting and makes no production-fix claim.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "b8688e0",
@@ -1002,9 +1002,41 @@
     "specAmbiguitiesThisWindow": [],
     "result": "PASS_WITH_TYPED_SURVEY_FRONTIER"
   },
-  "subjectCommit": "b3a2af6",
+  "frontEndProfileClosureRedWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.53; tests/contracts/day9-acceptance-contract.json scope Y",
+    "opened": "b977a7e (tests only; 1287 passed, 16 declared semantic failures, 1 ignored, zero build errors)",
+    "closed": "0c5db21",
+    "implementationCommits": [
+      "0c5db21"
+    ],
+    "redDiagnostics": {
+      "path": "tests/contracts/front-end-profile-closure-red.json",
+      "sha256": "65fe91719ba4052342a9d1940d11f0372792ad9c1132a3196ee88f0747795ef9"
+    },
+    "acceptanceReceipt": {
+      "path": "tests/contracts/front-end-profile-closure-receipt.json",
+      "sha256": "327ddb06d7f6cb1a5a58749fcfe0d98f0d844312989dc35245693822f6fe7bf7"
+    },
+    "surveyReceipt": {
+      "path": "tests/contracts/full-config-parse-survey-receipt.json",
+      "sha256": "c986f5b75af135dc4cab4c5836e9cebdd6b3aac22cdd29b33566899f63123277"
+    },
+    "declaredCapabilities": 16,
+    "focusedGreen": "16/16",
+    "dashboardRun": "20260903T161450Z-34865; 48/48 clean; zero regressions",
+    "fullConfigurationSurvey": "20260903T162825Z-96918; 2798/2798 clean, zero diagnosed/unavailable/timeout/panic; exact transitions 2760 clean-to-clean and 38 diagnosed-to-clean",
+    "singleLinePreprocessedMeasurement": "20260903T162252Z; bpf_jit_comp 63.751s and gss_rpc_xdr 68.710s; 4149/4155 profile samples in repeated physical_line_col character counting; measurement only",
+    "scopeException": "crates/evocc-types/src/lib.rs contains the sole canonical __builtin_va_list layout row required by Y2; no middle-end crate changed",
+    "specAmbiguitiesThisWindow": [
+      "Y-REGISTER-ADDRESS-DIAGNOSTIC",
+      "Y-FUNCTION-POINTER-ARITHMETIC-EXECUTION",
+      "Y-RANGE-DESIGNATOR-PLAN-COST"
+    ],
+    "result": "PASS_ALL_ENUMERATED_TARGET_C_UNITS_CLEAN"
+  },
+  "subjectCommit": "76c7077",
   "gate": {
-    "claim": "Revision 1.9.49 scope X is implemented and green. The six declared front-end rules use shared expansion, conversion, address-constant, builtin-prototype, and place-validation authorities. The 16-unit dashboard remains 48/48 clean with zero regression. The full-configuration raw-to-EvoCPP-to-parser measurement completes all 2798 target C units without panic, timeout, or unavailable classification; 2760 are clean and 38 typed-diagnosed units remain an explicitly open frontier.",
+    "claim": "Revision 1.9.53 scope Y is implemented and green. Sixteen declared front-end gaps close through shared preprocessing, type, place, constant-expression, initializer-plan, and pointer-conversion authorities. The 16-unit dashboard remains 48/48 clean with zero regression. The full-configuration raw-source to EvoCPP to parser measurement completes all 2798 target C units cleanly with zero diagnosed, unavailable, timeout, or panic classifications.",
     "measured": {
       "dualOracleCleanParseTus": "16/16",
       "rawPreprocessClean": "16/16",
@@ -1039,6 +1071,7 @@
       "parserTimeoutSecondsPerTu": 10,
       "workspaceTestsAtWSubject": "1256/1256; 1 ignored",
       "workspaceTestsAtXSubject": "1287/1287; 1 ignored",
+      "workspaceTestsAtYSubject": "1326/1326; 1 ignored",
       "specifiedFrontier": true,
       "acceptanceAuthorityConflict": false,
       "e2912LanesRemaining": 0,
@@ -1107,23 +1140,24 @@
       "labeledStatementExpressionExecutionTests": "1/1",
       "frontEndLanguageFormsTests": "50/50",
       "frontEndSurveyResidueTests": "46/46",
-      "fullConfigurationSurveyRun": "20260903T115834Z-66704",
+      "frontEndProfileClosureTests": "16/16",
+      "fullConfigurationSurveyRun": "20260903T162825Z-96918",
       "fullConfigurationTargetUnits": 2798,
-      "fullConfigurationClean": 2760,
-      "fullConfigurationDiagnosed": 38,
+      "fullConfigurationClean": 2798,
+      "fullConfigurationDiagnosed": 0,
       "fullConfigurationUnavailable": 0,
       "fullConfigurationTimeout": 0,
       "fullConfigurationPanic": 0,
-      "fullConfigurationDiagnosedToClean": 66
+      "fullConfigurationDiagnosedToClean": 38
     },
-    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260903T061659Z-52334/results.jsonl",
+    "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260903T115135Z-31973/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "9bb76516f8b772797d7451c1d2b68a77ccce756c74a2a24dd073fd32196c9c84",
-      "subjectCommit": "597bb76",
-      "publishedFromRun": "20260903T115135Z-31973"
+      "sha256": "9732a390a71cfd74f465ab55a327e8cf9d559a5965606607b9eaf6b96e4dd2ca",
+      "subjectCommit": "0c5db21",
+      "publishedFromRun": "20260903T161450Z-34865"
     },
-    "result": "FRONT_END_SURVEY_RESIDUE_PASS_WITH_TYPED_SURVEY_FRONTIER"
+    "result": "FRONT_END_PROFILE_CLOSURE_PASS_ALL_ENUMERATED_TARGET_C_UNITS_CLEAN"
   },
   "lanes": {
     "clean": {
@@ -1945,6 +1979,19 @@
       "stageF1": "CLOSED",
       "regressionsAgainstPrevious": 0,
       "scopeX": "PASS"
+    },
+    "frontEndProfileClosureAfter": {
+      "run": "20260903T161450Z-34865",
+      "subjectCommit": "0c5db21",
+      "baselineRun": "20260903T115135Z-31973",
+      "rawPreprocessClean": "16/16",
+      "gccPreprocessedParserClean": "16/16",
+      "clangPreprocessedParserClean": "16/16",
+      "dualOracleCleanParseTus": "16/16",
+      "stageF1": "CLOSED",
+      "regressionsAgainstPrevious": 0,
+      "fullConfigurationSurvey": "20260903T162825Z-96918; 2798/2798 clean; zero diagnosed/unavailable/timeout/panic",
+      "scopeY": "PASS"
     }
   },
   "attributes": {
@@ -2048,6 +2095,35 @@
       "dashboard": "20260903T115135Z-31973; 48/48 clean; zero regressions",
       "fullConfigurationSurvey": "20260903T115834Z-66704; 2760/2798 clean; 38 diagnosed; zero unavailable/timeout/panic"
     },
+    "frontEndProfileClosureAcceptance": {
+      "focused": {
+        "passed": 16,
+        "failed": 0,
+        "command": "CARGO_TARGET_DIR=/private/tmp/c30-y-red-target cargo test -p evocc-cpp --test macro_profile_closure -p evocc-parser --test final_profile_conformance --no-fail-fast -- --nocapture"
+      },
+      "workspaceAtSubject": {
+        "passed": 1326,
+        "failed": 0,
+        "ignored": 1,
+        "command": "CARGO_TARGET_DIR=/private/tmp/c30-y-red-target cargo test --workspace --no-fail-fast --quiet"
+      },
+      "clippy": {
+        "warnings": 0,
+        "command": "CARGO_TARGET_DIR=/private/tmp/c30-y-red-target cargo clippy --workspace --all-targets -- -D warnings"
+      },
+      "format": {
+        "result": "clean",
+        "command": "cargo fmt --all -- --check"
+      },
+      "ruff": {
+        "result": "clean",
+        "command": "ruff check tests/acceptance tools"
+      },
+      "baseLayoutCorpus": "128/128 ORACLE_CONSENSUS; 0 mismatches; run 20260903T161217Z-22412",
+      "attributedLayoutCorpus": "22/22 ORACLE_CONSENSUS; 0 mismatches; run 20260903T161242Z-24439",
+      "dashboard": "20260903T161450Z-34865; 48/48 clean; zero regressions",
+      "fullConfigurationSurvey": "20260903T162825Z-96918; 2798/2798 clean; zero diagnosed/unavailable/timeout/panic"
+    },
     "tokenLocationPreprocessorAcceptance": {
       "workspace": {
         "passed": 1083,
@@ -2095,10 +2171,10 @@
       "fullConfigurationSurvey": "20260902T113345Z-48715; 2445/2798 clean; 353 diagnosed; zero unavailable/timeout/panic"
     },
     "workspace": {
-      "passed": 1263,
+      "passed": 1326,
       "failed": 0,
       "ignored": 1,
-      "command": "CARGO_TARGET_DIR=/private/tmp/c30-w-final-target cargo test --workspace --no-fail-fast (1263/1263; 1 ignored)"
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-y-red-target cargo test --workspace --no-fail-fast --quiet (1326/1326; 1 ignored)"
     },
     "suites": {
       "crates/evocc-parser/tests/checkpoint_allocation_scaling.rs": {
@@ -2434,11 +2510,11 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "b3a2af61169c8332a186e6f30bba1758d8e133af",
-    "path": "/private/tmp/c30-x-replay.yiO23a/repo",
-    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-x-replay.yiO23a/repo; git switch --detach b3a2af61169c8332a186e6f30bba1758d8e133af; test ! -e .git/objects/info/alternates; CARGO_TARGET_DIR=/private/tmp/c30-x-replay.yiO23a/target cargo test --workspace --no-fail-fast --locked --offline",
+    "commit": "76c707782759a64ac95b307879a2eb2d1bb09141",
+    "path": "/private/tmp/c30-y-replay.y8QI0p/repo",
+    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-y-replay.y8QI0p/repo; git switch --detach 76c707782759a64ac95b307879a2eb2d1bb09141; test ! -e .git/objects/info/alternates; CARGO_TARGET_DIR=/private/tmp/c30-y-replay.y8QI0p/target cargo test --workspace --no-fail-fast --locked --offline --quiet",
     "measured": {
-      "passed": 1287,
+      "passed": 1326,
       "failed": 0,
       "ignored": 1,
       "objectsAlternates": "absent",
@@ -2471,7 +2547,10 @@
     "G2-VOLATILE-UNION-COPY: section 10.1.3 requires volatile aggregates to lower as memberwise volatile accesses, but a union has overlapping members and the specification provides no selected-member authority. Volatile union copy therefore remains fail-closed rather than reading every overlapping member.",
     "G2-VOLATILE-BIT-FIELD-COPY: section 10.1.3 does not freeze the access width, mask sequence, or trace granularity for a volatile aggregate member that is a bit-field. That form remains fail-closed.",
     "G2-AGGREGATE-CALL-ABI: the specification requires one semantic copy for by-value arguments and returns but does not freeze the hidden return-destination parameter position or deterministic origin identity for caller-owned aggregate temporaries. The implementation uses an address-based internal ABI with the return destination before mem/world tokens and a high-bit function-ordinal origin namespace; no broader ABI claim is made.",
-    "P9-STRLEN-LITERAL-EDGE: revision 1.9.27 says a string-literal operand folds to the literal's length but does not freeze whether an embedded zero terminates that length or whether prefixed wide, UTF-16, UTF-32 and UTF-8 literals take the constant path. The sealed evidence and positive claim cover ordinary narrow literals without embedded zeros; no broader oracle-conformance claim is made."
+    "P9-STRLEN-LITERAL-EDGE: revision 1.9.27 says a string-literal operand folds to the literal's length but does not freeze whether an embedded zero terminates that length or whether prefixed wide, UTF-16, UTF-32 and UTF-8 literals take the constant path. The sealed evidence and positive claim cover ordinary narrow literals without embedded zeros; no broader oracle-conformance claim is made.",
+    "Y-REGISTER-ADDRESS-DIAGNOSTIC: revision 1.9.53 forbids taking the address of a register object but does not assign the diagnostic code, message, or span.",
+    "Y-FUNCTION-POINTER-ARITHMETIC-EXECUTION: revision 1.9.53 admits scale-one function-pointer arithmetic at the front end, while Function provenance elsewhere permits only offset zero and no execution or lowering boundary is assigned.",
+    "Y-RANGE-DESIGNATOR-PLAN-COST: revision 1.9.53 bounds initializer-plan cost by written entries, while 10.1.12 still says a range designator expands to one Index action per selected element; no range-cost claim is made."
   ],
   "processDeviations": [
     "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (f33b9fd), aligned arguments as constant expressions (79da60e), attribute positions in members, block scope and parameters (b8688e0).",
@@ -2554,6 +2633,9 @@
     "The first X survey invocation correctly refused before enumeration because the dashboard publisher had changed a tracked receipt. The receipt was committed at b3a2af6, and the accepted survey ran on that exact clean subject.",
     "The shared main branch advanced with a middle-end-only commit after the survey subject was sealed. The isolated no-local clone was explicitly detached to b3a2af6 before the locked offline replay, so the replay and survey cover the same front-end state.",
     "The first X base-layout invocation inside the restricted sandbox returned one without evidence. It was rejected; all recorded layout results are the subsequent permission-correct sequential 128/128 and 22/22 ORACLE_CONSENSUS runs.",
-    "The first final X workspace invocation launched no tests because the host linker exhausted disk space while five isolated Cargo target trees coexisted. It is not evidence. Only those task-specific reproducible build directories were removed; source, logs, sealed evidence, and the no-local clone remained. The identical command then completed 1287/1287 with one ignored test."
+    "The first final X workspace invocation launched no tests because the host linker exhausted disk space while five isolated Cargo target trees coexisted. It is not evidence. Only those task-specific reproducible build directories were removed; source, logs, sealed evidence, and the no-local clone remained. The identical command then completed 1287/1287 with one ignored test.",
+    "Scope Y required the measured __builtin_va_list layout. The only canonical TargetDataLayout authority is in crates/evocc-types, so the implementation changes one layout row there rather than duplicating target facts in parser or interpreter. This is an explicit one-line exception to the listed front-end crate boundary; no EvoIR, egraph, equality optimizer, proof, or proof-checker code changed.",
+    "The first scope-Y isolated replay used a temporary runner that moved each test executable away from sibling evo-proofcheck and evo-policy-eval binaries. The resulting missing-binary failures are rejected. The accepted locked offline replay retained the Cargo target topology, removed only com.apple.provenance metadata from isolated build artifacts, and completed 1326/1326 with one ignored test.",
+    "An initial aggregate-zero-fill implementation considered whole-object byte clearing. Review before commit found that this would overwrite untouched union and overlapping subobjects; the accepted initializer plan emits typed zero stores only for omitted subobjects and remains bounded by written entries."
   ]
 }

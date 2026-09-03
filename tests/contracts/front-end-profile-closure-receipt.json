@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "c30.front-end-profile-closure.acceptance.v1",
+  "status": "PASS_ALL_ENUMERATED_TARGET_C_UNITS_CLEAN",
+  "authority": {
+    "baselineCommit": "51488947c6a998e818182c90d7b6715794f0b06b",
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.53",
+      "sha256": "e89cb6148512700a35114f0694325ff84cb2a01f6ce22a5b8447d073aea75592"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "Y",
+      "openingSha256": "1ff07b8ac768207779b7833bf849e7cb6be11e8a54ff934973daed62e25db174",
+      "closureSha256": "7339d9a5b18d09572d7694c47c737606a96bd64c4cf9ef01f8946ea8347cab84",
+      "rulings": [
+        "fullConfigSurveyIsMeasureOnly",
+        "singleLinePreprocessedParseMeasured",
+        "scopeYClosed"
+      ]
+    }
+  },
+  "commits": {
+    "testsOnlyRed": {
+      "commit": "b977a7e453846a1c2e94e755b4e0765b0260200d",
+      "message": "Expose the remaining measured front-end gaps"
+    },
+    "implementation": {
+      "commit": "0c5db21b14ed90ab86148a54f62b748c0a60284e",
+      "message": "Complete the measured GNU front-end semantics"
+    },
+    "dashboardReceipt": {
+      "commit": "76c707782759a64ac95b307879a2eb2d1bb09141",
+      "message": "Publish the measured front-end dashboard"
+    }
+  },
+  "redWindow": {
+    "receipt": {
+      "path": "tests/contracts/front-end-profile-closure-red.json",
+      "sha256": "65fe91719ba4052342a9d1940d11f0372792ad9c1132a3196ee88f0747795ef9"
+    },
+    "focused": {
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-y-red-target cargo test -p evocc-cpp --test macro_profile_closure -p evocc-parser --test final_profile_conformance --no-fail-fast -- --nocapture",
+      "passed": 0,
+      "failed": 16,
+      "ignored": 0,
+      "buildErrors": 0,
+      "unexpectedFailures": 0
+    },
+    "workspace": {
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-y-red-target cargo test --workspace --no-fail-fast",
+      "passed": 1287,
+      "failed": 16,
+      "ignored": 1,
+      "buildErrors": 0,
+      "unexpectedFailures": 0
+    },
+    "declaredCapabilities": 16
+  },
+  "semanticAcceptance": {
+    "focused": {
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-y-red-target cargo test -p evocc-cpp --test macro_profile_closure -p evocc-parser --test final_profile_conformance --no-fail-fast -- --nocapture",
+      "passed": 16,
+      "failed": 0
+    },
+    "implementationFacts": [
+      "Macro argument collection shares the conditional-directive stack, preserves empty paste operands, treats continued block comments as whitespace, implements __VA_OPT__, and accepts keyword-spelled parameter names.",
+      "The -fshort-wchar target profile gives wchar_t and wide literals unsigned-short representation and concatenates narrow and wide literal fragments under the frozen rule.",
+      "register declarations, va_list object layout, wide and va_arg lvalues, parameter qualifier compatibility, function-pointer arithmetic, and the GNU escape character use shared type and place authorities.",
+      "String literal addresses and address/null comparisons compose into static address constants; initializer plans scale with written entries rather than aggregate extent.",
+      "String literals decay before the shared character-pointer signedness conversion in every conversion context."
+    ]
+  },
+  "standardGate": {
+    "workspace": {
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-y-red-target cargo test --workspace --no-fail-fast --quiet",
+      "passed": 1326,
+      "failed": 0,
+      "ignored": 1
+    },
+    "clippy": {
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-y-red-target cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    },
+    "baseLayoutCorpus": {
+      "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "128/128 ORACLE_CONSENSUS",
+      "mismatches": 0,
+      "runId": "20260903T161217Z-22412"
+    },
+    "attributedLayoutCorpus": {
+      "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "22/22 ORACLE_CONSENSUS",
+      "mismatches": 0,
+      "runId": "20260903T161242Z-24439"
+    },
+    "commitReferences": {
+      "command": "python3 tools/check-commit-references.py",
+      "result": "clean"
+    },
+    "diffCheck": "clean"
+  },
+  "acceptanceDiffGuard": {
+    "receipt": "tests/contracts/kernel-dashboard-receipt.json",
+    "receiptSha256": "9732a390a71cfd74f465ab55a327e8cf9d559a5965606607b9eaf6b96e4dd2ca",
+    "previousRun": "20260903T115135Z-31973",
+    "publishedRun": "20260903T161450Z-34865",
+    "subjectCommit": "0c5db21",
+    "rawPreprocess": "16/16 clean",
+    "gccPreprocessedParser": "16/16 clean",
+    "clangPreprocessedParser": "16/16 clean",
+    "dualOracleParse": "16/16 clean",
+    "regressions": 0
+  },
+  "fullConfigurationSurvey": {
+    "receipt": "tests/contracts/full-config-parse-survey-receipt.json",
+    "runId": "20260903T162825Z-96918",
+    "capture": ".evidence/full-config-parse-survey/20260903T162825Z-96918",
+    "commandRecords": 2944,
+    "includedTargetCUnits": 2798,
+    "excluded": 146,
+    "clean": 2798,
+    "diagnosed": 0,
+    "unavailable": 0,
+    "timeout": 0,
+    "panic": 0,
+    "transitionsFromPreviousSurvey": {
+      "clean-to-clean": 2760,
+      "diagnosed-to-clean": 38,
+      "other": 0,
+      "regressions": 0
+    },
+    "atRootFirstDiagnosticTop15": [],
+    "timing": {
+      "parallelism": 4,
+      "medianWallMilliseconds": 2239.497,
+      "maximumWallMilliseconds": 18051.352,
+      "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c"
+    },
+    "scopeDiscipline": "The survey was measure-only. No newly observed issue was fixed."
+  },
+  "singleLinePreprocessedMeasurement": {
+    "runId": "20260903T162252Z",
+    "capture": ".evidence/single-line-preprocessed-parse/20260903T162252Z",
+    "results": [
+      {
+        "unit": "arch/arm64/net/bpf_jit_comp.c",
+        "singleLineParserMilliseconds": 63751.406,
+        "integratedRawPathMilliseconds": 4182.878
+      },
+      {
+        "unit": "net/sunrpc/auth_gss/gss_rpc_xdr.c",
+        "singleLineParserMilliseconds": 68710.022,
+        "integratedRawPathMilliseconds": 4906.1
+      }
+    ],
+    "profile": "4149/4155 samples were in Lexer::make_token -> physical_line_col character counting; repeated prefix scans make multi-megabyte one-line inputs quadratic",
+    "productionFix": false
+  },
+  "isolatedOfflineReplay": {
+    "clone": "/private/tmp/c30-y-replay.y8QI0p/repo",
+    "cloneMode": "git clone --no-local; git switch --detach 76c707782759a64ac95b307879a2eb2d1bb09141",
+    "alternatesFile": "absent",
+    "commit": "76c707782759a64ac95b307879a2eb2d1bb09141",
+    "command": "CARGO_TARGET_DIR=/private/tmp/c30-y-replay.y8QI0p/target cargo test --workspace --no-fail-fast --locked --offline --quiet",
+    "passed": 1326,
+    "failed": 0,
+    "ignored": 1,
+    "returnCode": 0
+  },
+  "scopeException": {
+    "path": "crates/evocc-types/src/lib.rs",
+    "change": "one canonical layout row gives __builtin_va_list size 32 and alignment 8",
+    "reason": "TargetDataLayout is the sole shared layout authority. Duplicating the frozen Y2 layout in parser or interpreter would create a second authority.",
+    "middleEndImpact": "none"
+  },
+  "processDeviations": [
+    "The first isolated replay used a temporary Cargo runner that moved test executables away from sibling evo-proofcheck and evo-policy-eval binaries. Those missing-binary failures are rejected. The direct locked offline replay retained target topology and passed.",
+    "macOS provenance metadata delayed isolated test artifacts. Only com.apple.provenance xattrs on the isolated target directory were removed before the accepted replay; no source or evidence file changed."
+  ],
+  "adjacentSpecificationEdges": [
+    "Y-REGISTER-ADDRESS-DIAGNOSTIC: revision 1.9.53 forbids taking the address of a register object but does not assign its diagnostic code, message, or span.",
+    "Y-FUNCTION-POINTER-ARITHMETIC-EXECUTION: revision 1.9.53 admits scale-one function-pointer arithmetic at the front end, while Function provenance elsewhere permits only offset zero and no execution or lowering boundary is assigned.",
+    "Y-RANGE-DESIGNATOR-PLAN-COST: revision 1.9.53 bounds initializer-plan cost by written entries, while 10.1.12 still describes expansion to one Index action per selected element. No range-cost claim is made."
+  ],
+  "specGap": null,
+  "claimCeiling": "All sixteen declared front-end capabilities pass, the fixed 16-unit dashboard remains 48/48 clean, and all 2,798 enumerated target C translation units complete the integrated raw-source to EvoCPP to parser survey cleanly under the frozen configuration. This is not a general C conformance claim; the diagnostic single-line .i surface remains measured performance debt."
+}

@@ -1,27 +1,24 @@
 {
-  "schemaVersion": 6,
-  "receiptId": "c30.full-configuration-parse-survey.v6",
-  "status": "MEASURED_NO_PANIC_WITH_DIAGNOSTIC_FRONTIER",
+  "schemaVersion": 7,
+  "receiptId": "c30.full-configuration-parse-survey.v7",
+  "status": "PASS_ALL_ENUMERATED_TARGET_C_UNITS_CLEAN",
   "authority": {
     "contract": "tests/contracts/day9-acceptance-contract.json",
-    "openingContractSha256": "3675ece4e94f5dc0c6fd6c7c231ab23c11c3f511a7db418029c3d915390a2733",
-    "closureCommit": "0be70acf130a32cb76fbd1b1840b2452dc25403e",
-    "closureContractSha256": "ab812f0e13b5ccd10c28707cb0056695bc96ff5360b361dda9765086a57f2727",
-    "scope": "X front-end survey residue; F3 measure-only rerun",
+    "openingContractSha256": "1ff07b8ac768207779b7833bf849e7cb6be11e8a54ff934973daed62e25db174",
+    "closureContractSha256": "7339d9a5b18d09572d7694c47c737606a96bd64c4cf9ef01f8946ea8347cab84",
+    "scope": "Y final measured front-end profile closure; F3 measure-only rerun",
     "rulings": [
       "fullConfigSurveyIsMeasureOnly",
-      "scopeXClosed"
+      "singleLinePreprocessedParseMeasured",
+      "scopeYClosed"
     ],
     "specification": "docs/evoir-spec.md",
-    "frontEndAuthorityRevision": "1.9.49",
-    "frontEndAuthoritySha256": "c8c5218cd99c25289e2f57767f33c11657e19cd36e0ea8e5e4f720c03621db2f",
-    "surveyCheckoutRevision": "1.9.50",
-    "surveySpecificationSha256": "8fe15b7a25c4e5bb5b18e7c0701974572da332d25c506e3742ceb19d15cdaa99",
-    "revisionQualification": "Revision 1.9.49 supplies the corrected front-end authority. Revision 1.9.50 changed the equality cost policy only and did not alter the X clauses."
+    "frontEndAuthorityRevision": "1.9.53",
+    "frontEndAuthoritySha256": "e89cb6148512700a35114f0694325ff84cb2a01f6ce22a5b8447d073aea75592"
   },
-  "implementationCommit": "597bb7697de02679e8bf26c2dc6cfe061a1e3992",
-  "subjectCommit": "b3a2af61169c8332a186e6f30bba1758d8e133af",
-  "subjectQualification": "The survey subject is the front-end implementation plus its committed zero-regression dashboard receipt. Later middle-end commits are excluded from this measurement.",
+  "implementationCommit": "0c5db21b14ed90ab86148a54f62b748c0a60284e",
+  "subjectCommit": "76c707782759a64ac95b307879a2eb2d1bb09141",
+  "subjectQualification": "The survey subject is the sixteen-rule front-end implementation plus its committed zero-regression dashboard receipt.",
   "surveyRunChangedProductionOrSpecification": false,
   "harness": {
     "path": "tools/survey-cohort.py",
@@ -39,11 +36,11 @@
     }
   },
   "run": {
-    "id": "20260903T115834Z-66704",
-    "capture": ".evidence/full-config-parse-survey/20260903T115834Z-66704",
+    "id": "20260903T162825Z-96918",
+    "capture": ".evidence/full-config-parse-survey/20260903T162825Z-96918",
     "command": "python3 tools/survey-cohort.py --evocc target/release/evocc --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --jobs 4 --timeout 60",
     "returnCode": 0,
-    "releaseBinarySha256": "59eb644da5f829a1469f103acb54c5d699dd00fc362d80c703575a8a7b8e5522"
+    "releaseBinarySha256": "467a86e97c4055e56719d26197b490cc6484ccc1387d8cc52abf26d6f2503b01"
   },
   "enumeration": {
     "source": ".build/reference/gcc-lane-1/**/*.o.cmd",
@@ -59,8 +56,8 @@
     "evidence": "enumeration.jsonl"
   },
   "classifications": {
-    "clean": 2760,
-    "diagnosed": 38,
+    "clean": 2798,
+    "diagnosed": 0,
     "unavailable": 0,
     "timeout": 0,
     "panic": 0,
@@ -68,82 +65,134 @@
     "evidence": "results.jsonl"
   },
   "previousSurveyComparison": {
-    "runId": "20260903T064414Z-47949",
+    "runId": "20260903T115834Z-66704",
     "sharedTargetUnits": 2798,
-    "command": "jq -n --slurpfile old <previous-results> --slurpfile new <current-results> 'join classifications by unitId and count each old-to-new pair'",
+    "command": "jq -n --slurpfile old <previous-results> --slurpfile new <current-results> 'index by unitId, group old-to-new classifications, and count regressions'",
     "transitions": {
-      "clean-to-clean": 2694,
-      "diagnosed-to-clean": 66,
-      "diagnosed-to-diagnosed": 38
+      "clean-to-clean": 2760,
+      "diagnosed-to-clean": 38
     },
     "otherTransitions": 0,
-    "cleanDelta": 66,
-    "diagnosedDelta": -66,
-    "movedToCleanByOldFinding": [
-      {"finding": "E2102 invalid-projected-lvalue", "units": 31},
-      {"finding": "E1001 expected-declaration", "units": 18},
-      {"finding": "E2102 invalid-update-operands", "units": 8},
-      {"finding": "E2101 expected-modifiable-lvalue", "units": 4},
-      {"finding": "E2001 undeclared-identifier", "units": 2},
-      {"finding": "E2202 invalid-initializer-type", "units": 2},
-      {"finding": "E2208 non-constant-static-initializer", "units": 1}
-    ],
-    "interpretation": "All 2,798 unit identities are shared. Exactly 66 previously diagnosed units become clean; no clean unit regresses and no unit changes into panic, timeout, or unavailable."
+    "cleanDelta": 38,
+    "diagnosedDelta": -38,
+    "regressions": 0,
+    "interpretation": "All 2,798 unit identities are shared. Every one of the 38 previously diagnosed units became clean; no clean unit regressed."
   },
-  "atRootFirstDiagnosticTop15": [
-    {"rank": 1, "finding": "E2208 non-constant-static-initializer", "units": 10, "exampleUnit": "drivers/clk/clk-fixed-factor.c", "exampleRecord": "drivers/clk/.clk-fixed-factor.o.cmd"},
-    {"rank": 2, "finding": "E2202 invalid-initializer-type", "units": 8, "exampleUnit": "drivers/firmware/arm_scmi/clock.c", "exampleRecord": "drivers/firmware/arm_scmi/.clock.o.cmd"},
-    {"rank": 3, "finding": "E2102 invalid-update-operands", "units": 4, "exampleUnit": "arch/arm64/net/bpf_jit_comp.c", "exampleRecord": "arch/arm64/net/.bpf_jit_comp.o.cmd"},
-    {"rank": 4, "finding": "E1003 expected-expression", "units": 3, "exampleUnit": "drivers/usb/host/ohci-hcd.c", "exampleRecord": "drivers/usb/host/.ohci-hcd.o.cmd"},
-    {"rank": 5, "finding": "E0102 unmatched-conditional", "units": 2, "exampleUnit": "kernel/module/main.c", "exampleRecord": "kernel/module/.main.o.cmd"},
-    {"rank": 6, "finding": "E1001 expected-declaration", "units": 2, "exampleUnit": "fs/nfs/callback_xdr.c", "exampleRecord": "fs/nfs/.callback_xdr.o.cmd"},
-    {"rank": 7, "finding": "E2101 expected-modifiable-lvalue", "units": 2, "exampleUnit": "arch/arm64/kernel/fpsimd.c", "exampleRecord": "arch/arm64/kernel/.fpsimd.o.cmd"},
-    {"rank": 8, "finding": "E2205 not-covered-day5", "units": 2, "exampleUnit": "drivers/firmware/efi/libstub/file.c", "exampleRecord": "drivers/firmware/efi/libstub/.file.o.cmd"},
-    {"rank": 9, "finding": "E0110 invalid-token-paste", "units": 1, "exampleUnit": "net/core/filter.c", "exampleRecord": "net/core/.filter.o.cmd"},
-    {"rank": 10, "finding": "E1005 invalid-declarator", "units": 1, "exampleUnit": "kernel/panic.c", "exampleRecord": "kernel/.panic.o.cmd"},
-    {"rank": 11, "finding": "E1006 invalid-character-literal", "units": 1, "exampleUnit": "lib/string_helpers.c", "exampleRecord": "lib/.string_helpers.o.cmd"},
-    {"rank": 12, "finding": "E2001 undeclared-identifier", "units": 1, "exampleUnit": "drivers/firmware/arm_scmi/quirks.c", "exampleRecord": "drivers/firmware/arm_scmi/.quirks.o.cmd"},
-    {"rank": 13, "finding": "E2207 initializer-plan-too-large", "units": 1, "exampleUnit": "kernel/printk/printk.c", "exampleRecord": "kernel/printk/.printk.o.cmd"}
-  ],
+  "atRootFirstDiagnosticTop15": [],
   "timing": {
     "parallelism": 4,
     "perUnitTimeoutSeconds": 60,
-    "medianWallMilliseconds": 2428.757,
-    "maximumWallMilliseconds": 19163.359,
+    "medianWallMilliseconds": 2239.497,
+    "maximumWallMilliseconds": 18051.352,
     "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c",
     "qualification": "Per-process wall time was observed under concurrent host load; it is coarse telemetry, not a benchmark."
   },
+  "singleLinePreprocessedParserMeasurement": {
+    "runId": "20260903T162252Z",
+    "capture": ".evidence/single-line-preprocessed-parse/20260903T162252Z",
+    "command": "python3 .evidence/single-line-preprocessed-parse/20260903T162252Z/measure.py",
+    "results": [
+      {
+        "unit": "arch/arm64/net/bpf_jit_comp.c",
+        "inputBytes": 3371090,
+        "inputLines": 1,
+        "singleLineParserMilliseconds": 63751.406,
+        "integratedRawPathMilliseconds": 4182.878,
+        "returnCode": 0
+      },
+      {
+        "unit": "net/sunrpc/auth_gss/gss_rpc_xdr.c",
+        "inputBytes": 3520324,
+        "inputLines": 1,
+        "singleLineParserMilliseconds": 68710.022,
+        "integratedRawPathMilliseconds": 4906.1,
+        "returnCode": 0
+      }
+    ],
+    "boundedProfile": {
+      "command": "python3 .evidence/single-line-preprocessed-parse/20260903T162252Z/profile.py",
+      "sampleCommand": "/usr/bin/sample <pid> 5 1 -file profile.sample.txt",
+      "samplesInCharacterCount": 4149,
+      "totalSamples": 4155,
+      "finding": "Lexer::make_token calls physical_line_col, which counts characters from the beginning of the line to each token offset. A multi-megabyte one-line input therefore repeatedly scans the same prefix and exhibits quadratic lexical position accounting.",
+      "scope": "measured and reported only; no production fix"
+    },
+    "sealedEvidence": {
+      "resultsSha256": "f3ae575e3b8919273e9341304d81eae5c39c86b7783acbc48afd6b3d22981a23",
+      "profileSha256": "a580f61cfb1ab14efa764e47aca84b61a7e6303b1477f61658bdf1b4594e20d2",
+      "manifestSha256": "b97373a83783b4e18b44bd38ed19f16bc5d5d4b37330a1801678b8b04c40b0f9",
+      "sealSha256": "3a549bf0ed7710a7506016b1847bdbcb4a5a40cc6bc5ed573ac1fe7381ad196f"
+    }
+  },
   "sealedEvidence": {
-    "seal": {"path": ".evidence/full-config-parse-survey/20260903T115834Z-66704/seal.json", "sha256": "cdb6846dc18350f6b9fca476f88895b5ff0b7a5f234e5871c4d28df8ce820d96", "bytes": 704},
-    "capture": {"files": 5603, "bytes": 21853716},
-    "captureManifest": {"path": "capture-files.tsv", "sha256": "dc3c8e8bf4ce4c2be7c3c097f7224ce8197af834e4c0b6a18c6288ff7e5f131d", "bytes": 549121},
-    "summarySha256": "e2dc8c85893070bce6a350e15f392753016ecc29bcb0eed81b7bc0d89fe7784c",
-    "resultsSha256": "8d44a35ed8eb0081362110dd2f2b81beaf50a2201593c0bee279b742cc14d460",
+    "seal": {
+      "path": ".evidence/full-config-parse-survey/20260903T162825Z-96918/seal.json",
+      "sha256": "5854942a9657138578cb1eff9ae96eb90301cae8737ce521fb5f49084ed0da82",
+      "bytes": 704
+    },
+    "capture": {
+      "files": 5603,
+      "bytes": 21498718
+    },
+    "captureManifest": {
+      "path": "capture-files.tsv",
+      "sha256": "25b26eb4ef6cc6d9b620fb141df159789c9649906aba10859289ed919ab8a281",
+      "bytes": 549023
+    },
+    "summarySha256": "29ae2c1548719e330cbd16db1f29bb28725e246104ef95951c85af60261e3e56",
+    "resultsSha256": "40f4b959df1240238e2f114a133d21749c915d0b5bc51ed73d0c5ff328fab732",
     "enumerationSha256": "a87c93dc3a6e77add3db9e93cb74471418e26ddab2207b60a06b8681f6cfd930",
     "argvSha256": "e470edd0562830bc462e870c33963037a577f5d6a1334dde234be75e0029fcab",
-    "verification": "The seal covers 5,603 files and 21,853,716 bytes; all classification and exclusion sums reconcile with the frozen denominators."
+    "verification": "The seal covers 5,603 files and 21,498,718 bytes; all classification and exclusion sums reconcile with the frozen denominators."
   },
   "acceptanceGuard": {
-    "runId": "20260903T115135Z-31973",
-    "previousRunId": "20260903T061659Z-52334",
+    "runId": "20260903T161450Z-34865",
+    "previousRunId": "20260903T115135Z-31973",
+    "subjectCommit": "0c5db21",
     "rawPreprocessClean": "16/16",
     "gccPreprocessedParserClean": "16/16",
     "clangPreprocessedParserClean": "16/16",
-    "dualOracleClean": "16/16",
+    "dualOracleCleanParseTus": "16/16",
     "regressionsAgainstPrevious": 0,
-    "receiptSha256": "9bb76516f8b772797d7451c1d2b68a77ccce756c74a2a24dd073fd32196c9c84",
-    "resultsSha256": "d104172ad372d1dabbc2b5017967685dc09fc321a933343ecf25985c015e27fb"
+    "receiptSha256": "9732a390a71cfd74f465ab55a327e8cf9d559a5965606607b9eaf6b96e4dd2ca",
+    "resultsSha256": "4a39afdd3701ce525905ad1553e1b7685143349b2b15f8475d225c66b4933a90"
   },
   "gates": {
-    "workspace": {"command": "CARGO_TARGET_DIR=/private/tmp/c30-x-final-target cargo test --workspace --no-fail-fast", "passed": 1287, "failed": 0, "ignored": 1},
-    "clippy": {"command": "CARGO_TARGET_DIR=/private/tmp/c30-x-final-target cargo clippy --workspace --all-targets -- -D warnings", "warnings": 0},
-    "format": {"command": "cargo fmt --all -- --check", "result": "clean"},
-    "ruff": {"command": "ruff check tests/acceptance tools", "result": "clean"},
-    "baseLayoutCorpus": "128/128 ORACLE_CONSENSUS; 0 mismatches",
-    "attributedLayoutCorpus": "22/22 ORACLE_CONSENSUS; 0 mismatches",
-    "offlineNoLocalReplay": "1287 passed / 0 failed / 1 ignored at b3a2af61169c8332a186e6f30bba1758d8e133af; objects alternates absent",
+    "workspace": {
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-y-red-target cargo test --workspace --no-fail-fast --quiet",
+      "passed": 1326,
+      "failed": 0,
+      "ignored": 1
+    },
+    "clippy": {
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-y-red-target cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    },
+    "baseLayoutCorpus": "128/128 ORACLE_CONSENSUS; 0 mismatches; run 20260903T161217Z-22412",
+    "attributedLayoutCorpus": "22/22 ORACLE_CONSENSUS; 0 mismatches; run 20260903T161242Z-24439",
+    "offlineNoLocalReplay": "1326 passed / 0 failed / 1 ignored at 76c707782759a64ac95b307879a2eb2d1bb09141; objects alternates absent",
     "diffCheck": "clean"
   },
+  "scopeException": {
+    "path": "crates/evocc-types/src/lib.rs",
+    "change": "one canonical layout row gives __builtin_va_list size 32 and alignment 8",
+    "reason": "The frozen Y2 rule requires va_list layout and layout of containing records. TargetDataLayout in evocc-types is the sole shared layout authority; duplicating the rule in parser or interpreter would create a second authority.",
+    "impact": "The requested front-end crate list omitted evocc-types. No egraph, equality optimizer, proof, proof-checker, EvoIR, or new crate was touched."
+  },
+  "adjacentSpecificationEdges": [
+    "Y-REGISTER-ADDRESS-DIAGNOSTIC: revision 1.9.53 forbids taking the address of a register object but does not assign the diagnostic code, message, or span.",
+    "Y-FUNCTION-POINTER-ARITHMETIC-EXECUTION: revision 1.9.53 admits scale-one function-pointer arithmetic at the front end, while Function provenance elsewhere permits only offset zero and no execution/lowering boundary is assigned.",
+    "Y-RANGE-DESIGNATOR-PLAN-COST: revision 1.9.53 bounds initializer-plan cost by written entries, while 10.1.12 still says a range designator expands to one Index action per selected element. The measured sparse singleton case is compact; no range-cost claim is made."
+  ],
   "specGap": null,
-  "scopeDiscipline": "The survey was measure-only. No problem exposed among the remaining 38 typed-diagnosed units was investigated or fixed in this run."
+  "scopeDiscipline": "The full survey was measure-only. It exposed no remaining diagnostic frontier, so no survey finding was fixed. The single-line parser slowdown was sampled and recorded without a production edit.",
+  "claimCeiling": "All 2,798 enumerated target C translation units complete the integrated raw-source to EvoCPP to parser survey cleanly under this frozen configuration. This is not a general C conformance claim, and the diagnostic single-line .i surface remains performance debt outside the acceptance surface."
 }
