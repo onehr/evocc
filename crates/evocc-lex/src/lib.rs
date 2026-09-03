@@ -504,12 +504,18 @@ struct LineSplice {
     removed_total: usize,
 }
 
+#[derive(Debug, Clone)]
+struct NonAsciiLine {
+    line_index: usize,
+    continuation_offsets: Vec<usize>,
+}
+
 pub struct Lexer<'src> {
     file: FileId,
-    raw_source: &'src str,
     source: Cow<'src, str>,
     line_splices: Vec<LineSplice>,
     raw_line_starts: Vec<usize>,
+    raw_non_ascii_lines: Vec<NonAsciiLine>,
     pos: usize,
     line: u32,
     col: u32,
@@ -576,12 +582,33 @@ impl<'src> Lexer<'src> {
                 .enumerate()
                 .filter_map(|(index, byte)| (*byte == b'\n').then_some(index + 1)),
         );
+        let raw_non_ascii_lines = raw_line_starts
+            .iter()
+            .enumerate()
+            .filter_map(|(line_index, line_start)| {
+                let line_end = raw_line_starts
+                    .get(line_index + 1)
+                    .copied()
+                    .unwrap_or(source.len());
+                let bytes = &source.as_bytes()[*line_start..line_end];
+                (!bytes.is_ascii()).then(|| NonAsciiLine {
+                    line_index,
+                    continuation_offsets: bytes
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(offset, byte)| {
+                            (byte & 0b1100_0000 == 0b1000_0000).then_some(*line_start + offset)
+                        })
+                        .collect(),
+                })
+            })
+            .collect();
         Self {
             file,
-            raw_source: source,
             source: logical_source,
             line_splices,
             raw_line_starts,
+            raw_non_ascii_lines,
             pos: 0,
             line: 1,
             col: 1,
@@ -607,7 +634,16 @@ impl<'src> Lexer<'src> {
             .partition_point(|line_start| *line_start <= physical_offset)
             .saturating_sub(1);
         let line_start = self.raw_line_starts[line_index];
-        let column = self.raw_source[line_start..physical_offset].chars().count() + 1;
+        let continuation_count = self
+            .raw_non_ascii_lines
+            .binary_search_by_key(&line_index, |line| line.line_index)
+            .ok()
+            .map_or(0, |index| {
+                self.raw_non_ascii_lines[index]
+                    .continuation_offsets
+                    .partition_point(|offset| *offset < physical_offset)
+            });
+        let column = physical_offset - line_start - continuation_count + 1;
         ((line_index + 1) as u32, column as u32)
     }
 
@@ -1921,6 +1957,35 @@ mod tests {
             tokens[3].span,
             SourceSpan::new(FileId::new(1), 22, 26, 4, 3),
         );
+    }
+
+    #[test]
+    fn cached_physical_columns_preserve_utf8_character_positions() {
+        let source = "\"\u{03b1}\" tail\nplain end";
+        let lexer = Lexer::new(FileId::new(1), source);
+        assert_eq!(lexer.raw_non_ascii_lines.len(), 1);
+        assert_eq!(lexer.raw_non_ascii_lines[0].line_index, 0);
+
+        let tokens = lex(source);
+        let tail = tokens
+            .iter()
+            .find(|token| matches!(&token.text, TokenText::Decoded(text) if text == "tail"))
+            .expect("tail token");
+        assert_eq!((tail.span.line_start, tail.span.column_start), (1, 5));
+    }
+
+    #[test]
+    fn ascii_lines_need_no_per_character_column_index() {
+        let source = "first second third";
+        let lexer = Lexer::new(FileId::new(1), source);
+        assert!(lexer.raw_non_ascii_lines.is_empty());
+
+        let tokens = lex(source);
+        let third = tokens
+            .iter()
+            .find(|token| matches!(&token.text, TokenText::Decoded(text) if text == "third"))
+            .expect("third token");
+        assert_eq!((third.span.line_start, third.span.column_start), (1, 14));
     }
 
     #[test]
