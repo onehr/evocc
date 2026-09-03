@@ -58,3 +58,29 @@ fn nested_static_array_decay_is_valid_inside_an_aggregate() {
         "static struct descriptor descriptor = { .bits = object.bits };\n",
     ));
 }
+
+const FUNCTION_ADDRESS_PREFIX: &str = concat!(
+    "typedef int (*fn_t)(int); int impl(int value) { return value; } ",
+    "struct table_entry { const void *data; }; ",
+);
+
+#[test]
+fn pointer_comparison_condition_preserves_the_selected_address_constant() {
+    accepts(&format!(
+        "{FUNCTION_ADDRESS_PREFIX} static const struct table_entry entry = {{ .data = (impl == (fn_t)0) ? impl : impl }};\n"
+    ));
+}
+
+#[test]
+fn integer_condition_preserves_the_selected_address_constant() {
+    accepts(&format!(
+        "{FUNCTION_ADDRESS_PREFIX} static const struct table_entry entry = {{ .data = 1 ? impl : (void *)0 }};\n"
+    ));
+}
+
+#[test]
+fn nonnull_function_address_condition_selects_an_address_constant() {
+    accepts(&format!(
+        "{FUNCTION_ADDRESS_PREFIX} static const struct table_entry entry = {{ .data = impl ? impl : 0 }};\n"
+    ));
+}

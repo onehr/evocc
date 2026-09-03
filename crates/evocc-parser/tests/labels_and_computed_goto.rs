@@ -79,6 +79,15 @@ fn computed_goto_composes_with_local_labels_and_loops() {
 }
 
 #[test]
+fn label_addresses_are_static_address_constants_in_range_designators() {
+    accepts(concat!(
+        "int f(int index) { static const void *targets[4] = { ",
+        "[0 ... 3] = &&fallback, [1] = &&one }; goto *targets[index & 3]; ",
+        "one: return 1; fallback: return 0; }\n",
+    ));
+}
+
+#[test]
 fn nonconstant_case_range_bound_keeps_the_typed_diagnostic() {
     rejects(
         "int f(int value, int bound) { switch (value) { case bound ... 3: return 1; } return 0; }\n",

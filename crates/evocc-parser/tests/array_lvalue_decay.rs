@@ -59,3 +59,32 @@ fn string_literals_and_array_of_array_elements_decay() {
 fn compound_literal_arrays_decay() {
     accepts("int *values(void) { return (int[2]){ 1, 2 }; }\n");
 }
+
+#[test]
+fn array_lvalues_decay_inside_conditional_arms() {
+    accepts("int f(void) { return (0 ? \"\" : 0)[0]; }\n");
+    accepts(concat!(
+        "int *choose(int condition, int (*array)[4]) { ",
+        "return condition ? *array : (int *)0; }\n",
+    ));
+}
+
+#[test]
+fn kfifo_get_conditional_array_idiom_is_a_projectable_place() {
+    accepts(concat!(
+        "struct fifo { unsigned int in; unsigned int out; int *type; int buf[4]; }; ",
+        "int kfifo_get_shape(struct fifo *fifo, int *value) { ",
+        "*value = (0 ? ((typeof(fifo->type))(void *)0) : fifo->buf)[fifo->out & 3]; ",
+        "return 1; }\n",
+    ));
+}
+
+#[test]
+fn kfifo_put_conditional_array_idiom_is_a_projectable_place() {
+    accepts(concat!(
+        "struct fifo { unsigned int in; unsigned int out; int *type; int buf[4]; }; ",
+        "int kfifo_put_shape(struct fifo *fifo, int value) { ",
+        "(0 ? ((typeof(fifo->type))(void *)0) : fifo->buf)[fifo->in & 3] = value; ",
+        "return 1; }\n",
+    ));
+}

@@ -84,14 +84,11 @@ fn cohort_label_address_form_fails_closed_without_an_evoir_form() {
 }
 
 #[test]
-fn static_label_address_initializer_keeps_the_typed_diagnostic() {
-    let arena = Arena::default();
-    let diagnostic = parse(
-        "int main(void) { static void *target = &&done; done: return target != 0; }\n",
-        &arena,
-    )
-    .expect_err("a label address is not a static initializer");
-    assert_eq!(diagnostic.code, "E2208");
+fn static_label_address_initializer_reaches_the_typed_execution_boundary() {
+    assert_execution_and_lowering_refuse(concat!(
+        "int main(void) { static void *targets[2] = { [0 ... 1] = &&done }; ",
+        "goto *targets[0]; done: return 0; }\n",
+    ));
 }
 
 #[test]

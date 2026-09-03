@@ -74,3 +74,31 @@ fn incompatible_visible_library_declaration_is_e2927() {
     assert_eq!(error.code, "E2927");
     assert_eq!(error.message, "builtin-library-declaration-incompatible");
 }
+
+#[test]
+fn memmove_uses_its_library_prototype_without_a_visible_declaration() {
+    accepts(&format!(
+        "{SIZE_T} void *move(void *destination, const void *source, size_t count) {{ _Static_assert(__builtin_types_compatible_p(typeof(__builtin_memmove(destination, source, count)), void *), \"memmove\"); return __builtin_memmove(destination, source, count); }}\n"
+    ));
+}
+
+#[test]
+fn prefetch_accepts_one_to_three_operands_and_has_void_type() {
+    accepts(concat!(
+        "void probe(const void *address) { ",
+        "_Static_assert(__builtin_types_compatible_p(typeof(__builtin_prefetch(address)), void), \"one\"); ",
+        "_Static_assert(__builtin_types_compatible_p(typeof(__builtin_prefetch(address, 0)), void), \"two\"); ",
+        "_Static_assert(__builtin_types_compatible_p(typeof(__builtin_prefetch(address, 1, 3)), void), \"three\"); ",
+        "__builtin_prefetch(address); __builtin_prefetch(address, 0); ",
+        "__builtin_prefetch(address, 1, 3); }\n",
+    ));
+}
+
+#[test]
+fn extract_return_address_has_the_measured_void_pointer_type() {
+    accepts(concat!(
+        "void *probe(void *address) { ",
+        "_Static_assert(__builtin_types_compatible_p(typeof(__builtin_extract_return_addr(address)), void *), \"return address\"); ",
+        "return __builtin_extract_return_addr(address); }\n",
+    ));
+}
