@@ -16,6 +16,14 @@
 //! `tests/contracts/day5-kernel-cohort.json`, and refuses any module whose
 //! canonical text digest appears in a denylist file.
 
+pub mod search;
+
+pub use search::{
+    candidate_fitness, held_out_corpus, search_cost_weights, searched_policy, training_corpus,
+    SearchConfig, SearchEvaluation, SearchOutcome, HELD_OUT_RANGE, SEARCHED_POLICY_NAME,
+    TRAINING_RANGE,
+};
+
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
@@ -607,7 +615,7 @@ impl PolicyReport {
     }
 }
 
-fn json_string(value: &str) -> String {
+pub(crate) fn json_string(value: &str) -> String {
     let mut text = String::with_capacity(value.len() + 2);
     text.push('"');
     for character in value.chars() {

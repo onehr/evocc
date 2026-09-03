@@ -8,9 +8,9 @@
 //! over that vector, so the vector form has to reproduce each shipped function
 //! exactly, on every operator, before anything is searched.
 
+use evocc_eqopt::ScalarOperator;
 use evocc_eqopt::{shipped_policies, CostAxis, CostFunction, CostModel, OperatorWeights};
 use evocc_evoir::CmpOp;
-use evocc_eqopt::ScalarOperator;
 
 /// Every operator the P0 e-graph admits, the constant included.
 fn every_operator() -> Vec<ScalarOperator> {
@@ -105,10 +105,7 @@ fn each_shipped_cost_function_equals_its_vector_form_on_every_operator() {
 fn the_shipped_weight_vectors_are_the_recorded_numbers() {
     // add, sub, mul, and, or, xor, shl, lshr, ashr, zext, sext, trunc, icmp
     let expected: [(&str, [u64; 13]); 5] = [
-        (
-            "instruction-count",
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-        ),
+        ("instruction-count", [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
         (
             "weighted-operators",
             [1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
@@ -150,7 +147,10 @@ fn a_weight_vector_renders_and_parses_back() {
         text,
         "add=1,sub=1,mul=5,and=1,or=1,xor=1,shl=0,lshr=1,ashr=1,zext=1,sext=1,trunc=1,icmp=1"
     );
-    assert_eq!(OperatorWeights::parse(&text).expect("a round trip"), weights);
+    assert_eq!(
+        OperatorWeights::parse(&text).expect("a round trip"),
+        weights
+    );
     assert!(OperatorWeights::parse("add=1").is_err());
     assert!(OperatorWeights::parse(&text.replace("mul", "mull")).is_err());
 }

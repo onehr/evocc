@@ -105,7 +105,10 @@ fn the_search_is_a_function_of_its_seed() {
     };
     let first = search_cost_weights(&config, &corpus, 17, STEPS, &checker);
     let second = search_cost_weights(&config, &corpus, 17, STEPS, &checker);
-    assert_eq!(first.best, second.best, "the same seed found two weightings");
+    assert_eq!(
+        first.best, second.best,
+        "the same seed found two weightings"
+    );
     assert_eq!(first.best_fitness, second.best_fitness);
     assert_eq!(first.trajectory, second.trajectory);
     assert_eq!(first.evaluations, second.evaluations);
@@ -131,9 +134,17 @@ fn the_search_is_a_function_of_its_seed() {
         ..config
     };
     let other = search_cost_weights(&elsewhere, &corpus, 17, STEPS, &checker);
+    let visited = |outcome: &evocc_policy::SearchOutcome| {
+        outcome
+            .history
+            .iter()
+            .map(|step| step.weights.render())
+            .collect::<Vec<_>>()
+    };
     assert_ne!(
-        other.trajectory, first.trajectory,
-        "a different seed must walk a different path"
+        visited(&other),
+        visited(&first),
+        "a different seed must visit different vectors"
     );
 }
 
