@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.2** | **Authoritative reference** | **2026-09-04**
+**Revision 0.3** | **Authoritative reference** | **2026-09-04**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -185,6 +185,8 @@ second successor out as the fall-through where block order allows.
 | `ret rs...` | return with the result registers listed |
 | `brk #imm16` | trap; the immediate is the decimal part of the EvoIR diagnostic the trap or assumption reason carries (`trap.unreachable_reached` is `brk #3024`), which fits sixteen bits and is an authority both documents share |
 
+A conditional terminator does not name its `flags` operand: the parser recovers it from the instruction that Section 2's adjacency rule requires to precede it, while `cset` and `csel` name theirs. This asymmetry is intended (revision 0.3).
+
 Condition codes used: `eq`, `ne`, `lt`, `le`, `gt`, `ge` (signed), `lo`,
 `ls`, `hi`, `hs` (unsigned), `vs`, `vc` (signed overflow set / clear),
 `cs`, `cc` (carry).
@@ -210,12 +212,12 @@ in the table is refused with the diagnostic named in Section 10.
 | `const.bits<N>` | `mov #imm` |
 | `add`, `sub`, `mul`, `and`, `or`, `xor`, `shl`, `lshr`, `ashr` on `bits<N>`, `N <= 64` | the operation, with the extensions of Section 3 |
 | `sdiv`, `udiv`, `srem`, `urem` | `sdiv`/`udiv`, remainders by `msub`; `divisor_nonzero` and `signed_div_rem_no_overflow` have been asserted before, which makes the machine's answers for the excluded operands unobservable |
-| `divisor_nonzero %d` | `cmp %d, #0` then `cset ne` |
-| `signed_div_rem_no_overflow %a, %b` | `cmp %a, #INT_MIN` (materialized), `cset ne` into `%p`; `cmp %b, #-1`, `cset ne` into `%q`; `orr %p, %q` |
-| `signed_add_defined %a, %b` / `signed_sub_defined` | `adds`/`subs` into a scratch, then `cset vc` |
-| `signed_mul_defined %a, %b` | 32-bit: `smull` the sign-extended operands, compare with the sign extension of its low 32 bits, `cset eq`; 64-bit: `mul` and `smulh`, compare the high word with `asr` of the low word by 63, `cset eq`; narrower widths sign-extend to 32 first |
-| `shift_count_defined.<s> %x, %amt` | zero-extend `%amt` per Section 3, `cmp` with `#N`, `cset lo` |
-| `signed_shl_defined.<s> %x, %amt` | `shift_count_defined` as above, and `(x << amt) >> amt == x` with an arithmetic right shift, `and` of the two `bits<1>` |
+| `divisor_nonzero %d` | zero-extend `%d` per Section 3, `cmp %d, #0` then `cset ne` |
+| `signed_div_rem_no_overflow %a, %b` | sign-extend both per Section 3; `cmp %a, #INT_MIN_N` (the minimum of `bits<N>`, materialized), `cset ne` into `%p`; `cmp %b, #-1`, `cset ne` into `%q`; `orr %p, %q` |
+| `signed_add_defined %a, %b` / `signed_sub_defined` | at the register width: `adds`/`subs` into a scratch, then `cset vc`; below it: sign-extend both operands, `add`/`sub` at the register width, and compare the result with the sign extension of its low `N` bits (`sbfx` then `cmp`, `cset eq`), because the `v` flag reports the register and never the source width (revision 0.3; `bits<3>`: 3 + 3 is 6, outside -4..3, so 0) |
+| `signed_mul_defined %a, %b` | 32-bit: `smull` the sign-extended operands, compare with the sign extension of its low 32 bits, `cset eq`; 64-bit: `mul` and `smulh`, compare the high word with `asr` of the low word by 63, `cset eq`; any other `N` sign-extends to the next register width and compares the product with the sign extension of its low `N` bits (revision 0.3) |
+| `shift_count_defined.<s> %x, %amt` | extend `%amt` by its declared signedness `<s>` to the register width, `cmp` with `#N`, `cset lo`: a sign-extended negative amount exceeds every bound up to 64 as an unsigned quantity, so one unsigned comparison serves both signednesses (revision 0.3; zero-extending a signed `bits<1>` amount of 1 had answered 1 where EvoIR decodes -1 and answers 0) |
+| `signed_shl_defined.<s> %x, %amt` | the conjunction of four `bits<1>`: `shift_count_defined` as above; `%x` non-negative (`cmp` with `#0` after sign extension, `cset ge`); the round trip `(x << amt) >> amt == x` with an arithmetic right shift at the register width; and, below the register width, the shifted result representable in signed `bits<N>` (compare with the sign extension of its low `N` bits), as EvoIR 3.3.1 defines the predicate (revision 0.3) |
 | `sext`, `zext`, `trunc` | the extension of Section 3, or nothing for `trunc` |
 | `icmp.*` on integers | the extensions of Section 3, `cmp`, then `cset`; when the only consumer is a `cond_br` in the same block, `cmp` then `b.cond` with no `cset` |
 | `icmp.eq`/`ne` on pointers | the same, 64-bit, no extension |
@@ -395,6 +397,7 @@ block           := "^" ident "(" params ")" ":" newline (indent instruction newl
 params          := [ "%v" int ":" class ("," " " "%v" int ":" class)* ]
 class           := "gpr32" | "gpr64" | "flags"
 instruction     := "%v" int ":" class " = " op operands
+                 | "%v" int ":" class ", %v" int ":flags = " ("adds"|"subs") ".w"|".x" operands   ; a register and the flags
                  | "%v" int ":" class " = " op ".w"|".x" operands        ; width suffix on two-width forms
                  | "%v" int ":" class " = frame.slot [origin=" ident ", size=" int ", align=" int "]"
                  | "mem.copy [" reg "], [" reg "], #" int ", #" int
@@ -437,5 +440,6 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.3 | 2026-09-04 | Second implementation: 20,000 of 20,000 generated programs lowered and judged by the three-lane gate with 0 mismatches. Rules the executor's five predicate-row findings: overflow flags report the register, so narrower widths compare with the sign extension of the low N bits (add, sub, mul); shift amounts extend by their declared signedness; the signed left-shift predicate conjoins count, sign, round trip and representability; the division predicates extend first; the grammar spells a two-definition adds/subs and states the conditional-terminator asymmetry. |
 | 0.2 | 2026-09-04 | Rules the thirteen stops of the first implementation: lowering rows for every UB predicate; `icmp.eq`/`ne` moved to the zero-extended row after a measured counterexample; `frame.slot` as a per-execution pseudo-form reconciling `alloca` with EvoIR 3.7; `ldr.p`/`ldr.pf`/`str.p` for provenance; a grammar for the textual form with the executor's spellings (symbols, the volatile marker, explicit call registers, two-successor conditionals, spelled entry labels); the `ub.assume` continuation-block construction; `brk` immediates as the diagnostic's decimal part; shift amounts and `ptr.offset` wrapping as obligation-covered differences; `mem.copy` as a pseudo-form transferring initializedness and provenance; block arguments kept until the Section 7 pass; up to eight results in `x0`..`x7` for the machine lane; the five unreachable codes named as such. |
 | 0.1 | 2026-09-04 | First statement: purpose, register classes, sub-width representation, the AArch64 scalar instruction subset with executable semantics, the lowering table with fail-closed boundaries, the Darwin arm64 scalar calling convention and frame layout, out-of-SSA and linear scan, emission, three verification instruments, and the `E4xxx` diagnostics. |
