@@ -347,8 +347,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__builtin_has_attribute") => TokenKind::BuiltinHasAttribute,
                     Some("__builtin_strlen") => TokenKind::BuiltinStrlen,
                     Some(
-                        "__builtin_memset" | "__builtin_memcpy" | "__builtin_memcmp"
-                        | "__builtin_strcmp" | "__builtin_strncmp" | "__builtin_alloca",
+                        "__builtin_memset"
+                        | "__builtin_memcpy"
+                        | "__builtin_memcmp"
+                        | "__builtin_strcmp"
+                        | "__builtin_strncmp"
+                        | "__builtin_alloca"
+                        | "__builtin_memmove"
+                        | "__builtin_prefetch"
+                        | "__builtin_extract_return_addr",
                     ) => TokenKind::BuiltinLibrary,
                     Some(
                         "__builtin_isdigit" | "__builtin_isalpha" | "__builtin_isspace"
@@ -2361,7 +2368,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return true;
         }
         match expression {
-            CHirExpr::StringLit(_, _) => true,
+            CHirExpr::StringLit(_, _) | CHirExpr::LabelAddress { .. } => true,
             CHirExpr::CompoundLit(_, _, _) => self.current_scope == self.symbols.file_scope(),
             CHirExpr::Ident { symbol, .. } => self.symbol_decays_to_static_address(*symbol),
             CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => self.lvalue_has_static_address(operand),
@@ -2389,12 +2396,34 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 true
             }
             CHirExpr::Ternary(condition, when_true, when_false, _) => self
-                .constant_arithmetic_truth(condition)
+                .static_initializer_condition_truth(condition)
                 .is_some_and(|condition| {
                     self.is_static_address_constant(if condition { when_true } else { when_false })
                 }),
             _ => false,
         }
+    }
+
+    fn static_initializer_condition_truth(&self, expression: &CHirExpr<'_>) -> Option<bool> {
+        if let Some(truth) = self.constant_arithmetic_truth(expression) {
+            return Some(truth);
+        }
+        if self.is_null_pointer_constant(expression) {
+            return Some(false);
+        }
+        if self.is_static_address_constant(expression) {
+            return Some(true);
+        }
+        let CHirExpr::Binary(BinaryOp::Eq | BinaryOp::Ne, left, right, _) = expression else {
+            return None;
+        };
+        let left_null = self.is_null_pointer_constant(left);
+        let right_null = self.is_null_pointer_constant(right);
+        let one_null_and_one_nonnull_address =
+            (left_null && self.is_static_address_constant(right) && !right_null)
+                || (right_null && self.is_static_address_constant(left) && !left_null);
+        one_null_and_one_nonnull_address
+            .then_some(matches!(expression, CHirExpr::Binary(BinaryOp::Ne, ..)))
     }
 
     fn address_constant_through_integer_cast(&self, expression: &CHirExpr<'_>) -> bool {
@@ -7402,7 +7431,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     /// The canonical pointer descriptor of an expression used as a place root.
-    fn pointer_root_descriptor(&self, expression: &CHirExpr<'arena>) -> Option<PointerTypeDesc> {
+    fn pointer_root_descriptor(
+        &mut self,
+        expression: &CHirExpr<'arena>,
+    ) -> Option<PointerTypeDesc> {
+        if let Some(InferredExpressionType {
+            ty: InferredType::StringPointer(prefix),
+            ..
+        }) = self.converted_expression_type(expression)
+        {
+            let element = self.string_element_type(prefix);
+            return PointerTypeDesc::to_object(&self.types, element);
+        }
         PointerTypeDesc::from_expression(&self.symbols, &self.types, expression).ok()
     }
 
@@ -8377,11 +8417,29 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         target: InferredPointerType,
         source: InferredPointerType,
     ) -> bool {
-        self.pointer_conversion_types_compatible(target, source)
-            && qualifiers_include(
-                target.qualifiers.compatibility(),
-                source.qualifiers.compatibility(),
-            )
+        self.function_and_void_pointer_pair(target, source)
+            || (self.pointer_conversion_types_compatible(target, source)
+                && qualifiers_include(
+                    target.qualifiers.compatibility(),
+                    source.qualifiers.compatibility(),
+                ))
+    }
+
+    fn function_and_void_pointer_pair(
+        &self,
+        left: InferredPointerType,
+        right: InferredPointerType,
+    ) -> bool {
+        let (Some(left), Some(right)) =
+            (self.types.get(left.pointee), self.types.get(right.pointee))
+        else {
+            return false;
+        };
+        matches!(
+            (&left.kind, &right.kind),
+            (TypeKind::Function { .. }, TypeKind::Void)
+                | (TypeKind::Void, TypeKind::Function { .. })
+        )
     }
 
     fn pointer_conversion_types_compatible(
@@ -8492,15 +8550,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let CHirExpr::Cast(target, operand, _) = expression else {
             return false;
         };
-        let Some(TypeKind::Pointer(pointee)) = self.types.get(*target).map(|ty| &ty.kind) else {
+        let Some(TypeKind::Pointer(_)) = self.types.get(*target).map(|ty| &ty.kind) else {
             return false;
         };
-        if !matches!(
-            self.types.get(*pointee).map(|ty| &ty.kind),
-            Some(TypeKind::Void)
-        ) {
-            return false;
-        }
         self.integer_expression_type(operand).is_ok()
             && self
                 .eval_integer_constant_expression(operand)
@@ -9405,14 +9457,25 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
         let (external_name, return_ty, parameter_types) =
             self.builtin_library_prototype(&builtin, keyword.span)?;
-        if arguments.len() != parameter_types.len() {
+        let variable_prefetch_arity = builtin == "__builtin_prefetch";
+        let valid_arity = if variable_prefetch_arity {
+            (1..=3).contains(&arguments.len())
+        } else {
+            arguments.len() == parameter_types.len()
+        };
+        if !valid_arity {
             self.report("E2909", "builtin-arity", keyword.span);
             return None;
         }
+        let validation_types = if variable_prefetch_arity {
+            &parameter_types[..arguments.len()]
+        } else {
+            parameter_types.as_slice()
+        };
         if let Some(invalid) =
             arguments
                 .iter()
-                .zip(&parameter_types)
+                .zip(validation_types)
                 .find_map(|(argument, parameter)| {
                     (self.assignment_constraint(AssignmentOp::Simple, *parameter, argument)
                         == UpdateConstraint::Invalid)
@@ -9426,8 +9489,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             TypeKind::Function {
                 return_type: return_ty,
                 parameters: FunctionParameters::Prototype {
-                    types: parameter_types,
-                    variadic: false,
+                    types: if variable_prefetch_arity {
+                        vec![parameter_types[0]]
+                    } else {
+                        parameter_types
+                    },
+                    variadic: variable_prefetch_arity,
                 },
             },
             Qualifiers::default(),
@@ -9482,6 +9549,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 void_pointer,
                 vec![void_pointer, const_void_pointer, size_ty],
             ),
+            "__builtin_memmove" => (
+                "memmove",
+                void_pointer,
+                vec![void_pointer, const_void_pointer, size_ty],
+            ),
             "__builtin_memcmp" => (
                 "memcmp",
                 int_ty,
@@ -9498,6 +9570,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 vec![const_char_pointer, const_char_pointer, size_ty],
             ),
             "__builtin_strlen" => ("strlen", size_ty, vec![const_char_pointer]),
+            "__builtin_prefetch" => (
+                "__builtin_prefetch",
+                void_ty,
+                vec![const_void_pointer, int_ty, int_ty],
+            ),
+            "__builtin_extract_return_addr" => (
+                "__builtin_extract_return_addr",
+                void_pointer,
+                vec![void_pointer],
+            ),
             "__builtin_alloca" => ("alloca", void_pointer, vec![size_ty]),
             "__builtin_isdigit" => ("isdigit", int_ty, vec![int_ty]),
             "__builtin_isalpha" => ("isalpha", int_ty, vec![int_ty]),

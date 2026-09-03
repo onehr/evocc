@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.50** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.51** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -4262,13 +4262,24 @@ instruction; the replacement root's selected `source=before` node and selected
 `source=derived` nodes emit in extraction order at the original root's position.
 The root class must be the final class of the original root node.
 
-The checker recomputes the region-relative cost from Section 8. A seed, a
-`const` node, or a non-root before-witness reuse costs zero. The replacement
-root's non-constant before node and every non-constant derived node cost one plus
-the sum of selected child costs; repeated child positions are counted repeatedly.
-Giving constants zero cost is semantic, not cosmetic: otherwise
-`icmp.eq x, x` and its `true` replacement both cost one, making every identity
-comparison rule in the reviewed registry unreachable under strict improvement.
+The checker does not judge cost (revision 1.9.51; before it the checker
+recomputed the default cost and refused a region that was not a strict
+improvement under it). It verifies that every replacement is equivalent by
+the recorded events, that the extracted root is not the original root node
+itself (a region must change something), and every structural rule of this
+section. Whether the replacement is an improvement is decided by the
+producer's policy (7.5 "Cost is a policy") and is producer conformance the
+checker cannot observe, like the ceiling-stop rule of 8.11. The default
+policy's cost, for the record: a seed, a `const` node, or a non-root
+before-witness reuse costs zero; the replacement root's non-constant before
+node and every non-constant derived node cost one plus the sum of selected
+child costs, repeated child positions counted repeatedly; constants cost
+zero so that `icmp.eq x, x` and its `true` replacement do not tie. Measured
+at revision 1.9.50: under the P0 registries every replacement is an alias or
+a constant, so two all-positive cost functions optimize 0 of 1,000 programs
+differently, and cost discriminates only by assigning zero; the fourth
+question's search space opens only when a right-hand side may emit an
+instruction, which the registry below admits.
 A region block is
 valid only when the extracted root has strictly lower cost than the original
 witness root. Ties retain the original and therefore produce no region block.
@@ -4577,6 +4588,70 @@ p1_231_known_sext sext(?a) => known_const when fully_known
 p1_232_known_trunc trunc(?a) => known_const when fully_known
 ```
 
+**Reviewed registry `p0.scalar.v4`.** This registry is normative for `evp2`
+certificates and includes every rule of `p0.scalar.v3` unchanged, followed by
+the first emitting rules: the three spellings of doubling are one class, and
+which of them survives is the policy's choice. Its digest is `1a5391603386e18e18bfb1b2fc61985c9eb252c6e65bcb3259104bd49b2a9d74`, computed
+as for the earlier registries:
+
+```text
+p0_001_add_zero_rhs add(?x,const_like(?x,0)) => ?x when true
+p0_002_add_zero_lhs add(const_like(?x,0),?x) => ?x when true
+p0_003_mul_one_rhs mul(?x,const_like(?x,1)) => ?x when true
+p0_004_mul_one_lhs mul(const_like(?x,1),?x) => ?x when true
+p0_005_and_zero_rhs and(?x,const_like(?x,0)) => const_like(?x,0) when true
+p0_006_and_zero_lhs and(const_like(?x,0),?x) => const_like(?x,0) when true
+p0_007_or_zero_rhs or(?x,const_like(?x,0)) => ?x when true
+p0_008_or_zero_lhs or(const_like(?x,0),?x) => ?x when true
+p0_009_double_neg sub(const_like(?x,0),sub(const_like(?x,0),?x)) => ?x when true
+p0_010_icmp_eq_self icmp.eq(?x,?x) => bool(1) when true
+p0_011_icmp_ne_self icmp.ne(?x,?x) => bool(0) when true
+p0_012_icmp_slt_self icmp.slt(?x,?x) => bool(0) when true
+p0_013_icmp_sle_self icmp.sle(?x,?x) => bool(1) when true
+p0_014_icmp_ult_self icmp.ult(?x,?x) => bool(0) when true
+p0_015_icmp_ule_self icmp.ule(?x,?x) => bool(1) when true
+p0_100_fold_add add(?a,?b) => fold.add(?a,?b) when all_const
+p0_101_fold_sub sub(?a,?b) => fold.sub(?a,?b) when all_const
+p0_102_fold_mul mul(?a,?b) => fold.mul(?a,?b) when all_const
+p0_103_fold_and and(?a,?b) => fold.and(?a,?b) when all_const
+p0_104_fold_or or(?a,?b) => fold.or(?a,?b) when all_const
+p0_105_fold_xor xor(?a,?b) => fold.xor(?a,?b) when all_const
+p0_106_fold_icmp_eq icmp.eq(?a,?b) => fold.icmp.eq(?a,?b) when all_const
+p0_107_fold_icmp_ne icmp.ne(?a,?b) => fold.icmp.ne(?a,?b) when all_const
+p0_108_fold_icmp_slt icmp.slt(?a,?b) => fold.icmp.slt(?a,?b) when all_const
+p0_109_fold_icmp_sle icmp.sle(?a,?b) => fold.icmp.sle(?a,?b) when all_const
+p0_110_fold_icmp_ult icmp.ult(?a,?b) => fold.icmp.ult(?a,?b) when all_const
+p0_111_fold_icmp_ule icmp.ule(?a,?b) => fold.icmp.ule(?a,?b) when all_const
+p1_200_known_and and(?a,?b) => known_const when fully_known
+p1_201_known_or or(?a,?b) => known_const when fully_known
+p1_202_known_xor xor(?a,?b) => known_const when fully_known
+p1_203_known_add add(?a,?b) => known_const when fully_known
+p1_204_known_sub sub(?a,?b) => known_const when fully_known
+p1_205_known_mul mul(?a,?b) => known_const when fully_known
+p1_210_known_icmp_eq icmp.eq(?a,?b) => known_const when fully_known
+p1_211_known_icmp_ne icmp.ne(?a,?b) => known_const when fully_known
+p1_212_known_icmp_slt icmp.slt(?a,?b) => known_const when fully_known
+p1_213_known_icmp_sle icmp.sle(?a,?b) => known_const when fully_known
+p1_214_known_icmp_ult icmp.ult(?a,?b) => known_const when fully_known
+p1_215_known_icmp_ule icmp.ule(?a,?b) => known_const when fully_known
+p1_220_and_cover_rhs and(?x,?m) => ?x when covers(?m,?x)
+p1_221_and_cover_lhs and(?m,?x) => ?x when covers(?m,?x)
+p1_222_or_cover_rhs or(?x,?m) => ?m when covers(?m,?x)
+p1_223_or_cover_lhs or(?m,?x) => ?m when covers(?m,?x)
+p1_224_xor_known_zero_rhs xor(?x,?z) => ?x when known_zero(?z)
+p1_225_xor_known_zero_lhs xor(?z,?x) => ?x when known_zero(?z)
+p1_206_known_shl shl(?a,?k) => known_const when fully_known
+p1_207_known_lshr lshr(?a,?k) => known_const when fully_known
+p1_208_known_ashr ashr(?a,?k) => known_const when fully_known
+p1_230_known_zext zext(?a) => known_const when fully_known
+p1_231_known_sext sext(?a) => known_const when fully_known
+p1_232_known_trunc trunc(?a) => known_const when fully_known
+p2_300_mul_two_rhs mul(?x,const_like(?x,2)) => add(?x,?x) when width_min(?x,2)
+p2_301_mul_two_lhs mul(const_like(?x,2),?x) => add(?x,?x) when width_min(?x,2)
+p2_302_add_self_shl add(?x,?x) => shl(?x,const_like(?x,1)) when width_min(?x,2)
+p2_303_shl_one_add shl(?x,const_like(?x,1)) => add(?x,?x) when width_min(?x,2)
+```
+
 **Registries and revisions.** A registry is admissible only when this
 specification prints its rule block and digest; a producer and a checker may
 not agree on a registry between themselves, because a certificate checked
@@ -4584,7 +4659,7 @@ against rules it supplied establishes only that its merges follow from its own
 claims. A revision includes every rule of the registry it revises, unchanged
 and in the same order, before its new rules, so a rule id keeps its meaning
 across revisions. `evp1` accepts `p0.scalar.v1` only; `evp2` accepts
-`p0.scalar.v1`, `p0.scalar.v2` and `p0.scalar.v3`. Defined at revision 1.9.40 after the
+`p0.scalar.v1` through `p0.scalar.v4`. Defined at revision 1.9.40 after the
 randomized gate stopped for want of a procedure.
 
 **Which registry a certificate names, and rule order within a tier.** A
@@ -4637,6 +4712,17 @@ On a left-hand side `const_like` only matches a node already present in the
 before witness closure. On a right-hand side it may identify such a node or a
 `source=derived` node whose payload the checker recomputes. `bool` and `fold.*`
 are right-hand builders and therefore require a `node:` proof reference.
+
+**Emitting right-hand sides.** A right-hand side may be an operator applied to
+bound variables and `const_like` terms, such as `add(?x,?x)` or
+`shl(?x,const_like(?x,1))`. The producer emits it as a `source=derived` node
+whose operator, sort and children the checker reconstructs from the pattern
+and the recorded bindings, in a class of its own that the rewrite then unions
+with the left-hand node's class; it requires a `node:` proof reference like
+every builder, and its fact under 8.10 is computed like any node's. The side
+condition `width_min(?x,K)` holds when the sort of `?x` is `bits<N>` with
+`N >= K`; it records no premise. Whether the emitted node is extracted is the
+policy's decision (7.5). Defined at revision 1.9.51.
 
 `fold.add`, `fold.sub`, and `fold.mul` compute modulo `2^N`; the bitwise folds
 operate on the exact `N` raw bits. Equality and unsigned comparisons use those
@@ -4740,6 +4826,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.51 | 2026-09-03 | The checker stops judging cost: strict improvement is producer conformance under the declared policy (11.3), after the policy harness measured that no all-positive cost function can differ from another in the P0 profile. Defines emitting right-hand sides and `width_min` (11.6) and prints `p0.scalar.v4` with the doubling rules `mul(x,2) = add(x,x) = shl(x,1)`, the first rewrites whose extraction is a genuine choice. |
 | 1.9.50 | 2026-09-03 | States that extraction cost is a producer policy the checker does not verify, so cost functions and schedules may be replaced and measured without a format change (7.5). |
 | 1.9.49 | 2026-09-03 | Corrects the 10.1.17 label-address entry, which had denied address-constant status without a probe and contradicted the measured rule of 1.9.48; the executor stopped on the contradiction. |
 | 1.9.48 | 2026-09-03 | Fourth full-configuration survey (2,694 of 2,798 clean). Defines the `_Pragma` operator through expansion and the whitespace flag of a substituted argument (10.4); qualified `void *` to function pointer, conditional and label address constants, and three more library builtins (10.1.14, 10.1.18). |
