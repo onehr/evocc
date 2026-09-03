@@ -339,8 +339,29 @@ fn the_campaign_measures_its_duplicates() {
             }
         }
     }
+    // A region with no rewrite at all is a duplicate proved by congruence and
+    // nothing else, and its root leaves the output, so the count of them is the
+    // count of instructions this buys.
+    let mut regions = 0_u64;
+    let mut congruence_only = 0_u64;
+    for seed in 0..256_u64 {
+        let module = generate_module(seed, GeneratorConfig::default());
+        let outcome = optimize_scalar_module_with_evp1(&module, ScalarEqBudget::new(20_000, 256));
+        for region in &outcome.certificate.regions {
+            regions += 1;
+            if !region
+                .events
+                .iter()
+                .any(|event| matches!(event, evocc_proof::EvpEvent::Rewrite(_)))
+            {
+                congruence_only += 1;
+            }
+        }
+    }
     println!("duplicateInstructions={total}");
     println!("duplicatesWhoseTwinIsInTheirClosure={in_closure}");
+    println!("regions={regions}");
+    println!("congruenceOnlyRegions={congruence_only}");
     assert!(
         total > 0,
         "the generator must produce duplicates, or this measures nothing"
