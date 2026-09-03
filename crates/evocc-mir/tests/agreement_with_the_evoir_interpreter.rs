@@ -93,14 +93,21 @@ func @main(%arg0: bits<13>, %arg1: bits<13>, %arg2: mem<all>, %arg3: world) -> (
     effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<13>, %v1: bits<13>, %v2: mem<all>, %v3: world):
+    %v8 = const.bits<13> 7
+    %v9 = and.bits<13> %v0, %v8
+    %v10 = and.bits<13> %v1, %v8
     %v4 = add.bits<13> %v0, %v1
-    %v5 = lshr.bits<13> %v4, %v1
-    %v6 = ashr.bits<13> %v5, %v0
+    %v5 = lshr.bits<13> %v4, %v10
+    %v6 = ashr.bits<13> %v5, %v9
     %v7 = mul.bits<13> %v6, %v1
     ret %v7, %v2, %v3
 }
 ";
 
+// Every shift amount is masked below the shifted width first, which is what
+// EvoIR Section 3.4 requires of "a valid C lowering": the raw shift is total,
+// so an unguarded amount at or above the width means zero there and a
+// wrap-around count on the machine.
 #[test]
 fn narrow_widths_agree() {
     for (left, right) in [(0_u64, 0_u64), (1, 2), (0x1fff, 3), (0x1000, 12), (5, 7)] {

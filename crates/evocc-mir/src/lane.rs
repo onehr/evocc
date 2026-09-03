@@ -40,6 +40,30 @@ fn mask(width: u16) -> u64 {
     }
 }
 
+/// The bits above a narrow argument's value.
+///
+/// Section 6: "a `bits<N>` argument with `N < 64` is passed in the low bits of
+/// its register with the upper bits unspecified, and the callee applies
+/// Section 3 before reading it as anything but a low-`N`-bit value." Passing
+/// zeroes there would make an unspecified bit read like a specified one and
+/// would hide exactly the defect Section 9.1's comparison exists to find, so
+/// the bits above `N` are filled with a pattern derived from the argument's
+/// position and width: deterministic, so the lane is reproducible, and rarely
+/// zero, so a lowering that reads them answers differently from EvoIR.
+fn unspecified_fill(index: usize, bits: u16) -> u64 {
+    let register: u16 = if bits <= 32 { 32 } else { 64 };
+    if bits >= register {
+        return 0;
+    }
+    let mut mixed = (index as u64)
+        .wrapping_add(1)
+        .wrapping_mul(0x9e37_79b9_7f4a_7c15)
+        ^ u64::from(bits).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    mixed ^= mixed >> 31;
+    mixed |= 1;
+    (mixed & mask(register - bits)) << bits
+}
+
 /// Execute `entry` in a lowered module on the EvoIR entry arguments.
 ///
 /// `result_types` are the entry function's ordinary EvoIR result types, memory
@@ -54,12 +78,15 @@ pub fn observe_entry(
     limits: MirLimits,
 ) -> Result<MirRun, MirError> {
     let mut arguments = Vec::new();
-    for value in entry_args
+    for (index, value) in entry_args
         .iter()
         .filter(|value| is_register_type(&value.ty))
+        .enumerate()
     {
         match value.ty {
-            EvoIRType::Bits(_) => arguments.push(MirValue::Int(value.raw_bits)),
+            EvoIRType::Bits(width) => arguments.push(MirValue::Int(
+                (value.raw_bits & mask(width)) | unspecified_fill(index, width),
+            )),
             ref other => {
                 return Err(MirError::Invalid {
                     detail: format!("no register spelling for an entry argument of type {other:?}"),

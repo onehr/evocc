@@ -467,3 +467,72 @@ fn a_frame_slot_is_a_fresh_object_on_every_execution() {
         .result;
     assert_eq!(bits(result), 5, "the second slot is a different object");
 }
+
+#[test]
+fn an_unmasked_comparison_reads_the_bits_above_a_narrow_value() {
+    // The counterexample to Section 3's first row. It lists icmp.eq and icmp.ne
+    // among the operations that need no inserted extension, "the low N bits of
+    // the result depend only on the low N bits of the operands". Two bits<3>
+    // values whose low three bits are both 0b101 compare unequal under a plain
+    // cmp.w, because trunc inserts nothing and the bits above bit 2 survive.
+    // The lowering therefore gives equality the same zero-extension as an
+    // unsigned ordered comparison; this test pins what the literal reading
+    // would produce.
+    let unmasked = run(
+        vec![w(0), w(1)],
+        vec![
+            MInst::Cmp {
+                dst: f(2),
+                lhs: w(0),
+                rhs: w(1),
+                width: Width::W,
+            },
+            MInst::Cset {
+                dst: w(3),
+                flags: f(2),
+                cond: Cond::Eq,
+            },
+        ],
+        MTerm::Ret { value: Some(w(3)) },
+        &[int(0b1101), int(0b0101)],
+    );
+    assert_eq!(bits(unmasked), 0, "the bits above bit two decided it");
+
+    let masked = run(
+        vec![w(0), w(1)],
+        vec![
+            MInst::BinaryImm {
+                op: BinOp::And,
+                dst: w(4),
+                lhs: w(0),
+                imm: 0b111,
+                width: Width::W,
+            },
+            MInst::BinaryImm {
+                op: BinOp::And,
+                dst: w(5),
+                lhs: w(1),
+                imm: 0b111,
+                width: Width::W,
+            },
+            MInst::Cmp {
+                dst: f(2),
+                lhs: w(4),
+                rhs: w(5),
+                width: Width::W,
+            },
+            MInst::Cset {
+                dst: w(3),
+                flags: f(2),
+                cond: Cond::Eq,
+            },
+        ],
+        MTerm::Ret { value: Some(w(3)) },
+        &[int(0b1101), int(0b0101)],
+    );
+    assert_eq!(
+        bits(masked),
+        1,
+        "the inserted mask restores the EvoIR answer"
+    );
+}

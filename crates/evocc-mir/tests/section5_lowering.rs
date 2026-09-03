@@ -85,9 +85,11 @@ func @main(%arg0: bits<13>, %arg1: mem<all>, %arg2: world) -> (bits<13>, mem<all
 fn lshr_on_a_narrow_value_zero_extends_first() {
     // Section 3: lshr needs its operand "zero-extended to the register width",
     // inserted as "and with the mask 2^N - 1".
+    // The shift amount is itself a narrow value, so Section 3's fourth row
+    // masks it too: "and with 2^M - 1 when M < 32".
     assert_eq!(
         mnemonics(&lower(UNSIGNED_NARROW)),
-        vec!["mov#", "and#", "lsr"]
+        vec!["mov#", "and#", "and#", "lsr"]
     );
 }
 
@@ -107,7 +109,7 @@ fn ashr_on_a_narrow_value_sign_extends_first() {
     // Section 3: "sbfx from bit N - 1".
     assert_eq!(
         mnemonics(&lower(SIGNED_NARROW)),
-        vec!["mov#", "sbfx", "asr"]
+        vec!["mov#", "sbfx", "and#", "asr"]
     );
 }
 

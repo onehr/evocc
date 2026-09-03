@@ -246,7 +246,10 @@ pub fn interpret_module(
             }
             frames[top].regs.clear();
             for (arg, value) in block.args.iter().zip(incoming) {
-                frames[top].regs.insert(arg.id, Slot::Value(value));
+                // A gpr32 block argument is thirty-two bits of a register; a
+                // wider incoming pattern loses its upper half exactly as a
+                // thirty-two-bit write would.
+                write(&mut frames[top], *arg, value);
             }
             frames[top].next = 0;
             frames[top].entered = true;
