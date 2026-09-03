@@ -7,7 +7,7 @@
 //! shipped policy keeps a region that fires it: under one cost function every
 //! spelling ties and none of the four could ever appear.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use evocc_eqopt::{optimize_scalar_module_with_policy, shipped_policies};
 use evocc_randgate::{generate_module, GeneratorConfig};
@@ -16,26 +16,6 @@ const PROGRAMS: u64 = 256;
 
 fn config() -> GeneratorConfig {
     GeneratorConfig::default()
-}
-
-/// Which emitting rules one policy fires over the first `PROGRAMS` seeds, and
-/// how often.
-fn fired_by(policy: &evocc_eqopt::ExtractionPolicy) -> BTreeMap<String, u64> {
-    let mut counts = BTreeMap::new();
-    for seed in 0..PROGRAMS {
-        let module = generate_module(seed, config());
-        let outcome = optimize_scalar_module_with_policy(&module, policy);
-        for region in &outcome.certificate.regions {
-            for event in &region.events {
-                if let evocc_proof::EvpEvent::Rewrite(rewrite) = event {
-                    if rewrite.rule.starts_with("p2_") {
-                        *counts.entry(rewrite.rule.clone()).or_default() += 1;
-                    }
-                }
-            }
-        }
-    }
-    counts
 }
 
 /// Every rule any shipped policy fires over the first `PROGRAMS` seeds.
