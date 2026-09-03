@@ -82,7 +82,8 @@
     "checkerDoesNotJudgeCost": "2026-09-03: the executor's SPEC_GAP was real and is ruled for Reading B at 1.9.51: the checker verifies equivalence, non-vacuity and structure, never improvement; improvement under the declared policy is producer conformance. The measured fact behind it: 0 of 1,000 programs differ between two all-positive cost functions, because every P0 replacement is an alias or a constant; the zero-multiply control (697 of 1,000 differ) proved the instrument falsifiable. p0.scalar.v4 (digest 1a5391603386e18e...) adds the first emitting rules so that extraction becomes a choice.",
     "stageS4aClosed": "2026-09-03: the policy evaluation harness (crates/evocc-policy, binary evo-policy-eval) measures a (registry, cost function, schedule) policy over a corpus deterministically: dynamic steps, instructions, regions, transactions, wall, 100 percent certificate replay, corpus digest, kernel-cohort path refusal pinned. Two all-positive cost functions optimize 0 of 1,000 programs differently under the P0 registries; a zero-multiply control differs on 697, proving the instrument falsifiable. 3,500 certificates replayed, 0 refusals. Architect's isolated gate on 91c6a3c: middle-end crates 248/0 (the 16 failures were the front-end team's declared red), clippy 0, fmt clean; merged into main.",
     "derivedChildrenAreUsed": "2026-09-03: the executor's SPEC_GAP was real: 11.3's 'unused derived nodes are invalid' had no notion of a derived node used through its parent. Ruled for Reading B at 1.9.52. The distinguishing certificate (seed 9324 shrunk: a derived const 1 under a derived shl) is now valid.",
-    "architectRemovedALiveWorktree": "2026-09-03: the architect removed the policy executor's worktree while it was mid-window, believing the window closed; the executor's uncommitted emitting-rewrite work was lost, and its report and this ruling are the record. Rules from now on: an executor commits after every green increment, and the architect never removes a worktree whose agent has not reported completion of its current window."
+    "architectRemovedALiveWorktree": "2026-09-03: the architect removed the policy executor's worktree while it was mid-window, believing the window closed; the executor's uncommitted emitting-rewrite work was lost, and its report and this ruling are the record. Rules from now on: an executor commits after every green increment, and the architect never removes a worktree whose agent has not reported completion of its current window.",
+    "stageS4bClosed": "2026-09-04: emitting right-hand sides, width_min, p0.scalar.v4 and the non-vacuity check in place; the checker no longer judges cost. Over the same 1,000-program corpus the two all-positive cost functions now optimize 569 of 1,000 programs differently (0 before v4), weighted functions prefer add or shl over mul by their own weights, prefer-shift takes two transactions (mul to add to shl); 21,000 programs, 0 mismatches, 0 refusals; all four registry digests recomputed from the spec text by test. Architect's isolated gate on b25ce78: 1341/0, clippy 0, fmt clean; merged into main. Open by the executor's list: only add and shl can be emitted, emitted terms are one level deep, a const_like operand is always a fresh derived node."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",
@@ -378,6 +379,28 @@
       "programsDifferingUnderControl": 697,
       "architectGate": {
         "middleEnd": "248/0",
+        "clippy": 0,
+        "fmt": "clean"
+      }
+    },
+    "s4b": {
+      "branchHead": "b25ce78",
+      "policyTable1000": {
+        "instruction-count vs weighted-operators": 569,
+        "instruction-count vs prefer-add": 625,
+        "instruction-count vs prefer-shift": 630,
+        "instruction-count vs zero-multiply": 775
+      },
+      "campaign": {
+        "programs": 21000,
+        "semanticMismatches": 0,
+        "certificateRefusals": 0,
+        "regions1000": 38633,
+        "regions20000": 803457
+      },
+      "architectGate": {
+        "passed": 1341,
+        "failed": 0,
         "clippy": 0,
         "fmt": "clean"
       }
