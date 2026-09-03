@@ -19,6 +19,9 @@ const REGISTRY_V1: &str = "p0.scalar.v1";
 /// unchanged and in order, so a rule id keeps its meaning across revisions.
 const REGISTRY_V2: &str = "p0.scalar.v2";
 const REGISTRY_V2_SHA256: &str = "c1691808ebe55a3b2520a0456345e7c38a23fa2732e0827393dcf12523024bce";
+/// The revision that admits the shifts and width changes.
+const REGISTRY_V3: &str = "p0.scalar.v3";
+const REGISTRY_V3_SHA256: &str = "aca1f15b47e602ce18c593e06d77008862947c7c7252a9f76bb823c71f53fb15";
 /// Section 8.11: the P0 profile's ceilings. A budget line that records anything
 /// else is not describing this profile's scheduler.
 const MAX_NODES: u64 = 100_000;
@@ -140,6 +143,7 @@ fn admitted_registry(certificate: &EvpCertificate) -> Option<Registry> {
     match (certificate.version, named) {
         (_, (REGISTRY_V1, REGISTRY_SHA256)) => Some(Registry::Reviewed),
         (EvpVersion::Evp2, (REGISTRY_V2, REGISTRY_V2_SHA256)) => Some(Registry::Revised),
+        (EvpVersion::Evp2, (REGISTRY_V3, REGISTRY_V3_SHA256)) => Some(Registry::Widened),
         _ => None,
     }
 }

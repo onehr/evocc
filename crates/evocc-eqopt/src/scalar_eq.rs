@@ -26,6 +26,12 @@ const OP_ICMP_SLT: OpId = 12;
 const OP_ICMP_SLE: OpId = 13;
 const OP_ICMP_ULT: OpId = 14;
 const OP_ICMP_ULE: OpId = 15;
+const OP_SHL: OpId = 20;
+const OP_LSHR: OpId = 21;
+const OP_ASHR: OpId = 22;
+const OP_ZEXT: OpId = 23;
+const OP_SEXT: OpId = 24;
+const OP_TRUNC: OpId = 25;
 const DYNAMIC_OP_BASE: OpId = 1_000;
 
 /// Public Inst-to-operator authority for the Day-7 P0 profile.
@@ -39,6 +45,15 @@ pub enum ScalarOperator {
     Or,
     Xor,
     ICmp(CmpOp),
+    /// Admitted to the Section 8.5 allowlist at revision 1.9.44. None of them
+    /// may trap; a shift's definedness guard is a separate predicate and stays
+    /// excluded, and a width change consumes one sort and produces another.
+    Shl,
+    LShr,
+    AShr,
+    ZExt,
+    SExt,
+    Trunc,
 }
 
 /// Why an instruction cannot enter the Day-7 pure scalar e-graph.
@@ -72,6 +87,12 @@ pub fn ingest_scalar_inst(inst: &Inst) -> Result<ScalarOperator, ScalarBridgeErr
         Inst::Or(..) => ScalarOperator::Or,
         Inst::Xor(..) => ScalarOperator::Xor,
         Inst::ICmp(_, comparison, ..) => ScalarOperator::ICmp(*comparison),
+        Inst::Shl(..) => ScalarOperator::Shl,
+        Inst::LShr(..) => ScalarOperator::LShr,
+        Inst::AShr(..) => ScalarOperator::AShr,
+        Inst::ZExt(..) => ScalarOperator::ZExt,
+        Inst::SExt(..) => ScalarOperator::SExt,
+        Inst::Trunc(..) => ScalarOperator::Trunc,
         Inst::Alloca { .. }
         | Inst::LifetimeEnd { .. }
         | Inst::PointerValid { .. }
@@ -135,6 +156,10 @@ pub enum ScalarRewrite {
     MaskCover,
     /// `xor` against an operand every bit of which is known zero.
     XorKnownZero,
+    /// Not a rule at all: the instruction is an earlier one's structural
+    /// duplicate, and Section 7.4 makes the two one value. What justifies the
+    /// replacement is the congruence the region records, not a rewrite.
+    Congruent,
 }
 
 impl ScalarRewrite {
@@ -150,6 +175,7 @@ impl ScalarRewrite {
             Self::KnownConst => 8,
             Self::MaskCover => 9,
             Self::XorKnownZero => 10,
+            Self::Congruent => 11,
         }
     }
 }
@@ -256,6 +282,10 @@ pub(crate) struct AppliedRewrite {
     pub(crate) result: Value,
     pub(crate) instruction: Inst,
     pub(crate) facts: HashMap<u32, ScalarFact>,
+    /// The earlier instruction this one duplicates, for a `Congruent` event.
+    /// Carried so the re-derivation can check Section 7.4 for itself instead of
+    /// taking the sweep's word that two instructions were the same node.
+    pub(crate) twin: Option<Inst>,
     pub(crate) negations: NegationEnv,
     /// What Section 8.10 knew about each value's bits where the rewrite was
     /// selected. Recorded beside `facts` rather than folded into it because the
@@ -268,6 +298,25 @@ pub(crate) struct AppliedRewrite {
 
 impl AppliedRewrite {
     pub(crate) fn is_reviewed_instance(&self) -> bool {
+        if self.rule == ScalarRewrite::Congruent {
+            // Section 7.4: the same operation, the same attributes, and
+            // operands that are pairwise the same values.
+            let Some(twin) = &self.twin else {
+                return false;
+            };
+            let same_shape = ingest_scalar_inst(&self.instruction).ok()
+                == ingest_scalar_inst(twin).ok()
+                && scalar_result(&self.instruction).map(|value| &value.ty)
+                    == scalar_result(twin).map(|value| &value.ty)
+                && scalar_operands(&self.instruction)
+                    .into_iter()
+                    .map(|operand| operand.id)
+                    .eq(scalar_operands(twin).into_iter().map(|operand| operand.id))
+                && constant_payload(&self.instruction) == constant_payload(twin);
+            let replaces_with_the_twin = scalar_result(twin)
+                .is_some_and(|value| self.replacement == Replacement::Alias(value.clone()));
+            return same_shape && replaces_with_the_twin;
+        }
         let instantiates = |candidate: Option<RewriteOpportunity>| {
             candidate.is_some_and(|opportunity| {
                 opportunity.rule == self.rule && opportunity.replacement == self.replacement
@@ -398,7 +447,8 @@ pub(crate) fn optimize_scalar_module_with_events(
             // operand at a value a region's witness closure need not contain,
             // while the region's own congruence closure joins their classes
             // anyway.
-            let mut congruent: HashMap<(ScalarOperator, Vec<u32>), Value> = HashMap::new();
+            let mut congruent: HashMap<(ScalarOperator, EvoIRType, Vec<u32>), (Value, Inst)> =
+                HashMap::new();
             let mut facts = HashMap::new();
             let mut negations = NegationEnv::new();
             let mut known = KnownEnv::new();
@@ -432,9 +482,13 @@ pub(crate) fn optimize_scalar_module_with_events(
                     .or_else(|| fact_driven_opportunity(&inst, &known));
                 let shape = scalar_result(&inst).cloned().map(|result| {
                     (
-                        result,
+                        result.clone(),
                         (
                             operator,
+                            // Two width changes from one source differ only in
+                            // what they produce, so the result's sort is part
+                            // of what makes them the same node.
+                            result.ty,
                             scalar_operands(&inst)
                                 .into_iter()
                                 .map(|operand| operand.id)
@@ -442,18 +496,42 @@ pub(crate) fn optimize_scalar_module_with_events(
                         ),
                     )
                 });
+                let mut duplicate_of = None;
                 if let Some((result, shape)) = shape {
-                    let first = congruent.entry(shape).or_insert(result.clone()).clone();
+                    let first = congruent
+                        .entry(shape)
+                        .or_insert((result.clone(), inst.clone()))
+                        .clone();
                     // Only where no rule answers the instruction: a rule that
-                    // does states the equality itself, in a region a reader can
-                    // verify, and taking the congruence instead would leave the
-                    // instruction in the output with nothing recorded about it.
-                    if opportunity.is_none() && first != result {
-                        aliases.insert(result.id, first);
-                        record_known(&inst, &mut known);
+                    // does states the equality itself, and it is the narrower
+                    // claim.
+                    if opportunity.is_none() && first.0 != result {
+                        duplicate_of = Some(first);
+                    }
+                }
+                if let Some((twin, twin_instruction)) = duplicate_of {
+                    let Some(result) = scalar_result(&inst).cloned() else {
                         rewritten.push(inst);
                         continue;
-                    }
+                    };
+                    aliases.insert(result.id, twin.clone());
+                    record_known(&inst, &mut known);
+                    applied.push(AppliedRewrite {
+                        function: function.name.clone(),
+                        block: block.id,
+                        result,
+                        instruction: inst.clone(),
+                        facts: facts.clone(),
+                        twin: Some(twin_instruction),
+                        negations: negations.clone(),
+                        known: known.clone(),
+                        rule: ScalarRewrite::Congruent,
+                        replacement: Replacement::Alias(twin),
+                    });
+                    report.merges += 1;
+                    report.optimized_values += 1;
+                    rewritten.push(inst);
+                    continue;
                 }
                 let bridge = bridge_candidate(&inst, &facts, opportunity.as_ref());
                 report.graph_nodes = report.graph_nodes.saturating_add(bridge.node_count);
@@ -533,6 +611,7 @@ pub(crate) fn optimize_scalar_module_with_events(
                     result: result.clone(),
                     instruction: inst,
                     facts: facts.clone(),
+                    twin: None,
                     negations: negations.clone(),
                     known: known.clone(),
                     rule: opportunity
@@ -904,7 +983,16 @@ pub(crate) fn fold_raw(
         ScalarOperator::ICmp(comparison) => {
             u64::from(fold_comparison(comparison, left, right, operand_ty))
         }
-        ScalarOperator::Const => return None,
+        // `p0.scalar.v3` gives the shifts and width changes a fact-driven fold
+        // and no `all_const` one, so there is no fold to compute here; their
+        // exact value comes from the Section 8.10 row instead.
+        ScalarOperator::Const
+        | ScalarOperator::Shl
+        | ScalarOperator::LShr
+        | ScalarOperator::AShr
+        | ScalarOperator::ZExt
+        | ScalarOperator::SExt
+        | ScalarOperator::Trunc => return None,
     };
     Some(mask_raw(folded, result_ty))
 }
@@ -929,6 +1017,14 @@ fn signed_value(raw: u64, width: u16) -> i128 {
         i128::from(raw)
     } else {
         i128::from(raw) - (1_i128 << width)
+    }
+}
+
+/// A constant's payload, which is the one attribute a P0 node carries.
+fn constant_payload(instruction: &Inst) -> Option<u64> {
+    match instruction {
+        Inst::Const(value, raw) => Some(mask_raw(*raw, &value.ty)),
+        _ => None,
     }
 }
 
@@ -977,7 +1073,13 @@ pub(crate) fn scalar_result(inst: &Inst) -> Option<&Value> {
         | Inst::And(result, ..)
         | Inst::Or(result, ..)
         | Inst::Xor(result, ..)
-        | Inst::ICmp(result, ..) => Some(result),
+        | Inst::ICmp(result, ..)
+        | Inst::Shl(result, ..)
+        | Inst::LShr(result, ..)
+        | Inst::AShr(result, ..)
+        | Inst::ZExt(result, ..)
+        | Inst::SExt(result, ..)
+        | Inst::Trunc(result, ..) => Some(result),
         _ => None,
     }
 }
@@ -991,7 +1093,13 @@ pub(crate) fn scalar_operands(inst: &Inst) -> Vec<&Value> {
         | Inst::And(_, left, right)
         | Inst::Or(_, left, right)
         | Inst::Xor(_, left, right)
-        | Inst::ICmp(_, _, left, right) => vec![left, right],
+        | Inst::ICmp(_, _, left, right)
+        | Inst::Shl(_, left, right)
+        | Inst::LShr(_, left, right)
+        | Inst::AShr(_, left, right) => vec![left, right],
+        Inst::ZExt(_, source, _) | Inst::SExt(_, source, _) | Inst::Trunc(_, source, _) => {
+            vec![source]
+        }
         _ => Vec::new(),
     }
 }
@@ -1011,6 +1119,12 @@ pub(crate) fn operator_id(operator: ScalarOperator) -> OpId {
         ScalarOperator::ICmp(CmpOp::SLe) => OP_ICMP_SLE,
         ScalarOperator::ICmp(CmpOp::ULt) => OP_ICMP_ULT,
         ScalarOperator::ICmp(CmpOp::ULe) => OP_ICMP_ULE,
+        ScalarOperator::Shl => OP_SHL,
+        ScalarOperator::LShr => OP_LSHR,
+        ScalarOperator::AShr => OP_ASHR,
+        ScalarOperator::ZExt => OP_ZEXT,
+        ScalarOperator::SExt => OP_SEXT,
+        ScalarOperator::Trunc => OP_TRUNC,
     }
 }
 

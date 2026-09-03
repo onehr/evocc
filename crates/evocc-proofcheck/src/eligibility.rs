@@ -5,7 +5,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use evocc_evoir::{inst_results, BlockId, EvoIRType, Function, Inst, Module, Value};
+use evocc_evoir::{inst_results, BlockId, CmpOp, EvoIRType, Function, Inst, Module, Value};
 use evocc_proof::{EvpRegionId, EvpSeed, EvpSeedOrigin};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,6 +47,13 @@ fn derive_function(function: &Function, regions: &mut Vec<EligibleRegion>) {
             }
             let mut closure = HashSet::new();
             collect_witness_closure(
+                function,
+                &definitions,
+                block_index,
+                instruction_index,
+                &mut closure,
+            );
+            join_structural_duplicates(
                 function,
                 &definitions,
                 block_index,
@@ -165,6 +172,77 @@ fn collect_witness_closure(
     }
 }
 
+/// Section 8.5 as revised at 1.9.44: every allowlisted instruction of the
+/// block, earlier than the root, that is a structural duplicate of one already
+/// in the closure joins it, each with its own operand cone, to a fixed point.
+fn join_structural_duplicates(
+    function: &Function,
+    definitions: &HashMap<u32, Definition>,
+    root_block: usize,
+    root: usize,
+    closure: &mut HashSet<usize>,
+) {
+    let instructions = &function.blocks[root_block].insts;
+    loop {
+        let shapes = closure
+            .iter()
+            .filter_map(|index| structural_shape(&instructions[*index]))
+            .collect::<Vec<_>>();
+        let joining = (0..root)
+            .filter(|index| !closure.contains(index))
+            .filter(|index| {
+                structural_shape(&instructions[*index]).is_some_and(|shape| shapes.contains(&shape))
+            })
+            .collect::<Vec<_>>();
+        if joining.is_empty() {
+            return;
+        }
+        for index in joining {
+            collect_witness_closure(function, definitions, root_block, index, closure);
+        }
+    }
+}
+
+/// What makes two instructions the same node: the operation, the sort it
+/// produces, the attributes, and the operand values in order.
+fn structural_shape(instruction: &Inst) -> Option<(&'static str, EvoIRType, u64, Vec<u32>)> {
+    if !allowlisted(instruction) {
+        return None;
+    }
+    let (name, payload) = match instruction {
+        Inst::Const(_, raw) => ("const", *raw),
+        Inst::Add(..) => ("add", 0),
+        Inst::Sub(..) => ("sub", 0),
+        Inst::Mul(..) => ("mul", 0),
+        Inst::And(..) => ("and", 0),
+        Inst::Or(..) => ("or", 0),
+        Inst::Xor(..) => ("xor", 0),
+        Inst::ICmp(_, CmpOp::Eq, ..) => ("icmp.eq", 0),
+        Inst::ICmp(_, CmpOp::Ne, ..) => ("icmp.ne", 0),
+        Inst::ICmp(_, CmpOp::SLt, ..) => ("icmp.slt", 0),
+        Inst::ICmp(_, CmpOp::SLe, ..) => ("icmp.sle", 0),
+        Inst::ICmp(_, CmpOp::ULt, ..) => ("icmp.ult", 0),
+        Inst::ICmp(_, CmpOp::ULe, ..) => ("icmp.ule", 0),
+        Inst::Shl(..) => ("shl", 0),
+        Inst::LShr(..) => ("lshr", 0),
+        Inst::AShr(..) => ("ashr", 0),
+        Inst::ZExt(..) => ("zext", 0),
+        Inst::SExt(..) => ("sext", 0),
+        Inst::Trunc(..) => ("trunc", 0),
+        _ => return None,
+    };
+    let result = inst_results(instruction).first().copied()?;
+    Some((
+        name,
+        result.ty.clone(),
+        payload,
+        inst_operands(instruction)
+            .into_iter()
+            .map(|operand| operand.id)
+            .collect(),
+    ))
+}
+
 fn tainted_values(function: &Function) -> HashSet<u32> {
     fixed_point(function, |instruction| {
         matches!(instruction, Inst::Uninitialized(_))
@@ -264,6 +342,13 @@ fn region_id(function: &Function, block_index: usize, instruction: usize) -> Evp
     }
 }
 
+fn width_of(ty: &EvoIRType) -> u16 {
+    match ty {
+        EvoIRType::Bits(width) => *width,
+        _ => 0,
+    }
+}
+
 fn allowlisted(instruction: &Inst) -> bool {
     let shape_ok = match instruction {
         Inst::Const(result, _) => eligible_bits(&result.ty),
@@ -277,6 +362,27 @@ fn allowlisted(instruction: &Inst) -> bool {
         }
         Inst::ICmp(result, _, left, right) => {
             result.ty == EvoIRType::Bits(1) && eligible_bits(&left.ty) && right.ty == left.ty
+        }
+        // Admitted at revision 1.9.44. A shift consumes its amount in any
+        // `bits<M>`; a width change consumes one sort and produces another,
+        // both within the bound. None may trap, and the shift's definedness
+        // guard is a separate predicate that stays off this list.
+        Inst::Shl(result, shifted, amount)
+        | Inst::LShr(result, shifted, amount)
+        | Inst::AShr(result, shifted, amount) => {
+            eligible_bits(&result.ty) && shifted.ty == result.ty && eligible_bits(&amount.ty)
+        }
+        Inst::ZExt(result, source, ty) | Inst::SExt(result, source, ty) => {
+            eligible_bits(&result.ty)
+                && result.ty == *ty
+                && eligible_bits(&source.ty)
+                && width_of(&source.ty) <= width_of(&result.ty)
+        }
+        Inst::Trunc(result, source, ty) => {
+            eligible_bits(&result.ty)
+                && result.ty == *ty
+                && eligible_bits(&source.ty)
+                && width_of(&result.ty) <= width_of(&source.ty)
         }
         _ => false,
     };
@@ -495,23 +601,25 @@ mod tests {
 
     #[test]
     fn a_non_allowlisted_scalar_result_remains_excluded_from_total_arithmetic() {
-        let narrow = Value {
+        // Division is what the allowlist still leaves out; revision 1.9.44
+        // admitted the width changes this case used to be written with.
+        let divisor = Value {
             id: 1,
-            ty: EvoIRType::Bits(16),
+            ty: EvoIRType::Bits(32),
         };
-        let extended = bits(2);
+        let quotient = bits(2);
         let module = Module {
             globals: Vec::new(),
             functions: vec![function(vec![Block {
                 id: 0,
                 args: vec![BlockArg {
                     name: "n".to_owned(),
-                    value: narrow.clone(),
+                    value: divisor.clone(),
                 }],
                 insts: vec![
-                    Inst::ZExt(extended.clone(), narrow, EvoIRType::Bits(32)),
+                    Inst::SDiv(quotient.clone(), divisor.clone(), divisor),
                     Inst::Const(bits(3), 0),
-                    Inst::Add(bits(4), extended, bits(3)),
+                    Inst::Add(bits(4), quotient, bits(3)),
                 ],
                 terminator: Inst::Ret(vec![bits(4)]),
             }])],

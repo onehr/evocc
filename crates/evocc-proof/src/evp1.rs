@@ -141,7 +141,7 @@ pub enum EvpNodeSource {
     Derived,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EvpEffectClass {
     Pure,
     Guard,
@@ -969,6 +969,13 @@ fn validate_operation(text: &str) -> Result<(), EvpParseError> {
             | "icmp.sle"
             | "icmp.ult"
             | "icmp.ule"
+            // Admitted to the operator table at revision 1.9.44.
+            | "shl"
+            | "lshr"
+            | "ashr"
+            | "zext"
+            | "sext"
+            | "trunc"
     ) {
         Ok(())
     } else {

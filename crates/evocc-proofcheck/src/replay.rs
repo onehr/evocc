@@ -19,12 +19,58 @@ use evocc_proof::{
 pub(crate) enum Registry {
     Reviewed,
     Revised,
+    Widened,
 }
 
-/// Every rule the revision adds is printed with a `p1_` identifier and every
-/// rule it inherits with a `p0_` one.
-fn is_revision_rule(rule: &str) -> bool {
-    rule.starts_with("p1_")
+/// Which registry first prints a rule. The identifiers do not answer this on
+/// their own: `p1_206` is printed by the third registry although it sits
+/// between two rules of the second.
+fn first_printed_by(rule: &str) -> Registry {
+    const REVISED: [&str; 18] = [
+        "p1_200_known_and",
+        "p1_201_known_or",
+        "p1_202_known_xor",
+        "p1_203_known_add",
+        "p1_204_known_sub",
+        "p1_205_known_mul",
+        "p1_210_known_icmp_eq",
+        "p1_211_known_icmp_ne",
+        "p1_212_known_icmp_slt",
+        "p1_213_known_icmp_sle",
+        "p1_214_known_icmp_ult",
+        "p1_215_known_icmp_ule",
+        "p1_220_and_cover_rhs",
+        "p1_221_and_cover_lhs",
+        "p1_222_or_cover_rhs",
+        "p1_223_or_cover_lhs",
+        "p1_224_xor_known_zero_rhs",
+        "p1_225_xor_known_zero_lhs",
+    ];
+    const WIDENED: [&str; 6] = [
+        "p1_206_known_shl",
+        "p1_207_known_lshr",
+        "p1_208_known_ashr",
+        "p1_230_known_zext",
+        "p1_231_known_sext",
+        "p1_232_known_trunc",
+    ];
+    if WIDENED.contains(&rule) {
+        Registry::Widened
+    } else if REVISED.contains(&rule) {
+        Registry::Revised
+    } else {
+        Registry::Reviewed
+    }
+}
+
+/// Whether a certificate naming `named` may use a rule `printed` first prints.
+fn contains(named: Registry, printed: Registry) -> bool {
+    matches!(
+        (named, printed),
+        (Registry::Reviewed, Registry::Reviewed)
+            | (Registry::Revised, Registry::Reviewed | Registry::Revised)
+            | (Registry::Widened, _)
+    )
 }
 
 const LEFT: usize = 0;
@@ -496,11 +542,15 @@ fn validate_reviewed_rule(
     // revision, and it records the facts its side condition read. A rule the
     // earlier registry already held reads no fact and records none, so a
     // premise on one is a claim its rule never makes.
-    if is_revision_rule(&rewrite.rule) {
-        if replay.registry != Registry::Revised || rewrite.premises.is_empty() {
+    let printed = first_printed_by(&rewrite.rule);
+    if !contains(replay.registry, printed) {
+        return Err(());
+    }
+    if printed == Registry::Reviewed {
+        if !rewrite.premises.is_empty() {
             return Err(());
         }
-    } else if !rewrite.premises.is_empty() {
+    } else if rewrite.premises.is_empty() {
         return Err(());
     }
     let bindings = rewrite
@@ -543,6 +593,17 @@ fn validate_reviewed_rule(
     };
     let known = |operation: &str| -> Result<(), ()> {
         known_constant(replay, rewrite, lhs, rhs_node, operation, binary()?, facts)
+    };
+    // A shift's amount is written `?k` in the registry, not `?b`.
+    let shifted = || -> Result<(u32, u32), ()> {
+        if bindings.len() == 2 {
+            Ok((*bindings.get("a").ok_or(())?, *bindings.get("k").ok_or(())?))
+        } else {
+            Err(())
+        }
+    };
+    let known_shift = |operation: &str| -> Result<(), ()> {
+        known_constant(replay, rewrite, lhs, rhs_node, operation, shifted()?, facts)
     };
     let cover = |operation: &'static str, mask: usize, right_is_mask: bool| -> Result<(), ()> {
         covering(
@@ -691,8 +752,47 @@ fn validate_reviewed_rule(
         "p1_225_xor_known_zero_lhs" => {
             cleared_operand(replay, rewrite, lhs, rhs_node, facts, LEFT, cleared()?)
         }
+        "p1_206_known_shl" => known_shift("shl"),
+        "p1_207_known_lshr" => known_shift("lshr"),
+        "p1_208_known_ashr" => known_shift("ashr"),
+        "p1_230_known_zext" => widened(replay, rewrite, lhs, rhs_node, "zext", unary("a")?, facts),
+        "p1_231_known_sext" => widened(replay, rewrite, lhs, rhs_node, "sext", unary("a")?, facts),
+        "p1_232_known_trunc" => {
+            widened(replay, rewrite, lhs, rhs_node, "trunc", unary("a")?, facts)
+        }
         _ => Err(()),
     }
+}
+
+/// The same as `known_constant`, for a rule whose left pattern names one
+/// operand: a width change consumes one value and produces another sort.
+fn widened(
+    replay: &Replay<'_>,
+    rewrite: &EvpRewrite,
+    lhs: &EvpNode,
+    rhs: Option<&EvpNode>,
+    operation: &str,
+    bound: u32,
+    facts: &[Fact],
+) -> Result<(), ()> {
+    let [source] = lhs.children.as_slice() else {
+        return Err(());
+    };
+    if lhs.operation != operation || replay.find(*source) != bound {
+        return Err(());
+    }
+    let matched = replay.find(lhs.owner);
+    let fact = replay.fact_of(facts, matched)?;
+    if !fact.is_fully_known() {
+        return Err(());
+    }
+    let [premise] = rewrite.premises.as_slice() else {
+        return Err(());
+    };
+    if replay.find(premise.class) != matched {
+        return Err(());
+    }
+    validate_const(rhs.ok_or(())?, &lhs.sort, fact.raw(), None)
 }
 
 /// `fully_known`: the matched node's own class has every bit known, and the
@@ -1062,6 +1162,37 @@ fn validate_node_shape(
                 return Err(());
             }
         }
+        // A shift's shifted operand is its own sort and its amount is any
+        // `bits<M>`; a width change consumes one sort and produces another,
+        // both within the bound (Section 8.5, revision 1.9.44).
+        "shl" | "lshr" | "ashr" => {
+            if !node.attributes.is_empty() || node.children.len() != 2 {
+                return Err(());
+            }
+            if sorts[find(node.children[0]) as usize] != node.sort
+                || bits_width(&sorts[find(node.children[1]) as usize]).is_none()
+            {
+                return Err(());
+            }
+        }
+        "zext" | "sext" => {
+            if !node.attributes.is_empty() || node.children.len() != 1 {
+                return Err(());
+            }
+            let source = bits_width(&sorts[find(node.children[0]) as usize]).ok_or(())?;
+            if source > width {
+                return Err(());
+            }
+        }
+        "trunc" => {
+            if !node.attributes.is_empty() || node.children.len() != 1 {
+                return Err(());
+            }
+            let source = bits_width(&sorts[find(node.children[0]) as usize]).ok_or(())?;
+            if width > source {
+                return Err(());
+            }
+        }
         _ => return Err(()),
     }
     Ok(())
@@ -1094,6 +1225,12 @@ fn expected_node(
             vec![left, right],
             Vec::new(),
         ),
+        Inst::Shl(_, shifted, amount) => ("shl", vec![shifted, amount], Vec::new()),
+        Inst::LShr(_, shifted, amount) => ("lshr", vec![shifted, amount], Vec::new()),
+        Inst::AShr(_, shifted, amount) => ("ashr", vec![shifted, amount], Vec::new()),
+        Inst::ZExt(_, source, _) => ("zext", vec![source], Vec::new()),
+        Inst::SExt(_, source, _) => ("sext", vec![source], Vec::new()),
+        Inst::Trunc(_, source, _) => ("trunc", vec![source], Vec::new()),
         _ => return Err(()),
     };
     Ok(EvpNode {

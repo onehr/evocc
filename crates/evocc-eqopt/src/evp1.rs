@@ -30,6 +30,40 @@ const REGISTRY_V1: &str = "p0.scalar.v1";
 const REGISTRY_V1_SHA256: &str = "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9";
 const REGISTRY_V2: &str = "p0.scalar.v2";
 const REGISTRY_V2_SHA256: &str = "c1691808ebe55a3b2520a0456345e7c38a23fa2732e0827393dcf12523024bce";
+const REGISTRY_V3: &str = "p0.scalar.v3";
+const REGISTRY_V3_SHA256: &str = "aca1f15b47e602ce18c593e06d77008862947c7c7252a9f76bb823c71f53fb15";
+
+/// The rules each revision added, which is what makes the narrowest registry a
+/// question about names rather than about numbers: `p1_206` is printed by the
+/// third registry although it sits between two rules of the second.
+const V2_RULES: [&str; 18] = [
+    "p1_200_known_and",
+    "p1_201_known_or",
+    "p1_202_known_xor",
+    "p1_203_known_add",
+    "p1_204_known_sub",
+    "p1_205_known_mul",
+    "p1_210_known_icmp_eq",
+    "p1_211_known_icmp_ne",
+    "p1_212_known_icmp_slt",
+    "p1_213_known_icmp_sle",
+    "p1_214_known_icmp_ult",
+    "p1_215_known_icmp_ule",
+    "p1_220_and_cover_rhs",
+    "p1_221_and_cover_lhs",
+    "p1_222_or_cover_rhs",
+    "p1_223_or_cover_lhs",
+    "p1_224_xor_known_zero_rhs",
+    "p1_225_xor_known_zero_lhs",
+];
+const V3_RULES: [&str; 6] = [
+    "p1_206_known_shl",
+    "p1_207_known_lshr",
+    "p1_208_known_ashr",
+    "p1_230_known_zext",
+    "p1_231_known_sext",
+    "p1_232_known_trunc",
+];
 /// Section 8.11: the P0 profile's ceilings. A budget line records these and no
 /// producer-local ones; a tighter `ScalarEqBudget` is this producer's own stop
 /// rule, not the profile's box, and recording it would make the checker refuse
@@ -88,6 +122,7 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
     let mut proof_nodes = 0_usize;
     'admit: for (function_index, function) in module.functions.iter().enumerate() {
         for (block_index, block) in function.blocks.iter().enumerate() {
+            let shapes = block_shapes(block);
             for (instruction_index, instruction) in block.insts.iter().enumerate() {
                 let Some(root_event) = applied.iter().find(|event| {
                     event.function == function.name
@@ -104,6 +139,7 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
                         function_index,
                         block_index,
                         instruction_index,
+                        &shapes,
                         &applied,
                         root_event,
                     )
@@ -196,14 +232,24 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
 /// Every rule the revision adds is printed with a `p1_` identifier and every
 /// rule it inherits with a `p0_` one, so the prefix is the whole test.
 fn registry_for(regions: &[EvpRegion]) -> (&'static str, &'static str) {
-    let revised = regions.iter().flat_map(|region| &region.events).any(
-        |event| matches!(event, EvpEvent::Rewrite(rewrite) if rewrite.rule.starts_with("p1_")),
-    );
-    if revised {
-        (REGISTRY_V2, REGISTRY_V2_SHA256)
-    } else {
-        (REGISTRY_V1, REGISTRY_V1_SHA256)
+    let mut fired =
+        regions
+            .iter()
+            .flat_map(|region| &region.events)
+            .filter_map(|event| match event {
+                EvpEvent::Rewrite(rewrite) => Some(rewrite.rule.as_str()),
+                _ => None,
+            });
+    let mut widest = (REGISTRY_V1, REGISTRY_V1_SHA256);
+    for rule in &mut fired {
+        if V3_RULES.contains(&rule) {
+            return (REGISTRY_V3, REGISTRY_V3_SHA256);
+        }
+        if V2_RULES.contains(&rule) {
+            widest = (REGISTRY_V2, REGISTRY_V2_SHA256);
+        }
     }
+    widest
 }
 
 /// The scheduler's record for one completed transaction.
@@ -317,6 +363,7 @@ fn build_region(
     function_index: usize,
     block_index: usize,
     instruction_index: usize,
+    shapes: &BlockShapes,
     applied: &[AppliedRewrite],
     root_event: &AppliedRewrite,
 ) -> Option<(EvpRegion, AppliedRewrite, Replacement, bool)> {
@@ -336,6 +383,7 @@ fn build_region(
         .collect::<HashMap<_, _>>();
     let mut closure = HashSet::new();
     collect_closure(block, &definitions, instruction_index, &mut closure)?;
+    join_duplicates(block, &definitions, shapes, instruction_index, &mut closure)?;
     let witness_indices = (0..block.insts.len())
         .filter(|index| closure.contains(index))
         .collect::<Vec<_>>();
@@ -429,6 +477,21 @@ fn build_region(
     }) {
         let node_id = *value_nodes.get(&event.result.id)?;
         let lhs = classes.find(nodes.get(node_id as usize)?.owner)?;
+        if event.rule == ScalarRewrite::Congruent {
+            // Section 7.4 already put this node in its twin's class, and the
+            // closure recorded that as a congruence event. There is no rule to
+            // state and nothing to merge; what the region claims is that the
+            // twin is a cheaper member of the class the root ended in.
+            if event.result.id == root_event.result.id {
+                let (chosen, replacement) =
+                    cheaper_member(&seed_values, &nodes, &node_values, &classes, lhs, node_id)?;
+                selected = Some(chosen);
+                normalized_root = Some(event.clone());
+                output_replacement = Some(replacement);
+                congruent_root = true;
+            }
+            continue;
+        }
         // Section 8.10 as the checker will recompute it: from the region's own
         // nodes, after the merges recorded so far. Reading the sweep's
         // environment instead would let the producer state a premise nobody
@@ -443,6 +506,7 @@ fn build_region(
             result: event.result.clone(),
             instruction: event.instruction.clone(),
             facts: event.facts.clone(),
+            twin: None,
             negations: event.negations.clone(),
             known: event.known.clone(),
             rule: opportunity.rule,
@@ -644,8 +708,11 @@ fn build_region(
 /// rewrites cannot reproduce the partition": a reader replaying the stream has
 /// to reach the classes the producer reached.
 ///
-/// The scan is ascending by node pair and restarts after every merge, so which
-/// events a region emits is a function of its node stream and nothing else.
+/// Nodes are grouped by what makes them the same node and the first of each
+/// group absorbs the rest, in node order, and the pass repeats while anything
+/// merges. Grouping rather than comparing every pair matters once a closure
+/// can hold every duplicate of every constant in its block, which is what
+/// Section 8.5 admitted at revision 1.9.44.
 ///
 /// A congruence cannot contradict a fact. Two congruent nodes have the same
 /// operation and pairwise equal children, so Section 8.10 transfers them to the
@@ -659,51 +726,48 @@ fn close_congruences(
     epoch: u64,
     changed: &mut Vec<(u32, u64)>,
 ) -> Option<()> {
-    'closure: loop {
-        for left_index in 0..nodes.len() {
-            for right_index in (left_index + 1)..nodes.len() {
-                let left = nodes.get(left_index)?;
-                let right = nodes.get(right_index)?;
-                let lhs_pre = classes.find(left.owner)?;
-                let rhs_pre = classes.find(right.owner)?;
-                if lhs_pre == rhs_pre || !congruent(left, right, classes)? {
-                    continue;
-                }
-                let result = lhs_pre.min(rhs_pre);
-                events.push(EvpEvent::Congruence(EvpCongruence {
-                    lhs_pre,
-                    rhs_pre,
-                    result,
-                    lhs_node: left.node,
-                    rhs_node: right.node,
-                }));
-                classes.union(lhs_pre, rhs_pre)?;
-                changed.push((result, epoch));
-                continue 'closure;
+    type Shape = (String, String, EvpEffectClass, Vec<(String, u64)>, Vec<u32>);
+    loop {
+        let mut first_of: HashMap<Shape, u32> = HashMap::new();
+        let mut merged = false;
+        for node in nodes {
+            let children = node
+                .children
+                .iter()
+                .map(|child| classes.find(*child))
+                .collect::<Option<Vec<_>>>()?;
+            let shape = (
+                node.operation.clone(),
+                node.sort.clone(),
+                node.effect,
+                node.attributes.clone(),
+                children,
+            );
+            let Some(first) = first_of.get(&shape).copied() else {
+                first_of.insert(shape, node.node);
+                continue;
+            };
+            let lhs_pre = classes.find(nodes.get(first as usize)?.owner)?;
+            let rhs_pre = classes.find(node.owner)?;
+            if lhs_pre == rhs_pre {
+                continue;
             }
+            let result = lhs_pre.min(rhs_pre);
+            events.push(EvpEvent::Congruence(EvpCongruence {
+                lhs_pre,
+                rhs_pre,
+                result,
+                lhs_node: first,
+                rhs_node: node.node,
+            }));
+            classes.union(lhs_pre, rhs_pre)?;
+            changed.push((result, epoch));
+            merged = true;
         }
-        return Some(());
-    }
-}
-
-/// Identical operator, sort, effect class, attributes and arity, and every pair
-/// of corresponding children already in one class -- the exact conditions
-/// Section 11.3 makes a reader verify.
-fn congruent(left: &EvpNode, right: &EvpNode, classes: &LocalClasses) -> Option<bool> {
-    if left.operation != right.operation
-        || left.sort != right.sort
-        || left.effect != right.effect
-        || left.attributes != right.attributes
-        || left.children.len() != right.children.len()
-    {
-        return Some(false);
-    }
-    for (one, other) in left.children.iter().zip(&right.children) {
-        if classes.find(*one)? != classes.find(*other)? {
-            return Some(false);
+        if !merged {
+            return Some(());
         }
     }
-    Some(true)
 }
 
 struct LocalClasses {
@@ -908,13 +972,27 @@ fn fact_rewrite(
     let operator = ingest_scalar_inst(&event.instruction).ok()?;
     let fact = facts.of(classes.find(matched.owner)?, classes)?;
     if fact.is_constant() {
+        // `zext(?a)`, `sext(?a)` and `trunc(?a)` name one variable; every other
+        // fact-driven fold names two.
+        let bindings = match operator {
+            ScalarOperator::ZExt | ScalarOperator::SExt | ScalarOperator::Trunc => {
+                vec![("a", BindingPath::child(LEFT))]
+            }
+            // The registry writes a shift's amount `?k`, not `?b`, and Section
+            // 11.3 requires the binding names to be exactly the rule's own.
+            ScalarOperator::Shl | ScalarOperator::LShr | ScalarOperator::AShr => vec![
+                ("a", BindingPath::child(LEFT)),
+                ("k", BindingPath::child(RIGHT)),
+            ],
+            _ => operand_bindings(),
+        };
         return Some(RegionRewrite {
             opportunity: RewriteOpportunity {
                 rule: ScalarRewrite::KnownConst,
                 replacement: Replacement::Constant(fact.value()),
             },
             rule: known_const_rule(operator)?,
-            bindings: operand_bindings(),
+            bindings,
             right_hand_variable: None,
             premises: vec![PremiseSource::Matched],
         });
@@ -1028,7 +1106,15 @@ fn fold_rule(operator: ScalarOperator) -> Option<&'static str> {
         ScalarOperator::ICmp(CmpOp::SLe) => "p0_109_fold_icmp_sle",
         ScalarOperator::ICmp(CmpOp::ULt) => "p0_110_fold_icmp_ult",
         ScalarOperator::ICmp(CmpOp::ULe) => "p0_111_fold_icmp_ule",
-        ScalarOperator::Const => return None,
+        // The registry gives these no `all_const` fold; their exact value is a
+        // fact, and `known_const_rule` is what states it.
+        ScalarOperator::Const
+        | ScalarOperator::Shl
+        | ScalarOperator::LShr
+        | ScalarOperator::AShr
+        | ScalarOperator::ZExt
+        | ScalarOperator::SExt
+        | ScalarOperator::Trunc => return None,
     })
 }
 
@@ -1046,6 +1132,12 @@ fn known_const_rule(operator: ScalarOperator) -> Option<&'static str> {
         ScalarOperator::ICmp(CmpOp::SLe) => "p1_213_known_icmp_sle",
         ScalarOperator::ICmp(CmpOp::ULt) => "p1_214_known_icmp_ult",
         ScalarOperator::ICmp(CmpOp::ULe) => "p1_215_known_icmp_ule",
+        ScalarOperator::Shl => "p1_206_known_shl",
+        ScalarOperator::LShr => "p1_207_known_lshr",
+        ScalarOperator::AShr => "p1_208_known_ashr",
+        ScalarOperator::ZExt => "p1_230_known_zext",
+        ScalarOperator::SExt => "p1_231_known_sext",
+        ScalarOperator::Trunc => "p1_232_known_trunc",
         ScalarOperator::Const => return None,
     })
 }
@@ -1148,6 +1240,12 @@ fn node_transfer(node: &EvpNode, facts: &[KnownBits], classes: &LocalClasses) ->
         "icmp.sle" => child(LEFT)?.transfer_icmp(child(RIGHT)?, Comparison::SLe),
         "icmp.ult" => child(LEFT)?.transfer_icmp(child(RIGHT)?, Comparison::ULt),
         "icmp.ule" => child(LEFT)?.transfer_icmp(child(RIGHT)?, Comparison::ULe),
+        "shl" => child(LEFT)?.transfer_shl(child(RIGHT)?),
+        "lshr" => child(LEFT)?.transfer_lshr(child(RIGHT)?),
+        "ashr" => child(LEFT)?.transfer_ashr(child(RIGHT)?),
+        "zext" => child(LEFT)?.transfer_zext(width),
+        "sext" => child(LEFT)?.transfer_sext(width),
+        "trunc" => child(LEFT)?.transfer_trunc(width),
         _ => return None,
     };
     Some(fact)
@@ -1192,6 +1290,89 @@ fn collect_closure(
     Some(())
 }
 
+/// What makes two instructions the same node: the operation, the sort it
+/// produces, its attributes, and its operand values in order.
+pub(crate) type InstructionShape = (ScalarOperator, EvoIRType, u64, Vec<u32>);
+
+/// One block's shapes, and where each is written.
+///
+/// Computed once for the block rather than once per candidate root: with the
+/// duplicate rule of revision 1.9.44 every region of a block asks the same
+/// question, and asking it per region is what made a thousand programs stop
+/// finishing.
+pub(crate) struct BlockShapes {
+    shapes: Vec<Option<InstructionShape>>,
+    written_at: HashMap<InstructionShape, Vec<usize>>,
+}
+
+pub(crate) fn block_shapes(block: &evocc_evoir::Block) -> BlockShapes {
+    let shapes = block
+        .insts
+        .iter()
+        .map(instruction_shape)
+        .collect::<Vec<_>>();
+    let mut written_at: HashMap<InstructionShape, Vec<usize>> = HashMap::new();
+    for (index, shape) in shapes.iter().enumerate() {
+        if let Some(shape) = shape {
+            written_at.entry(shape.clone()).or_default().push(index);
+        }
+    }
+    BlockShapes { shapes, written_at }
+}
+
+/// Section 8.5 as revised at 1.9.44: every allowlisted instruction of the same
+/// block, earlier than the root, that is a structural duplicate of one already
+/// in the closure joins it, each with its own operand cone, to a fixed point.
+///
+/// A duplicate's cone is its twin's cone, since the operands are the same
+/// values, so nothing outside the closure's own seeds can arrive this way.
+fn join_duplicates(
+    block: &evocc_evoir::Block,
+    definitions: &HashMap<u32, usize>,
+    shapes: &BlockShapes,
+    root: usize,
+    closure: &mut HashSet<usize>,
+) -> Option<()> {
+    loop {
+        let mut joining = Vec::new();
+        for index in closure.iter() {
+            let Some(shape) = shapes.shapes.get(*index).and_then(Option::as_ref) else {
+                continue;
+            };
+            for candidate in shapes.written_at.get(shape).into_iter().flatten() {
+                if *candidate < root && !closure.contains(candidate) {
+                    joining.push(*candidate);
+                }
+            }
+        }
+        if joining.is_empty() {
+            return Some(());
+        }
+        joining.sort_unstable();
+        joining.dedup();
+        for index in joining {
+            collect_closure(block, definitions, index, closure)?;
+        }
+    }
+}
+
+fn instruction_shape(instruction: &Inst) -> Option<InstructionShape> {
+    let operator = ingest_scalar_inst(instruction).ok()?;
+    let payload = match instruction {
+        Inst::Const(value, raw) => mask_raw(*raw, &value.ty),
+        _ => 0,
+    };
+    Some((
+        operator,
+        crate::scalar_eq::scalar_result(instruction)?.ty.clone(),
+        payload,
+        scalar_operands(instruction)
+            .into_iter()
+            .map(|operand| operand.id)
+            .collect(),
+    ))
+}
+
 fn before_node(
     instruction: &Inst,
     node: u32,
@@ -1219,6 +1400,12 @@ fn before_node(
             vec![left, right],
             Vec::new(),
         ),
+        Inst::Shl(_, shifted, amount) => ("shl", vec![shifted, amount], Vec::new()),
+        Inst::LShr(_, shifted, amount) => ("lshr", vec![shifted, amount], Vec::new()),
+        Inst::AShr(_, shifted, amount) => ("ashr", vec![shifted, amount], Vec::new()),
+        Inst::ZExt(_, source, _) => ("zext", vec![source], Vec::new()),
+        Inst::SExt(_, source, _) => ("sext", vec![source], Vec::new()),
+        Inst::Trunc(_, source, _) => ("trunc", vec![source], Vec::new()),
         _ => return None,
     };
     Some(EvpNode {
@@ -1487,6 +1674,40 @@ fn alias_representative(
                 Replacement::Alias(value.clone()),
             ));
         }
+    }
+    None
+}
+
+/// A member of `class` that costs less to extract than the node at `node_id`.
+///
+/// Seeds first, then nodes in emission order, skipping the node the region is
+/// replacing: that one costs one, and reusing it would claim an improvement the
+/// checker recomputes as none.
+fn cheaper_member(
+    seed_values: &[Value],
+    nodes: &[EvpNode],
+    node_values: &HashMap<u32, Value>,
+    classes: &LocalClasses,
+    class: u32,
+    replaced: u32,
+) -> Option<(SelectedSource, Replacement)> {
+    for (index, value) in seed_values.iter().enumerate() {
+        if classes.find(u32::try_from(index).ok()?) == Some(class) {
+            return Some((
+                SelectedSource::Value(value.id),
+                Replacement::Alias(value.clone()),
+            ));
+        }
+    }
+    for node in nodes {
+        if node.node == replaced || classes.find(node.owner) != Some(class) {
+            continue;
+        }
+        let value = node_values.get(&node.node)?;
+        return Some((
+            SelectedSource::Node(node.node),
+            Replacement::Alias(value.clone()),
+        ));
     }
     None
 }
