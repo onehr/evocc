@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.47** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.48** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -3212,7 +3212,7 @@ oracles reject it in a static assertion).
 
 **Library builtins.** `__builtin_memset`, `__builtin_memcpy`,
 `__builtin_memcmp`, `__builtin_strcmp`, `__builtin_strncmp` and
-`__builtin_strlen` have the prototypes of the library functions they name
+`__builtin_strlen`, and `__builtin_memmove` (`void *(void *, const void *, size_t)`), have the prototypes of the library functions they name; `__builtin_prefetch(addr[, rw[, locality]])` is `void` with one to three arguments; `__builtin_extract_return_addr(p)` returns `void *` (evidence `p29-residue.c`, `lib`, `ra`, `tys`)
 (`memset` returns `void *`, `strlen` returns `size_t`); `__builtin_alloca(n)`
 returns `void *`; `__builtin_va_list`, `__builtin_va_start`,
 `__builtin_va_arg(ap, T)` (of type `T`) and `__builtin_va_end` are typed by the
@@ -3785,6 +3785,28 @@ its result may be converted to a function pointer the same way (evidence
 and `__pa_symbol` assignments were `E2202`, `E2102` or `E1003` in about 60
 units.
 
+**Qualified `void *` and function pointers.** The conversion between a
+pointer to function and `void *` of 10.1.18 holds for `void *` with any
+qualifiers on the pointee (`const void *data` to `fn_t`, and back) at every
+site named there (evidence `p29-residue.c`, `cv`). Measured defect at
+revision 1.9.47: `cb = match->data` with `const void *data` was `E2102`,
+`E2202` or `E2001` in about nine units.
+
+**Conditional address constants.** A conditional expression is an address
+constant when its condition is an integer constant expression or an address
+constant (a function or object address, which is never null) and the arm
+selected is an address constant: `(impl == (fn_t)0) ? impl : impl`,
+`1 ? impl : (void *)0`, `impl ? impl : 0` (evidence `p29-residue.c`, both
+oracles warn `-Waddress` and compile). Measured defect at revision 1.9.47:
+`_OF_DECLARE` tables were `E2208` in nine units.
+
+**Label addresses.** `&&label` is an address constant of type `void *`
+usable in static initializers, including range designators
+(`[0 ... 255] = &&dflt`); `goto *expr` is accepted by the front end with
+`expr` of pointer type, and lowering stays `E3029` (evidence
+`p29-residue.c`, `lab`). Measured defect at revision 1.9.47: the BPF
+interpreter's jump table was `E2208`, `E2001` and `E1003`.
+
 **`_Pragma`, spellings and attribute placement.** `_Pragma("...")` is handled
 exactly where `#pragma` would be, including at file scope between
 declarations and inside a macro expansion; `__inline` and `__inline__` spell
@@ -3932,6 +3954,28 @@ an acceptance surface, because the parser and the survey consume the token
 stream. Measured defect at revision 1.9.31: a space was written before every
 expanded token, so the computed include named `. / trace_arm .h` and 56
 units of the full configuration failed with `E0105`.
+
+**The `_Pragma` operator.** `_Pragma ( string-literal )` is processed wherever
+it stands after macro expansion, including when the string literal was
+produced by stringization inside an expansion: the literal is destringized
+(C11 6.10.9) and handled exactly as a `#pragma` directive at that point,
+under the pragma rules of this section (`pack` applied, others ignored-safe
+and counted). The operand must be exactly one string literal after
+expansion; anything else is `E0112` (`stray-token`). A `;` that follows the
+operator at file scope is an empty declaration and is accepted (both oracles
+compile it; evidence `p30-pragma-operator.out`, whose `F` line is a malformed
+probe of the architect's and is not evidence). Measured defect at revision
+1.9.47: `_Pragma` with an expanded operand was left in the token stream and
+`__bpf_kfunc_start_defs()` failed with `E1001` in 18 units.
+
+**Whitespace of a substituted argument.** When an argument is substituted
+for a parameter in a replacement list, the first token of the argument takes
+the whitespace flag of that occurrence of the parameter, and the remaining
+tokens keep the flags of their spelling (evidence `p30-pragma-operator.out`:
+with `STR(GCC diagnostic s)`, `D(push)` is `"GCC diagnostic push"`, `E(x)`
+with `STR(a s b)` is `"a x b"`, and `G(name)` with `STR(s.h)` is `"name.h"`).
+Measured defect at revision 1.9.47: the flag was dropped and the pragma
+text read `GCC diagnosticpush`.
 
 **Rescanning.** After a macro's replacement list has its arguments
 substituted, it is rescanned for further macro names together with the
@@ -4680,6 +4724,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.48 | 2026-09-03 | Fourth full-configuration survey (2,694 of 2,798 clean). Defines the `_Pragma` operator through expansion and the whitespace flag of a substituted argument (10.4); qualified `void *` to function pointer, conditional and label address constants, and three more library builtins (10.1.14, 10.1.18). |
 | 1.9.47 | 2026-09-03 | Names the edge combination of seed facts a join, distinct from the class merge, after both had been called a meet (8.10); lifts the sentence that made `p1_202`-`p1_204` unfireable, since a fully known block argument now satisfies `fully_known` without `all_const` (11.6). Both gaps found by the executor implementing facts of seeds. |
 | 1.9.46 | 2026-09-03 | Regions admitted in every block (12,913 to 27,195 in the 1000-program gate). Rules that an instruction outside the sort bound is absent from the allowlist, records that `definition` seeds cannot arise in this profile (8.5, 8.7), and defines facts of seeds across block edges by a forward fixed point the checker recomputes (8.10). |
 | 1.9.45 | 2026-09-03 | Admits `__builtin_va_arg` at the front end as a typed C-HIR node under the same fail-closed lowering, and makes a library builtin's prototype the call's type whether or not the library function is declared, `E2927` now naming an incompatible visible declaration; both sentences had contradicted 1.9.34 and stopped the front-end executor. |
