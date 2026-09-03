@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "c30.front-end-survey-residue.acceptance.v1",
+  "status": "PASS_WITH_TYPED_SURVEY_FRONTIER",
+  "authority": {
+    "baselineCommit": "a037027e4b8c7563b1b645d71bd34bf2b79e4cbb",
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.49",
+      "sections": [
+        "10.4 The _Pragma operator",
+        "10.4 Whitespace of a substituted argument",
+        "10.1.18 Qualified void * and function pointers",
+        "10.1.18 Conditional address constants",
+        "10.1.18 Label addresses",
+        "10.1.14 Library builtins",
+        "10.1.3 Array lvalues"
+      ],
+      "sha256": "c8c5218cd99c25289e2f57767f33c11657e19cd36e0ea8e5e4f720c03621db2f",
+      "implementationCheckout": {
+        "revision": "1.9.50",
+        "sha256": "8fe15b7a25c4e5bb5b18e7c0701974572da332d25c506e3742ceb19d15cdaa99",
+        "qualification": "Revision 1.9.50 changed the middle-end cost-policy section only; the 1.9.49 front-end clauses remained unchanged."
+      },
+      "closureCheckout": {
+        "revision": "1.9.51",
+        "sha256": "efaade04f3d2823d6c46ada41dee1aa9a1b988ef1074b0920007519a409bb631",
+        "qualification": "Revision 1.9.51 changed the equality registry and proof interface only."
+      }
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "X",
+      "openingSha256": "3675ece4e94f5dc0c6fd6c7c231ab23c11c3f511a7db418029c3d915390a2733",
+      "closureCommit": "0be70acf130a32cb76fbd1b1840b2452dc25403e",
+      "closureSha256": "ab812f0e13b5ccd10c28707cb0056695bc96ff5360b361dda9765086a57f2727",
+      "rulings": [
+        "fullConfigSurveyIsMeasureOnly",
+        "scopeXClosed"
+      ]
+    }
+  },
+  "commits": {
+    "testsOnlyRed": {
+      "commit": "0ede9b42c89687ed93fc4107c6ba83c53bf3f56e",
+      "message": "Expose measured GNU front-end gaps"
+    },
+    "implementation": {
+      "commit": "597bb7697de02679e8bf26c2dc6cfe061a1e3992",
+      "message": "Accept measured GNU front-end forms"
+    },
+    "dashboardReceipt": {
+      "commit": "b3a2af61169c8332a186e6f30bba1758d8e133af",
+      "message": "Record clean front-end cohort publication"
+    },
+    "contractClosure": {
+      "commit": "0be70acf130a32cb76fbd1b1840b2452dc25403e",
+      "message": "Record the measured front-end survey closure"
+    }
+  },
+  "redWindow": {
+    "receipt": {
+      "path": "tests/contracts/front-end-survey-residue-red.json",
+      "sha256": "8574c7c56c383055b0671738c220082e8120fe06c10847bc2384094abe341069"
+    },
+    "focused": {
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-x-red-target cargo test -p evocc-cpp --test pragma_operator_expansion -p evocc-parser --test function_void_pointer_conversions --test static_pointer_address_constants --test labels_and_computed_goto --test library_builtin_typing --test array_lvalue_decay -p evocc-lower --test computed_goto_lowering --no-fail-fast -- --nocapture",
+      "passed": 30,
+      "failed": 16,
+      "ignored": 0,
+      "buildErrors": 0,
+      "unexpectedFailures": 0
+    },
+    "workspace": {
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-x-red-target cargo test --workspace --no-fail-fast",
+      "passed": 1267,
+      "failed": 16,
+      "ignored": 1,
+      "buildErrors": 0,
+      "unexpectedFailures": 0
+    },
+    "declaredCapabilities": 6
+  },
+  "semanticAcceptance": {
+    "focused": {
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-x-red-target cargo test -p evocc-cpp --test pragma_operator_expansion -p evocc-parser --test function_void_pointer_conversions --test static_pointer_address_constants --test labels_and_computed_goto --test library_builtin_typing --test array_lvalue_decay -p evocc-lower --test computed_goto_lowering --no-fail-fast -- --nocapture",
+      "passed": 46,
+      "failed": 0
+    },
+    "implementationFacts": [
+      "A final-token preprocessing pass consumes _Pragma produced by macro expansion, validates its single string operand, destringizes it, and reuses the existing pragma classifier; malformed operands report E0112.",
+      "The first token substituted for a macro parameter inherits the whitespace flag of the parameter occurrence, while subsequent spelling flags remain unchanged.",
+      "Pointers to function and qualified void pointers use one conversion rule across initialization, assignment, arguments, returns, casts, and conditional operands.",
+      "Static address constants compose through measured conditional conditions and label addresses; label-address execution and lowering retain the existing E3029 fail-closed boundary.",
+      "memmove uses its ordinary library call identity, while prefetch and extract_return_addr receive their frozen builtin prototypes without undeclared-identifier diagnostics.",
+      "The shared MemoryPlace validator reconstructs decay through array members and conditional arms instead of admitting kfifo syntax by name; a direct forged integer place root remains invalid."
+    ]
+  },
+  "standardGate": {
+    "workspace": {
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-x-final-target cargo test --workspace --no-fail-fast",
+      "passed": 1287,
+      "failed": 0,
+      "ignored": 1
+    },
+    "clippy": {
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-x-final-target cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    },
+    "baseLayoutCorpus": {
+      "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "128/128 ORACLE_CONSENSUS",
+      "mismatches": 0
+    },
+    "attributedLayoutCorpus": {
+      "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "22/22 ORACLE_CONSENSUS",
+      "mismatches": 0
+    },
+    "commitReferences": {
+      "command": "python3 tools/check-commit-references.py",
+      "result": "231 rewritten, 44 resolved unchanged, 135 other hexadecimal tokens"
+    },
+    "diffCheck": "clean"
+  },
+  "acceptanceDiffGuard": {
+    "receipt": "tests/contracts/kernel-dashboard-receipt.json",
+    "receiptSha256": "9bb76516f8b772797d7451c1d2b68a77ccce756c74a2a24dd073fd32196c9c84",
+    "previousRun": "20260903T061659Z-52334",
+    "publishedRun": "20260903T115135Z-31973",
+    "subjectCommit": "597bb76",
+    "rawPreprocess": "16/16 clean",
+    "gccPreprocessedParser": "16/16 clean",
+    "clangPreprocessedParser": "16/16 clean",
+    "dualOracleParse": "16/16 clean",
+    "regressions": 0
+  },
+  "isolatedOfflineReplay": {
+    "clone": "/private/tmp/c30-x-replay.yiO23a/repo",
+    "cloneMode": "git clone --no-local; git switch --detach b3a2af61169c8332a186e6f30bba1758d8e133af",
+    "alternatesFile": "absent",
+    "commit": "b3a2af61169c8332a186e6f30bba1758d8e133af",
+    "command": "CARGO_TARGET_DIR=/private/tmp/c30-x-replay.yiO23a/target cargo test --workspace --no-fail-fast --locked --offline",
+    "passed": 1287,
+    "failed": 0,
+    "ignored": 1,
+    "returnCode": 0
+  },
+  "fullConfigurationSurvey": {
+    "receipt": "tests/contracts/full-config-parse-survey-receipt.json",
+    "runId": "20260903T115834Z-66704",
+    "capture": ".evidence/full-config-parse-survey/20260903T115834Z-66704",
+    "includedTargetCUnits": 2798,
+    "clean": 2760,
+    "diagnosed": 38,
+    "unavailable": 0,
+    "timeout": 0,
+    "panic": 0,
+    "transitionsFromPreviousSurvey": {
+      "clean-to-clean": 2694,
+      "diagnosed-to-clean": 66,
+      "diagnosed-to-diagnosed": 38,
+      "other": 0
+    },
+    "scopeDiscipline": "The survey was measure-only; none of the remaining typed frontier was investigated or fixed."
+  },
+  "processDeviations": [
+    "The first survey invocation correctly refused before enumeration because the dashboard publisher had changed a tracked receipt. The 48/48 receipt was committed, and the accepted survey ran on that exact clean subject.",
+    "The shared main branch advanced with one middle-end commit after the survey subject was sealed. The no-local clone was explicitly detached to b3a2af6 so the replay proves the same front-end subject rather than silently including later work.",
+    "A restricted base-layout invocation before the implementation commit returned one without evidence. It was rejected; every recorded base and attributed result comes from a permission-correct sequential invocation.",
+    "The first final workspace invocation launched no tests because the host linker exhausted disk space while five isolated Cargo target trees coexisted. That run is rejected. Only those task-specific reproducible build directories were removed; source, logs, sealed evidence, and the no-local clone were retained. The identical command then completed 1287/1287 with one ignored test."
+  ],
+  "specGap": null,
+  "claimCeiling": "The six declared front-end capabilities pass, the 16-unit dashboard remains 48/48 clean, and 2,760 of 2,798 full-configuration target units are clean with zero unavailable, timeout, or panic. The remaining 38 typed diagnostics are a measured frontier, not a general front-end-conformance claim."
+}

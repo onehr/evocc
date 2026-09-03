@@ -1,30 +1,27 @@
 {
-  "schemaVersion": 5,
-  "receiptId": "c30.full-configuration-parse-survey.v5",
+  "schemaVersion": 6,
+  "receiptId": "c30.full-configuration-parse-survey.v6",
   "status": "MEASURED_NO_PANIC_WITH_DIAGNOSTIC_FRONTIER",
   "authority": {
     "contract": "tests/contracts/day9-acceptance-contract.json",
-    "openingContractSha256": "d800c5b6d87929bc769527d639990cdc8f0c90909ca1dac67a82e12493a22376",
-    "closureCommit": "0f38406a5762dce03e83eff5ef4cff4a692c8b0c",
-    "closureContractSha256": "815ab9744c30299aa9a452097942dfff2243623a6a0da20957b79215641562fb",
-    "currentContractSha256": "ff1dcf666a813c8a2aed62d698be9ac56b0cc9034d165f9dc66c8762733469c6",
-    "scope": "W front-end language forms; F3 measure-only rerun",
+    "openingContractSha256": "3675ece4e94f5dc0c6fd6c7c231ab23c11c3f511a7db418029c3d915390a2733",
+    "closureCommit": "0be70acf130a32cb76fbd1b1840b2452dc25403e",
+    "closureContractSha256": "ab812f0e13b5ccd10c28707cb0056695bc96ff5360b361dda9765086a57f2727",
+    "scope": "X front-end survey residue; F3 measure-only rerun",
     "rulings": [
-      "thirdSurveyRanking",
-      "gccOnlyBuiltinsFollowTheProfile",
       "fullConfigSurveyIsMeasureOnly",
-      "scopeWClosed"
+      "scopeXClosed"
     ],
     "specification": "docs/evoir-spec.md",
-    "frontEndAuthorityRevision": "1.9.45",
-    "frontEndAuthoritySha256": "b7651196fc140565c31bc2023602a4492b5fe40e8ded0e3ffbce05ef8ddaf2c2",
-    "repositoryRevisionAtReceipt": "1.9.48",
-    "repositorySpecificationSha256": "bfb2758ee2143f60a5ddb162b59352db791eb9e829c9fcd55dbbf0f385202398",
-    "revisionQualification": "Revisions 1.9.46-1.9.47 changed Sections 8 and 11 only. Revision 1.9.48 opens the follow-on X residue; it does not retroactively alter the six W acceptance rules frozen by revision 1.9.45."
+    "frontEndAuthorityRevision": "1.9.49",
+    "frontEndAuthoritySha256": "c8c5218cd99c25289e2f57767f33c11657e19cd36e0ea8e5e4f720c03621db2f",
+    "surveyCheckoutRevision": "1.9.50",
+    "surveySpecificationSha256": "8fe15b7a25c4e5bb5b18e7c0701974572da332d25c506e3742ceb19d15cdaa99",
+    "revisionQualification": "Revision 1.9.49 supplies the corrected front-end authority. Revision 1.9.50 changed the equality cost policy only and did not alter the X clauses."
   },
-  "implementationCommit": "e04f2800e4c05f0547a45c9eefec207c82eceb10",
-  "subjectCommit": "d74dd2ebc8c90cab3a4a377642a97c94966ba365",
-  "subjectQualification": "The survey subject is the W implementation plus its dashboard receipt. The subsequent 0f38406 commit independently records the same measured closure and changes no production code.",
+  "implementationCommit": "597bb7697de02679e8bf26c2dc6cfe061a1e3992",
+  "subjectCommit": "b3a2af61169c8332a186e6f30bba1758d8e133af",
+  "subjectQualification": "The survey subject is the front-end implementation plus its committed zero-regression dashboard receipt. Later middle-end commits are excluded from this measurement.",
   "surveyRunChangedProductionOrSpecification": false,
   "harness": {
     "path": "tools/survey-cohort.py",
@@ -42,11 +39,11 @@
     }
   },
   "run": {
-    "id": "20260903T064414Z-47949",
-    "capture": ".evidence/full-config-parse-survey/20260903T064414Z-47949",
+    "id": "20260903T115834Z-66704",
+    "capture": ".evidence/full-config-parse-survey/20260903T115834Z-66704",
     "command": "python3 tools/survey-cohort.py --evocc target/release/evocc --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --jobs 4 --timeout 60",
     "returnCode": 0,
-    "releaseBinarySha256": "7f6ad3c7a13d431412d2111dba8c8d63843b1ee997acc425c7811d8ad2ef61b0"
+    "releaseBinarySha256": "59eb644da5f829a1469f103acb54c5d699dd00fc362d80c703575a8a7b8e5522"
   },
   "enumeration": {
     "source": ".build/reference/gcc-lane-1/**/*.o.cmd",
@@ -62,8 +59,8 @@
     "evidence": "enumeration.jsonl"
   },
   "classifications": {
-    "clean": 2694,
-    "diagnosed": 104,
+    "clean": 2760,
+    "diagnosed": 38,
     "unavailable": 0,
     "timeout": 0,
     "panic": 0,
@@ -71,84 +68,82 @@
     "evidence": "results.jsonl"
   },
   "previousSurveyComparison": {
-    "runId": "20260902T113345Z-48715",
+    "runId": "20260903T064414Z-47949",
     "sharedTargetUnits": 2798,
     "command": "jq -n --slurpfile old <previous-results> --slurpfile new <current-results> 'join classifications by unitId and count each old-to-new pair'",
     "transitions": {
-      "clean-to-clean": 2445,
-      "diagnosed-to-clean": 249,
-      "diagnosed-to-diagnosed": 104
+      "clean-to-clean": 2694,
+      "diagnosed-to-clean": 66,
+      "diagnosed-to-diagnosed": 38
     },
     "otherTransitions": 0,
-    "cleanDelta": 249,
-    "diagnosedDelta": -249,
-    "interpretation": "The six W rules move exactly 249 shared target translation units from typed-diagnosed to clean. No clean unit regressed and no unit changed into panic, timeout, or unavailable."
+    "cleanDelta": 66,
+    "diagnosedDelta": -66,
+    "movedToCleanByOldFinding": [
+      {"finding": "E2102 invalid-projected-lvalue", "units": 31},
+      {"finding": "E1001 expected-declaration", "units": 18},
+      {"finding": "E2102 invalid-update-operands", "units": 8},
+      {"finding": "E2101 expected-modifiable-lvalue", "units": 4},
+      {"finding": "E2001 undeclared-identifier", "units": 2},
+      {"finding": "E2202 invalid-initializer-type", "units": 2},
+      {"finding": "E2208 non-constant-static-initializer", "units": 1}
+    ],
+    "interpretation": "All 2,798 unit identities are shared. Exactly 66 previously diagnosed units become clean; no clean unit regresses and no unit changes into panic, timeout, or unavailable."
   },
   "atRootFirstDiagnosticTop15": [
-    {"rank": 1, "finding": "E2102 invalid-projected-lvalue", "units": 32, "exampleUnit": "arch/arm64/kernel/acpi.c", "exampleRecord": "arch/arm64/kernel/.acpi.o.cmd"},
-    {"rank": 2, "finding": "E1001 expected-declaration", "units": 20, "exampleUnit": "fs/nfs/callback_xdr.c", "exampleRecord": "fs/nfs/.callback_xdr.o.cmd"},
-    {"rank": 3, "finding": "E2102 invalid-update-operands", "units": 11, "exampleUnit": "arch/arm64/net/bpf_jit_comp.c", "exampleRecord": "arch/arm64/net/.bpf_jit_comp.o.cmd"},
-    {"rank": 4, "finding": "E2202 invalid-initializer-type", "units": 10, "exampleUnit": "drivers/firmware/arm_scmi/clock.c", "exampleRecord": "drivers/firmware/arm_scmi/.clock.o.cmd"},
-    {"rank": 5, "finding": "E2208 non-constant-static-initializer", "units": 10, "exampleUnit": "drivers/clk/clk-fixed-factor.c", "exampleRecord": "drivers/clk/.clk-fixed-factor.o.cmd"},
-    {"rank": 6, "finding": "E2101 expected-modifiable-lvalue", "units": 6, "exampleUnit": "arch/arm64/kernel/fpsimd.c", "exampleRecord": "arch/arm64/kernel/.fpsimd.o.cmd"},
-    {"rank": 7, "finding": "E2001 undeclared-identifier", "units": 4, "exampleUnit": "drivers/firmware/arm_scmi/quirks.c", "exampleRecord": "drivers/firmware/arm_scmi/.quirks.o.cmd"},
-    {"rank": 8, "finding": "E1003 expected-expression", "units": 3, "exampleUnit": "drivers/usb/host/ohci-hcd.c", "exampleRecord": "drivers/usb/host/.ohci-hcd.o.cmd"},
-    {"rank": 9, "finding": "E0102 unmatched-conditional", "units": 2, "exampleUnit": "kernel/module/main.c", "exampleRecord": "kernel/module/.main.o.cmd"},
-    {"rank": 10, "finding": "E2205 not-covered-day5", "units": 2, "exampleUnit": "drivers/firmware/efi/libstub/file.c", "exampleRecord": "drivers/firmware/efi/libstub/.file.o.cmd"},
-    {"rank": 11, "finding": "E0110 invalid-token-paste", "units": 1, "exampleUnit": "net/core/filter.c", "exampleRecord": "net/core/.filter.o.cmd"},
-    {"rank": 12, "finding": "E1005 invalid-declarator", "units": 1, "exampleUnit": "kernel/panic.c", "exampleRecord": "kernel/.panic.o.cmd"},
-    {"rank": 13, "finding": "E1006 invalid-character-literal", "units": 1, "exampleUnit": "lib/string_helpers.c", "exampleRecord": "lib/.string_helpers.o.cmd"},
-    {"rank": 14, "finding": "E2207 initializer-plan-too-large", "units": 1, "exampleUnit": "kernel/printk/printk.c", "exampleRecord": "kernel/printk/.printk.o.cmd"}
+    {"rank": 1, "finding": "E2208 non-constant-static-initializer", "units": 10, "exampleUnit": "drivers/clk/clk-fixed-factor.c", "exampleRecord": "drivers/clk/.clk-fixed-factor.o.cmd"},
+    {"rank": 2, "finding": "E2202 invalid-initializer-type", "units": 8, "exampleUnit": "drivers/firmware/arm_scmi/clock.c", "exampleRecord": "drivers/firmware/arm_scmi/.clock.o.cmd"},
+    {"rank": 3, "finding": "E2102 invalid-update-operands", "units": 4, "exampleUnit": "arch/arm64/net/bpf_jit_comp.c", "exampleRecord": "arch/arm64/net/.bpf_jit_comp.o.cmd"},
+    {"rank": 4, "finding": "E1003 expected-expression", "units": 3, "exampleUnit": "drivers/usb/host/ohci-hcd.c", "exampleRecord": "drivers/usb/host/.ohci-hcd.o.cmd"},
+    {"rank": 5, "finding": "E0102 unmatched-conditional", "units": 2, "exampleUnit": "kernel/module/main.c", "exampleRecord": "kernel/module/.main.o.cmd"},
+    {"rank": 6, "finding": "E1001 expected-declaration", "units": 2, "exampleUnit": "fs/nfs/callback_xdr.c", "exampleRecord": "fs/nfs/.callback_xdr.o.cmd"},
+    {"rank": 7, "finding": "E2101 expected-modifiable-lvalue", "units": 2, "exampleUnit": "arch/arm64/kernel/fpsimd.c", "exampleRecord": "arch/arm64/kernel/.fpsimd.o.cmd"},
+    {"rank": 8, "finding": "E2205 not-covered-day5", "units": 2, "exampleUnit": "drivers/firmware/efi/libstub/file.c", "exampleRecord": "drivers/firmware/efi/libstub/.file.o.cmd"},
+    {"rank": 9, "finding": "E0110 invalid-token-paste", "units": 1, "exampleUnit": "net/core/filter.c", "exampleRecord": "net/core/.filter.o.cmd"},
+    {"rank": 10, "finding": "E1005 invalid-declarator", "units": 1, "exampleUnit": "kernel/panic.c", "exampleRecord": "kernel/.panic.o.cmd"},
+    {"rank": 11, "finding": "E1006 invalid-character-literal", "units": 1, "exampleUnit": "lib/string_helpers.c", "exampleRecord": "lib/.string_helpers.o.cmd"},
+    {"rank": 12, "finding": "E2001 undeclared-identifier", "units": 1, "exampleUnit": "drivers/firmware/arm_scmi/quirks.c", "exampleRecord": "drivers/firmware/arm_scmi/.quirks.o.cmd"},
+    {"rank": 13, "finding": "E2207 initializer-plan-too-large", "units": 1, "exampleUnit": "kernel/printk/printk.c", "exampleRecord": "kernel/printk/.printk.o.cmd"}
   ],
   "timing": {
     "parallelism": 4,
     "perUnitTimeoutSeconds": 60,
-    "medianWallMilliseconds": 2610.539,
-    "maximumWallMilliseconds": 18921.142,
+    "medianWallMilliseconds": 2428.757,
+    "maximumWallMilliseconds": 19163.359,
     "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c",
     "qualification": "Per-process wall time was observed under concurrent host load; it is coarse telemetry, not a benchmark."
   },
   "sealedEvidence": {
-    "seal": {"path": ".evidence/full-config-parse-survey/20260903T064414Z-47949/seal.json", "sha256": "e48ea7c4c869c54f78f4c58c153da82fa2a0d100de643b60bfb7032a2a55748c", "bytes": 704},
-    "capture": {"files": 5603, "bytes": 21992138},
-    "captureManifest": {"path": "capture-files.tsv", "sha256": "e2311943797d70ab7cfc0a6e3aae97ca83bcb905668e0c0b979033236d29252b", "bytes": 549280},
-    "summarySha256": "bdf0f842427f61670f8201489ee23e2e24f41ca7464d8fbe190c9c2f193b2938",
-    "resultsSha256": "edae77ac1dace4926711e5d15928aa7cd4302af922381ecb53288aed775b2b97",
+    "seal": {"path": ".evidence/full-config-parse-survey/20260903T115834Z-66704/seal.json", "sha256": "cdb6846dc18350f6b9fca476f88895b5ff0b7a5f234e5871c4d28df8ce820d96", "bytes": 704},
+    "capture": {"files": 5603, "bytes": 21853716},
+    "captureManifest": {"path": "capture-files.tsv", "sha256": "dc3c8e8bf4ce4c2be7c3c097f7224ce8197af834e4c0b6a18c6288ff7e5f131d", "bytes": 549121},
+    "summarySha256": "e2dc8c85893070bce6a350e15f392753016ecc29bcb0eed81b7bc0d89fe7784c",
+    "resultsSha256": "8d44a35ed8eb0081362110dd2f2b81beaf50a2201593c0bee279b742cc14d460",
     "enumerationSha256": "a87c93dc3a6e77add3db9e93cb74471418e26ddab2207b60a06b8681f6cfd930",
     "argvSha256": "e470edd0562830bc462e870c33963037a577f5d6a1334dde234be75e0029fcab",
-    "verification": "The seal reports 5603 files; all classification and exclusion sums reconcile with the frozen denominators."
+    "verification": "The seal covers 5,603 files and 21,853,716 bytes; all classification and exclusion sums reconcile with the frozen denominators."
   },
   "acceptanceGuard": {
-    "runId": "20260903T061659Z-52334",
-    "previousRunId": "20260902T111559Z-80486",
+    "runId": "20260903T115135Z-31973",
+    "previousRunId": "20260903T061659Z-52334",
     "rawPreprocessClean": "16/16",
     "gccPreprocessedParserClean": "16/16",
     "clangPreprocessedParserClean": "16/16",
     "dualOracleClean": "16/16",
     "regressionsAgainstPrevious": 0,
-    "receiptSha256": "3268a3374e0f74cce3840fed9cb3bd43a0d6f4973239291f0b95f7e4a28da190",
-    "resultsSha256": "e9e4238bb5b81806b6af3c801d2f59d38ce108028ad72e31f7b01fba63fd6c51"
-  },
-  "measuredKfifoReduction": {
-    "scope": "measurement only; production was not changed",
-    "cohortObservation": "30 of the 32 E2102 invalid-projected-lvalue units share the serial_core.h:879 kfifo_get expansion",
-    "minimalSource": "int f(){return(0?\"\":0)[0];}",
-    "sourceBytes": 28,
-    "subjectDiagnostic": "E2102 invalid-projected-lvalue",
-    "oracleResult": "GCC-14 and Clang-19 both accept under -std=gnu11 -Wall -Wextra -Werror -fsyntax-only",
-    "rootCauseShape": "array-to-pointer decay in a conditional expression followed by subscript; dereferencing the same conditional already succeeds",
-    "claimCeiling": "This isolates an implementation defect covered by the existing general array-lvalue rules; it does not fix or reclassify any survey unit."
+    "receiptSha256": "9bb76516f8b772797d7451c1d2b68a77ccce756c74a2a24dd073fd32196c9c84",
+    "resultsSha256": "d104172ad372d1dabbc2b5017967685dc09fc321a933343ecf25985c015e27fb"
   },
   "gates": {
-    "workspace": {"command": "cargo test --workspace --no-fail-fast", "passed": 1256, "failed": 0, "ignored": 1},
-    "clippy": {"command": "cargo clippy --workspace --all-targets -- -D warnings", "warnings": 0},
+    "workspace": {"command": "CARGO_TARGET_DIR=/private/tmp/c30-x-final-target cargo test --workspace --no-fail-fast", "passed": 1287, "failed": 0, "ignored": 1},
+    "clippy": {"command": "CARGO_TARGET_DIR=/private/tmp/c30-x-final-target cargo clippy --workspace --all-targets -- -D warnings", "warnings": 0},
     "format": {"command": "cargo fmt --all -- --check", "result": "clean"},
     "ruff": {"command": "ruff check tests/acceptance tools", "result": "clean"},
     "baseLayoutCorpus": "128/128 ORACLE_CONSENSUS; 0 mismatches",
     "attributedLayoutCorpus": "22/22 ORACLE_CONSENSUS; 0 mismatches",
-    "offlineNoLocalReplay": "1256 passed / 0 failed / 1 ignored at d74dd2ebc8c90cab3a4a377642a97c94966ba365; objects alternates absent",
+    "offlineNoLocalReplay": "1287 passed / 0 failed / 1 ignored at b3a2af61169c8332a186e6f30bba1758d8e133af; objects alternates absent",
     "diffCheck": "clean"
   },
   "specGap": null,
-  "scopeDiscipline": "The survey and kfifo reduction were measure-only. No problem discovered by either measurement was fixed; the 104 typed-diagnosed units remain the next measured frontier."
+  "scopeDiscipline": "The survey was measure-only. No problem exposed among the remaining 38 typed-diagnosed units was investigated or fixed in this run."
 }
