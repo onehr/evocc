@@ -21,6 +21,9 @@ pub(crate) enum Registry {
     Reviewed,
     Revised,
     Widened,
+    /// The revision that adds the emitting rules, so that the three spellings
+    /// of a doubling are one class and extraction becomes a choice.
+    Emitting,
 }
 
 /// Which registry first prints a rule. The identifiers do not answer this on
@@ -55,7 +58,9 @@ fn first_printed_by(rule: &str) -> Registry {
         "p1_231_known_sext",
         "p1_232_known_trunc",
     ];
-    if WIDENED.contains(&rule) {
+    if EMITTING.contains(&rule) {
+        Registry::Emitting
+    } else if WIDENED.contains(&rule) {
         Registry::Widened
     } else if REVISED.contains(&rule) {
         Registry::Revised
@@ -64,13 +69,41 @@ fn first_printed_by(rule: &str) -> Registry {
     }
 }
 
+/// The rules the widest registry adds. Their right-hand sides emit an
+/// instruction and their side condition `width_min` reads no class, so they
+/// belong to no tier that records a premise.
+const EMITTING: [&str; 4] = [
+    "p2_300_mul_two_rhs",
+    "p2_301_mul_two_lhs",
+    "p2_302_add_self_shl",
+    "p2_303_shl_one_add",
+];
+
+/// Whether a rule's side condition reads a class, and must therefore record
+/// what it read.
+///
+/// Section 11.3 makes this a property of the rule and not of the registry: the
+/// fact-driven rules record premises, `width_min` records none, and both are
+/// printed by a revision. A checker that inferred the requirement from the
+/// registry name would refuse every emitting rewrite for carrying no premise.
+fn reads_facts(rule: &str) -> bool {
+    matches!(
+        first_printed_by(rule),
+        Registry::Revised | Registry::Widened
+    )
+}
+
 /// Whether a certificate naming `named` may use a rule `printed` first prints.
 fn contains(named: Registry, printed: Registry) -> bool {
     matches!(
         (named, printed),
         (Registry::Reviewed, Registry::Reviewed)
             | (Registry::Revised, Registry::Reviewed | Registry::Revised)
-            | (Registry::Widened, _)
+            | (
+                Registry::Widened,
+                Registry::Reviewed | Registry::Revised | Registry::Widened
+            )
+            | (Registry::Emitting, _)
     )
 }
 
@@ -262,7 +295,28 @@ impl<'a> Replay<'a> {
         validate_reviewed_rule(self, rewrite, lhs, rhs_node, &facts)?;
         if let Some(node) = rhs_node {
             if node.source == EvpNodeSource::Derived {
-                self.used_derived.insert(node.node);
+                // Section 11.3 as amended at revision 1.9.52: a derived node is
+                // used when a rewrite names it or when it is a child, at any
+                // depth, of a derived node a rewrite names. The `const_like`
+                // operand an emitting right-hand side writes is used through
+                // the node that names it.
+                let mut pending = vec![node.clone()];
+                while let Some(node) = pending.pop() {
+                    if !self.used_derived.insert(node.node) {
+                        continue;
+                    }
+                    for child in &node.children {
+                        let root = self.find(*child);
+                        for candidate in &self.nodes {
+                            if candidate.source == EvpNodeSource::Derived
+                                && self.find(candidate.owner) == root
+                                && !self.used_derived.contains(&candidate.node)
+                            {
+                                pending.push(candidate.clone());
+                            }
+                        }
+                    }
+                }
             }
         }
         self.union(rewrite.lhs_pre, rewrite.rhs_pre);
@@ -423,6 +477,12 @@ impl<'a> Replay<'a> {
 
         let mut selections = Vec::new();
         let mut choices = BTreeMap::new();
+        // Section 11.3's topological rule, carried as a number: an entry is
+        // finite only once every child it selects already has one, so a child
+        // without an earlier entry has none and the extraction is refused.
+        // What the number counts is no longer read -- the checker does not
+        // judge cost (revision 1.9.51) -- but which entries have one is
+        // exactly the rule.
         let mut costs = HashMap::new();
         for extraction in &self.region.extractions {
             let class = self.find(extraction.class);
@@ -495,9 +555,22 @@ impl<'a> Replay<'a> {
         if reachable.len() != selections.len() {
             return Err(());
         }
-        let original_cost = original_root_cost(root_node, &self.nodes)?;
-        if costs[&root_class] >= original_cost {
-            return Err(());
+        // Section 11.3 (revision 1.9.51): the checker does not judge cost. It
+        // verifies equivalence, this section's structural rules, and that the
+        // region changed something -- an extraction that hands back the
+        // original root node proves an equality and optimizes nothing, and
+        // with the cost rule gone this is what refuses it. Whether the
+        // replacement is an improvement is decided by the producer's policy
+        // (7.5 "Cost is a policy") and is not observable here.
+        let root_choice = choices.get(&root_class).copied().ok_or(())?;
+        if let Selection {
+            choice: Selected::Node(node),
+            ..
+        } = &selections[root_choice]
+        {
+            if node.node == root_node {
+                return Err(());
+            }
         }
         Ok(RegionReplacement {
             function: self.region.id.function.clone(),
@@ -577,11 +650,11 @@ fn validate_reviewed_rule(
     if !contains(replay.registry, printed) {
         return Err(());
     }
-    if printed == Registry::Reviewed {
-        if !rewrite.premises.is_empty() {
+    if reads_facts(&rewrite.rule) {
+        if rewrite.premises.is_empty() {
             return Err(());
         }
-    } else if rewrite.premises.is_empty() {
+    } else if !rewrite.premises.is_empty() {
         return Err(());
     }
     let bindings = rewrite
@@ -791,8 +864,154 @@ fn validate_reviewed_rule(
         "p1_232_known_trunc" => {
             widened(replay, rewrite, lhs, rhs_node, "trunc", unary("a")?, facts)
         }
+        "p2_300_mul_two_rhs" => doubling(
+            replay,
+            lhs,
+            rhs_node,
+            DoublingSpec {
+                operation: "mul",
+                matched_constant: Some((RIGHT, 2)),
+                x: unary("x")?,
+                x_child: LEFT,
+                emitted: "add",
+                emitted_constant: None,
+            },
+        ),
+        "p2_301_mul_two_lhs" => doubling(
+            replay,
+            lhs,
+            rhs_node,
+            DoublingSpec {
+                operation: "mul",
+                matched_constant: Some((LEFT, 2)),
+                x: unary("x")?,
+                x_child: RIGHT,
+                emitted: "add",
+                emitted_constant: None,
+            },
+        ),
+        "p2_302_add_self_shl" => doubling(
+            replay,
+            lhs,
+            rhs_node,
+            DoublingSpec {
+                operation: "add",
+                matched_constant: None,
+                x: unary("x")?,
+                x_child: LEFT,
+                emitted: "shl",
+                emitted_constant: Some(1),
+            },
+        ),
+        "p2_303_shl_one_add" => doubling(
+            replay,
+            lhs,
+            rhs_node,
+            DoublingSpec {
+                operation: "shl",
+                matched_constant: Some((RIGHT, 1)),
+                x: unary("x")?,
+                x_child: LEFT,
+                emitted: "add",
+                emitted_constant: None,
+            },
+        ),
         _ => Err(()),
     }
+}
+
+struct DoublingSpec {
+    /// The operator of the left pattern.
+    operation: &'static str,
+    /// The child the left pattern fixes with `const_like`, and its payload.
+    /// `None` when the left pattern is `add(?x,?x)`, which fixes no constant
+    /// and instead requires both children to be one class.
+    matched_constant: Option<(usize, u64)>,
+    /// The class `?x` binds.
+    x: u32,
+    /// The child of the matched node `?x` names.
+    x_child: usize,
+    /// The operator the right-hand side emits.
+    emitted: &'static str,
+    /// The payload of the `const_like` operand the right-hand side writes, if
+    /// it writes one. It is the second operand in every rule that does.
+    emitted_constant: Option<u64>,
+}
+
+/// One of the four emitting rules of `p0.scalar.v4`.
+///
+/// Section 11.6: the operator, sort and children of the emitted node are
+/// reconstructed here from the pattern and the recorded bindings, never read
+/// off the certificate; a `const_like` operand's payload is recomputed the same
+/// way. `width_min(?x,2)` is read off the sort of the matched node, which is
+/// the sort of `?x` for every one of these rules, and records no premise.
+fn doubling(
+    replay: &Replay<'_>,
+    lhs: &EvpNode,
+    rhs: Option<&EvpNode>,
+    spec: DoublingSpec,
+) -> Result<(), ()> {
+    if lhs.operation != spec.operation || bits_width(&lhs.sort).ok_or(())? < 2 {
+        return Err(());
+    }
+    let [left, right] = lhs.children.as_slice() else {
+        return Err(());
+    };
+    let children = [*left, *right];
+    if replay.find(*children.get(spec.x_child).ok_or(())?) != spec.x {
+        return Err(());
+    }
+    match spec.matched_constant {
+        // Section 11.6: on a left-hand side `const_like` matches only a node
+        // already present in the before witness closure.
+        Some((child, value)) => {
+            if !class_has_const(
+                replay,
+                *children.get(child).ok_or(())?,
+                &lhs.sort,
+                value,
+                true,
+            )? {
+                return Err(());
+            }
+        }
+        // `add(?x,?x)` is a claim about one class, not about two operands the
+        // block happened to give one name.
+        None => {
+            if replay.find(*left) != spec.x || replay.find(*right) != spec.x {
+                return Err(());
+            }
+        }
+    }
+    let emitted = rhs.ok_or(())?;
+    if emitted.source != EvpNodeSource::Derived
+        || emitted.operation != spec.emitted
+        || emitted.sort != lhs.sort
+        || !emitted.attributes.is_empty()
+    {
+        return Err(());
+    }
+    let [first, second] = emitted.children.as_slice() else {
+        return Err(());
+    };
+    if replay.find(*first) != spec.x {
+        return Err(());
+    }
+    match spec.emitted_constant {
+        // The payload is recomputed from the pattern, so the constant operand
+        // is checked exactly as a named constant would be.
+        Some(value) => {
+            if !class_has_const(replay, *second, &lhs.sort, value, false)? {
+                return Err(());
+            }
+        }
+        None => {
+            if replay.find(*second) != spec.x {
+                return Err(());
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The same as `known_constant`, for a rule whose left pattern names one
@@ -1299,14 +1518,6 @@ fn extraction_closure(
         }
     }
     Ok(reached)
-}
-
-fn original_root_cost(node: u32, nodes: &[EvpNode]) -> Result<usize, ()> {
-    let root = nodes.get(node as usize).ok_or(())?;
-    if root.source != EvpNodeSource::Before {
-        return Err(());
-    }
-    Ok(usize::from(root.operation != "const"))
 }
 
 fn find_instruction<'a>(module: &'a Module, id: &evocc_proof::EvpRegionId) -> Option<&'a Inst> {

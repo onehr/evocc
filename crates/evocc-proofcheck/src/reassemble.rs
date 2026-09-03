@@ -146,6 +146,22 @@ fn materialize(node: &evocc_proof::EvpNode, result: Value, children: &[Value]) -
             let (left, right) = binary()?;
             Inst::Xor(result, left, right)
         }
+        // Admitted to the Section 8.5 allowlist at revision 1.9.44 and emitted
+        // by `p2_302_add_self_shl`. None of the three may trap; a shift's
+        // definedness guard is a separate predicate and is not part of the
+        // instruction this materializes.
+        "shl" => {
+            let (left, right) = binary()?;
+            Inst::Shl(result, left, right)
+        }
+        "lshr" => {
+            let (left, right) = binary()?;
+            Inst::LShr(result, left, right)
+        }
+        "ashr" => {
+            let (left, right) = binary()?;
+            Inst::AShr(result, left, right)
+        }
         operation if operation.starts_with("icmp.") => {
             let comparison = match operation {
                 "icmp.eq" => CmpOp::Eq,

@@ -1128,6 +1128,13 @@ impl FunctionGen<'_> {
     /// gate would depend on chance to produce a covering mask or a decidable
     /// ordering, and the rules that read them would go unmeasured.
     fn emit_fact_bait(&mut self, block: &mut OpenBlock) {
+        // A multiply by a literal two, which nothing else in this generator
+        // writes. The other two spellings of a doubling -- a self-addition and
+        // a shift by one -- already occur, so this is the only shape the
+        // emitting rules of `p0.scalar.v4` would otherwise have no source for.
+        // It is emitted at every site rather than drawn as one group of
+        // several, for the reason the known-zero identity is.
+        self.emit_doubling(block);
         let wide = self
             .active
             .iter()
@@ -1338,6 +1345,37 @@ impl FunctionGen<'_> {
                 });
                 self.record(block, &result);
             }
+        }
+    }
+
+    /// A multiply by two, in both operand orders.
+    ///
+    /// Section 11.6's emitting rules match `mul(?x, const_like(?x, 2))` in
+    /// either order under `width_min(?x, 2)`; both orders are emitted, for the
+    /// reason the covering bait emits all four of its combinations. A width of
+    /// one is skipped because the side condition excludes it.
+    fn emit_doubling(&mut self, block: &mut OpenBlock) {
+        let widths = self
+            .active
+            .iter()
+            .copied()
+            .filter(|width| *width >= 2)
+            .collect::<Vec<_>>();
+        if widths.is_empty() {
+            return;
+        }
+        let width = *self.rng.pick(&widths);
+        let value = self.value_of(block, width);
+        let two = self.emit_const(block, width, 2);
+        for two_on_the_left in [false, true] {
+            let (left, right) = if two_on_the_left {
+                (two.clone(), value.clone())
+            } else {
+                (value.clone(), two.clone())
+            };
+            let result = self.fresh(EvoIRType::Bits(width));
+            block.insts.push(Inst::Mul(result.clone(), left, right));
+            self.record(block, &result);
         }
     }
 

@@ -136,7 +136,7 @@ fn every_shipped_policy_answers_to_its_own_name() {
 fn the_default_policy_is_section_7_5_instruction_count() {
     let policy = default_policy();
     assert_eq!(policy.cost(), CostFunction::InstructionCount);
-    assert_eq!(policy.registry(), RegistryCeiling::V3);
+    assert_eq!(policy.registry(), RegistryCeiling::V4);
     assert_eq!(ExtractionPolicy::default(), policy);
 
     let cost = CostFunction::InstructionCount;
