@@ -4,6 +4,7 @@
 docs/*
 !docs/roadmap.md
 !docs/evoir-spec.md
+!docs/evomir-spec.md
 !docs/notebook/
 !docs/notebook/**
 !docs/images/
