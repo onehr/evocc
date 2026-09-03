@@ -50,9 +50,21 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
             sequentialize(&pairs, &mut insts, &mut next_scratch);
         }
         clear_edge_args(&mut term);
+        // The entry block's arguments are the function's parameters, bound by
+        // the caller rather than by an edge, so no copy can remove them. They
+        // are the fixed operands of the boundary that Section 7 hands the
+        // allocator, and they disappear when it assigns them.
+        let entry = split
+            .blocks
+            .first()
+            .is_some_and(|first| first.id == block.id);
         blocks.push(MBlock {
             id: block.id,
-            args: Vec::new(),
+            args: if entry {
+                block.args.clone()
+            } else {
+                Vec::new()
+            },
             insts,
             term,
         });

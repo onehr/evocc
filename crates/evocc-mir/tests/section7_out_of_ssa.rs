@@ -78,13 +78,21 @@ fn straight_edge() -> MFunction {
 
 #[test]
 fn every_block_argument_and_edge_argument_is_gone() {
-    let after = out_of_ssa(&straight_edge());
+    let before = straight_edge();
+    let after = out_of_ssa(&before);
     for block in &after.blocks {
-        assert!(block.args.is_empty(), "block {} keeps arguments", block.id);
         for (target, args) in term_edges(&block.term) {
             assert!(args.is_empty(), "edge to {target} keeps arguments");
         }
+        if block.id == 0 {
+            continue;
+        }
+        assert!(block.args.is_empty(), "block {} keeps arguments", block.id);
     }
+    // The entry block's arguments are the function's parameters: no edge binds
+    // them, so no copy can remove them, and they are the boundary's fixed
+    // operands until the allocator assigns them.
+    assert_eq!(find(&after, 0).args, before.blocks[0].args);
 }
 
 #[test]
