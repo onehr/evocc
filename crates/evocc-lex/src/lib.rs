@@ -111,9 +111,15 @@ pub enum TokenKind {
     BuiltinObjectSize,
     BuiltinHasAttribute,
     BuiltinStrlen,
+    /// GNU builtins whose front-end type is the corresponding C library
+    /// prototype.  The exact spelling remains in the token text.
+    BuiltinLibrary,
+    /// GNU ctype builtins, likewise selected by their retained spelling.
+    BuiltinCtype,
     BuiltinVaStart,
     BuiltinVaEnd,
     BuiltinVaCopy,
+    BuiltinVaArg,
     /// GNU bit operations and control/introspection builtins, promoted only
     /// after preprocessing.
     BuiltinBit,

@@ -33,7 +33,9 @@ fn accepts(source: &str) {
 fn sparse_designator_sets_an_unbounded_array_size() {
     accepts(concat!(
         "int values[] = { [3] = 1 }; ",
-        "_Static_assert(sizeof values == 4 * sizeof(int), \"sparse bound\");\n",
+        "_Static_assert(sizeof values == 4 * sizeof(int), \"sparse bound\"); ",
+        "enum { K = 7 }; const char *names[] = { [K] = \"x\", [2] = \"y\" }; ",
+        "_Static_assert(sizeof names == 8 * sizeof(char *), \"largest designator\");\n",
     ));
 }
 

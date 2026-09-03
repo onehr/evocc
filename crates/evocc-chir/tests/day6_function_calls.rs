@@ -2721,29 +2721,33 @@ fn call_execution_fails_closed_on_non_direct_or_unsupported_function_contracts()
             InterpreterLimits::default(),
         )
         .expect_err("unsupported or inconsistent calls must not produce a scalar value");
-        assert_eq!(error.code(), "E3007", "fault {fault:?}: {error:?}");
-        let (expected_message, expected_span) = match fault {
+        let (expected_code, expected_message, expected_span) = match fault {
             AddFault::IndirectCallee => (
+                "E3007",
                 "unsupported-interpreter-expression: indirect scalar function call",
                 span(138, 142),
             ),
-            AddFault::VariadicDefinition => {
-                ("unsupported-interpreter-function-signature", span(0, 39))
-            }
-            AddFault::UnnamedParameter => {
-                ("unsupported-interpreter-function-signature", span(8, 12))
-            }
+            AddFault::VariadicDefinition => ("E3030", "not-lowered: varargs", span(0, 39)),
+            AddFault::UnnamedParameter => (
+                "E3007",
+                "unsupported-interpreter-function-signature",
+                span(8, 12),
+            ),
             AddFault::ForgedDesignator => (
+                "E3007",
                 "unsupported-interpreter-expression: inconsistent function designator",
                 span(139, 142),
             ),
-            AddFault::ForgedWrittenDeclarator => {
-                ("unsupported-interpreter-function-signature", span(0, 39))
-            }
+            AddFault::ForgedWrittenDeclarator => (
+                "E3007",
+                "unsupported-interpreter-function-signature",
+                span(0, 39),
+            ),
             AddFault::None
             | AddFault::FileScopeParameter
             | AddFault::DuplicateParameterSpelling => unreachable!(),
         };
+        assert_eq!(error.code(), expected_code, "fault {fault:?}: {error:?}");
         assert_eq!(
             error.message(),
             expected_message,
@@ -2759,9 +2763,10 @@ fn call_execution_fails_closed_on_non_direct_or_unsupported_function_contracts()
                 error,
                 InterpreterError::UnsupportedExpression { .. }
             )),
-            AddFault::VariadicDefinition
-            | AddFault::UnnamedParameter
-            | AddFault::ForgedWrittenDeclarator => assert!(matches!(
+            AddFault::VariadicDefinition => {
+                assert!(matches!(error, InterpreterError::VarArgs { .. }))
+            }
+            AddFault::UnnamedParameter | AddFault::ForgedWrittenDeclarator => assert!(matches!(
                 error,
                 InterpreterError::UnsupportedFunctionSignature { .. }
             )),

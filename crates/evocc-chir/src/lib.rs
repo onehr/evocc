@@ -358,6 +358,7 @@ pub enum VarArgsBuiltinOp {
     Start,
     End,
     Copy,
+    Arg,
 }
 
 // ---------------------------------------------------------------------------
@@ -446,11 +447,13 @@ pub enum CHirExpr<'arena> {
     },
     /// A GNU variable-argument operation retained until the target calling
     /// convention defines its execution. `second` is the last named parameter
-    /// for `Start`, the source object for `Copy`, and absent for `End`.
+    /// for `Start`, the source object for `Copy`, and absent for `End` and
+    /// `Arg`. `requested_ty` is present only for `Arg`.
     BuiltinVarArgs {
         op: VarArgsBuiltinOp,
         first: &'arena CHirExpr<'arena>,
         second: Option<&'arena CHirExpr<'arena>>,
+        requested_ty: Option<TypeId>,
         facts: ExprFacts,
         span: SourceSpan,
     },

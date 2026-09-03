@@ -98,10 +98,10 @@ impl PointerTypeDesc {
             .ok_or(MemoryPlaceError::UnknownType(right.pointee))?
             .kind;
         let pointee = if left_kind == right_kind
-            || (matches!(left_kind, TypeKind::Void) && is_object_type(right_kind))
+            || (matches!(left_kind, TypeKind::Void) && is_object_or_function_type(right_kind))
         {
             left.pointee
-        } else if matches!(right_kind, TypeKind::Void) && is_object_type(left_kind) {
+        } else if matches!(right_kind, TypeKind::Void) && is_object_or_function_type(left_kind) {
             right.pointee
         } else {
             return Err(MemoryPlaceError::IncompatiblePointerTypes {
@@ -468,7 +468,33 @@ impl<'arena> MemoryPlace<'arena> {
                 pointer,
                 pointer_type,
             } => {
-                let expression_type = PointerTypeDesc::from_expression(symbols, types, pointer)?;
+                let expression_type = if let CHirExpr::StringLit(literal, _) = pointer {
+                    let Some(pointee) = types.get(pointer_type.pointee()) else {
+                        return Err(MemoryPlaceError::UnknownType(pointer_type.pointee()));
+                    };
+                    let matches_literal = matches!(
+                        (literal.prefix, &pointee.kind),
+                        (
+                            crate::StringPrefix::None | crate::StringPrefix::U8,
+                            TypeKind::Int(evocc_types::IntRank::Char)
+                        ) | (
+                            crate::StringPrefix::L,
+                            TypeKind::Int(evocc_types::IntRank::Int)
+                        ) | (
+                            crate::StringPrefix::U16,
+                            TypeKind::Int(evocc_types::IntRank::UShort)
+                        ) | (
+                            crate::StringPrefix::U,
+                            TypeKind::Int(evocc_types::IntRank::UInt)
+                        )
+                    );
+                    if !matches_literal || pointer_type.pointee_qualifiers() != pointee.qualifiers {
+                        return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
+                    }
+                    *pointer_type
+                } else {
+                    PointerTypeDesc::from_expression(symbols, types, pointer)?
+                };
                 if expression_type != *pointer_type {
                     return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
                 }
@@ -1091,8 +1117,8 @@ fn call_expression_return_type(
     }
 }
 
-fn is_object_type(kind: &TypeKind) -> bool {
-    !matches!(kind, TypeKind::Void | TypeKind::Function { .. })
+fn is_object_or_function_type(kind: &TypeKind) -> bool {
+    !matches!(kind, TypeKind::Void)
 }
 
 /// Whether an object type itself is modifiable under C's recursive aggregate

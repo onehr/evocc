@@ -332,6 +332,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             if token.kind == TokenKind::Identifier {
                 token.kind = match spelling {
                     Some("__signed__") => TokenKind::Signed,
+                    Some("__inline" | "__inline__") => TokenKind::Inline,
+                    Some("__restrict" | "__restrict__") => TokenKind::Restrict,
                     Some("__extension__") => TokenKind::GnuExtension,
                     Some("__builtin_va_list") => TokenKind::BuiltinVaList,
                     Some("__int128" | "__int128_t" | "__uint128_t") => TokenKind::GnuInt128,
@@ -344,9 +346,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     Some("__builtin_object_size") => TokenKind::BuiltinObjectSize,
                     Some("__builtin_has_attribute") => TokenKind::BuiltinHasAttribute,
                     Some("__builtin_strlen") => TokenKind::BuiltinStrlen,
+                    Some(
+                        "__builtin_memset" | "__builtin_memcpy" | "__builtin_memcmp"
+                        | "__builtin_strcmp" | "__builtin_strncmp" | "__builtin_alloca",
+                    ) => TokenKind::BuiltinLibrary,
+                    Some(
+                        "__builtin_isdigit" | "__builtin_isalpha" | "__builtin_isspace"
+                        | "__builtin_toupper" | "__builtin_tolower",
+                    ) => TokenKind::BuiltinCtype,
                     Some("__builtin_va_start") => TokenKind::BuiltinVaStart,
                     Some("__builtin_va_end") => TokenKind::BuiltinVaEnd,
                     Some("__builtin_va_copy") => TokenKind::BuiltinVaCopy,
+                    Some("__builtin_va_arg") => TokenKind::BuiltinVaArg,
                     Some(
                         "__builtin_ffs"
                         | "__builtin_ffsl"
@@ -1348,7 +1359,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut inline_spans = Vec::new();
         let mut attributes = Vec::new();
         self.parse_declaration_modifiers(&mut storage, &mut inline_spans, &mut attributes);
-        let Some(specifier) = self.parse_declaration_type_specifier(&mut inline_spans) else {
+        let Some(specifier) =
+            self.parse_declaration_type_specifier(&mut inline_spans, &mut attributes)
+        else {
             self.report("E1001", "expected-declaration", self.span());
             return None;
         };
@@ -1971,7 +1984,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         self.report("E2202", "invalid-initializer-type", expression.span());
                         return None;
                     }
-                    WrittenInitializer::List { elements, span, .. } => {
+                    WrittenInitializer::List {
+                        elements,
+                        designations,
+                        span,
+                    } => {
                         if let Some(WrittenInitializer::Expression(CHirExpr::StringLit(
                             literal,
                             literal_span,
@@ -1992,10 +2009,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                                 }
                                 literal.explicit_unit_count()?.checked_add(1)?
                             } else {
-                                self.inferred_array_element_count(element, elements, *span)?
+                                self.inferred_array_element_count(
+                                    element,
+                                    elements,
+                                    designations,
+                                    *span,
+                                )?
                             }
                         } else {
-                            self.inferred_array_element_count(element, elements, *span)?
+                            self.inferred_array_element_count(
+                                element,
+                                elements,
+                                designations,
+                                *span,
+                            )?
                         }
                     }
                 };
@@ -2315,6 +2342,24 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if self.is_null_pointer_constant(expression) {
             return true;
         }
+        if self
+            .expression_type(expression)
+            .is_some_and(|inferred| match inferred.ty {
+                InferredType::Canonical(ty) => matches!(
+                    self.types.get(ty).map(|canonical| &canonical.kind),
+                    Some(TypeKind::Array { .. })
+                ),
+                InferredType::StringArray(_) => true,
+                InferredType::Integer(_)
+                | InferredType::Real(_)
+                | InferredType::Complex(_)
+                | InferredType::Pointer(_)
+                | InferredType::StringPointer(_) => false,
+            })
+            && self.lvalue_has_static_address(expression)
+        {
+            return true;
+        }
         match expression {
             CHirExpr::StringLit(_, _) => true,
             CHirExpr::CompoundLit(_, _, _) => self.current_scope == self.symbols.file_scope(),
@@ -2442,12 +2487,55 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         &mut self,
         element: TypeId,
         elements: &[WrittenInitializer<'arena>],
+        designations: &[Option<InitializerDesignation<'arena>>],
         span: SourceSpan,
     ) -> Option<u64> {
-        let mut cursor = 0;
+        if elements.len() != designations.len() {
+            unreachable!("initializer elements and designations are positional peers");
+        }
+        let mut source_cursor = 0_usize;
+        let mut array_cursor = 0_u64;
         let mut count = 0_u64;
-        while cursor < elements.len() {
-            let next = match self.initializer_stream_action_count(element, elements, cursor) {
+        while source_cursor < elements.len() {
+            if let Some(designation) = &designations[source_cursor] {
+                let Some(first) = designation.designators.first() else {
+                    unreachable!("a written designation has at least one designator");
+                };
+                let last = match first {
+                    WrittenDesignator::Index { expression, span } => {
+                        self.designator_constant_index(expression, *span)?
+                    }
+                    WrittenDesignator::Range { first, last, span } => {
+                        let first = self.designator_constant_index(first, *span)?;
+                        let last = self.designator_constant_index(last, *span)?;
+                        if first > last {
+                            self.report("E2917", "designator-index-not-constant", *span);
+                            return None;
+                        }
+                        last
+                    }
+                    WrittenDesignator::Field(_) => {
+                        // A field designator on an array is diagnosed by the
+                        // ordinary normalizer. Give it one provisional slot so
+                        // type inference never masks that precise error.
+                        array_cursor = array_cursor.checked_add(1)?;
+                        count = count.max(array_cursor);
+                        source_cursor += 1;
+                        continue;
+                    }
+                };
+                array_cursor = last.checked_add(1)?;
+                count = count.max(array_cursor);
+                source_cursor += 1;
+                continue;
+            }
+
+            let next_designation = designations[source_cursor + 1..]
+                .iter()
+                .position(Option::is_some)
+                .map_or(elements.len(), |offset| source_cursor + 1 + offset);
+            let segment = &elements[source_cursor..next_designation];
+            let next = match self.initializer_stream_action_count(element, segment, 0) {
                 Ok((next, _)) => next,
                 Err(InitializerPreflightError::TooLarge) => {
                     self.report("E2207", "initializer-plan-too-large", span);
@@ -2461,8 +2549,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     return None;
                 }
             };
-            cursor = if next > cursor { next } else { cursor + 1 };
-            count = count.checked_add(1)?;
+            source_cursor = source_cursor.checked_add(next.max(1))?;
+            array_cursor = array_cursor.checked_add(1)?;
+            count = count.max(array_cursor);
         }
         Some(count)
     }
@@ -3290,12 +3379,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 WrittenDesignator::Range { first, last, span } => {
                     let first = self.designator_constant_index(first, *span)?;
                     let last = self.designator_constant_index(last, *span)?;
-                    if first > last
-                        || last
-                            .checked_sub(first)
-                            .is_none_or(|width| width >= MAX_INITIALIZER_SUBOBJECTS)
+                    if first > last {
+                        self.report("E2917", "designator-index-not-constant", *span);
+                        return None;
+                    }
+                    if last
+                        .checked_sub(first)
+                        .is_none_or(|width| width >= MAX_INITIALIZER_SUBOBJECTS)
                     {
-                        self.report("E2906", "designator-outside-object", *span);
+                        self.report("E2207", "initializer-plan-too-large", *span);
                         return None;
                     }
                     for current in resolved {
@@ -3329,7 +3421,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .and_then(CInteger::try_mathematical_value)
             .and_then(|value| u64::try_from(value).ok());
         let Some(index) = index else {
-            self.report("E2906", "designator-outside-object", span);
+            self.report("E2917", "designator-index-not-constant", span);
             return None;
         };
         Some(index)
@@ -4366,12 +4458,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn parse_type_specifier(&mut self) -> Option<ParsedSpecifier<'arena>> {
-        self.parse_type_specifier_inner(None)
+        self.parse_type_specifier_inner(None, None)
+    }
+
+    fn parse_type_specifier_with_attributes(
+        &mut self,
+        attributes: &mut Vec<Attribute>,
+    ) -> Option<ParsedSpecifier<'arena>> {
+        self.parse_type_specifier_inner(None, Some(attributes))
     }
 
     fn parse_declaration_type_specifier(
         &mut self,
         inline_spans: &mut Vec<SourceSpan>,
+        attributes: &mut Vec<Attribute>,
     ) -> Option<ParsedSpecifier<'arena>> {
         if self.peek_kind() == Some(TokenKind::AutoType) {
             let keyword = self.advance().expect("peeked __auto_type");
@@ -4388,15 +4488,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 inherited_function_parameters: None,
             });
         }
-        self.parse_type_specifier_inner(Some(inline_spans))
+        self.parse_type_specifier_inner(Some(inline_spans), Some(attributes))
     }
 
     fn parse_type_specifier_inner(
         &mut self,
         mut inline_spans: Option<&mut Vec<SourceSpan>>,
+        mut specifier_attributes: Option<&mut Vec<Attribute>>,
     ) -> Option<ParsedSpecifier<'arena>> {
         let start = self.span();
-        let mut qualifiers = self.parse_qualifiers_with_inline(&mut inline_spans);
+        let mut qualifiers =
+            self.parse_qualifiers_with_inline(&mut inline_spans, &mut specifier_attributes);
         if matches!(
             self.peek_kind(),
             Some(TokenKind::Struct | TokenKind::Union | TokenKind::Enum)
@@ -4409,7 +4511,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 _ => unreachable!("tag keyword checked above"),
             };
             let mut parsed = self.parse_tag_specifier(kind, qualifiers, token.span)?;
-            let trailing = self.parse_qualifiers_with_inline(&mut inline_spans);
+            let trailing =
+                self.parse_qualifiers_with_inline(&mut inline_spans, &mut specifier_attributes);
             if trailing != Qualifiers::default() {
                 let TypeSpecifier::Tag {
                     ty,
@@ -4486,7 +4589,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             } else {
                 base
             };
-            let trailing = self.parse_qualifiers_with_inline(&mut inline_spans);
+            let trailing =
+                self.parse_qualifiers_with_inline(&mut inline_spans, &mut specifier_attributes);
             qualifiers = merge_qualifiers(qualifiers, trailing);
             let resolved = self.qualify_typedef_type(base, qualifiers);
             return Some(ParsedSpecifier {
@@ -4506,7 +4610,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 spelling: self.token_text(&token).to_owned(),
                 span: token.span,
             };
-            let trailing = self.parse_qualifiers_with_inline(&mut inline_spans);
+            let trailing =
+                self.parse_qualifiers_with_inline(&mut inline_spans, &mut specifier_attributes);
             qualifiers = merge_qualifiers(qualifiers, trailing);
             let end = self
                 .tokens
@@ -4532,6 +4637,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut end = None;
         while let Some(kind) = self.peek_kind() {
             if self.capture_inline_specifier(&mut inline_spans) {
+                continue;
+            }
+            if self.capture_specifier_attribute(&mut specifier_attributes) {
                 continue;
             }
             if is_builtin_type_word(kind) {
@@ -4602,10 +4710,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn parse_qualifiers_with_inline(
         &mut self,
         inline_spans: &mut Option<&mut Vec<SourceSpan>>,
+        specifier_attributes: &mut Option<&mut Vec<Attribute>>,
     ) -> Qualifiers {
         let mut qualifiers = Qualifiers::default();
         loop {
             if self.capture_inline_specifier(inline_spans) {
+                continue;
+            }
+            if self.capture_specifier_attribute(specifier_attributes) {
                 continue;
             }
             match self.peek_kind() {
@@ -4618,6 +4730,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.advance();
         }
         qualifiers
+    }
+
+    fn capture_specifier_attribute(
+        &mut self,
+        attributes: &mut Option<&mut Vec<Attribute>>,
+    ) -> bool {
+        if attributes.is_none() || self.peek_kind() != Some(TokenKind::Attribute) {
+            return false;
+        }
+        let parsed = self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers);
+        attributes
+            .as_mut()
+            .expect("specifier attribute capture was enabled")
+            .extend(parsed);
+        true
     }
 
     fn parse_qualifiers(&mut self) -> Qualifiers {
@@ -4823,7 +4950,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let start = self.span();
             let mut specifier_attributes =
                 self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers);
-            let Some(specifier) = self.parse_type_specifier() else {
+            let Some(specifier) =
+                self.parse_type_specifier_with_attributes(&mut specifier_attributes)
+            else {
                 self.report("E1001", "expected-declaration", self.span());
                 self.advance();
                 continue;
@@ -5889,7 +6018,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             // type, sit in the declaration-specifiers position.
             let mut specifier_attributes =
                 self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers);
-            let Some(specifier) = self.parse_type_specifier() else {
+            let Some(specifier) =
+                self.parse_type_specifier_with_attributes(&mut specifier_attributes)
+            else {
                 self.report("E1001", "expected-declaration", self.span());
                 break;
             };
@@ -7064,20 +7195,27 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         right: &'e CHirExpr<'arena>,
     ) -> Option<(&'e CHirExpr<'arena>, &'e CHirExpr<'arena>)> {
         let left_class = self.operand_type_class(self.converted_expression_type(left)?.ty);
-        if matches!(left_class, OperandTypeClass::Pointer(_)) {
+        if matches!(
+            left_class,
+            OperandTypeClass::Pointer(_) | OperandTypeClass::StringPointer(_)
+        ) {
             return Some((left, right));
         }
         let right_class = self.operand_type_class(self.converted_expression_type(right)?.ty);
-        if matches!(right_class, OperandTypeClass::Pointer(_)) {
+        if matches!(
+            right_class,
+            OperandTypeClass::Pointer(_) | OperandTypeClass::StringPointer(_)
+        ) {
             return Some((right, left));
         }
         None
     }
 
     /// The element type a subscript of this base designates.
-    fn subscript_element_type(&self, base: &CHirExpr<'arena>) -> Option<TypeId> {
+    fn subscript_element_type(&mut self, base: &CHirExpr<'arena>) -> Option<TypeId> {
         match self.operand_type_class(self.converted_expression_type(base)?.ty) {
             OperandTypeClass::Pointer(pointer) => Some(pointer.pointee),
+            OperandTypeClass::StringPointer(prefix) => Some(self.string_element_type(prefix)),
             _ => None,
         }
     }
@@ -7132,6 +7270,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 Vec::new(),
                 *ty,
             )),
+            CHirExpr::StringLit(literal, _) => {
+                let element_ty = self.string_element_type(literal.prefix);
+                let pointer_type = PointerTypeDesc::to_object(&self.types, element_ty)?;
+                Some((
+                    PlaceRoot::PointerExpression {
+                        pointer: expression,
+                        pointer_type,
+                    },
+                    Vec::new(),
+                    element_ty,
+                ))
+            }
             CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
                 // Taking an address and immediately dereferencing it preserves
                 // the original place identity. Keep that checked root and its
@@ -7163,6 +7313,30 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let (root, mut projections, addressed_ty) =
                         self.resolve_place_chain(addressed)?;
                     let fields = self.record_member_path(addressed_ty, name)?;
+                    let field_ty = fields.last()?.field_ty();
+                    projections.extend(fields.into_iter().map(PlaceProjection::Field));
+                    return Some((root, projections, field_ty));
+                }
+                if self.designates_array_object(pointer) {
+                    let (root, mut projections, array_ty) = self.resolve_place_chain(pointer)?;
+                    let element_ty = match self.types.get(array_ty).map(|ty| &ty.kind) {
+                        Some(TypeKind::Array { element, .. }) => *element,
+                        _ => return None,
+                    };
+                    let zero = self.alloc_node(CHirExpr::Lit(
+                        IntLit {
+                            value: 0,
+                            suffix: IntSuffix::None,
+                            base: IntBase::Dec,
+                        },
+                        pointer.span(),
+                    ));
+                    projections.push(PlaceProjection::Index(IndexProjection::new(
+                        zero,
+                        element_ty,
+                        CIntegerType::INT,
+                    )));
+                    let fields = self.record_member_path(element_ty, name)?;
                     let field_ty = fields.last()?.field_ty();
                     projections.extend(fields.into_iter().map(PlaceProjection::Field));
                     return Some((root, projections, field_ty));
@@ -7213,13 +7387,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let Some(inferred) = self.expression_type(expression) else {
             return false;
         };
-        let InferredType::Canonical(ty) = inferred.ty else {
-            return false;
-        };
-        matches!(
-            self.types.get(ty).map(|canonical| &canonical.kind),
-            Some(TypeKind::Array { .. })
-        )
+        match inferred.ty {
+            InferredType::Canonical(ty) => matches!(
+                self.types.get(ty).map(|canonical| &canonical.kind),
+                Some(TypeKind::Array { .. })
+            ),
+            InferredType::StringArray(_) => true,
+            InferredType::Integer(_)
+            | InferredType::Real(_)
+            | InferredType::Complex(_)
+            | InferredType::Pointer(_)
+            | InferredType::StringPointer(_) => false,
+        }
     }
 
     /// The canonical pointer descriptor of an expression used as a place root.
@@ -7267,8 +7446,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2102", "invalid-projected-lvalue", span);
             return expression;
         };
-        let InferredType::Canonical(value_ty) = inferred.ty else {
-            return expression;
+        let value_ty = match inferred.ty {
+            InferredType::Canonical(value_ty) => value_ty,
+            inferred => {
+                let Some(value_ty) = self.materialize_inferred_type(inferred, Some(expression))
+                else {
+                    return expression;
+                };
+                value_ty
+            }
         };
         if !self.is_loadable_scalar(value_ty) {
             return expression;
@@ -7813,10 +7999,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 ) {
                     return None;
                 }
-                (
-                    InferredType::Canonical(self.subscript_element_type(base)?),
-                    ExprCategory::LValue,
-                )
+                let element = match self
+                    .operand_type_class(self.converted_expression_type(base)?.ty)
+                {
+                    OperandTypeClass::Pointer(pointer) => InferredType::Canonical(pointer.pointee),
+                    OperandTypeClass::StringPointer(prefix) => {
+                        InferredType::Integer(integer_type_for_rank(match prefix {
+                            StringPrefix::None | StringPrefix::U8 => IntRank::Char,
+                            StringPrefix::L => IntRank::Int,
+                            StringPrefix::U16 => IntRank::UShort,
+                            StringPrefix::U => IntRank::UInt,
+                        }))
+                    }
+                    _ => return None,
+                };
+                (element, ExprCategory::LValue)
             }
         };
         Some(InferredExpressionType {
@@ -8247,10 +8444,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         matches!(
             (&left.kind, &right.kind),
-            (TypeKind::Void, right) if is_object_type_kind(right)
+            (TypeKind::Void, right) if is_object_or_function_type_kind(right)
         ) || matches!(
             (&left.kind, &right.kind),
-            (left, TypeKind::Void) if is_object_type_kind(left)
+            (left, TypeKind::Void) if is_object_or_function_type_kind(left)
         )
     }
 
@@ -8811,6 +9008,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             TokenKind::BuiltinObjectSize => return self.parse_builtin_object_size(tok),
             TokenKind::BuiltinHasAttribute => return self.parse_builtin_has_attribute(tok),
             TokenKind::BuiltinStrlen => return self.parse_builtin_strlen(tok),
+            TokenKind::BuiltinLibrary | TokenKind::BuiltinCtype => {
+                return self.parse_builtin_library_call(tok);
+            }
             TokenKind::BuiltinVaStart => {
                 return self.parse_builtin_varargs(tok, VarArgsBuiltinOp::Start);
             }
@@ -8820,6 +9020,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             TokenKind::BuiltinVaCopy => {
                 return self.parse_builtin_varargs(tok, VarArgsBuiltinOp::Copy);
             }
+            TokenKind::BuiltinVaArg => return self.parse_builtin_va_arg(tok),
             TokenKind::BuiltinBit => return self.parse_builtin_bit(tok),
             TokenKind::BuiltinUnreachable => return self.parse_builtin_unreachable(tok),
             TokenKind::BuiltinReturnAddress => return self.parse_builtin_return_address(tok),
@@ -9166,16 +9367,25 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn parse_builtin_strlen(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        self.parse_builtin_library_call(keyword)
+    }
+
+    fn parse_builtin_library_call(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        let builtin = self.token_text(&keyword).to_owned();
         if self.peek_kind() != Some(TokenKind::LParen) {
             self.report("E2910", "builtin-not-called", keyword.span);
             return None;
         }
         self.advance();
-        if self.peek_kind() == Some(TokenKind::RParen) {
-            self.report("E2909", "builtin-arity", keyword.span);
-            return None;
+        let mut arguments = Vec::new();
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            loop {
+                arguments.push(self.parse_argument_expression()?);
+                if !self.match_kind(TokenKind::Comma) {
+                    break;
+                }
+            }
         }
-        let operand = self.parse_argument_expression()?;
         if self.peek_kind() != Some(TokenKind::RParen) {
             self.report("E2909", "builtin-arity", keyword.span);
             return None;
@@ -9183,14 +9393,74 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let close = self.advance().expect("peeked builtin closing parenthesis");
         let span = self.merge_span(keyword.span, close.span);
 
-        if let CHirExpr::StringLit(literal, _) = operand {
-            let length = literal.explicit_unit_count().or_else(|| {
-                self.report("E1006", "invalid-string-literal", operand.span());
-                None
-            })?;
-            return Some(self.size_literal(length, span));
+        if builtin == "__builtin_strlen" && arguments.len() == 1 {
+            if let CHirExpr::StringLit(literal, _) = arguments[0] {
+                let length = literal.explicit_unit_count().or_else(|| {
+                    self.report("E1006", "invalid-string-literal", arguments[0].span());
+                    None
+                })?;
+                return Some(self.size_literal(length, span));
+            }
         }
 
+        let (external_name, return_ty, parameter_types) =
+            self.builtin_library_prototype(&builtin, keyword.span)?;
+        if arguments.len() != parameter_types.len() {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        if let Some(invalid) =
+            arguments
+                .iter()
+                .zip(&parameter_types)
+                .find_map(|(argument, parameter)| {
+                    (self.assignment_constraint(AssignmentOp::Simple, *parameter, argument)
+                        == UpdateConstraint::Invalid)
+                        .then_some(*argument)
+                })
+        {
+            self.report("E2913", "builtin-operand-not-convertible", invalid.span());
+            return None;
+        }
+        let function_ty = self.intern(
+            TypeKind::Function {
+                return_type: return_ty,
+                parameters: FunctionParameters::Prototype {
+                    types: parameter_types,
+                    variadic: false,
+                },
+            },
+            Qualifiers::default(),
+        );
+        let symbol = self.resolve_builtin_library_function(
+            &external_name,
+            function_ty,
+            return_ty,
+            keyword.span,
+        )?;
+        let facts = self.facts_for_symbol(symbol);
+        let callee = self.alloc_node(CHirExpr::Ident {
+            symbol,
+            spelling: external_name,
+            facts,
+            span: keyword.span,
+        });
+        Some(self.alloc_node(CHirExpr::Call(callee, arguments, span)))
+    }
+
+    fn builtin_library_prototype(
+        &mut self,
+        builtin: &str,
+        span: SourceSpan,
+    ) -> Option<(String, TypeId, Vec<TypeId>)> {
+        let void_ty = self.intern(TypeKind::Void, Qualifiers::default());
+        let const_void_ty = self.intern(
+            TypeKind::Void,
+            Qualifiers {
+                is_const: true,
+                ..Qualifiers::default()
+            },
+        );
         let const_char = self.intern(
             TypeKind::Int(IntRank::Char),
             Qualifiers {
@@ -9198,40 +9468,122 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 ..Qualifiers::default()
             },
         );
+        let void_pointer = self.intern(TypeKind::Pointer(void_ty), Qualifiers::default());
+        let const_void_pointer =
+            self.intern(TypeKind::Pointer(const_void_ty), Qualifiers::default());
         let const_char_pointer = self.intern(TypeKind::Pointer(const_char), Qualifiers::default());
         let size_ty = self.intern(TypeKind::Int(IntRank::ULong), Qualifiers::default());
-        let expected = self.intern(
-            TypeKind::Function {
-                return_type: size_ty,
-                parameters: FunctionParameters::Prototype {
-                    types: vec![const_char_pointer],
-                    variadic: false,
-                },
-            },
-            Qualifiers::default(),
-        );
-        let symbol = self
+        let int_ty = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
+
+        let prototype = match builtin {
+            "__builtin_memset" => ("memset", void_pointer, vec![void_pointer, int_ty, size_ty]),
+            "__builtin_memcpy" => (
+                "memcpy",
+                void_pointer,
+                vec![void_pointer, const_void_pointer, size_ty],
+            ),
+            "__builtin_memcmp" => (
+                "memcmp",
+                int_ty,
+                vec![const_void_pointer, const_void_pointer, size_ty],
+            ),
+            "__builtin_strcmp" => (
+                "strcmp",
+                int_ty,
+                vec![const_char_pointer, const_char_pointer],
+            ),
+            "__builtin_strncmp" => (
+                "strncmp",
+                int_ty,
+                vec![const_char_pointer, const_char_pointer, size_ty],
+            ),
+            "__builtin_strlen" => ("strlen", size_ty, vec![const_char_pointer]),
+            "__builtin_alloca" => ("alloca", void_pointer, vec![size_ty]),
+            "__builtin_isdigit" => ("isdigit", int_ty, vec![int_ty]),
+            "__builtin_isalpha" => ("isalpha", int_ty, vec![int_ty]),
+            "__builtin_isspace" => ("isspace", int_ty, vec![int_ty]),
+            "__builtin_toupper" => ("toupper", int_ty, vec![int_ty]),
+            "__builtin_tolower" => ("tolower", int_ty, vec![int_ty]),
+            _ => {
+                self.report("E1003", "expected-expression", span);
+                return None;
+            }
+        };
+        Some((prototype.0.to_owned(), prototype.1, prototype.2))
+    }
+
+    fn resolve_builtin_library_function(
+        &mut self,
+        external_name: &str,
+        function_ty: TypeId,
+        return_ty: TypeId,
+        span: SourceSpan,
+    ) -> Option<SymbolId> {
+        let visible = self
             .symbols
-            .resolve(self.current_scope, "strlen")
-            .expect("the parser current scope is always live")
-            .filter(|symbol| {
-                self.symbols.symbol(*symbol).is_ok_and(|declaration| {
-                    declaration.kind() == SymbolKind::Function
-                        && self.types.compatible(declaration.ty(), expected)
-                })
-            })
-            .or_else(|| {
-                self.report("E2927", "builtin-library-function-undeclared", keyword.span);
-                None
-            })?;
-        let facts = self.facts_for_symbol(symbol);
-        let callee = self.alloc_node(CHirExpr::Ident {
-            symbol,
-            spelling: "strlen".to_owned(),
-            facts,
-            span: keyword.span,
-        });
-        Some(self.alloc_node(CHirExpr::Call(callee, vec![operand], span)))
+            .resolve(self.current_scope, external_name)
+            .expect("the parser current scope is always live");
+        if let Some(symbol) = visible {
+            let compatible = self.symbols.symbol(symbol).is_ok_and(|declaration| {
+                declaration.kind() == SymbolKind::Function
+                    && self.types.compatible(declaration.ty(), function_ty)
+            });
+            if !compatible {
+                self.report("E2927", "builtin-library-declaration-incompatible", span);
+                return None;
+            }
+            return Some(symbol);
+        }
+        if let Some(symbol) = self.external_entities.get(external_name).copied() {
+            let compatible = self.symbols.symbol(symbol).is_ok_and(|declaration| {
+                declaration.kind() == SymbolKind::Function
+                    && self.types.compatible(declaration.ty(), function_ty)
+            });
+            if !compatible {
+                self.report("E2927", "builtin-library-declaration-incompatible", span);
+                return None;
+            }
+            return Some(symbol);
+        }
+
+        let name = SpannedName {
+            spelling: external_name.to_owned(),
+            span,
+        };
+        let symbol = self.declare_symbol(
+            &name,
+            SymbolData::Function {
+                storage: StorageClass::Extern,
+            },
+            function_ty,
+        );
+        let parameters = self
+            .parameter_syntax_from_function_type(function_ty, span)
+            .expect("a builtin library prototype is a function type");
+        self.side_declarations
+            .push(self.alloc_node(CHirDecl::Function(FunctionDecl {
+                symbol,
+                name,
+                ty: function_ty,
+                return_specifier: TypeSpecifier::Builtin {
+                    ty: return_ty,
+                    span,
+                },
+                written: WrittenDeclarator {
+                    layers: vec![WrittenDeclaratorLayer::Function { span }],
+                    span,
+                },
+                parameters,
+                storage: StorageClass::Extern,
+                asm_label: None,
+                asm_label_span: None,
+                inline_spans: Vec::new(),
+                gnu_extension_spans: Vec::new(),
+                attributes: Vec::new(),
+                body: None,
+                span,
+            })));
+        Some(symbol)
     }
 
     fn parse_builtin_object_size(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
@@ -9393,7 +9745,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 Some(self.parse_argument_expression()?)
             }
-            VarArgsBuiltinOp::End => None,
+            VarArgsBuiltinOp::End | VarArgsBuiltinOp::Arg => None,
         };
         if self.peek_kind() != Some(TokenKind::RParen) {
             self.report("E2909", "builtin-arity", keyword.span);
@@ -9444,8 +9796,60 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             op,
             first,
             second,
+            requested_ty: None,
             facts: ExprFacts::value(void_ty),
             span: self.merge_span(keyword.span, close.span),
+        }))
+    }
+
+    fn parse_builtin_va_arg(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        if self.peek_kind() != Some(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        self.advance();
+        if self.peek_kind() == Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let list = self.parse_argument_expression()?;
+        if !self.match_kind(TokenKind::Comma) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let (requested_ty, tag_event) = self.parse_type_name()?;
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance().expect("peeked builtin closing parenthesis");
+        let span = self.merge_span(keyword.span, close.span);
+        if let Some(event) = tag_event {
+            let declaration = self.finish_tag_event(event, span, Vec::new());
+            self.side_declarations.push(declaration);
+        }
+        let requested_is_object = self.types.get(requested_ty).is_some_and(|canonical| {
+            !matches!(
+                canonical.kind,
+                TypeKind::Void | TypeKind::Array { .. } | TypeKind::Function { .. }
+            )
+        });
+        if !self.expression_is_va_list_object(list) || !requested_is_object {
+            let diagnostic_span = if self.expression_is_va_list_object(list) {
+                span
+            } else {
+                list.span()
+            };
+            self.report("E2913", "builtin-operand-not-convertible", diagnostic_span);
+            return None;
+        }
+        Some(self.alloc_node(CHirExpr::BuiltinVarArgs {
+            op: VarArgsBuiltinOp::Arg,
+            first: list,
+            second: None,
+            requested_ty: Some(requested_ty),
+            facts: ExprFacts::value(requested_ty),
+            span,
         }))
     }
 
@@ -9911,8 +10315,8 @@ fn qualifiers_include(target: Qualifiers, source: Qualifiers) -> bool {
         && (!source.is_atomic || target.is_atomic)
 }
 
-fn is_object_type_kind(kind: &TypeKind) -> bool {
-    !matches!(kind, TypeKind::Void | TypeKind::Function { .. })
+fn is_object_or_function_type_kind(kind: &TypeKind) -> bool {
+    !matches!(kind, TypeKind::Void)
 }
 
 // ── precedence table ───────────────────────────────────────────────────────
@@ -10027,9 +10431,12 @@ fn can_start_expression(kind: TokenKind) -> bool {
             | TokenKind::BuiltinObjectSize
             | TokenKind::BuiltinHasAttribute
             | TokenKind::BuiltinStrlen
+            | TokenKind::BuiltinLibrary
+            | TokenKind::BuiltinCtype
             | TokenKind::BuiltinVaStart
             | TokenKind::BuiltinVaEnd
             | TokenKind::BuiltinVaCopy
+            | TokenKind::BuiltinVaArg
             | TokenKind::BuiltinBit
             | TokenKind::BuiltinUnreachable
             | TokenKind::BuiltinReturnAddress
@@ -10957,12 +11364,14 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
             op,
             first,
             second,
+            requested_ty,
             facts,
             ..
         } => CHirExpr::BuiltinVarArgs {
             op: *op,
             first,
             second: *second,
+            requested_ty: *requested_ty,
             facts: *facts,
             span: paren_span,
         },
