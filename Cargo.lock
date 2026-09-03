@@ -153,6 +153,7 @@ dependencies = [
  "evocc-eqopt",
  "evocc-evoir",
  "evocc-memory",
+ "evocc-mir",
  "evocc-proof",
  "evocc-types",
 ]

@@ -968,3 +968,70 @@ fn the_campaign_reaches_the_tier_b_rules() {
         );
     }
 }
+
+/// The third lane of the EvoMIR specification's Section 9.1: EvoIR before,
+/// EvoIR after optimization, EvoMIR after lowering.
+///
+/// A refusal is counted, not compared. Every optimized module therefore either
+/// lowered and was judged, or carries the Section 10 codes that stopped it, and
+/// the two accounts add up to the programs the gate compared.
+#[test]
+fn the_third_lane_lowers_or_refuses_every_compared_program() {
+    let checker = ProofChecker::locate().expect("evo-proofcheck");
+    let report = run_campaign(GATE_SEED, 256, config(), budget(), &checker);
+
+    assert_eq!(
+        report.lowered + report.refused,
+        report.compared,
+        "{}",
+        report.render()
+    );
+    assert!(
+        report.machine_compared + report.machine_budget_exhausted <= report.lowered,
+        "{}",
+        report.render()
+    );
+    assert_eq!(report.mismatched, 0, "{}", report.render());
+    for code in report.refusal_codes.keys() {
+        assert!(
+            matches!(
+                *code,
+                "E4001"
+                    | "E4002"
+                    | "E4003"
+                    | "E4004"
+                    | "E4005"
+                    | "E4006"
+                    | "E4007"
+                    | "E4008"
+                    | "E4009"
+                    | "E4010"
+                    | "E4011"
+                    | "E4012"
+                    | "E4013"
+            ),
+            "{code} is not a Section 10 diagnostic"
+        );
+    }
+}
+
+/// What the Section 5 table costs the lane, measured rather than asserted.
+///
+/// Almost every generated program computes an undefined-behaviour predicate,
+/// and the table has no row for one, so the lane judges only the few programs
+/// that avoid them. The number is recorded here so a revision that gives the
+/// predicates a row can be seen to move it.
+#[test]
+fn the_lowering_table_reaches_a_measured_share_of_the_corpus() {
+    let checker = ProofChecker::locate().expect("evo-proofcheck");
+    let report = run_campaign(GATE_SEED, 256, config(), budget(), &checker);
+
+    assert!(report.compared > 0, "{}", report.render());
+    assert!(
+        report.refusal_codes.contains_key("E4009"),
+        "the predicate gap is what dominates: {}",
+        report.render()
+    );
+    assert!(report.lowered > 0, "{}", report.render());
+    assert_eq!(report.machine_budget_exhausted, 0, "{}", report.render());
+}

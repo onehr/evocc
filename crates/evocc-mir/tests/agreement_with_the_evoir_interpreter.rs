@@ -354,3 +354,204 @@ fn a_violated_obligation_traps_in_both_interpreters() {
     .expect_err("the checked profile traps");
     assert_eq!(error, evocc_mir::MirError::Trap { imm: 3002 });
 }
+
+const INDIRECT: &str = "\
+func @helper(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
+    %v3 = const.bits<32> 3
+    %v4 = mul.bits<32> %v0, %v3
+    ret %v4, %v1, %v2
+}
+
+func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }
+{
+^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
+    %v3 = func_addr @helper : fnptr<(bits<32>, mem<all>, world)->(bits<32>, mem<all>, world)>
+    (%v4, %v5, %v6) = call %v3(%v0, %v1, %v2)
+    ret %v4, %v5, %v6
+}
+";
+
+#[test]
+fn a_function_address_and_an_indirect_call_agree() {
+    for raw in [0_u64, 7, 0xffff_ffff] {
+        agree(INDIRECT, &with_tokens(vec![bits(32, raw)]));
+    }
+}
+
+const NULL_COMPARISON: &str = "\
+func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<1>, mem<all>, world) cc = target_default
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
+    (%v3, %v4, %v5) = alloca %v1, %v2 [origin=0, size=4, align=4]
+    %v6 = ptr.null : ptr<generic>
+    %v7 = icmp.eq %v3, %v6
+    %v8 = icmp.ne %v3, %v6
+    %v9 = xor.bits<1> %v7, %v8
+    ret %v9, %v4, %v5
+}
+";
+
+#[test]
+fn a_null_pointer_comparison_agrees() {
+    agree(NULL_COMPARISON, &with_tokens(vec![bits(32, 1)]));
+}
+
+const OBJECT_COPY: &str = "\
+func @main(%arg0: bits<64>, %arg1: mem<all>, %arg2: world) -> (bits<64>, mem<all>, world) cc = target_default
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<64>, %v1: mem<all>, %v2: world):
+    (%v3, %v4, %v5) = alloca %v1, %v2 [origin=0, size=16, align=8]
+    (%v6, %v7, %v8) = alloca %v4, %v5 [origin=1, size=16, align=8]
+    %v9 = access_in_bounds %v7, %v3 [size=8, align=8]
+    (%v10, %v11) = store %v9, %v8, %v3, %v0
+    %v12 = const.bits<64> 1
+    %v13 = ptr.offset.add.unsigned %v3, %v12 [scale=8]
+    %v14 = pointer_valid %v10, %v13
+    %v15 = access_in_bounds %v14, %v13 [size=8, align=8]
+    (%v16, %v17) = store %v15, %v11, %v13, %v0
+    (%v18, %v19) = copy %v16, %v17, %v6, %v3 [size=16, align=8]
+    %v20 = access_in_bounds %v18, %v6 [size=8, align=8]
+    (%v21, %v22, %v23) = load %v20, %v19, %v6 : bits<64>
+    ret %v21, %v22, %v23
+}
+";
+
+#[test]
+fn an_object_copy_agrees() {
+    for raw in [0_u64, 0x0123_4567_89ab_cdef] {
+        agree(OBJECT_COPY, &with_tokens(vec![bits(64, raw)]));
+    }
+}
+
+const LIFETIME: &str = "\
+func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
+    (%v3, %v4, %v5) = alloca %v1, %v2 [origin=0, size=4, align=4]
+    (%v6, %v7) = lifetime.end %v4, %v5, %v3
+    ret %v0, %v6, %v7
+}
+";
+
+#[test]
+fn an_explicit_lifetime_end_agrees() {
+    agree(LIFETIME, &with_tokens(vec![bits(32, 5)]));
+}
+
+const OBLIGATION_IN_A_LOOP: &str = "\
+func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
+    %v3 = const.bits<32> 0
+    br ^b1(%v0, %v3, %v1, %v2)
+
+^b1(%v4: bits<32>, %v5: bits<32>, %v6: mem<all>, %v7: world):
+    %v8 = const.bits<32> 0
+    %v9 = icmp.ne %v4, %v8
+    cond_br %v9, ^b2(%v4, %v5, %v6, %v7), ^b3(%v5, %v6, %v7)
+
+^b2(%v10: bits<32>, %v11: bits<32>, %v12: mem<all>, %v13: world):
+    %v14 = const.bits<32> 0
+    %v15 = icmp.ne %v10, %v14
+    ub.assume.division_by_zero %v15
+    %v16 = udiv.bits<32> %v11, %v10
+    %v17 = const.bits<32> 1
+    %v18 = sub.bits<32> %v10, %v17
+    %v19 = add.bits<32> %v16, %v10
+    br ^b1(%v18, %v19, %v12, %v13)
+
+^b3(%v20: bits<32>, %v21: mem<all>, %v22: world):
+    ret %v20, %v21, %v22
+}
+";
+
+#[test]
+fn an_obligation_inside_a_loop_body_agrees() {
+    // The split at the obligation carries every value the rest of the block
+    // still reads into the continuation block's arguments, so the loop's
+    // back edge still passes what the header expects.
+    for trips in [0_u64, 1, 4, 9] {
+        agree(OBLIGATION_IN_A_LOOP, &with_tokens(vec![bits(32, trips)]));
+    }
+}
+
+const FELL_OFF_THE_END: &str = "\
+func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
+    %v3 = const.bits<32> 0
+    %v4 = icmp.eq %v0, %v3
+    cond_br %v4, ^b1(%v1, %v2), ^b2(%v0, %v1, %v2)
+
+^b1(%v8: mem<all>, %v9: world):
+    trap.unreachable_reached
+
+^b2(%v5: bits<32>, %v6: mem<all>, %v7: world):
+    ret %v5, %v6, %v7
+}
+";
+
+#[test]
+fn a_trap_reached_stops_both_interpreters_with_the_same_reason() {
+    agree(FELL_OFF_THE_END, &with_tokens(vec![bits(32, 3)]));
+
+    let module = parse_section9_module(FELL_OFF_THE_END.as_bytes()).expect("canonical EvoIR");
+    let arguments = with_tokens(vec![bits(32, 0)]);
+    let evoir = interpret_module(&module, "main", &arguments, InterpreterLimits::new(100_000))
+        .expect_err("the trap is reached");
+    assert_eq!(evoir.code(), "E3024");
+
+    let lowered = lower_module(&module).expect("lowerable");
+    let error = lane::observe_entry(
+        &lowered,
+        "main",
+        &arguments,
+        &[EvoIRType::Bits(32)],
+        MirLimits::new(1_000_000),
+    )
+    .expect_err("the machine reaches its brk");
+    assert_eq!(error.code(), "E3024");
+}
+
+const WIDE_SCALAR: &str = "\
+func @main(%arg0: bits<47>, %arg1: bits<47>, %arg2: mem<all>, %arg3: world) -> (bits<47>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<47>, %v1: bits<47>, %v2: mem<all>, %v3: world):
+    %v4 = const.bits<47> 5
+    %v5 = or.bits<47> %v1, %v4
+    %v6 = sdiv.bits<47> %v0, %v5
+    %v7 = srem.bits<47> %v0, %v5
+    %v8 = add.bits<47> %v6, %v7
+    %v9 = icmp.sle %v8, %v0
+    %v10 = zext.bits<47> %v9
+    %v11 = xor.bits<47> %v8, %v10
+    %v12 = trunc.bits<9> %v11
+    %v13 = sext.bits<47> %v12
+    ret %v13, %v2, %v3
+}
+";
+
+#[test]
+fn a_gpr64_class_scalar_agrees() {
+    for (left, right) in [
+        (0_u64, 0_u64),
+        (1, 2),
+        (0x7fff_ffff_ffff, 0x11),
+        (0x4000_0000_0000, 3),
+    ] {
+        agree(
+            WIDE_SCALAR,
+            &with_tokens(vec![bits(47, left), bits(47, right)]),
+        );
+    }
+}
