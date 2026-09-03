@@ -1015,48 +1015,43 @@ fn the_third_lane_lowers_or_refuses_every_compared_program() {
     }
 }
 
-/// What the Section 5 table costs the lane, measured rather than asserted.
+/// How much of the corpus the lowering table reaches, measured.
 ///
-/// Almost every generated program computes an undefined-behaviour predicate,
-/// and the table has no row for one, so the lane judges only the few programs
-/// that avoid them. The number is recorded here so a revision that gives the
-/// predicates a row can be seen to move it.
+/// Revision 0.1 refused nineteen of every twenty programs, all of them for two
+/// rows it did not have. Revision 0.2 has them, so the table is expected to
+/// reach the whole corpus and any refusal that remains names a form Sections 5
+/// and 10 still exclude on purpose.
 #[test]
-fn the_lowering_table_reaches_a_measured_share_of_the_corpus() {
+fn the_lowering_table_reaches_the_corpus() {
     let checker = ProofChecker::locate().expect("evo-proofcheck");
     let report = run_campaign(GATE_SEED, 256, config(), budget(), &checker);
 
     assert!(report.compared > 0, "{}", report.render());
-    assert!(
-        report.refusal_codes.contains_key("E4009"),
-        "the predicate gap is what dominates: {}",
+    assert_eq!(report.refused, 0, "{}", report.render());
+    assert_eq!(report.lowered, report.compared, "{}", report.render());
+    assert_eq!(
+        report.machine_compared,
+        report.lowered,
+        "{}",
         report.render()
     );
-    assert!(report.lowered > 0, "{}", report.render());
     assert_eq!(report.machine_budget_exhausted, 0, "{}", report.render());
+    assert_eq!(report.mismatched, 0, "{}", report.render());
 }
 
-/// What each unwritten row of the Section 5 table costs the machine lane.
+/// Which forms the table still excludes, over the generated corpus.
 ///
-/// The lane judges only the modules the table admits, so the two rows it is
-/// missing decide how much of the corpus it sees. This measures them apart, on
-/// the generated modules rather than the optimized ones, because the scalar
-/// optimizer rewrites pure regions and leaves both shapes exactly where it
-/// found them.
-///
-/// The first is the undefined-behaviour predicates, which have no row at all
-/// while the division row says their results have already been asserted. The
-/// second is a function with more than one ordinary result, which Section 6
-/// refuses on purpose. The numbers are printed so a revision that adds a
-/// predicate row can be seen to move the first and not the second.
+/// The generator writes no floating point, no vector, no integer wider than
+/// sixty-four bits, no tuple and no function of nine arguments or nine
+/// results, so the count is expected to be zero and is measured rather than
+/// assumed: a generator that grew one of those shapes would show up here as a
+/// refusal rather than as a silently unjudged program.
 #[test]
-fn the_unwritten_rows_of_the_lowering_table_have_a_measured_cost() {
+fn the_forms_the_table_still_excludes_are_measured() {
     const CORPUS: u64 = 2_000;
     let mut refused = 0_u64;
-    let mut only_predicates = 0_u64;
-    let mut only_multiple_results = 0_u64;
-    let mut only_those_two = 0_u64;
-    let mut other = 0_u64;
+    let mut codes: std::collections::BTreeMap<&'static str, u64> =
+        std::collections::BTreeMap::new();
 
     for offset in 0..CORPUS {
         let module = generate_module(GATE_SEED.wrapping_add(offset), config());
@@ -1064,34 +1059,15 @@ fn the_unwritten_rows_of_the_lowering_table_have_a_measured_cost() {
             continue;
         };
         refused += 1;
-        let predicate =
-            |refusal: &evocc_mir::Refusal| refusal.detail.contains("undefined-behaviour predicate");
-        let multiple = |refusal: &evocc_mir::Refusal| refusal.code == "E4013";
-        if refusals.iter().all(predicate) {
-            only_predicates += 1;
-        }
-        if refusals.iter().all(multiple) {
-            only_multiple_results += 1;
-        }
-        if refusals
-            .iter()
-            .all(|refusal| predicate(refusal) || multiple(refusal))
-        {
-            only_those_two += 1;
-        } else {
-            other += 1;
+        for refusal in &refusals {
+            *codes.entry(refusal.code).or_default() += 1;
         }
     }
 
     println!("corpus={CORPUS}");
     println!("refused={refused}");
-    println!("refusedOnlyByPredicates={only_predicates}");
-    println!("refusedOnlyByMultipleResults={only_multiple_results}");
-    println!("refusedOnlyByThoseTwo={only_those_two}");
-    println!("refusedBySomethingElse={other}");
-
-    assert!(
-        only_those_two > refused / 2,
-        "those two rows are the majority of the refusals: {only_those_two} of {refused}"
-    );
+    for (code, count) in &codes {
+        println!("{code}={count}");
+    }
+    assert_eq!(refused, 0, "{codes:?}");
 }
