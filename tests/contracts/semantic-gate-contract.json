@@ -4,7 +4,7 @@
   "whatAContractIs": "The middle-end stream's frozen scope, gate and rulings. The specification is the only authority; this file records what the stream is allowed to change and what it must measure.",
   "authority": {
     "spec": "docs/evoir-spec.md",
-    "revision": "1.9.46",
+    "revision": "1.9.47",
     "crates": [
       "evocc-egraph",
       "evocc-eqopt",
@@ -69,7 +69,8 @@
     "stageS3dClosed": "2026-09-03: the six transfer rows exist in both lattices (an ashr expectation of the executor's own was corrected by the table), the negative test is narrowed to division and remainder; common-subexpression regions and premises over the new rows were measured inadmissible under 8.5 and reported rather than forced. 21,000 programs, 0 mismatches. Architect's isolated gate on 9d01c4b: 1217/0, clippy 0, fmt clean; merged into main.",
     "stageS3eClosed": "2026-09-03: shifts, width changes and structural duplicates in regions on both sides; p0.scalar.v3 in producer and checker; over 256 seeds the six transfer rows now enable 950 additional premised rewrites (114 to 1,064) where the previous window measured zero; duplicates with twins in their closure 0 of 16 to 21 of 21; congruence-only regions still 1 of 21 because the producer admits only entry-block arguments as seeds while 8.7 also admits definition-origin seeds. The checker refused an identity truncation whose width check the executor had written wrongly (seventeenth correct refusal). Quadratic congruence and per-root duplicate scans were replaced by grouped and per-block computations after the gate stopped finishing. One expectation outside the executor's boundary (evocc-lower's scalar corpus naming p0.scalar.v1) was updated by the architect to v3. Merged into main at 54d7c99; the architect's gate on 5bd4144 follows.",
     "definitionSeedsUnreachable": "2026-09-03: the third executor showed that under the only self-consistent reading of 8.5 a definition-origin seed cannot arise in this profile, and that the producer's real restriction was block_index == 0, not seed origin; lifting it doubled the regions (12,913 to 27,195) with 0 mismatches over 21,000 programs and every seed origin recomputed by the checker. Ruled at 1.9.46: Reading A is the rule, the definition origin is reserved.",
-    "stageS3fClosed": "2026-09-03: regions admitted in every block: 12,913 to 27,195 in the 1000-program gate, congruence-only 226 to 568, duplicates without a region 16 of 21 to 1 of 21 (the one correctly refused by the exclusion fixed point); 21,000 programs, 0 mismatches, 0 refusals, every seed origin recomputed by the checker. Architect's isolated gate on 68a8104: 1228/0, clippy 0, fmt clean; merged into main."
+    "stageS3fClosed": "2026-09-03: regions admitted in every block: 12,913 to 27,195 in the 1000-program gate, congruence-only 226 to 568, duplicates without a region 16 of 21 to 1 of 21 (the one correctly refused by the exclusion fixed point); 21,000 programs, 0 mismatches, 0 refusals, every seed origin recomputed by the checker. Architect's isolated gate on 68a8104: 1228/0, clippy 0, fmt clean; merged into main.",
+    "joinVersusMerge": "2026-09-03: both S3g gaps were real. The edge combination of seed facts is a join (bits every edge agrees on), the class merge combines knowledge; the executor's separate naming on both sides is the rule. The 11.6 sentence that forbade p1_202/203/204 rested on a premise 1.9.46 falsified; it is lifted and the three fire when a fully known non-constant operand exists (measured cost of the restraint: 313 regions and 336 premised rewrites over 256 seeds)."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",
