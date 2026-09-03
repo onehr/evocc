@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "c30.front-end-language-forms.acceptance.v1",
+  "status": "PASS_WITH_TYPED_SURVEY_FRONTIER",
+  "authority": {
+    "baselineCommit": "2692ef7e1f52e3e6b5dd05371abd2e0033dbaf79",
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.45",
+      "sections": [
+        "10.1.3 Array lvalues",
+        "10.1.12 Range designators and inferred bounds",
+        "10.1.14 Library builtins",
+        "10.1.17 Variable arguments at the front end",
+        "10.1.18 Function pointers and void *",
+        "10.1.18 _Pragma, spellings and attribute placement",
+        "10.1.19 Integer constants as pointers; decay in static objects"
+      ],
+      "sha256": "b7651196fc140565c31bc2023602a4492b5fe40e8ded0e3ffbce05ef8ddaf2c2",
+      "redCheckout": {
+        "revision": "1.9.46",
+        "sha256": "9a2648a75cd1cf5da2605ecb20c7f5a632f3ca848328cc105ff03465fde0d9da",
+        "qualification": "Revision 1.9.46 changed Sections 8 and 11 only; the W front-end clauses remained those of revision 1.9.45."
+      },
+      "greenCheckout": {
+        "revision": "1.9.47",
+        "sha256": "04172ed25a541c2113e9664caf97d9313d79157a7ebcac1666aa82c791ae7274",
+        "qualification": "Revision 1.9.47 also changed only the middle-end equality and proof sections."
+      }
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "W",
+      "openingSha256": "d800c5b6d87929bc769527d639990cdc8f0c90909ca1dac67a82e12493a22376",
+      "closureCommit": "3b205eecd1cdceef9563774513a53837058a0761",
+      "closureSha256": "815ab9744c30299aa9a452097942dfff2243623a6a0da20957b79215641562fb",
+      "rulings": [
+        "thirdSurveyRanking",
+        "gccOnlyBuiltinsFollowTheProfile",
+        "scopeWClosed"
+      ]
+    }
+  },
+  "commits": {
+    "testsOnlyRed": {
+      "commit": "e953f0d66e21f11f0d6d60915a6bd7f1d0576a5f",
+      "message": "test: expose unresolved GNU C front-end semantics"
+    },
+    "implementation": {
+      "commit": "b4380471d1298e7440fdc6f3d443884a55a15606",
+      "message": "Support measured GNU C language forms"
+    },
+    "dashboardReceipt": {
+      "commit": "0f71a892c6b4a4ac230e5e54d5d7c3cb8ff5278d",
+      "message": "Record clean front-end acceptance lanes"
+    }
+  },
+  "redWindow": {
+    "receipt": {
+      "path": "tests/contracts/front-end-language-forms-red.json",
+      "openingCommitSha256": "e9189da3161b5b225781df6fde3c5fe7fc7ee1c477364c6523e67e40cfb4cdb4",
+      "correctedSha256": "7fd60c3bcafcab5523e7b042e5a26aaae78116be8a7da2392072cc2085387842"
+    },
+    "focused": {
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-w-red-target cargo test -p evocc-parser --test array_lvalue_decay --test range_designator_bounds --test function_void_pointer_conversions --test library_builtin_typing --test ctype_builtin_table --test gnu_specifier_spellings --test static_pointer_address_constants --test builtin_strlen --test front_end_introspection -p evocc-chir --test varargs_fail_closed -p evocc-lower --test fail_closed_forms --no-fail-fast -- --nocapture",
+      "passed": 23,
+      "failed": 27,
+      "ignored": 0,
+      "buildErrors": 0,
+      "unexpectedFailures": 0
+    },
+    "workspace": {
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-w-red-target cargo test --workspace --no-fail-fast",
+      "passed": 1229,
+      "failed": 27,
+      "ignored": 1,
+      "buildErrors": 0,
+      "unexpectedFailures": 0
+    },
+    "declaredCapabilities": 6
+  },
+  "semanticAcceptance": {
+    "focused": {
+      "command": "CARGO_TARGET_DIR=/private/tmp/c30-w-final-target cargo test -p evocc-parser --test array_lvalue_decay --test range_designator_bounds --test function_void_pointer_conversions --test library_builtin_typing --test ctype_builtin_table --test gnu_specifier_spellings --test static_pointer_address_constants --test builtin_strlen --test front_end_introspection -p evocc-chir --test varargs_fail_closed -p evocc-lower --test fail_closed_forms --no-fail-fast",
+      "passed": 50,
+      "failed": 0
+    },
+    "implementationFacts": [
+      "Array lvalue decay is decided from the canonical expression type across named objects, record members, array elements, string literals, and compound literals.",
+      "Sparse, range, positional, and nested designators infer an unbounded array from the maximum occupied index rather than initializer count alone.",
+      "Function pointers and void pointers share one compatibility rule across initialization, assignment, arguments, returns, casts, conditional operands, and void-pointer arithmetic results.",
+      "Library and ctype builtins use their frozen prototypes without requiring a visible declaration; a visible incompatible declaration is E2927, and calls retain ordinary external-function C-HIR rather than adding an EvoIR intrinsic.",
+      "The C-locale ctype behavior byte-matches the sealed p28 table for 0..255, -1, and 0x130.",
+      "VaArg retains its requested object type in C-HIR; invalid operands are rejected and both interpreter paths plus lowering fail closed with E3030 at the variable-argument execution boundary.",
+      "GNU inline/restrict aliases and attributes interspersed between declaration specifiers use the existing canonical declaration representation.",
+      "Static address constants compose through pointer-width integer casts and decay of static arrays, members, and nested array elements."
+    ]
+  },
+  "standardGate": {
+    "workspace": {
+      "command": "cargo test --workspace --no-fail-fast",
+      "passed": 1256,
+      "failed": 0,
+      "ignored": 1
+    },
+    "clippy": {
+      "command": "cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    },
+    "baseLayoutCorpus": {
+      "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "128/128 ORACLE_CONSENSUS",
+      "mismatches": 0
+    },
+    "attributedLayoutCorpus": {
+      "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "22/22 ORACLE_CONSENSUS",
+      "mismatches": 0
+    },
+    "diffCheck": "clean"
+  },
+  "acceptanceDiffGuard": {
+    "receipt": "tests/contracts/kernel-dashboard-receipt.json",
+    "receiptSha256": "3268a3374e0f74cce3840fed9cb3bd43a0d6f4973239291f0b95f7e4a28da190",
+    "previousRun": "20260902T111559Z-80486",
+    "publishedRun": "20260903T061659Z-52334",
+    "subjectCommit": "b438047",
+    "rawPreprocess": "16/16 clean",
+    "gccPreprocessedParser": "16/16 clean",
+    "clangPreprocessedParser": "16/16 clean",
+    "dualOracleParse": "16/16 clean",
+    "regressions": 0
+  },
+  "isolatedOfflineReplay": {
+    "clone": "/private/tmp/c30-w-replay.8rNQyP/repo",
+    "cloneMode": "git clone --no-local",
+    "alternatesFile": "absent",
+    "commit": "0f71a892c6b4a4ac230e5e54d5d7c3cb8ff5278d",
+    "command": "CARGO_TARGET_DIR=/private/tmp/c30-w-replay.8rNQyP/target cargo test --workspace --no-fail-fast --locked --offline",
+    "passed": 1256,
+    "failed": 0,
+    "ignored": 1,
+    "returnCode": 0
+  },
+  "fullConfigurationSurvey": {
+    "receipt": "tests/contracts/full-config-parse-survey-receipt.json",
+    "runId": "20260903T064414Z-47949",
+    "capture": ".evidence/full-config-parse-survey/20260903T064414Z-47949",
+    "includedTargetCUnits": 2798,
+    "clean": 2694,
+    "diagnosed": 104,
+    "unavailable": 0,
+    "timeout": 0,
+    "panic": 0,
+    "transitionsFromPreviousSurvey": {
+      "clean-to-clean": 2445,
+      "diagnosed-to-clean": 249,
+      "diagnosed-to-diagnosed": 104,
+      "other": 0
+    },
+    "scopeDiscipline": "The survey and kfifo reduction were measure-only; none of the new typed frontier was fixed."
+  },
+  "processDeviations": [
+    "The RED receipt originally paired the revision 1.9.45 label with the digest of the checked-out revision 1.9.46 file. This closure separates the frozen 1.9.45 authority digest from the 1.9.46 checkout digest; revision 1.9.46 changed only Sections 8 and 11, so no W test or semantic claim changed.",
+    "The first RED workspace runner moved each test executable away from sibling helper binaries and caused 42 unrelated proof-boundary failures. That attempt was rejected; the recorded RED kept the complete Cargo target topology and contained exactly the 27 declared failures.",
+    "The implementation shared one canonical type/address fact across consumers instead of adding syntax-shape exceptions. Two obsolete assertions whose old expected diagnostics contradicted revision 1.9.45 were migrated in the semantic commit rather than deleted.",
+    "The first dashboard publication completed all raw lanes, then restricted sandbox access denied inspection of the sealed oracle image. The incomplete capture remains preserved at .evidence/kernel-dashboard/b438047-failed-sandbox-20260903T061236Z and is not acceptance evidence; the permission-correct run sealed 48/48.",
+    "The survey initially refused to run because its dashboard receipt was an uncommitted input. The receipt was committed at 0f71a89, then the same measure-only survey ran against that exact clean subject.",
+    "The final base-layout invocation inside the restricted sandbox returned one with no usable evidence. It was rejected; permission-correct base and attributed runs were executed sequentially and produced 128/128 and 22/22 ORACLE_CONSENSUS.",
+    "A Docker oracle attempt for the kfifo reduction was rejected because Docker did not contain the sealed image. The accepted oracle measurement used the project Apple container boundary and both frozen compilers."
+  ],
+  "specGap": null,
+  "claimCeiling": "The six declared W capabilities pass, the 16-unit dashboard remains 48/48 clean, and 2694 of 2798 full-configuration target units are clean with zero unavailable, timeout, or panic. The remaining 104 typed diagnostics, including the minimized kfifo conditional-array-decay defect, are an open measured frontier rather than general front-end conformance."
+}

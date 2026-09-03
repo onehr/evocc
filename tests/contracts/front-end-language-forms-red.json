@@ -18,7 +18,12 @@
         "10.1.18 _Pragma, spellings and attribute placement",
         "10.1.19 Integer constants as pointers; decay in static objects"
       ],
-      "sha256": "9a2648a75cd1cf5da2605ecb20c7f5a632f3ca848328cc105ff03465fde0d9da"
+      "sha256": "b7651196fc140565c31bc2023602a4492b5fe40e8ded0e3ffbce05ef8ddaf2c2",
+      "checkoutAtRed": {
+        "revision": "1.9.46",
+        "sha256": "9a2648a75cd1cf5da2605ecb20c7f5a632f3ca848328cc105ff03465fde0d9da",
+        "qualification": "Revision 1.9.46 changed Sections 8 and 11 only; the W front-end clauses remained byte-identical to the 1.9.45 authority."
+      }
     },
     "contract": {
       "path": "tests/contracts/day9-acceptance-contract.json",
