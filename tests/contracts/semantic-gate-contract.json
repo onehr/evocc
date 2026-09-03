@@ -78,7 +78,8 @@
     "stageS3hClosed": "2026-09-03: worklist fixed point on both sides, 0 disagreements against the sweep over 1,224,250 compared arguments, block evaluations 24,561 to 6,817 over 256 seeds, deepest function 448 to 88; 1000-program gate 48.9 s to 41.9 s. Double negation now re-derives its zeros off the partition: five inputs in 20,000 that used to drop the region and cost a second transaction now resolve in one; the old behaviour was a lost region, never a refusal. 21,000 programs, 0 mismatches, 0 refusals. Architect's isolated gate on 2aeb97e: 1267/0, clippy 0, fmt clean; merged into main.",
     "costIsAPolicy": "2026-09-03: 1.9.50 states that extraction cost is a producer policy the checker never verifies; the certificate format is unchanged. This is what lets the fourth question's cost model and schedule be replaced and measured, and it keeps the red lines: the kernel cohort never enters any policy's fitness, and no rule enters a release registry without the spec printing it.",
     "redLinesLiveInDay9Contract": "2026-09-03: the executor noted that no ruling named selfImprovementRedLines exists in this file; it lives in tests/contracts/day9-acceptance-contract.json (rulings.selfImprovementRedLines) and is restated in costIsAPolicy here. Both files bind this stream.",
-    "checkerDoesNotJudgeCost": "2026-09-03: the executor's SPEC_GAP was real and is ruled for Reading B at 1.9.51: the checker verifies equivalence, non-vacuity and structure, never improvement; improvement under the declared policy is producer conformance. The measured fact behind it: 0 of 1,000 programs differ between two all-positive cost functions, because every P0 replacement is an alias or a constant; the zero-multiply control (697 of 1,000 differ) proved the instrument falsifiable. p0.scalar.v4 (digest 1a5391603386e18e...) adds the first emitting rules so that extraction becomes a choice."
+    "checkerDoesNotJudgeCost": "2026-09-03: the executor's SPEC_GAP was real and is ruled for Reading B at 1.9.51: the checker verifies equivalence, non-vacuity and structure, never improvement; improvement under the declared policy is producer conformance. The measured fact behind it: 0 of 1,000 programs differ between two all-positive cost functions, because every P0 replacement is an alias or a constant; the zero-multiply control (697 of 1,000 differ) proved the instrument falsifiable. p0.scalar.v4 (digest 1a5391603386e18e...) adds the first emitting rules so that extraction becomes a choice.",
+    "stageS4aClosed": "2026-09-03: the policy evaluation harness (crates/evocc-policy, binary evo-policy-eval) measures a (registry, cost function, schedule) policy over a corpus deterministically: dynamic steps, instructions, regions, transactions, wall, 100 percent certificate replay, corpus digest, kernel-cohort path refusal pinned. Two all-positive cost functions optimize 0 of 1,000 programs differently under the P0 registries; a zero-multiply control differs on 697, proving the instrument falsifiable. 3,500 certificates replayed, 0 refusals. Architect's isolated gate on 91c6a3c: middle-end crates 248/0 (the 16 failures were the front-end team's declared red), clippy 0, fmt clean; merged into main."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",
@@ -363,6 +364,17 @@
       "architectGate": {
         "passed": 1267,
         "failed": 0,
+        "clippy": 0,
+        "fmt": "clean"
+      }
+    },
+    "s4a": {
+      "branchHead": "91c6a3c",
+      "corpusDigest": "e65104aecd936bbe4b1f5c1c40c0bf91268b330eac04586347868752f67ad979",
+      "programsDifferingBetweenAllPositivePolicies": 0,
+      "programsDifferingUnderControl": 697,
+      "architectGate": {
+        "middleEnd": "248/0",
         "clippy": 0,
         "fmt": "clean"
       }
