@@ -320,6 +320,7 @@ pub enum LoadKind {
     Sh,
     Sw,
     P,
+    Pf,
 }
 
 impl LoadKind {
@@ -334,6 +335,7 @@ impl LoadKind {
             Self::Sh => "ldrsh",
             Self::Sw => "ldrsw",
             Self::P => "ldr.p",
+            Self::Pf => "ldr.pf",
         }
     }
 
@@ -348,6 +350,7 @@ impl LoadKind {
             "ldrsh" => Self::Sh,
             "ldrsw" => Self::Sw,
             "ldr.p" => Self::P,
+            "ldr.pf" => Self::Pf,
             _ => return None,
         })
     }
@@ -359,7 +362,7 @@ impl LoadKind {
             Self::B | Self::Sb => 1,
             Self::H | Self::Sh => 2,
             Self::W | Self::Sw => 4,
-            Self::X | Self::P => 8,
+            Self::X | Self::P | Self::Pf => 8,
         }
     }
 
