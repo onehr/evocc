@@ -7,16 +7,17 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use evocc_eqopt::{policy_by_name, shipped_policies};
-use evocc_policy::{evaluate, Corpus, TimingMode};
+use evocc_eqopt::{policy_by_name, shipped_policies, OperatorWeights};
+use evocc_policy::{evaluate, searched_policy, Corpus, TimingMode};
 use evocc_randgate::{GeneratorConfig, ProofChecker};
 
 const DEFAULT_DENYLIST: &str = "tests/corpora/kernel-cohort-digests.json";
 const DEFAULT_STEPS: u64 = 200_000;
 
-const USAGE: &str = "usage: evo-policy-eval --policy NAME --seed N \
+const USAGE: &str = "usage: evo-policy-eval (--policy NAME | --weights VECTOR) --seed N \
 [--generated FIRST:COUNT | --corpus DIRECTORY] [--steps N] [--denylist PATH] \
-[--elide-timing]";
+[--elide-timing]\n  VECTOR is add=1,sub=1,mul=1,and=1,or=1,xor=1,shl=1,lshr=1,ashr=1,\
+zext=1,sext=1,trunc=1,icmp=1";
 
 fn main() -> ExitCode {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
@@ -33,7 +34,8 @@ fn main() -> ExitCode {
 }
 
 struct Options {
-    policy: String,
+    policy: Option<String>,
+    weights: Option<OperatorWeights>,
     seed: u64,
     generated: Option<(u64, u64)>,
     corpus: Option<PathBuf>,
@@ -44,6 +46,7 @@ struct Options {
 
 fn parse(arguments: &[String]) -> Result<Options, String> {
     let mut policy = None;
+    let mut weights = None;
     let mut seed = None;
     let mut generated = None;
     let mut corpus = None;
@@ -62,6 +65,7 @@ fn parse(arguments: &[String]) -> Result<Options, String> {
         let value = arguments.get(index + 1).ok_or_else(|| USAGE.to_owned())?;
         match flag {
             "--policy" => policy = Some(value.clone()),
+            "--weights" => weights = Some(OperatorWeights::parse(value)?),
             "--seed" => seed = Some(number(value)?),
             "--generated" => generated = Some(range(value)?),
             "--corpus" => corpus = Some(PathBuf::from(value)),
@@ -75,8 +79,14 @@ fn parse(arguments: &[String]) -> Result<Options, String> {
     if generated.is_some() == corpus.is_some() {
         return Err(format!("{USAGE}\nexactly one corpus source is required"));
     }
+    if policy.is_some() == weights.is_some() {
+        return Err(format!(
+            "{USAGE}\nexactly one of --policy and --weights names the cost function"
+        ));
+    }
     Ok(Options {
-        policy: policy.ok_or_else(|| USAGE.to_owned())?,
+        policy,
+        weights,
         seed: seed.ok_or_else(|| USAGE.to_owned())?,
         generated,
         corpus,
@@ -100,17 +110,18 @@ fn range(text: &str) -> Result<(u64, u64), String> {
 
 fn run(arguments: &[String]) -> Result<String, String> {
     let options = parse(arguments)?;
-    let policy = policy_by_name(&options.policy).ok_or_else(|| {
-        let known = shipped_policies()
-            .iter()
-            .map(|policy| policy.name())
-            .collect::<Vec<_>>()
-            .join(", ");
-        format!(
-            "no policy named {}; this producer ships {known}",
-            options.policy
-        )
-    })?;
+    let policy = match (&options.policy, options.weights) {
+        (Some(name), None) => policy_by_name(name).ok_or_else(|| {
+            let known = shipped_policies()
+                .iter()
+                .map(|policy| policy.name())
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("no policy named {name}; this producer ships {known}")
+        })?,
+        (None, Some(weights)) => searched_policy(weights),
+        _ => return Err(USAGE.to_owned()),
+    };
     let corpus = match (options.generated, &options.corpus) {
         (Some((first, count)), None) => Corpus::generated(first, count, GeneratorConfig::default()),
         (None, Some(directory)) => Corpus::from_directory(directory, Some(&options.denylist))

@@ -15,8 +15,8 @@ mod seed_facts;
 pub use evp1::*;
 pub use persistent::*;
 pub use policy::{
-    policy_by_name, shipped_policies, CostFunction, CostModel, ExtractionPolicy, RegistryCeiling,
-    SchedulePolicy,
+    policy_by_name, shipped_policies, CostAxis, CostFunction, CostModel, ExtractionPolicy,
+    OperatorWeights, RegistryCeiling, SchedulePolicy,
 };
 pub use scalar_eq::*;
 pub use seed_facts::{seed_fact_agreement, SeedFactAgreement};
