@@ -54,12 +54,16 @@ pub struct Allocated {
     pub frame_slots: u32,
     /// Callee-saved registers the body uses, which the prologue must save.
     pub used_callee_saved: Vec<u8>,
+    /// How many arguments the function takes, which Section 6 puts in `x0`
+    /// onwards and which are therefore defined when the function is entered.
+    pub parameters: usize,
 }
 
 /// Assign a physical register to every virtual register of an out-of-SSA
 /// function, spilling to the frame when a class runs out.
 pub fn allocate(function: &MFunction) -> Result<Allocated, String> {
     let mut next = FRESH_BASE;
+    let parameters = function.blocks.first().map_or(0, |block| block.args.len());
     let (mut current, pins) = pin_boundaries(function, &mut next);
     let mut slots: BTreeMap<u32, u32> = BTreeMap::new();
 
@@ -68,8 +72,8 @@ pub fn allocate(function: &MFunction) -> Result<Allocated, String> {
     // loop is bounded by the number of virtual registers.
     for _ in 0..64 {
         match scan(&current, &pins) {
-            Ok(assignment) => {
-                let blocks = drop_identity_moves(&current, &assignment);
+            Ok(mut assignment) => {
+                let blocks = drop_identity_moves(&current, &mut assignment);
                 let used_callee_saved = assignment
                     .values()
                     .copied()
@@ -80,6 +84,7 @@ pub fn allocate(function: &MFunction) -> Result<Allocated, String> {
                 return Ok(Allocated {
                     name: current.name.clone(),
                     blocks,
+                    parameters,
                     assignment,
                     spilled: slots.len(),
                     frame_slots: u32::try_from(slots.len()).unwrap_or(u32::MAX),
@@ -506,27 +511,82 @@ const fn overlaps(left: &Interval, right: &Interval) -> bool {
 
 /// Section 7: "No coalescing beyond removing a move whose two operands got the
 /// same register."
-fn drop_identity_moves(function: &MFunction, assignment: &BTreeMap<u32, u8>) -> Vec<MBlock> {
-    function
+///
+/// Removing the move leaves its destination without a definition, so the two
+/// names are merged: every later mention of the destination becomes the
+/// source. The physical result is identical and the function still reads as
+/// one definition per value, which is what the verifier of Section 9 checks.
+fn drop_identity_moves(function: &MFunction, assignment: &mut BTreeMap<u32, u8>) -> Vec<MBlock> {
+    let mut merged: BTreeMap<u32, VReg> = BTreeMap::new();
+    for block in &function.blocks {
+        for inst in &block.insts {
+            if let MInst::Mov { dst, src } = inst {
+                if dst.class == src.class && assignment.get(&dst.id) == assignment.get(&src.id) {
+                    let source = resolve(&merged, *src);
+                    merged.insert(dst.id, source);
+                }
+            }
+        }
+    }
+
+    let blocks = function
         .blocks
         .iter()
-        .map(|block| MBlock {
-            id: block.id,
-            args: Vec::new(),
-            insts: block
-                .insts
-                .iter()
-                .filter(|inst| match inst {
-                    MInst::Mov { dst, src } => {
-                        dst.class != src.class || assignment.get(&dst.id) != assignment.get(&src.id)
+        .map(|block| {
+            let mut insts = Vec::new();
+            for inst in &block.insts {
+                if let MInst::Mov { dst, src } = inst {
+                    if dst.class == src.class && assignment.get(&dst.id) == assignment.get(&src.id)
+                    {
+                        continue;
                     }
-                    _ => true,
-                })
-                .cloned()
-                .collect(),
-            term: block.term.clone(),
+                }
+                let mut rewritten = inst.clone();
+                for slot in operand_slots(&mut rewritten, false) {
+                    *slot = resolve(&merged, *slot);
+                }
+                for slot in operand_slots(&mut rewritten, true) {
+                    *slot = resolve(&merged, *slot);
+                }
+                insts.push(rewritten);
+            }
+            let mut term = block.term.clone();
+            for slot in term_slots(&mut term) {
+                *slot = resolve(&merged, *slot);
+            }
+            MBlock {
+                id: block.id,
+                args: Vec::new(),
+                insts,
+                term,
+            }
         })
-        .collect()
+        .collect();
+
+    for name in merged.keys() {
+        assignment.remove(name);
+    }
+    blocks
+}
+
+fn resolve(merged: &BTreeMap<u32, VReg>, reg: VReg) -> VReg {
+    let mut current = reg;
+    for _ in 0..64 {
+        match merged.get(&current.id) {
+            Some(next) if next.id != current.id => current = *next,
+            _ => return VReg::new(current.id, reg.class),
+        }
+    }
+    VReg::new(current.id, reg.class)
+}
+
+fn term_slots(term: &mut MTerm) -> Vec<&mut VReg> {
+    match term {
+        MTerm::B { .. } | MTerm::Brk { .. } => Vec::new(),
+        MTerm::BCond { flags, .. } => vec![flags],
+        MTerm::Cb { src, .. } | MTerm::Tb { src, .. } => vec![src],
+        MTerm::Ret { values } => values.iter_mut().collect(),
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -16,6 +16,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod allocverify;
 pub mod interp;
 pub mod lane;
 pub mod linscan;
@@ -27,6 +28,7 @@ pub mod validate;
 
 use std::fmt;
 
+pub use allocverify::{verify_allocation, VerifierRefusal};
 pub use interp::{interpret_module, MirError, MirLimits, MirOutcome, MirValue};
 pub use linscan::{allocate, render_allocated, Allocated, CALLEE_SAVED, CALLER_SAVED};
 pub use lower::{lower_module, Refusal};
