@@ -40,6 +40,15 @@ pub enum CostFunction {
     /// parameter: a multiply costs three, a shift or a width change costs one,
     /// every other admitted operator costs one, and a constant costs zero.
     WeightedOperators,
+    /// All positive, and cheapest on an addition: a multiply costs three, a
+    /// shift two, everything else one. With the emitting rules of
+    /// `p0.scalar.v4` this extracts `add(x, x)` from every spelling of a
+    /// doubling.
+    PreferAdd,
+    /// All positive, and cheapest on a shift: a multiply costs three, an
+    /// addition two, everything else one. It extracts `shl(x, 1)` from every
+    /// spelling of a doubling, which is the other half of the measurement.
+    PreferShift,
     /// A control that charges nothing for a multiply. No region rooted at one
     /// is then a strict improvement, so every such region is declined. It
     /// exists so that "the two shipped policies optimize the same programs"
@@ -60,6 +69,16 @@ impl CostModel for CostFunction {
                 ScalarOperator::Mul => 3,
                 _ => 1,
             },
+            Self::PreferAdd => match operator {
+                ScalarOperator::Mul => 3,
+                ScalarOperator::Shl | ScalarOperator::LShr | ScalarOperator::AShr => 2,
+                _ => 1,
+            },
+            Self::PreferShift => match operator {
+                ScalarOperator::Mul => 3,
+                ScalarOperator::Add => 2,
+                _ => 1,
+            },
             Self::ZeroMultiply => match operator {
                 ScalarOperator::Mul => 0,
                 _ => 1,
@@ -70,7 +89,7 @@ impl CostModel for CostFunction {
 
 /// The widest reviewed registry a policy draws rules from.
 ///
-/// Section 11.6 admits three registries and a certificate commits to one. The
+/// Section 11.6 admits four registries and a certificate commits to one. The
 /// producer already names the narrowest registry containing every rule it
 /// fired; this names the widest one it is willing to fire from, and a region
 /// whose rewrites reach past it is declined under Section 8.7.
@@ -79,6 +98,7 @@ pub enum RegistryCeiling {
     V1,
     V2,
     V3,
+    V4,
 }
 
 impl RegistryCeiling {
@@ -89,6 +109,7 @@ impl RegistryCeiling {
             Self::V1 => "p0.scalar.v1",
             Self::V2 => "p0.scalar.v2",
             Self::V3 => "p0.scalar.v3",
+            Self::V4 => "p0.scalar.v4",
         }
     }
 }
@@ -182,7 +203,7 @@ impl Default for ExtractionPolicy {
     fn default() -> Self {
         Self::new(
             "instruction-count",
-            RegistryCeiling::V3,
+            RegistryCeiling::V4,
             CostFunction::InstructionCount,
             SchedulePolicy::default(),
         )
@@ -196,14 +217,26 @@ pub fn shipped_policies() -> Vec<ExtractionPolicy> {
         ExtractionPolicy::default(),
         ExtractionPolicy::new(
             "weighted-operators",
-            RegistryCeiling::V3,
+            RegistryCeiling::V4,
             CostFunction::WeightedOperators,
             SchedulePolicy::default(),
         ),
         ExtractionPolicy::new(
             "zero-multiply",
-            RegistryCeiling::V3,
+            RegistryCeiling::V4,
             CostFunction::ZeroMultiply,
+            SchedulePolicy::default(),
+        ),
+        ExtractionPolicy::new(
+            "prefer-add",
+            RegistryCeiling::V4,
+            CostFunction::PreferAdd,
+            SchedulePolicy::default(),
+        ),
+        ExtractionPolicy::new(
+            "prefer-shift",
+            RegistryCeiling::V4,
+            CostFunction::PreferShift,
             SchedulePolicy::default(),
         ),
     ]

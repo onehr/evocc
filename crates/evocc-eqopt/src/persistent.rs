@@ -15,7 +15,7 @@ use crate::evp1::{
 };
 use crate::scalar_eq::{
     ingest_scalar_inst, mask_raw, operator_id, optimize_scalar_module_with_events, scalar_operands,
-    scalar_result, AppliedRewrite, Replacement, ScalarOperator,
+    scalar_result, AppliedRewrite, EmittedOperand, Replacement, ScalarOperator,
 };
 use crate::{ProofAuthority, ScalarEqBudget, ScalarEqOutcome};
 
@@ -364,6 +364,38 @@ impl EqualityState {
                     )
                 })?,
             Replacement::Constant(raw) => self.constant(*raw, &instance.result.ty)?,
+            // Section 11.6 "Emitting right-hand sides": the node the rule
+            // builds joins the persistent graph like any other, so a later
+            // phase asking what else is equal to this value finds it. Its
+            // operands are the bindings and the constants the pattern writes.
+            Replacement::Emit(term) => {
+                let mut children = Vec::new();
+                let mut node = None;
+                for operand in &term.operands {
+                    let binding = match operand {
+                        EmittedOperand::Bound(value) => self
+                            .values
+                            .get(&(instance.function.clone(), value.id))
+                            .copied()
+                            .ok_or_else(|| {
+                                format!(
+                                    "@{} emitted operand %v{} has no persistent binding",
+                                    instance.function, value.id
+                                )
+                            })?,
+                        EmittedOperand::Constant(raw) => self.constant(*raw, &term.result_ty)?,
+                    };
+                    children.push(binding.class);
+                }
+                let inserted = self
+                    .graph
+                    .insert_with_node(operator_id(term.operator), children);
+                node.replace(inserted.node);
+                ValueBinding {
+                    class: inserted.eclass,
+                    node: node.ok_or_else(|| "emitted node was not inserted".to_owned())?,
+                }
+            }
         };
         let lhs_class = self.graph.find(lhs.class);
         let rhs_class = self.graph.find(rhs.class);

@@ -15,8 +15,8 @@ use crate::known_bits::{Comparison, KnownBits};
 use crate::policy::{CostModel, ExtractionPolicy, RegistryCeiling, SchedulePolicy};
 use crate::scalar_eq::{
     fold_raw, ingest_scalar_inst, mask_raw, optimize_scalar_module_with_events, remap_inst_uses,
-    resolve_alias, scalar_operands, AppliedRewrite, NegationEnv, Replacement, RewriteOpportunity,
-    ScalarFact, ScalarOperator,
+    resolve_alias, scalar_operands, AppliedRewrite, Emitted, EmittedOperand, NegationEnv,
+    Replacement, RewriteOpportunity, ScalarFact, ScalarOperator,
 };
 use crate::seed_facts::SeedFacts;
 use crate::{ProofAuthority, ScalarEqBudget, ScalarEqReport, ScalarRewrite};
@@ -35,6 +35,10 @@ const REGISTRY_V2: &str = "p0.scalar.v2";
 const REGISTRY_V2_SHA256: &str = "c1691808ebe55a3b2520a0456345e7c38a23fa2732e0827393dcf12523024bce";
 const REGISTRY_V3: &str = "p0.scalar.v3";
 const REGISTRY_V3_SHA256: &str = "aca1f15b47e602ce18c593e06d77008862947c7c7252a9f76bb823c71f53fb15";
+/// The revision that adds the first emitting rules, so that the three
+/// spellings of a doubling become one class and extraction becomes a choice.
+const REGISTRY_V4: &str = "p0.scalar.v4";
+const REGISTRY_V4_SHA256: &str = "1a5391603386e18e18bfb1b2fc61985c9eb252c6e65bcb3259104bd49b2a9d74";
 
 /// The rules each revision added, which is what makes the narrowest registry a
 /// question about names rather than about numbers: `p1_206` is printed by the
@@ -66,6 +70,12 @@ const V3_RULES: [&str; 6] = [
     "p1_230_known_zext",
     "p1_231_known_sext",
     "p1_232_known_trunc",
+];
+const V4_RULES: [&str; 4] = [
+    "p2_300_mul_two_rhs",
+    "p2_301_mul_two_lhs",
+    "p2_302_add_self_shl",
+    "p2_303_shl_one_add",
 ];
 /// Section 8.11: the P0 profile's ceilings. A budget line records these and no
 /// producer-local ones; a tighter `ScalarEqBudget` is this producer's own stop
@@ -294,12 +304,32 @@ fn policy_keeps(
         return false;
     };
     let root_cost = policy.cost().operator_cost(operator);
-    // Both replacement shapes the P0 profile can emit are free: an alias
-    // names a value the block already computes, and a constant costs zero by
-    // Section 7.5's semantic convention.
+    // An alias names a value the block already computes and a constant costs
+    // zero by Section 7.5's semantic convention; an emitting right-hand side
+    // is the one shape that costs what its operator is worth to this policy.
     let replacement_cost = match replacement {
         Replacement::Alias(_) => 0,
         Replacement::Constant(_) => policy.cost().operator_cost(ScalarOperator::Const),
+        // Section 7.5: a non-constant derived node costs one plus the sum of
+        // its selected child costs, and a policy chooses only what "one" is
+        // worth for each operator. Every operand of a P0 emitting right-hand
+        // side is a seed or a constant, and both are free.
+        Replacement::Emit(term) => {
+            let operands: u64 = term
+                .operands
+                .iter()
+                .map(|operand| match operand {
+                    EmittedOperand::Bound(_) => 0,
+                    EmittedOperand::Constant(_) => {
+                        policy.cost().operator_cost(ScalarOperator::Const)
+                    }
+                })
+                .sum();
+            policy
+                .cost()
+                .operator_cost(term.operator)
+                .saturating_add(operands)
+        }
     };
     if replacement_cost >= root_cost {
         return false;
@@ -315,9 +345,12 @@ fn policy_keeps(
 /// the two added-rule tables above are the whole test.
 fn rule_within(rule: &str, ceiling: RegistryCeiling) -> bool {
     match ceiling {
-        RegistryCeiling::V1 => !V2_RULES.contains(&rule) && !V3_RULES.contains(&rule),
-        RegistryCeiling::V2 => !V3_RULES.contains(&rule),
-        RegistryCeiling::V3 => true,
+        RegistryCeiling::V1 => {
+            !V2_RULES.contains(&rule) && !V3_RULES.contains(&rule) && !V4_RULES.contains(&rule)
+        }
+        RegistryCeiling::V2 => !V3_RULES.contains(&rule) && !V4_RULES.contains(&rule),
+        RegistryCeiling::V3 => !V4_RULES.contains(&rule),
+        RegistryCeiling::V4 => true,
     }
 }
 
@@ -336,10 +369,12 @@ fn registry_for(regions: &[EvpRegion]) -> (&'static str, &'static str) {
             });
     let mut widest = (REGISTRY_V1, REGISTRY_V1_SHA256);
     for rule in &mut fired {
-        if V3_RULES.contains(&rule) {
-            return (REGISTRY_V3, REGISTRY_V3_SHA256);
+        if V4_RULES.contains(&rule) {
+            return (REGISTRY_V4, REGISTRY_V4_SHA256);
         }
-        if V2_RULES.contains(&rule) {
+        if V3_RULES.contains(&rule) {
+            widest = (REGISTRY_V3, REGISTRY_V3_SHA256);
+        } else if V2_RULES.contains(&rule) && widest.0 == REGISTRY_V1 {
             widest = (REGISTRY_V2, REGISTRY_V2_SHA256);
         }
     }
@@ -759,6 +794,85 @@ fn build_region(
                     )
                 }
             }
+            // Section 11.6 "Emitting right-hand sides": the operator, sort and
+            // children come from the pattern and the recorded bindings, and
+            // the node goes into a class of its own that this rewrite then
+            // unions with the left-hand node's class. A `const_like` operand is
+            // a derived node of its own, used through the parent that names it
+            // (Section 11.3, revision 1.9.52).
+            Replacement::Emit(term) => {
+                let sort = packed_type(&term.result_ty)?;
+                let width = sort_width(&sort)?;
+                let bound = bindings
+                    .iter()
+                    .find(|(name, _)| name == "x")
+                    .map(|(_, class)| *class)?;
+                let (_, representative) = alias_representative(
+                    &seed_values,
+                    &nodes,
+                    &node_values,
+                    &classes,
+                    classes.find(bound)?,
+                )?;
+                let Replacement::Alias(bound_value) = representative else {
+                    return None;
+                };
+                let mut children = Vec::new();
+                let mut operands = Vec::new();
+                for operand in &term.operands {
+                    match operand {
+                        EmittedOperand::Bound(_) => {
+                            children.push(classes.find(bound)?);
+                            operands.push(EmittedOperand::Bound(bound_value.clone()));
+                        }
+                        EmittedOperand::Constant(raw) => {
+                            let raw = mask_raw(*raw, &term.result_ty);
+                            let node = u32::try_from(nodes.len()).ok()?;
+                            let owner = classes.push()?;
+                            widths.push(width);
+                            let fresh = EvpNode {
+                                node,
+                                owner,
+                                source: EvpNodeSource::Derived,
+                                operation: "const".to_owned(),
+                                sort: sort.clone(),
+                                effect: EvpEffectClass::Pure,
+                                attributes: vec![("value".to_owned(), raw)],
+                                children: Vec::new(),
+                            };
+                            nodes.push(fresh.clone());
+                            events.push(EvpEvent::Node(fresh));
+                            children.push(owner);
+                            operands.push(EmittedOperand::Constant(raw));
+                        }
+                    }
+                }
+                let node = u32::try_from(nodes.len()).ok()?;
+                let owner = classes.push()?;
+                widths.push(width);
+                let fresh = EvpNode {
+                    node,
+                    owner,
+                    source: EvpNodeSource::Derived,
+                    operation: emitted_operation(term.operator)?.to_owned(),
+                    sort,
+                    effect: EvpEffectClass::Pure,
+                    attributes: Vec::new(),
+                    children,
+                };
+                nodes.push(fresh.clone());
+                events.push(EvpEvent::Node(fresh));
+                (
+                    owner,
+                    EvpProofRef::Node(node),
+                    SelectedSource::Node(node),
+                    Replacement::Emit(Emitted {
+                        operator: term.operator,
+                        result_ty: term.result_ty.clone(),
+                        operands,
+                    }),
+                )
+            }
         };
         // Section 11.3 requires a union's endpoints to be two distinct canonical
         // roots. When congruence has already put them in one class the rewrite
@@ -1003,6 +1117,81 @@ fn region_rewrite(
     }
     fold_rewrite(event, matched, nodes, classes)
         .or_else(|| fact_rewrite(event, matched, classes, facts))
+        .or_else(|| emitting_rewrite(event, matched, nodes, classes))
+}
+
+/// An emitting rule of `p0.scalar.v4`, re-derived against this region.
+///
+/// Section 11.6 lets a left-hand `const_like` match only a node already in the
+/// before witness closure, so a `mul` by a two this transaction derived is not
+/// `p2_300` whatever the sweep called it, and `add(?x,?x)` is a claim about one
+/// class rather than about two operands the block gave one name.
+/// `width_min(?x,2)` is read off the sort and records no premise.
+fn emitting_rewrite(
+    event: &AppliedRewrite,
+    matched: &EvpNode,
+    nodes: &[EvpNode],
+    classes: &LocalClasses,
+) -> Option<RegionRewrite> {
+    let Replacement::Emit(term) = &event.replacement else {
+        return None;
+    };
+    if sort_width(&matched.sort)? < 2 {
+        return None;
+    }
+    let [left, right] = matched.children.as_slice() else {
+        return None;
+    };
+    let (rule, variable, emitted) = match (matched.operation.as_str(), event.rule) {
+        ("mul", ScalarRewrite::DoubleByAddition) => {
+            if class_holds_before_constant(nodes, classes, *right, &matched.sort, 2) {
+                ("p2_300_mul_two_rhs", LEFT, ScalarOperator::Add)
+            } else if class_holds_before_constant(nodes, classes, *left, &matched.sort, 2) {
+                ("p2_301_mul_two_lhs", RIGHT, ScalarOperator::Add)
+            } else {
+                return None;
+            }
+        }
+        ("add", ScalarRewrite::DoubleByShift) => {
+            if classes.find(*left)? != classes.find(*right)? {
+                return None;
+            }
+            ("p2_302_add_self_shl", LEFT, ScalarOperator::Shl)
+        }
+        ("shl", ScalarRewrite::ShiftedDoubleByAddition) => {
+            if !class_holds_before_constant(nodes, classes, *right, &matched.sort, 1) {
+                return None;
+            }
+            ("p2_303_shl_one_add", LEFT, ScalarOperator::Add)
+        }
+        _ => return None,
+    };
+    // The right-hand side the rule writes, instantiated under the one binding
+    // these four rules have. A term of any other shape is not this rule.
+    let bound = EmittedOperand::Bound(event_bound(event, variable)?);
+    let stated = if emitted == ScalarOperator::Shl {
+        vec![bound, EmittedOperand::Constant(1)]
+    } else {
+        vec![bound.clone(), bound]
+    };
+    if term.operator != emitted || term.operands != stated {
+        return None;
+    }
+    Some(RegionRewrite {
+        opportunity: RewriteOpportunity {
+            rule: event.rule,
+            replacement: event.replacement.clone(),
+        },
+        rule,
+        bindings: vec![("x", BindingPath::child(variable))],
+        right_hand_variable: None,
+        premises: Vec::new(),
+    })
+}
+
+/// The operand of the sweep's instruction one child position names.
+fn event_bound(event: &AppliedRewrite, child: usize) -> Option<Value> {
+    scalar_operands(&event.instruction).get(child).map(|value| (*value).clone())
 }
 
 /// A canonical reduction of Section 8.11, re-derived against this region.
@@ -1544,6 +1733,19 @@ fn join_duplicates(
     }
 }
 
+/// The Section 11.3 `op_id` an emitting right-hand side writes.
+///
+/// Only the operators the four emitting rules build are named. A rule that
+/// wrote any other operator would be a rule this producer does not implement,
+/// and answering `None` here is how it says so.
+fn emitted_operation(operator: ScalarOperator) -> Option<&'static str> {
+    match operator {
+        ScalarOperator::Add => Some("add"),
+        ScalarOperator::Shl => Some("shl"),
+        _ => None,
+    }
+}
+
 fn instruction_shape(instruction: &Inst) -> Option<InstructionShape> {
     let operator = ingest_scalar_inst(instruction).ok()?;
     let payload = match instruction {
@@ -1982,6 +2184,21 @@ fn apply(module: &Module, accepted: &[Accepted]) -> Result<(Module, ValueRemap),
     let mut output = module.clone();
     let mut value_remap = HashMap::new();
     for (function_index, function) in output.functions.iter_mut().enumerate() {
+        // Section 8.8 hands out the new value identities, and renumbering at
+        // the end of the function makes the choice of first identity
+        // unobservable. It only has to be free.
+        let mut next = function
+            .blocks
+            .iter()
+            .flat_map(|block| {
+                block.args.iter().map(|argument| argument.value.id).chain(
+                    block.insts.iter().flat_map(|instruction| {
+                        inst_results(instruction).into_iter().map(|value| value.id)
+                    }),
+                )
+            })
+            .max()
+            .map_or(Ok(0), |maximum| maximum.checked_add(1).ok_or(()))?;
         let mut aliases = HashMap::new();
         for (block_index, block) in function.blocks.iter_mut().enumerate() {
             let mut rewritten = Vec::new();
@@ -2008,6 +2225,43 @@ fn apply(module: &Module, accepted: &[Accepted]) -> Result<(Module, ValueRemap),
                             let result = inst_results(&instruction)[0].clone();
                             rewritten.push(Inst::Const(result.clone(), mask_raw(*raw, &result.ty)));
                         }
+                        // The emitted instructions occupy the root's position
+                        // in extraction order, and the root's uses are
+                        // rewritten to the value the last of them defines.
+                        Replacement::Emit(term) => {
+                            let mut operands = Vec::new();
+                            for operand in &term.operands {
+                                let value = match operand {
+                                    EmittedOperand::Bound(value) => {
+                                        resolve_alias(value, &aliases)
+                                    }
+                                    EmittedOperand::Constant(raw) => {
+                                        let constant = Value {
+                                            id: next,
+                                            ty: term.result_ty.clone(),
+                                        };
+                                        next = next.checked_add(1).ok_or(())?;
+                                        rewritten.push(Inst::Const(
+                                            constant.clone(),
+                                            mask_raw(*raw, &term.result_ty),
+                                        ));
+                                        constant
+                                    }
+                                };
+                                operands.push(value);
+                            }
+                            let result = Value {
+                                id: next,
+                                ty: term.result_ty.clone(),
+                            };
+                            next = next.checked_add(1).ok_or(())?;
+                            rewritten.push(emitted_instruction(
+                                term.operator,
+                                result.clone(),
+                                &operands,
+                            )?);
+                            aliases.insert(accepted.root, result);
+                        }
                     }
                 } else {
                     remap_inst_uses(&mut instruction, &aliases);
@@ -2024,6 +2278,22 @@ fn apply(module: &Module, accepted: &[Accepted]) -> Result<(Module, ValueRemap),
     }
     validate_module(&output).map_err(|_| ())?;
     Ok((output, value_remap))
+}
+
+/// The instruction an emitted right-hand side becomes in the after-module.
+fn emitted_instruction(
+    operator: ScalarOperator,
+    result: Value,
+    operands: &[Value],
+) -> Result<Inst, ()> {
+    let [left, right] = operands else {
+        return Err(());
+    };
+    match operator {
+        ScalarOperator::Add => Ok(Inst::Add(result, left.clone(), right.clone())),
+        ScalarOperator::Shl => Ok(Inst::Shl(result, left.clone(), right.clone())),
+        _ => Err(()),
+    }
 }
 
 fn renumber(function: &mut evocc_evoir::Function) -> Result<HashMap<u32, u32>, ()> {

@@ -300,7 +300,7 @@ fn an_extraction_that_returns_the_original_root_is_refused() {
         .find(|line| line.starts_with("seed 0 "))
         .expect("the probe has one seed")
         .split_whitespace()
-        .nth(4)
+        .nth(5)
         .expect("a seed record names its class")
         .to_owned();
     let extraction = case

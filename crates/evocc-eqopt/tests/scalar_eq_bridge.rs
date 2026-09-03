@@ -65,7 +65,13 @@ fn pure_scalar_region_round_trips_through_a_real_egraph_without_drift() {
     let outcome = optimize_scalar_module(&input, ScalarEqBudget::new(64, 8));
     assert_eq!(outcome.module, input);
     assert_eq!(outcome.report.regions_admitted, 1);
-    assert_eq!(outcome.report.merges, 0);
+    // `add(?x, ?x)` is one of the three spellings of a doubling that
+    // `p0.scalar.v4` makes one class, so the class gains the shift and the
+    // merge is real. The transient module keeps the instruction it started
+    // with: which spelling survives is the extraction policy's choice and is
+    // taken where the certificate is written, so no value is optimized here.
+    assert_eq!(outcome.report.merges, 1);
+    assert_eq!(outcome.report.optimized_values, 0);
     assert!(!outcome.report.fell_back);
     assert_eq!(execute(&outcome.module, 17), execute(&input, 17));
 }

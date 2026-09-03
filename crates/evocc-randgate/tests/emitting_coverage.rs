@@ -41,12 +41,26 @@ fn fired() -> BTreeSet<String> {
 fn the_campaign_reaches_every_emitting_rule() {
     let fired = fired();
     println!("firedRules={}", fired.len());
-    for rule in [
+    let emitting = [
         "p2_300_mul_two_rhs",
         "p2_301_mul_two_lhs",
         "p2_302_add_self_shl",
         "p2_303_shl_one_add",
-    ] {
-        assert!(fired.contains(rule), "{rule} never fired over {PROGRAMS} programs");
-    }
+    ];
+    let reached = emitting
+        .iter()
+        .filter(|rule| fired.contains(**rule))
+        .copied()
+        .collect::<Vec<_>>();
+    println!("emittingReached={}", reached.join(","));
+    let missing = emitting
+        .iter()
+        .filter(|rule| !fired.contains(**rule))
+        .copied()
+        .collect::<Vec<_>>();
+    assert!(
+        missing.is_empty(),
+        "{} never fired over {PROGRAMS} programs",
+        missing.join(",")
+    );
 }

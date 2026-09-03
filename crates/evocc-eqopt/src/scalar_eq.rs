@@ -158,6 +158,13 @@ pub enum ScalarRewrite {
     MaskCover,
     /// `xor` against an operand every bit of which is known zero.
     XorKnownZero,
+    /// `mul(?x, 2)` in either operand order, rewritten to `add(?x, ?x)`.
+    /// The first rule whose right-hand side emits an instruction.
+    DoubleByAddition,
+    /// `add(?x, ?x)`, rewritten to `shl(?x, 1)`.
+    DoubleByShift,
+    /// `shl(?x, 1)`, rewritten to `add(?x, ?x)`.
+    ShiftedDoubleByAddition,
     /// Not a rule at all: the instruction is an earlier one's structural
     /// duplicate, and Section 7.4 makes the two one value. What justifies the
     /// replacement is the congruence the region records, not a rewrite.
@@ -178,6 +185,9 @@ impl ScalarRewrite {
             Self::MaskCover => 9,
             Self::XorKnownZero => 10,
             Self::Congruent => 11,
+            Self::DoubleByAddition => 12,
+            Self::DoubleByShift => 13,
+            Self::ShiftedDoubleByAddition => 14,
         }
     }
 }
@@ -268,6 +278,32 @@ pub(crate) type NegationEnv = HashMap<u32, Value>;
 pub(crate) enum Replacement {
     Alias(Value),
     Constant(u64),
+    /// Section 11.6 "Emitting right-hand sides": an operator applied to bound
+    /// variables and `const_like` terms. The producer emits it as a derived
+    /// node the checker reconstructs from the pattern and the bindings, so what
+    /// is carried here is the pattern's shape and not a node identity.
+    Emit(Emitted),
+}
+
+/// The right-hand side of an emitting rule, instantiated under a substitution.
+///
+/// One operator over operands that are either a bound variable, named by the
+/// value it is bound to in this block, or a `const_like` term whose payload the
+/// checker recomputes from the pattern. The P0 emitting rules need no deeper
+/// nesting than this and the shape says so.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Emitted {
+    pub(crate) operator: ScalarOperator,
+    pub(crate) result_ty: EvoIRType,
+    pub(crate) operands: Vec<EmittedOperand>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum EmittedOperand {
+    /// A variable of the left pattern, bound to this block-local value.
+    Bound(Value),
+    /// `const_like(?x, K)`: a constant of the bound variable's own sort.
+    Constant(u64),
 }
 
 #[derive(Debug, Clone)]
@@ -334,6 +370,7 @@ impl AppliedRewrite {
             &self.negations,
         )) || instantiates(constant_fold(&self.instruction, &self.facts))
             || instantiates(fact_driven_opportunity(&self.instruction, &self.known))
+            || instantiates(emitting_opportunity(&self.instruction, &self.facts))
     }
 }
 
@@ -342,6 +379,10 @@ enum GraphTerm {
     Input(Value),
     Constant { raw: u64, ty: EvoIRType },
     Operation,
+    /// A node an emitting right-hand side built, and the pattern it was built
+    /// from. Extraction selects it only when the class holds nothing cheaper,
+    /// which is what makes an emitting rule the last resort it is.
+    Emitted(Emitted),
 }
 
 struct CandidateGraph {
@@ -493,7 +534,8 @@ pub(crate) fn optimize_scalar_module_with_events(
                 // answer only what neither could.
                 record_negation(&inst, &facts, &mut negations);
                 let opportunity = rewrite_opportunity(&inst, &facts, &negations)
-                    .or_else(|| fact_driven_opportunity(&inst, &known));
+                    .or_else(|| fact_driven_opportunity(&inst, &known))
+                    .or_else(|| emitting_opportunity(&inst, &facts));
                 let shape = scalar_result(&inst).cloned().map(|result| {
                     (
                         result.clone(),
@@ -599,6 +641,7 @@ pub(crate) fn optimize_scalar_module_with_events(
                     rewritten.push(inst);
                     continue;
                 };
+                let mut emitting = false;
                 let actual_replacement = match bridge.extracted {
                     Some(Replacement::Alias(value)) => {
                         let replacement = resolve_alias(&value, &aliases);
@@ -611,6 +654,18 @@ pub(crate) fn optimize_scalar_module_with_events(
                         record_known(&replacement, &mut known);
                         rewritten.push(replacement);
                         Replacement::Constant(raw)
+                    }
+                    // An emitting rewrite hands out new value identities, and
+                    // Section 8.8 is where they are handed out: the transient
+                    // module keeps the instruction it started with, so nothing
+                    // downstream in this sweep reads a name reassembly has not
+                    // yet assigned.
+                    Some(Replacement::Emit(term)) => {
+                        record_fact(&inst, &mut facts);
+                        record_known(&inst, &mut known);
+                        rewritten.push(inst.clone());
+                        emitting = true;
+                        Replacement::Emit(term)
                     }
                     None => {
                         record_fact(&inst, &mut facts);
@@ -635,7 +690,15 @@ pub(crate) fn optimize_scalar_module_with_events(
                 });
                 report.epochs += 1;
                 report.merges += 1;
-                report.optimized_values += 1;
+                // An emitting rewrite is a real merge and not a replacement in
+                // this module: the transient sweep keeps the instruction it
+                // started with, and Section 8.8 is where the emitted
+                // instructions and their value identities appear. Counting it
+                // as an optimized value would report work this module does not
+                // carry.
+                if !emitting {
+                    report.optimized_values += 1;
+                }
                 report.receipts.push(receipt);
             }
             block.insts = rewritten;
@@ -682,6 +745,22 @@ fn bridge_candidate(
                     .map(|value| &value.ty)
                     .expect("rewrite candidate has a scalar result");
                 bridge.constant(*raw, ty)
+            }
+            Replacement::Emit(term) => {
+                let children = term
+                    .operands
+                    .iter()
+                    .map(|operand| match operand {
+                        EmittedOperand::Bound(value) => bridge.input(value).0,
+                        EmittedOperand::Constant(raw) => {
+                            bridge.constant(*raw, &term.result_ty).0
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                let emitted = operator_id(term.operator);
+                bridge.terms.insert(emitted, GraphTerm::Emitted(term.clone()));
+                let inserted = bridge.graph.insert_with_node(emitted, children);
+                (inserted.eclass, inserted.node)
             }
         };
         let rhs_snapshot = bridge
@@ -748,6 +827,11 @@ fn extract_cheapest(
                 let _type_is_part_of_the_operator_identity = ty;
                 Some((1, node.op, Replacement::Constant(*raw)))
             }
+            // Section 7.5: an emitted instruction is the only choice that adds
+            // one, so it is selected only where the class holds no seed and no
+            // constant. Whether it is worth emitting is then the policy's
+            // question, asked once the region is built.
+            GraphTerm::Emitted(term) => Some((2, node.op, Replacement::Emit(term.clone()))),
             GraphTerm::Operation => None,
         })
         .min_by_key(|(cost, op, _)| (*cost, *op))
@@ -941,6 +1025,90 @@ pub(crate) fn rewrite_opportunity(
         }
         _ => constant_fold(inst, facts),
     }
+}
+
+/// The emitting rules of `p0.scalar.v4`, applied after every earlier tier.
+///
+/// Section 11.6 fixes the order: within a tier the producer applies the first
+/// applicable rule in registry order, and these four are printed after every
+/// canonical reduction, every `all_const` fold and every fact-driven rule. A
+/// `mul(?x, 2)` whose `?x` is itself constant is therefore folded, not doubled.
+///
+/// `width_min(?x, 2)` holds when the sort of `?x` is `bits<N>` with `N >= 2`.
+/// It reads no class and records no premise, which is why these rules sit in a
+/// registry revision without being Tier B rules.
+pub(crate) fn emitting_opportunity(
+    inst: &Inst,
+    facts: &HashMap<u32, ScalarFact>,
+) -> Option<RewriteOpportunity> {
+    match inst {
+        Inst::Mul(_, left, right) => {
+            let doubled = if is_constant(right, facts, 2) {
+                left
+            } else if is_constant(left, facts, 2) {
+                right
+            } else {
+                return None;
+            };
+            emit(
+                ScalarRewrite::DoubleByAddition,
+                ScalarOperator::Add,
+                doubled,
+                vec![
+                    EmittedOperand::Bound(doubled.clone()),
+                    EmittedOperand::Bound(doubled.clone()),
+                ],
+            )
+        }
+        Inst::Add(_, left, right) if left == right => emit(
+            ScalarRewrite::DoubleByShift,
+            ScalarOperator::Shl,
+            left,
+            vec![
+                EmittedOperand::Bound(left.clone()),
+                EmittedOperand::Constant(1),
+            ],
+        ),
+        // `shl(?x, const_like(?x, 1))` fixes the amount's sort to the shifted
+        // value's own sort. A shift by a one of some other width is a different
+        // left pattern and this rule does not state it.
+        Inst::Shl(_, shifted, amount)
+            if amount.ty == shifted.ty && is_constant(amount, facts, 1) =>
+        {
+            emit(
+                ScalarRewrite::ShiftedDoubleByAddition,
+                ScalarOperator::Add,
+                shifted,
+                vec![
+                    EmittedOperand::Bound(shifted.clone()),
+                    EmittedOperand::Bound(shifted.clone()),
+                ],
+            )
+        }
+        _ => None,
+    }
+}
+
+/// `width_min(?x, 2)` and the emitted term, or nothing.
+fn emit(
+    rule: ScalarRewrite,
+    operator: ScalarOperator,
+    bound: &Value,
+    operands: Vec<EmittedOperand>,
+) -> Option<RewriteOpportunity> {
+    // `width_min(?x, 2)` reads the sort of `?x`, and a value outside this
+    // profile's `bits<N>` bound has no sort the rule can read.
+    if scalar_width(&bound.ty).is_none_or(|width| width < 2) {
+        return None;
+    }
+    Some(RewriteOpportunity {
+        rule,
+        replacement: Replacement::Emit(Emitted {
+            operator,
+            result_ty: bound.ty.clone(),
+            operands,
+        }),
+    })
 }
 
 fn alias(rule: ScalarRewrite, value: &Value) -> Option<RewriteOpportunity> {

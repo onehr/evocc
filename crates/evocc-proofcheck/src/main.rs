@@ -24,6 +24,9 @@ const REGISTRY_V2_SHA256: &str = "c1691808ebe55a3b2520a0456345e7c38a23fa2732e082
 /// The revision that admits the shifts and width changes.
 const REGISTRY_V3: &str = "p0.scalar.v3";
 const REGISTRY_V3_SHA256: &str = "aca1f15b47e602ce18c593e06d77008862947c7c7252a9f76bb823c71f53fb15";
+/// The revision that adds the emitting rules.
+const REGISTRY_V4: &str = "p0.scalar.v4";
+const REGISTRY_V4_SHA256: &str = "1a5391603386e18e18bfb1b2fc61985c9eb252c6e65bcb3259104bd49b2a9d74";
 /// Section 8.11: the P0 profile's ceilings. A budget line that records anything
 /// else is not describing this profile's scheduler.
 const MAX_NODES: u64 = 100_000;
@@ -141,7 +144,7 @@ fn scheduler_record_holds(certificate: &EvpCertificate) -> bool {
 }
 
 /// Section 11.6: `evp1` accepts `p0.scalar.v1` only; `evp2` accepts
-/// `p0.scalar.v1` and `p0.scalar.v2`.
+/// `p0.scalar.v1` through `p0.scalar.v4`.
 ///
 /// The digest is checked with the name, because a certificate that named a
 /// registry this checker knows while carrying another's digest would be
@@ -155,6 +158,7 @@ fn admitted_registry(certificate: &EvpCertificate) -> Option<Registry> {
         (_, (REGISTRY_V1, REGISTRY_SHA256)) => Some(Registry::Reviewed),
         (EvpVersion::Evp2, (REGISTRY_V2, REGISTRY_V2_SHA256)) => Some(Registry::Revised),
         (EvpVersion::Evp2, (REGISTRY_V3, REGISTRY_V3_SHA256)) => Some(Registry::Widened),
+        (EvpVersion::Evp2, (REGISTRY_V4, REGISTRY_V4_SHA256)) => Some(Registry::Emitting),
         _ => None,
     }
 }
