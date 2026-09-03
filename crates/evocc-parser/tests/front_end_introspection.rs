@@ -147,15 +147,33 @@ fn every_variable_argument_object_operand_must_be_builtin_va_list() {
 }
 
 #[test]
-fn va_arg_remains_outside_the_front_end_profile() {
-    let source = "int bad(void) { __builtin_va_list ap; return __builtin_va_arg(ap, int); }\n";
-    let arena = Arena::default();
-    let diagnostic = parse(source, &arena).expect_err("va_arg is deliberately not admitted");
-    assert_eq!(diagnostic.code, "E2001");
-    assert_eq!(
-        diagnostic.message,
-        "undeclared-identifier: __builtin_va_arg"
+fn va_arg_is_retained_with_its_requested_object_type() {
+    let source = concat!(
+        "int take(int count, ...) { __builtin_va_list ap; ",
+        "__builtin_va_start(ap, count); int value = __builtin_va_arg(ap, int); ",
+        "__builtin_va_end(ap); return value; }\n",
     );
+    let arena = Arena::default();
+    let unit = parse_valid(source, &arena);
+    let retained = format!("{unit:#?}");
+    assert!(
+        retained.contains("Arg"),
+        "C-HIR must retain VaArg: {retained}"
+    );
+}
+
+#[test]
+fn va_arg_requires_a_va_list_and_a_non_array_non_function_object_type() {
+    for source in [
+        "int bad(int last, ...) { int ap; return __builtin_va_arg(ap, int); }\n",
+        "typedef int array_t[2]; int bad(int last, ...) { __builtin_va_list ap; return __builtin_va_arg(ap, array_t)[0]; }\n",
+        "typedef int function_t(void); int bad(int last, ...) { __builtin_va_list ap; return __builtin_va_arg(ap, function_t)(); }\n",
+    ] {
+        let arena = Arena::default();
+        let diagnostic = parse(source, &arena).expect_err("invalid va_arg form must be rejected");
+        assert_eq!(diagnostic.code, "E2913", "source: {source}");
+        assert_eq!(diagnostic.message, "builtin-operand-not-convertible");
+    }
 }
 
 #[test]

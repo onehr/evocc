@@ -1,0 +1,220 @@
+{
+  "receiptId": "c30.front-end-language-forms.red.v1",
+  "state": "RED",
+  "baseline": {
+    "commit": "2692ef7e1f52e3e6b5dd05371abd2e0033dbaf79",
+    "description": "revision 1.9.45 authority and the merged middle-end work; no front-end behavior from this window"
+  },
+  "authority": {
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.45",
+      "sections": [
+        "10.1.3 Array lvalues",
+        "10.1.12 Range designators and inferred bounds",
+        "10.1.14 Library builtins",
+        "10.1.17 Variable arguments at the front end",
+        "10.1.18 Function pointers and void *",
+        "10.1.18 _Pragma, spellings and attribute placement",
+        "10.1.19 Integer constants as pointers; decay in static objects"
+      ],
+      "sha256": "9a2648a75cd1cf5da2605ecb20c7f5a632f3ca848328cc105ff03465fde0d9da"
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "W",
+      "rulings": [
+        "thirdSurveyRanking",
+        "gccOnlyBuiltinsFollowTheProfile"
+      ],
+      "sha256": "d800c5b6d87929bc769527d639990cdc8f0c90909ca1dac67a82e12493a22376"
+    }
+  },
+  "sealedOracleProbes": [
+    {
+      "source": ".evidence/builtin-probes/20260902-2c23684c/p22-designators.c",
+      "sourceSha256": "e589f643eef1e32191de509fd4566462aa0b09936ef307705691ae57091e895b"
+    },
+    {
+      "source": ".evidence/builtin-probes/20260902-2c23684c/p23-function-pointers.c",
+      "sourceSha256": "266b7d7f140c016f40a56b5964dc8146a9523a1d06a8c5cd62db1ac040587bed"
+    },
+    {
+      "source": ".evidence/builtin-probes/20260902-2c23684c/p24-spellings.c",
+      "sourceSha256": "a72604d51291c8109d56d37a73863b73d3d74308922c1d539d38b8fae1b5512f"
+    },
+    {
+      "source": ".evidence/builtin-probes/20260902-2c23684c/p25-static-init.c",
+      "sourceSha256": "011aea50b012baa19581dc9a7760048e6a1a08414821f74636a0fe0a4e721831"
+    },
+    {
+      "source": ".evidence/builtin-probes/20260902-2c23684c/p26-builtins.c",
+      "sourceSha256": "4be18e58d50e0bcbcc88d6a3c7cf24cb43eab9be1ffd55d5309236bdc878299e"
+    },
+    {
+      "source": ".evidence/builtin-probes/20260902-2c23684c/p27-array-lvalues.c",
+      "sourceSha256": "7ad51f310f3147572fe31aa1c64b79e793bf1269c98c3dd18661c2ce1b6635c1"
+    },
+    {
+      "source": ".evidence/builtin-probes/20260902-2c23684c/p28-ctype-builtins.c",
+      "sourceSha256": "6a17ba5a4144fa71b526bbd171fca9b02615c4ecf89ca60201569e5eec8cd39f",
+      "expectedOutput": ".evidence/builtin-probes/20260902-2c23684c/p28-table.out",
+      "expectedOutputSha256": "39c6154f5e5df345f850274fe5db6a9739147ade29798c1c17c58fc37ef9cb09",
+      "trackedFixtureSha256": "39c6154f5e5df345f850274fe5db6a9739147ade29798c1c17c58fc37ef9cb09"
+    },
+    {
+      "output": ".evidence/builtin-probes/20260902-2c23684c/p22-p26.out",
+      "outputSha256": "eaea5cc5754c459718eff7eaaece5a702d847ac2d6c7788091beb70a812d950f"
+    },
+    {
+      "output": ".evidence/builtin-probes/20260902-2c23684c/p27-p28.out",
+      "outputSha256": "c0f841bc71a21fd5d579cb31d6542df07a924eb4c0c6d22305d09a8acb9e7f26"
+    }
+  ],
+  "declaredMissingCapabilities": [
+    {
+      "name": "general array-lvalue decay",
+      "tests": "crates/evocc-parser/tests/array_lvalue_decay.rs",
+      "failed": 3,
+      "diagnostic": "E2102: invalid-projected-lvalue",
+      "knownPassingForms": [
+        "compound-literal array decay"
+      ],
+      "forms": [
+        "fixed, flexible, and zero-length array members",
+        "string literals and elements of arrays of arrays",
+        "compound-literal array anchor"
+      ]
+    },
+    {
+      "name": "range designators and inferred unbounded-array bounds",
+      "tests": "crates/evocc-parser/tests/range_designator_bounds.rs",
+      "failed": 4,
+      "diagnostic": "E2906: designator-outside-object",
+      "forms": [
+        "sparse index",
+        "inclusive range",
+        "mixed positional and designated elements",
+        "nested arrays"
+      ]
+    },
+    {
+      "name": "function-pointer and void-pointer conversions",
+      "tests": "crates/evocc-parser/tests/function_void_pointer_conversions.rs",
+      "failed": 3,
+      "diagnostics": [
+        "E2202: invalid-initializer-type",
+        "E2102: invalid-update-operands"
+      ],
+      "knownPassingForms": [
+        "explicit casts and a conditional with a null pointer constant"
+      ],
+      "forms": [
+        "initialization in both directions",
+        "assignment, argument, and return",
+        "casts and conditional operands",
+        "conversion after void-pointer arithmetic"
+      ]
+    },
+    {
+      "name": "library builtin prototypes, ctype tables, and typed va_arg",
+      "tests": [
+        "crates/evocc-parser/tests/library_builtin_typing.rs",
+        "crates/evocc-parser/tests/ctype_builtin_table.rs",
+        "crates/evocc-parser/tests/builtin_strlen.rs",
+        "crates/evocc-parser/tests/front_end_introspection.rs",
+        "crates/evocc-chir/tests/varargs_fail_closed.rs",
+        "crates/evocc-lower/tests/fail_closed_forms.rs"
+      ],
+      "failed": 12,
+      "diagnostics": [
+        "E2001: undeclared-identifier for the unresolved library, ctype, and va_arg spellings",
+        "E2927: builtin-library-function-undeclared from the superseded strlen rule",
+        "E2001 instead of E2913 for an invalid va_arg operand or requested type",
+        "no C-HIR VaArg node exists, so interpreter and lowering fixtures fail before their required E3030 boundary"
+      ]
+    },
+    {
+      "name": "GNU declaration spellings and attribute placement",
+      "tests": "crates/evocc-parser/tests/gnu_specifier_spellings.rs",
+      "failed": 2,
+      "diagnostic": "E1001: expected-declaration",
+      "knownPassingForms": [
+        "_Pragma at file scope and through macro expansion"
+      ],
+      "forms": [
+        "_Pragma at file scope and through macro expansion",
+        "__inline and __restrict aliases",
+        "attributes between declaration specifiers"
+      ]
+    },
+    {
+      "name": "static address constants from integer casts and array decay",
+      "tests": "crates/evocc-parser/tests/static_pointer_address_constants.rs",
+      "failed": 3,
+      "diagnostic": "E2208: non-constant-static-initializer",
+      "knownPassingForms": [
+        "an integer constant explicitly cast to a pointer"
+      ],
+      "forms": [
+        "integer constant cast to a pointer",
+        "array member of a static object",
+        "element of a static multidimensional array",
+        "array decay nested in an aggregate initializer"
+      ]
+    }
+  ],
+  "focusedRed": {
+    "command": "CARGO_TARGET_DIR=/private/tmp/c30-w-red-target cargo test -p evocc-parser --test array_lvalue_decay --test range_designator_bounds --test function_void_pointer_conversions --test library_builtin_typing --test ctype_builtin_table --test gnu_specifier_spellings --test static_pointer_address_constants --test builtin_strlen --test front_end_introspection -p evocc-chir --test varargs_fail_closed -p evocc-lower --test fail_closed_forms --no-fail-fast -- --nocapture",
+    "passed": 23,
+    "failed": 27,
+    "buildErrors": 0,
+    "unexpectedFailures": 0
+  },
+  "workspaceRed": {
+    "command": "CARGO_TARGET_DIR=/private/tmp/c30-w-red-target cargo test --workspace --no-fail-fast",
+    "passed": 1229,
+    "failed": 27,
+    "ignored": 1,
+    "buildErrors": 0,
+    "unexpectedFailures": 0,
+    "failedTargets": [
+      "-p evocc-chir --test varargs_fail_closed",
+      "-p evocc-lower --test fail_closed_forms",
+      "-p evocc-parser --test array_lvalue_decay",
+      "-p evocc-parser --test builtin_strlen",
+      "-p evocc-parser --test ctype_builtin_table",
+      "-p evocc-parser --test front_end_introspection",
+      "-p evocc-parser --test function_void_pointer_conversions",
+      "-p evocc-parser --test gnu_specifier_spellings",
+      "-p evocc-parser --test library_builtin_typing",
+      "-p evocc-parser --test range_designator_bounds",
+      "-p evocc-parser --test static_pointer_address_constants"
+    ]
+  },
+  "measurementNotes": [
+    "An earlier workspace attempt used a per-binary temporary runner and was rejected: it moved executables away from sibling helper binaries and created 42 unrelated evocc-randgate failures. The recorded run instead places the complete Cargo target tree in /private/tmp and preserves sibling lookup.",
+    "Passing anchors record behavior already present at the baseline; every failing assertion belongs to one of the six declared capabilities."
+  ],
+  "staticGates": {
+    "clippy": {
+      "command": "cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "fmt": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    },
+    "diffCheck": {
+      "command": "git diff --check",
+      "result": "clean"
+    }
+  },
+  "claimCeiling": "This checkpoint proves only that the missing front-end behavior is executable as tests and fails for declared reasons. It makes no implementation or survey-progress claim.",
+  "specGap": null,
+  "productionChanges": []
+}

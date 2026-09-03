@@ -67,3 +67,12 @@ fn call_capable_interpreter_reports_e3030() {
         "__builtin_va_end(ap); return 0; }\n",
     ));
 }
+
+#[test]
+fn va_arg_interpreter_reports_e3030() {
+    assert_varargs_error(concat!(
+        "int take(int count, ...) { __builtin_va_list ap; ",
+        "__builtin_va_start(ap, count); return __builtin_va_arg(ap, int); } ",
+        "int main(void) { return take(1, 7); }\n",
+    ));
+}

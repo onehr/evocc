@@ -134,6 +134,10 @@ fn variable_arguments_fail_closed_with_only_e3030() {
             7,
             "int f(int last, ...) { __builtin_va_list ap; __builtin_va_start(ap, last); return 0; }\n",
         ),
+        (
+            11,
+            "int f(int last, ...) { __builtin_va_list ap; __builtin_va_start(ap, last); return __builtin_va_arg(ap, int); }\n",
+        ),
     ] {
         assert_lowering_error(
             source,
