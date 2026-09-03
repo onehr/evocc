@@ -985,8 +985,35 @@ fn canonical_reduction(
             };
             return (classes.find(*left)? == classes.find(*right)?).then_some(original);
         }
-        (_, ScalarRewrite::DoubleNegation, _) => {
-            return Some(original);
+        (_, ScalarRewrite::DoubleNegation, Replacement::Alias(value)) => {
+            // `sub(0, sub(0, ?x)) -> ?x` is a claim about the classes of both
+            // zeros, and the sweep reads neither off the partition: it reads
+            // its own constant environment, where a zero this transaction
+            // derived counts the same as one a before witness wrote. Section
+            // 11.6 lets a left-hand `const_like` match only a node already in
+            // the before witness closure, so the outer zero is re-derived here
+            // and the inner subtraction is looked for where the checker looks
+            // for it, in the class the outer subtraction's second child names.
+            let [zero, inner] = matched.children.as_slice() else {
+                return None;
+            };
+            if matched.operation != "sub"
+                || !class_holds_before_constant(nodes, classes, *zero, &matched.sort, 0)
+            {
+                return None;
+            }
+            let aliased = classes.find(*value_classes.get(&value.id)?)?;
+            let inner_class = classes.find(*inner)?;
+            let stated = nodes.iter().any(|node| {
+                node.source == EvpNodeSource::Before
+                    && node.operation == "sub"
+                    && node.sort == matched.sort
+                    && classes.find(node.owner) == Some(inner_class)
+                    && matches!(node.children.as_slice(), [zero, negated]
+                        if class_holds_before_constant(nodes, classes, *zero, &matched.sort, 0)
+                            && classes.find(*negated) == Some(aliased))
+            });
+            return stated.then_some(original);
         }
         _ => return None,
     };
