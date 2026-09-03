@@ -483,13 +483,24 @@ fn the_corpus_reports_its_seeds_by_origin() {
     );
 }
 
-/// What a duplicate is worth: how many the corpus writes, and how many become
-/// a region proved by congruence alone.
+/// What a duplicate is worth: how many the corpus writes, how many become a
+/// region, and how each of those is proved.
+///
+/// A duplicate whose instruction a rule answers is recorded as that rewrite
+/// rather than as a congruence, because the rule states the equality itself
+/// and is the narrower claim, so both kinds count as a duplicate the
+/// transaction removed. A duplicate that becomes no region at all is one the
+/// exclusion fixed point refuses, and those are what the count below is
+/// against.
 #[test]
 fn the_corpus_measures_its_duplicates_and_congruence_only_regions() {
     let mut duplicates = 0_usize;
     let mut computed_duplicates = 0_usize;
+    let mut by_congruence = 0_usize;
+    let mut by_rewrite = 0_usize;
+    let mut unregioned = 0_usize;
     let mut congruence_only = 0_usize;
+    let mut congruence_only_outside_entry = 0_usize;
     let mut regions = 0_usize;
     for seed in 0..CORPUS {
         let module = generate_module(seed, GeneratorConfig::default());
@@ -498,31 +509,105 @@ fn the_corpus_measures_its_duplicates_and_congruence_only_regions() {
         computed_duplicates += computed;
         let outcome = optimize_scalar_module_with_evp1(&module, budget());
         regions += outcome.certificate.regions.len();
-        congruence_only += outcome
-            .certificate
-            .regions
-            .iter()
-            .filter(|region| {
-                region
-                    .events
-                    .iter()
-                    .any(|event| matches!(event, EvpEvent::Congruence(_)))
-                    && !region
-                        .events
-                        .iter()
-                        .any(|event| matches!(event, EvpEvent::Rewrite(_)))
-            })
-            .count();
+        let mut kinds: HashMap<(String, String, u64), RegionKind> = HashMap::new();
+        for region in &outcome.certificate.regions {
+            let kind = region_kind(region);
+            if kind == RegionKind::Congruence {
+                congruence_only += 1;
+                if region.id.block != "entry" {
+                    congruence_only_outside_entry += 1;
+                }
+            }
+            kinds.insert(
+                (
+                    region.id.function.clone(),
+                    region.id.block.clone(),
+                    region.id.instruction,
+                ),
+                kind,
+            );
+        }
+        for (function, block, index) in duplicate_sites(&module) {
+            match kinds.get(&(function, block, index)) {
+                Some(RegionKind::Congruence) => by_congruence += 1,
+                Some(RegionKind::Rewrite) => by_rewrite += 1,
+                _ => unregioned += 1,
+            }
+        }
     }
     println!("structuralDuplicates={duplicates}");
     println!("computedDuplicates={computed_duplicates}");
+    println!("duplicatesProvedByCongruence={by_congruence}");
+    println!("duplicatesProvedByARule={by_rewrite}");
+    println!("duplicatesWithNoRegion={unregioned}");
     println!("congruenceOnlyRegions={congruence_only}");
+    println!("congruenceOnlyRegionsOutsideTheEntryBlock={congruence_only_outside_entry}");
     println!("regions={regions}");
     assert!(
-        congruence_only * 2 >= computed_duplicates,
-        "only {congruence_only} of {computed_duplicates} computed duplicates \
-         became a region proved by congruence"
+        congruence_only_outside_entry > 0,
+        "a duplicate outside the entry block must be able to be a region"
     );
+    assert!(
+        unregioned < by_congruence + by_rewrite,
+        "{unregioned} of {computed_duplicates} duplicates still leave no region"
+    );
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RegionKind {
+    Congruence,
+    Rewrite,
+    Neither,
+}
+
+/// A region whose root a congruence alone replaced, against one a rule
+/// answered.
+fn region_kind(region: &evocc_proof::EvpRegion) -> RegionKind {
+    let congruent = region
+        .events
+        .iter()
+        .any(|event| matches!(event, EvpEvent::Congruence(_)));
+    let rewritten = region
+        .events
+        .iter()
+        .any(|event| matches!(event, EvpEvent::Rewrite(_)));
+    match (congruent, rewritten) {
+        (_, true) => RegionKind::Rewrite,
+        (true, false) => RegionKind::Congruence,
+        (false, false) => RegionKind::Neither,
+    }
+}
+
+/// Where the corpus writes a duplicate, in the region identity spelling of
+/// Section 8.7 so the sites can be looked up among the admitted regions.
+fn duplicate_sites(module: &Module) -> Vec<(String, String, u64)> {
+    let mut sites = Vec::new();
+    for function in &module.functions {
+        for (block_index, block) in function.blocks.iter().enumerate() {
+            let label = if block_index == 0 {
+                "entry".to_owned()
+            } else {
+                format!("b{}", block.id)
+            };
+            let mut seen: HashMap<Shape, ()> = HashMap::new();
+            for (index, instruction) in block.insts.iter().enumerate() {
+                let Some(shape) = shape(instruction) else {
+                    continue;
+                };
+                if shape.0 == "const" {
+                    continue;
+                }
+                if seen.insert(shape, ()).is_some() {
+                    sites.push((
+                        function.name.clone(),
+                        label.clone(),
+                        u64::try_from(index).expect("an instruction index fits u64"),
+                    ));
+                }
+            }
+        }
+    }
+    sites
 }
 
 /// An instruction of a block that repeats the operation, sort, attributes and

@@ -6,10 +6,11 @@ use evocc_evoir::{inst_results, render_module, validate_module, CmpOp, Inst, Mod
 use evocc_proof::{
     sha256_hex, EvpBudget, EvpCertificate, EvpCongruence, EvpEffectClass, EvpEvent, EvpExtraction,
     EvpExtractionChoice, EvpNode, EvpNodeSource, EvpPremise, EvpProofRef, EvpQuantity, EvpRegion,
-    EvpRegionId, EvpRewrite, EvpSeed, EvpSeedOrigin, EvpStop, EvpVersion,
+    EvpRegionId, EvpRewrite, EvpSeed, EvpStop, EvpVersion,
 };
 use evocc_types::EvoIRType;
 
+use crate::eligibility::Admission;
 use crate::known_bits::{Comparison, KnownBits};
 use crate::scalar_eq::{
     fold_raw, ingest_scalar_inst, mask_raw, optimize_scalar_module_with_events, remap_inst_uses,
@@ -121,8 +122,14 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
     let mut events = Vec::new();
     let mut proof_nodes = 0_usize;
     'admit: for (function_index, function) in module.functions.iter().enumerate() {
+        // Section 8.5: taint and exclusion are computed once per function,
+        // before any region is formed, and consulted from there.
+        let admission = Admission::of(function);
         for (block_index, block) in function.blocks.iter().enumerate() {
-            let shapes = block_shapes(block);
+            let context = Surroundings {
+                shapes: block_shapes(block),
+                admission: &admission,
+            };
             for (instruction_index, instruction) in block.insts.iter().enumerate() {
                 let Some(root_event) = applied.iter().find(|event| {
                     event.function == function.name
@@ -139,7 +146,7 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
                         function_index,
                         block_index,
                         instruction_index,
-                        &shapes,
+                        &context,
                         &applied,
                         root_event,
                     )
@@ -358,12 +365,21 @@ struct Accepted {
     replacement: Replacement,
 }
 
+/// What the function and the block around a candidate root already answered.
+///
+/// The shapes are computed once per block and the admission facts once per
+/// function, so a candidate reads them rather than recomputing either.
+struct Surroundings<'a> {
+    shapes: BlockShapes,
+    admission: &'a Admission,
+}
+
 fn build_region(
     module: &Module,
     function_index: usize,
     block_index: usize,
     instruction_index: usize,
-    shapes: &BlockShapes,
+    surroundings: &Surroundings,
     applied: &[AppliedRewrite],
     root_event: &AppliedRewrite,
 ) -> Option<(EvpRegion, AppliedRewrite, Replacement, bool)> {
@@ -383,7 +399,13 @@ fn build_region(
         .collect::<HashMap<_, _>>();
     let mut closure = HashSet::new();
     collect_closure(block, &definitions, instruction_index, &mut closure)?;
-    join_duplicates(block, &definitions, shapes, instruction_index, &mut closure)?;
+    join_duplicates(
+        block,
+        &definitions,
+        &surroundings.shapes,
+        instruction_index,
+        &mut closure,
+    )?;
     let witness_indices = (0..block.insts.len())
         .filter(|index| closure.contains(index))
         .collect::<Vec<_>>();
@@ -399,11 +421,18 @@ fn build_region(
             }
         }
     }
-    if !seed_values.iter().all(|seed| {
-        block_index == 0
-            && block.args.iter().any(|argument| argument.value == *seed)
-            && matches!(seed.ty, EvoIRType::Bits(1..=64))
-    }) {
+    // Section 8.5: a region is ineligible when its root, any witness, or any
+    // seed is tainted or excluded. That is the whole condition. Which block
+    // the region sits in is not part of it, and neither is whether a seed is
+    // an argument of the entry block rather than of the block the region is
+    // in: the exclusion fixed point already decides what may be opaque, and
+    // narrowing it further loses every region of every later block.
+    if !witness_indices
+        .iter()
+        .flat_map(|index| inst_results(&block.insts[*index]))
+        .chain(seed_values.iter())
+        .all(|value| surroundings.admission.admits(value.id))
+    {
         return None;
     }
     let seeds = seed_values
@@ -413,7 +442,7 @@ fn build_region(
             Some(EvpSeed {
                 value: value.id,
                 sort: packed_type(&value.ty)?,
-                origin: EvpSeedOrigin::Input,
+                origin: surroundings.admission.origin(value.id),
                 class: u32::try_from(index).ok()?,
             })
         })

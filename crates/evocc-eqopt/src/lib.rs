@@ -4,6 +4,7 @@
 //! optimizer-independent authority for IR types, validation, text and
 //! interpretation.
 
+mod eligibility;
 mod evp1;
 pub mod known_bits;
 mod persistent;
