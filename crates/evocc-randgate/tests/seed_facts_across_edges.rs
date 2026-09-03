@@ -13,7 +13,7 @@
 
 use std::collections::BTreeMap;
 
-use evocc_eqopt::{optimize_scalar_module_with_evp1, ScalarEqBudget};
+use evocc_eqopt::{optimize_scalar_module_with_evp1, seed_fact_agreement, ScalarEqBudget};
 use evocc_evoir::{
     render_module, validate_module, Block, BlockArg, EffectSummary, Function, FunctionParam, Inst,
     Module, Value,
@@ -367,31 +367,79 @@ fn the_corpus_measures_premises_that_assert_a_seed() {
     );
 }
 
-/// What the fixed point costs, in passes over the function.
+/// What the fixed point costs, in block evaluations over the transaction.
 ///
-/// A pass is the whole function, so this is the only cost the analysis has
-/// beyond one walk of each block. A single-block function needs one pass; a
-/// chain of blocks needs one per link, and a loop one more to see its own back
-/// edge settle.
+/// A work item is one block taken off the queue and evaluated: its arguments'
+/// facts read, its instructions walked, and what it passes carried across its
+/// edges. That is the only cost this analysis has, and a transaction pays it
+/// twice, once for the sweep that proposes rewrites and once for the region
+/// building that states them.
 #[test]
-fn the_corpus_measures_the_fixed_points_passes() {
-    let mut passes: BTreeMap<usize, usize> = BTreeMap::new();
-    let mut deepest = 0_usize;
+fn the_corpus_measures_the_fixed_points_work_items() {
+    let mut items: BTreeMap<usize, usize> = BTreeMap::new();
+    let mut most = 0_usize;
     for seed in 0..CORPUS {
         let module = generate_module(seed, GeneratorConfig::default());
         let outcome = optimize_scalar_module_with_evp1(&module, budget());
-        *passes.entry(outcome.report.seed_fact_rounds).or_insert(0) += 1;
-        deepest = deepest.max(outcome.report.seed_fact_rounds);
+        *items
+            .entry(outcome.report.seed_fact_work_items)
+            .or_insert(0) += 1;
+        most = most.max(outcome.report.seed_fact_work_items);
     }
-    println!("seedFactPasses={passes:?}");
-    println!("maxSeedFactPasses={deepest}");
+    println!("seedFactWorkItems={items:?}");
+    println!("maxSeedFactWorkItems={most}");
     assert!(
-        deepest >= 2,
-        "a corpus with branches must need more than one pass somewhere"
+        most >= 2,
+        "a corpus with branches must evaluate more than one block somewhere"
     );
     assert!(
-        !passes.contains_key(&0),
+        !items.contains_key(&0),
         "every function is walked at least once"
+    );
+}
+
+/// Section 8.10: "the order of visits does not change the result".
+///
+/// That sentence is the whole licence for re-evaluating only what an edge
+/// change reaches, so it is measured rather than believed: over the corpus, the
+/// iteration the producer runs and the sweep of the whole function it replaced
+/// must derive the same fact for every block argument of every function, bit
+/// for bit, and the iteration must cost strictly less.
+#[test]
+fn the_iteration_and_the_whole_function_sweep_agree_on_the_corpus() {
+    let mut arguments = 0_usize;
+    let mut work_items = 0_usize;
+    let mut whole_pass_items = 0_usize;
+    let mut deepest = 0_usize;
+    let mut distribution: BTreeMap<usize, usize> = BTreeMap::new();
+    for seed in 0..CORPUS {
+        let module = generate_module(seed, GeneratorConfig::default());
+        for function in &module.functions {
+            let measured = seed_fact_agreement(function).unwrap_or_else(|error| panic!("{error}"));
+            arguments += measured.arguments;
+            work_items += measured.work_items;
+            whole_pass_items += measured.whole_pass_items;
+            deepest = deepest.max(measured.whole_passes);
+            *distribution.entry(measured.work_items).or_insert(0) += 1;
+        }
+    }
+    println!("arguments={arguments}");
+    println!("workItems={work_items}");
+    println!("wholePassItems={whole_pass_items}");
+    println!("deepestWholePassCount={deepest}");
+    println!("workItemsPerFunction={distribution:?}");
+    assert!(
+        arguments > 0,
+        "the corpus must give some block argument a fact"
+    );
+    assert!(
+        deepest >= 2,
+        "a corpus with branches must need more than one sweep somewhere"
+    );
+    assert!(
+        work_items < whole_pass_items,
+        "the iteration spent {work_items} block evaluations and the sweep {whole_pass_items}: \
+         re-evaluating only what an edge change reaches has to cost less"
     );
 }
 
@@ -598,6 +646,147 @@ fn a_comparison_the_sweep_folded_is_stated_as_the_rule_the_region_can_prove() {
     assert!(
         outcome.rules.contains(&"p1_213_known_icmp_sle".to_owned()),
         "the facts decide the comparison, and that is the rule to state: {:?}\n{}",
+        outcome.rules,
+        outcome.proof
+    );
+}
+
+/// A double negation over a zero the sweep and the region disagree about.
+///
+/// Reduced from seed 1592635637 of the long campaign, where `sub(%x, %x)` on a
+/// fully known argument was the zero that both subtractions read.
+///
+/// ```text
+/// ^entry(%0, %1, %2):
+///   %3 = const.bits<8> 5
+///   br ^b(%3, %1, %2)
+/// ^b(%4, %5, %6):       -- %4 is fully known by the seed fixed point
+///   %7 = sub %4, %4     -- derived: a zero with no `const` node before it
+///   %7 = const.bits<8> 0 -- written: the same zero, put there by the witness
+///   %8 = sub %7, %7     -- the inner negation
+///   %9 = sub %7, %8     -- the double negation
+/// ```
+///
+/// `derived` decides where the shared zero comes from. With it set the sweep's
+/// constant environment holds a zero for `%7` -- the fact of `sub(%4, %4)` is
+/// fully known -- while the region has no `const` node the before witness put
+/// in that class. Without it a written `const.bits<8> 0` leads the block and
+/// the same class is one the witness spoke for.
+fn double_negation(derived: bool) -> Module {
+    let zero = bits(8);
+    let negated = bits(9);
+    let restored = bits(10);
+    // The derived zero is `sub(%4, %4)` on the fully known argument, and the
+    // inner negation reads that same zero; the written one leads the block and
+    // the inner negation reads the opaque argument the entry block forwards.
+    let (lead, inner) = if derived {
+        (
+            Inst::Sub(zero.clone(), bits(4), bits(4)),
+            Inst::Sub(negated.clone(), zero.clone(), zero.clone()),
+        )
+    } else {
+        (
+            Inst::Const(zero.clone(), 0),
+            Inst::Sub(negated.clone(), zero.clone(), bits(5)),
+        )
+    };
+    let function = Function {
+        name: "main".to_owned(),
+        params: vec![
+            FunctionParam {
+                name: "x".to_owned(),
+                ty: EvoIRType::Bits(8),
+            },
+            FunctionParam {
+                name: "arg1".to_owned(),
+                ty: EvoIRType::Mem(Region::All),
+            },
+            FunctionParam {
+                name: "arg2".to_owned(),
+                ty: EvoIRType::World,
+            },
+        ],
+        ret_tys: vec![
+            EvoIRType::Bits(8),
+            EvoIRType::Mem(Region::All),
+            EvoIRType::World,
+        ],
+        effects: EffectSummary::default(),
+        blocks: vec![
+            Block {
+                id: 0,
+                args: vec![
+                    argument(&bits(0)),
+                    argument(&memory(1)),
+                    argument(&world(2)),
+                ],
+                insts: vec![Inst::Const(bits(3), 5)],
+                terminator: Inst::Br(1, vec![bits(3), bits(0), memory(1), world(2)]),
+            },
+            Block {
+                id: 1,
+                args: vec![
+                    argument(&bits(4)),
+                    argument(&bits(5)),
+                    argument(&memory(6)),
+                    argument(&world(7)),
+                ],
+                insts: vec![lead, inner, Inst::Sub(restored.clone(), zero, negated)],
+                terminator: Inst::Ret(vec![restored, memory(6), world(7)]),
+            },
+        ],
+    };
+    let mut module = Module {
+        globals: Vec::new(),
+        functions: vec![function],
+    };
+    module.recompute_effect_summaries();
+    validate_module(&module).expect("the probe is valid EvoIR");
+    module
+}
+
+/// A double negation over a zero no before witness wrote states another rule.
+///
+/// `p0_009_double_neg` is `sub(const_like(?x,0),sub(const_like(?x,0),?x))`, and
+/// Section 11.6 lets a left-hand `const_like` match only a node the before
+/// witness closure already held. The sweep reads its own constant environment
+/// instead, where the fold of `sub(%4, %4)` on a fully known argument has put a
+/// zero the region has only as a node this transaction derived, so the rule the
+/// sweep names is one the region cannot state.
+///
+/// Before the producer re-derived the reduction, the region resolved no binding
+/// for it and was dropped whole: the outer subtraction survived the transaction
+/// and a second one was needed to answer it. The facts answer it here, in the
+/// transaction that has them.
+#[test]
+fn a_double_negation_over_a_derived_zero_states_the_rule_the_region_can_prove() {
+    let module = double_negation(true);
+    let outcome = optimize(&module);
+    assert!(
+        !outcome.rules.contains(&"p0_009_double_neg".to_owned()),
+        "no before witness wrote the zero the two subtractions share: {:?}\n{}",
+        outcome.rules,
+        outcome.proof
+    );
+    assert!(
+        !outcome.after.contains("sub.bits<8>"),
+        "the facts decide every subtraction of the block:\n{}",
+        outcome.after
+    );
+}
+
+/// The same double negation over a zero a before witness wrote is stated.
+///
+/// This is the other half: the reduction is a real one whenever the partition
+/// puts a before-witness zero in both subtractions' zero operand, and it must
+/// keep firing there.
+#[test]
+fn a_double_negation_over_a_written_zero_is_stated_and_replayed() {
+    let module = double_negation(false);
+    let outcome = optimize(&module);
+    assert!(
+        outcome.rules.contains(&"p0_009_double_neg".to_owned()),
+        "a written zero is what the rule is about: {:?}\n{}",
         outcome.rules,
         outcome.proof
     );

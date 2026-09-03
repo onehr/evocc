@@ -20,4 +20,5 @@ evocc-eqopt = { path = "../evocc-eqopt" }
 evocc-lex = { path = "../evocc-lex" }
 evocc-lower = { path = "../evocc-lower" }
 evocc-parser = { path = "../evocc-parser" }
+evocc-randgate = { path = "../evocc-randgate" }
 evocc-types = { path = "../evocc-types" }
