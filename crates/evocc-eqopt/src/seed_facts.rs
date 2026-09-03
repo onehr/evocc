@@ -24,7 +24,7 @@
 //! some unrelated block moved. `by_whole_passes` keeps the sweep as the oracle
 //! the worklist is measured against; nothing but the agreement hook calls it.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use evocc_evoir::{Block, BlockId, Function, Inst, Value};
 
@@ -40,7 +40,7 @@ pub(crate) struct SeedFacts {
 
 impl SeedFacts {
     pub(crate) fn of(function: &Function, admission: &Admission) -> Self {
-        let (arguments, _, work_items) = by_whole_passes(function, admission);
+        let (arguments, work_items) = by_worklist(function, admission);
         Self {
             arguments,
             work_items,
@@ -189,6 +189,50 @@ fn cross_edges(
         }
         _ => {}
     }
+}
+
+/// The fixed point, re-evaluating a block only when its own arguments moved.
+///
+/// Returns the facts and the block evaluations it took. Every block is queued
+/// once at the start, because a block with no scalar arguments has nothing to
+/// wait for and the entry block never waits at all; a block no edge has spoken
+/// for yet is dropped when it comes up, and the edge that first speaks for one
+/// of its arguments puts it back. A block whose arguments an edge moved is
+/// queued again, and no other block is, because nothing else can change what
+/// this block passes on its edges.
+fn by_worklist(function: &Function, admission: &Admission) -> (HashMap<u32, KnownBits>, usize) {
+    let indices = block_indices(function);
+    let mut facts = entry_facts(function);
+    let mut queued = vec![true; function.blocks.len()];
+    let mut queue: VecDeque<usize> = (0..function.blocks.len()).collect();
+    let mut items = 0_usize;
+    let mut reached = Vec::new();
+    while let Some(index) = queue.pop_front() {
+        queued[index] = false;
+        let block = &function.blocks[index];
+        if index != 0 && !spoken_for(block, &facts) {
+            continue;
+        }
+        items += 1;
+        let env = block_environment(block, &facts);
+        reached.clear();
+        cross_edges(
+            function,
+            block,
+            &env,
+            admission,
+            &indices,
+            &mut facts,
+            &mut reached,
+        );
+        for target in reached.drain(..) {
+            if !queued[target] {
+                queued[target] = true;
+                queue.push_back(target);
+            }
+        }
+    }
+    (facts, items)
 }
 
 /// The whole-function sweep the worklist replaced, kept as its oracle.

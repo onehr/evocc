@@ -18,7 +18,7 @@
 //! visit order is measured rather than believed. What the checker runs is
 //! `by_current` alone; the oracle has no caller on the checking path.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use evocc_evoir::{inst_results, Block, BlockId, CmpOp, EvoIRType, Function, Inst, Module, Value};
 
@@ -70,8 +70,51 @@ fn block_indices(function: &Function) -> HashMap<BlockId, usize> {
 }
 
 /// The iteration the checker runs, and the block evaluations it took.
+///
+/// Every block is queued once at the start, because a block with no scalar
+/// arguments has nothing to wait for and the entry block never waits at all; a
+/// block no edge has spoken for yet is dropped when it comes up, and the edge
+/// that first speaks for one of its arguments puts it back. A block whose
+/// arguments an edge moved is queued again, and no other block is: nothing else
+/// can change what this block passes on its edges, since its environment is
+/// built from its own arguments and its own instructions and reads nothing
+/// else.
 fn by_current(function: &Function) -> (HashMap<u32, Fact>, usize) {
-    let (facts, _, items) = by_whole_passes(function);
+    let admitted = admitted_values(function);
+    let indices = block_indices(function);
+    let mut facts = entry_arguments(function);
+    let mut queued = vec![true; function.blocks.len()];
+    let mut queue: VecDeque<usize> = (0..function.blocks.len()).collect();
+    let mut items = 0_usize;
+    let mut reached = Vec::new();
+    while let Some(index) = queue.pop_front() {
+        queued[index] = false;
+        let block = &function.blocks[index];
+        if index != 0 && !spoken_for(block, &facts) {
+            continue;
+        }
+        items += 1;
+        let environment = environment_of(block, &facts);
+        reached.clear();
+        edges_of(block, |target, passed| {
+            carry(
+                function,
+                &indices,
+                target,
+                passed,
+                &environment,
+                &admitted,
+                &mut facts,
+                &mut reached,
+            );
+        });
+        for target in reached.drain(..) {
+            if !queued[target] {
+                queued[target] = true;
+                queue.push_back(target);
+            }
+        }
+    }
     (facts, items)
 }
 
@@ -80,6 +123,7 @@ fn by_current(function: &Function) -> (HashMap<u32, Fact>, usize) {
 ///
 /// Returns the facts, the passes the sweep took and the block evaluations it
 /// spent.
+#[cfg(test)]
 fn by_whole_passes(function: &Function) -> (HashMap<u32, Fact>, usize, usize) {
     let admitted = admitted_values(function);
     let indices = block_indices(function);
