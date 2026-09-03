@@ -385,6 +385,20 @@ pub(crate) fn optimize_scalar_module_with_events(
     for function in &mut optimized.functions {
         for block in &mut function.blocks {
             let mut aliases = HashMap::new();
+            // Section 7.4: two instructions with the same operator whose
+            // operands are already equal compute one value, so the second is
+            // the first. Recording that here is what lets a rule match over
+            // classes rather than over the names the block happened to give
+            // them: `icmp.eq %p, %q` on two such conjunctions is
+            // `icmp.eq %p, %p`, which the reviewed registry answers, and no
+            // amount of comparing operand names reaches it.
+            //
+            // Constants are left out. Equal payloads are already equal to the
+            // constant environment, and aliasing one to another would point an
+            // operand at a value a region's witness closure need not contain,
+            // while the region's own congruence closure joins their classes
+            // anyway.
+            let mut congruent: HashMap<(ScalarOperator, Vec<u32>), Value> = HashMap::new();
             let mut facts = HashMap::new();
             let mut negations = NegationEnv::new();
             let mut known = KnownEnv::new();
@@ -402,7 +416,7 @@ pub(crate) fn optimize_scalar_module_with_events(
                     rewritten.push(inst);
                     continue;
                 }
-                let Ok(_) = ingest_scalar_inst(&inst) else {
+                let Ok(operator) = ingest_scalar_inst(&inst) else {
                     rewritten.push(inst);
                     continue;
                 };
@@ -413,6 +427,31 @@ pub(crate) fn optimize_scalar_module_with_events(
                 record_negation(&inst, &facts, &mut negations);
                 let opportunity = rewrite_opportunity(&inst, &facts, &negations)
                     .or_else(|| fact_driven_opportunity(&inst, &known));
+                let shape = scalar_result(&inst).cloned().map(|result| {
+                    (
+                        result,
+                        (
+                            operator,
+                            scalar_operands(&inst)
+                                .into_iter()
+                                .map(|operand| operand.id)
+                                .collect::<Vec<_>>(),
+                        ),
+                    )
+                });
+                if let Some((result, shape)) = shape {
+                    let first = congruent.entry(shape).or_insert(result.clone()).clone();
+                    // Only where no rule answers the instruction: a rule that
+                    // does states the equality itself, in a region a reader can
+                    // verify, and taking the congruence instead would leave the
+                    // instruction in the output with nothing recorded about it.
+                    if opportunity.is_none() && first != result {
+                        aliases.insert(result.id, first);
+                        record_known(&inst, &mut known);
+                        rewritten.push(inst);
+                        continue;
+                    }
+                }
                 let bridge = bridge_candidate(&inst, &facts, opportunity.as_ref());
                 report.graph_nodes = report.graph_nodes.saturating_add(bridge.node_count);
                 if report.graph_nodes > budget.max_nodes

@@ -1146,11 +1146,56 @@ impl FunctionGen<'_> {
         // Drawn rather than taken in turn: a generator is built per function,
         // so a counter would give the last group only to functions with four
         // bait sites, and most have fewer.
-        match self.rng.below(4) {
+        match self.rng.below(5) {
             0 => self.emit_covering_mask(block, width, low),
             1 => self.emit_known_zero_identity(block),
             2 => self.emit_bounded_comparison(block, width, low),
+            3 => self.emit_shared_subexpression(block, width),
             _ => self.emit_known_constants(block, width, low),
+        }
+    }
+
+    /// One expression written twice, and every comparison of the two spellings.
+    ///
+    /// Section 7.4 makes the two conjunctions one node, so each comparison is a
+    /// comparison of a value with itself and the reviewed registry answers it.
+    /// A matcher that compared operands by name would see two different values
+    /// and answer nothing, which is the whole point of the shape. The first
+    /// copy is written through a value a canonical reduction replaces, so the
+    /// two are congruent only after that merge rather than as written.
+    fn emit_shared_subexpression(&mut self, block: &mut OpenBlock, width: u16) {
+        let left = self.value_of(block, width);
+        let right = self.value_of(block, width);
+        let zero = self.emit_const(block, width, 0);
+        let shifted = self.fresh(EvoIRType::Bits(width));
+        block
+            .insts
+            .push(Inst::Add(shifted.clone(), left.clone(), zero));
+        self.record(block, &shifted);
+        let first = self.fresh(EvoIRType::Bits(width));
+        block
+            .insts
+            .push(Inst::And(first.clone(), shifted, right.clone()));
+        self.record(block, &first);
+        let second = self.fresh(EvoIRType::Bits(width));
+        block.insts.push(Inst::And(second.clone(), left, right));
+        self.record(block, &second);
+        for operation in [
+            CmpOp::Eq,
+            CmpOp::Ne,
+            CmpOp::SLt,
+            CmpOp::SLe,
+            CmpOp::ULt,
+            CmpOp::ULe,
+        ] {
+            let result = self.fresh(EvoIRType::Bits(1));
+            block.insts.push(Inst::ICmp(
+                result.clone(),
+                operation,
+                first.clone(),
+                second.clone(),
+            ));
+            self.record(block, &result);
         }
     }
 
