@@ -10,7 +10,9 @@ use evocc_evoir::{inst_results, render_module, validate_module, Inst, Module, Va
 use evocc_proof::{parse_evp1, render_evp1, sha256, sha256_hex};
 use evocc_types::EvoIRType;
 
-use crate::evp1::{optimize_scalar_module_with_evp1_transaction, CertifiedScalarEqOutcome};
+use crate::evp1::{
+    optimize_scalar_module_with_evp1_transaction, policy_for, CertifiedScalarEqOutcome,
+};
 use crate::scalar_eq::{
     ingest_scalar_inst, mask_raw, operator_id, optimize_scalar_module_with_events, scalar_operands,
     scalar_result, AppliedRewrite, Replacement, ScalarOperator,
@@ -470,7 +472,7 @@ pub fn optimize_scalar_module_certified_persistent(
     state: &mut EqualityState,
     budget: ScalarEqBudget,
 ) -> CertifiedScalarEqOutcome {
-    let transaction = optimize_scalar_module_with_evp1_transaction(module, budget);
+    let transaction = optimize_scalar_module_with_evp1_transaction(module, &policy_for(budget));
     let outcome = transaction.outcome;
     if outcome.report.fell_back {
         return outcome;

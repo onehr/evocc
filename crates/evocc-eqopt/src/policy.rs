@@ -48,8 +48,23 @@ pub enum CostFunction {
 }
 
 impl CostModel for CostFunction {
-    fn operator_cost(&self, _operator: ScalarOperator) -> u64 {
-        todo!("the extraction policy has no cost function behind it yet")
+    fn operator_cost(&self, operator: ScalarOperator) -> u64 {
+        if operator == ScalarOperator::Const {
+            // Section 7.5's semantic convention, not a policy choice: a
+            // constant emits no instruction the cost model can charge for.
+            return 0;
+        }
+        match self {
+            Self::InstructionCount => 1,
+            Self::WeightedOperators => match operator {
+                ScalarOperator::Mul => 3,
+                _ => 1,
+            },
+            Self::ZeroMultiply => match operator {
+                ScalarOperator::Mul => 0,
+                _ => 1,
+            },
+        }
     }
 }
 
@@ -70,7 +85,11 @@ impl RegistryCeiling {
     /// The registry name this ceiling permits at its widest.
     #[must_use]
     pub fn name(self) -> &'static str {
-        todo!("the extraction policy has no registry ceiling behind it yet")
+        match self {
+            Self::V1 => "p0.scalar.v1",
+            Self::V2 => "p0.scalar.v2",
+            Self::V3 => "p0.scalar.v3",
+        }
     }
 }
 
@@ -115,12 +134,17 @@ impl ExtractionPolicy {
     /// A policy assembled from its three parameters.
     #[must_use]
     pub fn new(
-        _name: &'static str,
-        _registry: RegistryCeiling,
-        _cost: CostFunction,
-        _schedule: SchedulePolicy,
+        name: &'static str,
+        registry: RegistryCeiling,
+        cost: CostFunction,
+        schedule: SchedulePolicy,
     ) -> Self {
-        todo!("the extraction policy is not assembled yet")
+        Self {
+            name,
+            registry,
+            cost,
+            schedule,
+        }
     }
 
     /// The name that goes into the producer's report.
@@ -149,25 +173,46 @@ impl ExtractionPolicy {
 
     /// The same policy under different scheduler bounds.
     #[must_use]
-    pub fn with_schedule(self, _schedule: SchedulePolicy) -> Self {
-        todo!("the extraction policy is not assembled yet")
+    pub fn with_schedule(self, schedule: SchedulePolicy) -> Self {
+        Self { schedule, ..self }
     }
 }
 
 impl Default for ExtractionPolicy {
     fn default() -> Self {
-        todo!("the extraction policy has no default yet")
+        Self::new(
+            "instruction-count",
+            RegistryCeiling::V3,
+            CostFunction::InstructionCount,
+            SchedulePolicy::default(),
+        )
     }
 }
 
 /// Every policy this producer ships, in report order.
 #[must_use]
 pub fn shipped_policies() -> Vec<ExtractionPolicy> {
-    todo!("no policy is registered yet")
+    vec![
+        ExtractionPolicy::default(),
+        ExtractionPolicy::new(
+            "weighted-operators",
+            RegistryCeiling::V3,
+            CostFunction::WeightedOperators,
+            SchedulePolicy::default(),
+        ),
+        ExtractionPolicy::new(
+            "zero-multiply",
+            RegistryCeiling::V3,
+            CostFunction::ZeroMultiply,
+            SchedulePolicy::default(),
+        ),
+    ]
 }
 
 /// The policy named `name`, if this producer ships one.
 #[must_use]
-pub fn policy_by_name(_name: &str) -> Option<ExtractionPolicy> {
-    todo!("no policy is registered yet")
+pub fn policy_by_name(name: &str) -> Option<ExtractionPolicy> {
+    shipped_policies()
+        .into_iter()
+        .find(|policy| policy.name == name)
 }

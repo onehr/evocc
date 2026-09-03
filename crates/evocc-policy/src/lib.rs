@@ -16,11 +16,30 @@
 //! `tests/contracts/day5-kernel-cohort.json`, and refuses any module whose
 //! canonical text digest appears in a denylist file.
 
-use std::path::{Path, PathBuf};
+use std::fmt::Write as _;
+use std::fs;
+use std::path::{Component, Path, PathBuf};
+use std::time::Instant;
 
-use evocc_eqopt::ExtractionPolicy;
-use evocc_evoir::Module;
-use evocc_randgate::{GeneratorConfig, ProofChecker};
+use evocc_eqopt::{optimize_scalar_module_with_policy, ExtractionPolicy};
+use evocc_evoir::{
+    interpret_module, parse_section9_module, render_module, validate_module, InterpreterLimits,
+    Module,
+};
+use evocc_proof::{render_evp1, sha256_hex};
+use evocc_randgate::{entry_arguments, generate_module, observe, GeneratorConfig, ProofChecker};
+
+/// Section 10.4: the diagnostic the interpreter reports when fuel runs out.
+const FUEL_EXHAUSTED: &str = "E3008";
+
+/// Directory prefixes and exact paths no corpus may come from.
+///
+/// `.build` and `.evidence` are where acceptance evidence is frozen, and the
+/// kernel cohort is the acceptance corpus itself. A policy measured against
+/// any of them would be tuned against the corpus that is meant to judge it.
+const FORBIDDEN_PREFIXES: [&str; 2] = [".build", ".evidence"];
+const FORBIDDEN_SUFFIX: [&str; 2] = ["tests", "contracts"];
+const FORBIDDEN_FILE: &str = "day5-kernel-cohort.json";
 
 /// Where a corpus came from.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +48,17 @@ pub enum CorpusSource {
     Generated { first_seed: u64, count: u64 },
     /// Every `.evo` file directly under one directory, in file-name order.
     Directory(PathBuf),
+}
+
+impl CorpusSource {
+    /// The one-line description the report prints.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        match self {
+            Self::Generated { first_seed, count } => format!("generated:{first_seed}:{count}"),
+            Self::Directory(path) => format!("directory:{}", path.display()),
+        }
+    }
 }
 
 /// One module of a corpus, with the canonical Section 9 text it hashes to.
@@ -57,7 +87,23 @@ impl CorpusRefusal {
     /// The one-line refusal a caller prints.
     #[must_use]
     pub fn message(&self) -> String {
-        todo!("the harness does not report refusals yet")
+        match self {
+            Self::ForbiddenPath { path, reason } => {
+                format!("refused corpus path {}: {reason}", path.display())
+            }
+            Self::DeniedDigest { name, digest } => {
+                format!("refused module {name}: digest {digest} is on the corpus denylist")
+            }
+            Self::Unreadable { path, detail } => {
+                format!("could not read {}: {detail}", path.display())
+            }
+            Self::NotEvoIR { path, detail } => {
+                format!(
+                    "{} is not a Section 9 EvoIR module: {detail}",
+                    path.display()
+                )
+            }
+        }
     }
 }
 
@@ -74,8 +120,25 @@ impl Corpus {
     ///
     /// A generated corpus reads no path, so no path refusal can apply to it.
     #[must_use]
-    pub fn generated(_first_seed: u64, _count: u64, _config: GeneratorConfig) -> Self {
-        todo!("the harness does not build a generated corpus yet")
+    pub fn generated(first_seed: u64, count: u64, config: GeneratorConfig) -> Self {
+        let programs = (0..count)
+            .map(|offset| {
+                let seed = first_seed.wrapping_add(offset);
+                let module = generate_module(seed, config);
+                let text = render_module(&module);
+                CorpusProgram {
+                    name: format!("seed-{seed:020}"),
+                    digest: sha256_hex(text.as_bytes()),
+                    module,
+                    text,
+                }
+            })
+            .collect::<Vec<_>>();
+        Self {
+            digest: corpus_digest(&programs),
+            source: CorpusSource::Generated { first_seed, count },
+            programs,
+        }
     }
 
     /// Every `.evo` file directly under `directory`, in file-name order.
@@ -83,20 +146,142 @@ impl Corpus {
     /// Refuses the directory outright when its path is forbidden, and refuses
     /// any module whose digest the denylist names.
     pub fn from_directory(
-        _directory: &Path,
-        _denylist: Option<&Path>,
+        directory: &Path,
+        denylist: Option<&Path>,
     ) -> Result<Self, CorpusRefusal> {
-        todo!("the harness does not load a corpus from disk yet")
+        Self::admit_path(directory)?;
+        let denied = match denylist {
+            Some(path) => Self::read_denylist(path)?,
+            None => Vec::new(),
+        };
+        let mut paths = Vec::new();
+        let entries = fs::read_dir(directory).map_err(|error| CorpusRefusal::Unreadable {
+            path: directory.to_path_buf(),
+            detail: error.to_string(),
+        })?;
+        for entry in entries {
+            let entry = entry.map_err(|error| CorpusRefusal::Unreadable {
+                path: directory.to_path_buf(),
+                detail: error.to_string(),
+            })?;
+            let path = entry.path();
+            if path.extension().is_some_and(|extension| extension == "evo") {
+                paths.push(path);
+            }
+        }
+        paths.sort();
+
+        let mut programs = Vec::new();
+        for path in paths {
+            Self::admit_path(&path)?;
+            let bytes = fs::read(&path).map_err(|error| CorpusRefusal::Unreadable {
+                path: path.clone(),
+                detail: error.to_string(),
+            })?;
+            let module =
+                parse_section9_module(&bytes).map_err(|detail| CorpusRefusal::NotEvoIR {
+                    path: path.clone(),
+                    detail,
+                })?;
+            validate_module(&module).map_err(|detail| CorpusRefusal::NotEvoIR {
+                path: path.clone(),
+                detail,
+            })?;
+            let text = render_module(&module);
+            let digest = sha256_hex(text.as_bytes());
+            let name = path.file_name().map_or_else(
+                || path.display().to_string(),
+                |name| name.to_string_lossy().into_owned(),
+            );
+            if denied.iter().any(|entry| entry == &digest) {
+                return Err(CorpusRefusal::DeniedDigest { name, digest });
+            }
+            programs.push(CorpusProgram {
+                name,
+                module,
+                text,
+                digest,
+            });
+        }
+        Ok(Self {
+            digest: corpus_digest(&programs),
+            source: CorpusSource::Directory(directory.to_path_buf()),
+            programs,
+        })
     }
 
     /// Whether the harness will read a corpus from `path` at all.
-    pub fn admit_path(_path: &Path) -> Result<(), CorpusRefusal> {
-        todo!("the harness does not enforce the corpus red line yet")
+    ///
+    /// The judgement is on path components rather than on the rendered string,
+    /// so `buildings/.buildx` is not `.build` and a leading `./` changes
+    /// nothing.
+    pub fn admit_path(path: &Path) -> Result<(), CorpusRefusal> {
+        let components = path
+            .components()
+            .filter_map(|component| match component {
+                Component::Normal(part) => Some(part.to_string_lossy().into_owned()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        for forbidden in FORBIDDEN_PREFIXES {
+            if components.iter().any(|part| part == forbidden) {
+                return Err(CorpusRefusal::ForbiddenPath {
+                    path: path.to_path_buf(),
+                    reason: format!(
+                        "{forbidden} holds frozen acceptance evidence and never feeds a policy"
+                    ),
+                });
+            }
+        }
+        if components.last().is_some_and(|last| last == FORBIDDEN_FILE)
+            && components
+                .len()
+                .checked_sub(FORBIDDEN_SUFFIX.len() + 1)
+                .is_some_and(|start| components[start..components.len() - 1] == FORBIDDEN_SUFFIX)
+        {
+            return Err(CorpusRefusal::ForbiddenPath {
+                path: path.to_path_buf(),
+                reason: "the kernel cohort is an acceptance corpus and never enters a policy's \
+                         fitness"
+                    .to_owned(),
+            });
+        }
+        Ok(())
     }
 
     /// The digests a denylist file names, or an empty set when it is absent.
-    pub fn read_denylist(_path: &Path) -> Result<Vec<String>, CorpusRefusal> {
-        todo!("the harness does not read a denylist yet")
+    ///
+    /// The file is a JSON object with one `digests` array of lowercase hex
+    /// strings. It is read with the same small scanner the harness uses for
+    /// nothing else, because the workspace carries no JSON dependency and a
+    /// denylist that silently failed to parse would be worse than none.
+    pub fn read_denylist(path: &Path) -> Result<Vec<String>, CorpusRefusal> {
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let text = fs::read_to_string(path).map_err(|error| CorpusRefusal::Unreadable {
+            path: path.to_path_buf(),
+            detail: error.to_string(),
+        })?;
+        let mut digests = Vec::new();
+        let mut rest = text.as_str();
+        while let Some(open) = rest.find('"') {
+            rest = &rest[open + 1..];
+            let Some(close) = rest.find('"') else {
+                return Err(CorpusRefusal::Unreadable {
+                    path: path.to_path_buf(),
+                    detail: "an unterminated string".to_owned(),
+                });
+            };
+            let token = &rest[..close];
+            rest = &rest[close + 1..];
+            if token.len() == 64 && token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                digests.push(token.to_owned());
+            }
+        }
+        digests.sort();
+        digests.dedup();
+        Ok(digests)
     }
 
     #[must_use]
@@ -116,6 +301,29 @@ impl Corpus {
     }
 }
 
+fn corpus_digest(programs: &[CorpusProgram]) -> String {
+    let mut joined = String::new();
+    for program in programs {
+        joined.push_str(&program.text);
+    }
+    sha256_hex(joined.as_bytes())
+}
+
+/// Instructions the module holds, terminators excluded.
+///
+/// A terminator is one per block and no rewrite of this profile can remove
+/// one, so counting them would add a constant to both sides of every
+/// comparison and hide the movement the measurement is about.
+#[must_use]
+pub fn instruction_count(module: &Module) -> u64 {
+    module
+        .functions
+        .iter()
+        .flat_map(|function| &function.blocks)
+        .map(|block| block.insts.len() as u64)
+        .sum()
+}
+
 /// What happened to one program under one policy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProgramOutcome {
@@ -129,6 +337,25 @@ pub enum ProgramOutcome {
     /// The harness refused the run: the executions disagreed, the output did
     /// not validate, the digest chain broke, or a certificate did not replay.
     Refused { detail: String },
+}
+
+impl ProgramOutcome {
+    fn tag(&self) -> &'static str {
+        match self {
+            Self::Measured => "measured",
+            Self::UndefinedInput { .. } => "undefinedInput",
+            Self::FuelExhausted => "fuelExhausted",
+            Self::Refused { .. } => "refused",
+        }
+    }
+
+    fn detail(&self) -> String {
+        match self {
+            Self::Measured | Self::FuelExhausted => String::new(),
+            Self::UndefinedInput { code } => code.clone(),
+            Self::Refused { detail } => detail.clone(),
+        }
+    }
 }
 
 /// Everything one program contributes to the report.
@@ -172,8 +399,32 @@ pub struct Aggregate {
 impl Aggregate {
     /// The sums implied by `programs`, recomputed rather than accumulated.
     #[must_use]
-    pub fn of(_programs: &[ProgramMeasurement]) -> Self {
-        todo!("the harness does not aggregate yet")
+    pub fn of(programs: &[ProgramMeasurement]) -> Self {
+        let mut total = Self {
+            programs: programs.len() as u64,
+            ..Self::default()
+        };
+        for program in programs {
+            match &program.outcome {
+                ProgramOutcome::Measured => total.measured += 1,
+                ProgramOutcome::UndefinedInput { .. } => total.undefined_input += 1,
+                ProgramOutcome::FuelExhausted => total.fuel_exhausted += 1,
+                ProgramOutcome::Refused { .. } => total.refused += 1,
+            }
+            if program.regions != 0 {
+                total.programs_optimized += 1;
+            }
+            total.steps_before += program.steps_before;
+            total.steps_after += program.steps_after;
+            total.instructions_before += program.instructions_before;
+            total.instructions_after += program.instructions_after;
+            total.regions += program.regions;
+            total.transactions += program.transactions;
+            total.certificates += program.certificates;
+            total.certificates_replayed += program.certificates_replayed;
+            total.optimizer_wall_nanos += program.optimizer_wall_nanos;
+        }
+        total
     }
 }
 
@@ -204,8 +455,145 @@ pub struct PolicyReport {
 impl PolicyReport {
     /// The report as JSON, keys in a fixed order.
     #[must_use]
-    pub fn render_json(&self, _timing: TimingMode) -> String {
-        todo!("the harness does not render a report yet")
+    pub fn render_json(&self, timing: TimingMode) -> String {
+        let wall = |nanos: u128| match timing {
+            TimingMode::Measured => nanos.to_string(),
+            TimingMode::Elided => "null".to_owned(),
+        };
+        let schedule = self.policy.schedule();
+        let mut text = String::new();
+        let _ = writeln!(text, "{{");
+        let _ = writeln!(text, "  \"policy\": {{");
+        let _ = writeln!(text, "    \"name\": {},", json_string(self.policy.name()));
+        let _ = writeln!(
+            text,
+            "    \"registry\": {},",
+            json_string(self.policy.registry().name())
+        );
+        let _ = writeln!(
+            text,
+            "    \"costFunction\": {},",
+            json_string(&format!("{:?}", self.policy.cost()))
+        );
+        let _ = writeln!(text, "    \"schedule\": {{");
+        let _ = writeln!(text, "      \"maxNodes\": {},", schedule.max_nodes);
+        let _ = writeln!(text, "      \"maxEpochs\": {},", schedule.max_epochs);
+        let _ = writeln!(
+            text,
+            "      \"maxTransactions\": {}",
+            schedule.max_transactions
+        );
+        let _ = writeln!(text, "    }}");
+        let _ = writeln!(text, "  }},");
+        let _ = writeln!(
+            text,
+            "  \"corpusSource\": {},",
+            json_string(&self.corpus_source.describe())
+        );
+        let _ = writeln!(
+            text,
+            "  \"corpusDigest\": {},",
+            json_string(&self.corpus_digest)
+        );
+        let _ = writeln!(text, "  \"seed\": {},", self.seed);
+        let _ = writeln!(text, "  \"stepBudget\": {},", self.step_budget);
+        let _ = writeln!(text, "  \"programs\": [");
+        for (index, program) in self.programs.iter().enumerate() {
+            let comma = if index + 1 == self.programs.len() {
+                ""
+            } else {
+                ","
+            };
+            let _ = writeln!(text, "    {{");
+            let _ = writeln!(text, "      \"name\": {},", json_string(&program.name));
+            let _ = writeln!(
+                text,
+                "      \"inputDigest\": {},",
+                json_string(&program.input_digest)
+            );
+            let _ = writeln!(
+                text,
+                "      \"outputDigest\": {},",
+                json_string(&program.output_digest)
+            );
+            let _ = writeln!(
+                text,
+                "      \"outcome\": {},",
+                json_string(program.outcome.tag())
+            );
+            let _ = writeln!(
+                text,
+                "      \"outcomeDetail\": {},",
+                json_string(&program.outcome.detail())
+            );
+            let _ = writeln!(text, "      \"stepsBefore\": {},", program.steps_before);
+            let _ = writeln!(text, "      \"stepsAfter\": {},", program.steps_after);
+            let _ = writeln!(
+                text,
+                "      \"instructionsBefore\": {},",
+                program.instructions_before
+            );
+            let _ = writeln!(
+                text,
+                "      \"instructionsAfter\": {},",
+                program.instructions_after
+            );
+            let _ = writeln!(text, "      \"regions\": {},", program.regions);
+            let _ = writeln!(text, "      \"transactions\": {},", program.transactions);
+            let _ = writeln!(text, "      \"certificates\": {},", program.certificates);
+            let _ = writeln!(
+                text,
+                "      \"certificatesReplayed\": {},",
+                program.certificates_replayed
+            );
+            let _ = writeln!(
+                text,
+                "      \"optimizerWallNanos\": {}",
+                wall(program.optimizer_wall_nanos)
+            );
+            let _ = writeln!(text, "    }}{comma}");
+        }
+        let _ = writeln!(text, "  ],");
+        let total = &self.aggregate;
+        let _ = writeln!(text, "  \"aggregate\": {{");
+        let _ = writeln!(text, "    \"programs\": {},", total.programs);
+        let _ = writeln!(text, "    \"measured\": {},", total.measured);
+        let _ = writeln!(text, "    \"undefinedInput\": {},", total.undefined_input);
+        let _ = writeln!(text, "    \"fuelExhausted\": {},", total.fuel_exhausted);
+        let _ = writeln!(text, "    \"refused\": {},", total.refused);
+        let _ = writeln!(
+            text,
+            "    \"programsOptimized\": {},",
+            total.programs_optimized
+        );
+        let _ = writeln!(text, "    \"stepsBefore\": {},", total.steps_before);
+        let _ = writeln!(text, "    \"stepsAfter\": {},", total.steps_after);
+        let _ = writeln!(
+            text,
+            "    \"instructionsBefore\": {},",
+            total.instructions_before
+        );
+        let _ = writeln!(
+            text,
+            "    \"instructionsAfter\": {},",
+            total.instructions_after
+        );
+        let _ = writeln!(text, "    \"regions\": {},", total.regions);
+        let _ = writeln!(text, "    \"transactions\": {},", total.transactions);
+        let _ = writeln!(text, "    \"certificates\": {},", total.certificates);
+        let _ = writeln!(
+            text,
+            "    \"certificatesReplayed\": {},",
+            total.certificates_replayed
+        );
+        let _ = writeln!(
+            text,
+            "    \"optimizerWallNanos\": {}",
+            wall(total.optimizer_wall_nanos)
+        );
+        let _ = writeln!(text, "  }}");
+        let _ = writeln!(text, "}}");
+        text
     }
 
     /// Certificates replayed over certificates produced, as a pair rather than
@@ -219,24 +607,184 @@ impl PolicyReport {
     }
 }
 
+fn json_string(value: &str) -> String {
+    let mut text = String::with_capacity(value.len() + 2);
+    text.push('"');
+    for character in value.chars() {
+        match character {
+            '"' => text.push_str("\\\""),
+            '\\' => text.push_str("\\\\"),
+            '\n' => text.push_str("\\n"),
+            '\r' => text.push_str("\\r"),
+            '\t' => text.push_str("\\t"),
+            control if (control as u32) < 0x20 => {
+                let _ = write!(text, "\\u{:04x}", control as u32);
+            }
+            other => text.push(other),
+        }
+    }
+    text.push('"');
+    text
+}
+
 /// Programs whose optimized module text differs between two reports.
 ///
 /// The two reports must name the same corpus, or the comparison is meaningless
 /// and this returns `None`.
 #[must_use]
-pub fn differing_programs(_left: &PolicyReport, _right: &PolicyReport) -> Option<u64> {
-    todo!("the harness does not compare two policies yet")
+pub fn differing_programs(left: &PolicyReport, right: &PolicyReport) -> Option<u64> {
+    if left.corpus_digest != right.corpus_digest || left.programs.len() != right.programs.len() {
+        return None;
+    }
+    let mut differing = 0;
+    for (one, other) in left.programs.iter().zip(&right.programs) {
+        if one.name != other.name {
+            return None;
+        }
+        if one.output_digest != other.output_digest {
+            differing += 1;
+        }
+    }
+    Some(differing)
 }
 
 /// Evaluate `policy` over `corpus`, replaying every certificate through
 /// `checker`.
 #[must_use]
 pub fn evaluate(
-    _policy: &ExtractionPolicy,
-    _corpus: &Corpus,
-    _seed: u64,
-    _step_budget: u64,
-    _checker: &ProofChecker,
+    policy: &ExtractionPolicy,
+    corpus: &Corpus,
+    seed: u64,
+    step_budget: u64,
+    checker: &ProofChecker,
 ) -> PolicyReport {
-    todo!("the harness does not evaluate a policy yet")
+    let programs = corpus
+        .programs()
+        .iter()
+        .map(|program| measure(policy, program, seed, step_budget, checker))
+        .collect::<Vec<_>>();
+    PolicyReport {
+        policy: *policy,
+        corpus_source: corpus.source().clone(),
+        corpus_digest: corpus.digest().to_owned(),
+        seed,
+        step_budget,
+        aggregate: Aggregate::of(&programs),
+        programs,
+    }
+}
+
+/// One program's run: the Section 8.11 chain of transactions the policy's
+/// schedule permits, judged before and after by the Section 7 criterion.
+fn measure(
+    policy: &ExtractionPolicy,
+    program: &CorpusProgram,
+    seed: u64,
+    step_budget: u64,
+    checker: &ProofChecker,
+) -> ProgramMeasurement {
+    let mut measurement = ProgramMeasurement {
+        name: program.name.clone(),
+        input_digest: program.digest.clone(),
+        output_digest: program.digest.clone(),
+        outcome: ProgramOutcome::Measured,
+        steps_before: 0,
+        steps_after: 0,
+        instructions_before: instruction_count(&program.module),
+        instructions_after: instruction_count(&program.module),
+        regions: 0,
+        transactions: 0,
+        certificates: 0,
+        certificates_replayed: 0,
+        optimizer_wall_nanos: 0,
+    };
+    let arguments = entry_arguments(&program.module, seed);
+    let limits = InterpreterLimits::new(step_budget);
+
+    let before_steps = match interpret_module(&program.module, "main", &arguments, limits) {
+        Ok(outcome) => outcome.steps,
+        Err(error) => {
+            measurement.outcome = if error.code() == FUEL_EXHAUSTED {
+                ProgramOutcome::FuelExhausted
+            } else {
+                ProgramOutcome::UndefinedInput {
+                    code: error.code().to_owned(),
+                }
+            };
+            return measurement;
+        }
+    };
+    measurement.steps_before = before_steps;
+    measurement.steps_after = before_steps;
+    let before_observation = observe(&program.module, &arguments, step_budget);
+
+    let mut current = program.module.clone();
+    let mut current_text = program.text.clone();
+    let mut chained_from = program.digest.clone();
+
+    for _ in 0..policy.schedule().max_transactions {
+        let started = Instant::now();
+        let outcome = optimize_scalar_module_with_policy(&current, policy);
+        measurement.optimizer_wall_nanos += started.elapsed().as_nanos();
+        if outcome.certificate.regions.is_empty() {
+            break;
+        }
+        measurement.transactions += 1;
+        measurement.certificates += 1;
+        measurement.regions += outcome.certificate.regions.len() as u64;
+
+        if outcome.certificate.input_digest != chained_from {
+            measurement.outcome = ProgramOutcome::Refused {
+                detail: format!(
+                    "the certificate names input digest {} after {chained_from}",
+                    outcome.certificate.input_digest
+                ),
+            };
+            return measurement;
+        }
+        if let Err(detail) = validate_module(&outcome.module) {
+            measurement.outcome = ProgramOutcome::Refused { detail };
+            return measurement;
+        }
+        let after_text = render_module(&outcome.module);
+        let proof_text = render_evp1(&outcome.certificate);
+        if let Err(detail) = checker.check(&current_text, &after_text, &proof_text) {
+            measurement.outcome = ProgramOutcome::Refused { detail };
+            return measurement;
+        }
+        measurement.certificates_replayed += 1;
+
+        let after_steps = match interpret_module(&outcome.module, "main", &arguments, limits) {
+            Ok(run) => run.steps,
+            Err(error) if error.code() == FUEL_EXHAUSTED => {
+                measurement.outcome = ProgramOutcome::FuelExhausted;
+                return measurement;
+            }
+            Err(error) => {
+                measurement.outcome = ProgramOutcome::Refused {
+                    detail: format!(
+                        "a defined execution became undefined: {} {}",
+                        error.code(),
+                        error.message()
+                    ),
+                };
+                return measurement;
+            }
+        };
+        let after_observation = observe(&outcome.module, &arguments, step_budget);
+        if after_observation != before_observation {
+            measurement.outcome = ProgramOutcome::Refused {
+                detail: "the optimized module is not observationally equal to the input".to_owned(),
+            };
+            return measurement;
+        }
+
+        chained_from = outcome.certificate.output_digest.clone();
+        measurement.steps_after = after_steps;
+        measurement.instructions_after = instruction_count(&outcome.module);
+        measurement.output_digest = sha256_hex(after_text.as_bytes());
+        current = outcome.module;
+        current_text = after_text;
+    }
+    measurement
 }
