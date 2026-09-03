@@ -14,9 +14,10 @@ use evocc_eqopt::{
 };
 use evocc_evoir::render_module;
 use evocc_policy::{
-    candidate_fitness, evaluate, held_out_corpus, search_cost_weights, searched_policy,
-    training_corpus, Aggregate, Corpus, CorpusRefusal, PolicyReport, ProgramMeasurement,
-    ProgramOutcome, SearchConfig, TimingMode, HELD_OUT_RANGE, SEARCHED_WEIGHTS, TRAINING_RANGE,
+    axis_sensitivity, candidate_fitness, evaluate, held_out_corpus, search_cost_weights,
+    searched_policy, training_corpus, Aggregate, Corpus, CorpusRefusal, PolicyReport,
+    ProgramMeasurement, ProgramOutcome, SearchConfig, TimingMode, HELD_OUT_RANGE, SEARCHED_WEIGHTS,
+    TRAINING_RANGE,
 };
 use evocc_proof::render_evp1;
 use evocc_randgate::{generate_module, GeneratorConfig, ProofChecker};
@@ -272,6 +273,91 @@ fn the_searched_weighting_extracts_what_prefer_add_extracts() {
             first + offset
         );
     }
+}
+
+/// The coordinate sweep measures the space, so its own arithmetic has to hold
+/// before its counts mean anything: the baseline's own weight changes nothing,
+/// an axis's union is bounded by the corpus and by the sum over its range, and
+/// the axes that matter are the ones with a nonzero union.
+#[test]
+fn the_axis_sweep_counts_a_union_and_not_a_sum() {
+    let corpus = Corpus::generated(3_400_000, 24, GeneratorConfig::default());
+    let baseline = evocc_eqopt::policy_by_name("prefer-add")
+        .expect("a shipped policy")
+        .cost()
+        .weights();
+    let sweep = axis_sensitivity(baseline, 3, &corpus, 23, STEPS, &checker());
+
+    assert_eq!(sweep.axes.len(), CostAxis::ALL.len());
+    assert_eq!(sweep.baseline, baseline);
+    assert_eq!(sweep.corpus_digest, corpus.digest());
+    assert!(
+        sweep.discards.is_empty(),
+        "a swept point lost a certificate: {:?}",
+        sweep.discards
+    );
+    // Every axis holds its baseline weight somewhere in 0..=3, and that point
+    // is the baseline itself, so it is never evaluated again.
+    assert_eq!(sweep.repeats, CostAxis::ALL.len() as u64);
+    assert_eq!(
+        sweep.evaluations,
+        1 + CostAxis::ALL.len() as u64 * 3,
+        "one baseline and three moved points per axis"
+    );
+
+    for axis in &sweep.axes {
+        assert_eq!(axis.baseline_weight, baseline.get(axis.axis));
+        assert_eq!(axis.by_weight.len(), 4);
+        let at_baseline = axis
+            .by_weight
+            .iter()
+            .find(|(weight, _)| *weight == axis.baseline_weight)
+            .expect("the baseline weight is in the range");
+        assert_eq!(at_baseline.1, 0, "the baseline cannot differ from itself");
+        let sum: u64 = axis.by_weight.iter().map(|(_, changed)| changed).sum();
+        assert!(
+            axis.programs_changed <= sum,
+            "{}: a union of {} exceeds the sum {sum}",
+            axis.axis.name(),
+            axis.programs_changed
+        );
+        assert!(axis.programs_changed <= corpus.programs().len() as u64);
+        assert_eq!(
+            axis.programs_changed == 0,
+            sum == 0,
+            "{}: an axis changes nothing exactly when every weight changes nothing",
+            axis.axis.name()
+        );
+    }
+
+    assert_eq!(
+        sweep.axes_that_matter(),
+        sweep
+            .axes
+            .iter()
+            .filter(|axis| axis.programs_changed != 0)
+            .count() as u64
+    );
+    // A zero weight declines a whole rule family (7.5), so it moves programs
+    // for almost any operator that appears at all; that is a different claim
+    // from an axis the registry lets a policy decide something with. The two
+    // counts are therefore reported separately and the positive one is never
+    // the larger.
+    assert!(
+        sweep.axes_that_matter_at_a_positive_weight() <= sweep.axes_that_matter(),
+        "an axis that matters at a positive weight matters"
+    );
+    for axis in &sweep.axes {
+        if axis.matters_at_a_positive_weight() {
+            assert_ne!(axis.programs_changed, 0);
+        }
+    }
+    let rendered = sweep.render_json();
+    assert!(
+        rendered.contains("\"axesThatMatter\"")
+            && rendered.contains("\"axesThatMatterAtAPositiveWeight\""),
+        "the sweep reports both counts it exists to produce"
+    );
 }
 
 #[test]

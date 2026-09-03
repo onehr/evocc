@@ -13,6 +13,10 @@ path = "src/main.rs"
 name = "evo-cost-search"
 path = "src/search_main.rs"
 
+[[bin]]
+name = "evo-cost-axes"
+path = "src/axes_main.rs"
+
 [dependencies]
 evocc-eqopt = { path = "../evocc-eqopt" }
 evocc-evoir = { path = "../evocc-evoir" }
