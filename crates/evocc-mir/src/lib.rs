@@ -19,6 +19,7 @@
 pub mod interp;
 pub mod lane;
 pub mod lower;
+pub mod regalloc;
 pub mod text;
 pub mod text_parse;
 pub mod validate;
@@ -27,6 +28,7 @@ use std::fmt;
 
 pub use interp::{interpret_module, MirError, MirLimits, MirOutcome, MirValue};
 pub use lower::{lower_module, Refusal};
+pub use regalloc::out_of_ssa;
 pub use text::render_module;
 pub use text_parse::parse_module;
 pub use validate::validate_module;

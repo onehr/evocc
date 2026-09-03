@@ -1,0 +1,280 @@
+//! Section 7, out-of-SSA.
+//!
+//! "Block arguments are removed by placing, on each edge, the parallel copy
+//! from the values the terminator passes to the target's arguments, resolved
+//! into a sequence of moves with at most one scratch register (`x16`) for
+//! cycles. Critical edges are split by inserting a block. This happens before
+//! allocation, on virtual registers, as its own pass; the lowering of Section
+//! 5 does not do it."
+
+use evocc_mir::{
+    out_of_ssa, render_module, term_edges, BinOp, MBlock, MFunction, MInst, MModule, MTerm,
+    RegClass, VReg, Width,
+};
+
+fn w(id: u32) -> VReg {
+    VReg::new(id, RegClass::Gpr32)
+}
+
+fn moves(block: &MBlock) -> Vec<(u32, u32)> {
+    block
+        .insts
+        .iter()
+        .filter_map(|inst| match inst {
+            MInst::Mov { dst, src } => Some((dst.id, src.id)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn find(function: &MFunction, id: u32) -> &MBlock {
+    function
+        .blocks
+        .iter()
+        .find(|block| block.id == id)
+        .expect("block")
+}
+
+/// `^entry` falls into `^b1(%v2, %v3)`; the target reads them as `%v4, %v5`.
+fn straight_edge() -> MFunction {
+    MFunction {
+        name: "f".to_owned(),
+        blocks: vec![
+            MBlock {
+                id: 0,
+                args: vec![w(0), w(1)],
+                insts: vec![
+                    MInst::Binary {
+                        op: BinOp::Add,
+                        dst: w(2),
+                        lhs: w(0),
+                        rhs: w(1),
+                        width: Width::W,
+                    },
+                    MInst::Binary {
+                        op: BinOp::Sub,
+                        dst: w(3),
+                        lhs: w(0),
+                        rhs: w(1),
+                        width: Width::W,
+                    },
+                ],
+                term: MTerm::B {
+                    target: 1,
+                    args: vec![w(2), w(3)],
+                },
+            },
+            MBlock {
+                id: 1,
+                args: vec![w(4), w(5)],
+                insts: Vec::new(),
+                term: MTerm::Ret {
+                    values: vec![w(4), w(5)],
+                },
+            },
+        ],
+    }
+}
+
+#[test]
+fn every_block_argument_and_edge_argument_is_gone() {
+    let after = out_of_ssa(&straight_edge());
+    for block in &after.blocks {
+        assert!(block.args.is_empty(), "block {} keeps arguments", block.id);
+        for (target, args) in term_edges(&block.term) {
+            assert!(args.is_empty(), "edge to {target} keeps arguments");
+        }
+    }
+}
+
+#[test]
+fn an_edge_becomes_the_moves_its_arguments_named() {
+    let after = out_of_ssa(&straight_edge());
+    assert_eq!(moves(find(&after, 0)), vec![(4, 2), (5, 3)]);
+}
+
+/// A self-loop that passes its two arguments back crossed over: the parallel
+/// copy is a two-cycle and needs the scratch.
+fn swap() -> MFunction {
+    MFunction {
+        name: "f".to_owned(),
+        blocks: vec![
+            MBlock {
+                id: 0,
+                args: vec![w(0), w(1)],
+                insts: Vec::new(),
+                term: MTerm::B {
+                    target: 1,
+                    args: vec![w(0), w(1)],
+                },
+            },
+            MBlock {
+                id: 1,
+                args: vec![w(2), w(3)],
+                insts: Vec::new(),
+                term: MTerm::Tb {
+                    nonzero: true,
+                    src: w(2),
+                    bit: 0,
+                    taken: 1,
+                    taken_args: vec![w(3), w(2)],
+                    untaken: 2,
+                    untaken_args: vec![w(2)],
+                },
+            },
+            MBlock {
+                id: 2,
+                args: vec![w(4)],
+                insts: Vec::new(),
+                term: MTerm::Ret { values: vec![w(4)] },
+            },
+        ],
+    }
+}
+
+#[test]
+fn a_swap_uses_one_scratch_register() {
+    let after = out_of_ssa(&swap());
+    // The crossing edge is critical, so its copy lands in a block of its own.
+    let scratch: Vec<u32> = after
+        .blocks
+        .iter()
+        .flat_map(moves)
+        .filter(|(dst, _)| *dst >= 100)
+        .map(|(dst, _)| dst)
+        .collect();
+    assert_eq!(scratch.len(), 1, "one scratch definition: {after:?}");
+
+    let sequence: Vec<(u32, u32)> = after.blocks.iter().flat_map(moves).collect();
+    assert_eq!(
+        sequence.len(),
+        5,
+        "two on the entry edge, three on the swap: {sequence:?}"
+    );
+}
+
+/// Three registers rotated on one edge.
+fn rotation() -> MFunction {
+    MFunction {
+        name: "f".to_owned(),
+        blocks: vec![
+            MBlock {
+                id: 0,
+                args: vec![w(0), w(1), w(2)],
+                insts: Vec::new(),
+                term: MTerm::B {
+                    target: 1,
+                    args: vec![w(0), w(1), w(2)],
+                },
+            },
+            MBlock {
+                id: 1,
+                args: vec![w(3), w(4), w(5)],
+                insts: Vec::new(),
+                term: MTerm::Tb {
+                    nonzero: true,
+                    src: w(3),
+                    bit: 0,
+                    taken: 1,
+                    taken_args: vec![w(4), w(5), w(3)],
+                    untaken: 2,
+                    untaken_args: vec![w(3)],
+                },
+            },
+            MBlock {
+                id: 2,
+                args: vec![w(6)],
+                insts: Vec::new(),
+                term: MTerm::Ret { values: vec![w(6)] },
+            },
+        ],
+    }
+}
+
+#[test]
+fn a_cycle_of_three_uses_one_scratch_and_four_moves() {
+    let after = out_of_ssa(&rotation());
+    let critical: Vec<&MBlock> = after.blocks.iter().filter(|block| block.id >= 3).collect();
+    let rotate: Vec<(u32, u32)> = critical.iter().copied().flat_map(moves).collect();
+    assert_eq!(
+        rotate.len(),
+        4,
+        "a three-cycle costs one scratch move and three moves: {rotate:?}"
+    );
+    assert_eq!(
+        rotate.iter().filter(|(dst, _)| *dst >= 100).count(),
+        1,
+        "exactly one scratch: {rotate:?}"
+    );
+}
+
+#[test]
+fn a_critical_edge_is_split() {
+    // Block 1 has two successors and block 1 has two predecessors, so the back
+    // edge is critical and its copy cannot go in either endpoint.
+    let before = swap();
+    let after = out_of_ssa(&before);
+    assert!(
+        after.blocks.len() > before.blocks.len(),
+        "a block was inserted: {after:?}"
+    );
+    for block in &after.blocks {
+        let successors = term_edges(&block.term);
+        for (target, _) in &successors {
+            let predecessors = after
+                .blocks
+                .iter()
+                .filter(|other| term_edges(&other.term).iter().any(|(to, _)| to == target))
+                .count();
+            assert!(
+                successors.len() < 2 || predecessors < 2,
+                "block {} still has a critical edge to {target}",
+                block.id
+            );
+        }
+    }
+}
+
+#[test]
+fn the_pass_is_a_function_of_its_input() {
+    for function in [straight_edge(), swap(), rotation()] {
+        let one = MModule {
+            globals: Vec::new(),
+            functions: vec![out_of_ssa(&function)],
+        };
+        let two = MModule {
+            globals: Vec::new(),
+            functions: vec![out_of_ssa(&function)],
+        };
+        assert_eq!(render_module(&one), render_module(&two));
+    }
+}
+
+#[test]
+fn a_move_whose_source_and_destination_agree_is_not_emitted() {
+    let identity = MFunction {
+        name: "f".to_owned(),
+        blocks: vec![
+            MBlock {
+                id: 0,
+                args: vec![w(0)],
+                insts: Vec::new(),
+                term: MTerm::B {
+                    target: 1,
+                    args: vec![w(0)],
+                },
+            },
+            MBlock {
+                id: 1,
+                args: vec![w(0)],
+                insts: Vec::new(),
+                term: MTerm::Ret { values: vec![w(0)] },
+            },
+        ],
+    };
+    let after = out_of_ssa(&identity);
+    assert!(
+        after.blocks.iter().all(|block| moves(block).is_empty()),
+        "{after:?}"
+    );
+}
