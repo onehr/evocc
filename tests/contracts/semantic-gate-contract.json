@@ -39,7 +39,8 @@
     "S3d common subexpressions and wider facts: (1) a region whose root is a duplicate of a congruent earlier node is admitted with congruence events, an extraction to the earlier node and no rewrite, so the duplicate instruction leaves the output; measure regions and instructions removed; (2) the six transfer rows added at 1.9.43 (shl, lshr, ashr, zext, sext, trunc) in both the producer's and the checker's independent implementations, the inherited negative test narrowed to what is still unlisted (division, remainder, and everything else), and a measurement of how many additional premised rewrites the new facts enable over 256 seeds with the generator baited for shifts and width changes; (3) both campaigns re-run.",
     "S3e regions under 1.9.44: (1) eligibility, closure and manifests in both producer and checker for the six admitted operators and for structural duplicates, each recomputed independently; (2) registry p0.scalar.v3 (digest aca1f15b47e602ce18c593e06d77008862947c7c7252a9f76bb823c71f53fb15) in producer and checker, the narrowest-registry naming rule carried forward; (3) common-subexpression regions admitted (congruence events, extraction to the twin, no rewrite) with instructions removed from the output measured; (4) the six transfer rows now reachable in premises, measured on and off over 256 seeds; (5) the coverage assertion names p1_206..p1_208 and p1_230..p1_232 as reached or, if the generator cannot reach one, dominated or unreachable with the measured reason; (6) both campaigns re-run.",
     "S3f definition-origin seeds: the producer admits regions whose seeds have origin definition per 8.7, not only entry-block arguments; both manifests recomputed independently; measure congruence-only regions (1 of 21 duplicates before), regions gained overall, and any region kind that becomes admissible; both campaigns re-run; any mismatch shrunk and pinned. A second executor takes this window with a self-contained brief.",
-    "S3g facts across block edges: (1) the seed-fact fixed point of 8.10 in the producer and, independently, in the checker, so a block argument carries the meet of the facts passed on every incoming edge; (2) premises may name seed classes and are recomputed by the checker; (3) measure, over 256 seeds and both campaigns, premised rewrites whose premise names a seed, regions gained, and the fixed point's iteration counts (distribution, maximum) as a cost figure; (4) a hand-written loop whose carried argument keeps a known mask, checked end to end through evo-proofcheck; (5) both campaigns re-run."
+    "S3g facts across block edges: (1) the seed-fact fixed point of 8.10 in the producer and, independently, in the checker, so a block argument carries the meet of the facts passed on every incoming edge; (2) premises may name seed classes and are recomputed by the checker; (3) measure, over 256 seeds and both campaigns, premised rewrites whose premise names a seed, regions gained, and the fixed point's iteration counts (distribution, maximum) as a cost figure; (4) a hand-written loop whose carried argument keeps a known mask, checked end to end through evo-proofcheck; (5) both campaigns re-run.",
+    "S3h worklist and re-derivation: the seed-fact fixed point as a worklist on both sides, bit-for-bit equal to the whole-function sweep over 256 and 20,000 seeds; the double-negation reduction re-derived against the region's partition; both campaigns re-run."
   ],
   "gate": "cargo test --workspace; cargo clippy --workspace --all-targets -- -D warnings; cargo fmt --all -- --check; the 1000-program gate green; both reproducer tests green; wall time of the 1000-program test reported as the median of three runs on an idle machine.",
   "rulings": {
@@ -71,7 +72,8 @@
     "definitionSeedsUnreachable": "2026-09-03: the third executor showed that under the only self-consistent reading of 8.5 a definition-origin seed cannot arise in this profile, and that the producer's real restriction was block_index == 0, not seed origin; lifting it doubled the regions (12,913 to 27,195) with 0 mismatches over 21,000 programs and every seed origin recomputed by the checker. Ruled at 1.9.46: Reading A is the rule, the definition origin is reserved.",
     "stageS3fClosed": "2026-09-03: regions admitted in every block: 12,913 to 27,195 in the 1000-program gate, congruence-only 226 to 568, duplicates without a region 16 of 21 to 1 of 21 (the one correctly refused by the exclusion fixed point); 21,000 programs, 0 mismatches, 0 refusals, every seed origin recomputed by the checker. Architect's isolated gate on b249ac2: 1228/0, clippy 0, fmt clean; merged into main.",
     "joinVersusMerge": "2026-09-03: both S3g gaps were real. The edge combination of seed facts is a join (bits every edge agrees on), the class merge combines knowledge; the executor's separate naming on both sides is the rule. The 11.6 sentence that forbade p1_202/203/204 rested on a premise 1.9.46 falsified; it is lifted and the three fire when a fully known non-constant operand exists (measured cost of the restraint: 313 regions and 336 premised rewrites over 256 seeds).",
-    "stageS3gClosed": "2026-09-03: facts of seeds across block edges in both producer and checker with the join named apart from the merge; regions 27,195 to 37,813 (1000-program) and 553,820 to 772,255 (20,000-program), premises naming a seed 0 to 1,228 and 24,918; 21,000 programs, 0 mismatches after five refusals (seeds pinned, 26 in the replay list) that were the checker's eighteenth to twenty-second correct refusals: the identity-comparison reduction trusted the sweep's rewritten stream instead of the region's partition, and now re-derives. Fixed point cost: up to 191 passes on one function in 20,000; a worklist is the licensed follow-up. Architect's isolated gate on 95a4d40: 1263/0, clippy 0, fmt clean; merged into main. Open by the executor's list: DoubleNegation still takes the unconditional path; wall time noisy on the shared host."
+    "stageS3gClosed": "2026-09-03: facts of seeds across block edges in both producer and checker with the join named apart from the merge; regions 27,195 to 37,813 (1000-program) and 553,820 to 772,255 (20,000-program), premises naming a seed 0 to 1,228 and 24,918; 21,000 programs, 0 mismatches after five refusals (seeds pinned, 26 in the replay list) that were the checker's eighteenth to twenty-second correct refusals: the identity-comparison reduction trusted the sweep's rewritten stream instead of the region's partition, and now re-derives. Fixed point cost: up to 191 passes on one function in 20,000; a worklist is the licensed follow-up. Architect's isolated gate on 95a4d40: 1263/0, clippy 0, fmt clean; merged into main. Open by the executor's list: DoubleNegation still takes the unconditional path; wall time noisy on the shared host.",
+    "stageS3hClosed": "2026-09-03: worklist fixed point on both sides, 0 disagreements against the sweep over 1,224,250 compared arguments, block evaluations 24,561 to 6,817 over 256 seeds, deepest function 448 to 88; 1000-program gate 48.9 s to 41.9 s. Double negation now re-derives its zeros off the partition: five inputs in 20,000 that used to drop the region and cost a second transaction now resolve in one; the old behaviour was a lost region, never a refusal. 21,000 programs, 0 mismatches, 0 refusals. Architect's isolated gate on 2aeb97e: 1267/0, clippy 0, fmt clean; merged into main."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",
@@ -338,6 +340,23 @@
       },
       "architectGate": {
         "passed": 1263,
+        "failed": 0,
+        "clippy": 0,
+        "fmt": "clean"
+      }
+    },
+    "s3h": {
+      "branchHead": "2aeb97e",
+      "campaign": {
+        "programs": 21000,
+        "semanticMismatches": 0,
+        "certificateRefusals": 0,
+        "blockEvaluations256Seeds": "24561 to 6817",
+        "wallSeconds1000Median": 41.936,
+        "wallSeconds20000": 941.319
+      },
+      "architectGate": {
+        "passed": 1267,
         "failed": 0,
         "clippy": 0,
         "fmt": "clean"
