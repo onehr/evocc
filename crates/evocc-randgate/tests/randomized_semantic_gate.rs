@@ -1035,3 +1035,63 @@ fn the_lowering_table_reaches_a_measured_share_of_the_corpus() {
     assert!(report.lowered > 0, "{}", report.render());
     assert_eq!(report.machine_budget_exhausted, 0, "{}", report.render());
 }
+
+/// What each unwritten row of the Section 5 table costs the machine lane.
+///
+/// The lane judges only the modules the table admits, so the two rows it is
+/// missing decide how much of the corpus it sees. This measures them apart, on
+/// the generated modules rather than the optimized ones, because the scalar
+/// optimizer rewrites pure regions and leaves both shapes exactly where it
+/// found them.
+///
+/// The first is the undefined-behaviour predicates, which have no row at all
+/// while the division row says their results have already been asserted. The
+/// second is a function with more than one ordinary result, which Section 6
+/// refuses on purpose. The numbers are printed so a revision that adds a
+/// predicate row can be seen to move the first and not the second.
+#[test]
+fn the_unwritten_rows_of_the_lowering_table_have_a_measured_cost() {
+    const CORPUS: u64 = 2_000;
+    let mut refused = 0_u64;
+    let mut only_predicates = 0_u64;
+    let mut only_multiple_results = 0_u64;
+    let mut only_those_two = 0_u64;
+    let mut other = 0_u64;
+
+    for offset in 0..CORPUS {
+        let module = generate_module(GATE_SEED.wrapping_add(offset), config());
+        let Err(refusals) = evocc_mir::lower_module(&module) else {
+            continue;
+        };
+        refused += 1;
+        let predicate =
+            |refusal: &evocc_mir::Refusal| refusal.detail.contains("undefined-behaviour predicate");
+        let multiple = |refusal: &evocc_mir::Refusal| refusal.code == "E4013";
+        if refusals.iter().all(predicate) {
+            only_predicates += 1;
+        }
+        if refusals.iter().all(multiple) {
+            only_multiple_results += 1;
+        }
+        if refusals
+            .iter()
+            .all(|refusal| predicate(refusal) || multiple(refusal))
+        {
+            only_those_two += 1;
+        } else {
+            other += 1;
+        }
+    }
+
+    println!("corpus={CORPUS}");
+    println!("refused={refused}");
+    println!("refusedOnlyByPredicates={only_predicates}");
+    println!("refusedOnlyByMultipleResults={only_multiple_results}");
+    println!("refusedOnlyByThoseTwo={only_those_two}");
+    println!("refusedBySomethingElse={other}");
+
+    assert!(
+        only_those_two > refused / 2,
+        "those two rows are the majority of the refusals: {only_those_two} of {refused}"
+    );
+}
