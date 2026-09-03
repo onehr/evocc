@@ -5,13 +5,12 @@
 //! operand where the block wrote two names. The duplicate itself, though, stays
 //! in the output, and this file is about why.
 //!
-//! Section 8.5 builds a region's witness closure by following operands: "the
-//! closure contains the root and every instruction reached that way". The
-//! earlier twin of a duplicate is not one of its operands, so it is not in the
-//! closure, and Section 8.7 lets the certificate neither add it as a witness nor
-//! reinterpret it as a seed. Without it in the node stream there is no
-//! congruence to record between the two and no node for the extraction to name,
-//! so the duplicate's class holds one node of cost one and nothing is cheaper.
+//! Section 8.5 built a region's witness closure by following operands alone
+//! until revision 1.9.44, which added every earlier allowlisted instruction
+//! that is a structural duplicate of one already in the closure. That is what
+//! puts a duplicate's twin in its region: the two nodes are congruent as they
+//! are inserted, the extraction names the earlier one, and the duplicate leaves
+//! the output with no rule having fired.
 //!
 //! Everything here is computed from the module, independently of the producer:
 //! the duplicate detection and the closure are recomputed from Section 8.5's
@@ -44,6 +43,21 @@ fn allowlisted(instruction: &Inst) -> Option<(&'static str, Vec<u32>)> {
         Inst::And(_, left, right) => ("and", vec![left.id, right.id]),
         Inst::Or(_, left, right) => ("or", vec![left.id, right.id]),
         Inst::Xor(_, left, right) => ("xor", vec![left.id, right.id]),
+        Inst::Shl(_, left, right) => ("shl", vec![left.id, right.id]),
+        Inst::LShr(_, left, right) => ("lshr", vec![left.id, right.id]),
+        Inst::AShr(_, left, right) => ("ashr", vec![left.id, right.id]),
+        Inst::ZExt(result, source, _) => (
+            &*Box::leak(format!("zext/{:?}", result.ty).into_boxed_str()),
+            vec![source.id],
+        ),
+        Inst::SExt(result, source, _) => (
+            &*Box::leak(format!("sext/{:?}", result.ty).into_boxed_str()),
+            vec![source.id],
+        ),
+        Inst::Trunc(result, source, _) => (
+            &*Box::leak(format!("trunc/{:?}", result.ty).into_boxed_str()),
+            vec![source.id],
+        ),
         Inst::ICmp(_, comparison, left, right) => (
             match comparison {
                 CmpOp::Eq => "icmp.eq",
@@ -61,7 +75,8 @@ fn allowlisted(instruction: &Inst) -> Option<(&'static str, Vec<u32>)> {
 }
 
 /// Section 8.5: follow an operand only into an earlier allowlisted instruction
-/// of the same block.
+/// of the same block, and then take in every earlier allowlisted instruction
+/// that is a structural duplicate of one already reached, to a fixed point.
 fn closure(block: &Block, root: usize) -> HashSet<usize> {
     let definitions = block
         .insts
@@ -90,7 +105,39 @@ fn closure(block: &Block, root: usize) -> HashSet<usize> {
             }
         }
     }
-    reached
+    // Revision 1.9.44: duplicates of what is in the closure join it, each with
+    // its own operand cone, and only from before the root.
+    loop {
+        let shapes = reached
+            .iter()
+            .filter_map(|index| allowlisted(&block.insts[*index]))
+            .collect::<Vec<_>>();
+        let joining = (0..root)
+            .filter(|index| !reached.contains(index))
+            .filter(|index| {
+                allowlisted(&block.insts[*index]).is_some_and(|shape| shapes.contains(&shape))
+            })
+            .collect::<Vec<_>>();
+        if joining.is_empty() {
+            return reached;
+        }
+        pending.extend(joining);
+        while let Some(index) = pending.pop() {
+            if !reached.insert(index) {
+                continue;
+            }
+            let Some((_, operands)) = allowlisted(&block.insts[index]) else {
+                continue;
+            };
+            for operand in operands {
+                if let Some(definition) = definitions.get(&operand) {
+                    if *definition < index && allowlisted(&block.insts[*definition]).is_some() {
+                        pending.push(*definition);
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Every duplicate in one block, paired with the earlier instruction it
@@ -193,7 +240,7 @@ fn probe(insts: Vec<Inst>, root: Value) -> Module {
 /// Nothing can replace `%q` with `%p`: `%p` is not among `%q`'s operands, so
 /// Section 8.5 leaves it out of the closure and Section 8.7 forbids adding it.
 #[test]
-fn a_duplicates_twin_is_not_in_its_closure() {
+fn a_duplicates_twin_is_in_its_closure() {
     let left = bits(4);
     let right = bits(5);
     let module = probe(
@@ -209,29 +256,29 @@ fn a_duplicates_twin_is_not_in_its_closure() {
     let (duplicate, twin, reachable) = found[0];
     assert_eq!((duplicate, twin), (1, 0));
     assert!(
-        !reachable,
-        "the twin is not an operand ancestor, so no closure containing the \
-         duplicate contains it"
+        reachable,
+        "revision 1.9.44 takes the twin into the duplicate's closure"
     );
     assert_eq!(
         closure(block, duplicate).len(),
-        1,
-        "the duplicate's closure is the duplicate alone"
+        2,
+        "the closure is the duplicate and its twin"
     );
 
-    // And so the duplicate survives: its class holds one node of cost one and
-    // the region has nothing cheaper to extract.
+    // And so the duplicate goes: its class owns the twin's node, which costs
+    // nothing to reuse where the duplicate costs one.
     let outcome = optimize_scalar_module_with_evp1(&module, ScalarEqBudget::new(20_000, 256));
-    assert!(
-        outcome.certificate.regions.is_empty(),
-        "no region can be admitted for a duplicate whose twin it may not name"
+    assert_eq!(
+        outcome.certificate.regions.len(),
+        1,
+        "the duplicate is a region of its own"
     );
     assert_eq!(
         evocc_evoir::render_module(&outcome.module)
             .matches("and.bits<8>")
             .count(),
-        2,
-        "both conjunctions are still in the output"
+        1,
+        "one conjunction is left in the output"
     );
 }
 
@@ -297,5 +344,9 @@ fn the_campaign_measures_its_duplicates() {
     assert!(
         total > 0,
         "the generator must produce duplicates, or this measures nothing"
+    );
+    assert_eq!(
+        in_closure, total,
+        "since revision 1.9.44 every duplicate's twin is in its closure"
     );
 }

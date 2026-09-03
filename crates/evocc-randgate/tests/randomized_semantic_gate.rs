@@ -894,7 +894,8 @@ fn the_campaign_runs_more_than_one_epoch() {
     );
 }
 
-/// The fact-driven rules the revision added: fifteen reached, three dominated.
+/// The fact-driven rules the revisions added: twenty-one reached, three
+/// dominated.
 ///
 /// A rule the campaign never fires is a rule whose premise recording, whose
 /// side condition and whose builder are all unmeasured, however carefully they
@@ -936,6 +937,12 @@ fn the_campaign_reaches_the_tier_b_rules() {
         "p1_223_or_cover_lhs",
         "p1_224_xor_known_zero_rhs",
         "p1_225_xor_known_zero_lhs",
+        "p1_206_known_shl",
+        "p1_207_known_lshr",
+        "p1_208_known_ashr",
+        "p1_230_known_zext",
+        "p1_231_known_sext",
+        "p1_232_known_trunc",
     ] {
         assert!(fired.contains(rule), "{rule} never fired");
     }
