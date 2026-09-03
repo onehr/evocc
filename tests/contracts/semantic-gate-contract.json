@@ -434,6 +434,17 @@
         "failed": 0,
         "clippy": 0,
         "fmt": "clean"
+      },
+      "axisSweep": {
+        "commit": "b1b52fc",
+        "axesThatMatter": 13,
+        "axesThatMatterAtAPositiveWeight": 3,
+        "positiveAxes": [
+          "add",
+          "mul",
+          "shl"
+        ],
+        "executorGate": "workspace 1363/0, clippy 0, fmt clean (measure-only commit; not separately gated by the architect to save disk)"
       }
     }
   }
