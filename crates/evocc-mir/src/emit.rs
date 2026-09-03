@@ -240,7 +240,19 @@ fn store_mnemonic(kind: StoreKind) -> &'static str {
 fn emit_inst(text: &mut String, inst: &MInst, frame: &Frame, name: &impl Fn(VReg) -> String) {
     match inst {
         MInst::Mov { dst, src } => {
-            let _ = writeln!(text, "    mov {}, {}", name(*dst), name(*src));
+            // The two classes are one register file at two widths, so a move
+            // between them is the thirty-two-bit form: it truncates when it
+            // reads the low half and zero-extends when it writes it.
+            if dst.class == src.class {
+                let _ = writeln!(text, "    mov {}, {}", name(*dst), name(*src));
+            } else {
+                let narrow = |reg: VReg| {
+                    name(reg)
+                        .strip_prefix('x')
+                        .map_or_else(|| name(reg), |number| format!("w{number}"))
+                };
+                let _ = writeln!(text, "    mov {}, {}", narrow(*dst), narrow(*src));
+            }
         }
         MInst::MovImm { dst, imm } => emit_immediate(text, &name(*dst), dst.class, *imm),
         MInst::Adrp { dst, symbol, kind } => {
