@@ -21,6 +21,9 @@ use crate::{term_edges, MBlock, MFunction, MInst, MTerm, RegClass, VReg};
 /// the allocatable set, so nothing else can be given it.
 pub const SCRATCH_BASE: u32 = 1 << 24;
 
+/// One past the scratch range, so a later pass can take a range of its own.
+pub const SCRATCH_LIMIT: u32 = 1 << 25;
+
 /// Remove block arguments by placing each edge's parallel copy in its
 /// predecessor, splitting critical edges first.
 #[must_use]
@@ -235,5 +238,5 @@ fn sequentialize(pairs: &[(VReg, VReg)], insts: &mut Vec<MInst>, next_scratch: &
 /// Whether a virtual register is the Section 7 cycle-breaking scratch.
 #[must_use]
 pub const fn is_scratch(reg: VReg) -> bool {
-    reg.id >= SCRATCH_BASE && !matches!(reg.class, RegClass::Flags)
+    reg.id >= SCRATCH_BASE && reg.id < SCRATCH_LIMIT && !matches!(reg.class, RegClass::Flags)
 }

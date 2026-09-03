@@ -361,6 +361,47 @@ pub fn render_inst(inst: &MInst) -> String {
             use_of(*lhs),
             use_of(*rhs)
         ),
+        MInst::Ldp {
+            rt1,
+            rt2,
+            base,
+            offset,
+            writeback,
+        }
+        | MInst::Stp {
+            rt1,
+            rt2,
+            base,
+            offset,
+            writeback,
+        } => {
+            let mnemonic = if matches!(inst, MInst::Ldp { .. }) {
+                "ldp"
+            } else {
+                "stp"
+            };
+            let bang = if *writeback { "!" } else { "" };
+            let head = if matches!(inst, MInst::Ldp { .. }) {
+                format!("{}, {} = ", *rt1, *rt2)
+            } else {
+                String::new()
+            };
+            let operands = if matches!(inst, MInst::Ldp { .. }) {
+                String::new()
+            } else {
+                format!("{}, {}, ", use_of(*rt1), use_of(*rt2))
+            };
+            format!(
+                "{head}{mnemonic} {operands}[{}, #{offset}]{bang}",
+                use_of(*base)
+            )
+        }
+        MInst::SpillStore { src, slot } => {
+            format!("spill.store {}, [slot #{slot}]", use_of(*src))
+        }
+        MInst::SpillReload { dst, slot } => {
+            format!("{}spill.reload [slot #{slot}]", defined(*dst))
+        }
         MInst::FrameSlot {
             dst,
             origin,

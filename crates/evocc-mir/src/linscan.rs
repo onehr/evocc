@@ -1,8 +1,26 @@
 //! Section 7's linear scan and the allocated form it produces.
+//!
+//! The fixed operands of Section 7 are made short-lived first: a copy is
+//! placed on each side of every call and of the return, and the entry
+//! parameters are copied out of their boundary registers at the top of the
+//! function. Each boundary register is then live across one move and the call
+//! or return itself, so a pre-assignment can never collide with another, and
+//! the scan below only has to respect them rather than reconcile them.
+//!
+//! Spilling is a rewrite followed by a rerun: an interval that cannot be given
+//! a register is written to its frame slot after each definition and read back
+//! before each use, through registers whose live ranges are one instruction
+//! long, and the scan is run again over the rewritten function. That is the
+//! same allocation Section 7 describes, arrived at without a second
+//! interference structure.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
 
-use crate::MBlock;
+use crate::{
+    inst_defs, inst_uses, regalloc, term_edges, term_uses, MBlock, MFunction, MInst, MTerm,
+    RegClass, VReg,
+};
 
 /// Section 6: "`x0` to `x17` are caller-saved", less the two intra-procedure
 /// scratch registers, which Section 2 keeps for emitted sequences.
@@ -10,6 +28,17 @@ pub const CALLER_SAVED: [u8; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
 
 /// Section 6: "`x19` to `x28` ... are callee-saved".
 pub const CALLEE_SAVED: [u8; 10] = [19, 20, 21, 22, 23, 24, 25, 26, 27, 28];
+
+/// Section 2: "`x16` and `x17` are the intra-procedure-call scratch
+/// registers, used only by emitted sequences".
+pub const SCRATCH: u8 = 16;
+
+/// Section 6: arguments and results occupy `x0` to `x7`.
+const BOUNDARY: u8 = 8;
+
+/// Virtual registers this pass creates start above the out-of-SSA scratch
+/// range, so that a boundary copy is never mistaken for a cycle break.
+const FRESH_BASE: u32 = regalloc::SCRATCH_LIMIT;
 
 /// One allocated function: the same blocks with every virtual register
 /// assigned, no block arguments, and a frame slot for each spilled value.
@@ -29,12 +58,856 @@ pub struct Allocated {
 
 /// Assign a physical register to every virtual register of an out-of-SSA
 /// function, spilling to the frame when a class runs out.
-pub fn allocate(_function: &crate::MFunction) -> Result<Allocated, String> {
-    todo!("Section 7 linear scan")
+pub fn allocate(function: &MFunction) -> Result<Allocated, String> {
+    let mut next = FRESH_BASE;
+    let (mut current, pins) = pin_boundaries(function, &mut next);
+    let mut slots: BTreeMap<u32, u32> = BTreeMap::new();
+
+    // Each round either succeeds or sends at least one interval to the frame,
+    // and a value that has been spilled is never a candidate again, so the
+    // loop is bounded by the number of virtual registers.
+    for _ in 0..64 {
+        match scan(&current, &pins) {
+            Ok(assignment) => {
+                let blocks = drop_identity_moves(&current, &assignment);
+                let used_callee_saved = assignment
+                    .values()
+                    .copied()
+                    .filter(|number| CALLEE_SAVED.contains(number))
+                    .collect::<BTreeSet<u8>>()
+                    .into_iter()
+                    .collect();
+                return Ok(Allocated {
+                    name: current.name.clone(),
+                    blocks,
+                    assignment,
+                    spilled: slots.len(),
+                    frame_slots: u32::try_from(slots.len()).unwrap_or(u32::MAX),
+                    used_callee_saved,
+                });
+            }
+            Err(victims) => {
+                for victim in &victims {
+                    let next_slot = u32::try_from(slots.len()).unwrap_or(u32::MAX);
+                    slots.entry(*victim).or_insert(next_slot);
+                }
+                current = insert_spill_code(&current, &slots, &victims, &mut next);
+            }
+        }
+    }
+    Err("the allocator did not settle".to_owned())
+}
+
+// ---------------------------------------------------------------------------
+// Fixed operands
+// ---------------------------------------------------------------------------
+
+fn fresh(next: &mut u32, class: RegClass) -> VReg {
+    let reg = VReg::new(*next, class);
+    *next += 1;
+    reg
+}
+
+/// Copy every boundary value into or out of a register of its own, and record
+/// which physical register each of those short-lived registers must have.
+fn pin_boundaries(function: &MFunction, next: &mut u32) -> (MFunction, BTreeMap<u32, u8>) {
+    let mut pins: BTreeMap<u32, u8> = BTreeMap::new();
+    let mut blocks = Vec::new();
+
+    for (index, block) in function.blocks.iter().enumerate() {
+        let mut insts = Vec::new();
+
+        if index == 0 {
+            // Section 6: the parameters arrive in x0 to x7. Each is copied out
+            // at once, so the boundary register is live over one move.
+            for (position, parameter) in block.args.iter().enumerate() {
+                let incoming = fresh(next, parameter.class);
+                pins.insert(incoming.id, u8::try_from(position).unwrap_or(BOUNDARY));
+                insts.push(MInst::Mov {
+                    dst: *parameter,
+                    src: incoming,
+                });
+            }
+        }
+
+        for inst in &block.insts {
+            match inst {
+                MInst::Bl {
+                    symbol,
+                    args,
+                    results,
+                } => {
+                    let (moved, outputs) = pin_call(&mut insts, args, results, next, &mut pins);
+                    insts.push(MInst::Bl {
+                        symbol: symbol.clone(),
+                        args: moved,
+                        results: outputs.iter().map(|(pinned, _)| *pinned).collect(),
+                    });
+                    for (pinned, original) in outputs {
+                        insts.push(MInst::Mov {
+                            dst: original,
+                            src: pinned,
+                        });
+                    }
+                }
+                MInst::Blr {
+                    target,
+                    args,
+                    results,
+                } => {
+                    let (moved, outputs) = pin_call(&mut insts, args, results, next, &mut pins);
+                    insts.push(MInst::Blr {
+                        target: *target,
+                        args: moved,
+                        results: outputs.iter().map(|(pinned, _)| *pinned).collect(),
+                    });
+                    for (pinned, original) in outputs {
+                        insts.push(MInst::Mov {
+                            dst: original,
+                            src: pinned,
+                        });
+                    }
+                }
+                other => insts.push(other.clone()),
+            }
+        }
+
+        let term = match &block.term {
+            MTerm::Ret { values } => {
+                let mut moved = Vec::new();
+                for (position, value) in values.iter().enumerate() {
+                    let outgoing = fresh(next, value.class);
+                    pins.insert(outgoing.id, u8::try_from(position).unwrap_or(BOUNDARY));
+                    insts.push(MInst::Mov {
+                        dst: outgoing,
+                        src: *value,
+                    });
+                    moved.push(outgoing);
+                }
+                MTerm::Ret { values: moved }
+            }
+            other => other.clone(),
+        };
+
+        blocks.push(MBlock {
+            id: block.id,
+            args: Vec::new(),
+            insts,
+            term,
+        });
+    }
+
+    // Section 7's cycle scratch is pinned where Section 2 puts it.
+    for block in &blocks {
+        for reg in block
+            .insts
+            .iter()
+            .flat_map(inst_defs)
+            .chain(block.insts.iter().flat_map(inst_uses))
+        {
+            if regalloc::is_scratch(reg) {
+                pins.insert(reg.id, SCRATCH);
+            }
+        }
+    }
+
+    (
+        MFunction {
+            name: function.name.clone(),
+            blocks,
+        },
+        pins,
+    )
+}
+
+type PinnedResults = Vec<(VReg, VReg)>;
+
+fn pin_call(
+    insts: &mut Vec<MInst>,
+    args: &[VReg],
+    results: &[VReg],
+    next: &mut u32,
+    pins: &mut BTreeMap<u32, u8>,
+) -> (Vec<VReg>, PinnedResults) {
+    let mut moved = Vec::new();
+    for (position, arg) in args.iter().enumerate() {
+        let outgoing = fresh(next, arg.class);
+        pins.insert(outgoing.id, u8::try_from(position).unwrap_or(BOUNDARY));
+        insts.push(MInst::Mov {
+            dst: outgoing,
+            src: *arg,
+        });
+        moved.push(outgoing);
+    }
+    let mut outputs = Vec::new();
+    for (position, result) in results.iter().enumerate() {
+        let incoming = fresh(next, result.class);
+        pins.insert(incoming.id, u8::try_from(position).unwrap_or(BOUNDARY));
+        outputs.push((incoming, *result));
+    }
+    (moved, outputs)
+}
+
+// ---------------------------------------------------------------------------
+// Numbering, liveness and intervals
+// ---------------------------------------------------------------------------
+
+/// The half-open position range of each block, in the block order of Section 2.
+///
+/// Each instruction owns two positions: its operands are read at the even one
+/// and its results are written at the odd one. Without that a move's
+/// destination could never be given its source's register, and the only
+/// coalescing Section 7 admits -- "removing a move whose two operands got the
+/// same register" -- would never fire.
+fn numbering(function: &MFunction) -> BTreeMap<u32, (usize, usize)> {
+    let mut ranges = BTreeMap::new();
+    let mut position = 0;
+    for block in &function.blocks {
+        let start = position;
+        position += 2 * (block.insts.len() + 1);
+        ranges.insert(block.id, (start, position));
+    }
+    ranges
+}
+
+/// Backward dataflow to the least fixed point: what each block reads before it
+/// writes, and what its successors need.
+fn liveness(function: &MFunction) -> BTreeMap<u32, BTreeSet<u32>> {
+    let mut uses: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    let mut defs: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    for block in &function.blocks {
+        let mut read = BTreeSet::new();
+        let mut written = BTreeSet::new();
+        for inst in &block.insts {
+            for reg in inst_uses(inst) {
+                if !written.contains(&reg.id) {
+                    read.insert(reg.id);
+                }
+            }
+            for reg in inst_defs(inst) {
+                written.insert(reg.id);
+            }
+        }
+        for reg in term_uses(&block.term) {
+            if !written.contains(&reg.id) {
+                read.insert(reg.id);
+            }
+        }
+        uses.insert(block.id, read);
+        defs.insert(block.id, written);
+    }
+
+    let mut live_in: BTreeMap<u32, BTreeSet<u32>> = function
+        .blocks
+        .iter()
+        .map(|block| (block.id, BTreeSet::new()))
+        .collect();
+    loop {
+        let mut changed = false;
+        for block in function.blocks.iter().rev() {
+            let mut out: BTreeSet<u32> = BTreeSet::new();
+            for (target, _) in term_edges(&block.term) {
+                if let Some(entering) = live_in.get(&target) {
+                    out.extend(entering.iter().copied());
+                }
+            }
+            let mut entering = uses[&block.id].clone();
+            for value in out {
+                if !defs[&block.id].contains(&value) {
+                    entering.insert(value);
+                }
+            }
+            if live_in[&block.id] != entering {
+                live_in.insert(block.id, entering);
+                changed = true;
+            }
+        }
+        if !changed {
+            return live_in;
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Interval {
+    value: u32,
+    class: RegClass,
+    start: usize,
+    end: usize,
+    spans_call: bool,
+}
+
+fn intervals(function: &MFunction) -> Vec<Interval> {
+    let ranges = numbering(function);
+    let live_in = liveness(function);
+
+    let mut bounds: BTreeMap<u32, (usize, usize, RegClass)> = BTreeMap::new();
+    let touch = |value: VReg, at: usize, bounds: &mut BTreeMap<u32, (usize, usize, RegClass)>| {
+        bounds
+            .entry(value.id)
+            .and_modify(|(start, end, _)| {
+                *start = (*start).min(at);
+                *end = (*end).max(at);
+            })
+            .or_insert((at, at, value.class));
+    };
+
+    let mut calls: Vec<usize> = Vec::new();
+    for block in &function.blocks {
+        let (start, end) = ranges[&block.id];
+        for (offset, inst) in block.insts.iter().enumerate() {
+            let read = start + 2 * offset;
+            let write = read + 1;
+            if matches!(inst, MInst::Bl { .. } | MInst::Blr { .. }) {
+                calls.push(read);
+            }
+            for reg in inst_uses(inst) {
+                touch(reg, read, &mut bounds);
+            }
+            for reg in inst_defs(inst) {
+                touch(reg, write, &mut bounds);
+            }
+        }
+        for reg in term_uses(&block.term) {
+            touch(reg, end - 2, &mut bounds);
+        }
+        // Section 7: an interval is "extended across any block in which it is
+        // live on entry to cover the whole block". A value live on entry that
+        // dies inside the block covers only as far as its last read: the
+        // sentence is about a value passing through, and stretching one that
+        // ends here would hold its register for the whole block. The boundary
+        // registers of Section 6 are exactly such values, and stretching them
+        // would leave the parameters unable to keep the registers they arrive
+        // in.
+        let live_out: BTreeSet<u32> = term_edges(&block.term)
+            .into_iter()
+            .filter_map(|(target, _)| live_in.get(&target))
+            .flat_map(|entering| entering.iter().copied())
+            .collect();
+        for value in &live_in[&block.id] {
+            if let Some((first, last, _)) = bounds.get_mut(value) {
+                *first = (*first).min(start);
+                if live_out.contains(value) {
+                    *last = (*last).max(end - 1);
+                }
+            }
+        }
+    }
+
+    let mut result: Vec<Interval> = bounds
+        .into_iter()
+        .map(|(value, (start, end, class))| Interval {
+            value,
+            class,
+            start,
+            end,
+            spans_call: calls.iter().any(|at| start <= *at && *at < end),
+        })
+        .collect();
+    // Walk by start point, ties by virtual register number.
+    result.sort_by_key(|interval| (interval.start, interval.value));
+    result
+}
+
+// ---------------------------------------------------------------------------
+// The scan
+// ---------------------------------------------------------------------------
+
+/// Assign registers, or report the intervals that have to go to the frame.
+///
+/// The fixed operands are taken first and held for the whole of their (short)
+/// intervals, so the walk never has to displace one; a register a fixed
+/// interval holds is simply unavailable while it does.
+fn scan(function: &MFunction, pins: &BTreeMap<u32, u8>) -> Result<BTreeMap<u32, u8>, Vec<u32>> {
+    let all = intervals(function);
+    let mut assignment: BTreeMap<u32, u8> = BTreeMap::new();
+    let mut held: Vec<(Interval, u8)> = Vec::new();
+    let mut victims: Vec<u32> = Vec::new();
+
+    for interval in &all {
+        if interval.class == RegClass::Flags {
+            // Section 2 gives the class one register, and the adjacency rule
+            // keeps every live range inside one pair of instructions.
+            assignment.insert(interval.value, 0);
+            continue;
+        }
+        if let Some(number) = pins.get(&interval.value).copied() {
+            assignment.insert(interval.value, number);
+            held.push((*interval, number));
+        }
+    }
+
+    for interval in &all {
+        if interval.class == RegClass::Flags || pins.contains_key(&interval.value) {
+            continue;
+        }
+        let taken: BTreeSet<u8> = held
+            .iter()
+            .filter(|(other, _)| overlaps(other, interval))
+            .map(|(_, number)| *number)
+            .collect();
+        // Section 7: "a call clobbers every caller-saved register, so an
+        // interval live across a call is assigned a callee-saved register or
+        // spilled."
+        let candidates: Vec<u8> = if interval.spans_call {
+            CALLEE_SAVED.to_vec()
+        } else {
+            CALLER_SAVED
+                .iter()
+                .chain(CALLEE_SAVED.iter())
+                .copied()
+                .collect()
+        };
+        match candidates
+            .into_iter()
+            .find(|number| !taken.contains(number))
+        {
+            Some(number) => {
+                assignment.insert(interval.value, number);
+                held.push((*interval, number));
+            }
+            None => {
+                // Spill the overlapping interval whose next use is furthest
+                // away, ties by virtual register number; if this one reaches
+                // further than any of them, it is the one that goes.
+                let furthest = held
+                    .iter()
+                    .filter(|(other, _)| {
+                        overlaps(other, interval) && !pins.contains_key(&other.value)
+                    })
+                    .max_by_key(|(other, _)| (other.end, std::cmp::Reverse(other.value)))
+                    .map(|(other, number)| (*other, *number));
+                match furthest {
+                    Some((other, number)) if other.end > interval.end => {
+                        assignment.remove(&other.value);
+                        held.retain(|(entry, _)| entry.value != other.value);
+                        victims.push(other.value);
+                        assignment.insert(interval.value, number);
+                        held.push((*interval, number));
+                    }
+                    _ => victims.push(interval.value),
+                }
+            }
+        }
+    }
+
+    if victims.is_empty() {
+        Ok(assignment)
+    } else {
+        victims.sort_unstable();
+        victims.dedup();
+        Err(victims)
+    }
+}
+
+const fn overlaps(left: &Interval, right: &Interval) -> bool {
+    left.start <= right.end && right.start <= left.end
+}
+
+/// Section 7: "No coalescing beyond removing a move whose two operands got the
+/// same register."
+fn drop_identity_moves(function: &MFunction, assignment: &BTreeMap<u32, u8>) -> Vec<MBlock> {
+    function
+        .blocks
+        .iter()
+        .map(|block| MBlock {
+            id: block.id,
+            args: Vec::new(),
+            insts: block
+                .insts
+                .iter()
+                .filter(|inst| match inst {
+                    MInst::Mov { dst, src } => {
+                        dst.class != src.class || assignment.get(&dst.id) != assignment.get(&src.id)
+                    }
+                    _ => true,
+                })
+                .cloned()
+                .collect(),
+            term: block.term.clone(),
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Spill code
+// ---------------------------------------------------------------------------
+
+/// Write each spilled value to its slot after every definition and read it
+/// back before every use, through registers that live for one instruction.
+fn insert_spill_code(
+    function: &MFunction,
+    slots: &BTreeMap<u32, u32>,
+    victims: &[u32],
+    next: &mut u32,
+) -> MFunction {
+    let spilled: BTreeSet<u32> = victims.iter().copied().collect();
+    let mut blocks = Vec::new();
+    for block in &function.blocks {
+        let mut insts = Vec::new();
+        for inst in &block.insts {
+            let mut rewritten = inst.clone();
+            let mut before = Vec::new();
+            let mut after = Vec::new();
+            for reg in inst_uses(inst) {
+                if spilled.contains(&reg.id) {
+                    let temporary = fresh(next, reg.class);
+                    before.push(MInst::SpillReload {
+                        dst: temporary,
+                        slot: slots[&reg.id],
+                    });
+                    replace_use(&mut rewritten, reg, temporary);
+                }
+            }
+            for reg in inst_defs(inst) {
+                if spilled.contains(&reg.id) {
+                    let temporary = fresh(next, reg.class);
+                    replace_def(&mut rewritten, reg, temporary);
+                    after.push(MInst::SpillStore {
+                        src: temporary,
+                        slot: slots[&reg.id],
+                    });
+                }
+            }
+            insts.extend(before);
+            insts.push(rewritten);
+            insts.extend(after);
+        }
+        let mut term = block.term.clone();
+        for reg in term_uses(&block.term) {
+            if spilled.contains(&reg.id) {
+                let temporary = fresh(next, reg.class);
+                insts.push(MInst::SpillReload {
+                    dst: temporary,
+                    slot: slots[&reg.id],
+                });
+                replace_term_use(&mut term, reg, temporary);
+            }
+        }
+        blocks.push(MBlock {
+            id: block.id,
+            args: Vec::new(),
+            insts,
+            term,
+        });
+    }
+    MFunction {
+        name: function.name.clone(),
+        blocks,
+    }
+}
+
+fn swap_reg(slot: &mut VReg, from: VReg, to: VReg) {
+    if slot.id == from.id {
+        *slot = to;
+    }
+}
+
+fn replace_use(inst: &mut MInst, from: VReg, to: VReg) {
+    for reg in operand_slots(inst, false) {
+        swap_reg(reg, from, to);
+    }
+}
+
+fn replace_def(inst: &mut MInst, from: VReg, to: VReg) {
+    for reg in operand_slots(inst, true) {
+        swap_reg(reg, from, to);
+    }
+}
+
+/// Mutable access to an instruction's operand slots, definitions or uses.
+fn operand_slots(inst: &mut MInst, definitions: bool) -> Vec<&mut VReg> {
+    match inst {
+        MInst::Mov { dst, src } => {
+            if definitions {
+                vec![dst]
+            } else {
+                vec![src]
+            }
+        }
+        MInst::MovImm { dst, .. } | MInst::Adrp { dst, .. } | MInst::FrameSlot { dst, .. } => {
+            if definitions {
+                vec![dst]
+            } else {
+                Vec::new()
+            }
+        }
+        MInst::AddPageOff { dst, src, .. } | MInst::Extend { dst, src, .. } => {
+            if definitions {
+                vec![dst]
+            } else {
+                vec![src]
+            }
+        }
+        MInst::Load { dst, base, .. } => {
+            if definitions {
+                vec![dst]
+            } else {
+                vec![base]
+            }
+        }
+        MInst::Store { src, base, .. } => {
+            if definitions {
+                Vec::new()
+            } else {
+                vec![src, base]
+            }
+        }
+        MInst::Binary { dst, lhs, rhs, .. } | MInst::Cmp { dst, lhs, rhs, .. } => {
+            if definitions {
+                vec![dst]
+            } else {
+                vec![lhs, rhs]
+            }
+        }
+        MInst::BinaryImm { dst, lhs, .. }
+        | MInst::CmpImm { dst, lhs, .. }
+        | MInst::Bfx { dst, src: lhs, .. } => {
+            if definitions {
+                vec![dst]
+            } else {
+                vec![lhs]
+            }
+        }
+        MInst::Msub { dst, n, m, a, .. } => {
+            if definitions {
+                vec![dst]
+            } else {
+                vec![n, m, a]
+            }
+        }
+        MInst::FlagBinary {
+            dst,
+            flags,
+            lhs,
+            rhs,
+            ..
+        } => {
+            if definitions {
+                vec![dst, flags]
+            } else {
+                vec![lhs, rhs]
+            }
+        }
+        MInst::WideMultiply { dst, lhs, rhs, .. } => {
+            if definitions {
+                vec![dst]
+            } else {
+                vec![lhs, rhs]
+            }
+        }
+        MInst::Cset { dst, flags, .. } => {
+            if definitions {
+                vec![dst]
+            } else {
+                vec![flags]
+            }
+        }
+        MInst::Csel {
+            dst,
+            flags,
+            lhs,
+            rhs,
+            ..
+        } => {
+            if definitions {
+                vec![dst]
+            } else {
+                vec![flags, lhs, rhs]
+            }
+        }
+        MInst::MemCopy { dst, src, .. } => {
+            if definitions {
+                Vec::new()
+            } else {
+                vec![dst, src]
+            }
+        }
+        MInst::Bl { args, results, .. } => {
+            if definitions {
+                results.iter_mut().collect()
+            } else {
+                args.iter_mut().collect()
+            }
+        }
+        MInst::Blr {
+            target,
+            args,
+            results,
+        } => {
+            if definitions {
+                results.iter_mut().collect()
+            } else {
+                let mut slots = vec![target];
+                slots.extend(args.iter_mut());
+                slots
+            }
+        }
+        MInst::SpillStore { src, .. } => {
+            if definitions {
+                Vec::new()
+            } else {
+                vec![src]
+            }
+        }
+        MInst::SpillReload { dst, .. } => {
+            if definitions {
+                vec![dst]
+            } else {
+                Vec::new()
+            }
+        }
+        MInst::Ldp { rt1, rt2, base, .. } => {
+            if definitions {
+                vec![rt1, rt2]
+            } else {
+                vec![base]
+            }
+        }
+        MInst::Stp { rt1, rt2, base, .. } => {
+            if definitions {
+                Vec::new()
+            } else {
+                vec![rt1, rt2, base]
+            }
+        }
+    }
+}
+
+fn replace_term_use(term: &mut MTerm, from: VReg, to: VReg) {
+    match term {
+        MTerm::B { .. } | MTerm::Brk { .. } => {}
+        MTerm::BCond { flags, .. } => swap_reg(flags, from, to),
+        MTerm::Cb { src, .. } | MTerm::Tb { src, .. } => swap_reg(src, from, to),
+        MTerm::Ret { values } => {
+            for value in values {
+                swap_reg(value, from, to);
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The post-allocation textual form
+// ---------------------------------------------------------------------------
+
+/// The physical spelling of one assigned virtual register.
+#[must_use]
+pub fn physical(class: RegClass, number: u8) -> String {
+    match class {
+        RegClass::Gpr32 => format!("w{number}"),
+        RegClass::Gpr64 => format!("x{number}"),
+        RegClass::Flags => "nzcv".to_owned(),
+    }
 }
 
 /// Render an allocated function in the post-allocation spelling of Appendix A.
 #[must_use]
-pub fn render_allocated(_allocated: &Allocated) -> String {
-    todo!("the post-allocation textual form")
+pub fn render_allocated(allocated: &Allocated) -> String {
+    // A use is written without its class, so the physical spelling of one is
+    // recovered from the definition that owns it.
+    let mut classes: BTreeMap<u32, RegClass> = BTreeMap::new();
+    for block in &allocated.blocks {
+        for reg in block
+            .insts
+            .iter()
+            .flat_map(inst_defs)
+            .chain(block.insts.iter().flat_map(inst_uses))
+            .chain(term_uses(&block.term))
+        {
+            classes.insert(reg.id, reg.class);
+        }
+    }
+    let name = |reg: VReg| -> String {
+        let class = classes.get(&reg.id).copied().unwrap_or(reg.class);
+        allocated.assignment.get(&reg.id).map_or_else(
+            || format!("%v{}", reg.id),
+            |number| physical(class, *number),
+        )
+    };
+    let mut text = String::new();
+    let _ = writeln!(text, "func @{} {{", allocated.name);
+    for (index, block) in allocated.blocks.iter().enumerate() {
+        if index != 0 {
+            text.push('\n');
+        }
+        let label = if index == 0 {
+            "entry".to_owned()
+        } else {
+            format!("b{}", block.id)
+        };
+        let _ = writeln!(text, "{label}:");
+        for inst in &block.insts {
+            let _ = writeln!(text, "    {}", render_inst(inst, &name));
+        }
+        let _ = writeln!(text, "    {}", render_term(allocated, &block.term, &name));
+    }
+    text.push_str("}\n");
+    text
+}
+
+fn render_inst(inst: &MInst, name: &impl Fn(VReg) -> String) -> String {
+    // The pre-allocation renderer already spells every form; the only
+    // difference here is that an operand is a physical register, that a
+    // definition carries no class, and that the two spill pseudo-forms name a
+    // frame slot rather than an address.
+    match inst {
+        MInst::SpillStore { src, slot } => format!("str.x {}, [slot #{slot}]", name(*src)),
+        MInst::SpillReload { dst, slot } => format!("{} = ldr.x [slot #{slot}]", name(*dst)),
+        other => {
+            let pre = crate::text::render_inst(other);
+            rename(&pre, name)
+        }
+    }
+}
+
+fn render_term(allocated: &Allocated, term: &MTerm, name: &impl Fn(VReg) -> String) -> String {
+    match term {
+        // Section 6 returns in x0 onwards, so the registers are already fixed
+        // and Appendix A prints a bare `ret`.
+        MTerm::Ret { .. } => "ret".to_owned(),
+        other => {
+            let function = MFunction {
+                name: allocated.name.clone(),
+                blocks: allocated.blocks.clone(),
+            };
+            let pre = crate::text::render_term(&function, other);
+            rename(&pre, name)
+        }
+    }
+}
+
+/// Replace every `%vN` in a pre-allocation rendering with its physical name.
+fn rename(text: &str, name: &impl Fn(VReg) -> String) -> String {
+    let mut out = String::new();
+    let bytes: Vec<char> = text.chars().collect();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == '%' && bytes.get(index + 1) == Some(&'v') {
+            let mut end = index + 2;
+            let mut id = 0_u32;
+            while end < bytes.len() && bytes[end].is_ascii_digit() {
+                id = id * 10 + (bytes[end] as u32 - '0' as u32);
+                end += 1;
+            }
+            // A definition carries its class after a colon; a use does not.
+            // A definition carries `:class`, which the physical spelling
+            // replaces; a use carries nothing and is looked up by identity.
+            let skip = if bytes.get(end) == Some(&':') {
+                let mut tail = end + 1;
+                while tail < bytes.len() && bytes[tail].is_ascii_alphanumeric() {
+                    tail += 1;
+                }
+                tail
+            } else {
+                end
+            };
+            out.push_str(&name(VReg::new(id, RegClass::Gpr32)));
+            index = skip;
+            continue;
+        }
+        out.push(bytes[index]);
+        index += 1;
+    }
+    out
 }
