@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.54** | **Authoritative reference** | **2026-09-04**
+**Revision 1.9.55** | **Authoritative reference** | **2026-09-04**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -4334,7 +4334,7 @@ representation and relying on extraction to select it. A derived node is used
 when a rewrite names it or when it is a child, at any depth, of a derived
 node a rewrite names: the `const_like` operand that an emitting right-hand
 side such as `shl(?x,const_like(?x,1))` writes is used through the `shl`
-that names it, and the checker recomputes its payload from the pattern
+that names it (child at any depth is decided at class granularity, since the node stream records children as classes: a derived node is used when it belongs to the canonical class of a child, transitively, of a named derived node; a node event always allocates a fresh class, so membership is reached only through a recorded merge), and the checker recomputes its payload from the pattern
 exactly as for a named constant (revision 1.9.52, after the first emitting
 rule stopped on the unqualified sentence).
 
@@ -4370,9 +4370,7 @@ a constant, so two all-positive cost functions optimize 0 of 1,000 programs
 differently, and cost discriminates only by assigning zero; the fourth
 question's search space opens only when a right-hand side may emit an
 instruction, which the registry below admits.
-A region block is
-valid only when the extracted root has strictly lower cost than the original
-witness root. Ties retain the original and therefore produce no region block.
+A producer admits a region block only when the extracted root has strictly lower cost than the original witness root under its own policy, ties retaining the original; that is producer conformance, not a checker rule (revision 1.9.55 restated the sentence that had still read as one).
 
 **Versions.** `evp1` is the previous revision's format and remains readable:
 it carries no budget line, no epoch markers and no premises, so a checker
@@ -4916,6 +4914,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.55 | 2026-09-04 | Emitting rewrites measured: the two all-positive cost functions now optimize 569 of 1,000 programs differently. Restates the strict-improvement sentence of 11.3 as producer conformance and fixes the class granularity of a derived node's use through its parent (11.3). |
 | 1.9.54 | 2026-09-04 | The configured kernel's every translation unit parses clean (2,798 of 2,798). Assigns `E2928` to the address of a `register` object, `E3034` to the lowering of function-pointer arithmetic, and states that a range designator is one plan entry; the three edges the front-end executor named. |
 | 1.9.53 | 2026-09-03 | Fifth full-configuration survey (2,760 of 2,798). Defines the sixteen rules behind the remaining 38 units: one conditional stack across argument collection, empty `##` operands, comments across continued definitions, `__VA_OPT__`, keyword parameter names, `-fshort-wchar` wide strings (10.4); `register`, `va_list` objects, 128-bit and `va_arg` places, parameter compatibility, function-pointer arithmetic, `\e` (10.1.18); literal addresses, null comparisons in conditionals, no initializer size cap with `E2207` withdrawn (10.1.19); string literals at every site (10.1.3). All measured. |
 | 1.9.52 | 2026-09-03 | States that a derived node reachable as a child of a named derived node is used, so an emitting right-hand side may write a `const_like` operand (11.3); the executor stopped `p2_302` on the unqualified sentence. |
