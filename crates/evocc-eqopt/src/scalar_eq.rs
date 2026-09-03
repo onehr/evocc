@@ -8,7 +8,7 @@ use evocc_egraph::{
 };
 use evocc_types::EvoIRType;
 
-use evocc_evoir::{CmpOp, Inst, Module, Value};
+use evocc_evoir::{inst_results, CmpOp, Inst, Module, Value};
 
 use crate::known_bits::{Comparison, KnownBits};
 
@@ -417,6 +417,9 @@ pub(crate) fn optimize_scalar_module_with_events(
                     continue;
                 }
                 let Ok(operator) = ingest_scalar_inst(&inst) else {
+                    // Not a region root, and still a value the Section 8.10
+                    // table has a row for since revision 1.9.43.
+                    record_known(&inst, &mut known);
                     rewritten.push(inst);
                     continue;
                 };
@@ -693,8 +696,14 @@ pub(crate) fn known_of(value: &Value, known: &KnownEnv) -> Option<KnownBits> {
 
 /// The Section 8.10 transfer for one instruction's result. `None` for every
 /// operator the table does not list, which transfers to top.
+///
+/// The table reaches wider than the region does. Section 8.5's allowlist keeps
+/// a shift or a width change out of a witness closure, so a fact one of them
+/// carries can never become a premise; it is still worth deriving here, because
+/// this environment is what the sweep proposes rewrites from and a proposal the
+/// region declines costs nothing but the proposing.
 pub(crate) fn node_fact(inst: &Inst, known: &KnownEnv) -> Option<KnownBits> {
-    let result = scalar_result(inst)?;
+    let result = inst_results(inst).first().copied()?;
     let fact = match inst {
         Inst::Const(_, raw) => {
             KnownBits::constant(scalar_width(&result.ty)?, mask_raw(*raw, &result.ty))
@@ -708,13 +717,31 @@ pub(crate) fn node_fact(inst: &Inst, known: &KnownEnv) -> Option<KnownBits> {
         Inst::ICmp(_, operation, left, right) => {
             known_of(left, known)?.transfer_icmp(known_of(right, known)?, comparison_of(*operation))
         }
+        Inst::Shl(_, shifted, amount) => {
+            known_of(shifted, known)?.transfer_shl(known_of(amount, known)?)
+        }
+        Inst::LShr(_, shifted, amount) => {
+            known_of(shifted, known)?.transfer_lshr(known_of(amount, known)?)
+        }
+        Inst::AShr(_, shifted, amount) => {
+            known_of(shifted, known)?.transfer_ashr(known_of(amount, known)?)
+        }
+        Inst::ZExt(_, source, _) => {
+            known_of(source, known)?.transfer_zext(scalar_width(&result.ty)?)
+        }
+        Inst::SExt(_, source, _) => {
+            known_of(source, known)?.transfer_sext(scalar_width(&result.ty)?)
+        }
+        Inst::Trunc(_, source, _) => {
+            known_of(source, known)?.transfer_trunc(scalar_width(&result.ty)?)
+        }
         _ => return None,
     };
     Some(fact)
 }
 
 pub(crate) fn record_known(inst: &Inst, known: &mut KnownEnv) {
-    if let (Some(result), Some(fact)) = (scalar_result(inst), node_fact(inst, known)) {
+    if let (Some(result), Some(fact)) = (inst_results(inst).first(), node_fact(inst, known)) {
         known.insert(result.id, fact);
     }
 }

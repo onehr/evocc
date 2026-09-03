@@ -186,13 +186,106 @@ fn icmp_is_known_only_when_the_bits_decide_it() {
     );
 }
 
+/// `shl`: bit `i` is known zero below the amount and is input bit `i - k`
+/// above, and only when the amount is fully known and below the width.
+#[test]
+fn a_left_shift_by_a_known_amount_moves_the_known_bits_up() {
+    assert_eq!(
+        bits("1?01").transfer_shl(KnownBits::constant(8, 2)),
+        bits("0100"),
+        "the bits shifted in are known zero and the top ones fall off"
+    );
+    assert_eq!(
+        bits("1?01").transfer_shl(KnownBits::constant(8, 0)),
+        bits("1?01"),
+        "a shift by zero is the identity"
+    );
+    assert_eq!(
+        bits("1?01").transfer_shl(bits("????????")),
+        KnownBits::top(4),
+        "an amount the analysis does not know decides nothing"
+    );
+    assert_eq!(
+        bits("1?01").transfer_shl(KnownBits::constant(8, 4)),
+        KnownBits::top(4),
+        "an amount at or above the width is the guard's case, not this table's"
+    );
+}
+
+/// `lshr`: bit `i` is input bit `i + k` while that is in range, known zero
+/// above.
+#[test]
+fn a_logical_right_shift_by_a_known_amount_moves_them_down() {
+    assert_eq!(
+        bits("1?01").transfer_lshr(KnownBits::constant(8, 2)),
+        bits("001?"),
+        "the bits shifted in are known zero"
+    );
+    assert_eq!(
+        bits("1?01").transfer_lshr(bits("????????")),
+        KnownBits::top(4),
+        "an unknown amount decides nothing"
+    );
+}
+
+/// `ashr`: the same, except that the bits shifted in are the input's sign bit
+/// and are known only when it is.
+#[test]
+fn an_arithmetic_right_shift_replicates_a_known_sign() {
+    assert_eq!(
+        bits("1?01").transfer_ashr(KnownBits::constant(8, 2)),
+        bits("111?"),
+        "a known sign bit is replicated"
+    );
+    assert_eq!(
+        bits("??01").transfer_ashr(KnownBits::constant(8, 2)),
+        KnownBits::top(4),
+        "an unknown sign bit is not, and the two known bits shifted out"
+    );
+    assert_eq!(
+        bits("0?01").transfer_ashr(KnownBits::constant(8, 2)),
+        bits("000?"),
+        "a sign known zero makes this the logical shift"
+    );
+}
+
+/// `zext`: the low bits are the input's, the rest are known zero.
+#[test]
+fn a_zero_extension_knows_its_upper_bits() {
+    assert_eq!(bits("1?0").transfer_zext(6), bits("0001?0"));
+    assert_eq!(
+        bits("???").transfer_zext(6),
+        bits("000???"),
+        "the upper bits are known even when none of the input's are"
+    );
+}
+
+/// `sext`: the upper bits are the input's sign bit, known only when it is.
+#[test]
+fn a_sign_extension_knows_its_upper_bits_only_with_the_sign() {
+    assert_eq!(bits("1?0").transfer_sext(6), bits("1111?0"));
+    assert_eq!(bits("0?0").transfer_sext(6), bits("0000?0"));
+    assert_eq!(
+        bits("??0").transfer_sext(6),
+        bits("?????0"),
+        "an unknown sign leaves every extended bit unknown"
+    );
+}
+
+/// `trunc`: bit `i` is input bit `i`, and nothing else survives.
+#[test]
+fn a_truncation_keeps_the_bits_it_keeps() {
+    assert_eq!(bits("1?01").transfer_trunc(2), bits("01"));
+    assert_eq!(bits("1?01").transfer_trunc(3), bits("?01"));
+}
+
 #[test]
 fn a_transfer_that_is_not_listed_is_top() {
-    // Section 8.10: "anything not listed transfers to top". The lattice offers
-    // no shift, division, extension or truncation transfer, so a caller that
-    // wanted one has nothing to call and the fact stays top by construction.
-    // This test records that as a property of the module's surface, which is
-    // what keeps a later contributor from quietly adding a stronger row.
+    // Section 8.10: "anything not listed transfers to top". Division and
+    // remainder are what the table still leaves out, so a caller that wanted
+    // one has nothing to call and the fact stays top by construction. This
+    // test records that as a property of the module's surface, which is what
+    // keeps a later contributor from quietly adding a stronger row.
     let listed = [
         "constant",
         "transfer_and",
@@ -202,12 +295,25 @@ fn a_transfer_that_is_not_listed_is_top() {
         "transfer_sub",
         "transfer_mul",
         "transfer_icmp",
+        "transfer_shl",
+        "transfer_lshr",
+        "transfer_ashr",
+        "transfer_zext",
+        "transfer_sext",
+        "transfer_trunc",
         "meet",
         "top",
     ];
     let surface = include_str!("../src/known_bits.rs");
     for name in [
-        "shl", "lshr", "ashr", "sdiv", "udiv", "srem", "urem", "sext", "zext", "trunc",
+        "sdiv",
+        "udiv",
+        "srem",
+        "urem",
+        "ptr_offset",
+        "select",
+        "rotate",
+        "popcount",
     ] {
         assert!(
             !surface.contains(&format!("pub fn transfer_{name}(")),

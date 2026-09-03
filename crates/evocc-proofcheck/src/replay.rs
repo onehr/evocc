@@ -255,6 +255,19 @@ impl<'a> Replay<'a> {
             "add" => child(LEFT)?.add(child(RIGHT)?),
             "sub" => child(LEFT)?.sub(child(RIGHT)?),
             "mul" => child(LEFT)?.mul(child(RIGHT)?),
+            // The rows Section 8.10 gained at revision 1.9.43. Section 11.3's
+            // operator table has no spelling for any of them and Section 8.5's
+            // allowlist keeps them out of a witness closure, so no certificate
+            // reaches these arms today. They are here because the checker's
+            // copy of the table is what makes a premise verifiable, and the
+            // day the grammar admits the operators is not the day to start
+            // writing the transfers.
+            "shl" => child(LEFT)?.shl(child(RIGHT)?),
+            "lshr" => child(LEFT)?.lshr(child(RIGHT)?),
+            "ashr" => child(LEFT)?.ashr(child(RIGHT)?),
+            "zext" => child(LEFT)?.zext(width),
+            "sext" => child(LEFT)?.sext(width),
+            "trunc" => child(LEFT)?.trunc(width),
             _ => return Err(()),
         })
     }

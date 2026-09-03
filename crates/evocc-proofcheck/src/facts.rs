@@ -196,6 +196,119 @@ impl Fact {
         }
     }
 
+    // -- the shift and width rows, added at revision 1.9.43 -----------------
+    //
+    // A shift by an amount that is not fully known, or is known and not below
+    // the width, transfers to top: the out-of-range case belongs to the shift's
+    // own definedness guard, and this analysis says nothing about a guarded
+    // operation.
+
+    /// How far a shift shifts, when the table admits the amount at all.
+    fn distance(amount: Self, width: u16) -> Option<u32> {
+        if !amount.is_fully_known() || amount.ones >= u64::from(width) {
+            return None;
+        }
+        u32::try_from(amount.ones).ok()
+    }
+
+    /// Everything moves up; what moves in below is zero.
+    pub(crate) fn shl(self, amount: Self) -> Self {
+        let Some(distance) = Self::distance(amount, self.width) else {
+            return Self::top(self.width);
+        };
+        Self {
+            width: self.width,
+            zeros: ((self.zeros << distance) | low(distance)) & span(self.width),
+            ones: (self.ones << distance) & span(self.width),
+        }
+    }
+
+    /// Everything moves down; what moves in above is zero.
+    pub(crate) fn lshr(self, amount: Self) -> Self {
+        let Some(distance) = Self::distance(amount, self.width) else {
+            return Self::top(self.width);
+        };
+        Self {
+            width: self.width,
+            zeros: (self.zeros >> distance) | self.vacated(distance),
+            ones: self.ones >> distance,
+        }
+    }
+
+    /// Everything moves down; what moves in above is the sign, if the sign is
+    /// known at all.
+    pub(crate) fn ashr(self, amount: Self) -> Self {
+        let Some(distance) = Self::distance(amount, self.width) else {
+            return Self::top(self.width);
+        };
+        let vacated = self.vacated(distance);
+        Self {
+            width: self.width,
+            zeros: (self.zeros >> distance) | (vacated & self.sign_zero()),
+            ones: (self.ones >> distance) | (vacated & self.sign_one()),
+        }
+    }
+
+    /// The bits a right shift by `distance` leaves behind at the top.
+    fn vacated(self, distance: u32) -> u64 {
+        span(self.width) & !low(u32::from(self.width) - distance)
+    }
+
+    fn sign_bit(self) -> u64 {
+        1 << (self.width - 1)
+    }
+
+    /// All ones when the sign is known zero, nothing otherwise, so that either
+    /// can be used as a mask over the bits an extension adds.
+    fn sign_zero(self) -> u64 {
+        if self.zeros & self.sign_bit() == 0 {
+            0
+        } else {
+            u64::MAX
+        }
+    }
+
+    fn sign_one(self) -> u64 {
+        if self.ones & self.sign_bit() == 0 {
+            0
+        } else {
+            u64::MAX
+        }
+    }
+
+    /// The bits an extension to `width` adds above this fact's own.
+    fn added(self, width: u16) -> u64 {
+        span(width) & !span(self.width)
+    }
+
+    /// The added bits are zero.
+    pub(crate) fn zext(self, width: u16) -> Self {
+        Self {
+            width,
+            zeros: self.zeros | self.added(width),
+            ones: self.ones,
+        }
+    }
+
+    /// The added bits are the sign, if the sign is known.
+    pub(crate) fn sext(self, width: u16) -> Self {
+        let added = self.added(width);
+        Self {
+            width,
+            zeros: self.zeros | (added & self.sign_zero()),
+            ones: self.ones | (added & self.sign_one()),
+        }
+    }
+
+    /// What is left of the low bits.
+    pub(crate) fn trunc(self, width: u16) -> Self {
+        Self {
+            width,
+            zeros: self.zeros & span(width),
+            ones: self.ones & span(width),
+        }
+    }
+
     /// The smallest and largest values the unknown bits allow, read unsigned.
     fn bounds(self) -> (u64, u64) {
         (self.ones, self.ones | (span(self.width) & !self.known()))
@@ -321,5 +434,73 @@ impl Comparison {
             "icmp.ule" => Self::ULe,
             _ => return None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Comparison, Fact};
+
+    /// `zeros`/`ones` written as a bit string, most significant first, with `?`
+    /// for an unknown bit.
+    fn bits(pattern: &str) -> Fact {
+        let width = u16::try_from(pattern.len()).expect("a pattern fits a width");
+        let mut mask = 0_u64;
+        let mut value = 0_u64;
+        for (index, symbol) in pattern.chars().rev().enumerate() {
+            match symbol {
+                '?' => {}
+                '0' => mask |= 1 << index,
+                '1' => {
+                    mask |= 1 << index;
+                    value |= 1 << index;
+                }
+                other => panic!("unknown bit symbol {other}"),
+            }
+        }
+        Fact::from_premise(width, mask, value).expect("a pattern is a fact")
+    }
+
+    #[test]
+    fn the_shift_rows_move_the_bits_the_table_says() {
+        assert_eq!(bits("1?01").shl(Fact::constant(8, 2)), bits("0100"));
+        assert_eq!(bits("1?01").shl(Fact::constant(8, 0)), bits("1?01"));
+        assert_eq!(bits("1?01").shl(bits("????????")), Fact::top(4));
+        assert_eq!(bits("1?01").shl(Fact::constant(8, 4)), Fact::top(4));
+        assert_eq!(bits("1?01").lshr(Fact::constant(8, 2)), bits("001?"));
+        assert_eq!(bits("1?01").lshr(bits("????????")), Fact::top(4));
+        assert_eq!(bits("1?01").ashr(Fact::constant(8, 2)), bits("111?"));
+        assert_eq!(bits("??01").ashr(Fact::constant(8, 2)), Fact::top(4));
+        assert_eq!(bits("0?01").ashr(Fact::constant(8, 2)), bits("000?"));
+    }
+
+    #[test]
+    fn the_width_rows_extend_and_truncate_as_the_table_says() {
+        assert_eq!(bits("1?0").zext(6), bits("0001?0"));
+        assert_eq!(bits("???").zext(6), bits("000???"));
+        assert_eq!(bits("1?0").sext(6), bits("1111?0"));
+        assert_eq!(bits("0?0").sext(6), bits("0000?0"));
+        assert_eq!(bits("??0").sext(6), bits("?????0"));
+        assert_eq!(bits("1?01").trunc(2), bits("01"));
+        assert_eq!(bits("1?01").trunc(3), bits("?01"));
+    }
+
+    /// The rows the checker still does not have, so that a premise about one of
+    /// them cannot be confirmed by anything but top.
+    #[test]
+    fn division_and_remainder_have_no_row() {
+        let surface = include_str!("facts.rs");
+        for name in ["sdiv", "udiv", "srem", "urem"] {
+            assert!(
+                !surface.contains(&format!("fn {name}(")),
+                "{name} is not a Section 8.10 transfer and must not be one here"
+            );
+        }
+        // The comparison row is the one whose procedure the table spells out,
+        // and it is still here.
+        assert_eq!(
+            Fact::constant(4, 3).compare(Fact::constant(4, 5), Comparison::ULt),
+            Fact::constant(1, 1)
+        );
     }
 }

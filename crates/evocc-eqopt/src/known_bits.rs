@@ -202,6 +202,96 @@ impl KnownBits {
     }
 }
 
+impl KnownBits {
+    // -- the shift and width rows, added at revision 1.9.43 -----------------
+    //
+    // A shift whose amount the analysis does not fully know, or knows to be at
+    // or above the width, transfers to top: Section 8.10 leaves that case to
+    // the shift's own definedness guard and states nothing about a guarded
+    // operation.
+
+    /// The amount a shift is by, when the table admits it.
+    fn shift_amount(amount: Self, width: u16) -> Option<u32> {
+        if !amount.is_constant() || amount.value() >= u64::from(width) {
+            return None;
+        }
+        u32::try_from(amount.value()).ok()
+    }
+
+    /// Bit `i` is known zero for `i < k` and is input bit `i - k` above.
+    #[must_use]
+    pub fn transfer_shl(self, amount: Self) -> Self {
+        let Some(shift) = Self::shift_amount(amount, self.width) else {
+            return Self::top(self.width);
+        };
+        Self::new(
+            self.width,
+            (self.mask << shift) | trailing_mask(shift),
+            self.value << shift,
+        )
+    }
+
+    /// Bit `i` is input bit `i + k` while that is in range, known zero above.
+    #[must_use]
+    pub fn transfer_lshr(self, amount: Self) -> Self {
+        let Some(shift) = Self::shift_amount(amount, self.width) else {
+            return Self::top(self.width);
+        };
+        let vacated = width_mask(self.width) & !trailing_mask(u32::from(self.width) - shift);
+        Self::new(
+            self.width,
+            (self.mask >> shift) | vacated,
+            self.value >> shift,
+        )
+    }
+
+    /// The same, except that the bits vacated are the input's sign bit and are
+    /// known only when it is.
+    #[must_use]
+    pub fn transfer_ashr(self, amount: Self) -> Self {
+        let Some(shift) = Self::shift_amount(amount, self.width) else {
+            return Self::top(self.width);
+        };
+        let sign = 1_u64 << (self.width - 1);
+        let vacated = width_mask(self.width) & !trailing_mask(u32::from(self.width) - shift);
+        let known_sign = self.mask & sign != 0;
+        let ones = if self.value & sign == 0 { 0 } else { vacated };
+        Self::new(
+            self.width,
+            (self.mask >> shift) | if known_sign { vacated } else { 0 },
+            (self.value >> shift) | ones,
+        )
+    }
+
+    /// The low `W` bits are the input's; the upper bits are known zero.
+    #[must_use]
+    pub fn transfer_zext(self, width: u16) -> Self {
+        let added = width_mask(width) & !width_mask(self.width);
+        Self::new(width, self.mask | added, self.value)
+    }
+
+    /// The low `W` bits are the input's; the upper bits are the input's sign
+    /// bit, known only when it is.
+    #[must_use]
+    pub fn transfer_sext(self, width: u16) -> Self {
+        let sign = 1_u64 << (self.width - 1);
+        let added = width_mask(width) & !width_mask(self.width);
+        let known_sign = self.mask & sign != 0;
+        let ones = if self.value & sign == 0 { 0 } else { added };
+        Self::new(
+            width,
+            self.mask | if known_sign { added } else { 0 },
+            self.value | ones,
+        )
+    }
+
+    /// Bit `i` is input bit `i`, for `i` below the new width.
+    #[must_use]
+    pub fn transfer_trunc(self, width: u16) -> Self {
+        Self::new(width, self.mask, self.value)
+    }
+}
+
 /// How many bits, counting from bit zero, are set before the first clear one.
 fn trailing_ones(bits: u64, width: u16) -> u32 {
     let limit = u32::from(width);
