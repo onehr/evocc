@@ -305,6 +305,9 @@ impl MacroMap {
                     prescanned_args
                 };
                 if let Some(mut arg) = self.resolve_arg(tok, m, selected_args) {
+                    if let Some(first) = arg.first_mut() {
+                        first.preceded_by_whitespace = tok.preceded_by_whitespace;
+                    }
                     if gnu_comma_variadic {
                         let comma = pending_paste
                             .take()
@@ -769,7 +772,42 @@ impl Preprocessor {
             self.process_impl(tokens, source, &mut expanding, true, 0)
                 .into_vec(),
         );
-        TokenStream::new(output)
+        TokenStream::new(self.consume_pragma_operators(output, source))
+    }
+
+    /// Consume `_Pragma` only after ordinary macro expansion has produced its
+    /// final operand tokens. This is the phase-4 boundary at which a
+    /// stringized operand can be validated and destringized without guessing
+    /// what a still-expandable macro invocation will produce.
+    fn consume_pragma_operators(&mut self, tokens: Vec<Token>, source: &str) -> Vec<Token> {
+        let mut output = Vec::with_capacity(tokens.len());
+        let mut index = 0;
+        while index < tokens.len() {
+            let token = &tokens[index];
+            if token.kind != TokenKind::Identifier || token_lexeme(token, source) != "_Pragma" {
+                output.push(token.clone());
+                index += 1;
+                continue;
+            }
+
+            if let Some((pragma_text, next_index)) = parse_pragma_operator(&tokens, index, source) {
+                let pragma_tokens = lex_decoded_tokens(token.span.file, &pragma_text);
+                if let Some(marker) = self.process_pragma(&pragma_tokens, &pragma_text, token.span)
+                {
+                    output.push(marker);
+                }
+                index = next_index;
+                continue;
+            }
+
+            self.errors.push(PreprocessError {
+                code: "E0112",
+                span: token.span,
+                message: "stray-token".into(),
+            });
+            index = pragma_operator_end(&tokens, index);
+        }
+        output
     }
 
     fn process_resolved_source(
@@ -2182,6 +2220,26 @@ fn parse_pragma_operator(tokens: &[Token], index: usize, source: &str) -> Option
         }
     }
     Some((destringized, index + 4))
+}
+
+fn pragma_operator_end(tokens: &[Token], index: usize) -> usize {
+    if tokens.get(index + 1).map(|token| token.kind) != Some(TokenKind::LParen) {
+        return index + 1;
+    }
+    let mut depth = 0_u32;
+    for (offset, token) in tokens.iter().enumerate().skip(index + 1) {
+        match token.kind {
+            TokenKind::LParen => depth = depth.saturating_add(1),
+            TokenKind::RParen => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return offset + 1;
+                }
+            }
+            _ => {}
+        }
+    }
+    tokens.len()
 }
 
 fn lex_decoded_tokens(file: FileId, source: &str) -> Vec<Token> {

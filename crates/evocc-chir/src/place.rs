@@ -468,34 +468,7 @@ impl<'arena> MemoryPlace<'arena> {
                 pointer,
                 pointer_type,
             } => {
-                let expression_type = if let CHirExpr::StringLit(literal, _) = pointer {
-                    let Some(pointee) = types.get(pointer_type.pointee()) else {
-                        return Err(MemoryPlaceError::UnknownType(pointer_type.pointee()));
-                    };
-                    let matches_literal = matches!(
-                        (literal.prefix, &pointee.kind),
-                        (
-                            crate::StringPrefix::None | crate::StringPrefix::U8,
-                            TypeKind::Int(evocc_types::IntRank::Char)
-                        ) | (
-                            crate::StringPrefix::L,
-                            TypeKind::Int(evocc_types::IntRank::Int)
-                        ) | (
-                            crate::StringPrefix::U16,
-                            TypeKind::Int(evocc_types::IntRank::UShort)
-                        ) | (
-                            crate::StringPrefix::U,
-                            TypeKind::Int(evocc_types::IntRank::UInt)
-                        )
-                    );
-                    if !matches_literal || pointer_type.pointee_qualifiers() != pointee.qualifiers {
-                        return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
-                    }
-                    *pointer_type
-                } else {
-                    PointerTypeDesc::from_expression(symbols, types, pointer)?
-                };
-                if expression_type != *pointer_type {
+                if !pointer_expression_matches(symbols, types, pointer, *pointer_type) {
                     return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
                 }
                 if types.get(pointer_type.pointee()).is_none() {
@@ -975,6 +948,12 @@ fn pointer_expression_type(
         CHirExpr::LabelAddress { facts, .. }
         | CHirExpr::BuiltinReturnAddress { facts, .. }
         | CHirExpr::BuiltinFrameAddress { facts, .. } => converted_pointer_type(types, facts.ty()),
+        CHirExpr::Member(_, _, _) | CHirExpr::PtrMember(_, _, _) | CHirExpr::Index(_, _, _) => {
+            converted_pointer_type(
+                types,
+                addressed_expression_type(symbols, types, expression)?,
+            )
+        }
         CHirExpr::Lit(_, _)
         | CHirExpr::FloatLit(_, _)
         | CHirExpr::CharLit(_, _)
@@ -988,9 +967,6 @@ fn pointer_expression_type(
         | CHirExpr::SizeOf(_, _)
         | CHirExpr::SizeOfExpr(_, _, _)
         | CHirExpr::AlignOf(_, _)
-        | CHirExpr::Member(_, _, _)
-        | CHirExpr::PtrMember(_, _, _)
-        | CHirExpr::Index(_, _, _)
         | CHirExpr::StatementExpr { value: None, .. } => {
             Err(MemoryPlaceError::PointerExpressionTypeUnavailable)
         }
@@ -998,6 +974,66 @@ fn pointer_expression_type(
             unreachable!("statement expressions are validated before the general match")
         }
     }
+}
+
+fn pointer_expression_matches(
+    symbols: &SymbolTable,
+    types: &TypeInterner,
+    expression: &CHirExpr<'_>,
+    expected: PointerTypeDesc,
+) -> bool {
+    if pointer_expression_type(symbols, types, expression).is_ok_and(|actual| actual == expected) {
+        return true;
+    }
+    match expression {
+        CHirExpr::StringLit(literal, _) => string_literal_matches(types, literal.prefix, expected),
+        CHirExpr::Ternary(_, when_true, when_false, _) => {
+            conditional_arm_matches(symbols, types, when_true, expected)
+                && conditional_arm_matches(symbols, types, when_false, expected)
+        }
+        CHirExpr::Elvis(operand, fallback, _) => {
+            conditional_arm_matches(symbols, types, operand, expected)
+                && conditional_arm_matches(symbols, types, fallback, expected)
+        }
+        _ => false,
+    }
+}
+
+fn conditional_arm_matches(
+    symbols: &SymbolTable,
+    types: &TypeInterner,
+    expression: &CHirExpr<'_>,
+    expected: PointerTypeDesc,
+) -> bool {
+    is_null_pointer_constant(symbols, types, expression)
+        || pointer_expression_matches(symbols, types, expression, expected)
+}
+
+fn string_literal_matches(
+    types: &TypeInterner,
+    prefix: crate::StringPrefix,
+    expected: PointerTypeDesc,
+) -> bool {
+    let Some(pointee) = types.get(expected.pointee()) else {
+        return false;
+    };
+    let matches_literal = matches!(
+        (prefix, &pointee.kind),
+        (
+            crate::StringPrefix::None | crate::StringPrefix::U8,
+            TypeKind::Int(evocc_types::IntRank::Char)
+        ) | (
+            crate::StringPrefix::L,
+            TypeKind::Int(evocc_types::IntRank::Int)
+        ) | (
+            crate::StringPrefix::U16,
+            TypeKind::Int(evocc_types::IntRank::UShort)
+        ) | (
+            crate::StringPrefix::U,
+            TypeKind::Int(evocc_types::IntRank::UInt)
+        )
+    );
+    matches_literal && expected.pointee_qualifiers() == pointee.qualifiers
 }
 
 fn converted_pointer_type(
@@ -1063,12 +1099,9 @@ fn is_null_pointer_constant(
     let CHirExpr::Cast(pointer, operand, _) = expression else {
         return false;
     };
-    let Some(TypeKind::Pointer(pointee)) = types.get(*pointer).map(|ty| &ty.kind) else {
+    let Some(TypeKind::Pointer(_)) = types.get(*pointer).map(|ty| &ty.kind) else {
         return false;
     };
-    if !matches!(types.get(*pointee).map(|ty| &ty.kind), Some(TypeKind::Void)) {
-        return false;
-    }
     eval_integer_constant(operand, types, symbols, &target)
         .is_some_and(|value| value.mathematical_value() == 0)
 }
@@ -1096,6 +1129,25 @@ fn addressed_expression_type(
         CHirExpr::CompoundLit(ty, _, _) => *ty,
         CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
             pointer_expression_type(symbols, types, pointer)?.pointee()
+        }
+        CHirExpr::Member(base, name, _) => {
+            let base = addressed_expression_type(symbols, types, base)?;
+            record_member_path(types, base, name)
+                .and_then(|path| path.last().copied())
+                .map(FieldProjection::field_ty)
+                .ok_or(MemoryPlaceError::PointerExpressionTypeUnavailable)?
+        }
+        CHirExpr::PtrMember(pointer, name, _) => {
+            let base = pointer_expression_type(symbols, types, pointer)?.pointee();
+            record_member_path(types, base, name)
+                .and_then(|path| path.last().copied())
+                .map(FieldProjection::field_ty)
+                .ok_or(MemoryPlaceError::PointerExpressionTypeUnavailable)?
+        }
+        CHirExpr::Index(left, right, _) => {
+            let base = pointer_expression_type(symbols, types, left)
+                .or_else(|_| pointer_expression_type(symbols, types, right))?;
+            base.pointee()
         }
         _ => return Err(MemoryPlaceError::PointerExpressionTypeUnavailable),
     };
