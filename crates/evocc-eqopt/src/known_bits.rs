@@ -124,6 +124,31 @@ impl KnownBits {
         })
     }
 
+    /// The combination of two facts about *different* values that reach one
+    /// class from different paths: a bit is known only where both know it and
+    /// agree, so this loses knowledge where `meet` gains it.
+    ///
+    /// The two are easy to confuse, because Section 8.10 spells the merge of
+    /// two classes already proved equal "meet" and spells the combination over
+    /// incoming edges "meet" as well, in the dataflow sense where the
+    /// combination is what loses precision. They are opposite operations and
+    /// the difference is soundness: two values proved equal may each contribute
+    /// what it knows, while two values arriving on different edges may
+    /// contribute only what they agree on. `None` only for a width mismatch,
+    /// which is a malformed pairing rather than a disagreement.
+    #[must_use]
+    pub fn join(self, other: Self) -> Option<Self> {
+        if self.width != other.width {
+            return None;
+        }
+        let agreed = self.mask & other.mask & !(self.value ^ other.value);
+        Some(Self {
+            width: self.width,
+            mask: agreed,
+            value: self.value & agreed,
+        })
+    }
+
     // -- transfers ----------------------------------------------------------
 
     /// Known where either input is known zero, or both are known one.

@@ -8,10 +8,12 @@ mod eligibility;
 mod facts;
 mod reassemble;
 mod replay;
+mod seed_facts;
 
 use eligibility::derive_eligible_regions;
 use reassemble::reassemble;
 use replay::{replay_region, RegionReplacement, Registry};
+use seed_facts::SeedFacts;
 
 const REGISTRY_V1: &str = "p0.scalar.v1";
 /// The revision that adds the Tier B rules. Section 11.6 "Registries and
@@ -67,7 +69,16 @@ fn main() -> ExitCode {
         return ExitCode::from(3);
     }
     let eligible = derive_eligible_regions(&before_module);
-    let reassembled_module = match claim(&certificate, &before_module, &eligible, registry) {
+    // Section 8.10: what a block argument knows, recomputed here rather than
+    // read off the certificate.
+    let seed_facts = SeedFacts::of(&before_module);
+    let reassembled_module = match claim(
+        &certificate,
+        &before_module,
+        &eligible,
+        &seed_facts,
+        registry,
+    ) {
         // Section 11.3: a certificate with no region claims that after.evo is
         // the canonical rendering of the module parsed from before.evo, and
         // nothing else. Comparing against the raw input bytes instead would
@@ -161,6 +172,7 @@ fn claim(
     certificate: &EvpCertificate,
     module: &evocc_evoir::Module,
     eligible: &[eligibility::EligibleRegion],
+    seed_facts: &SeedFacts,
     registry: Registry,
 ) -> Result<Claim, ()> {
     if certificate.regions.is_empty() {
@@ -177,7 +189,13 @@ fn claim(
             return Err(());
         }
         previous = Some(index);
-        replacements.push(replay_region(module, region, &eligible[index], registry)?);
+        replacements.push(replay_region(
+            module,
+            region,
+            &eligible[index],
+            seed_facts,
+            registry,
+        )?);
     }
     Ok(Claim::Regions(replacements))
 }

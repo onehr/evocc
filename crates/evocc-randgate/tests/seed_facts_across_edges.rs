@@ -11,6 +11,8 @@
 //! that a premise naming a seed is checked against a fact the checker
 //! recomputes for itself rather than one the producer asserts.
 
+use std::collections::BTreeMap;
+
 use evocc_eqopt::{optimize_scalar_module_with_evp1, ScalarEqBudget};
 use evocc_evoir::{
     render_module, validate_module, Block, BlockArg, EffectSummary, Function, FunctionParam, Inst,
@@ -336,9 +338,6 @@ fn a_seed_premise_above_the_recomputed_fact_is_refused() {
 }
 
 /// What facts crossing an edge are worth.
-///
-/// The fixed point's own iteration count is a cost figure the transaction
-/// reports; it is measured beside this once the counter exists.
 #[test]
 fn the_corpus_measures_premises_that_assert_a_seed() {
     let mut regions = 0_usize;
@@ -365,5 +364,33 @@ fn the_corpus_measures_premises_that_assert_a_seed() {
     assert!(
         naming_a_seed > 0,
         "a fact crossing a block edge must reach a premise somewhere in the corpus"
+    );
+}
+
+/// What the fixed point costs, in passes over the function.
+///
+/// A pass is the whole function, so this is the only cost the analysis has
+/// beyond one walk of each block. A single-block function needs one pass; a
+/// chain of blocks needs one per link, and a loop one more to see its own back
+/// edge settle.
+#[test]
+fn the_corpus_measures_the_fixed_points_passes() {
+    let mut passes: BTreeMap<usize, usize> = BTreeMap::new();
+    let mut deepest = 0_usize;
+    for seed in 0..CORPUS {
+        let module = generate_module(seed, GeneratorConfig::default());
+        let outcome = optimize_scalar_module_with_evp1(&module, budget());
+        *passes.entry(outcome.report.seed_fact_rounds).or_insert(0) += 1;
+        deepest = deepest.max(outcome.report.seed_fact_rounds);
+    }
+    println!("seedFactPasses={passes:?}");
+    println!("maxSeedFactPasses={deepest}");
+    assert!(
+        deepest >= 2,
+        "a corpus with branches must need more than one pass somewhere"
+    );
+    assert!(
+        !passes.contains_key(&0),
+        "every function is walked at least once"
     );
 }

@@ -9,6 +9,7 @@ mod evp1;
 pub mod known_bits;
 mod persistent;
 mod scalar_eq;
+mod seed_facts;
 
 pub use evp1::*;
 pub use persistent::*;

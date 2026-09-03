@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use crate::eligibility::EligibleRegion;
 use crate::facts::{Comparison, Fact};
+use crate::seed_facts::SeedFacts;
 use evocc_evoir::{inst_results, CmpOp, EvoIRType, Inst, Module, Value};
 use evocc_proof::{
     EvpCongruence, EvpEffectClass, EvpEvent, EvpExtractionChoice, EvpNode, EvpNodeSource,
@@ -102,6 +103,7 @@ pub(crate) fn replay_region(
     module: &Module,
     claimed: &EvpRegion,
     derived: &EligibleRegion,
+    seed_facts: &SeedFacts,
     registry: Registry,
 ) -> Result<RegionReplacement, ()> {
     if claimed.id != derived.id
@@ -111,7 +113,7 @@ pub(crate) fn replay_region(
     {
         return Err(());
     }
-    let mut replay = Replay::new(module, claimed, registry)?;
+    let mut replay = Replay::new(module, claimed, seed_facts, registry)?;
     for event in &claimed.events {
         replay.event(event)?;
     }
@@ -129,11 +131,17 @@ struct Replay<'a> {
     before_count: usize,
     derived_started: bool,
     used_derived: HashSet<u32>,
+    seed_starts: Vec<Fact>,
     registry: Registry,
 }
 
 impl<'a> Replay<'a> {
-    fn new(module: &'a Module, region: &'a EvpRegion, registry: Registry) -> Result<Self, ()> {
+    fn new(
+        module: &'a Module,
+        region: &'a EvpRegion,
+        seed_facts: &SeedFacts,
+        registry: Registry,
+    ) -> Result<Self, ()> {
         let mut sorts = Vec::new();
         let mut value_classes = HashMap::new();
         for (index, seed) in region.seeds.iter().enumerate() {
@@ -153,6 +161,22 @@ impl<'a> Replay<'a> {
         let parent = (0..sorts.len())
             .map(|index| u32::try_from(index).expect("seed index checked"))
             .collect();
+        // Section 8.10 "Facts of seeds": a seed of origin `input` starts at the
+        // fact this checker's own fixed point gives its block argument, not at
+        // top, so a premise naming a seed class is confirmed against something
+        // the checker derived rather than against nothing.
+        let seed_starts = region
+            .seeds
+            .iter()
+            .zip(&sorts)
+            .map(|(seed, sort)| {
+                let width = bits_width(sort).ok_or(())?;
+                Ok(seed_facts
+                    .of_value(&region.id.function, seed.value)
+                    .filter(|fact| fact.width() == width)
+                    .unwrap_or_else(|| Fact::top(width)))
+            })
+            .collect::<Result<Vec<_>, ()>>()?;
         Ok(Self {
             module,
             region,
@@ -164,6 +188,7 @@ impl<'a> Replay<'a> {
             before_count: 0,
             derived_started: false,
             used_derived: HashSet::new(),
+            seed_starts,
             registry,
         })
     }
@@ -250,8 +275,9 @@ impl<'a> Replay<'a> {
 
     /// The Section 8.10 fact of every class, from this region's nodes alone.
     ///
-    /// A class's fact is the meet of the transfers of the nodes it owns; seeds
-    /// contribute nothing, because Section 8.10 gives a block argument no fact.
+    /// A class's fact is the meet of the transfers of the nodes it owns and,
+    /// for a seed class, of the fact Section 8.10's function-wide fixed point
+    /// gives the block argument it names.
     /// The loop runs to a fixed point because a union can sharpen a child's
     /// fact after the node that reads it was inserted, and facts only ever move
     /// down.
@@ -261,6 +287,11 @@ impl<'a> Replay<'a> {
             .iter()
             .map(|sort| bits_width(sort).map(Fact::top).ok_or(()))
             .collect::<Result<Vec<_>, ()>>()?;
+        for (index, start) in self.seed_starts.iter().enumerate() {
+            let root = self.find(u32::try_from(index).map_err(|_| ())?) as usize;
+            let merged = facts.get(root).copied().ok_or(())?.meet(*start).ok_or(())?;
+            facts[root] = merged;
+        }
         loop {
             let mut changed = false;
             for node in &self.nodes {
@@ -1538,8 +1569,14 @@ mod tests {
         bindings: &[(&str, u32)],
     ) {
         let (region, derived) = certificate_region(&module, root, rule, replacement, bindings);
-        let plan = replay_region(&module, &region, &derived, Registry::Reviewed)
-            .unwrap_or_else(|()| panic!("reviewed rule {rule} must replay"));
+        let plan = replay_region(
+            &module,
+            &region,
+            &derived,
+            &SeedFacts::of(&module),
+            Registry::Reviewed,
+        )
+        .unwrap_or_else(|()| panic!("reviewed rule {rule} must replay"));
         reassemble(&module, vec![plan])
             .unwrap_or_else(|()| panic!("reviewed rule {rule} must reassemble"));
     }
@@ -1715,20 +1752,41 @@ mod tests {
             panic!()
         };
         node.attributes[0].1 = 13;
-        assert!(replay_region(&module, &bad_payload, &derived, Registry::Reviewed).is_err());
+        assert!(replay_region(
+            &module,
+            &bad_payload,
+            &derived,
+            &SeedFacts::of(&module),
+            Registry::Reviewed
+        )
+        .is_err());
 
         let mut unknown_rule = valid.clone();
         let EvpEvent::Rewrite(rewrite) = unknown_rule.events.last_mut().unwrap() else {
             panic!()
         };
         rewrite.rule = "producer_supplied_add".to_owned();
-        assert!(replay_region(&module, &unknown_rule, &derived, Registry::Reviewed).is_err());
+        assert!(replay_region(
+            &module,
+            &unknown_rule,
+            &derived,
+            &SeedFacts::of(&module),
+            Registry::Reviewed
+        )
+        .is_err());
 
         let mut wrong_binding = valid;
         let EvpEvent::Rewrite(rewrite) = wrong_binding.events.last_mut().unwrap() else {
             panic!()
         };
         rewrite.bindings[0].1 = 1;
-        assert!(replay_region(&module, &wrong_binding, &derived, Registry::Reviewed).is_err());
+        assert!(replay_region(
+            &module,
+            &wrong_binding,
+            &derived,
+            &SeedFacts::of(&module),
+            Registry::Reviewed
+        )
+        .is_err());
     }
 }
