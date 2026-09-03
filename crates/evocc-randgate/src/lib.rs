@@ -21,7 +21,7 @@ pub use differential::{
     observe, run_seed, DefinedRun, GateBudget, Mismatch, MismatchKind, Observation, ProofChecker,
     StaticObservation, Verdict,
 };
-pub use generate::{entry_arguments, generate_module, GeneratorConfig, WIDTHS};
+pub use generate::{entry_arguments, generate_module, GeneratorConfig, GeneratorMode, WIDTHS};
 pub use report::{run_campaign, CampaignReport};
 pub use rng::Rng;
 pub use shrink::shrink_module;

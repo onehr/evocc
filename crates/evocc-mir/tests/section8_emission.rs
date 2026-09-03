@@ -123,6 +123,111 @@ func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all
 }
 ";
 
+/// A program whose only interesting instruction is a `copy` of `size` bytes
+/// from a static object into an automatic one, reading the first and last word
+/// of the destination back so that the copy is observable.
+fn copy_program(size: usize) -> String {
+    assert!(size.is_multiple_of(8));
+    let bytes: String = (0..size)
+        .map(|index| {
+            format!(
+                "{:02x}",
+                u8::try_from(index % 256)
+                    .expect("a byte")
+                    .wrapping_mul(31)
+                    .wrapping_add(7)
+            )
+        })
+        .collect();
+    let initialized = "1".repeat(size);
+    let tail = size / 8 - 1;
+    format!(
+        "\
+global @source origin=0 kind=file visibility=external size={size} align=8 bytes={bytes} initialized={initialized}
+
+func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects {{ reads={{all}}, writes={{all}}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }}
+{{
+^entry(%v0: mem<all>, %v1: world):
+    (%v2, %v3, %v4) = alloca %v0, %v1 [origin=1, size={size}, align=8]
+    %v5 = global_addr @source : ptr<generic>
+    (%v6, %v7) = copy %v3, %v4, %v2, %v5 [size={size}, align=8]
+    %v8 = access_in_bounds %v6, %v2 [size=8, align=8]
+    (%v9, %v10, %v11) = load %v8, %v7, %v2 : bits<64>
+    %v12 = const.bits<64> {tail}
+    %v13 = ptr.offset.add.unsigned %v2, %v12 [scale=8]
+    %v14 = pointer_valid %v10, %v13
+    %v15 = access_in_bounds %v14, %v13 [size=8, align=8]
+    (%v16, %v17, %v18) = load %v15, %v11, %v13 : bits<64>
+    %v19 = xor.bits<64> %v9, %v16
+    %v20 = const.bits<64> 32
+    %v21 = shift_count_defined.unsigned %v19, %v20
+    ub.assume.invalid_shift_count %v21
+    %v22 = lshr.bits<64> %v19, %v20
+    %v23 = xor.bits<64> %v19, %v22
+    %v24 = trunc.bits<32> %v23
+    ret %v24, %v17, %v18
+}}
+"
+    )
+}
+
+fn emitted_copy(size: usize) -> String {
+    let source = copy_program(size);
+    let module = parse_section9_module(source.as_bytes()).expect("canonical EvoIR");
+    emit_module(&build(&source), &module.globals)
+}
+
+/// Section 4: `mem.copy` expands "to `ldr`/`str` pairs of the largest aligned
+/// width, unrolled up to 64 bytes and a counted loop above".
+#[test]
+fn a_copy_of_sixty_four_bytes_is_unrolled() {
+    let text = emitted_copy(64);
+    assert_eq!(
+        text.matches("    ldr x16, [").count(),
+        8,
+        "eight aligned words, one pair each:\n{text}"
+    );
+    assert!(
+        !text.contains("_copy"),
+        "no loop below the ceiling:\n{text}"
+    );
+}
+
+#[test]
+fn a_copy_above_sixty_four_bytes_is_a_counted_loop() {
+    let text = emitted_copy(200);
+    assert!(
+        text.contains("_copy0:\n"),
+        "the counted loop needs a label:\n{text}"
+    );
+    assert!(text.contains("    cbnz x16, "), "{text}");
+    assert_eq!(
+        text.matches("    ldr x17, [").count(),
+        1,
+        "one load in the body, not twenty-five:\n{text}"
+    );
+    assert_eq!(text.matches("    str x17, [").count(), 1, "{text}");
+}
+
+#[test]
+fn the_host_assembler_accepts_both_copy_expansions() {
+    let version = match assembler() {
+        Ok(version) => version,
+        Err(reason) => {
+            println!("skipped: {reason}");
+            return;
+        }
+    };
+    println!("assembler={version}");
+    for size in [64_usize, 200] {
+        let text = emitted_copy(size);
+        if let Err(complaint) = assemble(&text) {
+            panic!("the assembler refused a {size}-byte copy:\n{complaint}\n{text}");
+        }
+    }
+}
+
 #[test]
 fn a_function_is_emitted_with_the_platform_prefix_and_alignment() {
     let text = emit_module(&build(ARITHMETIC), &[]);

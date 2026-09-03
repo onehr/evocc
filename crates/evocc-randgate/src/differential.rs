@@ -153,6 +153,12 @@ pub enum MismatchKind {
     MachineReturnValues,
     MachineVolatileTrace,
     MachineStaticMemory,
+    /// The fourth lane: the assembled program's exit status is not the eight
+    /// bits the EvoIR interpreter's result carries.
+    NativeExitStatus,
+    /// The fourth lane: a stage of the native pipeline refused a module the
+    /// first three lanes agreed on.
+    NativeStopped,
 }
 
 /// A refused claim together with the smallest input that still refuses it.

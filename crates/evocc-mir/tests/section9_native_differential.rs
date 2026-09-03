@@ -208,6 +208,83 @@ const PROGRAMS: [(&str, &str); 5] = [
     ("memory", MEMORY),
 ];
 
+/// A program whose only interesting instruction is a `copy` of `size` bytes
+/// from a static object into an automatic one, reading the first and last word
+/// of the destination back so that the copy is observable in the exit status.
+fn copy_program(size: usize) -> String {
+    assert!(size.is_multiple_of(8));
+    let bytes: String = (0..size)
+        .map(|index| {
+            format!(
+                "{:02x}",
+                u8::try_from(index % 256)
+                    .expect("a byte")
+                    .wrapping_mul(31)
+                    .wrapping_add(7)
+            )
+        })
+        .collect();
+    let initialized = "1".repeat(size);
+    let tail = size / 8 - 1;
+    format!(
+        "\
+global @source origin=0 kind=file visibility=external size={size} align=8 bytes={bytes} initialized={initialized}
+
+func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects {{ reads={{all}}, writes={{all}}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }}
+{{
+^entry(%v0: mem<all>, %v1: world):
+    (%v2, %v3, %v4) = alloca %v0, %v1 [origin=1, size={size}, align=8]
+    %v5 = global_addr @source : ptr<generic>
+    (%v6, %v7) = copy %v3, %v4, %v2, %v5 [size={size}, align=8]
+    %v8 = access_in_bounds %v6, %v2 [size=8, align=8]
+    (%v9, %v10, %v11) = load %v8, %v7, %v2 : bits<64>
+    %v12 = const.bits<64> {tail}
+    %v13 = ptr.offset.add.unsigned %v2, %v12 [scale=8]
+    %v14 = pointer_valid %v10, %v13
+    %v15 = access_in_bounds %v14, %v13 [size=8, align=8]
+    (%v16, %v17, %v18) = load %v15, %v11, %v13 : bits<64>
+    %v19 = xor.bits<64> %v9, %v16
+    %v20 = const.bits<64> 32
+    %v21 = shift_count_defined.unsigned %v19, %v20
+    ub.assume.invalid_shift_count %v21
+    %v22 = lshr.bits<64> %v19, %v20
+    %v23 = xor.bits<64> %v19, %v22
+    %v24 = trunc.bits<32> %v23
+    ret %v24, %v17, %v18
+}}
+"
+    )
+}
+
+/// Section 4: a `mem.copy` above sixty-four bytes is a counted loop, and the
+/// loop moves the same bytes the interpreter moved.
+#[test]
+fn a_two_hundred_byte_copy_agrees_with_the_interpreter() {
+    let version = match toolchain() {
+        Ok(version) => version,
+        Err(reason) => {
+            println!("skipped={reason}");
+            return;
+        }
+    };
+    println!("toolchain={version}");
+
+    for size in [64_usize, 200] {
+        let source = copy_program(size);
+        let (functions, module) = build(&source);
+        let text = emit_module(&functions, &module.globals);
+        let status = match run_native(&format!("copy{size}"), &text) {
+            Ok(status) => status,
+            Err(reason) => panic!("{size}: {reason}\n{text}"),
+        };
+        let expected = interpreted(&module);
+        let observed = u8::try_from(status & 0xff).expect("eight bits");
+        assert_eq!(observed, expected, "a {size}-byte copy disagreed\n{text}");
+        println!("copyBytes={size} exitStatus={observed}");
+    }
+}
+
 #[test]
 fn the_native_run_agrees_with_the_interpreter() {
     let version = match toolchain() {

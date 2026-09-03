@@ -41,9 +41,29 @@ const MEMORY_WIDTHS: [u16; 4] = [8, 16, 32, 64];
 const CARRIER: AccessLayout = AccessLayout::new(8, 8);
 const CARRIER_WIDTH: u16 = 64;
 
+/// Which seed space a generated module comes from.
+///
+/// EvoMIR Section 9, "The native corpus": "The randomized generator's seed
+/// space is pinned by the middle-end campaigns (a seed names one module
+/// forever), so the native lane does not change it. It draws from a second
+/// generator mode with its own seed space, `native-main`, whose `main` takes
+/// no arguments and returns one `bits<32>`."
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GeneratorMode {
+    /// The mode the middle-end campaigns pinned: `@main` takes what the draw
+    /// gives it and returns up to `max_results` ordinary values.
+    #[default]
+    Standard,
+    /// The native corpus: `@main` takes no arguments and returns one
+    /// `bits<32>`, so a process exit status can carry its result.
+    NativeMain,
+}
+
 /// The shape ceilings one generated module stays within.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GeneratorConfig {
+    /// Which seed space and entry shape this configuration draws from.
+    pub mode: GeneratorMode,
     /// Callable helper functions defined before `@main`.
     pub max_helper_functions: u32,
     /// Module globals available to `global_addr`.
@@ -63,6 +83,7 @@ pub struct GeneratorConfig {
 impl Default for GeneratorConfig {
     fn default() -> Self {
         Self {
+            mode: GeneratorMode::Standard,
             max_helper_functions: 2,
             max_globals: 2,
             max_segment_instructions: 6,
@@ -70,6 +91,18 @@ impl Default for GeneratorConfig {
             max_blocks: 24,
             max_loop_trips: 4,
             max_results: 3,
+        }
+    }
+}
+
+impl GeneratorConfig {
+    /// The Section 9 native corpus: the default ceilings in the second seed
+    /// space, whose `@main` a process exit status can report.
+    #[must_use]
+    pub fn native_main() -> Self {
+        Self {
+            mode: GeneratorMode::NativeMain,
+            ..Self::default()
         }
     }
 }
