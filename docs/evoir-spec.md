@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.42** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.43** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1935,6 +1935,12 @@ defined; anything not listed transfers to top.
 | `add`, `sub` | the trailing run of bits that is known in both inputs, computed by ordinary carry propagation until the first unknown bit |
 | `mul` | the trailing known-zero run is the sum of the inputs' trailing known-zero runs; nothing else |
 | `icmp.*` | decided by intervals, as the paragraph below states; top otherwise |
+| `shl` | when the amount is fully known and below `N`: bit `i` is known zero for `i < k` and equals input bit `i - k` above; top otherwise |
+| `lshr` | when the amount is fully known and below `N`: bit `i` equals input bit `i + k` for `i + k < N` and is known zero above; top otherwise |
+| `ashr` | when the amount is fully known and below `N`: bit `i` equals input bit `i + k` for `i + k < N` and equals the input's sign bit above, known only when that bit is; top otherwise |
+| `zext` | the low `W` bits equal the input's bits; the upper bits are known zero |
+| `sext` | the low `W` bits equal the input's bits; the upper bits equal the input's sign bit, known only when that bit is |
+| `trunc` | bit `i` equals input bit `i` for `i < N` |
 
 **The `icmp` procedure.** Let `lo(a)` be the fact of `a` with every unknown bit
 zero and `hi(a)` with every unknown bit one, read as unsigned `N`-bit values.
@@ -1948,7 +1954,7 @@ and are top when either sign bit is unknown. No other case is decided; a
 procedure that decided more would be a stronger analysis than this table
 states. Defined at revision 1.9.40.
 
-The transfers are deliberately weak. Each is a statement a checker can
+The shift and width rows were added at revision 1.9.43; a shift amount that is not fully known, or is known and not below the width, transfers to top, because the shift's own definedness guard (Section 4) is what excludes the out-of-range case and this analysis states nothing about guarded operations. The transfers are deliberately weak. Each is a statement a checker can
 recompute from the region's nodes with no search; a stronger analysis that
 needed one would move the judgment into shared code, which Section 11.6
 reserves for cases that fail safe.
@@ -4563,6 +4569,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.43 | 2026-09-03 | Class-based matching measured (+25 regions, +26 merge-enabled matches over 256 seeds). Extends the 8.10 transfer table with `shl`, `lshr`, `ashr` under a fully known in-range amount and with `zext`, `sext`, `trunc`; the registry is unchanged, the new facts feed the existing Tier B rules. |
 | 1.9.42 | 2026-09-03 | Congruence closure measured. Places a congruence that holds at insertion before every epoch marker and one a merge enabled after that epoch's marker; states that a rewrite joining a class with itself is not recorded and the replacement stands on the recorded merges (11.3). |
 | 1.9.41 | 2026-09-03 | Fact-driven rewrites measured (772 of 7,900 regions carry a premise; residual regions 20 to 0). Settles four readings: folds carry no premise (8.10), a certificate names the narrowest reviewed registry containing its rules, rule order within a tier is registry order so three Tier B rules are dominated, premise classes resolve through the partition, and a premise on a premise-free rule or with the wrong digit count is invalid (11.6). |
 | 1.9.40 | 2026-09-03 | Prints the reviewed registry `p0.scalar.v2` (18 Tier B rules over the 8.10 facts) with its digest, defines registries and revisions, the Tier B side conditions and premises (11.6); corrects the premise comparison so a claim the checker cannot confirm is refused (11.3); fixes the `icmp` transfer as an interval procedure (8.10). Three gaps the randomized gate stopped on. |
