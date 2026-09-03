@@ -122,9 +122,9 @@ fn deterministic_scalar_p0_corpus_is_clean_before_and_after_with_reviewed_certif
         assert_eq!(
             outcome.report.proof_authority,
             ProofAuthority::Reviewed {
-                registry: "p0.scalar.v1"
+                registry: "p0.scalar.v3"
             },
-            "{id}: Day 8 producer must name the frozen reviewed registry"
+            "{id}: the producer must name the narrowest reviewed registry containing every rule it fired"
         );
         executions_clean += 1;
     }
@@ -143,6 +143,6 @@ fn deterministic_scalar_p0_corpus_is_clean_before_and_after_with_reviewed_certif
         "Day-7 G4 measured: executions={executions_clean}/{PROGRAMS}, \
          optimized={optimized_programs}/{PROGRAMS}, \
          canonicalCertificates={canonical_certificates}/{PROGRAMS}, \
-         ruleInstances={rule_instances}, authority=p0.scalar.v1"
+         ruleInstances={rule_instances}, authority=p0.scalar.v3"
     );
 }
