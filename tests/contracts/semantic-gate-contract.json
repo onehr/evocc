@@ -60,7 +60,8 @@
     "tierBReadingsRatified": "2026-09-03: the second executor's four readings are ratified in 1.9.41 (folds carry no premise; premise classes resolve through the partition; a premise on a premise-free rule is invalid; a wrong digit count is invalid). Its registry naming (narrowest reviewed registry containing the fired rules) is now the rule. Its rule priority is overruled in one step: within a tier the first applicable rule in registry order wins, so a premise-free fold precedes a fact rule and p1_202/p1_203/p1_204 are dominated and counted as such, not fired by preference. The nested-pattern binding defect (p0_009, 8 seeds in 20,000) was the checker's sixteenth correct refusal.",
     "stageS3aClosed": "2026-09-03: Tier B fact-driven rewrites in place against p0.scalar.v2: producer facts from the 8.10 transfers, premises in the stated order, an independent checker recomputation that refuses unconfirmable bits; 45 of 45 rules reached over 256 seeds (p1_202/203/204 now counted as dominated under 1.9.41); 21,000 programs, 0 mismatches; 772 of 7,900 regions in the 1000-program gate carry a premise; residual regions 20 to 0. One producer defect (p0_009 nested-pattern binding, 8 seeds) found by the checker and fixed. Architect's isolated gate on 88d7253: 1190/0, clippy 0, fmt clean; merged into main.",
     "congruencePlacementRatified": "2026-09-03: the executor's Reading A for congruence placement among epoch markers is now the rule, and the unrecorded vacuous rewrite is stated explicitly: a replacement may stand on recorded merges alone. 'Regions existing only by congruence' means a region whose root is replaced on the strength of a congruence with no rewrite of its own.",
-    "stageS3bClosed": "2026-09-03: congruence closure produced and verified: regions 7,900 to 9,062 in the 1000-program gate (+14.7 percent), 197 justified by a congruence alone; premised regions 772 to 232 under registry-order priority; p1_202/203/204 asserted absent; 21,000 programs, 0 mismatches, 0 refusals; the eight p0_009 seeds replay clean. Architect's isolated gate on 0c0ec2d: 1194/0, clippy 0, fmt clean; merged into main. Open by the executor's list: matching is still value-based, facts and congruence are block-local, no produced certificate reaches a ceiling."
+    "stageS3bClosed": "2026-09-03: congruence closure produced and verified: regions 7,900 to 9,062 in the 1000-program gate (+14.7 percent), 197 justified by a congruence alone; premised regions 772 to 232 under registry-order priority; p1_202/203/204 asserted absent; 21,000 programs, 0 mismatches, 0 refusals; the eight p0_009 seeds replay clean. Architect's isolated gate on 0c0ec2d: 1194/0, clippy 0, fmt clean; merged into main. Open by the executor's list: matching is still value-based, facts and congruence are block-local, no produced certificate reaches a ceiling.",
+    "stageS3cClosed": "2026-09-03: rule matching over e-classes: isolated over 256 seeds with the same generator, regions 2,610 to 2,635 and merge-enabled matches 4 to 30; congruence aliasing applies only where no rule answers the instruction (an unconditional version swallowed a rewrite and was caught by copy_is_opaque); shrinker gained constant-collapse and congruent-pair reductions, neither hand-reduced reproducer shrinks once its property is stated exactly. 21,000 programs, 0 mismatches. Architect's isolated gate on a407f33: 1202/0, clippy 0, fmt clean; merged into main."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",
@@ -228,6 +229,24 @@
       },
       "architectGate": {
         "passed": 1194,
+        "failed": 0,
+        "clippy": 0,
+        "fmt": "clean"
+      }
+    },
+    "s3c": {
+      "branchHead": "a407f33",
+      "campaign": {
+        "programs": 21000,
+        "semanticMismatches": 0,
+        "certificateRefusals": 0,
+        "regions1000": 9147,
+        "mergeEnabledMatches256Seeds": "4 to 30",
+        "wallSeconds1000Median": 23.44,
+        "wallSeconds20000": 481.371
+      },
+      "architectGate": {
+        "passed": 1202,
         "failed": 0,
         "clippy": 0,
         "fmt": "clean"
