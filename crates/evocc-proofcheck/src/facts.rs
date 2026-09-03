@@ -196,6 +196,41 @@ impl Fact {
         }
     }
 
+    // -- the shift and width rows, added at revision 1.9.43 -----------------
+    //
+    // Declared and not yet computed: each answers top, which is what Section
+    // 8.10 gives an operator it does not list.
+
+    /// `shl` under a fully known amount below the width.
+    pub(crate) fn shl(self, _amount: Self) -> Self {
+        Self::top(self.width)
+    }
+
+    /// `lshr` under a fully known amount below the width.
+    pub(crate) fn lshr(self, _amount: Self) -> Self {
+        Self::top(self.width)
+    }
+
+    /// `ashr` under a fully known amount below the width.
+    pub(crate) fn ashr(self, _amount: Self) -> Self {
+        Self::top(self.width)
+    }
+
+    /// `zext` to `width`.
+    pub(crate) fn zext(self, width: u16) -> Self {
+        Self::top(width)
+    }
+
+    /// `sext` to `width`.
+    pub(crate) fn sext(self, width: u16) -> Self {
+        Self::top(width)
+    }
+
+    /// `trunc` to `width`.
+    pub(crate) fn trunc(self, width: u16) -> Self {
+        Self::top(width)
+    }
+
     /// The smallest and largest values the unknown bits allow, read unsigned.
     fn bounds(self) -> (u64, u64) {
         (self.ones, self.ones | (span(self.width) & !self.known()))
@@ -321,5 +356,73 @@ impl Comparison {
             "icmp.ule" => Self::ULe,
             _ => return None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Comparison, Fact};
+
+    /// `zeros`/`ones` written as a bit string, most significant first, with `?`
+    /// for an unknown bit.
+    fn bits(pattern: &str) -> Fact {
+        let width = u16::try_from(pattern.len()).expect("a pattern fits a width");
+        let mut mask = 0_u64;
+        let mut value = 0_u64;
+        for (index, symbol) in pattern.chars().rev().enumerate() {
+            match symbol {
+                '?' => {}
+                '0' => mask |= 1 << index,
+                '1' => {
+                    mask |= 1 << index;
+                    value |= 1 << index;
+                }
+                other => panic!("unknown bit symbol {other}"),
+            }
+        }
+        Fact::from_premise(width, mask, value).expect("a pattern is a fact")
+    }
+
+    #[test]
+    fn the_shift_rows_move_the_bits_the_table_says() {
+        assert_eq!(bits("1?01").shl(Fact::constant(8, 2)), bits("0100"));
+        assert_eq!(bits("1?01").shl(Fact::constant(8, 0)), bits("1?01"));
+        assert_eq!(bits("1?01").shl(bits("????????")), Fact::top(4));
+        assert_eq!(bits("1?01").shl(Fact::constant(8, 4)), Fact::top(4));
+        assert_eq!(bits("1?01").lshr(Fact::constant(8, 2)), bits("001?"));
+        assert_eq!(bits("1?01").lshr(bits("????????")), Fact::top(4));
+        assert_eq!(bits("1?01").ashr(Fact::constant(8, 2)), bits("111?"));
+        assert_eq!(bits("??01").ashr(Fact::constant(8, 2)), bits("???0"));
+        assert_eq!(bits("0?01").ashr(Fact::constant(8, 2)), bits("000?"));
+    }
+
+    #[test]
+    fn the_width_rows_extend_and_truncate_as_the_table_says() {
+        assert_eq!(bits("1?0").zext(6), bits("0001?0"));
+        assert_eq!(bits("???").zext(6), bits("000???"));
+        assert_eq!(bits("1?0").sext(6), bits("1111?0"));
+        assert_eq!(bits("0?0").sext(6), bits("0000?0"));
+        assert_eq!(bits("??0").sext(6), bits("?????0"));
+        assert_eq!(bits("1?01").trunc(2), bits("01"));
+        assert_eq!(bits("1?01").trunc(3), bits("?01"));
+    }
+
+    /// The rows the checker still does not have, so that a premise about one of
+    /// them cannot be confirmed by anything but top.
+    #[test]
+    fn division_and_remainder_have_no_row() {
+        let surface = include_str!("facts.rs");
+        for name in ["sdiv", "udiv", "srem", "urem"] {
+            assert!(
+                !surface.contains(&format!("fn {name}(")),
+                "{name} is not a Section 8.10 transfer and must not be one here"
+            );
+        }
+        // The comparison row is the one whose procedure the table spells out,
+        // and it is still here.
+        assert_eq!(
+            Fact::constant(4, 3).compare(Fact::constant(4, 5), Comparison::ULt),
+            Fact::constant(1, 1)
+        );
     }
 }

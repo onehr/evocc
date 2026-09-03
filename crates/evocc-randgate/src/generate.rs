@@ -1146,12 +1146,81 @@ impl FunctionGen<'_> {
         // Drawn rather than taken in turn: a generator is built per function,
         // so a counter would give the last group only to functions with four
         // bait sites, and most have fewer.
+        // The known-zero identity is emitted at every site rather than drawn
+        // as one group of several. Its two rules have no other source in the
+        // generator, it is three instructions, and leaving a rule's only source
+        // to a draw is what made coverage move under every earlier change.
+        self.emit_known_zero_identity(block);
         match self.rng.below(5) {
             0 => self.emit_covering_mask(block, width, low),
-            1 => self.emit_known_zero_identity(block),
-            2 => self.emit_bounded_comparison(block, width, low),
-            3 => self.emit_shared_subexpression(block, width),
+            1 => self.emit_bounded_comparison(block, width, low),
+            2 => self.emit_shared_subexpression(block, width),
+            3 => self.emit_shifted_and_widened(block, width, low),
             _ => self.emit_known_constants(block, width, low),
+        }
+    }
+
+    /// A value whose bits a shift or a width change makes known, handed to a
+    /// rule that reads them.
+    ///
+    /// `shl` by half the width knows its low half zero and `zext` from half the
+    /// width knows its high half zero, both by rows Section 8.10 gained at
+    /// revision 1.9.43. Each is then masked by a constant that covers what it
+    /// left live, which is the covering identity's shape. Whether either fact
+    /// can reach a region is a separate question and a measured one: Section
+    /// 8.5's operator allowlist admits neither operator as a witness.
+    fn emit_shifted_and_widened(&mut self, block: &mut OpenBlock, width: u16, low: u64) {
+        let half = width / 2;
+        let high = mask(width) & !low;
+
+        // The shift, guarded exactly as `emit_shift` guards one: the amount is
+        // masked into range and the predicate is asserted before the shift.
+        let value = self.value_of(block, width);
+        let amount = self.emit_const(block, width, u64::from(half));
+        let defined = self.fresh(EvoIRType::Bits(1));
+        block.insts.push(Inst::ShiftCountDefined {
+            result: defined.clone(),
+            shifted: value.clone(),
+            amount: amount.clone(),
+            amount_signed: false,
+        });
+        self.record(block, &defined);
+        block
+            .insts
+            .push(Inst::UbAssume(defined, UbReason::InvalidShiftCount));
+        let shifted = self.fresh(EvoIRType::Bits(width));
+        block.insts.push(Inst::Shl(shifted.clone(), value, amount));
+        self.record(block, &shifted);
+        let high_mask = self.emit_const(block, width, high);
+        let covered = self.fresh(EvoIRType::Bits(width));
+        block
+            .insts
+            .push(Inst::And(covered.clone(), shifted, high_mask));
+        self.record(block, &covered);
+
+        // The width change, when the profile's widths leave room for one.
+        if half >= 1 {
+            let narrow = self.value_of(block, width);
+            let truncated = self.fresh(EvoIRType::Bits(half));
+            block.insts.push(Inst::Trunc(
+                truncated.clone(),
+                narrow,
+                EvoIRType::Bits(half),
+            ));
+            self.record(block, &truncated);
+            let widened = self.fresh(EvoIRType::Bits(width));
+            block.insts.push(Inst::ZExt(
+                widened.clone(),
+                truncated,
+                EvoIRType::Bits(width),
+            ));
+            self.record(block, &widened);
+            let low_mask = self.emit_const(block, width, low);
+            let masked = self.fresh(EvoIRType::Bits(width));
+            block
+                .insts
+                .push(Inst::And(masked.clone(), widened, low_mask));
+            self.record(block, &masked);
         }
     }
 

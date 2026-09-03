@@ -202,6 +202,50 @@ impl KnownBits {
     }
 }
 
+impl KnownBits {
+    // -- the shift and width rows, added at revision 1.9.43 -----------------
+    //
+    // Declared and not yet computed: each answers top, which is what Section
+    // 8.10 gives an operator it does not list, so a caller reading one of these
+    // learns nothing rather than something wrong.
+
+    /// `shl` under a fully known amount below the width.
+    #[must_use]
+    pub fn transfer_shl(self, _amount: Self) -> Self {
+        Self::top(self.width)
+    }
+
+    /// `lshr` under a fully known amount below the width.
+    #[must_use]
+    pub fn transfer_lshr(self, _amount: Self) -> Self {
+        Self::top(self.width)
+    }
+
+    /// `ashr` under a fully known amount below the width.
+    #[must_use]
+    pub fn transfer_ashr(self, _amount: Self) -> Self {
+        Self::top(self.width)
+    }
+
+    /// `zext` to `width`.
+    #[must_use]
+    pub fn transfer_zext(self, width: u16) -> Self {
+        Self::top(width)
+    }
+
+    /// `sext` to `width`.
+    #[must_use]
+    pub fn transfer_sext(self, width: u16) -> Self {
+        Self::top(width)
+    }
+
+    /// `trunc` to `width`.
+    #[must_use]
+    pub fn transfer_trunc(self, width: u16) -> Self {
+        Self::top(width)
+    }
+}
+
 /// How many bits, counting from bit zero, are set before the first clear one.
 fn trailing_ones(bits: u64, width: u16) -> u32 {
     let limit = u32::from(width);
