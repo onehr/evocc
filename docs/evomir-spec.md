@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.3** | **Authoritative reference** | **2026-09-04**
+**Revision 0.4** | **Authoritative reference** | **2026-09-04**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -198,6 +198,8 @@ stated.
 |---|---|
 | `frame.slot rd [origin=O, size=S, align=A]` | `rd := the address of a fresh object of S bytes at alignment A`, one per dynamic execution of the instruction, as EvoIR Section 3.7 requires of `alloca`; after allocation the slot is a fixed frame offset (Section 6), and the reuse of that memory by a re-executed `alloca` is sound because EvoIR ends the previous object's lifetime before the site is reached again |
 | `mem.copy [dst], [src], #size, #align` | copies `size` bytes from `src` to `dst`, transferring per-byte initializedness and pointer fragments exactly as EvoIR Section 3.8's `copy` does (identical or disjoint ranges); emission expands it to `ldr`/`str` pairs of the largest aligned width, unrolled up to 64 bytes and a counted loop above; the loads of the expansion never report an uninitialized read, because they move representation, not values |
+| `spill.store %v, slot` / `spill.load rd, slot` | the store of a virtual register to its spill slot and the reload from it, inserted by the allocator; emission expands them to `str`/`ldr` at the slot's offset from `sp` (revision 0.4) |
+| the prologue and epilogue | synthesized at emission from Section 6 and never present as instructions: the interpreter's memory is EvoIR's object model, with no linear stack, no `sp` and no return address, so they are not interpretable; the allocated form is judged by the verifier and the native run (revision 0.4) |
 
 ## 5. Lowering: EvoIR to EvoMIR
 
@@ -285,7 +287,10 @@ rounded to its declared alignment, laid out in origin order from the top of
 the frame downward), then the spill area (one 8-byte slot per spilled
 virtual register), then outgoing stack arguments (none in this revision).
 `sp` stays 16-byte aligned at every call. The frame is static: no dynamic
-`alloca` exists in EvoIR.
+`alloca` exists in EvoIR. Every slot (object, spill, save area) is addressed
+from `sp` with a non-negative scaled offset, never from `x29`, so that frames
+above 256 bytes stay inside the unsigned twelve-bit immediate form; `x29`
+serves the unwinder and the debugger, not the code (revision 0.4).
 
 **Stack arguments** (beyond `x7`) are not lowered in this revision; Apple's
 rule packs them by natural alignment rather than in 8-byte slots, and that
@@ -295,10 +300,20 @@ rule enters with the measurement that enables it.
 
 **Out-of-SSA.** Block arguments are removed by placing, on each edge, the
 parallel copy from the values the terminator passes to the target's
-arguments, resolved into a sequence of moves with at most one scratch
-register (`x16`) for cycles. Critical edges are split by inserting a block.
-This happens before allocation, on virtual registers, as its own pass; the
-lowering of Section 5 does not do it.
+arguments, resolved into a sequence of moves with at most one scratch: a
+reserved virtual register that the allocator pins to `x16`, which is
+excluded from the allocatable set, so that the pass stays on virtual
+registers (revision 0.4). Where the copy goes is a rule, not a choice: at
+the end of the predecessor when the predecessor has one successor; at the
+top of the target when the target has one predecessor; otherwise the edge
+is split by inserting a block. A copy placed at the end of a predecessor
+with two successors would run on both edges, and a copy placed between a
+`cmp` and its `b.cond` would break the adjacency rule of Section 2; the
+allocation verifier found both before this sentence existed. The entry
+block's arguments have no incoming edge and survive this pass as the
+function's parameters; the allocator removes them by assigning `x0`
+onwards. This happens before allocation, as its own pass; the lowering of
+Section 5 does not do it.
 
 **Linear scan.** Instructions are numbered in block order (the order of
 Section 2); a virtual register's live interval is from its definition to
@@ -311,8 +326,11 @@ reloaded before each use and stored after its definition. Fixed operands
 `x16`/`x17` in emitted sequences) are pre-assigned intervals the allocator
 must respect; a call clobbers every caller-saved register, so an interval
 live across a call is assigned a callee-saved register or spilled. Ties are
-broken by virtual register number, so the allocation is deterministic. No
-coalescing beyond removing a move whose two operands got the same register.
+broken by virtual register number, and among free registers the lowest-numbered
+one of the class is taken, callee-saved only for an interval that spans a call
+(revision 0.4), so the allocation is deterministic and the emitted text is a
+stable digest. No coalescing beyond removing a move whose two operands got
+the same register.
 
 The output is verified, not trusted (Section 9): every physical register
 read is defined on every path, no two simultaneously live values share a
@@ -351,6 +369,13 @@ Three instruments, each independent of the lowering:
    the host toolchain for Darwin, recorded by version). The native suite of
    the roadmap's B4 is the corpus; the receipt records every program's
    output digest under both compilers.
+
+**The native corpus.** The randomized generator's seed space is pinned by
+the middle-end campaigns (a seed names one module forever), so the native
+lane does not change it. It draws from a second generator mode with its own
+seed space, `native-main`, whose `main` takes no arguments and returns one
+`bits<32>`, and its programs are compared by exit status modulo 256, the
+eight bits a process status carries (revision 0.4).
 
 A probe precedes every calling-convention sentence that is used: before the
 first cross-boundary call is emitted, a probe program compiled by the host
@@ -440,6 +465,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.4 | 2026-09-04 | First native runs: five assembled programs agree with the interpreter on exit status. Rules the allocation and emission findings: the out-of-SSA scratch is a pinned virtual register, copy placement is a three-way rule, entry arguments become parameters the allocator assigns, the lowest free register is taken, spill accesses are pseudo-forms, frame slots are addressed from `sp`, the prologue is synthesized at emission and not interpretable; the native lane uses a second generator mode so pinned seeds stay pinned. |
 | 0.3 | 2026-09-04 | Second implementation: 20,000 of 20,000 generated programs lowered and judged by the three-lane gate with 0 mismatches. Rules the executor's five predicate-row findings: overflow flags report the register, so narrower widths compare with the sign extension of the low N bits (add, sub, mul); shift amounts extend by their declared signedness; the signed left-shift predicate conjoins count, sign, round trip and representability; the division predicates extend first; the grammar spells a two-definition adds/subs and states the conditional-terminator asymmetry. |
 | 0.2 | 2026-09-04 | Rules the thirteen stops of the first implementation: lowering rows for every UB predicate; `icmp.eq`/`ne` moved to the zero-extended row after a measured counterexample; `frame.slot` as a per-execution pseudo-form reconciling `alloca` with EvoIR 3.7; `ldr.p`/`ldr.pf`/`str.p` for provenance; a grammar for the textual form with the executor's spellings (symbols, the volatile marker, explicit call registers, two-successor conditionals, spelled entry labels); the `ub.assume` continuation-block construction; `brk` immediates as the diagnostic's decimal part; shift amounts and `ptr.offset` wrapping as obligation-covered differences; `mem.copy` as a pseudo-form transferring initializedness and provenance; block arguments kept until the Section 7 pass; up to eight results in `x0`..`x7` for the machine lane; the five unreachable codes named as such. |
 | 0.1 | 2026-09-04 | First statement: purpose, register classes, sub-width representation, the AArch64 scalar instruction subset with executable semantics, the lowering table with fail-closed boundaries, the Darwin arm64 scalar calling convention and frame layout, out-of-SSA and linear scan, emission, three verification instruments, and the `E4xxx` diagnostics. |
