@@ -252,6 +252,35 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
             expect_general(name, block, *lhs, "a csel operand")?;
             expect_general(name, block, *rhs, "a csel operand")
         }
+        MInst::FlagBinary {
+            dst,
+            flags,
+            lhs,
+            rhs,
+            ..
+        } => {
+            expect_general(name, block, *dst, "an adds/subs result")?;
+            expect_flags(name, block, *flags, "an adds/subs flags result")?;
+            expect_general(name, block, *lhs, "an adds/subs operand")?;
+            expect_general(name, block, *rhs, "an adds/subs operand")
+        }
+        MInst::WideMultiply { dst, lhs, rhs, .. } => {
+            if dst.class != RegClass::Gpr64 {
+                return Err(format!(
+                    "@{name} block {block}: a wide multiply writes a gpr64 value"
+                ));
+            }
+            expect_general(name, block, *lhs, "a wide multiply operand")?;
+            expect_general(name, block, *rhs, "a wide multiply operand")
+        }
+        MInst::MemCopy { dst, src, .. } => {
+            if dst.class != RegClass::Gpr64 || src.class != RegClass::Gpr64 {
+                return Err(format!(
+                    "@{name} block {block}: a mem.copy addresses two gpr64 values"
+                ));
+            }
+            Ok(())
+        }
         MInst::Adrp { dst, .. } | MInst::FrameSlot { dst, .. } => {
             if dst.class != RegClass::Gpr64 {
                 return Err(format!(
@@ -275,7 +304,20 @@ fn validate_term_shape(name: &str, block: u32, term: &MTerm) -> Result<(), Strin
         MTerm::Cb { src, .. } | MTerm::Tb { src, .. } => {
             expect_general(name, block, *src, "a branch operand")
         }
-        MTerm::Ret { value: Some(value) } => expect_general(name, block, *value, "a result"),
-        MTerm::B { .. } | MTerm::Ret { value: None } | MTerm::Brk { .. } => Ok(()),
+        MTerm::Ret { values } => {
+            // Section 6: "an EvoMIR function returns up to eight integer or
+            // pointer results in x0 to x7 in order."
+            if values.len() > 8 {
+                return Err(format!(
+                    "@{name} block {block}: {} results exceed x0 to x7",
+                    values.len()
+                ));
+            }
+            for value in values {
+                expect_general(name, block, *value, "a result")?;
+            }
+            Ok(())
+        }
+        MTerm::B { .. } | MTerm::Brk { .. } => Ok(()),
     }
 }

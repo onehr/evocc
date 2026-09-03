@@ -38,6 +38,9 @@ fn mnemonics(module: &evocc_mir::MModule) -> Vec<String> {
                     MInst::Csel { .. } => "csel".to_owned(),
                     MInst::Bl { .. } => "bl".to_owned(),
                     MInst::Blr { .. } => "blr".to_owned(),
+                    MInst::FlagBinary { op, .. } => op.mnemonic().to_owned(),
+                    MInst::WideMultiply { op, .. } => op.mnemonic().to_owned(),
+                    MInst::MemCopy { .. } => "mem.copy".to_owned(),
                     MInst::FrameSlot { .. } => "frame.slot".to_owned(),
                 });
             }
@@ -361,4 +364,155 @@ fn every_lowering_round_trips_through_the_textual_form() {
         let parsed = evocc_mir::parse_module(&text).expect("parse");
         assert_eq!(parsed, lowered);
     }
+}
+
+/// A function whose only instruction is the named predicate, so the mnemonic
+/// list is the row of Section 5 and nothing else.
+fn predicate(width: u16, body: &str, effects_trap: bool) -> Vec<String> {
+    let trap = if effects_trap { "true" } else { "false" };
+    let text = [
+        format!("func @main(%arg0: bits<{width}>, %arg1: bits<{width}>, %arg2: mem<all>, %arg3: world) -> (bits<1>, mem<all>, world) cc = target_default"),
+        format!("    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, may_trap={trap}, may_unwind=false }}"),
+        "{".to_owned(),
+        format!("^entry(%v0: bits<{width}>, %v1: bits<{width}>, %v2: mem<all>, %v3: world):"),
+        format!("    {body}"),
+        "    ret %v4, %v2, %v3".to_owned(),
+        "}".to_owned(),
+        String::new(),
+    ]
+    .join("\n");
+    mnemonics(&lower(&text))
+}
+
+#[test]
+fn a_divisor_check_lowers_to_a_compare_and_a_cset() {
+    // Section 5: "`divisor_nonzero %d` | `cmp %d, #0` then `cset ne`".
+    assert_eq!(
+        predicate(32, "%v4 = divisor_nonzero %v1", false),
+        vec!["cmp#", "cset"]
+    );
+    // A narrow divisor is normalized first, because `cmp` reads every bit of
+    // the register.
+    assert_eq!(
+        predicate(13, "%v4 = divisor_nonzero %v1", false),
+        vec!["and#", "cmp#", "cset"]
+    );
+}
+
+#[test]
+fn the_division_overflow_check_lowers_to_two_comparisons_and_an_or() {
+    // Section 5: "`cmp %a, #INT_MIN` (materialized), `cset ne` into `%p`;
+    // `cmp %b, #-1`, `cset ne` into `%q`; `orr %p, %q`".
+    assert_eq!(
+        predicate(32, "%v4 = signed_div_rem_no_overflow %v0, %v1", false),
+        vec!["mov#", "cmp", "cset", "mov#", "cmp", "cset", "orr"]
+    );
+}
+
+#[test]
+fn the_additive_overflow_checks_use_the_flag_setting_forms_at_the_register_width() {
+    // Section 5: "`adds`/`subs` into a scratch, then `cset vc`".
+    assert_eq!(
+        predicate(32, "%v4 = signed_add_defined %v0, %v1", false),
+        vec!["adds", "cset"]
+    );
+    assert_eq!(
+        predicate(64, "%v4 = signed_sub_defined %v0, %v1", false),
+        vec!["subs", "cset"]
+    );
+}
+
+#[test]
+fn the_additive_overflow_checks_test_the_source_width_when_it_is_narrower() {
+    // The `v` flag reports overflow of the register. A narrow value needs the
+    // bitfield comparison the multiply row already uses.
+    assert_eq!(
+        predicate(13, "%v4 = signed_add_defined %v0, %v1", false),
+        vec!["sbfx", "sbfx", "add", "sbfx", "cmp", "cset"]
+    );
+}
+
+#[test]
+fn the_multiply_overflow_check_uses_the_wide_products() {
+    // Section 5: 32-bit uses `smull` and compares with the sign extension of
+    // its low bits; 64-bit uses `mul` and `smulh` against `asr` by 63.
+    assert_eq!(
+        predicate(32, "%v4 = signed_mul_defined %v0, %v1", false),
+        vec!["smull", "sbfx", "cmp", "cset"]
+    );
+    assert_eq!(
+        predicate(64, "%v4 = signed_mul_defined %v0, %v1", false),
+        vec!["mul", "smulh", "asr#", "cmp", "cset"]
+    );
+}
+
+#[test]
+fn the_shift_count_check_compares_the_amount_with_the_shifted_width() {
+    // Section 5: "zero-extend `%amt` per Section 3, `cmp` with `#N`, `cset lo`".
+    assert_eq!(
+        predicate(32, "%v4 = shift_count_defined.unsigned %v0, %v1", false),
+        vec!["cmp#", "cset"]
+    );
+}
+
+#[test]
+fn the_signed_left_shift_check_adds_the_non_negative_operand_condition() {
+    // EvoIR Section 3.3.1 makes the predicate false for a negative left
+    // operand; Section 5's row states only the count and the round trip.
+    let names = predicate(32, "%v4 = signed_shl_defined.unsigned %v0, %v1", false);
+    assert!(names.contains(&"lsl".to_owned()), "{names:?}");
+    assert!(names.contains(&"asr".to_owned()), "{names:?}");
+    assert_eq!(
+        names.iter().filter(|name| *name == "cset").count(),
+        3,
+        "the count, the sign and the round trip: {names:?}"
+    );
+    assert_eq!(
+        names.iter().filter(|name| *name == "and").count(),
+        2,
+        "their conjunction: {names:?}"
+    );
+}
+
+const OBJECT_COPY: &str = "\
+func @main(%arg0: bits<64>, %arg1: mem<all>, %arg2: world) -> (bits<64>, mem<all>, world) cc = target_default
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<64>, %v1: mem<all>, %v2: world):
+    (%v3, %v4, %v5) = alloca %v1, %v2 [origin=0, size=16, align=8]
+    (%v6, %v7, %v8) = alloca %v4, %v5 [origin=1, size=16, align=8]
+    (%v9, %v10) = copy %v7, %v8, %v6, %v3 [size=16, align=8]
+    ret %v0, %v9, %v10
+}
+";
+
+#[test]
+fn an_object_copy_lowers_to_the_mem_copy_pseudo_form() {
+    // Section 5: "`copy` with static size | `mem.copy`".
+    assert_eq!(
+        mnemonics(&lower(OBJECT_COPY)),
+        vec!["frame.slot", "frame.slot", "mem.copy"]
+    );
+}
+
+const THREE_RESULTS: &str = "\
+func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, bits<32>, bits<1>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
+    %v3 = add.bits<32> %v0, %v0
+    %v4 = icmp.ult %v0, %v3
+    ret %v0, %v3, %v4, %v1, %v2
+}
+";
+
+#[test]
+fn three_ordinary_results_lower_to_a_three_register_return() {
+    // Section 6: "an EvoMIR function returns up to eight integer or pointer
+    // results in x0 to x7 in order."
+    let lowered = lower(THREE_RESULTS);
+    let evocc_mir::MTerm::Ret { values } = &lowered.functions[0].blocks[0].term else {
+        panic!("the entry block returns");
+    };
+    assert_eq!(values.len(), 3);
 }

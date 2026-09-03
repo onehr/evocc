@@ -96,31 +96,33 @@ pub fn observe_entry(
     }
     let outcome = interpret_module(module, entry, &arguments, limits)?;
 
+    // Section 6 returns up to eight results in x0 to x7, in order, each a
+    // low-N-bit value in a register whose upper bits are unspecified.
+    if outcome.results.len() != result_types.len() {
+        return Err(MirError::Invalid {
+            detail: format!(
+                "the entry returned {} results where {} were declared",
+                outcome.results.len(),
+                result_types.len()
+            ),
+        });
+    }
     let mut returns = Vec::new();
-    match (result_types.len(), outcome.result) {
-        (0, _) => {}
-        (1, Some(MirValue::Int(raw))) => {
-            let ty = result_types[0].clone();
-            let raw_bits = match ty {
-                EvoIRType::Bits(width) => raw & mask(width),
-                _ => {
-                    return Err(MirError::Invalid {
-                        detail: "no register spelling for this result type".to_owned(),
-                    })
-                }
-            };
-            returns.push(RuntimeValue { ty, raw_bits });
-        }
-        (1, other) => {
+    for (value, ty) in outcome.results.iter().zip(result_types) {
+        let EvoIRType::Bits(width) = ty else {
             return Err(MirError::Invalid {
-                detail: format!("the entry returned {other:?} where one integer was declared"),
-            })
-        }
-        (count, _) => {
+                detail: format!("no register spelling for a result of type {ty:?}"),
+            });
+        };
+        let MirValue::Int(raw) = value else {
             return Err(MirError::Invalid {
-                detail: format!("{count} ordinary results are not lowered"),
-            })
-        }
+                detail: format!("an integer result came back as {value:?}"),
+            });
+        };
+        returns.push(RuntimeValue {
+            ty: ty.clone(),
+            raw_bits: raw & mask(*width),
+        });
     }
 
     Ok(MirRun {

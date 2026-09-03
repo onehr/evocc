@@ -1,19 +1,20 @@
 //! The canonical textual form of Appendix A: the renderer.
 //!
-//! Appendix A prints one pre-allocation function and calls the form canonical
-//! and round-trippable. It fixes: `func @name {` on its own line, block labels
-//! at column zero with a parenthesised argument list, a four-space instruction
-//! indent, `%vN:class` with no space after the colon on a definition, `.w`
-//! and `.x` width suffixes, `#imm` immediates, `[%vN, #off]` addresses and a
-//! bare `ret` with an optional operand.
+//! Revision 0.2 carries a grammar. It fixes `func @name {`, block labels at
+//! column zero with a parenthesised argument list, `%vN:class` on a definition
+//! and `%vN` on a use, `.w`/`.x` width suffixes on the two-width forms,
+//! `#imm` immediates, `[%vN, #off]` addresses, the `frame.slot` and `mem.copy`
+//! attribute spellings, `bl @f(args) -> results`, two-successor conditionals,
+//! `ret rs...`, the four symbol relocation names, the ` volatile` marker, and
+//! the EvoIR Section 9.4 byte rules (four-space indent, `", "` between
+//! operands, one blank line between blocks and between functions, one final
+//! newline).
 //!
-//! It prints no other shape. Every spelling below carries those conventions to
-//! a form Appendix A does not print, and the remaining byte rules (one `\n`
-//! per line, no trailing whitespace, `", "` between operands, `" [k=v, k=v]"`
-//! attribute lists, one blank line between blocks and between functions, one
-//! final newline) are EvoIR Section 9.4 applied to this format. Revision 0.1
-//! is silent on both, which is a recorded gap: no observable behaviour depends
-//! on the spelling, but a digest over these bytes does.
+//! The grammar writes a conditional terminator without naming the condition
+//! register (`b.eq, ^t(...), ^e(...)`), so the flags value a terminator reads
+//! is positional; Section 2's adjacency rule makes the producer unambiguous
+//! and the parser recovers it from the instruction that precedes the
+//! terminator.
 
 use std::fmt::Write as _;
 
@@ -132,8 +133,13 @@ fn defined(reg: VReg) -> String {
     format!("{reg} = ")
 }
 
-fn maybe_defined(reg: Option<VReg>) -> String {
-    reg.map(defined).unwrap_or_default()
+/// A call's result list: definitions, so each carries its class.
+fn results(regs: &[VReg]) -> String {
+    if regs.is_empty() {
+        String::new()
+    } else {
+        format!(" -> {}", definitions(regs))
+    }
 }
 
 /// Which symbol table an `adrp`/`add` pair names.
@@ -312,17 +318,48 @@ pub fn render_inst(inst: &MInst) -> String {
         MInst::Bl {
             symbol,
             args,
-            result,
-        } => format!("{}bl @{symbol}({})", maybe_defined(*result), uses(args)),
+            results: outputs,
+        } => format!("bl @{symbol}({}){}", uses(args), results(outputs)),
         MInst::Blr {
             target,
             args,
-            result,
+            results: outputs,
         } => format!(
-            "{}blr {}({})",
-            maybe_defined(*result),
+            "blr {}({}){}",
             use_of(*target),
-            uses(args)
+            uses(args),
+            results(outputs)
+        ),
+        MInst::MemCopy {
+            dst,
+            src,
+            size,
+            align,
+        } => format!(
+            "mem.copy [{}], [{}], #{size}, #{align}",
+            use_of(*dst),
+            use_of(*src)
+        ),
+        MInst::FlagBinary {
+            op,
+            dst,
+            flags,
+            lhs,
+            rhs,
+            width,
+        } => format!(
+            "{dst}, {flags} = {}.{} {}, {}",
+            op.mnemonic(),
+            width.mnemonic(),
+            use_of(*lhs),
+            use_of(*rhs)
+        ),
+        MInst::WideMultiply { op, dst, lhs, rhs } => format!(
+            "{}{} {}, {}",
+            defined(*dst),
+            op.mnemonic(),
+            use_of(*lhs),
+            use_of(*rhs)
         ),
         MInst::FrameSlot {
             dst,
@@ -346,15 +383,14 @@ pub fn render_term(function: &MFunction, term: &MTerm) -> String {
     match term {
         MTerm::B { target, args } => format!("b {}", edge(function, *target, args)),
         MTerm::BCond {
-            flags,
             cond,
             taken,
             taken_args,
             untaken,
             untaken_args,
+            ..
         } => format!(
-            "b.cond {}, {}, {}, {}",
-            use_of(*flags),
+            "b.{}, {}, {}",
             cond.mnemonic(),
             edge(function, *taken, taken_args),
             edge(function, *untaken, untaken_args)
@@ -362,15 +398,13 @@ pub fn render_term(function: &MFunction, term: &MTerm) -> String {
         MTerm::Cb {
             nonzero,
             src,
-            width,
             taken,
             taken_args,
             untaken,
             untaken_args,
         } => format!(
-            "{}.{} {}, {}, {}",
+            "{} {}, {}, {}",
             if *nonzero { "cbnz" } else { "cbz" },
-            width.mnemonic(),
             use_of(*src),
             edge(function, *taken, taken_args),
             edge(function, *untaken, untaken_args)
@@ -390,8 +424,8 @@ pub fn render_term(function: &MFunction, term: &MTerm) -> String {
             edge(function, *taken, taken_args),
             edge(function, *untaken, untaken_args)
         ),
-        MTerm::Ret { value: Some(value) } => format!("ret {}", use_of(*value)),
-        MTerm::Ret { value: None } => "ret".to_owned(),
+        MTerm::Ret { values } if values.is_empty() => "ret".to_owned(),
+        MTerm::Ret { values } => format!("ret {}", uses(values)),
         MTerm::Brk { imm } => format!("brk #{imm}"),
     }
 }

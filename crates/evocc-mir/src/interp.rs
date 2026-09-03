@@ -30,8 +30,8 @@ use evocc_memory::{
 use evocc_types::TargetDataLayout;
 
 use crate::{
-    BinOp, Cond, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass, StoreKind,
-    SymbolKind, VReg, Width,
+    BinOp, Cond, FlagOp, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass, StoreKind,
+    SymbolKind, VReg, WideMul, Width,
 };
 
 // The same host-resource policy the EvoIR interpreter runs under, so that a
@@ -67,6 +67,14 @@ pub enum MirValue {
 enum Flags {
     /// `cmp` of two raw bit patterns at one width.
     Int { lhs: u64, rhs: u64, width: Width },
+    /// `adds`/`subs`: the four condition bits the arithmetic set, which is
+    /// what makes `vs`/`vc` and `cs`/`cc` readable (Section 4).
+    Arithmetic {
+        negative: bool,
+        zero: bool,
+        carry: bool,
+        overflow: bool,
+    },
     /// `cmp` where at least one operand carries provenance: only equality is
     /// meaningful, exactly as EvoIR Section 3.5 says of a pointer comparison.
     Identity { equal: bool },
@@ -81,7 +89,7 @@ enum Slot {
 /// Successful EvoMIR execution.
 #[derive(Debug, Clone)]
 pub struct MirOutcome {
-    pub result: Option<MirValue>,
+    pub results: Vec<MirValue>,
     pub steps: u64,
     pub memory: MemoryState,
     pub world: WorldState,
@@ -156,7 +164,7 @@ struct Frame {
     regs: HashMap<u32, Slot>,
     memory_frame: Option<FrameId>,
     memory_scope: Option<ScopeId>,
-    result: Option<VReg>,
+    results: Vec<VReg>,
 }
 
 /// Interpret a module's named entry function.
@@ -223,7 +231,7 @@ pub fn interpret_module(
         regs: HashMap::new(),
         memory_frame,
         memory_scope,
-        result: None,
+        results: Vec::new(),
     }];
     let mut steps = 0_u64;
 
@@ -268,7 +276,7 @@ pub fn interpret_module(
                 MInst::Bl {
                     ref symbol,
                     ref args,
-                    result,
+                    ref results,
                 } => {
                     let index = module
                         .functions
@@ -278,12 +286,13 @@ pub fn interpret_module(
                             detail: format!("bl targets missing function @{symbol}"),
                         })?;
                     let values = read_all(&frames[top], args)?;
-                    push_call(module, &mut state, &mut frames, index, values, result)?;
+                    let outputs = results.clone();
+                    push_call(module, &mut state, &mut frames, index, values, outputs)?;
                 }
                 MInst::Blr {
                     target,
                     ref args,
-                    result,
+                    ref results,
                 } => {
                     let identity = match read(&frames[top], target)? {
                         MirValue::Fn(PointerValue::Function(identity)) => identity,
@@ -298,7 +307,8 @@ pub fn interpret_module(
                         .filter(|index| *index < module.functions.len())
                         .ok_or(MirError::BadCallTarget { code: "E3016" })?;
                     let values = read_all(&frames[top], args)?;
-                    push_call(module, &mut state, &mut frames, index, values, result)?;
+                    let outputs = results.clone();
+                    push_call(module, &mut state, &mut frames, index, values, outputs)?;
                 }
                 other => execute(&mut state, &mut frames[top], &other)?,
             }
@@ -335,12 +345,12 @@ pub fn interpret_module(
             MTerm::Cb {
                 nonzero,
                 src,
-                width,
                 taken,
                 taken_args,
                 untaken,
                 untaken_args,
             } => {
+                let width = Width::for_class(src.class).unwrap_or(Width::X);
                 let raw = read_bits(&frames[top], src)? & width.mask();
                 let go = (raw != 0) == nonzero;
                 let (target, args) = if go {
@@ -381,11 +391,8 @@ pub fn interpret_module(
                 frames[top].entered = false;
             }
             MTerm::Brk { imm } => return Err(MirError::Trap { imm }),
-            MTerm::Ret { value } => {
-                let returned = match value {
-                    Some(reg) => Some(read(&frames[top], reg)?),
-                    None => None,
-                };
+            MTerm::Ret { values } => {
+                let returned = read_all(&frames[top], &values)?;
                 let finished = frames.pop().expect("the top frame exists");
                 if let Some(frame) = finished.memory_frame {
                     state.memory = state
@@ -395,17 +402,23 @@ pub fn interpret_module(
                 }
                 let Some(caller) = frames.last_mut() else {
                     return Ok(MirOutcome {
-                        result: returned,
+                        results: returned,
                         steps,
                         memory: state.memory,
                         world: state.world,
                     });
                 };
-                if let Some(destination) = finished.result {
-                    let value = returned.ok_or_else(|| MirError::Invalid {
-                        detail: "a call expects a result the callee did not return".to_owned(),
-                    })?;
-                    write(caller, destination, value);
+                if finished.results.len() != returned.len() {
+                    return Err(MirError::Invalid {
+                        detail: format!(
+                            "a call expects {} results and the callee returned {}",
+                            finished.results.len(),
+                            returned.len()
+                        ),
+                    });
+                }
+                for (destination, value) in finished.results.iter().zip(returned) {
+                    write(caller, *destination, value);
                 }
             }
         }
@@ -418,7 +431,7 @@ fn push_call(
     frames: &mut Vec<Frame>,
     index: usize,
     values: Vec<MirValue>,
-    result: Option<VReg>,
+    results: Vec<VReg>,
 ) -> Result<(), MirError> {
     let (memory_frame, memory_scope) = begin_frame(state, &module.functions[index])?;
     frames.push(Frame {
@@ -430,7 +443,7 @@ fn push_call(
         regs: HashMap::new(),
         memory_frame,
         memory_scope,
-        result,
+        results,
     });
     Ok(())
 }
@@ -622,8 +635,12 @@ fn evaluate(flags: Flags, cond: Cond) -> Result<bool, MirError> {
                 detail: "an ordered condition on a pointer comparison".to_owned(),
             }),
         },
+        // `cmp rn, rm` sets the flags from `rn - rm`, so the same four bits are
+        // available; they are computed here from the operands rather than
+        // stored, which keeps one definition of each condition.
         Flags::Int { lhs, rhs, width } => {
             let (left, right) = (lhs & width.mask(), rhs & width.mask());
+            let difference = left.wrapping_sub(right) & width.mask();
             Ok(match cond {
                 Cond::Eq => left == right,
                 Cond::Ne => left != right,
@@ -635,9 +652,72 @@ fn evaluate(flags: Flags, cond: Cond) -> Result<bool, MirError> {
                 Cond::Ls => left <= right,
                 Cond::Hi => left > right,
                 Cond::Hs => left >= right,
+                // A subtraction overflows when the operands differ in sign and
+                // the result takes the sign of the subtrahend.
+                Cond::Vs | Cond::Vc => {
+                    let overflow = (wide_signed(left, width) - wide_signed(right, width))
+                        != wide_signed(difference, width);
+                    (cond == Cond::Vs) == overflow
+                }
+                // `cmp` sets the carry when no borrow occurred.
+                Cond::Cs => left >= right,
+                Cond::Cc => left < right,
             })
         }
+        Flags::Arithmetic {
+            negative,
+            zero,
+            carry,
+            overflow,
+        } => Ok(match cond {
+            Cond::Eq => zero,
+            Cond::Ne => !zero,
+            Cond::Lt => negative != overflow,
+            Cond::Ge => negative == overflow,
+            Cond::Le => zero || (negative != overflow),
+            Cond::Gt => !zero && (negative == overflow),
+            Cond::Lo | Cond::Cc => !carry,
+            Cond::Hs | Cond::Cs => carry,
+            Cond::Ls => !carry || zero,
+            Cond::Hi => carry && !zero,
+            Cond::Vs => overflow,
+            Cond::Vc => !overflow,
+        }),
     }
+}
+
+/// The four condition bits an `adds` or `subs` writes.
+///
+/// The machine computes a subtraction as `rn + !rm + 1`, so one addition
+/// produces the value, the carry and the overflow for both forms.
+fn arithmetic_flags(left: u64, right: u64, width: Width, subtract: bool) -> (u64, Flags) {
+    let mask = width.mask();
+    let (left, right) = (left & mask, right & mask);
+    let addend = if subtract { !right & mask } else { right };
+    let carry_in = u128::from(subtract);
+    let wide = u128::from(left) + u128::from(addend) + carry_in;
+    let value = (wide & u128::from(mask)) as u64;
+    let carry = wide >> width.bits() != 0;
+    let exact = if subtract {
+        wide_signed(left, width) - wide_signed(right, width)
+    } else {
+        wide_signed(left, width) + wide_signed(right, width)
+    };
+    (
+        value,
+        Flags::Arithmetic {
+            negative: wide_signed(value, width) < 0,
+            zero: value == 0,
+            carry,
+            overflow: exact != wide_signed(value, width),
+        },
+    )
+}
+
+/// The signed value of a register at one width, in an arithmetic wide enough
+/// that a sum of two of them cannot itself overflow.
+fn wide_signed(raw: u64, width: Width) -> i128 {
+    i128::from(signed(raw, width))
 }
 
 fn layout_for(size: u64) -> AccessLayout {
@@ -959,6 +1039,51 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                 other => other,
             };
             write(frame, *dst, value);
+        }
+        MInst::FlagBinary {
+            op,
+            dst,
+            flags,
+            lhs,
+            rhs,
+            width,
+        } => {
+            let left = read_bits(frame, *lhs)?;
+            let right = read_bits(frame, *rhs)?;
+            let (value, set) = arithmetic_flags(left, right, *width, *op == FlagOp::Subs);
+            write(frame, *dst, MirValue::Int(value));
+            frame.regs.insert(flags.id, Slot::Flags(set));
+        }
+        MInst::WideMultiply { op, dst, lhs, rhs } => {
+            let value = match op {
+                // `smull xd, wn, wm`: the signed 32x32 product, exact in 64.
+                WideMul::Smull => {
+                    let left = i64::from(read_bits(frame, *lhs)? as u32 as i32);
+                    let right = i64::from(read_bits(frame, *rhs)? as u32 as i32);
+                    left.wrapping_mul(right) as u64
+                }
+                // `smulh xd, xn, xm`: the high half of the signed 64x64 product.
+                WideMul::Smulh => {
+                    let left = i128::from(read_bits(frame, *lhs)? as i64);
+                    let right = i128::from(read_bits(frame, *rhs)? as i64);
+                    ((left * right) >> 64) as i64 as u64
+                }
+            };
+            write(frame, *dst, MirValue::Int(value));
+        }
+        MInst::MemCopy {
+            dst,
+            src,
+            size,
+            align,
+        } => {
+            let destination = read_pointer(frame, *dst)?;
+            let source = read_pointer(frame, *src)?;
+            let layout = AccessLayout::new(*size, *align);
+            state.memory = state
+                .memory
+                .copy_bytes(destination, source, layout)
+                .map_err(|error| memory_error(&error))?;
         }
         MInst::Bl { .. } | MInst::Blr { .. } => {
             return Err(MirError::Invalid {

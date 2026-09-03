@@ -54,7 +54,7 @@ fn a_flags_value_consumed_by_the_next_instruction_is_legal() {
                 cond: Cond::Eq,
             },
         ],
-        MTerm::Ret { value: Some(w(3)) },
+        MTerm::Ret { values: vec![w(3)] },
     );
     assert_eq!(validate_module(&module), Ok(()));
 }
@@ -105,7 +105,7 @@ fn a_flags_value_consumed_two_instructions_later_is_refused() {
                 cond: Cond::Eq,
             },
         ],
-        MTerm::Ret { value: Some(w(3)) },
+        MTerm::Ret { values: vec![w(3)] },
     );
     assert!(validate_module(&module).is_err());
 }
@@ -133,7 +133,7 @@ fn a_second_flags_writer_between_producer_and_consumer_is_refused() {
                 cond: Cond::Eq,
             },
         ],
-        MTerm::Ret { value: Some(w(3)) },
+        MTerm::Ret { values: vec![w(3)] },
     );
     assert!(validate_module(&module).is_err());
 }
@@ -167,7 +167,7 @@ fn a_flags_value_that_crosses_a_block_edge_is_refused() {
                         flags: f(2),
                         cond: Cond::Eq,
                     }],
-                    term: MTerm::Ret { value: Some(w(3)) },
+                    term: MTerm::Ret { values: vec![w(3)] },
                 },
             ],
         }],
@@ -183,14 +183,14 @@ fn a_virtual_register_defined_twice_is_refused() {
             MInst::MovImm { dst: w(1), imm: 1 },
             MInst::MovImm { dst: w(1), imm: 2 },
         ],
-        MTerm::Ret { value: Some(w(1)) },
+        MTerm::Ret { values: vec![w(1)] },
     );
     assert!(validate_module(&module).is_err());
 }
 
 #[test]
 fn a_use_without_a_definition_is_refused() {
-    let module = one_block(vec![w(0)], Vec::new(), MTerm::Ret { value: Some(w(9)) });
+    let module = one_block(vec![w(0)], Vec::new(), MTerm::Ret { values: vec![w(9)] });
     assert!(validate_module(&module).is_err());
 }
 
@@ -214,7 +214,7 @@ fn an_edge_whose_arity_does_not_match_the_target_is_refused() {
                     id: 1,
                     args: vec![w(1)],
                     insts: Vec::new(),
-                    term: MTerm::Ret { value: Some(w(1)) },
+                    term: MTerm::Ret { values: vec![w(1)] },
                 },
             ],
         }],
@@ -242,7 +242,7 @@ fn an_edge_whose_class_does_not_match_the_target_is_refused() {
                     id: 1,
                     args: vec![w(1)],
                     insts: Vec::new(),
-                    term: MTerm::Ret { value: Some(w(1)) },
+                    term: MTerm::Ret { values: vec![w(1)] },
                 },
             ],
         }],
@@ -261,13 +261,13 @@ fn an_unreachable_block_is_refused() {
                     id: 0,
                     args: Vec::new(),
                     insts: Vec::new(),
-                    term: MTerm::Ret { value: None },
+                    term: MTerm::Ret { values: Vec::new() },
                 },
                 MBlock {
                     id: 1,
                     args: Vec::new(),
                     insts: Vec::new(),
-                    term: MTerm::Ret { value: None },
+                    term: MTerm::Ret { values: Vec::new() },
                 },
             ],
         }],

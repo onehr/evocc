@@ -56,7 +56,7 @@ fn appendix_a_module() -> MModule {
                         width: Width::W,
                     },
                 ],
-                term: MTerm::Ret { value: Some(v4) },
+                term: MTerm::Ret { values: vec![v4] },
             }],
         }],
     }
@@ -164,12 +164,30 @@ fn every_form() -> MModule {
                         MInst::Bl {
                             symbol: "helper".to_owned(),
                             args: vec![g(12), w(10)],
-                            result: Some(w(13)),
+                            results: vec![w(13), g(20)],
                         },
                         MInst::Blr {
                             target: g(11),
                             args: Vec::new(),
-                            result: None,
+                            results: Vec::new(),
+                        },
+                        MInst::MemCopy {
+                            dst: g(12),
+                            src: g(20),
+                            size: 16,
+                            align: 8,
+                        },
+                        MInst::WideMultiply {
+                            op: evocc_mir::WideMul::Smull,
+                            dst: g(21),
+                            lhs: w(13),
+                            rhs: w(10),
+                        },
+                        MInst::WideMultiply {
+                            op: evocc_mir::WideMul::Smulh,
+                            dst: g(22),
+                            lhs: g(21),
+                            rhs: g(20),
                         },
                         MInst::Cmp {
                             dst: f(14),
@@ -210,12 +228,27 @@ fn every_form() -> MModule {
                 MBlock {
                     id: 1,
                     args: vec![w(18)],
-                    insts: vec![MInst::Cmp {
-                        dst: f(19),
-                        lhs: w(18),
-                        rhs: w(18),
-                        width: Width::W,
-                    }],
+                    insts: vec![
+                        MInst::FlagBinary {
+                            op: evocc_mir::FlagOp::Adds,
+                            dst: w(23),
+                            flags: f(24),
+                            lhs: w(18),
+                            rhs: w(18),
+                            width: Width::W,
+                        },
+                        MInst::Cset {
+                            dst: w(25),
+                            flags: f(24),
+                            cond: Cond::Vc,
+                        },
+                        MInst::Cmp {
+                            dst: f(19),
+                            lhs: w(18),
+                            rhs: w(25),
+                            width: Width::W,
+                        },
+                    ],
                     term: MTerm::BCond {
                         flags: f(19),
                         cond: Cond::Ge,
@@ -235,7 +268,9 @@ fn every_form() -> MModule {
                     id: 3,
                     args: Vec::new(),
                     insts: Vec::new(),
-                    term: MTerm::Ret { value: None },
+                    term: MTerm::Ret {
+                        values: vec![w(2), g(0)],
+                    },
                 },
             ],
         }],
@@ -273,4 +308,56 @@ fn a_parser_rejects_a_non_canonical_indent() {
 fn a_parser_rejects_an_unknown_mnemonic() {
     let text = APPENDIX_A.replace("mul.w", "fmul.w");
     assert!(parse_module(&text).is_err());
+}
+
+/// Revision 0.2's grammar writes a conditional terminator without naming the
+/// register that set the flags, so the parser recovers it from the instruction
+/// Section 2's adjacency rule requires to precede it.
+#[test]
+fn a_conditional_terminator_names_no_condition_register() {
+    let text = render_module(&every_form());
+    assert!(text.contains("    b.ge, ^b2(), ^b3()\n"), "{text}");
+    assert!(!text.contains("b.cond"), "{text}");
+}
+
+/// A call writes its results after the arrow, and both are definitions.
+#[test]
+fn a_call_spells_its_results_after_an_arrow() {
+    let text = render_module(&every_form());
+    assert!(
+        text.contains("    bl @helper(%v12, %v10) -> %v13:gpr32, %v20:gpr64\n"),
+        "{text}"
+    );
+    assert!(text.contains("    blr %v11()\n"), "{text}");
+}
+
+#[test]
+fn the_two_pseudo_forms_have_their_own_spellings() {
+    let text = render_module(&every_form());
+    assert!(
+        text.contains("    %v12:gpr64 = frame.slot [origin=3, size=8, align=8]\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("    mem.copy [%v12], [%v20], #16, #8\n"),
+        "{text}"
+    );
+}
+
+/// `adds` and `subs` write a register and the flags, which the grammar's
+/// single-destination production cannot spell; both definitions are written
+/// before the `=`.
+#[test]
+fn a_flag_setting_arithmetic_form_spells_both_destinations() {
+    let text = render_module(&every_form());
+    assert!(
+        text.contains("    %v23:gpr32, %v24:flags = adds.w %v18, %v18\n"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_function_returns_up_to_eight_results() {
+    let text = render_module(&every_form());
+    assert!(text.contains("    ret %v2, %v0\n"), "{text}");
 }

@@ -34,7 +34,27 @@ fn run(args: Vec<VReg>, insts: Vec<MInst>, term: MTerm, inputs: &[MirValue]) -> 
     };
     interpret_module(&module, "main", inputs, MirLimits::new(10_000))
         .expect("execution")
-        .result
+        .results
+        .into_iter()
+        .next()
+}
+
+fn results(args: Vec<VReg>, insts: Vec<MInst>, term: MTerm, inputs: &[MirValue]) -> Vec<MirValue> {
+    let module = MModule {
+        globals: Vec::new(),
+        functions: vec![MFunction {
+            name: "main".to_owned(),
+            blocks: vec![MBlock {
+                id: 0,
+                args,
+                insts,
+                term,
+            }],
+        }],
+    };
+    interpret_module(&module, "main", inputs, MirLimits::new(10_000))
+        .expect("execution")
+        .results
 }
 
 fn int(value: u64) -> MirValue {
@@ -59,7 +79,7 @@ fn a_thirty_two_bit_destination_clears_the_upper_half() {
             rhs: g(0),
             width: Width::W,
         }],
-        MTerm::Ret { value: Some(w(1)) },
+        MTerm::Ret { values: vec![w(1)] },
         &[int(0xffff_ffff_0000_0001)],
     );
     assert_eq!(bits(result), 2);
@@ -76,7 +96,7 @@ fn wrapping_arithmetic_matches_the_register_width() {
             rhs: w(1),
             width: Width::W,
         }],
-        MTerm::Ret { value: Some(w(2)) },
+        MTerm::Ret { values: vec![w(2)] },
         &[int(1), int(2)],
     );
     assert_eq!(bits(result), 0xffff_ffff);
@@ -103,7 +123,7 @@ fn msub_computes_a_remainder() {
                 width: Width::W,
             },
         ],
-        MTerm::Ret { value: Some(w(3)) },
+        MTerm::Ret { values: vec![w(3)] },
         &[int(17), int(5)],
     );
     assert_eq!(bits(result), 2);
@@ -122,7 +142,7 @@ fn division_by_zero_yields_zero_on_the_machine() {
             rhs: w(1),
             width: Width::W,
         }],
-        MTerm::Ret { value: Some(w(2)) },
+        MTerm::Ret { values: vec![w(2)] },
         &[int(9), int(0)],
     );
     assert_eq!(bits(result), 0);
@@ -139,7 +159,7 @@ fn a_register_shift_uses_the_low_five_or_six_bits_of_the_amount() {
             rhs: w(1),
             width: Width::W,
         }],
-        MTerm::Ret { value: Some(w(2)) },
+        MTerm::Ret { values: vec![w(2)] },
         &[int(1), int(33)],
     );
     assert_eq!(bits(result), 2, "33 mod 32 is one");
@@ -156,7 +176,7 @@ fn asr_replicates_the_sign_bit() {
             imm: 4,
             width: Width::W,
         }],
-        MTerm::Ret { value: Some(w(1)) },
+        MTerm::Ret { values: vec![w(1)] },
         &[int(0xffff_fff0)],
     );
     assert_eq!(bits(result), 0xffff_ffff);
@@ -174,7 +194,7 @@ fn sbfx_sign_extends_from_the_named_bit() {
             bits: 3,
             width: Width::W,
         }],
-        MTerm::Ret { value: Some(w(1)) },
+        MTerm::Ret { values: vec![w(1)] },
         &[int(0b101)],
     );
     assert_eq!(bits(result), 0xffff_fffd);
@@ -192,7 +212,7 @@ fn ubfx_zero_extends_from_the_named_bit() {
             bits: 3,
             width: Width::W,
         }],
-        MTerm::Ret { value: Some(w(1)) },
+        MTerm::Ret { values: vec![w(1)] },
         &[int(0b1111_1101)],
     );
     assert_eq!(bits(result), 0b101);
@@ -213,7 +233,7 @@ fn the_extension_forms_read_their_fixed_widths() {
                 dst: w(1),
                 src: w(0),
             }],
-            MTerm::Ret { value: Some(w(1)) },
+            MTerm::Ret { values: vec![w(1)] },
             &[int(input)],
         );
         assert_eq!(bits(result), expected, "{op:?}");
@@ -249,7 +269,7 @@ fn cset_writes_zero_or_one_into_the_whole_register() {
                     cond,
                 },
             ],
-            MTerm::Ret { value: Some(w(3)) },
+            MTerm::Ret { values: vec![w(3)] },
             &[int(lhs), int(rhs)],
         );
         assert_eq!(bits(result), expected, "{cond:?}");
@@ -276,7 +296,7 @@ fn csel_selects_on_the_condition() {
                 width: Width::W,
             },
         ],
-        MTerm::Ret { value: Some(w(3)) },
+        MTerm::Ret { values: vec![w(3)] },
         &[int(4), int(9)],
     );
     assert_eq!(bits(result), 4);
@@ -307,24 +327,28 @@ fn tbnz_branches_on_bit_zero() {
                     id: 1,
                     args: Vec::new(),
                     insts: vec![MInst::MovImm { dst: w(1), imm: 7 }],
-                    term: MTerm::Ret { value: Some(w(1)) },
+                    term: MTerm::Ret { values: vec![w(1)] },
                 },
                 MBlock {
                     id: 2,
                     args: Vec::new(),
                     insts: vec![MInst::MovImm { dst: w(2), imm: 9 }],
-                    term: MTerm::Ret { value: Some(w(2)) },
+                    term: MTerm::Ret { values: vec![w(2)] },
                 },
             ],
         }],
     };
     let taken = interpret_module(&module, "main", &[int(0b10)], MirLimits::new(100))
         .expect("run")
-        .result;
+        .results
+        .into_iter()
+        .next();
     assert_eq!(bits(taken), 9, "bit zero is clear");
     let untaken = interpret_module(&module, "main", &[int(0b11)], MirLimits::new(100))
         .expect("run")
-        .result;
+        .results
+        .into_iter()
+        .next();
     assert_eq!(bits(untaken), 7, "bit zero is set");
 }
 
@@ -384,7 +408,7 @@ fn bl_passes_arguments_and_returns_one_result() {
                         rhs: w(0),
                         width: Width::W,
                     }],
-                    term: MTerm::Ret { value: Some(w(1)) },
+                    term: MTerm::Ret { values: vec![w(1)] },
                 }],
             },
             MFunction {
@@ -395,16 +419,18 @@ fn bl_passes_arguments_and_returns_one_result() {
                     insts: vec![MInst::Bl {
                         symbol: "twice".to_owned(),
                         args: vec![w(0)],
-                        result: Some(w(1)),
+                        results: vec![w(1)],
                     }],
-                    term: MTerm::Ret { value: Some(w(1)) },
+                    term: MTerm::Ret { values: vec![w(1)] },
                 }],
             },
         ],
     };
     let result = interpret_module(&module, "main", &[int(21)], MirLimits::new(1000))
         .expect("run")
-        .result;
+        .results
+        .into_iter()
+        .next();
     assert_eq!(bits(result), 42);
 }
 
@@ -458,13 +484,15 @@ fn a_frame_slot_is_a_fresh_object_on_every_execution() {
                         volatile: false,
                     },
                 ],
-                term: MTerm::Ret { value: Some(g(4)) },
+                term: MTerm::Ret { values: vec![g(4)] },
             }],
         }],
     };
     let result = interpret_module(&module, "main", &[], MirLimits::new(1000))
         .expect("run")
-        .result;
+        .results
+        .into_iter()
+        .next();
     assert_eq!(bits(result), 5, "the second slot is a different object");
 }
 
@@ -493,7 +521,7 @@ fn an_unmasked_comparison_reads_the_bits_above_a_narrow_value() {
                 cond: Cond::Eq,
             },
         ],
-        MTerm::Ret { value: Some(w(3)) },
+        MTerm::Ret { values: vec![w(3)] },
         &[int(0b1101), int(0b0101)],
     );
     assert_eq!(bits(unmasked), 0, "the bits above bit two decided it");
@@ -527,7 +555,7 @@ fn an_unmasked_comparison_reads_the_bits_above_a_narrow_value() {
                 cond: Cond::Eq,
             },
         ],
-        MTerm::Ret { value: Some(w(3)) },
+        MTerm::Ret { values: vec![w(3)] },
         &[int(0b1101), int(0b0101)],
     );
     assert_eq!(
@@ -535,4 +563,280 @@ fn an_unmasked_comparison_reads_the_bits_above_a_narrow_value() {
         1,
         "the inserted mask restores the EvoIR answer"
     );
+}
+
+#[test]
+fn adds_and_subs_write_a_result_and_the_overflow_flag() {
+    // Section 4: "`adds`, `subs rd, rn, rm` | as `add`/`sub`, and write `nzcv`;
+    // `v` is the signed-overflow flag, `c` the carry".
+    for (op, lhs, rhs, sum, overflowed) in [
+        (evocc_mir::FlagOp::Adds, 1_u64, 2_u64, 3_u64, false),
+        (evocc_mir::FlagOp::Adds, 0x7fff_ffff, 1, 0x8000_0000, true),
+        (evocc_mir::FlagOp::Subs, 5, 3, 2, false),
+        (evocc_mir::FlagOp::Subs, 0x8000_0000, 1, 0x7fff_ffff, true),
+    ] {
+        let value = run(
+            vec![w(0), w(1)],
+            vec![
+                MInst::FlagBinary {
+                    op,
+                    dst: w(2),
+                    flags: f(3),
+                    lhs: w(0),
+                    rhs: w(1),
+                    width: Width::W,
+                },
+                MInst::Cset {
+                    dst: w(4),
+                    flags: f(3),
+                    cond: Cond::Vc,
+                },
+            ],
+            MTerm::Ret {
+                values: vec![w(2), w(4)],
+            },
+            &[int(lhs), int(rhs)],
+        );
+        assert_eq!(value, Some(MirValue::Int(sum)), "{op:?} {lhs} {rhs}");
+        let defined = results(
+            vec![w(0), w(1)],
+            vec![
+                MInst::FlagBinary {
+                    op,
+                    dst: w(2),
+                    flags: f(3),
+                    lhs: w(0),
+                    rhs: w(1),
+                    width: Width::W,
+                },
+                MInst::Cset {
+                    dst: w(4),
+                    flags: f(3),
+                    cond: Cond::Vc,
+                },
+            ],
+            MTerm::Ret {
+                values: vec![w(2), w(4)],
+            },
+            &[int(lhs), int(rhs)],
+        );
+        assert_eq!(
+            defined[1],
+            MirValue::Int(u64::from(!overflowed)),
+            "{op:?} {lhs} {rhs}"
+        );
+    }
+}
+
+#[test]
+fn the_carry_conditions_read_a_subtraction() {
+    for (lhs, rhs, borrowed) in [(3_u64, 5_u64, true), (5, 3, false), (4, 4, false)] {
+        let value = run(
+            vec![w(0), w(1)],
+            vec![
+                MInst::Cmp {
+                    dst: f(2),
+                    lhs: w(0),
+                    rhs: w(1),
+                    width: Width::W,
+                },
+                MInst::Cset {
+                    dst: w(3),
+                    flags: f(2),
+                    cond: Cond::Cc,
+                },
+            ],
+            MTerm::Ret { values: vec![w(3)] },
+            &[int(lhs), int(rhs)],
+        );
+        assert_eq!(bits(value), u64::from(borrowed), "{lhs} {rhs}");
+    }
+}
+
+#[test]
+fn the_wide_signed_multiplies_produce_exact_products() {
+    // smull: the signed 32x32 product, exact in 64 bits.
+    let low = run(
+        vec![w(0), w(1)],
+        vec![MInst::WideMultiply {
+            op: evocc_mir::WideMul::Smull,
+            dst: g(2),
+            lhs: w(0),
+            rhs: w(1),
+        }],
+        MTerm::Ret { values: vec![g(2)] },
+        &[int(0xffff_ffff), int(3)],
+    );
+    assert_eq!(bits(low), (-3_i64) as u64, "minus one times three");
+
+    // smulh: the high half of the signed 64x64 product.
+    let high = run(
+        vec![g(0), g(1)],
+        vec![MInst::WideMultiply {
+            op: evocc_mir::WideMul::Smulh,
+            dst: g(2),
+            lhs: g(0),
+            rhs: g(1),
+        }],
+        MTerm::Ret { values: vec![g(2)] },
+        &[int(1_u64 << 40), int(1_u64 << 40)],
+    );
+    assert_eq!(bits(high), 1 << 16);
+}
+
+#[test]
+fn a_function_returns_up_to_eight_results() {
+    let values = results(
+        vec![w(0), g(1)],
+        vec![MInst::MovImm { dst: w(2), imm: 7 }],
+        MTerm::Ret {
+            values: vec![w(0), g(1), w(2)],
+        },
+        &[int(4), int(9)],
+    );
+    assert_eq!(
+        values,
+        vec![MirValue::Int(4), MirValue::Int(9), MirValue::Int(7)]
+    );
+}
+
+#[test]
+fn a_call_binds_every_result_it_declares() {
+    let module = MModule {
+        globals: Vec::new(),
+        functions: vec![
+            MFunction {
+                name: "pair".to_owned(),
+                blocks: vec![MBlock {
+                    id: 0,
+                    args: vec![w(0)],
+                    insts: vec![MInst::Binary {
+                        op: BinOp::Add,
+                        dst: w(1),
+                        lhs: w(0),
+                        rhs: w(0),
+                        width: Width::W,
+                    }],
+                    term: MTerm::Ret {
+                        values: vec![w(1), w(0)],
+                    },
+                }],
+            },
+            MFunction {
+                name: "main".to_owned(),
+                blocks: vec![MBlock {
+                    id: 0,
+                    args: vec![w(0)],
+                    insts: vec![MInst::Bl {
+                        symbol: "pair".to_owned(),
+                        args: vec![w(0)],
+                        results: vec![w(1), w(2)],
+                    }],
+                    term: MTerm::Ret {
+                        values: vec![w(1), w(2)],
+                    },
+                }],
+            },
+        ],
+    };
+    let outcome = interpret_module(&module, "main", &[int(5)], MirLimits::new(1000))
+        .expect("run")
+        .results;
+    assert_eq!(outcome, vec![MirValue::Int(10), MirValue::Int(5)]);
+}
+
+#[test]
+fn mem_copy_transfers_bytes_and_leaves_the_source_alone() {
+    // Section 4: mem.copy "copies size bytes from src to dst, transferring
+    // per-byte initializedness and pointer fragments exactly as EvoIR Section
+    // 3.8's copy does".
+    let module = MModule {
+        globals: Vec::new(),
+        functions: vec![MFunction {
+            name: "main".to_owned(),
+            blocks: vec![MBlock {
+                id: 0,
+                args: vec![g(0)],
+                insts: vec![
+                    MInst::FrameSlot {
+                        dst: g(1),
+                        origin: 0,
+                        size: 8,
+                        align: 8,
+                    },
+                    MInst::FrameSlot {
+                        dst: g(2),
+                        origin: 1,
+                        size: 8,
+                        align: 8,
+                    },
+                    MInst::Store {
+                        src: g(0),
+                        base: g(1),
+                        offset: 0,
+                        kind: evocc_mir::StoreKind::X,
+                        volatile: false,
+                    },
+                    MInst::MemCopy {
+                        dst: g(2),
+                        src: g(1),
+                        size: 8,
+                        align: 8,
+                    },
+                    MInst::Load {
+                        dst: g(3),
+                        base: g(2),
+                        offset: 0,
+                        kind: evocc_mir::LoadKind::X,
+                        volatile: false,
+                    },
+                ],
+                term: MTerm::Ret { values: vec![g(3)] },
+            }],
+        }],
+    };
+    let value = interpret_module(&module, "main", &[int(0x1234)], MirLimits::new(1000))
+        .expect("run")
+        .results;
+    assert_eq!(value, vec![MirValue::Int(0x1234)]);
+}
+
+#[test]
+fn mem_copy_of_an_uninitialized_source_moves_representation_not_values() {
+    // Section 4: "the loads of the expansion never report an uninitialized
+    // read, because they move representation, not values." A copy of bytes
+    // nothing has written is therefore defined, and only a later scalar load
+    // of one reports E3001.
+    let module = MModule {
+        globals: Vec::new(),
+        functions: vec![MFunction {
+            name: "main".to_owned(),
+            blocks: vec![MBlock {
+                id: 0,
+                args: Vec::new(),
+                insts: vec![
+                    MInst::FrameSlot {
+                        dst: g(1),
+                        origin: 0,
+                        size: 8,
+                        align: 8,
+                    },
+                    MInst::FrameSlot {
+                        dst: g(2),
+                        origin: 1,
+                        size: 8,
+                        align: 8,
+                    },
+                    MInst::MemCopy {
+                        dst: g(2),
+                        src: g(1),
+                        size: 8,
+                        align: 8,
+                    },
+                ],
+                term: MTerm::Ret { values: Vec::new() },
+            }],
+        }],
+    };
+    assert!(interpret_module(&module, "main", &[], MirLimits::new(1000)).is_ok());
 }

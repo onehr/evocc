@@ -141,6 +141,10 @@ pub enum Cond {
     Ls,
     Hi,
     Hs,
+    Vs,
+    Vc,
+    Cs,
+    Cc,
 }
 
 impl Cond {
@@ -157,6 +161,10 @@ impl Cond {
             Self::Ls => "ls",
             Self::Hi => "hi",
             Self::Hs => "hs",
+            Self::Vs => "vs",
+            Self::Vc => "vc",
+            Self::Cs => "cs",
+            Self::Cc => "cc",
         }
     }
 
@@ -173,6 +181,10 @@ impl Cond {
             "ls" => Self::Ls,
             "hi" => Self::Hi,
             "hs" => Self::Hs,
+            "vs" => Self::Vs,
+            "vc" => Self::Vc,
+            "cs" => Self::Cs,
+            "cc" => Self::Cc,
             _ => return None,
         })
     }
@@ -250,6 +262,61 @@ impl BinOp {
                 | Self::Lsr
                 | Self::Asr
         )
+    }
+}
+
+/// The flag-setting arithmetic forms of Section 4: "`adds`, `subs rd, rn, rm`
+/// | as `add`/`sub`, and write `nzcv`".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum FlagOp {
+    Adds,
+    Subs,
+}
+
+impl FlagOp {
+    #[must_use]
+    pub const fn mnemonic(self) -> &'static str {
+        match self {
+            Self::Adds => "adds",
+            Self::Subs => "subs",
+        }
+    }
+
+    #[must_use]
+    pub fn from_mnemonic(text: &str) -> Option<Self> {
+        Some(match text {
+            "adds" => Self::Adds,
+            "subs" => Self::Subs,
+            _ => return None,
+        })
+    }
+}
+
+/// The two wide signed multiplies of Section 4.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum WideMul {
+    /// `smull xd, wn, wm`: the signed 32x32 to 64 product.
+    Smull,
+    /// `smulh xd, xn, xm`: the high 64 bits of a signed 64x64 product.
+    Smulh,
+}
+
+impl WideMul {
+    #[must_use]
+    pub const fn mnemonic(self) -> &'static str {
+        match self {
+            Self::Smull => "smull",
+            Self::Smulh => "smulh",
+        }
+    }
+
+    #[must_use]
+    pub fn from_mnemonic(text: &str) -> Option<Self> {
+        Some(match text {
+            "smull" => Self::Smull,
+            "smulh" => Self::Smulh,
+            _ => return None,
+        })
     }
 }
 
@@ -478,6 +545,23 @@ pub enum MInst {
         imm: u64,
         width: Width,
     },
+    /// `adds`/`subs rd, rn, rm`: the arithmetic result and `nzcv`.
+    FlagBinary {
+        op: FlagOp,
+        dst: VReg,
+        flags: VReg,
+        lhs: VReg,
+        rhs: VReg,
+        width: Width,
+    },
+    /// `smull`/`smulh`: the two wide signed multiplies, whose operand and
+    /// result widths Section 4 fixes, so neither carries a width suffix.
+    WideMultiply {
+        op: WideMul,
+        dst: VReg,
+        lhs: VReg,
+        rhs: VReg,
+    },
     /// `msub rd, rn, rm, ra`: `rd := ra - rn * rm`.
     Msub {
         dst: VReg,
@@ -522,29 +606,31 @@ pub enum MInst {
         cond: Cond,
         width: Width,
     },
-    /// `bl sym`. The argument and result registers are explicit because
-    /// Section 7 requires the allocator to see them as fixed operands and the
-    /// interpreter to pass them; Section 4's bare `bl sym` names neither.
+    /// `bl @f(args) -> results`. Section 4 makes the argument and result
+    /// registers explicit operands so the allocator sees them as fixed.
     Bl {
         symbol: String,
         args: Vec<VReg>,
-        result: Option<VReg>,
+        results: Vec<VReg>,
     },
-    /// `blr rn`, with the same explicit operands.
+    /// `blr rn(args) -> results`.
     Blr {
         target: VReg,
         args: Vec<VReg>,
-        result: Option<VReg>,
+        results: Vec<VReg>,
     },
-    /// The frame slot of an EvoIR `alloca`.
-    ///
-    /// Section 5 lowers `alloca` to `add rd, x29, #slot`, but EvoIR Section 3.7
-    /// gives every dynamic execution of an `alloca` a fresh object identity and
-    /// the next dynamic instance of its origin site, and EvoMIR Section 1 makes
-    /// the EvoIR specification win where the two meet. A slot address computed
-    /// once per activation cannot carry that identity, so the allocation stays
-    /// an instruction at the `alloca`'s program point and the frame offset is
-    /// assigned by Section 6 later.
+    /// The `mem.copy` pseudo-form of Section 4: `size` bytes from `src` to
+    /// `dst`, "transferring per-byte initializedness and pointer fragments
+    /// exactly as EvoIR Section 3.8's `copy` does".
+    MemCopy {
+        dst: VReg,
+        src: VReg,
+        size: u64,
+        align: u32,
+    },
+    /// The `frame.slot` pseudo-form of Section 4: "the address of a fresh
+    /// object of S bytes at alignment A, one per dynamic execution of the
+    /// instruction, as EvoIR Section 3.7 requires of `alloca`".
     FrameSlot {
         dst: VReg,
         origin: u64,
@@ -571,11 +657,11 @@ pub enum MTerm {
         untaken: u32,
         untaken_args: Vec<VReg>,
     },
-    /// `cbz`/`cbnz rn, label`.
+    /// `cbz`/`cbnz rn, ^then(args), ^else(args)`. The tested width is the
+    /// operand's class, so Section 4 gives the form no width suffix.
     Cb {
         nonzero: bool,
         src: VReg,
-        width: Width,
         taken: u32,
         taken_args: Vec<VReg>,
         untaken: u32,
@@ -591,8 +677,8 @@ pub enum MTerm {
         untaken: u32,
         untaken_args: Vec<VReg>,
     },
-    /// `ret`.
-    Ret { value: Option<VReg> },
+    /// `ret rs...`: Section 6 returns up to eight results in `x0` to `x7`.
+    Ret { values: Vec<VReg> },
     /// `brk #imm16`.
     Brk { imm: u16 },
 }
@@ -638,9 +724,11 @@ pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
         | MInst::CmpImm { dst, .. }
         | MInst::Cset { dst, .. }
         | MInst::Csel { dst, .. }
-        | MInst::FrameSlot { dst, .. } => vec![*dst],
-        MInst::Store { .. } => Vec::new(),
-        MInst::Bl { result, .. } | MInst::Blr { result, .. } => result.iter().copied().collect(),
+        | MInst::FrameSlot { dst, .. }
+        | MInst::WideMultiply { dst, .. } => vec![*dst],
+        MInst::FlagBinary { dst, flags, .. } => vec![*dst, *flags],
+        MInst::Store { .. } | MInst::MemCopy { .. } => Vec::new(),
+        MInst::Bl { results, .. } | MInst::Blr { results, .. } => results.clone(),
     }
 }
 
@@ -654,7 +742,11 @@ pub fn inst_uses(inst: &MInst) -> Vec<VReg> {
         MInst::MovImm { .. } | MInst::Adrp { .. } | MInst::FrameSlot { .. } => Vec::new(),
         MInst::Load { base, .. } => vec![*base],
         MInst::Store { src, base, .. } => vec![*src, *base],
-        MInst::Binary { lhs, rhs, .. } | MInst::Cmp { lhs, rhs, .. } => vec![*lhs, *rhs],
+        MInst::Binary { lhs, rhs, .. }
+        | MInst::Cmp { lhs, rhs, .. }
+        | MInst::FlagBinary { lhs, rhs, .. }
+        | MInst::WideMultiply { lhs, rhs, .. } => vec![*lhs, *rhs],
+        MInst::MemCopy { dst, src, .. } => vec![*dst, *src],
         MInst::BinaryImm { lhs, .. } | MInst::CmpImm { lhs, .. } | MInst::Bfx { src: lhs, .. } => {
             vec![*lhs]
         }
@@ -705,7 +797,7 @@ pub fn term_uses(term: &MTerm) -> Vec<VReg> {
             uses.extend(untaken_args.iter().copied());
             uses
         }
-        MTerm::Ret { value } => value.iter().copied().collect(),
+        MTerm::Ret { values } => values.clone(),
         MTerm::Brk { .. } => Vec::new(),
     }
 }
@@ -746,5 +838,8 @@ pub fn term_edges(term: &MTerm) -> Vec<(u32, &[VReg])> {
 /// Whether an instruction writes the flags register.
 #[must_use]
 pub fn writes_flags(inst: &MInst) -> bool {
-    matches!(inst, MInst::Cmp { .. } | MInst::CmpImm { .. })
+    matches!(
+        inst,
+        MInst::Cmp { .. } | MInst::CmpImm { .. } | MInst::FlagBinary { .. }
+    )
 }

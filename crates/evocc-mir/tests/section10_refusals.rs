@@ -39,27 +39,41 @@ func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<1>, mem<all>
 ";
 
 #[test]
-fn a_ub_predicate_is_absent_from_section_five_and_is_e4009() {
-    // The Section 5 table has no row for divisor_nonzero,
-    // signed_div_rem_no_overflow, shift_count_defined, signed_shl_defined or
-    // the signed_*_defined family, and Section 10 gives E4009 to "any EvoIR
-    // instruction absent from Section 5". The div/rem row nonetheless assumes
-    // those predicates have been computed, which is the gap this test pins.
-    assert_eq!(codes(PREDICATE), vec!["E4009"]);
+fn every_ub_predicate_now_has_a_row_and_is_not_refused() {
+    // Revision 0.2 gives each predicate a lowering row, and they "lower
+    // whether or not a `ub.assume` consumes them".
+    let module = parse_section9_module(PREDICATE.as_bytes()).expect("canonical EvoIR");
+    assert!(lower_module(&module).is_ok());
 }
 
-const TWO_RESULTS: &str = "\
-func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, bits<32>, mem<all>, world) cc = target_default
+const EIGHT_RESULTS: &str = "\
+func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, mem<all>, world) cc = target_default
     effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
-    ret %v0, %v0, %v1, %v2
+    ret %v0, %v0, %v0, %v0, %v0, %v0, %v0, %v0, %v1, %v2
+}
+";
+
+const NINE_RESULTS: &str = "\
+func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
+    ret %v0, %v0, %v0, %v0, %v0, %v0, %v0, %v0, %v0, %v1, %v2
 }
 ";
 
 #[test]
-fn more_than_one_ordinary_result_is_e4013() {
-    assert_eq!(codes(TWO_RESULTS), vec!["E4013"]);
+fn eight_ordinary_results_are_accepted() {
+    // Section 6: eight results go in x0 to x7.
+    let module = parse_section9_module(EIGHT_RESULTS.as_bytes()).expect("canonical EvoIR");
+    assert!(lower_module(&module).is_ok());
+}
+
+#[test]
+fn a_ninth_ordinary_result_is_e4013() {
+    assert_eq!(codes(NINE_RESULTS), vec!["E4013"]);
 }
 
 const NINE_ARGUMENTS: &str = "\
@@ -111,10 +125,8 @@ fn ordinary_scalar_static_data_is_not_refused() {
 
 #[test]
 fn a_refusal_names_the_instruction_it_was_reported_at() {
-    let module = parse_section9_module(PREDICATE.as_bytes()).expect("canonical EvoIR");
+    let module = parse_section9_module(WIDE_INTEGER.as_bytes()).expect("canonical EvoIR");
     let refusals = lower_module(&module).expect_err("refused");
-    assert_eq!(refusals.len(), 1);
     assert_eq!(refusals[0].function, "main");
-    assert_eq!(refusals[0].index, 0);
-    assert_eq!(refusals[0].name, "not-lowered: unsupported-form");
+    assert_eq!(refusals[0].name, "not-lowered: wide-integer");
 }

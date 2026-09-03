@@ -18,8 +18,8 @@ use evocc_evoir::{
 use evocc_types::EvoIRType;
 
 use crate::{
-    BinOp, Cond, ExtOp, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass, StoreKind,
-    SymbolKind, VReg, Width,
+    BinOp, Cond, ExtOp, FlagOp, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass,
+    StoreKind, SymbolKind, VReg, WideMul, Width,
 };
 
 /// One EvoIR form this revision does not lower, reported at the instruction.
@@ -40,11 +40,15 @@ const E4003: (&str, &str) = ("E4003", "not-lowered: wide-integer");
 const E4004: (&str, &str) = ("E4004", "not-lowered: tuple");
 const E4009: (&str, &str) = ("E4009", "not-lowered: unsupported-form");
 const E4010: (&str, &str) = ("E4010", "abi: too-many-register-arguments");
-const E4013: (&str, &str) = ("E4013", "abi: multiple-results");
+const E4013: (&str, &str) = ("E4013", "abi: too-many-results");
 
 /// Section 6: "Integer and pointer arguments of at most 64 bits go in `x0` to
 /// `x7` in order ... A ninth integer argument is refused."
 const MAX_REGISTER_ARGUMENTS: usize = 8;
+
+/// Section 6: "an EvoMIR function returns up to eight integer or pointer
+/// results in `x0` to `x7` in order ... A ninth result is `E4013`."
+const MAX_REGISTER_RESULTS: usize = 1;
 
 /// Lower a whole module, or report every refusal it contains.
 pub fn lower_module(module: &Module) -> Result<MModule, Vec<Refusal>> {
@@ -110,6 +114,14 @@ fn significant_bits(ty: &EvoIRType) -> u16 {
     match ty {
         EvoIRType::Bits(width) => *width,
         _ => 64,
+    }
+}
+
+fn mask_of(bits: u16) -> u64 {
+    if bits >= 64 {
+        u64::MAX
+    } else {
+        (1_u64 << bits) - 1
     }
 }
 
@@ -186,7 +198,7 @@ fn scan_function(module: &Module, function: &Function, refusals: &mut Vec<Refusa
         }
     }
     let results = ordinary_types(&function.ret_tys);
-    if results.len() > 1 {
+    if results.len() > MAX_REGISTER_RESULTS {
         report(
             E4013,
             entry_block,
@@ -296,18 +308,13 @@ fn scan_inst(
                 report(E4009, block, index, detail);
             }
         }
-        Inst::Copy { layout, .. } => {
-            if copy_unit(layout.size_bytes, u64::from(layout.align_bytes)).is_none() {
-                report(
-                    E4009,
-                    block,
-                    index,
-                    format!(
-                        "a copy of {} bytes at alignment {} has no aligned load and store width",
-                        layout.size_bytes, layout.align_bytes
-                    ),
-                );
-            }
+        Inst::Copy { .. } => {
+            report(
+                E4009,
+                block,
+                index,
+                "the mem.copy row is pending".to_owned(),
+            );
         }
         Inst::Call {
             results,
@@ -323,7 +330,7 @@ fn scan_inst(
                     format!("a call to @{callee} passes {} arguments", args.len()),
                 );
             }
-            if results.len() > 1 {
+            if results.len() > MAX_REGISTER_RESULTS {
                 report(
                     E4013,
                     block,
@@ -348,7 +355,7 @@ fn scan_inst(
                     format!("an indirect call passes {} arguments", args.len()),
                 );
             }
-            if results.len() > 1 {
+            if results.len() > MAX_REGISTER_RESULTS {
                 report(
                     E4013,
                     block,
@@ -357,13 +364,7 @@ fn scan_inst(
                 );
             }
         }
-        // Section 5's table has no row for the UB predicates, and Section 10
-        // gives E4009 to "any EvoIR instruction absent from Section 5". The
-        // div/rem row nonetheless says the program "has asserted
-        // divisor_nonzero and signed_div_rem_no_overflow before", which cannot
-        // be true of a program whose predicates do not lower. Recorded gap; the
-        // fail-closed reading is the one implemented, because Section 1 makes
-        // it the rule for everything the table omits.
+        // The predicate rows of revision 0.2 are not implemented yet.
         Inst::DivisorNonZero(..)
         | Inst::SignedDivRemNoOverflow(..)
         | Inst::SignedAddDefined(..)
@@ -375,7 +376,7 @@ fn scan_inst(
                 E4009,
                 block,
                 index,
-                "an undefined-behaviour predicate has no row in Section 5".to_owned(),
+                "the predicate row is pending".to_owned(),
             );
         }
     }
@@ -390,17 +391,6 @@ fn unsupported_access(ty: &EvoIRType) -> Option<String> {
         EvoIRType::Bits(width) if matches!(width.div_ceil(8), 1 | 2 | 4 | 8) => None,
         other => Some(format!("an access of type {other:?} has no matching width")),
     }
-}
-
-/// The largest of the machine's widths that both divides the byte count and is
-/// covered by the alignment: Section 5's "largest aligned width".
-fn copy_unit(size: u64, align: u64) -> Option<u64> {
-    if size == 0 {
-        return Some(1);
-    }
-    [8, 4, 2, 1]
-        .into_iter()
-        .find(|unit| align >= *unit && size.is_multiple_of(*unit))
 }
 
 // ---------------------------------------------------------------------------
@@ -524,13 +514,122 @@ impl Lowerer {
         dst
     }
 
-    /// Section 3: "shift amount operand `bits<M>`: zero-extended, then masked
-    /// to the width of the shifted value by the instruction itself; `and` with
-    /// `2^M - 1` when `M < 32`".
+    /// `cmp` of two registers followed by the `cset` its condition names, the
+    /// shape every boolean row of Section 5 ends in.
+    fn compare_into(
+        &mut self,
+        insts: &mut Vec<MInst>,
+        lhs: VReg,
+        rhs: VReg,
+        width: Width,
+        cond: Cond,
+    ) -> VReg {
+        let flags = self.fresh(RegClass::Flags);
+        insts.push(MInst::Cmp {
+            dst: flags,
+            lhs,
+            rhs,
+            width,
+        });
+        let dst = self.fresh(RegClass::Gpr32);
+        insts.push(MInst::Cset { dst, flags, cond });
+        dst
+    }
+
+    /// The conjunction of two `bits<1>` values, each of which `cset` wrote as
+    /// zero or one into a whole register.
+    fn both(&mut self, insts: &mut Vec<MInst>, lhs: VReg, rhs: VReg) -> VReg {
+        let dst = self.fresh(RegClass::Gpr32);
+        insts.push(MInst::Binary {
+            op: BinOp::And,
+            dst,
+            lhs,
+            rhs,
+            width: Width::W,
+        });
+        dst
+    }
+
+    /// Whether a register holding an exact signed value is representable in
+    /// `bits`: its low `bits` bits, sign-extended, are the value itself.
+    fn representable_in(
+        &mut self,
+        insts: &mut Vec<MInst>,
+        value: VReg,
+        bits: u16,
+        width: Width,
+    ) -> VReg {
+        if bits >= width.bits() {
+            let one = self.fresh(RegClass::Gpr32);
+            insts.push(MInst::MovImm { dst: one, imm: 1 });
+            return one;
+        }
+        let class = if width == Width::X {
+            RegClass::Gpr64
+        } else {
+            RegClass::Gpr32
+        };
+        let truncated = self.fresh(class);
+        insts.push(MInst::Bfx {
+            signed: true,
+            dst: truncated,
+            src: value,
+            lsb: 0,
+            bits,
+            width,
+        });
+        self.compare_into(insts, value, truncated, width, Cond::Eq)
+    }
+
+    /// Section 5: "zero-extend `%amt` per Section 3, `cmp` with `#N`, `cset
+    /// lo`", with the extension taken from the declared signedness.
+    ///
+    /// EvoIR Section 3.3.1 decodes the amount "at width `M` with the declared
+    /// source signedness" and is true only for counts in `[0, N)`. A negative
+    /// signed amount of width `M` below the register width is not negative once
+    /// zero-extended, so a one-bit signed amount of 1, which EvoIR decodes as
+    /// -1, would compare below `N` and answer true. Extending by the declared
+    /// signedness makes every negative amount compare above `N` unsigned.
+    /// Recorded gap.
+    fn count_defined(
+        &mut self,
+        insts: &mut Vec<MInst>,
+        shifted: &Value,
+        amount: &Value,
+        amount_signed: bool,
+    ) -> Result<VReg, String> {
+        let bound = significant_bits(&shifted.ty);
+        let bits = significant_bits(&amount.ty);
+        let class = class_of(&amount.ty).map_err(|(code, _)| code.to_owned())?;
+        let width = width_of(class);
+        let raw = self.reg(amount)?;
+        let extended = if amount_signed {
+            self.sign_extend(insts, raw, bits, width)
+        } else {
+            self.zero_extend(insts, raw, bits, width)
+        };
+        let flags = self.fresh(RegClass::Flags);
+        insts.push(MInst::CmpImm {
+            dst: flags,
+            lhs: extended,
+            imm: u64::from(bound),
+            width,
+        });
+        let dst = self.fresh(RegClass::Gpr32);
+        insts.push(MInst::Cset {
+            dst,
+            flags,
+            cond: Cond::Lo,
+        });
+        Ok(dst)
+    }
+
+    /// Section 3: "shift amount operand `bits<M>` | the low `M` bits are the
+    /// amount | `and` with `2^M - 1` when `M` is below the register width".
     fn shift_amount(&mut self, insts: &mut Vec<MInst>, amount: &Value) -> Result<VReg, String> {
         let reg = self.reg(amount)?;
         let bits = significant_bits(&amount.ty);
-        if bits >= 32 {
+        if bits >= width_of(reg.class).bits() {
             return Ok(reg);
         }
         let dst = self.fresh(reg.class);
@@ -829,15 +928,9 @@ fn lower_terminator(
         }
         Inst::Ret(values) => {
             let _ = function;
-            let mut ordinary = values.iter().filter(|value| is_register_type(&value.ty));
-            let value = match ordinary.next() {
-                Some(value) => Some(lowerer.reg(value)?),
-                None => None,
-            };
-            if ordinary.next().is_some() {
-                return Err("more than one ordinary result".to_owned());
-            }
-            Ok(MTerm::Ret { value })
+            Ok(MTerm::Ret {
+                values: edge_args(lowerer, values)?,
+            })
         }
         Inst::Trap(reason) => Ok(MTerm::Brk {
             imm: trap_immediate(*reason),
@@ -1100,46 +1193,23 @@ fn lower_inst(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Res
                 volatile: *volatile,
             });
         }
-        // Section 5: "a loop of `ldr`/`str` pairs of the largest aligned width,
-        // unrolled up to 64 bytes, a counted loop above". The counted loop is a
-        // code-size policy that only emission can measure, so every copy is
-        // unrolled here and the loop enters with B2. Recorded gap.
+        // Section 5: `copy` with static size lowers to `mem.copy`, the
+        // pseudo-form that transfers per-byte initializedness and pointer
+        // fragments; emission expands it.
         Inst::Copy {
             destination,
             source,
             layout,
             ..
         } => {
-            let unit = copy_unit(layout.size_bytes, u64::from(layout.align_bytes))
-                .ok_or_else(|| "a copy with no aligned width".to_owned())?;
-            let destination = lowerer.reg(destination)?;
-            let source = lowerer.reg(source)?;
-            let (load, store, class) = match unit {
-                8 => (LoadKind::X, StoreKind::X, RegClass::Gpr64),
-                4 => (LoadKind::W, StoreKind::W, RegClass::Gpr32),
-                2 => (LoadKind::H, StoreKind::H, RegClass::Gpr32),
-                _ => (LoadKind::B, StoreKind::B, RegClass::Gpr32),
-            };
-            let mut offset = 0_u64;
-            while offset < layout.size_bytes {
-                let at = i64::try_from(offset).map_err(|_| "a copy beyond i64".to_owned())?;
-                let temporary = lowerer.fresh(class);
-                insts.push(MInst::Load {
-                    dst: temporary,
-                    base: source,
-                    offset: at,
-                    kind: load,
-                    volatile: false,
-                });
-                insts.push(MInst::Store {
-                    src: temporary,
-                    base: destination,
-                    offset: at,
-                    kind: store,
-                    volatile: false,
-                });
-                offset += unit;
-            }
+            let dst = lowerer.reg(destination)?;
+            let src = lowerer.reg(source)?;
+            insts.push(MInst::MemCopy {
+                dst,
+                src,
+                size: layout.size_bytes,
+                align: layout.align_bytes,
+            });
         }
         Inst::Call {
             results,
@@ -1148,11 +1218,11 @@ fn lower_inst(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Res
             ..
         } => {
             let arguments = edge_args(lowerer, args)?;
-            let result = call_result(lowerer, results)?;
+            let outputs = call_results(lowerer, results)?;
             insts.push(MInst::Bl {
                 symbol: callee.clone(),
                 args: arguments,
-                result,
+                results: outputs,
             });
         }
         Inst::IndirectCall {
@@ -1163,33 +1233,259 @@ fn lower_inst(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Res
         } => {
             let target = lowerer.reg(callee)?;
             let arguments = edge_args(lowerer, args)?;
-            let result = call_result(lowerer, results)?;
+            let outputs = call_results(lowerer, results)?;
             insts.push(MInst::Blr {
                 target,
                 args: arguments,
-                result,
+                results: outputs,
             });
+        }
+        // --- the undefined-behaviour predicates of Section 5 ----------------
+        //
+        // Every row below is the specification's, with one generalization the
+        // specification's own technique dictates: a row written for a value at
+        // the register width tests representability in the register, and EvoIR
+        // asks for representability in `bits<N>`. Where `N` is narrower the
+        // check is closed with the bitfield comparison Section 5 already uses
+        // in the `signed_mul_defined` row ("compare with the sign extension of
+        // its low 32 bits"), read at `N` instead of 32. Two further departures
+        // are recorded with the gap they answer, at the row that makes them.
+        Inst::DivisorNonZero(result, divisor) => {
+            let bits = significant_bits(&divisor.ty);
+            let class = class_of(&divisor.ty).map_err(|(code, _)| code.to_owned())?;
+            let width = width_of(class);
+            let source = lowerer.reg(divisor)?;
+            // `cmp` reads the whole register, so Section 3's zero-extension is
+            // required here exactly as it is for `icmp.eq`. Section 5's row
+            // does not say so; recorded gap.
+            let source = lowerer.zero_extend(insts, source, bits, width);
+            let flags = lowerer.fresh(RegClass::Flags);
+            insts.push(MInst::CmpImm {
+                dst: flags,
+                lhs: source,
+                imm: 0,
+                width,
+            });
+            let dst = lowerer.fresh(RegClass::Gpr32);
+            insts.push(MInst::Cset {
+                dst,
+                flags,
+                cond: Cond::Ne,
+            });
+            lowerer.bind(result, dst);
+        }
+        Inst::SignedDivRemNoOverflow(result, lhs, rhs) => {
+            let bits = significant_bits(&lhs.ty);
+            let class = class_of(&lhs.ty).map_err(|(code, _)| code.to_owned())?;
+            let width = width_of(class);
+            let left = lowerer.reg(lhs)?;
+            let right = lowerer.reg(rhs)?;
+            let left = lowerer.zero_extend(insts, left, bits, width);
+            let right = lowerer.zero_extend(insts, right, bits, width);
+            // The two patterns compared against are the N-bit representations
+            // of INT_MIN and of -1, materialized as Section 5 says.
+            let minimum = lowerer.fresh(class);
+            insts.push(MInst::MovImm {
+                dst: minimum,
+                imm: 1_u64 << (bits - 1),
+            });
+            let low = lowerer.compare_into(insts, left, minimum, width, Cond::Ne);
+            let ones = lowerer.fresh(class);
+            insts.push(MInst::MovImm {
+                dst: ones,
+                imm: mask_of(bits),
+            });
+            let high = lowerer.compare_into(insts, right, ones, width, Cond::Ne);
+            let dst = lowerer.fresh(RegClass::Gpr32);
+            insts.push(MInst::Binary {
+                op: BinOp::Orr,
+                dst,
+                lhs: low,
+                rhs: high,
+                width: Width::W,
+            });
+            lowerer.bind(result, dst);
+        }
+        Inst::SignedAddDefined(result, lhs, rhs) | Inst::SignedSubDefined(result, lhs, rhs) => {
+            let subtract = matches!(inst, Inst::SignedSubDefined(..));
+            let bits = significant_bits(&lhs.ty);
+            let class = class_of(&lhs.ty).map_err(|(code, _)| code.to_owned())?;
+            let width = width_of(class);
+            let left = lowerer.reg(lhs)?;
+            let right = lowerer.reg(rhs)?;
+            let left = lowerer.sign_extend(insts, left, bits, width);
+            let right = lowerer.sign_extend(insts, right, bits, width);
+            let dst = if bits == width.bits() {
+                // Section 5: "`adds`/`subs` into a scratch, then `cset vc`".
+                let scratch = lowerer.fresh(class);
+                let flags = lowerer.fresh(RegClass::Flags);
+                insts.push(MInst::FlagBinary {
+                    op: if subtract { FlagOp::Subs } else { FlagOp::Adds },
+                    dst: scratch,
+                    flags,
+                    lhs: left,
+                    rhs: right,
+                    width,
+                });
+                let dst = lowerer.fresh(RegClass::Gpr32);
+                insts.push(MInst::Cset {
+                    dst,
+                    flags,
+                    cond: Cond::Vc,
+                });
+                dst
+            } else {
+                // The `v` flag reports overflow of the register, not of
+                // `bits<N>`: sign-extended narrow operands never set it, so
+                // the row answers "defined" where EvoIR answers "not". The sum
+                // is exact at the register width, and representability in `N`
+                // bits is the bitfield comparison. Recorded gap.
+                let sum = lowerer.fresh(class);
+                insts.push(MInst::Binary {
+                    op: if subtract { BinOp::Sub } else { BinOp::Add },
+                    dst: sum,
+                    lhs: left,
+                    rhs: right,
+                    width,
+                });
+                lowerer.representable_in(insts, sum, bits, width)
+            };
+            lowerer.bind(result, dst);
+        }
+        Inst::SignedMulDefined(result, lhs, rhs) => {
+            let bits = significant_bits(&lhs.ty);
+            let class = class_of(&lhs.ty).map_err(|(code, _)| code.to_owned())?;
+            let width = width_of(class);
+            let left = lowerer.reg(lhs)?;
+            let right = lowerer.reg(rhs)?;
+            let left = lowerer.sign_extend(insts, left, bits, width);
+            let right = lowerer.sign_extend(insts, right, bits, width);
+            let dst = if width == Width::W {
+                // Section 5, 32-bit: "`smull` the sign-extended operands,
+                // compare with the sign extension of its low 32 bits". Read at
+                // `N` rather than at 32, which is the same instruction and the
+                // same comparison; the product of two values of at most 32
+                // significant bits is exact in the 64-bit result.
+                let product = lowerer.fresh(RegClass::Gpr64);
+                insts.push(MInst::WideMultiply {
+                    op: WideMul::Smull,
+                    dst: product,
+                    lhs: left,
+                    rhs: right,
+                });
+                lowerer.representable_in(insts, product, bits, Width::X)
+            } else {
+                // Section 5, 64-bit: "`mul` and `smulh`, compare the high word
+                // with `asr` of the low word by 63".
+                let low = lowerer.fresh(RegClass::Gpr64);
+                insts.push(MInst::Binary {
+                    op: BinOp::Mul,
+                    dst: low,
+                    lhs: left,
+                    rhs: right,
+                    width: Width::X,
+                });
+                let high = lowerer.fresh(RegClass::Gpr64);
+                insts.push(MInst::WideMultiply {
+                    op: WideMul::Smulh,
+                    dst: high,
+                    lhs: left,
+                    rhs: right,
+                });
+                let sign = lowerer.fresh(RegClass::Gpr64);
+                insts.push(MInst::BinaryImm {
+                    op: BinOp::Asr,
+                    dst: sign,
+                    lhs: low,
+                    imm: 63,
+                    width: Width::X,
+                });
+                let exact = lowerer.compare_into(insts, high, sign, Width::X, Cond::Eq);
+                if bits == 64 {
+                    exact
+                } else {
+                    let fits = lowerer.representable_in(insts, low, bits, Width::X);
+                    lowerer.both(insts, exact, fits)
+                }
+            };
+            lowerer.bind(result, dst);
+        }
+        Inst::ShiftCountDefined {
+            result,
+            shifted,
+            amount,
+            amount_signed,
+        } => {
+            let dst = lowerer.count_defined(insts, shifted, amount, *amount_signed)?;
+            lowerer.bind(result, dst);
+        }
+        Inst::SignedShlDefined {
+            result,
+            shifted,
+            amount,
+            amount_signed,
+        } => {
+            let count_ok = lowerer.count_defined(insts, shifted, amount, *amount_signed)?;
+            let bits = significant_bits(&shifted.ty);
+            let class = class_of(&shifted.ty).map_err(|(code, _)| code.to_owned())?;
+            let width = width_of(class);
+            let value = lowerer.reg(shifted)?;
+            let value = lowerer.sign_extend(insts, value, bits, width);
+            // EvoIR Section 3.3.1 makes the predicate "false for an invalid
+            // count, a negative left operand, or a shifted result not
+            // representable in signed bits<N>". Section 5's row states the
+            // count and the round trip and omits the negative operand;
+            // recorded gap.
+            let zero = lowerer.fresh(class);
+            insts.push(MInst::MovImm { dst: zero, imm: 0 });
+            let non_negative = lowerer.compare_into(insts, value, zero, width, Cond::Ge);
+            let amount_reg = lowerer.shift_amount(insts, amount)?;
+            let shifted_left = lowerer.fresh(class);
+            insts.push(MInst::Binary {
+                op: BinOp::Lsl,
+                dst: shifted_left,
+                lhs: value,
+                rhs: amount_reg,
+                width,
+            });
+            let back = lowerer.fresh(class);
+            insts.push(MInst::Binary {
+                op: BinOp::Asr,
+                dst: back,
+                lhs: shifted_left,
+                rhs: amount_reg,
+                width,
+            });
+            // Section 5: "(x << amt) >> amt == x with an arithmetic right
+            // shift".
+            let round_trip = lowerer.compare_into(insts, back, value, width, Cond::Eq);
+            let mut dst = lowerer.both(insts, count_ok, non_negative);
+            dst = lowerer.both(insts, dst, round_trip);
+            if bits < width.bits() {
+                // The round trip tests representability in the register, not
+                // in bits<N>; the same recorded gap as the additive rows.
+                let fits = lowerer.representable_in(insts, shifted_left, bits, width);
+                dst = lowerer.both(insts, dst, fits);
+            }
+            lowerer.bind(result, dst);
         }
         other => return Err(format!("{other:?} has no row in Section 5")),
     }
     Ok(())
 }
 
-fn call_result(lowerer: &mut Lowerer, results: &[Value]) -> Result<Option<VReg>, String> {
-    let ordinary: Vec<&Value> = results
-        .iter()
-        .filter(|value| is_register_type(&value.ty))
-        .collect();
-    match ordinary.as_slice() {
-        [] => Ok(None),
-        [value] => {
-            let class = class_of(&value.ty).map_err(|(code, _)| code.to_owned())?;
-            let reg = lowerer.fresh(class);
-            lowerer.bind(value, reg);
-            Ok(Some(reg))
-        }
-        _ => Err("a call with more than one ordinary result".to_owned()),
+fn call_results(lowerer: &mut Lowerer, results: &[Value]) -> Result<Vec<VReg>, String> {
+    let mut outputs = Vec::new();
+    for value in results.iter().filter(|value| is_register_type(&value.ty)) {
+        let class = class_of(&value.ty).map_err(|(code, _)| code.to_owned())?;
+        let reg = lowerer.fresh(class);
+        lowerer.bind(value, reg);
+        outputs.push(reg);
     }
+    if outputs.len() > MAX_REGISTER_RESULTS {
+        return Err("a call with more than eight ordinary results".to_owned());
+    }
+    Ok(outputs)
 }
 
 fn address_of(

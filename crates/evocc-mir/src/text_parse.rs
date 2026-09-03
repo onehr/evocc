@@ -15,8 +15,8 @@ use std::collections::HashMap;
 use evocc_evoir::{AccessLayout, GlobalKind, GlobalObject, GlobalVisibility};
 
 use crate::{
-    BinOp, Cond, ExtOp, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass, StoreKind,
-    SymbolKind, VReg, Width,
+    BinOp, Cond, ExtOp, FlagOp, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass,
+    StoreKind, SymbolKind, VReg, WideMul, Width,
 };
 
 /// Parse canonical Appendix A bytes back into a module.
@@ -234,6 +234,37 @@ fn parse_block(
                 }
                 insts.push(inst);
             }
+            // The grammar writes `b.<cond>` with no condition register, so the
+            // flags value it reads is the one Section 2's adjacency rule
+            // requires: the flags register the preceding instruction defines.
+            Parsed::Term(MTerm::BCond {
+                cond,
+                taken,
+                taken_args,
+                untaken,
+                untaken_args,
+                ..
+            }) => {
+                let flags = insts
+                    .last()
+                    .and_then(|inst| {
+                        crate::inst_defs(inst)
+                            .into_iter()
+                            .find(|reg| reg.class == RegClass::Flags)
+                    })
+                    .ok_or_else(|| {
+                        "a conditional branch follows the instruction that sets its flags"
+                            .to_owned()
+                    })?;
+                term = Some(MTerm::BCond {
+                    flags,
+                    cond,
+                    taken,
+                    taken_args,
+                    untaken,
+                    untaken_args,
+                });
+            }
             Parsed::Term(parsed) => term = Some(parsed),
         }
     }
@@ -371,6 +402,26 @@ impl<'a> Scan<'a> {
         }
     }
 
+    /// The optional `-> results` of a call: definitions, so each names its
+    /// class.
+    fn result_list(&mut self) -> Result<Vec<VReg>, String> {
+        if !self.text.starts_with(" -> ") {
+            return Ok(Vec::new());
+        }
+        self.expect(" -> ")?;
+        let mut regs = Vec::new();
+        loop {
+            let name = self
+                .take_while(|character| character != ',' && character != ' ' && character != ')');
+            regs.push(parse_definition(name)?);
+            if self.text.starts_with(", ") {
+                self.expect(", ")?;
+                continue;
+            }
+            return Ok(regs);
+        }
+    }
+
     fn edge(&mut self) -> Result<(u32, Vec<VReg>), String> {
         self.expect("^")?;
         let label = self.take_while(|character| character.is_ascii_alphanumeric());
@@ -403,6 +454,12 @@ fn split_width(mnemonic: &str) -> Option<(&str, Width)> {
 }
 
 fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, String> {
+    // `adds`/`subs` define a register and the flags. The Appendix A grammar has
+    // no two-destination production, so both are written before the `=` and
+    // recognised before the single-destination forms.
+    if let Some(inst) = parse_flag_binary(body, classes)? {
+        return Ok(Parsed::Inst(inst));
+    }
     let (dst, rest) = match body.split_once(" = ") {
         Some((head, tail)) if head.starts_with("%v") => (Some(parse_definition(head)?), tail),
         _ => (None, body),
@@ -417,13 +474,19 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
     if dst.is_none() {
         match mnemonic {
             "ret" => {
-                let value = if arguments.is_empty() {
-                    None
-                } else {
-                    Some(scan.use_of()?)
-                };
+                let mut values = Vec::new();
+                if !arguments.is_empty() {
+                    loop {
+                        values.push(scan.use_of()?);
+                        if scan.text.starts_with(", ") {
+                            scan.expect(", ")?;
+                            continue;
+                        }
+                        break;
+                    }
+                }
                 scan.finish()?;
-                return Ok(Parsed::Term(MTerm::Ret { value }));
+                return Ok(Parsed::Term(MTerm::Ret { values }));
             }
             "brk" => {
                 let imm = scan.immediate()?;
@@ -437,18 +500,16 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
                 scan.finish()?;
                 return Ok(Parsed::Term(MTerm::B { target, args }));
             }
-            "b.cond" => {
-                let flags = scan.use_of()?;
-                scan.expect(", ")?;
-                let cond = scan.condition()?;
+            "cbz" | "cbnz" => {
+                let src = scan.use_of()?;
                 scan.expect(", ")?;
                 let (taken, taken_args) = scan.edge()?;
                 scan.expect(", ")?;
                 let (untaken, untaken_args) = scan.edge()?;
                 scan.finish()?;
-                return Ok(Parsed::Term(MTerm::BCond {
-                    flags,
-                    cond,
+                return Ok(Parsed::Term(MTerm::Cb {
+                    nonzero: mnemonic == "cbnz",
+                    src,
                     taken,
                     taken_args,
                     untaken,
@@ -476,24 +537,27 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
             }
             _ => {}
         }
-        if let Some((head, width)) = split_width(mnemonic) {
-            if head == "cbz" || head == "cbnz" {
-                let src = scan.use_of()?;
-                scan.expect(", ")?;
-                let (taken, taken_args) = scan.edge()?;
-                scan.expect(", ")?;
-                let (untaken, untaken_args) = scan.edge()?;
-                scan.finish()?;
-                return Ok(Parsed::Term(MTerm::Cb {
-                    nonzero: head == "cbnz",
-                    src,
-                    width,
-                    taken,
-                    taken_args,
-                    untaken,
-                    untaken_args,
-                }));
-            }
+        if let Some(name) = mnemonic.strip_prefix("b.") {
+            let name = name
+                .strip_suffix(',')
+                .ok_or_else(|| format!("a conditional branch names two successors: '{body}'"))?;
+            let cond =
+                Cond::from_mnemonic(name).ok_or_else(|| format!("unknown condition '{name}'"))?;
+            let (taken, taken_args) = scan.edge()?;
+            scan.expect(", ")?;
+            let (untaken, untaken_args) = scan.edge()?;
+            scan.finish()?;
+            // The flags operand is filled in by the caller from the preceding
+            // instruction; a placeholder cannot escape, because `parse_block`
+            // replaces it before the block is built.
+            return Ok(Parsed::Term(MTerm::BCond {
+                flags: VReg::new(u32::MAX, RegClass::Flags),
+                cond,
+                taken,
+                taken_args,
+                untaken,
+                untaken_args,
+            }));
         }
         // A store defines nothing either.
         let volatile = arguments.starts_with("volatile ");
@@ -519,21 +583,40 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
         if mnemonic == "bl" {
             let symbol = scan.symbol()?;
             let args = scan.use_list()?;
+            let results = scan.result_list()?;
             scan.finish()?;
             return Ok(Parsed::Inst(MInst::Bl {
                 symbol,
                 args,
-                result: None,
+                results,
             }));
         }
         if mnemonic == "blr" {
             let target = scan.use_of()?;
             let args = scan.use_list()?;
+            let results = scan.result_list()?;
             scan.finish()?;
             return Ok(Parsed::Inst(MInst::Blr {
                 target,
                 args,
-                result: None,
+                results,
+            }));
+        }
+        if mnemonic == "mem.copy" {
+            scan.expect("[")?;
+            let dst = scan.use_of()?;
+            scan.expect("], [")?;
+            let src = scan.use_of()?;
+            scan.expect("], ")?;
+            let size = scan.immediate()?;
+            scan.expect(", ")?;
+            let align = scan.immediate()?;
+            scan.finish()?;
+            return Ok(Parsed::Inst(MInst::MemCopy {
+                dst,
+                src,
+                size,
+                align: u32::try_from(align).map_err(|_| "an alignment is small".to_owned())?,
             }));
         }
         return Err(format!("unknown form '{body}'"));
@@ -610,25 +693,12 @@ fn parse_defining(
         scan.finish()?;
         return Ok(MInst::Cset { dst, flags, cond });
     }
-    if mnemonic == "bl" {
-        let symbol = scan.symbol()?;
-        let args = scan.use_list()?;
+    if let Some(op) = WideMul::from_mnemonic(mnemonic) {
+        let lhs = scan.use_of()?;
+        scan.expect(", ")?;
+        let rhs = scan.use_of()?;
         scan.finish()?;
-        return Ok(MInst::Bl {
-            symbol,
-            args,
-            result: Some(dst),
-        });
-    }
-    if mnemonic == "blr" {
-        let target = scan.use_of()?;
-        let args = scan.use_list()?;
-        scan.finish()?;
-        return Ok(MInst::Blr {
-            target,
-            args,
-            result: Some(dst),
-        });
+        return Ok(MInst::WideMultiply { op, dst, lhs, rhs });
     }
     if let Some(op) = ExtOp::from_mnemonic(mnemonic) {
         let src = scan.use_of()?;
@@ -758,4 +828,41 @@ fn parse_defining(
             }
         }
     }
+}
+
+/// The two-destination `adds`/`subs` form, or `None` when `body` is not one.
+fn parse_flag_binary(
+    body: &str,
+    classes: &HashMap<u32, RegClass>,
+) -> Result<Option<MInst>, String> {
+    let Some((head, tail)) = body.split_once(" = ") else {
+        return Ok(None);
+    };
+    let Some((left, right)) = head.split_once(", ") else {
+        return Ok(None);
+    };
+    if !left.starts_with("%v") || !right.starts_with("%v") {
+        return Ok(None);
+    }
+    let dst = parse_definition(left)?;
+    let flags = parse_definition(right)?;
+    let (mnemonic, arguments) = tail
+        .split_once(' ')
+        .ok_or_else(|| format!("unknown form '{body}'"))?;
+    let (name, width) =
+        split_width(mnemonic).ok_or_else(|| format!("unknown form '{mnemonic}'"))?;
+    let op = FlagOp::from_mnemonic(name).ok_or_else(|| format!("unknown form '{mnemonic}'"))?;
+    let mut scan = Scan::new(arguments, classes);
+    let lhs = scan.use_of()?;
+    scan.expect(", ")?;
+    let rhs = scan.use_of()?;
+    scan.finish()?;
+    Ok(Some(MInst::FlagBinary {
+        op,
+        dst,
+        flags,
+        lhs,
+        rhs,
+        width,
+    }))
 }

@@ -555,3 +555,192 @@ fn a_gpr64_class_scalar_agrees() {
         );
     }
 }
+
+/// A function whose entry block computes one predicate over two arguments of
+/// one width and returns it, so the comparison isolates that row of Section 5.
+fn predicate_module(width: u16, body: &str) -> String {
+    [
+        format!("func @main(%arg0: bits<{width}>, %arg1: bits<{width}>, %arg2: mem<all>, %arg3: world) -> (bits<1>, mem<all>, world) cc = target_default"),
+        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }".to_owned(),
+        "{".to_owned(),
+        format!("^entry(%v0: bits<{width}>, %v1: bits<{width}>, %v2: mem<all>, %v3: world):"),
+        format!("    {body}"),
+        "    ret %v4, %v2, %v3".to_owned(),
+        "}".to_owned(),
+        String::new(),
+    ]
+    .join("\n")
+}
+
+/// Operand patterns chosen so every predicate meets its boundary: zero, one,
+/// the all-ones pattern (which is -1 at every width), the sign bit, the
+/// largest positive value, and a few interior points.
+fn probes(width: u16) -> Vec<u64> {
+    let mask = if width >= 64 {
+        u64::MAX
+    } else {
+        (1_u64 << width) - 1
+    };
+    let sign = 1_u64 << (width - 1);
+    let mut values = vec![0, 1, mask, sign, sign.wrapping_sub(1), mask ^ 1, 2];
+    values.retain(|value| *value <= mask);
+    values.sort_unstable();
+    values.dedup();
+    values
+}
+
+fn agree_over(width: u16, body: &str) {
+    let text = predicate_module(width, body);
+    for left in probes(width) {
+        for right in probes(width) {
+            agree(
+                &text,
+                &with_tokens(vec![bits(width, left), bits(width, right)]),
+            );
+        }
+    }
+}
+
+/// The widths the randomized generator draws from, so a predicate row is
+/// exercised at the register widths and at every shape below them.
+const WIDTHS: [u16; 9] = [1, 2, 3, 8, 13, 16, 31, 32, 64];
+
+#[test]
+fn the_divisor_check_agrees_at_every_width() {
+    for width in WIDTHS {
+        agree_over(width, "%v4 = divisor_nonzero %v1");
+    }
+}
+
+#[test]
+fn the_division_overflow_check_agrees_at_every_width() {
+    for width in WIDTHS {
+        agree_over(width, "%v4 = signed_div_rem_no_overflow %v0, %v1");
+    }
+}
+
+#[test]
+fn the_additive_overflow_checks_agree_at_every_width() {
+    for width in WIDTHS {
+        agree_over(width, "%v4 = signed_add_defined %v0, %v1");
+        agree_over(width, "%v4 = signed_sub_defined %v0, %v1");
+    }
+}
+
+#[test]
+fn the_multiply_overflow_check_agrees_at_every_width() {
+    for width in WIDTHS {
+        agree_over(width, "%v4 = signed_mul_defined %v0, %v1");
+    }
+}
+
+#[test]
+fn the_shift_count_check_agrees_at_every_width_and_signedness() {
+    for width in WIDTHS {
+        agree_over(width, "%v4 = shift_count_defined.unsigned %v0, %v1");
+        agree_over(width, "%v4 = shift_count_defined.signed %v0, %v1");
+    }
+}
+
+#[test]
+fn the_signed_left_shift_check_agrees_at_every_width_and_signedness() {
+    for width in WIDTHS {
+        agree_over(width, "%v4 = signed_shl_defined.unsigned %v0, %v1");
+        agree_over(width, "%v4 = signed_shl_defined.signed %v0, %v1");
+    }
+}
+
+/// Two widths at once, so a predicate whose amount is narrower or wider than
+/// the shifted value is covered as well.
+#[test]
+fn a_shift_predicate_agrees_when_its_two_widths_differ() {
+    for (shifted, amount) in [(32_u16, 3_u16), (3, 32), (13, 47), (64, 1), (1, 64)] {
+        let text = [
+            format!("func @main(%arg0: bits<{shifted}>, %arg1: bits<{amount}>, %arg2: mem<all>, %arg3: world) -> (bits<1>, mem<all>, world) cc = target_default"),
+            "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }".to_owned(),
+            "{".to_owned(),
+            format!("^entry(%v0: bits<{shifted}>, %v1: bits<{amount}>, %v2: mem<all>, %v3: world):"),
+            "    %v4 = signed_shl_defined.signed %v0, %v1".to_owned(),
+            "    ret %v4, %v2, %v3".to_owned(),
+            "}".to_owned(),
+            String::new(),
+        ]
+        .join("\n");
+        for left in probes(shifted) {
+            for right in probes(amount) {
+                agree(
+                    &text,
+                    &with_tokens(vec![bits(shifted, left), bits(amount, right)]),
+                );
+            }
+        }
+    }
+}
+
+const MULTIPLE_RESULTS: &str = "\
+func @main(%arg0: bits<32>, %arg1: bits<13>, %arg2: mem<all>, %arg3: world) -> (bits<32>, bits<13>, bits<1>, bits<64>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: bits<13>, %v2: mem<all>, %v3: world):
+    %v4 = add.bits<32> %v0, %v0
+    %v5 = sub.bits<13> %v1, %v1
+    %v6 = icmp.ult %v0, %v4
+    %v7 = zext.bits<64> %v0
+    ret %v4, %v5, %v6, %v7, %v2, %v3
+}
+";
+
+#[test]
+fn four_results_agree() {
+    // Section 6 returns up to eight results in x0 to x7, each masked back to
+    // its declared width by the lane.
+    for (left, right) in [(0_u64, 0_u64), (7, 9), (0xffff_ffff, 0x1fff)] {
+        agree(
+            MULTIPLE_RESULTS,
+            &with_tokens(vec![bits(32, left), bits(13, right)]),
+        );
+    }
+}
+
+const GUARDED_DIVISION: &str = "\
+func @main(%arg0: bits<17>, %arg1: bits<17>, %arg2: mem<all>, %arg3: world) -> (bits<17>, bits<17>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<17>, %v1: bits<17>, %v2: mem<all>, %v3: world):
+    %v4 = divisor_nonzero %v1
+    ub.assume.division_by_zero %v4
+    %v5 = signed_div_rem_no_overflow %v0, %v1
+    ub.assume.signed_overflow %v5
+    %v6 = sdiv.bits<17> %v0, %v1
+    %v7 = srem.bits<17> %v0, %v1
+    ret %v6, %v7, %v2, %v3
+}
+";
+
+#[test]
+fn a_guarded_division_agrees_and_traps_alike() {
+    // The whole shape a C division lowers to: two predicates, two obligations,
+    // then the operation, with two results.
+    for (left, right) in [(100_u64, 7_u64), (0x1ffff, 5), (0x10000, 3)] {
+        agree(
+            GUARDED_DIVISION,
+            &with_tokens(vec![bits(17, left), bits(17, right)]),
+        );
+    }
+
+    let module = parse_section9_module(GUARDED_DIVISION.as_bytes()).expect("canonical EvoIR");
+    let arguments = with_tokens(vec![bits(17, 5), bits(17, 0)]);
+    let evoir = interpret_module(&module, "main", &arguments, InterpreterLimits::new(100_000))
+        .expect_err("the divisor is zero");
+    assert_eq!(evoir.code(), "E3002");
+    let lowered = lower_module(&module).expect("lowerable");
+    let error = lane::observe_entry(
+        &lowered,
+        "main",
+        &arguments,
+        &[EvoIRType::Bits(17), EvoIRType::Bits(17)],
+        MirLimits::new(1_000_000),
+    )
+    .expect_err("the checked profile traps");
+    assert_eq!(error.code(), "E3002");
+}
