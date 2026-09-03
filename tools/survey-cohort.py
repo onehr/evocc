@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Survey parser diagnostics over a cohort or a full Kbuild command inventory.
+"""Survey front-end diagnostics over a cohort or a full Kbuild command inventory.
 
 The small-cohort mode preserves the original interface. Full-configuration
-mode reuses the frozen reconnaissance command decoder and argv projection,
-runs one bounded release-front-end process per real C compile command, and
-seals the exact inputs and outputs used for the aggregate report.
+mode reuses the frozen reconnaissance command decoder and argv projection. It
+can stop after parsing or continue through EvoIR lowering, runs one bounded
+release compiler process per real C compile command, and seals the exact
+inputs and outputs used for the aggregate report.
 """
 
 from __future__ import annotations
@@ -33,7 +34,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RECONNAISSANCE_RUNNER = PROJECT_ROOT / "tests/acceptance/day5-kernel-reconnaissance.py"
 DEFAULT_COMMAND_ROOT = PROJECT_ROOT / ".build/reference/gcc-lane-1"
 DEFAULT_SOURCE_ROOT = PROJECT_ROOT / ".build/linux-src"
-DEFAULT_EVIDENCE_ROOT = PROJECT_ROOT / ".evidence/full-config-parse-survey"
+DEFAULT_EVIDENCE_ROOTS = {
+    "parse": PROJECT_ROOT / ".evidence/full-config-parse-survey",
+    "lower": PROJECT_ROOT / ".evidence/full-config-lowering-survey",
+}
 DEFAULT_CONTRACT = PROJECT_ROOT / "tests/contracts/day9-acceptance-contract.json"
 DIAGNOSTIC = re.compile(
     r"^(?P<path>.+):(?P<line>[0-9]+):(?P<column>[0-9]+): "
@@ -140,6 +144,15 @@ def diagnostic_rows(stderr: str) -> list[dict[str, Any]]:
 
 def finding_key(diagnostic: dict[str, Any]) -> str:
     return f"{diagnostic['code']} {diagnostic['message'].split(':', 1)[0]}"
+
+
+def diagnostic_code_family(diagnostic: dict[str, Any]) -> str:
+    code = diagnostic["code"]
+    if code.startswith("E30"):
+        return "E30xx"
+    if code.startswith("E29"):
+        return "E29xx"
+    return "other"
 
 
 def panic_message(stderr: str) -> str | None:
@@ -266,7 +279,7 @@ def resolve_source(
     return resolved, logical, "gcc-output"
 
 
-def parse_projection(
+def front_end_projection(
     reconnaissance: ModuleType,
     evocc: Path,
     original: list[str],
@@ -274,6 +287,7 @@ def parse_projection(
     source_token: str,
     source: Path,
     source_logical: str,
+    action: str,
 ) -> tuple[list[str], list[str]]:
     lane = command_root.name
     raw, omitted = reconnaissance.raw_projection(evocc, original, lane, source_logical)
@@ -285,7 +299,8 @@ def parse_projection(
         omitted.remove(source_token)
         raw[-1] = str(source)
     require(raw[1:3] == ["-E", "-P"], "reconnaissance projection shape changed")
-    return [raw[0], "--parse-only", "--survey", *raw[3:]], omitted
+    mode = "--parse-only" if action == "parse" else "--emit=evoir"
+    return [raw[0], mode, "--survey", *raw[3:]], omitted
 
 
 def inventory(
@@ -293,7 +308,9 @@ def inventory(
     command_root: Path,
     source_root: Path,
     evocc: Path,
+    action: str = "parse",
 ) -> tuple[list[CompileUnit], list[dict[str, Any]]]:
+    require(action in DEFAULT_EVIDENCE_ROOTS, f"unknown survey action: {action}")
     records = sorted(command_root.rglob("*.o.cmd"))
     require(bool(records), f"no .o.cmd records found under {command_root}")
     units: list[CompileUnit] = []
@@ -346,7 +363,7 @@ def inventory(
         require(source_token is not None, f"missing included source token: {relative}")
         source, source_logical, source_origin = resolve_source(command_root, source_root, source_token)
         require(source.is_file(), f"selected source is absent: {relative}: {source}")
-        projected, omitted = parse_projection(
+        projected, omitted = front_end_projection(
             reconnaissance,
             evocc,
             argv,
@@ -354,6 +371,7 @@ def inventory(
             source_token,
             source,
             source_logical,
+            action,
         )
         unit_id = sha256_bytes(relative.encode())[:16]
         unit = CompileUnit(
@@ -391,7 +409,12 @@ def inventory(
     return units, rows
 
 
-def run_one(unit: CompileUnit, capture: Path, timeout_seconds: int) -> dict[str, Any]:
+def run_one(
+    unit: CompileUnit,
+    capture: Path,
+    timeout_seconds: int,
+    action: str,
+) -> dict[str, Any]:
     stdout_path = capture / "stdout" / f"{unit.unit_id}.stdout"
     stderr_path = capture / "stderr" / f"{unit.unit_id}.stderr"
     started = time.monotonic_ns()
@@ -430,6 +453,7 @@ def run_one(unit: CompileUnit, capture: Path, timeout_seconds: int) -> dict[str,
         "record": unit.record_relative,
         "source": unit.source_logical,
         "sourceOrigin": unit.source_origin,
+        "action": action,
         "classification": classification,
         "returnCode": return_code,
         "timedOut": timed_out,
@@ -454,6 +478,7 @@ def result_summary(
     inventory_rows: list[dict[str, Any]],
     jobs: int,
     timeout_seconds: int,
+    action: str,
 ) -> dict[str, Any]:
     categories = collections.Counter(row["classification"] for row in rows)
     for category in ("clean", "diagnosed", "unavailable", "timeout", "panic"):
@@ -467,6 +492,11 @@ def result_summary(
         if row["classification"] == "diagnosed":
             roots[row["firstDiagnosticClass"]].append(row)
     ranked = sorted(roots.items(), key=lambda item: (-len(item[1]), item[0]))
+    diagnostic_families = collections.Counter(
+        diagnostic_code_family(row["firstDiagnostic"])
+        for row in rows
+        if row["classification"] == "diagnosed"
+    )
     top = [
         {
             "finding": finding,
@@ -493,7 +523,8 @@ def result_summary(
     times = [row["wallMilliseconds"] for row in rows]
     slowest = max(rows, key=lambda row: row["wallMilliseconds"])
     return {
-        "schema": "evocc.full-configuration-parse-survey.v1",
+        "schema": f"evocc.full-configuration-{action}-survey.v1",
+        "action": action,
         "enumeration": {
             "commandRecords": len(inventory_rows),
             "includedCUnits": len(rows),
@@ -511,6 +542,9 @@ def result_summary(
         "classifications": {
             name: categories[name]
             for name in ("clean", "diagnosed", "unavailable", "timeout", "panic")
+        },
+        "diagnosedByCodeFamily": {
+            name: diagnostic_families[name] for name in ("E30xx", "E29xx", "other")
         },
         "atRootTop15": top,
         "panicUnits": panic_units,
@@ -537,18 +571,29 @@ def git_output(*args: str) -> str:
     return completed.stdout.strip()
 
 
-def validate_authority(contract: Path) -> None:
+def validate_authority(contract: Path, action: str) -> None:
     value = json.loads(contract.read_text(encoding="utf-8"))
     scope = value.get("scope", [])
+    if action == "parse":
+        require(
+            any(
+                isinstance(item, str) and item.startswith("F3 full-configuration parse survey:")
+                for item in scope
+            ),
+            "contract does not open the full-configuration parse survey",
+        )
+        ruling = value.get("rulings", {}).get("fullConfigSurveyIsMeasureOnly", "")
+        require("measure-only" in ruling, "contract does not carry the measure-only ruling")
+        return
     require(
         any(
-            isinstance(item, str) and item.startswith("F3 full-configuration parse survey:")
+            isinstance(item, str)
+            and item.startswith("Z after closure:")
+            and "lowering survey, measure-only" in item
             for item in scope
         ),
-        "contract does not open the full-configuration parse survey",
+        "contract does not open the measure-only full-configuration lowering survey",
     )
-    ruling = value.get("rulings", {}).get("fullConfigSurveyIsMeasureOnly", "")
-    require("measure-only" in ruling, "contract does not carry the measure-only ruling")
 
 
 def seal_capture(capture: Path) -> dict[str, Any]:
@@ -580,8 +625,8 @@ def run_full_configuration(args: argparse.Namespace) -> int:
     evocc = args.evocc.resolve()
     command_root = args.command_record_root.resolve()
     source_root = args.source_root.resolve()
-    evidence_root = args.evidence_root.resolve()
-    validate_authority(contract)
+    evidence_root = (args.evidence_root or DEFAULT_EVIDENCE_ROOTS[args.action]).resolve()
+    validate_authority(contract, args.action)
     require(evocc.is_file(), f"release compiler is absent: {evocc}")
     require(args.timeout > 0, "timeout must be positive")
     require(args.jobs > 0, "parallelism must be positive")
@@ -607,6 +652,7 @@ def run_full_configuration(args: argparse.Namespace) -> int:
         command_root,
         source_root,
         evocc,
+        args.action,
     )
     require(len(inventory_rows) == 2944, f"expected 2944 command records, found {len(inventory_rows)}")
     jsonl(capture / "enumeration.jsonl", inventory_rows)
@@ -626,8 +672,9 @@ def run_full_configuration(args: argparse.Namespace) -> int:
     )
     subject = git_output("rev-parse", "HEAD")
     config = {
-        "schema": "evocc.full-configuration-parse-survey.config.v1",
+        "schema": f"evocc.full-configuration-{args.action}-survey.config.v1",
         "runId": run_id,
+        "action": args.action,
         "subjectCommit": subject,
         "contract": {
             "path": contract.relative_to(PROJECT_ROOT).as_posix(),
@@ -661,7 +708,10 @@ def run_full_configuration(args: argparse.Namespace) -> int:
     results: list[dict[str, Any]] = []
     completed_count = 0
     with ThreadPoolExecutor(max_workers=args.jobs) as executor:
-        futures = {executor.submit(run_one, unit, capture, args.timeout): unit for unit in units}
+        futures = {
+            executor.submit(run_one, unit, capture, args.timeout, args.action): unit
+            for unit in units
+        }
         for future in as_completed(futures):
             unit = futures[future]
             try:
@@ -673,7 +723,7 @@ def run_full_configuration(args: argparse.Namespace) -> int:
                 print(f"surveyed {completed_count}/{len(units)} units", flush=True)
     results.sort(key=lambda row: row["record"])
     jsonl(capture / "results.jsonl", results)
-    summary = result_summary(results, inventory_rows, args.jobs, args.timeout)
+    summary = result_summary(results, inventory_rows, args.jobs, args.timeout, args.action)
     summary["runId"] = run_id
     summary["subjectCommit"] = subject
     summary["capture"] = capture.relative_to(PROJECT_ROOT).as_posix()
@@ -707,8 +757,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--glob", default="*.gcc.c")
     parser.add_argument("--json", type=Path)
+    parser.add_argument(
+        "--action",
+        choices=tuple(DEFAULT_EVIDENCE_ROOTS),
+        default="parse",
+        help="stop after parsing or continue through EvoIR lowering",
+    )
     parser.add_argument("--source-root", type=Path, default=DEFAULT_SOURCE_ROOT)
-    parser.add_argument("--evidence-root", type=Path, default=DEFAULT_EVIDENCE_ROOT)
+    parser.add_argument("--evidence-root", type=Path)
     parser.add_argument("--contract", type=Path, default=DEFAULT_CONTRACT)
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--timeout", type=int, default=60)
@@ -720,6 +776,7 @@ def main() -> int:
     args = parse_args()
     try:
         if args.units is not None:
+            require(args.action == "parse", "cohort mode supports only the parse action")
             return run_cohort_mode(args)
         return run_full_configuration(args)
     except (OSError, subprocess.CalledProcessError, SurveyError, json.JSONDecodeError) as error:

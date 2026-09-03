@@ -59,6 +59,24 @@ def main() -> int:
         host = next(row for row in rows if row["record"] == "scripts/.host.o.cmd")
         assert host["included"] is False, host
         assert host["exclusionReason"] == "host-compiler-program", host
+
+        lowering_units, lowering_rows = survey.inventory(
+            reconnaissance,
+            commands,
+            sources,
+            Path("/subject/evocc"),
+            "lower",
+        )
+        assert len(lowering_units) == len(units) == 1
+        assert len(lowering_rows) == len(rows) == 2
+        assert units[0].projected_argv[1:3] == ("--parse-only", "--survey")
+        assert lowering_units[0].projected_argv[1:3] == ("--emit=evoir", "--survey")
+        assert units[0].projected_argv[3:] == lowering_units[0].projected_argv[3:]
+        assert units[0].omitted_argv == lowering_units[0].omitted_argv
+
+        assert survey.diagnostic_code_family({"code": "E3034"}) == "E30xx"
+        assert survey.diagnostic_code_family({"code": "E2928"}) == "E29xx"
+        assert survey.diagnostic_code_family({"code": "E3101"}) == "other"
     return 0
 
 
