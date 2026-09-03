@@ -239,8 +239,8 @@ fn an_arithmetic_right_shift_replicates_a_known_sign() {
     );
     assert_eq!(
         bits("??01").transfer_ashr(KnownBits::constant(8, 2)),
-        bits("???0"),
-        "an unknown sign bit is not, and the one bit that moved down is kept"
+        KnownBits::top(4),
+        "an unknown sign bit is not, and the two known bits shifted out"
     );
     assert_eq!(
         bits("0?01").transfer_ashr(KnownBits::constant(8, 2)),

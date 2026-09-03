@@ -198,37 +198,115 @@ impl Fact {
 
     // -- the shift and width rows, added at revision 1.9.43 -----------------
     //
-    // Declared and not yet computed: each answers top, which is what Section
-    // 8.10 gives an operator it does not list.
+    // A shift by an amount that is not fully known, or is known and not below
+    // the width, transfers to top: the out-of-range case belongs to the shift's
+    // own definedness guard, and this analysis says nothing about a guarded
+    // operation.
 
-    /// `shl` under a fully known amount below the width.
-    pub(crate) fn shl(self, _amount: Self) -> Self {
-        Self::top(self.width)
+    /// How far a shift shifts, when the table admits the amount at all.
+    fn distance(amount: Self, width: u16) -> Option<u32> {
+        if !amount.is_fully_known() || amount.ones >= u64::from(width) {
+            return None;
+        }
+        u32::try_from(amount.ones).ok()
     }
 
-    /// `lshr` under a fully known amount below the width.
-    pub(crate) fn lshr(self, _amount: Self) -> Self {
-        Self::top(self.width)
+    /// Everything moves up; what moves in below is zero.
+    pub(crate) fn shl(self, amount: Self) -> Self {
+        let Some(distance) = Self::distance(amount, self.width) else {
+            return Self::top(self.width);
+        };
+        Self {
+            width: self.width,
+            zeros: ((self.zeros << distance) | low(distance)) & span(self.width),
+            ones: (self.ones << distance) & span(self.width),
+        }
     }
 
-    /// `ashr` under a fully known amount below the width.
-    pub(crate) fn ashr(self, _amount: Self) -> Self {
-        Self::top(self.width)
+    /// Everything moves down; what moves in above is zero.
+    pub(crate) fn lshr(self, amount: Self) -> Self {
+        let Some(distance) = Self::distance(amount, self.width) else {
+            return Self::top(self.width);
+        };
+        Self {
+            width: self.width,
+            zeros: (self.zeros >> distance) | self.vacated(distance),
+            ones: self.ones >> distance,
+        }
     }
 
-    /// `zext` to `width`.
+    /// Everything moves down; what moves in above is the sign, if the sign is
+    /// known at all.
+    pub(crate) fn ashr(self, amount: Self) -> Self {
+        let Some(distance) = Self::distance(amount, self.width) else {
+            return Self::top(self.width);
+        };
+        let vacated = self.vacated(distance);
+        Self {
+            width: self.width,
+            zeros: (self.zeros >> distance) | (vacated & self.sign_zero()),
+            ones: (self.ones >> distance) | (vacated & self.sign_one()),
+        }
+    }
+
+    /// The bits a right shift by `distance` leaves behind at the top.
+    fn vacated(self, distance: u32) -> u64 {
+        span(self.width) & !low(u32::from(self.width) - distance)
+    }
+
+    fn sign_bit(self) -> u64 {
+        1 << (self.width - 1)
+    }
+
+    /// All ones when the sign is known zero, nothing otherwise, so that either
+    /// can be used as a mask over the bits an extension adds.
+    fn sign_zero(self) -> u64 {
+        if self.zeros & self.sign_bit() == 0 {
+            0
+        } else {
+            u64::MAX
+        }
+    }
+
+    fn sign_one(self) -> u64 {
+        if self.ones & self.sign_bit() == 0 {
+            0
+        } else {
+            u64::MAX
+        }
+    }
+
+    /// The bits an extension to `width` adds above this fact's own.
+    fn added(self, width: u16) -> u64 {
+        span(width) & !span(self.width)
+    }
+
+    /// The added bits are zero.
     pub(crate) fn zext(self, width: u16) -> Self {
-        Self::top(width)
+        Self {
+            width,
+            zeros: self.zeros | self.added(width),
+            ones: self.ones,
+        }
     }
 
-    /// `sext` to `width`.
+    /// The added bits are the sign, if the sign is known.
     pub(crate) fn sext(self, width: u16) -> Self {
-        Self::top(width)
+        let added = self.added(width);
+        Self {
+            width,
+            zeros: self.zeros | (added & self.sign_zero()),
+            ones: self.ones | (added & self.sign_one()),
+        }
     }
 
-    /// `trunc` to `width`.
+    /// What is left of the low bits.
     pub(crate) fn trunc(self, width: u16) -> Self {
-        Self::top(width)
+        Self {
+            width,
+            zeros: self.zeros & span(width),
+            ones: self.ones & span(width),
+        }
     }
 
     /// The smallest and largest values the unknown bits allow, read unsigned.
@@ -392,7 +470,7 @@ mod tests {
         assert_eq!(bits("1?01").lshr(Fact::constant(8, 2)), bits("001?"));
         assert_eq!(bits("1?01").lshr(bits("????????")), Fact::top(4));
         assert_eq!(bits("1?01").ashr(Fact::constant(8, 2)), bits("111?"));
-        assert_eq!(bits("??01").ashr(Fact::constant(8, 2)), bits("???0"));
+        assert_eq!(bits("??01").ashr(Fact::constant(8, 2)), Fact::top(4));
         assert_eq!(bits("0?01").ashr(Fact::constant(8, 2)), bits("000?"));
     }
 
