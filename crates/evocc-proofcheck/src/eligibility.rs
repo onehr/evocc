@@ -243,6 +243,30 @@ fn structural_shape(instruction: &Inst) -> Option<(&'static str, EvoIRType, u64,
     ))
 }
 
+/// The values Section 8.5 lets a region name: neither tainted nor excluded.
+///
+/// Section 8.10 sends every other value to top, so the seed fixed point asks
+/// this the same question region formation does, from the same two fixed
+/// points.
+pub(crate) fn admitted_values(function: &Function) -> HashSet<u32> {
+    let tainted = tainted_values(function);
+    let excluded = excluded_values(function);
+    let mut admitted = HashSet::new();
+    for block in &function.blocks {
+        for value in block
+            .args
+            .iter()
+            .map(|argument| &argument.value)
+            .chain(block.insts.iter().flat_map(|i| inst_results(i)))
+        {
+            if !tainted.contains(&value.id) && !excluded.contains(&value.id) {
+                admitted.insert(value.id);
+            }
+        }
+    }
+    admitted
+}
+
 fn tainted_values(function: &Function) -> HashSet<u32> {
     fixed_point(function, |instruction| {
         matches!(instruction, Inst::Uninitialized(_))
@@ -349,7 +373,7 @@ fn width_of(ty: &EvoIRType) -> u16 {
     }
 }
 
-fn allowlisted(instruction: &Inst) -> bool {
+pub(crate) fn allowlisted(instruction: &Inst) -> bool {
     let shape_ok = match instruction {
         Inst::Const(result, _) => eligible_bits(&result.ty),
         Inst::Add(result, left, right)

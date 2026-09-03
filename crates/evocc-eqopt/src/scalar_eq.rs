@@ -10,7 +10,9 @@ use evocc_types::EvoIRType;
 
 use evocc_evoir::{inst_results, CmpOp, Inst, Module, Value};
 
+use crate::eligibility::Admission;
 use crate::known_bits::{Comparison, KnownBits};
+use crate::seed_facts::SeedFacts;
 
 pub(crate) use evocc_evoir::{remap_inst_uses, resolve_alias};
 
@@ -231,6 +233,10 @@ pub struct ScalarEqReport {
     /// its own -- the regions closing congruence is what buys.
     pub congruences: usize,
     pub congruent_roots: usize,
+    /// Passes the Section 8.10 seed-fact fixed point took, the deepest of any
+    /// function in the module. It buys the facts a block argument carries, and
+    /// it is the only cost this analysis has.
+    pub seed_fact_rounds: usize,
     pub budget_exhausted: bool,
     pub proof_replay_failed: bool,
     pub fell_back: bool,
@@ -431,8 +437,14 @@ pub(crate) fn optimize_scalar_module_with_events(
     // throw away work a checker would have verified.
     let mut stopped = false;
 
-    for function in &mut optimized.functions {
-        for block in &mut function.blocks {
+    for (index, function) in optimized.functions.iter_mut().enumerate() {
+        // Section 8.10: the facts of this function's block arguments, computed
+        // once, before any region is formed and before any rewrite is
+        // proposed.
+        let admission = Admission::of(&original.functions[index]);
+        let seed_facts = SeedFacts::of(&original.functions[index], &admission);
+        report.seed_fact_rounds = report.seed_fact_rounds.max(seed_facts.passes());
+        for (block_index, block) in function.blocks.iter_mut().enumerate() {
             let mut aliases = HashMap::new();
             // Section 7.4: two instructions with the same operator whose
             // operands are already equal compute one value, so the second is
@@ -451,7 +463,9 @@ pub(crate) fn optimize_scalar_module_with_events(
                 HashMap::new();
             let mut facts = HashMap::new();
             let mut negations = NegationEnv::new();
-            let mut known = KnownEnv::new();
+            // A block argument is no longer opaque: it carries what every
+            // edge into this block agrees on.
+            let mut known = seed_facts.arguments_of(&original.functions[index].blocks[block_index]);
             let mut rewritten = Vec::with_capacity(block.insts.len());
             for original_inst in &block.insts {
                 let mut inst = original_inst.clone();

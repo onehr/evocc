@@ -17,6 +17,7 @@ use crate::scalar_eq::{
     resolve_alias, scalar_operands, AppliedRewrite, NegationEnv, Replacement, RewriteOpportunity,
     ScalarFact, ScalarOperator,
 };
+use crate::seed_facts::SeedFacts;
 use crate::{ProofAuthority, ScalarEqBudget, ScalarEqReport, ScalarRewrite};
 
 /// The two reviewed registries of Section 11.6.
@@ -125,10 +126,15 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
         // Section 8.5: taint and exclusion are computed once per function,
         // before any region is formed, and consulted from there.
         let admission = Admission::of(function);
+        // Section 8.10: what every edge into a block agrees its arguments
+        // carry, computed once for the function before any region is formed.
+        let seed_facts = SeedFacts::of(function, &admission);
+        report.seed_fact_rounds = report.seed_fact_rounds.max(seed_facts.passes());
         for (block_index, block) in function.blocks.iter().enumerate() {
             let context = Surroundings {
                 shapes: block_shapes(block),
                 admission: &admission,
+                seed_facts: &seed_facts,
             };
             for (instruction_index, instruction) in block.insts.iter().enumerate() {
                 let Some(root_event) = applied.iter().find(|event| {
@@ -372,6 +378,7 @@ struct Accepted {
 struct Surroundings<'a> {
     shapes: BlockShapes,
     admission: &'a Admission,
+    seed_facts: &'a SeedFacts,
 }
 
 fn build_region(
@@ -475,6 +482,22 @@ fn build_region(
         .map(|seed| sort_width(&seed.sort))
         .chain(nodes.iter().map(|node| sort_width(&node.sort)))
         .collect::<Option<Vec<_>>>()?;
+    // Section 8.10 "Facts of seeds": a seed of origin `input` is not opaque to
+    // the analysis, only to the region. Its class starts at the fact the
+    // function-wide fixed point derived rather than at top, which is what lets
+    // a side condition read what a block argument carries. Every other seed
+    // starts at top.
+    let seed_starts = seeds
+        .iter()
+        .zip(&widths)
+        .map(|(seed, width)| {
+            surroundings
+                .seed_facts
+                .of_value(seed.value)
+                .filter(|fact| fact.width() == *width)
+                .unwrap_or_else(|| KnownBits::top(*width))
+        })
+        .collect::<Vec<_>>();
     // The before nodes are the region as the transaction found it, produced by
     // no epoch, so they precede the first marker.
     let mut events = nodes
@@ -525,7 +548,7 @@ fn build_region(
         // nodes, after the merges recorded so far. Reading the sweep's
         // environment instead would let the producer state a premise nobody
         // else derives.
-        let facts = RegionFacts::compute(&nodes, &widths, &classes)?;
+        let facts = RegionFacts::compute(&nodes, &widths, &seed_starts, &classes)?;
         let derived = region_rewrite(event, &nodes, &value_classes, &classes, &facts, node_id)?;
         let opportunity = derived.opportunity;
         let rule = derived.rule;
@@ -879,7 +902,7 @@ fn region_rewrite(
     node_id: u32,
 ) -> Option<RegionRewrite> {
     let matched = nodes.get(node_id as usize)?;
-    if let Some(opportunity) = canonical_reduction(event, nodes, value_classes, classes) {
+    if let Some(opportunity) = canonical_reduction(event, matched, nodes, value_classes, classes) {
         if let Some((rule, bindings)) = exact_rule(
             &event.instruction,
             &event.facts,
@@ -908,6 +931,7 @@ fn region_rewrite(
 /// derived is not this rule, whatever the sweep called it.
 fn canonical_reduction(
     event: &AppliedRewrite,
+    matched: &EvpNode,
     nodes: &[EvpNode],
     value_classes: &HashMap<u32, u32>,
     classes: &LocalClasses,
@@ -946,7 +970,22 @@ fn canonical_reduction(
             }
             values
         }
-        (_, ScalarRewrite::DoubleNegation | ScalarRewrite::IdentityComparison, _) => {
+        (_, ScalarRewrite::IdentityComparison, _) => {
+            // `icmp.*(?x, ?x)` is a claim about one class, not about two
+            // values the sweep happened to give one name. The sweep matches on
+            // its own rewritten stream, where an earlier alias may already have
+            // replaced one operand by the other; the region is built from
+            // `before.evo`, and there the two operands are whatever classes
+            // they are. A seed whose fact is fully known is still its own
+            // class -- a fact is not a node, and no rule in this profile joins
+            // a class to the constant its fact names -- so the identity has to
+            // be read off the partition rather than off the instruction.
+            let [left, right] = matched.children.as_slice() else {
+                return None;
+            };
+            return (classes.find(*left)? == classes.find(*right)?).then_some(original);
+        }
+        (_, ScalarRewrite::DoubleNegation, _) => {
             return Some(original);
         }
         _ => return None,
@@ -1202,9 +1241,10 @@ fn class_constant(
 /// The Section 8.10 fact of every class of one region, recomputed from its
 /// nodes.
 ///
-/// A class's fact is the meet of the transfers of the nodes it owns, and a meet
-/// that disagrees with itself on a known bit is an invalid union rather than a
-/// fact, so the whole region is abandoned. The producer computes this the way
+/// A class's fact is the meet of the transfers of the nodes it owns and, for a
+/// seed class, of the fact Section 8.10's function-wide fixed point gives the
+/// block argument. A meet that disagrees with itself on a known bit is an
+/// invalid union rather than a fact, so the whole region is abandoned. The producer computes this the way
 /// the checker will, from the node stream and nothing else: a premise derived
 /// from the sweep's own environment would be a claim only the producer could
 /// make.
@@ -1213,11 +1253,22 @@ struct RegionFacts {
 }
 
 impl RegionFacts {
-    fn compute(nodes: &[EvpNode], widths: &[u16], classes: &LocalClasses) -> Option<Self> {
+    fn compute(
+        nodes: &[EvpNode],
+        widths: &[u16],
+        seeds: &[KnownBits],
+        classes: &LocalClasses,
+    ) -> Option<Self> {
         let mut facts = widths
             .iter()
             .map(|width| KnownBits::top(*width))
             .collect::<Vec<_>>();
+        // Seed classes come first, in manifest order, and start at the fact
+        // Section 8.10 gives the block argument they name.
+        for (index, fact) in seeds.iter().enumerate() {
+            let root = classes.find(u32::try_from(index).ok()?)? as usize;
+            facts[root] = facts.get(root).copied()?.meet(*fact)?;
+        }
         loop {
             let mut changed = false;
             for node in nodes {

@@ -31,6 +31,12 @@ pub struct CampaignReport {
     /// congruence alone replaced.
     pub congruence_counts: BTreeMap<usize, u64>,
     pub congruent_roots: u64,
+    /// Premises that assert a bit about a class a seed owns, which is what the
+    /// Section 8.10 seed fixed point buys, and the passes that fixed point
+    /// took, as its cost.
+    pub premises_asserting_a_seed: u64,
+    pub seed_fact_passes: BTreeMap<usize, u64>,
+    pub max_seed_fact_passes: usize,
     /// Regions a fresh transaction over an optimized module still admits, and
     /// the programs that have any. Section 11.3 names these a measured quality
     /// metric of the registry: Section 11.6 lets a left-hand `const_like` match
@@ -104,6 +110,19 @@ impl CampaignReport {
             .join(",");
         let _ = writeln!(text, "congruenceCounts={congruences}");
         let _ = writeln!(text, "congruentRoots={}", self.congruent_roots);
+        let _ = writeln!(
+            text,
+            "premisesAssertingASeed={}",
+            self.premises_asserting_a_seed
+        );
+        let passes = self
+            .seed_fact_passes
+            .iter()
+            .map(|(count, transactions)| format!("{count}:{transactions}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let _ = writeln!(text, "seedFactPasses={passes}");
+        let _ = writeln!(text, "maxSeedFactPasses={}", self.max_seed_fact_passes);
         let _ = writeln!(text, "residualRegions={}", self.residual_regions);
         let _ = writeln!(text, "residualPrograms={}", self.residual_programs);
         let lengths = self
@@ -154,7 +173,14 @@ pub fn run_campaign(
                 premise_counts,
                 congruence_counts,
                 congruent_roots,
+                premises_asserting_a_seed,
+                seed_fact_passes,
             } => {
+                report.premises_asserting_a_seed += premises_asserting_a_seed as u64;
+                for (passes, transactions) in seed_fact_passes {
+                    *report.seed_fact_passes.entry(passes).or_default() += transactions;
+                    report.max_seed_fact_passes = report.max_seed_fact_passes.max(passes);
+                }
                 report.transactions += transactions as u64;
                 *report.run_lengths.entry(transactions).or_default() += 1;
                 if stopped_at_ceiling {

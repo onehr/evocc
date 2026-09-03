@@ -134,6 +134,27 @@ impl Fact {
     // -- the transfer table --------------------------------------------------
 
     /// Known where either input is known zero, or both are known one.
+    /// What two facts arriving on different edges agree on: a bit is known
+    /// only where both know it and give it the same value.
+    ///
+    /// This is not `meet`. `meet` combines two facts about one value already
+    /// proved equal and may keep what either knows; this combines facts about
+    /// two different values reaching one argument and may keep only what both
+    /// know. Section 8.10 spells them with the same word, in the two senses the
+    /// dataflow literature gives it, and the difference is soundness rather
+    /// than taste: a bit known on one edge alone says nothing about the value
+    /// that arrives on the other.
+    pub(crate) fn join(self, other: Self) -> Self {
+        if self.width != other.width {
+            return Self::top(self.width);
+        }
+        Self {
+            width: self.width,
+            zeros: self.zeros & other.zeros,
+            ones: self.ones & other.ones,
+        }
+    }
+
     pub(crate) fn and(self, other: Self) -> Self {
         Self {
             width: self.width,

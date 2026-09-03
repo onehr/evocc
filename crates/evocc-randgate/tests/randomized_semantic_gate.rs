@@ -674,7 +674,7 @@ fn the_extended_campaign_finds_no_mismatch() {
 /// themselves are pinned by the hand-written reproducers in
 /// `certificate_binding_refusal.rs`, which no generator change can move.
 /// Rediscovering any of them by chance is not a regression test either way.
-const REFUSED_SEEDS: [u64; 21] = [
+const REFUSED_SEEDS: [u64; 26] = [
     1_592_591_013,
     1_592_627_955,
     1_592_629_865,
@@ -699,6 +699,15 @@ const REFUSED_SEEDS: [u64; 21] = [
     1_592_644_319,
     1_592_645_150,
     1_592_645_621,
+    // The five the long run refused once a block argument carried a fact: the
+    // sweep read an identity comparison off its own rewritten stream, where an
+    // earlier alias had already replaced one operand by the other, and the
+    // region could not join the two classes.
+    1_592_634_837,
+    1_592_638_363,
+    1_592_642_422,
+    1_592_642_867,
+    1_592_644_670,
 ];
 
 #[test]
@@ -946,10 +955,16 @@ fn the_campaign_reaches_the_tier_b_rules() {
     ] {
         assert!(fired.contains(rule), "{rule} never fired");
     }
-    for dominated in ["p1_202_known_xor", "p1_203_known_add", "p1_204_known_sub"] {
+    // Revision 1.9.47: these three stopped being dominated when a block
+    // argument gained a fact of its own. `fully_known` on `xor`, `add` and
+    // `sub` used to hold exactly when `all_const` did, so the fold always came
+    // first in registry order and the fact rule never fired; a seed that is
+    // fully known without any `const` node standing for it separates the two,
+    // and a coverage claim counts them as reached when such an input exists.
+    for reached in ["p1_202_known_xor", "p1_203_known_add", "p1_204_known_sub"] {
         assert!(
-            !fired.contains(dominated),
-            "{dominated} is dominated by its fold and no conforming producer fires it"
+            fired.contains(reached),
+            "{reached} fires where the operands are known without being constants"
         );
     }
 }
