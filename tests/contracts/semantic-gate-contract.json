@@ -289,6 +289,13 @@
         "congruenceOnlyRegions256Seeds": 1,
         "wallSeconds1000Median": 27.283,
         "wallSeconds20000": 560.148
+      },
+      "architectGate": {
+        "subject": "e862b8b",
+        "passed": 1220,
+        "failed": 0,
+        "clippy": 0,
+        "fmt": "clean"
       }
     }
   }
