@@ -18,7 +18,7 @@ use evocc_evoir::{
     validate_module, Block, BlockArg, CmpOp, EffectSummary, Function, FunctionParam, Inst, Module,
     Value,
 };
-use evocc_proof::EvpEvent;
+use evocc_proof::{EvpEvent, EvpNode, EvpProofRef, EvpRegion};
 use evocc_randgate::shrink_module;
 use evocc_types::{EvoIRType, Region};
 
@@ -185,12 +185,65 @@ fn a_congruent_pair_becomes_one_node() {
     );
 }
 
-/// The nested-pattern reproducer, handed back to the shrinker.
+/// Whether some region resolves the nested rule's variable in a class that
+/// owns more than one subtraction.
 ///
-/// Its property is that some region's witness closure holds two `sub` nodes
-/// that fold to one constant while their operands stay apart, and that the
-/// nested rule fires there. Anything shorter that still holds it is a better
-/// reproducer than the one written by hand.
+/// This is the property the reproducer exists for, and stating it exactly is
+/// what makes handing the module back to the shrinker meaningful. A weaker
+/// property -- that the nested rule fires at all -- is held by modules with one
+/// subtraction in the class, where the variable can only resolve one way and
+/// nothing is being pinned. The partition is replayed from the certificate's
+/// own events, so the test does not need the producer to tell it anything.
+fn resolves_among_several_subtractions(region: &EvpRegion) -> bool {
+    let mut parent =
+        (0..u32::try_from(region.seeds.len()).expect("seed count fits")).collect::<Vec<u32>>();
+    let mut nodes: Vec<EvpNode> = Vec::new();
+
+    fn find(parent: &[u32], mut class: u32) -> u32 {
+        while parent[class as usize] != class {
+            class = parent[class as usize];
+        }
+        class
+    }
+
+    for event in &region.events {
+        match event {
+            EvpEvent::Node(node) => {
+                let owner = u32::try_from(parent.len()).expect("class count fits");
+                parent.push(owner);
+                nodes.push(node.clone());
+            }
+            EvpEvent::Congruence(congruence) => {
+                let (left, right) = (congruence.lhs_pre, congruence.rhs_pre);
+                parent[left.max(right) as usize] = left.min(right);
+            }
+            EvpEvent::Rewrite(rewrite) => {
+                if rewrite.rule == "p0_009_double_neg" {
+                    if let EvpProofRef::Node(id) = rewrite.lhs {
+                        let inner = find(&parent, nodes[id as usize].children[1]);
+                        let subtractions = nodes
+                            .iter()
+                            .filter(|node| {
+                                node.operation == "sub" && find(&parent, node.owner) == inner
+                            })
+                            .count();
+                        if subtractions > 1 {
+                            return true;
+                        }
+                    }
+                }
+                let (left, right) = (rewrite.lhs_pre, rewrite.rhs_pre);
+                parent[left.max(right) as usize] = left.min(right);
+            }
+            EvpEvent::Epoch(_) => {}
+        }
+    }
+    false
+}
+
+/// The nested-pattern reproducer, handed back to the shrinker under the
+/// property above. Anything shorter that still holds it is a better reproducer
+/// than the one written by hand.
 #[test]
 fn the_nested_pattern_reproducer_is_re_reduced() {
     let zero = value(4, EvoIRType::Bits(8));
@@ -216,12 +269,11 @@ fn the_nested_pattern_reproducer_is_re_reduced() {
     );
     let mut still = |module: &Module| {
         let outcome = optimize_scalar_module_with_evp1(module, ScalarEqBudget::new(20_000, 256));
-        outcome.certificate.regions.iter().any(|region| {
-            region.witnesses.len() >= 5
-                && region.events.iter().any(|event| {
-                    matches!(event, EvpEvent::Rewrite(rewrite) if rewrite.rule == "p0_009_double_neg")
-                })
-        })
+        outcome
+            .certificate
+            .regions
+            .iter()
+            .any(resolves_among_several_subtractions)
     };
     assert!(still(&before), "the reproducer must hold its own property");
     let after = shrink_module(&before, &mut still, ROUNDS);
