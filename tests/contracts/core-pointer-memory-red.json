@@ -4,7 +4,7 @@
     "specification": "docs/evoir-spec.md revision 1.9.11 sections 10.1.3 and 10.1.5",
     "acceptanceContract": "tests/contracts/day9-acceptance-contract.json scope line G"
   },
-  "baselineCommit": "7dce708",
+  "baselineCommit": "a4d963b",
   "classification": "tests-only RED",
   "declaredMissingCapabilities": [
     "scaled pointer prefix, postfix and compound updates",

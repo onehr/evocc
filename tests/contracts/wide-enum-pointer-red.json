@@ -1,13 +1,13 @@
 {
   "receiptId": "c30.wide-enum-pointer.red.v1",
   "state": "RED",
-  "baselineCommit": "5849376",
+  "baselineCommit": "63ac81c",
   "classification": "tests-only RED",
   "authority": {
     "specification": {
       "path": "docs/evoir-spec.md",
       "revision": "1.9.28",
-      "commit": "5849376",
+      "commit": "63ac81c",
       "sha256": "88bb523395fb9e796a3f1e3cca35035596e41bd8345fdf6ad98d1c4e5bd2e908",
       "sections": [
         "10.1.3 Arithmetic on void *",

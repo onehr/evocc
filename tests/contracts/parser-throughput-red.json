@@ -9,7 +9,7 @@
     "scope": "P7(b)",
     "sha256": "4ab6a29b9fe874436d609cfa568e6891b843401ae3d9ce25c571ca677615b408"
   },
-  "baselineCommit": "f642fd7",
+  "baselineCommit": "3f22138",
   "declaredMissingCapability": "near-linear tag declaration and lexical tag resolution",
   "redTest": {
     "path": "crates/evocc-chir/tests/tag_resolution_scaling.rs",

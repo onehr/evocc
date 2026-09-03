@@ -1,13 +1,13 @@
 {
   "receiptId": "c30.packed-enum.red.v1",
   "state": "RED",
-  "baselineCommit": "30ed2fc",
+  "baselineCommit": "46b07be",
   "classification": "tests-only RED",
   "authority": {
     "specification": {
       "path": "docs/evoir-spec.md",
       "revision": "1.9.25",
-      "commit": "30ed2fc",
+      "commit": "46b07be",
       "sections": ["10.1.9", "10.1.14"],
       "sha256": "f7b2aebe013a45ff18334dd5f7000dcaea84f077194ebf09c2da687fecb63ea2"
     },

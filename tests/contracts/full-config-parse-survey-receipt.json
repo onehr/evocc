@@ -5,7 +5,7 @@
   "authority": {
     "contract": "tests/contracts/day9-acceptance-contract.json",
     "openingContractSha256": "d800c5b6d87929bc769527d639990cdc8f0c90909ca1dac67a82e12493a22376",
-    "closureCommit": "3b205eecd1cdceef9563774513a53837058a0761",
+    "closureCommit": "0f38406a5762dce03e83eff5ef4cff4a692c8b0c",
     "closureContractSha256": "815ab9744c30299aa9a452097942dfff2243623a6a0da20957b79215641562fb",
     "currentContractSha256": "ff1dcf666a813c8a2aed62d698be9ac56b0cc9034d165f9dc66c8762733469c6",
     "scope": "W front-end language forms; F3 measure-only rerun",
@@ -22,9 +22,9 @@
     "repositorySpecificationSha256": "bfb2758ee2143f60a5ddb162b59352db791eb9e829c9fcd55dbbf0f385202398",
     "revisionQualification": "Revisions 1.9.46-1.9.47 changed Sections 8 and 11 only. Revision 1.9.48 opens the follow-on X residue; it does not retroactively alter the six W acceptance rules frozen by revision 1.9.45."
   },
-  "implementationCommit": "b4380471d1298e7440fdc6f3d443884a55a15606",
-  "subjectCommit": "0f71a892c6b4a4ac230e5e54d5d7c3cb8ff5278d",
-  "subjectQualification": "The survey subject is the W implementation plus its dashboard receipt. The subsequent 3b205ee commit independently records the same measured closure and changes no production code.",
+  "implementationCommit": "e04f2800e4c05f0547a45c9eefec207c82eceb10",
+  "subjectCommit": "d74dd2ebc8c90cab3a4a377642a97c94966ba365",
+  "subjectQualification": "The survey subject is the W implementation plus its dashboard receipt. The subsequent 0f38406 commit independently records the same measured closure and changes no production code.",
   "surveyRunChangedProductionOrSpecification": false,
   "harness": {
     "path": "tools/survey-cohort.py",
@@ -146,7 +146,7 @@
     "ruff": {"command": "ruff check tests/acceptance tools", "result": "clean"},
     "baseLayoutCorpus": "128/128 ORACLE_CONSENSUS; 0 mismatches",
     "attributedLayoutCorpus": "22/22 ORACLE_CONSENSUS; 0 mismatches",
-    "offlineNoLocalReplay": "1256 passed / 0 failed / 1 ignored at 0f71a892c6b4a4ac230e5e54d5d7c3cb8ff5278d; objects alternates absent",
+    "offlineNoLocalReplay": "1256 passed / 0 failed / 1 ignored at d74dd2ebc8c90cab3a4a377642a97c94966ba365; objects alternates absent",
     "diffCheck": "clean"
   },
   "specGap": null,

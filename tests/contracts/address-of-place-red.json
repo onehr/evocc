@@ -1,7 +1,7 @@
 {
   "receiptId": "c30.address-of-place.red.v1",
   "state": "RED",
-  "baselineCommit": "b14eccd8528ac6f7509351eb25d1417f4491be69",
+  "baselineCommit": "ba0f22866be1aaa89d3820cf1ddbaa6c9617c58d",
   "authority": {
     "specification": {
       "path": "docs/evoir-spec.md",
@@ -12,7 +12,7 @@
     "contract": {
       "path": "tests/contracts/day9-acceptance-contract.json",
       "scope": "M",
-      "commit": "b14eccd",
+      "commit": "ba0f228",
       "sha256": "34a4e6e7cabe8a4321d034207cd40667bd03162579d87796a03949b2153a0aff"
     }
   },

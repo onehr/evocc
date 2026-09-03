@@ -1,6 +1,6 @@
 {
   "receiptId": "c30.parser-checkpoint-scaling.red.v1",
-  "baselineCommit": "facfc67",
+  "baselineCommit": "0901bff",
   "classification": "tests-only RED",
   "declaredCapability": "speculative declaration parsing allocates near-linearly while preserving exact SymbolTable snapshot semantics",
   "focusedCommand": "cargo test -p evocc-parser --test checkpoint_allocation_scaling -- --nocapture",

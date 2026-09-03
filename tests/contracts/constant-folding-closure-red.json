@@ -6,7 +6,7 @@
     "contract": "tests/contracts/day9-acceptance-contract.json scope line K",
     "contractSha256": "7ed07af44693fe00c732b1e048e6411ab2ba8a5b0c58d98ae1b76a6d0c1dbc65"
   },
-  "baseline": "607a5a922662fd60ef0b5c12d5ef4d0522b48d2b",
+  "baseline": "4f4f175f2e99312ca104ac0bd4d44a241c1545ed",
   "declaredMissingCapabilities": [
     "expression-size-and-alignment-folding",
     "conditional-null-pointer-constant-typing",
@@ -82,7 +82,7 @@
     }
   ],
   "oracleEvidence": {
-    "path": ".evidence/builtin-probes/20260829-51e740c/npc.out",
+    "path": ".evidence/builtin-probes/20260829-048733e/npc.out",
     "sha256": "78a683f15a1f4e05ca9161545afd2146f0fc66ff2a3a05d7e5bfdf64cc16f01f",
     "sourceSha256": "9c9888be30c53f6acc026924388afd71f7215eab224a317421ff68bb8703d421",
     "runnerSha256": "0873fdcfff553bdbba21a4ef61c5dc56dedd6d271ee574db27530c402f6abec8",

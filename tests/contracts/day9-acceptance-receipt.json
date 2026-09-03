@@ -9,34 +9,34 @@
     "revision": "1.9.48",
     "sha256": "bfb2758ee2143f60a5ddb162b59352db791eb9e829c9fcd55dbbf0f385202398"
   },
-  "cutLine": "Revision 1.9.45 scope W is implemented at b438047 and published at 0f71a89. Six front-end rule families pass a tests-only RED-to-GREEN window: array decay, designator bounds, function/void-pointer conversions, typed library and variable-argument builtins, GNU declaration spellings, and static address constants. Dashboard run 20260903T061659Z-52334 remains 48/48 clean with zero regressions. Full-configuration survey 20260903T064414Z-47949 measures 2694 clean and 104 typed-diagnosed among 2798 target C units, with zero unavailable, timeout, or panic; exactly 249 previously diagnosed units moved to clean. Revisions 1.9.46-1.9.47 affect the equality/proof sections, and 1.9.48 opens the measured follow-on X residue without changing the closed W claims.",
+  "cutLine": "Revision 1.9.45 scope W is implemented at e04f280 and published at d74dd2e. Six front-end rule families pass a tests-only RED-to-GREEN window: array decay, designator bounds, function/void-pointer conversions, typed library and variable-argument builtins, GNU declaration spellings, and static address constants. Dashboard run 20260903T061659Z-52334 remains 48/48 clean with zero regressions. Full-configuration survey 20260903T064414Z-47949 measures 2694 clean and 104 typed-diagnosed among 2798 target C units, with zero unavailable, timeout, or panic; exactly 249 previously diagnosed units moved to clean. Revisions 1.9.46-1.9.47 affect the equality/proof sections, and 1.9.48 opens the measured follow-on X residue without changing the closed W claims.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
-    "closed": "eae3e42",
+    "closed": "b8688e0",
     "implementationCommits": [
-      "4a9efc1",
-      "adce449",
-      "ed8302b",
-      "eae3e42",
-      "a15872e"
+      "01bc6ad",
+      "f33b9fd",
+      "79da60e",
+      "b8688e0",
+      "fa7c415"
     ]
   },
   "typeofGenericRedWindow": {
-    "contractOpened": "eb663ae",
-    "opened": "b3b9aed (tests only; 12/12 failed for E1001 or E1003, zero Rust build errors)",
-    "closed": "bd9a112",
+    "contractOpened": "737990b",
+    "opened": "cc4927c (tests only; 12/12 failed for E1001 or E1003, zero Rust build errors)",
+    "closed": "fee59fa",
     "implementationCommits": [
-      "bd9a112"
+      "fee59fa"
     ]
   },
   "kernelBuiltinsRedWindow": {
-    "opened": "b558bd9 (tests only; 12/12 failed for the four declared reasons, zero Rust build errors)",
-    "closed": "21625b4",
+    "opened": "a95c280 (tests only; 12/12 failed for the four declared reasons, zero Rust build errors)",
+    "closed": "da1b509",
     "implementationCommits": [
-      "6711313",
-      "d14f024",
-      "c3d0fd4",
-      "21625b4"
+      "ee02b03",
+      "8fa41ee",
+      "a9b0649",
+      "da1b509"
     ],
     "diagnostics": {
       "path": "tests/contracts/kernel-builtins-red.json",
@@ -44,13 +44,13 @@
     }
   },
   "kernelAsmOverflowRedWindow": {
-    "opened": "f80e548 (tests only; 23/23 failed for exactly six declared capabilities, zero Rust build errors)",
-    "closed": "094b235",
+    "opened": "a040067 (tests only; 23/23 failed for exactly six declared capabilities, zero Rust build errors)",
+    "closed": "afe1d2b",
     "implementationCommits": [
-      "e972dcf",
-      "353f888",
-      "dc0879e",
-      "094b235"
+      "2017c65",
+      "740db3b",
+      "a7d13fb",
+      "afe1d2b"
     ],
     "diagnostics": {
       "path": "tests/contracts/kernel-asm-overflow-red.json",
@@ -66,13 +66,13 @@
     ]
   },
   "preprocessorProfileRedWindow": {
-    "opened": "56c9f42 (tests only; 10/10 failed for exactly five declared capabilities, zero Rust build errors)",
-    "closed": "b53e222",
+    "opened": "94d0aa9 (tests only; 10/10 failed for exactly five declared capabilities, zero Rust build errors)",
+    "closed": "d0b99f6",
     "implementationCommits": [
-      "c3081cb",
-      "962b2b4",
-      "c2c4f19",
-      "b53e222"
+      "c415a87",
+      "4490932",
+      "8e5cc50",
+      "d0b99f6"
     ],
     "diagnostics": {
       "path": "tests/contracts/preprocessor-profile-red.json",
@@ -87,13 +87,13 @@
     ]
   },
   "preprocessorPastePackRedWindow": {
-    "opened": "e3aaabc (tests only; 5/8 failed for exactly two missing capabilities, 3/8 were green controls, zero Rust build errors)",
-    "closed": "2cf588c",
+    "opened": "fa556c7 (tests only; 5/8 failed for exactly two missing capabilities, 3/8 were green controls, zero Rust build errors)",
+    "closed": "25330ad",
     "implementationCommits": [
-      "4cf00dd",
-      "3bb9a6a",
-      "ac28733",
-      "2cf588c"
+      "857edff",
+      "462e7f4",
+      "4d1308c",
+      "25330ad"
     ],
     "diagnostics": {
       "path": "tests/contracts/preprocessor-paste-pack-red.json",
@@ -109,10 +109,10 @@
     ]
   },
   "preprocessorPpNumberPasteRedWindow": {
-    "opened": "ed79624 (tests only; 4/5 failed for the single declared capability, 1/5 was a green integer control, zero Rust build errors)",
-    "closed": "ca6845f",
+    "opened": "1b2b28f (tests only; 4/5 failed for the single declared capability, 1/5 was a green integer control, zero Rust build errors)",
+    "closed": "b534558",
     "implementationCommits": [
-      "ca6845f"
+      "b534558"
     ],
     "diagnostics": {
       "path": "tests/contracts/preprocessor-ppnumber-paste-red.json",
@@ -123,10 +123,10 @@
     ]
   },
   "preprocessingTokenGrammarRedWindow": {
-    "opened": "ca16ab8 (tests only; 11/16 failed for the declared preprocessing-token grammar capability, 5/16 were green controls, zero Rust build errors)",
-    "closed": "b7f9775",
+    "opened": "9145617 (tests only; 11/16 failed for the declared preprocessing-token grammar capability, 5/16 were green controls, zero Rust build errors)",
+    "closed": "f3b21a0",
     "implementationCommits": [
-      "b7f9775"
+      "f3b21a0"
     ],
     "diagnostics": {
       "path": "tests/contracts/preprocessing-token-grammar-red.json",
@@ -145,10 +145,10 @@
     ]
   },
   "corePointerMemoryRedWindow": {
-    "opened": "734eabd (tests only; four targets contained six failing assertions for exactly two declared capabilities, zero Rust build errors)",
-    "closed": "fa0c98e",
+    "opened": "8aada39 (tests only; four targets contained six failing assertions for exactly two declared capabilities, zero Rust build errors)",
+    "closed": "e6323c6",
     "implementationCommits": [
-      "fa0c98e"
+      "e6323c6"
     ],
     "diagnostics": {
       "path": "tests/contracts/core-pointer-memory-red.json",
@@ -160,13 +160,13 @@
     ]
   },
   "statementExpressionsInitializersRedWindow": {
-    "opened": "dbd4395 (tests only; 26/38 failed for exactly three declared capabilities, 12/38 were green controls, zero Rust build errors)",
-    "closed": "3a201db",
+    "opened": "95dafa1 (tests only; 26/38 failed for exactly three declared capabilities, 12/38 were green controls, zero Rust build errors)",
+    "closed": "a670a3b",
     "implementationCommits": [
-      "5ab29ac",
-      "e638570",
-      "587937c",
-      "3a201db"
+      "0136489",
+      "fb9a038",
+      "f572773",
+      "a670a3b"
     ],
     "diagnostics": {
       "path": "tests/contracts/statement-expressions-initializers-red.json",
@@ -180,15 +180,15 @@
     "dependentFixture": "The verbatim __auto_type cohort shape remains an active dependency on the compile-time inference window; the equivalent typeof fixture is green and no test is disabled."
   },
   "compileTimeBuiltinsRedWindow": {
-    "opened": "532794a (tests only; 22/26 failed for exactly ten declared capabilities, 4/26 were green controls, zero Rust build errors)",
-    "closed": "b8d7a6d",
+    "opened": "b72d60f (tests only; 22/26 failed for exactly ten declared capabilities, 4/26 were green controls, zero Rust build errors)",
+    "closed": "2bf5fcc",
     "implementationCommits": [
-      "0d94962",
-      "3476ae9",
-      "4ecd0f6",
-      "b8d7a6d"
+      "d234e67",
+      "a14e230",
+      "b857a11",
+      "2bf5fcc"
     ],
-    "authorityRevision": "8e9e42c (specification revision 1.9.15)",
+    "authorityRevision": "8b286c2 (specification revision 1.9.15)",
     "diagnostics": {
       "path": "tests/contracts/compile-time-builtins-red.json",
       "sha256": "b507980e4654143e5322528bb043ca15e480930651f29897d760751b04266121"
@@ -207,14 +207,14 @@
     ]
   },
   "aggregateCopiesRedWindow": {
-    "opened": "f549dc2 (tests only; 22/25 failed for exactly four declared capabilities, 3/25 were green controls, zero Rust build errors)",
-    "closed": "b6b7db7",
+    "opened": "c789a10 (tests only; 22/25 failed for exactly four declared capabilities, 3/25 were green controls, zero Rust build errors)",
+    "closed": "c3697bb",
     "implementationCommits": [
-      "8fa03cc",
-      "e1c70b4",
-      "b6b7db7"
+      "f9b7d5d",
+      "b7b298e",
+      "c3697bb"
     ],
-    "authorityRevision": "8e9e42c (specification revision 1.9.15)",
+    "authorityRevision": "8b286c2 (specification revision 1.9.15)",
     "diagnostics": {
       "path": "tests/contracts/aggregate-copies-red.json",
       "sha256": "0343b8df93d14246dcc05183a4cc1b54d119b857d04e1a7b54fceee2a531d16c"
@@ -227,16 +227,16 @@
     ]
   },
   "parseClosureRedWindow": {
-    "opened": "304d5bf (tests only; 15/31 failed for the declared capabilities, 16/31 were green controls, zero Rust build errors)",
-    "closed": "3f54595",
+    "opened": "0b623be (tests only; 15/31 failed for the declared capabilities, 16/31 were green controls, zero Rust build errors)",
+    "closed": "12ede1f",
     "implementationCommits": [
-      "d3c5dfb",
-      "3f54595"
+      "0e8e494",
+      "12ede1f"
     ],
     "maintenanceCommits": [
-      "5ac26b1"
+      "f047d2a"
     ],
-    "authorityRevision": "8e54baf (specification revision 1.9.17)",
+    "authorityRevision": "8a68a58 (specification revision 1.9.17)",
     "diagnostics": {
       "path": "tests/contracts/parse-closure-red.json",
       "sha256": "e0573d749753f75b229e962fd33ba8ac2cc786e8c50ce50ff2985453138bef43"
@@ -252,13 +252,13 @@
     ]
   },
   "constantFoldingClosureRedWindow": {
-    "opened": "dbe605b (tests only; 12/13 failed for exactly three declared capabilities, 1/13 was a green control, zero Rust build errors)",
-    "closed": "91bdaa4",
+    "opened": "99fca58 (tests only; 12/13 failed for exactly three declared capabilities, 1/13 was a green control, zero Rust build errors)",
+    "closed": "08ab88e",
     "implementationCommits": [
-      "15137f4",
-      "91bdaa4"
+      "ba4cb59",
+      "08ab88e"
     ],
-    "authorityRevision": "51e740c (specification revision 1.9.18)",
+    "authorityRevision": "048733e (specification revision 1.9.18)",
     "diagnostics": {
       "path": "tests/contracts/constant-folding-closure-red.json",
       "sha256": "a3af8e737d55b6e718ec9f94002203eefa612e3d37bea461013db93548ed4c46"
@@ -269,7 +269,7 @@
       "array-bound-validation"
     ],
     "oracleEvidence": {
-      "path": ".evidence/builtin-probes/20260829-51e740c/npc.out",
+      "path": ".evidence/builtin-probes/20260829-048733e/npc.out",
       "sha256": "78a683f15a1f4e05ca9161545afd2146f0fc66ff2a3a05d7e5bfdf64cc16f01f",
       "imageDigest": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
       "measuredValues": "sizeof-expression 4; alignof-expression 4; operand side effect 0; sizeof-void 1; sizeof-function 1; constant NPC conditional 4; nonconstant conditional 1; GCC-14 and Clang-19 identical"
@@ -280,12 +280,12 @@
     ]
   },
   "gnuArrayInt128RedWindow": {
-    "opened": "3f9619b (tests only; 7/13 failed for exactly three declared capabilities, 6/13 were green controls, zero Rust build errors)",
-    "closed": "8402eea",
+    "opened": "20a78fa (tests only; 7/13 failed for exactly three declared capabilities, 6/13 were green controls, zero Rust build errors)",
+    "closed": "8349bb6",
     "implementationCommits": [
-      "8402eea"
+      "8349bb6"
     ],
-    "authorityRevision": "ae431ae (specification revision 1.9.19)",
+    "authorityRevision": "1d579d7 (specification revision 1.9.19)",
     "diagnostics": {
       "path": "tests/contracts/gnu-array-int128-red.json",
       "sha256": "9c0b76bbf98aa79d58529a935fae9bf129d8dba3371d30ab96cefd8e3462749a"
@@ -310,12 +310,12 @@
     ]
   },
   "anonymousMemberDesignatorsRedWindow": {
-    "opened": "d8fa30a (tests only; 4/5 failed for anonymous designated initializers, nested __builtin_offsetof, unbounded nesting and the pt_regs.sp shape; 1/5 was a green ambiguity control; zero Rust build errors)",
-    "closed": "07009fe",
+    "opened": "7756732 (tests only; 4/5 failed for anonymous designated initializers, nested __builtin_offsetof, unbounded nesting and the pt_regs.sp shape; 1/5 was a green ambiguity control; zero Rust build errors)",
+    "closed": "e17b132",
     "implementationCommits": [
-      "07009fe"
+      "e17b132"
     ],
-    "authorityRevision": "b2a4d3e (specification revision 1.9.20)",
+    "authorityRevision": "afe176d (specification revision 1.9.20)",
     "diagnostics": {
       "path": "tests/contracts/anonymous-member-designators-red.json",
       "sha256": "4837c8831e508657b04a025125cd89be56be273ff7caaba3fd7c9f892cfbc91f"
@@ -358,12 +358,12 @@
     ]
   },
   "typeofUnqualRedWindow": {
-    "opened": "70a7991 (tests only; 7/7 semantic assertions failed for the single declared capability; zero Rust build errors)",
-    "closed": "cbf084c",
+    "opened": "0a159a7 (tests only; 7/7 semantic assertions failed for the single declared capability; zero Rust build errors)",
+    "closed": "c8de854",
     "implementationCommits": [
-      "cbf084c"
+      "c8de854"
     ],
-    "authorityRevision": "0e28b73 (specification revision 1.9.21)",
+    "authorityRevision": "991cc88 (specification revision 1.9.21)",
     "diagnostics": {
       "path": "tests/contracts/typeof-unqual-red.json",
       "sha256": "faaabcaf856c2562a45ab064fd0597c34a6b94ae1b22742259336d6e71ac7aa7"
@@ -383,11 +383,11 @@
     ]
   },
   "projectedPlaceRootRedWindow": {
-    "authorityRevision": "0e28b73 (specification revision 1.9.21, Section 10.1.3)",
+    "authorityRevision": "991cc88 (specification revision 1.9.21, Section 10.1.3)",
     "checkpoints": [
       {
-        "opened": "1c67ccd (tests only; 8/8 address-rooted target forms failed with E2102 while controls passed; zero Rust build errors)",
-        "closed": "60c64f2",
+        "opened": "0878681 (tests only; 8/8 address-rooted target forms failed with E2102 while controls passed; zero Rust build errors)",
+        "closed": "ce5d7d2",
         "diagnostics": {
           "path": "tests/contracts/address-of-place-red.json",
           "sha256": "87a80fe58a9feec255955b09c92467c8ecf9cf6d8b2a73ad86910a926871f277"
@@ -395,8 +395,8 @@
         "dashboardResult": "20260830T030920Z-23375: zero regressions and zero cohort-lane movement; the sealed first-error bytes disproved this as the cohort blocker"
       },
       {
-        "opened": "218ab00 (tests only; the call-result target failed with E2102 while the named-pointer control passed; zero Rust build errors)",
-        "closed": "78923a9",
+        "opened": "e87558a (tests only; the call-result target failed with E2102 while the named-pointer control passed; zero Rust build errors)",
+        "closed": "3ff1efd",
         "diagnostics": {
           "path": "tests/contracts/call-result-place-red.json",
           "sha256": "8868c3ff336dd4229aab287233a3542a99dbf1d59ef4d49045bdde2974674b95"
@@ -404,8 +404,8 @@
         "dashboardResult": "20260830T035121Z-46924: all 28 call-result-rooted invalid-projected-lvalue lanes moved, exposing 22 invalid-update-operands lanes; zero regressions"
       },
       {
-        "opened": "d751615 (tests only; scalar and aggregate immediate address/dereference updates failed while direct controls passed; 964 passed, 2 failed, zero Rust build errors)",
-        "closed": "e38c168",
+        "opened": "c4a8208 (tests only; scalar and aggregate immediate address/dereference updates failed while direct controls passed; 964 passed, 2 failed, zero Rust build errors)",
+        "closed": "34381d7",
         "diagnostics": {
           "path": "tests/contracts/address-dereference-update-red.json",
           "sha256": "07922cbf67ce7601b294ee92ed98dd1ca020892500d1cb1f303c8db5d6cbeb16"
@@ -414,17 +414,17 @@
       }
     ],
     "implementationCommits": [
-      "60c64f2",
-      "78923a9",
-      "e38c168"
+      "ce5d7d2",
+      "3ff1efd",
+      "34381d7"
     ],
     "result": "PASS"
   },
   "parserRecoveryRedWindow": {
-    "opened": "9fbb445 (tests only; 966 passed, 2 failed, 968 listed tests; zero Rust build errors)",
-    "closed": "1bad886",
+    "opened": "f4fe43e (tests only; 966 passed, 2 failed, 968 listed tests; zero Rust build errors)",
+    "closed": "8c4336f",
     "implementationCommits": [
-      "1bad886"
+      "8c4336f"
     ],
     "diagnostics": {
       "path": "tests/contracts/parser-recovery-red.json",
@@ -435,7 +435,7 @@
     "surveyEvidence": {
       "command": "python3 tools/survey-cohort.py --evocc target/release/evocc --units .evidence/day5-kernel-reconnaissance/20260830T041443Z-30099/parser --glob '*.gcc.c' --json <output>",
       "before": {
-        "path": ".evidence/parser-recovery/1bad886/before.json",
+        "path": ".evidence/parser-recovery/8c4336f/before.json",
         "sha256": "7b215c3790e78f27d143c1493bb193218e2b06259607a09a0a02126cccd2e739",
         "diagnostics": 8577,
         "unavailable": [
@@ -443,7 +443,7 @@
         ]
       },
       "after": {
-        "path": ".evidence/parser-recovery/1bad886/after.json",
+        "path": ".evidence/parser-recovery/8c4336f/after.json",
         "sha256": "392acf740d51f57e8c7afce475582c4f054f4655098ad79e8aecc4479bbb1a86",
         "diagnostics": 9670,
         "unavailable": [],
@@ -456,10 +456,10 @@
     "result": "PASS"
   },
   "statementExpressionPlaceRedWindow": {
-    "opened": "61ed38d (tests only; 969 passed, 3 semantic failures, 972 listed tests; zero Rust build errors)",
-    "closed": "0a53458",
+    "opened": "1daa81c (tests only; 969 passed, 3 semantic failures, 972 listed tests; zero Rust build errors)",
+    "closed": "e6024ab",
     "implementationCommits": [
-      "0a53458"
+      "e6024ab"
     ],
     "diagnostics": {
       "path": "tests/contracts/statement-expression-place-red.json",
@@ -475,10 +475,10 @@
     "result": "PASS_STAGE_F1_OPEN"
   },
   "parserCheckpointScalingRedWindow": {
-    "opened": "d188946 (tests only; 972 passed, 1 allocation-scaling failure, 973 listed tests; zero Rust build errors)",
-    "closed": "1697338",
+    "opened": "7a017fb (tests only; 972 passed, 1 allocation-scaling failure, 973 listed tests; zero Rust build errors)",
+    "closed": "b5ae113",
     "implementationCommits": [
-      "1697338"
+      "b5ae113"
     ],
     "diagnostics": {
       "path": "tests/contracts/parser-checkpoint-scaling-red.json",
@@ -506,12 +506,12 @@
     "result": "PASS_STAGE_F1_OPEN"
   },
   "frontierRulingsRedWindow": {
-    "authority": "docs/evoir-spec.md revision 1.9.22, commit 1eebdb7; tests/contracts/day9-acceptance-contract.json scope N",
-    "opened": "ceb4f64 (tests only; 977 passed, 11 semantic failures, zero Rust build errors)",
-    "closed": "270d2d1",
+    "authority": "docs/evoir-spec.md revision 1.9.22, commit 68364ea; tests/contracts/day9-acceptance-contract.json scope N",
+    "opened": "47ffbaf (tests only; 977 passed, 11 semantic failures, zero Rust build errors)",
+    "closed": "f14f23f",
     "implementationCommits": [
-      "7363568",
-      "270d2d1"
+      "68ee004",
+      "f14f23f"
     ],
     "diagnostics": {
       "path": "tests/contracts/frontier-rulings-red.json",
@@ -527,15 +527,15 @@
       "gnuAttributes": "28/28",
       "frontEndResolvedForms": "9/9"
     },
-    "postGreenAudit": "A nested index update was first observed RED as E3007 after the initial implementation. Commit 270d2d1 keeps the internal exact-once boundary active across nested arithmetic in both the scalar fast path and the explicit-memory task machine.",
+    "postGreenAudit": "A nested index update was first observed RED as E3007 after the initial implementation. Commit f14f23f keeps the internal exact-once boundary active across nested arithmetic in both the scalar fast path and the explicit-memory task machine.",
     "result": "PASS_STAGE_F1_OPEN"
   },
   "statementExpressionScopeRedWindow": {
-    "authority": "docs/evoir-spec.md revision 1.9.23, commit adabc63; tests/contracts/day9-acceptance-contract.json scope O",
-    "opened": "b86ee1b (tests only; 990 passed, 4 semantic failures, 994 listed workspace tests; zero Rust build errors)",
-    "closed": "9e9ce23",
+    "authority": "docs/evoir-spec.md revision 1.9.23, commit d16a589; tests/contracts/day9-acceptance-contract.json scope O",
+    "opened": "14ece41 (tests only; 990 passed, 4 semantic failures, 994 listed workspace tests; zero Rust build errors)",
+    "closed": "6636930",
     "implementationCommits": [
-      "9e9ce23"
+      "6636930"
     ],
     "diagnostics": {
       "path": "tests/contracts/statement-expression-scope-red.json",
@@ -554,11 +554,11 @@
     "result": "PASS_STAGE_F1_OPEN"
   },
   "pointerConstantConversionsRedWindow": {
-    "authority": "docs/evoir-spec.md revision 1.9.24, commit fa58552; tests/contracts/day9-acceptance-contract.json scope P5",
-    "opened": "817b386 (tests only; 994 passed, 8 semantic failures, 1002 listed workspace tests; zero Rust build errors)",
-    "closed": "269cac1",
+    "authority": "docs/evoir-spec.md revision 1.9.24, commit 67db611; tests/contracts/day9-acceptance-contract.json scope P5",
+    "opened": "5dfd2f6 (tests only; 994 passed, 8 semantic failures, 1002 listed workspace tests; zero Rust build errors)",
+    "closed": "dfd7aab",
     "implementationCommits": [
-      "269cac1"
+      "dfd7aab"
     ],
     "diagnostics": {
       "path": "tests/contracts/pointer-constant-conversions-red.json",
@@ -587,11 +587,11 @@
     "result": "PASS_STAGE_F1_OPEN"
   },
   "packedEnumRedWindow": {
-    "authority": "docs/evoir-spec.md revision 1.9.25, commit 30ed2fc; tests/contracts/day9-acceptance-contract.json scope P6",
-    "opened": "0fc1b93 (tests only; 1005 passed, 6 semantic failures, 1011 listed workspace tests; zero Rust build errors)",
-    "closed": "61d7884",
+    "authority": "docs/evoir-spec.md revision 1.9.25, commit 46b07be; tests/contracts/day9-acceptance-contract.json scope P6",
+    "opened": "47900c4 (tests only; 1005 passed, 6 semantic failures, 1011 listed workspace tests; zero Rust build errors)",
+    "closed": "b0f90e8",
     "implementationCommits": [
-      "61d7884"
+      "b0f90e8"
     ],
     "diagnostics": {
       "path": "tests/contracts/packed-enum-red.json",
@@ -610,13 +610,13 @@
     "result": "PASS_STAGE_F1_OPEN"
   },
   "parserThroughputRedWindow": {
-    "authority": "docs/evoir-spec.md revision 1.9.25, commit 30ed2fc; tests/contracts/day9-acceptance-contract.json scope P7",
-    "measurementCommit": "f642fd7",
-    "opened": "3b83681 (tests only; 1011 passed, 1 scaling failure, 1012 listed workspace tests; zero Rust build errors)",
-    "closed": "d54214f",
+    "authority": "docs/evoir-spec.md revision 1.9.25, commit 46b07be; tests/contracts/day9-acceptance-contract.json scope P7",
+    "measurementCommit": "3f22138",
+    "opened": "84d0941 (tests only; 1011 passed, 1 scaling failure, 1012 listed workspace tests; zero Rust build errors)",
+    "closed": "44f2e96",
     "implementationCommits": [
-      "f642fd7",
-      "d54214f"
+      "3f22138",
+      "44f2e96"
     ],
     "diagnostics": {
       "path": "tests/contracts/parser-throughput-red.json",
@@ -637,7 +637,7 @@
     },
     "realCorpus": {
       "reported": "init-init-task 20.03 s versus kernel-bpf-token 1.15 s",
-      "reproducedBaseline": "at exact 30ed2fc on the frozen inputs: init-init-task 3.09 s, kernel-bpf-token 3.11 s, ratio 0.994x",
+      "reproducedBaseline": "at exact 46b07be on the frozen inputs: init-init-task 3.09 s, kernel-bpf-token 3.11 s, ratio 0.994x",
       "reproducedGreen": "after indexed lookup: init-init-task 1.90 s, kernel-bpf-token 1.77 s, ratio 1.07x",
       "gate": "PASS: 1.07x <= 3x",
       "claimBoundary": "The reported 17x ratio did not reproduce; the independently profiled quadratic tag-lookup defect did reproduce and is the behavior fixed here."
@@ -645,12 +645,12 @@
     "result": "PASS_STAGE_F1_OPEN"
   },
   "frontEndIntrospectionRedWindow": {
-    "authority": "docs/evoir-spec.md revision 1.9.26, commit bafb803; tests/contracts/day9-acceptance-contract.json scope P8",
-    "opened": "8173181 (tests only; 1014 passed, 8 semantic failures, 1022 listed workspace tests; zero Rust build errors)",
-    "closed": "14c43cb",
+    "authority": "docs/evoir-spec.md revision 1.9.26, commit 52da41c; tests/contracts/day9-acceptance-contract.json scope P8",
+    "opened": "0c9852d (tests only; 1014 passed, 8 semantic failures, 1022 listed workspace tests; zero Rust build errors)",
+    "closed": "24de335",
     "implementationCommits": [
-      "8a1a623",
-      "14c43cb"
+      "51b628c",
+      "24de335"
     ],
     "diagnostics": {
       "path": "tests/contracts/front-end-introspection-red.json",
@@ -688,11 +688,11 @@
     "result": "PASS_STAGE_F1_OPEN"
   },
   "pointerPlaceStrlenRedWindow": {
-    "authority": "docs/evoir-spec.md revision 1.9.27, commit b33ff28; tests/contracts/day9-acceptance-contract.json scope P9",
-    "opened": "af487da (tests only; 1026 passed, 5 semantic failures, 1031 listed workspace tests; zero Rust build errors)",
-    "closed": "9e5a6d9",
+    "authority": "docs/evoir-spec.md revision 1.9.27, commit 00adf55; tests/contracts/day9-acceptance-contract.json scope P9",
+    "opened": "bd0be75 (tests only; 1026 passed, 5 semantic failures, 1031 listed workspace tests; zero Rust build errors)",
+    "closed": "b3ffcf5",
     "implementationCommits": [
-      "9e5a6d9"
+      "b3ffcf5"
     ],
     "diagnostics": {
       "path": "tests/contracts/pointer-place-strlen-red.json",
@@ -711,12 +711,12 @@
     "result": "PASS_STAGE_F1_OPEN"
   },
   "wideEnumPointerRedWindow": {
-    "authority": "docs/evoir-spec.md revision 1.9.28, commit 5849376; tests/contracts/day9-acceptance-contract.json scope P10",
-    "opened": "c627785 (tests only; 1032 passed, 5 semantic failures, 1037 listed workspace tests; zero Rust build errors)",
-    "closed": "b24c7ed",
+    "authority": "docs/evoir-spec.md revision 1.9.28, commit 63ac81c; tests/contracts/day9-acceptance-contract.json scope P10",
+    "opened": "f29beeb (tests only; 1032 passed, 5 semantic failures, 1037 listed workspace tests; zero Rust build errors)",
+    "closed": "04175f6",
     "implementationCommits": [
-      "3975e88",
-      "b24c7ed"
+      "ff37cf1",
+      "04175f6"
     ],
     "diagnostics": {
       "path": "tests/contracts/wide-enum-pointer-red.json",
@@ -735,19 +735,19 @@
       "failed": 0
     },
     "postPublicationCorrection": {
-      "firstPublication": "3975e88 / 20260901T111541Z-55835",
+      "firstPublication": "ff37cf1 / 20260901T111541Z-55835",
       "finding": "The simple-assignment exception moved init-init-task from tmp = *p to tmp += ((tmp >> 64) | (tmp << 64)); the shared operand classifier still called every 128-bit integer Other.",
       "red": "wide_integer_compound_assignments_share_the_integer_assignment_path failed with E2102 on the verbatim checksum expression",
-      "green": "b24c7ed gives wide integers an explicit front-end operand class, preserves their canonical type through shifts and usual arithmetic, and passes all ten compound-assignment operators without changing the existing 128-bit execution refusal"
+      "green": "04175f6 gives wide integers an explicit front-end operand class, preserves their canonical type through shifts and usual arithmetic, and passes all ten compound-assignment operators without changing the existing 128-bit execution refusal"
     },
     "result": "PASS_STAGE_F1_OPEN"
   },
   "pointerFrameWideRedWindow": {
-    "authority": "docs/evoir-spec.md revision 1.9.29, commit c132628; tests/contracts/day9-acceptance-contract.json scope P11",
-    "opened": "595f34b (tests only; 1042 passed, 10 semantic failures, 1052 listed workspace tests; zero Rust build errors)",
-    "closed": "ddc1028",
+    "authority": "docs/evoir-spec.md revision 1.9.29, commit 85cdf73; tests/contracts/day9-acceptance-contract.json scope P11",
+    "opened": "36d8c8d (tests only; 1042 passed, 10 semantic failures, 1052 listed workspace tests; zero Rust build errors)",
+    "closed": "136ac85",
     "implementationCommits": [
-      "ddc1028"
+      "136ac85"
     ],
     "diagnostics": {
       "path": "tests/contracts/pointer-frame-wide-red.json",
@@ -769,11 +769,11 @@
     "result": "PASS_STAGE_F1_OPEN"
   },
   "functionDeclarationFormsRedWindow": {
-    "authority": "docs/evoir-spec.md revision 1.9.30, commit 87dacd5; tests/contracts/day9-acceptance-contract.json scope P12",
-    "opened": "6976b26 (tests only; 1053 passed, 4 semantic failures, 1057 listed workspace tests; zero Rust build errors)",
-    "closed": "fe5179b",
+    "authority": "docs/evoir-spec.md revision 1.9.30, commit 0013f90; tests/contracts/day9-acceptance-contract.json scope P12",
+    "opened": "146f38b (tests only; 1053 passed, 4 semantic failures, 1057 listed workspace tests; zero Rust build errors)",
+    "closed": "b9320fb",
     "implementationCommits": [
-      "fe5179b"
+      "b9320fb"
     ],
     "diagnostics": {
       "path": "tests/contracts/function-declaration-forms-red.json",
@@ -796,11 +796,11 @@
     "result": "PASS_STAGE_F1_OPEN"
   },
   "typeofRedeclarationRedWindow": {
-    "authority": "docs/evoir-spec.md revision 1.9.31, commit 457a705; tests/contracts/day9-acceptance-contract.json scope P13",
-    "opened": "241f899 (tests only; 1047 passed, 13 semantic failures, 1060 listed workspace tests; zero Rust build errors)",
-    "closed": "88cd9a7",
+    "authority": "docs/evoir-spec.md revision 1.9.31, commit 4adf6ca; tests/contracts/day9-acceptance-contract.json scope P13",
+    "opened": "00c2d86 (tests only; 1047 passed, 13 semantic failures, 1060 listed workspace tests; zero Rust build errors)",
+    "closed": "1d094ba",
     "implementationCommits": [
-      "88cd9a7"
+      "1d094ba"
     ],
     "diagnostics": {
       "path": "tests/contracts/typeof-redeclaration-red.json",
@@ -828,10 +828,10 @@
   },
   "nestedTypeofParameterRedWindow": {
     "authority": "docs/evoir-spec.md revision 1.9.31; tests/contracts/day9-acceptance-contract.json scope P14",
-    "opened": "4ef70ec (tests only; 1060 passed, 5 panic failures, 1065 listed workspace tests; zero Rust build errors)",
-    "closed": "25acb6d",
+    "opened": "1d81263 (tests only; 1060 passed, 5 panic failures, 1065 listed workspace tests; zero Rust build errors)",
+    "closed": "f509eb5",
     "implementationCommits": [
-      "25acb6d"
+      "f509eb5"
     ],
     "diagnostics": {
       "path": "tests/contracts/nested-typeof-parameter-red.json",
@@ -849,10 +849,10 @@
   },
   "tokenLocationPreprocessorRedWindow": {
     "authority": "docs/evoir-spec.md revision 1.9.32 sections 10.1.20 and 10.4; tests/contracts/day9-acceptance-contract.json scope T",
-    "opened": "4106205 (tests only; 1069 passed, 14 declared semantic failures, 1083 workspace tests; zero build errors)",
-    "closed": "fc21cd3",
+    "opened": "4a86fd1 (tests only; 1069 passed, 14 declared semantic failures, 1083 workspace tests; zero build errors)",
+    "closed": "2cb9c80",
     "implementationCommits": [
-      "fc21cd3"
+      "2cb9c80"
     ],
     "redDiagnostics": {
       "path": "tests/contracts/token-location-preprocessor-red.json",
@@ -887,10 +887,10 @@
   },
   "preprocessorMacroArgumentRedWindow": {
     "authority": "docs/evoir-spec.md revision 1.9.33 section 10.4; tests/contracts/day9-acceptance-contract.json scope U",
-    "opened": "0ac7b38 (tests only; 1087 passed, 7 declared semantic failures, zero build errors)",
-    "closed": "6cc7820",
+    "opened": "53410a2 (tests only; 1087 passed, 7 declared semantic failures, zero build errors)",
+    "closed": "ed675da",
     "implementationCommits": [
-      "6cc7820"
+      "ed675da"
     ],
     "redDiagnostics": {
       "path": "tests/contracts/preprocessor-macro-argument-red.json",
@@ -913,10 +913,10 @@
   },
   "parserRuleClosureRedWindow": {
     "authority": "docs/evoir-spec.md revision 1.9.33 sections 10.1.3, 10.1.17, 10.1.18, and 10.1.19; tests/contracts/day9-acceptance-contract.json scope V",
-    "opened": "272e537 (tests only; 1099 passed, 17 declared semantic failures, zero build errors)",
-    "closed": "486519f",
+    "opened": "8bbe357 (tests only; 1099 passed, 17 declared semantic failures, zero build errors)",
+    "closed": "685b35d",
     "implementationCommits": [
-      "486519f"
+      "685b35d"
     ],
     "redDiagnostics": {
       "path": "tests/contracts/parser-rule-closure-red.json",
@@ -942,10 +942,10 @@
   },
   "frontEndLanguageFormsRedWindow": {
     "authority": "docs/evoir-spec.md revision 1.9.45 sections 10.1.3, 10.1.12, 10.1.14, 10.1.17, 10.1.18, and 10.1.19; tests/contracts/day9-acceptance-contract.json scope W",
-    "opened": "e953f0d (tests only; 1229 passed, 27 declared semantic failures, 1 ignored, zero build errors)",
-    "closed": "b438047",
+    "opened": "a6c591c (tests only; 1229 passed, 27 declared semantic failures, 1 ignored, zero build errors)",
+    "closed": "e04f280",
     "implementationCommits": [
-      "b438047"
+      "e04f280"
     ],
     "redDiagnostics": {
       "path": "tests/contracts/front-end-language-forms-red.json",
@@ -972,7 +972,7 @@
     "specAmbiguitiesThisWindow": [],
     "result": "PASS_WITH_TYPED_SURVEY_FRONTIER"
   },
-  "subjectCommit": "0f71a89",
+  "subjectCommit": "d74dd2e",
   "gate": {
     "claim": "Revision 1.9.45 scope W is implemented and green. The six declared front-end rules use shared type, place, conversion, and address-constant facts; variable-argument execution remains explicitly fail-closed. The 16-unit dashboard remains 48/48 clean with zero regression. The full-configuration raw-to-EvoCPP-to-parser measurement completes all 2798 target C units without panic, timeout, or unavailable classification; 2694 are clean and 104 typed-diagnosed units remain an explicitly open frontier.",
     "measured": {
@@ -1088,7 +1088,7 @@
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
       "sha256": "3268a3374e0f74cce3840fed9cb3bd43a0d6f4973239291f0b95f7e4a28da190",
-      "subjectCommit": "b438047",
+      "subjectCommit": "e04f280",
       "publishedFromRun": "20260903T061659Z-52334"
     },
     "result": "FRONT_END_LANGUAGE_FORMS_PASS_WITH_TYPED_SURVEY_FRONTIER"
@@ -1119,277 +1119,277 @@
     "stillFailing": [],
     "publicationsThisWindow": [
       {
-        "commit": "4a9efc1",
+        "commit": "01bc6ad",
         "run": "20260824T171601Z-36959",
         "parseLanesStoppedOn": "struct list_head *next, *prev; (member declarator list)"
       },
       {
-        "commit": "adce449",
+        "commit": "f33b9fd",
         "run": "20260824T174927Z-22061",
         "parseLanesStoppedOn": "} __attribute__((aligned(sizeof(void *)))); (aligned argument as constant expression)"
       },
       {
-        "commit": "ed8302b",
+        "commit": "79da60e",
         "run": "20260824T181349Z-70989",
         "parseLanesStoppedOn": "28 at typeof(_Generic(...)), 2 at __u64 __attribute__((aligned(8))) excl_prog_hash;"
       },
       {
-        "commit": "eae3e42",
+        "commit": "b8688e0",
         "run": "20260824T184441Z-28691",
         "parseLanesStoppedOn": "30 at typeof(_Generic(...))"
       },
       {
-        "commit": "bd9a112",
+        "commit": "fee59fa",
         "run": "20260825T082117Z-92634",
         "parseLanesStoppedOn": "14 at __builtin_expect, 10 at __builtin_constant_p, 4 at __alignof__, 2 at a pointer-declarator attribute; 2 clean; 0 regressions"
       },
       {
-        "commit": "6711313",
+        "commit": "ee02b03",
         "run": "20260825T105452Z-77776",
         "parseLanesStoppedOn": "18 at __builtin_expect, 10 at __builtin_constant_p, 4 at __alignof__; 2 clean; pointer-declarator attribute blockers removed; 0 regressions"
       },
       {
-        "commit": "d14f024",
+        "commit": "8fa41ee",
         "run": "20260825T111124Z-46687",
         "parseLanesStoppedOn": "18 at __builtin_expect, 10 at __builtin_constant_p, 2 at asm; 2 clean; __alignof__ blockers removed; 0 regressions"
       },
       {
-        "commit": "c3d0fd4",
+        "commit": "a9b0649",
         "run": "20260825T113218Z-23644",
         "parseLanesStoppedOn": "18 at __builtin_mul_overflow, 10 at __builtin_constant_p, 2 at asm; 2 clean; __builtin_expect blockers removed; 0 regressions"
       },
       {
-        "commit": "21625b4",
+        "commit": "da1b509",
         "run": "20260825T121253Z-62824",
         "parseLanesStoppedOn": "18 at __builtin_mul_overflow, 12 at asm; 2 clean; all four declared blockers absent; 0 regressions"
       },
       {
-        "commit": "353f888",
+        "commit": "740db3b",
         "run": "20260825T140659Z-90697",
         "parseLanesStoppedOn": "all 18 checked-arithmetic blocker lanes moved; 2 clean; 0 regressions"
       },
       {
-        "commit": "dc0879e",
+        "commit": "a7d13fb",
         "run": "20260825T151617Z-47009",
         "parseLanesStoppedOn": "6 at E2914 malformed-asm for projected output lvalues; no lane stopped on a checked-arithmetic builtin or unrecognized asm syntax; 2 clean; 0 regressions"
       },
       {
-        "commit": "094b235",
+        "commit": "afe1d2b",
         "run": "20260825T153953Z-70633",
         "parseLanesStoppedOn": "0 at checked arithmetic or asm; 10 pointer-update, 8 expected-expression, 6 designated-initializer, 4 invalid-projected-lvalue, 2 __builtin_choose_expr; 2 clean; 0 regressions"
       },
       {
-        "commit": "b53e222",
+        "commit": "d0b99f6",
         "run": "20260825T170334Z-98454",
         "parseLanesStoppedOn": "raw: 14 at E0104 cpucaps overflow and 2 clean; parser: 10 pointer-update, 6 expected-expression, 6 designated-initializer, 4 invalid-projected-lvalue, 2 pragma-pack, 2 __builtin_choose_expr, 2 clean; Unknown compiler 0; 0 regressions"
       },
       {
-        "commit": "ac28733",
+        "commit": "4d1308c",
         "run": "20260826T015400Z-85377",
         "parseLanesStoppedOn": "raw: 14 moved from E0104 cpucaps overflow to E0001 invalid token and 2 remain clean; parser: 10 pointer-update, 6 expected-expression, 6 designated-initializer, 4 invalid-projected-lvalue, 2 pragma-pack, 2 __builtin_choose_expr, 2 clean; 0 regressions"
       },
       {
-        "commit": "2cf588c",
+        "commit": "25330ad",
         "run": "20260826T022731Z-97460",
         "parseLanesStoppedOn": "raw: 14 E0001 invalid token and 2 clean; parser: supported pragma-pack blockers 0, 10 pointer-update, 8 expected-expression, 6 designated-initializer, 4 invalid-projected-lvalue, 2 __builtin_choose_expr, 2 clean; 0 regressions"
       },
       {
-        "commit": "ca6845f",
+        "commit": "b534558",
         "run": "20260826T080442Z-10002",
         "parseLanesStoppedOn": "raw: all 14 affected lanes moved from @gcc-output/include/generated/autoconf.h:2300:26 to arch/arm64/include/asm/sysreg.h:1163:26 with E0001, and 2 remain clean; parser: 10 pointer-update, 8 expected-expression, 6 designated-initializer, 4 invalid-projected-lvalue, 2 __builtin_choose_expr, 2 clean; 0 regressions"
       },
       {
-        "commit": "fa0c98e",
+        "commit": "e6323c6",
         "run": "20260826T121134Z-59549",
         "parseLanesStoppedOn": "raw: 14 E0001 at arch/arm64/include/asm/sysreg.h:1163:26 and 2 clean; parser: pointer-update 0, invalid-projected-lvalue 0, 12 expected-expression, 8 expected-token colon, 6 designated-initializer, 2 __builtin_choose_expr, 4 clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "b7f9775",
+        "commit": "f3b21a0",
         "run": "20260826T180246Z-51365",
         "parseLanesStoppedOn": "raw: 16/16 clean and zero at sysreg.h:1163; parser: 12 expected-expression, 8 expected-token colon, 6 designated-initializer, 2 __builtin_choose_expr, 4 clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "5ab29ac",
+        "commit": "0136489",
         "run": "20260826T195717Z-37307",
         "parseLanesStoppedOn": "raw: 16/16 clean; parser: statement-expression blockers 0, 10 designated-initializer, 8 expected-token colon, 6 __builtin_ctzl, 2 __auto_type, 2 __builtin_choose_expr, 4 clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "e638570",
+        "commit": "fb9a038",
         "run": "20260826T210931Z-30859",
         "parseLanesStoppedOn": "raw: 16/16 clean; parser: statement-expression and designated-initializer blockers 0, 10 __builtin_ctzl, 8 expected-token colon, 6 invalid-initializer-type, 2 __auto_type, 2 __builtin_choose_expr, 4 clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "3a201db",
+        "commit": "a670a3b",
         "run": "20260826T233030Z-8961",
         "parseLanesStoppedOn": "raw: 16/16 clean; parser: all three declared construct blockers and E2901/E2902 are 0, 10 __builtin_ctzl, 8 expected-token colon, 6 invalid-initializer-type, 2 __auto_type, 2 __builtin_choose_expr, 4 clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "0d94962",
+        "commit": "d234e67",
         "run": "20260827T070731Z-95986",
         "parseLanesStoppedOn": "raw: 16/16 clean; parser: choose/type/offset blockers 0, 12 __builtin_ctzl, 8 expected-token colon, 6 invalid-initializer-type, 2 __auto_type, 4 clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "3476ae9",
+        "commit": "a14e230",
         "run": "20260827T095532Z-86596",
         "parseLanesStoppedOn": "raw: 16/16 clean; parser: bit-builtin and unreachable blockers 0, 18 invalid-initializer-type, 8 expected-token colon, 2 __auto_type, 4 clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "4ecd0f6",
+        "commit": "b857a11",
         "run": "20260827T124256Z-64595",
         "parseLanesStoppedOn": "raw: 16/16 clean; parser: __auto_type and Elvis blockers 0, 18 invalid-initializer-type, 10 expected-token colon, 4 clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "b8d7a6d",
+        "commit": "2bf5fcc",
         "run": "20260827T134103Z-67070",
         "parseLanesStoppedOn": "raw: 16/16 clean; parser: all ten scope-I construct blockers 0, 28 invalid-initializer-type, 4 clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "b6b7db7",
+        "commit": "c3697bb",
         "run": "20260827T171604Z-1018",
         "parseLanesStoppedOn": "raw: 16/16 clean; parser: E2202/E2703/E2705 and all four declared G2 blockers 0, 28 unclassified E1001 expected-declaration at arch/arm64/include/asm/cmpxchg.h, 4 clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "5b48c18",
+        "commit": "8fd9193",
         "run": "20260827T204731Z-62790",
         "parseLanesStoppedOn": "raw: 16/16 clean; parser: empty-declaration blocker 0, 16 E1005 unsupported-abstract-declarator and 12 E1001 expected-declaration across the three measured C11 declaration forms, 4 clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "3f54595",
+        "commit": "12ede1f",
         "run": "20260828T182429Z-91203",
         "parseLanesStoppedOn": "raw: 16/16 clean; parser: all seven declared parse-closure capabilities resolved at their boundary, 28 E2912 static-assertion-not-constant in the specified kernel __is_constexpr idiom, 4 clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "15137f4",
+        "commit": "ba4cb59",
         "run": "20260829T055139Z-61417",
         "parseLanesStoppedOn": "fold-only F1 measurement: raw 16/16 clean; all 28 E2912 lanes resolved; 28 E1001 expected-declaration lanes at the compiler-provided __uint128_t spelling in arch/arm64/include/uapi/asm/ptrace.h:96; 4 parser lanes clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "91bdaa4",
+        "commit": "08ab88e",
         "run": "20260829T061750Z-7344",
         "parseLanesStoppedOn": "final closure measurement: raw 16/16 clean; 26 E2923 lanes at the computed-zero padding member in include/uapi/linux/sysinfo.h:22; 2 E2923 lanes at data[0] in include/uapi/linux/bpf.h:94; 4 parser lanes clean; dual-oracle clean 2/16; 0 regressions; revision 1.9.18 and the scope-K 16/16 gate conflict"
       },
       {
-        "commit": "8402eea",
+        "commit": "8349bb6",
         "run": "20260829T094329Z-72998",
         "parseLanesStoppedOn": "revision 1.9.19 ruling measurement: raw 16/16 clean; zero-bound, VLA-message and compiler-int128 blockers 0; 28 E2906 designator-outside-object lanes at __builtin_offsetof(struct pt_regs, sp) through an anonymous nested record; 4 parser lanes clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "07009fe",
+        "commit": "e17b132",
         "run": "20260829T123429Z-30856",
         "parseLanesStoppedOn": "revision 1.9.20 ruling measurement: raw 16/16 clean; anonymous designated-initializer and offsetof paths resolved; 28 E2001 undeclared-identifier lanes at __typeof_unqual__ in arch/arm64/include/asm/spectre.h:79; 4 parser lanes clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "cbf084c",
+        "commit": "c8de854",
         "run": "20260829T152145Z-2514",
         "parseLanesStoppedOn": "revision 1.9.21 ruling measurement: raw 16/16 clean; all 28 __typeof_unqual__ blockers resolved; 16 E2102 lanes at include/linux/sched.h:1805 and 12 E2102 lanes at include/linux/wait.h:176; 4 parser lanes clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "60c64f2",
+        "commit": "ce5d7d2",
         "run": "20260830T030920Z-23375",
         "parseLanesStoppedOn": "address-rooted place publication: the eight frozen target/control pairs are green, but the same 28 cohort lanes remain E2102 at exact call-result-rooted first-error sites; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "78923a9",
+        "commit": "3ff1efd",
         "run": "20260830T035121Z-46924",
         "parseLanesStoppedOn": "call-result-rooted place publication: 28 invalid-projected-lvalue lanes resolved; 22 lanes reach E2102 invalid-update-operands, with one timeout lane and three two-lane diagnostic classes; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "e38c168",
+        "commit": "34381d7",
         "run": "20260830T041443Z-30099",
         "parseLanesStoppedOn": "immediate address/dereference update publication: all 22 invalid-update-operands lanes resolved; next frontier is 17 E2102 statement-expression-rooted projection lanes, 5 timeout lanes, and E2906/E1001/E2001 at 2 lanes each; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "1bad886",
+        "commit": "8c4336f",
         "run": "20260830T045405Z-23380",
         "parseLanesStoppedOn": "recovery-only publication: no default first-error regressions; raw 16/16 clean; dual-oracle clean 2/16; one fixed-budget timeout reached the existing page-flags E2102, yielding 18 E2102 lanes and 4 timeouts; E2906/E1001/E2001 remain 2 lanes each"
       },
       {
-        "commit": "0a53458",
+        "commit": "e6024ab",
         "run": "20260830T101312Z-14565",
         "parseLanesStoppedOn": "statement-expression place publication: all 18 statement-expression-rooted E2102 lanes resolved; 22 lanes exceeded the unchanged 10-second parser budget, while E2906/E1001/E2001 remain 2 lanes each; raw 16/16 clean; dual-oracle clean 2/16; 0 classified regressions; Stage F1 remains open"
       },
       {
-        "commit": "1697338",
+        "commit": "b5ae113",
         "run": "20260830T110658Z-95784",
         "parseLanesStoppedOn": "speculative parser transaction publication: all 22 fixed-budget timeouts resolved without changing the 10-second limit; 24 lanes reach E1001 expected-declaration, 2 reach E2906, and 2 reach __builtin_object_size; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions; Stage F1 remains open"
       },
       {
-        "commit": "7363568",
+        "commit": "68ee004",
         "run": "20260831T033117Z-44479",
         "parseLanesStoppedOn": "revision 1.9.22 ruling publication: null-statement attributes, dynamic offsetof and conservative object-size blockers are absent; 26 lanes reach E2905 statement-expression-outside-function and 2 reach E1001 expected-declaration; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions; Stage F1 remains open"
       },
       {
-        "commit": "270d2d1",
+        "commit": "f14f23f",
         "run": "20260831T040339Z-3286",
         "parseLanesStoppedOn": "exact-once hardening publication: nested side effects in generated dynamic-offset arithmetic execute once in both interpreter paths; the 48 dashboard observations are byte-classified identically to the preceding scope-N run; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions"
       },
       {
-        "commit": "9e9ce23",
+        "commit": "6636930",
         "run": "20260831T070738Z-60065",
         "parseLanesStoppedOn": "revision 1.9.23 publication: all 26 incorrect E2905 lanes and both typeof(function) E1001 lanes are gone; 26 lanes now reach E2102 on assigning GNU NULL ((void *)0) to a function-pointer member, and 2 reach E2208 on the EXPORT_SYMBOL function-address static initializer; raw 16/16 clean; dual-oracle clean 2/16; 0 regressions; Stage F1 remains open"
       },
       {
-        "commit": "269cac1",
+        "commit": "dfd7aab",
         "run": "20260831T172344Z-47247",
         "parseLanesStoppedOn": "revision 1.9.24 publication: all 26 null-function-pointer E2102 lanes and both address-constant E2208 lanes are gone; lib-kstrtox becomes the third dual-oracle clean unit; 15 lanes reach E2911 on packed enum size and 11 exceed the unchanged 10-second parser budget; raw 16/16 clean; dual-oracle clean 3/16; 0 regressions; Stage F1 remains open"
       },
       {
-        "commit": "61d7884",
+        "commit": "b0f90e8",
         "run": "20260831T193604Z-13726",
         "parseLanesStoppedOn": "revision 1.9.25 packed-enum publication: all 15 E2911 lanes are gone; six debug-profile parser lanes time out and the others reach E2001 __builtin_has_attribute or __builtin_va_start; raw 16/16 clean; dual-oracle clean 3/16; 0 regressions; Stage F1 remains open"
       },
       {
-        "commit": "f642fd7",
+        "commit": "3f22138",
         "run": "20260831T194743Z-81561",
         "parseLanesStoppedOn": "release-profile measurement publication: all six debug-profile timeout artifacts disappear under the unchanged 10-second budget; 13 GCC lanes reach E2001 __builtin_has_attribute and 13 Clang lanes reach E2001 __builtin_va_start; raw 16/16 clean; dual-oracle clean 3/16; 0 regressions"
       },
       {
-        "commit": "d54214f",
+        "commit": "44f2e96",
         "run": "20260831T203043Z-22845",
         "parseLanesStoppedOn": "indexed lexical-tag lookup publication: the same 13 plus 13 typed E2001 frontier remains, with zero timeouts and zero regressions; synthetic 4x-input growth is 4.19x and the frozen init-init-task to kernel-bpf-token release ratio is 1.07x; raw 16/16 clean; dual-oracle clean 3/16; Stage F1 remains open"
       },
       {
-        "commit": "8a1a623",
+        "commit": "51b628c",
         "run": "20260901T034625Z-57162",
         "parseLanesStoppedOn": "revision 1.9.26 front-end introspection publication: all 13 GCC __builtin_has_attribute and 13 Clang __builtin_va_start first errors are gone; each oracle stream now has 10 E2102 invalid-update-operands lanes, 2 E2001 __builtin_strlen lanes and 1 E2102 invalid-projected-lvalue lane; raw 16/16 clean; dual-oracle clean 3/16; 0 regressions; Stage F1 remains open"
       },
       {
-        "commit": "14c43cb",
+        "commit": "24de335",
         "run": "20260901T054646Z-62929",
         "parseLanesStoppedOn": "post-GREEN integrity publication: consumers independently recompute __builtin_has_attribute from retained declaration identity; all 48 observations retain the preceding classification, raw 16/16 clean, dual-oracle clean 3/16 and 0 regressions; Stage F1 remains open"
       },
       {
-        "commit": "9e5a6d9",
+        "commit": "b3ffcf5",
         "run": "20260901T093517Z-94633",
         "parseLanesStoppedOn": "revision 1.9.27 publication: the complete pointer-root form matrix and both __builtin_strlen paths are green; six units per oracle stream become newly clean, dual-oracle clean parsing moves from 3/16 to 9/16, raw preprocessing remains 16/16, and regressions remain zero. The remaining 14 parser lanes are eight E2102, two E2101, two E1303 and two E1001 observations across seven units; Stage F1 remains open"
       },
       {
-        "commit": "3975e88",
+        "commit": "ff37cf1",
         "run": "20260901T111541Z-55835",
         "parseLanesStoppedOn": "initial revision 1.9.28 publication: kernel-bpf-token becomes dual-oracle clean and the four declared first-error classes are removed, moving clean parsing from 9/16 to 10/16 with zero regressions; init-init-task advances within the same function to E2102 at a wide compound assignment, exposing the incomplete shared classification"
       },
       {
-        "commit": "b24c7ed",
+        "commit": "04175f6",
         "run": "20260901T115632Z-47898",
         "parseLanesStoppedOn": "final revision 1.9.28 publication: the wide compound-assignment E2102 is gone; init-init-task advances to E1303 on the GNU enumerator expression 1 << 31. Raw preprocessing remains 16/16, dual-oracle clean parsing remains 10/16, twelve parser lanes remain across six units, and regressions remain zero; Stage F1 remains open"
       },
       {
-        "commit": "ddc1028",
+        "commit": "136ac85",
         "run": "20260901T140210Z-65904",
         "parseLanesStoppedOn": "revision 1.9.29 publication: all six character-pointer E2202, four __builtin_frame_address E2001 and two signed-enumerator E1303 observations are gone; init-init-task becomes dual-oracle clean. Raw preprocessing remains 16/16, dual-oracle clean parsing moves to 11/16, and ten parser lanes remain across five units: four E1001 at typeof(*function_pointer) declarators and six E1002 at multi-declarator function-type typedef declarations. Both are already specified; regressions remain zero and Stage F1 remains open"
       },
       {
-        "commit": "fe5179b",
+        "commit": "b9320fb",
         "run": "20260901T145829Z-31164",
         "parseLanesStoppedOn": "revision 1.9.30 publication: all four typeof(*function_pointer) E1001 and all six multi-function-declarator E1002 observations are gone; init-do-mounts-initrd and kernel-power-main become dual-oracle clean. Raw preprocessing remains 16/16, dual-oracle clean parsing moves to 13/16, and six parser lanes remain across three units: four E1001 at the unregistered __typeof spelling and two E2002 at a repeated compatible block-scope extern function declaration. Neither next form is explicitly specified; regressions remain zero and Stage F1 remains open"
       },
       {
-        "commit": "88cd9a7",
+        "commit": "1d094ba",
         "run": "20260901T162827Z-12206",
         "parseLanesStoppedOn": "revision 1.9.31 publication: all four __typeof E1001 and both compatible-redeclaration E2002 observations are gone; init-do-mounts becomes dual-oracle clean. Raw preprocessing remains 16/16, dual-oracle clean parsing moves to 14/16, and four parser lanes remain across mm-mprotect and mm-mincore, all DRIVER_RUST_PANIC while nested typeof parsing reinstalls an already-visible parameter shadow. Revision 1.9.31 covers that construct; regressions remain zero and Stage F1 remains open"
       },
       {
-        "commit": "25acb6d",
+        "commit": "f509eb5",
         "run": "20260901T185119Z-83939",
         "parseLanesStoppedOn": "scope P14 publication: all four nested-typeof DRIVER_RUST_PANIC observations are gone; mm-mprotect and mm-mincore become clean under both oracle preprocessors. Raw preprocessing, GCC-preprocessed parsing, and Clang-preprocessed parsing are each 16/16, dual-oracle clean parsing is 16/16, regressions are zero, and Stage F1 is closed"
       }
@@ -1398,7 +1398,7 @@
   "dashboardDelta": {
     "before": {
       "run": "20260828T182429Z-91203",
-      "subjectCommit": "3f54595",
+      "subjectCommit": "12ede1f",
       "nextFirstErrorClasses": {
         "E2912 static-assertion-not-constant": 28
       },
@@ -1407,7 +1407,7 @@
     },
     "foldPublication": {
       "run": "20260829T055139Z-61417",
-      "subjectCommit": "15137f4",
+      "subjectCommit": "ba4cb59",
       "resolvedFirstErrorClasses": {
         "E2912 static-assertion-not-constant": 28
       },
@@ -1420,7 +1420,7 @@
     },
     "zeroBoundConflict": {
       "run": "20260829T061750Z-7344",
-      "subjectCommit": "91bdaa4",
+      "subjectCommit": "08ab88e",
       "nextFirstErrorClasses": {
         "E2923 computed-zero array bound": 26,
         "E2923 explicit zero array bound": 2
@@ -1433,7 +1433,7 @@
     },
     "anonymousDesignatorBefore": {
       "run": "20260829T094329Z-72998",
-      "subjectCommit": "8402eea",
+      "subjectCommit": "8349bb6",
       "resolvedFirstErrorClasses": {
         "E2923 computed-zero array bound": 26,
         "E2923 explicit zero array bound": 2
@@ -1449,7 +1449,7 @@
     },
     "typeofUnqualBefore": {
       "run": "20260829T123429Z-30856",
-      "subjectCommit": "07009fe",
+      "subjectCommit": "e17b132",
       "resolvedFirstErrorClasses": {
         "E2906 designator-outside-object at anonymous offsetof member path": 28
       },
@@ -1464,7 +1464,7 @@
     },
     "typeofUnqualAfter": {
       "run": "20260829T152145Z-2514",
-      "subjectCommit": "cbf084c",
+      "subjectCommit": "c8de854",
       "resolvedFirstErrorClasses": {
         "E2001 undeclared-identifier at __typeof_unqual__": 28
       },
@@ -1480,7 +1480,7 @@
     },
     "addressRootAfter": {
       "run": "20260830T030920Z-23375",
-      "subjectCommit": "60c64f2",
+      "subjectCommit": "ce5d7d2",
       "resolvedTargetPairs": 8,
       "cohortLanesMoved": 0,
       "nextFirstErrorClasses": {
@@ -1492,7 +1492,7 @@
     },
     "callResultAfter": {
       "run": "20260830T035121Z-46924",
-      "subjectCommit": "78923a9",
+      "subjectCommit": "3ff1efd",
       "resolvedFirstErrorClasses": {
         "E2102 call-result-rooted invalid-projected-lvalue": 28
       },
@@ -1509,7 +1509,7 @@
     },
     "projectedPlaceAfter": {
       "run": "20260830T041443Z-30099",
-      "subjectCommit": "e38c168",
+      "subjectCommit": "34381d7",
       "resolvedFirstErrorClasses": {
         "E2102 invalid-update-operands": 22
       },
@@ -1528,7 +1528,7 @@
     },
     "after": {
       "run": "20260830T045405Z-23380",
-      "subjectCommit": "1bad886",
+      "subjectCommit": "8c4336f",
       "resolvedRecoveryFailures": {
         "surveyUnavailableUnits": 1
       },
@@ -1548,7 +1548,7 @@
     },
     "statementExpressionPlaceAfter": {
       "run": "20260830T101312Z-14565",
-      "subjectCommit": "0a53458",
+      "subjectCommit": "e6024ab",
       "resolvedFirstErrorClasses": {
         "E2102 statement-expression-rooted invalid-projected-lvalue": 18
       },
@@ -1566,7 +1566,7 @@
     },
     "parserCheckpointScalingAfter": {
       "run": "20260830T110658Z-95784",
-      "subjectCommit": "1697338",
+      "subjectCommit": "b5ae113",
       "resolvedFirstErrorClasses": {
         "PARSE_TIMEOUT at fixed 10-second parser budget": 22
       },
@@ -1583,7 +1583,7 @@
     },
     "frontierRulingsAfter": {
       "run": "20260831T033117Z-44479",
-      "subjectCommit": "7363568",
+      "subjectCommit": "68ee004",
       "resolvedFirstErrorClasses": {
         "E1001 expected-declaration at null-statement attribute": 24,
         "E2906 dynamic offsetof index": 2,
@@ -1601,7 +1601,7 @@
     },
     "exactOnceHardeningAfter": {
       "run": "20260831T040339Z-3286",
-      "subjectCommit": "270d2d1",
+      "subjectCommit": "f14f23f",
       "nextFirstErrorClasses": {
         "E2905 statement-expression-outside-function": 26,
         "E1001 expected-declaration": 2
@@ -1614,7 +1614,7 @@
     },
     "statementExpressionScopeAfter": {
       "run": "20260831T070738Z-60065",
-      "subjectCommit": "9e9ce23",
+      "subjectCommit": "6636930",
       "resolvedFirstErrorClasses": {
         "E2905 statement-expression-outside-function": 26,
         "E1001 expected-declaration at typeof(function-designator)": 2
@@ -1631,7 +1631,7 @@
     },
     "pointerConstantsAfter": {
       "run": "20260831T172344Z-47247",
-      "subjectCommit": "269cac1",
+      "subjectCommit": "dfd7aab",
       "resolvedFirstErrorClasses": {
         "E2102 invalid-update-operands at include/linux/delayed_call.h:33": 26,
         "E2208 non-constant-static-initializer at lib/kstrtox.c:138": 2
@@ -1649,7 +1649,7 @@
     },
     "packedEnumsAfter": {
       "run": "20260831T193604Z-13726",
-      "subjectCommit": "61d7884",
+      "subjectCommit": "b0f90e8",
       "resolvedFirstErrorClasses": {
         "E2911 static-assertion-failed at include/linux/rw_hint.h:22": 15
       },
@@ -1665,7 +1665,7 @@
     },
     "releaseMeasurementAfter": {
       "run": "20260831T194743Z-81561",
-      "subjectCommit": "f642fd7",
+      "subjectCommit": "3f22138",
       "measurementConfiguration": "release subject binary; unchanged 10-second per-TU timeout; 4 parser jobs",
       "resolvedFirstErrorClasses": {
         "PARSE_TIMEOUT with debug subject binary": 6
@@ -1682,7 +1682,7 @@
     },
     "tagIndexAfter": {
       "run": "20260831T203043Z-22845",
-      "subjectCommit": "d54214f",
+      "subjectCommit": "44f2e96",
       "nextFirstErrorClasses": {
         "gcc-preprocessed-parser E2001 undeclared-identifier: __builtin_has_attribute": 13,
         "clang-preprocessed-parser E2001 undeclared-identifier: __builtin_va_start": 13
@@ -1697,7 +1697,7 @@
     },
     "frontEndIntrospectionAfter": {
       "run": "20260901T054646Z-62929",
-      "subjectCommit": "14c43cb",
+      "subjectCommit": "24de335",
       "resolvedFirstErrorClasses": {
         "gcc-preprocessed-parser E2001 undeclared-identifier: __builtin_has_attribute": 13,
         "clang-preprocessed-parser E2001 undeclared-identifier: __builtin_va_start": 13
@@ -1719,7 +1719,7 @@
     },
     "pointerPlacesStrlenAfter": {
       "run": "20260901T093517Z-94633",
-      "subjectCommit": "9e5a6d9",
+      "subjectCommit": "b3ffcf5",
       "movedFirstErrorClasses": {
         "gcc-preprocessed-parser E2102 invalid-update-operands": 6,
         "clang-preprocessed-parser E2102 invalid-update-operands": 6,
@@ -1752,7 +1752,7 @@
     },
     "wideEnumPointerAfter": {
       "run": "20260901T115632Z-47898",
-      "subjectCommit": "b24c7ed",
+      "subjectCommit": "04175f6",
       "baselineRun": "20260901T093517Z-94633",
       "intermediateRun": "20260901T111541Z-55835",
       "resolvedFirstErrorClasses": {
@@ -1786,7 +1786,7 @@
     },
     "pointerFrameWideAfter": {
       "run": "20260901T140210Z-65904",
-      "subjectCommit": "ddc1028",
+      "subjectCommit": "136ac85",
       "baselineRun": "20260901T115632Z-47898",
       "resolvedFirstErrorClasses": {
         "gcc-preprocessed-parser E2202 invalid-initializer-type at include/linux/fs_context.h:142": 3,
@@ -1818,7 +1818,7 @@
     },
     "functionDeclarationFormsAfter": {
       "run": "20260901T145829Z-31164",
-      "subjectCommit": "fe5179b",
+      "subjectCommit": "b9320fb",
       "baselineRun": "20260901T140210Z-65904",
       "resolvedFirstErrorClasses": {
         "gcc-preprocessed-parser E1001 expected-declaration at typeof(*function_pointer) declarator": 2,
@@ -1848,7 +1848,7 @@
     },
     "typeofRedeclarationAfter": {
       "run": "20260901T162827Z-12206",
-      "subjectCommit": "88cd9a7",
+      "subjectCommit": "1d094ba",
       "baselineRun": "20260901T145829Z-31164",
       "resolvedFirstErrorClasses": {
         "gcc-preprocessed-parser E1001 expected-declaration at the unregistered __typeof spelling": 2,
@@ -1873,7 +1873,7 @@
     },
     "nestedTypeofParameterAfter": {
       "run": "20260901T185119Z-83939",
-      "subjectCommit": "25acb6d",
+      "subjectCommit": "f509eb5",
       "baselineRun": "20260901T162827Z-12206",
       "resolvedFirstErrorClasses": {
         "gcc-preprocessed-parser DRIVER_RUST_PANIC reinstalling the nested typeof parameter shadow start": 2,
@@ -1892,7 +1892,7 @@
     },
     "frontEndLanguageFormsAfter": {
       "run": "20260903T061659Z-52334",
-      "subjectCommit": "b438047",
+      "subjectCommit": "e04f280",
       "baselineRun": "20260902T111559Z-80486",
       "rawPreprocessClean": "16/16",
       "gccPreprocessedParserClean": "16/16",
@@ -2361,7 +2361,7 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "0f71a892c6b4a4ac230e5e54d5d7c3cb8ff5278d",
+    "commit": "d74dd2ebc8c90cab3a4a377642a97c94966ba365",
     "path": "/private/tmp/c30-w-replay.8rNQyP/repo",
     "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-w-replay.8rNQyP/repo; test ! -e .git/objects/info/alternates; CARGO_TARGET_DIR=/private/tmp/c30-w-replay.8rNQyP/target cargo test --workspace --no-fail-fast --locked --offline",
     "measured": {
@@ -2401,10 +2401,10 @@
     "P9-STRLEN-LITERAL-EDGE: revision 1.9.27 says a string-literal operand folds to the literal's length but does not freeze whether an embedded zero terminates that length or whether prefixed wide, UTF-16, UTF-32 and UTF-8 literals take the constant path. The sealed evidence and positive claim cover ordinary narrow literals without embedded zeros; no broader oracle-conformance claim is made."
   ],
   "processDeviations": [
-    "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (adce449), aligned arguments as constant expressions (ed8302b), attribute positions in members, block scope and parameters (eae3e42).",
-    "The first real publication reused a stale capture after the observer refused to overwrite it, producing a receipt whose subject commit did not match its run; the publisher now captures per commit and takes the run directory from its own capture (a15872e). The receipt in the tree is from the corrected publisher.",
+    "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (f33b9fd), aligned arguments as constant expressions (79da60e), attribute positions in members, block scope and parameters (b8688e0).",
+    "The first real publication reused a stale capture after the observer refused to overwrite it, producing a receipt whose subject commit did not match its run; the publisher now captures per commit and takes the run directory from its own capture (fa7c415). The receipt in the tree is from the corrected publisher.",
     "Two RED expectations were corrected by the oracle before implementation: aligned on a typedef may lower alignment (4,1 not 4,4) and a lone packed member gives (8,2) not (8,4).",
-    "The typeof-only intermediate commit described by the implementation plan was not made because it would leave one declared workspace test red while the same plan required a green workspace before every production commit; bd9a112 closes both constructs atomically.",
+    "The typeof-only intermediate commit described by the implementation plan was not made because it would leave one declared workspace test red while the same plan required a green workspace before every production commit; fee59fa closes both constructs atomically.",
     "The plan's lowering identity fixture used a pointer parameter that the existing allocation manifest rejects even in the spelled-out baseline. The fixture uses an address-taken local pointer instead, preserving the intended volatile-pointer front-end identity check without expanding the pointer-call ABI.",
     "The first dashboard publication attempt was rejected before measurement because the container runtime could not write its state within the sandbox; it was rerun with the same command outside that boundary. A separate relative-evidence-path defect in the publisher was exposed and avoided with the measured absolute evidence path recorded in gate.command.",
     "The _Static_assert lexer token existed but its declaration grammar did not. Scope E requires __builtin_constant_p in that context, so the smallest positive _Static_assert consumer was added without opening its unfrozen negative diagnostic surface.",
@@ -2423,7 +2423,7 @@
     "Two preprocessing-token dashboard captures were refused at 16/48 observations because they were launched inside the restricted sandbox: every raw lane succeeded, then the Apple container CLI returned Operation not permitted when inspecting the sealed oracle image. Both incomplete captures remain preserved and were not used. The complete publication used the same subject commit and previous-run lineage with the required container permission; it sealed 48/48 observations with zero regressions.",
     "The verbatim statement-expression cohort shape using __auto_type remains declared as a dependency on the compile-time inference window. An active equivalent fixture uses typeof, and no test is disabled.",
     "The earlier boundary test for compound literals was migrated from expecting E2902 to expecting successful parsing in the same semantic commit that retired the diagnostic; the regression test was not deleted.",
-    "The first compound-literal dashboard capture was refused after the restricted sandbox denied container inspection and remains preserved as incomplete evidence. Review then found that static compound-literal lowering fabricated an undefined global_addr. A failing regression test was added, the lowerer was changed to fail closed for this unfrozen relocation, and the successful publication was made from the follow-up subject 3a201db.",
+    "The first compound-literal dashboard capture was refused after the restricted sandbox denied container inspection and remains preserved as incomplete evidence. Review then found that static compound-literal lowering fabricated an undefined global_addr. A failing regression test was added, the lowerer was changed to fail closed for this unfrozen relocation, and the successful publication was made from the follow-up subject a670a3b.",
     "File-scope compound literals are parsed and executed with static/read-only object semantics, but their EvoIR relocation lowering remains fail-closed because sections 10.1.13 and 3 do not define deterministic unnamed global identity or the required static pointer relocation/provenance representation. No representation was invented.",
     "The initial case-range implementation normalized consecutive ordinary case labels in the parser, which made the new byte-identity test pass but changed a frozen C-HIR fingerprint. The full workspace gate caught it before commit; C-HIR preservation was restored and only lowering now coalesces consecutive label chains after selector conversion.",
     "Revision 1.9.14 referred to an EvoIR unreachable terminator that did not exist in Sections 3 or 9. Production work stopped until the architecture owner supplied revision 1.9.15; the implementation then added the typed trap reason and verified validator, both interpreters, textual round-trip, proof-checker, and eqopt behavior as one semantic unit.",
@@ -2431,38 +2431,38 @@
     "Volatile struct copies recursively emit volatile loads and stores in declaration order, while ordinary aggregate copies remain one opaque EvoIR copy. Volatile unions and volatile bit-fields are refused at their named specification gaps instead of inventing overlapping or width-dependent trace semantics.",
     "The G2 publication moved all 28 E2202 aggregate-initializer lanes to E1001 expected-declaration in arch/arm64/include/asm/cmpxchg.h with zero regressions. The new first-error class was retained as unclassified until the parse-closure measurement assigned its concrete declaration forms.",
     "Revision 1.9.17 withdrew the successor-set/E3028 computed-goto contract before production resumed. The tests-only checkpoint was amended first: the front end preserves label addresses and goto *, while the C-HIR interpreter and lowering fail closed with E3029 and no EvoIR instruction is invented.",
-    "Rust 1.98 enabled a fixed-size decoder-slice Clippy warning in four pre-existing binary decoders. Commit 5ac26b1 is a behavior-neutral maintenance change that restores the frozen zero-warning gate and is not counted as a parse-closure semantic commit.",
+    "Rust 1.98 enabled a fixed-size decoder-slice Clippy warning in four pre-existing binary decoders. Commit f047d2a is a behavior-neutral maintenance change that restores the frozen zero-warning gate and is not counted as a parse-closure semantic commit.",
     "The attributable publication after the three C11 declaration forms had zero regressions but did not close stage F1. All 28 parser lanes moved to E2912 in the already-specified kernel __is_constexpr composition; the receipt records every affected unit and leaves F1 OPEN instead of treating first-error movement as acceptance.",
     "The first sealed constant-expression probe was rejected even though its container command returned zero: the read-only filesystem made both compilers fail and the runner lacked set -e. Only the rerun with set -eu, a writable output mount, and bound image/compiler/source/runner digests supplied oracle evidence.",
     "The first complete workspace gate caught an obsolete unit test that accepted int fixed[0] = {}. Revision 1.9.18 requires E2923 for a written zero bound, while int inferred[] = {} remains legal because no bound is written; the test was split to retain both behaviors before the gate was rerun.",
     "The fold-only F1 publication was retained separately from the final array-bound publication. It proves the 28 E2912 lanes moved to __uint128_t; the final revision 1.9.18 publication proves that enforcing E2923 then exposed the zero-bound authority conflict earlier in the same 14 units.",
     "The initialized-VLA path originally anchored E2203 at the initializer while the new eager bound check anchored it at the declarator bound. The focused regression caught this unintended span change; initialized declarations remain on the established initializer validation path while every path now uses the canonical variable-length-object message.",
-    "The first revision 1.9.19 dashboard publication attempt was refused when the restricted sandbox denied the local container runtime inspect operation. Its incomplete capture is preserved at .evidence/kernel-dashboard/8402eea-sandbox-refused-20260829T093740Z and was not used; the repeated publication on the same commit and lineage sealed 48/48 observations with zero regressions.",
+    "The first revision 1.9.19 dashboard publication attempt was refused when the restricted sandbox denied the local container runtime inspect operation. Its incomplete capture is preserved at .evidence/kernel-dashboard/8349bb6-sandbox-refused-20260829T093740Z and was not used; the repeated publication on the same commit and lineage sealed 48/48 observations with zero regressions.",
     "The original unevaluated-operand fixture wrapped sizeof(__typeof_unqual__(side++)) in a void cast, but the existing C-HIR scalar interpreter cannot execute that otherwise unrelated void-cast expression. The GREEN fixture returns side plus the measured sizeof value and subtracts that value, preserving the exact side==0 property without widening K4.",
-    "The first K4 publication attempt was refused before lane execution because the isolated worktree lacked a real, project-contained frozen kernel archive; that failed capture is preserved as .evidence/kernel-dashboard/cbf084c-refused-missing-archive. A second run sealed 48/48 observations but the publisher then raised ValueError while relativizing the shared evidence path to the isolated checkout; that capture is preserved as cbf084c-refused-relative-evidence-path. The authoritative third run used real worktree-local evidence, sealed 48/48 observations, and its byte-verified artifacts were copied into the root evidence tree without changing them.",
+    "The first K4 publication attempt was refused before lane execution because the isolated worktree lacked a real, project-contained frozen kernel archive; that failed capture is preserved as .evidence/kernel-dashboard/c8de854-refused-missing-archive. A second run sealed 48/48 observations but the publisher then raised ValueError while relativizing the shared evidence path to the isolated checkout; that capture is preserved as c8de854-refused-relative-evidence-path. The authoritative third run used real worktree-local evidence, sealed 48/48 observations, and its byte-verified artifacts were copied into the root evidence tree without changing them.",
     "The reviewer supplied address-rooted container_of as the measured scope-M blocker. Eight tests proved that form was defective, but the immediate sealed publication moved zero lanes and bound the actual first errors to call-result-rooted projections. Scope M therefore used three separately published RED/GREEN checkpoints instead of reporting the plausible initial diagnosis as measured fact.",
-    "The first sandboxed scope-M publication stopped before measurement because the restricted container boundary could not inspect the sealed oracle image. It is preserved at .evidence/kernel-dashboard/60c64f2-sandbox-refused and is not evidence; the authoritative rerun 20260830T030920Z-23375 used the same subject and previous-run lineage.",
+    "The first sandboxed scope-M publication stopped before measurement because the restricted container boundary could not inspect the sealed oracle image. It is preserved at .evidence/kernel-dashboard/ce5d7d2-sandbox-refused and is not evidence; the authoritative rerun 20260830T030920Z-23375 used the same subject and previous-run lineage.",
     "The final scope-M publication cleared all 22 invalid-update-operands lanes and exposed 17 uses of the same E2102 code for a different statement-expression-rooted shape. The frozen M gate is defined by exact target/control expression families, so this newly reachable form is recorded as the next frontier rather than silently expanding the completed scope.",
     "Scope L's contract named init-init-task and mm-mincore as unavailable survey units. A baseline produced before the production edit measured only mm-mincore unavailable; init-init-task already completed with E2102 at line 23018. The receipt preserves that measured correction rather than claiming a 2-to-0 movement.",
     "The recovery dashboard retained zero regressions and 2/16 dual-oracle clean parse, but one clang init-do-mounts lane completed at its existing E2102 instead of timing out under the fixed 10-second budget. The receipt records timeout 5-to-4 and E2102 17-to-18, and does not call the complete 48-lane output byte-identical.",
     "Closing the statement-expression place defect removed all 18 matching E2102 lanes, but the next fixed-budget publication timed out on 22 lanes and left dual-oracle clean parse at 2/16. The publisher correctly reports zero classified regressions because every prior lane was already failing, but that predicate is not a progress predicate; the receipt records the throughput boundary explicitly and does not widen the timeout or claim Stage F1 closure.",
-    "The first parser-throughput publication was refused after all 16 raw lanes succeeded because the restricted sandbox denied sealed oracle container inspection. Its incomplete capture is preserved at .evidence/kernel-dashboard/1697338-sandbox-refused-20260830T110119Z and is not acceptance evidence. The permission-correct rerun used the same subject and previous-run lineage, retained the 10-second parser budget, sealed 48/48 observations, and converted all 22 prior timeouts into typed first errors with zero regressions.",
-    "The first scope-N GREEN publication covered the measured root update index. A deliberate post-GREEN audit then made index++ a child of arithmetic and observed E3007, proving the internal exact-once boundary was too narrow. Commit 270d2d1 scopes mutation permission across the complete generated expression in both interpreter paths; its follow-up publication classified all 48 observations identically with zero regressions.",
+    "The first parser-throughput publication was refused after all 16 raw lanes succeeded because the restricted sandbox denied sealed oracle container inspection. Its incomplete capture is preserved at .evidence/kernel-dashboard/b5ae113-sandbox-refused-20260830T110119Z and is not acceptance evidence. The permission-correct rerun used the same subject and previous-run lineage, retained the 10-second parser budget, sealed 48/48 observations, and converted all 22 prior timeouts into typed first errors with zero regressions.",
+    "The first scope-N GREEN publication covered the measured root update index. A deliberate post-GREEN audit then made index++ a child of arithmetic and observed E3007, proving the internal exact-once boundary was too narrow. Commit f14f23f scopes mutation permission across the complete generated expression in both interpreter paths; its follow-up publication classified all 48 observations identically with zero regressions.",
     "One pre-commit workspace invocation omitted the established /tmp runner and was interrupted after macOS provenance scanning imposed per-binary delay; it is not acceptance evidence. The recorded canonical all-target locked/offline run completed 988/988 with the runner. A restricted base-layout invocation also returned rc 1 with no evidence and was rejected; the subsequent sequential sealed runs produced 128/128 and 22/22 ORACLE_CONSENSUS.",
     "The scope-O byte-identity fixture initially called an undefined external function, which the EvoIR validator correctly rejects even in the spelled-out control. The fixture was corrected during GREEN to provide a real definition while retaining the inherited extern redeclaration; the RED still failed first at typeof(function) with E1001 and the corrected pair proves no front-end-only form survives.",
     "A post-fix attempt to run the base and attributed layout observers concurrently was rejected because they share one mutable container identity: one failed deleting the other's running container and the other detected a changing image inventory. Neither result was used; fresh sequential runs produced 128/128 and 22/22 ORACLE_CONSENSUS.",
     "The opening P5 RED proved all five conversion contexts at the parser boundary but executed only assignment and truth testing. Inspection during GREEN found that call and return lowering used a separate function-value mapper that rejected function pointers entirely. The semantic commit therefore adds one weighted dual-interpreter execution case covering initialization, assignment, argument, return and comparison; it refines the declared null-conversion capability and does not open a new one.",
     "The first two packed-enum bisection probe attempts were rejected as evidence because the sealed read-only container prevented compiler temporary or output files under /tmp. The accepted third run binds TMPDIR and the executable to the writable evidence mount, records both compiler identities, and obtains identical size/alignment 1/1 results; only that output is cited.",
     "The scope-P7 measurement configuration changed explicitly from the debug subject compiler to the release subject compiler while retaining the 10-second per-TU timeout and four parser jobs. The observer argv, run configuration and receipt all bind that change; it was not represented as a silent timeout increase.",
-    "The reported release timing of init-init-task 20.03 seconds versus kernel-bpf-token 1.15 seconds did not reproduce on the frozen byte-identical inputs at exact baseline 30ed2fc: measured medians were 3.09 and 3.11 seconds. That conflict is retained rather than relabelled. Independent sampling and a deterministic scaling RED exposed a real quadratic lexical-tag lookup; the indexed implementation closes that measured defect and yields a 1.07x real-TU ratio.",
+    "The reported release timing of init-init-task 20.03 seconds versus kernel-bpf-token 1.15 seconds did not reproduce on the frozen byte-identical inputs at exact baseline 46b07be: measured medians were 3.09 and 3.11 seconds. That conflict is retained rather than relabelled. Independent sampling and a deterministic scaling RED exposed a real quadratic lexical-tag lookup; the indexed implementation closes that measured defect and yields a 1.07x real-TU ratio.",
     "The initial scope-P8 GREEN implementation rendered and executed the measured answers, but a deliberate corrupted-C-HIR audit found that downstream validation accepted a forged HasAttribute result because its match branch was empty. The corruption test failed first, then consumers were changed to recompute declaration/member identity and written attributes through the shared anonymous-member resolver. The follow-up publication retained all 48 lane classifications with zero regressions.",
-    "The first P10 publication at 3975e88 cleared the declared first-error sites but exposed E2102 on a later 128-bit compound assignment in the same checksum function. A verbatim kernel-shape test was observed RED before b24c7ed replaced the simple-assignment exception with a shared wide-integer operand class; the final publication retains the intermediate run in the single dashboard lineage rather than presenting it as completion.",
+    "The first P10 publication at ff37cf1 cleared the declared first-error sites but exposed E2102 on a later 128-bit compound assignment in the same checksum function. A verbatim kernel-shape test was observed RED before 04175f6 replaced the simple-assignment exception with a shared wide-integer operand class; the final publication retains the intermediate run in the single dashboard lineage rather than presenting it as completion.",
     "One final workspace invocation accidentally omitted the established /tmp runner and was interrupted after multiple individually green test binaries demonstrated the known macOS provenance delay. It is not evidence. The complete 1038/1038 workspace gate and 1037/1037 isolated all-target replay both used the established runner and exited zero.",
     "The P11 constant-expression rules require correct 128-bit reference values while the execution boundary requires E3033. The implementation therefore widened the shared front-end integer kernel to u128 and added explicit checked narrowing only at interpreter and lowering sinks; it did not widen EvoIR or claim 128-bit execution.",
     "The first sandboxed P11 layout invocation stopped before sealed container inspection and produced no usable evidence. The authoritative sequential reruns used the same base and attributed commands with the required container permission and produced 128/128 and 22/22 ORACLE_CONSENSUS with zero mismatches.",
     "The P12 RED reached E1001 before its final function-pointer-object guard. GREEN exposed that the guard used the non-constant file-scope initializer copy = fp; it was corrected to the PM-measured already-green form copy = target. Neither failing RED assertion nor declared capability changed, and the correction is recorded rather than hidden in the semantic commit.",
-    "The first complete P13 GREEN workspace gate found two historical Day 5 exact-message cases that still expected ordinary-identifier-redefinition. They were added to the same tests-only checkpoint, independently replayed as one failing test with 2/36 mismatches on commit 241f899, and then passed under the production diagnostic change; no second RED window was created.",
-    "The first P13 dashboard capture completed all 16 raw preprocessing lanes but was refused when restricted sandbox access denied sealed oracle inspection. Its incomplete capture is preserved at .evidence/kernel-dashboard/88cd9a7-sandbox-refused and its 16-row run at .evidence/day5-kernel-reconnaissance/20260901T162552Z-5025; neither is acceptance evidence. The permission-correct rerun on the same commit and previous-run lineage sealed 48/48 observations as run 20260901T162827Z-12206.",
+    "The first complete P13 GREEN workspace gate found two historical Day 5 exact-message cases that still expected ordinary-identifier-redefinition. They were added to the same tests-only checkpoint, independently replayed as one failing test with 2/36 mismatches on commit 00c2d86, and then passed under the production diagnostic change; no second RED window was created.",
+    "The first P13 dashboard capture completed all 16 raw preprocessing lanes but was refused when restricted sandbox access denied sealed oracle inspection. Its incomplete capture is preserved at .evidence/kernel-dashboard/1d094ba-sandbox-refused and its 16-row run at .evidence/day5-kernel-reconnaissance/20260901T162552Z-5025; neither is acceptance evidence. The permission-correct rerun on the same commit and previous-run lineage sealed 48/48 observations as run 20260901T162827Z-12206.",
     "The opening P14 fixtures initially expected __builtin_types_compatible_p to have type _Bool. The duplicate-shadow panic ran first and masked that test defect. Revision 1.9.31 specifies int, so the tests-only commit was amended before any production commit and independently replayed as exactly five duplicate-shadow panics with the corrected type assertions.",
     "The independent RED replay briefly shared the main checkout's Cargo target and replaced its focused test binary with the detached-checkout build. That stale derived cache was rejected, only evocc-parser build artifacts were cleaned, GREEN was rebuilt, and the final no-local replay used its own target directory.",
     "The scope-T token-location test initially carried an unobserved expected invocation column of 35; GREEN first fixed the declared text and panic failures, then exposed the measured column as 34. The assertion was corrected in the semantic commit and the deviation is retained rather than hidden.",
@@ -2474,8 +2474,8 @@
     "The final scope-V documentation gate was first started without the established temporary runner. Every completed target was green, but macOS provenance scanning imposed the known per-binary delay; the run was interrupted and is not evidence. The complete 1118/1118 rerun used the isolated /private/tmp runner and exited zero.",
     "The W RED receipt originally paired the revision 1.9.45 label with the digest of the checked-out revision 1.9.46 file. The closure separates the frozen 1.9.45 authority digest from the 1.9.46 checkout digest; the intervening revision changed only Sections 8 and 11, so no W test or semantic claim changed.",
     "The first W workspace RED runner moved each test executable away from sibling helper binaries and caused 42 unrelated proof-boundary failures. That attempt was rejected; the recorded run kept the complete Cargo target topology and contained exactly 27 declared semantic failures with zero build errors.",
-    "The first W dashboard publication completed all raw lanes, then restricted sandbox access denied inspection of the sealed oracle image. The incomplete capture is preserved at .evidence/kernel-dashboard/b438047-failed-sandbox-20260903T061236Z and is not acceptance evidence; the permission-correct run sealed 48/48.",
-    "The W full-configuration survey initially refused an uncommitted dashboard receipt. Commit 0f71a89 fixed the measurement input, and the accepted survey ran against that exact clean subject. It was measure-only and moved no production or specification state.",
+    "The first W dashboard publication completed all raw lanes, then restricted sandbox access denied inspection of the sealed oracle image. The incomplete capture is preserved at .evidence/kernel-dashboard/e04f280-failed-sandbox-20260903T061236Z and is not acceptance evidence; the permission-correct run sealed 48/48.",
+    "The W full-configuration survey initially refused an uncommitted dashboard receipt. Commit d74dd2e fixed the measurement input, and the accepted survey ran against that exact clean subject. It was measure-only and moved no production or specification state.",
     "The kfifo_get frontier was reduced without a production edit to the 28-byte source int f(){return(0?\"\":0)[0];}. The subject reports E2102 while both sealed oracles accept; the finding is recorded for the follow-on scope and not silently fixed inside W.",
     "The final base-layout invocation inside the restricted sandbox returned one with no usable evidence. It was rejected; permission-correct base and attributed runs were executed sequentially and produced 128/128 and 22/22 ORACLE_CONSENSUS."
   ]

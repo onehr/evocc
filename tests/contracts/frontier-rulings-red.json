@@ -1,13 +1,13 @@
 {
   "receiptId": "c30.frontier-rulings.red.v1",
   "state": "RED",
-  "baselineCommit": "1eebdb7",
+  "baselineCommit": "68364ea",
   "classification": "tests-only RED",
   "authority": {
     "specification": {
       "path": "docs/evoir-spec.md",
       "revision": "1.9.22",
-      "commit": "1eebdb7",
+      "commit": "68364ea",
       "sections": ["10.1.9", "10.1.17", "6.3"],
       "sha256": "4ebf83c51f7c753e967770cac4f2e48b30403514c6c3187201e44e328f7813e0"
     },

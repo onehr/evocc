@@ -5,10 +5,10 @@
     "contract": "tests/contracts/day9-acceptance-contract.json scope line J"
   },
   "baseline": {
-    "originalSpecificationCommit": "7b9c3284c30dd8b2a6a2ed2489cb11de2f3fc2ca",
-    "originalScopeCommit": "988f93338d4068220ee607448d6b7ad8d6ee9846",
-    "amendmentSpecificationCommit": "8e54bafec0fc05dc1e2e804a216f13aaef03931d",
-    "amendmentScopeCommit": "a01ce8bab220da71a75c5ff83f6045d110249aa8"
+    "originalSpecificationCommit": "65921c5527a840d2247e9a756f15f94ac6309d66",
+    "originalScopeCommit": "4ec5834fcc70b4d135a3493b872dd0eb46156b43",
+    "amendmentSpecificationCommit": "8a68a58ae3629e3d093561f542b86868aed126f8",
+    "amendmentScopeCommit": "d0663d031832a7350b8c2da66a72e33e69c8aee1"
   },
   "declaredMissingCapabilities": [
     "empty-declarations",

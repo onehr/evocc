@@ -3,8 +3,8 @@
   "receiptId": "c30.parser-rule-closure.red.v1",
   "status": "RED_AS_DECLARED",
   "authority": {
-    "baselineCommit": "8f9a59d94f85e107788b40a1815fab88531e86db",
-    "windowBaselineCommit": "18cf79707655840be105cb9818df3c7ba1da20a0",
+    "baselineCommit": "8bf9f1bbf748205a5a9bb3b518bf3412a6c37e2a",
+    "windowBaselineCommit": "e061dd23ed8ca780c63271f6e1b32193a7281287",
     "specification": {
       "path": "docs/evoir-spec.md",
       "revision": "1.9.33",

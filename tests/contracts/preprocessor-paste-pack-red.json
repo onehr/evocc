@@ -1,5 +1,5 @@
 {
-  "baseline": "6ac277decb9ade1958df26a9e3b45ee9767900c8",
+  "baseline": "a9aff25a727805d077a83d11797922cd1bd3e22a",
   "authority": [
     "docs/evoir-spec.md revision 1.9.9 sections 6.3, 10.1.9 and 10.4",
     "tests/contracts/day9-acceptance-contract.json scope P2",

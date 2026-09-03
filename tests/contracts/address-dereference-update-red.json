@@ -1,7 +1,7 @@
 {
   "receiptId": "c30.address-dereference-update.red.v1",
   "baseline": {
-    "commit": "78923a97b73e3059cc75f55834c3589a71e32471",
+    "commit": "3ff1efdd0b1493cfad15dd97f2ee08f5207d94ad",
     "description": "call-result-rooted places accepted; invalid-projected-lvalue absent from the sealed cohort"
   },
   "authority": {

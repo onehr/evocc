@@ -4,7 +4,7 @@
     "specification": "docs/evoir-spec.md revision 1.9.14 sections 10.1.17 and 6.3",
     "contract": "tests/contracts/day9-acceptance-contract.json scope line I"
   },
-  "baseline": "388a34f29ebc89e834a7db3e94aec62765cd6341",
+  "baseline": "9d7dafae19dbe42f8f4b623c1c3484876a233f0c",
   "declaredMissingCapabilities": [
     "choose-expression",
     "type-compatibility-builtin",

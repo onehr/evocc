@@ -6,7 +6,7 @@
     "contract": "tests/contracts/day9-acceptance-contract.json scope lines K and K2",
     "contractSha256": "bd33f3e663b2396a89eb04a06e2845436a553abbcdeea65f17585518366b3a40"
   },
-  "baseline": "04c7f1c9c77d8754de41725a9484f43e7b40f9c8",
+  "baseline": "8339cdb0f29b10ba1782565d08e6ec1dc7135af6",
   "declaredMissingCapabilities": [
     "gnu-zero-length-array-layout",
     "uniform-variable-length-object-refusal",

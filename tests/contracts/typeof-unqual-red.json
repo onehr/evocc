@@ -1,12 +1,12 @@
 {
   "receiptId": "c30.typeof-unqual.red.v1",
   "state": "RED",
-  "baselineCommit": "0e28b738b7394c0512be583fcc090fae30f92c0e",
+  "baselineCommit": "991cc88fea7bf958fabe9b9b549b73422d268e7b",
   "authority": {
     "specification": {
       "path": "docs/evoir-spec.md",
       "revision": "1.9.21",
-      "commit": "0e28b73",
+      "commit": "991cc88",
       "section": "10.1.10",
       "sha256": "d7a6ec7fbeee4a8befbc95a00c8de170f9c5306425f80770c465716f1f7528cb"
     },

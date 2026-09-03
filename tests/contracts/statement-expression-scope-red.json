@@ -1,13 +1,13 @@
 {
   "receiptId": "c30.statement-expression-scope.red.v1",
   "state": "RED",
-  "baselineCommit": "adabc63",
+  "baselineCommit": "d16a589",
   "classification": "tests-only RED",
   "authority": {
     "specification": {
       "path": "docs/evoir-spec.md",
       "revision": "1.9.23",
-      "commit": "adabc63",
+      "commit": "d16a589",
       "sections": ["6.3", "10.1.10", "10.1.11", "10.1.17"],
       "sha256": "68f5c055e0de71e2209f931276a84fb4ce1cb977175795e73342d3fb95d112ac"
     },

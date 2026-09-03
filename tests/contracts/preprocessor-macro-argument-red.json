@@ -3,7 +3,7 @@
   "receiptId": "c30.preprocessor-macro-argument.red.v1",
   "status": "RED_AS_DECLARED",
   "authority": {
-    "baselineCommit": "8f9a59d94f85e107788b40a1815fab88531e86db",
+    "baselineCommit": "8bf9f1bbf748205a5a9bb3b518bf3412a6c37e2a",
     "specification": {
       "path": "docs/evoir-spec.md",
       "revision": "1.9.33",

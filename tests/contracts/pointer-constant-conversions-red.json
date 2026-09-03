@@ -1,13 +1,13 @@
 {
   "receiptId": "c30.pointer-constant-conversions.red.v1",
   "state": "RED",
-  "baselineCommit": "fa58552",
+  "baselineCommit": "67db611",
   "classification": "tests-only RED",
   "authority": {
     "specification": {
       "path": "docs/evoir-spec.md",
       "revision": "1.9.24",
-      "commit": "fa58552",
+      "commit": "67db611",
       "sections": ["2.1", "6.3", "10.1.19"],
       "sha256": "b3853b3f43e82ac846dfa4e43d0d80df5c43b74e27af438f7524f34199222161"
     },

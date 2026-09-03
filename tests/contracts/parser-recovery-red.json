@@ -2,7 +2,7 @@
   "receiptId": "c30.parser-recovery.red",
   "authority": {
     "contract": "tests/contracts/day9-acceptance-contract.json scope L",
-    "subjectCommit": "2e35a1c"
+    "subjectCommit": "9129840"
   },
   "declaredCapability": "a failed declaration transaction restores the parser scope cursor together with the symbol table without changing ordinary first-error behavior",
   "reproducer": "int a[-1]; void f(void) { goto nowhere; } int b[-2];",

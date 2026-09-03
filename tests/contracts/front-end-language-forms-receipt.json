@@ -3,7 +3,7 @@
   "receiptId": "c30.front-end-language-forms.acceptance.v1",
   "status": "PASS_WITH_TYPED_SURVEY_FRONTIER",
   "authority": {
-    "baselineCommit": "2692ef7e1f52e3e6b5dd05371abd2e0033dbaf79",
+    "baselineCommit": "c93e9151ace1dcf3eba7691820ecb37cd1ce00da",
     "specification": {
       "path": "docs/evoir-spec.md",
       "revision": "1.9.45",
@@ -32,7 +32,7 @@
       "path": "tests/contracts/day9-acceptance-contract.json",
       "scope": "W",
       "openingSha256": "d800c5b6d87929bc769527d639990cdc8f0c90909ca1dac67a82e12493a22376",
-      "closureCommit": "3b205eecd1cdceef9563774513a53837058a0761",
+      "closureCommit": "0f38406a5762dce03e83eff5ef4cff4a692c8b0c",
       "closureSha256": "815ab9744c30299aa9a452097942dfff2243623a6a0da20957b79215641562fb",
       "rulings": [
         "thirdSurveyRanking",
@@ -43,15 +43,15 @@
   },
   "commits": {
     "testsOnlyRed": {
-      "commit": "e953f0d66e21f11f0d6d60915a6bd7f1d0576a5f",
+      "commit": "a6c591c6e294f02eef43d0769362997ceb6aa641",
       "message": "test: expose unresolved GNU C front-end semantics"
     },
     "implementation": {
-      "commit": "b4380471d1298e7440fdc6f3d443884a55a15606",
+      "commit": "e04f2800e4c05f0547a45c9eefec207c82eceb10",
       "message": "Support measured GNU C language forms"
     },
     "dashboardReceipt": {
-      "commit": "0f71a892c6b4a4ac230e5e54d5d7c3cb8ff5278d",
+      "commit": "d74dd2ebc8c90cab3a4a377642a97c94966ba365",
       "message": "Record clean front-end acceptance lanes"
     }
   },
@@ -132,7 +132,7 @@
     "receiptSha256": "3268a3374e0f74cce3840fed9cb3bd43a0d6f4973239291f0b95f7e4a28da190",
     "previousRun": "20260902T111559Z-80486",
     "publishedRun": "20260903T061659Z-52334",
-    "subjectCommit": "b438047",
+    "subjectCommit": "e04f280",
     "rawPreprocess": "16/16 clean",
     "gccPreprocessedParser": "16/16 clean",
     "clangPreprocessedParser": "16/16 clean",
@@ -143,7 +143,7 @@
     "clone": "/private/tmp/c30-w-replay.8rNQyP/repo",
     "cloneMode": "git clone --no-local",
     "alternatesFile": "absent",
-    "commit": "0f71a892c6b4a4ac230e5e54d5d7c3cb8ff5278d",
+    "commit": "d74dd2ebc8c90cab3a4a377642a97c94966ba365",
     "command": "CARGO_TARGET_DIR=/private/tmp/c30-w-replay.8rNQyP/target cargo test --workspace --no-fail-fast --locked --offline",
     "passed": 1256,
     "failed": 0,
@@ -172,8 +172,8 @@
     "The RED receipt originally paired the revision 1.9.45 label with the digest of the checked-out revision 1.9.46 file. This closure separates the frozen 1.9.45 authority digest from the 1.9.46 checkout digest; revision 1.9.46 changed only Sections 8 and 11, so no W test or semantic claim changed.",
     "The first RED workspace runner moved each test executable away from sibling helper binaries and caused 42 unrelated proof-boundary failures. That attempt was rejected; the recorded RED kept the complete Cargo target topology and contained exactly the 27 declared failures.",
     "The implementation shared one canonical type/address fact across consumers instead of adding syntax-shape exceptions. Two obsolete assertions whose old expected diagnostics contradicted revision 1.9.45 were migrated in the semantic commit rather than deleted.",
-    "The first dashboard publication completed all raw lanes, then restricted sandbox access denied inspection of the sealed oracle image. The incomplete capture remains preserved at .evidence/kernel-dashboard/b438047-failed-sandbox-20260903T061236Z and is not acceptance evidence; the permission-correct run sealed 48/48.",
-    "The survey initially refused to run because its dashboard receipt was an uncommitted input. The receipt was committed at 0f71a89, then the same measure-only survey ran against that exact clean subject.",
+    "The first dashboard publication completed all raw lanes, then restricted sandbox access denied inspection of the sealed oracle image. The incomplete capture remains preserved at .evidence/kernel-dashboard/e04f280-failed-sandbox-20260903T061236Z and is not acceptance evidence; the permission-correct run sealed 48/48.",
+    "The survey initially refused to run because its dashboard receipt was an uncommitted input. The receipt was committed at d74dd2e, then the same measure-only survey ran against that exact clean subject.",
     "The final base-layout invocation inside the restricted sandbox returned one with no usable evidence. It was rejected; permission-correct base and attributed runs were executed sequentially and produced 128/128 and 22/22 ORACLE_CONSENSUS.",
     "A Docker oracle attempt for the kfifo reduction was rejected because Docker did not contain the sealed image. The accepted oracle measurement used the project Apple container boundary and both frozen compilers."
   ],

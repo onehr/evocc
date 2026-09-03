@@ -1,13 +1,13 @@
 {
   "receiptId": "c30.pointer-place-library-string.red.v1",
   "state": "RED",
-  "baselineCommit": "b33ff28",
+  "baselineCommit": "00adf55",
   "classification": "tests-only RED",
   "authority": {
     "specification": {
       "path": "docs/evoir-spec.md",
       "revision": "1.9.27",
-      "commit": "b33ff28",
+      "commit": "00adf55",
       "sha256": "a46e3563c936a2b7efe5e2ae052579f3817b04b4d60b1e94a5a713c36ddaa41b",
       "sections": [
         "10.1.3 What may root a place",

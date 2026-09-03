@@ -2,7 +2,7 @@
   "receiptId": "c30.token-location-preprocessor.red.v1",
   "state": "RED",
   "baseline": {
-    "commit": "8562deb9da04c7d993b39a24afc76f4aeeb1f176",
+    "commit": "5c56d94bd0a367f2a4331ef3664b103c2689e034",
     "description": "source-location, stringization-whitespace, and outer-sequence-rescan contracts specified; production behavior unchanged"
   },
   "authority": {

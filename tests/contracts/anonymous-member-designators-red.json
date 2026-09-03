@@ -2,12 +2,12 @@
   "receiptId": "c30.anonymous-member-designators.red",
   "authority": {
     "specification": "docs/evoir-spec.md revision 1.9.20 section 10.1.6 and section 6.3",
-    "specificationCommit": "b2a4d3e0e6dd6f521b5bd68ce23f99fcb288903a",
+    "specificationCommit": "afe176dcd49e571c87b43834a0eec100c0844cf8",
     "specificationSha256": "438acb88e16bebdbf2ccb063eedd51185ee11b38e549a63294f6514b38be3c6b",
     "contract": "tests/contracts/day9-acceptance-contract.json scope line K3",
     "contractSha256": "60620ed4cbfb7caa95830d798fd2ddb7c603c64ce03a4f7950d798c1e8ca7134"
   },
-  "baseline": "b2a4d3e0e6dd6f521b5bd68ce23f99fcb288903a",
+  "baseline": "afe176dcd49e571c87b43834a0eec100c0844cf8",
   "declaredMissingCapabilities": [
     "anonymous-member-promotion-for-designated-initializers-and-builtin-offsetof"
   ],

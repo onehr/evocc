@@ -3,7 +3,7 @@
   "receiptId": "c30.token-location-preprocessor.acceptance.v1",
   "status": "PASS_WITH_TYPED_SURVEY_FRONTIER",
   "authority": {
-    "baselineCommit": "8562deb9da04c7d993b39a24afc76f4aeeb1f176",
+    "baselineCommit": "5c56d94bd0a367f2a4331ef3664b103c2689e034",
     "specification": {
       "path": "docs/evoir-spec.md",
       "revision": "1.9.32",
@@ -23,15 +23,15 @@
   },
   "commits": {
     "testsOnlyRed": {
-      "commit": "4106205",
+      "commit": "4a86fd1",
       "message": "test: expose macro location and expansion defects"
     },
     "implementation": {
-      "commit": "fc21cd3024e079cd68078cb3eca4303a49d89a26",
+      "commit": "2cb9c8043b195c968f85cb2e66746b29d1a0695e",
       "message": "fix: preserve macro token origins and rescanning"
     },
     "dashboardReceipt": {
-      "commit": "ce845bb1976d90389863806d988b6084da39f04e",
+      "commit": "eccfdc2340f31bc54d255c74647ffe50f179bf33",
       "message": "docs: publish a clean kernel front-end dashboard"
     }
   },
@@ -152,7 +152,7 @@
     "receiptSha256": "7e3ef861c490031e21c164f7ef30cbaaac6ccc382e2cdae696df545168371d31",
     "previousRun": "20260901T185119Z-83939",
     "publishedRun": "20260902T051401Z-89830",
-    "subjectCommit": "fc21cd3",
+    "subjectCommit": "2cb9c80",
     "rawPreprocess": "16/16 clean",
     "gccPreprocessedParser": "16/16 clean",
     "clangPreprocessedParser": "16/16 clean",
@@ -164,7 +164,7 @@
     "clone": "/tmp/c30-token-replay.D04X4A/repo",
     "cloneMode": "git clone --no-local",
     "alternatesFile": "absent",
-    "commit": "fc21cd3024e079cd68078cb3eca4303a49d89a26",
+    "commit": "2cb9c8043b195c968f85cb2e66746b29d1a0695e",
     "command": "cargo test --workspace --no-fail-fast --locked --offline",
     "passed": 1083,
     "failed": 0,

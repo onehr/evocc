@@ -2,8 +2,8 @@
   "receiptId": "c30.statement-expression-place.red.v1",
   "state": "RED",
   "baseline": {
-    "semanticCommit": "46716e16010fb7f8e2a2f6bc34cebfa183612667",
-    "parentCommit": "79cba3a925b19304f773a6b5faaed3f21e861819",
+    "semanticCommit": "d6c874fdf59160f0592b7a1fbbbeb729afe4c80e",
+    "parentCommit": "7f605520a146b12d5a4cc35eacbb852494213216",
     "parentDelta": "README.md only; committed concurrently after the semantic baseline gate and before this checkpoint",
     "dashboardRun": "20260830T045405Z-23380",
     "dashboardResultsSha256": "887d789eee796a73fcd05c8c12715118e5be907421d751991ae0e473efd1c8d3",
@@ -87,7 +87,7 @@
   "evidenceIntegrity": {
     "discardedAttempt": ".evidence/day5-layout/20260830T095217Z-39196",
     "reason": "the restricted sandbox denied local container image inspection before any oracle execution; the authoritative rerun used the same inputs and completed both corpora",
-    "concurrentCommit": "79cba3a added README.md while the gates ran; its diff was reviewed as documentation-only and was not modified by this checkpoint"
+    "concurrentCommit": "7f60552 added README.md while the gates ran; its diff was reviewed as documentation-only and was not modified by this checkpoint"
   },
   "specGap": null,
   "productionChanges": []

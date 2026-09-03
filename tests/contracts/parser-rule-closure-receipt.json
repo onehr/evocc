@@ -3,8 +3,8 @@
   "receiptId": "c30.parser-rule-closure.acceptance.v1",
   "status": "PASS_WITH_TYPED_SURVEY_FRONTIER",
   "authority": {
-    "baselineCommit": "8f9a59d94f85e107788b40a1815fab88531e86db",
-    "windowBaselineCommit": "18cf79707655840be105cb9818df3c7ba1da20a0",
+    "baselineCommit": "8bf9f1bbf748205a5a9bb3b518bf3412a6c37e2a",
+    "windowBaselineCommit": "e061dd23ed8ca780c63271f6e1b32193a7281287",
     "specification": {
       "path": "docs/evoir-spec.md",
       "revision": "1.9.33",
@@ -31,15 +31,15 @@
   },
   "commits": {
     "testsOnlyRed": {
-      "commit": "272e537ef70e4ec88fac1d91fe698cc757702fc5",
+      "commit": "8bbe357107c16352376103aa162cfdf51258602f",
       "message": "test: expose parser semantic closure gaps"
     },
     "implementation": {
-      "commit": "486519f75f81062f92bd60c446f696eada858fc6",
+      "commit": "685b35dbc41b124ec4afccc47409a0a8729e2b7d",
       "message": "fix: unify parser type and address semantics"
     },
     "dashboardReceipt": {
-      "commit": "6bbeaf444c7adcc9fb34a093f4944e927a71d7ae",
+      "commit": "2cf2b9eb9fea8e3cc4bc128a7d437bfd45ee7b9d",
       "message": "docs: publish parser semantic dashboard"
     }
   },
@@ -129,7 +129,7 @@
     "receiptSha256": "ee302e5c531cbe9433afd49040ed0525d9669534b9e820078825a5c8baea5bef",
     "previousRun": "20260902T074011Z-8961",
     "publishedRun": "20260902T111559Z-80486",
-    "subjectCommit": "486519f",
+    "subjectCommit": "685b35d",
     "rawPreprocess": "16/16 clean",
     "gccPreprocessedParser": "16/16 clean",
     "clangPreprocessedParser": "16/16 clean",
@@ -140,7 +140,7 @@
     "clone": "/tmp/c30-v-replay.uGdwaB/repo",
     "cloneMode": "git clone --no-local",
     "alternatesFile": "absent",
-    "commit": "6bbeaf444c7adcc9fb34a093f4944e927a71d7ae",
+    "commit": "2cf2b9eb9fea8e3cc4bc128a7d437bfd45ee7b9d",
     "command": "CARGO_TARGET_DIR=/tmp/c30-v-replay.uGdwaB/target cargo test --workspace --no-fail-fast --locked --offline",
     "passed": 1118,
     "failed": 0,

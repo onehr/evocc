@@ -1,7 +1,7 @@
 {
   "receiptId": "c30.call-result-place.red.v1",
   "baseline": {
-    "commit": "60c64f227a1fcb41d9f6095425d32175e6141978",
+    "commit": "ce5d7d2e883ee48decd3696efde7975705fafac3",
     "description": "address/dereference place identities fixed; sealed cohort publication unchanged"
   },
   "authority": {

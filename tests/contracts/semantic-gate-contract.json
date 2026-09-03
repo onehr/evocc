@@ -46,48 +46,48 @@
     "schedulerRecordIsNotAGap": "2026-09-02: the executor reported that 8.11 requires budget and epoch lines while 11.3 makes them optional. The Versions paragraph of 11.3 settles it: evp1 carries no budget line, no epoch markers and no premises, and a checker validates it without a scheduler claim; evp2 adds the three. Every certificate produced today is evp1 and is valid. The bounded-scheduler record is the evp2 stage, not a defect.",
     "checkerIsRightProducerIsWrong": "2026-09-02: 12 refusals in 21,000 trials, 0 semantic mismatches. Seven of eight reduced refusals are one producer defect (bindings taken from remapped operands); the eighth is the zero-region renumbering. The checker refused correctly in every case, which is the property the standalone checker exists to have.",
     "fuelIsAHostLimit": "2026-09-02: E3008 allocated; a fuel-exhausted trial is neither undefined behaviour nor a comparison. The executor's separate counter was the right choice and is now the rule.",
-    "stageS1Closed": "2026-09-03: the randomized semantic gate is closed on branch head eaf7c6b, fast-forwarded into main. 21,000 programs: 0 semantic mismatches, 0 certificate refusals, all 27 scalar rules reached, the twelve formerly refusing seeds pinned as a replay test. The architect's isolated gate: 1133/0, clippy 0, fmt clean. Not covered yet and recorded by the executor: pointers across block edges, data-dependent loop bounds, copy, lifetime.end, ptr.null, func_addr and indirect calls, multiple returns, recursion, floating point and vectors; the shrinker lacks block merging.",
+    "stageS1Closed": "2026-09-03: the randomized semantic gate is closed on branch head 91d6a5e, fast-forwarded into main. 21,000 programs: 0 semantic mismatches, 0 certificate refusals, all 27 scalar rules reached, the twelve formerly refusing seeds pinned as a replay test. The architect's isolated gate: 1133/0, clippy 0, fmt clean. Not covered yet and recorded by the executor: pointers across block edges, data-dependent loop bounds, copy, lifetime.end, ptr.null, func_addr and indirect calls, multiple returns, recursion, floating point and vectors; the shrinker lacks block merging.",
     "budgetLineDefined": "2026-09-03: both S2b gaps were real. Every budget quantity is consumed/bound in that order; fuel is written consumed/bound with n declared, bound = max(256, 8*n), consumed = the most firings of one rule in one epoch; the checker verifies bounds equal the profile constants, consumed within bound, the fuel derivation, epoch markers within the consumed count, and stop-reason consistency; saturated and no-new-best are telemetry. Recorded in 11.3 with an example line.",
     "aliasRightHandSideFromBinding": "2026-09-03: seed 1592636988 (extended shapes) refused because the alias right-hand side was read from the instruction's operand while 11.3 admits class:cI only for a bare variable bound to cI. Fixed by taking the right-hand side from the binding and choosing a deterministic representative (seeds in manifest order, then nodes in emission order). The checker was right for the thirteenth time.",
-    "stageS2aClosed": "2026-09-03: generator coverage extended to pointers across block edges, data-dependent bounded loops, copy, lifetime.end, ptr.null, func_addr with indirect calls and multiple returns, each pinned by the coverage assertion; 21,000 programs on the extended shapes: 0 semantic mismatches, 0 certificate refusals after the alias fix (seed 1592636988 pinned), all 27 scalar rules reached. Architect's isolated gate on b4af227: 1137/0, clippy 0, fmt clean; fast-forwarded into main. Still uncovered by the executor's own list: signed left shift assumptions, recursion, floating point, vectors, pointers as call arguments or returns, ordered pointer comparison, copy across distinct objects, block-merging in the shrinker.",
+    "stageS2aClosed": "2026-09-03: generator coverage extended to pointers across block edges, data-dependent bounded loops, copy, lifetime.end, ptr.null, func_addr with indirect calls and multiple returns, each pinned by the coverage assertion; 21,000 programs on the extended shapes: 0 semantic mismatches, 0 certificate refusals after the alias fix (seed 1592636988 pinned), all 27 scalar rules reached. Architect's isolated gate on c38d0c1: 1137/0, clippy 0, fmt clean; fast-forwarded into main. Still uncovered by the executor's own list: signed left shift assumptions, recursion, floating point, vectors, pointers as call arguments or returns, ordered pointer comparison, copy across distinct objects, block-merging in the shrinker.",
     "epochMarkersFromOne": "2026-09-03: both S2b gaps ruled. Epoch markers are 1-based, k <= consumed epochs is tight, marker 0 is malformed; evp2 must carry the budget line and evp1 must not. The executor's implementation already matched both readings; the spec now says so.",
     "saturatedMeansFixpoint": "2026-09-03: the scalar bridge is a single sweep and records stop=saturated. A single sweep is a fixpoint only if re-running it on its own output admits no region; that has not been measured. Until it is, a producer that stops by its own rule records stop=policy (new telemetry reason); claiming saturated without a fixpoint is a false record even though unverifiable.",
-    "stageS2bClosed": "2026-09-03: evp2 is produced and verified: budget line from real counters, epoch markers, the six checker properties each pinned by a one-field edit of a real certificate in refusing and holding form, evp1 still read, evp1 with any addition and evp2 without its budget line malformed. 21,000 programs replay evp2 with 0 mismatches and 0 refusals. Architect's isolated gate on 6c18d64: 1147/0, clippy 0, fmt clean; fast-forwarded into main. Open by the executor's own list: no premise or Tier B rule exists yet, every transaction is one epoch, no produced certificate has reached a ceiling.",
+    "stageS2bClosed": "2026-09-03: evp2 is produced and verified: budget line from real counters, epoch markers, the six checker properties each pinned by a one-field edit of a real certificate in refusing and holding form, evp1 still read, evp1 with any addition and evp2 without its budget line malformed. 21,000 programs replay evp2 with 0 mismatches and 0 refusals. Architect's isolated gate on 55cc098: 1147/0, clippy 0, fmt clean; fast-forwarded into main. Open by the executor's own list: no premise or Tier B rule exists yet, every transaction is one epoch, no produced certificate has reached a ceiling.",
     "saturatedIsTheTransactionsOwnFixpoint": "2026-09-03: the executor's SPEC_GAP was right and the architect's 1.9.37 sentence was wrong: saturated means no rule fired in the last epoch (8.11), not that a fresh transaction admits nothing. The residual-region count (1 program in 1000, 1 region, seed 1592591027) is the price of 11.6's before-witness rule for const_like and becomes a standing campaign metric. n is the largest region's starting count; stop=fuel is reserved for larger regions; a ceiling stop keeps admitted regions.",
-    "stageS2cClosed": "2026-09-03: bounded multi-epoch scheduler of 8.11 in place: a rewrite belongs to the epoch after the last one that changed a class it matches on, fuel per (rule, epoch), markers increase inside region blocks; 722 of 977 optimized programs run more than one epoch, deepest 6; wall time unchanged within spread (18.097 s). Fixpoint measured: 1 residual region in 1000 programs (seed 1592591027), a registry boundary of 11.6, which corrected the architect's saturation ruling. Shrinker merges a block into its unique predecessor (12 blocks to 5 on a generated module; no pinned reproducer shrinks, all are single-block). The three ceiling stops are verified only on hand-edited certificates because no P0 input can reach a ceiling. Architect's isolated gate on 04833ab: 1153/0, clippy 0, fmt clean; fast-forwarded into main.",
+    "stageS2cClosed": "2026-09-03: bounded multi-epoch scheduler of 8.11 in place: a rewrite belongs to the epoch after the last one that changed a class it matches on, fuel per (rule, epoch), markers increase inside region blocks; 722 of 977 optimized programs run more than one epoch, deepest 6; wall time unchanged within spread (18.097 s). Fixpoint measured: 1 residual region in 1000 programs (seed 1592591027), a registry boundary of 11.6, which corrected the architect's saturation ruling. Shrinker merges a block into its unique predecessor (12 blocks to 5 on a generated module; no pinned reproducer shrinks, all are single-block). The three ceiling stops are verified only on hand-edited certificates because no P0 input can reach a ceiling. Architect's isolated gate on 5388ab5: 1153/0, clippy 0, fmt clean; fast-forwarded into main.",
     "keptRegionsAreProducerConformance": "2026-09-03: the executor observed that 'a ceiling stop keeps every admitted region' cannot be checked, because 11.2 permits a producer to decline any eligible region. Agreed: it is producer conformance, pinned by a producer-side test, in the same class as saturated and no-new-best.",
-    "stageS2dClosed": "2026-09-03: stop reasons come from the scheduler's counters (saturated when the last epoch fired nothing, policy at the producer's own budget); a ceiling stop keeps admitted regions (3 admitted with a generous budget, 1 kept at one epoch, the partial certificate verifies); residual regions are a campaign counter: 20 of 21,000 programs (0.095 percent), one region each, all the 11.6 shape. Wall time +10 percent for the extra measuring transaction. Architect's isolated gate on 8a165c9: 1154/0, clippy 0, fmt clean; merged into main.",
-    "stageS2eClosed": "2026-09-03: runs of 8.11 in place with digest chaining (a broken chain is its own mismatch kind); 21,000 programs: 20 runs of two transactions, none longer, none at the ceiling, residual regions after the last transaction 0 for every run; generator now emits recursion, pointers across call boundaries, copy between distinct objects and all five ub.assume reasons; 0 mismatches, 0 refusals. Architect's isolated gate on f1ae24f: 1155/0, clippy 0, fmt clean; merged into main. Open by the executor's list: no produced certificate reaches a profile ceiling or the transaction ceiling; pointers round-tripped through memory across a call; floating point, vectors, tuples, wide integers, mutual recursion.",
+    "stageS2dClosed": "2026-09-03: stop reasons come from the scheduler's counters (saturated when the last epoch fired nothing, policy at the producer's own budget); a ceiling stop keeps admitted regions (3 admitted with a generous budget, 1 kept at one epoch, the partial certificate verifies); residual regions are a campaign counter: 20 of 21,000 programs (0.095 percent), one region each, all the 11.6 shape. Wall time +10 percent for the extra measuring transaction. Architect's isolated gate on f192154: 1154/0, clippy 0, fmt clean; merged into main.",
+    "stageS2eClosed": "2026-09-03: runs of 8.11 in place with digest chaining (a broken chain is its own mismatch kind); 21,000 programs: 20 runs of two transactions, none longer, none at the ceiling, residual regions after the last transaction 0 for every run; generator now emits recursion, pointers across call boundaries, copy between distinct objects and all five ub.assume reasons; 0 mismatches, 0 refusals. Architect's isolated gate on 1204b2b: 1155/0, clippy 0, fmt clean; merged into main. Open by the executor's list: no produced certificate reaches a profile ceiling or the transaction ceiling; pointers round-tripped through memory across a call; floating point, vectors, tuples, wide integers, mutual recursion.",
     "tierBGapsRuled": "2026-09-03: all three S3a gaps were real. A registry is admissible only when the specification prints it (Reading A); p0.scalar.v2 is printed with digest c1691808ebe55a3b... and includes v1 unchanged. The premise comparison was stated backwards and is corrected: the checker refuses any premise bit it cannot confirm. The icmp transfer is now an interval procedure with signed comparisons top under an unknown sign bit. The executor's refusal to build a second transfer implementation with no certificate crossing between the two was correct.",
-    "s3aPartial": "2026-09-03: the first executor delivered the known-bits lattice (8.10 rows and the negative surface), the premise record and parser of 11.3, and registry admission by version (evp1: v1; evp2: v1 or v2, name and digest together), then stopped at its context limit with the 18 Tier B rules pinned as an ignored coverage test (0 of 18 reached, because no producer rule reads a fact). Architect's isolated gate on d8797c0: 1172/0 (2 ignored), clippy 0, fmt clean; merged into main. The remaining parts pass to a fresh executor with a self-contained brief.",
+    "s3aPartial": "2026-09-03: the first executor delivered the known-bits lattice (8.10 rows and the negative surface), the premise record and parser of 11.3, and registry admission by version (evp1: v1; evp2: v1 or v2, name and digest together), then stopped at its context limit with the 18 Tier B rules pinned as an ignored coverage test (0 of 18 reached, because no producer rule reads a fact). Architect's isolated gate on 8b34a39: 1172/0 (2 ignored), clippy 0, fmt clean; merged into main. The remaining parts pass to a fresh executor with a self-contained brief.",
     "tierBReadingsRatified": "2026-09-03: the second executor's four readings are ratified in 1.9.41 (folds carry no premise; premise classes resolve through the partition; a premise on a premise-free rule is invalid; a wrong digit count is invalid). Its registry naming (narrowest reviewed registry containing the fired rules) is now the rule. Its rule priority is overruled in one step: within a tier the first applicable rule in registry order wins, so a premise-free fold precedes a fact rule and p1_202/p1_203/p1_204 are dominated and counted as such, not fired by preference. The nested-pattern binding defect (p0_009, 8 seeds in 20,000) was the checker's sixteenth correct refusal.",
-    "stageS3aClosed": "2026-09-03: Tier B fact-driven rewrites in place against p0.scalar.v2: producer facts from the 8.10 transfers, premises in the stated order, an independent checker recomputation that refuses unconfirmable bits; 45 of 45 rules reached over 256 seeds (p1_202/203/204 now counted as dominated under 1.9.41); 21,000 programs, 0 mismatches; 772 of 7,900 regions in the 1000-program gate carry a premise; residual regions 20 to 0. One producer defect (p0_009 nested-pattern binding, 8 seeds) found by the checker and fixed. Architect's isolated gate on 88d7253: 1190/0, clippy 0, fmt clean; merged into main.",
+    "stageS3aClosed": "2026-09-03: Tier B fact-driven rewrites in place against p0.scalar.v2: producer facts from the 8.10 transfers, premises in the stated order, an independent checker recomputation that refuses unconfirmable bits; 45 of 45 rules reached over 256 seeds (p1_202/203/204 now counted as dominated under 1.9.41); 21,000 programs, 0 mismatches; 772 of 7,900 regions in the 1000-program gate carry a premise; residual regions 20 to 0. One producer defect (p0_009 nested-pattern binding, 8 seeds) found by the checker and fixed. Architect's isolated gate on 797871f: 1190/0, clippy 0, fmt clean; merged into main.",
     "congruencePlacementRatified": "2026-09-03: the executor's Reading A for congruence placement among epoch markers is now the rule, and the unrecorded vacuous rewrite is stated explicitly: a replacement may stand on recorded merges alone. 'Regions existing only by congruence' means a region whose root is replaced on the strength of a congruence with no rewrite of its own.",
-    "stageS3bClosed": "2026-09-03: congruence closure produced and verified: regions 7,900 to 9,062 in the 1000-program gate (+14.7 percent), 197 justified by a congruence alone; premised regions 772 to 232 under registry-order priority; p1_202/203/204 asserted absent; 21,000 programs, 0 mismatches, 0 refusals; the eight p0_009 seeds replay clean. Architect's isolated gate on 0c0ec2d: 1194/0, clippy 0, fmt clean; merged into main. Open by the executor's list: matching is still value-based, facts and congruence are block-local, no produced certificate reaches a ceiling.",
-    "stageS3cClosed": "2026-09-03: rule matching over e-classes: isolated over 256 seeds with the same generator, regions 2,610 to 2,635 and merge-enabled matches 4 to 30; congruence aliasing applies only where no rule answers the instruction (an unconditional version swallowed a rewrite and was caught by copy_is_opaque); shrinker gained constant-collapse and congruent-pair reductions, neither hand-reduced reproducer shrinks once its property is stated exactly. 21,000 programs, 0 mismatches. Architect's isolated gate on a407f33: 1202/0, clippy 0, fmt clean; merged into main.",
+    "stageS3bClosed": "2026-09-03: congruence closure produced and verified: regions 7,900 to 9,062 in the 1000-program gate (+14.7 percent), 197 justified by a congruence alone; premised regions 772 to 232 under registry-order priority; p1_202/203/204 asserted absent; 21,000 programs, 0 mismatches, 0 refusals; the eight p0_009 seeds replay clean. Architect's isolated gate on 16cb075: 1194/0, clippy 0, fmt clean; merged into main. Open by the executor's list: matching is still value-based, facts and congruence are block-local, no produced certificate reaches a ceiling.",
+    "stageS3cClosed": "2026-09-03: rule matching over e-classes: isolated over 256 seeds with the same generator, regions 2,610 to 2,635 and merge-enabled matches 4 to 30; congruence aliasing applies only where no rule answers the instruction (an unconditional version swallowed a rewrite and was caught by copy_is_opaque); shrinker gained constant-collapse and congruent-pair reductions, neither hand-reduced reproducer shrinks once its property is stated exactly. 21,000 programs, 0 mismatches. Architect's isolated gate on 9908e5e: 1202/0, clippy 0, fmt clean; merged into main.",
     "s3dBlockedBySection85": "2026-09-03: both S3d parts were blocked by 8.5, as the executor measured (16 of 16 duplicates with twins outside their closures; 0 additional premised rewrites with the new rows on or off). Ruled at 1.9.44: shifts and width changes join the allowlist and the op_id grammar; the witness closure gains structural duplicates; p0.scalar.v3 (digest aca1f15b47e602ce...) adds six known_* folds. The executor's Reading A was the only permitted one at the time and its restraint was correct.",
-    "stageS3dClosed": "2026-09-03: the six transfer rows exist in both lattices (an ashr expectation of the executor's own was corrected by the table), the negative test is narrowed to division and remainder; common-subexpression regions and premises over the new rows were measured inadmissible under 8.5 and reported rather than forced. 21,000 programs, 0 mismatches. Architect's isolated gate on 9d01c4b: 1217/0, clippy 0, fmt clean; merged into main.",
-    "stageS3eClosed": "2026-09-03: shifts, width changes and structural duplicates in regions on both sides; p0.scalar.v3 in producer and checker; over 256 seeds the six transfer rows now enable 950 additional premised rewrites (114 to 1,064) where the previous window measured zero; duplicates with twins in their closure 0 of 16 to 21 of 21; congruence-only regions still 1 of 21 because the producer admits only entry-block arguments as seeds while 8.7 also admits definition-origin seeds. The checker refused an identity truncation whose width check the executor had written wrongly (seventeenth correct refusal). Quadratic congruence and per-root duplicate scans were replaced by grouped and per-block computations after the gate stopped finishing. One expectation outside the executor's boundary (evocc-lower's scalar corpus naming p0.scalar.v1) was updated by the architect to v3. Merged into main at 54d7c99; the architect's gate on 5bd4144 follows.",
+    "stageS3dClosed": "2026-09-03: the six transfer rows exist in both lattices (an ashr expectation of the executor's own was corrected by the table), the negative test is narrowed to division and remainder; common-subexpression regions and premises over the new rows were measured inadmissible under 8.5 and reported rather than forced. 21,000 programs, 0 mismatches. Architect's isolated gate on 562475f: 1217/0, clippy 0, fmt clean; merged into main.",
+    "stageS3eClosed": "2026-09-03: shifts, width changes and structural duplicates in regions on both sides; p0.scalar.v3 in producer and checker; over 256 seeds the six transfer rows now enable 950 additional premised rewrites (114 to 1,064) where the previous window measured zero; duplicates with twins in their closure 0 of 16 to 21 of 21; congruence-only regions still 1 of 21 because the producer admits only entry-block arguments as seeds while 8.7 also admits definition-origin seeds. The checker refused an identity truncation whose width check the executor had written wrongly (seventeenth correct refusal). Quadratic congruence and per-root duplicate scans were replaced by grouped and per-block computations after the gate stopped finishing. One expectation outside the executor's boundary (evocc-lower's scalar corpus naming p0.scalar.v1) was updated by the architect to v3. Merged into main at 6d7b713; the architect's gate on b6ba0f9 follows.",
     "definitionSeedsUnreachable": "2026-09-03: the third executor showed that under the only self-consistent reading of 8.5 a definition-origin seed cannot arise in this profile, and that the producer's real restriction was block_index == 0, not seed origin; lifting it doubled the regions (12,913 to 27,195) with 0 mismatches over 21,000 programs and every seed origin recomputed by the checker. Ruled at 1.9.46: Reading A is the rule, the definition origin is reserved.",
-    "stageS3fClosed": "2026-09-03: regions admitted in every block: 12,913 to 27,195 in the 1000-program gate, congruence-only 226 to 568, duplicates without a region 16 of 21 to 1 of 21 (the one correctly refused by the exclusion fixed point); 21,000 programs, 0 mismatches, 0 refusals, every seed origin recomputed by the checker. Architect's isolated gate on 68a8104: 1228/0, clippy 0, fmt clean; merged into main.",
+    "stageS3fClosed": "2026-09-03: regions admitted in every block: 12,913 to 27,195 in the 1000-program gate, congruence-only 226 to 568, duplicates without a region 16 of 21 to 1 of 21 (the one correctly refused by the exclusion fixed point); 21,000 programs, 0 mismatches, 0 refusals, every seed origin recomputed by the checker. Architect's isolated gate on b249ac2: 1228/0, clippy 0, fmt clean; merged into main.",
     "joinVersusMerge": "2026-09-03: both S3g gaps were real. The edge combination of seed facts is a join (bits every edge agrees on), the class merge combines knowledge; the executor's separate naming on both sides is the rule. The 11.6 sentence that forbade p1_202/203/204 rested on a premise 1.9.46 falsified; it is lifted and the three fire when a fully known non-constant operand exists (measured cost of the restraint: 313 regions and 336 premised rewrites over 256 seeds).",
-    "stageS3gClosed": "2026-09-03: facts of seeds across block edges in both producer and checker with the join named apart from the merge; regions 27,195 to 37,813 (1000-program) and 553,820 to 772,255 (20,000-program), premises naming a seed 0 to 1,228 and 24,918; 21,000 programs, 0 mismatches after five refusals (seeds pinned, 26 in the replay list) that were the checker's eighteenth to twenty-second correct refusals: the identity-comparison reduction trusted the sweep's rewritten stream instead of the region's partition, and now re-derives. Fixed point cost: up to 191 passes on one function in 20,000; a worklist is the licensed follow-up. Architect's isolated gate on 0f79e99: 1263/0, clippy 0, fmt clean; merged into main. Open by the executor's list: DoubleNegation still takes the unconditional path; wall time noisy on the shared host."
+    "stageS3gClosed": "2026-09-03: facts of seeds across block edges in both producer and checker with the join named apart from the merge; regions 27,195 to 37,813 (1000-program) and 553,820 to 772,255 (20,000-program), premises naming a seed 0 to 1,228 and 24,918; 21,000 programs, 0 mismatches after five refusals (seeds pinned, 26 in the replay list) that were the checker's eighteenth to twenty-second correct refusals: the identity-comparison reduction trusted the sweep's rewritten stream instead of the region's partition, and now re-derives. Fixed point cost: up to 191 passes on one function in 20,000; a worklist is the licensed follow-up. Architect's isolated gate on 95a4d40: 1263/0, clippy 0, fmt clean; merged into main. Open by the executor's list: DoubleNegation still takes the unconditional path; wall time noisy on the shared host."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",
-    "mergedIntoMain": "eaf7c6b",
+    "mergedIntoMain": "91d6a5e",
     "commits": [
-      "493ac05",
-      "02585c9",
-      "743b63d",
-      "d2c7a73",
-      "2626dd1",
-      "d1cea53",
-      "1e8dff9",
-      "1755739",
-      "bb11109",
-      "3057792",
-      "eaf7c6b"
+      "80b703e",
+      "3f1b0d1",
+      "5dcc2b0",
+      "91035d0",
+      "8f068cf",
+      "d4e594e",
+      "f2e4364",
+      "5d3c384",
+      "b230b21",
+      "486d24d",
+      "91d6a5e"
     ],
     "campaign": {
       "programs": 21000,
@@ -99,14 +99,14 @@
       "wallSeconds20000": 326.076
     },
     "architectGate": {
-      "subject": "eaf7c6b",
+      "subject": "91d6a5e",
       "passed": 1133,
       "failed": 0,
       "clippy": 0,
       "fmt": "clean"
     },
     "s2a": {
-      "branchHead": "b4af227",
+      "branchHead": "c38d0c1",
       "campaign": {
         "programs": 21000,
         "semanticMismatches": 0,
@@ -123,7 +123,7 @@
       }
     },
     "s2b": {
-      "branchHead": "6c18d64",
+      "branchHead": "55cc098",
       "campaign": {
         "programs": 21000,
         "semanticMismatches": 0,
@@ -140,7 +140,7 @@
       }
     },
     "s2c": {
-      "branchHead": "04833ab",
+      "branchHead": "5388ab5",
       "campaign": {
         "programs": 21000,
         "semanticMismatches": 0,
@@ -159,7 +159,7 @@
       }
     },
     "s2d": {
-      "branchHead": "8a165c9",
+      "branchHead": "f192154",
       "campaign": {
         "programs": 21000,
         "semanticMismatches": 0,
@@ -177,7 +177,7 @@
       }
     },
     "s2e": {
-      "branchHead": "f1ae24f",
+      "branchHead": "1204b2b",
       "campaign": {
         "programs": 21000,
         "semanticMismatches": 0,
@@ -196,7 +196,7 @@
       }
     },
     "s3aPartial": {
-      "branchHead": "d8797c0",
+      "branchHead": "8b34a39",
       "architectGate": {
         "passed": 1172,
         "failed": 0,
@@ -207,7 +207,7 @@
       "tierBRulesReached": "0 of 18"
     },
     "s3a": {
-      "branchHead": "88d7253",
+      "branchHead": "797871f",
       "campaign": {
         "programs": 21000,
         "semanticMismatches": 0,
@@ -226,7 +226,7 @@
       }
     },
     "s3b": {
-      "branchHead": "0c0ec2d",
+      "branchHead": "16cb075",
       "campaign": {
         "programs": 21000,
         "semanticMismatches": 0,
@@ -245,7 +245,7 @@
       }
     },
     "s3c": {
-      "branchHead": "a407f33",
+      "branchHead": "9908e5e",
       "campaign": {
         "programs": 21000,
         "semanticMismatches": 0,
@@ -263,7 +263,7 @@
       }
     },
     "s3d": {
-      "branchHead": "9d01c4b",
+      "branchHead": "562475f",
       "campaign": {
         "programs": 21000,
         "semanticMismatches": 0,
@@ -282,7 +282,7 @@
       }
     },
     "s3e": {
-      "branchHead": "54d7c99",
+      "branchHead": "6d7b713",
       "campaign": {
         "programs": 21000,
         "semanticMismatches": 0,
@@ -296,7 +296,7 @@
         "wallSeconds20000": 560.148
       },
       "architectGate": {
-        "subject": "e862b8b",
+        "subject": "98b0e77",
         "passed": 1220,
         "failed": 0,
         "clippy": 0,
@@ -304,7 +304,7 @@
       }
     },
     "s3f": {
-      "branchHead": "68a8104",
+      "branchHead": "b249ac2",
       "campaign": {
         "programs": 21000,
         "semanticMismatches": 0,
@@ -323,7 +323,7 @@
       }
     },
     "s3g": {
-      "branchHead": "0f79e99",
+      "branchHead": "95a4d40",
       "campaign": {
         "programs": 21000,
         "semanticMismatches": 0,

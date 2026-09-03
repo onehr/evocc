@@ -4,7 +4,7 @@
     "specification": "docs/evoir-spec.md revision 1.9.15 sections 3, 9, 10.1.3, and 6.3",
     "contract": "tests/contracts/day9-acceptance-contract.json scope line G2"
   },
-  "baseline": "1abaebd711cd83b3b6e2a1851792982458c06d14",
+  "baseline": "7553412621456b8ccba2f5342564122cfe3ebdeb",
   "declaredMissingCapabilities": [
     "evoir-copy-instruction",
     "record-and-union-assignment",

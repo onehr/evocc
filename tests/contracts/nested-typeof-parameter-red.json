@@ -1,6 +1,6 @@
 {
   "receiptId": "c30.nested-typeof-parameter-red.v1",
-  "baseline": "52a5a59",
+  "baseline": "66611e0",
   "authority": {
     "specification": {
       "path": "docs/evoir-spec.md",

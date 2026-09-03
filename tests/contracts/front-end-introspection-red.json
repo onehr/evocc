@@ -1,13 +1,13 @@
 {
   "receiptId": "c30.front-end-introspection.red.v1",
   "state": "RED",
-  "baselineCommit": "bafb803",
+  "baselineCommit": "52da41c",
   "classification": "tests-only RED",
   "authority": {
     "specification": {
       "path": "docs/evoir-spec.md",
       "revision": "1.9.26",
-      "commit": "bafb803",
+      "commit": "52da41c",
       "sections": ["6.3", "10.1.9", "10.1.17"],
       "sha256": "a98b1b7f709cf0d9a8a246439f60bc879d2e1890e7a987996717ad6b019b99fd"
     },
