@@ -71,6 +71,9 @@ pub enum LowerError {
     PointerDifference {
         span: SourceSpan,
     },
+    FunctionPointerArithmetic {
+        span: SourceSpan,
+    },
     WideInteger {
         span: SourceSpan,
     },
@@ -124,6 +127,9 @@ impl fmt::Display for LowerError {
             Self::PointerDifference { .. } => {
                 formatter.write_str("not-lowered: pointer-difference")
             }
+            Self::FunctionPointerArithmetic { .. } => {
+                formatter.write_str("not-lowered: function-pointer-arithmetic")
+            }
             Self::WideInteger { .. } => formatter.write_str("not-executed: wide-integer"),
             Self::StaticRelocation { .. } => formatter.write_str("not-lowered: static-relocation"),
             Self::ComputedGoto { .. } => formatter.write_str("not-lowered: computed-goto"),
@@ -160,6 +166,7 @@ impl LowerError {
             Self::FrameAddress { .. } => "E3031",
             Self::PointerDifference { .. } => "E3032",
             Self::WideInteger { .. } => "E3033",
+            Self::FunctionPointerArithmetic { .. } => "E3034",
             _ => "E3101",
         }
     }
@@ -181,6 +188,7 @@ impl LowerError {
             | Self::ReturnAddress { span }
             | Self::FrameAddress { span }
             | Self::PointerDifference { span }
+            | Self::FunctionPointerArithmetic { span }
             | Self::WideInteger { span }
             | Self::StaticRelocation { span }
             | Self::ComputedGoto { span }
@@ -3197,6 +3205,21 @@ impl<'a> FunctionLowerer<'a> {
         is_aggregate_type(self.unit.types(), ty)
     }
 
+    fn is_function_pointer_type(&self, ty: TypeId) -> bool {
+        let Some(TypeKind::Pointer(pointee)) =
+            self.unit.types().get(ty).map(|canonical| &canonical.kind)
+        else {
+            return false;
+        };
+        matches!(
+            self.unit
+                .types()
+                .get(*pointee)
+                .map(|canonical| &canonical.kind),
+            Some(TypeKind::Function { .. })
+        )
+    }
+
     fn synthetic_origin(&mut self) -> Result<u64, LowerError> {
         let local = self.next_synthetic_origin;
         self.next_synthetic_origin =
@@ -5792,6 +5815,12 @@ impl<'a> FunctionLowerer<'a> {
         let left_object_pointer = matches!(left.value.ty, EvoIRType::Ptr(_));
         let right_object_pointer = matches!(right.value.ty, EvoIRType::Ptr(_));
         if matches!(operator, BinaryOp::Add | BinaryOp::Sub)
+            && (matches!(left.value.ty, EvoIRType::FnPtr { .. })
+                || matches!(right.value.ty, EvoIRType::FnPtr { .. }))
+        {
+            return Err(LowerError::FunctionPointerArithmetic { span });
+        }
+        if matches!(operator, BinaryOp::Add | BinaryOp::Sub)
             && left_object_pointer
             && !right_pointer
         {
@@ -6616,6 +6645,9 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         self.validate_place(place, target, span)?;
+        if operator != AssignmentOp::Simple && self.is_function_pointer_type(place.ty()) {
+            return Err(LowerError::FunctionPointerArithmetic { span });
+        }
         if self.memory_symbols.contains(&place.symbol()) {
             let address = self.object_address(place.symbol(), span, state)?;
             let volatile = self
@@ -6781,6 +6813,9 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         self.validate_place(place, target, span)?;
+        if self.is_function_pointer_type(place.ty()) {
+            return Err(LowerError::FunctionPointerArithmetic { span });
+        }
         let original = self.local(state, place.symbol(), span)?;
         if matches!(original.value.ty, EvoIRType::Ptr(_)) {
             let one = self.constant(state, CIntegerType::INT, 1)?;
@@ -6921,6 +6956,9 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        if self.is_function_pointer_type(pointer_ty) {
+            return Err(LowerError::FunctionPointerArithmetic { span });
+        }
         if !matches!(pointer.value.ty, EvoIRType::Ptr(_))
             || !matches!(index.value.ty, EvoIRType::Bits(_))
         {
@@ -6978,6 +7016,9 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        if operator != AssignmentOp::Simple && self.is_function_pointer_type(place.value_ty()) {
+            return Err(LowerError::FunctionPointerArithmetic { span });
+        }
         let address = self.lower_place_address(place, target_span, state)?;
         let volatile = place.access_qualifiers().is_volatile;
         if self.is_aggregate_type(place.value_ty()) {
@@ -7057,6 +7098,9 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        if self.is_function_pointer_type(place.value_ty()) {
+            return Err(LowerError::FunctionPointerArithmetic { span });
+        }
         let address = self.lower_place_address(place, target_span, state)?;
         let original = self.emit_memory_load(
             address.clone(),

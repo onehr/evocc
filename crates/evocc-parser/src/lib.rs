@@ -7185,6 +7185,60 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         MemoryPlace::derive(&self.symbols, &self.types, root, projections, value_ty).ok()
     }
 
+    /// Whether the designated object is rooted in `register` storage.
+    ///
+    /// Projections preserve the root object's storage class. Dereferencing a
+    /// pointer does not: a register-qualified pointer object may still point
+    /// at an addressable object, so pointer-rooted places deliberately return
+    /// false here.
+    fn place_roots_register_object(&self, expression: &CHirExpr<'arena>) -> bool {
+        let symbol = match expression {
+            CHirExpr::Ident { symbol, .. } => Some(*symbol),
+            CHirExpr::MemoryRead { place, .. } => match place.root() {
+                PlaceRoot::Object { symbol } => Some(*symbol),
+                PlaceRoot::PointerExpression { .. } | PlaceRoot::CompoundLiteral { .. } => None,
+            },
+            CHirExpr::Member(base, _, _) | CHirExpr::Index(base, _, _) => {
+                return self.place_roots_register_object(base);
+            }
+            CHirExpr::PtrMember(_, _, _)
+            | CHirExpr::Unary(UnaryOp::Deref, _, _)
+            | CHirExpr::Lit(_, _)
+            | CHirExpr::FloatLit(_, _)
+            | CHirExpr::CharLit(_, _)
+            | CHirExpr::StringLit(_, _)
+            | CHirExpr::LabelAddress { .. }
+            | CHirExpr::Unary(_, _, _)
+            | CHirExpr::Binary(_, _, _, _)
+            | CHirExpr::Ternary(_, _, _, _)
+            | CHirExpr::Elvis(_, _, _)
+            | CHirExpr::Call(_, _, _)
+            | CHirExpr::CheckedArithmetic { .. }
+            | CHirExpr::BitBuiltin { .. }
+            | CHirExpr::BuiltinUnreachable { .. }
+            | CHirExpr::BuiltinReturnAddress { .. }
+            | CHirExpr::BuiltinFrameAddress { .. }
+            | CHirExpr::BuiltinVarArgs { .. }
+            | CHirExpr::Cast(_, _, _)
+            | CHirExpr::EvaluateOnce(_, _)
+            | CHirExpr::SizeOf(_, _)
+            | CHirExpr::SizeOfExpr(_, _, _)
+            | CHirExpr::AlignOf(_, _)
+            | CHirExpr::Assign { .. }
+            | CHirExpr::MemoryAssign { .. }
+            | CHirExpr::Update { .. }
+            | CHirExpr::MemoryUpdate { .. }
+            | CHirExpr::StatementExpr { .. }
+            | CHirExpr::CompoundLit(_, _, _)
+            | CHirExpr::Comma(_, _, _) => None,
+        };
+        symbol.is_some_and(|symbol| {
+            self.symbols
+                .symbol(symbol)
+                .is_ok_and(|symbol| symbol.storage_class() == Some(StorageClass::Register))
+        })
+    }
+
     fn resolve_place_chain(
         &mut self,
         expression: &'arena CHirExpr<'arena>,
@@ -8605,6 +8659,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if let Some(op) = unary {
             let token = self.advance().unwrap();
             let operand = self.parse_unary()?;
+            if op == UnaryOp::AddrOf && self.place_roots_register_object(operand) {
+                self.report("E2928", "address-of-register-object", token.span);
+                return None;
+            }
             let span = self.merge_span(token.span, operand.span());
             return Some(self.alloc_node(CHirExpr::Unary(op, operand, span)));
         }
