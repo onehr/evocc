@@ -16,17 +16,25 @@
 
 #![forbid(unsafe_code)]
 
+pub mod allocverify;
+pub mod emit;
 pub mod interp;
 pub mod lane;
+pub mod linscan;
 pub mod lower;
+pub mod regalloc;
 pub mod text;
 pub mod text_parse;
 pub mod validate;
 
 use std::fmt;
 
+pub use allocverify::{verify_allocation, VerifierRefusal};
+pub use emit::{emit_module, frame_of, Frame};
 pub use interp::{interpret_module, MirError, MirLimits, MirOutcome, MirValue};
+pub use linscan::{allocate, render_allocated, Allocated, CALLEE_SAVED, CALLER_SAVED};
 pub use lower::{lower_module, Refusal};
+pub use regalloc::out_of_ssa;
 pub use text::render_module;
 pub use text_parse::parse_module;
 pub use validate::validate_module;
@@ -497,9 +505,15 @@ pub enum SymbolKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MInst {
     /// `mov rd, rn`.
-    Mov { dst: VReg, src: VReg },
+    Mov {
+        dst: VReg,
+        src: VReg,
+    },
     /// `mov rd, #imm`: the `movz`/`movk`/`movn` sequence, spelled as one form.
-    MovImm { dst: VReg, imm: u64 },
+    MovImm {
+        dst: VReg,
+        imm: u64,
+    },
     /// `adrp rd, sym@PAGE`.
     Adrp {
         dst: VReg,
@@ -571,7 +585,11 @@ pub enum MInst {
         width: Width,
     },
     /// `sxtb`, `sxth`, `sxtw`, `uxtb`, `uxth`.
-    Extend { op: ExtOp, dst: VReg, src: VReg },
+    Extend {
+        op: ExtOp,
+        dst: VReg,
+        src: VReg,
+    },
     /// `sbfx`/`ubfx rd, rn, #lsb, #width`.
     Bfx {
         signed: bool,
@@ -596,7 +614,11 @@ pub enum MInst {
         width: Width,
     },
     /// `cset rd, cond`.
-    Cset { dst: VReg, flags: VReg, cond: Cond },
+    Cset {
+        dst: VReg,
+        flags: VReg,
+        cond: Cond,
+    },
     /// `csel rd, rn, rm, cond`.
     Csel {
         dst: VReg,
@@ -618,6 +640,38 @@ pub enum MInst {
         target: VReg,
         args: Vec<VReg>,
         results: Vec<VReg>,
+    },
+    /// `ldp`/`stp rt1, rt2, [rn, #off]`: Section 4 admits them "prologue and
+    /// epilogue only (Section 6)". `writeback` is the pre-index the prologue's
+    /// `stp x29, x30, [sp, #-16]!` uses.
+    Ldp {
+        rt1: VReg,
+        rt2: VReg,
+        base: VReg,
+        offset: i64,
+        writeback: bool,
+    },
+    Stp {
+        rt1: VReg,
+        rt2: VReg,
+        base: VReg,
+        offset: i64,
+        writeback: bool,
+    },
+    /// A spilled value written to its frame slot, and read back from it.
+    ///
+    /// Section 7 spills "to a frame slot" and Section 6 lays out "one 8-byte
+    /// slot per spilled virtual register", but neither gives EvoMIR a form for
+    /// the two accesses. They are pseudo-forms here, on the pattern Section 4
+    /// already uses for `frame.slot` and `mem.copy`; emission expands each to a
+    /// `str` or `ldr` at the slot's frame offset. Recorded gap.
+    SpillStore {
+        src: VReg,
+        slot: u32,
+    },
+    SpillReload {
+        dst: VReg,
+        slot: u32,
     },
     /// The `mem.copy` pseudo-form of Section 4: `size` bytes from `src` to
     /// `dst`, "transferring per-byte initializedness and pointer fragments
@@ -725,9 +779,14 @@ pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
         | MInst::Cset { dst, .. }
         | MInst::Csel { dst, .. }
         | MInst::FrameSlot { dst, .. }
+        | MInst::SpillReload { dst, .. }
         | MInst::WideMultiply { dst, .. } => vec![*dst],
+        MInst::Ldp { rt1, rt2, .. } => vec![*rt1, *rt2],
         MInst::FlagBinary { dst, flags, .. } => vec![*dst, *flags],
-        MInst::Store { .. } | MInst::MemCopy { .. } => Vec::new(),
+        MInst::Store { .. }
+        | MInst::MemCopy { .. }
+        | MInst::SpillStore { .. }
+        | MInst::Stp { .. } => Vec::new(),
         MInst::Bl { results, .. } | MInst::Blr { results, .. } => results.clone(),
     }
 }
@@ -747,6 +806,10 @@ pub fn inst_uses(inst: &MInst) -> Vec<VReg> {
         | MInst::FlagBinary { lhs, rhs, .. }
         | MInst::WideMultiply { lhs, rhs, .. } => vec![*lhs, *rhs],
         MInst::MemCopy { dst, src, .. } => vec![*dst, *src],
+        MInst::SpillStore { src, .. } => vec![*src],
+        MInst::SpillReload { .. } => Vec::new(),
+        MInst::Ldp { base, .. } => vec![*base],
+        MInst::Stp { rt1, rt2, base, .. } => vec![*rt1, *rt2, *base],
         MInst::BinaryImm { lhs, .. } | MInst::CmpImm { lhs, .. } | MInst::Bfx { src: lhs, .. } => {
             vec![*lhs]
         }

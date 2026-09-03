@@ -41,6 +41,10 @@ fn mnemonics(module: &evocc_mir::MModule) -> Vec<String> {
                     MInst::FlagBinary { op, .. } => op.mnemonic().to_owned(),
                     MInst::WideMultiply { op, .. } => op.mnemonic().to_owned(),
                     MInst::MemCopy { .. } => "mem.copy".to_owned(),
+                    MInst::Ldp { .. } => "ldp".to_owned(),
+                    MInst::Stp { .. } => "stp".to_owned(),
+                    MInst::SpillStore { .. } => "spill.store".to_owned(),
+                    MInst::SpillReload { .. } => "spill.reload".to_owned(),
                     MInst::FrameSlot { .. } => "frame.slot".to_owned(),
                 });
             }

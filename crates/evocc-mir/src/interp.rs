@@ -1085,6 +1085,77 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                 .copy_bytes(destination, source, layout)
                 .map_err(|error| memory_error(&error))?;
         }
+        // Section 4: "`ldp`/`stp rt1, rt2, [rn, #off]` | two registers,
+        // prologue and epilogue only". The pair is two adjacent eight-byte
+        // accesses through the base, with the pre-index the prologue uses.
+        MInst::Ldp {
+            rt1,
+            rt2,
+            base,
+            offset,
+            writeback,
+        } => {
+            let address = read_pointer(frame, *base)?;
+            let at = if *writeback {
+                let moved = address
+                    .checked_offset(*offset)
+                    .map_err(|error| memory_error(&error))?;
+                write(frame, *base, MirValue::Ptr(moved));
+                moved
+            } else {
+                address
+                    .checked_offset(*offset)
+                    .map_err(|error| memory_error(&error))?
+            };
+            let access = layout_for(8);
+            for (index, dst) in [(0_i64, *rt1), (8, *rt2)] {
+                let slot = at
+                    .checked_offset(index)
+                    .map_err(|error| memory_error(&error))?;
+                let raw = state
+                    .memory
+                    .load_integer(slot, access)
+                    .map_err(|error| memory_error(&error))?;
+                let raw = u64::try_from(raw).map_err(|_| MirError::Invalid {
+                    detail: "an access wider than a register".to_owned(),
+                })?;
+                write(frame, dst, MirValue::Int(raw));
+            }
+        }
+        MInst::Stp {
+            rt1,
+            rt2,
+            base,
+            offset,
+            writeback,
+        } => {
+            let address = read_pointer(frame, *base)?;
+            let at = address
+                .checked_offset(*offset)
+                .map_err(|error| memory_error(&error))?;
+            if *writeback {
+                write(frame, *base, MirValue::Ptr(at));
+            }
+            let access = layout_for(8);
+            for (index, src) in [(0_i64, *rt1), (8, *rt2)] {
+                let slot = at
+                    .checked_offset(index)
+                    .map_err(|error| memory_error(&error))?;
+                let value = read_bits(frame, src)?;
+                state.memory = state
+                    .memory
+                    .store_integer(slot, access, u128::from(value))
+                    .map_err(|error| memory_error(&error))?;
+            }
+        }
+        // The spill pair is expanded by emission against the frame layout of
+        // Section 6, which the interpreter has no linear stack to model; see
+        // the recorded gap on the prologue.
+        MInst::SpillStore { .. } | MInst::SpillReload { .. } => {
+            return Err(MirError::Invalid {
+                detail: "a spill access exists only after allocation".to_owned(),
+            });
+        }
         MInst::Bl { .. } | MInst::Blr { .. } => {
             return Err(MirError::Invalid {
                 detail: "a call is executed by the frame stack".to_owned(),
