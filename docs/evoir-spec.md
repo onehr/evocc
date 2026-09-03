@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.49** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.50** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1464,6 +1464,19 @@ matching case:
   child costs; and
 - any non-constant `source=derived` node costs one plus its selected child
   costs.
+
+**Cost is a policy.** The cost function above is the default policy of this
+profile, not a property the checker verifies: a certificate proves that every
+replacement is equivalent, never that it was the cheapest, and Section 8.7
+already lets a producer decline any eligible region. A producer may therefore
+extract under any other cost function provided it is deterministic for a
+given module, budget and policy name, applies the same strict-improvement
+rule relative to its own costs, and is named in the producer's report (not
+in the certificate, whose format does not change). Two policies that differ
+only in cost produce certificates the checker accepts or refuses on identical
+grounds. The kernel cohort is an acceptance corpus and never enters the
+fitness of any policy (the contract's red lines). Defined at revision 1.9.50
+to open the measurement of learned cost functions and schedules.
 
 The replacement-root exclusion in the third rule is mandatory: assigning zero
 to the original root would make every target tie the original under strict
@@ -4727,6 +4740,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.50 | 2026-09-03 | States that extraction cost is a producer policy the checker does not verify, so cost functions and schedules may be replaced and measured without a format change (7.5). |
 | 1.9.49 | 2026-09-03 | Corrects the 10.1.17 label-address entry, which had denied address-constant status without a probe and contradicted the measured rule of 1.9.48; the executor stopped on the contradiction. |
 | 1.9.48 | 2026-09-03 | Fourth full-configuration survey (2,694 of 2,798 clean). Defines the `_Pragma` operator through expansion and the whitespace flag of a substituted argument (10.4); qualified `void *` to function pointer, conditional and label address constants, and three more library builtins (10.1.14, 10.1.18). |
 | 1.9.47 | 2026-09-03 | Names the edge combination of seed facts a join, distinct from the class merge, after both had been called a meet (8.10); lifts the sentence that made `p1_202`-`p1_204` unfireable, since a fully known block argument now satisfies `fully_known` without `all_const` (11.6). Both gaps found by the executor implementing facts of seeds. |
