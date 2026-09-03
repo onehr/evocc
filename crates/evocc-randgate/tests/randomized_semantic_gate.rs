@@ -946,10 +946,16 @@ fn the_campaign_reaches_the_tier_b_rules() {
     ] {
         assert!(fired.contains(rule), "{rule} never fired");
     }
-    for dominated in ["p1_202_known_xor", "p1_203_known_add", "p1_204_known_sub"] {
+    // Revision 1.9.47: these three stopped being dominated when a block
+    // argument gained a fact of its own. `fully_known` on `xor`, `add` and
+    // `sub` used to hold exactly when `all_const` did, so the fold always came
+    // first in registry order and the fact rule never fired; a seed that is
+    // fully known without any `const` node standing for it separates the two,
+    // and a coverage claim counts them as reached when such an input exists.
+    for reached in ["p1_202_known_xor", "p1_203_known_add", "p1_204_known_sub"] {
         assert!(
-            !fired.contains(dominated),
-            "{dominated} is dominated by its fold and no conforming producer fires it"
+            fired.contains(reached),
+            "{reached} fires where the operands are known without being constants"
         );
     }
 }

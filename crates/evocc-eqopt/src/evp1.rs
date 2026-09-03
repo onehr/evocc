@@ -13,9 +13,9 @@ use evocc_types::EvoIRType;
 use crate::eligibility::Admission;
 use crate::known_bits::{Comparison, KnownBits};
 use crate::scalar_eq::{
-    dominated_by_its_fold, fold_raw, ingest_scalar_inst, mask_raw,
-    optimize_scalar_module_with_events, remap_inst_uses, resolve_alias, scalar_operands,
-    AppliedRewrite, NegationEnv, Replacement, RewriteOpportunity, ScalarFact, ScalarOperator,
+    fold_raw, ingest_scalar_inst, mask_raw, optimize_scalar_module_with_events, remap_inst_uses,
+    resolve_alias, scalar_operands, AppliedRewrite, NegationEnv, Replacement, RewriteOpportunity,
+    ScalarFact, ScalarOperator,
 };
 use crate::seed_facts::SeedFacts;
 use crate::{ProofAuthority, ScalarEqBudget, ScalarEqReport, ScalarRewrite};
@@ -1023,7 +1023,7 @@ fn fact_rewrite(
 ) -> Option<RegionRewrite> {
     let operator = ingest_scalar_inst(&event.instruction).ok()?;
     let fact = facts.of(classes.find(matched.owner)?, classes)?;
-    if fact.is_constant() && !dominated_by_its_fold(operator) {
+    if fact.is_constant() {
         // `zext(?a)`, `sext(?a)` and `trunc(?a)` name one variable; every other
         // fact-driven fold names two.
         let bindings = match operator {

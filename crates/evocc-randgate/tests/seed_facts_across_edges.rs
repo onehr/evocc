@@ -394,3 +394,101 @@ fn the_corpus_measures_the_fixed_points_passes() {
         "every function is walked at least once"
     );
 }
+
+/// A `xor` both of whose operands a block argument knows completely folds to
+/// its constant, on the fact rule rather than on the fold.
+///
+/// ```text
+/// ^entry(%0, %1, %2):
+///   %3 = const.bits<8> 5
+///   %4 = const.bits<8> 3
+///   br ^b(%3, %4, %1, %2)
+/// ^b(%5, %6, %7, %8):
+///   %9 = xor %5, %6        -- fully known (6); no const node in the region
+///   ret %9, %7, %8
+/// ```
+///
+/// This is the input that separates two side conditions Section 11.6 used to
+/// treat as one. `%5` and `%6` are fully known by the seed fixed point while
+/// the region holds no `const` node for either, so `all_const` fails and
+/// `fully_known` holds: registry order still puts `p0_105` first, and it does
+/// not apply, so `p1_202` answers the node. Before revision 1.9.46 no input
+/// could do this, which is why the three fact folds were called dominated;
+/// revision 1.9.47 lifted the sentence that forbade them.
+#[test]
+fn a_xor_of_two_fully_known_arguments_folds_on_its_fact() {
+    let five = bits(3);
+    let three = bits(4);
+    let carried = bits(5);
+    let other = bits(6);
+    let result = bits(9);
+    let function = Function {
+        name: "main".to_owned(),
+        params: vec![
+            FunctionParam {
+                name: "x".to_owned(),
+                ty: EvoIRType::Bits(8),
+            },
+            FunctionParam {
+                name: "arg1".to_owned(),
+                ty: EvoIRType::Mem(Region::All),
+            },
+            FunctionParam {
+                name: "arg2".to_owned(),
+                ty: EvoIRType::World,
+            },
+        ],
+        ret_tys: vec![
+            EvoIRType::Bits(8),
+            EvoIRType::Mem(Region::All),
+            EvoIRType::World,
+        ],
+        effects: EffectSummary::default(),
+        blocks: vec![
+            Block {
+                id: 0,
+                args: vec![
+                    argument(&bits(0)),
+                    argument(&memory(1)),
+                    argument(&world(2)),
+                ],
+                insts: vec![Inst::Const(five.clone(), 5), Inst::Const(three.clone(), 3)],
+                terminator: Inst::Br(1, vec![five, three, memory(1), world(2)]),
+            },
+            Block {
+                id: 1,
+                args: vec![
+                    argument(&carried),
+                    argument(&other),
+                    argument(&memory(7)),
+                    argument(&world(8)),
+                ],
+                insts: vec![Inst::Xor(result.clone(), carried, other)],
+                terminator: Inst::Ret(vec![result, memory(7), world(8)]),
+            },
+        ],
+    };
+    let mut module = Module {
+        globals: Vec::new(),
+        functions: vec![function],
+    };
+    module.recompute_effect_summaries();
+    validate_module(&module).expect("the probe is valid EvoIR");
+    let outcome = optimize(&module);
+    assert!(
+        outcome.rules.contains(&"p1_202_known_xor".to_owned()),
+        "the fact rule answers what the fold cannot: {:?}\n{}",
+        outcome.rules,
+        outcome.proof
+    );
+    assert!(
+        !outcome.rules.contains(&"p0_105_fold_xor".to_owned()),
+        "all_const does not hold here, so the fold must not claim it: {:?}",
+        outcome.rules
+    );
+    assert!(
+        !outcome.after.contains("xor.bits<8>"),
+        "the xor leaves the output:\n{}",
+        outcome.after
+    );
+}

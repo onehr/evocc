@@ -851,7 +851,7 @@ pub(crate) fn fact_driven_opportunity(inst: &Inst, known: &KnownEnv) -> Option<R
         return None;
     }
     let fact = node_fact(inst, known)?;
-    if fact.is_constant() && !dominated_by_its_fold(ingest_scalar_inst(inst).ok()?) {
+    if fact.is_constant() {
         return constant(ScalarRewrite::KnownConst, fact.value());
     }
     match inst {
@@ -886,23 +886,6 @@ pub(crate) fn fact_driven_opportunity(inst: &Inst, known: &KnownEnv) -> Option<R
         }
         _ => None,
     }
-}
-
-/// Section 11.6: `p1_202`, `p1_203` and `p1_204` are dominated by `p0_105`,
-/// `p0_100` and `p0_101`, and "no conforming producer fires them".
-///
-/// The reason the section gives is that `fully_known` on `xor`, `add` and
-/// `sub` holds "exactly when `all_const` holds". Since revision 1.9.46 that is
-/// no longer so: a block argument may carry a fully known fact without any
-/// `const` node standing for it, and then the fold's side condition fails
-/// where the fact-driven rule's holds. The sentence that forbids firing them
-/// is unconditional, so this producer keeps to it and leaves such a node
-/// alone; what that costs is measured rather than assumed.
-pub(crate) const fn dominated_by_its_fold(operator: ScalarOperator) -> bool {
-    matches!(
-        operator,
-        ScalarOperator::Xor | ScalarOperator::Add | ScalarOperator::Sub
-    )
 }
 
 pub(crate) fn rewrite_opportunity(
