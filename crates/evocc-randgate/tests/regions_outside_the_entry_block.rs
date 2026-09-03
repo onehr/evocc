@@ -442,6 +442,85 @@ fn a_scalar_from_an_unlisted_instruction_is_an_excluded_definition_seed() {
     );
 }
 
+/// A value wider than the profile's bound is an excluded seed, not an opaque
+/// one -- which is the reading this producer and the checker both take, and
+/// the reading that makes origin `definition` unreachable.
+///
+/// Section 8.5 says a value starts excluded "when its defining instruction is
+/// absent from the allowlist". The allowlist is nineteen operator spellings,
+/// and the same section separately says that "every root and witness result in
+/// this profile has type `bits<N>` with `1 <= N <= 64`". Read with the sort
+/// condition inside the allowlist judgment, the addition below is absent from
+/// it and its result starts excluded, so the comparison is not a region. Read
+/// with the allowlist as the spellings alone, `add` is on it, the result is
+/// not excluded, and the comparison is a region with one seed of sort
+/// `bits<100>` and origin `definition`. Only the first reading is consistent
+/// with the sentence about witness results, because the closure rule would
+/// otherwise follow that addition into the closure as a witness.
+///
+/// ```text
+/// ^entry(%0: bits<100>, ...):
+///   %3 = add.bits<100> %0, %0
+///   %4 = icmp.eq %3, %3          -- bits<1>, so the result is in bound
+/// ```
+#[test]
+fn a_value_wider_than_the_profiles_bound_is_an_excluded_seed() {
+    let wide = |id: u32| Value {
+        id,
+        ty: EvoIRType::Bits(100),
+    };
+    let sum = wide(3);
+    let flag = value(4, 1);
+    let function = Function {
+        name: "main".to_owned(),
+        params: vec![
+            FunctionParam {
+                name: "x".to_owned(),
+                ty: EvoIRType::Bits(100),
+            },
+            FunctionParam {
+                name: "arg1".to_owned(),
+                ty: EvoIRType::Mem(Region::All),
+            },
+            FunctionParam {
+                name: "arg2".to_owned(),
+                ty: EvoIRType::World,
+            },
+        ],
+        ret_tys: vec![
+            EvoIRType::Bits(1),
+            EvoIRType::Mem(Region::All),
+            EvoIRType::World,
+        ],
+        effects: EffectSummary::default(),
+        blocks: vec![Block {
+            id: 0,
+            args: vec![
+                argument(&wide(0)),
+                argument(&memory(1)),
+                argument(&world(2)),
+            ],
+            insts: vec![
+                Inst::Add(sum.clone(), wide(0), wide(0)),
+                Inst::ICmp(flag.clone(), CmpOp::Eq, sum.clone(), sum),
+            ],
+            terminator: Inst::Ret(vec![flag, memory(1), world(2)]),
+        }],
+    };
+    let mut module = Module {
+        globals: Vec::new(),
+        functions: vec![function],
+    };
+    module.recompute_effect_summaries();
+    validate_module(&module).expect("a bit-vector wider than 64 is well-formed EvoIR");
+    let outcome = optimize(&module);
+    assert_eq!(
+        outcome.regions, 0,
+        "a wider-than-bound value is excluded, so the comparison is not a region:\n{}",
+        outcome.proof
+    );
+}
+
 /// Every seed of every region the corpus produces, by origin.
 ///
 /// The certificate records the origin and the checker recomputes it, so this
