@@ -96,6 +96,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "evocc-mir"
+version = "0.0.0"
+dependencies = [
+ "evocc-evoir",
+ "evocc-memory",
+ "evocc-types",
+]
+
+[[package]]
 name = "evocc-parser"
 version = "0.0.0"
 dependencies = [
