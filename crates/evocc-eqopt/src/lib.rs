@@ -14,3 +14,4 @@ mod seed_facts;
 pub use evp1::*;
 pub use persistent::*;
 pub use scalar_eq::*;
+pub use seed_facts::{seed_fact_agreement, SeedFactAgreement};

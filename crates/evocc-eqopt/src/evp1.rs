@@ -129,7 +129,7 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
         // Section 8.10: what every edge into a block agrees its arguments
         // carry, computed once for the function before any region is formed.
         let seed_facts = SeedFacts::of(function, &admission);
-        report.seed_fact_rounds = report.seed_fact_rounds.max(seed_facts.passes());
+        report.seed_fact_work_items += seed_facts.work_items();
         for (block_index, block) in function.blocks.iter().enumerate() {
             let context = Surroundings {
                 shapes: block_shapes(block),

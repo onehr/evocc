@@ -32,11 +32,11 @@ pub struct CampaignReport {
     pub congruence_counts: BTreeMap<usize, u64>,
     pub congruent_roots: u64,
     /// Premises that assert a bit about a class a seed owns, which is what the
-    /// Section 8.10 seed fixed point buys, and the passes that fixed point
-    /// took, as its cost.
+    /// Section 8.10 seed fixed point buys, and the block evaluations that fixed
+    /// point took, as its cost.
     pub premises_asserting_a_seed: u64,
-    pub seed_fact_passes: BTreeMap<usize, u64>,
-    pub max_seed_fact_passes: usize,
+    pub seed_fact_work_items: BTreeMap<usize, u64>,
+    pub max_seed_fact_work_items: usize,
     /// Regions a fresh transaction over an optimized module still admits, and
     /// the programs that have any. Section 11.3 names these a measured quality
     /// metric of the registry: Section 11.6 lets a left-hand `const_like` match
@@ -115,14 +115,18 @@ impl CampaignReport {
             "premisesAssertingASeed={}",
             self.premises_asserting_a_seed
         );
-        let passes = self
-            .seed_fact_passes
+        let items = self
+            .seed_fact_work_items
             .iter()
             .map(|(count, transactions)| format!("{count}:{transactions}"))
             .collect::<Vec<_>>()
             .join(",");
-        let _ = writeln!(text, "seedFactPasses={passes}");
-        let _ = writeln!(text, "maxSeedFactPasses={}", self.max_seed_fact_passes);
+        let _ = writeln!(text, "seedFactWorkItems={items}");
+        let _ = writeln!(
+            text,
+            "maxSeedFactWorkItems={}",
+            self.max_seed_fact_work_items
+        );
         let _ = writeln!(text, "residualRegions={}", self.residual_regions);
         let _ = writeln!(text, "residualPrograms={}", self.residual_programs);
         let lengths = self
@@ -174,12 +178,12 @@ pub fn run_campaign(
                 congruence_counts,
                 congruent_roots,
                 premises_asserting_a_seed,
-                seed_fact_passes,
+                seed_fact_work_items,
             } => {
                 report.premises_asserting_a_seed += premises_asserting_a_seed as u64;
-                for (passes, transactions) in seed_fact_passes {
-                    *report.seed_fact_passes.entry(passes).or_default() += transactions;
-                    report.max_seed_fact_passes = report.max_seed_fact_passes.max(passes);
+                for (items, transactions) in seed_fact_work_items {
+                    *report.seed_fact_work_items.entry(items).or_default() += transactions;
+                    report.max_seed_fact_work_items = report.max_seed_fact_work_items.max(items);
                 }
                 report.transactions += transactions as u64;
                 *report.run_lengths.entry(transactions).or_default() += 1;

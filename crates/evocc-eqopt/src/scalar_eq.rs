@@ -233,10 +233,10 @@ pub struct ScalarEqReport {
     /// its own -- the regions closing congruence is what buys.
     pub congruences: usize,
     pub congruent_roots: usize,
-    /// Passes the Section 8.10 seed-fact fixed point took, the deepest of any
-    /// function in the module. It buys the facts a block argument carries, and
-    /// it is the only cost this analysis has.
-    pub seed_fact_rounds: usize,
+    /// Block evaluations the Section 8.10 seed-fact fixed point took, summed
+    /// over every function of the module. It buys the facts a block argument
+    /// carries, and it is the only cost this analysis has.
+    pub seed_fact_work_items: usize,
     pub budget_exhausted: bool,
     pub proof_replay_failed: bool,
     pub fell_back: bool,
@@ -443,7 +443,7 @@ pub(crate) fn optimize_scalar_module_with_events(
         // proposed.
         let admission = Admission::of(&original.functions[index]);
         let seed_facts = SeedFacts::of(&original.functions[index], &admission);
-        report.seed_fact_rounds = report.seed_fact_rounds.max(seed_facts.passes());
+        report.seed_fact_work_items += seed_facts.work_items();
         for (block_index, block) in function.blocks.iter_mut().enumerate() {
             let mut aliases = HashMap::new();
             // Section 7.4: two instructions with the same operator whose

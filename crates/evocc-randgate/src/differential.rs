@@ -189,7 +189,7 @@ pub enum Verdict {
         /// Premises that assert a bit about a class a seed owns, and the passes
         /// the Section 8.10 seed fixed point took in each transaction.
         premises_asserting_a_seed: usize,
-        seed_fact_passes: BTreeMap<usize, u64>,
+        seed_fact_work_items: BTreeMap<usize, u64>,
     },
     /// The input program was undefined; the specification's equality is modulo
     /// undefined behaviour, so nothing is compared.
@@ -291,7 +291,7 @@ struct Trial {
     congruence_counts: BTreeMap<usize, u64>,
     congruent_roots: usize,
     premises_asserting_a_seed: usize,
-    seed_fact_passes: BTreeMap<usize, u64>,
+    seed_fact_work_items: BTreeMap<usize, u64>,
     residual_regions: usize,
     /// Transactions the run executed and kept, each of which admitted at least
     /// one region. The transaction that admits nothing is what ends the run and
@@ -330,7 +330,7 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
                 congruence_counts: BTreeMap::new(),
                 congruent_roots: 0,
                 premises_asserting_a_seed: 0,
-                seed_fact_passes: BTreeMap::new(),
+                seed_fact_work_items: BTreeMap::new(),
                 residual_regions: 0,
                 transactions: 0,
                 stopped_at_ceiling: false,
@@ -352,7 +352,7 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
         congruence_counts: BTreeMap::new(),
         congruent_roots: 0,
         premises_asserting_a_seed: 0,
-        seed_fact_passes: BTreeMap::new(),
+        seed_fact_work_items: BTreeMap::new(),
         residual_regions: 0,
         transactions: 0,
         stopped_at_ceiling: false,
@@ -421,8 +421,8 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
             .or_default() += 1;
         trial.congruent_roots += outcome.report.congruent_roots;
         *trial
-            .seed_fact_passes
-            .entry(outcome.report.seed_fact_rounds)
+            .seed_fact_work_items
+            .entry(outcome.report.seed_fact_work_items)
             .or_default() += 1;
         trial.transactions += 1;
         trial.optimizer_budget_exhausted |= outcome.report.budget_exhausted;
@@ -549,7 +549,7 @@ pub fn run_seed(
             congruence_counts: trial.congruence_counts.clone(),
             congruent_roots: trial.congruent_roots,
             premises_asserting_a_seed: trial.premises_asserting_a_seed,
-            seed_fact_passes: trial.seed_fact_passes.clone(),
+            seed_fact_work_items: trial.seed_fact_work_items.clone(),
             residual_regions: trial.residual_regions,
             transactions: trial.transactions,
             stopped_at_ceiling: trial.stopped_at_ceiling,
