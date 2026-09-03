@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.55** | **Authoritative reference** | **2026-09-04**
+**Revision 1.9.56** | **Authoritative reference** | **2026-09-04**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1472,9 +1472,13 @@ profile, not a property the checker verifies: a certificate proves that every
 replacement is equivalent, never that it was the cheapest, and Section 8.7
 already lets a producer decline any eligible region. A producer may therefore
 extract under any other cost function provided it is deterministic for a
-given module, budget and policy name, applies the same strict-improvement
-rule relative to its own costs, and is named in the producer's report (not
-in the certificate, whose format does not change). Two policies that differ
+given module, budget and policy, applies the same strict-improvement
+rule relative to its own costs, and is identified in the producer's report
+by a name together with a complete description from which the function can
+be rebuilt (for a weight vector, every weight); the name alone is a label
+(revision 1.9.56, after a searched weighting shared one name across
+vectors). The certificate carries none of this and its format does not
+change. Two policies that differ
 only in cost produce certificates the checker accepts or refuses on identical
 grounds. The kernel cohort is an acceptance corpus and never enters the
 fitness of any policy (the contract's red lines). Defined at revision 1.9.50
@@ -4914,6 +4918,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.56 | 2026-09-04 | First search over cost weights: a searched vector ties the best hand-written functions on held-out programs and beats none, because the registry's cost can express one preference only (add before mul before shl). States that a policy is identified by name plus a complete description in the report (7.5). |
 | 1.9.55 | 2026-09-04 | Emitting rewrites measured: the two all-positive cost functions now optimize 569 of 1,000 programs differently. Restates the strict-improvement sentence of 11.3 as producer conformance and fixes the class granularity of a derived node's use through its parent (11.3). |
 | 1.9.54 | 2026-09-04 | The configured kernel's every translation unit parses clean (2,798 of 2,798). Assigns `E2928` to the address of a `register` object, `E3034` to the lowering of function-pointer arithmetic, and states that a range designator is one plan entry; the three edges the front-end executor named. |
 | 1.9.53 | 2026-09-03 | Fifth full-configuration survey (2,760 of 2,798). Defines the sixteen rules behind the remaining 38 units: one conditional stack across argument collection, empty `##` operands, comments across continued definitions, `__VA_OPT__`, keyword parameter names, `-fshort-wchar` wide strings (10.4); `register`, `va_list` objects, 128-bit and `va_arg` places, parameter compatibility, function-pointer arithmetic, `\e` (10.1.18); literal addresses, null comparisons in conditionals, no initializer size cap with `E2207` withdrawn (10.1.19); string literals at every site (10.1.3). All measured. |
