@@ -89,7 +89,7 @@
     "derivedChildrenAreUsed": "2026-09-03: the executor's SPEC_GAP was real: 11.3's 'unused derived nodes are invalid' had no notion of a derived node used through its parent. Ruled for Reading B at 1.9.52. The distinguishing certificate (seed 9324 shrunk: a derived const 1 under a derived shl) is now valid.",
     "architectRemovedALiveWorktree": "2026-09-03: the architect removed the policy executor's worktree while it was mid-window, believing the window closed; the executor's uncommitted emitting-rewrite work was lost, and its report and this ruling are the record. Rules from now on: an executor commits after every green increment, and the architect never removes a worktree whose agent has not reported completion of its current window.",
     "stageS4bClosed": "2026-09-04: emitting right-hand sides, width_min, p0.scalar.v4 and the non-vacuity check in place; the checker no longer judges cost. Over the same 1,000-program corpus the two all-positive cost functions now optimize 569 of 1,000 programs differently (0 before v4), weighted functions prefer add or shl over mul by their own weights, prefer-shift takes two transactions (mul to add to shl); 21,000 programs, 0 mismatches, 0 refusals; all four registry digests recomputed from the spec text by test. Architect's isolated gate on b25ce78: 1341/0, clippy 0, fmt clean; merged into main. Open by the executor's list: only add and shl can be emitted, emitted terms are one level deep, a const_like operand is always a fresh derived node.",
-    "stageS4cClosed": "2026-09-04: the first search over cost weights (mu+lambda, seed 1592639575, 12 individuals, 10 generations, 83 evaluations, 0 replay failures, deterministic across two runs) reached the training floor 37183 that weighted-operators and prefer-add already occupy and, on a disjoint held-out corpus (256 programs, digests recorded), extracted byte-identically to prefer-add: it beats instruction-count and prefer-shift and beats none of the best hand-written functions. A second search seed reached the same floor with an unrelated vector carrying the same ordering add < mul < shl. Cause, measured not proved: p0.scalar.v4's only emitting rules are the doubling triangle, whose spellings differ in steps only by whether a constant is materialized, so cost can express exactly one preference and about ten of the thirteen axes are inert. A null result recorded as such. The policy-identity gap is ruled at 1.9.56 (name plus complete description)."
+    "stageS4cClosed": "2026-09-04: the first search over cost weights (mu+lambda, seed 1592639575, 12 individuals, 10 generations, 83 evaluations, 0 replay failures, deterministic across two runs) reached the training floor 37183 that weighted-operators and prefer-add already occupy and, on a disjoint held-out corpus (256 programs, digests recorded), extracted byte-identically to prefer-add: it beats instruction-count and prefer-shift and beats none of the best hand-written functions. A second search seed reached the same floor with an unrelated vector carrying the same ordering add < mul < shl. Cause, measured not proved: p0.scalar.v4's only emitting rules are the doubling triangle, whose spellings differ in steps only by whether a constant is materialized, so cost can express exactly one preference and about ten of the thirteen axes are inert. A null result recorded as such. The policy-identity gap is ruled at 1.9.56 (name plus complete description). Architect's isolated gate on 1376ab0: 1362/0, clippy 0, fmt clean; merged into main. Companion measurement (interim, to be committed by the executor): 3 of 13 weight axes change any extraction at a positive weight (add, mul, shl); the other ten act only at weight zero, by declining a rule family."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",
@@ -406,6 +406,31 @@
       },
       "architectGate": {
         "passed": 1341,
+        "failed": 0,
+        "clippy": 0,
+        "fmt": "clean"
+      }
+    },
+    "s4c": {
+      "branchHead": "1376ab0",
+      "heldOut": {
+        "corpusDigest": "9600024fbc63596dfe5c3c00a99ef6b62f9a1c0d1d6d326c85f15cf5ddbcebfd",
+        "stepsAfter": {
+          "instruction-count": 48954,
+          "weighted-operators": 48950,
+          "prefer-add": 48950,
+          "prefer-shift": 49343,
+          "searched-weights": 48950
+        }
+      },
+      "search": {
+        "evaluations": 83,
+        "discardedForReplay": 0,
+        "trainingFloor": 37183,
+        "deterministic": true
+      },
+      "architectGate": {
+        "passed": 1362,
         "failed": 0,
         "clippy": 0,
         "fmt": "clean"
