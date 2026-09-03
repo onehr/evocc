@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.45** | **Authoritative reference** | **2026-09-03**
+**Revision 1.9.46** | **Authoritative reference** | **2026-09-03**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1704,7 +1704,11 @@ excluded values.
 "Transitively depends" is a second monotone fixed point, not an implementation
 guess. A value starts excluded when its type is `mem<R>`, `world`, any pointer
 type, or when its defining instruction is absent from the allowlist, may trap,
-or carries any non-pure effect. Exclusion propagates from every operand to its
+or carries any non-pure effect. An instruction is absent from the allowlist when
+its operator is not listed or when its result sort lies outside this
+profile's bound, so an `add.bits<100>` is absent and its result starts
+excluded (ruled at revision 1.9.46; the other reading would let the closure
+follow that instruction as a witness, contradicting the bound). Exclusion propagates from every operand to its
 result and across block edges positionally to block arguments. Entry block
 arguments of ordinary `bits<N>` type start unexcluded. Iterate forward passes in
 Section 8.6 order until no bit changes. Thus a scalar returned by a call is an
@@ -1735,7 +1739,12 @@ value, or by iteration over an unordered container.
 ### 8.7 Seed Manifest and Region Identity
 
 A **seed** is a leaf of the witness closure: a value a witness instruction names
-but no instruction in that closure defines.
+but no instruction in that closure defines. In this profile every seed has origin
+`input`: a value defined earlier in the same block by an instruction the
+closure does not follow is, by the exclusion rule of 8.5, excluded, and its
+region ineligible (measured at revision 1.9.46 over 577,015 regions, none
+with a `definition` seed). The `definition` origin stays in the manifest
+format for a later profile and is recomputed by the checker like any field.
 
 ```text
 Seed {
@@ -1936,6 +1945,21 @@ on a bit both know, the union is **invalid** — two values with a differing
 known bit cannot be equal — and the transaction rolls back under Section 8.9.
 That check is part of what makes a union sound, so it is performed by the
 checker as well as the producer.
+
+**Facts of seeds.** A seed of origin `input` carries a fact computed once per
+function, before regions are formed, by a forward fixed point over the
+function in Section 8.6 order: the fact of a block argument is the meet of
+the facts of the values passed to it on every edge entering the block, a
+passed value's fact being the transfer of its defining instruction over the
+facts of its operands (an unlisted instruction's result, a pointer, and any
+excluded value being top); every edge counts, none is pruned by a fact, and
+a block argument not yet visited contributes the meet's identity. Iteration
+stops when no fact changes; the lattice is finite and every step only loses
+knowledge, so it terminates, and the order of visits does not change the
+result. Entry block arguments are top. A premise may name a seed's class;
+the checker recomputes the seed's fact by the same fixed point over
+`before.evo`. Defined at revision 1.9.46; before it, seeds were top and no
+fact crossed a block edge.
 
 **Transfer.** For a node with known-bits inputs, exactly these transfers are
 defined; anything not listed transfers to top.
@@ -4651,6 +4675,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.46 | 2026-09-03 | Regions admitted in every block (12,913 to 27,195 in the 1000-program gate). Rules that an instruction outside the sort bound is absent from the allowlist, records that `definition` seeds cannot arise in this profile (8.5, 8.7), and defines facts of seeds across block edges by a forward fixed point the checker recomputes (8.10). |
 | 1.9.45 | 2026-09-03 | Admits `__builtin_va_arg` at the front end as a typed C-HIR node under the same fail-closed lowering, and makes a library builtin's prototype the call's type whether or not the library function is declared, `E2927` now naming an incompatible visible declaration; both sentences had contradicted 1.9.34 and stopped the front-end executor. |
 | 1.9.44 | 2026-09-03 | Admits shifts and width changes as region roots and witnesses (8.5) and in the certificate's `op_id` (11.3), after the 1.9.43 transfer rows were measured to enable zero premised rewrites while excluded from regions; extends the witness closure to structural duplicates so a common subexpression is a region proved by congruence alone (8.5); prints `p0.scalar.v3` with six fact-driven folds for the new operators (11.6). |
 | 1.9.43 | 2026-09-03 | Class-based matching measured (+25 regions, +26 merge-enabled matches over 256 seeds). Extends the 8.10 transfer table with `shl`, `lshr`, `ashr` under a fully known in-range amount and with `zext`, `sext`, `trunc`; the registry is unchanged, the new facts feed the existing Tier B rules. |
