@@ -24,8 +24,15 @@ pub const SCRATCH_BASE: u32 = 1 << 24;
 /// One past the scratch range, so a later pass can take a range of its own.
 pub const SCRATCH_LIMIT: u32 = 1 << 25;
 
-/// Remove block arguments by placing each edge's parallel copy in its
-/// predecessor, splitting critical edges first.
+/// Remove block arguments by placing each edge's parallel copy where it can
+/// only run on that edge, splitting the edges where nowhere will do.
+///
+/// A copy may sit at the end of the predecessor only when the predecessor has
+/// one successor, and at the top of the target only when the target has one
+/// predecessor; an edge with neither is the critical edge Section 7 splits. A
+/// copy appended to a block whose terminator reads the flags would also stand
+/// between the comparison and its consumer, which Section 2 forbids, and the
+/// same rule keeps that from arising.
 #[must_use]
 pub fn out_of_ssa(function: &MFunction) -> MFunction {
     let split = split_critical_edges(function);
@@ -34,15 +41,19 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
         .iter()
         .map(|block| (block.id, block.args.clone()))
         .collect();
+    let mut predecessors: BTreeMap<u32, usize> = BTreeMap::new();
+    for block in &split.blocks {
+        for (target, _) in term_edges(&block.term) {
+            *predecessors.entry(target).or_default() += 1;
+        }
+    }
 
     let mut next_scratch = SCRATCH_BASE;
-    let mut blocks = Vec::new();
+    let mut suffix: BTreeMap<u32, Vec<MInst>> = BTreeMap::new();
+    let mut prefix: BTreeMap<u32, Vec<MInst>> = BTreeMap::new();
+
     for block in &split.blocks {
-        let mut insts = block.insts.clone();
-        let mut term = block.term.clone();
-        // One edge at a time, so a block with two successors places two
-        // sequences; a block with two successors and an argument-passing edge
-        // cannot occur, because such an edge was split above.
+        let successors = term_edges(&block.term).len();
         for (target, args) in term_edges(&block.term) {
             let destinations = parameters.get(&target).cloned().unwrap_or_default();
             let pairs: Vec<(VReg, VReg)> = destinations
@@ -50,20 +61,34 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
                 .copied()
                 .zip(args.iter().copied())
                 .collect();
-            sequentialize(&pairs, &mut insts, &mut next_scratch);
+            if pairs.is_empty() {
+                continue;
+            }
+            let mut moves = Vec::new();
+            sequentialize(&pairs, &mut moves, &mut next_scratch);
+            if successors == 1 {
+                suffix.entry(block.id).or_default().extend(moves);
+            } else {
+                prefix.entry(target).or_default().extend(moves);
+            }
         }
+    }
+
+    let entry = split.blocks.first().map(|block| block.id);
+    let mut blocks = Vec::new();
+    for block in &split.blocks {
+        let mut insts = prefix.remove(&block.id).unwrap_or_default();
+        insts.extend(block.insts.iter().cloned());
+        insts.extend(suffix.remove(&block.id).unwrap_or_default());
+        let mut term = block.term.clone();
         clear_edge_args(&mut term);
         // The entry block's arguments are the function's parameters, bound by
         // the caller rather than by an edge, so no copy can remove them. They
         // are the fixed operands of the boundary that Section 7 hands the
         // allocator, and they disappear when it assigns them.
-        let entry = split
-            .blocks
-            .first()
-            .is_some_and(|first| first.id == block.id);
         blocks.push(MBlock {
             id: block.id,
-            args: if entry {
+            args: if entry == Some(block.id) {
                 block.args.clone()
             } else {
                 Vec::new()

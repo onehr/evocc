@@ -165,12 +165,15 @@ fn a_register_read_before_it_is_written_is_refused() {
 #[test]
 fn two_live_values_in_one_register_are_refused() {
     let mut allocated = allocate(&out_of_ssa(&branching())).expect("allocation");
-    // Give every value the same register: the two arms then reach the join
-    // with different values in it, which is what the property forbids.
-    for number in allocated.assignment.values_mut() {
-        *number = 0;
-    }
-    let refusal = verify_allocation(&allocated).expect_err("one register cannot hold both");
+    // Drop the last instruction of one arm, so the register the join reads
+    // holds one value on one path and something else on the other.
+    let arm = allocated
+        .blocks
+        .iter_mut()
+        .find(|block| block.id == 1)
+        .expect("the first arm");
+    arm.insts.pop();
+    let refusal = verify_allocation(&allocated).expect_err("the paths disagree about the register");
     assert_eq!(refusal.code, "E4020");
 }
 
