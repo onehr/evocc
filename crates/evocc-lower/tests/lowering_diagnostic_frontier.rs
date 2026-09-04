@@ -33,12 +33,17 @@ fn expected_use_span(source: &str, spelling: &str, ordinal: u32) -> SourceSpan {
     let byte_start = source
         .rfind(spelling)
         .unwrap_or_else(|| panic!("case {ordinal} has no `{spelling}` use"));
+    let prefix = &source[..byte_start];
+    let line_start = 1 + u32::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count())
+        .expect("small fixture");
+    let line_byte_start = prefix.rfind('\n').map_or(0, |index| index + 1);
+    let column_start = 1 + u32::try_from(byte_start - line_byte_start).expect("small fixture");
     SourceSpan::new(
         FileId::new(10_200 + ordinal),
         u32::try_from(byte_start).expect("small fixture"),
         u32::try_from(byte_start + spelling.len()).expect("small fixture"),
-        1,
-        1,
+        line_start,
+        column_start,
     )
 }
 

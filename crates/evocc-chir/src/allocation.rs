@@ -831,7 +831,10 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                     span: object.span,
                 });
             }
-            if !file_object_storage_compatible(symbol.storage, object.storage) {
+            let global_register = object.storage == StorageClass::Register
+                && object.asm_label.is_some()
+                && symbol.storage == Some(StorageClass::Register);
+            if !global_register && !file_object_storage_compatible(symbol.storage, object.storage) {
                 return Err(AllocationSiteManifestError::ObjectStorageMismatch {
                     symbol: object.symbol,
                     declaration: object.storage,
@@ -1080,7 +1083,9 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             CHirDecl::Object(object) => {
                 self.validate_object_declaration(object, file_scope, current_function)?;
                 let strength = if file_scope {
-                    if object.initializer.is_some() {
+                    if object.storage == StorageClass::Register && object.asm_label.is_some() {
+                        None
+                    } else if object.initializer.is_some() {
                         Some(AnchorStrength::Definition)
                     } else if object.storage == StorageClass::Extern {
                         None

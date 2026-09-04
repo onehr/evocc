@@ -74,6 +74,9 @@ pub enum LowerError {
     FunctionPointerArithmetic {
         span: SourceSpan,
     },
+    GlobalRegisterVariable {
+        span: SourceSpan,
+    },
     WideInteger {
         span: SourceSpan,
     },
@@ -130,6 +133,9 @@ impl fmt::Display for LowerError {
             Self::FunctionPointerArithmetic { .. } => {
                 formatter.write_str("not-lowered: function-pointer-arithmetic")
             }
+            Self::GlobalRegisterVariable { .. } => {
+                formatter.write_str("not-lowered: global-register-variable")
+            }
             Self::WideInteger { .. } => formatter.write_str("not-executed: wide-integer"),
             Self::StaticRelocation { .. } => formatter.write_str("not-lowered: static-relocation"),
             Self::ComputedGoto { .. } => formatter.write_str("not-lowered: computed-goto"),
@@ -167,6 +173,7 @@ impl LowerError {
             Self::PointerDifference { .. } => "E3032",
             Self::WideInteger { .. } => "E3033",
             Self::FunctionPointerArithmetic { .. } => "E3034",
+            Self::GlobalRegisterVariable { .. } => "E3035",
             _ => "E3101",
         }
     }
@@ -189,6 +196,7 @@ impl LowerError {
             | Self::FrameAddress { span }
             | Self::PointerDifference { span }
             | Self::FunctionPointerArithmetic { span }
+            | Self::GlobalRegisterVariable { span }
             | Self::WideInteger { span }
             | Self::StaticRelocation { span }
             | Self::ComputedGoto { span }
@@ -316,7 +324,9 @@ struct FunctionLowerer<'a> {
 /// explicit input and is consulted for every scalar type admitted by this
 /// Day-6 lowering slice.
 pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Module, LowerError> {
-    let memory_symbols = collect_memory_symbols(unit);
+    let global_register_symbols = collect_global_register_symbols(unit);
+    let mut memory_symbols = collect_memory_symbols(unit);
+    memory_symbols.retain(|symbol| !global_register_symbols.contains(symbol));
     let manifest =
         AllocationSiteManifest::derive(unit).map_err(|_| LowerError::InvalidGeneratedSsa {
             message: "cannot derive the authoritative allocation-site manifest".to_owned(),
@@ -363,7 +373,7 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
             })
         });
     let functions = index_functions(unit, target, memory_profile)?;
-    prevalidate_unit_for_lowering(unit, target)?;
+    prevalidate_unit_for_lowering(unit, target, &global_register_symbols)?;
     let globals = lower_globals(unit, target, &memory_symbols, &allocation_origins)?;
     let mut lowered = Vec::new();
     for declaration in unit.iter() {
@@ -401,6 +411,19 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
     module.recompute_effect_summaries();
     validate_module(&module).map_err(|message| LowerError::InvalidGeneratedSsa { message })?;
     Ok(module)
+}
+
+fn collect_global_register_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
+    unit.iter()
+        .filter_map(|declaration| match declaration {
+            CHirDecl::Object(object)
+                if object.storage == StorageClass::Register && object.asm_label.is_some() =>
+            {
+                Some(object.symbol)
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
@@ -685,11 +708,23 @@ fn lower_globals(
     let mut declarations = BTreeMap::<SymbolId, &ObjectDecl<'_>>::new();
     for declaration in unit.iter() {
         match declaration {
-            CHirDecl::Object(object) if memory_symbols.contains(&object.symbol) => {
+            CHirDecl::Object(object)
+                if memory_symbols.contains(&object.symbol)
+                    && origins.contains_key(&object.symbol) =>
+            {
+                let canonical_type = unit
+                    .symbols()
+                    .symbol(object.symbol)
+                    .ok()
+                    .map(|symbol| symbol.ty());
                 declarations
                     .entry(object.symbol)
                     .and_modify(|selected| {
-                        if object.initializer.is_some() {
+                        if object.initializer.is_some()
+                            || (selected.initializer.is_none()
+                                && canonical_type == Some(object.ty)
+                                && canonical_type != Some(selected.ty))
+                        {
                             *selected = object;
                         }
                     })
@@ -1069,6 +1104,7 @@ fn subobject_offset(
 fn prevalidate_unit_for_lowering(
     unit: &CHirUnit<'_>,
     target: &TargetDataLayout,
+    global_register_symbols: &BTreeSet<SymbolId>,
 ) -> Result<(), LowerError> {
     evocc_chir::validate_front_end_builtin_records(unit, target).map_err(|span| {
         LowerError::UnsupportedExpression {
@@ -1086,7 +1122,12 @@ fn prevalidate_unit_for_lowering(
             CHirDecl::Function(function) => {
                 if let Some(body) = function.body {
                     let mut labels = BTreeMap::new();
-                    prevalidate_stmt_for_lowering(unit, body, &mut labels)?;
+                    prevalidate_stmt_for_lowering(
+                        unit,
+                        body,
+                        &mut labels,
+                        global_register_symbols,
+                    )?;
                     let mut goto_names = BTreeSet::new();
                     collect_goto_names(body, &mut goto_names);
                     if goto_names.iter().any(|name| !labels.contains_key(name)) {
@@ -1109,6 +1150,7 @@ fn prevalidate_unit_for_lowering(
 fn prevalidate_decl_for_lowering(
     unit: &CHirUnit<'_>,
     declaration: &CHirDecl<'_>,
+    global_register_symbols: &BTreeSet<SymbolId>,
 ) -> Result<(), LowerError> {
     match declaration {
         CHirDecl::Asm(assembly) => Err(LowerError::Asm {
@@ -1121,7 +1163,7 @@ fn prevalidate_decl_for_lowering(
                     if let InitAction::StoreScalar { value, .. }
                     | InitAction::CopyAggregate { value, .. } = action
                     {
-                        prevalidate_expr_for_lowering(unit, value)?;
+                        prevalidate_expr_for_lowering(unit, value, global_register_symbols)?;
                     }
                 }
             }
@@ -1139,65 +1181,71 @@ fn prevalidate_stmt_for_lowering(
     unit: &CHirUnit<'_>,
     statement: &CHirStmt<'_>,
     labels: &mut BTreeMap<String, SourceSpan>,
+    global_register_symbols: &BTreeSet<SymbolId>,
 ) -> Result<(), LowerError> {
     match statement {
         CHirStmt::Asm(assembly) => Err(LowerError::Asm {
             span: assembly.span,
         }),
         CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
-            prevalidate_expr_for_lowering(unit, expression)
+            prevalidate_expr_for_lowering(unit, expression, global_register_symbols)
         }
         CHirStmt::If(condition, then_branch, else_branch, _) => {
-            prevalidate_expr_for_lowering(unit, condition)?;
-            prevalidate_stmt_for_lowering(unit, then_branch, labels)?;
+            prevalidate_expr_for_lowering(unit, condition, global_register_symbols)?;
+            prevalidate_stmt_for_lowering(unit, then_branch, labels, global_register_symbols)?;
             if let Some(else_branch) = else_branch {
-                prevalidate_stmt_for_lowering(unit, else_branch, labels)?;
+                prevalidate_stmt_for_lowering(unit, else_branch, labels, global_register_symbols)?;
             }
             Ok(())
         }
         CHirStmt::Switch(expression, body, _)
         | CHirStmt::While(expression, body, _)
         | CHirStmt::Case(expression, body, _) => {
-            prevalidate_expr_for_lowering(unit, expression)?;
-            prevalidate_stmt_for_lowering(unit, body, labels)
+            prevalidate_expr_for_lowering(unit, expression, global_register_symbols)?;
+            prevalidate_stmt_for_lowering(unit, body, labels, global_register_symbols)
         }
         CHirStmt::CaseRange(first, last, body, _) => {
-            prevalidate_expr_for_lowering(unit, first)?;
-            prevalidate_expr_for_lowering(unit, last)?;
-            prevalidate_stmt_for_lowering(unit, body, labels)
+            prevalidate_expr_for_lowering(unit, first, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, last, global_register_symbols)?;
+            prevalidate_stmt_for_lowering(unit, body, labels, global_register_symbols)
         }
         CHirStmt::DoWhile(body, expression, _) => {
-            prevalidate_stmt_for_lowering(unit, body, labels)?;
-            prevalidate_expr_for_lowering(unit, expression)
+            prevalidate_stmt_for_lowering(unit, body, labels, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, expression, global_register_symbols)
         }
         CHirStmt::For(initializer, condition, step, body, _) => {
             match initializer {
                 CHirForInit::Empty => {}
                 CHirForInit::Expression(expression) => {
-                    prevalidate_expr_for_lowering(unit, expression)?;
+                    prevalidate_expr_for_lowering(unit, expression, global_register_symbols)?;
                 }
                 CHirForInit::Declaration(declarations) => {
                     for declaration in declarations {
-                        prevalidate_decl_for_lowering(unit, declaration)?;
+                        prevalidate_decl_for_lowering(unit, declaration, global_register_symbols)?;
                     }
                 }
             }
             if let Some(condition) = condition {
-                prevalidate_expr_for_lowering(unit, condition)?;
+                prevalidate_expr_for_lowering(unit, condition, global_register_symbols)?;
             }
             if let Some(step) = step {
-                prevalidate_expr_for_lowering(unit, step)?;
+                prevalidate_expr_for_lowering(unit, step, global_register_symbols)?;
             }
-            prevalidate_stmt_for_lowering(unit, body, labels)
+            prevalidate_stmt_for_lowering(unit, body, labels, global_register_symbols)
         }
         CHirStmt::Compound(items, _) => {
             for item in items {
                 match item {
                     CHirBlockItem::Declaration(declaration) => {
-                        prevalidate_decl_for_lowering(unit, declaration)?;
+                        prevalidate_decl_for_lowering(unit, declaration, global_register_symbols)?;
                     }
                     CHirBlockItem::Statement(statement) => {
-                        prevalidate_stmt_for_lowering(unit, statement, labels)?;
+                        prevalidate_stmt_for_lowering(
+                            unit,
+                            statement,
+                            labels,
+                            global_register_symbols,
+                        )?;
                     }
                 }
             }
@@ -1210,9 +1258,11 @@ fn prevalidate_stmt_for_lowering(
                     reason: "duplicate label in function",
                 });
             }
-            prevalidate_stmt_for_lowering(unit, nested, labels)
+            prevalidate_stmt_for_lowering(unit, nested, labels, global_register_symbols)
         }
-        CHirStmt::Default(nested, _) => prevalidate_stmt_for_lowering(unit, nested, labels),
+        CHirStmt::Default(nested, _) => {
+            prevalidate_stmt_for_lowering(unit, nested, labels, global_register_symbols)
+        }
         CHirStmt::Return(None, _)
         | CHirStmt::Break(_)
         | CHirStmt::Continue(_)
@@ -1226,6 +1276,7 @@ fn prevalidate_stmt_for_lowering(
 fn prevalidate_expr_for_lowering(
     unit: &CHirUnit<'_>,
     expression: &CHirExpr<'_>,
+    global_register_symbols: &BTreeSet<SymbolId>,
 ) -> Result<(), LowerError> {
     match expression {
         CHirExpr::Ident {
@@ -1234,6 +1285,9 @@ fn prevalidate_expr_for_lowering(
             facts,
             span,
         } => {
+            if global_register_symbols.contains(symbol) {
+                return Err(LowerError::GlobalRegisterVariable { span: *span });
+            }
             let declaration =
                 unit.symbols()
                     .symbol(*symbol)
@@ -1275,8 +1329,8 @@ fn prevalidate_expr_for_lowering(
                     feature: "assignment result facts disagree with its scalar place",
                 });
             }
-            prevalidate_expr_for_lowering(unit, target)?;
-            prevalidate_expr_for_lowering(unit, value)
+            prevalidate_expr_for_lowering(unit, target, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, value, global_register_symbols)
         }
         CHirExpr::Update {
             place,
@@ -1292,7 +1346,7 @@ fn prevalidate_expr_for_lowering(
                     feature: "update result facts disagree with its scalar place",
                 });
             }
-            prevalidate_expr_for_lowering(unit, target)
+            prevalidate_expr_for_lowering(unit, target, global_register_symbols)
         }
         CHirExpr::MemoryRead { place, span, .. } => {
             place
@@ -1302,7 +1356,7 @@ fn prevalidate_expr_for_lowering(
                     feature: "memory read place is not authoritative in this C-HIR unit",
                 })?;
             for source in place.source_expressions() {
-                prevalidate_expr_for_lowering(unit, source)?;
+                prevalidate_expr_for_lowering(unit, source, global_register_symbols)?;
             }
             Ok(())
         }
@@ -1326,9 +1380,9 @@ fn prevalidate_expr_for_lowering(
                 });
             }
             for source in place.source_expressions() {
-                prevalidate_expr_for_lowering(unit, source)?;
+                prevalidate_expr_for_lowering(unit, source, global_register_symbols)?;
             }
-            prevalidate_expr_for_lowering(unit, value)
+            prevalidate_expr_for_lowering(unit, value, global_register_symbols)
         }
         CHirExpr::MemoryUpdate {
             place, facts, span, ..
@@ -1346,7 +1400,7 @@ fn prevalidate_expr_for_lowering(
                 });
             }
             for source in place.source_expressions() {
-                prevalidate_expr_for_lowering(unit, source)?;
+                prevalidate_expr_for_lowering(unit, source, global_register_symbols)?;
             }
             Ok(())
         }
@@ -1357,28 +1411,30 @@ fn prevalidate_expr_for_lowering(
                     span: *span,
                 });
             }
-            prevalidate_expr_for_lowering(unit, operand)
+            prevalidate_expr_for_lowering(unit, operand, global_register_symbols)
         }
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::Member(operand, _, _)
-        | CHirExpr::PtrMember(operand, _, _) => prevalidate_expr_for_lowering(unit, operand),
+        | CHirExpr::PtrMember(operand, _, _) => {
+            prevalidate_expr_for_lowering(unit, operand, global_register_symbols)
+        }
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
         | CHirExpr::Comma(left, right, _)
         | CHirExpr::Elvis(left, right, _) => {
-            prevalidate_expr_for_lowering(unit, left)?;
-            prevalidate_expr_for_lowering(unit, right)
+            prevalidate_expr_for_lowering(unit, left, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, right, global_register_symbols)
         }
         CHirExpr::Ternary(condition, then_value, else_value, _) => {
-            prevalidate_expr_for_lowering(unit, condition)?;
-            prevalidate_expr_for_lowering(unit, then_value)?;
-            prevalidate_expr_for_lowering(unit, else_value)
+            prevalidate_expr_for_lowering(unit, condition, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, then_value, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, else_value, global_register_symbols)
         }
         CHirExpr::Call(callee, arguments, _) => {
-            prevalidate_expr_for_lowering(unit, callee)?;
+            prevalidate_expr_for_lowering(unit, callee, global_register_symbols)?;
             for argument in arguments {
-                prevalidate_expr_for_lowering(unit, argument)?;
+                prevalidate_expr_for_lowering(unit, argument, global_register_symbols)?;
             }
             Ok(())
         }
@@ -1398,14 +1454,14 @@ fn prevalidate_expr_for_lowering(
                 if let InitAction::StoreScalar { value, .. }
                 | InitAction::CopyAggregate { value, .. } = action
                 {
-                    prevalidate_expr_for_lowering(unit, value)?;
+                    prevalidate_expr_for_lowering(unit, value, global_register_symbols)?;
                 }
             }
             Ok(())
         }
         CHirExpr::StatementExpr { body, .. } => {
             let mut labels = BTreeMap::new();
-            prevalidate_stmt_for_lowering(unit, body, &mut labels)
+            prevalidate_stmt_for_lowering(unit, body, &mut labels, global_register_symbols)
         }
         CHirExpr::SizeOf(ty, span)
         | CHirExpr::SizeOfExpr(_, ty, span)
@@ -2119,7 +2175,7 @@ fn validate_object_declaration_for_lowering(
     }
     if symbol.kind() != SymbolKind::Object
         || symbol.spelling() != object.name.spelling
-        || symbol.ty() != object.ty
+        || !unit.types().compatible(symbol.ty(), object.ty)
         || symbol.storage_class() != Some(object.storage)
         || !written_declarator_matches(
             unit.types(),
