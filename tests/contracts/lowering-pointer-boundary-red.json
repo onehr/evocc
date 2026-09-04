@@ -1,0 +1,112 @@
+{
+  "receiptId": "c30.lowering-pointer-boundary.red.v1",
+  "state": "RED",
+  "openedAt": "2026-09-04T22:34:10+08:00",
+  "baseline": {
+    "commit": "cf8770075fa42010e75b9eb0699c32e5df65f8e8",
+    "description": "The global-register and composite-object lowering fixes are present; the pointer-specific ruling is not implemented."
+  },
+  "authority": {
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.59",
+      "sha256": "5d1497b490c4b3e77d5066fbf4cfa4dfca6803bb07d4e9dafe64866d1366eda7",
+      "sections": [
+        "3 Poison of pointer type",
+        "3 Pointer and integer conversions",
+        "4.2 Effect Assignment by Instruction Category",
+        "9 Textual Form",
+        "Appendix A Instruction Reference"
+      ]
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "AA3 restated under 1.9.59",
+      "sha256": "362603c8b259231a48e50e5ef0978bf9d17732dc35031bc73a88cbc54bcc3711"
+    }
+  },
+  "declaredCapabilities": [
+    "A pointer-to-integer or non-null integer-to-pointer conversion reports E3036 at the conversion; a null pointer constant still lowers.",
+    "An uninitialized object or function pointer is a typed EvoIR poison value with absent provenance.",
+    "Pointer poison may cross CFG edges without being consumed and may be overwritten before use.",
+    "Dereferencing pointer poison reports E3013 in both interpreters.",
+    "The validator and Section 9 reader accept and round-trip uninitialized.ptr and uninitialized.fnptr."
+  ],
+  "declaredFailures": [
+    {
+      "test": "pointer_integer_conversions_have_one_typed_lowering_boundary",
+      "observed": "Both conversion directions report E3101; pointer-to-integer retains the free-text diagnostic integer expression has a non-bit-vector EvoIR value."
+    },
+    {
+      "test": "pointer_poison_crosses_cfg_edges_until_definite_assignment",
+      "observed": "Lowering reports E3101 non-integer scalar type is outside Day 6 while constructing an absent incoming pointer value."
+    },
+    {
+      "test": "dereferencing_pointer_poison_is_e3013_in_both_interpreters",
+      "observed": "The C-HIR interpreter reports E3001 read-of-uninitialized-object before the EvoIR half is reached."
+    }
+  ],
+  "protectedExistingBehavior": [
+    {
+      "test": "pointer_poison_validates_and_round_trips_in_both_pointer_namespaces",
+      "result": "PASS: the generic Inst::Uninitialized representation already validates and round-trips ptr<generic> and fnptr signatures exactly."
+    },
+    {
+      "test": "pointer_integer_conversions_have_one_typed_lowering_boundary",
+      "result": "The same test pins that (int *)0 remains accepted."
+    }
+  ],
+  "focusedRuns": [
+    {
+      "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target cargo test -p evocc-lower --test lowering_diagnostic_frontier --no-fail-fast -- --nocapture",
+      "passed": 5,
+      "failed": 3,
+      "ignored": 0,
+      "buildErrors": 0,
+      "unexpectedFailures": 0
+    },
+    {
+      "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target cargo test -p evocc-evoir --test uninitialized_pointer --no-fail-fast -- --nocapture",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "buildErrors": 0,
+      "unexpectedFailures": 0
+    }
+  ],
+  "workspaceRun": {
+    "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target cargo test --workspace --no-fail-fast",
+    "result": "Every pre-existing test target passed; lowering_diagnostic_frontier had exactly the three declared failures and five passes; uninitialized_pointer passed.",
+    "declaredFailures": 3,
+    "buildErrors": 0,
+    "unexpectedFailures": 0,
+    "longRunningIgnored": 3
+  },
+  "staticGates": {
+    "clippy": {
+      "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    },
+    "baseLayoutCorpus": {
+      "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "PASS 128/128; ORACLE_CONSENSUS; 0 mismatches"
+    },
+    "attributedLayoutCorpus": {
+      "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "PASS 22/22; ORACLE_CONSENSUS; 0 mismatches"
+    }
+  },
+  "rejectedEvidence": [
+    "The first base-layout invocation could not access the sealed container inside the restricted sandbox and exited 1 without output; it is not evidence. The permission-correct rerun above is the recorded result."
+  ],
+  "productionChanges": [],
+  "claimCeiling": "This checkpoint proves three declared semantic RED failures and one protected generic IR/text capability. It makes no implementation or survey claim."
+}

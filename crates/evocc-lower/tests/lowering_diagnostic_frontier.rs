@@ -1,11 +1,15 @@
 //! Regression contract for the first full-configuration lowering frontier.
 
-use evocc_chir::{AllocationSiteManifest, CHirDecl};
+use evocc_chir::interp::{interpret_scalar_function, InterpreterLimits as ChirLimits};
+use evocc_chir::{AllocationSiteManifest, CHirDecl, SymbolId};
 use evocc_common::{Arena, FileId, SourceSpan};
+use evocc_evoir::{
+    interpret_module, render_module, InterpreterLimits as EvoIrLimits, RuntimeValue,
+};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_lower::{lower_unit, LowerError};
 use evocc_parser::Parser;
-use evocc_types::TargetDataLayout;
+use evocc_types::{EvoIRType, TargetDataLayout};
 
 fn parse<'arena>(arena: &'arena Arena, source: &str, ordinal: u32) -> evocc_chir::CHirUnit<'arena> {
     let file = FileId::new(10_200 + ordinal);
@@ -152,37 +156,112 @@ fn lowering_error(source: &str, ordinal: u32) -> LowerError {
         .expect_err("frontier fixture must remain fail-closed")
 }
 
-#[test]
-fn generic_lowering_wrapper_is_not_a_diagnostic_resting_place() {
-    let non_bit_vector = lowering_error(
-        "void *offset(const int *at) { return (void *)((unsigned long)at + *at); }\n",
-        6,
-    );
-    let non_integer_scalar = lowering_error(
-        concat!(
-            "struct node { struct node *parent; }; ",
-            "struct node *root(struct node *node) { struct node *parent; ",
-            "while (node->parent != node) { parent = node->parent; node = parent; } ",
-            "return node; }\n",
-        ),
-        7,
-    );
+fn function_symbol(unit: &evocc_chir::CHirUnit<'_>, name: &str) -> SymbolId {
+    unit.iter()
+        .find_map(|declaration| match declaration {
+            CHirDecl::Function(function) if function.name.spelling == name => Some(function.symbol),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("missing function {name}"))
+}
 
+fn entry_arguments(module: &evocc_evoir::Module) -> Vec<RuntimeValue> {
+    module.functions[0]
+        .params
+        .iter()
+        .map(|parameter| match &parameter.ty {
+            EvoIRType::Mem(_) | EvoIRType::World => RuntimeValue::new(parameter.ty.clone(), 0),
+            other => panic!("unexpected ordinary entry parameter {other:?}"),
+        })
+        .collect()
+}
+
+#[test]
+fn pointer_integer_conversions_have_one_typed_lowering_boundary() {
+    let cases = [
+        (
+            "unsigned long bits(int *pointer) { return (unsigned long)pointer; }\n",
+            "(unsigned long)pointer",
+            6,
+        ),
+        (
+            "int *pointer(unsigned long bits) { return (int *)bits; }\n",
+            "(int *)bits",
+            7,
+        ),
+    ];
+    for (source, conversion, ordinal) in cases {
+        let error = lowering_error(source, ordinal);
+        assert_eq!(error.code(), "E3036", "wrong diagnostic: {error}");
+        assert_eq!(error.to_string(), "not-lowered: pointer-integer-conversion");
+        let start = source
+            .find(conversion)
+            .expect("fixture contains conversion");
+        assert_eq!(
+            error.span().expect("typed error has span").byte_start,
+            start as u32
+        );
+    }
+
+    let source = "int *null_pointer(void) { return (int *)0; }\n";
+    let arena = Arena::default();
+    let unit = parse(&arena, source, 8);
+    lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap_or_else(|error| {
+        panic!(
+            "null pointer constant was rejected: {} {error}",
+            error.code()
+        )
+    });
+}
+
+#[test]
+fn pointer_poison_crosses_cfg_edges_until_definite_assignment() {
+    let source = concat!(
+        "int *select_pointer(int *a, int c) { int *t; ",
+        "if (c) t = a; else t = 0; return t; }\n",
+    );
+    let arena = Arena::default();
+    let unit = parse(&arena, source, 9);
+    let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+        .unwrap_or_else(|error| panic!("pointer poison did not lower: {} {error}", error.code()));
+    let text = render_module(&module);
+    assert!(
+        text.contains("uninitialized.ptr<generic>"),
+        "the missing incoming value must be explicit pointer poison:\n{text}"
+    );
+}
+
+#[test]
+fn dereferencing_pointer_poison_is_e3013_in_both_interpreters() {
+    let source = "int main(void) { int *pointer; return *pointer; }\n";
+    let arena = Arena::default();
+    let unit = parse(&arena, source, 10);
+    let chir_error = interpret_scalar_function(
+        &unit,
+        function_symbol(&unit, "main"),
+        ChirLimits::new(100_000),
+    )
+    .expect_err("C-HIR dereferenced an absent-provenance pointer");
     assert_eq!(
-        non_bit_vector.to_string(),
-        "integer expression has a non-bit-vector EvoIR value"
+        chir_error.code(),
+        "E3013",
+        "wrong C-HIR error: {chir_error}"
     );
+    assert_eq!(chir_error.message(), "invalid-pointer-representation");
+
+    let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+        .unwrap_or_else(|error| panic!("pointer poison lowering failed: {} {error}", error.code()));
+    let evoir_error = interpret_module(
+        &module,
+        "main",
+        &entry_arguments(&module),
+        EvoIrLimits::new(100_000),
+    )
+    .expect_err("EvoIR dereferenced an absent-provenance pointer");
     assert_eq!(
-        non_integer_scalar.to_string(),
-        "non-integer scalar type is outside Day 6"
+        evoir_error.code(),
+        "E3013",
+        "wrong EvoIR error: {evoir_error}"
     );
-    assert_ne!(non_bit_vector.code(), "E3101");
-    assert_ne!(non_integer_scalar.code(), "E3101");
-    assert_ne!(
-        non_bit_vector.code(),
-        non_integer_scalar.code(),
-        "independent lowering classes need independent diagnostic codes"
-    );
-    assert!(non_bit_vector.code().starts_with("E30"));
-    assert!(non_integer_scalar.code().starts_with("E30"));
+    assert_eq!(evoir_error.message(), "invalid-pointer-representation");
 }
