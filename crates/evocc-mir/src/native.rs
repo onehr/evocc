@@ -17,7 +17,7 @@ use evocc_evoir::Module;
 use evocc_types::EvoIRType;
 
 use crate::lane::is_register_type;
-use crate::{allocate, emit_module, lower_module, out_of_ssa, verify_allocation};
+use crate::{allocate, emit_module, lower_module_with, out_of_ssa, verify_allocation};
 
 /// Where the native pipeline stopped.
 ///
@@ -75,7 +75,7 @@ pub fn compile_module_with(
     module: &Module,
     keep: &dyn Fn(&str) -> bool,
 ) -> Result<String, NativeStop> {
-    let lowered = lower_module(module).map_err(|refusals| {
+    let lowered = lower_module_with(module, &|name| !keep(name)).map_err(|refusals| {
         let mut codes: Vec<&'static str> = refusals.iter().map(|refusal| refusal.code).collect();
         codes.sort_unstable();
         codes.dedup();
@@ -234,4 +234,34 @@ fn run(mut command: Command) -> Result<(), String> {
         return Ok(());
     }
     Err(String::from_utf8_lossy(&output.stderr).into_owned())
+}
+
+/// The EvoCC driver binary, which is what a user runs.
+///
+/// Section 9's third instrument compares an assembled program with "the
+/// reference compiler's build of the same C source", so the C source has to
+/// reach EvoIR first. The front end is another crate's business; this is the
+/// same boundary a user crosses, the command line.
+#[derive(Debug, Clone)]
+pub struct Driver {
+    binary: PathBuf,
+}
+
+impl Driver {
+    /// Find `evocc` next to the running test or binary.
+    pub fn locate() -> Result<Self, String> {
+        todo!("the driver binary")
+    }
+
+    /// The path the receipt records.
+    #[must_use]
+    pub fn binary(&self) -> &Path {
+        &self.binary
+    }
+
+    /// Compile one C source to canonical EvoIR text, or report the driver's
+    /// first diagnostic.
+    pub fn emit_evoir(&self, _source: &Path, _optimize: bool) -> Result<String, String> {
+        todo!("the driver's EvoIR output")
+    }
 }

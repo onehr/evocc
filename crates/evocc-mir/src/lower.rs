@@ -52,6 +52,29 @@ const MAX_REGISTER_RESULTS: usize = 8;
 
 /// Lower a whole module, or report every refusal it contains.
 pub fn lower_module(module: &Module) -> Result<MModule, Vec<Refusal>> {
+    lower_module_with(module, &|_| false)
+}
+
+/// Lower a module in which `external` names the symbols something other than
+/// this module defines.
+///
+/// EvoMIR Section 6 (revision 0.5): "Across the host boundary the platform rule
+/// governs instead: a caller extends an argument narrower than 32 bits to 32
+/// bits ... A cross-boundary call therefore inserts the extension the platform
+/// requires; a call between EvoCC functions does not."
+///
+/// Which calls those are is not an EvoIR question: EvoIR 1.9.56 refuses a call
+/// to a function the module does not define ("call to missing function"), so
+/// every call is between EvoCC functions until emission is told to leave a
+/// definition out and let the linker bind the symbol elsewhere. That filter is
+/// the only construct in this codebase that makes a boundary, so it is what
+/// `external` reports. Recorded gap: the specification states the rule without
+/// saying which calls it governs, because the representation cannot yet spell
+/// one.
+pub fn lower_module_with(
+    module: &Module,
+    external: &dyn Fn(&str) -> bool,
+) -> Result<MModule, Vec<Refusal>> {
     let mut refusals = Vec::new();
     for function in &module.functions {
         scan_function(module, function, &mut refusals);
@@ -61,7 +84,7 @@ pub fn lower_module(module: &Module) -> Result<MModule, Vec<Refusal>> {
     }
     let mut functions = Vec::new();
     for function in &module.functions {
-        match lower_function(function) {
+        match lower_function(function, external) {
             Ok(lowered) => functions.push(lowered),
             Err(detail) => refusals.push(Refusal {
                 function: function.name.clone(),
@@ -623,7 +646,10 @@ impl Lowerer {
     }
 }
 
-fn lower_function(function: &Function) -> Result<MFunction, String> {
+fn lower_function(
+    function: &Function,
+    external: &dyn Fn(&str) -> bool,
+) -> Result<MFunction, String> {
     let entry = function
         .blocks
         .first()
@@ -646,7 +672,7 @@ fn lower_function(function: &Function) -> Result<MFunction, String> {
 
     for block in &function.blocks {
         let id = ids[&block.id];
-        lower_block(&mut lowerer, function, block, id, &ids)?;
+        lower_block(&mut lowerer, function, block, id, &ids, external)?;
     }
     for (imm, id) in lowerer.traps.clone() {
         lowerer.blocks.push(MBlock {
@@ -677,6 +703,7 @@ fn lower_block(
     block: &Block,
     id: u32,
     ids: &HashMap<u32, u32>,
+    external: &dyn Fn(&str) -> bool,
 ) -> Result<(), String> {
     let mut args = Vec::new();
     for arg in &block.args {
@@ -754,7 +781,7 @@ fn lower_block(
             }
         }
 
-        lower_inst(lowerer, &mut insts, inst)?;
+        lower_inst(lowerer, &mut insts, inst, external)?;
     }
 
     let term = lower_terminator(lowerer, function, block, ids, fused)?;
@@ -919,7 +946,12 @@ fn lower_terminator(
 }
 
 #[allow(clippy::too_many_lines)]
-fn lower_inst(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Result<(), String> {
+fn lower_inst(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    inst: &Inst,
+    external: &dyn Fn(&str) -> bool,
+) -> Result<(), String> {
     match inst {
         Inst::Const(result, bits) => {
             let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
@@ -1196,7 +1228,28 @@ fn lower_inst(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Res
             args,
             ..
         } => {
-            let arguments = edge_args(lowerer, args)?;
+            let mut arguments = edge_args(lowerer, args)?;
+            if external(callee) {
+                // Section 6, revision 0.5: across the host boundary "a caller
+                // extends an argument narrower than 32 bits to 32 bits". The
+                // value of a `bits<N>` is its low `N` bits, so the extension
+                // that preserves it is the zero one; sign-extending would need
+                // the source type's signedness, which lives above the
+                // extraction boundary and which EvoIR does not carry. Recorded
+                // gap: a signed host parameter narrower than 32 bits is not
+                // reachable from EvoIR alone.
+                let register: Vec<&Value> = args
+                    .iter()
+                    .filter(|value| is_register_type(&value.ty))
+                    .collect();
+                for (slot, value) in arguments.iter_mut().zip(register) {
+                    if let EvoIRType::Bits(bits) = value.ty {
+                        if bits < 32 {
+                            *slot = lowerer.zero_extend(insts, *slot, bits, Width::W);
+                        }
+                    }
+                }
+            }
             let outputs = call_results(lowerer, results)?;
             insts.push(MInst::Bl {
                 symbol: callee.clone(),
