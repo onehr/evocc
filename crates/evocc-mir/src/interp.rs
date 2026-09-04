@@ -108,6 +108,11 @@ pub enum MirError {
     BadCallTarget { code: &'static str },
     /// The module could not be executed at all.
     Invalid { detail: String },
+    /// An `asm` was reached. EvoIR Section 3.11: "an interpreter cannot
+    /// execute an `asm` and reports `E3021` when it reaches one, so a program
+    /// containing one is verified by the native run of the EvoMIR
+    /// specification's Section 9 and by nothing else."
+    OpaqueAssembly,
 }
 
 impl MirError {
@@ -120,6 +125,7 @@ impl MirError {
             Self::BudgetExhausted => "E3008".to_owned(),
             Self::Memory { code, .. } | Self::BadCallTarget { code } => (*code).to_owned(),
             Self::Invalid { .. } => "E3007".to_owned(),
+            Self::OpaqueAssembly => "E3021".to_owned(),
         }
     }
 
@@ -131,6 +137,7 @@ impl MirError {
             Self::Memory { detail, .. } => detail.clone(),
             Self::BadCallTarget { code } => format!("call-target-{code}"),
             Self::Invalid { detail } => detail.clone(),
+            Self::OpaqueAssembly => "inline-assembly-is-not-interpretable".to_owned(),
         }
     }
 }
@@ -391,6 +398,9 @@ pub fn interpret_module(
                 frames[top].entered = false;
             }
             MTerm::Brk { imm } => return Err(MirError::Trap { imm }),
+            // Section 9: "A function containing an `asm` is outside instrument
+            // one: neither interpreter executes one."
+            MTerm::AsmGoto { .. } => return Err(MirError::OpaqueAssembly),
             MTerm::Ret { values } => {
                 let returned = read_all(&frames[top], &values)?;
                 let finished = frames.pop().expect("the top frame exists");
@@ -729,6 +739,7 @@ fn layout_for(size: u64) -> AccessLayout {
 
 fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), MirError> {
     match inst {
+        MInst::Asm(_) => return Err(MirError::OpaqueAssembly),
         MInst::Mov { dst, src } => {
             let value = read(frame, *src)?;
             write(frame, *dst, value);

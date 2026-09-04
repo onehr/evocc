@@ -20,6 +20,7 @@ fn mnemonics(module: &evocc_mir::MModule) -> Vec<String> {
         for block in &function.blocks {
             for inst in &block.insts {
                 names.push(match inst {
+                    MInst::Asm(_) => "asm".to_owned(),
                     MInst::Mov { .. } => "mov".to_owned(),
                     MInst::MovImm { .. } => "mov#".to_owned(),
                     MInst::Adrp { .. } => "adrp".to_owned(),

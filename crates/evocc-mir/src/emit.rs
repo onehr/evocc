@@ -12,8 +12,8 @@ use std::fmt::Write as _;
 use evocc_evoir::GlobalObject;
 
 use crate::{
-    linscan::physical, Allocated, LoadKind, MInst, MTerm, RegClass, StoreKind, SymbolKind, VReg,
-    WideMul, Width,
+    linscan::physical, Allocated, AsmBody, AsmConstraint, AsmOperand, AsmValue, LoadKind, MInst,
+    MTerm, RegClass, StoreKind, SymbolKind, VReg, WideMul, Width,
 };
 
 /// Where every part of one frame lives, measured in bytes above `sp` after the
@@ -277,6 +277,141 @@ fn emit_frame_access(text: &mut String, mnemonic: &str, register: &str, offset: 
     let scratch = physical(RegClass::Gpr64, SCRATCH_OFFSET);
     emit_add_immediate(text, "add", &scratch, "sp", offset);
     let _ = writeln!(text, "    {mnemonic} {register}, [{scratch}, #0]");
+}
+
+/// Section 8: "An `asm` is emitted as its template with every operand
+/// reference replaced: `%0` to `%9` and `%[name]` by the operand's register in
+/// its natural width, `%w0` and `%x0` by the 32-bit and 64-bit spelling of that
+/// register, a `Q` operand by `[reg]`, an immediate operand by its value,
+/// `%l[label]` by the block label, and `%%` by one percent. The template's own
+/// text is copied verbatim and never parsed."
+fn emit_assembly(
+    text: &mut String,
+    body: &AsmBody,
+    labels: &[(u32, Vec<VReg>)],
+    function: &str,
+    spell: &impl Fn(VReg, RegClass) -> String,
+) {
+    let operands = body.numbered();
+    // The reference is resolved against the operand it names, at the width the
+    // modifier asks for or the operand's own.
+    let render = |operand: &AsmOperand, width: Option<RegClass>| -> String {
+        match operand.value {
+            AsmValue::Imm(value) => format!("{value}"),
+            AsmValue::Zero(class) => {
+                let class = width.unwrap_or(class);
+                if class == RegClass::Gpr32 {
+                    "wzr"
+                } else {
+                    "xzr"
+                }
+                .to_owned()
+            }
+            AsmValue::Reg(reg) => {
+                let spelled = spell(reg, width.unwrap_or(reg.class));
+                if matches!(operand.constraint, AsmConstraint::Memory { .. }) {
+                    format!("[{spelled}]")
+                } else {
+                    spelled
+                }
+            }
+        }
+    };
+
+    let mut rendered = String::new();
+    let characters: Vec<char> = body.template.chars().collect();
+    let mut index = 0;
+    while index < characters.len() {
+        if characters[index] != '%' {
+            rendered.push(characters[index]);
+            index += 1;
+            continue;
+        }
+        index += 1;
+        if index >= characters.len() {
+            rendered.push('%');
+            break;
+        }
+        // `%%` is one percent.
+        if characters[index] == '%' {
+            rendered.push('%');
+            index += 1;
+            continue;
+        }
+        // `%l[label]` names one of the `asm.goto` successors, in the order the
+        // labels were declared.
+        if characters[index] == 'l' && characters.get(index + 1) == Some(&'[') {
+            let close = characters[index + 2..]
+                .iter()
+                .position(|c| *c == ']')
+                .map(|at| index + 2 + at);
+            if let Some(close) = close {
+                let name: String = characters[index + 2..close].iter().collect();
+                let target = name
+                    .parse::<usize>()
+                    .ok()
+                    .or_else(|| {
+                        name.strip_prefix('b')
+                            .and_then(|digits| digits.parse::<usize>().ok())
+                    })
+                    .and_then(|position| labels.get(position))
+                    .map(|(block, _)| *block);
+                if let Some(block) = target {
+                    rendered.push_str(&label(function, block));
+                    index = close + 1;
+                    continue;
+                }
+            }
+        }
+        // A width modifier before the number or the name.
+        let width = match characters[index] {
+            'w' => Some(RegClass::Gpr32),
+            'x' => Some(RegClass::Gpr64),
+            _ => None,
+        };
+        let at = if width.is_some() { index + 1 } else { index };
+        if at >= characters.len() {
+            rendered.push('%');
+            rendered.push(characters[index]);
+            index += 1;
+            continue;
+        }
+        // `%[name]`.
+        if characters[at] == '[' {
+            let close = characters[at + 1..]
+                .iter()
+                .position(|c| *c == ']')
+                .map(|offset| at + 1 + offset);
+            if let Some(close) = close {
+                let name: String = characters[at + 1..close].iter().collect();
+                if let Some(operand) = operands
+                    .iter()
+                    .find(|operand| operand.name.as_deref() == Some(name.as_str()))
+                {
+                    rendered.push_str(&render(operand, width));
+                    index = close + 1;
+                    continue;
+                }
+            }
+        }
+        // `%0` to `%9`.
+        if let Some(digit) = characters[at].to_digit(10) {
+            if let Some(operand) = operands.get(digit as usize) {
+                rendered.push_str(&render(operand, width));
+                index = at + 1;
+                continue;
+            }
+        }
+        // Anything else is not a reference this revision admits; EvoIR has
+        // already refused it, so the character is copied as it stands.
+        rendered.push('%');
+        rendered.push(characters[index]);
+        index += 1;
+    }
+
+    for line in rendered.lines() {
+        let _ = writeln!(text, "    {line}");
+    }
 }
 
 fn scratch(class: RegClass) -> String {
@@ -615,6 +750,7 @@ fn emit_inst(
                 let _ = writeln!(text, "    cbnz {counter}, {body}");
             }
         }
+        MInst::Asm(body) => emit_assembly(text, body, &[], function, spell),
         MInst::Ldp {
             rt1,
             rt2,
@@ -712,6 +848,18 @@ fn emit_term(
                 label(function, *taken)
             );
             branch(text, *untaken);
+        }
+        // Section 8: the template first, then the branch its `%l[label]`
+        // references did not take. A successor the template jumps to is the
+        // template's own business; the fall-through is emission's.
+        MTerm::AsmGoto {
+            body,
+            labels,
+            fallthrough,
+            ..
+        } => {
+            emit_assembly(text, body, labels, function, spell);
+            branch(text, *fallthrough);
         }
         MTerm::Ret { .. } => {
             emit_epilogue(text, frame);

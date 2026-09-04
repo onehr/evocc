@@ -1,0 +1,581 @@
+//! EvoMIR Section 4's `asm` and `asm.goto`, Section 7's constraint classes and
+//! Section 8's template substitution.
+//!
+//! EvoIR Section 3.11 fixes the vocabulary: "The admitted vocabulary is the one
+//! the configured kernel uses, measured over twenty-four preprocessed
+//! translation units containing 24,735 `asm` statements." Every row of that
+//! table gets one case here, written as EvoMIR by hand, and each case is
+//! allocated, verified, emitted, assembled, linked and run, with its exit
+//! status compared against a host-compiled program computing the same thing.
+//!
+//! The tests are written against hand-written EvoMIR rather than hand-written
+//! EvoIR because `evocc-evoir` does not carry the `asm` instruction yet and is
+//! another stream's crate; this half of the work is complete without it.
+
+use std::process::Command;
+
+use evocc_mir::{
+    allocate, emit_module, out_of_ssa, verify_allocation, AsmBody, AsmClobber, AsmConstraint,
+    AsmDirection, AsmImmediate, AsmOperand, AsmValue, BinOp, MBlock, MFunction, MInst, MModule,
+    MTerm, RegClass, VReg, Width,
+};
+
+fn w(id: u32) -> VReg {
+    VReg::new(id, RegClass::Gpr32)
+}
+
+fn g(id: u32) -> VReg {
+    VReg::new(id, RegClass::Gpr64)
+}
+
+/// The host toolchain, or the reason there is none.
+fn toolchain() -> Result<String, String> {
+    let output = Command::new("clang")
+        .arg("--version")
+        .output()
+        .map_err(|error| format!("clang is absent: {error}"))?;
+    if !output.status.success() {
+        return Err("clang did not report a version".to_owned());
+    }
+    let text = String::from_utf8_lossy(&output.stdout).into_owned();
+    if !text.contains("arm64") && !text.contains("aarch64") {
+        return Err("the host toolchain does not target arm64".to_owned());
+    }
+    Ok(text.lines().next().unwrap_or_default().to_owned())
+}
+
+/// Assemble, link and run one emitted text, returning its exit status.
+fn run_native(name: &str, text: &str) -> Result<u8, String> {
+    let directory = std::env::temp_dir().join(format!("evocc-asm-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+    let source = directory.join(format!("{name}.s"));
+    let program = directory.join(name);
+    std::fs::write(&source, text).map_err(|error| error.to_string())?;
+    let built = Command::new("clang")
+        .arg("-o")
+        .arg(&program)
+        .arg(&source)
+        .output()
+        .map_err(|error| error.to_string())?;
+    if !built.status.success() {
+        return Err(format!(
+            "the toolchain refused {name}:\n{}\n{text}",
+            String::from_utf8_lossy(&built.stderr)
+        ));
+    }
+    let run = Command::new(&program)
+        .output()
+        .map_err(|error| error.to_string())?;
+    let _ = std::fs::remove_file(&source);
+    let _ = std::fs::remove_file(&program);
+    let code = run
+        .status
+        .code()
+        .ok_or_else(|| format!("{name} did not exit normally"))?;
+    u8::try_from(code & 0xff).map_err(|error| error.to_string())
+}
+
+/// The exit status of a host-compiled C program computing the same thing.
+fn run_reference(name: &str, source: &str) -> Result<u8, String> {
+    let directory = std::env::temp_dir().join(format!("evocc-asm-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+    let path = directory.join(format!("{name}.c"));
+    let program = directory.join(format!("{name}-reference"));
+    std::fs::write(&path, source).map_err(|error| error.to_string())?;
+    let built = Command::new("clang")
+        .args(["-std=c11", "-O2", "-o"])
+        .arg(&program)
+        .arg(&path)
+        .output()
+        .map_err(|error| error.to_string())?;
+    if !built.status.success() {
+        return Err(format!(
+            "the toolchain refused the reference for {name}:\n{}",
+            String::from_utf8_lossy(&built.stderr)
+        ));
+    }
+    let run = Command::new(&program)
+        .output()
+        .map_err(|error| error.to_string())?;
+    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(&program);
+    let code = run
+        .status
+        .code()
+        .ok_or_else(|| format!("the reference for {name} did not exit normally"))?;
+    u8::try_from(code & 0xff).map_err(|error| error.to_string())
+}
+
+/// A `main` that runs `insts` and returns `result`.
+fn program(insts: Vec<MInst>, result: VReg) -> MFunction {
+    MFunction {
+        name: "main".to_owned(),
+        blocks: vec![MBlock {
+            id: 0,
+            args: Vec::new(),
+            insts,
+            term: MTerm::Ret {
+                values: vec![result],
+            },
+        }],
+    }
+}
+
+/// Allocate, verify and emit one function.
+fn build(function: &MFunction) -> String {
+    let allocated = allocate(&out_of_ssa(function)).expect("allocation");
+    verify_allocation(&allocated).expect("the allocation verifies");
+    emit_module(&[allocated], &[])
+}
+
+/// One constraint row's case: its EvoMIR, and the C that computes the same.
+struct Case {
+    row: &'static str,
+    function: MFunction,
+    reference: String,
+}
+
+fn constant(dst: VReg, value: u64) -> MInst {
+    MInst::MovImm { dst, imm: value }
+}
+
+/// `r`, `=r`, `+r`: "a general register, read, written, or both".
+fn plain_registers() -> Case {
+    let body = AsmBody {
+        template: "add %0, %1, %2".to_owned(),
+        volatile: false,
+        outputs: vec![AsmOperand::reg(
+            AsmConstraint::Register(AsmDirection::Write),
+            w(10),
+        )],
+        inputs: vec![
+            AsmOperand::reg(AsmConstraint::Register(AsmDirection::Read), w(1)),
+            AsmOperand::reg(AsmConstraint::Register(AsmDirection::Read), w(2)),
+        ],
+        clobbers: Vec::new(),
+    };
+    Case {
+        row: "r",
+        function: program(
+            vec![constant(w(1), 70), constant(w(2), 33), MInst::Asm(body)],
+            w(10),
+        ),
+        reference: "int main(void){unsigned a=70,b=33,o;__asm__(\"add %w0, %w1, %w2\":\"=r\"(o):\"r\"(a),\"r\"(b));return o&0xff;}\n".to_owned(),
+    }
+}
+
+/// `+r`: the operand is read and written, so it is one register.
+fn read_write_register() -> Case {
+    let body = AsmBody {
+        template: "add %0, %0, #7".to_owned(),
+        volatile: false,
+        outputs: vec![AsmOperand::reg(
+            AsmConstraint::Register(AsmDirection::ReadWrite),
+            w(10),
+        )],
+        inputs: Vec::new(),
+        clobbers: Vec::new(),
+    };
+    Case {
+        row: "+r",
+        function: program(
+            vec![
+                constant(w(1), 100),
+                MInst::Mov {
+                    dst: w(10),
+                    src: w(1),
+                },
+                MInst::Asm(body),
+            ],
+            w(10),
+        ),
+        reference: "int main(void){unsigned o=100;__asm__(\"add %w0, %w0, #7\":\"+r\"(o));return o&0xff;}\n".to_owned(),
+    }
+}
+
+/// `=&r`: "written, and not sharing a register with any input".
+fn early_clobber() -> Case {
+    let body = AsmBody {
+        template: "mov %0, %1\n    add %0, %0, %2".to_owned(),
+        volatile: false,
+        outputs: vec![AsmOperand::reg(
+            AsmConstraint::EarlyClobber(AsmDirection::Write),
+            w(10),
+        )],
+        inputs: vec![
+            AsmOperand::reg(AsmConstraint::Register(AsmDirection::Read), w(1)),
+            AsmOperand::reg(AsmConstraint::Register(AsmDirection::Read), w(2)),
+        ],
+        clobbers: Vec::new(),
+    };
+    Case {
+        row: "=&r",
+        function: program(
+            vec![constant(w(1), 90), constant(w(2), 11), MInst::Asm(body)],
+            w(10),
+        ),
+        reference: "int main(void){unsigned a=90,b=11,o;__asm__(\"mov %w0, %w1\\n\\tadd %w0, %w0, %w2\":\"=&r\"(o):\"r\"(a),\"r\"(b));return o&0xff;}\n".to_owned(),
+    }
+}
+
+/// `rZ`: "a general register, or the zero register when the operand is the
+/// constant zero; the template must spell it with a width modifier".
+fn register_or_zero() -> Case {
+    let body = AsmBody {
+        template: "orr %0, %1, %w2".to_owned(),
+        volatile: false,
+        outputs: vec![AsmOperand::reg(
+            AsmConstraint::Register(AsmDirection::Write),
+            w(10),
+        )],
+        inputs: vec![
+            AsmOperand::reg(AsmConstraint::Register(AsmDirection::Read), w(1)),
+            AsmOperand {
+                constraint: AsmConstraint::RegisterOrZero,
+                name: None,
+                value: AsmValue::Zero(RegClass::Gpr32),
+            },
+        ],
+        clobbers: Vec::new(),
+    };
+    Case {
+        row: "rZ",
+        function: program(vec![constant(w(1), 123), MInst::Asm(body)], w(10)),
+        reference: "int main(void){unsigned a=123,o;__asm__(\"orr %w0, %w1, %w2\":\"=r\"(o):\"r\"(a),\"rZ\"(0));return o&0xff;}\n".to_owned(),
+    }
+}
+
+/// `Q`: "a memory operand whose address is a register with no offset".
+fn memory_operand() -> Case {
+    let body = AsmBody {
+        template: "ldr %w0, %1".to_owned(),
+        volatile: false,
+        outputs: vec![AsmOperand::reg(
+            AsmConstraint::Register(AsmDirection::Write),
+            w(10),
+        )],
+        inputs: vec![AsmOperand::reg(
+            AsmConstraint::Memory {
+                direction: AsmDirection::Read,
+                offsettable: false,
+            },
+            g(3),
+        )],
+        clobbers: Vec::new(),
+    };
+    Case {
+        row: "Q",
+        function: program(
+            vec![
+                MInst::FrameSlot {
+                    dst: g(3),
+                    origin: 0,
+                    size: 8,
+                    align: 8,
+                },
+                constant(w(1), 201),
+                MInst::Store {
+                    src: w(1),
+                    base: g(3),
+                    offset: 0,
+                    kind: evocc_mir::StoreKind::W,
+                    volatile: false,
+                },
+                MInst::Asm(body),
+            ],
+            w(10),
+        ),
+        reference: "int main(void){unsigned v=201,o;__asm__(\"ldr %w0, %1\":\"=r\"(o):\"Q\"(v):\"memory\");return o&0xff;}\n".to_owned(),
+    }
+}
+
+/// A digit: "this operand occupies the same location as the output that digit
+/// names (a tied operand)".
+fn tied_operand() -> Case {
+    let body = AsmBody {
+        template: "add %0, %0, #5".to_owned(),
+        volatile: false,
+        outputs: vec![AsmOperand::reg(
+            AsmConstraint::Register(AsmDirection::Write),
+            w(10),
+        )],
+        inputs: vec![AsmOperand::reg(AsmConstraint::Tied(0), w(1))],
+        clobbers: Vec::new(),
+    };
+    Case {
+        row: "0",
+        function: program(vec![constant(w(1), 60), MInst::Asm(body)], w(10)),
+        reference: "int main(void){unsigned a=60,o;__asm__(\"add %w0, %w0, #5\":\"=r\"(o):\"0\"(a));return o&0xff;}\n".to_owned(),
+    }
+}
+
+/// `I`: "an immediate the add or subtract forms accept".
+fn immediate_operand() -> Case {
+    let body = AsmBody {
+        template: "add %0, %1, #%2".to_owned(),
+        volatile: false,
+        outputs: vec![AsmOperand::reg(
+            AsmConstraint::Register(AsmDirection::Write),
+            w(10),
+        )],
+        inputs: vec![
+            AsmOperand::reg(AsmConstraint::Register(AsmDirection::Read), w(1)),
+            AsmOperand::imm(AsmImmediate::I, 17),
+        ],
+        clobbers: Vec::new(),
+    };
+    Case {
+        row: "I",
+        function: program(vec![constant(w(1), 40), MInst::Asm(body)], w(10)),
+        reference: "int main(void){unsigned a=40,o;__asm__(\"add %w0, %w1, #%2\":\"=r\"(o):\"r\"(a),\"I\"(17));return o&0xff;}\n".to_owned(),
+    }
+}
+
+/// `K`: "an immediate the 32-bit logical forms accept".
+fn logical_immediate() -> Case {
+    let body = AsmBody {
+        template: "and %0, %1, #%2".to_owned(),
+        volatile: false,
+        outputs: vec![AsmOperand::reg(
+            AsmConstraint::Register(AsmDirection::Write),
+            w(10),
+        )],
+        inputs: vec![
+            AsmOperand::reg(AsmConstraint::Register(AsmDirection::Read), w(1)),
+            AsmOperand::imm(AsmImmediate::K, 255),
+        ],
+        clobbers: Vec::new(),
+    };
+    Case {
+        row: "K",
+        function: program(vec![constant(w(1), 0x1234_00c7), MInst::Asm(body)], w(10)),
+        reference: "int main(void){unsigned a=0x123400c7u,o;__asm__(\"and %w0, %w1, #%2\":\"=r\"(o):\"r\"(a),\"K\"(255));return o&0xff;}\n".to_owned(),
+    }
+}
+
+/// `i`: "an integer constant".
+fn integer_constant() -> Case {
+    let body = AsmBody {
+        template: "mov %0, #%1".to_owned(),
+        volatile: false,
+        outputs: vec![AsmOperand::reg(
+            AsmConstraint::Register(AsmDirection::Write),
+            w(10),
+        )],
+        inputs: vec![AsmOperand::imm(AsmImmediate::Integer, 199)],
+        clobbers: Vec::new(),
+    };
+    Case {
+        row: "i",
+        function: program(vec![MInst::Asm(body)], w(10)),
+        reference: "int main(void){unsigned o;__asm__(\"mov %w0, #%1\":\"=r\"(o):\"i\"(199));return o&0xff;}\n".to_owned(),
+    }
+}
+
+/// `p`: "an address".
+fn address_operand() -> Case {
+    let body = AsmBody {
+        template: "ldr %w0, [%1]".to_owned(),
+        volatile: false,
+        outputs: vec![AsmOperand::reg(
+            AsmConstraint::Register(AsmDirection::Write),
+            w(10),
+        )],
+        inputs: vec![AsmOperand::reg(AsmConstraint::Address, g(3))],
+        clobbers: Vec::new(),
+    };
+    Case {
+        row: "p",
+        function: program(
+            vec![
+                MInst::FrameSlot {
+                    dst: g(3),
+                    origin: 0,
+                    size: 8,
+                    align: 8,
+                },
+                constant(w(1), 77),
+                MInst::Store {
+                    src: w(1),
+                    base: g(3),
+                    offset: 0,
+                    kind: evocc_mir::StoreKind::W,
+                    volatile: false,
+                },
+                MInst::Asm(body),
+            ],
+            w(10),
+        ),
+        // The reference names `memory` so the host compiler orders the store
+        // before the template; an address operand alone tells it nothing about
+        // what the template reads.
+        reference: "int main(void){unsigned v=77,o;unsigned*p=&v;__asm__(\"ldr %w0, [%1]\":\"=r\"(o):\"r\"(p):\"memory\");return o&0xff;}\n".to_owned(),
+    }
+}
+
+/// A named operand and a literal percent, and a register clobber and a `cc`
+/// clobber: "a named physical register, which the allocator must treat as
+/// written".
+fn named_and_clobbers() -> Case {
+    let body = AsmBody {
+        template: "mov x9, #3\n    adds %[out], %[in], w9".to_owned(),
+        volatile: true,
+        outputs: vec![AsmOperand {
+            constraint: AsmConstraint::Register(AsmDirection::Write),
+            name: Some("out".to_owned()),
+            value: AsmValue::Reg(w(10)),
+        }],
+        inputs: vec![AsmOperand {
+            constraint: AsmConstraint::Register(AsmDirection::Read),
+            name: Some("in".to_owned()),
+            value: AsmValue::Reg(w(1)),
+        }],
+        clobbers: vec![
+            AsmClobber::Register(9),
+            AsmClobber::Flags,
+            AsmClobber::Memory,
+        ],
+    };
+    Case {
+        row: "clobbers",
+        function: program(vec![constant(w(1), 150), MInst::Asm(body)], w(10)),
+        reference: "int main(void){unsigned a=150,o;__asm__ volatile(\"mov x9, #3\\n\\tadds %w[out], %w[in], w9\":[out]\"=r\"(o):[in]\"r\"(a):\"x9\",\"cc\",\"memory\");return o&0xff;}\n".to_owned(),
+    }
+}
+
+fn cases() -> Vec<Case> {
+    vec![
+        plain_registers(),
+        read_write_register(),
+        early_clobber(),
+        register_or_zero(),
+        memory_operand(),
+        tied_operand(),
+        immediate_operand(),
+        logical_immediate(),
+        integer_constant(),
+        address_operand(),
+        named_and_clobbers(),
+    ]
+}
+
+#[test]
+fn every_constraint_row_runs_and_agrees_with_the_host() {
+    let version = match toolchain() {
+        Ok(version) => version,
+        Err(reason) => {
+            println!("skipped={reason}");
+            return;
+        }
+    };
+    println!("toolchain={version}");
+
+    let mut agreed = 0;
+    let all = cases();
+    for case in &all {
+        let text = build(&case.function);
+        let name = format!("asm-{}", case.row.replace(['&', '+', '='], "x"));
+        let observed = match run_native(&name, &text) {
+            Ok(status) => status,
+            Err(reason) => panic!("{}: {reason}", case.row),
+        };
+        let expected = match run_reference(&name, &case.reference) {
+            Ok(status) => status,
+            Err(reason) => panic!("{}: {reason}", case.row),
+        };
+        assert_eq!(
+            observed, expected,
+            "constraint {} disagreed with the host\n{text}",
+            case.row
+        );
+        println!("row={} exitStatus={observed}", case.row);
+        agreed += 1;
+    }
+    println!("constraintRows={}", all.len());
+    println!("agreeing={agreed}");
+    assert_eq!(agreed, all.len());
+}
+
+/// Section 7: an early-clobber output takes a register no input holds.
+#[test]
+fn an_early_clobber_output_avoids_every_input() {
+    let case = early_clobber();
+    let allocated = allocate(&out_of_ssa(&case.function)).expect("allocation");
+    verify_allocation(&allocated).expect("the allocation verifies");
+    let output = allocated.assignment[&10];
+    for input in [1_u32, 2] {
+        assert_ne!(
+            allocated.assignment[&input], output,
+            "the early-clobber output shares a register with input %v{input}"
+        );
+    }
+}
+
+/// Section 7: "a digit ... the same register as the output that digit names".
+#[test]
+fn a_tied_operand_shares_its_output_register() {
+    let case = tied_operand();
+    let allocated = allocate(&out_of_ssa(&case.function)).expect("allocation");
+    verify_allocation(&allocated).expect("the allocation verifies");
+    assert_eq!(allocated.assignment[&1], allocated.assignment[&10]);
+}
+
+/// Section 7: a clobbered register holds no operand and no value across the
+/// instruction.
+#[test]
+fn a_clobbered_register_is_left_alone() {
+    let case = named_and_clobbers();
+    let allocated = allocate(&out_of_ssa(&case.function)).expect("allocation");
+    verify_allocation(&allocated).expect("the allocation verifies");
+    for (value, number) in &allocated.assignment {
+        assert_ne!(*number, 9, "%v{value} was given the clobbered register x9");
+    }
+}
+
+/// Section 4: "The interpreter does not execute it (it reports `E3021`)."
+#[test]
+fn the_interpreter_refuses_an_assembly_function() {
+    let case = plain_registers();
+    let module = MModule {
+        globals: Vec::new(),
+        functions: vec![case.function],
+    };
+    let outcome =
+        evocc_mir::interpret_module(&module, "main", &[], evocc_mir::MirLimits::new(10_000));
+    let error = outcome.expect_err("an asm is not interpretable");
+    assert_eq!(error.code(), "E3021");
+}
+
+/// Section 8: the template's own text is copied verbatim and never parsed, and
+/// `%%` is one percent.
+#[test]
+fn the_template_is_copied_verbatim() {
+    let body = AsmBody {
+        template: "// %% literal and a comma, %0".to_owned(),
+        volatile: false,
+        outputs: vec![AsmOperand::reg(
+            AsmConstraint::Register(AsmDirection::Write),
+            w(10),
+        )],
+        inputs: Vec::new(),
+        clobbers: Vec::new(),
+    };
+    let function = program(
+        vec![
+            MInst::Asm(body),
+            MInst::Binary {
+                op: BinOp::Add,
+                dst: w(11),
+                lhs: w(10),
+                rhs: w(10),
+                width: Width::W,
+            },
+        ],
+        w(11),
+    );
+    let text = build(&function);
+    assert!(
+        text.contains("    // % literal and a comma, w"),
+        "the template is copied with one percent:\n{text}"
+    );
+}
