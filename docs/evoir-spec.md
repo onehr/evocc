@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.56** | **Authoritative reference** | **2026-09-04**
+**Revision 1.9.57** | **Authoritative reference** | **2026-09-04**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1318,6 +1318,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3032` | `not-lowered: pointer-difference` | lowering |
 | `E3033` | `not-executed: wide-integer` | lowering |
 | `E3034` | `not-lowered: function-pointer-arithmetic` | lowering |
+| `E3035` | `not-lowered: global-register-variable` | lowering |
 | `E3029` | `not-lowered: computed-goto` | lowering |
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
@@ -3864,6 +3865,35 @@ compile). Measured defect at revision 1.9.33: `__bpf_kfunc_start_defs()`,
 `MEM_STATIC`, `__maybe_unused` between specifiers and `__restrict` parameters
 were `E1001` or `E1002` in 37 units.
 
+**Global register variables.** A file-scope declaration
+`register T name asm("reg")` is a global register variable (GNU). It
+declares no object and supplies no storage: it has no allocation site, and
+the allocation-site manifest of 10.1.6 passes over it rather than failing to
+derive one. Its type is `T`, `sizeof` and `_Alignof` are `T`'s (measured 8
+and 8 for `unsigned long`), and `&name` is `E2928`. A read yields the
+current value of the named machine register and a write sets it; EvoIR has
+no machine-register value, so a use is `E3035`
+(`not-lowered: global-register-variable`) at the use, while the declaration
+alone is accepted (evidence `p32-register-variables.out`, both oracles
+compile the reads and refuse the addresses). A block-scope
+`register T name asm("reg")` is an ordinary automatic object whose register
+binding matters only when it is an `asm` operand, where `E3021` already
+applies; its value behaves as any automatic object's (measured, both
+oracles). Measured defect at revision 1.9.56:
+`arch/arm64/include/asm/stack_pointer.h` declares
+`register unsigned long current_stack_pointer asm("sp")`, which nearly every
+arm64 translation unit includes and 20 of 2,798 use; the manifest's refusal
+to derive a site for it stopped 2,754 of 2,798 units at lowering, all with
+one generic message.
+
+**Lowering diagnostics name their class.** A lowering failure carries a code
+of its own, as a front-end diagnostic does; `E3101`
+(`evoir-lowering-failed`) is a wrapper for a class that has not been given
+one yet, never a resting place. A survey that ranks lowering stops ranks
+codes, so every class large enough to appear in a ranking is given a code
+before the next survey runs (revision 1.9.57, after one wrapper carried four
+distinct classes and 2,768 of 2,794 stops).
+
 **Storage class `register`, va_list objects, 128-bit places.** `register` is
 accepted on parameters and block-scope objects and has no effect beyond
 forbidding `&` on the object, which is `E2928` (`address-of-register-object`) at the `&` (both oracles reject it). `__builtin_va_list` is an object type that may
@@ -4918,6 +4948,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.57 | 2026-09-04 | First full-configuration lowering survey (4 clean of 2,798). Defines global register variables: no allocation site, the manifest passes over them, a use is `E3035` and the declaration is accepted, which is what stopped 2,754 units; states that a lowering failure names its class and `E3101` is a wrapper, never a resting place. |
 | 1.9.56 | 2026-09-04 | First search over cost weights: a searched vector ties the best hand-written functions on held-out programs and beats none, because the registry's cost can express one preference only (add before mul before shl). States that a policy is identified by name plus a complete description in the report (7.5). |
 | 1.9.55 | 2026-09-04 | Emitting rewrites measured: the two all-positive cost functions now optimize 569 of 1,000 programs differently. Restates the strict-improvement sentence of 11.3 as producer conformance and fixes the class granularity of a derived node's use through its parent (11.3). |
 | 1.9.54 | 2026-09-04 | The configured kernel's every translation unit parses clean (2,798 of 2,798). Assigns `E2928` to the address of a `register` object, `E3034` to the lowering of function-pointer arithmetic, and states that a range designator is one plan entry; the three edges the front-end executor named. |

@@ -1,0 +1,295 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "c30.post-closure-lowering-survey.v1",
+  "status": "PASS_MEASUREMENT_PUBLISHED",
+  "authority": {
+    "openingCommit": "04a498a19d061d242c8193c61c0d975dc1cb4dbc",
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "semanticRevision": "1.9.54",
+      "semanticSha256": "f0ac2dc7c8648521736a7d552ddb59c00aad64c648340ab555428f259b641de8",
+      "executionCheckoutRevision": "1.9.56",
+      "executionCheckoutSha256": "c27de478e704a9179ece43a0a079d658f79e7689cbe8755805dd9723789240e8",
+      "qualification": "Revisions 1.9.55 and 1.9.56 change equality-policy text only; the revision 1.9.54 front-end and lowering boundary remains the semantic authority for this receipt."
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "Z",
+      "openingSha256": "46f0c1f459b0fbf31c9780c8948c08c057e81fb50414d34b0ec75d7a6d5e7f39",
+      "executionSha256": "ac17a51fac720949b9311c4f79c22d503604435ba029537ca78b9033fbd5fef5"
+    }
+  },
+  "commits": {
+    "sourceColumnIndex": "9f7d0243c5f138bd67b9803ed5a8df04bc5d3ae7",
+    "testsOnlyRed": "cc4cb658d3095b6c425bdba6bde2fca29060b9fb",
+    "diagnosticImplementation": "74f896c23dab7aacd000e58c46b72c134bcb6ebd",
+    "loweringSurveyHarness": "872364d51338787252e60f1219ad24180c3b295d",
+    "surveyRevisionGuard": "c6d21b0ca4696a7a0ac02c5c93011e9803cd4910",
+    "dashboardSubject": "061ed2267441a012ea83dd416aba32efa8e223e4",
+    "surveySubject": "909088d6c0626991610f45b42e63e2dafc298812"
+  },
+  "sourceColumnPerformance": {
+    "capture": ".evidence/single-line-preprocessed-parse/20260903T175835Z",
+    "resultsSha256": "768a7a5f146fc4ea366a4427591c8fea3e07ee95bf5f6d0c19fffeed74ab1331",
+    "sealSha256": "e7c328510fb8d7805a1db6fd1ffe0e5014b757f0f6733beab9a6a48b310090a8",
+    "command": "python3 .evidence/single-line-preprocessed-parse/20260903T175835Z/measure.py",
+    "measurements": [
+      {
+        "unit": "arch/arm64/net/bpf_jit_comp.c",
+        "beforeMilliseconds": 63751.406,
+        "afterMilliseconds": 2964.314,
+        "underFiveSeconds": true
+      },
+      {
+        "unit": "net/sunrpc/auth_gss/gss_rpc_xdr.c",
+        "beforeMilliseconds": 68710.022,
+        "afterMilliseconds": 3568.794,
+        "underFiveSeconds": true
+      }
+    ],
+    "implementation": "ASCII columns are a byte delta; non-ASCII lines use a cached continuation-byte index, preserving character-column semantics without rescanning the line prefix per token."
+  },
+  "diagnosticRedWindow": {
+    "receipt": {
+      "path": "tests/contracts/register-function-pointer-boundary-red.json",
+      "sha256": "6bd5659d541dd49ff779b9957ddfe545d125fcb262a758a960a94d5007404ae7"
+    },
+    "opened": "cc4cb658d3095b6c425bdba6bde2fca29060b9fb",
+    "closed": "74f896c23dab7aacd000e58c46b72c134bcb6ebd",
+    "red": {
+      "command": "cargo test -p evocc-parser --test final_profile_conformance -p evocc-lower --test fail_closed_forms --no-fail-fast -- --nocapture",
+      "passed": 20,
+      "failed": 2,
+      "ignored": 0,
+      "buildErrors": 0,
+      "declaredSourceForms": 12
+    },
+    "green": {
+      "command": "cargo test -p evocc-parser --test final_profile_conformance -p evocc-lower --test fail_closed_forms --locked --offline --no-fail-fast -- --nocapture",
+      "passed": 22,
+      "failed": 0,
+      "ignored": 0,
+      "facts": [
+        "Taking the address of a direct, parameter, member, or array-element register object reports E2928 at the address operator.",
+        "Binary, compound-assignment, update, and projected-place function-pointer arithmetic all report only E3034 at lowering."
+      ]
+    }
+  },
+  "dashboardGuard": {
+    "receipt": "tests/contracts/kernel-dashboard-receipt.json",
+    "receiptSha256": "edcc3d6d1e7c5aaed88df47acbf458e77105d318cb0a8e87aadb68aa2081500b",
+    "runId": "20260903T230349Z-20340",
+    "subjectCommit": "061ed22",
+    "previousRunId": "20260903T230031Z-11831",
+    "rawPreprocess": "16/16 clean",
+    "gccPreprocessedParser": "16/16 clean",
+    "clangPreprocessedParser": "16/16 clean",
+    "dualOracleParse": "16/16 clean",
+    "regressions": 0
+  },
+  "fullConfigurationParseGuard": {
+    "runId": "20260903T230814Z-34516",
+    "capture": ".evidence/full-config-parse-survey/20260903T230814Z-34516",
+    "command": "python3 tools/survey-cohort.py --action parse --evocc target/release/evocc --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --jobs 4 --timeout 60",
+    "subjectCommit": "909088d6c0626991610f45b42e63e2dafc298812",
+    "releaseBinarySha256": "a3df995ef9ed8a07aa87f647359464d178c79b3aaaaee12306bbab1211e6bcf0",
+    "classifications": {
+      "clean": 2798,
+      "diagnosed": 0,
+      "unavailable": 0,
+      "timeout": 0,
+      "panic": 0
+    },
+    "timing": {
+      "parallelism": 4,
+      "perUnitTimeoutSeconds": 60,
+      "medianWallMilliseconds": 2107.759,
+      "maximumWallMilliseconds": 17594.444,
+      "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c",
+      "qualification": "Observed under concurrent host load; coarse telemetry, not a benchmark."
+    },
+    "sealedEvidence": {
+      "files": 5603,
+      "bytes": 21367859,
+      "summarySha256": "dfe19ffc7a2f24999d763a15dceeae8aa43854c07ee5f49abe083426e5355cc4",
+      "resultsSha256": "de25641767514cf25d1b90456cd7fe58dc9b17a1889d0e0e020c0abd5f5ea345",
+      "enumerationSha256": "c32f35e65656d90afb5484ab1eee91e82040432e798e0ee5055c58b5ccdca026",
+      "argvSha256": "e66c6ee896c0ffd2586c66c18602c1b6f55ac2d9c806ebce7c4bce19f705a177",
+      "manifestSha256": "01cae407837df21154f50caa40b3a78cd86dd69e088ddbdeecf17a72602b026e",
+      "sealSha256": "944074c90db879ec582c14d2899b6ea0e87b3cace3336f092dc67f1af1e8ea89"
+    }
+  },
+  "fullConfigurationLoweringSurvey": {
+    "runId": "20260903T233847Z-6468",
+    "capture": ".evidence/full-config-lowering-survey/20260903T233847Z-6468",
+    "command": "python3 tools/survey-cohort.py --action lower --evocc target/release/evocc --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --jobs 4 --timeout 60",
+    "subjectCommit": "909088d6c0626991610f45b42e63e2dafc298812",
+    "releaseBinarySha256": "a3df995ef9ed8a07aa87f647359464d178c79b3aaaaee12306bbab1211e6bcf0",
+    "enumeration": {
+      "commandRecords": 2944,
+      "includedTargetCUnits": 2798,
+      "excluded": 146,
+      "excludedByReason": {
+        "assembly-source": 67,
+        "host-compiler-program": 34,
+        "link-or-binary-transform": 43,
+        "vmlinux-synthetic-target": 2
+      }
+    },
+    "classifications": {
+      "clean": 4,
+      "diagnosed": 2794,
+      "unavailable": 0,
+      "timeout": 0,
+      "panic": 0
+    },
+    "diagnosedByCodeFamily": {
+      "E30xx": 26,
+      "E29xx": 0,
+      "other": 2768
+    },
+    "atRootFirstDiagnosticTop15": [
+      {
+        "finding": "E3101 evoir-lowering-failed",
+        "units": 2768,
+        "exampleUnit": "arch/arm64/crypto/aes-ce-ccm-glue.c"
+      },
+      {
+        "finding": "E3030 evoir-lowering-failed",
+        "units": 22,
+        "exampleUnit": "drivers/firmware/efi/libstub/skip_spaces.c"
+      },
+      {
+        "finding": "E3021 evoir-lowering-failed",
+        "units": 4,
+        "exampleUnit": "kernel/time/timecounter.c"
+      }
+    ],
+    "fullMessageBreakdown": [
+      {
+        "finding": "E3101 generated invalid EvoIR: cannot derive the authoritative allocation-site manifest",
+        "units": 2754
+      },
+      {
+        "finding": "E3030 not-lowered: varargs",
+        "units": 22
+      },
+      {
+        "finding": "E3101 object declaration disagrees with its semantic identity",
+        "units": 12
+      },
+      {
+        "finding": "E3021 not-lowered: asm",
+        "units": 4
+      },
+      {
+        "finding": "E3101 non-integer scalar type is outside Day 6",
+        "units": 1
+      },
+      {
+        "finding": "E3101 integer expression has a non-bit-vector EvoIR value",
+        "units": 1
+      }
+    ],
+    "cleanUnits": [
+      "drivers/tty/vt/consolemap_deftbl.c",
+      "lib/bitrev.c",
+      "lib/zstd/common/debug.c",
+      "scripts/mod/empty.c"
+    ],
+    "timing": {
+      "parallelism": 4,
+      "perUnitTimeoutSeconds": 60,
+      "medianWallMilliseconds": 2129.838,
+      "maximumWallMilliseconds": 17310.67,
+      "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c",
+      "qualification": "Observed under concurrent host load; coarse telemetry, not a benchmark."
+    },
+    "sealedEvidence": {
+      "files": 5603,
+      "bytes": 22625240,
+      "summarySha256": "6a0be2d93aca6844ce5c7dab7be767902bfdb2e27e842124677e98732b19cfa0",
+      "resultsSha256": "411f792e9ca423be1c592f52be3a26d13b762351bb4d1f1df336026552cddb76",
+      "enumerationSha256": "ea4a159e70325af0fd184398f2b75729e07f0a414c4a5adf0c292b03e68e9df3",
+      "argvSha256": "6cdee9451b1c985cce1e2d0ca1ca55f268814123eaa6a6f4cb42d7fa6b8aff43",
+      "manifestSha256": "b1c5f6a0a339a8d8c8ffef077005f026cf707738e6fea2f5238bd4ba678e259b",
+      "sealSha256": "e0146cdf839280dfb8a2748b2250bd64f776bcdc7d93a66669ea9d36432bfa2b"
+    },
+    "scopeDiscipline": "Measure-only. No finding from this survey was fixed or used to rewrite the specification."
+  },
+  "standardGate": {
+    "workspace": {
+      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --locked --offline --quiet",
+      "passed": 1363,
+      "failed": 0,
+      "ignored": 1,
+      "returnCode": 0,
+      "logSha256": "37978b38c84a8bb2a000e393905957f43f2c28baacb62ab083752198d2e71af0"
+    },
+    "clippy": {
+      "command": "cargo clippy --workspace --all-targets --locked --offline -- -D warnings",
+      "warnings": 0,
+      "returnCode": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    },
+    "surveyInventorySelfTest": {
+      "command": "python3 tests/acceptance/full-config-survey-inventory-selftest.py",
+      "result": "PASS"
+    },
+    "commitReferenceCheck": {
+      "command": "python3 tools/check-commit-references.py",
+      "result": "PASS: 231 rewritten, 75 resolved unchanged, 142 other hexadecimal tokens; 308 map entries"
+    },
+    "baseLayoutCorpus": {
+      "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "128/128 ORACLE_CONSENSUS",
+      "mismatches": 0,
+      "runId": "20260904T005835Z-10975"
+    },
+    "attributedLayoutCorpus": {
+      "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject",
+      "result": "22/22 ORACLE_CONSENSUS",
+      "mismatches": 0,
+      "runId": "20260904T005855Z-12625"
+    },
+    "diffCheck": "clean"
+  },
+  "isolatedOfflineReplay": {
+    "commit": "d0d9cf9071dc1685339865b74cf3119e24549ae7",
+    "path": "/private/tmp/c30-z-replay.UQKAjW/repo",
+    "cloneCommand": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-z-replay.UQKAjW/repo; git switch --detach d0d9cf9071dc1685339865b74cf3119e24549ae7; test ! -e .git/objects/info/alternates",
+    "buildCommand": "CARGO_TARGET_DIR=/private/tmp/c30-z-replay.UQKAjW/target cargo test --workspace --locked --offline --no-run",
+    "testCommand": "CARGO_TARGET_DIR=/private/tmp/c30-z-replay.UQKAjW/target CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --locked --offline --quiet",
+    "measured": {
+      "passed": 1363,
+      "failed": 0,
+      "ignored": 1,
+      "returnCode": 0,
+      "objectsAlternates": "absent",
+      "freshTargetBytesHuman": "2.1G",
+      "logSha256": "509e1ddd0c0d514ebcf7ee5f99e5d21e54ec78440514cdc192cf05b32dfb7b5b"
+    },
+    "helperBoundary": {
+      "qualification": "The temporary runner copied each isolated-clone test executable without metadata. The three sibling commands were copied from this clone's fresh target, not from the primary worktree.",
+      "evoProofcheckSha256": "3f70e7d38e059fb6ac5d1e01a778b1711916b76fc6bfea4221f60566b32b559b",
+      "evoPolicyEvalSha256": "52d4672ef5ee74d88e251af39df4680df1e4bc4d9271bc58abb686bfdb218dd5",
+      "evoCostSearchSha256": "8ee379f80c633f4c118f0148dee28e1a7ff22535130c9836c91d09a4911b1233"
+    }
+  },
+  "processDeviations": [
+    "A concurrent middle-end stream advanced shared main during an otherwise green workspace gate. The lowering survey now freezes HEAD at start and refuses sealing if it changes; the accepted dashboard and surveys ran in a fixed worktree.",
+    "The first attributed-layout invocation omitted C30_LAYOUT_CASE_SET=attributed and failed manifest validation. Its capture is retained; the correctly configured rerun passed 22/22.",
+    "The first fixed-worktree dashboard attempt refused a symbolic kernel archive. A non-symbolic hard link to the frozen inode fixed the input boundary. The next run measured all 48 lanes but exposed the publisher's cross-root relative-path limitation. The accepted third run used real worktree-local evidence and stayed 48/48 with zero regressions.",
+    "Two parse-survey setup attempts stopped before executing any unit because symlink-resolved binary and build roots were outside the fixed subject root. The accepted runs used a hard-linked release binary and APFS copy-on-write snapshots of the exact gcc-lane-1 and linux-src trees; file counts matched the authorities.",
+    "The first final workspace attempt copied each test binary away from its Cargo target siblings, so fourteen proof and policy targets could not find evo-proofcheck, evo-policy-eval, or evo-cost-search. A second in-place attempt preserved topology but retained the host's per-binary provenance delay and was interrupted after ten green targets. Neither attempt is gate evidence. The accepted run copied the three built workspace binaries beside the temporary test runner, retained byte-identical executables, completed all targets, and exited zero."
+  ],
+  "specGap": null,
+  "claimCeiling": "The configured kernel still parses 2,798 of 2,798 target C translation units cleanly. The lowering survey is a measured frontier, not a lowering-completeness claim: four units lower cleanly and 2,794 fail closed with typed diagnostics; no panic, timeout, or unavailable execution occurred."
+}

@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.4** | **Authoritative reference** | **2026-09-04**
+**Revision 0.5** | **Authoritative reference** | **2026-09-04**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -200,6 +200,7 @@ stated.
 | `mem.copy [dst], [src], #size, #align` | copies `size` bytes from `src` to `dst`, transferring per-byte initializedness and pointer fragments exactly as EvoIR Section 3.8's `copy` does (identical or disjoint ranges); emission expands it to `ldr`/`str` pairs of the largest aligned width, unrolled up to 64 bytes and a counted loop above; the loads of the expansion never report an uninitialized read, because they move representation, not values |
 | `spill.store %v, slot` / `spill.load rd, slot` | the store of a virtual register to its spill slot and the reload from it, inserted by the allocator; emission expands them to `str`/`ldr` at the slot's offset from `sp` (revision 0.4) |
 | the prologue and epilogue | synthesized at emission from Section 6 and never present as instructions: the interpreter's memory is EvoIR's object model, with no linear stack, no `sp` and no return address, so they are not interpretable; the allocated form is judged by the verifier and the native run (revision 0.4) |
+| the register-offset addressing of `mem.copy`'s counted loop | emission's business, like the prologue's pre-indexed `stp` and `frame.slot`'s `add rd, sp, #off`: the loop counts an offset in a register, so the expansion uses the register-offset form of `ldr`/`str`, which the table's immediate rows do not admit and which only emission ever writes (revision 0.5) |
 
 ## 5. Lowering: EvoIR to EvoMIR
 
@@ -255,10 +256,18 @@ The convention is Apple's AArch64 variant of AAPCS64, restricted to what
 this revision lowers; the restriction is refused, never approximated.
 
 **Arguments and results.** Integer and pointer arguments of at most 64 bits
-go in `x0` to `x7` in order; a `bits<N>` argument with `N < 64` is passed
-in the low bits of its register with the upper bits unspecified, and the
-callee applies Section 3 before reading it as anything but a low-`N`-bit
-value. A ninth integer argument is refused (`E4010`); an aggregate argument
+go in `x0` to `x7` in order. Between two EvoCC-compiled functions, a
+`bits<N>` argument with `N < 64` is passed in the low bits of its register
+with the upper bits unspecified, and the callee applies Section 3 before
+reading it as anything but a low-`N`-bit value. Across the host boundary the
+platform rule governs instead: a caller extends an argument narrower than 32
+bits to 32 bits, zero-extending an unsigned source type and sign-extending a
+signed one, and a callee may assume the bits above its parameter's width are
+that extension (Apple's AArch64 variant; revision 0.5, after the executor
+found the two rules unreconciled and the probe passed only because each host
+function masked its own argument). A cross-boundary call therefore inserts
+the extension the platform requires; a call between EvoCC functions does
+not. A ninth integer argument is refused (`E4010`); an aggregate argument
 or result is refused (`E4011`); a variadic call or callee is refused
 (`E4012`, the EvoIR `E3030` boundary). **Results:** an EvoMIR function
 returns up to eight integer or pointer results in `x0` to `x7` in order.
@@ -465,6 +474,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.5 | 2026-09-04 | 256 generated programs assembled, linked, run and agreeing with the interpreter on exit status; a fourth gate lane; a sixteen-shape calling-convention probe, 32 comparisons, 0 failures. States the cross-boundary argument extension the platform requires, distinct from the internal rule, and records that emission may write addressing forms the Section 4 tables do not admit. |
 | 0.4 | 2026-09-04 | First native runs: five assembled programs agree with the interpreter on exit status. Rules the allocation and emission findings: the out-of-SSA scratch is a pinned virtual register, copy placement is a three-way rule, entry arguments become parameters the allocator assigns, the lowest free register is taken, spill accesses are pseudo-forms, frame slots are addressed from `sp`, the prologue is synthesized at emission and not interpretable; the native lane uses a second generator mode so pinned seeds stay pinned. |
 | 0.3 | 2026-09-04 | Second implementation: 20,000 of 20,000 generated programs lowered and judged by the three-lane gate with 0 mismatches. Rules the executor's five predicate-row findings: overflow flags report the register, so narrower widths compare with the sign extension of the low N bits (add, sub, mul); shift amounts extend by their declared signedness; the signed left-shift predicate conjoins count, sign, round trip and representability; the division predicates extend first; the grammar spells a two-definition adds/subs and states the conditional-terminator asymmetry. |
 | 0.2 | 2026-09-04 | Rules the thirteen stops of the first implementation: lowering rows for every UB predicate; `icmp.eq`/`ne` moved to the zero-extended row after a measured counterexample; `frame.slot` as a per-execution pseudo-form reconciling `alloca` with EvoIR 3.7; `ldr.p`/`ldr.pf`/`str.p` for provenance; a grammar for the textual form with the executor's spellings (symbols, the volatile marker, explicit call registers, two-successor conditionals, spelled entry labels); the `ub.assume` continuation-block construction; `brk` immediates as the diagnostic's decimal part; shift amounts and `ptr.offset` wrapping as obligation-covered differences; `mem.copy` as a pseudo-form transferring initializedness and provenance; block arguments kept until the Section 7 pass; up to eight results in `x0`..`x7` for the machine lane; the five unreachable codes named as such. |
