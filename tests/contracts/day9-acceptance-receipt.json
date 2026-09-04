@@ -2,17 +2,14 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "ac17a51fac720949b9311c4f79c22d503604435ba029537ca78b9033fbd5fef5"
+    "sha256": "362603c8b259231a48e50e5ef0978bf9d17732dc35031bc73a88cbc54bcc3711"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.54",
-    "sha256": "f0ac2dc7c8648521736a7d552ddb59c00aad64c648340ab555428f259b641de8",
-    "executionCheckoutRevision": "1.9.56",
-    "executionCheckoutSha256": "c27de478e704a9179ece43a0a079d658f79e7689cbe8755805dd9723789240e8",
-    "executionCheckoutQualification": "Revisions 1.9.55 and 1.9.56 change equality policy only; revision 1.9.54 remains the semantic authority for scope Z."
+    "revision": "1.9.59",
+    "sha256": "5d1497b490c4b3e77d5066fbf4cfa4dfca6803bb07d4e9dafe64866d1366eda7"
   },
-  "cutLine": "Revision 1.9.54 scope Z is implemented through c6d21b0 and measured at fixed survey subject 909088d. The two frozen single-line inputs parse in 2964.314 ms and 3568.794 ms, both below five seconds. E2928 and E3034 close from one tests-only RED window. Dashboard run 20260903T230349Z-20340 remains 48/48 clean with zero regressions, and full-configuration parse survey 20260903T230814Z-34516 remains 2798/2798 clean. Lowering survey 20260903T233847Z-6468 is measure-only: 4 clean and 2794 typed first diagnostics, with zero unavailable, timeout, or panic.",
+  "cutLine": "Revision 1.9.59 AA3 is implemented through d40091f and measured at fixed survey subject a0157ce. Pointer-typed poison lowers and reports E3013 when consumed; pointer-integer conversions report E3036. Dashboard run 20260904T163131Z-74556 remains 48/48 clean, full-configuration parse run 20260904T164537Z-41718 remains 2798/2798 clean, and lowering run 20260904T171723Z-48751 measures 5 clean plus 2793 typed first diagnostics with zero unavailable, timeout, panic, or regression. AA1 and AA2 remain open because their real-corpus E3101 class counts did not move.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "b8688e0",
@@ -1058,9 +1055,39 @@
     },
     "result": "PASS_MEASUREMENT_PUBLISHED_WITH_TYPED_LOWERING_FRONTIER"
   },
-  "subjectCommit": "909088d",
+  "loweringFrontierWindow": {
+    "authority": "docs/evoir-spec.md revision 1.9.59; tests/contracts/day9-acceptance-contract.json scope AA and AA3 restatement",
+    "testsOnlyRedCommits": [
+      "3f0ceee5ab12fd93243d44e43c78f510fcb51e63",
+      "f84a2b30c98e8224314bd13ad84ced846c2579eb"
+    ],
+    "implementationCommits": [
+      "cf8770075fa42010e75b9eb0699c32e5df65f8e8",
+      "d40091f4617aa02f67707d095aea36c97295c8cf"
+    ],
+    "dashboardReceiptCommit": "a0157ce08620de638fabbc1a2840e8e82e463dff",
+    "acceptanceReceipt": {
+      "path": "tests/contracts/full-config-lowering-survey-receipt.json",
+      "sha256": "ee76bb92742395cbd1c8b286401a4881897ea18515e4a69bcc5e515d03df3fae"
+    },
+    "dashboardRun": "20260904T163131Z-74556; 48/48 clean; zero regressions",
+    "fullConfigurationParseSurvey": "20260904T164537Z-41718; 2798/2798 clean; zero diagnosed/unavailable/timeout/panic",
+    "fullConfigurationLoweringSurvey": "20260904T171723Z-48751; 5 clean, 2793 diagnosed, zero unavailable/timeout/panic; measure-only",
+    "measuredTransitions": [
+      "lib/union_find.c moved from E3101 non-integer scalar type is outside Day 6 to clean.",
+      "crypto/jitterentropy.c moved from free-text E3101 integer expression has a non-bit-vector EvoIR value to E3036 not-lowered: pointer-integer-conversion."
+    ],
+    "acceptanceAssessment": {
+      "AA1": "OPEN: the focused global-register forms pass, but the full-corpus allocation-manifest free-text class remains 2754 units and must be re-minimized before another production edit.",
+      "AA2": "OPEN: the completed-array redeclaration fixture passes, but the full-corpus semantic-identity free-text class remains 12 units and must be re-minimized.",
+      "AA3": "PASS: typed pointer poison, E3013 consumption, and E3036 pointer-integer conversion boundaries are implemented and replayed.",
+      "AA4": "PASS_MEASUREMENT: the parse guard remains 2798/2798 and the lowering frontier is sealed."
+    },
+    "result": "PASS_MEASUREMENT_PUBLISHED_WITH_AA1_AND_AA2_OPEN"
+  },
+  "subjectCommit": "a0157ce",
   "gate": {
-    "claim": "Revision 1.9.54 scope Z is implemented and green on the fixed survey subject. Stage F3 remains closed: the 16-unit dashboard is 48/48 clean with zero regression and the full-configuration raw-source to EvoCPP to parser measurement completes all 2798 target C units cleanly. The lowering result is only a measured frontier: 4 clean and 2794 typed first diagnostics, with zero unavailable, timeout, or panic classifications.",
+    "claim": "Revision 1.9.59 AA3 is implemented and green on the fixed survey subject. Stage F3 remains closed: the dashboard is 48/48 clean and the full-configuration parse measurement is 2798/2798 clean. The lowering result is a measured frontier, not a completeness claim: 5 clean and 2793 typed first diagnostics, with zero unavailable, timeout, panic, or regression. AA1 and AA2 remain open because their corpus classes did not move.",
     "measured": {
       "dualOracleCleanParseTus": "16/16",
       "rawPreprocessClean": "16/16",
@@ -1069,7 +1096,14 @@
       "stageF1": "CLOSED",
       "stageF3": "CLOSED",
       "fullConfigurationParse": "2798/2798 clean",
-      "fullConfigurationLowering": "4/2798 clean; 2794 typed first diagnostics; measure-only",
+      "fullConfigurationLowering": "5/2798 clean; 2793 typed first diagnostics; measure-only",
+      "workspaceTestsAtAASubject": "1547/1547; 4 ignored; 234 targets",
+      "loweringDiagnosticFrontierTests": "9/9",
+      "uninitializedPointerTextTests": "1/1",
+      "aa1CorpusStatus": "OPEN; allocation-manifest free-text class remains 2754 units",
+      "aa2CorpusStatus": "OPEN; semantic-identity free-text class remains 12 units",
+      "aa3Status": "PASS",
+      "aa4Status": "PASS_MEASUREMENT",
       "workspaceTestsAtZSubject": "1363/1363; 1 ignored",
       "sourceColumnPerformance": "2964.314 ms and 3568.794 ms; both frozen inputs below 5 seconds",
       "registerAndFunctionPointerBoundaryTests": "22/22",
@@ -1183,9 +1217,9 @@
     "command": "cargo build --release -p evocc; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260903T115135Z-31973/results.jsonl",
     "dashboardReceipt": {
       "path": "tests/contracts/kernel-dashboard-receipt.json",
-      "sha256": "9732a390a71cfd74f465ab55a327e8cf9d559a5965606607b9eaf6b96e4dd2ca",
-      "subjectCommit": "0c5db21",
-      "publishedFromRun": "20260903T161450Z-34865"
+      "sha256": "ab75ba9fffe0ac08c9d74ec607dcb45d13c83be501c1dec2a5e368c0ab979622",
+      "subjectCommit": "d40091f",
+      "publishedFromRun": "20260904T163131Z-74556"
     },
     "result": "FRONT_END_PROFILE_CLOSURE_PASS_ALL_ENUMERATED_TARGET_C_UNITS_CLEAN"
   },

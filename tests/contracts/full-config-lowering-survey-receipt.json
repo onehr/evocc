@@ -1,98 +1,85 @@
 {
-  "schemaVersion": 1,
-  "receiptId": "c30.post-closure-lowering-survey.v1",
-  "status": "PASS_MEASUREMENT_PUBLISHED",
+  "schemaVersion": 2,
+  "receiptId": "c30.lowering-frontier-survey.v2",
+  "status": "PASS_MEASUREMENT_PUBLISHED_WITH_OPEN_IMPLEMENTATION_FINDINGS",
   "authority": {
-    "openingCommit": "04a498a19d061d242c8193c61c0d975dc1cb4dbc",
     "specification": {
       "path": "docs/evoir-spec.md",
-      "semanticRevision": "1.9.54",
-      "semanticSha256": "f0ac2dc7c8648521736a7d552ddb59c00aad64c648340ab555428f259b641de8",
-      "executionCheckoutRevision": "1.9.56",
-      "executionCheckoutSha256": "c27de478e704a9179ece43a0a079d658f79e7689cbe8755805dd9723789240e8",
-      "qualification": "Revisions 1.9.55 and 1.9.56 change equality-policy text only; the revision 1.9.54 front-end and lowering boundary remains the semantic authority for this receipt."
+      "revision": "1.9.59",
+      "sha256": "5d1497b490c4b3e77d5066fbf4cfa4dfca6803bb07d4e9dafe64866d1366eda7"
     },
     "contract": {
       "path": "tests/contracts/day9-acceptance-contract.json",
-      "scope": "Z",
-      "openingSha256": "46f0c1f459b0fbf31c9780c8948c08c057e81fb50414d34b0ec75d7a6d5e7f39",
-      "executionSha256": "ac17a51fac720949b9311c4f79c22d503604435ba029537ca78b9033fbd5fef5"
+      "scope": [
+        "AA lowering frontier",
+        "AA3 restated under 1.9.59"
+      ],
+      "sha256": "362603c8b259231a48e50e5ef0978bf9d17732dc35031bc73a88cbc54bcc3711"
     }
   },
   "commits": {
-    "sourceColumnIndex": "9f7d0243c5f138bd67b9803ed5a8df04bc5d3ae7",
-    "testsOnlyRed": "cc4cb658d3095b6c425bdba6bde2fca29060b9fb",
-    "diagnosticImplementation": "74f896c23dab7aacd000e58c46b72c134bcb6ebd",
-    "loweringSurveyHarness": "872364d51338787252e60f1219ad24180c3b295d",
-    "surveyRevisionGuard": "c6d21b0ca4696a7a0ac02c5c93011e9803cd4910",
-    "dashboardSubject": "061ed2267441a012ea83dd416aba32efa8e223e4",
-    "surveySubject": "909088d6c0626991610f45b42e63e2dafc298812"
+    "testsOnlyFrontierRed": "3f0ceee5ab12fd93243d44e43c78f510fcb51e63",
+    "registerAndObjectImplementation": "cf8770075fa42010e75b9eb0699c32e5df65f8e8",
+    "testsOnlyPointerBoundaryRed": "f84a2b30c98e8224314bd13ad84ced846c2579eb",
+    "pointerBoundaryImplementation": "d40091f4617aa02f67707d095aea36c97295c8cf",
+    "dashboardReceipt": "a0157ce08620de638fabbc1a2840e8e82e463dff",
+    "surveySubject": "a0157ce08620de638fabbc1a2840e8e82e463dff"
   },
-  "sourceColumnPerformance": {
-    "capture": ".evidence/single-line-preprocessed-parse/20260903T175835Z",
-    "resultsSha256": "768a7a5f146fc4ea366a4427591c8fea3e07ee95bf5f6d0c19fffeed74ab1331",
-    "sealSha256": "e7c328510fb8d7805a1db6fd1ffe0e5014b757f0f6733beab9a6a48b310090a8",
-    "command": "python3 .evidence/single-line-preprocessed-parse/20260903T175835Z/measure.py",
-    "measurements": [
-      {
-        "unit": "arch/arm64/net/bpf_jit_comp.c",
-        "beforeMilliseconds": 63751.406,
-        "afterMilliseconds": 2964.314,
-        "underFiveSeconds": true
-      },
-      {
-        "unit": "net/sunrpc/auth_gss/gss_rpc_xdr.c",
-        "beforeMilliseconds": 68710.022,
-        "afterMilliseconds": 3568.794,
-        "underFiveSeconds": true
-      }
-    ],
-    "implementation": "ASCII columns are a byte delta; non-ASCII lines use a cached continuation-byte index, preserving character-column semantics without rescanning the line prefix per token."
-  },
-  "diagnosticRedWindow": {
-    "receipt": {
-      "path": "tests/contracts/register-function-pointer-boundary-red.json",
-      "sha256": "6bd5659d541dd49ff779b9957ddfe545d125fcb262a758a960a94d5007404ae7"
+  "redWindows": [
+    {
+      "receipt": "tests/contracts/lowering-diagnostic-frontier-red.json",
+      "sha256": "b7fc8ebab40073b4d9401eaceb98a7ecf87f7b13cc5f6fcc7492db75cc3dcc6f",
+      "opened": "3f0ceee5ab12fd93243d44e43c78f510fcb51e63"
     },
-    "opened": "cc4cb658d3095b6c425bdba6bde2fca29060b9fb",
-    "closed": "74f896c23dab7aacd000e58c46b72c134bcb6ebd",
-    "red": {
-      "command": "cargo test -p evocc-parser --test final_profile_conformance -p evocc-lower --test fail_closed_forms --no-fail-fast -- --nocapture",
-      "passed": 20,
-      "failed": 2,
-      "ignored": 0,
-      "buildErrors": 0,
-      "declaredSourceForms": 12
-    },
-    "green": {
-      "command": "cargo test -p evocc-parser --test final_profile_conformance -p evocc-lower --test fail_closed_forms --locked --offline --no-fail-fast -- --nocapture",
-      "passed": 22,
-      "failed": 0,
-      "ignored": 0,
-      "facts": [
-        "Taking the address of a direct, parameter, member, or array-element register object reports E2928 at the address operator.",
-        "Binary, compound-assignment, update, and projected-place function-pointer arithmetic all report only E3034 at lowering."
-      ]
+    {
+      "receipt": "tests/contracts/lowering-pointer-boundary-red.json",
+      "sha256": "86578bb7b97c4f4a70570faf2d8bc847f6b956d08e0b4718f5c0c253980d76d3",
+      "opened": "f84a2b30c98e8224314bd13ad84ced846c2579eb",
+      "declaredFailures": 3,
+      "buildErrors": 0
     }
+  ],
+  "pointerBoundary": {
+    "focusedCommand": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target cargo test -p evocc-lower --test lowering_diagnostic_frontier --no-fail-fast",
+    "focusedResult": {
+      "passed": 9,
+      "failed": 0
+    },
+    "evoirTextCommand": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target cargo test -p evocc-evoir --test uninitialized_pointer --no-fail-fast",
+    "evoirTextResult": {
+      "passed": 1,
+      "failed": 0
+    },
+    "facts": [
+      "A pointer local without an initializer lowers to the generic typed Inst::Uninitialized form rendered as uninitialized.ptr or uninitialized.fnptr.",
+      "The validator and Section 9 reader already treated pointer poison as ordinary non-effect data; object and function pointer forms round-trip byte-identically.",
+      "Pointer poison may cross a CFG edge or be overwritten without a semantic read.",
+      "Dereferencing an uninitialized object pointer and calling an uninitialized function pointer report E3013 in both interpreters.",
+      "A pointer-to-integer or non-null integer-to-pointer conversion reports E3036; a null pointer constant still lowers."
+    ],
+    "egraphBoundary": "Both eligibility implementations exclude Inst::Uninitialized as a family; no pointer or function-pointer poison enters the scalar e-graph."
   },
   "dashboardGuard": {
-    "receipt": "tests/contracts/kernel-dashboard-receipt.json",
-    "receiptSha256": "edcc3d6d1e7c5aaed88df47acbf458e77105d318cb0a8e87aadb68aa2081500b",
-    "runId": "20260903T230349Z-20340",
-    "subjectCommit": "061ed22",
-    "previousRunId": "20260903T230031Z-11831",
+    "runId": "20260904T163131Z-74556",
+    "subjectCommit": "d40091f",
+    "previousRunId": "20260903T230349Z-20340",
     "rawPreprocess": "16/16 clean",
     "gccPreprocessedParser": "16/16 clean",
     "clangPreprocessedParser": "16/16 clean",
     "dualOracleParse": "16/16 clean",
-    "regressions": 0
+    "total": "48/48 clean",
+    "regressions": 0,
+    "receipt": {
+      "path": "tests/contracts/kernel-dashboard-receipt.json",
+      "sha256": "ab75ba9fffe0ac08c9d74ec607dcb45d13c83be501c1dec2a5e368c0ab979622"
+    }
   },
   "fullConfigurationParseGuard": {
-    "runId": "20260903T230814Z-34516",
-    "capture": ".evidence/full-config-parse-survey/20260903T230814Z-34516",
+    "runId": "20260904T164537Z-41718",
+    "capture": ".evidence/full-config-parse-survey/20260904T164537Z-41718",
     "command": "python3 tools/survey-cohort.py --action parse --evocc target/release/evocc --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --jobs 4 --timeout 60",
-    "subjectCommit": "909088d6c0626991610f45b42e63e2dafc298812",
-    "releaseBinarySha256": "a3df995ef9ed8a07aa87f647359464d178c79b3aaaaee12306bbab1211e6bcf0",
+    "subjectCommit": "a0157ce08620de638fabbc1a2840e8e82e463dff",
+    "releaseBinarySha256": "374d14e6ab5a46d50006afeadb0bdb0598078fd360ecf409a0a8839548787ebe",
     "classifications": {
       "clean": 2798,
       "diagnosed": 0,
@@ -103,28 +90,28 @@
     "timing": {
       "parallelism": 4,
       "perUnitTimeoutSeconds": 60,
-      "medianWallMilliseconds": 2107.759,
-      "maximumWallMilliseconds": 17594.444,
+      "medianWallMilliseconds": 2256.849,
+      "maximumWallMilliseconds": 18209.815,
       "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c",
       "qualification": "Observed under concurrent host load; coarse telemetry, not a benchmark."
     },
     "sealedEvidence": {
       "files": 5603,
-      "bytes": 21367859,
-      "summarySha256": "dfe19ffc7a2f24999d763a15dceeae8aa43854c07ee5f49abe083426e5355cc4",
-      "resultsSha256": "de25641767514cf25d1b90456cd7fe58dc9b17a1889d0e0e020c0abd5f5ea345",
-      "enumerationSha256": "c32f35e65656d90afb5484ab1eee91e82040432e798e0ee5055c58b5ccdca026",
-      "argvSha256": "e66c6ee896c0ffd2586c66c18602c1b6f55ac2d9c806ebce7c4bce19f705a177",
-      "manifestSha256": "01cae407837df21154f50caa40b3a78cd86dd69e088ddbdeecf17a72602b026e",
-      "sealSha256": "944074c90db879ec582c14d2899b6ea0e87b3cace3336f092dc67f1af1e8ea89"
+      "bytes": 21097292,
+      "summarySha256": "871392fc193a715c381eccad3264e37ff073123acecb1ef011b7960cd8577166",
+      "resultsSha256": "7b5be25dce67ca06d02495a7da2d42d520d594a2cfd095a4935dd24b0597a0a8",
+      "enumerationSha256": "f301cd6f708a7e83382b3ec9a906ff70f128789b21dd66d142cf828ed62450ef",
+      "argvSha256": "1bfa08bfc01c913e36bc1e626729be8f37db73bb9f3b5a2def62002bbf9df48e",
+      "manifestSha256": "93709afbb52c0c793eb4877057c9d9d2b26275d606774a834122e54cdd706dd5",
+      "sealSha256": "e2cfe66b6e29d0d47a89ab4467ea0aa78280dd02a93c6f57b07110a16610bcc5"
     }
   },
   "fullConfigurationLoweringSurvey": {
-    "runId": "20260903T233847Z-6468",
-    "capture": ".evidence/full-config-lowering-survey/20260903T233847Z-6468",
+    "runId": "20260904T171723Z-48751",
+    "capture": ".evidence/full-config-lowering-survey/20260904T171723Z-48751",
     "command": "python3 tools/survey-cohort.py --action lower --evocc target/release/evocc --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --jobs 4 --timeout 60",
-    "subjectCommit": "909088d6c0626991610f45b42e63e2dafc298812",
-    "releaseBinarySha256": "a3df995ef9ed8a07aa87f647359464d178c79b3aaaaee12306bbab1211e6bcf0",
+    "subjectCommit": "a0157ce08620de638fabbc1a2840e8e82e463dff",
+    "releaseBinarySha256": "374d14e6ab5a46d50006afeadb0bdb0598078fd360ecf409a0a8839548787ebe",
     "enumeration": {
       "commandRecords": 2944,
       "includedTargetCUnits": 2798,
@@ -137,21 +124,21 @@
       }
     },
     "classifications": {
-      "clean": 4,
-      "diagnosed": 2794,
+      "clean": 5,
+      "diagnosed": 2793,
       "unavailable": 0,
       "timeout": 0,
       "panic": 0
     },
     "diagnosedByCodeFamily": {
-      "E30xx": 26,
+      "E30xx": 27,
       "E29xx": 0,
-      "other": 2768
+      "other": 2766
     },
     "atRootFirstDiagnosticTop15": [
       {
         "finding": "E3101 evoir-lowering-failed",
-        "units": 2768,
+        "units": 2766,
         "exampleUnit": "arch/arm64/crypto/aes-ce-ccm-glue.c"
       },
       {
@@ -163,6 +150,11 @@
         "finding": "E3021 evoir-lowering-failed",
         "units": 4,
         "exampleUnit": "kernel/time/timecounter.c"
+      },
+      {
+        "finding": "E3036 evoir-lowering-failed",
+        "units": 1,
+        "exampleUnit": "crypto/jitterentropy.c"
       }
     ],
     "fullMessageBreakdown": [
@@ -183,51 +175,65 @@
         "units": 4
       },
       {
-        "finding": "E3101 non-integer scalar type is outside Day 6",
-        "units": 1
-      },
-      {
-        "finding": "E3101 integer expression has a non-bit-vector EvoIR value",
+        "finding": "E3036 not-lowered: pointer-integer-conversion",
         "units": 1
       }
     ],
     "cleanUnits": [
       "drivers/tty/vt/consolemap_deftbl.c",
       "lib/bitrev.c",
+      "lib/union_find.c",
       "lib/zstd/common/debug.c",
       "scripts/mod/empty.c"
     ],
+    "comparisonToRun20260903T233847Z6468": {
+      "cleanToClean": 4,
+      "diagnosedToClean": 1,
+      "diagnosedToDiagnosed": 2793,
+      "regressions": 0,
+      "exactChanges": [
+        "lib/union_find.c moved from E3101 non-integer scalar type is outside Day 6 to clean.",
+        "crypto/jitterentropy.c moved from free-text E3101 integer expression has a non-bit-vector EvoIR value to E3036 not-lowered: pointer-integer-conversion."
+      ]
+    },
     "timing": {
       "parallelism": 4,
       "perUnitTimeoutSeconds": 60,
-      "medianWallMilliseconds": 2129.838,
-      "maximumWallMilliseconds": 17310.67,
-      "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c",
+      "medianWallMilliseconds": 2153.188,
+      "maximumWallMilliseconds": 18266.358,
+      "maximumUnit": "drivers/net/ethernet/intel/igb/e1000_mac.c",
       "qualification": "Observed under concurrent host load; coarse telemetry, not a benchmark."
     },
     "sealedEvidence": {
       "files": 5603,
-      "bytes": 22625240,
-      "summarySha256": "6a0be2d93aca6844ce5c7dab7be767902bfdb2e27e842124677e98732b19cfa0",
-      "resultsSha256": "411f792e9ca423be1c592f52be3a26d13b762351bb4d1f1df336026552cddb76",
-      "enumerationSha256": "ea4a159e70325af0fd184398f2b75729e07f0a414c4a5adf0c292b03e68e9df3",
-      "argvSha256": "6cdee9451b1c985cce1e2d0ca1ca55f268814123eaa6a6f4cb42d7fa6b8aff43",
-      "manifestSha256": "b1c5f6a0a339a8d8c8ffef077005f026cf707738e6fea2f5238bd4ba678e259b",
-      "sealSha256": "e0146cdf839280dfb8a2748b2250bd64f776bcdc7d93a66669ea9d36432bfa2b"
+      "bytes": 22325618,
+      "summarySha256": "c9852387e9a8288c204bcd84803afe447c6b0522ef4afb86fb1c7f6e55da5e22",
+      "resultsSha256": "0bcb4e9e043dded6670831362fbd82629a296f0f23c72bfbb0a18af81aaaf50b",
+      "enumerationSha256": "3ca0f6398446902adc8c9f310660fdf19ba39a5d4893049a1f44e5e3220032f7",
+      "argvSha256": "f3bf1fa0e756c3fe85cd28c23710d138d69ab140ed682186b50aa8384d4386df",
+      "manifestSha256": "c5caf705e9e6dc7ff5df7de6b2b9afd5b763cafb226b4f571936c6da54eded37",
+      "sealSha256": "49883d2aaf9367727dc4211893c53c228313bb1697cc2b27a1bf49aea22bc2b6"
     },
     "scopeDiscipline": "Measure-only. No finding from this survey was fixed or used to rewrite the specification."
   },
+  "acceptanceAssessment": {
+    "AA1": "Focused global-register declaration/use tests pass, but the full-configuration allocation-manifest class remains 2754/2754 units. AA1 is not closed by corpus evidence and the class must be re-minimized before another production edit.",
+    "AA2": "The completed-array redeclaration fixture passes, but the full-configuration semantic-identity class remains 12/12 units. AA2 is not closed by corpus evidence and the real construct must be re-minimized.",
+    "AA3": "PASS: pointer poison lowers and is typed across validation, text, interpretation and the e-graph boundary; pointer-integer conversions are E3036 rather than free-text E3101.",
+    "AA4": "PASS_MEASUREMENT: parse remains 2798/2798 and the new lowering frontier is sealed."
+  },
   "standardGate": {
     "workspace": {
-      "command": "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --locked --offline --quiet",
-      "passed": 1363,
+      "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet",
+      "passed": 1547,
       "failed": 0,
-      "ignored": 1,
+      "ignored": 4,
+      "targets": 234,
       "returnCode": 0,
-      "logSha256": "37978b38c84a8bb2a000e393905957f43f2c28baacb62ab083752198d2e71af0"
+      "logSha256": "0a44c83ef18ce320e916600a593d40d129295868afe24c157166e866a509ea5a"
     },
     "clippy": {
-      "command": "cargo clippy --workspace --all-targets --locked --offline -- -D warnings",
+      "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target cargo clippy --workspace --all-targets -- -D warnings",
       "warnings": 0,
       "returnCode": 0
     },
@@ -239,57 +245,49 @@
       "command": "ruff check tests/acceptance tools",
       "result": "clean"
     },
+    "commitReferenceCheck": {
+      "command": "python3 tools/check-commit-references.py",
+      "result": "PASS: 231 rewritten, 100 resolved unchanged, 149 other hexadecimal tokens; 308 map entries"
+    },
     "surveyInventorySelfTest": {
       "command": "python3 tests/acceptance/full-config-survey-inventory-selftest.py",
       "result": "PASS"
     },
-    "commitReferenceCheck": {
-      "command": "python3 tools/check-commit-references.py",
-      "result": "PASS: 231 rewritten, 75 resolved unchanged, 142 other hexadecimal tokens; 308 map entries"
-    },
     "baseLayoutCorpus": {
       "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
-      "result": "128/128 ORACLE_CONSENSUS",
-      "mismatches": 0,
-      "runId": "20260904T005835Z-10975"
+      "result": "128/128 ORACLE_CONSENSUS; 0 mismatches",
+      "runId": "20260904T182038Z-65992"
     },
     "attributedLayoutCorpus": {
       "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject",
-      "result": "22/22 ORACLE_CONSENSUS",
-      "mismatches": 0,
-      "runId": "20260904T005855Z-12625"
+      "result": "22/22 ORACLE_CONSENSUS; 0 mismatches",
+      "runId": "20260904T182059Z-66706"
     },
     "diffCheck": "clean"
   },
   "isolatedOfflineReplay": {
-    "commit": "d0d9cf9071dc1685339865b74cf3119e24549ae7",
-    "path": "/private/tmp/c30-z-replay.UQKAjW/repo",
-    "cloneCommand": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-z-replay.UQKAjW/repo; git switch --detach d0d9cf9071dc1685339865b74cf3119e24549ae7; test ! -e .git/objects/info/alternates",
-    "buildCommand": "CARGO_TARGET_DIR=/private/tmp/c30-z-replay.UQKAjW/target cargo test --workspace --locked --offline --no-run",
-    "testCommand": "CARGO_TARGET_DIR=/private/tmp/c30-z-replay.UQKAjW/target CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --locked --offline --quiet",
+    "commit": "a0157ce08620de638fabbc1a2840e8e82e463dff",
+    "path": "/private/tmp/c30-aa-replay.Ub7UB5/repo",
+    "cloneCommand": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-aa-replay.Ub7UB5/repo; git switch --detach a0157ce08620de638fabbc1a2840e8e82e463dff; test ! -e .git/objects/info/alternates",
+    "buildCommand": "CARGO_TARGET_DIR=/private/tmp/c30-aa-replay.Ub7UB5/target cargo test --workspace --locked --offline --no-run",
+    "testCommand": "CARGO_TARGET_DIR=/private/tmp/c30-aa-replay.Ub7UB5/target CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --locked --offline --quiet",
     "measured": {
-      "passed": 1363,
+      "passed": 1547,
       "failed": 0,
-      "ignored": 1,
+      "ignored": 4,
+      "targets": 234,
       "returnCode": 0,
       "objectsAlternates": "absent",
-      "freshTargetBytesHuman": "2.1G",
-      "logSha256": "509e1ddd0c0d514ebcf7ee5f99e5d21e54ec78440514cdc192cf05b32dfb7b5b"
-    },
-    "helperBoundary": {
-      "qualification": "The temporary runner copied each isolated-clone test executable without metadata. The three sibling commands were copied from this clone's fresh target, not from the primary worktree.",
-      "evoProofcheckSha256": "3f70e7d38e059fb6ac5d1e01a778b1711916b76fc6bfea4221f60566b32b559b",
-      "evoPolicyEvalSha256": "52d4672ef5ee74d88e251af39df4680df1e4bc4d9271bc58abb686bfdb218dd5",
-      "evoCostSearchSha256": "8ee379f80c633f4c118f0148dee28e1a7ff22535130c9836c91d09a4911b1233"
+      "freshTargetBytesHuman": "2.3G",
+      "buildLogSha256": "504a32075da988502d2c8340a61e0e31c2d7191faa00d12ad6b1298258513456",
+      "testLogSha256": "0657a7be362bd56dfde8bba2ec9c759fcbe8f4257231bd7ff6fb29a1d01b00f1"
     }
   },
   "processDeviations": [
-    "A concurrent middle-end stream advanced shared main during an otherwise green workspace gate. The lowering survey now freezes HEAD at start and refuses sealing if it changes; the accepted dashboard and surveys ran in a fixed worktree.",
-    "The first attributed-layout invocation omitted C30_LAYOUT_CASE_SET=attributed and failed manifest validation. Its capture is retained; the correctly configured rerun passed 22/22.",
-    "The first fixed-worktree dashboard attempt refused a symbolic kernel archive. A non-symbolic hard link to the frozen inode fixed the input boundary. The next run measured all 48 lanes but exposed the publisher's cross-root relative-path limitation. The accepted third run used real worktree-local evidence and stayed 48/48 with zero regressions.",
-    "Two parse-survey setup attempts stopped before executing any unit because symlink-resolved binary and build roots were outside the fixed subject root. The accepted runs used a hard-linked release binary and APFS copy-on-write snapshots of the exact gcc-lane-1 and linux-src trees; file counts matched the authorities.",
-    "The first final workspace attempt copied each test binary away from its Cargo target siblings, so fourteen proof and policy targets could not find evo-proofcheck, evo-policy-eval, or evo-cost-search. A second in-place attempt preserved topology but retained the host's per-binary provenance delay and was interrupted after ten green targets. Neither attempt is gate evidence. The accepted run copied the three built workspace binaries beside the temporary test runner, retained byte-identical executables, completed all targets, and exited zero."
+    "The first post-implementation workspace run found one historical CLI assertion that still expected the generic E3101 pointer-to-integer text. The assertion was changed to the exact E3036 diagnostic, its target passed 6/6, and the complete workspace was rerun green.",
+    "A base and attributed layout attempt was started concurrently. The two observers share global container inventory, so one saw inventory drift and the other failed cleanup. Neither result is evidence; subsequent sequential runs passed 128/128 and 22/22.",
+    "The first dashboard attempt in the isolated worktree was refused before measurement because the pinned kernel archive was absent. A hard link to the authority inode restored the exact SHA-256 closure. The next attempt measured 48/48 clean but hit the publisher's known relative-evidence-path exception; the accepted run used an absolute worktree-local evidence path and retained the same subject and previous-run lineage."
   ],
   "specGap": null,
-  "claimCeiling": "The configured kernel still parses 2,798 of 2,798 target C translation units cleanly. The lowering survey is a measured frontier, not a lowering-completeness claim: four units lower cleanly and 2,794 fail closed with typed diagnostics; no panic, timeout, or unavailable execution occurred."
+  "claimCeiling": "Revision 1.9.59 AA3 is implemented and replayed: pointer poison is typed and pointer-integer conversions fail closed as E3036. The parse guard remains 2798/2798. The lowering survey improves from 4 to 5 clean units with no regressions, panic, timeout or unavailable execution. It does not prove AA1 or AA2 against the real corpus: their 2754-unit and 12-unit E3101 classes remain unchanged and are explicitly open for re-minimization."
 }
