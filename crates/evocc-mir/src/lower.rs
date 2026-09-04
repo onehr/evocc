@@ -784,7 +784,7 @@ fn lower_block(
         lower_inst(lowerer, &mut insts, inst, external)?;
     }
 
-    let term = lower_terminator(lowerer, function, block, ids, fused)?;
+    let term = lower_terminator(lowerer, &mut insts, function, block, ids, fused)?;
     lowerer.blocks.push(MBlock {
         id: current_id,
         args: current_args,
@@ -890,6 +890,7 @@ fn lower_compare(
 
 fn lower_terminator(
     lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
     function: &Function,
     block: &Block,
     ids: &HashMap<u32, u32>,
@@ -934,9 +935,28 @@ fn lower_terminator(
         }
         Inst::Ret(values) => {
             let _ = function;
-            Ok(MTerm::Ret {
-                values: edge_args(lowerer, values)?,
-            })
+            let mut results = edge_args(lowerer, values)?;
+            // Section 6: Apple's variant extends a result narrower than 32
+            // bits, and the probe of Section 9 measured it: a host caller
+            // reading a `bits<8>` result at `-O2` takes the whole register and
+            // its own build of the same function had left the bits above the
+            // width clear. A callee cannot know whether its caller is one this
+            // compiler emitted, so it extends on every return; the internal
+            // rule leaves those bits unspecified, so specifying them breaks
+            // nothing. Zero, because EvoIR carries no result signedness, which
+            // is the rule revision 0.7 already ruled for arguments.
+            let register: Vec<&Value> = values
+                .iter()
+                .filter(|value| is_register_type(&value.ty))
+                .collect();
+            for (slot, value) in results.iter_mut().zip(register) {
+                if let EvoIRType::Bits(bits) = value.ty {
+                    if bits < 32 {
+                        *slot = lowerer.zero_extend(insts, *slot, bits, Width::W);
+                    }
+                }
+            }
+            Ok(MTerm::Ret { values: results })
         }
         Inst::Trap(reason) => Ok(MTerm::Brk {
             imm: trap_immediate(*reason),

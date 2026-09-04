@@ -17,7 +17,7 @@ use evocc_evoir::Module;
 use evocc_types::EvoIRType;
 
 use crate::lane::is_register_type;
-use crate::{allocate, emit_module, lower_module_with, out_of_ssa, verify_allocation};
+use crate::{allocate, emit_module_for, lower_module_with, out_of_ssa, verify_allocation, Target};
 
 /// Where the native pipeline stopped.
 ///
@@ -75,6 +75,15 @@ pub fn compile_module_with(
     module: &Module,
     keep: &dyn Fn(&str) -> bool,
 ) -> Result<String, NativeStop> {
+    compile_module_for(Target::Darwin, module, keep)
+}
+
+/// Lower, allocate, verify and emit one EvoIR module for `target`.
+pub fn compile_module_for(
+    target: Target,
+    module: &Module,
+    keep: &dyn Fn(&str) -> bool,
+) -> Result<String, NativeStop> {
     let lowered = lower_module_with(module, &|name| !keep(name)).map_err(|refusals| {
         let mut codes: Vec<&'static str> = refusals.iter().map(|refusal| refusal.code).collect();
         codes.sort_unstable();
@@ -96,7 +105,7 @@ pub fn compile_module_with(
         })?;
         functions.push(allocated);
     }
-    Ok(emit_module(&functions, &module.globals))
+    Ok(emit_module_for(target, &functions, &module.globals))
 }
 
 /// Lower, allocate, verify and emit every function of one EvoIR module.

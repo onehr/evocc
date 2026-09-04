@@ -603,3 +603,179 @@ fn a_ninth_register_argument_stays_refused() {
     assert_eq!(codes, vec!["E4010"]);
     println!("stackArgumentsRefusedBy=E4010");
 }
+
+// ---------------------------------------------------------------------------
+// The narrow-result probe (E4014)
+// ---------------------------------------------------------------------------
+
+/// Section 6: "A narrow result crossing the boundary is not yet ruled: Apple's
+/// variant extends it too, and nothing in this revision measures it."
+///
+/// These are the widths a C type has, so the host can declare the function and
+/// read its result at that type.
+const NARROW_RESULTS: [u16; 3] = [1, 8, 16];
+
+/// A function of one `bits<32>` argument returning `bits<N>`.
+///
+/// The body negates at width `N`, which at the machine width sets every bit
+/// above `N` for any nonzero operand: the bits the internal rule leaves
+/// unspecified, and the ones the platform rule would have the callee clear.
+fn narrow_result_function(name: &str, width: u16) -> Function {
+    let mut builder = Builder::new();
+    let argument = builder.value(EvoIRType::Bits(32));
+    let mem = builder.value(MEM());
+    let world = builder.value(WORLD());
+    let block_args: Vec<BlockArg> = [&argument, &mem, &world].into_iter().map(binder).collect();
+
+    let narrowed = builder.value(EvoIRType::Bits(width));
+    builder.push(Inst::Trunc(
+        narrowed.clone(),
+        argument.clone(),
+        EvoIRType::Bits(width),
+    ));
+    let zero = builder.value(EvoIRType::Bits(width));
+    builder.push(Inst::Const(zero.clone(), 0));
+    let negated = builder.value(EvoIRType::Bits(width));
+    builder.push(Inst::Sub(negated.clone(), zero, narrowed));
+
+    Function {
+        name: name.to_owned(),
+        params: vec![
+            FunctionParam {
+                name: "arg0".to_owned(),
+                ty: EvoIRType::Bits(32),
+            },
+            FunctionParam {
+                name: "arg1".to_owned(),
+                ty: MEM(),
+            },
+            FunctionParam {
+                name: "arg2".to_owned(),
+                ty: WORLD(),
+            },
+        ],
+        ret_tys: vec![EvoIRType::Bits(width), MEM(), WORLD()],
+        effects: EffectSummary::default(),
+        blocks: vec![Block {
+            id: 0,
+            args: block_args,
+            insts: builder.insts,
+            terminator: Inst::Ret(vec![negated, mem, world]),
+        }],
+    }
+}
+
+/// The C type a `bits<N>` result is declared with.
+const fn narrow_c_type(width: u16) -> &'static str {
+    match width {
+        1 | 8 => "uint8_t",
+        _ => "uint16_t",
+    }
+}
+
+fn narrow_module() -> Module {
+    let mut functions = Vec::new();
+    for width in NARROW_RESULTS {
+        functions.push(narrow_result_function(
+            &format!("host_narrow_{width}"),
+            width,
+        ));
+        functions.push(narrow_result_function(
+            &format!("evocc_narrow_{width}"),
+            width,
+        ));
+    }
+    let mut module = Module {
+        globals: Vec::new(),
+        functions,
+    };
+    module.recompute_effect_summaries();
+    module
+}
+
+/// The host side: its own build of the same function, and the comparison.
+///
+/// The result is used at its declared C type without a mask, so a host caller
+/// that trusts the platform's extension reads whatever the callee left above
+/// the width.
+fn narrow_source() -> String {
+    let mut text = String::from("#include <stdint.h>\n#include <stdio.h>\n\n");
+    for width in NARROW_RESULTS {
+        let c = narrow_c_type(width);
+        let mask = (1_u64 << width) - 1;
+        text.push_str(&format!(
+            "{c} host_narrow_{width}(uint32_t a) {{ return ({c})((0u - a) & {mask}u); }}\n"
+        ));
+        text.push_str(&format!("extern {c} evocc_narrow_{width}(uint32_t a);\n\n"));
+    }
+    text.push_str("int main(void) {\n    int failures = 0;\n    int checks = 0;\n");
+    for width in NARROW_RESULTS {
+        text.push_str(&format!(
+            "    for (uint32_t a = 1; a < 200; a++) {{\n        checks++;\n        uint32_t mine = (uint32_t)evocc_narrow_{width}(a);\n        uint32_t theirs = (uint32_t)host_narrow_{width}(a);\n        if (mine != theirs) {{\n            printf(\"narrowResult {width} disagreed a=%u evocc=%u host=%u\\n\", a, mine, theirs);\n            failures++;\n            break;\n        }}\n    }}\n"
+        ));
+    }
+    text.push_str("    printf(\"narrowChecks=%d\\nnarrowFailures=%d\\n\", checks, failures);\n    return failures == 0 ? 0 : 1;\n}\n");
+    text
+}
+
+/// Section 6, the question `E4014` stands on: does the callee have to extend a
+/// result narrower than 32 bits before it crosses the boundary?
+#[test]
+fn the_narrow_result_probe_settles_the_extension() {
+    let toolchain = match Toolchain::locate() {
+        Ok(toolchain) => toolchain,
+        Err(reason) => {
+            println!("skipped={reason}");
+            return;
+        }
+    };
+    println!("probeFile={}", file!());
+    println!("toolchain={}", toolchain.version());
+
+    let module = narrow_module();
+    evocc_evoir::validate_module(&module).expect("the probe module validates");
+    let text = compile_module_with(&module, &|name| !name.starts_with("host_"))
+        .expect("every probe function lowers, allocates, verifies and emits");
+
+    let directory = std::env::temp_dir().join(format!("evocc-narrow-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).expect("a working directory");
+    let assembly = directory.join("narrow.s");
+    let source = directory.join("narrow.c");
+    let program = directory.join("narrow");
+    std::fs::write(&assembly, &text).expect("the emitted text");
+    std::fs::write(&source, narrow_source()).expect("the host source");
+
+    let built = Command::new("clang")
+        .arg("-O2")
+        .arg("-o")
+        .arg(&program)
+        .arg(&source)
+        .arg(&assembly)
+        .output()
+        .expect("run clang");
+    assert!(
+        built.status.success(),
+        "the toolchain refused the narrow-result probe:\n{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    let run = Command::new(&program).output().expect("run the probe");
+    let stdout = String::from_utf8_lossy(&run.stdout).into_owned();
+    print!("{stdout}");
+    for width in NARROW_RESULTS {
+        println!("narrowWidth={width} cType={}", narrow_c_type(width));
+    }
+
+    let _ = std::fs::remove_file(&assembly);
+    let _ = std::fs::remove_file(&source);
+    let _ = std::fs::remove_file(&program);
+
+    assert_eq!(
+        run.status.code(),
+        Some(0),
+        "the narrow-result probe reported a disagreement:\n{stdout}"
+    );
+    assert!(
+        stdout.contains(&format!("narrowChecks={}", NARROW_RESULTS.len() * 199)),
+        "the probe ran fewer comparisons than it declared:\n{stdout}"
+    );
+}

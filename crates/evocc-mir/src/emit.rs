@@ -113,19 +113,111 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
     }
 }
 
-/// The platform symbol prefix of Section 8.
-const PREFIX: &str = "_";
+/// The platform an emission targets.
+///
+/// Section 1: the AArch64 scalar subset is "first hosted as Darwin arm64 ...
+/// and then as Linux AArch64 for the kernel. The two targets share every rule
+/// below except the ones the calling convention and the symbol syntax name."
+/// This is those ones: the symbol prefix, the page-relative spelling, the
+/// section names and the local-label prefix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Target {
+    #[default]
+    Darwin,
+    Linux,
+}
+
+impl Target {
+    /// Section 8: "symbols get the platform prefix (`_` on Darwin)".
+    #[must_use]
+    pub const fn symbol_prefix(self) -> &'static str {
+        match self {
+            Self::Darwin => "_",
+            Self::Linux => "",
+        }
+    }
+
+    /// A label the assembler keeps out of the symbol table.
+    const fn label_prefix(self) -> &'static str {
+        match self {
+            Self::Darwin => "L",
+            Self::Linux => ".L",
+        }
+    }
+
+    const fn text_section(self) -> &'static str {
+        match self {
+            Self::Darwin => ".section __TEXT,__text,regular,pure_instructions",
+            Self::Linux => ".text",
+        }
+    }
+
+    const fn data_section(self) -> &'static str {
+        match self {
+            Self::Darwin => ".section __DATA,__data",
+            Self::Linux => ".data",
+        }
+    }
+
+    /// The name a target is selected by.
+    #[must_use]
+    pub const fn mnemonic(self) -> &'static str {
+        match self {
+            Self::Darwin => "darwin-arm64",
+            Self::Linux => "linux-aarch64",
+        }
+    }
+
+    /// Read a target name.
+    #[must_use]
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "darwin-arm64" | "darwin" => Some(Self::Darwin),
+            "linux-aarch64" | "linux" => Some(Self::Linux),
+            _ => None,
+        }
+    }
+
+    /// Section 4: the page-relative pair, "`@f@FUNCPAGE` / `@f@FUNCPAGEOFF`
+    /// for a function symbol ... (Darwin spelling; Linux uses `:pg_hi21:` and
+    /// `:lo12:`)".
+    fn adrp_operand(self, symbol: &str, page: &str) -> String {
+        match self {
+            Self::Darwin => format!("{}{symbol}@{page}", self.symbol_prefix()),
+            Self::Linux => format!(":pg_hi21:{symbol}"),
+        }
+    }
+
+    fn pageoff_operand(self, symbol: &str) -> String {
+        match self {
+            Self::Darwin => format!("{}{symbol}@PAGEOFF", self.symbol_prefix()),
+            Self::Linux => format!(":lo12:{symbol}"),
+        }
+    }
+}
 
 /// Emit one module as Darwin arm64 assembly.
 #[must_use]
 pub fn emit_module(functions: &[Allocated], globals: &[GlobalObject]) -> String {
+    emit_module_for(Target::Darwin, functions, globals)
+}
+
+/// Emit one module for `target`.
+#[must_use]
+pub fn emit_module_for(
+    target: Target,
+    functions: &[Allocated],
+    globals: &[GlobalObject],
+) -> String {
+    let prefix = target.symbol_prefix();
     let mut text = String::new();
-    text.push_str(".section __TEXT,__text,regular,pure_instructions\n");
+    text.push_str(target.text_section());
+    text.push('\n');
     for function in functions {
-        emit_function(&mut text, function);
+        emit_function(&mut text, target, function);
     }
     if !globals.is_empty() {
-        text.push_str("\n.section __DATA,__data\n");
+        let _ = writeln!(text, "\n{}", target.data_section());
         let mut ordered: Vec<&GlobalObject> = globals.iter().collect();
         ordered.sort_by_key(|global| global.origin);
         for global in ordered {
@@ -134,8 +226,8 @@ pub fn emit_module(functions: &[Allocated], globals: &[GlobalObject]) -> String 
                 ".p2align {}",
                 global.layout.align_bytes.trailing_zeros()
             );
-            let _ = writeln!(text, ".globl {PREFIX}{}", global.symbol);
-            let _ = writeln!(text, "{PREFIX}{}:", global.symbol);
+            let _ = writeln!(text, ".globl {prefix}{}", global.symbol);
+            let _ = writeln!(text, "{prefix}{}:", global.symbol);
             for byte in &global.bytes {
                 let _ = writeln!(text, "    .byte {byte}");
             }
@@ -147,15 +239,16 @@ pub fn emit_module(functions: &[Allocated], globals: &[GlobalObject]) -> String 
     text
 }
 
-fn label(function: &str, block: u32) -> String {
-    format!("L{function}_block{block}")
+fn label(target: Target, function: &str, block: u32) -> String {
+    format!("{}{function}_block{block}", target.label_prefix())
 }
 
-fn emit_function(text: &mut String, allocated: &Allocated) {
+fn emit_function(text: &mut String, target: Target, allocated: &Allocated) {
     let frame = frame_of(allocated);
-    let _ = writeln!(text, "\n.globl {PREFIX}{}", allocated.name);
+    let prefix = target.symbol_prefix();
+    let _ = writeln!(text, "\n.globl {prefix}{}", allocated.name);
     let _ = writeln!(text, ".p2align 2");
-    let _ = writeln!(text, "{PREFIX}{}:", allocated.name);
+    let _ = writeln!(text, "{prefix}{}:", allocated.name);
     emit_prologue(text, &frame);
 
     // Appendix A's width suffix, not the operand's declared class, decides how
@@ -178,12 +271,28 @@ fn emit_function(text: &mut String, allocated: &Allocated) {
     let order: Vec<u32> = allocated.blocks.iter().map(|block| block.id).collect();
     let mut copies = 0_u32;
     for (index, block) in allocated.blocks.iter().enumerate() {
-        let _ = writeln!(text, "{}:", label(&allocated.name, block.id));
+        let _ = writeln!(text, "{}:", label(target, &allocated.name, block.id));
         for inst in &block.insts {
-            emit_inst(text, inst, &frame, &spell, &allocated.name, &mut copies);
+            emit_inst(
+                text,
+                target,
+                inst,
+                &frame,
+                &spell,
+                &allocated.name,
+                &mut copies,
+            );
         }
         let next = order.get(index + 1).copied();
-        emit_term(text, &allocated.name, &block.term, &frame, next, &spell);
+        emit_term(
+            text,
+            target,
+            &allocated.name,
+            &block.term,
+            &frame,
+            next,
+            &spell,
+        );
     }
 }
 
@@ -287,6 +396,7 @@ fn emit_frame_access(text: &mut String, mnemonic: &str, register: &str, offset: 
 /// text is copied verbatim and never parsed."
 fn emit_assembly(
     text: &mut String,
+    target: Target,
     body: &AsmBody,
     labels: &[(u32, Vec<VReg>)],
     function: &str,
@@ -347,7 +457,9 @@ fn emit_assembly(
                 .map(|at| index + 2 + at);
             if let Some(close) = close {
                 let name: String = characters[index + 2..close].iter().collect();
-                let target = name
+                // Revision 0.8: `%l[...]` holds the label's position in the
+                // declared list, counting from zero.
+                let successor = name
                     .parse::<usize>()
                     .ok()
                     .or_else(|| {
@@ -356,8 +468,8 @@ fn emit_assembly(
                     })
                     .and_then(|position| labels.get(position))
                     .map(|(block, _)| *block);
-                if let Some(block) = target {
-                    rendered.push_str(&label(function, block));
+                if let Some(block) = successor {
+                    rendered.push_str(&label(target, function, block));
                     index = close + 1;
                     continue;
                 }
@@ -473,6 +585,7 @@ const fn store_class(kind: StoreKind) -> RegClass {
 #[allow(clippy::too_many_lines)]
 fn emit_inst(
     text: &mut String,
+    target: Target,
     inst: &MInst,
     frame: &Frame,
     spell: &impl Fn(VReg, RegClass) -> String,
@@ -503,16 +616,22 @@ fn emit_inst(
             let page = match kind {
                 SymbolKind::Global | SymbolKind::Function => "PAGE",
             };
-            let _ = writeln!(text, "    adrp {}, {PREFIX}{symbol}@{page}", name(*dst));
+            let _ = writeln!(
+                text,
+                "    adrp {}, {}",
+                name(*dst),
+                target.adrp_operand(symbol, page)
+            );
         }
         MInst::AddPageOff {
             dst, src, symbol, ..
         } => {
             let _ = writeln!(
                 text,
-                "    add {}, {}, {PREFIX}{symbol}@PAGEOFF",
+                "    add {}, {}, {}",
                 name(*dst),
-                name(*src)
+                name(*src),
+                target.pageoff_operand(symbol)
             );
         }
         MInst::Load {
@@ -682,7 +801,7 @@ fn emit_inst(
             );
         }
         MInst::Bl { symbol, .. } => {
-            let _ = writeln!(text, "    bl {PREFIX}{symbol}");
+            let _ = writeln!(text, "    bl {}{symbol}", target.symbol_prefix());
         }
         MInst::Blr { target, .. } => {
             let _ = writeln!(text, "    blr {}", name(*target));
@@ -750,7 +869,7 @@ fn emit_inst(
                 let _ = writeln!(text, "    cbnz {counter}, {body}");
             }
         }
-        MInst::Asm(body) => emit_assembly(text, body, &[], function, spell),
+        MInst::Asm(body) => emit_assembly(text, target, body, &[], function, spell),
         MInst::Ldp {
             rt1,
             rt2,
@@ -788,6 +907,7 @@ fn emit_inst(
 
 fn emit_term(
     text: &mut String,
+    target: Target,
     function: &str,
     term: &MTerm,
     frame: &Frame,
@@ -795,9 +915,10 @@ fn emit_term(
     spell: &impl Fn(VReg, RegClass) -> String,
 ) {
     let name = |reg: VReg| spell(reg, reg.class);
+    let platform = target;
     let branch = |text: &mut String, target: u32| {
         if next != Some(target) {
-            let _ = writeln!(text, "    b {}", label(function, target));
+            let _ = writeln!(text, "    b {}", label(platform, function, target));
         }
     };
     match term {
@@ -812,7 +933,7 @@ fn emit_term(
                 text,
                 "    b.{} {}",
                 cond.mnemonic(),
-                label(function, *taken)
+                label(platform, function, *taken)
             );
             branch(text, *untaken);
         }
@@ -828,7 +949,7 @@ fn emit_term(
                 "    {} {}, {}",
                 if *nonzero { "cbnz" } else { "cbz" },
                 name(*src),
-                label(function, *taken)
+                label(platform, function, *taken)
             );
             branch(text, *untaken);
         }
@@ -845,7 +966,7 @@ fn emit_term(
                 "    {} {}, #{bit}, {}",
                 if *nonzero { "tbnz" } else { "tbz" },
                 name(*src),
-                label(function, *taken)
+                label(platform, function, *taken)
             );
             branch(text, *untaken);
         }
@@ -858,7 +979,7 @@ fn emit_term(
             fallthrough,
             ..
         } => {
-            emit_assembly(text, body, labels, function, spell);
+            emit_assembly(text, target, body, labels, function, spell);
             branch(text, *fallthrough);
         }
         MTerm::Ret { .. } => {

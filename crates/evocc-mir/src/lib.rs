@@ -31,12 +31,13 @@ pub mod validate;
 use std::fmt;
 
 pub use allocverify::{verify_allocation, VerifierRefusal};
-pub use emit::{emit_module, frame_of, Frame};
+pub use emit::{emit_module, emit_module_for, frame_of, Frame, Target};
 pub use interp::{interpret_module, MirError, MirLimits, MirOutcome, MirValue};
 pub use linscan::{allocate, render_allocated, Allocated, CALLEE_SAVED, CALLER_SAVED};
 pub use lower::{lower_module, lower_module_with, Refusal};
 pub use native::{
-    compile_module, compile_module_with, native_corpus_entry, Driver, NativeStop, Toolchain,
+    compile_module, compile_module_for, compile_module_with, native_corpus_entry, Driver,
+    NativeStop, Toolchain,
 };
 pub use regalloc::out_of_ssa;
 pub use text::render_module;
