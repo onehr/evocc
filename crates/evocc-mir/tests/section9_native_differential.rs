@@ -269,6 +269,88 @@ fn source_byte(index: usize) -> u8 {
         >> 24) as u8
 }
 
+/// A program with one automatic object larger than the twelve-bit immediate
+/// the prologue subtracts, and one copy larger than the sixteen bits one `movz`
+/// carries.
+///
+/// Section 6 lays the frame out "from `sp` with a non-negative scaled offset",
+/// and Section 4 expands a copy above sixty-four bytes as "a counted loop".
+/// Neither says what to do when the offset or the size leaves the immediate
+/// range; both then need a second instruction, and this is the program that
+/// needs them.
+fn large_frame_program(object: usize, copied: usize) -> String {
+    assert!(object.is_multiple_of(8) && copied.is_multiple_of(8) && copied <= object);
+    let tail = copied / 8 - 1;
+    format!(
+        "\
+func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects {{ reads={{all}}, writes={{all}}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }}
+{{
+^entry(%v0: mem<all>, %v1: world):
+    (%v2, %v3, %v4) = alloca %v0, %v1 [origin=1, size={object}, align=8]
+    (%v5, %v6, %v7) = alloca %v3, %v4 [origin=2, size={object}, align=8]
+    %v8 = const.bits<64> 3735928559
+    %v9 = access_in_bounds %v6, %v2 [size=8, align=8]
+    (%v10, %v11) = store %v9, %v7, %v2, %v8
+    %v12 = const.bits<64> {tail}
+    %v13 = ptr.offset.add.unsigned %v2, %v12 [scale=8]
+    %v14 = pointer_valid %v10, %v13
+    %v15 = access_in_bounds %v14, %v13 [size=8, align=8]
+    %v16 = const.bits<64> 11400714819323198485
+    (%v17, %v18) = store %v15, %v11, %v13, %v16
+    (%v19, %v20) = copy %v17, %v18, %v5, %v2 [size={copied}, align=8]
+    %v21 = access_in_bounds %v19, %v5 [size=8, align=8]
+    (%v22, %v23, %v24) = load %v21, %v20, %v5 : bits<64>
+    %v25 = ptr.offset.add.unsigned %v5, %v12 [scale=8]
+    %v26 = pointer_valid %v23, %v25
+    %v27 = access_in_bounds %v26, %v25 [size=8, align=8]
+    (%v28, %v29, %v30) = load %v27, %v24, %v25 : bits<64>
+    %v31 = const.bits<64> 31
+    %v32 = mul.bits<64> %v22, %v31
+    %v33 = add.bits<64> %v32, %v28
+    %v34 = const.bits<64> 32
+    %v35 = shift_count_defined.unsigned %v33, %v34
+    ub.assume.invalid_shift_count %v35
+    %v36 = lshr.bits<64> %v33, %v34
+    %v37 = xor.bits<64> %v33, %v36
+    %v38 = trunc.bits<32> %v37
+    ret %v38, %v29, %v30
+}}
+"
+    )
+}
+
+/// Section 6: a frame past the twelve-bit immediate, and Section 4: a copy past
+/// sixteen bits of counter.
+#[test]
+fn a_frame_and_a_copy_beyond_their_immediates_agree_with_the_interpreter() {
+    let version = match toolchain() {
+        Ok(version) => version,
+        Err(reason) => {
+            println!("skipped={reason}");
+            return;
+        }
+    };
+    println!("toolchain={version}");
+
+    // 8 KiB of objects puts the frame past 4095; 70000 bytes puts the copy
+    // counter past 65535.
+    for (object, copied) in [(8192_usize, 4096_usize), (70_000, 70_000)] {
+        let source = large_frame_program(object, copied);
+        let (functions, module) = build(&source);
+        let text = emit_module(&functions, &module.globals);
+        let status = match run_native(&format!("large{object}"), &text) {
+            Ok(status) => status,
+            Err(reason) => panic!("{object}: {reason}"),
+        };
+        let expected = interpreted(&module);
+        let observed = u8::try_from(status & 0xff).expect("eight bits");
+        assert_eq!(observed, expected, "a {object}-byte frame disagreed");
+        assert_ne!(observed, 0, "the {object}-byte fold is not observable");
+        println!("frameObjectBytes={object} copyBytes={copied} exitStatus={observed}");
+    }
+}
+
 /// Section 4: a `mem.copy` above sixty-four bytes is a counted loop, and the
 /// loop moves the same bytes the interpreter moved.
 #[test]

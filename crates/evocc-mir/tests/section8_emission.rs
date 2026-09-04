@@ -446,3 +446,73 @@ fn a_two_width_form_spells_every_operand_at_its_own_width() {
         Err(reason) => println!("skipped: {reason}"),
     }
 }
+
+/// Section 6 keeps every slot "inside the unsigned twelve-bit immediate form",
+/// and Section 4 counts a copy down from its size. A frame with a large
+/// automatic object leaves the first range and a copy above sixty-four
+/// kilobytes leaves the second, and each then needs a second instruction.
+#[test]
+fn a_frame_and_a_copy_beyond_their_immediates_take_two_instructions() {
+    let g = |id: u32| VReg::new(id, RegClass::Gpr64);
+
+    // Two objects of 70000 bytes: the frame is 140000 bytes, which is neither a
+    // twelve-bit immediate nor a multiple of 4096 the assembler could shift on
+    // its own, and the copy between them counts past 65535.
+    let function = MFunction {
+        name: "large".to_owned(),
+        blocks: vec![MBlock {
+            id: 0,
+            args: Vec::new(),
+            insts: vec![
+                MInst::FrameSlot {
+                    dst: g(0),
+                    origin: 0,
+                    size: 70_000,
+                    align: 8,
+                },
+                MInst::FrameSlot {
+                    dst: g(1),
+                    origin: 1,
+                    size: 70_000,
+                    align: 8,
+                },
+                MInst::MemCopy {
+                    dst: g(0),
+                    src: g(1),
+                    size: 70_000,
+                    align: 8,
+                },
+            ],
+            term: MTerm::Ret { values: Vec::new() },
+        }],
+    };
+
+    let allocated = allocate(&out_of_ssa(&function)).expect("allocation");
+    let text = emit_module(&[allocated], &[]);
+    assert!(
+        text.contains("    sub sp, sp, #34, lsl #12\n    sub sp, sp, #736\n"),
+        "the prologue needs the shifted form and a remainder:\n{text}"
+    );
+    assert!(
+        text.contains("    add sp, sp, #34, lsl #12\n    add sp, sp, #736\n"),
+        "the epilogue reverses it:\n{text}"
+    );
+    assert!(
+        text.contains("    add x0, sp, #17, lsl #12\n    add x0, x0, #368\n"),
+        "a slot beyond the immediate is addressed in two instructions:\n{text}"
+    );
+    // 70000 is 0x11170: one `movz` for the low half and one `movk` for the top.
+    assert!(
+        text.contains("    movz x16, #4464\n    movk x16, #1, lsl #16\n"),
+        "the counter needs both halves:\n{text}"
+    );
+    match assembler() {
+        Ok(version) => {
+            println!("assembler={version}");
+            if let Err(complaint) = assemble(&text) {
+                panic!("the assembler refused the wide immediates:\n{complaint}\n{text}");
+            }
+        }
+        Err(reason) => println!("skipped: {reason}"),
+    }
+}

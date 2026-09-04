@@ -90,6 +90,32 @@ const PATTERN_B: [Shape; 8] = [
     Shape::Ptr,
 ];
 
+/// The shapes that cross to a host function which does not mask its own
+/// argument.
+///
+/// Every width here is exactly a C type's, so the value the host callee reads
+/// is the value EvoIR passed only when the register carries the platform's
+/// extension: revision 0.5's rule for the boundary, as against the internal
+/// rule that leaves the bits above `N` unspecified. Widths with no C type of
+/// their own stay in the folding families above, whose host side masks.
+const PATTERN_C: [Shape; 8] = [
+    Shape::Bits(8),
+    Shape::Bits(16),
+    Shape::Bits(32),
+    Shape::Ptr,
+    Shape::Bits(8),
+    Shape::Bits(64),
+    Shape::Bits(16),
+    Shape::Bits(8),
+];
+
+/// The shapes whose host side does not mask, at every admitted arity.
+fn bare_shapes() -> Vec<(String, Vec<Shape>)> {
+    (1..=8_usize)
+        .map(|count| (format!("c{count}"), PATTERN_C[..count].to_vec()))
+        .collect()
+}
+
 /// Every shape the probe covers: both patterns at every admitted arity.
 fn shapes() -> Vec<(String, Vec<Shape>)> {
     let mut all = Vec::new();
@@ -99,11 +125,6 @@ fn shapes() -> Vec<(String, Vec<Shape>)> {
         }
     }
     all
-}
-
-/// The constant the forwarder adds to argument `position` before handing it on.
-const fn bump(position: usize) -> u64 {
-    (position as u64) * 2 + 1
 }
 
 const MEM: fn() -> EvoIRType = || EvoIRType::Mem(Region::All);
@@ -266,8 +287,15 @@ fn fold_function(name: &str, shapes: &[Shape]) -> Function {
     }
 }
 
-/// A function that bumps each integer argument at its own width and calls
-/// `callee` with the result, so the outgoing registers carry bits above `N`.
+/// A function that negates each integer argument at its own width and calls
+/// `callee` with the result.
+///
+/// Negation is what makes the outgoing register carry bits above `N`: at the
+/// machine width `0 - x` sets every bit above the source's width for any
+/// nonzero `x`, where an addition only carries when the operand is near the
+/// top of its range. Those bits are exactly what the internal rule leaves
+/// unspecified and what the boundary rule of Section 6 requires a caller to
+/// clear.
 fn forwarder(name: &str, callee: &str, shapes: &[Shape]) -> Function {
     let mut builder = Builder::new();
     let (args, mem, world) = entry_values(&mut builder, shapes);
@@ -278,15 +306,15 @@ fn forwarder(name: &str, callee: &str, shapes: &[Shape]) -> Function {
         .collect::<Vec<_>>();
 
     let mut outgoing = Vec::new();
-    for (position, (shape, value)) in shapes.iter().zip(&args).enumerate() {
+    for (shape, value) in shapes.iter().zip(&args) {
         match shape {
             Shape::Ptr => outgoing.push(value.clone()),
             Shape::Bits(width) => {
-                let addend = builder.value(EvoIRType::Bits(*width));
-                builder.push(Inst::Const(addend.clone(), bump(position) & shape.mask()));
-                let sum = builder.value(EvoIRType::Bits(*width));
-                builder.push(Inst::Add(sum.clone(), value.clone(), addend));
-                outgoing.push(sum);
+                let zero = builder.value(EvoIRType::Bits(*width));
+                builder.push(Inst::Const(zero.clone(), 0));
+                let negated = builder.value(EvoIRType::Bits(*width));
+                builder.push(Inst::Sub(negated.clone(), zero, value.clone()));
+                outgoing.push(negated);
             }
         }
     }
@@ -329,6 +357,14 @@ fn probe_module() -> Module {
         functions.push(forwarder(
             &format!("evocc_calls_host_{tag}"),
             &format!("host_fold_{tag}"),
+            &shapes,
+        ));
+    }
+    for (tag, shapes) in bare_shapes() {
+        functions.push(fold_function(&format!("host_bare_{tag}"), &shapes));
+        functions.push(forwarder(
+            &format!("evocc_calls_bare_{tag}"),
+            &format!("host_bare_{tag}"),
             &shapes,
         ));
     }
@@ -379,6 +415,32 @@ fn probe_source() -> String {
         ));
     }
 
+    // The same fold with nothing masked: each argument is used at its own C
+    // type, so the host compiler is free to trust the platform's extension and
+    // read the whole register. This is the shape that would have passed
+    // silently while the caller left the bits above `N` as it found them.
+    for (tag, shapes) in bare_shapes() {
+        let signature = shapes
+            .iter()
+            .enumerate()
+            .map(|(index, shape)| format!("{} a{index}", shape.c_type()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        text.push_str(&format!("uint32_t host_bare_{tag}({signature}) {{\n"));
+        text.push_str("    uint32_t acc = 0x811c9dc5u;\n");
+        for (index, shape) in shapes.iter().enumerate() {
+            let contribution = match shape {
+                Shape::Ptr => format!("(uint32_t)(*a{index})"),
+                Shape::Bits(_) => format!("(uint32_t)a{index}"),
+            };
+            text.push_str(&format!("    acc = acc * 16777619u ^ {contribution};\n"));
+        }
+        text.push_str("    return acc;\n}\n\n");
+        text.push_str(&format!(
+            "extern uint32_t evocc_calls_bare_{tag}({signature});\n\n"
+        ));
+    }
+
     text.push_str("int main(void) {\n    int failures = 0;\n    int checks = 0;\n");
     for (tag, shapes) in shapes() {
         let mut direct = Vec::new();
@@ -395,10 +457,10 @@ fn probe_source() -> String {
                         .wrapping_add(0x0123_4567_89ab_cdef);
                     direct.push(format!("({}){}ull", shape.c_type(), raw));
                     bumped.push(format!(
-                        "({})(({}ull + {}ull) & {}ull)",
+                        "({})((0ull - ({}ull & {}ull)) & {}ull)",
                         shape.c_type(),
                         raw,
-                        bump(index),
+                        shape.mask(),
                         shape.mask()
                     ));
                 }
@@ -408,6 +470,36 @@ fn probe_source() -> String {
         let bumped = bumped.join(", ");
         text.push_str(&format!(
             "    checks += 2;\n    if (evocc_fold_{tag}({direct}) != host_fold_{tag}({direct})) {{\n        printf(\"hostCallsEvocc {tag} disagreed\\n\");\n        failures++;\n    }}\n    if (evocc_calls_host_{tag}({direct}) != host_fold_{tag}({bumped})) {{\n        printf(\"evoccCallsHost {tag} disagreed\\n\");\n        failures++;\n    }}\n"
+        ));
+    }
+    for (tag, shapes) in bare_shapes() {
+        let mut direct = Vec::new();
+        let mut bumped = Vec::new();
+        for (index, shape) in shapes.iter().enumerate() {
+            match shape {
+                Shape::Ptr => {
+                    direct.push(format!("&bytes[{}]", index * 3 % 16));
+                    bumped.push(format!("&bytes[{}]", index * 3 % 16));
+                }
+                Shape::Bits(_) => {
+                    let raw = 0xc2b2_ae3d_27d4_eb4f_u64
+                        .wrapping_mul(index as u64 + 1)
+                        .wrapping_add(0x0f0f_0f0f_0f0f_0f0f);
+                    direct.push(format!("({}){}ull", shape.c_type(), raw));
+                    bumped.push(format!(
+                        "({})((0ull - ({}ull & {}ull)) & {}ull)",
+                        shape.c_type(),
+                        raw,
+                        shape.mask(),
+                        shape.mask()
+                    ));
+                }
+            }
+        }
+        let direct = direct.join(", ");
+        let bumped = bumped.join(", ");
+        text.push_str(&format!(
+            "    checks += 1;\n    if (evocc_calls_bare_{tag}({direct}) != host_bare_{tag}({bumped})) {{\n        printf(\"evoccCallsBareHost {tag} disagreed\\n\");\n        failures++;\n    }}\n"
         ));
     }
     text.push_str("    printf(\"checks=%d\\nfailures=%d\\n\", checks, failures);\n    return failures == 0 ? 0 : 1;\n}\n");
@@ -440,8 +532,8 @@ fn the_calling_convention_probe_agrees_in_both_directions() {
     let module = probe_module();
     evocc_evoir::validate_module(&module).expect("the probe module validates");
 
-    // The host compiles `host_fold_*`; EvoCC compiles the other two families.
-    let text = compile_module_with(&module, &|name| !name.starts_with("host_fold_"))
+    // The host compiles every `host_*`; EvoCC compiles the rest.
+    let text = compile_module_with(&module, &|name| !name.starts_with("host_"))
         .expect("every probe function lowers, allocates, verifies and emits");
 
     let directory = std::env::temp_dir().join(format!("evocc-probe-{}", std::process::id()));
@@ -452,7 +544,11 @@ fn the_calling_convention_probe_agrees_in_both_directions() {
     std::fs::write(&assembly, &text).expect("the emitted text");
     std::fs::write(&source, probe_source()).expect("the host source");
 
+    // The host side is optimized: at `-O0` clang spills a narrow parameter to
+    // the stack with a byte or halfword store and reloads it, which masks the
+    // register and hides exactly the difference this family exists to find.
     let built = Command::new("clang")
+        .arg("-O2")
         .arg("-o")
         .arg(&program)
         .arg(&source)
@@ -468,7 +564,8 @@ fn the_calling_convention_probe_agrees_in_both_directions() {
     let stdout = String::from_utf8_lossy(&run.stdout).into_owned();
     print!("{stdout}");
 
-    let covered = shapes();
+    let mut covered = shapes();
+    covered.extend(bare_shapes());
     println!("shapes={}", covered.len());
     for (tag, shape) in &covered {
         println!(
@@ -486,8 +583,10 @@ fn the_calling_convention_probe_agrees_in_both_directions() {
         Some(0),
         "the probe reported a disagreement:\n{stdout}"
     );
+    // Two comparisons for each folding shape and one for each bare shape.
+    let expected = shapes().len() * 2 + bare_shapes().len();
     assert!(
-        stdout.contains(&format!("checks={}", covered.len() * 2)),
+        stdout.contains(&format!("checks={expected}")),
         "the probe ran fewer comparisons than it declared:\n{stdout}"
     );
 
