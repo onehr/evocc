@@ -336,6 +336,29 @@ fn the_gate_runs_four_lanes_over_the_native_corpus() {
     }
 }
 
+/// The campaign is a command, not only a test: the mode is a flag.
+#[test]
+fn the_command_line_gate_runs_the_native_corpus() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_evo-randgate"))
+        .args(["--seed", "97", "--count", "8", "--mode", "native-main"])
+        .output()
+        .expect("run evo-randgate");
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stdout={stdout}, stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(stdout.contains("generated=8"), "stdout={stdout}");
+    assert!(stdout.contains("mismatched=0"), "stdout={stdout}");
+    if Toolchain::locate().is_ok() {
+        assert!(stdout.contains("nativeRun=8"), "stdout={stdout}");
+        assert!(stdout.contains("nativeAgreeing=8"), "stdout={stdout}");
+    }
+    print!("{stdout}");
+}
+
 #[test]
 #[ignore = "long run: reserved for the standing campaign, not for every commit"]
 fn the_extended_native_campaign_finds_no_mismatch() {
