@@ -97,7 +97,7 @@
     "evomirFirstImplementationStops": "2026-09-04: the first implementation of the EvoMIR specification stopped thirteen times, every stop real; revision 0.2 rules all: UB predicates get lowering rows (they refused 19,410 of 20,000), icmp.eq/ne need zero-extension (a specification sentence was wrong, found by hand), frame.slot per dynamic execution, ldr.p/ldr.pf/str.p for provenance, a grammar with the executor's spellings, the ub.assume continuation construction, brk immediates as diagnostic numbers, shift amounts and ptr.offset wrapping as obligation-covered differences, mem.copy as a pseudo-form, block arguments kept until the out-of-SSA pass, up to eight results in x0..x7 for the machine lane (16,926 of 20,000 were refused for a second result), and the five unreachable codes named as such.",
     "stageB1Closed": "2026-09-04: EvoMIR under revision 0.2: every predicate row, eight results, frame.slot and mem.copy pseudo-forms, the Appendix A grammar round-tripped; 1,000 of 1,000 and 20,000 of 20,000 generated programs lowered and judged by the three-lane gate with 0 mismatches (revision 0.1 had judged 179 of 20,000). Six more findings, all specification sentences about narrow widths in the new predicate rows, are ruled at revision 0.3 and were pinned by the executor before the campaign could reach them. Executor's gate: 1475/0, clippy 0, fmt clean; architect's isolated gates: c6c4052 1424/0 and 6b56544 1475/0, clippy 0, fmt clean; merged into main.",
     "stageB2Partial": "2026-09-04: out-of-SSA, linear scan, an allocation verifier sharing no code with the allocator (which refused the allocator's first output: an edge copy placed between cmp and b.cond, running on both successors), frame layout, Darwin arm64 emission accepted by Apple clang 21, and the first native differential: five hand-written programs assembled, linked, run, exit statuses agreeing with the interpreter modulo 256. The 256-seed native campaign, the fourth gate lane and the calling-convention probe remain (B2b). Eight findings ruled at revision 0.4. The executor stopped at its context limit at 17560d5; a fresh executor continues. Architect's isolated gate on 17560d5: 1502/0, clippy 0, fmt clean; merged into main.",
-    "stageB2Closed": "2026-09-04: the native campaign closes B2. 256 generated native-main programs assembled, linked, run, and their exit statuses agree with the EvoIR interpreter modulo 256; a four-lane campaign over 1,000 programs (EvoIR, optimized EvoIR, EvoMIR, native) with 0 mismatches, 1,000 of 1,000 lowered and run; a calling-convention probe of 16 shapes and 32 comparisons in both directions, 0 failures, stack arguments refused by E4010; mem.copy above 64 bytes as a counted loop, pinned at 200 bytes. The campaign refused 120 of the first 256 programs before running clean and found four defects, each pinned by a test verified to fail against the pre-fix code: two in emission (a two-width operand spelling, and a frame slot left unaligned by an align-1 object), one in allocation (a value leaving a block on any edge must hold its register to the end of it, which is what broke loops under pressure), and one in the verifier itself (a function may ignore an argument). The executor's SPEC_GAP on cross-boundary argument extension is ruled at EvoMIR revision 0.5."
+    "stageB2Closed": "2026-09-04: the native campaign closes B2. 256 generated native-main programs assembled, linked, run, and their exit statuses agree with the EvoIR interpreter modulo 256; a four-lane campaign over 1,000 programs (EvoIR, optimized EvoIR, EvoMIR, native) with 0 mismatches, 1,000 of 1,000 lowered and run; a calling-convention probe of 16 shapes and 32 comparisons in both directions, 0 failures, stack arguments refused by E4010; mem.copy above 64 bytes as a counted loop, pinned at 200 bytes. The campaign refused 120 of the first 256 programs before running clean and found four defects, each pinned by a test verified to fail against the pre-fix code: two in emission (a two-width operand spelling, and a frame slot left unaligned by an align-1 object), one in allocation (a value leaving a block on any edge must hold its register to the end of it, which is what broke loops under pressure), and one in the verifier itself (a function may ignore an argument). The executor's SPEC_GAP on cross-boundary argument extension is ruled at EvoMIR revision 0.5. Architect's isolated gate on 0c83fa8: 1521/0 (2 ignored), clippy 0, fmt clean; merged into main."
   },
   "receipt": {
     "branch": "worktree-agent-aa51d196760578511",
@@ -485,6 +485,39 @@
       "architectGate": {
         "passed": 1502,
         "failed": 0,
+        "clippy": 0,
+        "fmt": "clean"
+      }
+    },
+    "b2b": {
+      "branchHead": "0c83fa8",
+      "native": {
+        "programs": 256,
+        "assembled": 256,
+        "linked": 256,
+        "ran": 256,
+        "exitStatusesAgreeing": 256,
+        "wallSeconds": 115.881
+      },
+      "fourLane1000": {
+        "lowered": 1000,
+        "refused": 0,
+        "machineCompared": 1000,
+        "nativeRun": 1000,
+        "nativeAgreeing": 1000,
+        "mismatched": 0
+      },
+      "probe": {
+        "shapes": 16,
+        "comparisons": 32,
+        "failures": 0,
+        "stackArgumentsRefusedBy": "E4010"
+      },
+      "toolchain": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+      "architectGate": {
+        "passed": 1521,
+        "failed": 0,
+        "ignored": 2,
         "clippy": 0,
         "fmt": "clean"
       }
