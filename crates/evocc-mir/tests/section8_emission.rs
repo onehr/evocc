@@ -129,15 +129,7 @@ func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all
 fn copy_program(size: usize) -> String {
     assert!(size.is_multiple_of(8));
     let bytes: String = (0..size)
-        .map(|index| {
-            format!(
-                "{:02x}",
-                u8::try_from(index % 256)
-                    .expect("a byte")
-                    .wrapping_mul(31)
-                    .wrapping_add(7)
-            )
-        })
+        .map(|index| format!("{:02x}", (index % 256) as u8))
         .collect();
     let initialized = "1".repeat(size);
     let tail = size / 8 - 1;
