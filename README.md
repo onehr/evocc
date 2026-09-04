@@ -131,7 +131,7 @@ Other useful flags: `-E` (preprocess), `--parse-only`, `--emit=c-hir`, and `--su
 | EvoMIR, register allocation, AArch64 emission | done for the scalar subset: 256 generated programs assembled, linked, run, exit statuses agreeing |
 | Linux ABI, kernel codegen, link, boot | not started |
 
-The compiler emits machine code. Programs it compiles run natively on an Apple arm64 host and agree with its own checked interpreter on every one of 256 randomly generated programs, and a four-lane gate compares the source IR, the optimized IR, the machine IR and the native run on a thousand more. What it does not yet do is compile the kernel: the full-configuration lowering survey is the frontier, and no Linux target exists.
+The compiler compiles C to machine code that runs. Three hundred and eighty-four C programs go from source to a native binary through this compiler alone, and every one of them agrees with the host compiler's build of the same source; 256 randomly generated programs agree with the compiler's own checked interpreter; a four-lane gate compares the source IR, the optimized IR, the machine IR and the native run. What it does not yet do is compile the kernel: the full-configuration lowering survey is the frontier, and no Linux target exists.
 
 ## Layout
 
