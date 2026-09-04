@@ -376,14 +376,25 @@ fn intervals(function: &MFunction) -> Vec<Interval> {
         for reg in term_uses(&block.term) {
             touch(reg, end - 2, &mut bounds);
         }
-        // Section 7: an interval is "extended across any block in which it is
-        // live on entry to cover the whole block". A value live on entry that
-        // dies inside the block covers only as far as its last read: the
-        // sentence is about a value passing through, and stretching one that
-        // ends here would hold its register for the whole block. The boundary
-        // registers of Section 6 are exactly such values, and stretching them
-        // would leave the parameters unable to keep the registers they arrive
-        // in.
+    }
+
+    // Section 7: an interval is "extended across any block in which it is live
+    // on entry to cover the whole block". A value live on entry that dies
+    // inside the block covers only as far as its last read: the sentence is
+    // about a value passing through, and stretching one that ends here would
+    // hold its register for the whole block. The boundary registers of Section
+    // 6 are exactly such values, and stretching them would leave the parameters
+    // unable to keep the registers they arrive in.
+    //
+    // This is a pass of its own rather than the tail of the one above, because
+    // a value is only extendable once its definitions and uses are all known.
+    // Folded into the discovery pass, the extension reached only the values
+    // some earlier block had already mentioned, and a value first mentioned
+    // after the block it lives through kept an interval that began inside it:
+    // thirty-two of the day-7 programs handed one register to a pointer that
+    // lived across a block and to a dead flag-setting result inside it.
+    for block in &function.blocks {
+        let (start, end) = ranges[&block.id];
         let live_out: BTreeSet<u32> = term_edges(&block.term)
             .into_iter()
             .filter_map(|(target, _)| live_in.get(&target))

@@ -326,3 +326,105 @@ fn a_value_carried_around_a_loop_keeps_its_register() {
         verify_allocation(&allocated).expect("the loop-carried values keep their registers");
     }
 }
+
+/// A value that lives through a block laid out before any block that mentions
+/// it keeps its register there.
+///
+/// The interval extension ran inside the pass that discovers definitions and
+/// uses, so it reached only the values some earlier block had already
+/// mentioned. A loop whose blocks are laid out starting in the middle produces
+/// the value it cannot reach: `^b1` is entered only from `^b3`, and the value
+/// `^b3` defines and `^b2` reads lives across `^b1` while its first mention
+/// comes after it. The register then went to a dead flag-setting result inside
+/// `^b1`. Thirty-two of the 128 Day 7 programs were refused for this.
+#[test]
+fn a_value_living_through_an_earlier_block_keeps_its_register() {
+    let function = MFunction {
+        name: "midloop".to_owned(),
+        blocks: vec![
+            // The entry enters the cycle at its last block.
+            MBlock {
+                id: 0,
+                args: Vec::new(),
+                insts: vec![MInst::FrameSlot {
+                    dst: g(100),
+                    origin: 0,
+                    size: 8,
+                    align: 8,
+                }],
+                term: MTerm::B {
+                    target: 3,
+                    args: Vec::new(),
+                },
+            },
+            // Laid out first of the cycle and entered only from its last block.
+            // The flag-setting form defines a register nothing reads, which is
+            // what took the carried value's register.
+            MBlock {
+                id: 1,
+                args: Vec::new(),
+                insts: vec![
+                    MInst::MovImm { dst: w(10), imm: 1 },
+                    MInst::FlagBinary {
+                        op: evocc_mir::FlagOp::Adds,
+                        dst: w(11),
+                        flags: VReg::new(12, RegClass::Flags),
+                        lhs: w(10),
+                        rhs: w(10),
+                        width: Width::W,
+                    },
+                    MInst::Cset {
+                        dst: w(13),
+                        flags: VReg::new(12, RegClass::Flags),
+                        cond: evocc_mir::Cond::Vc,
+                    },
+                ],
+                term: MTerm::Tb {
+                    nonzero: true,
+                    src: w(13),
+                    bit: 0,
+                    taken: 2,
+                    taken_args: Vec::new(),
+                    untaken: 4,
+                    untaken_args: Vec::new(),
+                },
+            },
+            // Reads the carried value, whose only definition is below.
+            MBlock {
+                id: 2,
+                args: Vec::new(),
+                insts: vec![MInst::Mov {
+                    dst: g(20),
+                    src: g(50),
+                }],
+                term: MTerm::B {
+                    target: 3,
+                    args: Vec::new(),
+                },
+            },
+            // Defines it, after both blocks that need it.
+            MBlock {
+                id: 3,
+                args: Vec::new(),
+                insts: vec![MInst::Mov {
+                    dst: g(50),
+                    src: g(100),
+                }],
+                term: MTerm::B {
+                    target: 1,
+                    args: Vec::new(),
+                },
+            },
+            MBlock {
+                id: 4,
+                args: Vec::new(),
+                insts: Vec::new(),
+                term: MTerm::Ret { values: Vec::new() },
+            },
+        ],
+    };
+
+    let allocated = allocate(&out_of_ssa(&function)).expect("allocation");
+    verify_allocation(&allocated)
+        .expect("the value carried across the first block keeps its register");
+}

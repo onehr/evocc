@@ -94,6 +94,13 @@ fn day5() -> Result<Corpus, String> {
         let Some((id, source)) = json_id_and_source(line) else {
             continue;
         };
+        // The authority emits its rejected cases beside its defined ones. A
+        // program whose behaviour the standard leaves undefined has no exit
+        // status to compare: the reference build reads whatever the stack held
+        // and EvoCC's checked profile traps, and both are correct.
+        if !id.starts_with("defined.") {
+            continue;
+        }
         let path = directory.join(format!("{id}.c"));
         std::fs::write(&path, source).map_err(|error| error.to_string())?;
         sources.push(path);

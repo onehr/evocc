@@ -249,8 +249,33 @@ pub struct Driver {
 
 impl Driver {
     /// Find `evocc` next to the running test or binary.
+    ///
+    /// The release build is preferred where both exist, because a campaign of
+    /// hundreds of programs spends real time in the front end; either is the
+    /// same driver.
     pub fn locate() -> Result<Self, String> {
-        todo!("the driver binary")
+        let mut directory =
+            std::env::current_exe().map_err(|error| format!("current executable: {error}"))?;
+        directory.pop();
+        if directory.ends_with("deps") {
+            directory.pop();
+        }
+        let profile = directory.clone();
+        let root = profile.parent().map(Path::to_path_buf);
+        let name = format!("evocc{}", std::env::consts::EXE_SUFFIX);
+        let candidates = root
+            .into_iter()
+            .map(|root| root.join("release").join(&name))
+            .chain(std::iter::once(profile.join(&name)));
+        for candidate in candidates {
+            if candidate.is_file() {
+                return Ok(Self { binary: candidate });
+            }
+        }
+        Err(format!(
+            "no {name} beside {}; build the workspace so the driver is present",
+            directory.display()
+        ))
     }
 
     /// The path the receipt records.
@@ -261,7 +286,24 @@ impl Driver {
 
     /// Compile one C source to canonical EvoIR text, or report the driver's
     /// first diagnostic.
-    pub fn emit_evoir(&self, _source: &Path, _optimize: bool) -> Result<String, String> {
-        todo!("the driver's EvoIR output")
+    pub fn emit_evoir(&self, source: &Path, optimize: bool) -> Result<String, String> {
+        let mut command = Command::new(&self.binary);
+        command.arg("--emit=evoir");
+        if optimize {
+            command.arg("-Oeq-scalar");
+        }
+        command.arg(source);
+        let output = command
+            .output()
+            .map_err(|error| format!("{}: {error}", self.binary.display()))?;
+        if !output.status.success() {
+            let complaint = String::from_utf8_lossy(&output.stderr).into_owned();
+            return Err(if complaint.trim().is_empty() {
+                format!("the driver exited {}", output.status)
+            } else {
+                complaint
+            });
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     }
 }
