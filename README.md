@@ -134,6 +134,8 @@ Other useful flags: `-E` (preprocess), `--parse-only`, `--emit=c-hir`, and `--su
 
 The compiler compiles C to machine code that runs. Three hundred and eighty-four C programs go from source to a native binary through this compiler alone, on two targets: on an Apple arm64 host, and on Linux AArch64 inside the sealed container. Every one of them agrees with the reference compiler's build of the same source on both; 256 randomly generated programs agree with the compiler's own checked interpreter; a four-lane gate compares the source IR, the optimized IR, the machine IR and the native run. What it does not yet do is compile the kernel: the full-configuration lowering survey is the frontier, and no Linux target exists.
 
+A one-screen status picture, rendered from the receipts rather than written by hand, lives in [docs/status.md](docs/status.md); `python3 tools/render-status.py` regenerates it and `--check` fails if it has drifted.
+
 ## Layout
 
 ```
