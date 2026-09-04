@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.58** | **Authoritative reference** | **2026-09-04**
+**Revision 1.9.59** | **Authoritative reference** | **2026-09-04**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -590,6 +590,26 @@ This is a validator invariant, not merely a lowering convention: an IR program
 cannot form an out-of-range pointer, omit its formation obligation, offset it
 back into range, and thereby erase the source C undefined behavior.
 
+**Poison of pointer type.** `uninitialized.ptr<AS>` and
+`uninitialized.fnptr<Sig>` are the pointer forms of the poison value: an
+automatic object of pointer type declared without an initializer holds one
+until it is assigned. Their provenance is *absent*, so any dereference
+reports `E3013` by the rule Section 5.3 already gives, a comparison against
+them is the comparison of an absent-provenance pointer, and the e-graph
+excludes them as it excludes every poison value. A pointer local without an
+initializer is ordinary C and the kernel writes it everywhere; refusing it
+would have frozen a hole rather than named one (revision 1.9.59, after
+`int *t;` joined from two branches stopped the lowering with a message about
+integers).
+
+**Pointer and integer conversions.** A conversion between a pointer and an
+integer in either direction is `E3036`
+(`not-lowered: pointer-integer-conversion`) at the conversion. Revision 1.7
+deferred these with the provenance model they need, and Section 5.3 already
+excludes `ptrtoint` from this profile; the code names the class so a survey
+can rank it, which the wrapper `E3101` could not. A null pointer constant
+converted to a pointer is not this conversion and stays admitted.
+
 ### 3.8 Memory Operations
 
 ```text
@@ -854,7 +874,7 @@ EffectSummary {
 | Instruction | reads | writes | volatile | atomic | io | may_trap | may_unwind |
 |---|---|---|---|---|---|---|---|
 | `const` | `{}` | `{}` | false | false | false | false | false |
-| `uninitialized.bits<N>` | `{}` | `{}` | false | false | false | false | false |
+| `uninitialized.bits<N>`, `uninitialized.ptr<AS>`, `uninitialized.fnptr<Sig>` | `{}` | `{}` | false | false | false | false | false |
 | `add`, `sub`, `mul` | `{}` | `{}` | false | false | false | false | false |
 | `sdiv`, `udiv`, `srem`, `urem` | `{}` | `{}` | false | false | false | true | false |
 | integer UB predicates | `{}` | `{}` | false | false | false | false | false |
@@ -953,7 +973,7 @@ The Day 7 scalar P0 e-graph bridge admits only total, pure scalar nodes. Every
 instruction that carries `mem<all>` or `world`, every pointer operation, every
 guard, every may-trap instruction, and every value transitively depending on
 one of them is ineligible and remains byte-for-byte outside the e-graph region.
-`uninitialized.bits<N>` and every value transitively depending on scalar poison
+Every `uninitialized` form and every value transitively depending on poison
 are likewise ineligible. P0 therefore cannot erase, advance, or delay an
 `E3001` by applying an identity such as `x & 0` or an identity comparison to a
 poison-dependent value.
@@ -1382,6 +1402,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3033` | `not-executed: wide-integer` | lowering |
 | `E3034` | `not-lowered: function-pointer-arithmetic` | lowering |
 | `E3035` | `not-lowered: global-register-variable` | lowering |
+| `E3036` | `not-lowered: pointer-integer-conversion` | lowering |
 | `E3029` | `not-lowered: computed-goto` | lowering |
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
@@ -4983,7 +5004,8 @@ certificate and should pass.
 | Calls | `call @callee(args..., %m, %w)` | ret values, `mem`, `world` | callee, args, memory, world | depends |
 | | `call %fptr(args..., %m, %w)` | ret values, `mem`, `world` | callee value, args, memory, world | depends |
 | UB | `ub.assume.<reason> %cond` | — | `%cond` : `bits<1>` | yes |
-| Scalar poison | `uninitialized.bits<N>` | `bits<N>` | — | on consumption |
+| Poison | `uninitialized.bits<N>` | `bits<N>` | — | on consumption |
+| | `uninitialized.ptr<AS>`, `uninitialized.fnptr<Sig>` | that type | — | on dereference (`E3013`) |
 | `copy` | `(%m1, %w1) = copy %m0, %w0, %dst, %src [size=N, align=A]` | copy N bytes with initializedness; identical or disjoint ranges |
 
 ---
@@ -5019,6 +5041,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.59 | 2026-09-04 | Gives poison a pointer form (`uninitialized.ptr`, `uninitialized.fnptr`), so a pointer local without an initializer lowers rather than stopping the unit, and allocates `E3036` to pointer and integer conversions in either direction, which revision 1.7 deferred and the wrapper `E3101` had been carrying. Both classes were reduced to one line each by the architect. |
 | 1.9.58 | 2026-09-04 | Specifies inline assembly as an opaque EvoIR instruction with the constraint vocabulary the configured kernel uses, measured over 24,735 `asm` statements in twenty-four preprocessed units and against both oracles; `asm.goto` is a terminator, the effects are maximal, no rewrite can reach it, and neither interpreter executes it, so a program containing one is verified by the native run alone. |
 | 1.9.57 | 2026-09-04 | First full-configuration lowering survey (4 clean of 2,798). Defines global register variables: no allocation site, the manifest passes over them, a use is `E3035` and the declaration is accepted, which is what stopped 2,754 units; states that a lowering failure names its class and `E3101` is a wrapper, never a resting place. |
 | 1.9.56 | 2026-09-04 | First search over cost weights: a searched vector ties the best hand-written functions on held-out programs and beats none, because the registry's cost can express one preference only (add before mul before shl). States that a policy is identified by name plus a complete description in the report (7.5). |
