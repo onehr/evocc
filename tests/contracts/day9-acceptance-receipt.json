@@ -2,14 +2,17 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "7339d9a5b18d09572d7694c47c737606a96bd64c4cf9ef01f8946ea8347cab84"
+    "sha256": "ac17a51fac720949b9311c4f79c22d503604435ba029537ca78b9033fbd5fef5"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.53",
-    "sha256": "e89cb6148512700a35114f0694325ff84cb2a01f6ce22a5b8447d073aea75592"
+    "revision": "1.9.54",
+    "sha256": "f0ac2dc7c8648521736a7d552ddb59c00aad64c648340ab555428f259b641de8",
+    "executionCheckoutRevision": "1.9.56",
+    "executionCheckoutSha256": "c27de478e704a9179ece43a0a079d658f79e7689cbe8755805dd9723789240e8",
+    "executionCheckoutQualification": "Revisions 1.9.55 and 1.9.56 change equality policy only; revision 1.9.54 remains the semantic authority for scope Z."
   },
-  "cutLine": "Revision 1.9.53 scope Y is implemented at 0c5db21 and published at 76c7077. Sixteen independently executable RED failures closed through shared preprocessing, type, place, constant-expression, initializer-plan, and pointer-conversion authorities. Dashboard run 20260903T161450Z-34865 remains 48/48 clean with zero regressions. Full-configuration survey 20260903T162825Z-96918 measures all 2798 target C units clean with zero diagnosed, unavailable, timeout, or panic; the exact transition is 2760 clean-to-clean and 38 diagnosed-to-clean. The single-line .i diagnostic measurement identifies quadratic source-position accounting and makes no production-fix claim.",
+  "cutLine": "Revision 1.9.54 scope Z is implemented through c6d21b0 and measured at fixed survey subject 909088d. The two frozen single-line inputs parse in 2964.314 ms and 3568.794 ms, both below five seconds. E2928 and E3034 close from one tests-only RED window. Dashboard run 20260903T230349Z-20340 remains 48/48 clean with zero regressions, and full-configuration parse survey 20260903T230814Z-34516 remains 2798/2798 clean. Lowering survey 20260903T233847Z-6468 is measure-only: 4 clean and 2794 typed first diagnostics, with zero unavailable, timeout, or panic.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "b8688e0",
@@ -1034,15 +1037,39 @@
     ],
     "result": "PASS_ALL_ENUMERATED_TARGET_C_UNITS_CLEAN"
   },
-  "subjectCommit": "76c7077",
+  "postClosureLoweringSurvey": {
+    "authority": "docs/evoir-spec.md revision 1.9.54; tests/contracts/day9-acceptance-contract.json scope Z",
+    "implementationCommits": [
+      "9f7d024",
+      "74f896c",
+      "872364d",
+      "c6d21b0"
+    ],
+    "testsOnlyRed": "cc4cb65; 20 passed and exactly 2 declared semantic failures across 12 source forms; zero build errors",
+    "acceptanceReceipt": "tests/contracts/full-config-lowering-survey-receipt.json",
+    "singleLinePreprocessedMeasurement": "20260903T175835Z; 63751.406 ms to 2964.314 ms and 68710.022 ms to 3568.794 ms; both frozen inputs below 5 seconds",
+    "dashboardRun": "20260903T230349Z-20340; 48/48 clean; zero regressions",
+    "fullConfigurationParseSurvey": "20260903T230814Z-34516; 2798/2798 clean; zero diagnosed/unavailable/timeout/panic",
+    "fullConfigurationLoweringSurvey": "20260903T233847Z-6468; 4 clean, 2794 diagnosed, zero unavailable/timeout/panic; measure-only",
+    "firstLoweringDiagnostics": {
+      "E3101 evoir-lowering-failed": 2768,
+      "E3030 evoir-lowering-failed": 22,
+      "E3021 evoir-lowering-failed": 4
+    },
+    "result": "PASS_MEASUREMENT_PUBLISHED_WITH_TYPED_LOWERING_FRONTIER"
+  },
+  "subjectCommit": "909088d",
   "gate": {
-    "claim": "Revision 1.9.53 scope Y is implemented and green. Sixteen declared front-end gaps close through shared preprocessing, type, place, constant-expression, initializer-plan, and pointer-conversion authorities. The 16-unit dashboard remains 48/48 clean with zero regression. The full-configuration raw-source to EvoCPP to parser measurement completes all 2798 target C units cleanly with zero diagnosed, unavailable, timeout, or panic classifications.",
+    "claim": "Revision 1.9.54 scope Z is implemented and green on the fixed survey subject. Stage F3 remains closed: the 16-unit dashboard is 48/48 clean with zero regression and the full-configuration raw-source to EvoCPP to parser measurement completes all 2798 target C units cleanly. The lowering result is only a measured frontier: 4 clean and 2794 typed first diagnostics, with zero unavailable, timeout, or panic classifications.",
     "measured": {
       "dualOracleCleanParseTus": "16/16",
       "rawPreprocessClean": "16/16",
       "gccPreprocessedParserClean": "16/16",
       "clangPreprocessedParserClean": "16/16",
       "stageF1": "CLOSED",
+      "stageF3": "CLOSED",
+      "fullConfigurationParse": "2798/2798 clean",
+      "fullConfigurationLowering": "4/2798 clean; 2794 typed first diagnostics; measure-only",
       "remainingParserLanes": 0,
       "remainingParserUnits": 0,
       "remainingFirstErrors": {},
@@ -2547,10 +2574,7 @@
     "G2-VOLATILE-UNION-COPY: section 10.1.3 requires volatile aggregates to lower as memberwise volatile accesses, but a union has overlapping members and the specification provides no selected-member authority. Volatile union copy therefore remains fail-closed rather than reading every overlapping member.",
     "G2-VOLATILE-BIT-FIELD-COPY: section 10.1.3 does not freeze the access width, mask sequence, or trace granularity for a volatile aggregate member that is a bit-field. That form remains fail-closed.",
     "G2-AGGREGATE-CALL-ABI: the specification requires one semantic copy for by-value arguments and returns but does not freeze the hidden return-destination parameter position or deterministic origin identity for caller-owned aggregate temporaries. The implementation uses an address-based internal ABI with the return destination before mem/world tokens and a high-bit function-ordinal origin namespace; no broader ABI claim is made.",
-    "P9-STRLEN-LITERAL-EDGE: revision 1.9.27 says a string-literal operand folds to the literal's length but does not freeze whether an embedded zero terminates that length or whether prefixed wide, UTF-16, UTF-32 and UTF-8 literals take the constant path. The sealed evidence and positive claim cover ordinary narrow literals without embedded zeros; no broader oracle-conformance claim is made.",
-    "Y-REGISTER-ADDRESS-DIAGNOSTIC: revision 1.9.53 forbids taking the address of a register object but does not assign the diagnostic code, message, or span.",
-    "Y-FUNCTION-POINTER-ARITHMETIC-EXECUTION: revision 1.9.53 admits scale-one function-pointer arithmetic at the front end, while Function provenance elsewhere permits only offset zero and no execution or lowering boundary is assigned.",
-    "Y-RANGE-DESIGNATOR-PLAN-COST: revision 1.9.53 bounds initializer-plan cost by written entries, while 10.1.12 still says a range designator expands to one Index action per selected element; no range-cost claim is made."
+    "P9-STRLEN-LITERAL-EDGE: revision 1.9.27 says a string-literal operand folds to the literal's length but does not freeze whether an embedded zero terminates that length or whether prefixed wide, UTF-16, UTF-32 and UTF-8 literals take the constant path. The sealed evidence and positive claim cover ordinary narrow literals without embedded zeros; no broader oracle-conformance claim is made."
   ],
   "processDeviations": [
     "Three constructs were added in implementation commits rather than in the tests-only commit, each discovered by a publication and covered by a test that failed first: record-member declarator lists (f33b9fd), aligned arguments as constant expressions (79da60e), attribute positions in members, block scope and parameters (b8688e0).",
