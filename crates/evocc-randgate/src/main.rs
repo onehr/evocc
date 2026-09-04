@@ -8,6 +8,7 @@ use evocc_eqopt::ScalarEqBudget;
 use evocc_randgate::{run_campaign, CampaignReport, GateBudget, GeneratorConfig, ProofChecker};
 
 const USAGE: &str = "usage: evo-randgate --seed N --count M \
+[--mode standard|native-main] \
 [--budget-nodes N] [--budget-epochs N] [--steps N] [--out DIRECTORY]";
 
 fn main() -> ExitCode {
@@ -31,6 +32,7 @@ fn main() -> ExitCode {
 struct Options {
     seed: u64,
     count: u64,
+    config: GeneratorConfig,
     budget: GateBudget,
     out: Option<PathBuf>,
 }
@@ -42,6 +44,7 @@ fn parse(arguments: &[String]) -> Result<Options, String> {
     let mut epochs = 256_usize;
     let mut steps = GateBudget::default().step_budget;
     let mut out = None;
+    let mut config = GeneratorConfig::default();
 
     let mut index = 0;
     while index < arguments.len() {
@@ -54,6 +57,13 @@ fn parse(arguments: &[String]) -> Result<Options, String> {
             "--budget-epochs" => epochs = usize::try_from(number(value)?).map_err(|_| USAGE)?,
             "--steps" => steps = number(value)?,
             "--out" => out = Some(PathBuf::from(value)),
+            "--mode" => {
+                config = match value.as_str() {
+                    "standard" => GeneratorConfig::default(),
+                    "native-main" => GeneratorConfig::native_main(),
+                    other => return Err(format!("{other} is not a generator mode")),
+                };
+            }
             _ => return Err(USAGE.to_owned()),
         }
         index += 2;
@@ -62,6 +72,7 @@ fn parse(arguments: &[String]) -> Result<Options, String> {
     Ok(Options {
         seed: seed.ok_or_else(|| USAGE.to_owned())?,
         count: count.ok_or_else(|| USAGE.to_owned())?,
+        config,
         budget: GateBudget {
             scalar: ScalarEqBudget::new(nodes, epochs),
             step_budget: steps,
@@ -81,7 +92,7 @@ fn run(arguments: &[String]) -> Result<(String, bool), String> {
     let report = run_campaign(
         options.seed,
         options.count,
-        GeneratorConfig::default(),
+        options.config,
         options.budget,
         &checker,
     );

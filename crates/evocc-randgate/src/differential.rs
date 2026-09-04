@@ -6,17 +6,21 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
 
 use evocc_eqopt::{optimize_scalar_module_with_evp1, ScalarEqBudget};
 use evocc_evoir::{
     interpret_module, render_module, validate_module, InterpreterLimits, Module, RuntimeValue,
 };
 use evocc_memory::{AccessLayout, MemoryState, ObjectOrigin, ObjectOwner, Pointer, VolatileEvent};
-use evocc_mir::{lane, lower_module, validate_module as validate_machine, MirError, MirLimits};
+use evocc_mir::{
+    compile_module, lane, lower_module, native_corpus_entry, validate_module as validate_machine,
+    MirError, MirLimits, Toolchain,
+};
 use evocc_proof::{render_evp1, sha256_hex};
 use evocc_types::EvoIRType;
 
-use crate::generate::{entry_arguments, generate_module, GeneratorConfig};
+use crate::generate::{entry_arguments, generate_module, GeneratorConfig, GeneratorMode};
 use crate::shrink::shrink_module;
 
 /// The two independent ceilings one trial runs under.
@@ -173,6 +177,10 @@ pub struct Mismatch {
     pub after: String,
     /// The EVP1 certificate for the minimized input.
     pub proof: String,
+    /// Whether the fourth lane assembled, linked and ran the program before
+    /// the comparison refused, so a campaign can count a native run that
+    /// disagreed alongside the ones that agreed.
+    pub native_run: bool,
 }
 
 /// What one seed established.
@@ -212,6 +220,10 @@ pub enum Verdict {
         refusal_codes: Vec<&'static str>,
         machine_compared: bool,
         machine_budget_exhausted: bool,
+        /// The fourth lane: whether the host ran the program, and the reason it
+        /// did not when it did not.
+        native_run: bool,
+        native_skipped: Option<&'static str>,
     },
     /// The input program was undefined; the specification's equality is modulo
     /// undefined behaviour, so nothing is compared.
@@ -337,6 +349,11 @@ struct Trial {
     refusal_codes: Vec<&'static str>,
     machine_compared: bool,
     machine_budget_exhausted: bool,
+    /// The fourth lane. `native_run` is set when the host assembled, linked and
+    /// ran the optimized module; `native_skipped` names, in one word, why it
+    /// did not.
+    native_run: bool,
+    native_skipped: Option<&'static str>,
 }
 
 /// The one place that recognises a fuel stop, so both sides answer alike.
@@ -344,7 +361,13 @@ fn stopped_on_fuel(observation: &Observation) -> bool {
     matches!(observation, Observation::Undefined { code, .. } if *code == FUEL_EXHAUSTED)
 }
 
-fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker) -> Trial {
+fn judge(
+    module: &Module,
+    seed: u64,
+    config: GeneratorConfig,
+    budget: GateBudget,
+    checker: &ProofChecker,
+) -> Trial {
     let before_text = render_module(module);
     let arguments = entry_arguments(module, seed);
     let before = observe(module, &arguments, budget.step_budget);
@@ -373,6 +396,8 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
                 refusal_codes: Vec::new(),
                 machine_compared: false,
                 machine_budget_exhausted: false,
+                native_run: false,
+                native_skipped: None,
             };
         }
     };
@@ -399,6 +424,8 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
         refusal_codes: Vec::new(),
         machine_compared: false,
         machine_budget_exhausted: false,
+        native_run: false,
+        native_skipped: None,
     };
 
     // The run of Section 8.11. Each transaction takes the previous output, each
@@ -417,7 +444,15 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
             // Nothing left to admit: this transaction ends the run and leaves
             // the module alone, which is what a residual of zero means.
             trial.residual_regions = 0;
-            return finish(trial, &before_run, &current, &arguments, budget);
+            return finish(
+                trial,
+                &before_run,
+                &current,
+                &arguments,
+                budget,
+                seed,
+                config.mode,
+            );
         }
         if step + 1 == MAX_TRANSACTIONS {
             trial.stopped_at_ceiling = true;
@@ -515,7 +550,15 @@ fn judge(module: &Module, seed: u64, budget: GateBudget, checker: &ProofChecker)
         .certificate
         .regions
         .len();
-    finish(trial, &before_run, &current, &arguments, budget)
+    finish(
+        trial,
+        &before_run,
+        &current,
+        &arguments,
+        budget,
+        seed,
+        config.mode,
+    )
 }
 
 /// The step budget the machine lane runs under, as a multiple of the EvoIR
@@ -546,6 +589,8 @@ fn finish(
     optimized: &Module,
     arguments: &[RuntimeValue],
     budget: GateBudget,
+    seed: u64,
+    mode: GeneratorMode,
 ) -> Trial {
     let machine = match lower_module(optimized) {
         Ok(machine) => machine,
@@ -555,6 +600,7 @@ fn finish(
             codes.sort_unstable();
             codes.dedup();
             trial.refusal_codes = codes;
+            trial.native_skipped = Some("loweringRefused");
             return trial;
         }
     };
@@ -623,6 +669,85 @@ fn finish(
             MismatchKind::MachineStaticMemory,
             "surviving static memory differs on the machine".to_owned(),
         ));
+        return trial;
+    }
+    native_lane(trial, before, optimized, seed, mode)
+}
+
+/// The host toolchain, located once for the whole process.
+///
+/// A campaign is a thousand or twenty thousand programs; asking the host for
+/// its version once each would be a thousand processes spent on a constant.
+/// The answer includes the reason there is none, so a skipped lane is a
+/// recorded reason rather than a silence.
+fn toolchain() -> Result<&'static Toolchain, &'static str> {
+    static LOCATED: OnceLock<Result<Toolchain, String>> = OnceLock::new();
+    LOCATED
+        .get_or_init(Toolchain::locate)
+        .as_ref()
+        .map_err(|_| "hostToolchainAbsent")
+}
+
+/// The fourth lane: the optimized module assembled, linked and run on the host.
+///
+/// EvoMIR Section 9: "then the machine lane of the randomized gate gains a
+/// fourth, native lane where the host toolchain is present", over the corpus of
+/// Section 9's "The native corpus", whose programs "are compared by exit status
+/// modulo 256, the eight bits a process status carries". Every reason not to
+/// run it is counted, so the lane's silence is never mistaken for its assent.
+fn native_lane(
+    mut trial: Trial,
+    before: &DefinedRun,
+    optimized: &Module,
+    seed: u64,
+    mode: GeneratorMode,
+) -> Trial {
+    if mode != GeneratorMode::NativeMain {
+        trial.native_skipped = Some("notTheNativeCorpus");
+        return trial;
+    }
+    if let Err(reason) = native_corpus_entry(optimized) {
+        trial.native_skipped = Some(reason);
+        return trial;
+    }
+    let toolchain = match toolchain() {
+        Ok(toolchain) => toolchain,
+        Err(reason) => {
+            trial.native_skipped = Some(reason);
+            return trial;
+        }
+    };
+    let text = match compile_module(optimized) {
+        Ok(text) => text,
+        Err(stop) => {
+            trial.refusal = Some((
+                MismatchKind::NativeStopped,
+                format!("{} stopped: {}", stop.component(), stop.detail()),
+            ));
+            return trial;
+        }
+    };
+    let observed = match toolchain.exit_status(&format!("gate{seed:x}"), &text) {
+        Ok(status) => status,
+        Err(stop) => {
+            trial.refusal = Some((
+                MismatchKind::NativeStopped,
+                format!("{} stopped: {}", stop.component(), stop.detail()),
+            ));
+            return trial;
+        }
+    };
+    trial.native_run = true;
+
+    let expected = before
+        .returns
+        .first()
+        .map_or(0, |value| (value.raw_bits & 0xff) as u8);
+    if observed != expected {
+        trial.refusal = Some((
+            MismatchKind::NativeExitStatus,
+            format!("the interpreter said {expected}, the host said {observed}"),
+        ));
     }
     trial
 }
@@ -674,7 +799,7 @@ pub fn run_seed(
     checker: &ProofChecker,
 ) -> Verdict {
     let module = generate_module(seed, config);
-    let trial = judge(&module, seed, budget, checker);
+    let trial = judge(&module, seed, config, budget, checker);
     if trial.fuel_exhausted {
         return Verdict::InterpreterBudgetExhausted;
     }
@@ -699,6 +824,8 @@ pub fn run_seed(
             refusal_codes: trial.refusal_codes.clone(),
             machine_compared: trial.machine_compared,
             machine_budget_exhausted: trial.machine_budget_exhausted,
+            native_run: trial.native_run,
+            native_skipped: trial.native_skipped,
         };
     };
 
@@ -708,8 +835,9 @@ pub fn run_seed(
     // which is a different defect, and a reproducer that has drifted onto one
     // sends its reader to the wrong place.
     let optimized = trial.regions != 0;
+    let native_run = trial.native_run;
     let mut still_refuses = |candidate: &Module| {
-        let candidate = judge(candidate, seed, budget, checker);
+        let candidate = judge(candidate, seed, config, budget, checker);
         candidate.input_undefined.is_none()
             && !candidate.fuel_exhausted
             && (candidate.regions != 0) == optimized
@@ -719,7 +847,7 @@ pub fn run_seed(
                 .is_some_and(|(candidate_kind, _)| *candidate_kind == kind)
     };
     let minimal = shrink_module(&module, &mut still_refuses, 8);
-    let minimal = judge(&minimal, seed, budget, checker);
+    let minimal = judge(&minimal, seed, config, budget, checker);
 
     Verdict::Mismatch(Box::new(Mismatch {
         seed,
@@ -728,5 +856,6 @@ pub fn run_seed(
         before: minimal.before_text,
         after: minimal.after_text,
         proof: minimal.proof_text,
+        native_run,
     }))
 }

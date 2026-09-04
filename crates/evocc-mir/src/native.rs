@@ -160,6 +160,11 @@ impl Toolchain {
         let workdir = std::env::temp_dir().join(format!("evocc-native-{}", std::process::id()));
         std::fs::create_dir_all(&workdir)
             .map_err(|error| format!("no working directory: {error}"))?;
+        // A campaign writes and deletes three files per program, and a desktop
+        // platform indexes and scans each one as it appears. The marker is
+        // advisory and its absence costs only time, so a host that ignores it
+        // is not an error here.
+        let _ = std::fs::write(workdir.join(".metadata_never_index"), b"");
         Ok(Self {
             version: text.lines().next().unwrap_or_default().to_owned(),
             workdir,

@@ -227,7 +227,19 @@ pub fn run_campaign(
                 refusal_codes,
                 machine_compared,
                 machine_budget_exhausted,
+                native_run,
+                native_skipped,
             } => {
+                if native_run {
+                    report.native_run += 1;
+                    // A `Compared` verdict is one where every lane agreed, so a
+                    // program the host ran and this arm sees is one that
+                    // agreed; a run that disagreed arrives as a mismatch below.
+                    report.native_agreeing += 1;
+                }
+                if let Some(reason) = native_skipped {
+                    *report.native_skipped.entry(reason).or_default() += 1;
+                }
                 if lowered {
                     report.lowered += 1;
                 } else {
@@ -284,6 +296,9 @@ pub fn run_campaign(
             Verdict::Mismatch(mismatch) => {
                 report.mismatched += 1;
                 report.mismatched_seeds.push(seed);
+                if mismatch.native_run {
+                    report.native_run += 1;
+                }
                 if report.mismatches.len() < RETAINED_REPRODUCERS {
                     report.mismatches.push(*mismatch);
                 }
