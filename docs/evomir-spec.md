@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.7** | **Authoritative reference** | **2026-09-04**
+**Revision 0.8** | **Authoritative reference** | **2026-09-04**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -385,7 +385,7 @@ in `.data`/`.bss`/`.rodata` (`__DATA,__data` etc. on Darwin) with their
 EvoIR initial bytes; symbols get the platform prefix (`_` on Darwin). The
 only relocations this revision emits are the page-relative pair for
 `global_addr` and `func_addr` and the branch relocation of `bl`; a pointer
-inside static data (EvoIR `E3026`) is refused. An `asm` is emitted as its template with every operand reference replaced:
+inside static data (EvoIR `E3026`) is refused. In `%l[...]` the bracket holds the label's position in the declared list, counting from zero, or `bN` naming that position; a label has no name of its own in either representation (revision 0.8, taken at the point of use and to be revisited when a C front end lowers a real `asm goto`). An `asm` is emitted as its template with every operand reference replaced:
 `%0` to `%9` and `%[name]` by the operand's register in its natural width,
 `%w0` and `%x0` by the 32-bit and 64-bit spelling of that register, a `Q`
 operand by `[reg]`, an immediate operand by its value, `%l[label]` by the
@@ -485,6 +485,17 @@ terminator      := "b ^" ident "(" args ")"
                  | "ret" [" " reg ("," " " reg)*]
                  | "brk #" int
 call-form       := "bl @" ident "(" args ")" [" -> " results] | "blr " reg "(" args ")" [" -> " results]
+asm-form        := "%v" int ":" class " = asm" [".volatile"] " " string
+                   " outputs [" asm-out ("," " " asm-out)* "]"
+                   " inputs [" asm-in ("," " " asm-in)* "]"
+                   " clobbers [" string ("," " " string)* "]"
+                 ; a register output is the instruction's result, as the higher IR writes it;
+                 ; a memory output names its address register in the list, since it is not a result
+asm-goto-form   := "asm.goto" [".volatile"] " " string " outputs [...] inputs [...] clobbers [...]"
+                   " labels [^" ident "()" ("," " ^" ident "()")* "]"
+                   " fallthrough ^" ident "()"
+asm-out         := string "(" ident ")"
+asm-in          := string "(" ident ")" ": " (reg | "#" int | "#zero:" class)
 symbol          := "@" ident "@PAGE" | "@" ident "@PAGEOFF" | "@" ident "@FUNCPAGE" | "@" ident "@FUNCPAGEOFF"
 ```
 
@@ -517,6 +528,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.8 | 2026-09-04 | Inline assembly runs on the machine: eleven constraint rows and both `asm.goto` edges assembled, linked, run and agreeing with host-compiled equivalents. Gives Appendix A its assembly productions, in the executor's spelling, and fixes `%l[...]` as the label's position in the declared list. |
 | 0.7 | 2026-09-04 | 384 C programs compiled by the whole pipeline, run natively, and agreeing with the host compiler's build of the same source. Defines a cross-boundary call as one whose callee emission does not define, makes the argument extension a zero extension because EvoIR carries no parameter signedness, and refuses a narrow result across the boundary as `E4014` until a probe settles it. |
 | 0.6 | 2026-09-04 | Carries inline assembly through the machine representation: the constraint classes the allocator must satisfy, including early clobber, tied operands, address operands and register clobbers; emission substitutes operand references into the template and copies its text verbatim; a function containing an `asm` is judged by the verifier and the native run, not by the interpreter. |
 | 0.5 | 2026-09-04 | 256 generated programs assembled, linked, run and agreeing with the interpreter on exit status; a fourth gate lane; a sixteen-shape calling-convention probe, 32 comparisons, 0 failures. States the cross-boundary argument extension the platform requires, distinct from the internal rule, and records that emission may write addressing forms the Section 4 tables do not admit. |
