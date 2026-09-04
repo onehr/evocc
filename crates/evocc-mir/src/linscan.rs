@@ -390,11 +390,20 @@ fn intervals(function: &MFunction) -> Vec<Interval> {
             .flat_map(|entering| entering.iter().copied())
             .collect();
         for value in &live_in[&block.id] {
-            if let Some((first, last, _)) = bounds.get_mut(value) {
+            if let Some((first, _, _)) = bounds.get_mut(value) {
                 *first = (*first).min(start);
-                if live_out.contains(value) {
-                    *last = (*last).max(end - 1);
-                }
+            }
+        }
+        // A value that leaves the block on any edge holds its register to the
+        // end of the block, whether it entered the block or was defined in it.
+        // Reaching only the values that entered leaves a value defined in a
+        // block and read after the back edge expiring at that definition, and
+        // the register goes to the next interval while the loop still needs it:
+        // the allocation verifier found exactly that, on a pointer carried
+        // around a loop whose register a spill store then took.
+        for value in &live_out {
+            if let Some((_, last, _)) = bounds.get_mut(value) {
+                *last = (*last).max(end - 1);
             }
         }
     }

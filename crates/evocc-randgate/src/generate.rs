@@ -59,6 +59,26 @@ pub enum GeneratorMode {
     NativeMain,
 }
 
+/// The width Section 9's native corpus returns, the width a process exit status
+/// carries eight bits of.
+pub const NATIVE_RESULT_WIDTH: u16 = 32;
+
+impl GeneratorMode {
+    /// The tag that separates the two seed spaces.
+    ///
+    /// Section 9 keeps the first seed space pinned, so the second one starts
+    /// its stream somewhere else entirely rather than at the same state with a
+    /// different interface: a seed of one space then names a module of that
+    /// space alone.
+    #[must_use]
+    pub const fn seed_space(self) -> u64 {
+        match self {
+            Self::Standard => 0,
+            Self::NativeMain => 0x4E41_5449_5645_4D41,
+        }
+    }
+}
+
 /// The shape ceilings one generated module stays within.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GeneratorConfig {
@@ -113,7 +133,7 @@ impl GeneratorConfig {
 /// passes `validate_module` and renders to canonical Section 9 bytes.
 #[must_use]
 pub fn generate_module(seed: u64, config: GeneratorConfig) -> Module {
-    let mut rng = Rng::from_seed(seed);
+    let mut rng = Rng::from_seed(seed ^ config.mode.seed_space());
     let mut origins = 0_u64;
     let globals = generate_globals(&mut rng, config, &mut origins);
     let symbols: Vec<String> = globals.iter().map(|global| global.symbol.clone()).collect();
@@ -140,7 +160,21 @@ pub fn generate_module(seed: u64, config: GeneratorConfig) -> Module {
         signatures.push(signature);
         functions.push(function);
     }
-    let entry = random_signature(&mut rng, config, "main".to_owned(), &symbols, true);
+    let entry = match config.mode {
+        GeneratorMode::Standard => {
+            random_signature(&mut rng, config, "main".to_owned(), &symbols, true)
+        }
+        // Section 9: "whose `main` takes no arguments and returns one
+        // `bits<32>`". The interface is fixed rather than drawn, so no bits of
+        // the stream are spent on it and the body sees the same source the
+        // standard mode would have given it at this point.
+        GeneratorMode::NativeMain => Signature {
+            name: "main".to_owned(),
+            params: Vec::new(),
+            results: vec![EvoIRType::Bits(NATIVE_RESULT_WIDTH)],
+            recursive: false,
+        },
+    };
     functions.push(generate_function(
         &mut rng,
         config,

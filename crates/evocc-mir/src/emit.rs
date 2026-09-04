@@ -13,6 +13,7 @@ use evocc_evoir::GlobalObject;
 
 use crate::{
     linscan::physical, Allocated, LoadKind, MInst, MTerm, RegClass, StoreKind, SymbolKind, VReg,
+    WideMul, Width,
 };
 
 /// Where every part of one frame lives, measured in bytes above `sp` after the
@@ -69,31 +70,39 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
     automatic.dedup();
 
     let spill_bytes = u64::from(allocated.frame_slots) * 8;
-    let automatic_bytes: u64 = automatic
-        .iter()
-        .map(|(_, size, align)| align_up(*size, *align))
-        .sum();
-    let saved_bytes = allocated.used_callee_saved.len() as u64 * 8;
-    let size = align_up(spill_bytes + automatic_bytes + saved_bytes, 16);
 
     let mut spills = BTreeMap::new();
     for index in 0..allocated.frame_slots {
         spills.insert(index, u64::from(index) * 8);
     }
 
-    // "laid out in origin order from the top of the frame downward": the
-    // lowest origin takes the highest address of the automatic area.
+    // "one slot per `frame.slot` (its declared size, rounded to its declared
+    // alignment, laid out in origin order from the top of the frame
+    // downward)": walking the origins in reverse from the bottom of the area
+    // upward puts the lowest origin highest, which is that order, and gives
+    // each object an offset its own alignment divides. An object placed by
+    // subtracting its rounded size from the top instead would land wherever
+    // the object above it left the cursor, which is what the campaign's first
+    // assembler refusal was.
     let mut slots = BTreeMap::new();
-    let mut cursor = spill_bytes + automatic_bytes;
-    for (origin, object, align) in &automatic {
-        let bytes = align_up(*object, *align);
-        cursor -= bytes;
+    let mut cursor = spill_bytes;
+    for (origin, object, align) in automatic.iter().rev() {
+        cursor = align_up(cursor, (*align).max(1));
         slots.insert(*origin, cursor);
+        cursor += *object;
     }
+
+    // Section 6 addresses "every slot (object, spill, save area) ... from `sp`
+    // with a non-negative scaled offset", and an eight-byte transfer scales by
+    // eight, so the save area starts on an eight-byte boundary whatever the
+    // objects below it needed.
+    let saved_base = align_up(cursor, 8);
+    let saved_bytes = allocated.used_callee_saved.len() as u64 * 8;
+    let size = align_up(saved_base + saved_bytes, 16);
 
     let mut saved = BTreeMap::new();
     for (index, number) in allocated.used_callee_saved.iter().enumerate() {
-        saved.insert(*number, spill_bytes + automatic_bytes + index as u64 * 8);
+        saved.insert(*number, saved_base + index as u64 * 8);
     }
 
     Frame {
@@ -149,21 +158,32 @@ fn emit_function(text: &mut String, allocated: &Allocated) {
     let _ = writeln!(text, "{PREFIX}{}:", allocated.name);
     emit_prologue(text, &frame);
 
-    let name = |reg: VReg| -> String {
-        allocated
-            .assignment
-            .get(&reg.id)
-            .map_or_else(|| "xzr".to_owned(), |number| physical(reg.class, *number))
+    // Appendix A's width suffix, not the operand's declared class, decides how
+    // an operand of a two-width form is spelled: the assembler admits only one
+    // width per instruction, and Section 4's semantics are the suffix's.
+    let spell = |reg: VReg, class: RegClass| -> String {
+        allocated.assignment.get(&reg.id).map_or_else(
+            || {
+                if class == RegClass::Gpr32 {
+                    "wzr"
+                } else {
+                    "xzr"
+                }
+                .to_owned()
+            },
+            |number| physical(class, *number),
+        )
     };
 
     let order: Vec<u32> = allocated.blocks.iter().map(|block| block.id).collect();
+    let mut copies = 0_u32;
     for (index, block) in allocated.blocks.iter().enumerate() {
         let _ = writeln!(text, "{}:", label(&allocated.name, block.id));
         for inst in &block.insts {
-            emit_inst(text, inst, &frame, &name);
+            emit_inst(text, inst, &frame, &spell, &allocated.name, &mut copies);
         }
         let next = order.get(index + 1).copied();
-        emit_term(text, &allocated.name, &block.term, &frame, next, &name);
+        emit_term(text, &allocated.name, &block.term, &frame, next, &spell);
     }
 }
 
@@ -214,8 +234,18 @@ fn emit_immediate(text: &mut String, register: &str, class: RegClass, value: u64
 }
 
 fn scratch(class: RegClass) -> String {
-    physical(class, 16)
+    physical(class, SCRATCH_OFFSET)
 }
+
+/// Section 2's two intra-procedure-call scratch registers, "used only by
+/// emitted sequences". The unrolled copy needs one; the counted loop needs the
+/// second for its counter.
+const SCRATCH_OFFSET: u8 = 16;
+const SCRATCH_UNIT: u8 = 17;
+
+/// Section 4: a `mem.copy` is "unrolled up to 64 bytes and a counted loop
+/// above".
+const UNROLL_CEILING: u64 = 64;
 
 fn load_mnemonic(kind: LoadKind) -> &'static str {
     match kind {
@@ -236,8 +266,41 @@ fn store_mnemonic(kind: StoreKind) -> &'static str {
     }
 }
 
+/// The class a load's destination is spelled in.
+///
+/// The transfer size is the mnemonic's, not the register's: `ldrb` and `ldrh`
+/// write a thirty-two-bit register, `ldrsw` a sixty-four-bit one, and the two
+/// sign-extending byte and halfword forms take whichever the value's class
+/// asks for.
+const fn load_class(kind: LoadKind, declared: RegClass) -> RegClass {
+    match kind {
+        LoadKind::B | LoadKind::H | LoadKind::W => RegClass::Gpr32,
+        LoadKind::X | LoadKind::P | LoadKind::Pf | LoadKind::Sw => RegClass::Gpr64,
+        LoadKind::Sb | LoadKind::Sh => declared,
+    }
+}
+
+/// The class a store's source is spelled in: the same rule without the
+/// sign-extending forms, which do not store.
+const fn store_class(kind: StoreKind) -> RegClass {
+    match kind {
+        StoreKind::B | StoreKind::H | StoreKind::W => RegClass::Gpr32,
+        StoreKind::X | StoreKind::P => RegClass::Gpr64,
+    }
+}
+
 #[allow(clippy::too_many_lines)]
-fn emit_inst(text: &mut String, inst: &MInst, frame: &Frame, name: &impl Fn(VReg) -> String) {
+fn emit_inst(
+    text: &mut String,
+    inst: &MInst,
+    frame: &Frame,
+    spell: &impl Fn(VReg, RegClass) -> String,
+    function: &str,
+    copies: &mut u32,
+) {
+    let name = |reg: VReg| spell(reg, reg.class);
+    // Every operand of a two-width form takes the form's own width.
+    let at = |reg: VReg, width: Width| spell(reg, width.class());
     match inst {
         MInst::Mov { dst, src } => {
             // The two classes are one register file at two widths, so a move
@@ -246,12 +309,12 @@ fn emit_inst(text: &mut String, inst: &MInst, frame: &Frame, name: &impl Fn(VReg
             if dst.class == src.class {
                 let _ = writeln!(text, "    mov {}, {}", name(*dst), name(*src));
             } else {
-                let narrow = |reg: VReg| {
-                    name(reg)
-                        .strip_prefix('x')
-                        .map_or_else(|| name(reg), |number| format!("w{number}"))
-                };
-                let _ = writeln!(text, "    mov {}, {}", narrow(*dst), narrow(*src));
+                let _ = writeln!(
+                    text,
+                    "    mov {}, {}",
+                    at(*dst, Width::W),
+                    at(*src, Width::W)
+                );
             }
         }
         MInst::MovImm { dst, imm } => emit_immediate(text, &name(*dst), dst.class, *imm),
@@ -282,8 +345,8 @@ fn emit_inst(text: &mut String, inst: &MInst, frame: &Frame, name: &impl Fn(VReg
                 text,
                 "    {} {}, [{}, #{offset}]",
                 load_mnemonic(*kind),
-                name(*dst),
-                name(*base)
+                spell(*dst, load_class(*kind, dst.class)),
+                spell(*base, RegClass::Gpr64)
             );
         }
         MInst::Store {
@@ -297,67 +360,99 @@ fn emit_inst(text: &mut String, inst: &MInst, frame: &Frame, name: &impl Fn(VReg
                 text,
                 "    {} {}, [{}, #{offset}]",
                 store_mnemonic(*kind),
-                name(*src),
-                name(*base)
+                spell(*src, store_class(*kind)),
+                spell(*base, RegClass::Gpr64)
             );
         }
         MInst::Binary {
-            op, dst, lhs, rhs, ..
+            op,
+            dst,
+            lhs,
+            rhs,
+            width,
         } => {
             let _ = writeln!(
                 text,
                 "    {} {}, {}, {}",
                 op.mnemonic(),
-                name(*dst),
-                name(*lhs),
-                name(*rhs)
+                at(*dst, *width),
+                at(*lhs, *width),
+                at(*rhs, *width)
             );
         }
         MInst::BinaryImm {
-            op, dst, lhs, imm, ..
+            op,
+            dst,
+            lhs,
+            imm,
+            width,
         } => {
             let _ = writeln!(
                 text,
                 "    {} {}, {}, #{imm}",
                 op.mnemonic(),
-                name(*dst),
-                name(*lhs)
+                at(*dst, *width),
+                at(*lhs, *width)
             );
         }
-        MInst::Msub { dst, n, m, a, .. } => {
+        MInst::Msub {
+            dst,
+            n,
+            m,
+            a,
+            width,
+        } => {
             let _ = writeln!(
                 text,
                 "    msub {}, {}, {}, {}",
-                name(*dst),
-                name(*n),
-                name(*m),
-                name(*a)
+                at(*dst, *width),
+                at(*n, *width),
+                at(*m, *width),
+                at(*a, *width)
             );
         }
         MInst::FlagBinary {
-            op, dst, lhs, rhs, ..
+            op,
+            dst,
+            lhs,
+            rhs,
+            width,
+            ..
         } => {
             let _ = writeln!(
                 text,
                 "    {} {}, {}, {}",
                 op.mnemonic(),
-                name(*dst),
-                name(*lhs),
-                name(*rhs)
+                at(*dst, *width),
+                at(*lhs, *width),
+                at(*rhs, *width)
             );
         }
+        // Section 4 fixes both widths of each wide multiply: `smull xd, wn,
+        // wm` and `smulh xd, xn, xm`.
         MInst::WideMultiply { op, dst, lhs, rhs } => {
+            let operands = match op {
+                WideMul::Smull => RegClass::Gpr32,
+                WideMul::Smulh => RegClass::Gpr64,
+            };
             let _ = writeln!(
                 text,
                 "    {} {}, {}, {}",
                 op.mnemonic(),
-                name(*dst),
-                name(*lhs),
-                name(*rhs)
+                spell(*dst, RegClass::Gpr64),
+                spell(*lhs, operands),
+                spell(*rhs, operands)
             );
         }
+        // `sxtb`/`sxth`/`uxtb`/`uxth`/`sxtw` all read a thirty-two-bit source.
         MInst::Extend { op, dst, src } => {
-            let _ = writeln!(text, "    {} {}, {}", op.mnemonic(), name(*dst), name(*src));
+            let _ = writeln!(
+                text,
+                "    {} {}, {}",
+                op.mnemonic(),
+                name(*dst),
+                spell(*src, RegClass::Gpr32)
+            );
         }
         MInst::Bfx {
             signed,
@@ -365,21 +460,25 @@ fn emit_inst(text: &mut String, inst: &MInst, frame: &Frame, name: &impl Fn(VReg
             src,
             lsb,
             bits,
-            ..
+            width,
         } => {
             let _ = writeln!(
                 text,
                 "    {} {}, {}, #{lsb}, #{bits}",
                 if *signed { "sbfx" } else { "ubfx" },
-                name(*dst),
-                name(*src)
+                at(*dst, *width),
+                at(*src, *width)
             );
         }
-        MInst::Cmp { lhs, rhs, .. } => {
-            let _ = writeln!(text, "    cmp {}, {}", name(*lhs), name(*rhs));
+        MInst::Cmp {
+            lhs, rhs, width, ..
+        } => {
+            let _ = writeln!(text, "    cmp {}, {}", at(*lhs, *width), at(*rhs, *width));
         }
-        MInst::CmpImm { lhs, imm, .. } => {
-            let _ = writeln!(text, "    cmp {}, #{imm}", name(*lhs));
+        MInst::CmpImm {
+            lhs, imm, width, ..
+        } => {
+            let _ = writeln!(text, "    cmp {}, #{imm}", at(*lhs, *width));
         }
         MInst::Cset { dst, cond, .. } => {
             let _ = writeln!(text, "    cset {}, {}", name(*dst), cond.mnemonic());
@@ -389,14 +488,15 @@ fn emit_inst(text: &mut String, inst: &MInst, frame: &Frame, name: &impl Fn(VReg
             lhs,
             rhs,
             cond,
+            width,
             ..
         } => {
             let _ = writeln!(
                 text,
                 "    csel {}, {}, {}, {}",
-                name(*dst),
-                name(*lhs),
-                name(*rhs),
+                at(*dst, *width),
+                at(*lhs, *width),
+                at(*rhs, *width),
                 cond.mnemonic()
             );
         }
@@ -421,8 +521,10 @@ fn emit_inst(text: &mut String, inst: &MInst, frame: &Frame, name: &impl Fn(VReg
             let _ = writeln!(text, "    ldr {}, [sp, #{offset}]", name(*dst));
         }
         // Section 4: emission expands the copy "to `ldr`/`str` pairs of the
-        // largest aligned width". The intra-procedure scratch of Section 2 is
-        // what carries each word.
+        // largest aligned width, unrolled up to 64 bytes and a counted loop
+        // above". The two intra-procedure scratch registers of Section 2 are
+        // what the expansion may use: one carries each unit, and above the
+        // ceiling the other is the counter.
         MInst::MemCopy {
             dst,
             src,
@@ -439,12 +541,32 @@ fn emit_inst(text: &mut String, inst: &MInst, frame: &Frame, name: &impl Fn(VReg
                 2 => ("ldrh", "strh", RegClass::Gpr32),
                 _ => ("ldrb", "strb", RegClass::Gpr32),
             };
-            let temporary = scratch(class);
-            let mut offset = 0;
-            while offset < *size {
-                let _ = writeln!(text, "    {load} {temporary}, [{}, #{offset}]", name(*src));
-                let _ = writeln!(text, "    {store} {temporary}, [{}, #{offset}]", name(*dst));
-                offset += unit;
+            let source = spell(*src, RegClass::Gpr64);
+            let destination = spell(*dst, RegClass::Gpr64);
+            if *size <= UNROLL_CEILING {
+                let temporary = scratch(class);
+                let mut offset = 0;
+                while offset < *size {
+                    let _ = writeln!(text, "    {load} {temporary}, [{source}, #{offset}]");
+                    let _ = writeln!(text, "    {store} {temporary}, [{destination}, #{offset}]");
+                    offset += unit;
+                }
+            } else {
+                // The counter runs down from `size` to zero in units, so the
+                // loop needs no comparison and leaves `nzcv` alone; the offset
+                // register is the second scratch, and the two addresses are
+                // read but never written, since the allocator may still have
+                // uses for them after the copy.
+                let counter = physical(RegClass::Gpr64, SCRATCH_OFFSET);
+                let temporary = physical(class, SCRATCH_UNIT);
+                let body = format!("L{function}_copy{copies}");
+                *copies += 1;
+                emit_immediate(text, &counter, RegClass::Gpr64, *size);
+                let _ = writeln!(text, "{body}:");
+                let _ = writeln!(text, "    sub {counter}, {counter}, #{unit}");
+                let _ = writeln!(text, "    {load} {temporary}, [{source}, {counter}]");
+                let _ = writeln!(text, "    {store} {temporary}, [{destination}, {counter}]");
+                let _ = writeln!(text, "    cbnz {counter}, {body}");
             }
         }
         MInst::Ldp {
@@ -488,8 +610,9 @@ fn emit_term(
     term: &MTerm,
     frame: &Frame,
     next: Option<u32>,
-    name: &impl Fn(VReg) -> String,
+    spell: &impl Fn(VReg, RegClass) -> String,
 ) {
+    let name = |reg: VReg| spell(reg, reg.class);
     let branch = |text: &mut String, target: u32| {
         if next != Some(target) {
             let _ = writeln!(text, "    b {}", label(function, target));

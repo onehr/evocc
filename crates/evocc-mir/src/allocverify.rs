@@ -53,17 +53,12 @@ pub fn verify_allocation(allocated: &Allocated) -> Result<(), VerifierRefusal> {
     // registers they were given must be x0 upwards with nothing missing.
     let mut entry: State = BTreeMap::new();
     let boundary = live_on_entry(allocated);
-    if boundary.len() != allocated.parameters {
-        return Err(refuse(
-            allocated.blocks.first().map_or(0, |block| block.id),
-            format!(
-                "{} values are live when the function is entered and it takes {} arguments",
-                boundary.len(),
-                allocated.parameters
-            ),
-        ));
-    }
-    let mut numbered: Vec<(u8, u32)> = Vec::new();
+    // A function is free to ignore an argument, so the live values are a
+    // subset of the argument registers rather than all of them: what Section 6
+    // fixes is where an argument arrives, not that the body reads it. Two
+    // values arriving in one register would still be two arguments in one
+    // place, which is refused here rather than left to the meet below.
+    let limit = u8::try_from(allocated.parameters).unwrap_or(u8::MAX);
     for value in &boundary {
         let Some(number) = allocated.assignment.get(value).copied() else {
             return Err(refuse(
@@ -71,20 +66,21 @@ pub fn verify_allocation(allocated: &Allocated) -> Result<(), VerifierRefusal> {
                 format!("%v{value} is live when the function is entered and was never assigned"),
             ));
         };
-        numbered.push((number, *value));
-    }
-    numbered.sort_unstable();
-    for (position, (number, value)) in numbered.into_iter().enumerate() {
-        let expected = u8::try_from(position).unwrap_or(u8::MAX);
-        if number != expected {
+        if number >= limit {
             return Err(refuse(
                 0,
                 format!(
-                    "an argument arrived in register {number} where Section 6 puts x{expected}"
+                    "%v{value} is live when the function is entered in register {number}, and Section 6 brings {} arguments in",
+                    allocated.parameters
                 ),
             ));
         }
-        entry.insert(number, Some(value));
+        if entry.insert(number, Some(*value)).is_some() {
+            return Err(refuse(
+                0,
+                format!("two arguments are live when the function is entered in register {number}"),
+            ));
+        }
     }
 
     let mut incoming: BTreeMap<u32, State> = BTreeMap::new();

@@ -127,6 +127,21 @@ impl Width {
         }
     }
 
+    /// The register class this width spells.
+    ///
+    /// Appendix A puts a width suffix on every two-width form, and Section 4's
+    /// semantics are the suffix's: an instruction reads and writes its own
+    /// width, whatever class its operands were declared in. Emission spells
+    /// every operand of such a form here, so that the assembly says what the
+    /// interpreter does.
+    #[must_use]
+    pub const fn class(self) -> RegClass {
+        match self {
+            Self::W => RegClass::Gpr32,
+            Self::X => RegClass::Gpr64,
+        }
+    }
+
     /// The width that holds a value of `class`.
     #[must_use]
     pub const fn for_class(class: RegClass) -> Option<Self> {
