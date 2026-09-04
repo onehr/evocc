@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.57** | **Authoritative reference** | **2026-09-04**
+**Revision 1.9.58** | **Authoritative reference** | **2026-09-04**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -768,6 +768,68 @@ the callee is not known statically.
 
 ---
 
+
+### 3.11 Inline Assembly
+
+An `asm` instruction carries a template the assembler will read and the
+operands it substitutes into it. It is **opaque**: no rule reads the
+template, no analysis interprets it, and the equality database never merges
+it with anything. It exists so that the kernel's assembly can pass through
+the compiler without any part of the compiler pretending to understand it.
+
+```text
+(%o1, ..., %ok, %m1, %w1) = asm[.volatile] "template" %m0, %w0
+    outputs [ "constraint" : Type, ... ]
+    inputs  [ "constraint" : %v, ... ]
+    clobbers [ "name", ... ]
+
+asm.goto[.volatile] "template" %m0, %w0
+    outputs [...] inputs [...] clobbers [...]
+    labels [ ^b1(args), ... ] fallthrough ^b0(args)
+```
+
+`asm.goto` is a terminator (Section 3.9) whose successors are its labels and
+its fall-through; it produces `mem` and `world` on every edge. A plain `asm`
+produces its outputs, then `mem<all>` and `world`.
+
+**Semantics.** The results are values of their declared types about which
+nothing is known: an interpreter cannot execute an `asm` and reports `E3021`
+when it reaches one, so a program containing one is verified by the native
+run of the EvoMIR specification's Section 9 and by nothing else. This is a
+real weakening of the instrument and is stated rather than hidden.
+
+**Constraints and modifiers.** The admitted vocabulary is the one the
+configured kernel uses, measured over twenty-four preprocessed translation
+units containing 24,735 `asm` statements:
+
+| Constraint | Meaning | Measured uses |
+|---|---|---|
+| `r`, `=r`, `+r` | a general register, read, written, or both | 14,038 |
+| `=&r`, `+&r` | written, and not sharing a register with any input (early clobber) | 7,537 |
+| `rZ` | a general register, or the zero register when the operand is the constant zero; the template must spell it with a width modifier, since the zero prints as `xzr`/`wzr` only under `%x`/`%w` (measured: `orr %0, %1, %2` with `rZ` is an assembler error under GCC-14 and `orr %0, %1, %x2` is accepted by both) | 3,301 |
+| `Q`, `=Q`, `+Q`, `Qo` | a memory operand whose address is a register with no offset | 8,113 |
+| a digit `0` to `9` | this operand occupies the same location as the output that digit names (a tied operand) | 3,528 |
+| `I`, `J` | an immediate the add or subtract forms accept, and its negation | 876 |
+| `K`, `L` | an immediate the 32-bit and 64-bit logical forms accept | 1,104 |
+| `i`, `n` | an integer constant | 113 |
+| `p` | an address | 48 |
+
+A constraint outside this table, or a constraint string combining letters
+this table does not combine, is `E3021` with the constraint named. Clobbers:
+`memory` (implied by the effects below and otherwise inert), `cc` (the flags),
+and a named physical register, which the allocator must treat as written.
+Template operand references: `%0` to `%9`, `%[name]`, a width modifier
+`%w0`/`%x0` before the number or name, `%l[label]` in an `asm.goto`, and
+`%%` for a literal percent; any other reference is `E3021`. Every rule in
+this paragraph is measured in `p33-asm-constraints.out`, where both oracles
+compile the whole vocabulary and print the same values.
+
+**Effects.** An `asm` reads and writes `mem<all>` and `world`, may trap, and
+may not be reordered against any other effectful instruction, duplicated,
+or removed, whether or not it is `volatile`; `volatile` is preserved for the
+assembler and changes nothing in EvoIR. Section 8.5's allowlist already makes
+it ineligible as a region root or witness, so no rewrite can reach it.
+Defined at revision 1.9.58.
 ## 4. Effect Model
 
 ### 4.1 Effect Summary
@@ -803,6 +865,7 @@ EffectSummary {
 | `sext`, `zext`, `trunc` | `{}` | `{}` | false | false | false | false | false |
 | `ptr.null`, `global_addr`, `func_addr` | `{}` | `{}` | false | false | false | false | false |
 | `ptr.offset.*.*` | `{}` | `{}` | false | false | false | true | false |
+| `asm`, `asm.goto` | `{all}` | `{all}` | true | false | true | true | false |
 | `alloca`, `lifetime.end` | `{All}` | `{All}` | false | false | false | true | false |
 | `pointer_valid`, `access_in_bounds` | `{All}` | `{}` | false | false | false | true | false |
 | `load` (normal) | `{All}` | `{}` | false | false | false | true | false |
@@ -3302,9 +3365,17 @@ labels, qualifiers, spans). Constraint strings are preserved as text and not
 validated in this revision. `asm` has maximal effects: it reads and writes
 `mem<all>` and `world`, may not be reordered, duplicated or removed, and an
 `asm goto` is a terminator whose successors are its labels plus fall-through.
-Lowering to EvoIR is a separate stage: until Section 4 specifies an `asm`
-operation, lowering reports `E3021` (`not-lowered: asm`) and fails closed;
-the C-HIR interpreter reports the same code when it reaches one.
+Lowering produces the `asm` instruction of Section 3.11 when every operand
+constraint, clobber and template reference is in the vocabulary that section
+admits, and reports `E3021` (`not-lowered: asm`) naming the offending
+constraint, clobber or reference otherwise. An output operand lowers to a
+result of the operand's lowered type followed by a store to the operand's
+place; an input operand lowers to the loaded value; a `+` operand lowers to
+both, tied; a `Q` operand lowers to the address of its place, and the place
+is not otherwise loaded or stored, so the memory effect of Section 3.11 is
+what covers it. Both interpreters report `E3021` when they reach an `asm`:
+it is executed by the native run and by nothing else. Revision 1.9.58
+replaced the unconditional deferral of revision 1.9.
 
 Errors (`E2914`, `malformed-asm`), each at the span named: an output operand
 that is not a modifiable lvalue, at the operand expression; a `%[name]` that
@@ -4948,6 +5019,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.58 | 2026-09-04 | Specifies inline assembly as an opaque EvoIR instruction with the constraint vocabulary the configured kernel uses, measured over 24,735 `asm` statements in twenty-four preprocessed units and against both oracles; `asm.goto` is a terminator, the effects are maximal, no rewrite can reach it, and neither interpreter executes it, so a program containing one is verified by the native run alone. |
 | 1.9.57 | 2026-09-04 | First full-configuration lowering survey (4 clean of 2,798). Defines global register variables: no allocation site, the manifest passes over them, a use is `E3035` and the declaration is accepted, which is what stopped 2,754 units; states that a lowering failure names its class and `E3101` is a wrapper, never a resting place. |
 | 1.9.56 | 2026-09-04 | First search over cost weights: a searched vector ties the best hand-written functions on held-out programs and beats none, because the registry's cost can express one preference only (add before mul before shl). States that a policy is identified by name plus a complete description in the report (7.5). |
 | 1.9.55 | 2026-09-04 | Emitting rewrites measured: the two all-positive cost functions now optimize 569 of 1,000 programs differently. Restates the strict-improvement sentence of 11.3 as producer conformance and fixes the class granularity of a derived node's use through its parent (11.3). |

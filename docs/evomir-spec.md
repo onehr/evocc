@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.5** | **Authoritative reference** | **2026-09-04**
+**Revision 0.7** | **Authoritative reference** | **2026-09-04**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -201,6 +201,7 @@ stated.
 | `spill.store %v, slot` / `spill.load rd, slot` | the store of a virtual register to its spill slot and the reload from it, inserted by the allocator; emission expands them to `str`/`ldr` at the slot's offset from `sp` (revision 0.4) |
 | the prologue and epilogue | synthesized at emission from Section 6 and never present as instructions: the interpreter's memory is EvoIR's object model, with no linear stack, no `sp` and no return address, so they are not interpretable; the allocated form is judged by the verifier and the native run (revision 0.4) |
 | the register-offset addressing of `mem.copy`'s counted loop | emission's business, like the prologue's pre-indexed `stp` and `frame.slot`'s `add rd, sp, #off`: the loop counts an offset in a register, so the expansion uses the register-offset form of `ldr`/`str`, which the table's immediate rows do not admit and which only emission ever writes (revision 0.5) |
+| `asm` / `asm.goto` | the EvoIR instruction of its specification's Section 3.11, carried through unchanged: the template, its operands with their constraints, its clobbers and, for `asm.goto`, its label successors. The interpreter does not execute it (it reports `E3021`); emission writes the template with each operand reference replaced by the operand's assigned register, memory address or immediate |
 
 ## 5. Lowering: EvoIR to EvoMIR
 
@@ -261,13 +262,24 @@ go in `x0` to `x7` in order. Between two EvoCC-compiled functions, a
 with the upper bits unspecified, and the callee applies Section 3 before
 reading it as anything but a low-`N`-bit value. Across the host boundary the
 platform rule governs instead: a caller extends an argument narrower than 32
-bits to 32 bits, zero-extending an unsigned source type and sign-extending a
-signed one, and a callee may assume the bits above its parameter's width are
-that extension (Apple's AArch64 variant; revision 0.5, after the executor
-found the two rules unreconciled and the probe passed only because each host
-function masked its own argument). A cross-boundary call therefore inserts
-the extension the platform requires; a call between EvoCC functions does
-not. A ninth integer argument is refused (`E4010`); an aggregate argument
+bits to 32 bits and a callee may assume the bits above its parameter's width
+are that extension (Apple's AArch64 variant; revision 0.5, after the
+executor found the two rules unreconciled and the probe passed only because
+each host function masked its own argument; eighteen of forty comparisons
+failed once the probe stopped masking and was built at `-O2`). A call is
+**cross-boundary** when the callee's definition is not emitted beside the
+caller, which is a fact emission holds and EvoIR cannot spell, since every
+call EvoIR admits names a function the module defines (revision 0.7).
+
+EvoIR carries no signedness on a parameter, so the extension EvoMIR inserts
+is a **zero extension**: the value of a `bits<N>` is its low `N` bits, and a
+front end that must pass a signed narrow argument emits `sext` to
+`bits<32>` before the call, which is a lowering rule of the EvoIR
+specification, not a machine one (revision 0.7). A narrow **result**
+crossing the boundary is not yet ruled: Apple's variant extends it too, and
+nothing in this revision measures it, so a function returning a `bits<N>`
+with `N < 32` across the boundary is `E4014` (`abi: narrow-result`) until a
+probe settles it. A ninth integer argument is refused (`E4010`); an aggregate argument
 or result is refused (`E4011`); a variadic call or callee is refused
 (`E4012`, the EvoIR `E3030` boundary). **Results:** an EvoMIR function
 returns up to eight integer or pointer results in `x0` to `x7` in order.
@@ -324,6 +336,26 @@ function's parameters; the allocator removes them by assigning `x0`
 onwards. This happens before allocation, as its own pass; the lowering of
 Section 5 does not do it.
 
+**Assembly operands.** A constraint fixes what an `asm` operand may be, and
+the allocator must satisfy it before it satisfies anything else:
+
+| Constraint | Requirement on the allocator |
+|---|---|
+| `r`, `=r`, `+r` | any register of the operand's class |
+| `=&r`, `+&r` | a register no input operand of the same `asm` holds (early clobber) |
+| `rZ` | as `r`, except that an operand known to be the constant zero is the zero register and consumes no allocation |
+| `Q`, `=Q`, `+Q`, `Qo` | a register holding the operand's address, and the emitted reference is `[reg]` |
+| a digit | the same register as the output that digit names (a tied operand); the two intervals are one |
+| `I`, `J`, `K`, `L`, `i`, `n` | no register: the operand is an immediate the emitter writes literally, and the lowering has already refused a non-constant |
+| `p` | a register holding the address |
+
+A clobber names a register the `asm` writes: the allocator treats the whole
+instruction as defining it, so no live value may occupy it across the
+instruction, and `cc` clobbers the flags, which ends any `flags` value's
+adjacency. `memory` constrains nothing here; the maximal effects of the
+EvoIR instruction already order the `asm` against every other access.
+Defined at revision 0.6.
+
 **Linear scan.** Instructions are numbered in block order (the order of
 Section 2); a virtual register's live interval is from its definition to
 its last use, extended across any block in which it is live on entry to
@@ -353,12 +385,22 @@ in `.data`/`.bss`/`.rodata` (`__DATA,__data` etc. on Darwin) with their
 EvoIR initial bytes; symbols get the platform prefix (`_` on Darwin). The
 only relocations this revision emits are the page-relative pair for
 `global_addr` and `func_addr` and the branch relocation of `bl`; a pointer
-inside static data (EvoIR `E3026`) is refused. The emitted text is
+inside static data (EvoIR `E3026`) is refused. An `asm` is emitted as its template with every operand reference replaced:
+`%0` to `%9` and `%[name]` by the operand's register in its natural width,
+`%w0` and `%x0` by the 32-bit and 64-bit spelling of that register, a `Q`
+operand by `[reg]`, an immediate operand by its value, `%l[label]` by the
+block label, and `%%` by one percent. The template's own text is copied
+verbatim and never parsed. The emitted text is
 deterministic and is what the receipt digests.
 
 ## 9. Verification
 
 Three instruments, each independent of the lowering:
+
+A function containing an `asm` is outside instrument one: neither
+interpreter executes one, so such a function is judged by the allocation
+verifier and the native run alone. That is the price of admitting assembly
+and it is stated here rather than discovered later.
 
 1. **The EvoMIR interpreter.** Every Section 4 form has executable
    semantics; an interpreter executes an EvoMIR function on the same inputs
@@ -415,6 +457,7 @@ sides, and are never emitted today.
 | `E4011` | `abi: aggregate-by-value` | aggregate argument or result |
 | `E4012` | `abi: variadic` | variadic callee or caller |
 | `E4013` | `abi: too-many-results` | more than eight ordinary results |
+| `E4014` | `abi: narrow-result` | a result narrower than 32 bits crosses the host boundary, whose extension no probe has settled |
 | `E4020` | `allocation: verifier-refused` | the allocation verifier found a violation; internal, must never reach a user of a released build |
 
 ## Appendix A. Textual Form
@@ -474,6 +517,8 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.7 | 2026-09-04 | 384 C programs compiled by the whole pipeline, run natively, and agreeing with the host compiler's build of the same source. Defines a cross-boundary call as one whose callee emission does not define, makes the argument extension a zero extension because EvoIR carries no parameter signedness, and refuses a narrow result across the boundary as `E4014` until a probe settles it. |
+| 0.6 | 2026-09-04 | Carries inline assembly through the machine representation: the constraint classes the allocator must satisfy, including early clobber, tied operands, address operands and register clobbers; emission substitutes operand references into the template and copies its text verbatim; a function containing an `asm` is judged by the verifier and the native run, not by the interpreter. |
 | 0.5 | 2026-09-04 | 256 generated programs assembled, linked, run and agreeing with the interpreter on exit status; a fourth gate lane; a sixteen-shape calling-convention probe, 32 comparisons, 0 failures. States the cross-boundary argument extension the platform requires, distinct from the internal rule, and records that emission may write addressing forms the Section 4 tables do not admit. |
 | 0.4 | 2026-09-04 | First native runs: five assembled programs agree with the interpreter on exit status. Rules the allocation and emission findings: the out-of-SSA scratch is a pinned virtual register, copy placement is a three-way rule, entry arguments become parameters the allocator assigns, the lowest free register is taken, spill accesses are pseudo-forms, frame slots are addressed from `sp`, the prologue is synthesized at emission and not interpretable; the native lane uses a second generator mode so pinned seeds stay pinned. |
 | 0.3 | 2026-09-04 | Second implementation: 20,000 of 20,000 generated programs lowered and judged by the three-lane gate with 0 mismatches. Rules the executor's five predicate-row findings: overflow flags report the register, so narrower widths compare with the sign extension of the low N bits (add, sub, mul); shift amounts extend by their declared signedness; the signed left-shift predicate conjoins count, sign, round trip and representability; the division predicates extend first; the grammar spells a two-definition adds/subs and states the conditional-terminator asymmetry. |
