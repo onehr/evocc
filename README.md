@@ -129,9 +129,10 @@ Other useful flags: `-E` (preprocess), `--parse-only`, `--emit=c-hir`, and `--su
 | Analysis lattices, bounded scheduler | not started |
 | Randomized semantic gate | not started |
 | EvoMIR, register allocation, AArch64 emission | done for the scalar subset: 256 generated programs assembled, linked, run, exit statuses agreeing |
-| Linux ABI, kernel codegen, link, boot | not started |
+| Linux AArch64 target | done for the scalar subset: 384 of 384 agree with GCC-14 in the sealed container |
+| Kernel codegen, link, boot | not started |
 
-The compiler compiles C to machine code that runs. Three hundred and eighty-four C programs go from source to a native binary through this compiler alone, and every one of them agrees with the host compiler's build of the same source; 256 randomly generated programs agree with the compiler's own checked interpreter; a four-lane gate compares the source IR, the optimized IR, the machine IR and the native run. What it does not yet do is compile the kernel: the full-configuration lowering survey is the frontier, and no Linux target exists.
+The compiler compiles C to machine code that runs. Three hundred and eighty-four C programs go from source to a native binary through this compiler alone, on two targets: on an Apple arm64 host, and on Linux AArch64 inside the sealed container. Every one of them agrees with the reference compiler's build of the same source on both; 256 randomly generated programs agree with the compiler's own checked interpreter; a four-lane gate compares the source IR, the optimized IR, the machine IR and the native run. What it does not yet do is compile the kernel: the full-configuration lowering survey is the frontier, and no Linux target exists.
 
 ## Layout
 
