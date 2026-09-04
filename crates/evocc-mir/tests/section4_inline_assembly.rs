@@ -579,3 +579,155 @@ fn the_template_is_copied_verbatim() {
         "the template is copied with one percent:\n{text}"
     );
 }
+
+/// EvoIR Section 3.11: "`asm.goto` is a terminator whose successors are its
+/// labels and its fall-through."
+///
+/// The template branches to `%l[0]` when its operand is zero. The operand is
+/// not zero, so the run takes the fall-through, and the host-compiled `asm
+/// goto` computing the same thing answers the same.
+fn goto_function(operand: u64) -> MFunction {
+    let body = AsmBody {
+        template: "cbz %w0, %l[0]".to_owned(),
+        volatile: true,
+        outputs: Vec::new(),
+        inputs: vec![AsmOperand::reg(
+            AsmConstraint::Register(AsmDirection::Read),
+            w(1),
+        )],
+        clobbers: Vec::new(),
+    };
+    MFunction {
+        name: "main".to_owned(),
+        blocks: vec![
+            MBlock {
+                id: 0,
+                args: Vec::new(),
+                insts: vec![constant(w(1), operand)],
+                term: MTerm::AsmGoto {
+                    body,
+                    labels: vec![(1, Vec::new())],
+                    fallthrough: 2,
+                    fallthrough_args: Vec::new(),
+                },
+            },
+            MBlock {
+                id: 1,
+                args: Vec::new(),
+                insts: vec![constant(w(10), 10)],
+                term: MTerm::Ret {
+                    values: vec![w(10)],
+                },
+            },
+            MBlock {
+                id: 2,
+                args: Vec::new(),
+                insts: vec![constant(w(10), 20)],
+                term: MTerm::Ret {
+                    values: vec![w(10)],
+                },
+            },
+        ],
+    }
+}
+
+#[test]
+fn an_asm_goto_takes_both_of_its_edges() {
+    let version = match toolchain() {
+        Ok(version) => version,
+        Err(reason) => {
+            println!("skipped={reason}");
+            return;
+        }
+    };
+    println!("toolchain={version}");
+
+    for (operand, label) in [(5_u64, "notZero"), (0, "zero")] {
+        let text = build(&goto_function(operand));
+        assert!(
+            text.contains("cbz w"),
+            "the template is copied with its operand substituted:\n{text}"
+        );
+        let name = format!("asm-goto-{label}");
+        let observed =
+            run_native(&name, &text).unwrap_or_else(|reason| panic!("{label}: {reason}"));
+        let reference = format!(
+            "int main(void){{unsigned a={operand};__asm__ goto(\"cbz %w0, %l[jump]\"::\"r\"(a)::jump);return 20;jump:return 10;}}\n"
+        );
+        let expected =
+            run_reference(&name, &reference).unwrap_or_else(|reason| panic!("{label}: {reason}"));
+        assert_eq!(observed, expected, "asm.goto {label} disagreed\n{text}");
+        println!("asmGoto={label} operand={operand} exitStatus={observed}");
+    }
+}
+
+/// Appendix A: the textual form "round-trips through a parser, so that tests
+/// can state EvoMIR by hand and the receipt can digest it".
+///
+/// Appendix A gives no production for either assembly form, so the rendering
+/// mirrors the EvoIR instruction's own spelling of Section 3.11: the quoted
+/// template, then the outputs, inputs and clobbers, and for the terminator its
+/// labels and fall-through. Recorded gap; this is what pins the choice.
+#[test]
+fn both_assembly_forms_round_trip_byte_for_byte() {
+    let mut functions: Vec<MFunction> = cases().into_iter().map(|case| case.function).collect();
+    functions.push(goto_function(5));
+    // A template with a quote, a backslash, a tab and a newline in it, so the
+    // escapes the one-line form needs are exercised too.
+    functions.push(program(
+        vec![MInst::Asm(AsmBody {
+            template: "// \"quoted\" \\ and %% \n    mov %0, #1".to_owned(),
+            volatile: true,
+            outputs: vec![AsmOperand {
+                constraint: AsmConstraint::Register(AsmDirection::Write),
+                name: Some("named".to_owned()),
+                value: AsmValue::Reg(w(10)),
+            }],
+            inputs: Vec::new(),
+            clobbers: vec![AsmClobber::Register(9), AsmClobber::Flags],
+        })],
+        w(10),
+    ));
+
+    for (index, function) in functions.iter().enumerate() {
+        let module = MModule {
+            globals: Vec::new(),
+            functions: vec![function.clone()],
+        };
+        let text = evocc_mir::render_module(&module);
+        let parsed = evocc_mir::parse_module(&text)
+            .unwrap_or_else(|error| panic!("function {index} did not parse: {error}\n{text}"));
+        assert_eq!(
+            parsed, module,
+            "function {index} did not round-trip\n{text}"
+        );
+        assert_eq!(
+            evocc_mir::render_module(&parsed),
+            text,
+            "function {index} did not render back to the same bytes"
+        );
+    }
+    println!("roundTripped={}", functions.len());
+}
+
+/// EvoIR Section 3.11: "A constraint outside this table, or a constraint string
+/// combining letters this table does not combine, is `E3021` with the
+/// constraint named."
+#[test]
+fn a_constraint_outside_the_table_is_refused() {
+    for outside in ["v", "=v", "w", "rx", "&r", "Z", "m"] {
+        assert!(
+            AsmConstraint::parse(outside).is_none(),
+            "'{outside}' is outside the measured table and must not parse"
+        );
+    }
+    // Every row of the table does parse, and renders back to itself.
+    for inside in [
+        "r", "=r", "+r", "=&r", "+&r", "rZ", "Q", "=Q", "+Q", "Qo", "0", "9", "I", "J", "K", "L",
+        "i", "n", "p",
+    ] {
+        let constraint =
+            AsmConstraint::parse(inside).unwrap_or_else(|| panic!("'{inside}' is in the table"));
+        assert_eq!(constraint.spelling(), inside);
+    }
+}

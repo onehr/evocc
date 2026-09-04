@@ -876,7 +876,9 @@ impl AsmConstraint {
         };
         Some(match rest {
             "r" => Self::Register(direction),
-            "&r" => Self::EarlyClobber(direction),
+            // The table has `=&r` and `+&r` and no read-only early clobber:
+            // an operand the template only reads cannot be clobbered early.
+            "&r" if direction != AsmDirection::Read => Self::EarlyClobber(direction),
             "Q" => Self::Memory {
                 direction,
                 offsettable: false,

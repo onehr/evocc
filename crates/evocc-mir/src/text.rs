@@ -21,7 +21,8 @@ use std::fmt::Write as _;
 use evocc_evoir::{GlobalKind, GlobalObject, GlobalVisibility};
 
 use crate::{
-    AsmBody, AsmOperand, AsmValue, MBlock, MFunction, MInst, MModule, MTerm, SymbolKind, VReg,
+    AsmBody, AsmConstraint, AsmOperand, AsmValue, MBlock, MFunction, MInst, MModule, MTerm,
+    SymbolKind, VReg,
 };
 
 /// Render one module to its canonical bytes.
@@ -197,7 +198,15 @@ fn render_asm_body(body: &AsmBody) -> String {
     let list = |operands: &[AsmOperand], with_value: bool| -> String {
         operands
             .iter()
-            .map(|one| operand(one, with_value))
+            // A register output's value is already the result the instruction
+            // names, as EvoIR Section 3.11 has it; a memory output's address
+            // register is not, so it is written here.
+            .map(|one| {
+                operand(
+                    one,
+                    with_value || matches!(one.constraint, AsmConstraint::Memory { .. }),
+                )
+            })
             .collect::<Vec<_>>()
             .join(", ")
     };
@@ -211,7 +220,7 @@ fn render_asm_body(body: &AsmBody) -> String {
         "{} \"{}\" outputs [{}] inputs [{}] clobbers [{}]",
         if body.volatile { ".volatile" } else { "" },
         escape_template(&body.template),
-        list(&body.outputs, true),
+        list(&body.outputs, false),
         list(&body.inputs, true),
         clobbers
     )

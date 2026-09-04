@@ -15,8 +15,9 @@ use std::collections::HashMap;
 use evocc_evoir::{AccessLayout, GlobalKind, GlobalObject, GlobalVisibility};
 
 use crate::{
-    BinOp, Cond, ExtOp, FlagOp, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass,
-    StoreKind, SymbolKind, VReg, WideMul, Width,
+    AsmBody, AsmClobber, AsmConstraint, AsmOperand, AsmValue, BinOp, Cond, ExtOp, FlagOp, LoadKind,
+    MBlock, MFunction, MInst, MModule, MTerm, RegClass, StoreKind, SymbolKind, VReg, WideMul,
+    Width,
 };
 
 /// Parse canonical Appendix A bytes back into a module.
@@ -453,7 +454,249 @@ fn split_width(mnemonic: &str) -> Option<(&str, Width)> {
     }
 }
 
+/// Read an `asm` or an `asm.goto`, or nothing when the body is neither.
+///
+/// The spelling is the one `text.rs` renders: an optional result list, the
+/// keyword, the quoted template, then the three operand lists and, for the
+/// terminator, its labels and fall-through. Appendix A gives no production for
+/// either form; this mirrors EvoIR Section 3.11's own, and the round trip is
+/// what pins it.
+fn parse_assembly(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Option<Parsed>, String> {
+    let mut rest = body;
+    let mut results: Vec<VReg> = Vec::new();
+    if !rest.starts_with("asm") {
+        let Some((head, tail)) = body.split_once(" = ") else {
+            return Ok(None);
+        };
+        if !head.starts_with("%v") || !tail.starts_with("asm") {
+            return Ok(None);
+        }
+        for one in head.split(", ") {
+            results.push(parse_definition(one)?);
+        }
+        rest = tail;
+    }
+
+    let goto = rest.starts_with("asm.goto");
+    rest = rest
+        .strip_prefix(if goto { "asm.goto" } else { "asm" })
+        .ok_or_else(|| format!("not an asm: '{body}'"))?;
+    let volatile = rest.starts_with(".volatile");
+    if volatile {
+        rest = &rest[".volatile".len()..];
+    }
+    rest = rest
+        .strip_prefix(' ')
+        .ok_or_else(|| format!("expected a template in '{body}'"))?;
+    let (template, mut rest) = take_quoted(rest)?;
+
+    let outputs = take_operand_list(&mut rest, " outputs [", classes)?;
+    let inputs = take_operand_list(&mut rest, " inputs [", classes)?;
+    let clobbers = take_clobbers(&mut rest)?;
+
+    // Every register output is a result, in the order they were declared.
+    let mut assigned = results.into_iter();
+    let outputs: Vec<AsmOperand> = outputs
+        .into_iter()
+        .map(|(constraint, name, value)| {
+            let value = match value {
+                Some(value) => value,
+                None if matches!(constraint, AsmConstraint::Memory { .. }) => {
+                    return Err(format!("a memory output needs its address in '{body}'"))
+                }
+                None => AsmValue::Reg(
+                    assigned
+                        .next()
+                        .ok_or_else(|| format!("an output has no result in '{body}'"))?,
+                ),
+            };
+            Ok(AsmOperand {
+                constraint,
+                name,
+                value,
+            })
+        })
+        .collect::<Result<_, String>>()?;
+    let inputs: Vec<AsmOperand> = inputs
+        .into_iter()
+        .map(|(constraint, name, value)| {
+            Ok(AsmOperand {
+                constraint,
+                name,
+                value: value.ok_or_else(|| format!("an input has no operand in '{body}'"))?,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    let assembly = AsmBody {
+        template,
+        volatile,
+        outputs,
+        inputs,
+        clobbers,
+    };
+    if !goto {
+        if !rest.is_empty() {
+            return Err(format!("trailing text '{rest}'"));
+        }
+        return Ok(Some(Parsed::Inst(MInst::Asm(assembly))));
+    }
+
+    let mut scan = Scan::new(
+        rest.strip_prefix(" labels [")
+            .ok_or_else(|| format!("an asm.goto needs its labels in '{body}'"))?,
+        classes,
+    );
+    let mut labels = Vec::new();
+    if !scan.text.starts_with(']') {
+        loop {
+            labels.push(scan.edge()?);
+            if scan.text.starts_with(", ") {
+                scan.expect(", ")?;
+            } else {
+                break;
+            }
+        }
+    }
+    scan.expect("] fallthrough ")?;
+    let (fallthrough, fallthrough_args) = scan.edge()?;
+    scan.finish()?;
+    Ok(Some(Parsed::Term(MTerm::AsmGoto {
+        body: assembly,
+        labels,
+        fallthrough,
+        fallthrough_args,
+    })))
+}
+
+/// Read one double-quoted string, undoing the escapes `text.rs` writes.
+fn take_quoted(text: &str) -> Result<(String, &str), String> {
+    let mut characters = text.chars();
+    if characters.next() != Some('"') {
+        return Err(format!("expected a quoted string at '{text}'"));
+    }
+    let mut value = String::new();
+    let mut consumed = 1;
+    let mut escaped = false;
+    for character in characters {
+        consumed += character.len_utf8();
+        if escaped {
+            value.push(match character {
+                'n' => '\n',
+                't' => '\t',
+                other => other,
+            });
+            escaped = false;
+        } else if character == '\\' {
+            escaped = true;
+        } else if character == '"' {
+            return Ok((value, &text[consumed..]));
+        } else {
+            value.push(character);
+        }
+    }
+    Err(format!("unterminated string at '{text}'"))
+}
+
+/// Read one bracketed operand list introduced by `prefix`.
+type ParsedOperand = (AsmConstraint, Option<String>, Option<AsmValue>);
+
+fn take_operand_list(
+    text: &mut &str,
+    prefix: &str,
+    classes: &HashMap<u32, RegClass>,
+) -> Result<Vec<ParsedOperand>, String> {
+    let rest = text
+        .strip_prefix(prefix)
+        .ok_or_else(|| format!("expected '{prefix}' at '{text}'"))?;
+    let close = rest
+        .find(']')
+        .ok_or_else(|| format!("unterminated list at '{rest}'"))?;
+    let inner = &rest[..close];
+    *text = &rest[close + 1..];
+    if inner.is_empty() {
+        return Ok(Vec::new());
+    }
+    inner
+        .split(", ")
+        .map(|one| parse_operand(one, classes))
+        .collect()
+}
+
+fn parse_operand(text: &str, classes: &HashMap<u32, RegClass>) -> Result<ParsedOperand, String> {
+    let (spelling, rest) = take_quoted(text)?;
+    let constraint = AsmConstraint::parse(&spelling)
+        .ok_or_else(|| format!("E3021: constraint '{spelling}' is outside the table"))?;
+    let mut rest = rest;
+    let mut name = None;
+    if let Some(open) = rest.strip_prefix('(') {
+        let close = open
+            .find(')')
+            .ok_or_else(|| format!("unterminated operand name at '{rest}'"))?;
+        name = Some(open[..close].to_owned());
+        rest = &open[close + 1..];
+    }
+    let value = if let Some(operand) = rest.strip_prefix(": ") {
+        Some(parse_operand_value(operand, classes)?)
+    } else if rest.is_empty() {
+        None
+    } else {
+        return Err(format!("trailing text '{rest}' in an asm operand"));
+    };
+    Ok((constraint, name, value))
+}
+
+fn parse_operand_value(text: &str, classes: &HashMap<u32, RegClass>) -> Result<AsmValue, String> {
+    if let Some(class) = text.strip_prefix("#zero:") {
+        return match class {
+            "gpr32" => Ok(AsmValue::Zero(RegClass::Gpr32)),
+            "gpr64" => Ok(AsmValue::Zero(RegClass::Gpr64)),
+            other => Err(format!("not a register class: '{other}'")),
+        };
+    }
+    if let Some(value) = text.strip_prefix('#') {
+        return value
+            .parse::<i64>()
+            .map(AsmValue::Imm)
+            .map_err(|_| format!("not an immediate: '{value}'"));
+    }
+    let mut scan = Scan::new(text, classes);
+    let reg = scan.use_of()?;
+    scan.finish()?;
+    Ok(AsmValue::Reg(reg))
+}
+
+fn take_clobbers(text: &mut &str) -> Result<Vec<AsmClobber>, String> {
+    let rest = text
+        .strip_prefix(" clobbers [")
+        .ok_or_else(|| format!("expected ' clobbers [' at '{text}'"))?;
+    let close = rest
+        .find(']')
+        .ok_or_else(|| format!("unterminated clobber list at '{rest}'"))?;
+    let inner = &rest[..close];
+    *text = &rest[close + 1..];
+    if inner.is_empty() {
+        return Ok(Vec::new());
+    }
+    inner
+        .split(", ")
+        .map(|one| {
+            let (name, rest) = take_quoted(one)?;
+            if !rest.is_empty() {
+                return Err(format!("trailing text '{rest}' in a clobber"));
+            }
+            AsmClobber::parse(&name)
+                .ok_or_else(|| format!("E3021: clobber '{name}' is outside the table"))
+        })
+        .collect()
+}
+
 fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, String> {
+    // An `asm` carries a template whose text is arbitrary, so it is recognised
+    // by its keyword before anything splits the body on a separator.
+    if let Some(parsed) = parse_assembly(body, classes)? {
+        return Ok(parsed);
+    }
     // `adds`/`subs` define a register and the flags. The Appendix A grammar has
     // no two-destination production, so both are written before the `=` and
     // recognised before the single-destination forms.
