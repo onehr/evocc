@@ -4,7 +4,7 @@
   "whatAContractIs": "The middle-end stream's frozen scope, gate and rulings. The specification is the only authority; this file records what the stream is allowed to change and what it must measure.",
   "authority": {
     "spec": "docs/evoir-spec.md",
-    "revision": "1.9.56",
+    "revision": "1.9.57",
     "crates": [
       "evocc-egraph",
       "evocc-eqopt",
