@@ -22,6 +22,7 @@ pub mod interp;
 pub mod lane;
 pub mod linscan;
 pub mod lower;
+pub mod native;
 pub mod regalloc;
 pub mod text;
 pub mod text_parse;
@@ -34,6 +35,7 @@ pub use emit::{emit_module, frame_of, Frame};
 pub use interp::{interpret_module, MirError, MirLimits, MirOutcome, MirValue};
 pub use linscan::{allocate, render_allocated, Allocated, CALLEE_SAVED, CALLER_SAVED};
 pub use lower::{lower_module, Refusal};
+pub use native::{compile_module, compile_module_with, native_corpus_entry, NativeStop, Toolchain};
 pub use regalloc::out_of_ssa;
 pub use text::render_module;
 pub use text_parse::parse_module;
@@ -122,6 +124,21 @@ impl Width {
         match self {
             Self::W => 0xffff_ffff,
             Self::X => u64::MAX,
+        }
+    }
+
+    /// The register class this width spells.
+    ///
+    /// Appendix A puts a width suffix on every two-width form, and Section 4's
+    /// semantics are the suffix's: an instruction reads and writes its own
+    /// width, whatever class its operands were declared in. Emission spells
+    /// every operand of such a form here, so that the assembly says what the
+    /// interpreter does.
+    #[must_use]
+    pub const fn class(self) -> RegClass {
+        match self {
+            Self::W => RegClass::Gpr32,
+            Self::X => RegClass::Gpr64,
         }
     }
 

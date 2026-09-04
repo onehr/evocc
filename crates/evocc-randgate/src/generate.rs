@@ -41,9 +41,49 @@ const MEMORY_WIDTHS: [u16; 4] = [8, 16, 32, 64];
 const CARRIER: AccessLayout = AccessLayout::new(8, 8);
 const CARRIER_WIDTH: u16 = 64;
 
+/// Which seed space a generated module comes from.
+///
+/// EvoMIR Section 9, "The native corpus": "The randomized generator's seed
+/// space is pinned by the middle-end campaigns (a seed names one module
+/// forever), so the native lane does not change it. It draws from a second
+/// generator mode with its own seed space, `native-main`, whose `main` takes
+/// no arguments and returns one `bits<32>`."
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GeneratorMode {
+    /// The mode the middle-end campaigns pinned: `@main` takes what the draw
+    /// gives it and returns up to `max_results` ordinary values.
+    #[default]
+    Standard,
+    /// The native corpus: `@main` takes no arguments and returns one
+    /// `bits<32>`, so a process exit status can carry its result.
+    NativeMain,
+}
+
+/// The width Section 9's native corpus returns, the width a process exit status
+/// carries eight bits of.
+pub const NATIVE_RESULT_WIDTH: u16 = 32;
+
+impl GeneratorMode {
+    /// The tag that separates the two seed spaces.
+    ///
+    /// Section 9 keeps the first seed space pinned, so the second one starts
+    /// its stream somewhere else entirely rather than at the same state with a
+    /// different interface: a seed of one space then names a module of that
+    /// space alone.
+    #[must_use]
+    pub const fn seed_space(self) -> u64 {
+        match self {
+            Self::Standard => 0,
+            Self::NativeMain => 0x4E41_5449_5645_4D41,
+        }
+    }
+}
+
 /// The shape ceilings one generated module stays within.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GeneratorConfig {
+    /// Which seed space and entry shape this configuration draws from.
+    pub mode: GeneratorMode,
     /// Callable helper functions defined before `@main`.
     pub max_helper_functions: u32,
     /// Module globals available to `global_addr`.
@@ -63,6 +103,7 @@ pub struct GeneratorConfig {
 impl Default for GeneratorConfig {
     fn default() -> Self {
         Self {
+            mode: GeneratorMode::Standard,
             max_helper_functions: 2,
             max_globals: 2,
             max_segment_instructions: 6,
@@ -74,13 +115,25 @@ impl Default for GeneratorConfig {
     }
 }
 
+impl GeneratorConfig {
+    /// The Section 9 native corpus: the default ceilings in the second seed
+    /// space, whose `@main` a process exit status can report.
+    #[must_use]
+    pub fn native_main() -> Self {
+        Self {
+            mode: GeneratorMode::NativeMain,
+            ..Self::default()
+        }
+    }
+}
+
 /// Produce the one module this seed names.
 ///
 /// The same seed and configuration yield the same module forever; the result
 /// passes `validate_module` and renders to canonical Section 9 bytes.
 #[must_use]
 pub fn generate_module(seed: u64, config: GeneratorConfig) -> Module {
-    let mut rng = Rng::from_seed(seed);
+    let mut rng = Rng::from_seed(seed ^ config.mode.seed_space());
     let mut origins = 0_u64;
     let globals = generate_globals(&mut rng, config, &mut origins);
     let symbols: Vec<String> = globals.iter().map(|global| global.symbol.clone()).collect();
@@ -107,7 +160,21 @@ pub fn generate_module(seed: u64, config: GeneratorConfig) -> Module {
         signatures.push(signature);
         functions.push(function);
     }
-    let entry = random_signature(&mut rng, config, "main".to_owned(), &symbols, true);
+    let entry = match config.mode {
+        GeneratorMode::Standard => {
+            random_signature(&mut rng, config, "main".to_owned(), &symbols, true)
+        }
+        // Section 9: "whose `main` takes no arguments and returns one
+        // `bits<32>`". The interface is fixed rather than drawn, so no bits of
+        // the stream are spent on it and the body sees the same source the
+        // standard mode would have given it at this point.
+        GeneratorMode::NativeMain => Signature {
+            name: "main".to_owned(),
+            params: Vec::new(),
+            results: vec![EvoIRType::Bits(NATIVE_RESULT_WIDTH)],
+            recursive: false,
+        },
+    };
     functions.push(generate_function(
         &mut rng,
         config,

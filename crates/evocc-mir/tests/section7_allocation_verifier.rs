@@ -19,6 +19,33 @@ fn f(id: u32) -> VReg {
     VReg::new(id, RegClass::Flags)
 }
 
+/// Section 6 says where an argument arrives, not that the body reads it.
+///
+/// The verifier's first rule required as many values live on entry as the
+/// function has arguments, so a function that ignores one was refused with
+/// `E4020` -- a hundred and ten of the first two hundred and fifty-six
+/// generated programs, whose helpers take arguments they never use.
+#[test]
+fn a_function_may_ignore_an_argument() {
+    let function = MFunction {
+        name: "ignores".to_owned(),
+        blocks: vec![MBlock {
+            id: 0,
+            args: vec![w(0), w(1), w(2)],
+            insts: vec![MInst::Binary {
+                op: BinOp::Add,
+                dst: w(3),
+                lhs: w(1),
+                rhs: w(1),
+                width: Width::W,
+            }],
+            term: MTerm::Ret { values: vec![w(3)] },
+        }],
+    };
+    let allocated = allocate(&out_of_ssa(&function)).expect("allocation");
+    verify_allocation(&allocated).expect("ignoring the first and third argument is not a fault");
+}
+
 fn straight() -> MFunction {
     MFunction {
         name: "main".to_owned(),

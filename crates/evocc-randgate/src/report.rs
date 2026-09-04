@@ -62,6 +62,15 @@ pub struct CampaignReport {
     pub refusal_codes: BTreeMap<&'static str, u64>,
     pub machine_compared: u64,
     pub machine_budget_exhausted: u64,
+    /// The fourth lane (EvoMIR Section 9, "The native corpus"). `native_run`
+    /// counts the programs the host toolchain assembled, linked and ran to a
+    /// normal exit; `native_agreeing` counts those whose exit status modulo 256
+    /// was the EvoIR interpreter's result. `native_skipped` names, by reason,
+    /// every program the lane declined to build, so a skipped lane is a counted
+    /// reason rather than a silence.
+    pub native_run: u64,
+    pub native_agreeing: u64,
+    pub native_skipped: BTreeMap<&'static str, u64>,
     pub mismatched: u64,
     pub mismatches: Vec<Mismatch>,
     /// Every seed that refused, in campaign order.
@@ -165,6 +174,15 @@ impl CampaignReport {
             "machineBudgetExhausted={}",
             self.machine_budget_exhausted
         );
+        let skipped = self
+            .native_skipped
+            .iter()
+            .map(|(reason, count)| format!("{reason}:{count}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let _ = writeln!(text, "nativeRun={}", self.native_run);
+        let _ = writeln!(text, "nativeAgreeing={}", self.native_agreeing);
+        let _ = writeln!(text, "nativeSkipped={skipped}");
         let _ = writeln!(text, "mismatched={}", self.mismatched);
         let _ = writeln!(text, "mismatchedSeeds={seeds}");
         let _ = writeln!(text, "undefinedCodes={codes}");
@@ -209,7 +227,19 @@ pub fn run_campaign(
                 refusal_codes,
                 machine_compared,
                 machine_budget_exhausted,
+                native_run,
+                native_skipped,
             } => {
+                if native_run {
+                    report.native_run += 1;
+                    // A `Compared` verdict is one where every lane agreed, so a
+                    // program the host ran and this arm sees is one that
+                    // agreed; a run that disagreed arrives as a mismatch below.
+                    report.native_agreeing += 1;
+                }
+                if let Some(reason) = native_skipped {
+                    *report.native_skipped.entry(reason).or_default() += 1;
+                }
                 if lowered {
                     report.lowered += 1;
                 } else {
@@ -266,6 +296,9 @@ pub fn run_campaign(
             Verdict::Mismatch(mismatch) => {
                 report.mismatched += 1;
                 report.mismatched_seeds.push(seed);
+                if mismatch.native_run {
+                    report.native_run += 1;
+                }
                 if report.mismatches.len() < RETAINED_REPRODUCERS {
                     report.mismatches.push(*mismatch);
                 }

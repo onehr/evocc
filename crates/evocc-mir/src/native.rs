@@ -1,0 +1,237 @@
+//! Section 9, instrument three: the host toolchain in the loop.
+//!
+//! "The assembled program is run on the host and its output compared with the
+//! reference compiler's build of the same C source ... the host toolchain for
+//! Darwin, recorded by version."
+//!
+//! This module is the only place in the crate that runs another program. It
+//! keeps the pipeline's stages apart so that a refusal or a disagreement names
+//! the component that produced it -- lowering, allocation, emission, the
+//! assembler, the linker, or the run -- which is what the native campaign has
+//! to report.
+
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+use evocc_evoir::Module;
+use evocc_types::EvoIRType;
+
+use crate::lane::is_register_type;
+use crate::{allocate, emit_module, lower_module, out_of_ssa, verify_allocation};
+
+/// Where the native pipeline stopped.
+///
+/// Each variant names one component, so a campaign row can be read without
+/// re-running anything.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NativeStop {
+    /// Section 5 has no row for some instruction; the codes are Section 10's.
+    Lowering(Vec<&'static str>),
+    /// Section 7's linear scan did not settle.
+    Allocation(String),
+    /// Section 9's second instrument refused the allocation (`E4020`).
+    Verification(String),
+    /// The host assembler refused the emitted text.
+    Assembly(String),
+    /// The host linker refused the object.
+    Link(String),
+    /// The program did not exit normally.
+    Run(String),
+}
+
+impl NativeStop {
+    /// The component the campaign names.
+    #[must_use]
+    pub const fn component(&self) -> &'static str {
+        match self {
+            Self::Lowering(_) => "lowering",
+            Self::Allocation(_) => "allocation",
+            Self::Verification(_) => "verification",
+            Self::Assembly(_) => "emission",
+            Self::Link(_) => "link",
+            Self::Run(_) => "run",
+        }
+    }
+
+    /// What the component said.
+    #[must_use]
+    pub fn detail(&self) -> String {
+        match self {
+            Self::Lowering(codes) => codes.join(","),
+            Self::Allocation(text)
+            | Self::Verification(text)
+            | Self::Assembly(text)
+            | Self::Link(text)
+            | Self::Run(text) => text.clone(),
+        }
+    }
+}
+
+/// Lower, allocate, verify and emit one EvoIR module as Darwin arm64 assembly.
+///
+/// Only the functions `keep` admits are emitted, so a module may declare a
+/// function the host side of a probe defines.
+pub fn compile_module_with(
+    module: &Module,
+    keep: &dyn Fn(&str) -> bool,
+) -> Result<String, NativeStop> {
+    let lowered = lower_module(module).map_err(|refusals| {
+        let mut codes: Vec<&'static str> = refusals.iter().map(|refusal| refusal.code).collect();
+        codes.sort_unstable();
+        codes.dedup();
+        NativeStop::Lowering(codes)
+    })?;
+    let mut functions = Vec::new();
+    for function in &lowered.functions {
+        if !keep(&function.name) {
+            continue;
+        }
+        let allocated = allocate(&out_of_ssa(function))
+            .map_err(|detail| NativeStop::Allocation(format!("@{}: {detail}", function.name)))?;
+        verify_allocation(&allocated).map_err(|refusal| {
+            NativeStop::Verification(format!(
+                "@{}: {} {} in block {}: {}",
+                function.name, refusal.code, refusal.name, refusal.block, refusal.detail
+            ))
+        })?;
+        functions.push(allocated);
+    }
+    Ok(emit_module(&functions, &module.globals))
+}
+
+/// Lower, allocate, verify and emit every function of one EvoIR module.
+pub fn compile_module(module: &Module) -> Result<String, NativeStop> {
+    compile_module_with(module, &|_| true)
+}
+
+/// Why a module is not a program of the Section 9 native corpus.
+///
+/// "its `main` takes no arguments and returns one `bits<32>`, and its programs
+/// are compared by exit status modulo 256".
+pub fn native_corpus_entry(module: &Module) -> Result<(), &'static str> {
+    let Some(main) = module
+        .functions
+        .iter()
+        .find(|function| function.name == "main")
+    else {
+        return Err("noEntry");
+    };
+    if main.params.iter().any(|param| is_register_type(&param.ty)) {
+        return Err("entryTakesArguments");
+    }
+    let results: Vec<&EvoIRType> = main
+        .ret_tys
+        .iter()
+        .filter(|ty| is_register_type(ty))
+        .collect();
+    match results.as_slice() {
+        [EvoIRType::Bits(32)] => Ok(()),
+        [_] => Err("entryResultIsNotThirtyTwoBits"),
+        _ => Err("entryDoesNotReturnOneResult"),
+    }
+}
+
+/// The host toolchain, located once and recorded by version.
+///
+/// Section 9's third instrument compares the assembled program with "the
+/// reference compiler's build of the same C source ... the host toolchain for
+/// Darwin, recorded by version", so the version line is part of the value and
+/// every receipt prints it.
+#[derive(Debug, Clone)]
+pub struct Toolchain {
+    version: String,
+    workdir: PathBuf,
+}
+
+impl Toolchain {
+    /// Find `clang`, record its version line, and open a working directory.
+    pub fn locate() -> Result<Self, String> {
+        let output = Command::new("clang")
+            .arg("--version")
+            .output()
+            .map_err(|error| format!("clang is absent: {error}"))?;
+        if !output.status.success() {
+            return Err("clang did not report a version".to_owned());
+        }
+        let text = String::from_utf8_lossy(&output.stdout).into_owned();
+        if !text.contains("arm64") && !text.contains("aarch64") {
+            return Err("the host toolchain does not target arm64".to_owned());
+        }
+        let workdir = std::env::temp_dir().join(format!("evocc-native-{}", std::process::id()));
+        std::fs::create_dir_all(&workdir)
+            .map_err(|error| format!("no working directory: {error}"))?;
+        // A campaign writes and deletes three files per program, and a desktop
+        // platform indexes and scans each one as it appears. The marker is
+        // advisory and its absence costs only time, so a host that ignores it
+        // is not an error here.
+        let _ = std::fs::write(workdir.join(".metadata_never_index"), b"");
+        Ok(Self {
+            version: text.lines().next().unwrap_or_default().to_owned(),
+            workdir,
+        })
+    }
+
+    /// The version line the receipt records.
+    #[must_use]
+    pub fn version(&self) -> &str {
+        &self.version
+    }
+
+    /// Assemble one emitted text into an object file.
+    pub fn assemble(&self, name: &str, text: &str) -> Result<PathBuf, NativeStop> {
+        let source = self.workdir.join(format!("{name}.s"));
+        let object = self.workdir.join(format!("{name}.o"));
+        std::fs::write(&source, text)
+            .map_err(|error| NativeStop::Assembly(format!("no source file: {error}")))?;
+        let mut command = Command::new("clang");
+        command.arg("-c").arg("-o").arg(&object).arg(&source);
+        let outcome = run(command).map_err(NativeStop::Assembly);
+        let _ = std::fs::remove_file(&source);
+        outcome?;
+        Ok(object)
+    }
+
+    /// Link one object file into an executable.
+    pub fn link(&self, name: &str, object: &Path) -> Result<PathBuf, NativeStop> {
+        let program = self.workdir.join(name);
+        let mut command = Command::new("clang");
+        command.arg("-o").arg(&program).arg(object);
+        let outcome = run(command).map_err(NativeStop::Link);
+        let _ = std::fs::remove_file(object);
+        outcome?;
+        Ok(program)
+    }
+
+    /// Run one executable and report the eight bits its exit status carries.
+    ///
+    /// Section 9: the corpus "programs are compared by exit status modulo 256,
+    /// the eight bits a process status carries". A program killed by a signal
+    /// has no such status and is a stop, not a status of its own.
+    pub fn run(&self, program: &Path) -> Result<u8, NativeStop> {
+        let outcome = Command::new(program)
+            .output()
+            .map_err(|error| NativeStop::Run(error.to_string()));
+        let _ = std::fs::remove_file(program);
+        let outcome = outcome?;
+        let code = outcome.status.code().ok_or_else(|| {
+            NativeStop::Run(format!("{} did not exit normally", program.display()))
+        })?;
+        u8::try_from(code & 0xff).map_err(|error| NativeStop::Run(error.to_string()))
+    }
+
+    /// Assemble, link and run one emitted text, removing every file it made.
+    pub fn exit_status(&self, name: &str, text: &str) -> Result<u8, NativeStop> {
+        let object = self.assemble(name, text)?;
+        let program = self.link(name, &object)?;
+        self.run(&program)
+    }
+}
+
+/// Run `command`, returning its standard error when it fails.
+fn run(mut command: Command) -> Result<(), String> {
+    let output = command.output().map_err(|error| error.to_string())?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(String::from_utf8_lossy(&output.stderr).into_owned())
+}
