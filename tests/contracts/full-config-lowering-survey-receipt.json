@@ -261,7 +261,28 @@
     },
     "diffCheck": "clean"
   },
-  "isolatedOfflineReplay": null,
+  "isolatedOfflineReplay": {
+    "commit": "d0d9cf9071dc1685339865b74cf3119e24549ae7",
+    "path": "/private/tmp/c30-z-replay.UQKAjW/repo",
+    "cloneCommand": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-z-replay.UQKAjW/repo; git switch --detach d0d9cf9071dc1685339865b74cf3119e24549ae7; test ! -e .git/objects/info/alternates",
+    "buildCommand": "CARGO_TARGET_DIR=/private/tmp/c30-z-replay.UQKAjW/target cargo test --workspace --locked --offline --no-run",
+    "testCommand": "CARGO_TARGET_DIR=/private/tmp/c30-z-replay.UQKAjW/target CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --locked --offline --quiet",
+    "measured": {
+      "passed": 1363,
+      "failed": 0,
+      "ignored": 1,
+      "returnCode": 0,
+      "objectsAlternates": "absent",
+      "freshTargetBytesHuman": "2.1G",
+      "logSha256": "509e1ddd0c0d514ebcf7ee5f99e5d21e54ec78440514cdc192cf05b32dfb7b5b"
+    },
+    "helperBoundary": {
+      "qualification": "The temporary runner copied each isolated-clone test executable without metadata. The three sibling commands were copied from this clone's fresh target, not from the primary worktree.",
+      "evoProofcheckSha256": "3f70e7d38e059fb6ac5d1e01a778b1711916b76fc6bfea4221f60566b32b559b",
+      "evoPolicyEvalSha256": "52d4672ef5ee74d88e251af39df4680df1e4bc4d9271bc58abb686bfdb218dd5",
+      "evoCostSearchSha256": "8ee379f80c633f4c118f0148dee28e1a7ff22535130c9836c91d09a4911b1233"
+    }
+  },
   "processDeviations": [
     "A concurrent middle-end stream advanced shared main during an otherwise green workspace gate. The lowering survey now freezes HEAD at start and refuses sealing if it changes; the accepted dashboard and surveys ran in a fixed worktree.",
     "The first attributed-layout invocation omitted C30_LAYOUT_CASE_SET=attributed and failed manifest validation. Its capture is retained; the correctly configured rerun passed 22/22.",

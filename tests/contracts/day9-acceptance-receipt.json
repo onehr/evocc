@@ -1030,11 +1030,8 @@
     "fullConfigurationSurvey": "20260903T162825Z-96918; 2798/2798 clean, zero diagnosed/unavailable/timeout/panic; exact transitions 2760 clean-to-clean and 38 diagnosed-to-clean",
     "singleLinePreprocessedMeasurement": "20260903T162252Z; bpf_jit_comp 63.751s and gss_rpc_xdr 68.710s; 4149/4155 profile samples in repeated physical_line_col character counting; measurement only",
     "scopeException": "crates/evocc-types/src/lib.rs contains the sole canonical __builtin_va_list layout row required by Y2; no middle-end crate changed",
-    "specAmbiguitiesThisWindow": [
-      "Y-REGISTER-ADDRESS-DIAGNOSTIC",
-      "Y-FUNCTION-POINTER-ARITHMETIC-EXECUTION",
-      "Y-RANGE-DESIGNATOR-PLAN-COST"
-    ],
+    "specAmbiguitiesThisWindow": [],
+    "subsequentRuling": "Revision 1.9.54 assigns E2928 and E3034 and counts a range designator as one initializer-plan entry.",
     "result": "PASS_ALL_ENUMERATED_TARGET_C_UNITS_CLEAN"
   },
   "postClosureLoweringSurvey": {
@@ -1046,7 +1043,10 @@
       "c6d21b0"
     ],
     "testsOnlyRed": "cc4cb65; 20 passed and exactly 2 declared semantic failures across 12 source forms; zero build errors",
-    "acceptanceReceipt": "tests/contracts/full-config-lowering-survey-receipt.json",
+    "acceptanceReceipt": {
+      "path": "tests/contracts/full-config-lowering-survey-receipt.json",
+      "sha256": "7a846231e2884126ca7150ddfb2a992d496058130bd520a27fb09a237486d256"
+    },
     "singleLinePreprocessedMeasurement": "20260903T175835Z; 63751.406 ms to 2964.314 ms and 68710.022 ms to 3568.794 ms; both frozen inputs below 5 seconds",
     "dashboardRun": "20260903T230349Z-20340; 48/48 clean; zero regressions",
     "fullConfigurationParseSurvey": "20260903T230814Z-34516; 2798/2798 clean; zero diagnosed/unavailable/timeout/panic",
@@ -1070,6 +1070,9 @@
       "stageF3": "CLOSED",
       "fullConfigurationParse": "2798/2798 clean",
       "fullConfigurationLowering": "4/2798 clean; 2794 typed first diagnostics; measure-only",
+      "workspaceTestsAtZSubject": "1363/1363; 1 ignored",
+      "sourceColumnPerformance": "2964.314 ms and 3568.794 ms; both frozen inputs below 5 seconds",
+      "registerAndFunctionPointerBoundaryTests": "22/22",
       "remainingParserLanes": 0,
       "remainingParserUnits": 0,
       "remainingFirstErrors": {},
@@ -2537,15 +2540,16 @@
     }
   },
   "offlineCloneReplay": {
-    "commit": "76c707782759a64ac95b307879a2eb2d1bb09141",
-    "path": "/private/tmp/c30-y-replay.y8QI0p/repo",
-    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-y-replay.y8QI0p/repo; git switch --detach 76c707782759a64ac95b307879a2eb2d1bb09141; test ! -e .git/objects/info/alternates; CARGO_TARGET_DIR=/private/tmp/c30-y-replay.y8QI0p/target cargo test --workspace --no-fail-fast --locked --offline --quiet",
+    "commit": "d0d9cf9071dc1685339865b74cf3119e24549ae7",
+    "path": "/private/tmp/c30-z-replay.UQKAjW/repo",
+    "command": "git clone --no-local /Users/onehrxn/dev/30days/c30 /private/tmp/c30-z-replay.UQKAjW/repo; git switch --detach d0d9cf9071dc1685339865b74cf3119e24549ae7; test ! -e .git/objects/info/alternates; CARGO_TARGET_DIR=/private/tmp/c30-z-replay.UQKAjW/target cargo test --workspace --locked --offline --no-run; CARGO_TARGET_DIR=/private/tmp/c30-z-replay.UQKAjW/target CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --locked --offline --quiet",
     "measured": {
-      "passed": 1326,
+      "passed": 1363,
       "failed": 0,
       "ignored": 1,
       "objectsAlternates": "absent",
-      "returnCode": 0
+      "returnCode": 0,
+      "logSha256": "509e1ddd0c0d514ebcf7ee5f99e5d21e54ec78440514cdc192cf05b32dfb7b5b"
     }
   },
   "specAmbiguities": [
