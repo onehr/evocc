@@ -265,7 +265,9 @@ fn malformed_lowering_and_runtime_failures_are_diagnostics_not_panics() {
                 "{stderr}"
             ),
             "lowering" => assert!(
-                stderr.contains("integer expression has a non-bit-vector EvoIR value"),
+                stderr.ends_with(
+                    ":1:36: error[E3036]: evoir-lowering-failed: not-lowered: pointer-integer-conversion\n"
+                ),
                 "{stderr}"
             ),
             "runtime" => assert!(

@@ -4308,6 +4308,20 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         InterpreterError::Memory { error, span }
     }
 
+    fn pointer_load_error(
+        error: MemoryFault,
+        address: Pointer,
+        access: AccessLayout,
+        span: SourceSpan,
+    ) -> InterpreterError {
+        let error = if matches!(error, MemoryFault::UninitializedRead { .. }) {
+            MemoryFault::InvalidPointerRepresentation { address, access }
+        } else {
+            error
+        };
+        InterpreterError::Memory { error, span }
+    }
+
     fn access_layout(
         &self,
         ty: TypeId,
@@ -5442,13 +5456,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         let (value, world) = self
                             .memory
                             .volatile_load_pointer_value(&self.world, address, layout)
-                            .map_err(|error| self.memory_error(error, span))?;
+                            .map_err(|error| {
+                                Self::pointer_load_error(error, address, layout, span)
+                            })?;
                         self.world = world;
                         value
                     } else {
                         self.memory
                             .load_pointer_value(address, layout)
-                            .map_err(|error| self.memory_error(error, span))?
+                            .map_err(|error| {
+                                Self::pointer_load_error(error, address, layout, span)
+                            })?
                     };
                     return Ok(CValue::FunctionPointer {
                         value,
@@ -5459,13 +5477,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     let (value, world) = self
                         .memory
                         .volatile_load_pointer(&self.world, address, layout)
-                        .map_err(|error| self.memory_error(error, span))?;
+                        .map_err(|error| Self::pointer_load_error(error, address, layout, span))?;
                     self.world = world;
                     value
                 } else {
                     self.memory
                         .load_pointer(address, layout)
-                        .map_err(|error| self.memory_error(error, span))?
+                        .map_err(|error| Self::pointer_load_error(error, address, layout, span))?
                 };
                 Ok(CValue::Pointer {
                     value,

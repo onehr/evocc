@@ -2656,6 +2656,9 @@ pub enum InterpreterError {
     UninitializedRead {
         block: BlockId,
     },
+    InvalidPointerRepresentation {
+        block: BlockId,
+    },
     MissingReturn {
         block: BlockId,
     },
@@ -2710,6 +2713,7 @@ impl InterpreterError {
                 None => "E3007",
             },
             Self::UninitializedRead { .. } => "E3001",
+            Self::InvalidPointerRepresentation { .. } => "E3013",
             Self::MissingReturn { .. } => "E3007",
             Self::DivisionByZero { .. } => "E3002",
             Self::RemainderByZero { .. } => "E3003",
@@ -2736,6 +2740,9 @@ impl InterpreterError {
                 |diagnostic| diagnostic.message.to_owned(),
             ),
             Self::UninitializedRead { .. } => "read-of-uninitialized-object".to_owned(),
+            Self::InvalidPointerRepresentation { .. } => {
+                "invalid-pointer-representation".to_owned()
+            }
             Self::MissingReturn { .. } => "scalar-function-fell-off-end".to_owned(),
             Self::DivisionByZero { .. } => "integer-division-by-zero".to_owned(),
             Self::RemainderByZero { .. } => "integer-remainder-by-zero".to_owned(),
@@ -2810,6 +2817,10 @@ impl fmt::Display for InterpreterError {
             Self::UninitializedRead { block } => write!(
                 formatter,
                 "E3001: read-of-uninitialized-object (uninitialized value in block {block})"
+            ),
+            Self::InvalidPointerRepresentation { block } => write!(
+                formatter,
+                "E3013: invalid-pointer-representation (pointer poison in block {block})"
             ),
             Self::MissingReturn { block } => write!(
                 formatter,
@@ -3282,7 +3293,7 @@ fn interpret_module_in_state(
                                 });
                             }
                             InternalValue::Uninitialized => {
-                                return Err(InterpreterError::UninitializedRead {
+                                return Err(InterpreterError::InvalidPointerRepresentation {
                                     block: block_id,
                                 });
                             }
@@ -4176,7 +4187,9 @@ fn read_pointer(
 ) -> Result<Pointer, InterpreterError> {
     match read_internal(values, value, block)? {
         InternalValue::Pointer(pointer) => Ok(pointer),
-        InternalValue::Uninitialized => Err(InterpreterError::UninitializedRead { block }),
+        InternalValue::Uninitialized => {
+            Err(InterpreterError::InvalidPointerRepresentation { block })
+        }
         InternalValue::Bits(_) | InternalValue::FunctionPointer(_) => {
             Err(InterpreterError::InvalidFunction {
                 message: format!(
@@ -4195,7 +4208,9 @@ fn read_function_pointer(
 ) -> Result<PointerValue, InterpreterError> {
     match read_internal(values, value, block)? {
         InternalValue::FunctionPointer(pointer) => Ok(pointer),
-        InternalValue::Uninitialized => Err(InterpreterError::UninitializedRead { block }),
+        InternalValue::Uninitialized => {
+            Err(InterpreterError::InvalidPointerRepresentation { block })
+        }
         InternalValue::Bits(_) | InternalValue::Pointer(_) => {
             Err(InterpreterError::InvalidFunction {
                 message: format!(

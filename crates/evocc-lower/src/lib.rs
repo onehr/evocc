@@ -77,6 +77,9 @@ pub enum LowerError {
     GlobalRegisterVariable {
         span: SourceSpan,
     },
+    PointerIntegerConversion {
+        span: SourceSpan,
+    },
     WideInteger {
         span: SourceSpan,
     },
@@ -136,6 +139,9 @@ impl fmt::Display for LowerError {
             Self::GlobalRegisterVariable { .. } => {
                 formatter.write_str("not-lowered: global-register-variable")
             }
+            Self::PointerIntegerConversion { .. } => {
+                formatter.write_str("not-lowered: pointer-integer-conversion")
+            }
             Self::WideInteger { .. } => formatter.write_str("not-executed: wide-integer"),
             Self::StaticRelocation { .. } => formatter.write_str("not-lowered: static-relocation"),
             Self::ComputedGoto { .. } => formatter.write_str("not-lowered: computed-goto"),
@@ -174,6 +180,7 @@ impl LowerError {
             Self::WideInteger { .. } => "E3033",
             Self::FunctionPointerArithmetic { .. } => "E3034",
             Self::GlobalRegisterVariable { .. } => "E3035",
+            Self::PointerIntegerConversion { .. } => "E3036",
             _ => "E3101",
         }
     }
@@ -197,6 +204,7 @@ impl LowerError {
             | Self::PointerDifference { span }
             | Self::FunctionPointerArithmetic { span }
             | Self::GlobalRegisterVariable { span }
+            | Self::PointerIntegerConversion { span }
             | Self::WideInteger { span }
             | Self::StaticRelocation { span }
             | Self::ComputedGoto { span }
@@ -2622,13 +2630,8 @@ impl<'a> FunctionLowerer<'a> {
                             symbol,
                             span: self.info.span,
                         })?;
-                let integer = canonical_integer(
-                    self.unit.types(),
-                    self.target,
-                    declaration.ty(),
-                    self.info.span,
-                )?;
-                (bits(integer), Some(integer))
+                let (ty, integer) = self.c_value_type(declaration.ty(), self.info.span)?;
+                (ty, Some(integer))
             } else if let EnvKey::Address(_) = key {
                 (EvoIRType::Ptr(AddressSpace::Generic), None)
             } else {
@@ -2682,13 +2685,8 @@ impl<'a> FunctionLowerer<'a> {
                         symbol: *symbol,
                         span: self.info.span,
                     })?;
-            let integer = canonical_integer(
-                self.unit.types(),
-                self.target,
-                declaration.ty(),
-                self.info.span,
-            )?;
-            let value = self.fresh_value(bits(integer));
+            let (ty, _) = self.c_value_type(declaration.ty(), self.info.span)?;
+            let value = self.fresh_value(ty);
             self.emit(state, Inst::Uninitialized(value.clone()))?;
             values.push(value);
         }
@@ -3776,6 +3774,9 @@ impl<'a> FunctionLowerer<'a> {
                         value: pointer,
                         integer: CIntegerType::ULONG,
                     });
+                }
+                if matches!(value.value.ty, EvoIRType::Bits(_)) {
+                    return Err(LowerError::PointerIntegerConversion { span });
                 }
                 Err(LowerError::UnsupportedExpression {
                     span,
@@ -5390,6 +5391,9 @@ impl<'a> FunctionLowerer<'a> {
                     });
                 }
                 let value = self.lower_expr(operand, state)?;
+                if matches!(value.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }) {
+                    return Err(LowerError::PointerIntegerConversion { span: *span });
+                }
                 self.cast(value, target, state)
             }
             CHirExpr::Assign {
@@ -7279,6 +7283,11 @@ impl<'a> FunctionLowerer<'a> {
             });
         }
         let EvoIRType::Bits(source_width) = value.value.ty else {
+            if matches!(value.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }) {
+                return Err(LowerError::PointerIntegerConversion {
+                    span: self.info.span,
+                });
+            }
             return Err(LowerError::InvalidControlFlow {
                 span: self.info.span,
                 reason: "integer expression has a non-bit-vector EvoIR value",

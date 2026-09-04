@@ -265,3 +265,43 @@ fn dereferencing_pointer_poison_is_e3013_in_both_interpreters() {
     );
     assert_eq!(evoir_error.message(), "invalid-pointer-representation");
 }
+
+#[test]
+fn calling_function_pointer_poison_is_e3013_in_both_interpreters() {
+    let source = "int main(void) { int (*callee)(void); return callee(); }\n";
+    let arena = Arena::default();
+    let unit = parse(&arena, source, 11);
+    let chir_error = interpret_scalar_function(
+        &unit,
+        function_symbol(&unit, "main"),
+        ChirLimits::new(100_000),
+    )
+    .expect_err("C-HIR called an absent-provenance function pointer");
+    assert_eq!(
+        chir_error.code(),
+        "E3013",
+        "wrong C-HIR error: {chir_error}"
+    );
+    assert_eq!(chir_error.message(), "invalid-pointer-representation");
+
+    let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+        .unwrap_or_else(|error| panic!("function pointer poison failed: {} {error}", error.code()));
+    let text = render_module(&module);
+    assert!(
+        text.contains("uninitialized.fnptr<"),
+        "missing function pointer poison:\n{text}"
+    );
+    let evoir_error = interpret_module(
+        &module,
+        "main",
+        &entry_arguments(&module),
+        EvoIrLimits::new(100_000),
+    )
+    .expect_err("EvoIR called an absent-provenance function pointer");
+    assert_eq!(
+        evoir_error.code(),
+        "E3013",
+        "wrong EvoIR error: {evoir_error}"
+    );
+    assert_eq!(evoir_error.message(), "invalid-pointer-representation");
+}
