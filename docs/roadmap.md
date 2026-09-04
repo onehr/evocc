@@ -1510,6 +1510,7 @@ F2 preprocess 16/16 (no diagnostics; fidelity measured by F3) ┤         B2 Mac
                         │         B7 LINUX USERSPACE GATE        │
                         └────────────┬───────────────────────────┘
                      F3 full-config parse 2,798/2,798 [CLOSED 2026-09-04, run 20260903T162825Z-96918; 34 HOSTCC records excluded; Kbuild-driven telemetry replaces the cohort)
+                     F4 full-config lowering N/N  (survey-ranked; first run 4/2,798, the frontier)
                      C1 kernel codegen: asm, asm goto, atomics, sections, relocations
                      C2 KERNEL OBJECT GATE: TUs compiling N/N, vmlinux links (baseline extraction)
                      G1 BASELINE BOOT: marker printed under QEMU
@@ -1532,6 +1533,7 @@ F2 preprocess 16/16 (no diagnostics; fidelity measured by F3) ┤         B2 Mac
 | B6-B7 | B5 | libc-free programs run on ARM64 Linux / `evocc --target aarch64-linux-gnu` / 100 percent of suite / program output |
 | K1 | none | one command boots a GCC-built kernel and initramfs under QEMU and prints the marker / boot log |
 | F3 | F2, K1 | TUs parsing and preprocessing / Kbuild `-E`/`--parse-only` sweep / N of N / dashboard |
+| F4 | F3 | TUs lowering to EvoIR / `--emit=evoir` sweep with the survey harness / N of N / sealed publication, ranked by first lowering diagnostic |
 | C1 | B7, F3 | assembler accepts every emitted `.s` / Kbuild `-S` sweep / N of N / platform assembler |
 | C2 | C1 | objects compiling and link / Kbuild `-c` + link / N of N, `vmlinux` present / linker |
 | G1 | C2, K1 | boot marker / QEMU command in this document / marker printed / boot log archived |
