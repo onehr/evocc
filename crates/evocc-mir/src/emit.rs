@@ -191,19 +191,19 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
     let _ = writeln!(text, "    stp x29, x30, [sp, #-16]!");
     let _ = writeln!(text, "    mov x29, sp");
     if frame.size != 0 {
-        let _ = writeln!(text, "    sub sp, sp, #{}", frame.size);
+        emit_add_immediate(text, "sub", "sp", "sp", frame.size);
     }
     for (number, offset) in &frame.saved {
-        let _ = writeln!(text, "    str x{number}, [sp, #{offset}]");
+        emit_frame_access(text, "str", &format!("x{number}"), *offset);
     }
 }
 
 fn emit_epilogue(text: &mut String, frame: &Frame) {
     for (number, offset) in &frame.saved {
-        let _ = writeln!(text, "    ldr x{number}, [sp, #{offset}]");
+        emit_frame_access(text, "ldr", &format!("x{number}"), *offset);
     }
     if frame.size != 0 {
-        let _ = writeln!(text, "    add sp, sp, #{}", frame.size);
+        emit_add_immediate(text, "add", "sp", "sp", frame.size);
     }
     let _ = writeln!(text, "    ldp x29, x30, [sp], #16");
 }
@@ -231,6 +231,52 @@ fn emit_immediate(text: &mut String, register: &str, class: RegClass, value: u64
     if !written {
         let _ = writeln!(text, "    movz {register}, #0");
     }
+}
+
+/// The largest immediate an `add` or `sub` carries in one instruction, and the
+/// largest one it carries in two: the second form shifts its twelve bits left
+/// by twelve.
+const IMM12: u64 = 4095;
+const IMM12_SHIFTED: u64 = 4095 << 12 | 4095;
+
+/// The largest frame offset a scaled transfer immediate reaches for a
+/// thirty-two-bit access. Every frame offset this revision produces is a
+/// multiple of eight, so one bound serves both widths.
+const SCALED_LIMIT: u64 = 4095 * 4;
+
+/// `dst := src + imm`, in as many instructions as the immediate needs.
+///
+/// Section 6 puts every slot "from `sp` with a non-negative scaled offset" and
+/// keeps the frame inside "the unsigned twelve-bit immediate form", which a
+/// frame with a large automatic object leaves. The platform's own answer is the
+/// shifted form, and below it a materialized constant; the sequence is
+/// emission's, as Section 4's pseudo-form expansions are.
+fn emit_add_immediate(text: &mut String, op: &str, dst: &str, src: &str, imm: u64) {
+    if imm <= IMM12 {
+        let _ = writeln!(text, "    {op} {dst}, {src}, #{imm}");
+    } else if imm <= IMM12_SHIFTED {
+        let high = imm >> 12;
+        let low = imm & IMM12;
+        let _ = writeln!(text, "    {op} {dst}, {src}, #{high}, lsl #12");
+        if low != 0 {
+            let _ = writeln!(text, "    {op} {dst}, {dst}, #{low}");
+        }
+    } else {
+        let scratch = physical(RegClass::Gpr64, SCRATCH_OFFSET);
+        emit_immediate(text, &scratch, RegClass::Gpr64, imm);
+        let _ = writeln!(text, "    {op} {dst}, {src}, {scratch}");
+    }
+}
+
+/// One transfer to or from a frame slot, at whatever distance from `sp`.
+fn emit_frame_access(text: &mut String, mnemonic: &str, register: &str, offset: u64) {
+    if offset <= SCALED_LIMIT {
+        let _ = writeln!(text, "    {mnemonic} {register}, [sp, #{offset}]");
+        return;
+    }
+    let scratch = physical(RegClass::Gpr64, SCRATCH_OFFSET);
+    emit_add_immediate(text, "add", &scratch, "sp", offset);
+    let _ = writeln!(text, "    {mnemonic} {register}, [{scratch}, #0]");
 }
 
 fn scratch(class: RegClass) -> String {
@@ -510,15 +556,15 @@ fn emit_inst(
         // its declared alignment ...)".
         MInst::FrameSlot { dst, origin, .. } => {
             let offset = frame.slots.get(origin).copied().unwrap_or(0);
-            let _ = writeln!(text, "    add {}, sp, #{offset}", name(*dst));
+            emit_add_immediate(text, "add", &name(*dst), "sp", offset);
         }
         MInst::SpillStore { src, slot } => {
             let offset = frame.spills.get(slot).copied().unwrap_or(0);
-            let _ = writeln!(text, "    str {}, [sp, #{offset}]", name(*src));
+            emit_frame_access(text, "str", &name(*src), offset);
         }
         MInst::SpillReload { dst, slot } => {
             let offset = frame.spills.get(slot).copied().unwrap_or(0);
-            let _ = writeln!(text, "    ldr {}, [sp, #{offset}]", name(*dst));
+            emit_frame_access(text, "ldr", &name(*dst), offset);
         }
         // Section 4: emission expands the copy "to `ldr`/`str` pairs of the
         // largest aligned width, unrolled up to 64 bytes and a counted loop
