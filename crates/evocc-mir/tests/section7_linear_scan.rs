@@ -12,9 +12,10 @@
 //! register or spilled. Ties are broken by virtual register number, so the
 //! allocation is deterministic."
 
+use evocc_evoir::parse_section9_module;
 use evocc_mir::{
-    allocate, out_of_ssa, render_allocated, BinOp, MBlock, MFunction, MInst, MTerm, RegClass, VReg,
-    Width, CALLEE_SAVED, CALLER_SAVED,
+    allocate, lower_module, out_of_ssa, render_allocated, verify_allocation, BinOp, MBlock,
+    MFunction, MInst, MTerm, RegClass, VReg, Width, CALLEE_SAVED, CALLER_SAVED,
 };
 
 fn w(id: u32) -> VReg {
@@ -237,4 +238,91 @@ fn the_allocated_form_names_physical_registers_and_no_block_arguments() {
     assert!(text.starts_with("func @dot {\nentry:\n"), "{text}");
     assert!(text.contains("ldr.w [x0, #0]"), "{text}");
     assert!(text.ends_with("    ret\n}\n"), "{text}");
+}
+
+/// The reduced program the campaign refused: a loop whose back edge leaves a
+/// join block.
+///
+/// `^b6` reads none of `^b1`'s arguments and writes all of them, so after the
+/// out-of-SSA pass those values leave the block without entering it. An
+/// interval was stretched to the end of a block only for a value that entered
+/// it, so each of them expired at the copy that wrote it, and under pressure
+/// the register went to the spill store standing right after the copies while
+/// the loop still needed it. The allocation verifier refused a hundred and
+/// twenty of the first two hundred and fifty-six generated programs on this;
+/// this is the reduction of the first of them.
+const CARRIED_AROUND_A_LOOP: &str = "\
+func @h0(%arg0: mem<all>, %arg1: world) -> (bits<32>, bits<64>, mem<all>, world) cc = target_default
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: mem<all>, %v1: world):
+    (%v2, %v3, %v4) = alloca %v0, %v1 [origin=0, size=8, align=8]
+    %v5 = const.bits<64> 1
+    %v6 = access_in_bounds %v3, %v2 [size=8, align=8]
+    (%v7, %v8) = store %v6, %v4, %v2, %v5
+    %v12 = const.bits<17> 0
+    %v13 = const.bits<1> 0
+    %v18 = const.bits<64> 0
+    %v27 = const.bits<64> 0
+    %v28 = const.bits<64> 2
+    %v29 = const.bits<32> 0
+    %v30 = const.bits<47> 0
+    br ^b1(%v27, %v28, %v2, %v13, %v12, %v29, %v30, %v18, %v7, %v8)
+
+^b1(%v31: bits<64>, %v32: bits<64>, %v33: ptr<generic>, %v34: bits<1>, %v35: bits<17>, %v36: bits<32>, %v37: bits<47>, %v38: bits<64>, %v39: mem<all>, %v40: world):
+    %v54 = const.bits<17> 63
+    %v55 = const.bits<17> 0
+    %v56 = const.bits<1> 0
+    %v57 = const.bits<64> 0
+    %v58 = const.bits<1> 0
+    %v60 = const.bits<32> 4231669572
+    cond_br %v58, ^b4(%v31, %v32, %v33, %v34, %v54, %v36, %v37, %v32, %v39, %v40), ^b5(%v31, %v32, %v33, %v56, %v55, %v60, %v37, %v57, %v39, %v40)
+
+^b4(%v61: bits<64>, %v62: bits<64>, %v63: ptr<generic>, %v64: bits<1>, %v65: bits<17>, %v66: bits<32>, %v67: bits<47>, %v68: bits<64>, %v69: mem<all>, %v70: world):
+    %v76 = const.bits<47> 0
+    %v79 = const.bits<64> 0
+    br ^b6(%v61, %v62, %v63, %v64, %v65, %v66, %v76, %v79, %v69, %v70)
+
+^b5(%v80: bits<64>, %v81: bits<64>, %v82: ptr<generic>, %v83: bits<1>, %v84: bits<17>, %v85: bits<32>, %v86: bits<47>, %v87: bits<64>, %v88: mem<all>, %v89: world):
+    %v94 = signed_shl_defined.unsigned %v84, %v84
+    (%v95, %v96, %v97) = alloca %v88, %v89 [origin=1, size=4, align=2]
+    %v98 = const.bits<64> 1
+    %v99 = ptr.offset.add.unsigned %v95, %v98 [scale=2]
+    %v100 = pointer_valid %v96, %v99
+    %v101 = const.bits<16> 11692
+    %v102 = access_in_bounds %v100, %v95 [size=2, align=2]
+    (%v103, %v104) = store %v102, %v97, %v95, %v101
+    %v105 = access_in_bounds %v103, %v99 [size=2, align=2]
+    (%v106, %v107) = store %v105, %v104, %v99, %v101
+    (%v108, %v109, %v110) = alloca %v106, %v107 [origin=2, size=2, align=2]
+    %v111 = access_in_bounds %v109, %v108 [size=2, align=2]
+    (%v112, %v113) = store %v111, %v110, %v108, %v101
+    (%v114, %v115) = copy %v112, %v113, %v95, %v108 [size=2, align=2]
+    %v117 = const.bits<64> 0
+    %v119 = ashr.bits<47> %v86, %v117
+    %v120 = signed_div_rem_no_overflow %v84, %v84
+    %v121 = const.bits<17> 0
+    %v126 = const.bits<1> 0
+    br ^b6(%v80, %v81, %v82, %v126, %v121, %v85, %v119, %v98, %v114, %v115)
+
+^b6(%v129: bits<64>, %v130: bits<64>, %v131: ptr<generic>, %v132: bits<1>, %v133: bits<17>, %v134: bits<32>, %v135: bits<47>, %v136: bits<64>, %v137: mem<all>, %v138: world):
+    %v140 = const.bits<17> 0
+    %v143 = const.bits<32> 0
+    %v155 = const.bits<64> 0
+    br ^b1(%v155, %v130, %v131, %v132, %v140, %v143, %v135, %v155, %v137, %v138)
+}
+";
+
+#[test]
+fn a_value_carried_around_a_loop_keeps_its_register() {
+    let module = parse_section9_module(CARRIED_AROUND_A_LOOP.as_bytes()).expect("canonical EvoIR");
+    let lowered = lower_module(&module).expect("every form is in the Section 5 table");
+    for function in &lowered.functions {
+        let allocated = allocate(&out_of_ssa(function)).expect("allocation");
+        assert!(
+            allocated.spilled > 0,
+            "the reproducer must still spill to reach the defect"
+        );
+        verify_allocation(&allocated).expect("the loop-carried values keep their registers");
+    }
 }

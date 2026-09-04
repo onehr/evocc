@@ -13,7 +13,8 @@ use std::process::Command;
 
 use evocc_evoir::parse_section9_module;
 use evocc_mir::{
-    allocate, emit_module, frame_of, lower_module, out_of_ssa, verify_allocation, Allocated,
+    allocate, emit_module, frame_of, lower_module, out_of_ssa, verify_allocation, Allocated, BinOp,
+    MBlock, MFunction, MInst, MTerm, RegClass, VReg, Width,
 };
 
 /// The host assembler, and its version, or the reason there is none.
@@ -292,5 +293,156 @@ fn the_host_assembler_accepts_the_emitted_text() {
         if let Err(complaint) = assemble(&text) {
             panic!("the assembler refused {name}:\n{complaint}\n{text}");
         }
+    }
+}
+
+/// Section 6: "Every slot (object, spill, save area) is addressed from `sp`
+/// with a non-negative scaled offset."
+///
+/// An automatic object was placed by subtracting its rounded size from wherever
+/// the object above it left the cursor, so an object whose alignment is one put
+/// every slot above it off an eight-byte boundary and the callee-saved words
+/// landed at offsets no scaled store can spell. The host assembler refused
+/// `str x19, [sp, #277]`.
+#[test]
+fn every_slot_lies_on_a_boundary_its_own_access_can_scale() {
+    let w = |id: u32| VReg::new(id, RegClass::Gpr32);
+    let g = |id: u32| VReg::new(id, RegClass::Gpr64);
+
+    // Three objects whose alignments and sizes do not divide each other, and a
+    // value that lives across a call so that a callee-saved register is used
+    // and the save area has to start somewhere.
+    let function = MFunction {
+        name: "frame".to_owned(),
+        blocks: vec![MBlock {
+            id: 0,
+            args: vec![w(0)],
+            insts: vec![
+                MInst::FrameSlot {
+                    dst: g(1),
+                    origin: 0,
+                    size: 5,
+                    align: 1,
+                },
+                MInst::FrameSlot {
+                    dst: g(2),
+                    origin: 1,
+                    size: 8,
+                    align: 8,
+                },
+                MInst::FrameSlot {
+                    dst: g(3),
+                    origin: 2,
+                    size: 2,
+                    align: 2,
+                },
+                MInst::Bl {
+                    symbol: "helper".to_owned(),
+                    args: vec![w(0)],
+                    results: vec![w(4)],
+                },
+                MInst::Binary {
+                    op: BinOp::Add,
+                    dst: w(5),
+                    lhs: w(4),
+                    rhs: w(0),
+                    width: Width::W,
+                },
+            ],
+            term: MTerm::Ret { values: vec![w(5)] },
+        }],
+    };
+
+    let allocated = allocate(&out_of_ssa(&function)).expect("allocation");
+    verify_allocation(&allocated).expect("the allocation verifies");
+    let frame = frame_of(&allocated);
+    assert!(
+        !allocated.used_callee_saved.is_empty(),
+        "a value live across a call must occupy a callee-saved register"
+    );
+    for (number, offset) in &frame.saved {
+        assert_eq!(
+            offset % 8,
+            0,
+            "x{number} is saved at {offset}, which no scaled store can spell"
+        );
+    }
+    for (origin, alignment) in [(0_u64, 1_u64), (1, 8), (2, 2)] {
+        let offset = frame.slots[&origin];
+        assert_eq!(
+            offset % alignment,
+            0,
+            "the object at origin {origin} needs alignment {alignment} and sits at {offset}"
+        );
+    }
+    assert_eq!(frame.size % 16, 0);
+}
+
+/// Appendix A puts a width suffix on a two-width form, and the assembler admits
+/// one width per instruction.
+///
+/// A shift whose amount came from a sixty-four-bit value was written
+/// `asr w15, w13, x15`, and a mask into a sixty-four-bit destination
+/// `and x11, w2, #2147483647`; the host assembler refused both.
+#[test]
+fn a_two_width_form_spells_every_operand_at_its_own_width() {
+    let w = |id: u32| VReg::new(id, RegClass::Gpr32);
+    let g = |id: u32| VReg::new(id, RegClass::Gpr64);
+
+    let function = MFunction {
+        name: "widths".to_owned(),
+        blocks: vec![MBlock {
+            id: 0,
+            args: vec![w(0), g(1)],
+            insts: vec![
+                // A thirty-two-bit shift whose amount is a sixty-four-bit value.
+                MInst::Binary {
+                    op: BinOp::Asr,
+                    dst: w(2),
+                    lhs: w(0),
+                    rhs: g(1),
+                    width: Width::W,
+                },
+                // A sixty-four-bit mask over a thirty-two-bit value.
+                MInst::BinaryImm {
+                    op: BinOp::And,
+                    dst: g(3),
+                    lhs: w(2),
+                    imm: 0x7fff_ffff,
+                    width: Width::X,
+                },
+            ],
+            term: MTerm::Ret { values: vec![g(3)] },
+        }],
+    };
+
+    let allocated = allocate(&out_of_ssa(&function)).expect("allocation");
+    let text = emit_module(&[allocated], &[]);
+    for line in text.lines() {
+        let line = line.trim();
+        let Some(operands) = line
+            .strip_prefix("asr ")
+            .or_else(|| line.strip_prefix("and "))
+        else {
+            continue;
+        };
+        let widths: Vec<char> = operands
+            .split(", ")
+            .filter_map(|operand| operand.chars().next())
+            .filter(|first| *first == 'w' || *first == 'x')
+            .collect();
+        assert!(
+            widths.windows(2).all(|pair| pair[0] == pair[1]),
+            "one instruction, two widths: {line}\n{text}"
+        );
+    }
+    match assembler() {
+        Ok(version) => {
+            println!("assembler={version}");
+            if let Err(complaint) = assemble(&text) {
+                panic!("the assembler refused the two-width forms:\n{complaint}\n{text}");
+            }
+        }
+        Err(reason) => println!("skipped: {reason}"),
     }
 }
