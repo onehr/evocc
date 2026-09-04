@@ -128,10 +128,10 @@ Other useful flags: `-E` (preprocess), `--parse-only`, `--emit=c-hir`, and `--su
 | Full-configuration sweep, 2,798 target C units, own preprocessor | done: 2,798 of 2,798 clean |
 | Analysis lattices, bounded scheduler | not started |
 | Randomized semantic gate | not started |
-| EvoMIR, register allocation, AArch64 | not started |
+| EvoMIR, register allocation, AArch64 emission | done for the scalar subset: 256 generated programs assembled, linked, run, exit statuses agreeing |
 | Linux ABI, kernel codegen, link, boot | not started |
 
-The compiler emits no machine code yet. Everything above the backend is deep and measured; the backend is the next stage.
+The compiler emits machine code. Programs it compiles run natively on an Apple arm64 host and agree with its own checked interpreter on every one of 256 randomly generated programs, and a four-lane gate compares the source IR, the optimized IR, the machine IR and the native run on a thousand more. What it does not yet do is compile the kernel: the full-configuration lowering survey is the frontier, and no Linux target exists.
 
 ## Layout
 
@@ -154,7 +154,7 @@ Every commit passes workspace tests, `clippy -D warnings`, `rustfmt`, Ruff, both
 
 **1. Spec as sole authority — the only one with real evidence so far.** 72 dashboard publications, zero regressions. Six executor stops at spec gaps; five architect errors overturned by an oracle or the executor before they became code; one commit whose message did not match its diff, caught by the executor reviewing upstream. A failure taxonomy is emerging — the unprobed assertion, the reference to a construct nobody defined, one rule implemented on one code path but not another — and each entry has a mechanical countermeasure that has since fired. The cost is real too: roughly one round in five went to fixing the spec.
 
-**2. Correct on the kernel — partial.** Parsing is closed on the cohort: 16/16 under both oracles. Preprocessing raises no diagnostics on the cohort; its fidelity is measured by the full sweep, which so far has found five preprocessor rules the spec had not stated and the oracles settle. Layout is bit-exact. Two interpreters agree on every corpus. Missing: any machine code, the full ~2,500-unit sweep, and the flight lab that boots the result. The open bet is whether a loop that converges on 16 units converges on 2,500.
+**2. Correct on the kernel — partial, and now measured end to end.** Every one of the configured kernel's 2,798 translation units preprocesses and parses clean under EvoCC's own front end. Lowering to IR is the current frontier: one survey ranks what stops it, and one rule at a time closes each class. Below that, the backend runs: generated programs compile to AArch64 and agree with the interpreter natively. Missing: the kernel's own lowering classes, a Linux target, and the flight lab that boots the result.
 
 **3. E-graph instead of a pipeline — not yet measurable.** The e-graph, the rule set, and the checker exist, but the cost model counts instructions and there is no target. This question is blocked on the backend, which makes the backend an instrument rather than a deliverable. Two hard points are already on the record: inlining, which the kernel depends on and a single-function e-graph cannot do; and constructs the kernel expects answered *after* optimization, which EvoCC answers conservatively in the front end.
 
