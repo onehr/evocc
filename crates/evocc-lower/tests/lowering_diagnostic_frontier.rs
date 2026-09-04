@@ -1,0 +1,183 @@
+//! Regression contract for the first full-configuration lowering frontier.
+
+use evocc_chir::{AllocationSiteManifest, CHirDecl};
+use evocc_common::{Arena, FileId, SourceSpan};
+use evocc_lex::{Lexer, TokenKind};
+use evocc_lower::{lower_unit, LowerError};
+use evocc_parser::Parser;
+use evocc_types::TargetDataLayout;
+
+fn parse<'arena>(arena: &'arena Arena, source: &str, ordinal: u32) -> evocc_chir::CHirUnit<'arena> {
+    let file = FileId::new(10_200 + ordinal);
+    let mut lexer = Lexer::new(file, source);
+    let mut tokens = Vec::new();
+    while let Some(token) = lexer.next() {
+        assert_ne!(
+            token.kind,
+            TokenKind::Error,
+            "lexer rejected case {ordinal}"
+        );
+        tokens.push(token);
+    }
+    let mut parser = Parser::new(tokens, file, source);
+    let unit = parser.parse_translation_unit_in(arena);
+    assert!(
+        !parser.had_error(),
+        "parser rejected case {ordinal}: {:?}",
+        parser.diagnostic()
+    );
+    unit
+}
+
+fn expected_use_span(source: &str, spelling: &str, ordinal: u32) -> SourceSpan {
+    let byte_start = source
+        .rfind(spelling)
+        .unwrap_or_else(|| panic!("case {ordinal} has no `{spelling}` use"));
+    SourceSpan::new(
+        FileId::new(10_200 + ordinal),
+        u32::try_from(byte_start).expect("small fixture"),
+        u32::try_from(byte_start + spelling.len()).expect("small fixture"),
+        1,
+        1,
+    )
+}
+
+#[test]
+fn global_register_declaration_has_no_allocation_site_or_global() {
+    let source = "register unsigned long sp_var asm(\"sp\");\n";
+    let arena = Arena::default();
+    let unit = parse(&arena, source, 0);
+    let object = match unit.declarations() {
+        [CHirDecl::Object(object)] => object,
+        declarations => panic!("unexpected declarations: {}", declarations.len()),
+    };
+    let manifest = AllocationSiteManifest::derive(&unit)
+        .unwrap_or_else(|error| panic!("global register manifest: {error:?}"));
+    assert!(
+        manifest.object_site(object.symbol).is_none(),
+        "a global register variable must not acquire object provenance"
+    );
+    let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+        .unwrap_or_else(|error| panic!("declaration-only lowering: {} {error}", error.code()));
+    assert!(module.globals.is_empty());
+    assert!(module.functions.is_empty());
+}
+
+#[test]
+fn global_register_reads_and_writes_fail_closed_at_the_use() {
+    let cases = [
+        (
+            "register unsigned long sp_var asm(\"sp\"); unsigned long read_sp(void) { return sp_var; }\n",
+            1,
+        ),
+        (
+            "register unsigned long sp_var asm(\"sp\"); void write_sp(unsigned long value) { sp_var = value; }\n",
+            2,
+        ),
+    ];
+    for (source, ordinal) in cases {
+        let arena = Arena::default();
+        let unit = parse(&arena, source, ordinal);
+        let error = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+            .expect_err("a machine-register use must fail closed before EvoIR");
+        assert_eq!(error.code(), "E3035", "wrong diagnostic: {error}");
+        assert_eq!(error.to_string(), "not-lowered: global-register-variable");
+        assert_eq!(
+            error.span(),
+            Some(expected_use_span(source, "sp_var", ordinal))
+        );
+    }
+}
+
+#[test]
+fn register_addresses_remain_a_front_end_error() {
+    let source = concat!(
+        "register unsigned long sp_var asm(\"sp\"); ",
+        "unsigned long *address(void) { return &sp_var; }\n",
+    );
+    let arena = Arena::default();
+    let file = FileId::new(10_203);
+    let mut lexer = Lexer::new(file, source);
+    let tokens = std::iter::from_fn(|| lexer.next()).collect::<Vec<_>>();
+    assert!(tokens.iter().all(|token| token.kind != TokenKind::Error));
+    let mut parser = Parser::new(tokens, file, source);
+    let _ = parser.parse_translation_unit_in(&arena);
+    let diagnostic = parser
+        .diagnostic()
+        .expect("taking a register address must be refused");
+    assert_eq!(diagnostic.code, "E2928");
+    assert_eq!(diagnostic.message, "address-of-register-object");
+    let address = source.find('&').expect("fixture has address operator");
+    assert_eq!(diagnostic.span.byte_start, address as u32);
+}
+
+#[test]
+fn block_scope_register_binding_remains_an_automatic_value() {
+    let source = concat!(
+        "unsigned long local(unsigned long value) { ",
+        "register unsigned long bound asm(\"x9\") = value; ",
+        "bound += 1; return bound; }\n",
+    );
+    let arena = Arena::default();
+    let unit = parse(&arena, source, 4);
+    AllocationSiteManifest::derive(&unit)
+        .unwrap_or_else(|error| panic!("local register manifest: {error:?}"));
+    lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+        .unwrap_or_else(|error| panic!("local register lowering: {} {error}", error.code()));
+}
+
+#[test]
+fn completed_array_redeclaration_uses_its_composite_identity() {
+    let source = "extern int values[]; extern int values[4];\n";
+    let arena = Arena::default();
+    let unit = parse(&arena, source, 5);
+    let manifest = AllocationSiteManifest::derive(&unit)
+        .unwrap_or_else(|error| panic!("completed-array manifest: {error:?}"));
+    assert!(manifest.sites().is_empty());
+    let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+        .unwrap_or_else(|error| panic!("completed-array lowering: {} {error}", error.code()));
+    assert!(module.globals.is_empty());
+    assert!(module.functions.is_empty());
+}
+
+fn lowering_error(source: &str, ordinal: u32) -> LowerError {
+    let arena = Arena::default();
+    let unit = parse(&arena, source, ordinal);
+    lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+        .expect_err("frontier fixture must remain fail-closed")
+}
+
+#[test]
+fn generic_lowering_wrapper_is_not_a_diagnostic_resting_place() {
+    let non_bit_vector = lowering_error(
+        "void *offset(const int *at) { return (void *)((unsigned long)at + *at); }\n",
+        6,
+    );
+    let non_integer_scalar = lowering_error(
+        concat!(
+            "struct node { struct node *parent; }; ",
+            "struct node *root(struct node *node) { struct node *parent; ",
+            "while (node->parent != node) { parent = node->parent; node = parent; } ",
+            "return node; }\n",
+        ),
+        7,
+    );
+
+    assert_eq!(
+        non_bit_vector.to_string(),
+        "integer expression has a non-bit-vector EvoIR value"
+    );
+    assert_eq!(
+        non_integer_scalar.to_string(),
+        "non-integer scalar type is outside Day 6"
+    );
+    assert_ne!(non_bit_vector.code(), "E3101");
+    assert_ne!(non_integer_scalar.code(), "E3101");
+    assert_ne!(
+        non_bit_vector.code(),
+        non_integer_scalar.code(),
+        "independent lowering classes need independent diagnostic codes"
+    );
+    assert!(non_bit_vector.code().starts_with("E30"));
+    assert!(non_integer_scalar.code().starts_with("E30"));
+}

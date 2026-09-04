@@ -1,0 +1,125 @@
+{
+  "receiptId": "c30.lowering-diagnostic-frontier.red.v1",
+  "state": "RED",
+  "openedAt": "2026-09-04T20:47:34+08:00",
+  "baseline": {
+    "commit": "b4b10c8e1c4940432674dd86030f1818710fb803",
+    "authorityCommit": "0da5d7d",
+    "description": "The working baseline contains later middle-end specification work, while the front-end lowering obligations remain those introduced by specification revision 1.9.57 and contract scope AA."
+  },
+  "authority": {
+    "specification": {
+      "path": "docs/evoir-spec.md",
+      "revision": "1.9.57",
+      "authorityCommitSha256": "9d1991291c81404a40277b17231b72146775784741cf0da1ffc860d310b78e1f",
+      "workingTreeRevision": "1.9.58",
+      "workingTreeSha256": "94ecbce8ec91a82ad3bd1565afc52686ea6220751e297f4d6f4b7503554f0463",
+      "sections": [
+        "10.1.18 Global register variables",
+        "10.1.18 Lowering diagnostics name their class"
+      ]
+    },
+    "contract": {
+      "path": "tests/contracts/day9-acceptance-contract.json",
+      "scope": "AA",
+      "authorityCommitSha256": "fe763aa01576dbad2265907baf32d6b07e639afdd3a8a0f9da2d867bc06d4e9e",
+      "workingTreeSha256": "4c2f3b2f35ec9642536c24feac934148cb74c88fdd46b97cd4e061dc9165ae2f"
+    }
+  },
+  "sealedOracleProbes": [
+    {
+      "path": ".evidence/builtin-probes/20260902-2c23684c/p32-register-variables.c",
+      "sha256": "721f7b8fd9cb47609ffc3c57be3a2f14d3b603b19d31d6039e7be458499b7f8a"
+    },
+    {
+      "path": ".evidence/builtin-probes/20260902-2c23684c/p32-register-variables.out",
+      "sha256": "2826b5b593048b668b1d832282450bbb98844dac28c0b82dafd5f1c3fb2342c5"
+    },
+    {
+      "path": ".evidence/builtin-probes/20260902-2c23684c/p32-address.c",
+      "sha256": "c61f835267c64c6b4ba038bbfadb79d6d58ebfef1f4187627897f5f636f31693"
+    }
+  ],
+  "declaredCapabilities": [
+    "A file-scope register-with-asm declaration has no allocation site and emits no EvoIR global.",
+    "A read or write of a global register variable reports E3035 at the use.",
+    "A completed array redeclaration uses the symbol's composite semantic identity.",
+    "The non-bit-vector integer lowering class has a stable code other than E3101.",
+    "The non-integer scalar lowering class has a different stable code other than E3101."
+  ],
+  "declaredFailures": [
+    {
+      "test": "global_register_declaration_has_no_allocation_site_or_global",
+      "observed": "AllocationSiteManifest::derive returns ObjectStorageMismatch for Register versus canonical Register."
+    },
+    {
+      "test": "global_register_reads_and_writes_fail_closed_at_the_use",
+      "observed": "Lowering stops before the use with E3101 generated invalid EvoIR: cannot derive the authoritative allocation-site manifest instead of E3035."
+    },
+    {
+      "test": "completed_array_redeclaration_uses_its_composite_identity",
+      "observed": "Lowering returns E3101 object declaration disagrees with its semantic identity."
+    },
+    {
+      "test": "generic_lowering_wrapper_is_not_a_diagnostic_resting_place",
+      "observed": "Both independent singleton classes still report E3101."
+    }
+  ],
+  "protectedExistingBehavior": [
+    {
+      "test": "register_addresses_remain_a_front_end_error",
+      "result": "PASS: E2928 at the address operator"
+    },
+    {
+      "test": "block_scope_register_binding_remains_an_automatic_value",
+      "result": "PASS: manifest derivation and lowering both succeed"
+    }
+  ],
+  "focusedRun": {
+    "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target cargo test -p evocc-lower --test lowering_diagnostic_frontier --no-fail-fast -- --nocapture",
+    "passed": 2,
+    "failed": 4,
+    "ignored": 0,
+    "buildErrors": 0,
+    "unexpectedFailures": 0
+  },
+  "workspaceRun": {
+    "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target cargo test --workspace --no-fail-fast",
+    "result": "Every pre-existing test target passed; the new lowering_diagnostic_frontier target had exactly its four declared failures and two passes.",
+    "declaredFailures": 4,
+    "buildErrors": 0,
+    "unexpectedFailures": 0,
+    "longRunningIgnored": 3
+  },
+  "staticGates": {
+    "clippy": {
+      "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target cargo clippy --workspace --all-targets -- -D warnings",
+      "warnings": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "result": "clean"
+    },
+    "ruff": {
+      "command": "ruff check tests/acceptance tools",
+      "result": "clean"
+    },
+    "baseLayoutCorpus": {
+      "runId": "20260904T124444Z-15098",
+      "result": "PASS 128/128; ORACLE_CONSENSUS; 0 mismatches"
+    },
+    "attributedLayoutCorpus": {
+      "runId": "20260904T124507Z-16967",
+      "result": "PASS 22/22; ORACLE_CONSENSUS; 0 mismatches"
+    }
+  },
+  "authorityGap": {
+    "id": "AA-E3101-SINGLETON-CODE-ASSIGNMENTS",
+    "status": "OPEN",
+    "finding": "Revision 1.9.57 requires a distinct code for every remaining lowering class but the diagnostic registry assigns neither a code nor a normative message to the non-bit-vector integer and non-integer scalar singleton classes.",
+    "requiredRuling": "Assign the two stable diagnostic codes and messages before production code or the next lowering survey encodes them.",
+    "notAssumed": "The test deliberately does not guess that the next available spellings are E3036 and E3037."
+  },
+  "productionChanges": [],
+  "claimCeiling": "This checkpoint proves four executable RED failures plus two protected baseline behaviors. It makes no implementation, publication, or lowering-survey claim."
+}
