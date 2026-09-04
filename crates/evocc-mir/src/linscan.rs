@@ -18,8 +18,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use crate::{
-    inst_defs, inst_uses, regalloc, term_edges, term_uses, MBlock, MFunction, MInst, MTerm,
-    RegClass, VReg,
+    inst_defs, inst_uses, regalloc, term_edges, term_uses, AsmBody, AsmConstraint, AsmOperand,
+    AsmValue, MBlock, MFunction, MInst, MTerm, RegClass, VReg,
 };
 
 /// Section 6: "`x0` to `x17` are caller-saved", less the two intra-procedure
@@ -372,9 +372,26 @@ fn intervals(function: &MFunction) -> Vec<Interval> {
             for reg in inst_defs(inst) {
                 touch(reg, write, &mut bounds);
             }
+            // Section 7: `=&r` and `+&r` want "a register no input operand of
+            // the same `asm` holds". An ordinary destination may reuse an
+            // input's register because the read happens before the write; an
+            // early clobber may not, so its interval starts where the reads do.
+            if let MInst::Asm(body) = inst {
+                for reg in early_clobbers(body) {
+                    touch(reg, read, &mut bounds);
+                }
+            }
         }
         for reg in term_uses(&block.term) {
             touch(reg, end - 2, &mut bounds);
+        }
+        if let MTerm::AsmGoto { body, .. } = &block.term {
+            for reg in body.defined() {
+                touch(reg, end - 1, &mut bounds);
+            }
+            for reg in early_clobbers(body) {
+                touch(reg, end - 2, &mut bounds);
+            }
         }
     }
 
@@ -443,10 +460,103 @@ fn intervals(function: &MFunction) -> Vec<Interval> {
 /// The fixed operands are taken first and held for the whole of their (short)
 /// intervals, so the walk never has to displace one; a register a fixed
 /// interval holds is simply unavailable while it does.
+/// The registers an `asm`'s early-clobber operands occupy.
+fn early_clobbers(body: &AsmBody) -> Vec<VReg> {
+    body.outputs
+        .iter()
+        .filter(|operand| matches!(operand.constraint, AsmConstraint::EarlyClobber(_)))
+        .filter_map(AsmOperand::register)
+        .collect()
+}
+
+/// Section 7: "A clobber names a register the `asm` writes: the allocator
+/// treats the whole instruction as defining it, so no live value may occupy it
+/// across the instruction."
+///
+/// The clobber is not a value with an interval; it is a register that is
+/// unavailable at one point. It reaches the scan as a fixed interference: an
+/// interval nothing owns, holding the register over the instruction, which
+/// every overlapping interval must avoid.
+fn asm_interferences(function: &MFunction) -> Vec<(Interval, u8)> {
+    let ranges = numbering(function);
+    let mut fixed = Vec::new();
+    let mut next = CLOBBER_BASE;
+    let mut record = |start: usize, end: usize, number: u8, next: &mut u32| {
+        for class in [RegClass::Gpr32, RegClass::Gpr64] {
+            fixed.push((
+                Interval {
+                    value: *next,
+                    class,
+                    start,
+                    end,
+                    spans_call: false,
+                },
+                number,
+            ));
+            *next += 1;
+        }
+    };
+    for block in &function.blocks {
+        let (start, end) = ranges[&block.id];
+        for (offset, inst) in block.insts.iter().enumerate() {
+            if let MInst::Asm(body) = inst {
+                let read = start + 2 * offset;
+                for number in body.clobbered_registers() {
+                    record(read, read + 1, number, &mut next);
+                }
+            }
+        }
+        if let MTerm::AsmGoto { body, .. } = &block.term {
+            for number in body.clobbered_registers() {
+                record(end - 2, end - 1, number, &mut next);
+            }
+        }
+    }
+    fixed
+}
+
+/// Interference intervals start their identities here, above any virtual
+/// register a function can hold, so the scan can tell them from values.
+const CLOBBER_BASE: u32 = u32::MAX / 2;
+
+/// Section 7: a digit constraint means "the same register as the output that
+/// digit names (a tied operand); the two intervals are one".
+fn tied_pairs(function: &MFunction) -> BTreeMap<u32, u32> {
+    let mut pairs = BTreeMap::new();
+    let mut collect = |body: &AsmBody| {
+        for input in &body.inputs {
+            let AsmConstraint::Tied(digit) = input.constraint else {
+                continue;
+            };
+            let (Some(input_reg), Some(output)) = (
+                input.register(),
+                body.outputs
+                    .get(usize::from(digit))
+                    .and_then(AsmOperand::register),
+            ) else {
+                continue;
+            };
+            pairs.insert(input_reg.id, output.id);
+        }
+    };
+    for block in &function.blocks {
+        for inst in &block.insts {
+            if let MInst::Asm(body) = inst {
+                collect(body);
+            }
+        }
+        if let MTerm::AsmGoto { body, .. } = &block.term {
+            collect(body);
+        }
+    }
+    pairs
+}
+
 fn scan(function: &MFunction, pins: &BTreeMap<u32, u8>) -> Result<BTreeMap<u32, u8>, Vec<u32>> {
     let all = intervals(function);
+    let tied = tied_pairs(function);
     let mut assignment: BTreeMap<u32, u8> = BTreeMap::new();
-    let mut held: Vec<(Interval, u8)> = Vec::new();
+    let mut held: Vec<(Interval, u8)> = asm_interferences(function);
     let mut victims: Vec<u32> = Vec::new();
 
     for interval in &all {
@@ -465,6 +575,15 @@ fn scan(function: &MFunction, pins: &BTreeMap<u32, u8>) -> Result<BTreeMap<u32, 
     for interval in &all {
         if interval.class == RegClass::Flags || pins.contains_key(&interval.value) {
             continue;
+        }
+        // A tied input takes the register its output was given, whichever of
+        // the two the walk reaches first: the pair is one location.
+        if let Some(output) = tied.get(&interval.value) {
+            if let Some(number) = assignment.get(output).copied() {
+                assignment.insert(interval.value, number);
+                held.push((*interval, number));
+                continue;
+            }
         }
         let taken: BTreeSet<u8> = held
             .iter()
@@ -498,7 +617,9 @@ fn scan(function: &MFunction, pins: &BTreeMap<u32, u8>) -> Result<BTreeMap<u32, 
                 let furthest = held
                     .iter()
                     .filter(|(other, _)| {
-                        overlaps(other, interval) && !pins.contains_key(&other.value)
+                        overlaps(other, interval)
+                            && !pins.contains_key(&other.value)
+                            && other.value < CLOBBER_BASE
                     })
                     .max_by_key(|(other, _)| (other.end, std::cmp::Reverse(other.value)))
                     .map(|(other, number)| (*other, *number));
@@ -513,6 +634,15 @@ fn scan(function: &MFunction, pins: &BTreeMap<u32, u8>) -> Result<BTreeMap<u32, 
                     _ => victims.push(interval.value),
                 }
             }
+        }
+    }
+
+    // The walk is by start point, so a tied output may come after its input.
+    for (input, output) in &tied {
+        if let Some(number) = assignment.get(output).copied() {
+            assignment.insert(*input, number);
+        } else if let Some(number) = assignment.get(input).copied() {
+            assignment.insert(*output, number);
         }
     }
 
@@ -606,6 +736,9 @@ fn term_slots(term: &mut MTerm) -> Vec<&mut VReg> {
         MTerm::BCond { flags, .. } => vec![flags],
         MTerm::Cb { src, .. } | MTerm::Tb { src, .. } => vec![src],
         MTerm::Ret { values } => values.iter_mut().collect(),
+        // An `asm.goto`'s operands are constrained, not boundary-pinned: the
+        // slots this pass rewrites are the ones a call or a return fixes.
+        MTerm::AsmGoto { .. } => Vec::new(),
     }
 }
 
@@ -698,6 +831,24 @@ fn replace_def(inst: &mut MInst, from: VReg, to: VReg) {
 /// Mutable access to an instruction's operand slots, definitions or uses.
 fn operand_slots(inst: &mut MInst, definitions: bool) -> Vec<&mut VReg> {
     match inst {
+        // An `asm`'s operands are named by their constraints and rewritten
+        // through the operand list, never through a spill: Section 7 requires
+        // each to be in the register its constraint asks for, and a reload
+        // placed between the constraint and the template would not be one.
+        MInst::Asm(body) => {
+            let mut slots = Vec::new();
+            for operand in body.outputs.iter_mut().chain(body.inputs.iter_mut()) {
+                let is_definition = !matches!(operand.constraint, AsmConstraint::Memory { .. })
+                    && operand.constraint.direction().writes();
+                if is_definition != definitions {
+                    continue;
+                }
+                if let AsmValue::Reg(reg) = &mut operand.value {
+                    slots.push(reg);
+                }
+            }
+            slots
+        }
         MInst::Mov { dst, src } => {
             if definitions {
                 vec![dst]
@@ -862,6 +1013,13 @@ fn replace_term_use(term: &mut MTerm, from: VReg, to: VReg) {
         MTerm::Ret { values } => {
             for value in values {
                 swap_reg(value, from, to);
+            }
+        }
+        MTerm::AsmGoto { body, .. } => {
+            for operand in body.outputs.iter_mut().chain(body.inputs.iter_mut()) {
+                if let AsmValue::Reg(reg) = &mut operand.value {
+                    swap_reg(reg, from, to);
+                }
             }
         }
     }

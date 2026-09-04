@@ -124,6 +124,16 @@ fn clear_edge_args(term: &mut MTerm) {
             taken_args.clear();
             untaken_args.clear();
         }
+        MTerm::AsmGoto {
+            labels,
+            fallthrough_args,
+            ..
+        } => {
+            for (_, args) in labels {
+                args.clear();
+            }
+            fallthrough_args.clear();
+        }
         MTerm::Ret { .. } | MTerm::Brk { .. } => {}
     }
 }
@@ -162,6 +172,17 @@ fn retarget(term: &mut MTerm, from: usize, to: u32) {
         } => {
             visit(taken, taken_args);
             visit(untaken, untaken_args);
+        }
+        MTerm::AsmGoto {
+            labels,
+            fallthrough,
+            fallthrough_args,
+            ..
+        } => {
+            for (target, args) in labels {
+                visit(target, args);
+            }
+            visit(fallthrough, fallthrough_args);
         }
         MTerm::Ret { .. } | MTerm::Brk { .. } => {}
     }

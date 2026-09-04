@@ -710,8 +710,370 @@ pub enum MInst {
         size: u64,
         align: u32,
     },
+    /// The `asm` of EvoIR Section 3.11, "carried through unchanged: the
+    /// template, its operands with their constraints, its clobbers".
+    ///
+    /// The interpreter does not execute it; emission writes the template with
+    /// each operand reference replaced by the operand's assigned register,
+    /// memory address or immediate.
+    Asm(AsmBody),
 }
 
+// ---------------------------------------------------------------------------
+// Inline assembly (EvoIR Section 3.11, EvoMIR Section 4)
+// ---------------------------------------------------------------------------
+
+/// Which way an assembly operand moves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AsmDirection {
+    /// `r`, `Q`: read by the template.
+    Read,
+    /// `=r`, `=Q`: written by it.
+    Write,
+    /// `+r`, `+Q`: both.
+    ReadWrite,
+}
+
+impl AsmDirection {
+    /// The prefix EvoIR Section 3.11 spells this direction with.
+    #[must_use]
+    pub const fn prefix(self) -> &'static str {
+        match self {
+            Self::Read => "",
+            Self::Write => "=",
+            Self::ReadWrite => "+",
+        }
+    }
+
+    #[must_use]
+    pub const fn reads(self) -> bool {
+        matches!(self, Self::Read | Self::ReadWrite)
+    }
+
+    #[must_use]
+    pub const fn writes(self) -> bool {
+        matches!(self, Self::Write | Self::ReadWrite)
+    }
+}
+
+/// The immediate letters of EvoIR Section 3.11's table.
+///
+/// Which values each letter admits is the assembler's business, not this
+/// crate's: the lowering has already refused a non-constant, and the emitter
+/// writes the constant literally.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AsmImmediate {
+    /// `I`: an immediate the add and subtract forms accept.
+    I,
+    /// `J`: its negation.
+    J,
+    /// `K`: an immediate the 32-bit logical forms accept.
+    K,
+    /// `L`: the 64-bit ones.
+    L,
+    /// `i`: an integer constant.
+    Integer,
+    /// `n`: an integer constant.
+    N,
+}
+
+impl AsmImmediate {
+    #[must_use]
+    pub const fn mnemonic(self) -> &'static str {
+        match self {
+            Self::I => "I",
+            Self::J => "J",
+            Self::K => "K",
+            Self::L => "L",
+            Self::Integer => "i",
+            Self::N => "n",
+        }
+    }
+
+    #[must_use]
+    pub fn from_mnemonic(text: &str) -> Option<Self> {
+        Some(match text {
+            "I" => Self::I,
+            "J" => Self::J,
+            "K" => Self::K,
+            "L" => Self::L,
+            "i" => Self::Integer,
+            "n" => Self::N,
+            _ => return None,
+        })
+    }
+}
+
+/// One row of EvoIR Section 3.11's constraint table.
+///
+/// The vocabulary is closed: it is the one the configured kernel uses, and a
+/// constraint outside it is refused before EvoMIR sees it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AsmConstraint {
+    /// `r`, `=r`, `+r`: any register of the operand's class.
+    Register(AsmDirection),
+    /// `=&r`, `+&r`: a register no input operand of the same `asm` holds.
+    EarlyClobber(AsmDirection),
+    /// `rZ`: as `r`, except that a constant zero is the zero register.
+    RegisterOrZero,
+    /// `Q`, `=Q`, `+Q`, `Qo`: a register holding the operand's address.
+    Memory {
+        direction: AsmDirection,
+        /// `Qo` rather than `Q`.
+        offsettable: bool,
+    },
+    /// A digit: the same register as the output that digit names.
+    Tied(u8),
+    /// `I`, `J`, `K`, `L`, `i`, `n`: an immediate written literally.
+    Immediate(AsmImmediate),
+    /// `p`: a register holding the address.
+    Address,
+}
+
+impl AsmConstraint {
+    /// The constraint string EvoIR Section 3.11 spells this row with.
+    #[must_use]
+    pub fn spelling(self) -> String {
+        match self {
+            Self::Register(direction) => format!("{}r", direction.prefix()),
+            Self::EarlyClobber(direction) => format!("{}&r", direction.prefix()),
+            Self::RegisterOrZero => "rZ".to_owned(),
+            Self::Memory {
+                direction,
+                offsettable,
+            } => format!(
+                "{}Q{}",
+                direction.prefix(),
+                if offsettable { "o" } else { "" }
+            ),
+            Self::Tied(digit) => digit.to_string(),
+            Self::Immediate(letter) => letter.mnemonic().to_owned(),
+            Self::Address => "p".to_owned(),
+        }
+    }
+
+    /// Read one constraint string, or nothing when it is outside the table.
+    #[must_use]
+    pub fn parse(text: &str) -> Option<Self> {
+        if text.len() == 1 {
+            if let Some(digit) = text.chars().next().and_then(|c| c.to_digit(10)) {
+                return Some(Self::Tied(u8::try_from(digit).ok()?));
+            }
+        }
+        if text == "rZ" {
+            return Some(Self::RegisterOrZero);
+        }
+        if text == "p" {
+            return Some(Self::Address);
+        }
+        if let Some(letter) = AsmImmediate::from_mnemonic(text) {
+            return Some(Self::Immediate(letter));
+        }
+        let (direction, rest) = match text.as_bytes().first() {
+            Some(b'=') => (AsmDirection::Write, &text[1..]),
+            Some(b'+') => (AsmDirection::ReadWrite, &text[1..]),
+            _ => (AsmDirection::Read, text),
+        };
+        Some(match rest {
+            "r" => Self::Register(direction),
+            // The table has `=&r` and `+&r` and no read-only early clobber:
+            // an operand the template only reads cannot be clobbered early.
+            "&r" if direction != AsmDirection::Read => Self::EarlyClobber(direction),
+            "Q" => Self::Memory {
+                direction,
+                offsettable: false,
+            },
+            "Qo" => Self::Memory {
+                direction,
+                offsettable: true,
+            },
+            _ => return None,
+        })
+    }
+
+    /// Whether the operand occupies a register the allocator must assign.
+    #[must_use]
+    pub const fn needs_register(self) -> bool {
+        !matches!(self, Self::Immediate(_))
+    }
+
+    /// Which way the operand moves, for the rows that carry a direction.
+    #[must_use]
+    pub const fn direction(self) -> AsmDirection {
+        match self {
+            Self::Register(direction)
+            | Self::EarlyClobber(direction)
+            | Self::Memory { direction, .. } => direction,
+            // A `rZ`, an address, an immediate and a tied operand are read.
+            Self::RegisterOrZero | Self::Address | Self::Immediate(_) | Self::Tied(_) => {
+                AsmDirection::Read
+            }
+        }
+    }
+}
+
+/// What one operand of an `asm` is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AsmValue {
+    /// A virtual register the allocator assigns.
+    Reg(VReg),
+    /// An immediate the emitter writes literally.
+    Imm(i64),
+    /// EvoIR Section 3.11's `rZ` when the operand is the constant zero: the
+    /// zero register, which "consumes no allocation".
+    Zero(RegClass),
+}
+
+/// One `asm` operand: its constraint, the name a `%[name]` reference uses,
+/// and the value it carries.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AsmOperand {
+    pub constraint: AsmConstraint,
+    pub name: Option<String>,
+    pub value: AsmValue,
+}
+
+impl AsmOperand {
+    /// A plain register operand with no name.
+    #[must_use]
+    pub const fn reg(constraint: AsmConstraint, reg: VReg) -> Self {
+        Self {
+            constraint,
+            name: None,
+            value: AsmValue::Reg(reg),
+        }
+    }
+
+    /// An immediate operand with no name.
+    #[must_use]
+    pub const fn imm(letter: AsmImmediate, value: i64) -> Self {
+        Self {
+            constraint: AsmConstraint::Immediate(letter),
+            name: None,
+            value: AsmValue::Imm(value),
+        }
+    }
+
+    /// The register this operand occupies, if it occupies one.
+    #[must_use]
+    pub const fn register(&self) -> Option<VReg> {
+        match self.value {
+            AsmValue::Reg(reg) => Some(reg),
+            AsmValue::Imm(_) | AsmValue::Zero(_) => None,
+        }
+    }
+}
+
+/// One entry of an `asm`'s clobber list.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AsmClobber {
+    /// A named physical register the `asm` writes.
+    Register(u8),
+    /// `cc`: the flags.
+    Flags,
+    /// `memory`: inert here, since the EvoIR instruction's maximal effects
+    /// already order it against every other access.
+    Memory,
+}
+
+impl AsmClobber {
+    /// The name EvoIR Section 3.11's clobber list spells this with.
+    #[must_use]
+    pub fn spelling(&self) -> String {
+        match self {
+            Self::Register(number) => format!("x{number}"),
+            Self::Flags => "cc".to_owned(),
+            Self::Memory => "memory".to_owned(),
+        }
+    }
+
+    /// Read one clobber name.
+    #[must_use]
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "cc" => Some(Self::Flags),
+            "memory" => Some(Self::Memory),
+            _ => text
+                .strip_prefix('x')
+                .or_else(|| text.strip_prefix('w'))
+                .and_then(|number| number.parse::<u8>().ok())
+                .filter(|number| *number <= 30)
+                .map(Self::Register),
+        }
+    }
+}
+
+/// Everything an `asm` and an `asm.goto` share.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AsmBody {
+    /// The template, copied verbatim and never parsed.
+    pub template: String,
+    /// EvoIR keeps `volatile` "for the assembler" and it changes nothing else.
+    pub volatile: bool,
+    pub outputs: Vec<AsmOperand>,
+    pub inputs: Vec<AsmOperand>,
+    pub clobbers: Vec<AsmClobber>,
+}
+
+impl AsmBody {
+    /// The operands in the order a template reference numbers them: outputs
+    /// first, then inputs, as the constraint table's digits require.
+    #[must_use]
+    pub fn numbered(&self) -> Vec<&AsmOperand> {
+        self.outputs.iter().chain(self.inputs.iter()).collect()
+    }
+
+    /// The registers the instruction defines: its register outputs.
+    ///
+    /// A memory output is not one: what it writes is the memory the address
+    /// names, and the register itself only carries the address.
+    #[must_use]
+    pub fn defined(&self) -> Vec<VReg> {
+        self.outputs
+            .iter()
+            .filter(|operand| !matches!(operand.constraint, AsmConstraint::Memory { .. }))
+            .filter_map(AsmOperand::register)
+            .collect()
+    }
+
+    /// The registers the instruction reads: every input that occupies one, the
+    /// address register of a memory output, which the template reads even when
+    /// it writes through it, and a read-write register output.
+    #[must_use]
+    pub fn read(&self) -> Vec<VReg> {
+        let mut registers: Vec<VReg> = self
+            .inputs
+            .iter()
+            .filter_map(AsmOperand::register)
+            .collect();
+        for operand in &self.outputs {
+            if matches!(operand.constraint, AsmConstraint::Memory { .. })
+                || operand.constraint.direction() == AsmDirection::ReadWrite
+            {
+                registers.extend(operand.register());
+            }
+        }
+        registers
+    }
+
+    /// The physical registers the clobber list names.
+    #[must_use]
+    pub fn clobbered_registers(&self) -> Vec<u8> {
+        self.clobbers
+            .iter()
+            .filter_map(|clobber| match clobber {
+                AsmClobber::Register(number) => Some(*number),
+                AsmClobber::Flags | AsmClobber::Memory => None,
+            })
+            .collect()
+    }
+
+    /// Whether the clobber list names the flags.
+    #[must_use]
+    pub fn clobbers_flags(&self) -> bool {
+        self.clobbers.contains(&AsmClobber::Flags)
+    }
+}
 /// One EvoMIR terminator.
 ///
 /// Every conditional form names both successors and the arguments each edge
@@ -754,6 +1116,16 @@ pub enum MTerm {
     Ret { values: Vec<VReg> },
     /// `brk #imm16`.
     Brk { imm: u16 },
+    /// The `asm.goto` of EvoIR Section 3.11: a terminator "whose successors
+    /// are its labels and its fall-through".
+    AsmGoto {
+        body: AsmBody,
+        /// Each `%l[label]` reference, in declaration order, with the values
+        /// its edge passes.
+        labels: Vec<(u32, Vec<VReg>)>,
+        fallthrough: u32,
+        fallthrough_args: Vec<VReg>,
+    },
 }
 
 /// A basic block: label, block arguments, instructions and one terminator.
@@ -807,6 +1179,7 @@ pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
         | MInst::SpillStore { .. }
         | MInst::Stp { .. } => Vec::new(),
         MInst::Bl { results, .. } | MInst::Blr { results, .. } => results.clone(),
+        MInst::Asm(body) => body.defined(),
     }
 }
 
@@ -843,6 +1216,7 @@ pub fn inst_uses(inst: &MInst) -> Vec<VReg> {
             uses.extend(args.iter().copied());
             uses
         }
+        MInst::Asm(body) => body.read(),
     }
 }
 
@@ -881,6 +1255,19 @@ pub fn term_uses(term: &MTerm) -> Vec<VReg> {
         }
         MTerm::Ret { values } => values.clone(),
         MTerm::Brk { .. } => Vec::new(),
+        MTerm::AsmGoto {
+            body,
+            labels,
+            fallthrough_args,
+            ..
+        } => {
+            let mut uses = body.read();
+            for (_, args) in labels {
+                uses.extend(args.iter().copied());
+            }
+            uses.extend(fallthrough_args.iter().copied());
+            uses
+        }
     }
 }
 
@@ -914,14 +1301,30 @@ pub fn term_edges(term: &MTerm) -> Vec<(u32, &[VReg])> {
             (*untaken, untaken_args.as_slice()),
         ],
         MTerm::Ret { .. } | MTerm::Brk { .. } => Vec::new(),
+        MTerm::AsmGoto {
+            labels,
+            fallthrough,
+            fallthrough_args,
+            ..
+        } => {
+            let mut edges: Vec<(u32, &[VReg])> = labels
+                .iter()
+                .map(|(target, args)| (*target, args.as_slice()))
+                .collect();
+            edges.push((*fallthrough, fallthrough_args.as_slice()));
+            edges
+        }
     }
 }
 
 /// Whether an instruction writes the flags register.
 #[must_use]
 pub fn writes_flags(inst: &MInst) -> bool {
-    matches!(
-        inst,
-        MInst::Cmp { .. } | MInst::CmpImm { .. } | MInst::FlagBinary { .. }
-    )
+    match inst {
+        MInst::Cmp { .. } | MInst::CmpImm { .. } | MInst::FlagBinary { .. } => true,
+        // Section 7: "`cc` clobbers the flags, which ends any `flags` value's
+        // adjacency".
+        MInst::Asm(body) => body.clobbers_flags(),
+        _ => false,
+    }
 }

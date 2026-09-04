@@ -8,7 +8,10 @@
 
 use std::collections::BTreeMap;
 
-use crate::{inst_defs, inst_uses, term_edges, term_uses, Allocated, MInst, MTerm, RegClass, VReg};
+use crate::{
+    inst_defs, inst_uses, term_edges, term_uses, Allocated, AsmBody, AsmConstraint, AsmOperand,
+    AsmValue, MInst, MTerm, RegClass, VReg,
+};
 
 /// The Section 10 refusal.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,6 +20,111 @@ pub struct VerifierRefusal {
     pub name: &'static str,
     pub block: u32,
     pub detail: String,
+}
+
+/// Section 9's second instrument, over an `asm`: every constraint class of
+/// Section 7 is checked against the registers the allocator actually gave.
+///
+/// The allocator does not certify itself here either. Each row is recomputed
+/// from the operand list and the assignment alone.
+fn verify_assembly(
+    body: &AsmBody,
+    block: u32,
+    register: &impl Fn(VReg) -> Option<u8>,
+    refuse: &impl Fn(u32, String) -> VerifierRefusal,
+) -> Result<(), VerifierRefusal> {
+    let number = |operand: &AsmOperand| -> Option<u8> { operand.register().and_then(register) };
+
+    // Every operand that needs a register has one.
+    for operand in body.numbered() {
+        if !operand.constraint.needs_register() {
+            continue;
+        }
+        match operand.value {
+            AsmValue::Zero(_) => {
+                if !matches!(operand.constraint, AsmConstraint::RegisterOrZero) {
+                    return Err(refuse(
+                        block,
+                        format!(
+                            "the zero register answers a \"{}\" operand",
+                            operand.constraint.spelling()
+                        ),
+                    ));
+                }
+            }
+            AsmValue::Imm(_) => {
+                return Err(refuse(
+                    block,
+                    format!(
+                        "an immediate answers a \"{}\" operand",
+                        operand.constraint.spelling()
+                    ),
+                ))
+            }
+            AsmValue::Reg(reg) => {
+                if register(reg).is_none() {
+                    return Err(refuse(
+                        block,
+                        format!("%v{} is an asm operand and was never assigned", reg.id),
+                    ));
+                }
+            }
+        }
+    }
+
+    // Early clobber: no input holds the register.
+    let inputs: Vec<u8> = body.inputs.iter().filter_map(number).collect();
+    for operand in &body.outputs {
+        if !matches!(operand.constraint, AsmConstraint::EarlyClobber(_)) {
+            continue;
+        }
+        let Some(assigned) = number(operand) else {
+            continue;
+        };
+        if inputs.contains(&assigned) {
+            return Err(refuse(
+                block,
+                format!("an early-clobber output shares register {assigned} with an input"),
+            ));
+        }
+    }
+
+    // A tied operand names an output that exists and shares its register.
+    for input in &body.inputs {
+        let AsmConstraint::Tied(digit) = input.constraint else {
+            continue;
+        };
+        let Some(output) = body.outputs.get(usize::from(digit)) else {
+            return Err(refuse(
+                block,
+                format!("a tied operand names output {digit}, which the asm does not have"),
+            ));
+        };
+        if number(input) != number(output) {
+            return Err(refuse(
+                block,
+                format!(
+                    "a tied operand is in register {:?} and output {digit} in {:?}",
+                    number(input),
+                    number(output)
+                ),
+            ));
+        }
+    }
+
+    // A clobbered register holds no operand: the asm destroys it.
+    let clobbered = body.clobbered_registers();
+    for operand in body.numbered() {
+        if let Some(assigned) = number(operand) {
+            if clobbered.contains(&assigned) {
+                return Err(refuse(
+                    block,
+                    format!("register {assigned} is clobbered and holds an asm operand"),
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// What a physical register is known to hold on entry to a block.
@@ -182,7 +290,14 @@ pub fn verify_allocation(allocated: &Allocated) -> Result<(), VerifierRefusal> {
                 }
             }
 
+            if let MInst::Asm(body) = inst {
+                verify_assembly(body, block.id, &register, &refuse)?;
+            }
             apply(&mut state, inst, &register);
+        }
+
+        if let MTerm::AsmGoto { body, .. } = &block.term {
+            verify_assembly(body, block.id, &register, &refuse)?;
         }
 
         for reg in term_uses(&block.term) {

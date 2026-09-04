@@ -300,6 +300,10 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
 
 fn validate_term_shape(name: &str, block: u32, term: &MTerm) -> Result<(), String> {
     match term {
+        // An `asm.goto`'s shape is its constraint list, checked by the
+        // allocation verifier of Section 9 rather than here: nothing about it
+        // is a class or a count this pass knows how to judge.
+        MTerm::AsmGoto { .. } => Ok(()),
         MTerm::BCond { flags, .. } => expect_flags(name, block, *flags, "a b.cond condition"),
         MTerm::Cb { src, .. } | MTerm::Tb { src, .. } => {
             expect_general(name, block, *src, "a branch operand")

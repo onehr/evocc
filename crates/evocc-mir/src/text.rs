@@ -20,7 +20,10 @@ use std::fmt::Write as _;
 
 use evocc_evoir::{GlobalKind, GlobalObject, GlobalVisibility};
 
-use crate::{MBlock, MFunction, MInst, MModule, MTerm, SymbolKind, VReg};
+use crate::{
+    AsmBody, AsmConstraint, AsmOperand, AsmValue, MBlock, MFunction, MInst, MModule, MTerm,
+    SymbolKind, VReg,
+};
 
 /// Render one module to its canonical bytes.
 #[must_use]
@@ -166,10 +169,98 @@ fn volatile_marker(volatile: bool) -> &'static str {
     }
 }
 
+/// Render one `asm` body: the template, then the three operand lists.
+///
+/// Appendix A gives no production for an `asm`, so this mirrors the spelling of
+/// the EvoIR instruction it carries (EvoIR Section 3.11) as closely as a form
+/// without `mem` and `world` tokens can: the constraint string in quotes, an
+/// optional `%[name]` name in parentheses, and, for an input, the operand after
+/// a colon. Recorded gap.
+fn render_asm_body(body: &AsmBody) -> String {
+    let operand = |operand: &AsmOperand, with_value: bool| -> String {
+        let mut text = format!("\"{}\"", operand.constraint.spelling());
+        if let Some(name) = &operand.name {
+            let _ = write!(text, "({name})");
+        }
+        if with_value {
+            let _ = write!(
+                text,
+                ": {}",
+                match operand.value {
+                    AsmValue::Reg(reg) => use_of(reg),
+                    AsmValue::Imm(value) => format!("#{value}"),
+                    AsmValue::Zero(class) => format!("#zero:{}", class.mnemonic()),
+                }
+            );
+        }
+        text
+    };
+    let list = |operands: &[AsmOperand], with_value: bool| -> String {
+        operands
+            .iter()
+            // A register output's value is already the result the instruction
+            // names, as EvoIR Section 3.11 has it; a memory output's address
+            // register is not, so it is written here.
+            .map(|one| {
+                operand(
+                    one,
+                    with_value || matches!(one.constraint, AsmConstraint::Memory { .. }),
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let clobbers = body
+        .clobbers
+        .iter()
+        .map(|clobber| format!("\"{}\"", clobber.spelling()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "{} \"{}\" outputs [{}] inputs [{}] clobbers [{}]",
+        if body.volatile { ".volatile" } else { "" },
+        escape_template(&body.template),
+        list(&body.outputs, false),
+        list(&body.inputs, true),
+        clobbers
+    )
+}
+
+/// The template is copied verbatim, so the only characters the one-line form
+/// cannot carry are the quote, the backslash and the newline.
+#[must_use]
+pub fn escape_template(template: &str) -> String {
+    let mut text = String::new();
+    for character in template.chars() {
+        match character {
+            '\\' => text.push_str("\\\\"),
+            '"' => text.push_str("\\\""),
+            '\n' => text.push_str("\\n"),
+            '\t' => text.push_str("\\t"),
+            other => text.push(other),
+        }
+    }
+    text
+}
+
 /// Render one instruction without its indent.
 #[must_use]
 pub fn render_inst(inst: &MInst) -> String {
     match inst {
+        MInst::Asm(body) => {
+            let results = body
+                .defined()
+                .into_iter()
+                .map(|reg| reg.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let prefix = if results.is_empty() {
+                String::new()
+            } else {
+                format!("{results} = ")
+            };
+            format!("{prefix}asm{}", render_asm_body(body))
+        }
         MInst::Mov { dst, src } => format!("{}mov {}", defined(*dst), use_of(*src)),
         MInst::MovImm { dst, imm } => format!("{}mov #{imm}", defined(*dst)),
         MInst::Adrp { dst, symbol, kind } => {
@@ -422,6 +513,23 @@ fn edge(function: &MFunction, target: u32, args: &[VReg]) -> String {
 #[must_use]
 pub fn render_term(function: &MFunction, term: &MTerm) -> String {
     match term {
+        MTerm::AsmGoto {
+            body,
+            labels,
+            fallthrough,
+            fallthrough_args,
+        } => {
+            let targets = labels
+                .iter()
+                .map(|(target, args)| edge(function, *target, args))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!(
+                "asm.goto{} labels [{targets}] fallthrough {}",
+                render_asm_body(body),
+                edge(function, *fallthrough, fallthrough_args)
+            )
+        }
         MTerm::B { target, args } => format!("b {}", edge(function, *target, args)),
         MTerm::BCond {
             cond,
