@@ -32,7 +32,12 @@ const NATIVE_PROGRAMS: u64 = 256;
 /// The seeds the four-lane campaigns run from, disjoint from the campaign
 /// above and from each other.
 const NATIVE_GATE_SEED: u64 = 0x4E41_5400_1001;
-const NATIVE_GATE_PROGRAMS: u64 = 1_000;
+/// The default the workspace gate runs. The fourth lane spends two host
+/// processes and one program launch on every program, about half a second each,
+/// so a thousand of them is twenty-five minutes of a gate that otherwise takes
+/// two; the thousand is kept below as a standing campaign.
+const NATIVE_GATE_PROGRAMS: u64 = 128;
+const NATIVE_STANDING_PROGRAMS: u64 = 1_000;
 const NATIVE_LONG_SEED: u64 = 0x4E41_5400_9001;
 const NATIVE_LONG_PROGRAMS: u64 = 20_000;
 
@@ -357,6 +362,31 @@ fn the_command_line_gate_runs_the_native_corpus() {
         assert!(stdout.contains("nativeAgreeing=8"), "stdout={stdout}");
     }
     print!("{stdout}");
+}
+
+/// The thousand-program campaign the default above stands in for.
+#[test]
+#[ignore = "standing campaign: about ten minutes of host processes"]
+fn the_standing_four_lane_campaign_finds_no_mismatch() {
+    let checker = ProofChecker::locate().expect("evo-proofcheck");
+    let started = Instant::now();
+    let report = run_campaign(
+        NATIVE_GATE_SEED,
+        NATIVE_STANDING_PROGRAMS,
+        native(),
+        GateBudget::default(),
+        &checker,
+    );
+    println!("{}", report.render());
+    println!("wallTimeSeconds={:.3}", started.elapsed().as_secs_f64());
+    assert_eq!(report.generated, NATIVE_STANDING_PROGRAMS);
+    assert_eq!(
+        report.mismatched,
+        0,
+        "mismatches: {:#?}",
+        report.mismatches.first()
+    );
+    assert_eq!(report.native_agreeing, report.native_run);
 }
 
 #[test]
