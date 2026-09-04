@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.8** | **Authoritative reference** | **2026-09-04**
+**Revision 0.9** | **Authoritative reference** | **2026-09-04**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -275,11 +275,15 @@ EvoIR carries no signedness on a parameter, so the extension EvoMIR inserts
 is a **zero extension**: the value of a `bits<N>` is its low `N` bits, and a
 front end that must pass a signed narrow argument emits `sext` to
 `bits<32>` before the call, which is a lowering rule of the EvoIR
-specification, not a machine one (revision 0.7). A narrow **result**
-crossing the boundary is not yet ruled: Apple's variant extends it too, and
-nothing in this revision measures it, so a function returning a `bits<N>`
-with `N < 32` across the boundary is `E4014` (`abi: narrow-result`) until a
-probe settles it. A ninth integer argument is refused (`E4010`); an aggregate argument
+specification, not a machine one (revision 0.7). A **result** narrower than 32 bits is
+zero-extended to 32 bits by the *callee*, on every return, not only where a
+boundary is known: a callee cannot know its caller, and the internal rule
+leaves those bits unspecified, so specifying them breaks nothing. Measured
+at revision 0.9, before the extension existed: a function returning
+`bits<8>` of the value 1 computed by negation returned 4294967295 where the
+host compiler's build of the same function returned 255, at every width
+tried; after it, 597 comparisons over three widths agree. `E4014` is
+therefore withdrawn. A ninth integer argument is refused (`E4010`); an aggregate argument
 or result is refused (`E4011`); a variadic call or callee is refused
 (`E4012`, the EvoIR `E3030` boundary). **Results:** an EvoMIR function
 returns up to eight integer or pointer results in `x0` to `x7` in order.
@@ -379,6 +383,19 @@ register, and every `flags` producer is adjacent to its consumer.
 
 ## 8. Emission
 
+**The two targets.** They differ in four places and nowhere else, each
+measured by emitting one module both ways (revision 0.9):
+
+| | Darwin arm64 | Linux AArch64 |
+|---|---|---|
+| symbol prefix | `_main` | `main` |
+| page-relative pair | `_g@PAGE`, `_g@PAGEOFF` | `:pg_hi21:g`, `:lo12:g` |
+| sections | `.section __TEXT,__text,…`, `.section __DATA,__data` | `.text`, `.data` |
+| local labels | `Lmain_block0` | `.Lmain_block0` |
+
+The target is a parameter of emission (`darwin-arm64`, `linux-aarch64`), not
+a build-time choice.
+
 The assembly text is the platform assembler's syntax. Functions are emitted
 in module order, each as `.globl`/`.p2align 2`/label/body; globals as data
 in `.data`/`.bss`/`.rodata` (`__DATA,__data` etc. on Darwin) with their
@@ -457,7 +474,6 @@ sides, and are never emitted today.
 | `E4011` | `abi: aggregate-by-value` | aggregate argument or result |
 | `E4012` | `abi: variadic` | variadic callee or caller |
 | `E4013` | `abi: too-many-results` | more than eight ordinary results |
-| `E4014` | `abi: narrow-result` | a result narrower than 32 bits crosses the host boundary, whose extension no probe has settled |
 | `E4020` | `allocation: verifier-refused` | the allocation verifier found a violation; internal, must never reach a user of a released build |
 
 ## Appendix A. Textual Form
@@ -528,6 +544,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.9 | 2026-09-04 | The same 384 C programs compile, link, run and agree on both targets: on the host under Apple clang, and inside the sealed container under GCC-14 for Linux AArch64. Settles the narrow result by probe (the callee extends; `E4014` withdrawn) and states the four places the two targets differ. |
 | 0.8 | 2026-09-04 | Inline assembly runs on the machine: eleven constraint rows and both `asm.goto` edges assembled, linked, run and agreeing with host-compiled equivalents. Gives Appendix A its assembly productions, in the executor's spelling, and fixes `%l[...]` as the label's position in the declared list. |
 | 0.7 | 2026-09-04 | 384 C programs compiled by the whole pipeline, run natively, and agreeing with the host compiler's build of the same source. Defines a cross-boundary call as one whose callee emission does not define, makes the argument extension a zero extension because EvoIR carries no parameter signedness, and refuses a narrow result across the boundary as `E4014` until a probe settles it. |
 | 0.6 | 2026-09-04 | Carries inline assembly through the machine representation: the constraint classes the allocator must satisfy, including early clobber, tied operands, address operands and register clobbers; emission substitutes operand references into the template and copies its text verbatim; a function containing an `asm` is judged by the verifier and the native run, not by the interpreter. |
