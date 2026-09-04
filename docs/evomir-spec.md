@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.6** | **Authoritative reference** | **2026-09-04**
+**Revision 0.7** | **Authoritative reference** | **2026-09-04**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -262,13 +262,24 @@ go in `x0` to `x7` in order. Between two EvoCC-compiled functions, a
 with the upper bits unspecified, and the callee applies Section 3 before
 reading it as anything but a low-`N`-bit value. Across the host boundary the
 platform rule governs instead: a caller extends an argument narrower than 32
-bits to 32 bits, zero-extending an unsigned source type and sign-extending a
-signed one, and a callee may assume the bits above its parameter's width are
-that extension (Apple's AArch64 variant; revision 0.5, after the executor
-found the two rules unreconciled and the probe passed only because each host
-function masked its own argument). A cross-boundary call therefore inserts
-the extension the platform requires; a call between EvoCC functions does
-not. A ninth integer argument is refused (`E4010`); an aggregate argument
+bits to 32 bits and a callee may assume the bits above its parameter's width
+are that extension (Apple's AArch64 variant; revision 0.5, after the
+executor found the two rules unreconciled and the probe passed only because
+each host function masked its own argument; eighteen of forty comparisons
+failed once the probe stopped masking and was built at `-O2`). A call is
+**cross-boundary** when the callee's definition is not emitted beside the
+caller, which is a fact emission holds and EvoIR cannot spell, since every
+call EvoIR admits names a function the module defines (revision 0.7).
+
+EvoIR carries no signedness on a parameter, so the extension EvoMIR inserts
+is a **zero extension**: the value of a `bits<N>` is its low `N` bits, and a
+front end that must pass a signed narrow argument emits `sext` to
+`bits<32>` before the call, which is a lowering rule of the EvoIR
+specification, not a machine one (revision 0.7). A narrow **result**
+crossing the boundary is not yet ruled: Apple's variant extends it too, and
+nothing in this revision measures it, so a function returning a `bits<N>`
+with `N < 32` across the boundary is `E4014` (`abi: narrow-result`) until a
+probe settles it. A ninth integer argument is refused (`E4010`); an aggregate argument
 or result is refused (`E4011`); a variadic call or callee is refused
 (`E4012`, the EvoIR `E3030` boundary). **Results:** an EvoMIR function
 returns up to eight integer or pointer results in `x0` to `x7` in order.
@@ -446,6 +457,7 @@ sides, and are never emitted today.
 | `E4011` | `abi: aggregate-by-value` | aggregate argument or result |
 | `E4012` | `abi: variadic` | variadic callee or caller |
 | `E4013` | `abi: too-many-results` | more than eight ordinary results |
+| `E4014` | `abi: narrow-result` | a result narrower than 32 bits crosses the host boundary, whose extension no probe has settled |
 | `E4020` | `allocation: verifier-refused` | the allocation verifier found a violation; internal, must never reach a user of a released build |
 
 ## Appendix A. Textual Form
@@ -505,6 +517,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.7 | 2026-09-04 | 384 C programs compiled by the whole pipeline, run natively, and agreeing with the host compiler's build of the same source. Defines a cross-boundary call as one whose callee emission does not define, makes the argument extension a zero extension because EvoIR carries no parameter signedness, and refuses a narrow result across the boundary as `E4014` until a probe settles it. |
 | 0.6 | 2026-09-04 | Carries inline assembly through the machine representation: the constraint classes the allocator must satisfy, including early clobber, tied operands, address operands and register clobbers; emission substitutes operand references into the template and copies its text verbatim; a function containing an `asm` is judged by the verifier and the native run, not by the interpreter. |
 | 0.5 | 2026-09-04 | 256 generated programs assembled, linked, run and agreeing with the interpreter on exit status; a fourth gate lane; a sixteen-shape calling-convention probe, 32 comparisons, 0 failures. States the cross-boundary argument extension the platform requires, distinct from the internal rule, and records that emission may write addressing forms the Section 4 tables do not admit. |
 | 0.4 | 2026-09-04 | First native runs: five assembled programs agree with the interpreter on exit status. Rules the allocation and emission findings: the out-of-SSA scratch is a pinned virtual register, copy placement is a three-way rule, entry arguments become parameters the allocator assigns, the lowest free register is taken, spill accesses are pseudo-forms, frame slots are addressed from `sp`, the prologue is synthesized at emission and not interpretable; the native lane uses a second generator mode so pinned seeds stay pinned. |
