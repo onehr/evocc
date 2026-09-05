@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.12** | **Authoritative reference** | **2026-09-05**
+**Revision 0.13** | **Authoritative reference** | **2026-09-05**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -341,12 +341,19 @@ caller reserves the outgoing area below its frame (Section 6 frame layout,
 packs stack arguments by natural alignment instead; that rule is still
 unmeasured, so more than eight integer arguments stay `E4010` there.
 
-**128-bit arguments and results (revision 0.10).** A `bits<128>` argument
-takes two consecutive registers `x(2k)`, `x(2k+1)`, the low half in the
-even one: the next register number is rounded up to even first, so after
-one 64-bit argument it is `x2`:`x3` with `x1` skipped, after two it is
-`x2`:`x3` with nothing skipped, and after seven it goes to the stack, whole,
-16-aligned, with `x7` unused. A `bits<128>` result is `x0`:`x1`, low half in
+**128-bit arguments and results (revision 0.10; Darwin corrected at
+0.13).** On Linux a `bits<128>` argument takes two consecutive registers
+`x(2k)`, `x(2k+1)`, the low half in the even one: the next register number
+is rounded up to even first, so after one 64-bit argument it is `x2`:`x3`
+with `x1` skipped, after two it is `x2`:`x3` with nothing skipped, and
+after seven it goes to the stack, whole, 16-aligned, with `x7` unused. On
+Darwin the platform does **not** round: the argument takes the next two
+registers whatever their parity, `x1`:`x2` after one 64-bit argument and
+`x3`:`x4` after three, and after seven it goes to the stack (measured with
+Apple clang, `.evidence/builtin-probes/20260905-b6/b6-darwin-abi.c`,
+`b6-darwin-abi.out`, functions `take_after_one`, `take_after_three`,
+`take_after_seven`; the executor found the revision 0.10 sentence
+unmeasured on Darwin and stopped rather than guess). A `bits<128>` result is `x0`:`x1`, low half in
 `x0`. Every row is measured with both oracles (`p35-int128.c`, functions
 `ret128`, `take_after_one`, `take_after_two`, `take_after_seven`; `p34-p35.out`
 and `p34-p35-clang.out`). Records are never passed by value in EvoIR (its
@@ -629,6 +636,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.13 | 2026-09-05 | Corrects the 128-bit argument rule for Darwin: Apple clang does not round the register number to even, so the pair takes the next two registers; Linux keeps the AAPCS64 rounding. Measured by the executor of the register-pair window. |
 | 0.12 | 2026-09-05 | Pointer-integer conversions lower to nothing; static relocations are emitted as `.xword symbol+addend` inside the global's bytes (`E4005` withdrawn), matching EvoIR 1.9.65. |
 | 0.11 | 2026-09-05 | External functions and objects (EvoIR 1.9.64 `declare`/`extern`) are emitted as undefined symbol references with the defined-symbol spellings; the linker resolves them, and the native lane may link against the host library for the library set. |
 | 0.10 | 2026-09-05 | Opens the two forms the sixth lowering survey put first: `bits<128>` as a pair of `gpr64` halves with measured sequences for every scalar form but division, the even-aligned pair convention for arguments and `x0`:`x1` for results; variadic callees and callers on Linux, with the register save area, the five-field list object and the general-registers-only `va_arg` procedure that agrees with both oracles on fourteen items; stack arguments in 8-byte slots on Linux. `E4012` withdrawn, `E4003` and `E4010` narrowed. The executor's spellings enter Appendix A with the implementation, as revision 0.8 did for assembly. |
