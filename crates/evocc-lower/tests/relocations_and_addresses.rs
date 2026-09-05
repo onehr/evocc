@@ -80,6 +80,20 @@ fn static_addresses_relocate_objects_members_and_functions() {
 }
 
 #[test]
+fn function_relocations_travel_through_object_pointer_storage() {
+    check(
+        "int f(void){return 7;} static void *p=(void *)(unsigned long)&f; int main(void){return p!=0;}",
+        Ok(1),
+        &["relocs=[(0, @f, 0)]"],
+    );
+    check(
+        "int f(void){return 7;} static void *p=(void *)(unsigned long)&f; int main(void){return ((int (*)(void))(unsigned long)p)();}",
+        Ok(7),
+        &["ptr.to_int", "ptr.from_int.fnptr"],
+    );
+}
+
+#[test]
 fn pointer_integer_round_trip_retains_live_exposed_provenance() {
     check(
         "int main(void){int x=4; int *p=(int *)(unsigned long)&x; return p ? 1 : 0;}",
