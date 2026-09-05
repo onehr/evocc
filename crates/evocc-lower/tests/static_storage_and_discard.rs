@@ -83,3 +83,14 @@ fn address_taken_scalar_parameters_own_frame_local_storage() {
 fn block_scope_external_function_addresses_use_the_unit_symbol() {
     check("int main(void){typedef int fn(void); extern fn f; fn *p=f; return p();} int f(void){return 7;}", 7);
 }
+
+#[test]
+fn control_flow_before_a_declaration_does_not_require_its_future_address() {
+    for (source, expected) in [
+        ("int f(int x){if(x<0)return 0; struct s{int n;} value={x}; return value.n;} int main(void){return f(7);}", 7),
+        ("int f(int x){if(x<0 || x>9)return 0; int a[2]={x,2}; return a[0]+a[1];} int main(void){return f(7);}", 9),
+        ("int f(int x){while(x>7)x--; int value=x; int *p=&value; return *p;} int main(void){return f(9);}", 7),
+    ] {
+        check(source, expected);
+    }
+}
