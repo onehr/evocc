@@ -3782,17 +3782,25 @@ fn execute_external_call(
         .ok_or_else(|| InterpreterError::InvalidModule {
             message: "external call lacks memory".into(),
         })?;
-    let arguments = arguments
-        .into_iter()
-        .map(|value| match value {
-            InternalValue::Bits(value) => Ok(LibraryValue::Integer(value)),
-            InternalValue::Pointer(value) => Ok(LibraryValue::Pointer(value)),
-            _ => Err(InterpreterError::MemoryAccess {
-                block,
-                error: MemoryFault::ExternalFunction { name: name.into() },
-            }),
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let arguments =
+        arguments
+            .into_iter()
+            .map(|value| match value {
+                // The library boundary of 10.1.14 takes C `int` and `size_t`
+                // arguments only; a wider value cannot name a library argument.
+                InternalValue::Bits(value) => u64::try_from(value)
+                    .map(LibraryValue::Integer)
+                    .map_err(|_| InterpreterError::MemoryAccess {
+                        block,
+                        error: MemoryFault::ExternalFunction { name: name.into() },
+                    }),
+                InternalValue::Pointer(value) => Ok(LibraryValue::Pointer(value)),
+                _ => Err(InterpreterError::MemoryAccess {
+                    block,
+                    error: MemoryFault::ExternalFunction { name: name.into() },
+                }),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
     let (next, result) = state
         .memory
         .call_library(name, &arguments)
@@ -3803,7 +3811,9 @@ fn execute_external_call(
             [result @ Value {
                 ty: EvoIRType::Bits(_),
                 ..
-            }] => InternalValue::Bits(IntegerKernel::for_value(result, block)?.normalize(value)),
+            }] => InternalValue::Bits(
+                IntegerKernel::for_value(result, block)?.normalize(u128::from(value)),
+            ),
             _ => {
                 return Err(InterpreterError::MemoryAccess {
                     block,
