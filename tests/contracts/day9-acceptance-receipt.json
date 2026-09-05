@@ -2,14 +2,14 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "362603c8b259231a48e50e5ef0978bf9d17732dc35031bc73a88cbc54bcc3711"
+    "sha256": "bdb9781df4fc3601fbc3ee8c42a02884a783e49f7afe523684e80d9a83d96579"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.59",
-    "sha256": "5d1497b490c4b3e77d5066fbf4cfa4dfca6803bb07d4e9dafe64866d1366eda7"
+    "revision": "1.9.60",
+    "sha256": "5d4e4d7463629aba53583cf2487c64a8c367e78f1700dc79124c6a334328ea4b"
   },
-  "cutLine": "Revision 1.9.59 AA3 is implemented through d40091f and measured at fixed survey subject a0157ce. Pointer-typed poison lowers and reports E3013 when consumed; pointer-integer conversions report E3036. Dashboard run 20260904T163131Z-74556 remains 48/48 clean, full-configuration parse run 20260904T164537Z-41718 remains 2798/2798 clean, and lowering run 20260904T171723Z-48751 measures 5 clean plus 2793 typed first diagnostics with zero unavailable, timeout, panic, or regression. AA1 and AA2 remain open because their real-corpus E3101 class counts did not move.",
+  "cutLine": "Fixed subject 3bc968d implements declaration-identity and static-integer repairs and specifies assembly edge semantics in revision 1.9.60. Dashboard 20260905T033631Z-41221 is 48/48 clean; parse survey 20260905T034102Z-58950 is 2798/2798 clean; lowering survey 20260905T041551Z-61762 is 6 clean and 2792 diagnosed, with no unavailable, timeout, panic or old-clean regression. E3101 falls from 2766 to 57, including 50 remaining manifest failures. AA and AB remain OPEN. Assembly production is unchanged; its uncommitted RED draft has focused evidence but the full workspace run stalled before executable startup. Isolated replay has not run for this subject.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "b8688e0",
@@ -1086,7 +1086,7 @@
     "result": "PASS_MEASUREMENT_PUBLISHED_WITH_AA1_AND_AA2_OPEN"
   },
   "declarationIdentityContinuation": {
-    "status": "IMPLEMENTED_AND_GATED_NOT_YET_PUBLISHED",
+    "status": "IMPLEMENTED_AND_MEASURED_WITH_MANIFEST_RESIDUE",
     "authority": "docs/evoir-spec.md revision 1.9.59; continuation of the allocation-manifest and object-identity corpus findings",
     "testsOnlyRedCommit": "690701b348748aeb1a56eb16abed29280aaab764",
     "sourcePatch": {
@@ -1122,13 +1122,14 @@
       "reason": "The first implementation assumed a definition's parameter scope was already Function. Four existing parser tests exposed provisional FunctionPrototype scopes after trailing attributes or complex declarators. Definition binding now completes the scope kind, and both transaction and checkpoint rollback restore it. The rejected run is not GREEN evidence."
     },
     "outstanding": [
-      "New dashboard, full parse/lowering surveys and isolated offline replay have NOT RUN for this continuation; the published counts elsewhere in this receipt still refer to their named historical subjects.",
-      "AA-NEXT-GLOBAL-CONSTANT-LOWERING is resolved by staticIntegerInitializerContinuation below. A new full survey is still required; the two targeted records now reach E3036 rather than this initializer failure.",
+      "The currentSubjectMeasurement below supersedes the historical corpus counts: 50 manifest failures remain; AA is not closed. Isolated offline replay has not run for this subject.",
+      "AA-NEXT-GLOBAL-CONSTANT-LOWERING is resolved by staticIntegerInitializerContinuation below and the new full survey contains no remaining global-integer-initializer first error.",
       "AB-ASM-TEXT-EDGE-CONTRACT is specified by assemblyEdgeContract below under the user's delegated authority. Assembly RED and implementation remain required; this is no longer awaiting a ruling."
     ]
   },
   "staticIntegerInitializerContinuation": {
-    "status": "IMPLEMENTED_AND_GATED_NOT_YET_PUBLISHED",
+    "status": "IMPLEMENTED_GATED_AND_CORPUS_MEASURED_REPLAY_PENDING",
+    "implementationCommit": "0dc4636fc8f199c04213c91345e993db2b6aa0cb",
     "authority": "User authorization on 2026-09-05; docs/evoir-spec.md 1.9.59 Sections 2.1 and 10.1.19",
     "testsOnlyRedCommit": "539900cb2e6ff48cbdbcd33fae39ac39674c13bc",
     "sourcePatch": { "base": "539900cb2e6ff48cbdbcd33fae39ac39674c13bc", "path": ".evidence/static-initializers/20260905T030307Z/source.patch", "sha256": "7a31a8f9a7e83d46615c34a7f73c3bb46f85f7896a325ea1e09c7f00261ceea0", "command": "git diff --binary -- crates/evocc-chir/src/interp.rs crates/evocc-lower/src/lib.rs" },
@@ -1151,12 +1152,14 @@
       "claimCeiling": "Two targeted debug-binary replays, not a full survey or throughput benchmark. Both advance past the real initializer failure."
     },
     "scope": "Reuse C-HIR static integer evaluation and the shared constant integer kernel; cast to destination type before serialization; preserve runtime E3006 and refuse raw static pointer bytes with E3026. No new diagnostic code or relocation representation.",
-    "outstanding": ["Release dashboard guard, full parse/lowering surveys and isolated offline replay for this subject have not run."]
+    "outstanding": ["Release dashboard and full parse/lowering surveys completed at 3bc968d; see currentSubjectMeasurement. Isolated offline replay remains NOT RUN."]
   },
   "assemblyEdgeContract": {
-    "status": "SPECIFIED_NOT_IMPLEMENTED",
+    "status": "IMPLEMENTED_FOCUSED_GREEN_CLOSURE_PENDING",
     "authority": "docs/evoir-spec.md revision 1.9.60 Sections 3.11 and 9; user authorization on 2026-09-05",
-    "productionChanges": [],
+    "productionChanges": ["dfbd2f1"],
+    "redCommit": "01f5961",
+    "focused": { "command": "CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo test -p evocc-evoir --test inline_assembly -p evocc --test inline_assembly_lowering --no-fail-fast", "redFailed": 8, "buildErrors": 0, "greenPassed": 8, "constraintRows": 26 },
     "probe": { "path": ".evidence/builtin-probes/20260905-asm-edges/receipt.json", "sourceSha256": "02828e8b09d8cd03318870385c0d365de0cdd9c563372b65360590b3db1d5f29", "gccAndClangOutputSha256": "fd77c7e8979204601b9e41908ea48ac19e0701dd562b0a98f1ad22c98535b0c2", "imageDigest": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2", "compileAndRunCommandPerOracle": "TMPDIR=/out /usr/bin/<gcc-14|clang-19> -std=gnu11 -O2 /out/outputs.c -o /out/<oracle>-output; execute that binary", "readWriteFallthroughTaken": [12, 7], "writeOnlyFallthroughTaken": [9, 9] },
     "workspace": { "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet", "exitCode": 0, "passed": 1562, "failed": 0, "ignored": 4, "targets": 236, "log": ".evidence/assembly-edge-contract/20260905T031010Z/workspace.log", "sha256": "c0125a64ea2b3ee4508a0ade1f10f7f930925351828f214b5f8237c88de5ad9c" },
     "otherGates": {
@@ -1167,11 +1170,45 @@
       "attributedLayout": { "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject", "runId": "20260905T031020Z-45642", "passed": 22, "mismatches": 0 }
     },
     "testIsolationCorrection": { "file": "crates/evocc/tests/declaration_identity.rs", "reason": "Two parallel tests used exactly evocc-declaration-35566-1788577657000864000.c and overwrote one another. Replace the clock-only suffix with an atomic serial; no production behavior changes.", "rejectedRun": ".evidence/assembly-edge-contract/20260905T031010Z/rejected-workspace.log", "rejectedRunSha256": "69eb8db5e017dd953db8a8d3c9a05dbb6aee51ccae5234bd480c4cea4b9f43c8", "rejectedPassed": 1560, "rejectedFailed": 2, "correctedFocusedPassed": 4 },
-    "claimCeiling": "The two requested rulings are recorded and the static integer repair is implemented. This does not claim assembly production support, a new full survey, or an isolated replay."
+    "claimCeiling": "Assembly representation and lowering are implemented in dfbd2f1; focused tests pass. The historical workspace result above predates implementation. Current workspace, isolated replay and refreshed surveys must finish before closure. No RED receipt is retained."
   },
-  "subjectCommit": "a0157ce",
+  "currentSubjectMeasurement": {
+    "subjectCommit": "3bc968de89e3061095fb5ec863bd6ea8e634443a",
+    "binarySha256": "bce79cc3bcf2333e7418154c2f91e287337b86f8a62aebc1296eb72039c71d6e",
+    "buildCommand": "cargo build --release -p evocc",
+    "dashboard": { "command": "python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260904T163131Z-74556/results.jsonl", "runId": "20260905T033631Z-41221", "cleanLanes": 48, "regressions": 0, "receipt": ".evidence/static-initializers/20260905T030307Z/dashboard-receipt.json" },
+    "parse": { "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --action parse --evocc target/release/evocc --jobs 4 --timeout 60", "runId": "20260905T034102Z-58950", "capture": ".evidence/full-config-parse-survey/20260905T034102Z-58950", "sealSha256": "35e88d3904b9487ad0e73bfdd9c9c7e9808f8b64d76531f07b3da7cc91bc09f1", "verifiedCaptureFiles": 5603, "clean": 2798, "diagnosed": 0, "unavailable": 0, "timeout": 0, "panic": 0, "medianWallMilliseconds": 2409.733, "maximumWallMilliseconds": 20786.523 },
+    "lower": { "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --action lower --evocc target/release/evocc --jobs 4 --timeout 60", "runId": "20260905T041551Z-61762", "capture": ".evidence/full-config-lowering-survey/20260905T041551Z-61762", "sealSha256": "8ea0d23da143e785cc9de87ea1811940a17ab375fba153345849efd513a1f845", "verifiedCaptureFiles": 5603, "clean": 6, "diagnosed": 2792, "unavailable": 0, "timeout": 0, "panic": 0, "firstDiagnosticCounts": { "E3033": 1697, "E3030": 1022, "E3101": 57, "E3026": 7, "E3021": 5, "E3036": 4 }, "remainingE3101": { "cannot derive the authoritative allocation-site manifest": 50, "incomplete or non-enum scalar type": 7 }, "medianWallMilliseconds": 2301.452, "maximumWallMilliseconds": 17613.456 },
+    "enumeration": { "records": 2944, "includedCUnits": 2798, "excluded": 146, "exclusions": { "assembly-source": 67, "host-compiler-program": 34, "link-or-binary-transform": 43, "vmlinux-synthetic-target": 2 } },
+    "comparison": { "previousLoweringRun": "20260904T171723Z-48751", "sameUnitIdSet": true, "oldCleanRegressions": 0, "newCleanUnits": ["lib/clz_tab.c"], "oldE3101": 2766, "newE3101": 57, "oldE3101Transitions": { "E3030": 1000, "E3033": 1697, "E3101": 57, "E3026": 7, "E3036": 3, "clean": 1, "E3021": 1 } },
+    "timingCaveat": "Four workers under concurrent host load; wall times are coarse telemetry, not a benchmark.",
+    "lastCompletedWorkspaceGate": "1562 passed, zero failed, four existing ignored; commands and logs above. This is not the current assembly RED draft gate or isolated replay.",
+    "assemblyRed": "Superseded by tests-only commit 01f5961: two files, eight declared failures, zero build errors. Implementation dfbd2f1 passes all eight tests including 26 constraint rows.",
+    "isolatedOfflineReplay": "NOT_RUN",
+    "closure": "AA_OPEN_WITH_MEASURED_MANIFEST_RESIDUE; AB_IMPLEMENTED_CLOSURE_PENDING"
+  },
+  "declarationFrontierReductions": {
+    "status": "AWAITING_ARCHITECTURE_RULINGS_NO_PRODUCTION_FIX",
+    "subject": "3bc968d",
+    "manifest": {
+      "unit": "arch/arm64/kernel/traps.c",
+      "sourceSite": "arch/arm64/kernel/traps.c:900; prior declaration arch/arm64/include/asm/stacktrace.h:62",
+      "minimalSource": "extern long a[1]; long a[1] __attribute__((aligned(16)));",
+      "command": "/private/tmp/c30-aa/target/release/evocc --emit=evoir --target=aarch64-unknown-linux-gnu /private/tmp/c30-array-alignment-redeclaration.c",
+      "observed": "E3101: cannot derive the authoritative allocation-site manifest; the second declaration alone lowers successfully",
+      "question": "Section 10.1.18 accumulates declaration attributes: how should cumulative object alignment relate to manifest semantic type identity?"
+    },
+    "incompleteEnum": {
+      "sourceSite": "arch/arm64/include/asm/insn.h:557",
+      "minimalSource": "enum aarch64_insn_encoding_class aarch64_get_insn_class(unsigned int insn);",
+      "command": "/private/tmp/c30-aa/target/release/evocc --emit=evoir --target=aarch64-unknown-linux-gnu /private/tmp/c30-insn-enum.c",
+      "observed": "E3101: incomplete or non-enum scalar type",
+      "question": "How should an unused function declaration with an incomplete enum return type enter EvoIR? No representation or rejection code is chosen here."
+    }
+  },
+  "subjectCommit": "3bc968de89e3061095fb5ec863bd6ea8e634443a",
   "gate": {
-    "claim": "Revision 1.9.59 AA3 is implemented and green on the fixed survey subject. Stage F3 remains closed: the dashboard is 48/48 clean and the full-configuration parse measurement is 2798/2798 clean. The lowering result is a measured frontier, not a completeness claim: 5 clean and 2793 typed first diagnostics, with zero unavailable, timeout, panic, or regression. AA1 and AA2 remain open because their corpus classes did not move.",
+    "claim": "At fixed subject 3bc968d, dashboard remains 48/48 and parse remains 2798/2798. Lowering is 6 clean and 2792 diagnosed; E3101 is reduced to 57, not eliminated. AA and AB are open. The completed 1562/0 workspace gate predates the uncommitted assembly RED draft; the latter's full gate and isolated replay are not complete.",
     "measured": {
       "dualOracleCleanParseTus": "16/16",
       "rawPreprocessClean": "16/16",
@@ -1180,12 +1217,12 @@
       "stageF1": "CLOSED",
       "stageF3": "CLOSED",
       "fullConfigurationParse": "2798/2798 clean",
-      "fullConfigurationLowering": "5/2798 clean; 2793 typed first diagnostics; measure-only",
-      "workspaceTestsAtAASubject": "1547/1547; 4 ignored; 234 targets",
+      "fullConfigurationLowering": "6/2798 clean; 2792 typed first diagnostics; measure-only",
+      "workspaceTestsAtAASubject": "1562/1562; 4 ignored; 236 targets; before uncommitted assembly RED draft",
       "loweringDiagnosticFrontierTests": "9/9",
       "uninitializedPointerTextTests": "1/1",
-      "aa1CorpusStatus": "OPEN; allocation-manifest free-text class remains 2754 units",
-      "aa2CorpusStatus": "OPEN; semantic-identity free-text class remains 12 units",
+      "aa1CorpusStatus": "OPEN; remaining allocation-manifest first-error class is 50 units",
+      "aa2CorpusStatus": "The original 12 identity records advance; combined AA closure remains OPEN with 50 manifest failures and seven non-enum scalar failures",
       "aa3Status": "PASS",
       "aa4Status": "PASS_MEASUREMENT",
       "workspaceTestsAtZSubject": "1363/1363; 1 ignored",
