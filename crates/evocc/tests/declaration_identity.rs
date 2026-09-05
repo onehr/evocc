@@ -2,13 +2,11 @@
 
 use std::fs;
 use std::process::{Command, Output};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 fn compile(source: &str, mode: &str) -> Output {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
+    static SERIAL: AtomicU64 = AtomicU64::new(0);
+    let nonce = SERIAL.fetch_add(1, Ordering::Relaxed);
     let path = std::env::temp_dir().join(format!(
         "evocc-declaration-{}-{nonce}.c",
         std::process::id()

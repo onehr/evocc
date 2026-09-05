@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.59** | **Authoritative reference** | **2026-09-04**
+**Revision 1.9.60** | **Authoritative reference** | **2026-09-05**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -798,19 +798,75 @@ it with anything. It exists so that the kernel's assembly can pass through
 the compiler without any part of the compiler pretending to understand it.
 
 ```text
-(%o1, ..., %ok, %m1, %w1) = asm[.volatile] "template" %m0, %w0
-    outputs [ "constraint" : Type, ... ]
-    inputs  [ "constraint" : %v, ... ]
-    clobbers [ "name", ... ]
-
-asm.goto[.volatile] "template" %m0, %w0
-    outputs [...] inputs [...] clobbers [...]
-    labels [ ^b1(args), ... ] fallthrough ^b0(args)
+(%o1, ..., %ok, %m1, %w1) = asm[ volatile] "template" %m0, %w0 outputs [...] inputs [...] clobbers [...]
+(%o1, ..., %ok, %m1, %w1) = asm.goto[ volatile] "template" %m0, %w0 outputs [...] inputs [...] clobbers [...] labels [...] fallthrough ^b0(args)
 ```
 
 `asm.goto` is a terminator (Section 3.9) whose successors are its labels and
 its fall-through; it produces `mem` and `world` on every edge. A plain `asm`
 produces its outputs, then `mem<all>` and `world`.
+
+**Output and edge binding.** Section 9 gives the complete one-line syntax;
+the two lines above are explanatory schemata, not additional accepted forms.
+Each output entry retains its constraint, symbolic name (empty when absent),
+type, and optional incoming value. A write-only register output has no incoming
+value; a read-write register output has one of exactly its result type. Each
+register output defines one fresh SSA result, in output-list order. A memory
+output instead carries its place's pointer as the incoming value and its type
+is that pointer's type; it defines no scalar result, even for `=Q`. It must not
+cause a separate load or store. Explicit inputs retain their constraint, name
+and value. Numeric template references count all outputs (including memory
+outputs), followed by explicit inputs. A read-write output's incoming value
+does not add another explicit input or change those numbers. A digit input
+constraint names a register output of exactly the same type.
+
+Both forms define exactly the register results followed by a fresh `mem<all>`
+and a fresh `world`. Inputs, memory addresses and read-write incoming values
+must be prior local definitions or block arguments: none may reference a
+result of this same instruction. For `asm.goto`, results become available
+only after the assembly, on **every** successor, including named labels.
+An edge argument may name a result of this terminator; this is not permission
+for a self-use in its input operands. Every use in a successor block must use
+that block's own argument, never the predecessor's result ID directly. All
+other edge operands must already be local to the predecessor, as in Section
+2.4. Successor arity and types are checked by the ordinary edge rules.
+
+The validator checks assembly inputs first, registers its fresh results,
+advances the current effect state, then checks each edge. Every successor
+edge passes the new memory and world exactly once, in the destination's
+corresponding token positions; passing either input token, dropping a token,
+duplicating it within one edge, or introducing another token is invalid.
+Passing the same new token on different mutually exclusive successor edges
+is valid, exactly as for `cond_br`; a dynamic execution takes only one edge.
+These rules do not introduce per-edge SSA namespaces or implicit dominance.
+
+Register results of both assembly forms start excluded under Section 8.5,
+because their defining instruction is not allowlisted. This includes results
+defined by the terminator, not only results in a block's instruction list.
+Poison and exclusion propagation traverse every assembly successor edge;
+passing a value through such an edge cannot make it an eligible scalar seed.
+The producer and independent checker each enforce this existing fixed-point
+rule. Neither may infer a successor choice by reading the opaque template.
+
+Lowering evaluates output places and inputs once before the assembly.
+Register output writeback is performed on every successor, using explicit
+edge blocks where necessary, before entering the source label or continuing
+with the next source statement. Those stores consume the assembly's new
+tokens, not its input tokens. `+` preserves its incoming value on an execution
+path where the template does not write it; a write-only output makes no such
+promise. The compiler does not inspect assembler instructions to infer which
+path writes an output. Label entries retain the source label name alongside
+the target block and edge arguments, so `%l[name]` does not depend on block
+numbering.
+
+The output-availability rule is measured in
+`.evidence/builtin-probes/20260905-asm-edges/outputs.c`: sealed GCC-14 and
+Clang-19 agree on read-write output values 12 (fallthrough) and 7 (taken),
+and on a write-only early-clobber output written before the branch, 9 on
+both edges. Both result files have SHA-256
+`fd77c7e8979204601b9e41908ea48ac19e0701dd562b0a98f1ad22c98535b0c2`.
+The SSA encoding and canonical text below are a compiler contract choice,
+not a claim about an oracle's internal representation.
 
 **Semantics.** The results are values of their declared types about which
 nothing is known: an interpreter cannot execute an `asm` and reports `E3021`
@@ -2226,8 +2282,8 @@ the two namespaces never collide because their prefixes differ. Block labels are
 positional: the first block of a function is `^entry` regardless of its numeric
 identity, and every other block is `^b` followed by its identifier.
 
-There are no comments. A `;` is not special and any occurrence is rejected by
-Section 9.5. This format is machine interchange rather than authored source;
+There are no comments. A `;` outside a quoted assembly string is rejected by
+Section 9.5; inside one it is assembler data and is retained. This format is machine interchange rather than authored source;
 explanatory text belongs beside a fixture, not inside a file whose bytes are
 digested.
 
@@ -2325,6 +2381,7 @@ inst_body :=
   | value_name " = ptr.offset." direction "." index_signedness " "
         value_name ", " value_name " [scale=" integer "]"
   | "(" result_list ") = call " callee "(" arg_list ")"
+  | "(" result_list ") = asm" volatile_marker " " asm_payload
 
 term_body :=
     "br " block_label "(" arg_list ")"
@@ -2332,6 +2389,8 @@ term_body :=
         ", " block_label "(" arg_list ")"
   | "ret" return_operands
   | "trap." trap_reason
+  | "(" result_list ") = asm.goto" volatile_marker " " asm_payload
+        " labels [" asm_label_list "] fallthrough " block_label "(" arg_list ")"
 
 return_operands  := ε | " " value_name ("," " " value_name)*
 
@@ -2351,7 +2410,43 @@ index_signedness := "signed" | "unsigned"
 result_list      := value_name ("," " " value_name)*
 arg_list         := ε | value_name ("," " " value_name)*
 callee           := symbol | value_name
+
+asm_payload      := quoted_string " " value_name ", " value_name
+                    " outputs [" asm_output_list "] inputs [" asm_input_list
+                    "] clobbers [" quoted_list "]"
+asm_output_list  := ε | asm_output (", " asm_output)*
+asm_output       := "(" quoted_string ", " quoted_string ", " type ", " asm_incoming ")"
+asm_incoming     := "-" | value_name
+asm_input_list   := ε | asm_input (", " asm_input)*
+asm_input        := "(" quoted_string ", " quoted_string ", " value_name ")"
+asm_label_list   := ε | asm_label (", " asm_label)*
+asm_label        := "(" quoted_string ", " block_label "(" arg_list "))"
+quoted_list      := ε | quoted_string (", " quoted_string)*
+quoted_string    := quote_byte quoted_byte* quote_byte
+quoted_byte      := quoted_ascii | backslash_byte quote_byte
+                  | backslash_byte backslash_byte | backslash_byte "x" hex_byte
+quote_byte       := the single byte 0x22
+backslash_byte   := the single byte 0x5c
+quoted_ascii     := a byte in 0x20..0x21, 0x23..0x5b, or 0x5d..0x7e
 ```
+
+In an assembly payload the first two values are the input `mem<all>` and
+`world`. An output tuple is `(constraint, name, type, incoming)` and an input
+tuple is `(constraint, name, value)`. Empty lists are spelled `[]` and an
+absent symbolic name is `""`. `-` is allowed only for write-only register
+outputs. Result IDs and types are bound by Section 3.11; memory outputs are
+not additional scalar results. Lists retain source order, including clobbers
+and named labels; no sorting or deduplication changes assembler data.
+
+Quoted strings encode the UTF-8 bytes of their decoded assembler text.
+Bytes 0x20 through 0x7e are literal except quote and backslash, which use
+`\"` and `\\`; every other byte uses exactly `\xhh` with lowercase hex.
+Thus a template newline is `\x0a`, not an actual line break or `\n` escape.
+Hex-escaping a printable byte, alternate escapes, unterminated strings,
+raw non-ASCII bytes and a decoded byte sequence that is not UTF-8 are
+noncanonical and rejected. Whitespace, semicolons, brackets and percent
+signs inside strings are data, not grammar delimiters. Escaping changes no
+template, constraint, name or clobber byte after decoding.
 
 The productions above are the canonical type spelling. In particular commas in
 `vec`, `tuple`, and function-pointer type lists carry exactly one following
@@ -2395,6 +2490,8 @@ ub.assume.<> <>
 <> = ptr.offset.<>.<> <>, <> [scale=<>]
 (<>) = call @<>(<>)
 (<>) = call <>(<>)
+(<>) = asm<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>]
+(<>) = asm.goto<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>] labels [<>] fallthrough <>
 br <>
 cond_br <>, <>, <>
 ret
@@ -2414,10 +2511,12 @@ form could not represent a legal module.
 #### 9.3.2 Shapes Not Yet Emitted
 
 A revision may lead its implementation. Any such shapes are listed in this
-block so the gap is declared rather than discovered. Revision 1.8.2 has no
-pending instruction, global, function-header, or effects-clause shape.
+block so the gap is declared rather than discovered. Revision 1.9.60 adds
+the two assembly shapes below; they remain pending until their implementation.
 
 ```text
+(<>) = asm<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>]
+(<>) = asm.goto<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>] labels [<>] fallthrough <>
 ```
 
 The empty `ret`, mandatory effects clause, `func_addr`, indirect callee, full
@@ -5000,6 +5099,8 @@ certificate and should pass.
 | | `cond_br %c, ^t(targs), ^e(eargs)` | — | condition, blocks, values | n/a |
 | | `ret values...` | — | return values | n/a |
 | | `trap.<reason>` | — | reason (`scalar_function_fell_off_end`, `unreachable_reached`) | yes |
+| Assembly | `asm [volatile]` | register outputs, `mem<all>`, `world` | template, constrained operands, clobbers, input tokens | yes; interpreter E3021 |
+| | `asm.goto [volatile]` | register outputs and tokens, bound on successor edges | same payload, named label edges, fallthrough edge | yes; interpreter E3021 |
 | Pointer | `func_addr @symbol` | `fnptr<Sig>` | symbol | no |
 | Calls | `call @callee(args..., %m, %w)` | ret values, `mem`, `world` | callee, args, memory, world | depends |
 | | `call %fptr(args..., %m, %w)` | ret values, `mem`, `world` | callee value, args, memory, world | depends |
@@ -5041,6 +5142,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.60 | 2026-09-05 | Under the user's authorization to close the two reported blockers, defines the missing assembly interchange grammar and output/effect edge bindings. Both-successor output availability is measured with the sealed oracles; the explicit SSA and byte encoding are compiler contract choices. No production code is changed by this specification revision. |
 | 1.9.59 | 2026-09-04 | Gives poison a pointer form (`uninitialized.ptr`, `uninitialized.fnptr`), so a pointer local without an initializer lowers rather than stopping the unit, and allocates `E3036` to pointer and integer conversions in either direction, which revision 1.7 deferred and the wrapper `E3101` had been carrying. Both classes were reduced to one line each by the architect. |
 | 1.9.58 | 2026-09-04 | Specifies inline assembly as an opaque EvoIR instruction with the constraint vocabulary the configured kernel uses, measured over 24,735 `asm` statements in twenty-four preprocessed units and against both oracles; `asm.goto` is a terminator, the effects are maximal, no rewrite can reach it, and neither interpreter executes it, so a program containing one is verified by the native run alone. |
 | 1.9.57 | 2026-09-04 | First full-configuration lowering survey (4 clean of 2,798). Defines global register variables: no allocation site, the manifest passes over them, a use is `E3035` and the declaration is accepted, which is what stopped 2,754 units; states that a lowering failure names its class and `E3101` is a wrapper, never a resting place. |

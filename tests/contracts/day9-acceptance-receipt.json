@@ -1124,7 +1124,7 @@
     "outstanding": [
       "New dashboard, full parse/lowering surveys and isolated offline replay have NOT RUN for this continuation; the published counts elsewhere in this receipt still refer to their named historical subjects.",
       "AA-NEXT-GLOBAL-CONSTANT-LOWERING is resolved by staticIntegerInitializerContinuation below. A new full survey is still required; the two targeted records now reach E3036 rather than this initializer failure.",
-      "AB-ASM-TEXT-EDGE-CONTRACT: section 3.11 has schematic asm forms, but the exhaustive section 9 grammar omits asm/asm.goto and does not define template escaping or asm.goto result/mem/world binders and output availability across successor edges. No asm RED or implementation was invented before that authority is supplied."
+      "AB-ASM-TEXT-EDGE-CONTRACT is specified by assemblyEdgeContract below under the user's delegated authority. Assembly RED and implementation remain required; this is no longer awaiting a ruling."
     ]
   },
   "staticIntegerInitializerContinuation": {
@@ -1152,6 +1152,22 @@
     },
     "scope": "Reuse C-HIR static integer evaluation and the shared constant integer kernel; cast to destination type before serialization; preserve runtime E3006 and refuse raw static pointer bytes with E3026. No new diagnostic code or relocation representation.",
     "outstanding": ["Release dashboard guard, full parse/lowering surveys and isolated offline replay for this subject have not run."]
+  },
+  "assemblyEdgeContract": {
+    "status": "SPECIFIED_NOT_IMPLEMENTED",
+    "authority": "docs/evoir-spec.md revision 1.9.60 Sections 3.11 and 9; user authorization on 2026-09-05",
+    "productionChanges": [],
+    "probe": { "path": ".evidence/builtin-probes/20260905-asm-edges/receipt.json", "sourceSha256": "02828e8b09d8cd03318870385c0d365de0cdd9c563372b65360590b3db1d5f29", "gccAndClangOutputSha256": "fd77c7e8979204601b9e41908ea48ac19e0701dd562b0a98f1ad22c98535b0c2", "imageDigest": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2", "compileAndRunCommandPerOracle": "TMPDIR=/out /usr/bin/<gcc-14|clang-19> -std=gnu11 -O2 /out/outputs.c -o /out/<oracle>-output; execute that binary", "readWriteFallthroughTaken": [12, 7], "writeOnlyFallthroughTaken": [9, 9] },
+    "workspace": { "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet", "exitCode": 0, "passed": 1562, "failed": 0, "ignored": 4, "targets": 236, "log": ".evidence/assembly-edge-contract/20260905T031010Z/workspace.log", "sha256": "c0125a64ea2b3ee4508a0ade1f10f7f930925351828f214b5f8237c88de5ad9c" },
+    "otherGates": {
+      "clippy": { "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target cargo clippy --workspace --all-targets -- -D warnings", "exitCode": 0, "log": ".evidence/assembly-edge-contract/20260905T031010Z/clippy.log", "sha256": "5a92cc71a1d6af3863c1d3c388579d63cde612f0ea8f6127eca8f3fbffc1ddd6" },
+      "fmt": { "command": "cargo fmt --all -- --check", "exitCode": 0 },
+      "ruff": { "command": "ruff check tests/acceptance tools", "exitCode": 0 },
+      "baseLayout": { "command": "bash tests/acceptance/day5-layout-conformance.sh --subject", "runId": "20260905T031010Z-45652", "passed": 128, "mismatches": 0 },
+      "attributedLayout": { "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject", "runId": "20260905T031020Z-45642", "passed": 22, "mismatches": 0 }
+    },
+    "testIsolationCorrection": { "file": "crates/evocc/tests/declaration_identity.rs", "reason": "Two parallel tests used exactly evocc-declaration-35566-1788577657000864000.c and overwrote one another. Replace the clock-only suffix with an atomic serial; no production behavior changes.", "rejectedRun": ".evidence/assembly-edge-contract/20260905T031010Z/rejected-workspace.log", "rejectedRunSha256": "69eb8db5e017dd953db8a8d3c9a05dbb6aee51ccae5234bd480c4cea4b9f43c8", "rejectedPassed": 1560, "rejectedFailed": 2, "correctedFocusedPassed": 4 },
+    "claimCeiling": "The two requested rulings are recorded and the static integer repair is implemented. This does not claim assembly production support, a new full survey, or an isolated replay."
   },
   "subjectCommit": "a0157ce",
   "gate": {
