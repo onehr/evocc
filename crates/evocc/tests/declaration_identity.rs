@@ -74,3 +74,67 @@ fn initializer_completes_written_unbounded_array() {
         lowers(source);
     }
 }
+
+#[test]
+fn object_alignment_accumulates_without_changing_type_identity() {
+    for (declarations, alignment) in [
+        (
+            "extern long a[1]; long a[1] __attribute__((aligned(16)));",
+            16,
+        ),
+        (
+            "long a[1] __attribute__((aligned(16))); extern long a[1];",
+            16,
+        ),
+        (
+            "extern long a[1] __attribute__((aligned(32))); long a[1];",
+            32,
+        ),
+        (
+            "long a[1]; extern long a[1] __attribute__((aligned(32)));",
+            32,
+        ),
+        (
+            "extern __typeof__(long[1]) a; __typeof__(long[1]) a __attribute__((aligned(16)));",
+            16,
+        ),
+    ] {
+        let source = format!("{declarations} int main(void) {{ return sizeof(a); }}");
+        let ir = lowers(&source);
+        assert!(
+            ir.lines().any(|line| line.starts_with("global @a ")
+                && line.contains(&format!("size=8 align={alignment} "))),
+            "{ir}"
+        );
+        let interpreted = compile(&source, "--interpret-c-hir");
+        assert!(
+            interpreted.status.success(),
+            "{}",
+            String::from_utf8_lossy(&interpreted.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&interpreted.stdout).trim(), "8");
+    }
+}
+
+#[test]
+fn unused_incomplete_enum_function_declarations_emit_nothing() {
+    let ir = lowers("enum aarch64_insn_encoding_class aarch64_get_insn_class(unsigned int insn);");
+    assert!(ir.trim().is_empty(), "{ir}");
+}
+
+#[test]
+fn incomplete_enum_function_uses_are_diagnosed_at_the_use() {
+    for source in [
+        "enum e f(unsigned int); void g(void) { f(0); }",
+        "enum e f(unsigned int); void g(void) { &f; }",
+        "enum e f(unsigned int); void g(void) { f(0); } enum e { A };",
+    ] {
+        let output = compile(source, "--parse-only");
+        let diagnostic = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !output.status.success() && diagnostic.contains("E2930"),
+            "{diagnostic}"
+        );
+    }
+    lowers("enum e f(unsigned int); enum e { A }; enum e f(unsigned int x) { return A; } int main(void) { return f(0); }");
+}
