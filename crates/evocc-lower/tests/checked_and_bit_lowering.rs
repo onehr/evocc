@@ -85,6 +85,19 @@ fn checked_arithmetic_uses_exact_width_and_round_trip_representability() {
 }
 
 #[test]
+fn checked_width_outside_the_signed_exact_profile_has_a_named_boundary() {
+    let arena = Arena::default();
+    let unit = parse(
+        "int product(unsigned long a,unsigned long b,unsigned long *r){return __builtin_mul_overflow(a,b,r);}",
+        &arena,
+    );
+    let error =
+        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap_err();
+    assert_eq!(error.code(), "E3042");
+    assert_eq!(error.to_string(), "not-lowered: checked-arithmetic-width");
+}
+
+#[test]
 fn bit_builtins_lower_to_total_operations_and_explicit_zero_obligations() {
     lowered("int f(unsigned x){return __builtin_clz(x)+__builtin_ctz(x)+__builtin_popcount(x);} int main(void){return f(8);}", 32, &["ctlz.bits<32>", "cttz.bits<32>", "ctpop.bits<32>", "ub.assume.bit_builtin_zero_operand"], true);
     lowered(
