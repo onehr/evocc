@@ -5552,6 +5552,13 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Negative checked results stored into an unsigned type
+
+Section 10.1.15's mathematical representability rule requires overflow for a negative result stored into an unsigned type, even when that type is as wide as (or wider than) `W`; the abbreviated truncation/extension test alone does not establish this case.
+The lowered overflow predicate additionally includes signed `exact_result < 0` for unsigned destinations, without changing the specified arithmetic width or runtime UB rules.
+Both sealed oracles print `1 18446744073709551615 1 4294967295` for `.evidence/builtin-probes/20260906-checked-conversion/result.c`, recorded in `result.out` (SHA-256 `3a4f266c33c39dac31175baedf4d36afd03fbbd95c86f969dd957505630a315a`).
+No diagnostic is added; affected full-configuration unit count is not yet measured.
+
 ### Variadic marker placement
 
 Section 1.1's explicit placement rule takes precedence over the abbreviated
@@ -5589,3 +5596,15 @@ new code, and affects one first-error unit in sealed lowering run
 `20260905T113121Z-43616` (`lib/crypto/chacha-block-generic.c`).
 The normalization is restricted to parameter checks and does not relax
 ordinary object or nested-array identity checks.
+
+### Function parameter identity checks
+
+A parameter written with function type, directly or through a typedef, is
+adjusted to a pointer to that exact function type; preserved-spelling identity
+checks undo only this outer adjustment and still check the function signature.
+Both sealed oracles print `7 7 7` for the three spellings in
+`.evidence/builtin-probes/20260906-function-parameters/parameter.c` and
+`parameter.out` (output SHA-256
+`69d15060f5a52403979ee890fa0e7ccd967e5ae9dc5483cf000b14974df57588`).
+No diagnostic is added: this removes the E3101 refusal affecting 2,464 units
+at `blockdev_direct_IO` in sealed lowering run `20260905T175021Z-94287`.

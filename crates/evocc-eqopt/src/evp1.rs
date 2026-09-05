@@ -2344,6 +2344,22 @@ fn remap_all(instruction: &mut Inst, identities: &HashMap<u32, u32>) -> Result<(
 #[allow(clippy::too_many_lines)]
 fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
     match instruction {
+        Inst::BitOperation {
+            result, operand, ..
+        } => vec![result, operand],
+        Inst::VaAccess(access) => {
+            let mut values = vec![
+                &mut access.list,
+                &mut access.mem_in,
+                &mut access.world_in,
+                &mut access.mem_out,
+                &mut access.world_out,
+            ];
+            if let evocc_evoir::VariadicOp::Arg(result) = &mut access.op {
+                values.push(result);
+            }
+            values
+        }
         Inst::Asm(assembly) => assembly.values_mut(),
         Inst::AsmGoto {
             assembly,

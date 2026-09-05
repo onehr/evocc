@@ -99,6 +99,7 @@ fn probe(insts: Vec<Inst>, root: Value) -> Module {
         }],
     };
     let mut module = Module {
+        assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),

@@ -359,8 +359,8 @@ fn gnu_int128_front_end_values_stop_at_the_execution_boundary() {
         CHirDecl::Object(object) if object.name.spelling == "after"
     )));
 
-    // The shared constant kernel is 128-bit, but both execution engines keep
-    // the specification's explicit E3033 boundary.
+    // Wide execution is admitted. Reading an uninitialized wide object must
+    // still report its memory fault rather than inventing a narrow value.
     let source = SourceFile::new(
         FileId::new(5_713),
         "/virtual/day5/gnu-int128-interpreter-boundary.c".into(),
@@ -382,9 +382,8 @@ fn gnu_int128_front_end_values_stop_at_the_execution_boundary() {
         panic!("expected wide local")
     };
     assert_eq!(written(&source, wide.specifier.span()), "__int128");
-    assert_eq!(
-        interpret_scalar_function(&unit, function.symbol, InterpreterLimits::default()),
-        Err(InterpreterError::WideInteger { span: wide.span }),
-        "the scalar interpreter must not narrow or execute __int128",
-    );
+    let error = interpret_scalar_function(&unit, function.symbol, InterpreterLimits::default())
+        .unwrap_err();
+    assert_eq!(error.code(), "E3001");
+    assert!(matches!(error, InterpreterError::Memory { .. }));
 }

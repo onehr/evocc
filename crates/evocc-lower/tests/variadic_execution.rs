@@ -51,6 +51,8 @@ fn chir_executes_variadic_lists_and_reports_mismatched_reads() {
         ("int f(int n,...){__builtin_va_list ap; __builtin_va_start(ap,n); return __builtin_va_arg(ap,int);} int main(void){return f(0);}".to_owned(), Err("E3038")),
         ("int f(int n,...){__builtin_va_list ap; __builtin_va_start(ap,n); return __builtin_va_arg(ap,int);} int main(void){return f(1,7L);}".to_owned(), Err("E3038")),
         ("int f(int n,...){__builtin_va_list ap; __builtin_va_start(ap,n); __builtin_va_end(ap); return __builtin_va_arg(ap,int);} int main(void){return f(1,7);}".to_owned(), Err("E3038")),
+        ("int main(void){__builtin_va_list ap; return __builtin_va_arg(ap,int);}".to_owned(), Err("E3038")),
+        ("int f(int n,...){__builtin_va_list ap; __builtin_va_start(ap,n); return *__builtin_va_arg(ap,int*);} int main(void){int x=19; int (*p)(int,...)=f; return p(1,&x);}".to_owned(), Ok(19)),
     ] {
         let arena = Arena::default();
         let unit = parse(&source, &arena);
@@ -61,6 +63,15 @@ fn chir_executes_variadic_lists_and_reports_mismatched_reads() {
         let result = interpret_scalar_function(&unit, symbol, InterpreterLimits::new(100_000));
         match expected {
             Ok(value) => assert_eq!(result.unwrap().return_value.unwrap().raw_bits, value),
+            Err(code) => assert_eq!(result.unwrap_err().code(), code),
+        }
+        let module = evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+        let result = interpret_module(&module, "main", &[
+            RuntimeValue::new(EvoIRType::Mem(Region::All), 0),
+            RuntimeValue::new(EvoIRType::World, 0),
+        ], evocc_evoir::InterpreterLimits::new(100_000));
+        match expected {
+            Ok(value) => assert_eq!(u128::from(result.unwrap().return_values[0].raw_bits), value),
             Err(code) => assert_eq!(result.unwrap_err().code(), code),
         }
     }

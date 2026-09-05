@@ -22,6 +22,7 @@ fn bit(id: u32) -> Value {
 
 fn input() -> Module {
     Module {
+        assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),

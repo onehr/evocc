@@ -373,7 +373,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         | "__builtin_ctzll"
                         | "__builtin_popcount"
                         | "__builtin_popcountl"
-                        | "__builtin_popcountll",
+                        | "__builtin_popcountll"
+                        | "__builtin_bswap16"
+                        | "__builtin_bswap32"
+                        | "__builtin_bswap64",
                     ) => TokenKind::BuiltinBit,
                     Some("__builtin_unreachable") => TokenKind::BuiltinUnreachable,
                     Some("__builtin_return_address") => TokenKind::BuiltinReturnAddress,
@@ -6482,11 +6485,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             end = next.span;
         }
         let span = self.merge_span(first.span, end);
-        if literal.explicit_unit_count().is_none() {
+        let Some(bytes) = literal.decoded_units().and_then(|units| {
+            units
+                .into_iter()
+                .map(u8::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .ok()
+        }) else {
             self.report("E1006", "invalid-string-literal", span);
             return None;
-        }
-        Some((literal.value, span))
+        };
+        let Ok(value) = String::from_utf8(bytes) else {
+            self.report("E1006", "invalid-string-literal", span);
+            return None;
+        };
+        Some((value, span))
     }
 
     fn is_modifiable_asm_output(&self, expression: &CHirExpr<'_>) -> bool {
@@ -10073,6 +10086,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2909", "builtin-arity", keyword.span);
             return None;
         }
+        let type_span = self.peek()?.span;
         let (requested_ty, tag_event) = self.parse_type_name()?;
         if self.peek_kind() != Some(TokenKind::RParen) {
             self.report("E2909", "builtin-arity", keyword.span);
@@ -10097,6 +10111,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 list.span()
             };
             self.report("E2913", "builtin-operand-not-convertible", diagnostic_span);
+            return None;
+        }
+        let changed_by_promotion =
+            match self.operand_type_class(InferredType::Canonical(requested_ty)) {
+                OperandTypeClass::Integer(integer) => {
+                    CInteger::new(0, integer).promoted().ty() != integer
+                }
+                OperandTypeClass::Real(FloatKind::F32) => true,
+                _ => false,
+            };
+        if changed_by_promotion {
+            self.report("E2929", "unpromoted-va-arg-type", type_span);
             return None;
         }
         Some(self.alloc_node(CHirExpr::BuiltinVarArgs {
@@ -10154,6 +10180,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             "__builtin_popcount" => (BitBuiltinOp::PopulationCount, IntRank::UInt),
             "__builtin_popcountl" => (BitBuiltinOp::PopulationCount, IntRank::ULong),
             "__builtin_popcountll" => (BitBuiltinOp::PopulationCount, IntRank::ULongLong),
+            "__builtin_bswap16" => (BitBuiltinOp::ByteSwap, IntRank::UShort),
+            "__builtin_bswap32" => (BitBuiltinOp::ByteSwap, IntRank::UInt),
+            "__builtin_bswap64" => (BitBuiltinOp::ByteSwap, IntRank::ULong),
             _ => unreachable!("BuiltinBit is assigned only to the frozen builtin spellings"),
         };
         if self.peek_kind() != Some(TokenKind::LParen) {
@@ -10188,6 +10217,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let span = self.merge_span(keyword.span, close.span);
         if let Ok(value) = self.eval_integer_constant_expression(operand) {
             if let Some(result) = eval_bit_builtin(op, value.cast(parameter_integer)) {
+                if op == BitBuiltinOp::ByteSwap {
+                    let literal = self.alloc_node(CHirExpr::Lit(
+                        IntLit {
+                            value: result.raw_bits() as u64,
+                            suffix: IntSuffix::None,
+                            base: IntBase::Dec,
+                        },
+                        span,
+                    ));
+                    return Some(self.alloc_node(CHirExpr::Cast(parameter_ty, literal, span)));
+                }
                 return Some(
                     self.alloc_node(CHirExpr::Lit(
                         IntLit {
@@ -10202,7 +10242,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
         }
         let converted = self.alloc_node(CHirExpr::Cast(parameter_ty, operand, operand.span()));
-        let result_ty = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
+        let result_ty = if op == BitBuiltinOp::ByteSwap {
+            parameter_ty
+        } else {
+            self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default())
+        };
         Some(self.alloc_node(CHirExpr::BitBuiltin {
             op,
             operand: converted,

@@ -80,6 +80,7 @@ fn module_of(insts: Vec<Inst>, result: Value) -> Module {
         }],
     };
     let mut module = Module {
+        assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),
@@ -349,6 +350,7 @@ fn width_min_excludes_a_one_bit_value() {
         }],
     };
     let mut module = Module {
+        assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),

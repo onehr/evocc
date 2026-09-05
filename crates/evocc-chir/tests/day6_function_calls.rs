@@ -2712,10 +2712,22 @@ fn signature_validation_is_identical_before_call_or_call_free_dispatch() {
 }
 
 #[test]
+fn a_variadic_definition_accepts_a_call_without_anonymous_arguments() {
+    let arena = Arena::default();
+    let program = program_with_add_fault(&arena, AddFault::VariadicDefinition);
+    let outcome = interpret_scalar_function(
+        &program.unit,
+        program.call_add,
+        InterpreterLimits::default(),
+    )
+    .unwrap();
+    assert_eq!(outcome.return_value.unwrap().raw_bits, 907);
+}
+
+#[test]
 fn call_execution_fails_closed_on_non_direct_or_unsupported_function_contracts() {
     for fault in [
         AddFault::IndirectCallee,
-        AddFault::VariadicDefinition,
         AddFault::UnnamedParameter,
         AddFault::ForgedDesignator,
         AddFault::ForgedWrittenDeclarator,
@@ -2735,7 +2747,6 @@ fn call_execution_fails_closed_on_non_direct_or_unsupported_function_contracts()
                 "unsupported-interpreter-expression: indirect scalar function call",
                 span(138, 142),
             ),
-            AddFault::VariadicDefinition => ("E3030", "not-lowered: varargs", span(0, 39)),
             AddFault::UnnamedParameter => (
                 "E3007",
                 "unsupported-interpreter-function-signature",
@@ -2756,7 +2767,8 @@ fn call_execution_fails_closed_on_non_direct_or_unsupported_function_contracts()
                 "unsupported-interpreter-function-signature",
                 span(8, 12),
             ),
-            AddFault::None
+            AddFault::VariadicDefinition
+            | AddFault::None
             | AddFault::FileScopeParameter
             | AddFault::DuplicateParameterSpelling => unreachable!(),
         };
@@ -2776,16 +2788,14 @@ fn call_execution_fails_closed_on_non_direct_or_unsupported_function_contracts()
                 error,
                 InterpreterError::UnsupportedExpression { .. }
             )),
-            AddFault::VariadicDefinition => {
-                assert!(matches!(error, InterpreterError::VarArgs { .. }))
-            }
             AddFault::UnnamedParameter
             | AddFault::ForgedWrittenDeclarator
             | AddFault::ForgedParameterStorage => assert!(matches!(
                 error,
                 InterpreterError::UnsupportedFunctionSignature { .. }
             )),
-            AddFault::None
+            AddFault::VariadicDefinition
+            | AddFault::None
             | AddFault::FileScopeParameter
             | AddFault::DuplicateParameterSpelling => unreachable!(),
         }

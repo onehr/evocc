@@ -289,5 +289,103 @@
     "The first dashboard attempt in the isolated worktree was refused before measurement because the pinned kernel archive was absent. A hard link to the authority inode restored the exact SHA-256 closure. The next attempt measured 48/48 clean but hit the publisher's known relative-evidence-path exception; the accepted run used an absolute worktree-local evidence path and retained the same subject and previous-run lineage."
   ],
   "specGap": null,
-  "claimCeiling": "Revision 1.9.59 AA3 is implemented and replayed: pointer poison is typed and pointer-integer conversions fail closed as E3036. The parse guard remains 2798/2798. The lowering survey improves from 4 to 5 clean units with no regressions, panic, timeout or unavailable execution. It does not prove AA1 or AA2 against the real corpus: their 2754-unit and 12-unit E3101 classes remain unchanged and are explicitly open for re-minimization."
+  "claimCeiling": "Revision 1.9.59 AA3 is implemented and replayed: pointer poison is typed and pointer-integer conversions fail closed as E3036. The parse guard remains 2798/2798. The lowering survey improves from 4 to 5 clean units with no regressions, panic, timeout or unavailable execution. It does not prove AA1 or AA2 against the real corpus: their 2754-unit and 12-unit E3101 classes remain unchanged and are explicitly open for re-minimization.",
+  "currentObservation": {
+    "runId": "20260905T175021Z-94287",
+    "subjectCommit": "3718ee837dc7c289b7b9ddd328bb96915dc747a5",
+    "capture": ".evidence/full-config-lowering-survey/20260905T175021Z-94287",
+    "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --action lower --evocc target/frontend/release/evocc --jobs 4 --timeout 60",
+    "classifications": {
+      "clean": 6,
+      "diagnosed": 2792,
+      "unavailable": 0,
+      "timeout": 0,
+      "panic": 0
+    },
+    "diagnosedByCode": {
+      "E3101": 2464,
+      "E3020": 303,
+      "E3036": 4,
+      "E3026": 8,
+      "E3021": 6,
+      "E3023": 7
+    },
+    "atRootTop15": [
+      {
+        "exampleRecord": "arch/arm64/crypto/.aes-ce-ccm-glue.o.cmd",
+        "exampleUnit": "arch/arm64/crypto/aes-ce-ccm-glue.c",
+        "finding": "E3101 evoir-lowering-failed",
+        "units": 2464
+      },
+      {
+        "exampleRecord": "arch/arm64/kernel/.io.o.cmd",
+        "exampleUnit": "arch/arm64/kernel/io.c",
+        "finding": "E3020 evoir-lowering-failed",
+        "units": 303
+      },
+      {
+        "exampleRecord": "crypto/asymmetric_keys/.pkcs7.asn1.o.cmd",
+        "exampleUnit": "crypto/asymmetric_keys/pkcs7.asn1.c",
+        "finding": "E3026 evoir-lowering-failed",
+        "units": 8
+      },
+      {
+        "exampleRecord": "lib/zstd/common/.entropy_common.o.cmd",
+        "exampleUnit": "lib/zstd/common/entropy_common.c",
+        "finding": "E3023 evoir-lowering-failed",
+        "units": 7
+      },
+      {
+        "exampleRecord": "kernel/time/.timecounter.o.cmd",
+        "exampleUnit": "kernel/time/timecounter.c",
+        "finding": "E3021 evoir-lowering-failed",
+        "units": 6
+      },
+      {
+        "exampleRecord": "crypto/.jitterentropy.o.cmd",
+        "exampleUnit": "crypto/jitterentropy.c",
+        "finding": "E3036 evoir-lowering-failed",
+        "units": 4
+      }
+    ],
+    "timing": {
+      "maximumUnit": "net/ethtool/ioctl.c",
+      "maximumWallMilliseconds": 30435.54,
+      "medianWallMilliseconds": 3467.711,
+      "note": "Per-process wall time was observed under concurrent host load; it is coarse telemetry, not a benchmark.",
+      "parallelism": 4,
+      "perUnitTimeoutSeconds": 60
+    },
+    "resultsSha256": "aef01300a52927c2a9e98acb0a4d495f30b306b62d23c50bf01c1df16796afc7",
+    "summarySha256": "1364b16242e5ccd31640ba30e903173a2c0e5cb818265ca7354e4dedb32634f4",
+    "sealSha256": "69219b59ac7a117125381340f714d40b820ad229ca8d018906bb17d43f0ec9ee",
+    "previousObservation": "20260905T162725Z-3971",
+    "parseGuard": {
+      "runId": "20260905T175158Z-291",
+      "subjectCommit": "3718ee837dc7c289b7b9ddd328bb96915dc747a5",
+      "capture": ".evidence/full-config-parse-survey/20260905T175158Z-291",
+      "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --action parse --evocc target/frontend/release/evocc --jobs 4 --timeout 60",
+      "classifications": {
+        "clean": 2798,
+        "diagnosed": 0,
+        "unavailable": 0,
+        "timeout": 0,
+        "panic": 0
+      },
+      "diagnosedByCode": {},
+      "atRootTop15": [],
+      "timing": {
+        "maximumUnit": "net/ipv4/udp.c",
+        "maximumWallMilliseconds": 37066.962,
+        "medianWallMilliseconds": 3043.245,
+        "note": "Per-process wall time was observed under concurrent host load; it is coarse telemetry, not a benchmark.",
+        "parallelism": 4,
+        "perUnitTimeoutSeconds": 60
+      },
+      "resultsSha256": "97e8624a18c68edd18972ea7082bd0de79e1a8311be68cac3a07139de98ec709",
+      "summarySha256": "133ac64ef0499e5006fddfc0b0a493baa8a9b4800655d2b5445304cd1ea1a1da",
+      "sealSha256": "67ef2c24420a17760b1debf65e03289d8c7e941690852765f0d194bb0b69e503"
+    },
+    "qualification": "Older named fields below are historical observations; current first-error counts are in currentObservation. 6 clean is not overall completion."
+  }
 }

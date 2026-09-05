@@ -371,6 +371,7 @@ fn probe_module() -> Module {
         ));
     }
     let mut module = Module {
+        assembly: Vec::new(),
         globals: Vec::new(),
         functions,
         ..Module::default()
@@ -513,6 +514,7 @@ fn probe_source() -> String {
 fn nine_register_arguments() -> Module {
     let shapes = vec![Shape::Bits(32); 9];
     let mut module = Module {
+        assembly: Vec::new(),
         globals: Vec::new(),
         functions: vec![fold_function("nine", &shapes)],
         ..Module::default()
@@ -691,6 +693,7 @@ fn narrow_module() -> Module {
         ));
     }
     let mut module = Module {
+        assembly: Vec::new(),
         globals: Vec::new(),
         functions,
         ..Module::default()

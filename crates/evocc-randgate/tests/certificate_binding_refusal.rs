@@ -106,6 +106,7 @@ fn module() -> Module {
     };
 
     let mut module = Module {
+        assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),
@@ -187,6 +188,7 @@ fn sparsely_numbered_module() -> Module {
     };
 
     let mut module = Module {
+        assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),
@@ -302,6 +304,7 @@ fn aliasing_module() -> Module {
     };
 
     let mut module = Module {
+        assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),
@@ -418,6 +421,7 @@ fn nested_negation_module() -> Module {
     };
 
     let mut module = Module {
+        assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),

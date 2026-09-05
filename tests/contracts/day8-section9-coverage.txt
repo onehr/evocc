@@ -79,7 +79,7 @@ Inst.UbAssume(condition,reason)|ub.assume.invalid_signed_left_shift %v1200
 Inst.Uninitialized(result)|%v1010 = uninitialized.bits<29>
 Inst.Xor(result,lhs,rhs)|%v1120 = xor.bits<37> %v1121, %v1122
 Inst.ZExt(result,source,target_ty)|%v1410 = zext.bits<37> %v1411
-Module(globals,extern_objects,declares,functions)|global @sentinel_file origin=7001 kind=file visibility=external size=3 align=4 bytes=a1b2c3 initialized=101
+Module(assembly,globals,extern_objects,declares,functions)|asm ".globl sentinel_asm\x0a"
 OffsetDirection.Add|%v1373 = ptr.offset.add.unsigned %v1374, %v1375 [scale=67]
 OffsetDirection.Subtract|%v1370 = ptr.offset.sub.signed %v1371, %v1372 [scale=61]
 Region.All|%arg9: mem<all>

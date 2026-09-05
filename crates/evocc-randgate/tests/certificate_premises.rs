@@ -120,6 +120,7 @@ fn covering_module() -> Module {
         }],
     };
     let mut module = Module {
+        assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),

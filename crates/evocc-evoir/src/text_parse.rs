@@ -163,9 +163,25 @@ impl ModuleParser<'_> {
                 }
                 self.position += 1;
             }
+            if self
+                .lines
+                .get(self.position)
+                .is_some_and(|line| line.starts_with("asm "))
+            {
+                break;
+            }
             functions.push(self.function()?);
         }
+        let mut assembly = Vec::new();
+        while let Some(line) = self.lines.get(self.position) {
+            let mut cursor = Cursor::new(line);
+            cursor.expect("asm ")?;
+            assembly.push(cursor.quoted()?);
+            cursor.finish()?;
+            self.position += 1;
+        }
         Ok(Module {
+            assembly,
             globals,
             extern_objects,
             declares,
@@ -583,6 +599,27 @@ fn parse_instruction(
             });
         }
     }
+    for op in [
+        crate::BitOp::LeadingZeros,
+        crate::BitOp::TrailingZeros,
+        crate::BitOp::Population,
+        crate::BitOp::ByteSwap,
+    ] {
+        if let Some(rest) = rhs
+            .strip_prefix(op.mnemonic())
+            .and_then(|rest| rest.strip_prefix('.'))
+        {
+            let mut cursor = Cursor::new(rest);
+            let ty = cursor.ty()?;
+            cursor.expect(" ")?;
+            let operand = use_value(cursor.remaining(), values)?;
+            return Ok(Inst::BitOperation {
+                result: Value { id: result_id, ty },
+                operand,
+                op,
+            });
+        }
+    }
     for (name, constructor) in [
         ("sext", Inst::SExt as fn(Value, Value, EvoIRType) -> Inst),
         ("zext", Inst::ZExt as fn(Value, Value, EvoIRType) -> Inst),
@@ -701,6 +738,36 @@ fn parse_tuple_instruction(
         .ok_or_else(|| "malformed multi-result instruction".to_owned())?;
     let result_ids = parse_result_ids(&body[1..close])?;
     let rhs = &body[close + 4..];
+    if rhs.starts_with("va_start ") || rhs.starts_with("va_end ") || rhs.starts_with("va_arg.") {
+        let (opcode, operands) = rhs.split_once(' ').ok_or("malformed variadic access")?;
+        let operands = parse_values(operands, values, false)?;
+        require_count(&operands, 3, "variadic access operands")?;
+        let result_type = opcode.strip_prefix("va_arg.").map(parse_type).transpose()?;
+        let offset = usize::from(result_type.is_some());
+        require_count(&result_ids, offset + 2, "variadic access results")?;
+        let op = match result_type {
+            Some(ty) => crate::VariadicOp::Arg(Value {
+                id: result_ids[0],
+                ty,
+            }),
+            None if opcode == "va_start" => crate::VariadicOp::Start,
+            None => crate::VariadicOp::End,
+        };
+        return Ok(Inst::VaAccess(crate::VariadicAccess {
+            op,
+            list: operands[0].clone(),
+            mem_in: operands[1].clone(),
+            world_in: operands[2].clone(),
+            mem_out: Value {
+                id: result_ids[offset],
+                ty: operands[1].ty.clone(),
+            },
+            world_out: Value {
+                id: result_ids[offset + 1],
+                ty: EvoIRType::World,
+            },
+        }));
+    }
     if rhs.starts_with("asm ") || rhs.starts_with("asm.goto ") {
         return parse_assembly(rhs, &result_ids, values);
     }
@@ -1199,6 +1266,7 @@ fn parse_ub_reason(text: &str) -> Result<UbReason, String> {
         "division_by_zero" => Ok(UbReason::DivisionByZero),
         "remainder_by_zero" => Ok(UbReason::RemainderByZero),
         "signed_overflow" => Ok(UbReason::SignedOverflow),
+        "bit_builtin_zero_operand" => Ok(UbReason::BitBuiltinZeroOperand),
         "invalid_shift_count" => Ok(UbReason::InvalidShiftCount),
         "invalid_signed_left_shift" => Ok(UbReason::InvalidSignedLeftShift),
         _ => Err("unknown UB reason".to_owned()),

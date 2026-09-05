@@ -82,10 +82,15 @@ def is_rendered_form(text: str) -> bool:
     # form always carries the complete attribute sequence.
     if text.startswith("global @"):
         return " origin=" in text
+    if text.startswith("func @"):
+        return " cc = " in text
     if text.startswith("effects {") or text == "{":
         return True
     if " = " in text:
-        return True
+        lhs = text.split(" = ", 1)[0]
+        # Local Rust bindings are not emitted SSA definitions. In particular,
+        # do not turn `let output = ...` inside raw strings into IR shapes.
+        return lhs == HOLE or lhs.startswith("(" + HOLE)
     return any(text == m or text.startswith(m if not m[-1].isalnum() else m + " ")
                for m in MNEMONIC)
 

@@ -531,6 +531,7 @@ fn observe_evoir(functions: &[Function]) -> Result<EvoExecutionObservation, Stri
         })
         .collect::<Result<Vec<_>, _>>()?;
     let module = Module {
+        assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: vec![],
@@ -665,8 +666,8 @@ fn branch_target(id: BlockId, args: &[Value]) -> String {
 
 fn render_inst(inst: &Inst) -> String {
     match inst {
-        Inst::Asm(_) | Inst::AsmGoto { .. } => {
-            panic!("assembly is outside these scalar golden fixtures")
+        Inst::Asm(_) | Inst::AsmGoto { .. } | Inst::VaAccess(_) | Inst::BitOperation { .. } => {
+            panic!("assembly and variadic lists are outside these scalar golden fixtures")
         }
         Inst::Const(result, immediate) => format!(
             "{} = const.{} {immediate}",

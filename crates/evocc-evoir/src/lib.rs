@@ -17,6 +17,8 @@ use evocc_types::{Region, TargetDataLayout};
 mod assembly;
 mod text;
 mod text_parse;
+mod variadic;
+pub use variadic::{VariadicAccess, VariadicOp};
 
 pub use assembly::{
     assembly_clobber, assembly_memory_constraint, AssemblyEdge, AssemblyInput, AssemblyLabel,
@@ -75,6 +77,25 @@ pub enum CmpOp {
     ULe,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BitOp {
+    LeadingZeros,
+    TrailingZeros,
+    Population,
+    ByteSwap,
+}
+
+impl BitOp {
+    pub const fn mnemonic(self) -> &'static str {
+        match self {
+            Self::LeadingZeros => "ctlz",
+            Self::TrailingZeros => "cttz",
+            Self::Population => "ctpop",
+            Self::ByteSwap => "bswap",
+        }
+    }
+}
+
 /// The source-level undefined-behavior class guarded by [`Inst::UbAssume`].
 ///
 /// The condition alone is deliberately insufficient to recover this
@@ -83,6 +104,7 @@ pub enum CmpOp {
 /// the reason explicitly and the interpreter preserves it on failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UbReason {
+    BitBuiltinZeroOperand,
     DivisionByZero,
     RemainderByZero,
     SignedOverflow,
@@ -95,6 +117,7 @@ impl UbReason {
     #[must_use]
     pub const fn diagnostic(self) -> &'static str {
         match self {
+            Self::BitBuiltinZeroOperand => "E3022",
             Self::DivisionByZero => "E3002",
             Self::RemainderByZero => "E3003",
             Self::SignedOverflow => "E3004",
@@ -107,6 +130,7 @@ impl UbReason {
     #[must_use]
     pub const fn message(self) -> &'static str {
         match self {
+            Self::BitBuiltinZeroOperand => "bit-builtin-zero-operand",
             Self::DivisionByZero => "integer-division-by-zero",
             Self::RemainderByZero => "integer-remainder-by-zero",
             Self::SignedOverflow => "signed-integer-overflow",
@@ -119,6 +143,7 @@ impl UbReason {
     #[must_use]
     pub const fn mnemonic(self) -> &'static str {
         match self {
+            Self::BitBuiltinZeroOperand => "bit_builtin_zero_operand",
             Self::DivisionByZero => "division_by_zero",
             Self::RemainderByZero => "remainder_by_zero",
             Self::SignedOverflow => "signed_overflow",
@@ -175,6 +200,13 @@ impl TrapReason {
 /// cannot be confused with ordinary call arguments or results.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Inst {
+    BitOperation {
+        result: Value,
+        operand: Value,
+        op: BitOp,
+    },
+    /// Typed access to an anonymous argument list with linear effect tokens.
+    VaAccess(VariadicAccess),
     /// Opaque assembly with explicit register results and effect tokens.
     Asm(InlineAssembly),
     /// Opaque assembly terminator; results are available on every edge.
@@ -400,6 +432,8 @@ pub enum Inst {
 #[must_use]
 pub fn inst_results(inst: &Inst) -> Vec<&Value> {
     match inst {
+        Inst::BitOperation { result, .. } => vec![result],
+        Inst::VaAccess(access) => access.results(),
         Inst::Asm(assembly) | Inst::AsmGoto { assembly, .. } => assembly.results(),
         Inst::Const(v, _)
         | Inst::Uninitialized(v)
@@ -481,6 +515,8 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
 #[must_use]
 pub fn inst_uses(inst: &Inst) -> Vec<&Value> {
     match inst {
+        Inst::BitOperation { operand, .. } => vec![operand],
+        Inst::VaAccess(access) => vec![&access.list, &access.mem_in, &access.world_in],
         Inst::Asm(assembly) => assembly.operands(),
         Inst::AsmGoto {
             assembly,
@@ -679,6 +715,8 @@ pub struct Function {
 /// A collection of mutually callable EvoIR functions.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Module {
+    /// File-scope assembler text, retained in source order and not interpreted.
+    pub assembly: Vec<String>,
     pub globals: Vec<GlobalObject>,
     pub extern_objects: Vec<ExternalObject>,
     pub declares: Vec<FunctionDeclaration>,
@@ -788,6 +826,7 @@ fn local_effect_summary(function: &Function) -> EffectSummary {
 #[allow(clippy::too_many_lines)]
 fn inst_effect_summary(inst: &Inst) -> EffectSummary {
     match inst {
+        Inst::BitOperation { .. } => EffectSummary::default(),
         Inst::Asm(_) | Inst::AsmGoto { .. } => EffectSummary {
             reads_all: true,
             writes_all: true,
@@ -829,7 +868,7 @@ fn inst_effect_summary(inst: &Inst) -> EffectSummary {
             may_trap: true,
             ..EffectSummary::default()
         },
-        Inst::Copy { .. } => EffectSummary {
+        Inst::Copy { .. } | Inst::VaAccess(_) => EffectSummary {
             reads_all: true,
             writes_all: true,
             may_trap: true,
@@ -1003,6 +1042,16 @@ pub fn validate_ssa(func: &Function) -> Result<(), String> {
                 require_local_value(&local, used, block.id, "instruction")?;
             }
             validate_instruction_types(inst, block.id)?;
+            if matches!(
+                inst,
+                Inst::VaAccess(VariadicAccess {
+                    op: VariadicOp::Start,
+                    ..
+                })
+            ) && !func.variadic
+            {
+                return Err("E3037: va-start-outside-variadic-signature".into());
+            }
             validate_memory_contract(
                 inst,
                 block.insts.get(index + 1),
@@ -1355,6 +1404,7 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                         effect_participants.insert(symbol.as_str());
                     }
                     Inst::Load { .. }
+                    | Inst::VaAccess(_)
                     | Inst::Store { .. }
                     | Inst::Copy { .. }
                     | Inst::Alloca { .. }
@@ -1919,6 +1969,12 @@ impl EffectState {
 
     fn advance(&mut self, inst: &Inst, block: BlockId) -> Result<(), String> {
         let tokens = match inst {
+            Inst::VaAccess(access) => Some((
+                &access.mem_in,
+                &access.world_in,
+                &access.mem_out,
+                &access.world_out,
+            )),
             Inst::Asm(assembly) | Inst::AsmGoto { assembly, .. } => Some((
                 &assembly.mem_in,
                 &assembly.world_in,
@@ -2038,6 +2094,22 @@ impl EffectState {
 
 fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String> {
     match inst {
+        Inst::BitOperation {
+            result,
+            operand,
+            op,
+        } => {
+            expect_bits(&result.ty, "bit operation result", block)?;
+            if result.ty != operand.ty
+                || (*op == BitOp::ByteSwap && !matches!(result.ty, EvoIRType::Bits(16 | 32 | 64)))
+            {
+                return Err(
+                    "bit operation operand/result type mismatch or invalid byte-swap width".into(),
+                );
+            }
+            Ok(())
+        }
+        Inst::VaAccess(access) => access.validate(),
         Inst::Asm(assembly) => assembly.validate(&[]),
         Inst::AsmGoto {
             assembly, labels, ..
@@ -2805,6 +2877,7 @@ pub struct InterpreterOutcome {
 }
 
 struct ExecutionState {
+    argument_lists: evocc_memory::ArgumentLists<(EvoIRType, InternalValue)>,
     memory: MemoryState,
     world: WorldState,
     globals: HashMap<String, Pointer>,
@@ -2830,6 +2903,7 @@ impl ExecutionState {
             max_volatile_events: MAX_VOLATILE_EVENTS,
         });
         Ok(Self {
+            argument_lists: evocc_memory::ArgumentLists::default(),
             memory,
             world,
             globals: HashMap::new(),
@@ -3288,6 +3362,7 @@ struct CallReturnBinding {
 }
 
 struct ModuleFrame {
+    anonymous: Vec<(EvoIRType, InternalValue)>,
     function_index: usize,
     block: BlockId,
     incoming: Vec<InternalValue>,
@@ -3304,11 +3379,13 @@ impl ModuleFrame {
         function_index: usize,
         block: BlockId,
         incoming: Vec<InternalValue>,
+        anonymous: Vec<(EvoIRType, InternalValue)>,
         return_binding: Option<CallReturnBinding>,
         memory_frame: Option<FrameId>,
         memory_scope: Option<ScopeId>,
     ) -> Self {
         Self {
+            anonymous,
             function_index,
             block,
             incoming,
@@ -3449,6 +3526,7 @@ fn interpret_module_in_state(
         entry_index,
         entry_block.id,
         incoming,
+        Vec::new(),
         None,
         entry_frame,
         entry_scope,
@@ -3537,10 +3615,16 @@ fn interpret_module_in_state(
                         &module.functions[callee_index],
                         block_id,
                     )?;
+                    let anonymous = separate_anonymous_arguments(
+                        &module.functions[callee_index],
+                        &args,
+                        &mut call_arguments,
+                    );
                     frames.push(ModuleFrame::new(
                         callee_index,
                         callee_entry.id,
                         call_arguments,
+                        anonymous,
                         Some(CallReturnBinding {
                             results,
                             mem_out,
@@ -3668,10 +3752,16 @@ fn interpret_module_in_state(
                         &module.functions[callee_index],
                         block_id,
                     )?;
+                    let anonymous = separate_anonymous_arguments(
+                        &module.functions[callee_index],
+                        &args,
+                        &mut call_arguments,
+                    );
                     frames.push(ModuleFrame::new(
                         callee_index,
                         callee_entry.id,
                         call_arguments,
+                        anonymous,
                         Some(CallReturnBinding {
                             results,
                             mem_out,
@@ -3680,6 +3770,15 @@ fn interpret_module_in_state(
                         memory_frame,
                         memory_scope,
                     ));
+                } else if let Inst::VaAccess(access) = &instruction {
+                    let frame = &mut frames[frame_index];
+                    execute_variadic_access(
+                        access,
+                        &frame.anonymous,
+                        block_id,
+                        &mut frame.values,
+                        &mut state,
+                    )?;
                 } else {
                     let memory_frame = frames[frame_index].memory_frame;
                     let memory_scope = frames[frame_index].memory_scope;
@@ -3965,6 +4064,57 @@ fn write_internal(values: &mut HashMap<u32, InternalValue>, result: &Value, valu
     values.insert(result.id, value);
 }
 
+fn separate_anonymous_arguments(
+    function: &Function,
+    arguments: &[Value],
+    incoming: &mut Vec<InternalValue>,
+) -> Vec<(EvoIRType, InternalValue)> {
+    let named = function.params.len().saturating_sub(2);
+    if !function.variadic {
+        return Vec::new();
+    }
+    arguments[named..]
+        .iter()
+        .zip(incoming.drain(named..arguments.len()))
+        .map(|(argument, value)| (argument.ty.clone(), value))
+        .collect()
+}
+
+fn execute_variadic_access(
+    access: &VariadicAccess,
+    anonymous: &[(EvoIRType, InternalValue)],
+    block: BlockId,
+    values: &mut HashMap<u32, InternalValue>,
+    state: &mut ExecutionState,
+) -> Result<(), InterpreterError> {
+    let fault = |error| InterpreterError::MemoryAccess { block, error };
+    let _ = read_value(values, &access.mem_in, block)?;
+    let _ = read_value(values, &access.world_in, block)?;
+    let list = read_pointer(values, &access.list, block)?;
+    let identity = match &access.op {
+        VariadicOp::Start => Some(state.argument_lists.start(anonymous.to_vec())),
+        VariadicOp::End => None,
+        VariadicOp::Arg(result) => {
+            let identity = state.memory.argument_list(list).map_err(fault)?;
+            let (ty, value) = state.argument_lists.read(identity).map_err(fault)?;
+            if ty != &result.ty {
+                return Err(fault(MemoryFault::InvalidArgumentList));
+            }
+            write_internal(values, result, *value);
+            Some(state.argument_lists.advance(identity).map_err(fault)?)
+        }
+    };
+    state.memory = state
+        .memory
+        .with_argument_list(list, identity)
+        .map_err(fault)?;
+    let mem = state.fresh_token()?;
+    let world = state.fresh_token()?;
+    write_value(values, &access.mem_out, mem);
+    write_value(values, &access.world_out, world);
+    Ok(())
+}
+
 fn execute_instruction(
     inst: &Inst,
     block: BlockId,
@@ -3974,6 +4124,24 @@ fn execute_instruction(
     memory_scope: Option<ScopeId>,
 ) -> Result<(), InterpreterError> {
     match inst {
+        Inst::VaAccess(access) => execute_variadic_access(access, &[], block, values, state)?,
+        Inst::BitOperation {
+            result,
+            operand,
+            op,
+        } => {
+            let raw = u128::from(read_value(values, operand, block)?);
+            let EvoIRType::Bits(width) = result.ty else {
+                unreachable!("validated bit type")
+            };
+            let result_bits = match op {
+                BitOp::LeadingZeros => u64::from(raw.leading_zeros() - (128 - u32::from(width))),
+                BitOp::TrailingZeros => u64::from(raw.trailing_zeros().min(u32::from(width))),
+                BitOp::Population => u64::from(raw.count_ones()),
+                BitOp::ByteSwap => (raw.swap_bytes() >> (128 - width)) as u64,
+            };
+            write_value(values, result, result_bits);
+        }
         Inst::Const(result, immediate) => {
             let kernel = IntegerKernel::for_value(result, block)?;
             write_value(values, result, kernel.normalize(u128::from(*immediate)));
@@ -5064,6 +5232,12 @@ fn remap(value: &mut Value, aliases: &HashMap<u32, Value>) {
 #[allow(clippy::too_many_lines)]
 pub fn remap_inst_uses(inst: &mut Inst, aliases: &HashMap<u32, Value>) {
     match inst {
+        Inst::BitOperation { operand, .. } => remap(operand, aliases),
+        Inst::VaAccess(access) => {
+            remap(&mut access.list, aliases);
+            remap(&mut access.mem_in, aliases);
+            remap(&mut access.world_in, aliases);
+        }
         Inst::Asm(assembly) => {
             for value in assembly.operands_mut() {
                 remap(value, aliases);
@@ -5979,6 +6153,7 @@ mod tests {
             }],
         };
         let mut module = Module {
+            assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
             globals: vec![],
@@ -6051,6 +6226,7 @@ mod tests {
             }],
         };
         let mut module = Module {
+            assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
             globals: vec![],
@@ -6167,6 +6343,7 @@ mod tests {
         };
         *callee = "countdown".to_owned();
         let mut module = Module {
+            assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
             globals: vec![],
@@ -7117,6 +7294,7 @@ mod tests {
 
         let module_outcome = interpret_module(
             &Module {
+                assembly: Vec::new(),
                 extern_objects: Vec::new(),
                 declares: Vec::new(),
                 globals: vec![],
@@ -7144,6 +7322,7 @@ mod tests {
         assert_eq!(
             interpret_module(
                 &Module {
+                    assembly: Vec::new(),
                     extern_objects: Vec::new(),
                     declares: Vec::new(),
                     globals: vec![],
@@ -7231,6 +7410,7 @@ mod tests {
 
         let module_outcome = interpret_module(
             &Module {
+                assembly: Vec::new(),
                 extern_objects: Vec::new(),
                 declares: Vec::new(),
                 globals: vec![],
@@ -7283,6 +7463,7 @@ mod tests {
         assert_eq!(function_error.message(), "read-of-uninitialized-object");
 
         let module = Module {
+            assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
             globals: vec![],
@@ -7653,6 +7834,7 @@ mod tests {
 
         let module_error = interpret_module(
             &Module {
+                assembly: Vec::new(),
                 extern_objects: Vec::new(),
                 declares: Vec::new(),
                 globals: vec![],

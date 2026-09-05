@@ -57,12 +57,6 @@ pub enum LowerError {
         span: SourceSpan,
         feature: &'static str,
     },
-    CheckedArithmetic {
-        span: SourceSpan,
-    },
-    BitBuiltin {
-        span: SourceSpan,
-    },
     ReturnAddress {
         span: SourceSpan,
     },
@@ -129,10 +123,6 @@ impl fmt::Display for LowerError {
             Self::UnsupportedType { feature, .. }
             | Self::UnsupportedExpression { feature, .. }
             | Self::UnsupportedStatement { feature, .. } => formatter.write_str(feature),
-            Self::CheckedArithmetic { .. } => {
-                formatter.write_str("not-lowered: checked-arithmetic")
-            }
-            Self::BitBuiltin { .. } => formatter.write_str("not-lowered: bit-builtin"),
             Self::ReturnAddress { .. } => formatter.write_str("not-lowered: return-address"),
             Self::FrameAddress { .. } => formatter.write_str("not-lowered: frame-address"),
             Self::PointerDifference { .. } => {
@@ -174,10 +164,8 @@ impl LowerError {
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
-            Self::CheckedArithmetic { .. } => "E3020",
             Self::Asm { .. } => "E3021",
             Self::AsmOperand { .. } => "E3021",
-            Self::BitBuiltin { .. } => "E3023",
             Self::ReturnAddress { .. } => "E3025",
             Self::StaticRelocation { .. } => "E3026",
             Self::ComputedGoto { .. } => "E3029",
@@ -204,8 +192,6 @@ impl LowerError {
             | Self::UnsupportedType { span, .. }
             | Self::UnsupportedExpression { span, .. }
             | Self::UnsupportedStatement { span, .. }
-            | Self::CheckedArithmetic { span }
-            | Self::BitBuiltin { span }
             | Self::ReturnAddress { span }
             | Self::FrameAddress { span }
             | Self::PointerDifference { span }
@@ -552,6 +538,13 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
         );
     }
     let mut module = Module {
+        assembly: unit
+            .iter()
+            .filter_map(|decl| match decl {
+                CHirDecl::Asm(assembly) => Some(assembly.template.clone()),
+                _ => None,
+            })
+            .collect(),
         globals,
         extern_objects: extern_objects.into_values().collect(),
         declares: declares.into_values().collect(),
@@ -580,7 +573,12 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
         if let CHirDecl::Object(object) = declaration {
             let is_aggregate = matches!(
                 unit.types().get(object.ty).map(|ty| &ty.kind),
-                Some(TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_))
+                Some(
+                    TypeKind::Array { .. }
+                        | TypeKind::Struct(_)
+                        | TypeKind::Union(_)
+                        | TypeKind::BuiltinVaList
+                )
             );
             let is_qualified_memory = unit
                 .types()
@@ -611,7 +609,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                 for parameter in parameters {
                     if matches!(
                         unit.types().get(parameter.ty).map(|ty| &ty.kind),
-                        Some(TypeKind::Struct(_) | TypeKind::Union(_))
+                        Some(TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList)
                     ) {
                         if let Some(symbol) = parameter.symbol {
                             out.insert(symbol);
@@ -1268,11 +1266,7 @@ fn prevalidate_unit_for_lowering(
     })?;
     for declaration in unit.iter() {
         match declaration {
-            CHirDecl::Asm(assembly) => {
-                return Err(LowerError::Asm {
-                    span: assembly.span,
-                });
-            }
+            CHirDecl::Asm(_) => {}
             CHirDecl::Function(function) => {
                 if let Some(body) = function.body {
                     let mut labels = BTreeMap::new();
@@ -1595,11 +1589,23 @@ fn prevalidate_expr_for_lowering(
             }
             Ok(())
         }
-        CHirExpr::CheckedArithmetic { span, .. } => {
-            Err(LowerError::CheckedArithmetic { span: *span })
+        CHirExpr::CheckedArithmetic {
+            lhs, rhs, target, ..
+        } => {
+            prevalidate_expr_for_lowering(unit, lhs, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, rhs, global_register_symbols)?;
+            prevalidate_expr_for_lowering(unit, target, global_register_symbols)
         }
-        CHirExpr::BitBuiltin { span, .. } => Err(LowerError::BitBuiltin { span: *span }),
-        CHirExpr::BuiltinVarArgs { span, .. } => Err(LowerError::VarArgs { span: *span }),
+        CHirExpr::BitBuiltin { operand, .. } => {
+            prevalidate_expr_for_lowering(unit, operand, global_register_symbols)
+        }
+        CHirExpr::BuiltinVarArgs { first, second, .. } => {
+            prevalidate_expr_for_lowering(unit, first, global_register_symbols)?;
+            if let Some(second) = second {
+                prevalidate_expr_for_lowering(unit, second, global_register_symbols)?;
+            }
+            Ok(())
+        }
         CHirExpr::BuiltinReturnAddress { span, .. } => {
             Err(LowerError::ReturnAddress { span: *span })
         }
@@ -1984,12 +1990,13 @@ fn function_value_type(
                 integer,
             })
         }
-        Some(TypeKind::Struct(_) | TypeKind::Union(_)) => Ok(FunctionValueType {
-            source: ty,
-            ir: EvoIRType::Ptr(AddressSpace::Generic),
-            integer: CIntegerType::ULONG,
-        }),
-        Some(TypeKind::BuiltinVaList) => Err(LowerError::VarArgs { span }),
+        Some(TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList) => {
+            Ok(FunctionValueType {
+                source: ty,
+                ir: EvoIRType::Ptr(AddressSpace::Generic),
+                integer: CIntegerType::ULONG,
+            })
+        }
         _ => Err(LowerError::UnsupportedType {
             ty,
             span,
@@ -2072,7 +2079,7 @@ fn function_pointer_ir_type(
 fn is_aggregate_type(types: &TypeInterner, ty: TypeId) -> bool {
     matches!(
         types.get(ty).map(|canonical| &canonical.kind),
-        Some(TypeKind::Struct(_) | TypeKind::Union(_))
+        Some(TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList)
     )
 }
 
@@ -2272,6 +2279,28 @@ fn written_declarator_matches(
     initialized_object: bool,
     adjusted_parameter: bool,
 ) -> bool {
+    // Undo only the outer function-to-pointer parameter adjustment.
+    if adjusted_parameter
+        && (matches!(
+            written.layers.first(),
+            Some(WrittenDeclaratorLayer::Function { .. })
+        ) || (written.layers.is_empty()
+            && types
+                .get(terminal)
+                .is_some_and(|ty| matches!(ty.kind, TypeKind::Function { .. }))))
+    {
+        if let Some(canonical) = types.get(current) {
+            if let TypeKind::Pointer(pointee) = canonical.kind {
+                if canonical.qualifiers == evocc_types::Qualifiers::default()
+                    && types
+                        .get(pointee)
+                        .is_some_and(|ty| matches!(ty.kind, TypeKind::Function { .. }))
+                {
+                    current = pointee;
+                }
+            }
+        }
+    }
     if let Some(syntax) = function_syntax {
         if !matches!(
             written.layers.first(),
@@ -2355,12 +2384,6 @@ fn validate_object_declaration_for_lowering(
     unit: &CHirUnit<'_>,
     object: &ObjectDecl<'_>,
 ) -> Result<(), LowerError> {
-    if matches!(
-        unit.types().get(object.ty).map(|canonical| &canonical.kind),
-        Some(TypeKind::BuiltinVaList)
-    ) {
-        return Err(LowerError::VarArgs { span: object.span });
-    }
     let symbol = unit
         .symbols()
         .symbol(object.symbol)
@@ -2931,7 +2954,7 @@ impl<'a> FunctionLowerer<'a> {
         Ok(Some(target))
     }
 
-    fn assembly_temporary(&mut self, value: Value, state: &mut State) -> EnvKey {
+    fn retain_temporary(&mut self, value: Value, state: &mut State) -> EnvKey {
         let key = EnvKey::Temporary(self.next_temporary);
         self.next_temporary += 1;
         state.env.insert(
@@ -2994,7 +3017,7 @@ impl<'a> FunctionLowerer<'a> {
                     .types()
                     .get(ty)
                     .is_some_and(|ty| ty.qualifiers.is_volatile);
-                let address_key = self.assembly_temporary(address.clone(), &mut state);
+                let address_key = self.retain_temporary(address.clone(), &mut state);
                 temporary_keys.push(address_key);
                 result_types.push(ir);
                 writebacks.push((address_key, ty, integer, volatile));
@@ -3014,7 +3037,7 @@ impl<'a> FunctionLowerer<'a> {
             };
             let key = incoming
                 .as_ref()
-                .map(|value| self.assembly_temporary(value.clone(), &mut state));
+                .map(|value| self.retain_temporary(value.clone(), &mut state));
             temporary_keys.extend(key);
             incoming_keys.push(key);
             outputs.push(AssemblyOutput {
@@ -3062,7 +3085,7 @@ impl<'a> FunctionLowerer<'a> {
             } else {
                 self.lower_expr(operand.expression, &mut state)?.value
             };
-            let key = self.assembly_temporary(value.clone(), &mut state);
+            let key = self.retain_temporary(value.clone(), &mut state);
             temporary_keys.push(key);
             input_keys.push(key);
             inputs.push(AssemblyInput {
@@ -3114,7 +3137,7 @@ impl<'a> FunctionLowerer<'a> {
         );
         let mut result_keys = Vec::new();
         for result in &assembly.results {
-            let key = self.assembly_temporary(result.clone(), &mut state);
+            let key = self.retain_temporary(result.clone(), &mut state);
             temporary_keys.push(key);
             result_keys.push(key);
         }
@@ -5743,7 +5766,12 @@ impl<'a> FunctionLowerer<'a> {
                     let address = self.object_address(*symbol, *span, state)?;
                     if matches!(
                         self.unit.types().get(facts.ty()).map(|ty| &ty.kind),
-                        Some(TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_))
+                        Some(
+                            TypeKind::Array { .. }
+                                | TypeKind::Struct(_)
+                                | TypeKind::Union(_)
+                                | TypeKind::BuiltinVaList
+                        )
                     ) {
                         return Ok(ExprValue {
                             value: address,
@@ -5776,11 +5804,29 @@ impl<'a> FunctionLowerer<'a> {
                     span: *span,
                     feature: "void call used as a scalar expression",
                 }),
-            CHirExpr::CheckedArithmetic { span, .. } => {
-                Err(LowerError::CheckedArithmetic { span: *span })
-            }
-            CHirExpr::BitBuiltin { span, .. } => Err(LowerError::BitBuiltin { span: *span }),
-            CHirExpr::BuiltinVarArgs { span, .. } => Err(LowerError::VarArgs { span: *span }),
+            CHirExpr::CheckedArithmetic {
+                op,
+                lhs,
+                rhs,
+                target,
+                target_ty,
+                span,
+                ..
+            } => self.lower_checked(*op, lhs, rhs, target, *target_ty, *span, state),
+            CHirExpr::BitBuiltin { op, operand, .. } => self.lower_bit(*op, operand, state),
+            CHirExpr::BuiltinVarArgs {
+                op,
+                first,
+                second,
+                requested_ty,
+                span,
+                ..
+            } => self
+                .lower_varargs(*op, first, *second, *requested_ty, *span, state)?
+                .ok_or(LowerError::UnsupportedExpression {
+                    span: *span,
+                    feature: "void variadic operation used as a value",
+                }),
             CHirExpr::BuiltinReturnAddress { span, .. } => {
                 Err(LowerError::ReturnAddress { span: *span })
             }
@@ -5807,7 +5853,12 @@ impl<'a> FunctionLowerer<'a> {
                 let address = self.lower_compound_literal_address(expression, state)?;
                 if matches!(
                     self.unit.types().get(*ty).map(|canonical| &canonical.kind),
-                    Some(TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_))
+                    Some(
+                        TypeKind::Array { .. }
+                            | TypeKind::Struct(_)
+                            | TypeKind::Union(_)
+                            | TypeKind::BuiltinVaList
+                    )
                 ) {
                     Ok(ExprValue {
                         value: address,
@@ -6695,6 +6746,233 @@ impl<'a> FunctionLowerer<'a> {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn lower_checked(
+        &mut self,
+        op: evocc_chir::CheckedArithmeticOp,
+        lhs: &'a CHirExpr<'a>,
+        rhs: &'a CHirExpr<'a>,
+        target: &'a CHirExpr<'a>,
+        target_ty: TypeId,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let left = self.lower_expr(lhs, state)?;
+        let left_key = self.retain_temporary(left.value, state);
+        let right = self.lower_expr(rhs, state)?;
+        let right_key = self.retain_temporary(right.value, state);
+        let address = self.lower_expr(target, state)?.value;
+        let left_width = u16::from(left.integer.bits()) + u16::from(!left.integer.is_signed());
+        let right_width = u16::from(right.integer.bits()) + u16::from(!right.integer.is_signed());
+        let required = match op {
+            evocc_chir::CheckedArithmeticOp::Mul => left_width + right_width,
+            _ => left_width.max(right_width) + 1,
+        };
+        let exact_type = match required {
+            0..=32 => CIntegerType::INT,
+            33..=64 => CIntegerType::LONG,
+            65..=128 => CIntegerType::INT128,
+            _ => {
+                return Err(LowerError::UnsupportedExpression {
+                    span,
+                    feature: "checked arithmetic requires more than 128 exact bits",
+                })
+            }
+        };
+        let left_value = state
+            .env
+            .remove(&left_key)
+            .expect("retained checked operand")
+            .value;
+        let right_value = state
+            .env
+            .remove(&right_key)
+            .expect("retained checked operand")
+            .value;
+        let left = self.cast(
+            ExprValue {
+                value: left_value,
+                integer: left.integer,
+            },
+            exact_type,
+            state,
+        )?;
+        let right = self.cast(
+            ExprValue {
+                value: right_value,
+                integer: right.integer,
+            },
+            exact_type,
+            state,
+        )?;
+        let exact = self.fresh_value(bits(exact_type));
+        self.emit(
+            state,
+            match op {
+                evocc_chir::CheckedArithmeticOp::Add => {
+                    Inst::Add(exact.clone(), left.value, right.value)
+                }
+                evocc_chir::CheckedArithmeticOp::Sub => {
+                    Inst::Sub(exact.clone(), left.value, right.value)
+                }
+                evocc_chir::CheckedArithmeticOp::Mul => {
+                    Inst::Mul(exact.clone(), left.value, right.value)
+                }
+            },
+        )?;
+        let destination = canonical_integer(self.unit.types(), self.target, target_ty, span)?;
+        let stored = self.cast(
+            ExprValue {
+                value: exact.clone(),
+                integer: exact_type,
+            },
+            destination,
+            state,
+        )?;
+        let round_trip = self.cast(stored.clone(), exact_type, state)?;
+        let mut result = self.fresh_value(EvoIRType::Bits(1));
+        self.emit(
+            state,
+            Inst::ICmp(result.clone(), CmpOp::Ne, exact.clone(), round_trip.value),
+        )?;
+        if !destination.is_signed() {
+            let zero = self.constant(state, exact_type, 0)?;
+            let negative = self.fresh_value(EvoIRType::Bits(1));
+            self.emit(
+                state,
+                Inst::ICmp(negative.clone(), CmpOp::SLt, exact, zero.value),
+            )?;
+            let overflow = self.fresh_value(EvoIRType::Bits(1));
+            self.emit(state, Inst::Or(overflow.clone(), result, negative))?;
+            result = overflow;
+        }
+        let volatile = self
+            .unit
+            .types()
+            .get(target_ty)
+            .is_some_and(|ty| ty.qualifiers.is_volatile);
+        self.emit_memory_store(address, stored, target_ty, volatile, span, state)?;
+        Ok(ExprValue {
+            value: result,
+            integer: CIntegerType::BOOL,
+        })
+    }
+
+    fn lower_bit(
+        &mut self,
+        op: evocc_chir::integer::BitBuiltinOp,
+        operand: &'a CHirExpr<'a>,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        use evocc_chir::integer::BitBuiltinOp;
+        let input = self.lower_expr(operand, state)?;
+        let total_op = match op {
+            BitBuiltinOp::CountLeadingZeros => evocc_evoir::BitOp::LeadingZeros,
+            BitBuiltinOp::CountTrailingZeros | BitBuiltinOp::FindFirstSet => {
+                evocc_evoir::BitOp::TrailingZeros
+            }
+            BitBuiltinOp::PopulationCount => evocc_evoir::BitOp::Population,
+            BitBuiltinOp::ByteSwap => evocc_evoir::BitOp::ByteSwap,
+        };
+        let zero = self.constant(state, input.integer, 0)?;
+        let nonzero = self.fresh_value(EvoIRType::Bits(1));
+        self.emit(
+            state,
+            Inst::ICmp(nonzero.clone(), CmpOp::Ne, input.value.clone(), zero.value),
+        )?;
+        if matches!(
+            op,
+            BitBuiltinOp::CountLeadingZeros | BitBuiltinOp::CountTrailingZeros
+        ) {
+            self.emit(
+                state,
+                Inst::UbAssume(nonzero.clone(), UbReason::BitBuiltinZeroOperand),
+            )?;
+        }
+        let counted = self.fresh_value(input.value.ty.clone());
+        self.emit(
+            state,
+            Inst::BitOperation {
+                result: counted.clone(),
+                operand: input.value,
+                op: total_op,
+            },
+        )?;
+        let mut counted = ExprValue {
+            value: counted,
+            integer: input.integer,
+        };
+        if op == BitBuiltinOp::FindFirstSet {
+            let one = self.constant(state, input.integer, 1)?;
+            let incremented = self.fresh_value(counted.value.ty.clone());
+            self.emit(
+                state,
+                Inst::Add(incremented.clone(), counted.value, one.value),
+            )?;
+            counted.value = incremented;
+        }
+        let result_type = if op == BitBuiltinOp::ByteSwap {
+            input.integer
+        } else {
+            CIntegerType::INT
+        };
+        let counted = self.cast(counted, result_type, state)?;
+        if op != BitBuiltinOp::FindFirstSet {
+            return Ok(counted);
+        }
+        let zero = self.constant(state, CIntegerType::INT, 0)?;
+        let temporary = self.retain_temporary(counted.value, state);
+        let symbols = state
+            .env
+            .keys()
+            .filter_map(|key| match key {
+                EnvKey::Local(symbol) => Some(*symbol),
+                _ => None,
+            })
+            .collect();
+        let keys = self.keys_for(state, &symbols, &[]);
+        let merge = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
+        let nonzero_args = self.edge_values(state, &keys)?;
+        let mut zero_args = nonzero_args.clone();
+        zero_args[keys
+            .iter()
+            .position(|key| *key == temporary)
+            .expect("result edge parameter")] = zero.value;
+        self.terminate(
+            state,
+            Inst::CondBr(nonzero, merge.block, nonzero_args, merge.block, zero_args),
+        )?;
+        *state = merge;
+        Ok(ExprValue {
+            value: state
+                .env
+                .remove(&temporary)
+                .expect("merged bit result")
+                .value,
+            integer: CIntegerType::INT,
+        })
+    }
+
+    fn common_branch_values(
+        &mut self,
+        left: ExprValue,
+        right: ExprValue,
+        left_state: &State,
+        right_state: &State,
+    ) -> Result<(ExprValue, ExprValue, CIntegerType), LowerError> {
+        if left.value.ty == right.value.ty
+            && matches!(left.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. })
+        {
+            return Ok((left, right, CIntegerType::ULONG));
+        }
+        let common = arithmetic_common_type(left.integer, right.integer);
+        Ok((
+            self.cast(left, common, left_state)?,
+            self.cast(right, common, right_state)?,
+            common,
+        ))
+    }
+
     fn lower_ternary(
         &mut self,
         condition: &'a CHirExpr<'a>,
@@ -6728,9 +7006,8 @@ impl<'a> FunctionLowerer<'a> {
         )?;
         let then_value = self.lower_expr(then_expression, &mut then_state)?;
         let else_value = self.lower_expr(else_expression, &mut else_state)?;
-        let common = arithmetic_common_type(then_value.integer, else_value.integer);
-        let then_value = self.cast(then_value, common, &then_state)?;
-        let else_value = self.cast(else_value, common, &else_state)?;
+        let (then_value, else_value, common) =
+            self.common_branch_values(then_value, else_value, &then_state, &else_state)?;
         let temporary = EnvKey::Temporary(self.next_temporary);
         self.next_temporary += 1;
         then_state.env.insert(
@@ -6856,9 +7133,8 @@ impl<'a> FunctionLowerer<'a> {
                 })?,
         };
         let else_value = self.lower_expr(else_expression, &mut else_state)?;
-        let common = arithmetic_common_type(then_value.integer, else_value.integer);
-        let then_value = self.cast(then_value, common, &then_state)?;
-        let else_value = self.cast(else_value, common, &else_state)?;
+        let (then_value, else_value, common) =
+            self.common_branch_values(then_value, else_value, &then_state, &else_state)?;
         let result_key = EnvKey::Temporary(self.next_temporary);
         self.next_temporary += 1;
         then_state.env.insert(
@@ -7160,6 +7436,16 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<(), LowerError> {
         match expression {
+            CHirExpr::BuiltinVarArgs {
+                op,
+                first,
+                second,
+                requested_ty,
+                span,
+                ..
+            } => {
+                self.lower_varargs(*op, first, *second, *requested_ty, *span, state)?;
+            }
             CHirExpr::Call(callee, arguments, span) => {
                 let _ = self.emit_call(callee, arguments, *span, state)?;
             }
@@ -7181,6 +7467,81 @@ impl<'a> FunctionLowerer<'a> {
             }
         }
         Ok(())
+    }
+
+    fn lower_varargs(
+        &mut self,
+        op: evocc_chir::VarArgsBuiltinOp,
+        first: &'a CHirExpr<'a>,
+        second: Option<&'a CHirExpr<'a>>,
+        requested_ty: Option<TypeId>,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<Option<ExprValue>, LowerError> {
+        use evocc_chir::VarArgsBuiltinOp;
+        use evocc_evoir::{VariadicAccess, VariadicOp};
+        let list = self.lower_expr(first, state)?.value;
+        if op == VarArgsBuiltinOp::Copy {
+            let source = second.ok_or(LowerError::VarArgs { span })?;
+            let source = self.lower_expr(source, state)?.value;
+            let mem_in = self.token(state, EnvKey::Memory)?.value;
+            let world_in = self.token(state, EnvKey::World)?.value;
+            let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+            let world_out = self.fresh_value(EvoIRType::World);
+            self.emit(
+                state,
+                Inst::Copy {
+                    destination: list,
+                    source,
+                    mem_in,
+                    world_in,
+                    mem_out: mem_out.clone(),
+                    world_out: world_out.clone(),
+                    layout: AccessLayout {
+                        size_bytes: 32,
+                        align_bytes: 8,
+                    },
+                },
+            )?;
+            self.replace_effect_tokens(state, mem_out, Some(world_out));
+            return Ok(None);
+        }
+        let result = if op == VarArgsBuiltinOp::Arg {
+            let ty = requested_ty.ok_or(LowerError::VarArgs { span })?;
+            if self.is_aggregate_type(ty) {
+                return Err(LowerError::VarArgs { span });
+            }
+            let value_type = function_value_type(self.unit.types(), self.target, ty, span)?;
+            Some(ExprValue {
+                value: self.fresh_value(value_type.ir),
+                integer: value_type.integer,
+            })
+        } else {
+            None
+        };
+        let op = match op {
+            VarArgsBuiltinOp::Start => VariadicOp::Start,
+            VarArgsBuiltinOp::End => VariadicOp::End,
+            VarArgsBuiltinOp::Arg => VariadicOp::Arg(result.as_ref().unwrap().value.clone()),
+            VarArgsBuiltinOp::Copy => unreachable!("copy returned above"),
+        };
+        let mem_in = self.token(state, EnvKey::Memory)?.value;
+        let world_in = self.token(state, EnvKey::World)?.value;
+        let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+        let world_out = self.fresh_value(EvoIRType::World);
+        self.emit(
+            state,
+            Inst::VaAccess(VariadicAccess {
+                op,
+                list,
+                mem_in,
+                world_in,
+                mem_out: mem_out.clone(),
+                world_out: world_out.clone(),
+            }),
+        )?;
+        self.replace_effect_tokens(state, mem_out, Some(world_out));
+        Ok(result)
     }
 
     fn lower_assignment(
@@ -9146,6 +9507,22 @@ fn remap_inst(
 #[allow(clippy::too_many_lines)]
 fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
     match instruction {
+        Inst::BitOperation {
+            result, operand, ..
+        } => vec![result, operand],
+        Inst::VaAccess(access) => {
+            let mut values = vec![
+                &mut access.list,
+                &mut access.mem_in,
+                &mut access.world_in,
+                &mut access.mem_out,
+                &mut access.world_out,
+            ];
+            if let evocc_evoir::VariadicOp::Arg(result) = &mut access.op {
+                values.push(result);
+            }
+            values
+        }
         Inst::Asm(assembly) => assembly.values_mut(),
         Inst::AsmGoto {
             assembly,
