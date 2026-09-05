@@ -69,7 +69,8 @@ fn the_persistent_equality_state_ingests_a_wide_constant_without_aborting() {
     // environment before any allowlist runs.
     for text in [WIDE_CONSTANT, WIDE_ARITHMETIC] {
         let source = module(text);
-        let mut state = EqualityState::for_module(&source).expect("a canonical module opens a state");
+        let mut state =
+            EqualityState::for_module(&source).expect("a canonical module opens a state");
         state
             .ingest_module(&source)
             .expect("a wide constant is data the state may hold");
@@ -83,7 +84,8 @@ fn the_certified_path_produces_a_certificate_the_checker_replays() {
     // checker never sees a `bits<128>` sort.
     for text in [WIDE_CONSTANT, WIDE_ARITHMETIC] {
         let source = module(text);
-        let mut state = EqualityState::for_module(&source).expect("a canonical module opens a state");
+        let mut state =
+            EqualityState::for_module(&source).expect("a canonical module opens a state");
         let outcome = optimize_scalar_module_certified_persistent(
             &source,
             &mut state,
