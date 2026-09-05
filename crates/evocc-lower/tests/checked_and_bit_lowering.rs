@@ -1,0 +1,91 @@
+use evocc_chir::{CHirDecl, CHirUnit};
+use evocc_common::{Arena, FileId};
+use evocc_lex::Lexer;
+use evocc_parser::Parser;
+use evocc_types::{EvoIRType, Region, TargetDataLayout};
+
+fn parse<'a>(source: &str, arena: &'a Arena) -> CHirUnit<'a> {
+    let file = FileId::new(45_005);
+    let mut lexer = Lexer::new(file, source);
+    let tokens = std::iter::from_fn(|| lexer.next()).collect();
+    let mut parser = Parser::new(tokens, file, source);
+    let unit = parser.parse_translation_unit_in(arena);
+    assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+    unit
+}
+
+fn lowered(source: &str, expected: u128, forms: &[&str], execute_ir: bool) {
+    let arena = Arena::default();
+    let unit = parse(source, &arena);
+    let module = evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+        .expect("specified builtin lowers");
+    let text = evocc_evoir::render_module(&module);
+    for form in forms {
+        assert!(text.contains(form), "missing {form}: {text}");
+    }
+    assert_eq!(
+        evocc_evoir::render_module(&evocc_evoir::parse_section9_module(text.as_bytes()).unwrap()),
+        text
+    );
+    let main = unit
+        .iter()
+        .find_map(|decl| match decl {
+            CHirDecl::Function(f) if f.name.spelling == "main" => Some(f.symbol),
+            _ => None,
+        })
+        .unwrap();
+    let result = evocc_chir::interp::interpret_scalar_function(
+        &unit,
+        main,
+        evocc_chir::interp::InterpreterLimits::new(100_000),
+    )
+    .unwrap();
+    assert_eq!(result.return_value.unwrap().raw_bits, expected);
+    if execute_ir {
+        let result = evocc_evoir::interpret_module(
+            &module,
+            "main",
+            &[
+                evocc_evoir::RuntimeValue::new(EvoIRType::Mem(Region::All), 0),
+                evocc_evoir::RuntimeValue::new(EvoIRType::World, 0),
+            ],
+            evocc_evoir::InterpreterLimits::new(100_000),
+        )
+        .unwrap();
+        assert_eq!(u128::from(result.return_values[0].raw_bits), expected);
+    }
+}
+
+#[test]
+fn file_assembly_is_preserved_and_not_executed() {
+    lowered(
+        "asm(\".globl named\\n\"); int main(void){return 7;}",
+        7,
+        &["asm \".globl named\\x0a\""],
+        true,
+    );
+}
+
+#[test]
+fn checked_arithmetic_uses_exact_width_and_round_trip_representability() {
+    // The wide IR executor is delivered separately; these fixtures pin C-HIR
+    // values and the actual lowering, without pretending to execute it here.
+    for (source, expected) in [
+        ("long main(void){long r; int o=__builtin_mul_overflow(70000L,70000L,&r); return o ? 0 : r;}", 4900000000),
+        ("int main(void){unsigned long r; return __builtin_mul_overflow(~0ul,2,&r);}", 1),
+        ("int main(void){unsigned char r; int o=__builtin_add_overflow(200,100,&r); return 100*o+r;}", 144),
+        ("long main(void){long r; int o=__builtin_sub_overflow(4000000000u,-1,&r); return o ? 0 : r;}", 4000000001),
+    ] { lowered(source, expected, &["icmp.ne", "store"], false); }
+}
+
+#[test]
+fn bit_builtins_lower_to_total_operations_and_explicit_zero_obligations() {
+    lowered("int f(unsigned x){return __builtin_clz(x)+__builtin_ctz(x)+__builtin_popcount(x);} int main(void){return f(8);}", 32, &["ctlz.bits<32>", "cttz.bits<32>", "ctpop.bits<32>", "ub.assume.bit_builtin_zero_operand"], true);
+    lowered(
+        "int f(unsigned x){return __builtin_ffs(x);} int main(void){return f(0)+f(16);}",
+        5,
+        &["cttz.bits<32>", "cond_br"],
+        true,
+    );
+    lowered("unsigned f(unsigned x){return __builtin_bswap32(x);} unsigned main(void){return f(0x11223344);}", 0x44332211, &["bswap.bits<32>"], true);
+}
