@@ -14,7 +14,8 @@
 
 use evocc_evoir::parse_section9_module;
 use evocc_mir::{
-    allocate, compile_module, compile_module_for, lower_module, out_of_ssa, validate_module,
+    allocate, compile_module_for, lower_module, out_of_ssa, validate_module,
+    MTerm,
     verify_allocation, MInst, RegClass, Target,
 };
 
@@ -64,7 +65,11 @@ fn mnemonics(module: &evocc_mir::MModule) -> Vec<String> {
                     MInst::Msub { .. } => "msub".to_owned(),
                     MInst::Extend { op, .. } => op.mnemonic().to_owned(),
                     MInst::Bfx { signed, .. } => {
-                        if *signed { "sbfx".to_owned() } else { "ubfx".to_owned() }
+                        if *signed {
+                            "sbfx".to_owned()
+                        } else {
+                            "ubfx".to_owned()
+                        }
                     }
                     MInst::Cmp { .. } => "cmp".to_owned(),
                     MInst::CmpImm { .. } => "cmp#".to_owned(),
@@ -74,6 +79,10 @@ fn mnemonics(module: &evocc_mir::MModule) -> Vec<String> {
                     MInst::Store { kind, .. } => kind.mnemonic().to_owned(),
                     MInst::Ldp { .. } => "ldp".to_owned(),
                     MInst::Stp { .. } => "stp".to_owned(),
+                    MInst::CarryBinary { op, .. } => op.mnemonic().to_owned(),
+                    MInst::SubCarryFlags { .. } => "sbcs".to_owned(),
+                    MInst::TstImm { .. } => "tst".to_owned(),
+                    MInst::Madd { .. } => "madd".to_owned(),
                     other => format!("{other:?}")
                         .split_whitespace()
                         .next()
@@ -93,7 +102,10 @@ fn every_register_is_narrow(module: &evocc_mir::MModule) {
         for block in &function.blocks {
             for reg in block.args.iter().copied() {
                 assert!(
-                    matches!(reg.class, RegClass::Gpr32 | RegClass::Gpr64 | RegClass::Flags),
+                    matches!(
+                        reg.class,
+                        RegClass::Gpr32 | RegClass::Gpr64 | RegClass::Flags
+                    ),
                     "a block argument escaped the pair representation: {reg}"
                 );
             }
@@ -423,13 +435,52 @@ fn widths_between_sixty_five_and_one_hundred_and_twenty_seven_stay_e4003() {
 // Section 6: 128-bit arguments and results
 // ---------------------------------------------------------------------------
 
-fn assembly(text: &str, target: Target) -> String {
-    let module = parse_section9_module(text.as_bytes()).expect("canonical EvoIR");
-    match target {
-        Target::Darwin => compile_module(&module),
-        Target::Linux => compile_module_for(target, &module, &|_| true),
+/// The number of argument positions a lowered function's entry block holds.
+///
+/// Section 7 pins each by its position, so the count is what says which
+/// register the convention assigned: a skipped register is a real position.
+fn argument_positions(text: &str) -> usize {
+    let module = lower(text);
+    module.functions[0].blocks[0].args.len()
+}
+
+/// One function summing a `bits<64>` argument with both halves of a
+/// `bits<128>` one, so that every register the convention names is read.
+fn sums_both_halves(before: &[&str]) -> String {
+    let mut param_tys: Vec<&str> = before.to_vec();
+    param_tys.push("bits<128>");
+    let entry: Vec<String> = before
+        .iter()
+        .enumerate()
+        .map(|(index, ty)| format!("%v{index}: {ty}"))
+        .chain(std::iter::once(format!(
+            "%v{}: bits<128>",
+            before.len()
+        )))
+        .collect();
+    let wide = before.len();
+    let mut body = format!(
+        "    %v20 = trunc.bits<64> %v{wide}\n\
+         \x20   %v21 = const.bits<128> 64\n\
+         \x20   %v22 = lshr.bits<128> %v{wide}, %v21\n\
+         \x20   %v23 = trunc.bits<64> %v22\n\
+         \x20   %v24 = add.bits<64> %v20, %v23\n"
+    );
+    let mut last = 24;
+    for index in 0..before.len() {
+        body.push_str(&format!(
+            "    %v{} = add.bits<64> %v{last}, %v{index}\n",
+            last + 1
+        ));
+        last += 1;
     }
-    .expect("the module compiles")
+    func(
+        &param_tys,
+        &entry.join(", "),
+        "bits<64>",
+        &body,
+        &format!("%v{last}"),
+    )
 }
 
 #[test]
@@ -439,29 +490,45 @@ fn a_wide_argument_takes_an_even_aligned_register_pair() {
     // even first, so after one 64-bit argument it is x2:x3 with x1 skipped,
     // after two it is x2:x3 with nothing skipped" (GCC-14 `take_after_one`,
     // `take_after_two`).
-    let after_one = func(
-        &["bits<64>", "bits<128>"],
-        "%v0: bits<64>, %v1: bits<128>",
-        "bits<64>",
-        "    %v2 = trunc.bits<64> %v1\n\
-         \x20   %v3 = add.bits<64> %v0, %v2\n",
-        "%v3",
+    assert_eq!(
+        argument_positions(&sums_both_halves(&[])),
+        2,
+        "a pair alone takes x0:x1"
     );
-    let text = assembly(&after_one, Target::Linux);
-    assert!(
-        text.contains("x2") && text.contains("x3"),
-        "the pair after one 64-bit argument is x2:x3, x1 skipped:\n{text}"
+    assert_eq!(
+        argument_positions(&sums_both_halves(&["bits<64>"])),
+        4,
+        "after one 64-bit argument the pair is x2:x3, with x1 skipped"
     );
-    assert!(
-        !text.contains("x1,") && !text.contains(", x1"),
-        "x1 is skipped by the even alignment:\n{text}"
+    assert_eq!(
+        argument_positions(&sums_both_halves(&["bits<64>", "bits<64>"])),
+        4,
+        "after two it is x2:x3 with nothing skipped"
     );
+    assert_eq!(
+        argument_positions(&sums_both_halves(&["bits<64>", "bits<64>", "bits<64>"])),
+        6,
+        "after three the pair is x4:x5, with x3 skipped"
+    );
+
+    // And every one of them allocates and verifies.
+    for before in [
+        vec![],
+        vec!["bits<64>"],
+        vec!["bits<64>", "bits<64>"],
+        vec!["bits<64>", "bits<64>", "bits<64>"],
+    ] {
+        let text = sums_both_halves(&before);
+        let module = parse_section9_module(text.as_bytes()).expect("canonical EvoIR");
+        compile_module_for(Target::Linux, &module, &|_| true)
+            .expect("the even-aligned pair compiles");
+    }
 }
 
 #[test]
 fn a_wide_result_is_x0_and_x1_with_the_low_half_first() {
-    // "A bits<128> result is x0:x1, low half in x0" (GCC-14 `ret128`
-    // returns 5 in x0 and the shifted half in x1).
+    // "A bits<128> result is x0:x1, low half in x0" (GCC-14 `ret128`, which
+    // returns the constant in x0 and the shifted half in x1).
     let text = func(
         &["bits<64>"],
         "%v0: bits<64>",
@@ -469,12 +536,24 @@ fn a_wide_result_is_x0_and_x1_with_the_low_half_first() {
         "    %v1 = zext.bits<128> %v0\n",
         "%v1",
     );
-    let emitted = assembly(&text, Target::Linux);
-    assert!(emitted.contains("x0"), "{emitted}");
+    let module = lower(&text);
+    let MTerm::Ret { values } = &module.functions[0].blocks[0].term else {
+        panic!("the entry returns");
+    };
+    assert_eq!(values.len(), 2, "the pair occupies two result registers");
+
+    // The low half is the zero-extended argument and the high half is the
+    // materialized zero, so the two are distinguishable in the emitted text.
+    let emitted = compile_module_for(Target::Linux, &module_of(&text), &|_| true)
+        .expect("a wide result compiles");
     assert!(
-        emitted.contains("x1"),
-        "the high half returns in x1:\n{emitted}"
+        emitted.contains("x1, #0"),
+        "the high half is zero in x1:\n{emitted}"
     );
+}
+
+fn module_of(text: &str) -> evocc_evoir::Module {
+    parse_section9_module(text.as_bytes()).expect("canonical EvoIR")
 }
 
 // ---------------------------------------------------------------------------
@@ -536,8 +615,7 @@ fn darwin_keeps_refusing_a_ninth_argument_with_e4010() {
     for count in [9, 10] {
         let text = many_arguments(count);
         let module = parse_section9_module(text.as_bytes()).expect("canonical EvoIR");
-        let refusals =
-            lower_module(&module).expect_err("Darwin refuses more than eight arguments");
+        let refusals = lower_module(&module).expect_err("Darwin refuses more than eight arguments");
         assert!(
             refusals.iter().any(|refusal| refusal.code == "E4010"),
             "{count}: {refusals:?}"

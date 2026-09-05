@@ -171,10 +171,26 @@ fn validate_block(
             ));
         }
     }
-    // Nothing between a producer and its consumer may write flags: with
-    // adjacency already established, that means no two consecutive writers.
+    // Nothing between a producer and its consumer may write flags. With
+    // adjacency already established, that means no two consecutive writers,
+    // unless the second one is the first one's consumer: Section 5's
+    // `sbcs` (revision 0.10) reads the borrow the preceding `cmp` left and
+    // sets the flags the following `cset` reads, so a producer standing
+    // immediately before its own consumer is the sequence the rule admits,
+    // not a violation of it.
     for pair in block.insts.windows(2) {
-        if writes_flags(&pair[0]) && writes_flags(&pair[1]) {
+        if !writes_flags(&pair[0]) || !writes_flags(&pair[1]) {
+            continue;
+        }
+        let produced: Vec<u32> = inst_defs(&pair[0])
+            .into_iter()
+            .filter(|reg| reg.class == RegClass::Flags)
+            .map(|reg| reg.id)
+            .collect();
+        let consumes = inst_uses(&pair[1])
+            .into_iter()
+            .any(|reg| reg.class == RegClass::Flags && produced.contains(&reg.id));
+        if !consumes {
             return Err(format!(
                 "@{name} block {id}: a second flags writer stands between a producer and its consumer"
             ));
@@ -263,6 +279,37 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
             expect_flags(name, block, *flags, "an adds/subs flags result")?;
             expect_general(name, block, *lhs, "an adds/subs operand")?;
             expect_general(name, block, *rhs, "an adds/subs operand")
+        }
+        // Section 5's carry-propagating forms read the `nzcv` the preceding
+        // flag-setting form produced, which the Section 2 adjacency rule
+        // already constrains.
+        MInst::CarryBinary {
+            dst,
+            flags,
+            lhs,
+            rhs,
+            ..
+        } => {
+            expect_general(name, block, *dst, "an adc/sbc result")?;
+            expect_flags(name, block, *flags, "an adc/sbc carry source")?;
+            expect_general(name, block, *lhs, "an adc/sbc operand")?;
+            expect_general(name, block, *rhs, "an adc/sbc operand")
+        }
+        MInst::SubCarryFlags {
+            dst,
+            flags_in,
+            lhs,
+            rhs,
+            ..
+        } => {
+            expect_flags(name, block, *dst, "an sbcs flags result")?;
+            expect_flags(name, block, *flags_in, "an sbcs carry source")?;
+            expect_general(name, block, *lhs, "an sbcs operand")?;
+            expect_general(name, block, *rhs, "an sbcs operand")
+        }
+        MInst::TstImm { dst, lhs, .. } => {
+            expect_flags(name, block, *dst, "a tst result")?;
+            expect_general(name, block, *lhs, "a tst operand")
         }
         MInst::WideMultiply { dst, lhs, rhs, .. } => {
             if dst.class != RegClass::Gpr64 {

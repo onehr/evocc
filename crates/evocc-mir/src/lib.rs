@@ -33,8 +33,10 @@ use std::fmt;
 pub use allocverify::{verify_allocation, VerifierRefusal};
 pub use emit::{emit_module, emit_module_for, frame_of, Frame, Target};
 pub use interp::{interpret_module, MirError, MirLimits, MirOutcome, MirValue};
-pub use linscan::{allocate, render_allocated, Allocated, CALLEE_SAVED, CALLER_SAVED};
-pub use lower::{lower_module, lower_module_with, Refusal};
+pub use linscan::{
+    allocate, allocate_for, render_allocated, Allocated, CALLEE_SAVED, CALLER_SAVED,
+};
+pub use lower::{lower_module, lower_module_for, lower_module_with, Refusal};
 pub use native::{
     compile_module, compile_module_for, compile_module_with, native_corpus_entry, Driver,
     NativeStop, Toolchain,
@@ -301,6 +303,37 @@ pub enum FlagOp {
     Subs,
 }
 
+/// The two carry-propagating arithmetic forms of Section 5's `bits<128>` row.
+///
+/// They differ from [`FlagOp`] in reading `nzcv` as well: `adc` adds the carry
+/// the preceding `adds` left, and `sbc` subtracts the borrow the preceding
+/// `subs` left. Both are what carries a sum or a difference from the low half
+/// of a pair into its high half (measured: GCC-14 `add128`, `sub128`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CarryOp {
+    Adc,
+    Sbc,
+}
+
+impl CarryOp {
+    #[must_use]
+    pub const fn mnemonic(self) -> &'static str {
+        match self {
+            Self::Adc => "adc",
+            Self::Sbc => "sbc",
+        }
+    }
+
+    #[must_use]
+    pub fn from_mnemonic(text: &str) -> Option<Self> {
+        match text {
+            "adc" => Some(Self::Adc),
+            "sbc" => Some(Self::Sbc),
+            _ => None,
+        }
+    }
+}
+
 impl FlagOp {
     #[must_use]
     pub const fn mnemonic(self) -> &'static str {
@@ -327,6 +360,12 @@ pub enum WideMul {
     Smull,
     /// `smulh xd, xn, xm`: the high 64 bits of a signed 64x64 product.
     Smulh,
+    /// `umulh xd, xn, xm`: the high 64 bits of an unsigned 64x64 product.
+    ///
+    /// Section 5's `bits<128>` row (revision 0.10) needs it for the product's
+    /// high half, and the kernel cohort's whole use of the width is that one
+    /// product read as two halves.
+    Umulh,
 }
 
 impl WideMul {
@@ -335,6 +374,7 @@ impl WideMul {
         match self {
             Self::Smull => "smull",
             Self::Smulh => "smulh",
+            Self::Umulh => "umulh",
         }
     }
 
@@ -343,6 +383,7 @@ impl WideMul {
         Some(match text {
             "smull" => Self::Smull,
             "smulh" => Self::Smulh,
+            "umulh" => Self::Umulh,
             _ => return None,
         })
     }
@@ -604,6 +645,54 @@ pub enum MInst {
         a: VReg,
         width: Width,
     },
+    /// `madd rd, rn, rm, ra`: `rd := ra + rn * rm`.
+    ///
+    /// Section 5's `bits<128>` product accumulates the two cross terms into
+    /// the high half with it.
+    Madd {
+        dst: VReg,
+        n: VReg,
+        m: VReg,
+        a: VReg,
+        width: Width,
+    },
+    /// `adc`/`sbc rd, rn, rm`: the arithmetic form that reads the carry.
+    ///
+    /// `flags` is the `nzcv` value the preceding `adds` or `subs` produced,
+    /// which the Section 2 adjacency rule already requires to be the
+    /// immediately preceding instruction. The form writes no flags of its own.
+    CarryBinary {
+        op: CarryOp,
+        dst: VReg,
+        flags: VReg,
+        lhs: VReg,
+        rhs: VReg,
+        width: Width,
+    },
+    /// `sbcs xzr, rn, rm`: the flag-setting subtract-with-borrow whose result
+    /// is discarded.
+    ///
+    /// Section 5 states the ordered 128-bit comparison as "`cmp alo, blo` then
+    /// `sbcs xzr, ahi, bhi` and `cset` with the 64-bit form's condition". Only
+    /// the flags are wanted, so like [`MInst::Cmp`] the destination names the
+    /// `flags` value this instruction defines, and `flags_in` names the one it
+    /// reads.
+    SubCarryFlags {
+        dst: VReg,
+        flags_in: VReg,
+        lhs: VReg,
+        rhs: VReg,
+        width: Width,
+    },
+    /// `tst rn, #imm`: the flags of `rn & imm`, the result discarded.
+    ///
+    /// Section 5's branch-free variable shift selects "on `tst s, #64`".
+    TstImm {
+        dst: VReg,
+        lhs: VReg,
+        imm: u64,
+        width: Width,
+    },
     /// `sxtb`, `sxth`, `sxtw`, `uxtb`, `uxth`.
     Extend {
         op: ExtOp,
@@ -664,12 +753,15 @@ pub enum MInst {
     /// `ldp`/`stp rt1, rt2, [rn, #off]`: Section 4 admits them "prologue and
     /// epilogue only (Section 6)". `writeback` is the pre-index the prologue's
     /// `stp x29, x30, [sp, #-16]!` uses.
+    /// `volatile` marks the pair that carries a `bits<128>` volatile access;
+    /// the prologue's and epilogue's own pairs are never volatile.
     Ldp {
         rt1: VReg,
         rt2: VReg,
         base: VReg,
         offset: i64,
         writeback: bool,
+        volatile: bool,
     },
     Stp {
         rt1: VReg,
@@ -677,6 +769,7 @@ pub enum MInst {
         base: VReg,
         offset: i64,
         writeback: bool,
+        volatile: bool,
     },
     /// A spilled value written to its frame slot, and read back from it.
     ///
@@ -691,6 +784,22 @@ pub enum MInst {
     },
     SpillReload {
         dst: VReg,
+        slot: u32,
+    },
+    /// One incoming stack argument (Section 6 "Stack arguments", Linux,
+    /// revision 0.10): "the callee reads slot `i` at `x29 + 16 + 8 * i`".
+    ///
+    /// A pseudo-form on the pattern of the spill accesses: it exists only
+    /// after allocation, because which arguments find no register is what the
+    /// allocation decides, and emission expands it against the frame.
+    IncomingArg {
+        dst: VReg,
+        slot: u32,
+    },
+    /// One outgoing stack argument, written into the area the caller reserves
+    /// "below its frame", at increasing addresses from the caller's `sp`.
+    OutgoingArg {
+        src: VReg,
         slot: u32,
     },
     /// The `mem.copy` pseudo-form of Section 4: `size` bytes from `src` to
@@ -1164,6 +1273,10 @@ pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
         | MInst::Binary { dst, .. }
         | MInst::BinaryImm { dst, .. }
         | MInst::Msub { dst, .. }
+        | MInst::Madd { dst, .. }
+        | MInst::CarryBinary { dst, .. }
+        | MInst::SubCarryFlags { dst, .. }
+        | MInst::TstImm { dst, .. }
         | MInst::Extend { dst, .. }
         | MInst::Bfx { dst, .. }
         | MInst::Cmp { dst, .. }
@@ -1172,12 +1285,14 @@ pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
         | MInst::Csel { dst, .. }
         | MInst::FrameSlot { dst, .. }
         | MInst::SpillReload { dst, .. }
+        | MInst::IncomingArg { dst, .. }
         | MInst::WideMultiply { dst, .. } => vec![*dst],
         MInst::Ldp { rt1, rt2, .. } => vec![*rt1, *rt2],
         MInst::FlagBinary { dst, flags, .. } => vec![*dst, *flags],
         MInst::Store { .. }
         | MInst::MemCopy { .. }
         | MInst::SpillStore { .. }
+        | MInst::OutgoingArg { .. }
         | MInst::Stp { .. } => Vec::new(),
         MInst::Bl { results, .. } | MInst::Blr { results, .. } => results.clone(),
         MInst::Asm(body) => body.defined(),
@@ -1199,14 +1314,24 @@ pub fn inst_uses(inst: &MInst) -> Vec<VReg> {
         | MInst::FlagBinary { lhs, rhs, .. }
         | MInst::WideMultiply { lhs, rhs, .. } => vec![*lhs, *rhs],
         MInst::MemCopy { dst, src, .. } => vec![*dst, *src],
-        MInst::SpillStore { src, .. } => vec![*src],
-        MInst::SpillReload { .. } => Vec::new(),
+        MInst::SpillStore { src, .. } | MInst::OutgoingArg { src, .. } => vec![*src],
+        MInst::SpillReload { .. } | MInst::IncomingArg { .. } => Vec::new(),
         MInst::Ldp { base, .. } => vec![*base],
         MInst::Stp { rt1, rt2, base, .. } => vec![*rt1, *rt2, *base],
         MInst::BinaryImm { lhs, .. } | MInst::CmpImm { lhs, .. } | MInst::Bfx { src: lhs, .. } => {
             vec![*lhs]
         }
-        MInst::Msub { n, m, a, .. } => vec![*n, *m, *a],
+        MInst::Msub { n, m, a, .. } | MInst::Madd { n, m, a, .. } => vec![*n, *m, *a],
+        MInst::CarryBinary {
+            flags, lhs, rhs, ..
+        }
+        | MInst::SubCarryFlags {
+            flags_in: flags,
+            lhs,
+            rhs,
+            ..
+        } => vec![*flags, *lhs, *rhs],
+        MInst::TstImm { lhs, .. } => vec![*lhs],
         MInst::Cset { flags, .. } => vec![*flags],
         MInst::Csel {
             flags, lhs, rhs, ..
@@ -1322,7 +1447,11 @@ pub fn term_edges(term: &MTerm) -> Vec<(u32, &[VReg])> {
 #[must_use]
 pub fn writes_flags(inst: &MInst) -> bool {
     match inst {
-        MInst::Cmp { .. } | MInst::CmpImm { .. } | MInst::FlagBinary { .. } => true,
+        MInst::Cmp { .. }
+        | MInst::CmpImm { .. }
+        | MInst::FlagBinary { .. }
+        | MInst::SubCarryFlags { .. }
+        | MInst::TstImm { .. } => true,
         // Section 7: "`cc` clobbers the flags, which ends any `flags` value's
         // adjacency".
         MInst::Asm(body) => body.clobbers_flags(),
