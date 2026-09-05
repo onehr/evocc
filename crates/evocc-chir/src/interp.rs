@@ -3708,32 +3708,53 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         arguments: &[CValue],
         span: SourceSpan,
     ) -> Result<CValue, InterpreterError> {
-        let arguments = arguments
-            .iter()
-            .map(|value| match value {
-                CValue::Integer(value) => u64::try_from(value.raw_bits())
-                    .map(LibraryValue::Integer)
-                    .map_err(|_| InterpreterError::WideInteger { span }),
-                CValue::Pointer { value, .. } => Ok(LibraryValue::Pointer(*value)),
-                _ => Err(self.memory_error(
-                    MemoryFault::ExternalFunction {
-                        name: spelling.into(),
-                    },
-                    span,
-                )),
-            })
-            .collect::<Result<Vec<_>, _>>()?;
         let entry = self
             .unit
             .symbols()
             .symbol(symbol)
             .map_err(|_| InterpreterError::UnknownFunction { symbol })?;
-        let Some(TypeKind::Function { return_type, .. }) =
-            self.unit.types().get(entry.ty()).map(|ty| &ty.kind)
+        let Some(TypeKind::Function {
+            return_type,
+            parameters,
+        }) = self.unit.types().get(entry.ty()).map(|ty| &ty.kind)
         else {
             return Err(InterpreterError::UnsupportedFunctionSignature { symbol, span });
         };
         let return_type = self.value_type(*return_type, span)?;
+        let parameter_types = match parameters {
+            FunctionParameters::Prototype { types, .. } => types.as_slice(),
+            FunctionParameters::Unspecified => self
+                .unit
+                .unprototyped_parameters(symbol)
+                .unwrap_or_default(),
+        };
+        let arguments = arguments
+            .iter()
+            .enumerate()
+            .map(|(index, value)| {
+                let value = match parameter_types.get(index) {
+                    Some(ty) => cast_machine_value(
+                        *value,
+                        self.value_type(*ty, span)?,
+                        span,
+                        self.unit.types(),
+                    )?,
+                    None => *value,
+                };
+                match value {
+                    CValue::Integer(value) => u64::try_from(value.raw_bits())
+                        .map(LibraryValue::Integer)
+                        .map_err(|_| InterpreterError::WideInteger { span }),
+                    CValue::Pointer { value, .. } => Ok(LibraryValue::Pointer(value)),
+                    _ => Err(self.memory_error(
+                        MemoryFault::ExternalFunction {
+                            name: spelling.into(),
+                        },
+                        span,
+                    )),
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         let (memory, result) = self
             .memory
             .call_library(spelling, &arguments)
