@@ -1,0 +1,27 @@
+{
+  "receiptId": "c30.declaration-identity.red.v1",
+  "baseline": "465db592a8c6057d44cd955483d1932fd851b70b",
+  "authority": "docs/evoir-spec.md revision 1.9.59; source locations, redeclarations, inferred array bounds; continuation of the AA corpus findings",
+  "productionChanges": [],
+  "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --release -p evocc --test declaration_identity -- --nocapture",
+  "measured": { "passed": 0, "failed": 4, "buildErrors": 0 },
+  "failures": [
+    { "test": "functions_from_one_macro_have_distinct_parameter_scopes", "diagnostic": "E3101 generated invalid EvoIR: cannot derive the authoritative allocation-site manifest" },
+    { "test": "functions_from_one_macro_have_distinct_empty_scopes", "diagnostic": "E3101 generated invalid EvoIR: cannot derive the authoritative allocation-site manifest" },
+    { "test": "extern_then_definition_preserves_one_object_identity", "diagnostic": "E3101 object declaration disagrees with its semantic identity" },
+    { "test": "initializer_completes_written_unbounded_array", "diagnostic": "E3101 object declaration disagrees with its semantic identity" }
+  ],
+  "corpusObservations": [
+    "Original projected argv from 20260904T171723Z-48751, arch/arm64/crypto/aes-ce-ccm-glue.c: manifest FunctionScopeMismatch for __ll_sc_atomic_add, atomic_ll_sc.h:95. One ATOMIC_OPS invocation emits multiple functions with equal expansion spans; the manifest demands a unique scope matching that span.",
+    "Original projected argv from the same run, lib/ctype.c (libstub record): manifest succeeds with 29 sites. The _ctype extern declaration has unbounded array type, the definition has fixed bound 256 and storage None, and the canonical symbol has storage Extern. Its written declarator still has the unbounded array layer."
+  ],
+  "preCommitGate": {
+    "workspace": { "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet", "exitCode": 101, "passed": 1547, "failed": 4, "ignored": 4, "targets": 235, "log": "/private/tmp/c30-declaration-red-workspace.log", "failureScope": "Only the four declared declaration_identity tests fail; no build errors." },
+    "clippy": { "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target cargo clippy --workspace --all-targets -- -D warnings", "exitCode": 0 },
+    "fmt": { "command": "cargo fmt --all -- --check", "exitCode": 0 },
+    "ruff": { "command": "ruff check tests/acceptance tools", "exitCode": 0 },
+    "baseLayout": { "command": "bash tests/acceptance/day5-layout-conformance.sh --subject", "runId": "20260905T012118Z-50121", "passed": 128, "mismatches": 0 },
+    "attributedLayout": { "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject", "runId": "20260905T012155Z-52587", "passed": 22, "mismatches": 0 }
+  },
+  "claimCeiling": "These four tests exercise preprocessing through the CLI and fail on the real declaration shapes. They do not establish how many corpus units share each newly exposed cause."
+}
