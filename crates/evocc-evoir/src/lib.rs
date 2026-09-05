@@ -4134,11 +4134,13 @@ fn execute_instruction(
             let EvoIRType::Bits(width) = result.ty else {
                 unreachable!("validated bit type")
             };
-            let result_bits = match op {
-                BitOp::LeadingZeros => u64::from(raw.leading_zeros() - (128 - u32::from(width))),
-                BitOp::TrailingZeros => u64::from(raw.trailing_zeros().min(u32::from(width))),
-                BitOp::Population => u64::from(raw.count_ones()),
-                BitOp::ByteSwap => (raw.swap_bytes() >> (128 - width)) as u64,
+            // The value model is 128 bits wide (revision 1.9.61); the counts
+            // are answered at the instruction's own width.
+            let result_bits: u128 = match op {
+                BitOp::LeadingZeros => u128::from(raw.leading_zeros() - (128 - u32::from(width))),
+                BitOp::TrailingZeros => u128::from(raw.trailing_zeros().min(u32::from(width))),
+                BitOp::Population => u128::from(raw.count_ones()),
+                BitOp::ByteSwap => raw.swap_bytes() >> (128 - width),
             };
             write_value(values, result, result_bits);
         }
