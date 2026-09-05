@@ -4370,15 +4370,15 @@ fn execute_instruction(
         }
         Inst::ICmp(result, operation, lhs, rhs) => {
             if matches!(lhs.ty, EvoIRType::Ptr(_)) {
-                let left = read_pointer(values, lhs, block)?;
-                let right = read_pointer(values, rhs, block)?;
+                let left = read_pointer_value(values, lhs, block)?;
+                let right = read_pointer_value(values, rhs, block)?;
                 let left = state
                     .memory
-                    .pointer_address(PointerValue::object(left))
+                    .pointer_address(left)
                     .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
                 let right = state
                     .memory
-                    .pointer_address(PointerValue::object(right))
+                    .pointer_address(right)
                     .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
                 let comparison = match operation {
                     CmpOp::Eq => left == right,
@@ -4393,8 +4393,8 @@ fn execute_instruction(
                 return Ok(());
             }
             if matches!(lhs.ty, EvoIRType::FnPtr { .. }) {
-                let left = read_function_pointer(values, lhs, block)?;
-                let right = read_function_pointer(values, rhs, block)?;
+                let left = read_pointer_value(values, lhs, block)?;
+                let right = read_pointer_value(values, rhs, block)?;
                 let left = state
                     .memory
                     .pointer_address(left)
@@ -4620,23 +4620,7 @@ fn execute_instruction(
                         .map_err(|_| InterpreterError::UnsupportedBitWidth { block, width: 128 })?;
                     InternalValue::Bits(raw)
                 }
-                EvoIRType::Ptr(_) => {
-                    let pointer = if *volatile {
-                        let (pointer, world) = state
-                            .memory
-                            .volatile_load_pointer(&state.world, address, layout)
-                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
-                        state.world = world;
-                        pointer
-                    } else {
-                        state
-                            .memory
-                            .load_pointer(address, layout)
-                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?
-                    };
-                    InternalValue::Pointer(pointer)
-                }
-                EvoIRType::FnPtr { .. } => {
+                EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => {
                     let pointer = if *volatile {
                         let (pointer, world) = state
                             .memory
@@ -4650,7 +4634,18 @@ fn execute_instruction(
                             .load_pointer_value(address, layout)
                             .map_err(|error| InterpreterError::MemoryAccess { block, error })?
                     };
-                    InternalValue::FunctionPointer(pointer)
+                    match (&result.ty, pointer) {
+                        (EvoIRType::Ptr(_), PointerValue::Null) => {
+                            InternalValue::Pointer(Pointer::NULL)
+                        }
+                        (EvoIRType::Ptr(_), PointerValue::Object(pointer)) => {
+                            InternalValue::Pointer(pointer)
+                        }
+                        (EvoIRType::Ptr(_), PointerValue::Exposed(address)) => {
+                            InternalValue::Pointer(Pointer::from_address(address))
+                        }
+                        _ => InternalValue::FunctionPointer(pointer),
+                    }
                 }
                 _ => {
                     return Err(InterpreterError::UnsupportedInstruction {
@@ -4841,35 +4836,35 @@ fn read_pointer(
         InternalValue::Uninitialized => {
             Err(InterpreterError::InvalidPointerRepresentation { block })
         }
-        InternalValue::Bits(_) | InternalValue::FunctionPointer(_) => {
-            Err(InterpreterError::InvalidFunction {
-                message: format!(
-                    "block {block} consumes non-pointer v{} as pointer",
-                    value.id
-                ),
-            })
+        InternalValue::FunctionPointer(_) => {
+            Err(InterpreterError::InvalidPointerRepresentation { block })
         }
+        InternalValue::Bits(_) => Err(InterpreterError::InvalidFunction {
+            message: format!(
+                "block {block} consumes non-pointer v{} as pointer",
+                value.id
+            ),
+        }),
     }
 }
 
-fn read_function_pointer(
+fn read_pointer_value(
     values: &HashMap<u32, InternalValue>,
     value: &Value,
     block: BlockId,
 ) -> Result<PointerValue, InterpreterError> {
     match read_internal(values, value, block)? {
         InternalValue::FunctionPointer(pointer) => Ok(pointer),
+        InternalValue::Pointer(pointer) => Ok(PointerValue::object(pointer)),
         InternalValue::Uninitialized => {
             Err(InterpreterError::InvalidPointerRepresentation { block })
         }
-        InternalValue::Bits(_) | InternalValue::Pointer(_) => {
-            Err(InterpreterError::InvalidFunction {
-                message: format!(
-                    "block {block} consumes non-function-pointer v{} as fnptr",
-                    value.id
-                ),
-            })
-        }
+        InternalValue::Bits(_) => Err(InterpreterError::InvalidFunction {
+            message: format!(
+                    "block {block} consumes non-pointer v{} as a pointer value",
+                value.id
+            ),
+        }),
     }
 }
 
