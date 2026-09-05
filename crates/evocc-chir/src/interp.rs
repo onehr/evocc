@@ -4641,8 +4641,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     },
                 ) => {
                     if index == 0
-                        && function_syntax
-                            .is_some_and(|syntax| !function_parameters_match(parameters, syntax))
+                        && function_syntax.is_some_and(|syntax| {
+                            !function_parameters_match(self.unit.types(), parameters, syntax)
+                        })
                     {
                         return false;
                     }
@@ -9386,7 +9387,11 @@ fn assignment_binary(operator: AssignmentOp) -> Option<BinaryOp> {
     }
 }
 
-fn function_parameters_match(canonical: &FunctionParameters, written: &ParameterSyntax) -> bool {
+fn function_parameters_match(
+    interner: &TypeInterner,
+    canonical: &FunctionParameters,
+    written: &ParameterSyntax,
+) -> bool {
     match (canonical, written) {
         (FunctionParameters::Unspecified, ParameterSyntax::Unspecified) => true,
         (
@@ -9398,10 +9403,9 @@ fn function_parameters_match(canonical: &FunctionParameters, written: &Parameter
         ) => {
             variadic == written_variadic
                 && types.len() == parameters.len()
-                && types
-                    .iter()
-                    .zip(parameters)
-                    .all(|(canonical, parameter)| *canonical == parameter.ty)
+                && types.iter().zip(parameters).all(|(canonical, parameter)| {
+                    interner.compatible_ignoring_top_qualifiers(*canonical, parameter.ty)
+                })
         }
         _ => false,
     }

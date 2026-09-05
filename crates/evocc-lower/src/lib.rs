@@ -1998,7 +1998,7 @@ fn function_info(
         })?;
     if symbol.kind() != SymbolKind::Function
         || symbol.spelling() != function.name.spelling
-        || !function_types_compatible(unit.types(), symbol.ty(), function.ty)
+        || !unit.types().compatible(symbol.ty(), function.ty)
         || !symbol
             .storage_class()
             .is_some_and(|storage| function_storage_compatible(storage, function.storage))
@@ -2369,90 +2369,6 @@ fn canonical_integer(
     Ok(integer)
 }
 
-fn function_types_compatible(types: &TypeInterner, left: TypeId, right: TypeId) -> bool {
-    if left == right {
-        return true;
-    }
-    let (Some(left), Some(right)) = (types.get(left), types.get(right)) else {
-        return false;
-    };
-    let (
-        TypeKind::Function {
-            return_type: left_return,
-            parameters: left_parameters,
-        },
-        TypeKind::Function {
-            return_type: right_return,
-            parameters: right_parameters,
-        },
-    ) = (&left.kind, &right.kind)
-    else {
-        return false;
-    };
-    left_return == right_return
-        && function_parameters_compatible(types, left_parameters, right_parameters)
-}
-
-fn function_parameters_compatible(
-    types: &TypeInterner,
-    left: &FunctionParameters,
-    right: &FunctionParameters,
-) -> bool {
-    match (left, right) {
-        (FunctionParameters::Unspecified, FunctionParameters::Unspecified) => true,
-        (
-            FunctionParameters::Prototype {
-                types: left_types,
-                variadic: left_variadic,
-            },
-            FunctionParameters::Prototype {
-                types: right_types,
-                variadic: right_variadic,
-            },
-        ) => left_variadic == right_variadic && left_types == right_types,
-        (
-            FunctionParameters::Unspecified,
-            FunctionParameters::Prototype {
-                types: prototype,
-                variadic,
-            },
-        )
-        | (
-            FunctionParameters::Prototype {
-                types: prototype,
-                variadic,
-            },
-            FunctionParameters::Unspecified,
-        ) => {
-            !variadic
-                && prototype.iter().all(|ty| {
-                    canonical_integer_for_compatibility(types, *ty)
-                        .is_some_and(|integer| integer_promotion(integer) == integer)
-                })
-        }
-    }
-}
-
-fn canonical_integer_for_compatibility(types: &TypeInterner, ty: TypeId) -> Option<CIntegerType> {
-    match &types.get(ty)?.kind {
-        TypeKind::Int(rank) => Some(integer_type_for_rank(*rank)),
-        TypeKind::Enum(tag) => {
-            let tag = types.tag(*tag)?;
-            let TagState::Complete(TagDefinition::Enum(constants)) = &tag.state else {
-                return None;
-            };
-            let minimum = constants.iter().map(|constant| constant.value).min()?;
-            let maximum = constants.iter().map(|constant| constant.value).max()?;
-            Some(integer_type_for_rank(enum_integer_rank(
-                minimum,
-                maximum,
-                tag.layout.packed,
-            )))
-        }
-        _ => None,
-    }
-}
-
 fn function_storage_compatible(entity: StorageClass, written: StorageClass) -> bool {
     match entity {
         StorageClass::Static => matches!(
@@ -2469,7 +2385,11 @@ fn function_storage_compatible(entity: StorageClass, written: StorageClass) -> b
     }
 }
 
-fn function_parameters_match(canonical: &FunctionParameters, written: &ParameterSyntax) -> bool {
+fn function_parameters_match(
+    interner: &TypeInterner,
+    canonical: &FunctionParameters,
+    written: &ParameterSyntax,
+) -> bool {
     match (canonical, written) {
         (FunctionParameters::Unspecified, ParameterSyntax::Unspecified) => true,
         (
@@ -2481,10 +2401,9 @@ fn function_parameters_match(canonical: &FunctionParameters, written: &Parameter
         ) => {
             variadic == written_variadic
                 && types.len() == parameters.len()
-                && types
-                    .iter()
-                    .zip(parameters)
-                    .all(|(canonical, parameter)| *canonical == parameter.ty)
+                && types.iter().zip(parameters).all(|(canonical, parameter)| {
+                    interner.compatible_ignoring_top_qualifiers(*canonical, parameter.ty)
+                })
         }
         _ => false,
     }
@@ -2532,7 +2451,7 @@ fn written_declarator_matches(
                     matches!(
                         &canonical.kind,
                         TypeKind::Function { parameters, .. }
-                            if function_parameters_match(parameters, syntax)
+                            if function_parameters_match(types, parameters, syntax)
                     )
                 });
         }
@@ -2551,7 +2470,7 @@ fn written_declarator_matches(
             ) => {
                 if index == 0
                     && function_syntax
-                        .is_some_and(|syntax| !function_parameters_match(parameters, syntax))
+                        .is_some_and(|syntax| !function_parameters_match(types, parameters, syntax))
                 {
                     return false;
                 }

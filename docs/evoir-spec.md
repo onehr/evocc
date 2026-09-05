@@ -5552,6 +5552,29 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Qualified function parameter identities
+
+Section 10.1.18's existing compatibility rule ignores parameter top-level
+qualifiers when comparing a function declaration with its symbol or written
+parameter list, without removing those qualifiers from the parameter object.
+Both sealed oracles compile `.evidence/builtin-probes/20260906-parameter-qualifiers/qualifiers.c`
+and print `7 7 7 7` in `qualifiers.out` (SHA-256
+`29b8ca085beae90f9c40224f98b731817a064d4cb9dd118bdbac6d8e90cda26b`).
+The implementation reuses TypeInterner compatibility instead of a second
+comparison; no diagnostic is added, and ten units in lowering survey
+`20260905T185525Z-27277` reached the corresponding identity failure.
+
+### Completion target versus explicit execution deferrals
+
+Lowering survey `20260905T185525Z-27277` records 2,700 first errors at E3035
+and two at E3029, with zero panic or timeout.
+Section 10.1.18 explicitly requires refusal of global-register reads/writes
+and used label addresses/computed jumps; these body rules remain authoritative
+even though the requested completion target permits only E3030, E3033 and E3026.
+Existing minimal controls are `lowering_diagnostic_frontier.rs` and
+`computed_goto_lowering.rs`; no diagnostic or unmeasured register/branch
+semantics is invented, and the overall completion target remains unmet.
+
 ### Signed relocation addends
 
 Section 2.1 explicitly makes a relocation addend signed, while Section 9's
