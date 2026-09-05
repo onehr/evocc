@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.62** | **Authoritative reference** | **2026-09-05**
+**Revision 1.9.63** | **Authoritative reference** | **2026-09-05**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2892,6 +2892,22 @@ both oracles: 16, and 32 when only the `extern` declaration carries
 `aligned(32)`; `.evidence/builtin-probes/20260902-2c23684c/p36-aa-tail.c`,
 `p36.out`). A manifest type comparison that reads alignment is a defect.
 
+**Library builtins introduce no identifier (revision 1.9.63).** A use of
+`__builtin_memset` and the other library builtins of 10.1.14 lowers to a
+call of the library function's symbol with the prototype 10.1.14 gives it,
+but declares nothing in the source: `static int memset = 3;` after
+`__builtin_memset(p, 0, 1)` is accepted, and `memset(p, 0, 1)` after it is an
+implicit declaration, refused by both oracles
+(`.evidence/builtin-probes/20260902-2c23684c/p37-builtin-scope.c`,
+`p37-use.c`, `p37.out`). The prototype the front end synthesizes therefore
+lives in the builtin namespace, keyed by the library function's name, once
+per unit, visible in no scope, and never in a function's scope: the manifest
+carries it as a unit-level function symbol, exactly as it carries a function
+the unit declares at file scope and calls without defining. It is compared
+against a visible declaration of the same library function only through
+`E2927`, and a source object or function named like it is a different
+symbol.
+
 **Declarations with an incomplete enumeration return type (revision
 1.9.62).** `enum e f(unsigned int);` with `e` not yet complete is an
 accepted declaration (both oracles). A function that is only declared and
@@ -5288,6 +5304,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.63 | 2026-09-05 | A library builtin's synthesized prototype is a unit-level symbol in the builtin namespace: it introduces no ordinary identifier and belongs to no function scope (both oracles, `p37-*`). |
 | 1.9.62 | 2026-09-05 | Rules the two declaration-identity questions of the lowering frontier: declared alignment is an object property, the maximum over a unit's declarations, and never part of a type identity; a declaration-only function with an incomplete enumeration in its type produces nothing, and a use while it is incomplete is `E2930`. Both measured under the sealed oracles (`p36-*`). |
 | 1.9.61 | 2026-09-05 | Opens the two classes the sixth lowering survey put first (1,697 and 1,022 of 2,792 diagnosed units): `bits<128>` executes in every scalar form but division (10.1.19), and variadic signatures, anonymous arguments and the three list instructions `va_start`, `va_arg`, `va_end` enter Sections 1.1, 3.10, 3.12 and 9, with `va_copy` a 32-byte `copy`. Both are measured against the sealed oracles (`p34-*`, `p35-*`: fourteen `va_arg` items and eight `__int128` ABI shapes, GCC-14 and Clang-19 agreeing); the register-level procedures are EvoMIR's. New codes `E3037`, `E3038`; `E3030` narrows to aggregates; `E3033` narrows to division and remainder. |
 | 1.9.60 | 2026-09-05 | Under the user's authorization to close the two reported blockers, defines the missing assembly interchange grammar and output/effect edge bindings. Both-successor output availability is measured with the sealed oracles; the explicit SSA and byte encoding are compiler contract choices. No production code is changed by this specification revision. |
