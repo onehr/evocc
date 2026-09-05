@@ -1,0 +1,29 @@
+{
+  "receiptId": "c30.static-integer-initializers.red.v1",
+  "baseline": "ca59506b2597801b37f3aa70549e59fd1036af6c",
+  "authority": "User authorization to repair the measured legal constant initializer; docs/evoir-spec.md 1.9.59 Sections 2.1 and 10.1.19",
+  "productionChanges": [],
+  "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc --test static_integer_initializers -- --nocapture",
+  "measured": { "passed": 1, "failed": 8, "buildErrors": 0 },
+  "failures": [
+    { "test": "bitwise_array_initializer_has_the_measured_value", "diagnostic": "E3101: global initializer is not an admitted integer constant", "requiredValue": 40 },
+    { "test": "initializer_arithmetic_uses_promotions_and_intermediate_casts", "diagnostic": "E3101: global initializer is not an admitted integer constant" },
+    { "test": "static_signed_arithmetic_wraps_in_its_operand_width", "diagnostic": "E3006 in C-HIR static initialization; static evaluation incorrectly used runtime signed-shift obligations" },
+    { "test": "static_short_circuiting_does_not_evaluate_dead_operands", "diagnostic": "E3101: global initializer is not an admitted integer constant" },
+    { "test": "static_conditional_converts_the_selected_arm_to_the_common_type", "diagnostic": "E3101: global initializer is not an admitted integer constant" },
+    { "test": "static_sizeof_and_alignment_use_the_target_without_evaluation", "diagnostic": "E3101: global initializer is not an admitted integer constant" },
+    { "test": "static_integer_folding_does_not_erase_the_runtime_shift_obligation", "diagnostic": "EvoIR path reports E3101 on initializer instead of reaching the runtime E3006 obligation" },
+    { "test": "static_pointer_bits_are_not_fabricated_without_relocations", "diagnostic": "Incorrect success: (void *)1 was serialized as raw integer bytes without pointer provenance; Section 2.1 requires E3026" }
+  ],
+  "positiveControl": "automatic_null_pointers_remain_supported: PASS",
+  "preCommitGate": {
+    "workspace": { "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet", "exitCode": 101, "passed": 1554, "failed": 8, "ignored": 4, "targets": 236, "failureScope": "Only the eight declared static_integer_initializers tests; no build errors" },
+    "clippy": { "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target cargo clippy --workspace --all-targets -- -D warnings", "exitCode": 0 },
+    "fmt": { "command": "cargo fmt --all -- --check", "exitCode": 0 },
+    "ruff": { "command": "ruff check tests/acceptance tools", "exitCode": 0 },
+    "baseLayout": { "command": "bash tests/acceptance/day5-layout-conformance.sh --subject", "runId": "20260905T023244Z-93526", "passed": 128, "mismatches": 0 },
+    "attributedLayout": { "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject", "runId": "20260905T023253Z-93517", "passed": 22, "mismatches": 0 }
+  },
+  "claimCeiling": "Focused numeric and refusal assertions only; no new corpus totals are claimed. Static pointer relocation remains deferred, including explicit null static initializers; ordinary automatic null pointers remain supported.",
+  "rejectedTestRun": "The first helper used clock-only temporary names and collided under parallel tests. That run is not RED evidence. The measured run uses an atomic serial with process identity."
+}
