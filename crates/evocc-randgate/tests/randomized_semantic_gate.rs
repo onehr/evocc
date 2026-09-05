@@ -83,6 +83,8 @@ fn family(inst: &Inst) -> &'static str {
         Inst::CondBr(..) => "cond_br",
         Inst::Ret(..) => "ret",
         Inst::Trap(..) => "trap",
+        Inst::Asm(_) => "asm",
+        Inst::AsmGoto { .. } => "asm.goto",
     }
 }
 

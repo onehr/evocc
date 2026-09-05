@@ -182,6 +182,15 @@ fn cross_edges(
         }
     };
     match &block.terminator {
+        Inst::AsmGoto {
+            labels,
+            fallthrough,
+            ..
+        } => {
+            for edge in labels.iter().map(|label| &label.edge).chain([fallthrough]) {
+                carry(edge.target, &edge.arguments);
+            }
+        }
         Inst::Br(target, arguments) => carry(*target, arguments),
         Inst::CondBr(_, true_target, true_arguments, false_target, false_arguments) => {
             carry(*true_target, true_arguments);

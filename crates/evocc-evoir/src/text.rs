@@ -23,10 +23,31 @@ pub fn validate_section9_bytes(bytes: &[u8]) -> Result<(), String> {
     if !text.ends_with('\n') || text.ends_with("\n\n") {
         return Err("EvoIR text must end in exactly one newline".to_owned());
     }
-    if text.contains(['\r', '\t', '\0', ';']) {
+    if text.contains(['\r', '\t', '\0']) {
         return Err("EvoIR text contains a forbidden byte".to_owned());
     }
     for line in text.lines() {
+        let mut quoted = false;
+        let mut escaped = false;
+        for byte in line.bytes() {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            if quoted && byte == b'\\' {
+                escaped = true;
+                continue;
+            }
+            if byte == b'"' {
+                quoted = !quoted;
+            }
+            if byte == b';' && !quoted {
+                return Err("EvoIR text contains a comment".into());
+            }
+        }
+        if quoted {
+            return Err("EvoIR text contains an unterminated string".into());
+        }
         if line.ends_with(' ') {
             return Err("EvoIR text contains trailing whitespace".to_owned());
         }
@@ -144,6 +165,23 @@ fn render_type(ty: &EvoIRType) -> String {
     }
 }
 
+fn quoted_string(text: &str) -> String {
+    let mut rendered = String::from("\"");
+    for byte in text.bytes() {
+        match byte {
+            b'"' => rendered.push_str("\\\""),
+            b'\\' => rendered.push_str("\\\\"),
+            0x20..=0x7e => rendered.push(char::from(byte)),
+            _ => {
+                use std::fmt::Write;
+                write!(rendered, "\\x{byte:02x}").expect("writing to String");
+            }
+        }
+    }
+    rendered.push('"');
+    rendered
+}
+
 fn render_value(value: &Value) -> String {
     format!("%v{}", value.id)
 }
@@ -161,6 +199,54 @@ struct FunctionRenderer {
 }
 
 impl FunctionRenderer {
+    fn assembly(&self, assembly: &crate::InlineAssembly, is_goto: bool) -> String {
+        let results = assembly
+            .results()
+            .into_iter()
+            .map(render_value)
+            .collect::<Vec<_>>()
+            .join(", ");
+        let outputs = assembly
+            .outputs
+            .iter()
+            .map(|output| {
+                format!(
+                    "({}, {}, {}, {})",
+                    quoted_string(&output.constraint),
+                    quoted_string(&output.name),
+                    render_type(&output.ty),
+                    output
+                        .incoming
+                        .as_ref()
+                        .map_or_else(|| "-".to_owned(), render_value)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let inputs = assembly
+            .inputs
+            .iter()
+            .map(|input| {
+                format!(
+                    "({}, {}, {})",
+                    quoted_string(&input.constraint),
+                    quoted_string(&input.name),
+                    render_value(&input.value)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let clobbers = assembly
+            .clobbers
+            .iter()
+            .map(|clobber| quoted_string(clobber))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("({results}) = asm{}{} {} {}, {} outputs [{outputs}] inputs [{inputs}] clobbers [{clobbers}]",
+            if is_goto { ".goto" } else { "" }, if assembly.volatile { " volatile" } else { "" },
+            quoted_string(&assembly.template), render_value(&assembly.mem_in), render_value(&assembly.world_in))
+    }
+
     fn block_name(&self, id: BlockId) -> String {
         if id == self.entry {
             "^entry".to_owned()
@@ -175,6 +261,25 @@ impl FunctionRenderer {
 
     fn instruction(&self, inst: &Inst) -> String {
         match inst {
+            Inst::Asm(assembly) => self.assembly(assembly, false),
+            Inst::AsmGoto {
+                assembly,
+                labels,
+                fallthrough,
+            } => format!(
+                "{} labels [{}] fallthrough {}",
+                self.assembly(assembly, true),
+                labels
+                    .iter()
+                    .map(|label| format!(
+                        "({}, {})",
+                        quoted_string(&label.name),
+                        self.branch_target(label.edge.target, &label.edge.arguments)
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                self.branch_target(fallthrough.target, &fallthrough.arguments)
+            ),
             Inst::Const(result, immediate) => format!(
                 "{} = const.{} {immediate}",
                 render_value(result),

@@ -193,6 +193,14 @@ impl ModuleParser<'_> {
             let body = line
                 .strip_prefix("    ")
                 .ok_or_else(|| format!("block {id} instruction is not indented"))?;
+            if body
+                .split_once(" = ")
+                .is_some_and(|(_, rhs)| rhs.starts_with("asm.goto "))
+            {
+                let terminator = parse_tuple_instruction(body, &values, self.signatures)?;
+                self.position += 1;
+                break terminator;
+            }
             if is_terminator_body(body) {
                 let terminator = parse_terminator(body, &values)?;
                 self.position += 1;
@@ -596,6 +604,9 @@ fn parse_tuple_instruction(
         .ok_or_else(|| "malformed multi-result instruction".to_owned())?;
     let result_ids = parse_result_ids(&body[1..close])?;
     let rhs = &body[close + 4..];
+    if rhs.starts_with("asm ") || rhs.starts_with("asm.goto ") {
+        return parse_assembly(rhs, &result_ids, values);
+    }
     if let Some(rest) = rhs.strip_prefix("alloca ") {
         require_count(&result_ids, 3, "alloca results")?;
         let (operands, attributes) = split_attributes(rest)?;
@@ -807,6 +818,147 @@ fn call_args(
         args[split].clone(),
         args[split + 1].clone(),
     ))
+}
+
+fn parse_assembly(
+    rhs: &str,
+    result_ids: &[u32],
+    values: &HashMap<u32, EvoIRType>,
+) -> Result<Inst, String> {
+    use crate::{
+        assembly_memory_constraint, AssemblyInput, AssemblyLabel, AssemblyOutput, InlineAssembly,
+    };
+    let mut cursor = Cursor::new(rhs);
+    cursor.expect("asm")?;
+    let is_goto = cursor.at(".goto");
+    if is_goto {
+        cursor.expect(".goto")?;
+    }
+    let volatile = cursor.at(" volatile");
+    if volatile {
+        cursor.expect(" volatile")?;
+    }
+    cursor.expect(" ")?;
+    let template = cursor.quoted()?;
+    cursor.expect(" ")?;
+    let mem_in = cursor.value(values)?;
+    cursor.expect(", ")?;
+    let world_in = cursor.value(values)?;
+    cursor.expect(" outputs [")?;
+    let mut outputs = Vec::new();
+    while !cursor.at("]") {
+        if !outputs.is_empty() {
+            cursor.expect(", ")?;
+        }
+        cursor.expect("(")?;
+        let constraint = cursor.quoted()?;
+        cursor.expect(", ")?;
+        let name = cursor.quoted()?;
+        cursor.expect(", ")?;
+        let ty = cursor.ty()?;
+        cursor.expect(", ")?;
+        let incoming = if cursor.at("-") {
+            cursor.expect("-")?;
+            None
+        } else {
+            Some(cursor.value(values)?)
+        };
+        cursor.expect(")")?;
+        outputs.push(AssemblyOutput {
+            constraint,
+            name,
+            ty,
+            incoming,
+        });
+    }
+    cursor.expect("] inputs [")?;
+    let mut inputs = Vec::new();
+    while !cursor.at("]") {
+        if !inputs.is_empty() {
+            cursor.expect(", ")?;
+        }
+        cursor.expect("(")?;
+        let constraint = cursor.quoted()?;
+        cursor.expect(", ")?;
+        let name = cursor.quoted()?;
+        cursor.expect(", ")?;
+        let value = cursor.value(values)?;
+        cursor.expect(")")?;
+        inputs.push(AssemblyInput {
+            constraint,
+            name,
+            value,
+        });
+    }
+    cursor.expect("] clobbers [")?;
+    let mut clobbers = Vec::new();
+    while !cursor.at("]") {
+        if !clobbers.is_empty() {
+            cursor.expect(", ")?;
+        }
+        clobbers.push(cursor.quoted()?);
+    }
+    cursor.expect("]")?;
+    let types = outputs
+        .iter()
+        .filter(|output| !assembly_memory_constraint(&output.constraint))
+        .map(|output| output.ty.clone())
+        .collect::<Vec<_>>();
+    require_count(result_ids, types.len() + 2, "assembly results")?;
+    let results = result_ids
+        .iter()
+        .zip(types)
+        .map(|(id, ty)| Value { id: *id, ty })
+        .collect::<Vec<_>>();
+    let assembly = InlineAssembly {
+        template,
+        volatile,
+        outputs,
+        inputs,
+        clobbers,
+        mem_in,
+        world_in,
+        mem_out: Value {
+            id: result_ids[results.len()],
+            ty: EvoIRType::Mem(Region::All),
+        },
+        world_out: Value {
+            id: result_ids[results.len() + 1],
+            ty: EvoIRType::World,
+        },
+        results,
+    };
+    if !is_goto {
+        cursor.finish()?;
+        return Ok(Inst::Asm(assembly));
+    }
+    let mut edge_values = values.clone();
+    for result in assembly.results() {
+        if edge_values.insert(result.id, result.ty.clone()).is_some() {
+            return Err("duplicate assembly result".into());
+        }
+    }
+    cursor.expect(" labels [")?;
+    let mut labels = Vec::new();
+    while !cursor.at("]") {
+        if !labels.is_empty() {
+            cursor.expect(", ")?;
+        }
+        cursor.expect("(")?;
+        let name = cursor.quoted()?;
+        cursor.expect(", ")?;
+        let edge = cursor.assembly_edge(&edge_values)?;
+        cursor.expect(")")?;
+        labels.push(AssemblyLabel { name, edge });
+    }
+    cursor.expect("] fallthrough ")?;
+    let fallthrough = cursor.assembly_edge(&edge_values)?;
+    cursor.finish()?;
+    Ok(Inst::AsmGoto {
+        assembly,
+        labels,
+        fallthrough,
+    })
 }
 
 fn parse_terminator(body: &str, values: &HashMap<u32, EvoIRType>) -> Result<Inst, String> {
@@ -1157,6 +1309,83 @@ impl<'a> Cursor<'a> {
     fn value_id(&mut self) -> Result<u32, String> {
         self.expect("%v")?;
         u32::try_from(self.index()?).map_err(|_| "value id exceeds u32".to_owned())
+    }
+
+    fn value(&mut self, values: &HashMap<u32, EvoIRType>) -> Result<Value, String> {
+        let id = self.value_id()?;
+        let ty = values
+            .get(&id)
+            .ok_or_else(|| format!("value %v{id} is not a prior local definition"))?
+            .clone();
+        Ok(Value { id, ty })
+    }
+
+    fn assembly_edge(
+        &mut self,
+        values: &HashMap<u32, EvoIRType>,
+    ) -> Result<crate::AssemblyEdge, String> {
+        self.expect("^")?;
+        let target = if self.at("entry") {
+            self.expect("entry")?;
+            0
+        } else {
+            self.expect("b")?;
+            u32::try_from(self.index()?).map_err(|_| "block id exceeds u32")?
+        };
+        self.expect("(")?;
+        let mut arguments = Vec::new();
+        while !self.at(")") {
+            if !arguments.is_empty() {
+                self.expect(", ")?;
+            }
+            arguments.push(self.value(values)?);
+        }
+        self.expect(")")?;
+        Ok(crate::AssemblyEdge { target, arguments })
+    }
+
+    fn quoted(&mut self) -> Result<String, String> {
+        self.expect("\"")?;
+        let mut bytes = Vec::new();
+        loop {
+            let byte = self
+                .text
+                .as_bytes()
+                .get(self.position)
+                .copied()
+                .ok_or("unterminated assembly string")?;
+            self.position += 1;
+            match byte {
+                b'"' => break,
+                b'\\' => {
+                    let escaped = self
+                        .text
+                        .as_bytes()
+                        .get(self.position)
+                        .copied()
+                        .ok_or("unterminated assembly escape")?;
+                    self.position += 1;
+                    match escaped {
+                        b'"' | b'\\' => bytes.push(escaped),
+                        b'x' => {
+                            let hex = self
+                                .text
+                                .get(self.position..self.position + 2)
+                                .ok_or("truncated assembly byte escape")?;
+                            bytes.push(
+                                u8::from_str_radix(hex, 16)
+                                    .map_err(|_| "invalid assembly byte escape")?,
+                            );
+                            self.position += 2;
+                        }
+                        _ => return Err("unknown assembly string escape".into()),
+                    }
+                }
+                0x20..=0x7e => bytes.push(byte),
+                _ => return Err("noncanonical assembly string byte".into()),
+            }
+        }
+        String::from_utf8(bytes).map_err(|_| "assembly string is not UTF-8".into())
     }
 
     fn boolean(&mut self) -> Result<bool, String> {

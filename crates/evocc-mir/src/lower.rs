@@ -281,6 +281,12 @@ fn scan_inst(
 
     match inst {
         // The Section 5 table, row by row.
+        Inst::Asm(_) | Inst::AsmGoto { .. } => report(
+            E4009,
+            block,
+            index,
+            "inline assembly selection is not implemented".into(),
+        ),
         Inst::Const(..)
         | Inst::Uninitialized(_)
         | Inst::Add(..)

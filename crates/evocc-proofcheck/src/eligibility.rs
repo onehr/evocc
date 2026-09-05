@@ -282,7 +282,7 @@ fn excluded_values(function: &Function) -> HashSet<u32> {
         .map(|argument| argument.value.id)
         .collect::<HashSet<_>>();
     for block in &function.blocks {
-        for instruction in &block.insts {
+        for instruction in block.insts.iter().chain([&block.terminator]) {
             if !allowlisted(instruction) {
                 excluded.extend(inst_results(instruction).into_iter().map(|value| value.id));
             }
@@ -295,7 +295,7 @@ fn excluded_values(function: &Function) -> HashSet<u32> {
 fn fixed_point(function: &Function, initial: impl Fn(&Inst) -> bool) -> HashSet<u32> {
     let mut values = HashSet::new();
     for block in &function.blocks {
-        for instruction in &block.insts {
+        for instruction in block.insts.iter().chain([&block.terminator]) {
             if initial(instruction) {
                 values.extend(inst_results(instruction).into_iter().map(|value| value.id));
             }
@@ -309,7 +309,7 @@ fn propagate(function: &Function, values: &mut HashSet<u32>) {
     loop {
         let before = values.len();
         for block in &function.blocks {
-            for instruction in &block.insts {
+            for instruction in block.insts.iter().chain([&block.terminator]) {
                 if inst_operands(instruction)
                     .iter()
                     .any(|operand| values.contains(&operand.id))
@@ -327,6 +327,15 @@ fn propagate(function: &Function, values: &mut HashSet<u32>) {
 
 fn propagate_edges(function: &Function, terminator: &Inst, values: &mut HashSet<u32>) {
     match terminator {
+        Inst::AsmGoto {
+            labels,
+            fallthrough,
+            ..
+        } => {
+            for edge in labels.iter().map(|label| &label.edge).chain([fallthrough]) {
+                propagate_edge(function, edge.target, &edge.arguments, values);
+            }
+        }
         Inst::Br(target, arguments) => propagate_edge(function, *target, arguments, values),
         Inst::CondBr(_, true_target, true_arguments, false_target, false_arguments) => {
             propagate_edge(function, *true_target, true_arguments, values);
@@ -427,6 +436,7 @@ fn packed_type(ty: &EvoIRType) -> String {
 #[allow(clippy::too_many_lines)]
 fn inst_operands(instruction: &Inst) -> Vec<&Value> {
     match instruction {
+        Inst::Asm(assembly) | Inst::AsmGoto { assembly, .. } => assembly.operands(),
         Inst::Const(..)
         | Inst::Uninitialized(..)
         | Inst::Trap(..)

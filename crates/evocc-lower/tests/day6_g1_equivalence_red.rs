@@ -660,6 +660,9 @@ fn branch_target(id: BlockId, args: &[Value]) -> String {
 
 fn render_inst(inst: &Inst) -> String {
     match inst {
+        Inst::Asm(_) | Inst::AsmGoto { .. } => {
+            panic!("assembly is outside these scalar golden fixtures")
+        }
         Inst::Const(result, immediate) => format!(
             "{} = const.{} {immediate}",
             value(result),

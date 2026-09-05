@@ -208,6 +208,29 @@ fn remap(value: &mut Value, aliases: &HashMap<u32, Value>) {
 #[allow(clippy::too_many_lines)]
 fn remap_uses(instruction: &mut Inst, aliases: &HashMap<u32, Value>) {
     match instruction {
+        Inst::Asm(assembly) => {
+            for value in assembly.operands_mut() {
+                remap(value, aliases);
+            }
+        }
+        Inst::AsmGoto {
+            assembly,
+            labels,
+            fallthrough,
+        } => {
+            for value in assembly.operands_mut() {
+                remap(value, aliases);
+            }
+            for edge in labels
+                .iter_mut()
+                .map(|label| &mut label.edge)
+                .chain([fallthrough])
+            {
+                for value in &mut edge.arguments {
+                    remap(value, aliases);
+                }
+            }
+        }
         Inst::Const(..)
         | Inst::Uninitialized(..)
         | Inst::Trap(..)
@@ -356,7 +379,7 @@ fn renumber(function: &mut evocc_evoir::Function) -> Result<(), ()> {
             }
             next = next.checked_add(1).ok_or(())?;
         }
-        for instruction in &block.insts {
+        for instruction in block.insts.iter().chain([&block.terminator]) {
             for result in inst_results(instruction) {
                 if identities.insert(result.id, next).is_some() {
                     return Err(());
@@ -385,6 +408,22 @@ fn remap_identity(value: &mut Value, identities: &HashMap<u32, u32>) -> Result<(
 #[allow(clippy::too_many_lines)]
 fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
     match instruction {
+        Inst::Asm(assembly) => assembly.values_mut(),
+        Inst::AsmGoto {
+            assembly,
+            labels,
+            fallthrough,
+        } => {
+            let mut values = assembly.values_mut();
+            for edge in labels
+                .iter_mut()
+                .map(|label| &mut label.edge)
+                .chain([fallthrough])
+            {
+                values.extend(edge.arguments.iter_mut());
+            }
+            values
+        }
         Inst::Const(result, _) | Inst::Uninitialized(result) => vec![result],
         Inst::Add(result, left, right)
         | Inst::Sub(result, left, right)

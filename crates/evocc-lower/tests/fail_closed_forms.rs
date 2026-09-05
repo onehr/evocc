@@ -29,6 +29,26 @@ fn assert_lowering_error(source: &str, ordinal: u32, code: &str, message: &str) 
     );
     AllocationSiteManifest::derive(&unit)
         .unwrap_or_else(|error| panic!("allocation manifest case {ordinal}: {error:?}"));
+    if code == "E3021" {
+        let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+            .expect("assembly now has an opaque IR representation");
+        let function = &module.functions[0];
+        let arguments = function
+            .params
+            .iter()
+            .map(|parameter| evocc_evoir::RuntimeValue::new(parameter.ty.clone(), 0))
+            .collect::<Vec<_>>();
+        let error = evocc_evoir::interpret_module(
+            &module,
+            &function.name,
+            &arguments,
+            evocc_evoir::InterpreterLimits::new(100),
+        )
+        .expect_err("assembly execution remains fail closed");
+        assert_eq!(error.code(), code);
+        assert!(error.to_string().contains(message));
+        return;
+    }
     let error = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
         .expect_err("lowering must fail closed");
     assert_eq!(error.code(), code, "wrong lowering diagnostic: {error}");
@@ -46,7 +66,7 @@ fn checked_arithmetic_fails_closed_with_only_e3020() {
 }
 
 #[test]
-fn extended_asm_fails_closed_with_only_e3021() {
+fn extended_asm_lowers_and_execution_fails_closed() {
     assert_lowering_error(
         "void f(void) { asm volatile(\"nop\" ::: \"memory\"); }\n",
         1,
@@ -56,7 +76,7 @@ fn extended_asm_fails_closed_with_only_e3021() {
 }
 
 #[test]
-fn asm_goto_fails_closed_with_only_e3021() {
+fn asm_goto_lowers_and_execution_fails_closed() {
     assert_lowering_error(
         "int h(void) { asm goto(\"b %l[o]\" : : : : o); return 0; o: return 1; }\n",
         2,

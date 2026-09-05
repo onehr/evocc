@@ -14,9 +14,14 @@ use evocc_memory::{
 pub use evocc_types::EvoIRType;
 use evocc_types::{Region, TargetDataLayout};
 
+mod assembly;
 mod text;
 mod text_parse;
 
+pub use assembly::{
+    assembly_clobber, assembly_memory_constraint, AssemblyEdge, AssemblyInput, AssemblyLabel,
+    AssemblyOutput, InlineAssembly,
+};
 pub use text::{render_module, validate_section9_bytes};
 pub use text_parse::parse_section9_module;
 
@@ -170,6 +175,14 @@ impl TrapReason {
 /// cannot be confused with ordinary call arguments or results.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Inst {
+    /// Opaque assembly with explicit register results and effect tokens.
+    Asm(InlineAssembly),
+    /// Opaque assembly terminator; results are available on every edge.
+    AsmGoto {
+        assembly: InlineAssembly,
+        labels: Vec<AssemblyLabel>,
+        fallthrough: AssemblyEdge,
+    },
     /// `Const(result, bits)`: define `result` from a non-negative raw bit
     /// pattern. The result type determines how many low bits are retained.
     Const(Value, u64),
@@ -387,6 +400,7 @@ pub enum Inst {
 #[must_use]
 pub fn inst_results(inst: &Inst) -> Vec<&Value> {
     match inst {
+        Inst::Asm(assembly) | Inst::AsmGoto { assembly, .. } => assembly.results(),
         Inst::Const(v, _)
         | Inst::Uninitialized(v)
         | Inst::Add(v, ..)
@@ -467,6 +481,19 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
 #[must_use]
 pub fn inst_uses(inst: &Inst) -> Vec<&Value> {
     match inst {
+        Inst::Asm(assembly) => assembly.operands(),
+        Inst::AsmGoto {
+            assembly,
+            labels,
+            fallthrough,
+        } => {
+            let mut uses = assembly.operands();
+            for label in labels {
+                uses.extend(&label.edge.arguments);
+            }
+            uses.extend(&fallthrough.arguments);
+            uses
+        }
         Inst::Const(..)
         | Inst::Uninitialized(..)
         | Inst::Trap(..)
@@ -720,6 +747,14 @@ fn local_effect_summary(function: &Function) -> EffectSummary {
 #[allow(clippy::too_many_lines)]
 fn inst_effect_summary(inst: &Inst) -> EffectSummary {
     match inst {
+        Inst::Asm(_) | Inst::AsmGoto { .. } => EffectSummary {
+            reads_all: true,
+            writes_all: true,
+            volatile: true,
+            io: true,
+            may_trap: true,
+            ..EffectSummary::default()
+        },
         Inst::SDiv(..)
         | Inst::UDiv(..)
         | Inst::SRem(..)
@@ -945,6 +980,26 @@ pub fn validate_ssa(func: &Function) -> Result<(), String> {
         if !is_terminator(&block.terminator) {
             return Err(format!("block {} ends with a non-terminator", block.id));
         }
+        if let Inst::AsmGoto {
+            assembly, labels, ..
+        } = &block.terminator
+        {
+            for used in assembly.operands() {
+                ensure_value_type(&used.ty, "assembly input")?;
+                require_local_value(&local, used, block.id, "assembly input")?;
+            }
+            assembly.validate(labels)?;
+            effects.advance(&block.terminator, block.id)?;
+            for result in assembly.results() {
+                ensure_value_type(&result.ty, "assembly result")?;
+                register_definition(
+                    &mut definitions,
+                    result,
+                    format!("assembly terminator in block {}", block.id),
+                )?;
+                local.insert(result.id, result.ty.clone());
+            }
+        }
         for used in inst_uses(&block.terminator) {
             ensure_value_type(
                 &used.ty,
@@ -954,6 +1009,22 @@ pub fn validate_ssa(func: &Function) -> Result<(), String> {
         }
 
         match &block.terminator {
+            Inst::AsmGoto {
+                labels,
+                fallthrough,
+                ..
+            } => {
+                for edge in labels.iter().map(|label| &label.edge).chain([fallthrough]) {
+                    validate_edge(&blocks, block.id, edge.target, &edge.arguments)?;
+                    validate_effect_edge(
+                        &blocks,
+                        block.id,
+                        edge.target,
+                        &edge.arguments,
+                        &effects,
+                    )?;
+                }
+            }
             Inst::Br(target, args) => {
                 validate_edge(&blocks, block.id, *target, args)?;
                 validate_effect_edge(&blocks, block.id, *target, args, &effects)?;
@@ -1489,7 +1560,7 @@ fn require_local_value(
 fn is_terminator(inst: &Inst) -> bool {
     matches!(
         inst,
-        Inst::Br(..) | Inst::CondBr(..) | Inst::Ret(..) | Inst::Trap(..)
+        Inst::Br(..) | Inst::CondBr(..) | Inst::Ret(..) | Inst::Trap(..) | Inst::AsmGoto { .. }
     )
 }
 
@@ -1655,6 +1726,14 @@ fn validate_reachability(func: &Function, entry: BlockId) -> Result<(), String> 
             return Err(format!("reachable block {} is missing", block_id));
         };
         match &block.terminator {
+            Inst::AsmGoto {
+                labels,
+                fallthrough,
+                ..
+            } => {
+                pending.extend(labels.iter().map(|label| label.edge.target));
+                pending.push(fallthrough.target);
+            }
             Inst::Br(target, _) => pending.push(*target),
             Inst::CondBr(_, true_block, _, false_block, _) => {
                 pending.push(*true_block);
@@ -1735,6 +1814,12 @@ impl EffectState {
 
     fn advance(&mut self, inst: &Inst, block: BlockId) -> Result<(), String> {
         let tokens = match inst {
+            Inst::Asm(assembly) | Inst::AsmGoto { assembly, .. } => Some((
+                &assembly.mem_in,
+                &assembly.world_in,
+                &assembly.mem_out,
+                &assembly.world_out,
+            )),
             Inst::Load {
                 mem_in,
                 world_in,
@@ -1848,6 +1933,10 @@ impl EffectState {
 
 fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String> {
     match inst {
+        Inst::Asm(assembly) => assembly.validate(&[]),
+        Inst::AsmGoto {
+            assembly, labels, ..
+        } => assembly.validate(labels),
         Inst::Const(result, _) => expect_bits(&result.ty, "const result", block),
         Inst::Uninitialized(result) => expect_data_type(&result.ty, "uninitialized result", block),
         Inst::Add(result, lhs, rhs)
@@ -2874,6 +2963,14 @@ impl fmt::Display for InterpreterError {
 
 impl std::error::Error for InterpreterError {}
 
+fn assembly_error(block: BlockId) -> InterpreterError {
+    InterpreterError::UndefinedBehavior {
+        block,
+        diagnostic: "E3021",
+        message: "not-lowered: asm",
+    }
+}
+
 fn trap_error(reason: TrapReason, block: BlockId) -> InterpreterError {
     match reason {
         TrapReason::ScalarFunctionFellOffEnd => InterpreterError::MissingReturn { block },
@@ -3016,6 +3113,7 @@ fn interpret_function_in_state(
                     world: state.world,
                 });
             }
+            Inst::AsmGoto { .. } => return Err(assembly_error(block.id)),
             Inst::Trap(reason) => return Err(trap_error(*reason, block.id)),
             _ => {
                 return Err(InterpreterError::InvalidFunction {
@@ -3424,6 +3522,7 @@ fn interpret_module_in_state(
                         });
                     }
                 }
+                Inst::AsmGoto { .. } => return Err(assembly_error(block_id)),
                 Inst::Trap(reason) => return Err(trap_error(reason, block_id)),
                 _ => {
                     return Err(InterpreterError::InvalidModule {
@@ -4106,6 +4205,7 @@ fn execute_instruction(
             write_value(values, mem_out, next_memory_token);
             write_value(values, world_out, next_world_token);
         }
+        Inst::Asm(_) | Inst::AsmGoto { .. } => return Err(assembly_error(block)),
         Inst::Call { .. } | Inst::IndirectCall { .. } => {
             return Err(InterpreterError::UnsupportedInstruction {
                 block,
@@ -4602,6 +4702,29 @@ fn remap(value: &mut Value, aliases: &HashMap<u32, Value>) {
 #[allow(clippy::too_many_lines)]
 pub fn remap_inst_uses(inst: &mut Inst, aliases: &HashMap<u32, Value>) {
     match inst {
+        Inst::Asm(assembly) => {
+            for value in assembly.operands_mut() {
+                remap(value, aliases);
+            }
+        }
+        Inst::AsmGoto {
+            assembly,
+            labels,
+            fallthrough,
+        } => {
+            for value in assembly.operands_mut() {
+                remap(value, aliases);
+            }
+            for edge in labels
+                .iter_mut()
+                .map(|label| &mut label.edge)
+                .chain([fallthrough])
+            {
+                for value in &mut edge.arguments {
+                    remap(value, aliases);
+                }
+            }
+        }
         Inst::Const(..)
         | Inst::Uninitialized(..)
         | Inst::Trap(..)

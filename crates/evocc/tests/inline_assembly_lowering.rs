@@ -105,7 +105,7 @@ fn assembly_constraints_and_refusals() {
         ),
         (
             "constant_expression_immediate",
-            r#"asm("mov %0, %1" : "=r"(y) : "i"(3 + 4));"#,
+            r#"asm("mov %0, %1" : "=r"(y) : "i"(1 << 31));"#,
             None,
         ),
         (
@@ -174,6 +174,8 @@ fn assembly_constraints_and_refusals() {
             None => {
                 output.status.success()
                     && evocc_evoir::parse_section9_module(&output.stdout).is_ok()
+                    && (*name != "constant_expression_immediate"
+                        || !String::from_utf8_lossy(&output.stdout).contains("ub.assume"))
             }
         };
         if !accepted {

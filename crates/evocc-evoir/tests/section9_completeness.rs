@@ -319,6 +319,18 @@ fn sentinel_module() -> Module {
 
 fn inst_schema(inst: &Inst) -> &'static str {
     match inst {
+        Inst::Asm(assembly) => {
+            let _ = assembly;
+            "Inst.Asm(assembly)"
+        }
+        Inst::AsmGoto {
+            assembly,
+            labels,
+            fallthrough,
+        } => {
+            let _ = (assembly, labels, fallthrough);
+            "Inst.AsmGoto(assembly,labels,fallthrough)"
+        }
         Inst::Const(result, immediate) => {
             let _ = (result, immediate);
             "Inst.Const(result,immediate)"

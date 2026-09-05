@@ -12,17 +12,18 @@ use evocc_chir::integer::{
     usual_arithmetic_type, CInteger, CIntegerType,
 };
 use evocc_chir::{
-    statement_expression_value, AllocationSiteManifest, AssignmentOp, BinaryOp, CHirBlockItem,
-    CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, ExprCategory, ExprFacts, FunctionDecl,
-    InitAction, MemoryPlace, ObjectDecl, ObjectInitializer, ParameterSyntax, PlaceProjection,
-    PlaceRoot, ScalarPlace, ScopeKind, StorageClass, SubobjectPath, SubobjectStep, SymbolId,
-    SymbolKind, UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
+    statement_expression_value, AllocationSiteManifest, AsmStmt, AssignmentOp, BinaryOp,
+    CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, ExprCategory, ExprFacts,
+    FunctionDecl, InitAction, MemoryPlace, ObjectDecl, ObjectInitializer, ParameterSyntax,
+    PlaceProjection, PlaceRoot, ScalarPlace, ScopeKind, StorageClass, SubobjectPath, SubobjectStep,
+    SymbolId, SymbolKind, UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
 };
 use evocc_common::SourceSpan;
 use evocc_evoir::{
-    inst_results, validate_module, AccessLayout, Block, BlockArg, BlockId, CmpOp, Function,
-    FunctionParam, GlobalKind, GlobalObject, GlobalVisibility, IndexSignedness, Inst, Module,
-    OffsetDirection, TrapReason, UbReason, Value,
+    inst_results, validate_module, AccessLayout, AssemblyEdge, AssemblyInput, AssemblyLabel,
+    AssemblyOutput, Block, BlockArg, BlockId, CmpOp, Function, FunctionParam, GlobalKind,
+    GlobalObject, GlobalVisibility, IndexSignedness, InlineAssembly, Inst, Module, OffsetDirection,
+    TrapReason, UbReason, Value,
 };
 use evocc_types::{
     enum_integer_rank, AddressSpace, ArrayBound, EvoIRType, FunctionParameters, LayoutError,
@@ -92,6 +93,10 @@ pub enum LowerError {
     Asm {
         span: SourceSpan,
     },
+    AsmOperand {
+        span: SourceSpan,
+        reason: String,
+    },
     VarArgs {
         span: SourceSpan,
     },
@@ -146,6 +151,7 @@ impl fmt::Display for LowerError {
             Self::StaticRelocation { .. } => formatter.write_str("not-lowered: static-relocation"),
             Self::ComputedGoto { .. } => formatter.write_str("not-lowered: computed-goto"),
             Self::Asm { .. } => formatter.write_str("not-lowered: asm"),
+            Self::AsmOperand { reason, .. } => write!(formatter, "not-lowered: asm: {reason}"),
             Self::VarArgs { .. } => formatter.write_str("not-lowered: varargs"),
             Self::MalformedFunction {
                 function, reason, ..
@@ -170,6 +176,7 @@ impl LowerError {
         match self {
             Self::CheckedArithmetic { .. } => "E3020",
             Self::Asm { .. } => "E3021",
+            Self::AsmOperand { .. } => "E3021",
             Self::BitBuiltin { .. } => "E3023",
             Self::ReturnAddress { .. } => "E3025",
             Self::StaticRelocation { .. } => "E3026",
@@ -209,6 +216,7 @@ impl LowerError {
             | Self::StaticRelocation { span }
             | Self::ComputedGoto { span }
             | Self::Asm { span }
+            | Self::AsmOperand { span, .. }
             | Self::VarArgs { span }
             | Self::MalformedFunction { span, .. }
             | Self::InvalidControlFlow { span, .. }
@@ -585,6 +593,18 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
     fn statement(unit: &CHirUnit<'_>, stmt: &CHirStmt<'_>, out: &mut BTreeSet<SymbolId>) {
         match stmt {
             CHirStmt::Asm(assembly) => {
+                for operand in
+                    assembly
+                        .outputs
+                        .iter()
+                        .chain(assembly.inputs.iter().filter(|operand| {
+                            evocc_evoir::assembly_memory_constraint(&operand.constraint)
+                        }))
+                {
+                    if let CHirExpr::Ident { symbol, .. } = operand.expression {
+                        out.insert(*symbol);
+                    }
+                }
                 for operand in assembly.outputs.iter().chain(&assembly.inputs) {
                     expression(unit, operand.expression, out);
                 }
@@ -1182,9 +1202,12 @@ fn prevalidate_stmt_for_lowering(
     global_register_symbols: &BTreeSet<SymbolId>,
 ) -> Result<(), LowerError> {
     match statement {
-        CHirStmt::Asm(assembly) => Err(LowerError::Asm {
-            span: assembly.span,
-        }),
+        CHirStmt::Asm(assembly) => {
+            for operand in assembly.outputs.iter().chain(&assembly.inputs) {
+                prevalidate_expr_for_lowering(unit, operand.expression, global_register_symbols)?;
+            }
+            Ok(())
+        }
         CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
             prevalidate_expr_for_lowering(unit, expression, global_register_symbols)
         }
@@ -2471,13 +2494,22 @@ impl<'a> FunctionLowerer<'a> {
                 continue;
             };
             let targets = match terminator {
-                Inst::Br(target, _) => [Some(*target), None],
+                Inst::AsmGoto {
+                    labels,
+                    fallthrough,
+                    ..
+                } => labels
+                    .iter()
+                    .map(|label| label.edge.target)
+                    .chain([fallthrough.target])
+                    .collect(),
+                Inst::Br(target, _) => vec![*target],
                 Inst::CondBr(_, true_target, _, false_target, _) => {
-                    [Some(*true_target), Some(*false_target)]
+                    vec![*true_target, *false_target]
                 }
-                _ => [None, None],
+                _ => vec![],
             };
-            for target in targets.into_iter().flatten() {
+            for target in targets {
                 if reachable.insert(target) {
                     pending.push(target);
                 }
@@ -2717,6 +2749,260 @@ impl<'a> FunctionLowerer<'a> {
         Ok(Some(target))
     }
 
+    fn assembly_temporary(&mut self, value: Value, state: &mut State) -> EnvKey {
+        let key = EnvKey::Temporary(self.next_temporary);
+        self.next_temporary += 1;
+        state.env.insert(
+            key,
+            BoundValue {
+                value,
+                integer: None,
+            },
+        );
+        key
+    }
+
+    fn lower_assembly(
+        &mut self,
+        source: &'a AsmStmt<'a>,
+        mut state: State,
+        live_after: &BTreeSet<SymbolId>,
+    ) -> Result<Flow, LowerError> {
+        let refuse = |reason: String| LowerError::AsmOperand {
+            span: source.span,
+            reason,
+        };
+        let mut outputs = Vec::new();
+        let mut inputs = Vec::new();
+        let mut result_types = Vec::new();
+        let mut writebacks = Vec::new();
+        let mut temporary_keys = Vec::new();
+        let mut incoming_keys = Vec::new();
+        let mut input_keys = Vec::new();
+        for operand in &source.outputs {
+            if !matches!(
+                operand.constraint.as_str(),
+                "=r" | "+r" | "=&r" | "+&r" | "=Q" | "+Q"
+            ) {
+                return Err(refuse(operand.constraint.clone()));
+            }
+            let address = self
+                .lower_unary(
+                    UnaryOp::AddrOf,
+                    operand.expression,
+                    operand.span,
+                    &mut state,
+                )?
+                .value;
+            let incoming = if evocc_evoir::assembly_memory_constraint(&operand.constraint) {
+                Some(address.clone())
+            } else {
+                let ty = match operand.expression {
+                    CHirExpr::Ident { facts, .. } | CHirExpr::MemoryRead { facts, .. } => {
+                        facts.ty()
+                    }
+                    CHirExpr::Unary(UnaryOp::Deref, pointer, span) => {
+                        self.pointer_pointee_type(pointer, *span)?
+                    }
+                    _ => return Err(refuse(format!("{} output place", operand.constraint))),
+                };
+                let (ir, integer) = self.c_value_type(ty, operand.span)?;
+                let volatile = self
+                    .unit
+                    .types()
+                    .get(ty)
+                    .is_some_and(|ty| ty.qualifiers.is_volatile);
+                let address_key = self.assembly_temporary(address.clone(), &mut state);
+                temporary_keys.push(address_key);
+                result_types.push(ir);
+                writebacks.push((address_key, ty, integer, volatile));
+                if operand.constraint.starts_with('+') {
+                    Some(
+                        self.emit_memory_load(address, ty, volatile, operand.span, &mut state)?
+                            .value,
+                    )
+                } else {
+                    None
+                }
+            };
+            let ty = if evocc_evoir::assembly_memory_constraint(&operand.constraint) {
+                incoming.as_ref().expect("memory address").ty.clone()
+            } else {
+                result_types.last().expect("register output").clone()
+            };
+            let key = incoming
+                .as_ref()
+                .map(|value| self.assembly_temporary(value.clone(), &mut state));
+            temporary_keys.extend(key);
+            incoming_keys.push(key);
+            outputs.push(AssemblyOutput {
+                constraint: operand.constraint.clone(),
+                name: operand.symbolic.clone().unwrap_or_default(),
+                ty,
+                incoming,
+            });
+        }
+        for operand in &source.inputs {
+            let immediate = matches!(
+                operand.constraint.as_str(),
+                "I" | "J" | "K" | "L" | "i" | "n"
+            );
+            if immediate
+                && !evocc_chir::builtin_constant_p(
+                    operand.expression,
+                    self.unit.types(),
+                    self.unit.symbols(),
+                    self.target,
+                )
+            {
+                return Err(refuse(operand.constraint.clone()));
+            }
+            let value = if immediate {
+                let integer = evocc_chir::interp::interpret_static_integer_expression(
+                    self.unit,
+                    operand.expression,
+                    self.target,
+                )
+                .map_err(|_| refuse(operand.constraint.clone()))?;
+                if integer.ty().bits() > 64 {
+                    return Err(LowerError::WideInteger { span: operand.span });
+                }
+                self.constant(&state, integer.ty(), integer.raw_bits() as u64)?
+                    .value
+            } else if evocc_evoir::assembly_memory_constraint(&operand.constraint) {
+                self.lower_unary(
+                    UnaryOp::AddrOf,
+                    operand.expression,
+                    operand.span,
+                    &mut state,
+                )?
+                .value
+            } else {
+                self.lower_expr(operand.expression, &mut state)?.value
+            };
+            let key = self.assembly_temporary(value.clone(), &mut state);
+            temporary_keys.push(key);
+            input_keys.push(key);
+            inputs.push(AssemblyInput {
+                constraint: operand.constraint.clone(),
+                name: operand.symbolic.clone().unwrap_or_default(),
+                value,
+            });
+        }
+        for (output, key) in outputs.iter_mut().zip(incoming_keys) {
+            if let Some(key) = key {
+                output.incoming = Some(self.token(&state, key)?.value);
+            }
+        }
+        for (input, key) in inputs.iter_mut().zip(input_keys) {
+            input.value = self.token(&state, key)?.value;
+        }
+        let results = result_types
+            .into_iter()
+            .map(|ty| self.fresh_value(ty))
+            .collect::<Vec<_>>();
+        let assembly = InlineAssembly {
+            template: source.template.clone(),
+            volatile: source.volatile_span.is_some(),
+            outputs,
+            inputs,
+            clobbers: source.clobbers.clone(),
+            results,
+            mem_in: self.token(&state, EnvKey::Memory)?.value,
+            world_in: self.token(&state, EnvKey::World)?.value,
+            mem_out: self.fresh_value(EvoIRType::Mem(Region::All)),
+            world_out: self.fresh_value(EvoIRType::World),
+        };
+        let labels = source
+            .labels
+            .iter()
+            .map(|label| AssemblyLabel {
+                name: label.spelling.clone(),
+                edge: AssemblyEdge {
+                    target: 0,
+                    arguments: vec![],
+                },
+            })
+            .collect::<Vec<_>>();
+        assembly.validate(&labels).map_err(refuse)?;
+        self.replace_effect_tokens(
+            &mut state,
+            assembly.mem_out.clone(),
+            Some(assembly.world_out.clone()),
+        );
+        let mut result_keys = Vec::new();
+        for result in &assembly.results {
+            let key = self.assembly_temporary(result.clone(), &mut state);
+            temporary_keys.push(key);
+            result_keys.push(key);
+        }
+        let mut successors = Vec::new();
+        if source.goto_span.is_some() {
+            let keys = self.keys_for(&state, &state.locals, &[]);
+            let mut labels = Vec::new();
+            for label in &source.labels {
+                let successor = self.new_block_from(&state, &keys, BlockRole::Ordinary)?;
+                labels.push(AssemblyLabel {
+                    name: label.spelling.clone(),
+                    edge: AssemblyEdge {
+                        target: successor.block,
+                        arguments: self.edge_values(&state, &keys)?,
+                    },
+                });
+                successors.push((Some(label.spelling.clone()), successor));
+            }
+            let fallthrough = self.new_block_from(&state, &keys, BlockRole::Ordinary)?;
+            let edge = AssemblyEdge {
+                target: fallthrough.block,
+                arguments: self.edge_values(&state, &keys)?,
+            };
+            self.terminate(
+                &state,
+                Inst::AsmGoto {
+                    assembly,
+                    labels,
+                    fallthrough: edge,
+                },
+            )?;
+            successors.push((None, fallthrough));
+        } else {
+            self.emit(&state, Inst::Asm(assembly))?;
+            successors.push((None, state));
+        }
+        let mut normal = Vec::new();
+        for (label, mut successor) in successors {
+            for ((address, ty, integer, volatile), result) in writebacks.iter().zip(&result_keys) {
+                let address = self.token(&successor, *address)?.value;
+                let value = ExprValue {
+                    value: self.token(&successor, *result)?.value,
+                    integer: *integer,
+                };
+                self.emit_memory_store(
+                    address,
+                    value,
+                    *ty,
+                    *volatile,
+                    source.span,
+                    &mut successor,
+                )?;
+            }
+            for key in &temporary_keys {
+                successor.env.remove(key);
+            }
+            if let Some(label) = label {
+                if let Some(target) = self.labels.get(&label).cloned() {
+                    self.branch(&successor, target.id, &target.keys)?;
+                } else {
+                    self.pending_gotos.entry(label).or_default().push(successor);
+                }
+            } else {
+                normal.push(successor);
+            }
+        }
+        let _ = live_after;
+        Ok(Flow { normal })
+    }
+
     fn lower_stmt(
         &mut self,
         statement: &'a CHirStmt<'a>,
@@ -2738,9 +3024,7 @@ impl<'a> FunctionLowerer<'a> {
         control: &ControlTargets,
     ) -> Result<Flow, LowerError> {
         match statement {
-            CHirStmt::Asm(assembly) => Err(LowerError::Asm {
-                span: assembly.span,
-            }),
+            CHirStmt::Asm(assembly) => self.lower_assembly(assembly, state, live_after),
             CHirStmt::Expr(CHirExpr::BuiltinUnreachable { .. }, _) => {
                 self.terminate(&state, Inst::Trap(TrapReason::UnreachableReached))?;
                 Ok(Flow::default())
@@ -7866,6 +8150,7 @@ struct CallSites {
 fn collect_calls_stmt(statement: &CHirStmt<'_>, calls: &mut CallSites) {
     match statement {
         CHirStmt::Asm(assembly) => {
+            calls.any = true;
             for operand in assembly.outputs.iter().chain(&assembly.inputs) {
                 collect_calls_expr(operand.expression, calls);
             }
@@ -8540,7 +8825,7 @@ fn renumber_function(function: &mut Function) -> Result<(), LowerError> {
                     message: "too many values to number".into(),
                 })?;
         }
-        for instruction in &block.insts {
+        for instruction in block.insts.iter().chain([&block.terminator]) {
             for result in inst_results(instruction) {
                 value_map.insert(result.id, next);
                 next = next
@@ -8586,6 +8871,23 @@ fn remap_inst(
         remap_value(value, value_map)?;
     }
     match instruction {
+        Inst::AsmGoto {
+            labels,
+            fallthrough,
+            ..
+        } => {
+            for edge in labels
+                .iter_mut()
+                .map(|label| &mut label.edge)
+                .chain([fallthrough])
+            {
+                edge.target = *block_map.get(&edge.target).ok_or_else(|| {
+                    LowerError::InvalidGeneratedSsa {
+                        message: "assembly edge has no final identity".into(),
+                    }
+                })?;
+            }
+        }
         Inst::Br(target, _) => {
             *target = *block_map
                 .get(target)
@@ -8615,6 +8917,22 @@ fn remap_inst(
 #[allow(clippy::too_many_lines)]
 fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
     match instruction {
+        Inst::Asm(assembly) => assembly.values_mut(),
+        Inst::AsmGoto {
+            assembly,
+            labels,
+            fallthrough,
+        } => {
+            let mut values = assembly.values_mut();
+            for edge in labels
+                .iter_mut()
+                .map(|label| &mut label.edge)
+                .chain([fallthrough])
+            {
+                values.extend(edge.arguments.iter_mut());
+            }
+            values
+        }
         Inst::Const(result, _) | Inst::Uninitialized(result) => vec![result],
         Inst::Add(result, left, right)
         | Inst::Sub(result, left, right)

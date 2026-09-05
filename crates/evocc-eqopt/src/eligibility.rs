@@ -125,7 +125,7 @@ fn bit_width(ty: &EvoIRType) -> u16 {
 fn tainted_values(function: &Function) -> HashSet<u32> {
     let mut tainted = HashSet::new();
     for block in &function.blocks {
-        for instruction in &block.insts {
+        for instruction in block.insts.iter().chain([&block.terminator]) {
             if matches!(instruction, Inst::Uninitialized(_)) {
                 tainted.extend(inst_results(instruction).into_iter().map(|value| value.id));
             }
@@ -154,7 +154,7 @@ fn excluded_values(function: &Function) -> HashSet<u32> {
                 excluded.insert(argument.value.id);
             }
         }
-        for instruction in &block.insts {
+        for instruction in block.insts.iter().chain([&block.terminator]) {
             let listed = allowlisted(instruction);
             for result in inst_results(instruction) {
                 if !listed || !in_bound(&result.ty) {
@@ -182,7 +182,7 @@ fn close(function: &Function, values: &mut HashSet<u32>) {
     loop {
         let before = values.len();
         for block in &function.blocks {
-            for instruction in &block.insts {
+            for instruction in block.insts.iter().chain([&block.terminator]) {
                 if operands(instruction)
                     .iter()
                     .any(|operand| values.contains(&operand.id))
@@ -191,6 +191,15 @@ fn close(function: &Function, values: &mut HashSet<u32>) {
                 }
             }
             match &block.terminator {
+                Inst::AsmGoto {
+                    labels,
+                    fallthrough,
+                    ..
+                } => {
+                    for edge in labels.iter().map(|label| &label.edge).chain([fallthrough]) {
+                        cross(function, &targets, edge.target, &edge.arguments, values);
+                    }
+                }
                 Inst::Br(target, arguments) => {
                     cross(function, &targets, *target, arguments, values)
                 }
@@ -232,6 +241,7 @@ fn cross(
 /// here too, because a value passed on an edge is used at the terminator.
 fn operands(instruction: &Inst) -> Vec<&Value> {
     match instruction {
+        Inst::Asm(assembly) | Inst::AsmGoto { assembly, .. } => assembly.operands(),
         Inst::Const(..)
         | Inst::Uninitialized(..)
         | Inst::PtrNull(..)

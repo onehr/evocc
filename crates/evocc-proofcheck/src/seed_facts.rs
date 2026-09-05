@@ -304,6 +304,15 @@ const fn comparison(operation: CmpOp) -> Comparison {
 /// Every edge the terminator leaves on, in the order Section 9.3 renders them.
 fn edges_of(block: &Block, mut visit: impl FnMut(BlockId, &[Value])) {
     match &block.terminator {
+        Inst::AsmGoto {
+            labels,
+            fallthrough,
+            ..
+        } => {
+            for edge in labels.iter().map(|label| &label.edge).chain([fallthrough]) {
+                visit(edge.target, &edge.arguments);
+            }
+        }
         Inst::Br(target, arguments) => visit(*target, arguments),
         Inst::CondBr(_, true_target, true_arguments, false_target, false_arguments) => {
             visit(*true_target, true_arguments);
