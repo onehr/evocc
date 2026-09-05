@@ -28,13 +28,27 @@ def load(path: Path | None) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+#: Repository-relative roots the evidence lives under. The build and evidence
+#: trees may be reached through a worktree symlink, so a resolved path is
+#: rewritten from the last of these markers rather than from the checkout.
+EVIDENCE_ROOTS = ("/.evidence/", "/.build/", "/tests/", "/tools/")
+
+
 def relative(path: str | None) -> str | None:
+    """A repository-relative path, so the receipt is not host-specific."""
     if path is None:
         return None
+    resolved = Path(path).resolve()
     try:
-        return str(Path(path).resolve().relative_to(REPO_ROOT))
+        return str(resolved.relative_to(REPO_ROOT.resolve()))
     except ValueError:
-        return path
+        pass
+    text = str(resolved)
+    for marker in EVIDENCE_ROOTS:
+        index = text.rfind(marker)
+        if index >= 0:
+            return text[index + 1 :]
+    return text
 
 
 def main() -> int:
@@ -64,9 +78,25 @@ def main() -> int:
         else []
     )
 
+    # The evidence must describe one kernel. A proof of a different vmlinux,
+    # or a boot of a different Image, would join runs that never coexisted.
+    if proof.get("vmlinuxSha256") != substitution["vmlinuxSha256"]:
+        print(
+            "k1: the proof and the substitution describe different vmlinux images",
+            file=sys.stderr,
+        )
+        return 2
+    if boot["imageSha256"] != substitution["imageSha256"]:
+        print("k1: the boot and the substitution describe different Images", file=sys.stderr)
+        return 2
+
     booted = boot["verdict"] == "PASS"
     substituted = substitution["substitutedUnits"]
-    proven = sorted(row["unit"] for row in proof["units"] if row["verdict"] == "proven")
+    proven = sorted(
+        row["unit"]
+        for row in proof["units"]
+        if row["verdict"] in ("proven", "proven-modulo-relocations")
+    )
     contributing_no_symbols = sorted(
         row["unit"] for row in proof["units"] if row["verdict"] == "no-symbols"
     )
@@ -109,6 +139,7 @@ def main() -> int:
             "relinkExitCode": substitution["relinkExitCode"],
             "imageSha256": substitution["imageSha256"],
             "vmlinuxSha256": substitution["vmlinuxSha256"],
+            "provenVmlinuxSha256": proof["vmlinuxSha256"],
             "runDirectory": relative(str(args.substitution.parent)),
             "boot": {
                 "verdict": boot["verdict"],

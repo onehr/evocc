@@ -9,9 +9,18 @@ Two independent witnesses, both read out of the linked image:
   reference vmlinux must not contain it.
 
 * byte identity per symbol. For every symbol a substituted object defines,
-  the bytes of that symbol in the object and the bytes of the same symbol in
-  vmlinux are extracted and compared. This is per unit, so it says which
-  units are in the image rather than that some unit is.
+  the bytes at that symbol in the object and at the same symbol in vmlinux
+  are extracted and compared. This is per unit, so it says which units are in
+  the image rather than that some unit is. The window length comes from the
+  reference object, because the emitter writes no ``.size`` directive; the
+  same window is read on both sides, so an equal result means the image
+  carries the object's bytes from that symbol onward.
+
+An object still carries unresolved relocations where the linker has yet to
+fill an address in; vmlinux carries the filled-in value. Those fields are
+masked on both sides before the comparison, and a symbol that matches only
+after masking is reported as ``proven-modulo-relocations`` with the number of
+masked bytes, never silently folded into an exact match.
 
 A substituted object that defines no symbol contributes no bytes and is
 reported as ``no-symbols``: there is nothing of it in vmlinux to find, and
@@ -41,6 +50,14 @@ SECTION = re.compile(
     r"^\s*\[\s*(?P<index>\d+)\]\s+(?P<name>\S+)\s+(?P<type>\S+)\s+"
     r"(?P<addr>[0-9a-f]+)\s+(?P<off>[0-9a-f]+)\s+(?P<size>[0-9a-f]+)"
 )
+RELOCATION = re.compile(
+    r"^(?P<offset>[0-9a-f]{16})\s+[0-9a-f]{16}\s+(?P<type>R_\S+)"
+)
+RELOCATION_SECTION = re.compile(r"^Relocation section '(?P<name>\S+)'")
+#: Relocation types that patch eight bytes; every other AArch64 relocation
+#: this backend can produce patches one four-byte instruction or word.
+WIDE_RELOCATIONS = ("ABS64", "PREL64", "GLOB_DAT", "RELATIVE")
+
 SYMBOL = re.compile(
     r"^\s*\d+:\s+(?P<value>[0-9a-f]+)\s+(?P<size>\d+)\s+(?P<type>\S+)\s+"
     r"(?P<bind>\S+)\s+\S+\s+(?P<ndx>\S+)\s+(?P<name>\S+)\s*$"
@@ -53,7 +70,8 @@ def container_readelf(mounts: dict[str, Path], paths: list[str]) -> str:
     for destination, source in mounts.items():
         volumes += ["-v", f"{source}:{destination}:ro"]
     script = "\n".join(
-        f'echo "@@FILE {path}"; readelf -SW {path}; echo "@@SYMS {path}"; readelf -sW {path}'
+        f'echo "@@FILE {path}"; readelf -SW {path}; echo "@@SYMS {path}"; '
+        f'readelf -sW {path}; echo "@@RELS {path}"; readelf -rW {path}'
         for path in paths
     )
     completed = subprocess.run(
@@ -73,15 +91,22 @@ def parse_readelf(text: str) -> dict[str, dict]:
     files: dict[str, dict] = {}
     current: dict | None = None
     mode = None
+    section: str | None = None
     for line in text.splitlines():
         if line.startswith("@@FILE "):
-            current = {"sections": {}, "symbols": {}}
+            current = {"sections": {}, "symbols": {}, "relocations": {}}
             files[line[len("@@FILE "):]] = current
             mode = "sections"
             continue
         if line.startswith("@@SYMS "):
             current = files[line[len("@@SYMS "):]]
             mode = "symbols"
+            continue
+        if line.startswith("@@RELS "):
+            current = files[line[len("@@RELS "):]]
+            current.setdefault("relocations", {})
+            mode = "relocations"
+            section = None
             continue
         if current is None:
             continue
@@ -95,6 +120,21 @@ def parse_readelf(text: str) -> dict[str, dict]:
                     "size": int(match.group("size"), 16),
                     "type": match.group("type"),
                 }
+        elif mode == "relocations":
+            header = RELOCATION_SECTION.match(line)
+            if header:
+                name = header.group("name")
+                section = name.split(".rela", 1)[-1] if name.startswith(".rela") else name
+                current["relocations"].setdefault(section, [])
+                continue
+            match = RELOCATION.match(line)
+            if match and section is not None:
+                width = 8 if any(
+                    marker in match.group("type") for marker in WIDE_RELOCATIONS
+                ) else 4
+                current["relocations"][section].append(
+                    (int(match.group("offset"), 16), width)
+                )
         else:
             match = SYMBOL.match(line)
             if match and match.group("ndx").isdigit():
@@ -132,6 +172,32 @@ def slice_symbol(
         handle.seek(offset)
         data = handle.read(size)
     return data if len(data) == size else None
+
+
+def relocated_ranges(table: dict, name: str, size: int) -> list[tuple[int, int]]:
+    """Where, inside one symbol, the object still has a hole for the linker."""
+    symbol = table["symbols"].get(name)
+    if symbol is None:
+        return []
+    section = table["sections"].get(symbol["ndx"])
+    if section is None:
+        return []
+    start, end = symbol["value"], symbol["value"] + size
+    return [
+        (offset - start, width)
+        for offset, width in table.get("relocations", {}).get(section["name"], [])
+        if start <= offset < end
+    ]
+
+
+def masked(data: bytes, ranges: list[tuple[int, int]]) -> bytes:
+    """The same bytes with every relocated field zeroed."""
+    if not ranges:
+        return data
+    buffer = bytearray(data)
+    for start, width in ranges:
+        buffer[start : start + width] = b"\x00" * min(width, max(0, len(buffer) - start))
+    return bytes(buffer)
 
 
 def main() -> int:
@@ -227,14 +293,28 @@ def main() -> int:
             size = sizes[name]
             mine = slice_symbol(object_path, table, name, False, size)
             theirs = slice_symbol(vmlinux_path, vmlinux_table, name, True, size)
+            ranges = relocated_ranges(table, name, size)
+            exact = mine is not None and mine == theirs
+            after_masking = (
+                mine is not None
+                and theirs is not None
+                and masked(mine, ranges) == masked(theirs, ranges)
+            )
             symbols.append({
                 "symbol": name,
                 "bytes": size,
                 "objectSha256": hashlib.sha256(mine).hexdigest() if mine else None,
                 "vmlinuxSha256": hashlib.sha256(theirs).hexdigest() if theirs else None,
-                "identical": mine is not None and mine == theirs,
+                "relocatedBytes": sum(width for _, width in ranges),
+                "identical": exact,
+                "identicalModuloRelocations": after_masking,
             })
-        verdict = "proven" if all(entry["identical"] for entry in symbols) else "mismatch"
+        if all(entry["identical"] for entry in symbols):
+            verdict = "proven"
+        elif all(entry["identicalModuloRelocations"] for entry in symbols):
+            verdict = "proven-modulo-relocations"
+        else:
+            verdict = "mismatch"
         rows.append({
             "unit": unit, "verdict": verdict, "symbols": symbols, "linkedIntoVmlinux": True,
         })
@@ -242,7 +322,12 @@ def main() -> int:
     counts: dict[str, int] = {}
     for row in rows:
         counts[row["verdict"]] = counts.get(row["verdict"], 0) + 1
+    with vmlinux_path.open("rb") as handle:
+        digest = hashlib.sha256()
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
     report = {
+        "vmlinuxSha256": digest.hexdigest(),
         "producerNote": producer_note,
         "counts": counts,
         "unitsLinkedIntoVmlinux": sorted(row["unit"] for row in rows if row["linkedIntoVmlinux"]),
