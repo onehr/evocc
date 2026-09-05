@@ -63,6 +63,11 @@ fn unresolved_runtime_symbols_fail_only_when_reached() {
             ("extern int g(void); int main(void){return g();}", "E3039"),
             ("extern int x; int main(void){return x;}", "E3040"),
             (
+                "extern int isdigit(int); int main(void){return isdigit(48);}",
+                "E3039",
+            ),
+            ("int main(void){return __builtin_isdigit(48);}", "E3039"),
+            (
                 "extern int g(void); int main(void){int (*p)(void)=g;return p();}",
                 "E3039",
             ),
@@ -159,5 +164,41 @@ fn external_variadic_calls_promote_anonymous_arguments() {
             "{mode}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
+    }
+}
+
+#[test]
+fn external_provenance_has_the_same_volatile_observation_in_both_interpreters() {
+    use evocc_chir::CHirDecl;
+    use evocc_common::{Arena, FileId};
+    use evocc_lex::Lexer;
+    use evocc_parser::Parser;
+    use evocc_types::TargetDataLayout;
+
+    for source in [
+        "extern int unused; extern int z; extern int x; int *volatile p; int main(void){p=&z;p=&x;return p==&x;}",
+        "extern int unused(void); extern int z(void); extern int x(void); int (*volatile p)(void); int main(void){p=z;p=x;return p==x;}",
+    ] {
+        let arena = Arena::default();
+        let file = FileId::new(45_001);
+        let mut lexer = Lexer::new(file, source);
+        let mut tokens = Vec::new();
+        while let Some(token) = lexer.next() {
+            assert_ne!(token.kind, evocc_lex::TokenKind::Error);
+            tokens.push(token);
+        }
+        let mut parser = Parser::new(tokens, file, source);
+        let unit = parser.parse_translation_unit_in(&arena);
+        assert!(!parser.had_error(), "{:?}", parser.diagnostic());
+        let symbol = unit.iter().find_map(|declaration| match declaration {
+            CHirDecl::Function(function) if function.name.spelling == "main" => Some(function.symbol),
+            _ => None,
+        }).unwrap();
+        let chir = evocc_chir::interp::interpret_scalar_function(&unit, symbol, evocc_chir::interp::InterpreterLimits::new(100_000)).unwrap();
+        let module = evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+        let function = module.functions.iter().find(|function| function.name == "main").unwrap();
+        let arguments = function.params.iter().map(|parameter| evocc_evoir::RuntimeValue::new(parameter.ty.clone(), 0)).collect::<Vec<_>>();
+        let evoir = evocc_evoir::interpret_module(&module, "main", &arguments, evocc_evoir::InterpreterLimits::new(100_000)).unwrap();
+        assert_eq!(chir.world.volatile_trace(), evoir.world.volatile_trace(), "{source}");
     }
 }
