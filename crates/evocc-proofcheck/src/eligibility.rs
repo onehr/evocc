@@ -437,6 +437,7 @@ fn packed_type(ty: &EvoIRType) -> String {
 fn inst_operands(instruction: &Inst) -> Vec<&Value> {
     match instruction {
         Inst::VaAccess(access) => vec![&access.list, &access.mem_in, &access.world_in],
+        Inst::BitOperation { operand, .. } => vec![operand],
         Inst::Asm(assembly) | Inst::AsmGoto { assembly, .. } => assembly.operands(),
         Inst::Const(..)
         | Inst::Uninitialized(..)
@@ -572,6 +573,7 @@ mod tests {
     #[test]
     fn derives_witness_and_seed_order_without_producer_help() {
         let module = Module {
+            assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
             globals: Vec::new(),
@@ -604,6 +606,7 @@ mod tests {
     #[test]
     fn poison_is_not_laundered_through_a_block_argument() {
         let module = Module {
+            assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
             globals: Vec::new(),
@@ -649,6 +652,7 @@ mod tests {
         };
         let quotient = bits(2);
         let module = Module {
+            assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
             globals: Vec::new(),

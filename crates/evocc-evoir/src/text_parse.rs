@@ -163,9 +163,25 @@ impl ModuleParser<'_> {
                 }
                 self.position += 1;
             }
+            if self
+                .lines
+                .get(self.position)
+                .is_some_and(|line| line.starts_with("asm "))
+            {
+                break;
+            }
             functions.push(self.function()?);
         }
+        let mut assembly = Vec::new();
+        while let Some(line) = self.lines.get(self.position) {
+            let mut cursor = Cursor::new(line);
+            cursor.expect("asm ")?;
+            assembly.push(cursor.quoted()?);
+            cursor.finish()?;
+            self.position += 1;
+        }
         Ok(Module {
+            assembly,
             globals,
             extern_objects,
             declares,
@@ -580,6 +596,27 @@ fn parse_instruction(
                     amount,
                     amount_signed: signed,
                 }
+            });
+        }
+    }
+    for op in [
+        crate::BitOp::LeadingZeros,
+        crate::BitOp::TrailingZeros,
+        crate::BitOp::Population,
+        crate::BitOp::ByteSwap,
+    ] {
+        if let Some(rest) = rhs
+            .strip_prefix(op.mnemonic())
+            .and_then(|rest| rest.strip_prefix('.'))
+        {
+            let mut cursor = Cursor::new(rest);
+            let ty = cursor.ty()?;
+            cursor.expect(" ")?;
+            let operand = use_value(cursor.remaining(), values)?;
+            return Ok(Inst::BitOperation {
+                result: Value { id: result_id, ty },
+                operand,
+                op,
             });
         }
     }
@@ -1229,6 +1266,7 @@ fn parse_ub_reason(text: &str) -> Result<UbReason, String> {
         "division_by_zero" => Ok(UbReason::DivisionByZero),
         "remainder_by_zero" => Ok(UbReason::RemainderByZero),
         "signed_overflow" => Ok(UbReason::SignedOverflow),
+        "bit_builtin_zero_operand" => Ok(UbReason::BitBuiltinZeroOperand),
         "invalid_shift_count" => Ok(UbReason::InvalidShiftCount),
         "invalid_signed_left_shift" => Ok(UbReason::InvalidSignedLeftShift),
         _ => Err("unknown UB reason".to_owned()),

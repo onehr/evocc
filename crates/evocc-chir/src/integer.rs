@@ -11,6 +11,7 @@ use crate::{BinaryOp, CheckedArithmeticOp, FloatLit, IntBase, IntLit, IntSuffix,
 /// Value operation selected by the GNU bit-counting builtin family.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BitBuiltinOp {
+    ByteSwap,
     FindFirstSet,
     CountLeadingZeros,
     CountTrailingZeros,
@@ -209,12 +210,20 @@ impl CInteger {
 /// Evaluate one GNU bit builtin after its source-level parameter conversion.
 ///
 /// `None` is the one typed runtime failure in this family: `clz(0)` or
-/// `ctz(0)`. Every successful result has C type `int` regardless of the
-/// operand width.
+/// `ctz(0)`. Counting returns `int`; byte swap retains the operand type.
 #[must_use]
 pub fn eval_bit_builtin(op: BitBuiltinOp, operand: CInteger) -> Option<CInteger> {
-    let raw = u64::try_from(operand.raw_bits()).ok()?;
+    let raw = operand.raw_bits();
     let result = match op {
+        BitBuiltinOp::ByteSwap => {
+            if !matches!(operand.ty().bits(), 16 | 32 | 64) {
+                return None;
+            }
+            return Some(CInteger::from_raw(
+                raw.swap_bytes() >> (128 - operand.ty().bits()),
+                operand.ty(),
+            ));
+        }
         BitBuiltinOp::FindFirstSet => {
             if raw == 0 {
                 0
@@ -226,7 +235,7 @@ pub fn eval_bit_builtin(op: BitBuiltinOp, operand: CInteger) -> Option<CInteger>
             if raw == 0 {
                 return None;
             }
-            raw.leading_zeros() - u32::from(64 - operand.ty().bits())
+            raw.leading_zeros() - u32::from(128 - operand.ty().bits())
         }
         BitBuiltinOp::CountTrailingZeros => {
             if raw == 0 {

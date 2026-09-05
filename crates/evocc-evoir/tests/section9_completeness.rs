@@ -261,6 +261,7 @@ fn sentinel_module() -> Module {
         })
         .collect();
     Module {
+        assembly: vec![".globl sentinel_asm\n".into()],
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: vec![
@@ -324,6 +325,14 @@ fn sentinel_module() -> Module {
 
 fn inst_schema(inst: &Inst) -> &'static str {
     match inst {
+        Inst::BitOperation {
+            result,
+            operand,
+            op,
+        } => {
+            let _ = (result, operand, op);
+            "Inst.BitOperation(result,operand,op)"
+        }
         Inst::VaAccess(access) => {
             let _ = access;
             "Inst.VaAccess(access)"
@@ -650,13 +659,14 @@ fn type_schema(ty: &EvoIRType) -> &'static str {
 
 fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
     let Module {
+        assembly,
         globals,
         extern_objects,
         declares,
         functions,
     } = module;
-    let _ = (extern_objects, declares);
-    let mut keys = BTreeSet::from(["Module(globals,extern_objects,declares,functions)"]);
+    let _ = (assembly, extern_objects, declares);
+    let mut keys = BTreeSet::from(["Module(assembly,globals,extern_objects,declares,functions)"]);
     for global in globals {
         let GlobalObject {
             symbol,
@@ -804,6 +814,7 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
     for value in ub_reasons {
         keys.insert(match value {
             UbReason::DivisionByZero => "UbReason.DivisionByZero",
+            UbReason::BitBuiltinZeroOperand => "UbReason.BitBuiltinZeroOperand",
             UbReason::RemainderByZero => "UbReason.RemainderByZero",
             UbReason::SignedOverflow => "UbReason.SignedOverflow",
             UbReason::InvalidShiftCount => "UbReason.InvalidShiftCount",

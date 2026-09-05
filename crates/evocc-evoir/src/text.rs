@@ -53,7 +53,7 @@ pub fn validate_section9_bytes(bytes: &[u8]) -> Result<(), String> {
         }
     }
     let first = text.lines().next().unwrap_or_default();
-    if !["global @", "extern @", "declare @", "func @"]
+    if !["global @", "extern @", "declare @", "func @", "asm "]
         .iter()
         .any(|prefix| first.starts_with(prefix))
     {
@@ -148,6 +148,12 @@ pub fn render_module(module: &Module) -> String {
             rendered.push('\n');
         }
         rendered.push_str(&render_function(function));
+    }
+    if !module.assembly.is_empty() && !rendered.is_empty() {
+        rendered.push('\n');
+    }
+    for template in &module.assembly {
+        rendered.push_str(&format!("asm {}\n", quoted_string(template)));
     }
     rendered
 }
@@ -300,6 +306,17 @@ impl FunctionRenderer {
 
     fn instruction(&self, inst: &Inst) -> String {
         match inst {
+            Inst::BitOperation {
+                result,
+                operand,
+                op,
+            } => format!(
+                "{} = {}.{} {}",
+                render_value(result),
+                op.mnemonic(),
+                render_type(&result.ty),
+                render_value(operand)
+            ),
             Inst::VaAccess(access) => {
                 let results = access
                     .results()
@@ -760,6 +777,7 @@ mod tests {
     #[test]
     fn first_block_is_entry_and_trap_uses_section_9_mnemonic() {
         let module = Module {
+            assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
             globals: vec![],
@@ -797,6 +815,7 @@ mod tests {
     #[test]
     fn module_global_has_exact_section_9_text() {
         let module = Module {
+            assembly: Vec::new(),
             extern_objects: Vec::new(),
             declares: Vec::new(),
             globals: vec![GlobalObject {

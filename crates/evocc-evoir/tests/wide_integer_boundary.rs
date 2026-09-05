@@ -18,6 +18,7 @@ fn evoir_refuses_executed_bits128_arithmetic_with_e3033() {
         ty: EvoIRType::Bits(128),
     };
     let module = Module {
+        assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: vec![],

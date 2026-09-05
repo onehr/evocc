@@ -128,6 +128,7 @@ fn later_block(insts: Vec<Inst>, root: Value) -> Module {
         ],
     };
     let mut module = Module {
+        assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),
@@ -323,6 +324,7 @@ fn a_region_two_edges_from_the_entry_block_is_admitted() {
         ],
     };
     let mut module = Module {
+        assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),
@@ -398,6 +400,7 @@ fn a_tainted_edge_argument_keeps_a_later_block_ineligible() {
         ],
     };
     let mut module = Module {
+        assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),
@@ -518,6 +521,7 @@ fn a_value_wider_than_the_profiles_bound_is_an_excluded_seed() {
         }],
     };
     let mut module = Module {
+        assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: Vec::new(),

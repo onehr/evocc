@@ -3486,7 +3486,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 });
                 tasks.push(MachineTask::EvalExpression {
                     expression: target,
-                    allow_root_mutation: false,
+                    allow_root_mutation: true,
                 });
                 tasks.push(MachineTask::EvalExpression {
                     expression: rhs,

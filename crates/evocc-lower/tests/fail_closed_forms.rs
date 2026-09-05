@@ -56,16 +56,6 @@ fn assert_lowering_error(source: &str, ordinal: u32, code: &str, message: &str) 
 }
 
 #[test]
-fn checked_arithmetic_fails_closed_with_only_e3020() {
-    assert_lowering_error(
-        "int f(int a) { int r; return __builtin_mul_overflow(a, a, &r); }\n",
-        0,
-        "E3020",
-        "not-lowered: checked-arithmetic",
-    );
-}
-
-#[test]
 fn extended_asm_lowers_and_execution_fails_closed() {
     assert_lowering_error(
         "void f(void) { asm volatile(\"nop\" ::: \"memory\"); }\n",
@@ -82,16 +72,6 @@ fn asm_goto_lowers_and_execution_fails_closed() {
         2,
         "E3021",
         "not-lowered: asm",
-    );
-}
-
-#[test]
-fn runtime_bit_builtins_fail_closed_with_only_e3023() {
-    assert_lowering_error(
-        "int f(unsigned value) { return __builtin_clz(value); }\n",
-        3,
-        "E3023",
-        "not-lowered: bit-builtin",
     );
 }
 

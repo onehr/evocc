@@ -5552,6 +5552,13 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Negative checked results stored into an unsigned type
+
+Section 10.1.15's mathematical representability rule requires overflow for a negative result stored into an unsigned type, even when that type is as wide as (or wider than) `W`; the abbreviated truncation/extension test alone does not establish this case.
+The lowered overflow predicate additionally includes signed `exact_result < 0` for unsigned destinations, without changing the specified arithmetic width or runtime UB rules.
+Both sealed oracles print `1 18446744073709551615 1 4294967295` for `.evidence/builtin-probes/20260906-checked-conversion/result.c`, recorded in `result.out` (SHA-256 `3a4f266c33c39dac31175baedf4d36afd03fbbd95c86f969dd957505630a315a`).
+No diagnostic is added; affected full-configuration unit count is not yet measured.
+
 ### Variadic marker placement
 
 Section 1.1's explicit placement rule takes precedence over the abbreviated

@@ -34,6 +34,7 @@ fn budget() -> GateBudget {
 fn family(inst: &Inst) -> &'static str {
     match inst {
         Inst::VaAccess(_) => "variadic",
+        Inst::BitOperation { op, .. } => op.mnemonic(),
         Inst::Const(..) => "const",
         Inst::Uninitialized(..) => "uninitialized",
         Inst::Add(..) => "add",

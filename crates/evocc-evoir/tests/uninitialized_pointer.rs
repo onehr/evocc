@@ -47,6 +47,7 @@ fn pointer_poison_validates_and_round_trips_in_both_pointer_namespaces() {
     validate_ssa(&function).expect("pointer poison must be an ordinary typed definition");
 
     let module = Module {
+        assembly: Vec::new(),
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: vec![],

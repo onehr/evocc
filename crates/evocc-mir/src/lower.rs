@@ -281,6 +281,12 @@ fn scan_inst(
 
     match inst {
         // The Section 5 table, row by row.
+        Inst::BitOperation { .. } => report(
+            E4009,
+            block,
+            index,
+            "bit operation instruction selection is not implemented".into(),
+        ),
         Inst::VaAccess(_) => report(
             E4009,
             block,
