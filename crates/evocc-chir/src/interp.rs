@@ -3565,8 +3565,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             });
         }
 
+        let target = linked_library_definition(self.unit, *symbol);
         if let Some(result) =
-            self.evaluate_external_ctype(*symbol, spelling, &arguments, call_span)?
+            self.evaluate_external_ctype(target, spelling, &arguments, call_span)?
         {
             return Ok(Some(result));
         }
@@ -3574,7 +3575,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let caller_slots = std::mem::take(&mut self.slots);
         let caller_fuel_anchor = self.fuel_anchor.take();
         self.enter_function(
-            *symbol,
+            target,
             arguments,
             Some(caller_slots),
             caller_fuel_anchor,
@@ -4110,6 +4111,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         &self,
         function: SymbolId,
     ) -> Result<&'arena FunctionDecl<'arena>, InterpreterError> {
+        let function = linked_library_definition(self.unit, function);
         let symbol = self
             .unit
             .symbols()
@@ -7756,10 +7758,34 @@ fn classify_referenced_symbols(
     }
 }
 
+// Builtin prototypes have their own semantic identity, but an ordinary call
+// still links to a compatible definition of the library name in this TU.
+fn linked_library_definition(unit: &CHirUnit<'_>, function: SymbolId) -> SymbolId {
+    if !unit.symbols().is_builtin_function(function) {
+        return function;
+    }
+    let Ok(prototype) = unit.symbols().symbol(function) else {
+        return function;
+    };
+    unit.iter()
+        .find_map(|declaration| match declaration {
+            CHirDecl::Function(definition)
+                if definition.body.is_some()
+                    && definition.name.spelling == prototype.spelling()
+                    && unit.types().compatible(definition.ty, prototype.ty()) =>
+            {
+                Some(definition.symbol)
+            }
+            _ => None,
+        })
+        .unwrap_or(function)
+}
+
 fn reachable_function_body<'arena>(
     unit: &CHirUnit<'arena>,
     function: SymbolId,
 ) -> Option<&'arena CHirStmt<'arena>> {
+    let function = linked_library_definition(unit, function);
     unit.iter().find_map(|declaration| match declaration {
         CHirDecl::Function(FunctionDecl { symbol, body, .. }) if *symbol == function => *body,
         CHirDecl::Function(_)

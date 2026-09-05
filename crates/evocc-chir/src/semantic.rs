@@ -249,6 +249,7 @@ impl Scope {
 pub enum SymbolTableError {
     UnknownScope(ScopeId),
     UnknownSymbol(SymbolId),
+    BuiltinLexicalBinding(SymbolId),
     InvalidFunctionScope {
         scope: ScopeId,
         function: SymbolId,
@@ -274,6 +275,13 @@ impl fmt::Display for SymbolTableError {
             Self::UnknownScope(scope) => write!(formatter, "unknown scope ID {}", scope.raw()),
             Self::UnknownSymbol(symbol) => {
                 write!(formatter, "unknown symbol ID {}", symbol.raw())
+            }
+            Self::BuiltinLexicalBinding(symbol) => {
+                write!(
+                    formatter,
+                    "builtin symbol {} cannot bind a lexical scope",
+                    symbol.raw()
+                )
             }
             Self::InvalidFunctionScope { scope, function } => write!(
                 formatter,
@@ -322,6 +330,7 @@ pub struct SymbolTableCheckpoint {
     scopes: Vec<Scope>,
     symbols: Vec<Symbol>,
     tags: Vec<TagBinding>,
+    builtin_functions: HashMap<String, SymbolId>,
 }
 
 /// One table-local, last-in-first-out speculative mutation boundary.
@@ -339,6 +348,7 @@ pub struct SymbolTableTransaction {
 #[derive(Debug)]
 enum SymbolTableUndo {
     ScopeCreated,
+    BuiltinDeclared,
     SymbolDeclared {
         scope: ScopeId,
     },
@@ -374,6 +384,7 @@ pub struct SymbolTable {
     scopes: Vec<Scope>,
     symbols: Vec<Symbol>,
     tags: Vec<TagBinding>,
+    builtin_functions: HashMap<String, SymbolId>,
     undo_log: Vec<SymbolTableUndo>,
     transaction_markers: Vec<usize>,
 }
@@ -395,6 +406,7 @@ impl SymbolTable {
             }],
             symbols: Vec::new(),
             tags: Vec::new(),
+            builtin_functions: HashMap::new(),
             undo_log: Vec::new(),
             transaction_markers: Vec::new(),
         }
@@ -443,6 +455,7 @@ impl SymbolTable {
             ScopeKind::Function | ScopeKind::FunctionPrototype
         ) || entry.parent != Some(self.file_scope())
             || symbol.kind() != SymbolKind::Function
+            || self.is_builtin_function(function)
             || symbol.scope() != self.file_scope()
             || entry.function_owner.is_some_and(|owner| owner != function)
         {
@@ -504,6 +517,42 @@ impl SymbolTable {
         Ok(id)
     }
 
+    /// Intern a library prototype in the unit's separate builtin namespace.
+    /// The file scope ID is only its unit anchor: no lexical binding is added.
+    pub fn declare_builtin_function(
+        &mut self,
+        spelling: &str,
+        ty: TypeId,
+        span: SourceSpan,
+    ) -> Result<(SymbolId, bool), SymbolTableError> {
+        if let Some(&symbol) = self.builtin_functions.get(spelling) {
+            return Ok((symbol, false));
+        }
+        let raw = u32::try_from(self.symbols.len())
+            .map_err(|_| SymbolTableError::SymbolTableExhausted)?;
+        let id = SymbolId(raw);
+        self.symbols.push(Symbol {
+            id,
+            scope: self.file_scope(),
+            spelling: spelling.to_owned(),
+            data: SymbolData::Function {
+                storage: StorageClass::Extern,
+            },
+            ty,
+            declared_alignment: 1,
+            span,
+        });
+        self.builtin_functions.insert(spelling.to_owned(), id);
+        self.record_undo(SymbolTableUndo::BuiltinDeclared);
+        Ok((id, true))
+    }
+
+    #[must_use]
+    pub fn is_builtin_function(&self, symbol: SymbolId) -> bool {
+        self.symbol(symbol)
+            .is_ok_and(|entry| self.builtin_functions.get(entry.spelling()) == Some(&symbol))
+    }
+
     /// Make an already-declared linked entity visible in another lexical
     /// scope without allocating a second semantic identity.
     ///
@@ -517,6 +566,9 @@ impl SymbolTable {
     ) -> Result<SymbolId, SymbolTableError> {
         let scope_index = self.scope_index(scope)?;
         let declaration = self.symbol(symbol)?;
+        if self.is_builtin_function(symbol) {
+            return Err(SymbolTableError::BuiltinLexicalBinding(symbol));
+        }
         let spelling = declaration.spelling.clone();
 
         if let Some(existing) = self.scopes[scope_index]
@@ -658,6 +710,7 @@ impl SymbolTable {
             scopes: self.scopes.clone(),
             symbols: self.symbols.clone(),
             tags: self.tags.clone(),
+            builtin_functions: self.builtin_functions.clone(),
         }
     }
 
@@ -720,6 +773,7 @@ impl SymbolTable {
         self.scopes = checkpoint.scopes;
         self.symbols = checkpoint.symbols;
         self.tags = checkpoint.tags;
+        self.builtin_functions = checkpoint.builtin_functions;
         Ok(())
     }
 
@@ -805,6 +859,10 @@ impl SymbolTable {
 
     fn apply_undo(&mut self, undo: SymbolTableUndo) {
         match undo {
+            SymbolTableUndo::BuiltinDeclared => {
+                let symbol = self.symbols.pop().expect("declared builtin remains last");
+                self.builtin_functions.remove(&symbol.spelling);
+            }
             SymbolTableUndo::ScopeCreated => {
                 let scope = self.scopes.pop().expect("created scope remains last");
                 debug_assert!(scope.symbols.is_empty());
@@ -872,6 +930,7 @@ impl Clone for SymbolTable {
             scopes: self.scopes.clone(),
             symbols: self.symbols.clone(),
             tags: self.tags.clone(),
+            builtin_functions: self.builtin_functions.clone(),
             undo_log: Vec::new(),
             transaction_markers: Vec::new(),
         }

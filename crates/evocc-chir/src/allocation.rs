@@ -942,6 +942,8 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
         )?;
         let coherently_bound = if file_scope {
             self.symbol_is_bound_in_scope(function.symbol, self.unit.symbols().file_scope())
+                || (self.unit.symbols().is_builtin_function(function.symbol)
+                    && function.body.is_none())
         } else {
             current_function.is_some_and(|authority| {
                 self.symbol_is_bound_under_function(function.symbol, authority)

@@ -220,6 +220,7 @@ struct DeclarationTransaction {
     entity_attribute_undo: usize,
     member_attribute_undo: usize,
     side_declarations: usize,
+    builtin_declarations: usize,
 }
 
 type AttributeNames = HashSet<String>;
@@ -280,6 +281,7 @@ pub struct Parser<'src, 'arena> {
     member_attribute_undo: Vec<MemberAttributeUndo>,
     declaration_transaction_depth: usize,
     side_declarations: Vec<&'arena CHirDecl<'arena>>,
+    builtin_declarations: Vec<&'arena CHirDecl<'arena>>,
     loop_depth: usize,
     current_function_parameters: Option<ParameterSyntax>,
     /// Attributes on labels and type names, which have no declaration node.
@@ -414,6 +416,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             member_attribute_undo: Vec::new(),
             declaration_transaction_depth: 0,
             side_declarations: Vec::new(),
+            builtin_declarations: Vec::new(),
             loop_depth: 0,
             current_function_parameters: None,
             detached_attributes: Vec::new(),
@@ -456,6 +459,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             let before = self.pos;
             if let Some(mut parsed) = self.parse_external_declaration() {
+                decls.append(&mut self.builtin_declarations);
                 decls.append(&mut parsed);
             }
             // Failed declaration transactions restore their own scope cursor,
@@ -773,6 +777,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             entity_attribute_undo: self.entity_attribute_undo.len(),
             member_attribute_undo: self.member_attribute_undo.len(),
             side_declarations: self.side_declarations.len(),
+            builtin_declarations: self.builtin_declarations.len(),
         }
     }
 
@@ -868,6 +873,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         self.side_declarations
             .truncate(transaction.side_declarations);
+        self.builtin_declarations
+            .truncate(transaction.builtin_declarations);
         self.declaration_transaction_depth -= 1;
         if self.declaration_transaction_depth == 0 {
             self.entity_undo.clear();
@@ -9692,25 +9699,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .resolve(self.current_scope, external_name)
             .expect("the parser current scope is always live");
         if let Some(symbol) = visible {
-            let compatible = self.symbols.symbol(symbol).is_ok_and(|declaration| {
+            let incompatible = self.symbols.symbol(symbol).is_ok_and(|declaration| {
                 declaration.kind() == SymbolKind::Function
-                    && self.types.compatible(declaration.ty(), function_ty)
+                    && !self.types.compatible(declaration.ty(), function_ty)
             });
-            if !compatible {
+            if incompatible {
                 self.report("E2927", "builtin-library-declaration-incompatible", span);
                 return None;
             }
-            return Some(symbol);
         }
-        if let Some(symbol) = self.external_entities.get(external_name).copied() {
-            let compatible = self.symbols.symbol(symbol).is_ok_and(|declaration| {
-                declaration.kind() == SymbolKind::Function
-                    && self.types.compatible(declaration.ty(), function_ty)
-            });
-            if !compatible {
-                self.report("E2927", "builtin-library-declaration-incompatible", span);
-                return None;
-            }
+        let (symbol, introduced) = self
+            .symbols
+            .declare_builtin_function(external_name, function_ty, span)
+            .expect("builtin symbol table fits u32 IDs");
+        if !introduced {
             return Some(symbol);
         }
 
@@ -9718,17 +9720,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             spelling: external_name.to_owned(),
             span,
         };
-        let symbol = self.declare_symbol(
-            &name,
-            SymbolData::Function {
-                storage: StorageClass::Extern,
-            },
-            function_ty,
-        );
         let parameters = self
             .parameter_syntax_from_function_type(function_ty, span)
             .expect("a builtin library prototype is a function type");
-        self.side_declarations
+        self.builtin_declarations
             .push(self.alloc_node(CHirDecl::Function(FunctionDecl {
                 symbol,
                 name,

@@ -193,8 +193,8 @@ fn builtin_strlen_resolves_to_constants_or_ordinary_calls() {
 fn undeclared_library_builtin_lowers_like_an_explicit_external_prototype() {
     assert_pairs(
         &[(
-            "void f(void *p) { __builtin_memset(p, 0, 1); }",
-            "extern void *memset(void *, int, unsigned long); void f(void *p) { memset(p, 0, 1); }",
+            "void f(void *p) { __builtin_memset(p, 0, 1); } void *memset(void *p, int value, unsigned long size) { return p; }",
+            "extern void *memset(void *, int, unsigned long); void f(void *p) { memset(p, 0, 1); } void *memset(void *p, int value, unsigned long size) { return p; }",
         )],
         200,
     );

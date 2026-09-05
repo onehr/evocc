@@ -120,6 +120,8 @@ fn synthesized_library_prototypes_are_unique_and_in_no_lexical_scope() {
         .iter()
         .all(|scope| !scope.symbols().contains(&symbols[0].id())));
     evocc_chir::AllocationSiteManifest::derive(&unit).unwrap();
+    let speculative = parse("void f(void *p) { typeof(__builtin_memset(p, 0, 1)) q = __builtin_memset(p, 0, 2); (void)q; }", &arena).unwrap();
+    evocc_chir::AllocationSiteManifest::derive(&speculative).unwrap();
 }
 
 #[test]

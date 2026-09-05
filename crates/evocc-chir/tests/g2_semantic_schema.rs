@@ -472,6 +472,21 @@ fn parser_transactions_are_lifo_and_undo_every_symbol_table_mutation() {
         .unwrap();
 
     let inner = symbols.begin_transaction();
+    let (builtin, introduced) = symbols
+        .declare_builtin_function("library", int, span(6))
+        .unwrap();
+    assert!(introduced);
+    assert_eq!(
+        symbols
+            .declare_builtin_function("library", int, span(6))
+            .unwrap(),
+        (builtin, false)
+    );
+    assert_eq!(symbols.resolve(nested_scope, "library").unwrap(), None);
+    assert_eq!(
+        symbols.bind_existing(nested_scope, builtin),
+        Err(SymbolTableError::BuiltinLexicalBinding(builtin))
+    );
     symbols
         .declare(nested_scope, "nested", object(), int, span(6))
         .unwrap();
@@ -481,6 +496,7 @@ fn parser_transactions_are_lifo_and_undo_every_symbol_table_mutation() {
     );
     symbols.commit_transaction(&inner).unwrap();
     symbols.rollback_transaction(&outer).unwrap();
+    assert!(!symbols.is_builtin_function(builtin));
 
     assert_eq!(symbols.symbol(base).unwrap().ty(), int);
     assert_eq!(
