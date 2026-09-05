@@ -202,3 +202,20 @@ fn external_provenance_has_the_same_volatile_observation_in_both_interpreters() 
         assert_eq!(chir.world.volatile_trace(), evoir.world.volatile_trace(), "{source}");
     }
 }
+
+#[test]
+fn library_arguments_are_converted_to_the_declared_parameter_type() {
+    let source = "int main(void){char a[300];__builtin_memset(a,0,300);return __builtin_memcmp(a,a,(signed char)-1);}";
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(
+            !output.status.success(),
+            "{mode}: a negative signed count must convert to size_t, not 255"
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("E3011"),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
