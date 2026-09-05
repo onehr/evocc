@@ -52,10 +52,12 @@ fn build(source: &str) -> Vec<Allocated> {
 
 /// Assemble a text, returning the assembler's complaint when it has one.
 fn assemble(text: &str) -> Result<(), String> {
+    static NEXT_FILE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = NEXT_FILE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let directory = std::env::temp_dir().join(format!("evocc-emit-{}", std::process::id()));
     std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
-    let source = directory.join("unit.s");
-    let object = directory.join("unit.o");
+    let source = directory.join(format!("unit-{sequence}.s"));
+    let object = directory.join(format!("unit-{sequence}.o"));
     std::fs::write(&source, text).map_err(|error| error.to_string())?;
     let output = Command::new("clang")
         .args(["-c", "-o"])
