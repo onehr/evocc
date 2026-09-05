@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.63** | **Authoritative reference** | **2026-09-05**
+**Revision 1.9.64** | **Authoritative reference** | **2026-09-05**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -195,8 +195,18 @@ return values from calls. A `tuple<>` (empty tuple) is equivalent to `void`.
 
 ### 2.1 Module and Function Structure
 
-An EvoIR module contains an ordered global-object table followed by an ordered
-function table. A global object binds one unique symbol, stable source-origin
+An EvoIR module contains an ordered global-object table, an ordered
+**external-object table**, an ordered **external-function table** and an
+ordered function table (the two external tables since revision 1.9.64). An
+external object binds a symbol this module uses but does not define to a size
+(or `unknown`, for an incomplete type) and an alignment; it has no bytes and
+no initializedness here, because another unit supplies them. An external
+function binds a symbol this module calls or takes the address of, but does
+not define, to its complete lowered signature. Neither may be defined in the
+same module (`E3041`, `symbol-declared-and-defined`), and each symbol appears
+at most once across all four tables. A `call @f` or `func_addr @f` names
+either a function or an external function; a `global_addr @g` names either a
+global or an external object. A global object binds one unique symbol, stable source-origin
 site, and global kind (`file`, `function_static`, `string_literal`, or
 `compound_literal`) to a fixed size and
 alignment, initial bytes, and a byte-for-byte initializedness bitmap. Module
@@ -1140,6 +1150,11 @@ than defaulted, because a default would be indistinguishable from an omission.
 
 **Derivation.** A summary is the least fixed point over the call graph:
 
+0. Every external function (2.1) has the **top** summary: `reads={all},
+   writes={all}` and every boolean `true`. Nothing this module holds can
+   bound what another unit's code does, so no smaller summary is sound; a
+   later revision may let a declared attribute (`const`, `pure`) lower it,
+   with a measurement.
 1. Every function starts at the empty summary.
 2. Each function's summary is the join of its own instructions' effects, per
    Section 4.2, with the summaries of every function it calls directly.
@@ -1514,6 +1529,7 @@ twice would let a reader think two conditions are the same finding.
 | `E2928` | `address-of-register-object` | front end |
 | `E2929` | `unpromoted-va-arg-type` | front end |
 | `E2930` | `use-with-incomplete-enumeration` | front end |
+| `E2931` | `unprototyped-call-mismatch` | front end |
 | `E0102` | `unmatched-conditional` | preprocessor |
 | `E0104` | `error-directive` | preprocessor |
 | `E0105` | `include-not-found` | preprocessor |
@@ -1543,6 +1559,9 @@ twice would let a reader think two conditions are the same finding.
 | `E3036` | `not-lowered: pointer-integer-conversion` | lowering |
 | `E3037` | `va-start-outside-variadic-signature` | validation |
 | `E3038` | `va-arg-mismatch` | runtime |
+| `E3039` | `external-call-not-executable` | runtime |
+| `E3040` | `external-object-not-executable` | runtime |
+| `E3041` | `symbol-declared-and-defined` | module validation |
 | `E3029` | `not-lowered: computed-goto` | lowering |
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
@@ -2374,11 +2393,16 @@ digested.
 ### 9.3 Grammar
 
 ```text
-module          := ε
-                 | global_seq
-                 | function_seq
-                 | global_seq newline function_seq
+module          := ε | segment (newline segment)*
+                   -- at most one of each, in this order:
+                   -- global_seq, extern_seq, declare_seq, function_seq
 global_seq      := global+
+extern_seq      := extern_object+
+extern_object   := "extern " symbol " size=" (integer | "unknown")
+                   " align=" integer newline
+declare_seq     := declare+
+declare         := "declare " symbol "(" type_list [", ..."] ")"
+                   " -> (" type_list ")" " cc = " ident newline
 function_seq    := function (newline function)*
 
 global          := "global " symbol " origin=" integer
@@ -2892,6 +2916,36 @@ both oracles: 16, and 32 when only the `extern` declaration carries
 `aligned(32)`; `.evidence/builtin-probes/20260902-2c23684c/p36-aa-tail.c`,
 `p36.out`). A manifest type comparison that reads alignment is a defect.
 
+**External symbols (revision 1.9.64).** A unit uses symbols it does not
+define: every kernel unit calls `printk` and reads `jiffies`. A function
+that the unit declares and calls or takes the address of, but does not
+define, lowers to one `declare` (Section 2.1, Section 9) carrying its
+complete lowered signature, with record parameters and results in the
+pointer form of 10.1.3 and the `...` marker of 1.1 when its prototype ends
+in `...`; a function declared without a prototype (`int f();`) and called
+takes the promoted types of its first call, and a later call with other
+promoted types is `E2931`. An object declared `extern` and used (loaded,
+stored or address-taken) but not defined lowers to one `extern` line with
+its type's size, `unknown` for an incomplete type such as `extern int a[];`,
+and its alignment (the maximum over declarations, 1.9.62). A declared but
+unused symbol produces nothing. The two interpreters execute a call to an
+external function only for the library set of 10.1.14 (`memset`, `memcpy`,
+`memmove`, `memcmp`, `strcmp`, `strncmp`, `strlen`), which they implement
+on the byte-and-initializedness model (`memset` initializes the bytes it
+writes, `memcpy` and `memmove` transfer initializedness exactly as `copy`,
+the readers require initialized bytes up to the last one they examine and
+report `E3001` otherwise); every other external call is `E3039`
+(`external-call-not-executable`) when reached. `global_addr` of an external
+object is a distinct, stable provenance that may be compared and passed;
+a `load` or `store` through it is `E3040` (`external-object-not-executable`)
+when reached. Neither code is a front-end refusal: the unit lowers, the
+e-graph treats the call by its top summary (Section 4), and the machine lane
+calls or addresses the symbol and lets the linker resolve it (EvoMIR
+Section 8). Measured under both oracles: a call of `memset` after
+`__builtin_memset` with no declaration in scope is still an implicit
+declaration (`p37-use.c`), so the synthesized prototype below is the only
+source of the `declare` for a builtin.
+
 **Library builtins introduce no identifier (revision 1.9.63).** A use of
 `__builtin_memset` and the other library builtins of 10.1.14 lowers to a
 call of the library function's symbol with the prototype 10.1.14 gives it,
@@ -3313,6 +3367,7 @@ front end that still emits it is defective.
 | `E2928` | the address of a `register` object is taken |
 | `E2929` | `__builtin_va_arg` names a type the default argument promotions change (`char`, `short`, `_Bool`, `float`, an enumeration narrower than `int`) |
 | `E2930` | a call or address-of names a function whose type contains an enumeration still incomplete at that point |
+| `E2931` | a function declared without a prototype and not defined in the unit is called with promoted argument types that differ from those of its first call |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -5304,6 +5359,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.64 | 2026-09-05 | Gives the module external-object and external-function tables (`extern`, `declare`), so a unit that calls or reads what another unit defines lowers instead of stopping at a missing callee: top effect summary for external functions, distinct provenance for external objects, interpreters execute only the 10.1.14 library set (`E3039`, `E3040` otherwise), `E3041` for a symbol both declared and defined, `E2931` for inconsistent unprototyped calls. This was a gap of the specification, not of the executor: revision 0.7 of EvoMIR had assumed every callee is defined beside its caller, which is true of the generated corpora and of no kernel unit. |
 | 1.9.63 | 2026-09-05 | A library builtin's synthesized prototype is a unit-level symbol in the builtin namespace: it introduces no ordinary identifier and belongs to no function scope (both oracles, `p37-*`). |
 | 1.9.62 | 2026-09-05 | Rules the two declaration-identity questions of the lowering frontier: declared alignment is an object property, the maximum over a unit's declarations, and never part of a type identity; a declaration-only function with an incomplete enumeration in its type produces nothing, and a use while it is incomplete is `E2930`. Both measured under the sealed oracles (`p36-*`). |
 | 1.9.61 | 2026-09-05 | Opens the two classes the sixth lowering survey put first (1,697 and 1,022 of 2,792 diagnosed units): `bits<128>` executes in every scalar form but division (10.1.19), and variadic signatures, anonymous arguments and the three list instructions `va_start`, `va_arg`, `va_end` enter Sections 1.1, 3.10, 3.12 and 9, with `va_copy` a 32-byte `copy`. Both are measured against the sealed oracles (`p34-*`, `p35-*`: fourteen `va_arg` items and eight `__int128` ABI shapes, GCC-14 and Clang-19 agreeing); the register-level procedures are EvoMIR's. New codes `E3037`, `E3038`; `E3030` narrows to aggregates; `E3033` narrows to division and remainder. |

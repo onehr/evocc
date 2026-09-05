@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.10** | **Authoritative reference** | **2026-09-05**
+**Revision 0.11** | **Authoritative reference** | **2026-09-05**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -482,6 +482,18 @@ block label, and `%%` by one percent. The template's own text is copied
 verbatim and never parsed. The emitted text is
 deterministic and is what the receipt digests.
 
+**External symbols (revision 0.11).** A `call @f` whose `@f` is an EvoIR
+`declare`, and a `global_addr @g` whose `@g` is an EvoIR `extern`, are
+emitted with exactly the spellings above for a defined symbol (`bl`,
+`adrp`/`add`, the `_` prefix on Darwin, `:pg_hi21:`/`:lo12:` on Linux); the
+object file carries an undefined symbol reference and the linker resolves
+it. Every such call is cross-boundary in the sense of Section 6, so the
+platform's extension rule applies to its narrow arguments. The native lane
+of Section 9 may link a program against the host C library for the 10.1.14
+library set and against reference-compiled objects for anything else; the
+interpreter lanes report the EvoIR codes `E3039`/`E3040` and the native
+result decides, exactly as for assembly (revision 0.6).
+
 ## 9. Verification
 
 Three instruments, each independent of the lowering:
@@ -616,6 +628,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.11 | 2026-09-05 | External functions and objects (EvoIR 1.9.64 `declare`/`extern`) are emitted as undefined symbol references with the defined-symbol spellings; the linker resolves them, and the native lane may link against the host library for the library set. |
 | 0.10 | 2026-09-05 | Opens the two forms the sixth lowering survey put first: `bits<128>` as a pair of `gpr64` halves with measured sequences for every scalar form but division, the even-aligned pair convention for arguments and `x0`:`x1` for results; variadic callees and callers on Linux, with the register save area, the five-field list object and the general-registers-only `va_arg` procedure that agrees with both oracles on fourteen items; stack arguments in 8-byte slots on Linux. `E4012` withdrawn, `E4003` and `E4010` narrowed. The executor's spellings enter Appendix A with the implementation, as revision 0.8 did for assembly. |
 | 0.9 | 2026-09-04 | The same 384 C programs compile, link, run and agree on both targets: on the host under Apple clang, and inside the sealed container under GCC-14 for Linux AArch64. Settles the narrow result by probe (the callee extends; `E4014` withdrawn) and states the four places the two targets differ. |
 | 0.8 | 2026-09-04 | Inline assembly runs on the machine: eleven constraint rows and both `asm.goto` edges assembled, linked, run and agreeing with host-compiled equivalents. Gives Appendix A its assembly productions, in the executor's spelling, and fixes `%l[...]` as the label's position in the declared list. |
