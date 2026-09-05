@@ -23,6 +23,10 @@ fn run(source: &str, mode: &str) -> Output {
 fn referenced_external_symbols_lower_without_invented_bodies() {
     for (source, expected) in [
         (
+            "extern int g(); int f(void){g((char)1);return g(2);}",
+            "declare @g(bits<32>,",
+        ),
+        (
             "extern int g(int); int f(int x){return g(x);}",
             "declare @g(",
         ),
@@ -58,6 +62,10 @@ fn unresolved_runtime_symbols_fail_only_when_reached() {
         for (source, code) in [
             ("extern int g(void); int main(void){return g();}", "E3039"),
             ("extern int x; int main(void){return x;}", "E3040"),
+            (
+                "extern int g(void); int main(void){int (*p)(void)=g;return p();}",
+                "E3039",
+            ),
         ] {
             let output = run(source, mode);
             assert!(!output.status.success());
@@ -84,11 +92,32 @@ fn external_memory_library_executes_real_bytes() {
     let source = "int main(void){char a[8]; char b[8]; __builtin_memset(a,0,8); __builtin_memcpy(b,a,8); __builtin_memmove(b+1,b,4); return __builtin_memcmp(a,b,8) + __builtin_strcmp(a,b) + __builtin_strncmp(a,b,8) + __builtin_strlen(a);}";
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {
         let output = run(source, mode);
+        assert_eq!(
+            output.stdout,
+            b"0\n",
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         assert!(
             output.status.success(),
             "{mode}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
+        for (source, expected) in [
+            ("int main(void){char a[8]=\"abc\"; __builtin_memmove(a+1,a,4); return __builtin_strlen(a) + 10*__builtin_strcmp(a,\"aabc\");}", "4\n"),
+            ("int main(void){char a[4],b[4];a[0]=7;__builtin_memcpy(b,a,4);return b[0];}", "7\n"),
+            ("int main(void){char a[4];return (__builtin_memset(a,42,4)==a)+a[3];}", "43\n"),
+        ] {
+            let output = run(source, mode);
+            assert!(output.status.success(), "{mode}: {}", String::from_utf8_lossy(&output.stderr));
+            assert_eq!(output.stdout, expected.as_bytes());
+        }
+        let output = run(
+            "int main(void){char a[4],b[4];a[0]=7;__builtin_memcpy(b,a,4);return b[1];}",
+            mode,
+        );
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3001"));
     }
 }
 

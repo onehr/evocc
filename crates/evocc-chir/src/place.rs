@@ -852,6 +852,21 @@ fn pointer_expression_type(
     types: &TypeInterner,
     expression: &CHirExpr<'_>,
 ) -> Result<PointerTypeDesc, MemoryPlaceError> {
+    if let CHirExpr::StringLit(literal, _) = expression {
+        let rank = match literal.prefix {
+            crate::StringPrefix::None | crate::StringPrefix::U8 => evocc_types::IntRank::Char,
+            crate::StringPrefix::L | crate::StringPrefix::U16 => evocc_types::IntRank::UShort,
+            crate::StringPrefix::U => evocc_types::IntRank::UInt,
+        };
+        let ty = types
+            .find(&evocc_types::CanonicalType {
+                kind: TypeKind::Int(rank),
+                qualifiers: Qualifiers::default(),
+            })
+            .ok_or(MemoryPlaceError::PointerExpressionTypeMismatch)?;
+        return PointerTypeDesc::to_object(types, ty)
+            .ok_or(MemoryPlaceError::PointerExpressionTypeMismatch);
+    }
     if let CHirExpr::StatementExpr {
         value: Some(value),
         facts,

@@ -184,6 +184,8 @@ fn counted_loop(remask: bool) -> Module {
         ],
     };
     let mut module = Module {
+        extern_objects: Vec::new(),
+        declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![function],
     };
@@ -517,6 +519,8 @@ fn a_xor_of_two_fully_known_arguments_folds_on_its_fact() {
         ],
     };
     let mut module = Module {
+        extern_objects: Vec::new(),
+        declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![function],
     };
@@ -629,6 +633,8 @@ fn a_comparison_the_sweep_folded_is_stated_as_the_rule_the_region_can_prove() {
         ],
     };
     let mut module = Module {
+        extern_objects: Vec::new(),
+        declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![function],
     };
@@ -737,6 +743,8 @@ fn double_negation(derived: bool) -> Module {
         ],
     };
     let mut module = Module {
+        extern_objects: Vec::new(),
+        declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![function],
     };

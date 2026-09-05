@@ -21,9 +21,9 @@ use evocc_chir::{
 use evocc_common::SourceSpan;
 use evocc_evoir::{
     inst_results, validate_module, AccessLayout, AssemblyEdge, AssemblyInput, AssemblyLabel,
-    AssemblyOutput, Block, BlockArg, BlockId, CmpOp, Function, FunctionParam, GlobalKind,
-    GlobalObject, GlobalVisibility, IndexSignedness, InlineAssembly, Inst, Module, OffsetDirection,
-    TrapReason, UbReason, Value,
+    AssemblyOutput, Block, BlockArg, BlockId, CmpOp, ExternalObject, Function, FunctionDeclaration,
+    FunctionParam, GlobalKind, GlobalObject, GlobalVisibility, IndexSignedness, InlineAssembly,
+    Inst, Module, OffsetDirection, TrapReason, UbReason, Value,
 };
 use evocc_types::{
     enum_integer_rank, AddressSpace, ArrayBound, EvoIRType, FunctionParameters, LayoutError,
@@ -322,6 +322,7 @@ struct FunctionLowerer<'a> {
     memory_symbols: &'a BTreeSet<SymbolId>,
     allocation_origins: &'a BTreeMap<SymbolId, u64>,
     compound_origins: BTreeMap<usize, (u64, bool)>,
+    string_origins: BTreeMap<usize, u64>,
     blocks: Vec<DraftBlock>,
     next_value: u32,
     next_block: BlockId,
@@ -390,7 +391,34 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
         });
     let functions = index_functions(unit, target, memory_profile)?;
     prevalidate_unit_for_lowering(unit, target, &global_register_symbols)?;
-    let globals = lower_globals(unit, target, &memory_symbols, &allocation_origins)?;
+    let mut globals = lower_globals(unit, target, &memory_symbols, &allocation_origins)?;
+    let mut string_origins = BTreeMap::new();
+    for site in manifest.sites() {
+        let Some(expression) = site.kind().string_literal() else {
+            continue;
+        };
+        let CHirExpr::StringLit(literal, span) = expression else {
+            unreachable!("manifest string site")
+        };
+        let (bytes, align) =
+            literal
+                .object_bytes(target)
+                .ok_or(LowerError::UnsupportedExpression {
+                    span: *span,
+                    feature: "invalid string representation",
+                })?;
+        let origin = site.ordinal().raw();
+        string_origins.insert(expression as *const CHirExpr<'_> as usize, origin);
+        globals.push(GlobalObject {
+            symbol: format!("__evocc.string.{origin}"),
+            origin,
+            kind: GlobalKind::StringLiteral,
+            visibility: GlobalVisibility::Internal,
+            layout: AccessLayout::new(bytes.len() as u64, align),
+            initialized: vec![true; bytes.len()],
+            bytes,
+        });
+    }
     let mut lowered = Vec::new();
     for declaration in unit.iter() {
         let CHirDecl::Function(function) = declaration else {
@@ -416,12 +444,115 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
                 &memory_symbols,
                 &allocation_origins,
                 &compound_origins,
+                &string_origins,
             )
             .lower(function)?,
         );
     }
+    let defined = lowered
+        .iter()
+        .map(|function| function.name.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut declares = BTreeMap::new();
+    for info in functions
+        .values()
+        .filter(|info| !defined.contains(info.name.as_str()))
+    {
+        let aggregate_return = info.return_type.as_ref().is_some_and(|value| {
+            matches!(
+                unit.types().get(value.source).map(|ty| &ty.kind),
+                Some(TypeKind::Struct(_) | TypeKind::Union(_))
+            )
+        });
+        let mut params = info
+            .parameter_types
+            .iter()
+            .map(|value| value.ir.clone())
+            .collect::<Vec<_>>();
+        if aggregate_return {
+            params.push(EvoIRType::Ptr(AddressSpace::Generic));
+        }
+        params.extend([EvoIRType::Mem(Region::All), EvoIRType::World]);
+        let mut ret_tys = info
+            .return_type
+            .iter()
+            .filter(|_| !aggregate_return)
+            .map(|value| value.ir.clone())
+            .collect::<Vec<_>>();
+        ret_tys.extend([EvoIRType::Mem(Region::All), EvoIRType::World]);
+        declares.insert(
+            info.name.clone(),
+            FunctionDeclaration {
+                name: info.name.clone(),
+                params,
+                ret_tys,
+            },
+        );
+    }
+    let global_names = globals
+        .iter()
+        .map(|global| global.symbol.as_str())
+        .collect::<BTreeSet<_>>();
+    let referenced_objects = lowered
+        .iter()
+        .flat_map(|function| &function.blocks)
+        .flat_map(|block| &block.insts)
+        .filter_map(|instruction| match instruction {
+            Inst::GlobalAddr { symbol, .. } if !global_names.contains(symbol.as_str()) => {
+                Some(symbol.as_str())
+            }
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    let mut extern_objects = BTreeMap::new();
+    for symbol in &memory_symbols {
+        let entry =
+            unit.symbols()
+                .symbol(*symbol)
+                .map_err(|_| LowerError::InvalidGeneratedSsa {
+                    message: "external object has no symbol".into(),
+                })?;
+        if !referenced_objects.contains(entry.spelling()) {
+            continue;
+        }
+        let (size, align) = match target.layout_of(unit.types(), entry.ty()) {
+            Ok(layout) => (Some(layout.size_bytes), layout.align_bytes),
+            Err(_) => match unit.types().get(entry.ty()).map(|ty| &ty.kind) {
+                Some(TypeKind::Array {
+                    element,
+                    bound: ArrayBound::Unbounded,
+                }) => {
+                    let layout = target.layout_of(unit.types(), *element).map_err(|source| {
+                        LowerError::Layout {
+                            ty: *element,
+                            span: entry.span(),
+                            source,
+                        }
+                    })?;
+                    (None, layout.align_bytes)
+                }
+                _ => {
+                    return Err(LowerError::UnsupportedType {
+                        ty: entry.ty(),
+                        span: entry.span(),
+                        feature: "external object has no object layout",
+                    })
+                }
+            },
+        };
+        extern_objects.insert(
+            entry.spelling().to_owned(),
+            ExternalObject {
+                symbol: entry.spelling().to_owned(),
+                size,
+                align: align.max(entry.declared_alignment()),
+            },
+        );
+    }
     let mut module = Module {
         globals,
+        extern_objects: extern_objects.into_values().collect(),
+        declares: declares.into_values().collect(),
         functions: lowered,
     };
     module.recompute_effect_summaries();
@@ -1703,7 +1834,9 @@ fn function_info(
                 span: function.span,
             });
         }
-        FunctionParameters::Unspecified if function.body.is_none() => &[],
+        FunctionParameters::Unspecified if function.body.is_none() => {
+            unit.unprototyped_parameters(function.symbol).unwrap_or(&[])
+        }
         FunctionParameters::Unspecified => {
             return Err(LowerError::MalformedFunction {
                 function: function.name.spelling.clone(),
@@ -2254,6 +2387,7 @@ fn validate_object_declaration_for_lowering(
 }
 
 impl<'a> FunctionLowerer<'a> {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         unit: &'a CHirUnit<'a>,
         target: &'a TargetDataLayout,
@@ -2262,6 +2396,7 @@ impl<'a> FunctionLowerer<'a> {
         memory_symbols: &'a BTreeSet<SymbolId>,
         allocation_origins: &'a BTreeMap<SymbolId, u64>,
         compound_origins: &BTreeMap<usize, (u64, bool)>,
+        string_origins: &BTreeMap<usize, u64>,
     ) -> Self {
         Self {
             unit,
@@ -2271,6 +2406,7 @@ impl<'a> FunctionLowerer<'a> {
             memory_symbols,
             allocation_origins,
             compound_origins: compound_origins.clone(),
+            string_origins: string_origins.clone(),
             blocks: Vec::new(),
             next_value: 0,
             next_block: 0,
@@ -5779,8 +5915,29 @@ impl<'a> FunctionLowerer<'a> {
                     integer: CIntegerType::ULONG,
                 })
             }
+            CHirExpr::StringLit(_, span) => {
+                let origin = self
+                    .string_origins
+                    .get(&(expression as *const CHirExpr<'_> as usize))
+                    .ok_or(LowerError::UnsupportedExpression {
+                        span: *span,
+                        feature: "string has no allocation site",
+                    })?;
+                let symbol = format!("__evocc.string.{origin}");
+                let result = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+                self.emit(
+                    state,
+                    Inst::GlobalAddr {
+                        result: result.clone(),
+                        symbol,
+                    },
+                )?;
+                Ok(ExprValue {
+                    value: result,
+                    integer: CIntegerType::ULONG,
+                })
+            }
             CHirExpr::FloatLit(_, span)
-            | CHirExpr::StringLit(_, span)
             | CHirExpr::Member(_, _, span)
             | CHirExpr::PtrMember(_, _, span)
             | CHirExpr::Index(_, _, span) => Err(LowerError::UnsupportedExpression {
@@ -6001,28 +6158,16 @@ impl<'a> FunctionLowerer<'a> {
         expression: &CHirExpr<'_>,
         span: SourceSpan,
     ) -> Result<TypeId, LowerError> {
-        let ty = match expression {
-            CHirExpr::Ident { facts, .. }
-            | CHirExpr::Assign { facts, .. }
-            | CHirExpr::MemoryAssign { facts, .. }
-            | CHirExpr::Update { facts, .. }
-            | CHirExpr::MemoryUpdate { facts, .. } => facts.ty(),
-            CHirExpr::Cast(ty, _, _) => *ty,
-            _ => {
-                return Err(LowerError::UnsupportedExpression {
-                    span,
-                    feature: "pointer expression type is unavailable",
-                });
-            }
-        };
-        match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
-            Some(TypeKind::Pointer(pointee)) => Ok(*pointee),
-            _ => Err(LowerError::UnsupportedType {
-                ty,
-                span,
-                feature: "expression does not have canonical pointer type",
-            }),
-        }
+        evocc_chir::PointerTypeDesc::from_expression(
+            self.unit.symbols(),
+            self.unit.types(),
+            expression,
+        )
+        .map(|pointer| pointer.pointee())
+        .map_err(|_| LowerError::UnsupportedExpression {
+            span,
+            feature: "pointer expression type is unavailable",
+        })
     }
 
     fn lower_binary(

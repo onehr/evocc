@@ -531,6 +531,8 @@ fn observe_evoir(functions: &[Function]) -> Result<EvoExecutionObservation, Stri
         })
         .collect::<Result<Vec<_>, _>>()?;
     let module = Module {
+        extern_objects: Vec::new(),
+        declares: Vec::new(),
         globals: vec![],
         functions: functions.to_vec(),
     };

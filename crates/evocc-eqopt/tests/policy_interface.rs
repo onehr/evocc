@@ -86,6 +86,8 @@ fn sample_module() -> Module {
         }],
     };
     let mut module = Module {
+        extern_objects: Vec::new(),
+        declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![function],
     };

@@ -71,7 +71,12 @@ fn layout_of(source: &str, name: &str) -> (u64, u32) {
     let layout = TargetDataLayout::aarch64_unknown_linux_gnu()
         .layout_of(unit.types(), ty)
         .unwrap_or_else(|e| panic!("layout of {name}: {e:?}"));
-    (layout.size_bytes, layout.align_bytes)
+    let declared = unit
+        .symbols()
+        .symbol(symbol)
+        .expect("declared")
+        .declared_alignment();
+    (layout.size_bytes, layout.align_bytes.max(declared))
 }
 
 // ---------------------------------------------------------------------------

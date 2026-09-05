@@ -12,9 +12,9 @@ use std::{
 
 use evocc_common::SourceSpan;
 use evocc_memory::{
-    AccessLayout, ByteSequence, FrameId, IndexSignedness, InitialState, MemoryConfig, MemoryFault,
-    MemoryLimits, MemoryState, OffsetDirection, Pointer, PointerValue, ScopeId as MemoryScopeId,
-    WorldLimits, WorldState,
+    AccessLayout, ByteSequence, FrameId, IndexSignedness, InitialState, LibraryValue, MemoryConfig,
+    MemoryFault, MemoryLimits, MemoryState, OffsetDirection, Pointer, PointerValue,
+    ScopeId as MemoryScopeId, WorldLimits, WorldState,
 };
 use evocc_types::{
     enum_integer_rank, ArrayBound, FunctionParameters, Qualifiers, TagDefinition, TagState,
@@ -125,6 +125,9 @@ pub struct InterpretOutcome {
 /// A fail-closed scalar interpreter error.
 #[derive(Debug, Clone, PartialEq)]
 pub enum InterpreterError {
+    IndirectCallDynamicSignatureMismatch {
+        span: SourceSpan,
+    },
     UnknownFunction {
         symbol: SymbolId,
     },
@@ -269,6 +272,7 @@ impl InterpreterError {
                 ..
             } => "E3006",
             Self::FuelExhausted { .. } => "E3008",
+            Self::IndirectCallDynamicSignatureMismatch { .. } => "E3019",
             Self::CallThroughNullFunctionPointer { .. } => "E3015",
             Self::CallThroughNonFunctionPointer { .. } => "E3016",
             Self::Asm { .. } => "E3021",
@@ -308,6 +312,9 @@ impl InterpreterError {
     #[must_use]
     pub fn message(&self) -> String {
         match self {
+            Self::IndirectCallDynamicSignatureMismatch { .. } => {
+                "indirect-call-dynamic-signature-mismatch".to_owned()
+            }
             Self::ReadOfUninitializedObject { spelling, .. } => {
                 format!("read-of-uninitialized-object: {spelling}")
             }
@@ -431,6 +438,7 @@ impl InterpreterError {
             | Self::MissingReturn { span }
             | Self::FuelExhausted { span, .. }
             | Self::Memory { span, .. }
+            | Self::IndirectCallDynamicSignatureMismatch { span }
             | Self::CallThroughNullFunctionPointer { span }
             | Self::CallThroughNonFunctionPointer { span } => Some(*span),
         }
@@ -866,6 +874,7 @@ struct Interpreter<'unit, 'arena> {
     manifest: Option<AllocationSiteManifest<'arena>>,
     static_bindings: HashMap<SymbolId, MemoryBinding>,
     static_compound_bindings: HashMap<usize, MemoryBinding>,
+    string_bindings: HashMap<usize, Pointer>,
     memory_frame: Option<MemoryFrame>,
     memory_mode: bool,
     memory: MemoryState,
@@ -904,6 +913,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             manifest: None,
             static_bindings: HashMap::new(),
             static_compound_bindings: HashMap::new(),
+            string_bindings: HashMap::new(),
             memory_frame: None,
             memory_mode,
             memory,
@@ -965,6 +975,28 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .as_ref()
             .ok_or(InterpreterError::MissingAllocationManifest)?;
         for site in manifest.sites() {
+            if let AllocationSiteKind::StringLiteral(expression) = site.kind() {
+                let CHirExpr::StringLit(literal, span) = expression else {
+                    unreachable!("manifest string site")
+                };
+                let (bytes, align) = literal.object_bytes(&self.target).ok_or(
+                    InterpreterError::UnsupportedExpression {
+                        feature: "invalid string representation",
+                        span: *span,
+                    },
+                )?;
+                let layout = AccessLayout::new(bytes.len() as u64, align);
+                let bytes = ByteSequence::try_from_bytes(bytes)
+                    .map_err(|error| self.memory_error(error, *span))?;
+                let (memory, pointer) = self
+                    .memory
+                    .allocate_string_literal(site.ordinal().raw(), layout, &bytes)
+                    .map_err(|error| self.memory_error(error, *span))?;
+                self.memory = memory;
+                self.string_bindings
+                    .insert(expression as *const CHirExpr<'arena> as usize, pointer);
+                continue;
+            }
             if let AllocationSiteKind::CompoundLiteral {
                 expression,
                 static_storage: true,
@@ -1044,6 +1076,53 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span: declaration.span,
                 });
             }
+        }
+
+        for symbol in required {
+            if self.static_bindings.contains_key(symbol) {
+                continue;
+            }
+            let entry = self.unit.symbols().symbol(*symbol).map_err(|_| {
+                InterpreterError::MalformedObjectDeclaration {
+                    symbol: *symbol,
+                    span: self
+                        .fuel_anchor
+                        .unwrap_or_else(|| self.unit.iter().next().expect("nonempty unit").span()),
+                }
+            })?;
+            if entry.storage_class() != Some(StorageClass::Extern) {
+                continue;
+            }
+            let (size, align) = match self.target.layout_of(self.unit.types(), entry.ty()) {
+                Ok(layout) => (Some(layout.size_bytes), layout.align_bytes),
+                Err(_) => match self.unit.types().get(entry.ty()).map(|ty| &ty.kind) {
+                    Some(TypeKind::Array {
+                        element,
+                        bound: ArrayBound::Unbounded,
+                    }) => (
+                        None,
+                        self.access_layout(*element, entry.span())?.align_bytes,
+                    ),
+                    _ => {
+                        return Err(InterpreterError::UnsupportedType {
+                            ty: entry.ty(),
+                            span: entry.span(),
+                        })
+                    }
+                },
+            };
+            let (memory, address) = self
+                .memory
+                .register_external(u64::MAX - u64::from(symbol.raw()), size, align)
+                .map_err(|error| self.memory_error(error, entry.span()))?;
+            self.memory = memory;
+            self.static_bindings.insert(
+                *symbol,
+                MemoryBinding {
+                    address,
+                    ty: entry.ty(),
+                },
+            );
         }
 
         for (expression, _) in compound_plans {
@@ -2102,7 +2181,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                                 value_base,
                             )? {
                                 if expects_value {
-                                    values.push(CValue::Integer(result));
+                                    values.push(result);
                                 }
                             }
                         } else {
@@ -2165,14 +2244,18 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     value_base,
                 } => {
                     let callee = pop_machine_value(&mut values, span)?;
-                    self.start_indirect_call(
+                    if let Some(result) = self.start_indirect_call(
                         callee,
                         arguments,
                         span,
                         expects_value,
                         &mut tasks,
                         value_base,
-                    )?;
+                    )? {
+                        if expects_value {
+                            values.push(result);
+                        }
+                    }
                     None
                 }
             };
@@ -3512,7 +3595,27 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span,
                 });
             }
-            CHirExpr::FloatLit(_, _) | CHirExpr::StringLit(_, _) => {
+            CHirExpr::StringLit(_, _) => {
+                let value = self
+                    .string_bindings
+                    .get(&(expression as *const CHirExpr<'arena> as usize))
+                    .copied()
+                    .ok_or(InterpreterError::UnsupportedExpression {
+                        feature: "string has no allocation site",
+                        span,
+                    })?;
+                let ty = PointerTypeDesc::from_expression(
+                    self.unit.symbols(),
+                    self.unit.types(),
+                    expression,
+                )
+                .map_err(|_| InterpreterError::UnsupportedExpression {
+                    feature: "string has no character type",
+                    span,
+                })?;
+                values.push(CValue::Pointer { value, ty });
+            }
+            CHirExpr::FloatLit(_, _) => {
                 return Err(InterpreterError::UnsupportedExpression {
                     feature: "outside executable Day-7 scalar memory subset",
                     span,
@@ -3534,7 +3637,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expects_value: bool,
         tasks: &mut Vec<MachineTask<'arena>>,
         value_base: usize,
-    ) -> Result<Option<CInteger>, InterpreterError> {
+    ) -> Result<Option<CValue>, InterpreterError> {
         self.tick(callee.span())?;
         let CHirExpr::Ident {
             symbol,
@@ -3569,6 +3672,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         if let Some(result) =
             self.evaluate_external_ctype(target, spelling, &arguments, call_span)?
         {
+            return Ok(Some(CValue::Integer(result)));
+        }
+
+        if !self.unit.iter().any(|declaration| matches!(declaration, CHirDecl::Function(function) if function.symbol == target && function.body.is_some())) {
+            let result = self.external_library_call(target, spelling, &arguments, call_span)?;
             return Ok(Some(result));
         }
 
@@ -3585,6 +3693,55 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             tasks,
         )?;
         Ok(None)
+    }
+
+    fn external_library_call(
+        &mut self,
+        symbol: SymbolId,
+        spelling: &str,
+        arguments: &[CValue],
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        let arguments = arguments
+            .iter()
+            .map(|value| match value {
+                CValue::Integer(value) => u64::try_from(value.raw_bits())
+                    .map(LibraryValue::Integer)
+                    .map_err(|_| InterpreterError::WideInteger { span }),
+                CValue::Pointer { value, .. } => Ok(LibraryValue::Pointer(*value)),
+                _ => Err(self.memory_error(
+                    MemoryFault::ExternalFunction {
+                        name: spelling.into(),
+                    },
+                    span,
+                )),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let entry = self
+            .unit
+            .symbols()
+            .symbol(symbol)
+            .map_err(|_| InterpreterError::UnknownFunction { symbol })?;
+        let Some(TypeKind::Function { return_type, .. }) =
+            self.unit.types().get(entry.ty()).map(|ty| &ty.kind)
+        else {
+            return Err(InterpreterError::UnsupportedFunctionSignature { symbol, span });
+        };
+        let return_type = self.value_type(*return_type, span)?;
+        let (memory, result) = self
+            .memory
+            .call_library(spelling, &arguments)
+            .map_err(|error| self.memory_error(error, span))?;
+        self.memory = memory;
+        match (result, return_type) {
+            (LibraryValue::Integer(value), ValueType::Integer(ty)) => {
+                Ok(CValue::Integer(CInteger::from_raw(u128::from(value), ty)))
+            }
+            (LibraryValue::Pointer(value), ValueType::Pointer(ty)) => {
+                Ok(CValue::Pointer { value, ty })
+            }
+            _ => Err(InterpreterError::UnsupportedFunctionSignature { symbol, span }),
+        }
     }
 
     fn evaluate_external_ctype(
@@ -3640,7 +3797,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expects_value: bool,
         tasks: &mut Vec<MachineTask<'arena>>,
         value_base: usize,
-    ) -> Result<(), InterpreterError> {
+    ) -> Result<Option<CValue>, InterpreterError> {
         let CValue::FunctionPointer { value, ty } = callee else {
             return Err(InterpreterError::CallThroughNonFunctionPointer { span: call_span });
         };
@@ -3662,6 +3819,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let symbol = self
             .function_symbol(identity)
             .ok_or(InterpreterError::CallThroughNonFunctionPointer { span: call_span })?;
+        let entry = self
+            .unit
+            .symbols()
+            .symbol(symbol)
+            .map_err(|_| InterpreterError::UnknownFunction { symbol })?;
+        if !self.function_types_compatible(entry.ty(), ty.pointee()) {
+            return Err(InterpreterError::IndirectCallDynamicSignatureMismatch { span: call_span });
+        }
+        if !self.unit.iter().any(|declaration| matches!(declaration, CHirDecl::Function(function) if function.symbol == symbol && function.body.is_some())) {
+            return self.external_library_call(symbol, entry.spelling(), &arguments, call_span).map(Some);
+        }
         let caller_slots = std::mem::take(&mut self.slots);
         let caller_fuel_anchor = self.fuel_anchor.take();
         self.enter_function(
@@ -3673,32 +3841,44 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             expects_value,
             value_base,
             tasks,
-        )
+        )?;
+        Ok(None)
     }
 
     fn function_identity(&self, symbol: SymbolId) -> Option<u64> {
-        self.unit
+        self.function_symbols()
+            .into_iter()
+            .position(|candidate| candidate == symbol)
+            .and_then(|index| u64::try_from(index).ok())
+            .and_then(|index| index.checked_add(1))
+    }
+
+    fn function_symbols(&self) -> Vec<SymbolId> {
+        let mut symbols = self
+            .unit
             .iter()
             .filter_map(|declaration| match declaration {
                 CHirDecl::Function(function) if function.body.is_some() => Some(function.symbol),
                 _ => None,
             })
-            .position(|candidate| candidate == symbol)
-            .and_then(|index| u64::try_from(index).ok())
-            .and_then(|index| index.checked_add(1))
+            .collect::<Vec<_>>();
+        let mut seen = symbols.iter().copied().collect::<BTreeSet<_>>();
+        for declaration in self.unit.iter() {
+            if let CHirDecl::Function(function) = declaration {
+                let symbol = linked_library_definition(self.unit, function.symbol);
+                if seen.insert(symbol) {
+                    symbols.push(symbol);
+                }
+            }
+        }
+        symbols
     }
 
     fn function_symbol(&self, identity: u64) -> Option<SymbolId> {
         let index = identity
             .checked_sub(1)
             .and_then(|index| usize::try_from(index).ok())?;
-        self.unit
-            .iter()
-            .filter_map(|declaration| match declaration {
-                CHirDecl::Function(function) if function.body.is_some() => Some(function.symbol),
-                _ => None,
-            })
-            .nth(index)
+        self.function_symbols().get(index).copied()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -6145,7 +6325,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     value: right,
                     ty: right_ty,
                 },
-            ) if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) && left_ty == right_ty => {
+            ) if matches!(operator, BinaryOp::Eq | BinaryOp::Ne)
+                && PointerTypeDesc::composite(self.unit.types(), left_ty, right_ty).is_ok() =>
+            {
                 Ok(machine_equality_result(operator, left == right))
             }
             (CValue::Pointer { value, .. }, CValue::Integer(zero))

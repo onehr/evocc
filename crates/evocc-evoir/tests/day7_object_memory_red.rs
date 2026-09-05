@@ -43,6 +43,8 @@ fn token_function(name: &str, insts: Vec<Inst>, returned: Vec<Value>) -> Functio
         }],
     };
     let mut module = Module {
+        extern_objects: Vec::new(),
+        declares: Vec::new(),
         globals: vec![],
         functions: vec![function],
     };
@@ -124,6 +126,8 @@ fn automatic_store_load_roundtrip_executes_real_memory() {
         vec![loaded, mem3, world3],
     );
     let module = Module {
+        extern_objects: Vec::new(),
+        declares: Vec::new(),
         globals: vec![],
         functions: vec![function],
     };
@@ -183,6 +187,8 @@ fn initialized_global_and_volatile_trace_are_observable() {
         vec![loaded, mem1, world1],
     );
     let module = Module {
+        extern_objects: Vec::new(),
+        declares: Vec::new(),
         globals: vec![GlobalObject {
             symbol: "counter".to_owned(),
             origin: 20,

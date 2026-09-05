@@ -7,8 +7,8 @@ use evocc_types::{AddressSpace, EvoIRType, Region};
 
 use crate::{
     validate_module, validate_section9_bytes, Block, BlockArg, BlockId, CmpOp, EffectSummary,
-    Function, FunctionParam, GlobalKind, GlobalObject, GlobalVisibility, Inst, Module, TrapReason,
-    UbReason, Value,
+    ExternalObject, Function, FunctionDeclaration, FunctionParam, GlobalKind, GlobalObject,
+    GlobalVisibility, Inst, Module, TrapReason, UbReason, Value,
 };
 
 type BinaryConstructor = fn(Value, Value, Value) -> Inst;
@@ -40,13 +40,20 @@ pub fn parse_section9_module(bytes: &[u8]) -> Result<Module, String> {
     let lines = text.lines().collect::<Vec<_>>();
     let mut signatures = HashMap::new();
     for line in &lines {
-        if line.starts_with("func @") {
-            let header = parse_function_header(line)?;
+        if line.starts_with("func @") || line.starts_with("declare @") {
+            let header = if line.starts_with("declare @") {
+                parse_declaration_header(line)?
+            } else {
+                parse_function_header(line)?
+            };
             if signatures
                 .insert(header.name.clone(), header.signature)
                 .is_some()
             {
-                return Err(format!("duplicate function header '{}'", header.name));
+                return Err(format!(
+                    "E3041: symbol-declared-and-defined: '{}'",
+                    header.name
+                ));
             }
         }
     }
@@ -96,6 +103,53 @@ impl ModuleParser<'_> {
             self.position += 1;
         }
 
+        let mut extern_objects = Vec::new();
+        while self
+            .lines
+            .get(self.position)
+            .is_some_and(|line| line.starts_with("extern @"))
+        {
+            let mut cursor = Cursor::new(self.lines[self.position]);
+            cursor.expect("extern @")?;
+            let symbol = cursor.ident()?.to_owned();
+            cursor.expect(" size=")?;
+            let size = if cursor.at("unknown") {
+                cursor.expect("unknown")?;
+                None
+            } else {
+                Some(cursor.index()?)
+            };
+            cursor.expect(" align=")?;
+            let align =
+                u32::try_from(cursor.index()?).map_err(|_| "external alignment exceeds u32")?;
+            cursor.finish()?;
+            extern_objects.push(ExternalObject {
+                symbol,
+                size,
+                align,
+            });
+            self.position += 1;
+        }
+        if !extern_objects.is_empty() && self.lines.get(self.position) == Some(&"") {
+            self.position += 1;
+        }
+        let mut declares = Vec::new();
+        while self
+            .lines
+            .get(self.position)
+            .is_some_and(|line| line.starts_with("declare @"))
+        {
+            let header = parse_declaration_header(self.lines[self.position])?;
+            declares.push(FunctionDeclaration {
+                name: header.name,
+                params: header.signature.params,
+                ret_tys: header.signature.results,
+            });
+            self.position += 1;
+        }
+        if !declares.is_empty() && self.lines.get(self.position) == Some(&"") {
+            self.position += 1;
+        }
         let mut functions = Vec::new();
         while self.position < self.lines.len() {
             if !functions.is_empty() {
@@ -109,7 +163,12 @@ impl ModuleParser<'_> {
             }
             functions.push(self.function()?);
         }
-        Ok(Module { globals, functions })
+        Ok(Module {
+            globals,
+            extern_objects,
+            declares,
+            functions,
+        })
     }
 
     fn function(&mut self) -> Result<Function, String> {
@@ -270,6 +329,23 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
         layout: AccessLayout::new(size, align),
         bytes,
         initialized,
+    })
+}
+
+fn parse_declaration_header(line: &str) -> Result<Header, String> {
+    let mut cursor = Cursor::new(line);
+    cursor.expect("declare @")?;
+    let name = cursor.ident()?.to_owned();
+    cursor.expect("(")?;
+    let params = cursor.type_list(")")?;
+    cursor.expect(") -> (")?;
+    let results = cursor.type_list(")")?;
+    cursor.expect(") cc = target_default")?;
+    cursor.finish()?;
+    Ok(Header {
+        name,
+        convention: "target_default".to_owned(),
+        signature: Signature { params, results },
     })
 }
 

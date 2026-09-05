@@ -371,6 +371,7 @@ fn probe_module() -> Module {
     let mut module = Module {
         globals: Vec::new(),
         functions,
+        ..Module::default()
     };
     module.recompute_effect_summaries();
     module
@@ -512,6 +513,7 @@ fn nine_register_arguments() -> Module {
     let mut module = Module {
         globals: Vec::new(),
         functions: vec![fold_function("nine", &shapes)],
+        ..Module::default()
     };
     module.recompute_effect_summaries();
     module
@@ -688,6 +690,7 @@ fn narrow_module() -> Module {
     let mut module = Module {
         globals: Vec::new(),
         functions,
+        ..Module::default()
     };
     module.recompute_effect_summaries();
     module

@@ -635,6 +635,12 @@ impl TypeInterner {
         self.types.get(id.raw() as usize)
     }
 
+    /// Look up an existing canonical type without changing interner identity or order.
+    #[must_use]
+    pub fn find(&self, ty: &CanonicalType) -> Option<TypeId> {
+        self.canonical.get(ty).copied()
+    }
+
     /// C type compatibility, independent of canonical identity. Incomplete
     /// arrays compose with fixed arrays, function parameters ignore their top
     /// qualifiers, and GNU alignment is not part of compatibility.

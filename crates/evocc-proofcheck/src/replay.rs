@@ -1624,6 +1624,8 @@ mod tests {
 
     fn module(insts: Vec<Inst>, root: Value, with_input: bool) -> Module {
         Module {
+            extern_objects: Vec::new(),
+            declares: Vec::new(),
             globals: Vec::new(),
             functions: vec![Function {
                 name: "main".to_owned(),

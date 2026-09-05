@@ -1217,7 +1217,7 @@
     },
     "backgroundVerification": {
       "ordinaryAssemblyWorkspace": "INTERRUPTED, not acceptance evidence: redundant with the retained isolated full workspace replay; terminated only its cargo/test/child processes 18042, 26612, 54246",
-      "isolatedAssemblyReplay": "RUNNING at fc138c6 in /private/tmp/c30-assembly-replay.IZedjG/repo, fresh target and no object alternates; covers AB implementation, not 8772b33",
+      "isolatedAssemblyReplay": "PASS at fc138c6: cargo build --workspace --bins --locked --offline && cargo test --workspace --no-fail-fast --locked --offline; exit 0, 238 targets, 1570 passed, 0 failed, 4 ignored; fresh target and no object alternates. Log: .evidence/external-symbols/c30-assembly-offline-workspace.log. Covers AB implementation, not later frontend changes or survey closure.",
       "currentLoweringTests": "PASS 81/81 at 8772b33; CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo test -p evocc-lower --tests --no-fail-fast; not the later cb0e83d full gate",
       "hostObservation": "One-second /usr/bin/sample of the waiting native corpus child recorded 891/891 samples at _dyld_start; the corpus advanced between process inspections. No runner or macOS metadata workaround added."
     },
@@ -1232,7 +1232,7 @@
       "checks": { "clippy": "CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo clippy --workspace --all-targets -- -D warnings: PASS", "fmt": "cargo fmt --all -- --check: PASS", "ruff": "ruff check tests/acceptance tools: PASS", "diff": "git diff --check: PASS" },
       "layout": { "base": { "command": "bash tests/acceptance/day5-layout-conformance.sh --subject", "runId": "20260905T082605Z-48573", "passed": 128, "mismatches": 0, "cutLine": "Measured before the final unit-level declaration-queue correction" }, "attributed": { "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject", "runId": "20260905T083240Z-73905", "passed": 22, "mismatches": 0 }, "rejectedAttempt": "20260905T082703Z-48572: omitted C30_LAYOUT_CASE_SET=attributed; manifest caseCount differs, no cases executed" },
       "latentSpecGap": "EXTERNAL-CALLEE-REPRESENTATION: both builtin and explicit extern calls without a TU body reach E3101 missing callee; no external declaration/effect representation is invented. This is not a remaining first-error class in the 57-unit replay; full batch report above.",
-      "workspace": { "subject": "cb0e83d", "command": "CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo build --workspace --bins --locked --offline && CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo test --workspace --no-fail-fast --locked --offline", "status": "RUNNING", "log": "/private/tmp/c30-builtin-namespace-workspace.log" },
+      "workspace": { "subject": "cb0e83d", "command": "CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo build --workspace --bins --locked --offline && CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo test --workspace --no-fail-fast --locked --offline", "status": "INVALIDATED_AND_FAILED: source changed before doctests completed; this is not a frozen-subject gate. Two legacy attributed-object tests also used type alignment instead of object alignment and are corrected in the current worktree.", "log": "/private/tmp/c30-builtin-namespace-workspace.log" },
       "isolatedReplay": "NOT_RUN for cb0e83d; the retained AB replay is at fc138c6 and cannot certify these later changes"
     },
     "subject": "3bc968d",

@@ -83,6 +83,13 @@ pub enum PointerValue {
     Function(u64),
 }
 
+/// Values admitted by the byte-oriented external C library execution boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LibraryValue {
+    Pointer(Pointer),
+    Integer(u64),
+}
+
 impl PointerValue {
     #[must_use]
     pub const fn object(pointer: Pointer) -> Self {
@@ -273,6 +280,7 @@ pub enum InitialState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ObjectOwner {
+    External,
     Static,
     ReadOnlyStatic,
     StringLiteral,
@@ -480,6 +488,8 @@ pub struct VolatileEvent {
 /// Stable semantic category used by interpreter diagnostic mappings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MemoryFaultKind {
+    ExternalObject,
+    ExternalFunction,
     InvalidAlignment,
     InvalidAccessSize,
     InvalidPointerLayout,
@@ -524,6 +534,12 @@ pub enum MemoryFaultKind {
 /// selection, but deliberately owns no source span or IR obligation type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MemoryFault {
+    ExternalObject {
+        object: ObjectId,
+    },
+    ExternalFunction {
+        name: String,
+    },
     InvalidAlignment {
         align_bytes: u32,
     },
@@ -653,6 +669,8 @@ impl MemoryFault {
     #[must_use]
     pub const fn kind(&self) -> MemoryFaultKind {
         match self {
+            Self::ExternalObject { .. } => MemoryFaultKind::ExternalObject,
+            Self::ExternalFunction { .. } => MemoryFaultKind::ExternalFunction,
             Self::InvalidAlignment { .. } => MemoryFaultKind::InvalidAlignment,
             Self::InvalidAccessSize { .. } => MemoryFaultKind::InvalidAccessSize,
             Self::InvalidPointerLayout { .. } => MemoryFaultKind::InvalidPointerLayout,
@@ -702,6 +720,14 @@ impl MemoryFault {
     #[must_use]
     pub const fn runtime_diagnostic(&self) -> Option<MemoryDiagnostic> {
         let diagnostic = match self {
+            Self::ExternalObject { .. } => MemoryDiagnostic {
+                code: "E3040",
+                message: "external-object-not-executable",
+            },
+            Self::ExternalFunction { .. } => MemoryDiagnostic {
+                code: "E3039",
+                message: "external-call-not-executable",
+            },
             Self::InvalidLifetimeEnd { .. } => MemoryDiagnostic {
                 code: "E3007",
                 message: "invalid-lifetime-end",
@@ -1036,6 +1062,31 @@ impl MemoryState {
         )
     }
 
+    /// Register provenance without allocating bytes for storage owned by another unit.
+    pub fn register_external(
+        &self,
+        origin_site: u64,
+        size: Option<u64>,
+        align: u32,
+    ) -> Result<(Self, Pointer), MemoryFault> {
+        let (mut next, pointer) = self.allocate_object(
+            ObjectOrigin {
+                site: origin_site,
+                instance: 0,
+            },
+            AccessLayout::new(0, align),
+            ObjectOwner::External,
+            AllocationContents::InitialState(InitialState::Uninitialized),
+        )?;
+        next.objects
+            .get_mut(&pointer.object)
+            .expect("just registered")
+            .info
+            .layout
+            .size_bytes = size.unwrap_or(i64::MAX as u64);
+        Ok((next, pointer))
+    }
+
     /// Freeze a fully initialized static object against subsequent stores.
     pub fn freeze_static(&self, pointer: Pointer) -> Result<Self, MemoryFault> {
         if pointer.object.is_null() {
@@ -1166,6 +1217,15 @@ impl MemoryState {
     /// Check a complete non-empty access range and its required alignment.
     /// Initialization is deliberately checked only by loads.
     pub fn check_access(&self, address: Pointer, access: AccessLayout) -> Result<(), MemoryFault> {
+        if self
+            .objects
+            .get(&address.object)
+            .is_some_and(|object| object.info.owner == ObjectOwner::External)
+        {
+            return Err(MemoryFault::ExternalObject {
+                object: address.object,
+            });
+        }
         validate_access_layout(access)?;
         self.check_pointer(address)?;
         let object = self
@@ -1293,6 +1353,98 @@ impl MemoryState {
         source: Pointer,
         access: AccessLayout,
     ) -> Result<Self, MemoryFault> {
+        self.copy_representation(destination, source, access, false)
+    }
+
+    /// Execute the specified external library subset against abstract storage.
+    /// Copies preserve initialization and provenance; comparisons actually read bytes.
+    pub fn call_library(
+        &self,
+        name: &str,
+        arguments: &[LibraryValue],
+    ) -> Result<(Self, LibraryValue), MemoryFault> {
+        use LibraryValue::{Integer, Pointer as Address};
+        let byte = |address: Pointer, offset: u64| -> Result<u8, MemoryFault> {
+            let offset = i64::try_from(offset)
+                .map_err(|_| MemoryFault::InvalidAccessSize { size_bytes: offset })?;
+            Ok(self
+                .load_bytes(address.checked_offset(offset)?, AccessLayout::new(1, 1))?
+                .bytes()[0])
+        };
+        match (name, arguments) {
+            ("memset", [Address(destination), Integer(value), Integer(size)]) => {
+                if *size == 0 {
+                    return Ok((self.clone(), Address(*destination)));
+                }
+                let access = AccessLayout::new(*size, 1);
+                self.check_access(*destination, access)?;
+                let length = usize::try_from(*size)
+                    .map_err(|_| MemoryFault::HostSizeExceeded { size_bytes: *size })?;
+                let bytes =
+                    ByteSequence::try_from_bytes(repeat_value(length, *value as u8, *size)?)?;
+                Ok((
+                    self.store_bytes(*destination, access, &bytes)?,
+                    Address(*destination),
+                ))
+            }
+            ("memcpy" | "memmove", [Address(destination), Address(source), Integer(size)]) => {
+                if *size == 0 {
+                    return Ok((self.clone(), Address(*destination)));
+                }
+                Ok((
+                    self.copy_representation(
+                        *destination,
+                        *source,
+                        AccessLayout::new(*size, 1),
+                        name == "memmove",
+                    )?,
+                    Address(*destination),
+                ))
+            }
+            ("strlen", [Address(source)]) => {
+                let mut length = 0;
+                while byte(*source, length)? != 0 {
+                    length += 1;
+                }
+                Ok((self.clone(), Integer(length)))
+            }
+            ("memcmp" | "strncmp", [Address(left), Address(right), Integer(size)]) => {
+                for offset in 0..*size {
+                    let a = byte(*left, offset)?;
+                    let b = byte(*right, offset)?;
+                    if a != b {
+                        return Ok((self.clone(), Integer((i32::from(a) - i32::from(b)) as u64)));
+                    }
+                    if name == "strncmp" && a == 0 {
+                        break;
+                    }
+                }
+                Ok((self.clone(), Integer(0)))
+            }
+            ("strcmp", [Address(left), Address(right)]) => {
+                let mut offset = 0;
+                loop {
+                    let a = byte(*left, offset)?;
+                    let b = byte(*right, offset)?;
+                    if a != b || a == 0 {
+                        return Ok((self.clone(), Integer((i32::from(a) - i32::from(b)) as u64)));
+                    }
+                    offset += 1;
+                }
+            }
+            _ => Err(MemoryFault::ExternalFunction {
+                name: name.to_owned(),
+            }),
+        }
+    }
+
+    fn copy_representation(
+        &self,
+        destination: Pointer,
+        source: Pointer,
+        access: AccessLayout,
+        overlap_allowed: bool,
+    ) -> Result<Self, MemoryFault> {
         if !is_valid_alignment(access.align_bytes) {
             return Err(MemoryFault::InvalidAlignment {
                 align_bytes: access.align_bytes,
@@ -1311,7 +1463,8 @@ impl MemoryState {
 
         let destination_range = self.checked_store_range(destination, access)?;
         let source_range = self.checked_range(source, access)?;
-        if destination.object == source.object
+        if !overlap_allowed
+            && destination.object == source.object
             && destination_range != source_range
             && destination_range.start < source_range.end
             && source_range.start < destination_range.end
@@ -1553,7 +1706,15 @@ impl MemoryState {
         owner: ObjectOwner,
         contents: AllocationContents<'_>,
     ) -> Result<(Self, Pointer), MemoryFault> {
-        validate_access_layout(layout)?;
+        if owner == ObjectOwner::External && layout.size_bytes == 0 {
+            if !layout.align_bytes.is_power_of_two() {
+                return Err(MemoryFault::InvalidAlignment {
+                    align_bytes: layout.align_bytes,
+                });
+            }
+        } else {
+            validate_access_layout(layout)?;
+        }
         if self
             .objects
             .values()

@@ -570,6 +570,8 @@ mod tests {
     #[test]
     fn derives_witness_and_seed_order_without_producer_help() {
         let module = Module {
+            extern_objects: Vec::new(),
+            declares: Vec::new(),
             globals: Vec::new(),
             functions: vec![function(vec![Block {
                 id: 0,
@@ -600,6 +602,8 @@ mod tests {
     #[test]
     fn poison_is_not_laundered_through_a_block_argument() {
         let module = Module {
+            extern_objects: Vec::new(),
+            declares: Vec::new(),
             globals: Vec::new(),
             functions: vec![function(vec![
                 Block {
@@ -643,6 +647,8 @@ mod tests {
         };
         let quotient = bits(2);
         let module = Module {
+            extern_objects: Vec::new(),
+            declares: Vec::new(),
             globals: Vec::new(),
             functions: vec![function(vec![Block {
                 id: 0,

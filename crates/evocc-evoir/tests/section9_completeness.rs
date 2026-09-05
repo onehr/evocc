@@ -259,6 +259,8 @@ fn sentinel_module() -> Module {
         })
         .collect();
     Module {
+        extern_objects: Vec::new(),
+        declares: Vec::new(),
         globals: vec![
             GlobalObject {
                 symbol: "sentinel_file".to_owned(),
@@ -636,8 +638,14 @@ fn type_schema(ty: &EvoIRType) -> &'static str {
 }
 
 fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
-    let Module { globals, functions } = module;
-    let mut keys = BTreeSet::from(["Module(globals,functions)"]);
+    let Module {
+        globals,
+        extern_objects,
+        declares,
+        functions,
+    } = module;
+    let _ = (extern_objects, declares);
+    let mut keys = BTreeSet::from(["Module(globals,extern_objects,declares,functions)"]);
     for global in globals {
         let GlobalObject {
             symbol,

@@ -36,7 +36,12 @@ SPEC = ROOT / "docs/evoir-spec.md"
 
 HOLE = "<>"
 PLACEHOLDER = re.compile(r"\{[^{}]*\}")
-STRING = re.compile(r'"((?:[^"\\]|\\.)*)"')
+STRING = re.compile(
+    r'''(?P<comment>//[^\n]*|/\*[\s\S]*?\*/)|'''
+    r'''(?P<char>b?'(?:\\.|[^'\\])')|'''
+    r'''b?r(?P<hashes>\#*)"(?P<raw>[\s\S]*?)"(?P=hashes)|'''
+    r'''b?"(?P<normal>(?:[^"\\]|\\.)*)"'''
+)
 MNEMONIC = ("br", "ret", "cond_br", "trap.", "ub.assume.")
 
 
@@ -87,7 +92,12 @@ def is_rendered_form(text: str) -> bool:
 
 def renderer_shapes(source: str) -> set[str]:
     shapes = set()
-    for literal in STRING.findall(source):
+    for match in STRING.finditer(source):
+        literal = match.group("normal")
+        if literal is None:
+            literal = match.group("raw")
+        if literal is None:
+            continue
         rendered = unescape(PLACEHOLDER.sub(HOLE, literal))
         for line in rendered.splitlines():
             if is_rendered_form(line):

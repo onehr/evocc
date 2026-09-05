@@ -184,7 +184,11 @@ pub fn generate_module(seed: u64, config: GeneratorConfig) -> Module {
         &mut origins,
     ));
 
-    let mut module = Module { globals, functions };
+    let mut module = Module {
+        globals,
+        functions,
+        ..Module::default()
+    };
     module.recompute_effect_summaries();
     module
 }

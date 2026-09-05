@@ -63,6 +63,8 @@ fn bits(id: u32) -> Value {
 
 fn input_module() -> Module {
     Module {
+        extern_objects: Vec::new(),
+        declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![Function {
             name: "main".to_owned(),

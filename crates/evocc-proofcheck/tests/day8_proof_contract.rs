@@ -25,6 +25,8 @@ fn main() {
     let paths = env::args_os().skip(1).collect::<Vec<_>>();
     assert_eq!(paths.len(), 3);
     let before = Module {
+        extern_objects: Vec::new(),
+        declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![Function {
             name: "main".to_owned(),

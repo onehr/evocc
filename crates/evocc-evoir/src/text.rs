@@ -53,7 +53,10 @@ pub fn validate_section9_bytes(bytes: &[u8]) -> Result<(), String> {
         }
     }
     let first = text.lines().next().unwrap_or_default();
-    if !first.starts_with("global @") && !first.starts_with("func @") {
+    if !["global @", "extern @", "declare @", "func @"]
+        .iter()
+        .any(|prefix| first.starts_with(prefix))
+    {
         return Err("EvoIR text does not begin with a module item".to_owned());
     }
     Ok(())
@@ -100,7 +103,48 @@ pub fn render_module(module: &Module) -> String {
             initialized
         ));
     }
-    if !globals.is_empty() && !module.functions.is_empty() {
+    if !globals.is_empty()
+        && (!module.extern_objects.is_empty()
+            || !module.declares.is_empty()
+            || !module.functions.is_empty())
+    {
+        rendered.push('\n');
+    }
+
+    for object in &module.extern_objects {
+        rendered.push_str(&format!(
+            "extern @{} size={} align={}\n",
+            object.symbol,
+            object
+                .size
+                .map_or_else(|| "unknown".to_owned(), |size| size.to_string()),
+            object.align
+        ));
+    }
+    if !module.extern_objects.is_empty()
+        && (!module.declares.is_empty() || !module.functions.is_empty())
+    {
+        rendered.push('\n');
+    }
+    for declaration in &module.declares {
+        rendered.push_str(&format!(
+            "declare @{}({}) -> ({}) cc = target_default\n",
+            declaration.name,
+            declaration
+                .params
+                .iter()
+                .map(render_type)
+                .collect::<Vec<_>>()
+                .join(", "),
+            declaration
+                .ret_tys
+                .iter()
+                .map(render_type)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if !module.declares.is_empty() && !module.functions.is_empty() {
         rendered.push('\n');
     }
 
@@ -684,6 +728,8 @@ mod tests {
     #[test]
     fn first_block_is_entry_and_trap_uses_section_9_mnemonic() {
         let module = Module {
+            extern_objects: Vec::new(),
+            declares: Vec::new(),
             globals: vec![],
             functions: vec![Function {
                 name: "stopped".to_owned(),
@@ -718,6 +764,8 @@ mod tests {
     #[test]
     fn module_global_has_exact_section_9_text() {
         let module = Module {
+            extern_objects: Vec::new(),
+            declares: Vec::new(),
             globals: vec![GlobalObject {
                 symbol: "__evocc.string.7".to_owned(),
                 origin: 7,

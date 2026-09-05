@@ -8,8 +8,8 @@ use std::fmt;
 
 pub use evocc_memory::{AccessLayout, IndexSignedness, OffsetDirection};
 use evocc_memory::{
-    ByteSequence, FrameId, InitialState, MemoryConfig, MemoryFault, MemoryLimits, MemoryState,
-    Pointer, PointerValue, ScopeId, WorldLimits, WorldState,
+    ByteSequence, FrameId, InitialState, LibraryValue, MemoryConfig, MemoryFault, MemoryLimits,
+    MemoryState, Pointer, PointerValue, ScopeId, WorldLimits, WorldState,
 };
 pub use evocc_types::EvoIRType;
 use evocc_types::{Region, TargetDataLayout};
@@ -679,7 +679,45 @@ pub struct Function {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Module {
     pub globals: Vec<GlobalObject>,
+    pub extern_objects: Vec<ExternalObject>,
+    pub declares: Vec<FunctionDeclaration>,
     pub functions: Vec<Function>,
+}
+
+/// Storage supplied by a linker, never allocated or initialized by this module.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalObject {
+    pub symbol: String,
+    pub size: Option<u64>,
+    pub align: u32,
+}
+
+/// A callable interface without an implementation or a producer-supplied effect summary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionDeclaration {
+    pub name: String,
+    pub params: Vec<EvoIRType>,
+    pub ret_tys: Vec<EvoIRType>,
+}
+
+impl FunctionDeclaration {
+    fn signature(&self) -> Function {
+        Function {
+            name: self.name.clone(),
+            params: self
+                .params
+                .iter()
+                .enumerate()
+                .map(|(index, ty)| FunctionParam {
+                    name: format!("arg{index}"),
+                    ty: ty.clone(),
+                })
+                .collect(),
+            ret_tys: self.ret_tys.clone(),
+            effects: EffectSummary::top(),
+            blocks: Vec::new(),
+        }
+    }
 }
 
 impl Module {
@@ -1183,12 +1221,52 @@ fn evoir_access_layout(ty: &EvoIRType) -> Result<Option<AccessLayout>, String> {
 /// Validate every function and all inter-function call signatures.
 pub fn validate_module(module: &Module) -> Result<(), String> {
     let mut functions = HashMap::new();
+    let mut symbols = HashSet::new();
+    for name in module
+        .functions
+        .iter()
+        .map(|f| f.name.as_str())
+        .chain(module.declares.iter().map(|f| f.name.as_str()))
+        .chain(module.globals.iter().map(|g| g.symbol.as_str()))
+        .chain(module.extern_objects.iter().map(|g| g.symbol.as_str()))
+    {
+        if !symbols.insert(name) {
+            return Err(format!("E3041: symbol-declared-and-defined: '{name}'"));
+        }
+    }
     for function in &module.functions {
         if functions.insert(function.name.as_str(), function).is_some() {
             return Err(format!("duplicate function symbol '{}'", function.name));
         }
         validate_ssa(function)
             .map_err(|message| format!("function '{}': {message}", function.name))?;
+    }
+    let declarations = module
+        .declares
+        .iter()
+        .map(FunctionDeclaration::signature)
+        .collect::<Vec<_>>();
+    for declaration in &declarations {
+        for ty in declaration
+            .params
+            .iter()
+            .map(|parameter| &parameter.ty)
+            .chain(&declaration.ret_tys)
+        {
+            validate_value_type(ty)?;
+        }
+        callable_signature(declaration)?;
+        functions.insert(declaration.name.as_str(), declaration);
+    }
+    let mut externs = HashSet::new();
+    for object in &module.extern_objects {
+        if !object.align.is_power_of_two() {
+            return Err(format!(
+                "external object '{}' has invalid alignment",
+                object.symbol
+            ));
+        }
+        externs.insert(object.symbol.as_str());
     }
 
     let mut globals = HashMap::new();
@@ -1291,7 +1369,10 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
         for block in &caller.blocks {
             for (index, instruction) in block.insts.iter().enumerate() {
                 match instruction {
-                    Inst::GlobalAddr { symbol, .. } if !globals.contains_key(symbol.as_str()) => {
+                    Inst::GlobalAddr { symbol, .. }
+                        if !globals.contains_key(symbol.as_str())
+                            && !externs.contains(symbol.as_str()) =>
+                    {
                         return Err(format!(
                             "function '{}' block {} instruction {} refers to missing global '{}'",
                             caller.name, block.id, index, symbol
@@ -3242,15 +3323,22 @@ fn interpret_module_in_state(
     state.functions = module
         .functions
         .iter()
+        .map(|function| function.name.as_str())
+        .chain(
+            module
+                .declares
+                .iter()
+                .map(|function| function.name.as_str()),
+        )
         .enumerate()
-        .map(|(index, function)| {
+        .map(|(index, name)| {
             let identity = u64::try_from(index)
                 .ok()
                 .and_then(|index| index.checked_add(1))
                 .ok_or_else(|| InterpreterError::InvalidModule {
                     message: "function provenance identity exhausted".to_owned(),
                 })?;
-            Ok((function.name.clone(), identity))
+            Ok((name.to_owned(), identity))
         })
         .collect::<Result<_, _>>()?;
     let entry_index = function_indices.get(entry_name).copied().ok_or_else(|| {
@@ -3332,6 +3420,29 @@ fn interpret_module_in_state(
                         &world_in,
                         block_id,
                     )?);
+                    if module
+                        .declares
+                        .iter()
+                        .any(|declaration| declaration.name == callee)
+                    {
+                        let returned = execute_external_call(
+                            &mut state,
+                            &callee,
+                            call_arguments,
+                            &results,
+                            block_id,
+                        )?;
+                        bind_call_return(
+                            &mut frames,
+                            CallReturnBinding {
+                                results,
+                                mem_out,
+                                world_out,
+                            },
+                            returned,
+                        )?;
+                        continue;
+                    }
                     let callee_index =
                         function_indices
                             .get(callee.as_str())
@@ -3396,6 +3507,51 @@ fn interpret_module_in_state(
                                 });
                             }
                         };
+                    let identity_index = identity
+                        .checked_sub(1)
+                        .and_then(|identity| usize::try_from(identity).ok());
+                    if let Some(declaration) = identity_index
+                        .and_then(|index| index.checked_sub(module.functions.len()))
+                        .and_then(|index| module.declares.get(index))
+                    {
+                        if function_pointer_type(&declaration.signature())
+                            .map_err(|message| InterpreterError::InvalidModule { message })?
+                            != callee.ty
+                        {
+                            return Err(InterpreterError::IndirectCallDynamicSignatureMismatch {
+                                block: block_id,
+                            });
+                        }
+                        let mut arguments =
+                            read_call_values(&args, block_id, &frames[frame_index].values)?;
+                        arguments.push(read_internal(
+                            &frames[frame_index].values,
+                            &mem_in,
+                            block_id,
+                        )?);
+                        arguments.push(read_internal(
+                            &frames[frame_index].values,
+                            &world_in,
+                            block_id,
+                        )?);
+                        let returned = execute_external_call(
+                            &mut state,
+                            &declaration.name,
+                            arguments,
+                            &results,
+                            block_id,
+                        )?;
+                        bind_call_return(
+                            &mut frames,
+                            CallReturnBinding {
+                                results,
+                                mem_out,
+                                world_out,
+                            },
+                            returned,
+                        )?;
+                        continue;
+                    }
                     let callee_index = identity
                         .checked_sub(1)
                         .and_then(|identity| usize::try_from(identity).ok())
@@ -3532,6 +3688,61 @@ fn interpret_module_in_state(
             },
         }
     }
+}
+
+fn execute_external_call(
+    state: &mut ExecutionState,
+    name: &str,
+    mut arguments: Vec<InternalValue>,
+    results: &[Value],
+    block: BlockId,
+) -> Result<Vec<InternalValue>, InterpreterError> {
+    let _world = arguments
+        .pop()
+        .ok_or_else(|| InterpreterError::InvalidModule {
+            message: "external call lacks world".into(),
+        })?;
+    let _memory = arguments
+        .pop()
+        .ok_or_else(|| InterpreterError::InvalidModule {
+            message: "external call lacks memory".into(),
+        })?;
+    let arguments = arguments
+        .into_iter()
+        .map(|value| match value {
+            InternalValue::Bits(value) => Ok(LibraryValue::Integer(value)),
+            InternalValue::Pointer(value) => Ok(LibraryValue::Pointer(value)),
+            _ => Err(InterpreterError::MemoryAccess {
+                block,
+                error: MemoryFault::ExternalFunction { name: name.into() },
+            }),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let (next, result) = state
+        .memory
+        .call_library(name, &arguments)
+        .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+    state.memory = next;
+    let result = match result {
+        LibraryValue::Integer(value) => match results {
+            [result @ Value {
+                ty: EvoIRType::Bits(_),
+                ..
+            }] => InternalValue::Bits(IntegerKernel::for_value(result, block)?.normalize(value)),
+            _ => {
+                return Err(InterpreterError::MemoryAccess {
+                    block,
+                    error: MemoryFault::ExternalFunction { name: name.into() },
+                })
+            }
+        },
+        LibraryValue::Pointer(value) => InternalValue::Pointer(value),
+    };
+    Ok(vec![
+        result,
+        InternalValue::Bits(state.fresh_token()?),
+        InternalValue::Bits(state.fresh_token()?),
+    ])
 }
 
 fn enter_module_frame(module: &Module, frame: &mut ModuleFrame) -> Result<(), InterpreterError> {
@@ -4347,6 +4558,14 @@ fn matching_guard(
 }
 
 fn initialize_globals(module: &Module, state: &mut ExecutionState) -> Result<(), InterpreterError> {
+    for (index, object) in module.extern_objects.iter().enumerate() {
+        let (memory, pointer) = state
+            .memory
+            .register_external(u64::MAX - index as u64, object.size, object.align)
+            .map_err(|error| InterpreterError::MemorySetup { error })?;
+        state.memory = memory;
+        state.globals.insert(object.symbol.clone(), pointer);
+    }
     for global in &module.globals {
         let (memory, pointer) = match global.kind {
             GlobalKind::StringLiteral => {
@@ -5605,6 +5824,8 @@ mod tests {
             }],
         };
         let mut module = Module {
+            extern_objects: Vec::new(),
+            declares: Vec::new(),
             globals: vec![],
             functions: vec![
                 identity_callee("identity", EvoIRType::Bits(32), Region::All),
@@ -5673,6 +5894,8 @@ mod tests {
             }],
         };
         let mut module = Module {
+            extern_objects: Vec::new(),
+            declares: Vec::new(),
             globals: vec![],
             functions: vec![
                 identity_callee("identity", EvoIRType::Bits(32), Region::All),
@@ -5786,6 +6009,8 @@ mod tests {
         };
         *callee = "countdown".to_owned();
         let mut module = Module {
+            extern_objects: Vec::new(),
+            declares: Vec::new(),
             globals: vec![],
             functions: vec![countdown, main],
         };
@@ -5802,7 +6027,7 @@ mod tests {
         duplicate.functions[1].name = "identity".to_owned();
         assert!(validate_module(&duplicate)
             .expect_err("duplicate symbols must fail")
-            .contains("duplicate function"));
+            .contains("E3041"));
 
         let mut missing = module.clone();
         let Inst::Call { callee, .. } = &mut missing.functions[1].blocks[0].insts[1] else {
@@ -6722,6 +6947,8 @@ mod tests {
 
         let module_outcome = interpret_module(
             &Module {
+                extern_objects: Vec::new(),
+                declares: Vec::new(),
                 globals: vec![],
                 functions: vec![function.clone()],
             },
@@ -6747,6 +6974,8 @@ mod tests {
         assert_eq!(
             interpret_module(
                 &Module {
+                    extern_objects: Vec::new(),
+                    declares: Vec::new(),
                     globals: vec![],
                     functions: vec![consumed],
                 },
@@ -6831,6 +7060,8 @@ mod tests {
 
         let module_outcome = interpret_module(
             &Module {
+                extern_objects: Vec::new(),
+                declares: Vec::new(),
                 globals: vec![],
                 functions: vec![function],
             },
@@ -6880,6 +7111,8 @@ mod tests {
         assert_eq!(function_error.message(), "read-of-uninitialized-object");
 
         let module = Module {
+            extern_objects: Vec::new(),
+            declares: Vec::new(),
             globals: vec![],
             functions: vec![function],
         };
@@ -7239,6 +7472,8 @@ mod tests {
 
         let module_error = interpret_module(
             &Module {
+                extern_objects: Vec::new(),
+                declares: Vec::new(),
                 globals: vec![],
                 functions: vec![function],
             },

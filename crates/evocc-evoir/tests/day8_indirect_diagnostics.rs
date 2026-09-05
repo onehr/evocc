@@ -119,6 +119,8 @@ fn null_module() -> Module {
     let memory_out = mem(5);
     let world_out = world(6);
     let mut module = Module {
+        extern_objects: Vec::new(),
+        declares: Vec::new(),
         globals: vec![],
         functions: vec![
             identity(64),
@@ -153,6 +155,8 @@ fn static_signature_mismatch_module() -> Module {
     let memory_out = mem(5);
     let world_out = world(6);
     let mut module = Module {
+        extern_objects: Vec::new(),
+        declares: Vec::new(),
         globals: vec![],
         functions: vec![
             identity(32),
@@ -287,6 +291,8 @@ fn roundtrip_module(stored: StoredProvenance) -> Module {
         call_world,
     );
     let mut module = Module {
+        extern_objects: Vec::new(),
+        declares: Vec::new(),
         globals: match stored {
             StoredProvenance::Object => vec![GlobalObject {
                 symbol: "object_source".to_owned(),

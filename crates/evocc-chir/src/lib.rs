@@ -152,6 +152,30 @@ impl StringLit {
         }
         Some(units)
     }
+
+    /// A string object's target representation, including its terminating zero.
+    #[must_use]
+    pub fn object_bytes(&self, target: &evocc_types::TargetDataLayout) -> Option<(Vec<u8>, u32)> {
+        let width = match self.prefix {
+            StringPrefix::None | StringPrefix::U8 => 1,
+            StringPrefix::L | StringPrefix::U16 => 2,
+            StringPrefix::U => 4,
+        };
+        let mut units = self.decoded_units()?;
+        units.push(0);
+        let mut bytes = Vec::new();
+        for unit in units {
+            match target.byte_order() {
+                evocc_types::ByteOrder::Little => {
+                    bytes.extend_from_slice(&unit.to_le_bytes()[..width])
+                }
+                evocc_types::ByteOrder::Big => {
+                    bytes.extend_from_slice(&unit.to_be_bytes()[4 - width..])
+                }
+            }
+        }
+        Some((bytes, width as u32))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1203,6 +1227,7 @@ pub struct CHirUnit<'arena> {
     detached_attributes: Vec<Attribute>,
     generic_selections: Vec<GenericSelectionRecord>,
     front_end_builtins: Vec<FrontEndBuiltinRecord<'arena>>,
+    unprototyped_parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
 }
 
 impl<'arena> CHirUnit<'arena> {
@@ -1219,7 +1244,20 @@ impl<'arena> CHirUnit<'arena> {
             detached_attributes: Vec::new(),
             generic_selections: Vec::new(),
             front_end_builtins: Vec::new(),
+            unprototyped_parameters: std::collections::HashMap::new(),
         }
+    }
+
+    pub fn set_unprototyped_parameters(
+        &mut self,
+        parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
+    ) {
+        self.unprototyped_parameters = parameters;
+    }
+
+    #[must_use]
+    pub fn unprototyped_parameters(&self, symbol: SymbolId) -> Option<&[TypeId]> {
+        self.unprototyped_parameters.get(&symbol).map(Vec::as_slice)
     }
 
     /// Attach the attributes that had no declaration node: labels and type

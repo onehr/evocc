@@ -214,6 +214,7 @@ struct EntityState {
 
 #[derive(Debug)]
 struct DeclarationTransaction {
+    unprototyped_calls: usize,
     entity_undo: usize,
     external_entity_undo: usize,
     inherited_function_parameter_undo: usize,
@@ -242,6 +243,7 @@ struct SwitchCaseContext {
 }
 
 pub struct Parser<'src, 'arena> {
+    unprototyped_calls: Vec<(SymbolId, Vec<TypeId>, SourceSpan)>,
     tokens: Vec<Token>,
     pos: usize,
     file: FileId,
@@ -417,6 +419,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             declaration_transaction_depth: 0,
             side_declarations: Vec::new(),
             builtin_declarations: Vec::new(),
+            unprototyped_calls: Vec::new(),
             loop_depth: 0,
             current_function_parameters: None,
             detached_attributes: Vec::new(),
@@ -476,6 +479,31 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.advance();
             }
         }
+        let definitions = decls
+            .iter()
+            .filter_map(|declaration| match declaration {
+                CHirDecl::Function(function) if function.body.is_some() => Some(function.symbol),
+                _ => None,
+            })
+            .collect::<HashSet<_>>();
+        let mut observed: HashMap<SymbolId, Vec<TypeId>> = HashMap::new();
+        for (symbol, parameters, span) in std::mem::take(&mut self.unprototyped_calls) {
+            if definitions.contains(&symbol) {
+                continue;
+            }
+            if let Some(first) = observed.get(&symbol) {
+                if first.len() != parameters.len()
+                    || !first
+                        .iter()
+                        .zip(&parameters)
+                        .all(|(left, right)| self.same_unqualified_type(*left, *right))
+                {
+                    self.report("E2931", "unprototyped-call-mismatch", span);
+                }
+            } else {
+                observed.insert(symbol, parameters);
+            }
+        }
         let mut unit = CHirUnit::new(
             decls,
             std::mem::take(&mut self.types),
@@ -484,6 +512,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         unit.set_detached_attributes(std::mem::take(&mut self.detached_attributes));
         unit.set_generic_selections(std::mem::take(&mut self.generic_selections));
         unit.set_front_end_builtins(std::mem::take(&mut self.front_end_builtins));
+        unit.set_unprototyped_parameters(observed);
         unit
     }
 
@@ -771,6 +800,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn begin_declaration_transaction(&mut self) -> DeclarationTransaction {
         self.declaration_transaction_depth += 1;
         DeclarationTransaction {
+            unprototyped_calls: self.unprototyped_calls.len(),
             entity_undo: self.entity_undo.len(),
             external_entity_undo: self.external_entity_undo.len(),
             inherited_function_parameter_undo: self.inherited_function_parameter_undo.len(),
@@ -802,6 +832,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn rollback_declaration_transaction(&mut self, transaction: &DeclarationTransaction) {
+        self.unprototyped_calls
+            .truncate(transaction.unprototyped_calls);
         while self.entity_undo.len() > transaction.entity_undo {
             let (symbol, previous) = self.entity_undo.pop().expect("undo marker is bounded");
             match previous {
@@ -8918,6 +8950,35 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         .unwrap_or_else(|| self.span());
                     self.expect(TokenKind::RParen)?;
                     let span = self.merge_span(expression.span(), end);
+                    if let CHirExpr::Ident { symbol, facts, .. } = expression {
+                        if matches!(
+                            self.types.get(facts.ty()).map(|ty| &ty.kind),
+                            Some(TypeKind::Function {
+                                parameters: FunctionParameters::Unspecified,
+                                ..
+                            })
+                        ) {
+                            let mut parameters = Vec::new();
+                            for argument in &mut arguments {
+                                let inferred = self.converted_expression_type(argument)?.ty;
+                                let promoted = match self.operand_type_class(inferred) {
+                                    OperandTypeClass::Integer(integer) => InferredType::Integer(
+                                        CInteger::new(0, integer).promoted().ty(),
+                                    ),
+                                    OperandTypeClass::Real(FloatKind::F32) => {
+                                        InferredType::Real(FloatKind::F64)
+                                    }
+                                    _ => inferred,
+                                };
+                                let ty =
+                                    self.materialize_inferred_type(promoted, Some(argument))?;
+                                parameters.push(ty);
+                                *argument =
+                                    self.alloc_node(CHirExpr::Cast(ty, argument, argument.span()));
+                            }
+                            self.unprototyped_calls.push((*symbol, parameters, span));
+                        }
+                    }
                     expression = self.alloc_node(CHirExpr::Call(expression, arguments, span));
                 }
                 Some(TokenKind::LBracket) => {
@@ -9099,6 +9160,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.report("E1006", "invalid-string-literal", span);
                     return None;
                 }
+                self.string_element_type(literal.prefix);
                 return Some(self.alloc_node(CHirExpr::StringLit(literal, span)));
             }
             TokenKind::LParen => {
