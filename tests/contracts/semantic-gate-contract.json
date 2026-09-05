@@ -4,7 +4,7 @@
   "whatAContractIs": "The middle-end stream's frozen scope, gate and rulings. The specification is the only authority; this file records what the stream is allowed to change and what it must measure.",
   "authority": {
     "spec": "docs/evoir-spec.md",
-    "revision": "1.9.58",
+    "revision": "1.9.61",
     "crates": [
       "evocc-egraph",
       "evocc-eqopt",
@@ -24,7 +24,7 @@
       "evocc-lower",
       "tests/contracts/day9-acceptance-contract.json"
     ],
-    "evomirSpec": "docs/evomir-spec.md revision 0.9"
+    "evomirSpec": "docs/evomir-spec.md revision 0.10"
   },
   "scope": [
     "S1 randomized semantic gate: deterministic generator of validator-clean EvoIR, differential interpretation of original versus scalar-optimized module under an explicit budget, EVP1 replay through evo-proofcheck for every trial, shrinker to a minimal reproducer. Gate: 1000 programs in the workspace test with 0 mismatches and 0 refusals; 20,000 in the ignored long run.",
@@ -592,6 +592,56 @@
         "ignored": 4,
         "clippy": 0,
         "fmt": "clean"
+      }
+    },
+    "b6": {
+      "branchHead": "b96a047",
+      "wideIntegers": {
+        "representation": "two gpr64 virtual registers, low half first; the allocator, the verifier and the EvoMIR interpreter see only 64-bit registers",
+        "lowered": "add, sub, mul, and, or, xor, shl, lshr, ashr, every icmp, zext, sext, trunc, load, store, shift_count_defined, block arguments, parameters and results",
+        "newForms": [
+          "adc",
+          "sbc",
+          "sbcs",
+          "umulh",
+          "madd",
+          "tst"
+        ],
+        "darwinComparisons": 120239,
+        "darwinFailures": 0,
+        "linuxComparisons": 120278,
+        "linuxFailures": 0,
+        "oracles": "Apple clang version 21.0.0 (clang-2100.1.1.101) on the host; gcc-14 (Debian 14.2.0-19) in evo-flight-lab:sealed",
+        "evidence": ".evidence/builtin-probes/20260905-b6"
+      },
+      "stackArguments": {
+        "target": "linux-aarch64",
+        "shapes": "nine and ten arguments with a promoted char, and a bits<128> after seven",
+        "agreeing": 3,
+        "darwin": "E4010, unchanged"
+      },
+      "refusals": {
+        "E4003": "sdiv, udiv, srem, urem and the signed definedness predicates at bits<128>; every width from 65 to 127 and above 128",
+        "E3033": "sdiv, udiv, srem and urem at bits<128> in the EvoIR interpreter, and every width it has no value model for",
+        "E4010": "more than eight register arguments on darwin-arm64"
+      },
+      "equalityProfile": {
+        "bits128": "declined, not aborted",
+        "beforeThisWindow": "three paths read a constant's width before the eligibility fixed point and reached a total width function whose remaining case aborted",
+        "checker": "already clean: every width read is bounded and answers a refusal"
+      },
+      "cCorpus": {
+        "blocked": "the C front end reports E3033 at the __int128 type, so no C program reaches this window's forms; the end-to-end evidence is EvoIR compiled, linked and run against both oracles instead",
+        "unchanged": "384 Darwin and 384 Linux, still agreeing"
+      },
+      "specGap": "EvoMIR Section 6's even-aligned register pair is unmeasured on darwin-arm64 and Apple clang does not round; evidence .evidence/builtin-probes/20260905-b6/b6-darwin-abi.out",
+      "architectGate": {
+        "evoccMir": "158 passed, 0 failed",
+        "evoccMirWideIntegers": "18 passed, 0 failed",
+        "evoccEvoirAndEqopt": "43 passed, 0 failed",
+        "clippy": 0,
+        "fmt": "clean",
+        "workspaceTotal": "not taken: three worktrees share one cargo target directory and serialised for over two hours without completing"
       }
     }
   }

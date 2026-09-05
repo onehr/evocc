@@ -39,6 +39,9 @@ pub struct Frame {
     /// Each `frame.slot` instruction, in the order Section 6 lays them out, to
     /// its offset above `sp`.
     pub slots: BTreeMap<u64, u64>,
+    /// Bytes of outgoing stack arguments, which Section 6 puts at the bottom
+    /// of the frame so that a call writes them at `[sp, #8 * i]`.
+    pub outgoing: u64,
 }
 
 const fn align_up(value: u64, alignment: u64) -> u64 {
@@ -71,9 +74,14 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
 
     let spill_bytes = u64::from(allocated.frame_slots) * 8;
 
+    // Section 6's frame layout puts "outgoing stack arguments (Linux only,
+    // revision 0.10)" last, which is lowest, so every other slot sits above
+    // the area and a call writes its arguments at `[sp, #8 * i]`.
+    let outgoing = allocated.outgoing;
+
     let mut spills = BTreeMap::new();
     for index in 0..allocated.frame_slots {
-        spills.insert(index, u64::from(index) * 8);
+        spills.insert(index, outgoing + u64::from(index) * 8);
     }
 
     // "one slot per `frame.slot` (its declared size, rounded to its declared
@@ -85,7 +93,7 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
     // the object above it left the cursor, which is what the campaign's first
     // assembler refusal was.
     let mut slots = BTreeMap::new();
-    let mut cursor = spill_bytes;
+    let mut cursor = outgoing + spill_bytes;
     for (origin, object, align) in automatic.iter().rev() {
         cursor = align_up(cursor, (*align).max(1));
         slots.insert(*origin, cursor);
@@ -110,6 +118,7 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
         saved,
         spills,
         slots,
+        outgoing,
     }
 }
 
@@ -730,6 +739,61 @@ fn emit_inst(
                 at(*a, *width)
             );
         }
+        MInst::Madd {
+            dst,
+            n,
+            m,
+            a,
+            width,
+        } => {
+            let _ = writeln!(
+                text,
+                "    madd {}, {}, {}, {}",
+                at(*dst, *width),
+                at(*n, *width),
+                at(*m, *width),
+                at(*a, *width)
+            );
+        }
+        MInst::CarryBinary {
+            op,
+            dst,
+            lhs,
+            rhs,
+            width,
+            ..
+        } => {
+            let _ = writeln!(
+                text,
+                "    {} {}, {}, {}",
+                op.mnemonic(),
+                at(*dst, *width),
+                at(*lhs, *width),
+                at(*rhs, *width)
+            );
+        }
+        // Section 5: the ordered comparison discards the difference, so the
+        // destination is the zero register.
+        MInst::SubCarryFlags {
+            lhs, rhs, width, ..
+        } => {
+            let zero = if matches!(width, Width::X) {
+                "xzr"
+            } else {
+                "wzr"
+            };
+            let _ = writeln!(
+                text,
+                "    sbcs {zero}, {}, {}",
+                at(*lhs, *width),
+                at(*rhs, *width)
+            );
+        }
+        MInst::TstImm {
+            lhs, imm, width, ..
+        } => {
+            let _ = writeln!(text, "    tst {}, #{imm}", at(*lhs, *width));
+        }
         MInst::FlagBinary {
             op,
             dst,
@@ -752,7 +816,7 @@ fn emit_inst(
         MInst::WideMultiply { op, dst, lhs, rhs } => {
             let operands = match op {
                 WideMul::Smull => RegClass::Gpr32,
-                WideMul::Smulh => RegClass::Gpr64,
+                WideMul::Smulh | WideMul::Umulh => RegClass::Gpr64,
             };
             let _ = writeln!(
                 text,
@@ -888,6 +952,17 @@ fn emit_inst(
                 let _ = writeln!(text, "    cbnz {counter}, {body}");
             }
         }
+        // Section 6: "the callee reads slot `i` at `x29 + 16 + 8 * i`, since
+        // the prologue saves the pair first", and the caller writes its own
+        // at increasing addresses from the `sp` it calls with.
+        MInst::IncomingArg { dst, slot } => {
+            let offset = 16 + u64::from(*slot) * 8;
+            let _ = writeln!(text, "    ldr {}, [x29, #{offset}]", name(*dst));
+        }
+        MInst::OutgoingArg { src, slot } => {
+            let offset = u64::from(*slot) * 8;
+            let _ = writeln!(text, "    str {}, [sp, #{offset}]", name(*src));
+        }
         MInst::Asm(body) => emit_assembly(text, target, body, &[], function, spell),
         MInst::Ldp {
             rt1,
@@ -895,6 +970,7 @@ fn emit_inst(
             base,
             offset,
             writeback,
+            ..
         } => {
             let bang = if *writeback { "!" } else { "" };
             let _ = writeln!(
@@ -911,6 +987,7 @@ fn emit_inst(
             base,
             offset,
             writeback,
+            ..
         } => {
             let bang = if *writeback { "!" } else { "" };
             let _ = writeln!(

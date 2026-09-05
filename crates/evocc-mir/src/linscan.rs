@@ -19,7 +19,7 @@ use std::fmt::Write as _;
 
 use crate::{
     inst_defs, inst_uses, regalloc, term_edges, term_uses, AsmBody, AsmConstraint, AsmOperand,
-    AsmValue, MBlock, MFunction, MInst, MTerm, RegClass, VReg,
+    AsmValue, MBlock, MFunction, MInst, MTerm, RegClass, Target, VReg,
 };
 
 /// Section 6: "`x0` to `x17` are caller-saved", less the two intra-procedure
@@ -57,14 +57,27 @@ pub struct Allocated {
     /// How many arguments the function takes, which Section 6 puts in `x0`
     /// onwards and which are therefore defined when the function is entered.
     pub parameters: usize,
+    /// Bytes of outgoing stack arguments this function's calls need, which
+    /// Section 6's frame layout reserves at the bottom of the frame (Linux
+    /// only, revision 0.10).
+    pub outgoing: u64,
 }
 
 /// Assign a physical register to every virtual register of an out-of-SSA
 /// function, spilling to the frame when a class runs out.
 pub fn allocate(function: &MFunction) -> Result<Allocated, String> {
+    allocate_for(Target::Darwin, function)
+}
+
+/// The same, for a named target.
+///
+/// Only Section 6's "Stack arguments" rule distinguishes them: on Linux an
+/// argument that finds no register goes to the frame, and on Darwin more than
+/// eight are refused in lowering and never reach here.
+pub fn allocate_for(target: Target, function: &MFunction) -> Result<Allocated, String> {
     let mut next = FRESH_BASE;
     let parameters = function.blocks.first().map_or(0, |block| block.args.len());
-    let (mut current, pins) = pin_boundaries(function, &mut next);
+    let (mut current, pins, outgoing) = pin_boundaries(target, function, &mut next);
     let mut slots: BTreeMap<u32, u32> = BTreeMap::new();
 
     // Each round either succeeds or sends at least one interval to the frame,
@@ -89,6 +102,7 @@ pub fn allocate(function: &MFunction) -> Result<Allocated, String> {
                     spilled: slots.len(),
                     frame_slots: u32::try_from(slots.len()).unwrap_or(u32::MAX),
                     used_callee_saved,
+                    outgoing,
                 });
             }
             Err(victims) => {
@@ -115,9 +129,14 @@ fn fresh(next: &mut u32, class: RegClass) -> VReg {
 
 /// Copy every boundary value into or out of a register of its own, and record
 /// which physical register each of those short-lived registers must have.
-fn pin_boundaries(function: &MFunction, next: &mut u32) -> (MFunction, BTreeMap<u32, u8>) {
+fn pin_boundaries(
+    platform: Target,
+    function: &MFunction,
+    next: &mut u32,
+) -> (MFunction, BTreeMap<u32, u8>, u64) {
     let mut pins: BTreeMap<u32, u8> = BTreeMap::new();
     let mut blocks = Vec::new();
+    let mut outgoing_slots: u32 = 0;
 
     for (index, block) in function.blocks.iter().enumerate() {
         let mut insts = Vec::new();
@@ -126,6 +145,17 @@ fn pin_boundaries(function: &MFunction, next: &mut u32) -> (MFunction, BTreeMap<
             // Section 6: the parameters arrive in x0 to x7. Each is copied out
             // at once, so the boundary register is live over one move.
             for (position, parameter) in block.args.iter().enumerate() {
+                // Section 6: an argument past the eighth "goes to the stack in
+                // an 8-byte slot ... the callee reads slot `i` at `x29 + 16 +
+                // 8 * i`". Darwin refuses those in lowering, so `position` is
+                // always inside the register file there.
+                if let Some(slot) = stack_slot(platform, position) {
+                    insts.push(MInst::IncomingArg {
+                        dst: *parameter,
+                        slot,
+                    });
+                    continue;
+                }
                 let incoming = fresh(next, parameter.class);
                 pins.insert(incoming.id, u8::try_from(position).unwrap_or(BOUNDARY));
                 insts.push(MInst::Mov {
@@ -142,7 +172,15 @@ fn pin_boundaries(function: &MFunction, next: &mut u32) -> (MFunction, BTreeMap<
                     args,
                     results,
                 } => {
-                    let (moved, outputs) = pin_call(&mut insts, args, results, next, &mut pins);
+                    let (moved, outputs) = pin_call(
+                        platform,
+                        &mut insts,
+                        args,
+                        results,
+                        next,
+                        &mut pins,
+                        &mut outgoing_slots,
+                    );
                     insts.push(MInst::Bl {
                         symbol: symbol.clone(),
                         args: moved,
@@ -160,7 +198,15 @@ fn pin_boundaries(function: &MFunction, next: &mut u32) -> (MFunction, BTreeMap<
                     args,
                     results,
                 } => {
-                    let (moved, outputs) = pin_call(&mut insts, args, results, next, &mut pins);
+                    let (moved, outputs) = pin_call(
+                        platform,
+                        &mut insts,
+                        args,
+                        results,
+                        next,
+                        &mut pins,
+                        &mut outgoing_slots,
+                    );
                     insts.push(MInst::Blr {
                         target: *target,
                         args: moved,
@@ -222,20 +268,44 @@ fn pin_boundaries(function: &MFunction, next: &mut u32) -> (MFunction, BTreeMap<
             blocks,
         },
         pins,
+        // `sp` stays 16-byte aligned at every call, so the area is rounded up.
+        u64::from(outgoing_slots).next_multiple_of(2) * 8,
     )
 }
+
+/// The stack slot Section 6 gives an argument position, or `None` when a
+/// register holds it.
+const fn stack_slot(platform: Target, position: usize) -> Option<u32> {
+    if matches!(platform, Target::Darwin) || position < MAX_REGISTER_ARGUMENTS {
+        return None;
+    }
+    Some((position - MAX_REGISTER_ARGUMENTS) as u32)
+}
+
+/// Section 6: "Integer and pointer arguments of at most 64 bits go in `x0` to
+/// `x7` in order."
+const MAX_REGISTER_ARGUMENTS: usize = 8;
 
 type PinnedResults = Vec<(VReg, VReg)>;
 
 fn pin_call(
+    platform: Target,
     insts: &mut Vec<MInst>,
     args: &[VReg],
     results: &[VReg],
     next: &mut u32,
     pins: &mut BTreeMap<u32, u8>,
+    outgoing_slots: &mut u32,
 ) -> (Vec<VReg>, PinnedResults) {
     let mut moved = Vec::new();
     for (position, arg) in args.iter().enumerate() {
+        // Section 6: the slots are "assigned in argument order at increasing
+        // addresses from the caller's `sp` at the call".
+        if let Some(slot) = stack_slot(platform, position) {
+            insts.push(MInst::OutgoingArg { src: *arg, slot });
+            *outgoing_slots = (*outgoing_slots).max(slot + 1);
+            continue;
+        }
         let outgoing = fresh(next, arg.class);
         pins.insert(outgoing.id, u8::try_from(position).unwrap_or(BOUNDARY));
         insts.push(MInst::Mov {
@@ -900,11 +970,38 @@ fn operand_slots(inst: &mut MInst, definitions: bool) -> Vec<&mut VReg> {
                 vec![lhs]
             }
         }
-        MInst::Msub { dst, n, m, a, .. } => {
+        MInst::Msub { dst, n, m, a, .. } | MInst::Madd { dst, n, m, a, .. } => {
             if definitions {
                 vec![dst]
             } else {
                 vec![n, m, a]
+            }
+        }
+        MInst::CarryBinary {
+            dst,
+            flags,
+            lhs,
+            rhs,
+            ..
+        }
+        | MInst::SubCarryFlags {
+            dst,
+            flags_in: flags,
+            lhs,
+            rhs,
+            ..
+        } => {
+            if definitions {
+                vec![dst]
+            } else {
+                vec![flags, lhs, rhs]
+            }
+        }
+        MInst::TstImm { dst, lhs, .. } => {
+            if definitions {
+                vec![dst]
+            } else {
+                vec![lhs]
             }
         }
         MInst::FlagBinary {
@@ -986,6 +1083,20 @@ fn operand_slots(inst: &mut MInst, definitions: bool) -> Vec<&mut VReg> {
                 vec![dst]
             } else {
                 Vec::new()
+            }
+        }
+        MInst::IncomingArg { dst, .. } => {
+            if definitions {
+                vec![dst]
+            } else {
+                Vec::new()
+            }
+        }
+        MInst::OutgoingArg { src, .. } => {
+            if definitions {
+                Vec::new()
+            } else {
+                vec![src]
             }
         }
         MInst::Ldp { rt1, rt2, base, .. } => {

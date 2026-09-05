@@ -344,6 +344,61 @@ pub fn render_inst(inst: &MInst) -> String {
             use_of(*m),
             use_of(*a)
         ),
+        MInst::Madd {
+            dst,
+            n,
+            m,
+            a,
+            width,
+        } => format!(
+            "{}madd.{} {}, {}, {}",
+            defined(*dst),
+            width.mnemonic(),
+            use_of(*n),
+            use_of(*m),
+            use_of(*a)
+        ),
+        MInst::CarryBinary {
+            op,
+            dst,
+            flags,
+            lhs,
+            rhs,
+            width,
+        } => format!(
+            "{}{}.{} {}, {}, {}",
+            defined(*dst),
+            op.mnemonic(),
+            width.mnemonic(),
+            use_of(*flags),
+            use_of(*lhs),
+            use_of(*rhs)
+        ),
+        MInst::SubCarryFlags {
+            dst,
+            flags_in,
+            lhs,
+            rhs,
+            width,
+        } => format!(
+            "{}sbcs.{} {}, {}, {}",
+            defined(*dst),
+            width.mnemonic(),
+            use_of(*flags_in),
+            use_of(*lhs),
+            use_of(*rhs)
+        ),
+        MInst::TstImm {
+            dst,
+            lhs,
+            imm,
+            width,
+        } => format!(
+            "{}tst.{} {}, #{imm}",
+            defined(*dst),
+            width.mnemonic(),
+            use_of(*lhs)
+        ),
         MInst::Extend { op, dst, src } => {
             format!("{}{} {}", defined(*dst), op.mnemonic(), use_of(*src))
         }
@@ -458,6 +513,7 @@ pub fn render_inst(inst: &MInst) -> String {
             base,
             offset,
             writeback,
+            volatile,
         }
         | MInst::Stp {
             rt1,
@@ -465,12 +521,14 @@ pub fn render_inst(inst: &MInst) -> String {
             base,
             offset,
             writeback,
+            volatile,
         } => {
             let mnemonic = if matches!(inst, MInst::Ldp { .. }) {
                 "ldp"
             } else {
                 "stp"
             };
+            let marker = if *volatile { "volatile " } else { "" };
             let bang = if *writeback { "!" } else { "" };
             let head = if matches!(inst, MInst::Ldp { .. }) {
                 format!("{}, {} = ", *rt1, *rt2)
@@ -483,7 +541,7 @@ pub fn render_inst(inst: &MInst) -> String {
                 format!("{}, {}, ", use_of(*rt1), use_of(*rt2))
             };
             format!(
-                "{head}{mnemonic} {operands}[{}, #{offset}]{bang}",
+                "{head}{mnemonic} {marker}{operands}[{}, #{offset}]{bang}",
                 use_of(*base)
             )
         }
@@ -492,6 +550,12 @@ pub fn render_inst(inst: &MInst) -> String {
         }
         MInst::SpillReload { dst, slot } => {
             format!("{}spill.reload [slot #{slot}]", defined(*dst))
+        }
+        MInst::IncomingArg { dst, slot } => {
+            format!("{}arg.incoming [slot #{slot}]", defined(*dst))
+        }
+        MInst::OutgoingArg { src, slot } => {
+            format!("arg.outgoing {}, [slot #{slot}]", use_of(*src))
         }
         MInst::FrameSlot {
             dst,

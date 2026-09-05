@@ -17,7 +17,9 @@ use evocc_evoir::Module;
 use evocc_types::EvoIRType;
 
 use crate::lane::is_register_type;
-use crate::{allocate, emit_module_for, lower_module_with, out_of_ssa, verify_allocation, Target};
+use crate::{
+    allocate_for, emit_module_for, lower_module_for, out_of_ssa, verify_allocation, Target,
+};
 
 /// Where the native pipeline stopped.
 ///
@@ -84,7 +86,7 @@ pub fn compile_module_for(
     module: &Module,
     keep: &dyn Fn(&str) -> bool,
 ) -> Result<String, NativeStop> {
-    let lowered = lower_module_with(module, &|name| !keep(name)).map_err(|refusals| {
+    let lowered = lower_module_for(target, module, &|name| !keep(name)).map_err(|refusals| {
         let mut codes: Vec<&'static str> = refusals.iter().map(|refusal| refusal.code).collect();
         codes.sort_unstable();
         codes.dedup();
@@ -95,7 +97,7 @@ pub fn compile_module_for(
         if !keep(&function.name) {
             continue;
         }
-        let allocated = allocate(&out_of_ssa(function))
+        let allocated = allocate_for(target, &out_of_ssa(function))
             .map_err(|detail| NativeStop::Allocation(format!("@{}: {detail}", function.name)))?;
         verify_allocation(&allocated).map_err(|refusal| {
             NativeStop::Verification(format!(

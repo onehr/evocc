@@ -753,7 +753,7 @@ fn build_region(
             }
             Replacement::Constant(raw) => {
                 let sort = packed_type(&event.result.ty)?;
-                let raw = mask_raw(*raw, &event.result.ty);
+                let raw = mask_raw(*raw, &event.result.ty)?;
                 if let Some(existing) = nodes.iter().find(|node| {
                     node.operation == "const"
                         && node.sort == sort
@@ -826,7 +826,7 @@ fn build_region(
                             operands.push(EmittedOperand::Bound(bound_value.clone()));
                         }
                         EmittedOperand::Constant(raw) => {
-                            let raw = mask_raw(*raw, &term.result_ty);
+                            let raw = mask_raw(*raw, &term.result_ty)?;
                             let node = u32::try_from(nodes.len()).ok()?;
                             let owner = classes.push()?;
                             widths.push(width);
@@ -1638,7 +1638,7 @@ fn class_has_before_constant(
     classes: &LocalClasses,
 ) -> Option<bool> {
     let class = classes.find(*value_classes.get(&value.id)?)?;
-    let raw = mask_raw(raw, &value.ty);
+    let raw = mask_raw(raw, &value.ty)?;
     Some(nodes.iter().any(|node| {
         node.source == EvpNodeSource::Before
             && node.operation == "const"
@@ -1751,7 +1751,7 @@ fn emitted_operation(operator: ScalarOperator) -> Option<&'static str> {
 fn instruction_shape(instruction: &Inst) -> Option<InstructionShape> {
     let operator = ingest_scalar_inst(instruction).ok()?;
     let payload = match instruction {
-        Inst::Const(value, raw) => mask_raw(*raw, &value.ty),
+        Inst::Const(value, raw) => mask_raw(*raw, &value.ty)?,
         _ => 0,
     };
     Some((
@@ -2030,7 +2030,8 @@ fn exact_rule(
 }
 
 fn is_constant(value: &Value, facts: &HashMap<u32, ScalarFact>, raw: u64) -> bool {
-    matches!(facts.get(&value.id), Some(ScalarFact::Constant { raw: actual, ty }) if ty == &value.ty && *actual == mask_raw(raw, ty))
+    matches!(facts.get(&value.id), Some(ScalarFact::Constant { raw: actual, ty })
+        if ty == &value.ty && mask_raw(raw, ty) == Some(*actual))
 }
 
 enum SelectedSource {
@@ -2225,7 +2226,8 @@ fn apply(module: &Module, accepted: &[Accepted]) -> Result<(Module, ValueRemap),
                         }
                         Replacement::Constant(raw) => {
                             let result = inst_results(&instruction)[0].clone();
-                            rewritten.push(Inst::Const(result.clone(), mask_raw(*raw, &result.ty)));
+                            let raw = mask_raw(*raw, &result.ty).ok_or(())?;
+                            rewritten.push(Inst::Const(result.clone(), raw));
                         }
                         // The emitted instructions occupy the root's position
                         // in extraction order, and the root's uses are
@@ -2243,7 +2245,7 @@ fn apply(module: &Module, accepted: &[Accepted]) -> Result<(Module, ValueRemap),
                                         next = next.checked_add(1).ok_or(())?;
                                         rewritten.push(Inst::Const(
                                             constant.clone(),
-                                            mask_raw(*raw, &term.result_ty),
+                                            mask_raw(*raw, &term.result_ty).ok_or(())?,
                                         ));
                                         constant
                                     }
