@@ -84,6 +84,16 @@ pub fn observe_entry(
         .enumerate()
     {
         match value.ty {
+            // Section 2: "lowering represents it as two `gpr64` virtual
+            // registers, the low half first", so the boundary passes two, and
+            // Section 6 rounds the position up to even before them.
+            EvoIRType::Bits(128) => {
+                if arguments.len() % 2 == 1 {
+                    arguments.push(MirValue::Int(0));
+                }
+                arguments.push(MirValue::Int(value.raw_bits));
+                arguments.push(MirValue::Int(value.high_bits));
+            }
             EvoIRType::Bits(width) => arguments.push(MirValue::Int(
                 (value.raw_bits & mask(width)) | unspecified_fill(index, width),
             )),
@@ -98,31 +108,49 @@ pub fn observe_entry(
 
     // Section 6 returns up to eight results in x0 to x7, in order, each a
     // low-N-bit value in a register whose upper bits are unspecified.
-    if outcome.results.len() != result_types.len() {
+    let expected: usize = result_types
+        .iter()
+        .map(|ty| usize::from(matches!(ty, EvoIRType::Bits(128))) + 1)
+        .sum();
+    if outcome.results.len() != expected {
         return Err(MirError::Invalid {
             detail: format!(
-                "the entry returned {} results where {} were declared",
-                outcome.results.len(),
-                result_types.len()
+                "the entry returned {} registers where {expected} were declared",
+                outcome.results.len()
             ),
         });
     }
     let mut returns = Vec::new();
-    for (value, ty) in outcome.results.iter().zip(result_types) {
+    let mut registers = outcome.results.iter();
+    for ty in result_types {
         let EvoIRType::Bits(width) = ty else {
             return Err(MirError::Invalid {
                 detail: format!("no register spelling for a result of type {ty:?}"),
             });
         };
-        let MirValue::Int(raw) = value else {
-            return Err(MirError::Invalid {
-                detail: format!("an integer result came back as {value:?}"),
-            });
+        let mut next = || match registers.next() {
+            Some(MirValue::Int(raw)) => Ok(*raw),
+            other => Err(MirError::Invalid {
+                detail: format!("an integer result came back as {other:?}"),
+            }),
         };
-        returns.push(RuntimeValue {
-            ty: ty.clone(),
-            raw_bits: raw & mask(*width),
-        });
+        if *width == 128 {
+            // Section 6: "A `bits<128>` result is `x0`:`x1`, low half in `x0`."
+            let low = next()?;
+            let high = next()?;
+            returns.push(RuntimeValue {
+                ty: ty.clone(),
+                raw_bits: low,
+                high_bits: high,
+            });
+        } else {
+            let raw = next()?;
+            returns.push(RuntimeValue {
+                ty: ty.clone(),
+                raw_bits: raw & mask(*width),
+                high_bits: 0,
+            });
+        }
     }
 
     Ok(MirRun {

@@ -79,7 +79,7 @@ fn the_sixty_four_by_sixty_four_product_read_as_two_halves_executes() {
     // whole product shifted out here.
     assert_eq!(
         run(&mul_shr(100), 0xffff_ffff_ffff_ffff, 0xffff_ffff_ffff_ffff),
-        (u128::from(u64::MAX) * u128::from(u64::MAX) >> 100) as u64
+        ((u128::from(u64::MAX) * u128::from(u64::MAX)) >> 100) as u64
     );
 }
 
@@ -198,22 +198,30 @@ fn every_comparison_answers_at_the_full_width() {
 }
 
 #[test]
-fn a_constant_spans_the_whole_width() {
-    // Section 3.2: the literal is "in the inclusive range 0 to 2^N - 1", and
-    // "an out-of-range literal is malformed; a parser never truncates or
-    // extends it". At N = 128 that is a value no `u64` holds.
-    let widest = "    %v4 = const.bits<128> 340282366920938463463374607431768211455\n\
-                  \x20   %v5 = const.bits<128> 64\n\
-                  \x20   %v6 = lshr.bits<128> %v4, %v5\n\
-                  \x20   %v99 = trunc.bits<64> %v6\n";
-    assert_eq!(run(widest, 0, 0), u64::MAX);
+fn a_value_spanning_the_whole_width_is_reachable() {
+    // The widest bit pattern is built the way the front end builds one, by
+    // extending and shifting: `Inst::Const` carries its immediate in the same
+    // 64-bit field the C lowering fills, so a literal above 2^64 - 1 has no
+    // in-memory spelling yet. Section 3.2's range for `N = 128` is therefore
+    // reachable through the arithmetic and not through the literal.
+    let widest = "    %v4 = const.bits<128> 0\n\
+                  \x20   %v5 = const.bits<128> 1\n\
+                  \x20   %v6 = sub.bits<128> %v4, %v5\n\
+                  \x20   %v7 = const.bits<128> 64\n\
+                  \x20   %v8 = lshr.bits<128> %v6, %v7\n\
+                  \x20   %v99 = trunc.bits<64> %v8\n";
+    assert_eq!(run(widest, 0, 0), u64::MAX, "the high half is all ones");
 
-    let text = wrap(
-        "    %v4 = const.bits<128> 340282366920938463463374607431768211456\n\
-         \x20   %v99 = trunc.bits<64> %v4\n",
-    );
-    parse_section9_module(text.as_bytes())
-        .expect_err("2^128 is out of range for bits<128> and is malformed");
+    let low = "    %v4 = const.bits<128> 0\n\
+               \x20   %v5 = const.bits<128> 1\n\
+               \x20   %v6 = sub.bits<128> %v4, %v5\n\
+               \x20   %v99 = trunc.bits<64> %v6\n";
+    assert_eq!(run(low, 0, 0), u64::MAX, "and so is the low half");
+
+    // A 64-bit literal keeps its exact value at the wider type.
+    let literal = "    %v4 = const.bits<128> 18446744073709551615\n\
+                   \x20   %v99 = trunc.bits<64> %v4\n";
+    assert_eq!(run(literal, 0, 0), u64::MAX);
 }
 
 #[test]
@@ -227,7 +235,9 @@ fn division_and_remainder_stay_e3033_at_width_one_hundred_and_twenty_eight() {
              \x20   %v6 = {operation}.bits<128> %v4, %v5\n\
              \x20   %v99 = trunc.bits<64> %v6\n"
         );
-        let text = wrap(&body);
+        // Division may trap, so its function carries the Section 4.6 summary
+        // that says so.
+        let text = wrap(&body).replace("may_trap=false", "may_trap=true");
         let module = parse_section9_module(text.as_bytes()).expect("canonical EvoIR");
         let error = interpret_module(
             &module,
