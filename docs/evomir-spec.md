@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.11** | **Authoritative reference** | **2026-09-05**
+**Revision 0.12** | **Authoritative reference** | **2026-09-05**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -252,6 +252,7 @@ in the table is refused with the diagnostic named in Section 10.
 | `ub.assume.<reason> %c` | checked profile: `tbz %c, #0, ^trap_reason(), ^continue(live...)`, where `^continue` is a fresh block whose arguments are exactly the registers the rest of the source block still reads, ordered by register number, and `^trap_reason` holds `brk` for the reason; one trap block per reason, appended after the source blocks in order of first use. Unchecked profile: nothing. The profile is a driver flag recorded in the receipt, default checked |
 | `call @f(args, %m, %w)` / `call %p(...)` | `bl`/`blr` with explicit argument and result registers (Section 6) |
 | `uninitialized.bits<N>` | `mov #0` (any value is permitted; zero is chosen so the output is deterministic) |
+| `ptr.to_int`, `ptr.from_int.*` | nothing: the value is the same 64-bit register (revision 0.12) |
 
 The UB predicates were absent from revision 0.1's table, which refused
 19,410 of 20,000 generated functions; they are ordinary boolean
@@ -549,7 +550,7 @@ sides, and are never emitted today.
 | `E4002` | `not-lowered: vector` | `vec` operand or result |
 | `E4003` | `not-lowered: wide-integer` | `bits<N>` with `64 < N < 128` or `N > 128`; at `N = 128`, division, remainder and the signed UB predicates |
 | `E4004` | `not-lowered: tuple` | tuple-typed value |
-| `E4005` | `not-lowered: static-pointer-data` | a pointer inside static initial bytes |
+| `E4005` | `not-lowered: static-pointer-data` | withdrawn at revision 0.12: a relocation `(offset, @symbol, addend)` is emitted as `.xword symbol+addend` at its offset, the surrounding bytes as before |
 | `E4006` | `not-lowered: indirect-branch` | computed goto (EvoIR `E3029` boundary) |
 | `E4007` | `not-lowered: frame-address` | EvoIR `E3031` boundary |
 | `E4008` | `not-lowered: pointer-difference` | EvoIR `E3032` boundary |
@@ -628,6 +629,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.12 | 2026-09-05 | Pointer-integer conversions lower to nothing; static relocations are emitted as `.xword symbol+addend` inside the global's bytes (`E4005` withdrawn), matching EvoIR 1.9.65. |
 | 0.11 | 2026-09-05 | External functions and objects (EvoIR 1.9.64 `declare`/`extern`) are emitted as undefined symbol references with the defined-symbol spellings; the linker resolves them, and the native lane may link against the host library for the library set. |
 | 0.10 | 2026-09-05 | Opens the two forms the sixth lowering survey put first: `bits<128>` as a pair of `gpr64` halves with measured sequences for every scalar form but division, the even-aligned pair convention for arguments and `x0`:`x1` for results; variadic callees and callers on Linux, with the register save area, the five-field list object and the general-registers-only `va_arg` procedure that agrees with both oracles on fourteen items; stack arguments in 8-byte slots on Linux. `E4012` withdrawn, `E4003` and `E4010` narrowed. The executor's spellings enter Appendix A with the implementation, as revision 0.8 did for assembly. |
 | 0.9 | 2026-09-04 | The same 384 C programs compile, link, run and agree on both targets: on the host under Apple clang, and inside the sealed container under GCC-14 for Linux AArch64. Settles the narrow result by probe (the callee extends; `E4014` withdrawn) and states the four places the two targets differ. |

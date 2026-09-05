@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.64** | **Authoritative reference** | **2026-09-05**
+**Revision 1.9.65** | **Authoritative reference** | **2026-09-05**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -213,9 +213,24 @@ alignment, initial bytes, and a byte-for-byte initializedness bitmap. Module
 interpretation allocates every global exactly once before entering the
 requested function; `global_addr` then returns that object's stable
 provenance. A duplicate global symbol or malformed initializer closure makes
-the module invalid. Pointer-valued static initializers require a relocation
-schema and are explicitly outside the Day 7 profile; ordinary scalar, array,
-record, and string/byte initializers are represented directly as bytes.
+the module invalid. Ordinary scalar, array, record, and string/byte
+initializers are represented directly as bytes. A pointer-valued static
+initializer is a **relocation** (revision 1.9.65): the global carries a list
+`relocs=[(offset, @symbol, addend), ...]`, each naming eight bytes at an
+8-aligned `offset` inside the object, a symbol from any of the four tables
+(global, external object, function, external function) and a signed byte
+`addend`. Relocations are sorted by offset, do not overlap, and lie within
+the size. At module load the eight bytes of each relocation hold the address
+of the symbol plus the addend with that symbol's provenance (function
+provenance for a function or external function), and are initialized;
+`bytes=` for those positions are zero and `initialized=` bits there are one.
+The list is omitted when empty, which keeps every existing module's text
+unchanged. `(void *)(unsigned long)&f`, `&arr[3]` and `&sv.l` are all
+symbol-plus-addend forms (measured: both oracles emit a symbol with an
+addend for each, `.evidence/builtin-probes/20260902-2c23684c/p38-ptrint.c`,
+`p38.out`). A static initializer that is not a symbol plus an addend (a
+difference of two addresses, a pointer read through an integer that is not a
+whole-pointer round trip) stays `E3026` (`not-lowered: static-relocation`).
 Top-level module execution starts from that deterministic declaration-order
 memory snapshot and an empty world trace; callers do not inject arbitrary
 initial memory or world states through the ABI-shaped entry token positions.
@@ -620,13 +635,45 @@ would have frozen a hole rather than named one (revision 1.9.59, after
 `int *t;` joined from two branches stopped the lowering with a message about
 integers).
 
-**Pointer and integer conversions.** A conversion between a pointer and an
-integer in either direction is `E3036`
-(`not-lowered: pointer-integer-conversion`) at the conversion. Revision 1.7
-deferred these with the provenance model they need, and Section 5.3 already
-excludes `ptrtoint` from this profile; the code names the class so a survey
-can rank it, which the wrapper `E3101` could not. A null pointer constant
+**Pointer and integer conversions.** A conversion from a pointer to an
+integer lowers to `ptr.to_int` followed by `trunc` when the integer is
+narrower than 64 bits; a conversion from an integer to a pointer lowers to
+`sext` or `zext` to `bits<64>` by the integer's signedness followed by
+`ptr.from_int` (Section 3.7, revision 1.9.65; both oracles agree on the
+extension and the truncation, `p38.out`). `E3036`
+(`not-lowered: pointer-integer-conversion`) is withdrawn and no longer
+reported. A null pointer constant
 converted to a pointer is not this conversion and stays admitted.
+
+**Pointer and integer conversions (revision 1.9.65).**
+
+```text
+%i = ptr.to_int %p
+%p = ptr.from_int.ptr<AS> %i
+```
+
+`ptr.to_int` takes a `ptr<AS>` or `fnptr<Sig>` and yields the `bits<64>`
+address it denotes on the target: the object's address plus the offset, the
+function's address, or the null pointer's zero. It is pure and produces no
+tokens, but it **exposes** the object whose address it takes: the
+interpreters record the exposure. `ptr.from_int` takes a `bits<64>` and
+yields a pointer of the written type whose provenance is *exposed-address*:
+a dereference through it, or an `access_in_bounds` on it, resolves at that
+moment to the unique live, exposed allocation (a global, external object, or
+a still-live `alloca`) whose byte range contains the address, and proceeds
+with that object's provenance; when no such allocation exists the access is
+`E3013`, exactly as through a dangling pointer. A zero yields the null
+pointer. `ptr.from_int` from a narrower integer does not exist: the front end
+extends first, and the extension follows the integer's signedness (measured,
+both oracles: `(void *)(int)-1` is `0xffffffffffffffff`, `(void *)(unsigned)-1`
+is `0xffffffff`; `p38.out`). A conversion to a narrower integer is
+`ptr.to_int` then `trunc` (measured: `(int)p` and `(unsigned short)p` are the
+low bits of the address). Neither form is in the Section 8.5 allowlist and
+no rewrite family may introduce, remove or reorder one; the machine lowers
+both to nothing (EvoMIR 0.12). The e-graph's memory profile, when it exists,
+must treat every `ptr.to_int` as an escape of its object. Provenance through
+integers is thereby PNVI-style: address arithmetic on integers is ordinary
+`bits<64>` arithmetic, and only the dereference asks which object is meant.
 
 ### 3.8 Memory Operations
 
@@ -1030,6 +1077,7 @@ EffectSummary {
 | `sext`, `zext`, `trunc` | `{}` | `{}` | false | false | false | false | false |
 | `ptr.null`, `global_addr`, `func_addr` | `{}` | `{}` | false | false | false | false | false |
 | `ptr.offset.*.*` | `{}` | `{}` | false | false | false | true | false |
+| `ptr.to_int`, `ptr.from_int.*` | `{}` | `{}` | false | false | false | false | false |
 | `asm`, `asm.goto` | `{all}` | `{all}` | true | false | true | true | false |
 | `va_start`, `va_arg.*`, `va_end` | `{All}` | `{All}` | false | false | false | true | false |
 | `alloca`, `lifetime.end` | `{All}` | `{All}` | false | false | false | true | false |
@@ -1556,7 +1604,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3033` | `not-executed: wide-integer` | lowering (division and remainder only, revision 1.9.61) |
 | `E3034` | `not-lowered: function-pointer-arithmetic` | lowering |
 | `E3035` | `not-lowered: global-register-variable` | lowering |
-| `E3036` | `not-lowered: pointer-integer-conversion` | lowering |
+| `E3036` | `not-lowered: pointer-integer-conversion` | lowering — **withdrawn at 1.9.65**, never reported |
 | `E3037` | `va-start-outside-variadic-signature` | validation |
 | `E3038` | `va-arg-mismatch` | runtime |
 | `E3039` | `external-call-not-executable` | runtime |
@@ -2408,7 +2456,9 @@ function_seq    := function (newline function)*
 global          := "global " symbol " origin=" integer
                    " kind=" global_kind " visibility=" visibility
                    " size=" integer " align=" integer
-                   " bytes=" hex_byte+ " initialized=" bit+ newline
+                   " bytes=" hex_byte+ " initialized=" bit+
+                   [" relocs=[" reloc (", " reloc)* "]"] newline
+reloc           := "(" integer ", " symbol ", " integer ")"
 global_kind     := "file" | "function_static" | "string_literal"
 visibility      := "external" | "internal"
 
@@ -2487,6 +2537,8 @@ inst_body :=
         value_name ", " value_name ", " value_name ", " value_name
         " [size=" integer ", align=" integer "]"
   | value_name " = ptr.offset." direction "." index_signedness " "
+  | value_name " = ptr.to_int " value_name
+  | value_name " = ptr.from_int." type " " value_name
         value_name ", " value_name " [scale=" integer "]"
   | "(" result_list ") = call " callee "(" arg_list ")"
   | "(" result_list ") = va_start " value_name ", " value_name ", " value_name
@@ -2599,6 +2651,8 @@ ub.assume.<> <>
 (<>, <>, <>) = load<> <>, <>, <> : <>
 (<>, <>) = store<> <>, <>, <>, <>
 <> = ptr.offset.<>.<> <>, <> [scale=<>]
+<> = ptr.to_int <>
+<> = ptr.from_int.<> <>
 (<>) = call @<>(<>)
 (<>) = call <>(<>)
 (<>) = va_start <>, <>, <>
@@ -5316,6 +5370,8 @@ certificate and should pass.
 | Assembly | `asm [volatile]` | register outputs, `mem<all>`, `world` | template, constrained operands, clobbers, input tokens | yes; interpreter E3021 |
 | | `asm.goto [volatile]` | register outputs and tokens, bound on successor edges | same payload, named label edges, fallthrough edge | yes; interpreter E3021 |
 | Pointer | `func_addr @symbol` | `fnptr<Sig>` | symbol | no |
+| | `ptr.to_int %p` | `bits<64>` | pointer | no |
+| | `ptr.from_int.ptr<AS> %i` | `ptr<AS>` | `bits<64>` | on dereference (`E3013`) |
 | Calls | `call @callee(args..., %m, %w)` | ret values, `mem`, `world` | callee, args, memory, world | depends |
 | | `call %fptr(args..., %m, %w)` | ret values, `mem`, `world` | callee value, args, memory, world | depends |
 | Varargs | `va_start %ap, %m, %w` | `mem<all>`, `world` | list object, memory, world | E3037 at validation |
@@ -5359,6 +5415,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.65 | 2026-09-05 | Rules the two lowering classes still hidden behind the survey's face so no window stops on them: static pointer initializers are relocations `(offset, @symbol, addend)` on a global (2.1, Section 9; `E3026` narrows to non-symbolic initializers), and pointer-integer conversions are `ptr.to_int` / `ptr.from_int` with exposed-address provenance and the oracles' measured extension and truncation (3.7; `E3036` withdrawn). |
 | 1.9.64 | 2026-09-05 | Gives the module external-object and external-function tables (`extern`, `declare`), so a unit that calls or reads what another unit defines lowers instead of stopping at a missing callee: top effect summary for external functions, distinct provenance for external objects, interpreters execute only the 10.1.14 library set (`E3039`, `E3040` otherwise), `E3041` for a symbol both declared and defined, `E2931` for inconsistent unprototyped calls. This was a gap of the specification, not of the executor: revision 0.7 of EvoMIR had assumed every callee is defined beside its caller, which is true of the generated corpora and of no kernel unit. |
 | 1.9.63 | 2026-09-05 | A library builtin's synthesized prototype is a unit-level symbol in the builtin namespace: it introduces no ordinary identifier and belongs to no function scope (both oracles, `p37-*`). |
 | 1.9.62 | 2026-09-05 | Rules the two declaration-identity questions of the lowering frontier: declared alignment is an object property, the maximum over a unit's declarations, and never part of a type identity; a declaration-only function with an incomplete enumeration in its type produces nothing, and a use while it is incomplete is `E2930`. Both measured under the sealed oracles (`p36-*`). |
