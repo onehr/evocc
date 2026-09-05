@@ -1220,7 +1220,11 @@ fn evoir_access_layout(ty: &EvoIRType) -> Result<Option<AccessLayout>, String> {
             ))
         }
     };
-    let align = u32::try_from(size.min(8)).map_err(|_| "invalid access alignment".to_owned())?;
+    let align = if *ty == EvoIRType::Bits(128) {
+        16
+    } else {
+        u32::try_from(size.min(8)).map_err(|_| "invalid access alignment".to_owned())?
+    };
     Ok(Some(AccessLayout::new(size, align)))
 }
 

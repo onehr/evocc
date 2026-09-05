@@ -83,7 +83,7 @@ impl Default for InterpreterLimits {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ScalarValue {
     pub ty: TypeId,
-    pub raw_bits: u64,
+    pub raw_bits: u128,
 }
 
 impl ScalarValue {
@@ -91,18 +91,24 @@ impl ScalarValue {
     pub fn mathematical_value(self, types: &TypeInterner) -> Result<i128, ScalarValueError> {
         let ty = canonical_integer_type(types, self.ty)
             .ok_or(ScalarValueError::UnsupportedType { ty: self.ty })?;
-        Ok(CInteger::new(self.raw_bits, ty).mathematical_value())
+        CInteger::from_raw(self.raw_bits, ty)
+            .try_mathematical_value()
+            .ok_or(ScalarValueError::OutsideSignedCarrier)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ScalarValueError {
     UnsupportedType { ty: TypeId },
+    OutsideSignedCarrier,
 }
 
 impl fmt::Display for ScalarValueError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::OutsideSignedCarrier => {
+                formatter.write_str("unsigned value does not fit i128; use raw_bits")
+            }
             Self::UnsupportedType { ty } => {
                 write!(formatter, "unsupported scalar value type ID {}", ty.raw())
             }
@@ -1432,14 +1438,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let return_value = match (flow, return_integer) {
             (Flow::Return(Some(value)), Some(return_integer)) => Some(ScalarValue {
                 ty: return_type,
-                raw_bits: u64::try_from(value.cast(return_integer).raw_bits())
-                    .expect("executed integer width is at most 64 bits"),
+                raw_bits: value.cast(return_integer).raw_bits(),
             }),
             (Flow::Return(None), None) | (Flow::Normal, None) => None,
             (Flow::Normal, Some(return_integer)) if is_main => Some(ScalarValue {
                 ty: return_type,
-                raw_bits: u64::try_from(CInteger::int(0).cast(return_integer).raw_bits())
-                    .expect("executed integer width is at most 64 bits"),
+                raw_bits: CInteger::int(0).cast(return_integer).raw_bits(),
             }),
             (Flow::Return(None), Some(_)) => {
                 return Err(InterpreterError::UnsupportedStatement {
@@ -4523,8 +4527,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             let return_value = match return_value {
                 Some(CValue::Integer(value)) => Some(ScalarValue {
                     ty: end.return_type,
-                    raw_bits: u64::try_from(value.raw_bits())
-                        .expect("executed integer width is at most 64 bits"),
+                    raw_bits: value.raw_bits(),
                 }),
                 Some(CValue::Pointer { .. } | CValue::FunctionPointer { .. }) => {
                     return Err(InterpreterError::UnsupportedExpression {
@@ -4557,12 +4560,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn integer_type(&self, ty: TypeId, span: SourceSpan) -> Result<CIntegerType, InterpreterError> {
-        match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
-            Some(TypeKind::BuiltinVaList) => return Err(InterpreterError::VarArgs { span }),
-            Some(TypeKind::GnuInt128(_)) => {
-                return Err(InterpreterError::WideInteger { span });
-            }
-            _ => {}
+        if let Some(TypeKind::BuiltinVaList) =
+            self.unit.types().get(ty).map(|canonical| &canonical.kind)
+        {
+            return Err(InterpreterError::VarArgs { span });
         }
         canonical_integer_type(self.unit.types(), ty)
             .ok_or(InterpreterError::UnsupportedType { ty, span })
@@ -4801,11 +4802,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span: declaration.span,
             });
         }
-        if matches!(canonical.kind, TypeKind::GnuInt128(_)) {
-            return Err(InterpreterError::WideInteger {
-                span: declaration.span,
-            });
-        }
         // Aggregates are storage like any other object here: the interpreter
         // never materialises one as a value, it only ever accesses subobjects
         // through a place, so admitting them costs nothing in the value model.
@@ -4813,6 +4809,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             || !matches!(
                 canonical.kind,
                 TypeKind::Int(_)
+                    | TypeKind::GnuInt128(_)
                     | TypeKind::Enum(_)
                     | TypeKind::Pointer(_)
                     | TypeKind::Array { .. }
@@ -5727,9 +5724,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         .load_integer(address, layout)
                         .map_err(|error| self.memory_error(error, span))?
                 };
-                let raw = u64::try_from(raw)
-                    .map_err(|_| InterpreterError::UnsupportedType { ty, span })?;
-                Ok(CValue::Integer(CInteger::new(raw, integer_type)))
+                Ok(CValue::Integer(CInteger::from_raw(raw, integer_type)))
             }
             ValueType::Pointer(pointer_type) => {
                 let is_function = matches!(
@@ -6304,6 +6299,21 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         )
     }
 
+    fn runtime_integer_binary(
+        &self,
+        operator: BinaryOp,
+        left: CInteger,
+        right: CInteger,
+        span: SourceSpan,
+    ) -> Result<CInteger, InterpreterError> {
+        if matches!(operator, BinaryOp::Div | BinaryOp::Mod)
+            && (left.ty().bits() == 128 || right.ty().bits() == 128)
+        {
+            return Err(InterpreterError::WideInteger { span });
+        }
+        eval_binary_integer(operator, left, right).map_err(|error| self.integer_error(error, span))
+    }
+
     fn apply_machine_binary(
         &self,
         operator: BinaryOp,
@@ -6339,11 +6349,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             });
         }
         match (left, right) {
-            (CValue::Integer(left), CValue::Integer(right)) => {
-                eval_binary_integer(operator, left, right)
-                    .map(CValue::Integer)
-                    .map_err(|error| self.integer_error(error, span))
-            }
+            (CValue::Integer(left), CValue::Integer(right)) => self
+                .runtime_integer_binary(operator, left, right, span)
+                .map(CValue::Integer),
             (CValue::Pointer { value, ty }, CValue::Integer(index))
                 if matches!(operator, BinaryOp::Add | BinaryOp::Sub) =>
             {
@@ -6571,8 +6579,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 feature: "invalid compound assignment operator",
                 span,
             })?;
-        let result = eval_binary_integer(binary, left, right)
-            .map_err(|error| self.integer_error(error, span))?;
+        let result = self.runtime_integer_binary(binary, left, right, span)?;
         self.store_memory_value(address, ty, qualifiers, CValue::Integer(result), span)
     }
 
@@ -7691,12 +7698,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             _ => {
                 let left = self.eval_expr(left, false)?;
                 let right = self.eval_expr(right, false)?;
-                let result = if self.static_integer_evaluation {
+                if self.static_integer_evaluation {
                     eval_constant_binary_integer(operator, left, right)
+                        .map_err(|error| self.integer_error(error, span))
                 } else {
-                    eval_binary_integer(operator, left, right)
-                };
-                result.map_err(|error| self.integer_error(error, span))
+                    self.runtime_integer_binary(operator, left, right, span)
+                }
             }
         }
     }
@@ -7806,8 +7813,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     feature: "invalid compound assignment operator",
                     span,
                 })?;
-            eval_binary_integer(binary, left, right)
-                .map_err(|error| self.integer_error(error, span))?
+            self.runtime_integer_binary(binary, left, right, span)?
                 .cast(slot.ty)
         };
         self.slots
@@ -9086,6 +9092,10 @@ fn canonical_integer_type(types: &TypeInterner, ty: TypeId) -> Option<CIntegerTy
     let canonical = types.get(ty)?;
     match canonical.kind {
         TypeKind::Int(rank) => Some(integer_type_for_rank(rank)),
+        TypeKind::GnuInt128(evocc_types::GnuInt128Signedness::Signed) => Some(CIntegerType::INT128),
+        TypeKind::GnuInt128(evocc_types::GnuInt128Signedness::Unsigned) => {
+            Some(CIntegerType::UINT128)
+        }
         TypeKind::Enum(tag) => {
             let definition = types.tag(tag)?;
             let TagState::Complete(TagDefinition::Enum(constants)) = &definition.state else {

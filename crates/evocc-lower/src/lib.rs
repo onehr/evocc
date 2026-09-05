@@ -1976,7 +1976,7 @@ fn function_value_type(
                 integer: CIntegerType::ULONG,
             })
         }
-        Some(TypeKind::Int(_) | TypeKind::Enum(_)) => {
+        Some(TypeKind::Int(_) | TypeKind::Enum(_) | TypeKind::GnuInt128(_)) => {
             let integer = canonical_integer(types, target, ty, span)?;
             Ok(FunctionValueType {
                 source: ty,
@@ -1984,7 +1984,6 @@ fn function_value_type(
                 integer,
             })
         }
-        Some(TypeKind::GnuInt128(_)) => Err(LowerError::WideInteger { span }),
         Some(TypeKind::Struct(_) | TypeKind::Union(_)) => Ok(FunctionValueType {
             source: ty,
             ir: EvoIRType::Ptr(AddressSpace::Generic),
@@ -2086,6 +2085,8 @@ fn canonical_integer(
     let canonical = types.get(ty).ok_or(LowerError::UnknownType { ty, span })?;
     let integer = match &canonical.kind {
         TypeKind::Int(rank) => integer_type_for_rank(*rank),
+        TypeKind::GnuInt128(evocc_types::GnuInt128Signedness::Signed) => CIntegerType::INT128,
+        TypeKind::GnuInt128(evocc_types::GnuInt128Signedness::Unsigned) => CIntegerType::UINT128,
         TypeKind::Enum(tag) => {
             let tag = types.tag(*tag).ok_or(LowerError::UnsupportedType {
                 ty,
@@ -3597,11 +3598,10 @@ impl<'a> FunctionLowerer<'a> {
             Some(TypeKind::Pointer(_)) => {
                 Ok((EvoIRType::Ptr(AddressSpace::Generic), CIntegerType::ULONG))
             }
-            Some(TypeKind::Int(_) | TypeKind::Enum(_)) => {
+            Some(TypeKind::Int(_) | TypeKind::Enum(_) | TypeKind::GnuInt128(_)) => {
                 let integer = canonical_integer(self.unit.types(), self.target, ty, span)?;
                 Ok((bits(integer), integer))
             }
-            Some(TypeKind::GnuInt128(_)) => Err(LowerError::WideInteger { span }),
             _ => Err(LowerError::UnsupportedType {
                 ty,
                 span,
@@ -4247,7 +4247,7 @@ impl<'a> FunctionLowerer<'a> {
                     feature: "integer-to-pointer conversion is not a null pointer constant",
                 })
             }
-            Some(TypeKind::Int(_) | TypeKind::Enum(_)) => {
+            Some(TypeKind::Int(_) | TypeKind::Enum(_) | TypeKind::GnuInt128(_)) => {
                 let integer = canonical_integer(self.unit.types(), self.target, ty, span)?;
                 self.cast(value, integer, state)
             }
@@ -5659,19 +5659,7 @@ impl<'a> FunctionLowerer<'a> {
                         feature: "integer literal has no Day-6 target representation",
                     }
                 })?;
-                let result = self.fresh_value(bits(integer.ty()));
-                self.emit(
-                    state,
-                    Inst::Const(
-                        result.clone(),
-                        u64::try_from(integer.raw_bits())
-                            .expect("lowered integer literal is at most 64 bits"),
-                    ),
-                )?;
-                Ok(ExprValue {
-                    value: result,
-                    integer: integer.ty(),
-                })
+                self.wide_constant(state, integer.ty(), integer.raw_bits())
             }
             CHirExpr::CharLit(literal, _) => {
                 let result = self.fresh_value(bits(CIntegerType::INT));
@@ -5850,19 +5838,7 @@ impl<'a> FunctionLowerer<'a> {
                             feature: "integer literal has no target representation",
                         })?
                         .cast(target);
-                    let result = self.fresh_value(bits(target));
-                    self.emit(
-                        state,
-                        Inst::Const(
-                            result.clone(),
-                            u64::try_from(converted.raw_bits())
-                                .expect("lowered integer cast is at most 64 bits"),
-                        ),
-                    )?;
-                    return Ok(ExprValue {
-                        value: result,
-                        integer: target,
-                    });
+                    return self.wide_constant(state, target, converted.raw_bits());
                 }
                 let value = self.lower_expr(operand, state)?;
                 if matches!(value.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }) {
@@ -6161,11 +6137,7 @@ impl<'a> FunctionLowerer<'a> {
             UnaryOp::BitNot => {
                 let integer = integer_promotion(operand.integer);
                 let operand = self.cast(operand, integer, state)?;
-                let mask = self.constant(
-                    state,
-                    integer,
-                    u64::try_from(integer.mask()).expect("lowered integer mask is at most 64 bits"),
-                )?;
+                let mask = self.wide_constant(state, integer, integer.mask())?;
                 let result = self.fresh_value(bits(integer));
                 self.emit(state, Inst::Xor(result.clone(), operand.value, mask.value))?;
                 Ok(ExprValue {
@@ -6532,6 +6504,11 @@ impl<'a> FunctionLowerer<'a> {
         right: ExprValue,
         integer: CIntegerType,
     ) -> Result<ExprValue, LowerError> {
+        if integer.bits() == 128 {
+            return Err(LowerError::WideInteger {
+                span: self.info.span,
+            });
+        }
         let nonzero = self.fresh_value(EvoIRType::Bits(1));
         self.emit(
             state,
@@ -7840,10 +7817,33 @@ impl<'a> FunctionLowerer<'a> {
         integer: CIntegerType,
         raw: u64,
     ) -> Result<ExprValue, LowerError> {
+        self.wide_constant(state, integer, u128::from(raw))
+    }
+
+    /// Keep the instruction's existing 64-bit immediate representation. A wide
+    /// constant is composed from its two halves using ordinary bit operations.
+    fn wide_constant(
+        &mut self,
+        state: &State,
+        integer: CIntegerType,
+        raw: u128,
+    ) -> Result<ExprValue, LowerError> {
+        let raw = raw & integer.mask();
         let result = self.fresh_value(bits(integer));
-        let mask =
-            u64::try_from(integer.mask()).expect("lowered integer constant is at most 64 bits");
-        self.emit(state, Inst::Const(result.clone(), raw & mask))?;
+        self.emit(state, Inst::Const(result.clone(), raw as u64))?;
+        let result = if raw >> 64 != 0 {
+            let high = self.fresh_value(bits(integer));
+            let amount = self.fresh_value(EvoIRType::Bits(32));
+            let shifted = self.fresh_value(bits(integer));
+            let joined = self.fresh_value(bits(integer));
+            self.emit(state, Inst::Const(high.clone(), (raw >> 64) as u64))?;
+            self.emit(state, Inst::Const(amount.clone(), 64))?;
+            self.emit(state, Inst::Shl(shifted.clone(), high, amount))?;
+            self.emit(state, Inst::Or(joined.clone(), result, shifted))?;
+            joined
+        } else {
+            result
+        };
         Ok(ExprValue {
             value: result,
             integer,

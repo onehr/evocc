@@ -38,7 +38,7 @@ fn main_symbol(unit: &CHirUnit<'_>) -> SymbolId {
 }
 
 #[test]
-fn chir_refuses_executed_wide_arithmetic_with_e3033() {
+fn chir_executes_wide_products_and_shifts() {
     let arena = Arena::default();
     let unit = parse(
         concat!(
@@ -50,9 +50,68 @@ fn chir_refuses_executed_wide_arithmetic_with_e3033() {
         ),
         &arena,
     );
-    let error =
+    let outcome =
         interpret_scalar_function(&unit, main_symbol(&unit), InterpreterLimits::new(100_000))
-            .expect_err("128-bit execution must fail closed until its value model exists");
-    assert_eq!(error.code(), "E3033", "{error:?}");
-    assert_eq!(error.message(), "not-executed: wide-integer", "{error:?}");
+            .unwrap();
+    assert_eq!(outcome.return_value.unwrap().raw_bits, 1);
+}
+
+#[test]
+fn wide_returns_memory_and_calls_do_not_truncate() {
+    for (body, expected) in [
+        ("return ((U)1<<100)+7;", (1_u128<<100)+7),
+        ("return ~(U)0;", u128::MAX),
+        ("volatile U x=((U)1<<100)+7; U *p=(U *)&x; return pass(*p);", (1_u128<<100)+7),
+        ("union P {U u; unsigned long halves[2];}; union P a={.u=((U)1<<100)+7}; union P b=a; return b.u;", (1_u128<<100)+7),
+        ("U x=1; for(int i=0;i<100;i++) x*=2; return x|7;", (1_u128<<100)+7),
+    ] {
+        let source = format!("typedef unsigned __int128 U; U pass(U x){{return x;}} U main(void){{{body}}}");
+        let arena = Arena::default();
+        let unit = parse(&source, &arena);
+        let outcome = interpret_scalar_function(&unit, main_symbol(&unit), InterpreterLimits::new(100_000)).unwrap();
+        let value = outcome.return_value.unwrap();
+        assert_eq!(value.raw_bits, expected, "{source}");
+        if expected == u128::MAX {
+            assert!(value.mathematical_value(unit.types()).is_err());
+        }
+    }
+}
+
+#[test]
+fn wide_division_refusal_covers_values_and_compound_stores() {
+    for body in [
+        "return x/3;",
+        "return x%3;",
+        "x/=3; return x;",
+        "x%=3; return x;",
+        "U *p=&x; *p/=3; return x;",
+        "U *p=&x; *p%=3; return x;",
+    ] {
+        let source = format!("typedef unsigned __int128 U; U main(void){{U x=(U)1<<100; {body}}}");
+        let arena = Arena::default();
+        let unit = parse(&source, &arena);
+        let error =
+            interpret_scalar_function(&unit, main_symbol(&unit), InterpreterLimits::new(100_000))
+                .unwrap_err();
+        assert_eq!(error.code(), "E3033", "{source}: {error}");
+    }
+}
+
+#[test]
+fn wide_runtime_obligations_remain_typed_failures() {
+    for (expression, code) in [
+        ("((__int128)1<<126)*2", "E3004"),
+        ("(__int128)1<<127", "E3006"),
+        ("(__int128)-1<<1", "E3006"),
+        ("(__uint128_t)1<<128", "E3005"),
+        ("(__uint128_t)1<<(~(__uint128_t)0)", "E3005"),
+    ] {
+        let source = format!("int main(void){{ return (int)({expression}); }}");
+        let arena = Arena::default();
+        let unit = parse(&source, &arena);
+        let error =
+            interpret_scalar_function(&unit, main_symbol(&unit), InterpreterLimits::new(100_000))
+                .unwrap_err();
+        assert_eq!(error.code(), code, "{source}: {error}");
+    }
 }

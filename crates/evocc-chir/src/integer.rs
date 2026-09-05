@@ -712,8 +712,12 @@ pub fn eval_constant_binary_integer(
     if op == BinaryOp::Shl {
         let left = left.promoted();
         let right = right.promoted();
-        let shift = u32::try_from(right.mathematical_value())
-            .map_err(|_| IntegerError::InvalidShiftCount)?;
+        let shift = u32::try_from(
+            right
+                .try_mathematical_value()
+                .ok_or(IntegerError::InvalidShiftCount)?,
+        )
+        .map_err(|_| IntegerError::InvalidShiftCount)?;
         if shift >= u32::from(left.ty.bits()) {
             return Err(IntegerError::InvalidShiftCount);
         }
@@ -760,22 +764,22 @@ fn eval_integer_shift(
     left: CInteger,
     right: CInteger,
 ) -> Result<CInteger, IntegerError> {
-    let shift =
-        u32::try_from(right.mathematical_value()).map_err(|_| IntegerError::InvalidShiftCount)?;
+    let shift = u32::try_from(
+        right
+            .try_mathematical_value()
+            .ok_or(IntegerError::InvalidShiftCount)?,
+    )
+    .map_err(|_| IntegerError::InvalidShiftCount)?;
     if shift >= u32::from(left.ty.bits) {
         return Err(IntegerError::InvalidShiftCount);
     }
     match op {
         BinaryOp::Shl if left.ty.signed => {
             let left_value = left.mathematical_value();
-            if left_value < 0 {
+            if left_value < 0 || left_value > (left.ty.signed_max() >> shift) {
                 return Err(IntegerError::InvalidSignedLeftShift);
             }
-            let value = left_value
-                .checked_mul(1_i128 << shift)
-                .ok_or(IntegerError::InvalidSignedLeftShift)?;
-            integer_from_mathematical(value, left.ty)
-                .map_err(|_| IntegerError::InvalidSignedLeftShift)
+            Ok(CInteger::from_raw(left.raw << shift, left.ty))
         }
         BinaryOp::Shl => Ok(CInteger::from_raw(left.raw << shift, left.ty)),
         BinaryOp::Shr if left.ty.signed => integer_from_mathematical(

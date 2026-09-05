@@ -24,10 +24,10 @@ fn lower(source: &str) -> Module {
         .unwrap_or_else(|error| panic!("{} {error}", error.code()));
     evocc_evoir::validate_module(&module).unwrap();
     let text = evocc_evoir::render_module(&module);
-    assert_eq!(
-        evocc_evoir::parse_section9_module(text.as_bytes()).unwrap(),
-        module
-    );
+    let parsed = evocc_evoir::parse_section9_module(text.as_bytes()).unwrap();
+    evocc_evoir::validate_module(&parsed).unwrap();
+    // Debug block-argument names are not part of the canonical text format.
+    assert_eq!(evocc_evoir::render_module(&parsed), text);
     module
 }
 
@@ -77,6 +77,35 @@ fn unions_memory_and_assembly_halves_preserve_the_wide_value() {
         .iter()
         .any(|i| matches!(i, Inst::Store { value, .. } if value.ty == EvoIRType::Bits(128))));
     assert!(instructions.iter().any(|i| matches!(i, Inst::Copy { .. })));
+    let mut wrong_alignment = module.clone();
+    let mut changed = false;
+    for instruction in wrong_alignment
+        .functions
+        .iter_mut()
+        .flat_map(|f| &mut f.blocks)
+        .flat_map(|b| &mut b.insts)
+    {
+        if let Inst::AccessInBounds { layout, .. } = instruction {
+            if layout.size_bytes == 16 {
+                layout.align_bytes = 8;
+                changed = true;
+            }
+        }
+    }
+    assert!(changed);
+    assert!(evocc_evoir::validate_module(&wrong_alignment).is_err());
+}
+
+#[test]
+fn wide_masks_signed_operations_and_join_arguments_lower() {
+    for source in [
+        "typedef unsigned __int128 U; U f(void){return (~(U)0<<37)&(~(U)0>>11);}",
+        "typedef __int128 S; S f(long x,int n){S a=x; while(n-->0) a=a*3-1; return a>>7;}",
+        "typedef unsigned __int128 U; U f(U a,U b,int c){U x; if(c) x=a; else x=b; return x+(a<b);}",
+        "typedef unsigned __int128 U; static U x=((U)1<<100)+7; U f(void){return x;}",
+    ] {
+        lower(source);
+    }
 }
 
 #[test]
