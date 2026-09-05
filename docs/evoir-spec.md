@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.60** | **Authoritative reference** | **2026-09-05**
+**Revision 1.9.61** | **Authoritative reference** | **2026-09-05**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -45,8 +45,16 @@ Type ::=
 ```
 
 ```text
-Sig ::= "(" TypeList ")" "->" "(" TypeList ")"
+Sig ::= "(" TypeList [ ", ..." ] ")" "->" "(" TypeList ")"
 ```
+
+A signature whose parameter list ends in `...` is **variadic**: a call may
+pass further *anonymous* arguments after the listed ones (Section 3.10), and
+the callee reads them with the instructions of Section 3.12. The marker sits
+after the ordinary parameters and before the trailing `mem<R>` and `world`
+positions, so `(bits<64>, ..., mem<all>, world)` is variadic and
+`(bits<64>, mem<all>, world, ...)` is malformed. Two signatures are equal only
+when they agree on the marker (revision 1.9.61).
 
 A `fnptr` carries its signature in the type rather than at the call site, so a
 callee's parameter and return types are known from the pointer alone. That is
@@ -178,7 +186,7 @@ return values from calls. A `tuple<>` (empty tuple) is equivalent to `void`.
 | `world` | always well-formed |
 | `vec<N, T>` | `N > 0`, `T` is well-formed, `T != void`, `T` is not `mem<_>` or `world` |
 | `tuple<T...>` | every `T_i` is well-formed |
-| `fnptr<Sig>` | every parameter and result type is well-formed and is not `void`; `mem<R>` and `world` appear exactly once each, as the final two parameters and the final two results, in that order; no other position carries `mem<_>` or `world`; no type nested inside a parameter or result carries either |
+| `fnptr<Sig>` | every parameter and result type is well-formed and is not `void`; `mem<R>` and `world` appear exactly once each, as the final two parameters and the final two results, in that order; no other position carries `mem<_>` or `world`; no type nested inside a parameter or result carries either; a `...` marker, when present, immediately precedes the `mem<R>` parameter |
 | `void` | always well-formed |
 
 ---
@@ -756,6 +764,19 @@ An indirect `call` names its callee by value rather than by symbol. Validation
 checks arguments and results against the pointer's signature; there is no symbol
 to resolve and no declaration to consult.
 
+**Anonymous arguments (revision 1.9.61).** When the callee's signature is
+variadic, the arguments between the last listed parameter and `%m0` are
+anonymous. Each has one of the types `bits<32>`, `bits<64>`, `bits<128>`,
+`f64`, `ptr<AS>` or `fnptr<Sig>`: these are the C types that survive the
+default argument promotions (10.1.3), and the front end performs the
+promotions, so `bits<8>` and `bits<16>` never appear here. There may be any
+number of them, including none. Their types are not part of the signature and
+are not checked against a declaration; they are recorded at the call and read
+back by `va_arg`. A non-variadic signature admits no argument beyond its
+list, as before. Anonymous arguments carry no `mem<_>`, `world`, `tuple` or
+`vec` type; a C aggregate passed anonymously stays `E3030`
+(`not-lowered: varargs`, message `anonymous aggregate argument`).
+
 Revision 1.8 admits only `cc = target_default` for every function. Module
 validation rejects another calling-convention identifier. Under that single-CC
 profile the parameter/result `Sig` is complete; a later profile adding another
@@ -906,6 +927,64 @@ or removed, whether or not it is `volatile`; `volatile` is preserved for the
 assembler and changes nothing in EvoIR. Section 8.5's allowlist already makes
 it ineligible as a region root or witness, so no rewrite can reach it.
 Defined at revision 1.9.58.
+### 3.12 Variadic Argument Access
+
+```text
+(%m1, %w1) = va_start %ap, %m0, %w0
+(%v, %m1, %w1) = va_arg.Type %ap, %m0, %w0
+(%m1, %w1) = va_end %ap, %m0, %w0
+```
+
+| Field | Description |
+|---|---|
+| `%ap` | A `ptr<AS>` to a **list object**: 32 bytes at alignment 8, the lowering of one `__builtin_va_list` (10.1.5). |
+| `Type` | For `va_arg`: one of `bits<32>`, `bits<64>`, `bits<128>`, `f64`, `ptr<AS>`, `fnptr<Sig>`, the promoted types of Section 3.10. |
+
+**Semantics.** A variadic function receives, besides its listed parameters,
+the sequence of anonymous arguments its caller passed. `va_start` makes the
+list object at `%ap` denote that sequence positioned at its first element;
+it is valid only inside a function whose own signature is variadic (module
+validation, `E3037`). `va_arg` yields the element at the list's position
+and advances the position by one. The yielded value has the argument's
+type: a `va_arg.Type` whose `Type` differs from the type the caller passed
+in that position, or that runs past the last anonymous argument, is
+**undefined**; both interpreters report `E3038` (`va-arg-mismatch`) and
+stop, and the machine returns whatever the calling convention's procedure
+finds (EvoMIR Section 6). `va_end` ends the list; after it, and before a
+`va_start`, the list object holds no list, and a `va_arg` on it is the same
+undefined behaviour.
+
+**The list object's bytes.** Between `va_start` and `va_end` the object
+representation of the list is unspecified. A `copy` (Section 3.8) of the
+whole 32 bytes produces a second list denoting the same sequence at the same
+position, which is how `__builtin_va_copy` lowers (10.1.3); any narrower
+`load`, `store` or partial `copy` of those bytes is undefined, and the
+interpreters may keep their own representation inside them. The kernel
+cohort passes `va_list` objects to callees by value: 10.1.3 already sends a
+record parameter as the address of a caller-made copy, and a list is a
+record for that rule (`__builtin_va_list` is a 32-byte structure on this
+target, evidence `p31-residue.c`), so the callee's `%ap` is that address.
+
+**Effects and rewriting.** All three read and write `{All}` (Section 4.2):
+the list object is memory, and the anonymous arguments are state no other
+instruction can name. None is allowlisted (8.5), no rewrite family may
+introduce, remove or reorder one, and the effect edges keep them in program
+order, exactly as for `copy`.
+
+**Measured convention (AArch64 Linux, general registers only).** The
+sealed oracles agree on every row (`.evidence/builtin-probes/20260902-2c23684c/p34-varargs.c`,
+`p34-callsite.c`, outputs `p34-p35.out` for GCC-14 and `p34-p35-clang.out`
+for Clang-19): a call site cannot tell a variadic prototype from a fixed one
+(`call_v` and `call_f` are instruction-for-instruction identical under both
+compilers); an anonymous `char` is promoted by the caller and occupies one
+8-byte slot; after `va_start` with `k` named integer parameters the object
+holds `gr_offs = -8 * (8 - k)` and `vr_offs = 0`; the hand-written
+Appendix B procedure in `p34-varargs.c` agrees with each compiler's own
+`va_arg` on all fourteen items including a 16-byte-aligned `__int128`, a
+16-byte record in the save area, a 24-byte record by reference, and the
+transition to stack arguments. The procedure itself is EvoMIR's to state
+(EvoMIR Section 6); EvoIR only promises the sequence.
+
 ## 4. Effect Model
 
 ### 4.1 Effect Summary
@@ -942,6 +1021,7 @@ EffectSummary {
 | `ptr.null`, `global_addr`, `func_addr` | `{}` | `{}` | false | false | false | false | false |
 | `ptr.offset.*.*` | `{}` | `{}` | false | false | false | true | false |
 | `asm`, `asm.goto` | `{all}` | `{all}` | true | false | true | true | false |
+| `va_start`, `va_arg.*`, `va_end` | `{All}` | `{All}` | false | false | false | true | false |
 | `alloca`, `lifetime.end` | `{All}` | `{All}` | false | false | false | true | false |
 | `pointer_valid`, `access_in_bounds` | `{All}` | `{}` | false | false | false | true | false |
 | `load` (normal) | `{All}` | `{}` | false | false | false | true | false |
@@ -1432,6 +1512,7 @@ twice would let a reader think two conditions are the same finding.
 | `E2926` | `va-start-outside-variadic-function` | front end |
 | `E2927` | `builtin-library-declaration-incompatible` | front end |
 | `E2928` | `address-of-register-object` | front end |
+| `E2929` | `unpromoted-va-arg-type` | front end |
 | `E0102` | `unmatched-conditional` | preprocessor |
 | `E0104` | `error-directive` | preprocessor |
 | `E0105` | `include-not-found` | preprocessor |
@@ -1455,10 +1536,12 @@ twice would let a reader think two conditions are the same finding.
 | `E3030` | `not-lowered: varargs` | lowering |
 | `E3031` | `not-lowered: frame-address` | lowering |
 | `E3032` | `not-lowered: pointer-difference` | lowering |
-| `E3033` | `not-executed: wide-integer` | lowering |
+| `E3033` | `not-executed: wide-integer` | lowering (division and remainder only, revision 1.9.61) |
 | `E3034` | `not-lowered: function-pointer-arithmetic` | lowering |
 | `E3035` | `not-lowered: global-register-variable` | lowering |
 | `E3036` | `not-lowered: pointer-integer-conversion` | lowering |
+| `E3037` | `va-start-outside-variadic-signature` | validation |
+| `E3038` | `va-arg-mismatch` | runtime |
 | `E3029` | `not-lowered: computed-goto` | lowering |
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
@@ -2313,10 +2396,10 @@ type            := "bits<" positive_int ">"
                  | "tuple<" type_list ">"
                  | "fnptr<" signature ">"
                  | "void"
-signature       := "(" type_list ")->(" type_list ")"
+signature       := "(" type_list [", ..."] ")->(" type_list ")"
 address_space   := "generic" | "global" | "stack" | "threadlocal"
 
-function        := "func " symbol "(" param_list ")"
+function        := "func " symbol "(" param_list [", ..."] ")"
                    " -> (" type_list ")"
                    " cc = " ident newline
                    indent effects_clause newline
@@ -2381,6 +2464,9 @@ inst_body :=
   | value_name " = ptr.offset." direction "." index_signedness " "
         value_name ", " value_name " [scale=" integer "]"
   | "(" result_list ") = call " callee "(" arg_list ")"
+  | "(" result_list ") = va_start " value_name ", " value_name ", " value_name
+  | "(" result_list ") = va_arg." type " " value_name ", " value_name ", " value_name
+  | "(" result_list ") = va_end " value_name ", " value_name ", " value_name
   | "(" result_list ") = asm" volatile_marker " " asm_payload
 
 term_body :=
@@ -2490,6 +2576,9 @@ ub.assume.<> <>
 <> = ptr.offset.<>.<> <>, <> [scale=<>]
 (<>) = call @<>(<>)
 (<>) = call <>(<>)
+(<>) = va_start <>, <>, <>
+(<>) = va_arg.<> <>, <>, <>
+(<>) = va_end <>, <>, <>
 (<>) = asm<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>]
 (<>) = asm.goto<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>] labels [<>] fallthrough <>
 br <>
@@ -2823,13 +2912,31 @@ front end accepts it and the C-HIR interpreter executes the same-object form;
 Section 3 has no pointer-difference instruction, so lowering reports `E3032`
 (`not-lowered: pointer-difference`) and fails closed until one is specified.
 
-**128-bit execution boundary.** The front end accepts, types, lays out,
-initializes, assigns and constant-folds `__int128` values completely; the
-C-HIR and EvoIR scalar value models are 64-bit, so *executing* a 128-bit
-arithmetic value — in either interpreter or in lowering — reports `E3033`
-(`not-executed: wide-integer`) and fails closed until `bits<128>` enters
-Section 1. Measured reference for that day: `((__uint128_t)1 << 100) + 7`
-shifted right by 64 is `68719476736`, and `(u * 3) >> 100` is `3`.
+**128-bit execution (revision 1.9.61).** `__int128` and `unsigned __int128`
+values are `bits<128>` scalars, which Section 1.1 has always admitted;
+what was missing was execution. A `bits<128>` value lowers, is interpreted
+and is optimized exactly as any other `bits<N>`: `load`/`store` at 16 bytes
+and alignment 16, `copy` of records holding one, `zext`/`sext` from and
+`trunc` to a narrower width, `add`, `sub`, `mul`, `and`, `or`, `xor`,
+`shl`, `lshr`, `ashr`, every `icmp`, the UB predicates, block arguments,
+parameters, results and anonymous arguments. Both interpreters extend their
+scalar value model to 128 bits for these forms. The kernel cohort's uses
+are exactly a 64-by-64-bit product read as two halves (`math64.h`,
+`lib/math/div64.c`), the `cmpxchg128` family (a union of one `u128` and two
+`u64` halves crossing `asm` operands and a return), and `GENMASK_U128`
+constants: `zext`, `mul`, `lshr`, `trunc`, `load`, `store`, `copy` and the
+call boundary. `sdiv`, `udiv`, `srem` and `urem` on `bits<128>` stay
+`E3033` (`not-executed: wide-integer`) until a unit needs one; the cohort's
+`mul_u64_u64_div_u64` divides the halves by hand. Reference values, both
+oracles (`p35-run.c` in `.evidence/builtin-probes/20260902-2c23684c/`):
+`((u128)0xffffffffffffffff * 0xfffffffffffffffe) >> 64` is
+`0xfffffffffffffffd`; `((u128)0x123456789abcdef0 * 0xfedcba9876543210) >> 37`
+is `0x56bbeba1111b6c47`; `(1 << 100)` has high half `0x1000000000`;
+`(((u128)1 << 64) | ~0ul) + 1` is `2:0`; `(1 << 64) < (~(u128)0 >> 64)` is 0
+and `1 < (1 << 64)` is 1. Earlier reference, still valid:
+`((__uint128_t)1 << 100) + 7` shifted right by 64 is `68719476736`, and
+`(u * 3) >> 100` is `3`. The register-pair convention for passing and
+returning one is EvoMIR's (EvoMIR Section 6, measured in `p35-int128.c`).
 
 **What may root a place.** Any expression of pointer type may be the root of a
 place through `*`, `->` or `[]`: a variable, a loaded pointer, an address-of,
@@ -3165,6 +3272,7 @@ front end that still emits it is defective.
 | `E2926` | `va_start` in a non-variadic function, or naming a parameter other than the last named one |
 | `E2927` | a library builtin's non-constant form used where a visible declaration of the library function has an incompatible type |
 | `E2928` | the address of a `register` object is taken |
+| `E2929` | `__builtin_va_arg` names a type the default argument promotions change (`char`, `short`, `_Bool`, `float`, an enumeration narrower than `int`) |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -3693,10 +3801,21 @@ and Clang-19 agree on every row.
   have type `__builtin_va_list` and `T` must be an object type that is not an
   array or function type; the expression is an rvalue of type `T`, kept in
   C-HIR as a `VaArg` node holding the list place and the type, with no
-  constant value. A `va_list` object, `va_start`, `va_arg` and `va_end` are
-  kept in C-HIR; lowering and both interpreters report `E3030`
-  (`not-lowered: varargs`) at the first of them and fail closed until the
-  target calling convention specifies them.
+  constant value. Lowering (revision 1.9.61): a function type whose
+  parameter list ends in `...` lowers to a variadic signature (Section
+  1.1), for declarations, definitions and `fnptr` alike; a call passes the
+  arguments after the last named parameter as anonymous arguments after the
+  default argument promotions (`char`, `short`, `_Bool` and enumerations to
+  `int`, `float` to `double`; Section 3.10); `__builtin_va_start(ap, param)`
+  lowers to `va_start` on the address of `ap`, `__builtin_va_arg(ap, T)` to
+  `va_arg.T'` where `T'` is the lowering of `T` after the same promotions
+  applied to `T` (so `va_arg(ap, char)` and `va_arg(ap, short)`, undefined in
+  C, are `E2929` at the type), followed by
+  the conversion to `T`; `__builtin_va_end(ap)` to `va_end`; and
+  `__builtin_va_copy(dst, src)` to a 32-byte `copy` (Section 3.12). A
+  `va_arg` of a record or union type, and a record or union passed as an
+  anonymous argument, stay `E3030` (`not-lowered: varargs`); the cohort has
+  neither. `E3030` is no longer reported for a variadic declaration or call.
 - **Empty records.** A struct or union whose member list declares no member
   (for instance one containing only a `_Static_assert`) is a GNU extension with
   `sizeof` 0 and alignment 1 (measured, both oracles); the kernel's
@@ -4092,8 +4211,8 @@ be a member, an array element or a typedef target; on the target it occupies
 32 bytes at alignment 8 (evidence `p31-residue.c`: a structure holding one
 pointer and one `va_list` is 40 bytes at 8). An element of an array of
 `__uint128_t` or `__int128_t` is a modifiable lvalue like any element, and
-`*__builtin_va_arg(ap, T *)` is a modifiable lvalue of type `T`; execution
-of both stays `E3033` and `E3030`. Measured defect at revision 1.9.52:
+`*__builtin_va_arg(ap, T *)` is a modifiable lvalue of type `T`; both
+execute since revision 1.9.61 (Section 3.12, 10.1.19). Measured defect at revision 1.9.52:
 `E1001`, `E1005`, `E2101` and `E2102` in six units.
 
 **Parameter compatibility.** Top-level qualifiers on parameter types do not
@@ -5104,6 +5223,9 @@ certificate and should pass.
 | Pointer | `func_addr @symbol` | `fnptr<Sig>` | symbol | no |
 | Calls | `call @callee(args..., %m, %w)` | ret values, `mem`, `world` | callee, args, memory, world | depends |
 | | `call %fptr(args..., %m, %w)` | ret values, `mem`, `world` | callee value, args, memory, world | depends |
+| Varargs | `va_start %ap, %m, %w` | `mem<all>`, `world` | list object, memory, world | E3037 at validation |
+| | `va_arg.Type %ap, %m, %w` | Type, `mem<all>`, `world` | list object, memory, world | yes; E3038 |
+| | `va_end %ap, %m, %w` | `mem<all>`, `world` | list object, memory, world | yes; E3038 |
 | UB | `ub.assume.<reason> %cond` | — | `%cond` : `bits<1>` | yes |
 | Poison | `uninitialized.bits<N>` | `bits<N>` | — | on consumption |
 | | `uninitialized.ptr<AS>`, `uninitialized.fnptr<Sig>` | that type | — | on dereference (`E3013`) |
@@ -5142,6 +5264,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.61 | 2026-09-05 | Opens the two classes the sixth lowering survey put first (1,697 and 1,022 of 2,792 diagnosed units): `bits<128>` executes in every scalar form but division (10.1.19), and variadic signatures, anonymous arguments and the three list instructions `va_start`, `va_arg`, `va_end` enter Sections 1.1, 3.10, 3.12 and 9, with `va_copy` a 32-byte `copy`. Both are measured against the sealed oracles (`p34-*`, `p35-*`: fourteen `va_arg` items and eight `__int128` ABI shapes, GCC-14 and Clang-19 agreeing); the register-level procedures are EvoMIR's. New codes `E3037`, `E3038`; `E3030` narrows to aggregates; `E3033` narrows to division and remainder. |
 | 1.9.60 | 2026-09-05 | Under the user's authorization to close the two reported blockers, defines the missing assembly interchange grammar and output/effect edge bindings. Both-successor output availability is measured with the sealed oracles; the explicit SSA and byte encoding are compiler contract choices. No production code is changed by this specification revision. |
 | 1.9.59 | 2026-09-04 | Gives poison a pointer form (`uninitialized.ptr`, `uninitialized.fnptr`), so a pointer local without an initializer lowers rather than stopping the unit, and allocates `E3036` to pointer and integer conversions in either direction, which revision 1.7 deferred and the wrapper `E3101` had been carrying. Both classes were reduced to one line each by the architect. |
 | 1.9.58 | 2026-09-04 | Specifies inline assembly as an opaque EvoIR instruction with the constraint vocabulary the configured kernel uses, measured over 24,735 `asm` statements in twenty-four preprocessed units and against both oracles; `asm.goto` is a terminator, the effects are maximal, no rewrite can reach it, and neither interpreter executes it, so a program containing one is verified by the native run alone. |

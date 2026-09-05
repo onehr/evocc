@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.9** | **Authoritative reference** | **2026-09-04**
+**Revision 0.10** | **Authoritative reference** | **2026-09-05**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -74,7 +74,12 @@ Every virtual register has exactly one **register class**:
 
 `gpr32` and `gpr64` name the same physical register file viewed at two
 widths; the allocator assigns one physical register per virtual register and
-the class fixes the spelling. There is no floating-point class in this
+the class fixes the spelling. A `bits<128>` EvoIR value has no class of its
+own: lowering represents it as **two `gpr64` virtual registers**, the low
+half first, and every operation on it becomes a sequence over the halves
+(Section 5, revision 0.10). The allocator, the verifier and the interpreter
+see only 64-bit registers; the pair is a fact of lowering and of the calling
+convention (Section 6), never of allocation. There is no floating-point class in this
 revision; `f32`, `f64` and `vec` values are refused (Section 10).
 
 A `flags` value may be consumed only by the instruction that immediately
@@ -127,7 +132,8 @@ their `bits<1>` result with `cset`, which writes 0 or 1 into the whole
 register; a `bits<1>` produced by `trunc` or `and` has unspecified upper
 bits, and the table above is what makes that safe.
 
-Widths above 64 are not lowered (`E4003`).
+Width 128 is lowered as a pair of halves (Sections 2, 5 and 6). Widths
+from 65 to 127 and above 128 are not lowered (`E4003`).
 
 ## 4. Instruction Set
 
@@ -223,6 +229,10 @@ in the table is refused with the diagnostic named in Section 10.
 | `shift_count_defined.<s> %x, %amt` | extend `%amt` by its declared signedness `<s>` to the register width, `cmp` with `#N`, `cset lo`: a sign-extended negative amount exceeds every bound up to 64 as an unsigned quantity, so one unsigned comparison serves both signednesses (revision 0.3; zero-extending a signed `bits<1>` amount of 1 had answered 1 where EvoIR decodes -1 and answers 0) |
 | `signed_shl_defined.<s> %x, %amt` | the conjunction of four `bits<1>`: `shift_count_defined` as above; `%x` non-negative (`cmp` with `#0` after sign extension, `cset ge`); the round trip `(x << amt) >> amt == x` with an arithmetic right shift at the register width; and, below the register width, the shifted result representable in signed `bits<N>` (compare with the sign extension of its low `N` bits), as EvoIR 3.3.1 defines the predicate (revision 0.3) |
 | `sext`, `zext`, `trunc` | the extension of Section 3, or nothing for `trunc` |
+| `bits<128>` forms (revision 0.10; the pair is `lo`, `hi`) | `add`: `adds lo` then `adc hi`; `sub`: `subs lo` then `sbc hi`; `mul`: `mul lo, alo, blo`, `umulh hi, alo, blo`, `madd hi, alo, bhi, hi`, `madd hi, ahi, blo, hi`; `and`, `or`, `xor`: halfwise; `zext` to 128: `hi = 0`; `sext` to 128: `hi = asr lo, #63`; `trunc` from 128: the low half, then Section 3; `shl`, `lshr`, `ashr` by an amount `s` (the front end has asserted `s < 128`): the branch-free form the oracles emit, that is the 64-bit shifts of both halves, the cross term `lsl`/`lsr` of the other half by `63 - s` after a one-bit pre-shift, combined by `orr`, and two `csel` on `tst s, #64` selecting the 64-or-more case (`p35-int128.c`, `shl_var`, `lshr_var`, both compilers); `icmp.eq`/`ne`: `eor` each half pair, `orr`, compare with zero; ordered `icmp`: `cmp alo, blo` then `sbcs xzr, ahi, bhi` and `cset` with the 64-bit form's condition (`lo` for `ult`, `lt` for `slt`; `ule` and `sle` compute the swapped subtraction and take `hs` and `ge`); `load`/`store`: `ldp`/`stp` of the halves at the address, which is not single-copy atomic, exactly as both oracles emit for a `volatile u128` (the cohort's atomic 128-bit accesses are `asm`); `shift_count_defined` compares the amount with `#128`; `copy` is unchanged; the remaining UB predicates and `sdiv`/`udiv`/`srem`/`urem` at width 128 are `E4003` (the cohort has none; EvoIR keeps division `E3033`) |
+| `va_start %ap` | in a variadic function only: store to the list object at `%ap` the five fields of Section 6 (`stack`, `gr_top`, `vr_top`, `gr_offs`, `vr_offs`) |
+| `va_arg.T %ap` | the register-then-stack procedure of Section 6 for `T`'s size and alignment, ending in a load of `T` from the computed address |
+| `va_end %ap` | nothing |
 | `icmp.*` on integers | the extensions of Section 3, `cmp`, then `cset`; when the only consumer is a `cond_br` in the same block, `cmp` then `b.cond` with no `cset` |
 | `icmp.eq`/`ne` on pointers | the same, 64-bit, no extension |
 | `ptr.null` | `mov #0` |
@@ -247,9 +257,9 @@ The UB predicates were absent from revision 0.1's table, which refused
 19,410 of 20,000 generated functions; they are ordinary boolean
 computations and lower whether or not a `ub.assume` consumes them.
 
-Every other EvoIR form is refused: wide integers, floating point, vectors,
-tuples, varargs, computed goto, frame address, aggregate arguments and
-results, and pointer difference each have a code in Section 10.
+Every other EvoIR form is refused: widths other than 1 to 64 and 128,
+floating point, vectors, tuples, computed goto, frame address, aggregate
+arguments and results, and pointer difference each have a code in Section 10.
 
 ## 6. Frame and Calling Convention (Darwin arm64, scalar)
 
@@ -310,16 +320,78 @@ and the epilogue reverses it. Below the saved pair, in order: the
 callee-saved save area, then one slot per `frame.slot` (its declared size,
 rounded to its declared alignment, laid out in origin order from the top of
 the frame downward), then the spill area (one 8-byte slot per spilled
-virtual register), then outgoing stack arguments (none in this revision).
+virtual register), then the register save area of a variadic function
+(Section 6, 64 bytes), then outgoing stack arguments (Linux only, revision 0.10).
 `sp` stays 16-byte aligned at every call. The frame is static: no dynamic
 `alloca` exists in EvoIR. Every slot (object, spill, save area) is addressed
 from `sp` with a non-negative scaled offset, never from `x29`, so that frames
 above 256 bytes stay inside the unsigned twelve-bit immediate form; `x29`
 serves the unwinder and the debugger, not the code (revision 0.4).
 
-**Stack arguments** (beyond `x7`) are not lowered in this revision; Apple's
-rule packs them by natural alignment rather than in 8-byte slots, and that
-rule enters with the measurement that enables it.
+**Stack arguments** (beyond `x7`). On the Linux target (revision 0.10) an
+argument that finds no register goes to the stack in an 8-byte slot, slots
+assigned in argument order at increasing addresses from the caller's `sp` at
+the call, a `bits<128>` in a 16-byte-aligned 16-byte slot; a narrow value
+occupies the low bytes of its slot with the rest unspecified (both oracles
+`str w` a promoted `char` into an 8-byte slot, `p34-callsite.c`). The
+caller reserves the outgoing area below its frame (Section 6 frame layout,
+"outgoing stack arguments"), and the callee reads slot `i` at `x29 + 16 +
+8 * i`, since the prologue saves the pair first. On Darwin the platform
+packs stack arguments by natural alignment instead; that rule is still
+unmeasured, so more than eight integer arguments stay `E4010` there.
+
+**128-bit arguments and results (revision 0.10).** A `bits<128>` argument
+takes two consecutive registers `x(2k)`, `x(2k+1)`, the low half in the
+even one: the next register number is rounded up to even first, so after
+one 64-bit argument it is `x2`:`x3` with `x1` skipped, after two it is
+`x2`:`x3` with nothing skipped, and after seven it goes to the stack, whole,
+16-aligned, with `x7` unused. A `bits<128>` result is `x0`:`x1`, low half in
+`x0`. Every row is measured with both oracles (`p35-int128.c`, functions
+`ret128`, `take_after_one`, `take_after_two`, `take_after_seven`; `p34-p35.out`
+and `p34-p35-clang.out`). Records are never passed by value in EvoIR (its
+10.1.3 sends a pointer to a copy), so the oracles' rule for 16-byte-aligned
+records (`take_union`, even pair) is recorded and unused.
+
+**Variadic functions (revision 0.10; withdraws `E4012`).** A call passes
+anonymous arguments exactly as it passes named ones: same registers, same
+slots, no distinction (`call_v` and `call_f` in `p34-callsite.c` are
+instruction-for-instruction identical under both oracles), and the front
+end has already promoted narrow values, so nothing is inserted. A variadic
+**callee** reserves a 64-byte, 16-byte-aligned **register save area** in its
+frame and stores `x_k` to `x7` into it at offsets `8 * k` to `56` in the
+prologue, where `k` is the number of argument registers its named
+parameters consumed (a `bits<128>` parameter consumes two and the rounding
+above). The list object is 32 bytes: `stack` (a pointer, offset 0),
+`gr_top` (offset 8), `vr_top` (offset 16), `gr_offs` (a signed 32-bit
+integer, offset 24), `vr_offs` (offset 28). `va_start` stores
+`stack = x29 + 16` (the first incoming stack slot), `gr_top = save area +
+64`, `vr_top = gr_top` (never read: the target is built with general
+registers only and both oracles leave `vr_offs = 0`), `gr_offs = -8 * (8 -
+k)` and `vr_offs = 0`; `k = 8` gives `gr_offs = 0` and every argument
+comes from the stack. `va_arg` of a type of size `S` (rounded up to a
+multiple of 8 as `S8`) and alignment `A` performs the procedure of the
+AAPCS64 Appendix B restricted to general registers:
+
+```text
+offs = gr_offs
+if offs < 0:
+    if A == 16: offs = (offs + 15) & ~15
+    next = offs + S8
+    if next <= 0: gr_offs = next; address = gr_top + offs; done
+    gr_offs = 0
+address = stack
+if A == 16: address = (address + 15) & ~15
+stack = address + S8
+```
+
+then loads `T` from `address`. This procedure, written by hand in
+`p34-varargs.c`, agrees with GCC-14's and Clang-19's own `va_arg` on
+fourteen consecutive items covering `int`, `long`, `__int128` (the
+16-byte rounding of `gr_offs` and of `stack`), a 16-byte record in the
+save area, a 24-byte record by reference, and the crossing from registers
+to stack for `k` of 1, 7 and 8. `va_end` emits nothing. Only the promoted
+scalar types of EvoIR 3.10 reach `va_arg`; the record rows above are
+measured for the day a unit needs them.
 
 ## 7. Out-of-SSA and Register Allocation
 
@@ -453,9 +525,9 @@ revision admits, and vice versa, and the receipt names it.
 ## 10. Diagnostics
 
 All are reported at the EvoIR instruction that could not be lowered; the
-driver emits no assembly for a function with any of them. Five codes
-(`E4005` to `E4008`, `E4012`) name forms a validated EvoIR module cannot
-contain at revision 1.9.56, because EvoIR's own fail-closed codes exclude
+driver emits no assembly for a function with any of them. Four codes
+(`E4005` to `E4008`) name forms a validated EvoIR module cannot
+contain at revision 1.9.61, because EvoIR's own fail-closed codes exclude
 them earlier; they are defined so that the boundary is named from both
 sides, and are never emitted today.
 
@@ -463,16 +535,16 @@ sides, and are never emitted today.
 |---|---|---|
 | `E4001` | `not-lowered: floating-point` | `f32`/`f64` operand or result |
 | `E4002` | `not-lowered: vector` | `vec` operand or result |
-| `E4003` | `not-lowered: wide-integer` | `bits<N>` with `N > 64` |
+| `E4003` | `not-lowered: wide-integer` | `bits<N>` with `64 < N < 128` or `N > 128`; at `N = 128`, division, remainder and the signed UB predicates |
 | `E4004` | `not-lowered: tuple` | tuple-typed value |
 | `E4005` | `not-lowered: static-pointer-data` | a pointer inside static initial bytes |
 | `E4006` | `not-lowered: indirect-branch` | computed goto (EvoIR `E3029` boundary) |
 | `E4007` | `not-lowered: frame-address` | EvoIR `E3031` boundary |
 | `E4008` | `not-lowered: pointer-difference` | EvoIR `E3032` boundary |
 | `E4009` | `not-lowered: unsupported-form` | any EvoIR instruction absent from Section 5 |
-| `E4010` | `abi: too-many-register-arguments` | more than eight integer arguments |
+| `E4010` | `abi: too-many-register-arguments` | more than eight integer arguments on Darwin (Linux lowers stack arguments, revision 0.10) |
 | `E4011` | `abi: aggregate-by-value` | aggregate argument or result |
-| `E4012` | `abi: variadic` | variadic callee or caller |
+| `E4012` | `abi: variadic` | withdrawn at revision 0.10: variadic callees and callers lower (Section 6); the name is kept so old receipts read |
 | `E4013` | `abi: too-many-results` | more than eight ordinary results |
 | `E4020` | `allocation: verifier-refused` | the allocation verifier found a violation; internal, must never reach a user of a released build |
 
@@ -544,6 +616,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.10 | 2026-09-05 | Opens the two forms the sixth lowering survey put first: `bits<128>` as a pair of `gpr64` halves with measured sequences for every scalar form but division, the even-aligned pair convention for arguments and `x0`:`x1` for results; variadic callees and callers on Linux, with the register save area, the five-field list object and the general-registers-only `va_arg` procedure that agrees with both oracles on fourteen items; stack arguments in 8-byte slots on Linux. `E4012` withdrawn, `E4003` and `E4010` narrowed. The executor's spellings enter Appendix A with the implementation, as revision 0.8 did for assembly. |
 | 0.9 | 2026-09-04 | The same 384 C programs compile, link, run and agree on both targets: on the host under Apple clang, and inside the sealed container under GCC-14 for Linux AArch64. Settles the narrow result by probe (the callee extends; `E4014` withdrawn) and states the four places the two targets differ. |
 | 0.8 | 2026-09-04 | Inline assembly runs on the machine: eleven constraint rows and both `asm.goto` edges assembled, linked, run and agreeing with host-compiled equivalents. Gives Appendix A its assembly productions, in the executor's spelling, and fixes `%l[...]` as the label's position in the declared list. |
 | 0.7 | 2026-09-04 | 384 C programs compiled by the whole pipeline, run natively, and agreeing with the host compiler's build of the same source. Defines a cross-boundary call as one whose callee emission does not define, makes the argument extension a zero extension because EvoIR carries no parameter signedness, and refuses a narrow result across the boundary as `E4014` until a probe settles it. |
