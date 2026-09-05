@@ -3153,11 +3153,19 @@ impl<'a> FunctionLowerer<'a> {
     ) -> Vec<EnvKey> {
         let mut keys = Vec::new();
         let mut seen = BTreeSet::new();
-        for symbol in preferred {
-            let key = if self.memory_symbols.contains(symbol) {
-                EnvKey::Address(*symbol)
+        let local_key = |symbol: SymbolId| {
+            if self.memory_symbols.contains(&symbol) {
+                let key = EnvKey::Address(symbol);
+                // Lexical visibility includes later declarations, but their
+                // allocation has not executed and has no address to transmit.
+                state.env.contains_key(&key).then_some(key)
             } else {
-                EnvKey::Local(*symbol)
+                Some(EnvKey::Local(symbol))
+            }
+        };
+        for symbol in preferred {
+            let Some(key) = local_key(*symbol) else {
+                continue;
             };
             if symbols.contains(symbol) && state.locals.contains(symbol) && seen.insert(key) {
                 keys.push(key);
@@ -3181,10 +3189,8 @@ impl<'a> FunctionLowerer<'a> {
             }
         }
         for symbol in symbols {
-            let key = if self.memory_symbols.contains(symbol) {
-                EnvKey::Address(*symbol)
-            } else {
-                EnvKey::Local(*symbol)
+            let Some(key) = local_key(*symbol) else {
+                continue;
             };
             if seen.contains(&key) {
                 continue;
