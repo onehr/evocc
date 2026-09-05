@@ -5552,6 +5552,21 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Static compound storage and block linkage
+
+Both sealed oracles compile `.evidence/builtin-probes/20260906-static-storage/storage.c`
+and print `12 7 7`: a static compound initializer copies its value, a discarded
+pointer expression keeps its side effects, and a block-declared external function
+may later be defined at file scope with the same linkage identity.
+Section 2.1 already names `compound_literal` but Section 9 omits its kind spelling;
+use that spelling and the private symbol `__evocc.compound.<origin>` without
+changing allocation-site identity.
+A function definition binds its file-child lexical scope to the existing
+non-builtin function symbol even when its first declaration was inside a block;
+this does not permit a definition inside that block.
+No diagnostic is added; survey `20260905T185525Z-27277` measured one aggregate-copy
+initializer, one block function-address lookup and two discarded-pointer sites.
+
 ### Qualified function parameter identities
 
 Section 10.1.18's existing compatibility rule ignores parameter top-level

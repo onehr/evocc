@@ -300,9 +300,9 @@ fn sentinel_module() -> Module {
                 initialized: vec![true],
             },
             GlobalObject {
-                symbol: "sentinel_relocation".into(),
+                symbol: "__evocc.compound.7004".into(),
                 origin: 7004,
-                kind: GlobalKind::File,
+                kind: GlobalKind::CompoundLiteral,
                 visibility: GlobalVisibility::Internal,
                 layout: AccessLayout::new(16, 8),
                 bytes: vec![0; 16],
@@ -814,6 +814,7 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
         GlobalKind::File,
         GlobalKind::FunctionStatic,
         GlobalKind::StringLiteral,
+        GlobalKind::CompoundLiteral,
     ];
     let visibility = [GlobalVisibility::External, GlobalVisibility::Internal];
 
@@ -882,6 +883,7 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
             GlobalKind::File => "GlobalKind.File",
             GlobalKind::FunctionStatic => "GlobalKind.FunctionStatic",
             GlobalKind::StringLiteral => "GlobalKind.StringLiteral",
+            GlobalKind::CompoundLiteral => "GlobalKind.CompoundLiteral",
         });
     }
     for value in visibility {

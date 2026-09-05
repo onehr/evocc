@@ -405,12 +405,64 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
             bytes,
         });
     }
+    let mut static_literal_origins = string_origins.clone();
+    for site in manifest.sites() {
+        if let Some((expression, true)) = site.kind().compound_literal() {
+            static_literal_origins.insert(
+                expression as *const CHirExpr<'_> as usize,
+                site.ordinal().raw(),
+            );
+        }
+    }
+    for site in manifest.sites() {
+        let Some((CHirExpr::CompoundLit(ty, initializer, span), true)) =
+            site.kind().compound_literal()
+        else {
+            continue;
+        };
+        let layout = target
+            .layout_of(unit.types(), *ty)
+            .map_err(|source| LowerError::Layout {
+                ty: *ty,
+                span: *span,
+                source,
+            })?;
+        let mut bytes = vec![
+            0;
+            usize::try_from(layout.size_bytes)
+                .map_err(|_| LowerError::StaticRelocation { span: *span })?
+        ];
+        let mut relocs = Vec::new();
+        for action in initializer.plan().actions() {
+            apply_static_initializer(
+                unit,
+                target,
+                *ty,
+                action,
+                &mut bytes,
+                &mut relocs,
+                &allocation_origins,
+                &static_literal_origins,
+            )?;
+        }
+        relocs.sort_by_key(|relocation| relocation.offset);
+        globals.push(GlobalObject {
+            symbol: format!("__evocc.compound.{}", site.ordinal().raw()),
+            origin: site.ordinal().raw(),
+            kind: GlobalKind::CompoundLiteral,
+            visibility: GlobalVisibility::Internal,
+            layout: AccessLayout::new(layout.size_bytes, layout.align_bytes),
+            initialized: vec![true; bytes.len()],
+            bytes,
+            relocs,
+        });
+    }
     globals.extend(lower_globals(
         unit,
         target,
         &memory_symbols,
         &allocation_origins,
-        &string_origins,
+        &static_literal_origins,
     )?);
     let mut lowered = Vec::new();
     for declaration in unit.iter() {
@@ -1083,6 +1135,12 @@ fn symbolic_address(
                 .ok_or_else(error)?;
             Ok((format!("__evocc.string.{origin}"), 0))
         }
+        CHirExpr::CompoundLit(..) => {
+            let origin = strings
+                .get(&(expression as *const CHirExpr<'_> as usize))
+                .ok_or_else(error)?;
+            Ok((format!("__evocc.compound.{origin}"), 0))
+        }
         CHirExpr::MemoryRead { place, .. }
             if address_of
                 || unit
@@ -1095,7 +1153,9 @@ fn symbolic_address(
                 PlaceRoot::PointerExpression { pointer, .. } => {
                     symbolic_address(unit, target, pointer, false, origins, strings)?
                 }
-                PlaceRoot::CompoundLiteral { .. } => return Err(error()),
+                PlaceRoot::CompoundLiteral { expression, .. } => {
+                    symbolic_address(unit, target, expression, true, origins, strings)?
+                }
             };
             for projection in place.projections() {
                 let delta = match projection {
@@ -1351,11 +1411,28 @@ fn apply_static_initializer(
                     .unwrap_or(0) as u8;
             }
         }
-        InitAction::CopyAggregate { span, .. } => {
-            return Err(LowerError::UnsupportedExpression {
-                span: *span,
-                feature: "global aggregate copy initializer",
-            });
+        InitAction::CopyAggregate { value, span, .. } => {
+            let CHirExpr::CompoundLit(ty, initializer, _) = value else {
+                return Err(LowerError::StaticRelocation { span: *span });
+            };
+            let mut copied_relocs = Vec::new();
+            target_bytes.fill(0);
+            for action in initializer.plan().actions() {
+                apply_static_initializer(
+                    unit,
+                    target,
+                    *ty,
+                    action,
+                    target_bytes,
+                    &mut copied_relocs,
+                    origins,
+                    strings,
+                )?;
+            }
+            for mut relocation in copied_relocs {
+                relocation.offset += offset as u64;
+                relocs.push(relocation);
+            }
         }
     }
     Ok(())
@@ -1538,6 +1615,7 @@ fn prevalidate_decl_for_lowering(
             Ok(())
         }
         CHirDecl::Tag(_) | CHirDecl::Typedef(_) => Ok(()),
+        CHirDecl::Function(function) if function.body.is_none() => Ok(()),
         CHirDecl::Function(function) => Err(LowerError::UnsupportedStatement {
             span: function.span,
             feature: "block function declaration is outside scalar lowering",
@@ -1945,6 +2023,71 @@ fn index_functions(
             .or_insert(info);
     }
 
+    // A used function may have its only declaration inside a block. Its
+    // canonical linkage symbol is still the unit-level callable authority.
+    for symbol in required {
+        if definitions.contains_key(&symbol) {
+            continue;
+        }
+        let entry = unit
+            .symbols()
+            .symbol(symbol)
+            .map_err(|_| LowerError::InvalidGeneratedSsa {
+                message: "required function symbol is absent".into(),
+            })?;
+        let Some(TypeKind::Function {
+            return_type,
+            parameters,
+        }) = unit.types().get(entry.ty()).map(|ty| &ty.kind)
+        else {
+            return Err(LowerError::UnknownSymbol {
+                symbol,
+                span: entry.span(),
+            });
+        };
+        if entry.kind() != SymbolKind::Function {
+            return Err(LowerError::UnknownSymbol {
+                symbol,
+                span: entry.span(),
+            });
+        }
+        let (types, variadic) = match parameters {
+            FunctionParameters::Prototype { types, variadic } => (types.as_slice(), *variadic),
+            FunctionParameters::Unspecified => {
+                (unit.unprototyped_parameters(symbol).unwrap_or(&[]), false)
+            }
+        };
+        let return_type = if unit
+            .types()
+            .get(*return_type)
+            .is_some_and(|ty| matches!(ty.kind, TypeKind::Void))
+        {
+            None
+        } else {
+            Some(function_value_type(
+                unit.types(),
+                target,
+                *return_type,
+                entry.span(),
+            )?)
+        };
+        definitions.insert(
+            symbol,
+            FunctionInfo {
+                name: entry.spelling().into(),
+                variadic,
+                ordinal: 0,
+                parameter_symbols: Vec::new(),
+                parameter_types: types
+                    .iter()
+                    .map(|ty| function_value_type(unit.types(), target, *ty, entry.span()))
+                    .collect::<Result<Vec<_>, _>>()?,
+                return_type,
+                participant: variadic,
+                span: entry.span(),
+            },
+        );
+    }
     let mut participants = BTreeSet::new();
     for declaration in unit.iter() {
         let CHirDecl::Function(function) = declaration else {
@@ -3689,6 +3832,7 @@ impl<'a> FunctionLowerer<'a> {
                 });
             }
             CHirDecl::Tag(_) | CHirDecl::Typedef(_) => return Ok(()),
+            CHirDecl::Function(function) if function.body.is_none() => return Ok(()),
             CHirDecl::Function(_) => {
                 return Err(LowerError::UnsupportedStatement {
                     span: declaration.span(),
@@ -5063,11 +5207,14 @@ impl<'a> FunctionLowerer<'a> {
         )?;
         let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
         if static_storage {
-            return Err(LowerError::UnsupportedExpression {
-                span: *span,
-                feature:
-                    "file-scope compound-literal relocation has no specified EvoIR global identity",
-            });
+            self.emit(
+                state,
+                Inst::GlobalAddr {
+                    result: address.clone(),
+                    symbol: format!("__evocc.compound.{origin}"),
+                },
+            )?;
+            return Ok(address);
         }
         let mem_in = self.token(state, EnvKey::Memory)?.value;
         let world_in = self.token(state, EnvKey::World)?.value;
@@ -7584,6 +7731,14 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<(), LowerError> {
         match expression {
+            CHirExpr::Cast(ty, operand, _)
+                if matches!(
+                    self.unit.types().get(*ty).map(|ty| &ty.kind),
+                    Some(TypeKind::Void)
+                ) =>
+            {
+                self.lower_discarded_expr(operand, state)?;
+            }
             CHirExpr::BuiltinVarArgs {
                 op,
                 first,

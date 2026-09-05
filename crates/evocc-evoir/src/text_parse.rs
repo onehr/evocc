@@ -344,6 +344,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
         "file" => GlobalKind::File,
         "function_static" => GlobalKind::FunctionStatic,
         "string_literal" => GlobalKind::StringLiteral,
+        "compound_literal" => GlobalKind::CompoundLiteral,
         _ => return Err("unknown module-global kind".to_owned()),
     };
     let visibility = match parse_named(fields[4], "visibility")? {

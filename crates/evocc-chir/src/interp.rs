@@ -1265,11 +1265,26 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         .store_bytes(address, layout, &value)
                         .map_err(|error| self.memory_error(error, span))?;
                 }
-                InitAction::CopyAggregate { span, .. } => {
-                    return Err(InterpreterError::UnsupportedExpression {
-                        feature: "aggregate copy in static initializer",
-                        span: *span,
-                    });
+                InitAction::CopyAggregate { value, span, .. } => {
+                    let CHirExpr::CompoundLit(ty, initializer, _) = value else {
+                        return Err(InterpreterError::UnsupportedExpression {
+                            feature: "nonconstant aggregate copy in static initializer",
+                            span: *span,
+                        });
+                    };
+                    self.guard_static_initializer_evaluation(value)?;
+                    let layout = self.access_layout(*ty, *span)?;
+                    let zero = ByteSequence::try_from_bytes(vec![0; layout.size_bytes as usize])
+                        .map_err(|error| self.memory_error(error, *span))?;
+                    self.memory = self
+                        .memory
+                        .store_bytes(address, layout, &zero)
+                        .map_err(|error| self.memory_error(error, *span))?;
+                    self.initialize_static_plan(
+                        MemoryBinding { address, ty: *ty },
+                        initializer,
+                        *span,
+                    )?;
                 }
             }
         }
@@ -2572,6 +2587,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let declaration = match declaration {
             CHirDecl::Object(declaration) => declaration,
             CHirDecl::Asm(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) => return Ok(()),
+            CHirDecl::Function(function) if function.body.is_none() => return Ok(()),
             CHirDecl::Function(declaration) => {
                 return Err(InterpreterError::UnsupportedDeclaration {
                     feature: "block function declaration",
@@ -3283,6 +3299,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expression: &'arena CHirExpr<'arena>,
         tasks: &mut Vec<MachineTask<'arena>>,
     ) -> Result<(), InterpreterError> {
+        if let CHirExpr::Cast(ty, operand, _) = expression {
+            if self
+                .unit
+                .types()
+                .get(*ty)
+                .is_some_and(|ty| matches!(ty.kind, TypeKind::Void))
+            {
+                return self.schedule_discarded_expression(operand, tasks);
+            }
+        }
         if let CHirExpr::BuiltinVarArgs { op, .. } = expression {
             if *op != crate::VarArgsBuiltinOp::Arg {
                 self.schedule_varargs(expression, tasks)?;
@@ -7130,6 +7156,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 Ok(())
             }
             CHirDecl::Asm(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) => Ok(()),
+            CHirDecl::Function(function) if function.body.is_none() => Ok(()),
             CHirDecl::Function(declaration) => Err(InterpreterError::UnsupportedDeclaration {
                 feature: "block function declaration",
                 span: declaration.span,
@@ -7304,6 +7331,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         match declaration {
             CHirDecl::Object(declaration) => self.exec_object_decl(declaration),
             CHirDecl::Asm(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) => Ok(()),
+            CHirDecl::Function(function) if function.body.is_none() => Ok(()),
             CHirDecl::Function(declaration) => Err(InterpreterError::UnsupportedDeclaration {
                 feature: "block function declaration",
                 span: declaration.span,

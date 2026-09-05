@@ -93,6 +93,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
         "file" => GlobalKind::File,
         "function_static" => GlobalKind::FunctionStatic,
         "string_literal" => GlobalKind::StringLiteral,
+        "compound_literal" => GlobalKind::CompoundLiteral,
         other => return Err(format!("unknown global kind '{other}'")),
     };
     let visibility = match attribute("visibility")?.as_str() {

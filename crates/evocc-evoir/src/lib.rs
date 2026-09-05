@@ -918,6 +918,7 @@ pub enum GlobalKind {
     File,
     FunctionStatic,
     StringLiteral,
+    CompoundLiteral,
 }
 
 /// Link visibility of one module global.
@@ -1412,6 +1413,15 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                 if global.symbol != expected || global.visibility != GlobalVisibility::Internal {
                     return Err(format!(
                         "string-literal global '{}' must be internal symbol '{expected}'",
+                        global.symbol
+                    ));
+                }
+            }
+            GlobalKind::CompoundLiteral => {
+                let expected = format!("__evocc.compound.{}", global.origin);
+                if global.symbol != expected || global.visibility != GlobalVisibility::Internal {
+                    return Err(format!(
+                        "compound-literal global '{}' must be internal symbol '{expected}'",
                         global.symbol
                     ));
                 }
@@ -4906,7 +4916,7 @@ fn initialize_globals(module: &Module, state: &mut ExecutionState) -> Result<(),
                     .allocate_string_literal(global.origin, global.layout, &bytes)
                     .map_err(|error| InterpreterError::MemorySetup { error })?
             }
-            GlobalKind::File | GlobalKind::FunctionStatic => state
+            GlobalKind::File | GlobalKind::FunctionStatic | GlobalKind::CompoundLiteral => state
                 .memory
                 .allocate_static(global.origin, global.layout, InitialState::Uninitialized)
                 .map_err(|error| InterpreterError::MemorySetup { error })?,

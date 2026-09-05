@@ -456,7 +456,6 @@ impl SymbolTable {
         ) || entry.parent != Some(self.file_scope())
             || symbol.kind() != SymbolKind::Function
             || self.is_builtin_function(function)
-            || symbol.scope() != self.file_scope()
             || entry.function_owner.is_some_and(|owner| owner != function)
         {
             return Err(SymbolTableError::InvalidFunctionScope { scope, function });

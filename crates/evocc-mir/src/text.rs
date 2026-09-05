@@ -63,6 +63,7 @@ fn render_global(text: &mut String, global: &GlobalObject) {
         GlobalKind::File => "file",
         GlobalKind::FunctionStatic => "function_static",
         GlobalKind::StringLiteral => "string_literal",
+        GlobalKind::CompoundLiteral => "compound_literal",
     };
     let visibility = match global.visibility {
         GlobalVisibility::External => "external",
