@@ -1,3 +1,5 @@
+mod support;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -36,6 +38,7 @@ impl Drop for TempTree {
 }
 
 fn run_frontend(mode: &str, input: &Path) -> Output {
+    support::warm_evocc();
     let mut child = Command::new(env!("CARGO_BIN_EXE_evocc"))
         .arg(mode)
         .arg(input)

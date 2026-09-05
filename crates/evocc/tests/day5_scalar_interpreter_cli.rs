@@ -1,3 +1,5 @@
+mod support;
+
 use std::io::Write;
 use std::process::{Command, Output, Stdio};
 use std::thread;
@@ -6,6 +8,7 @@ use std::time::{Duration, Instant};
 const WATCHDOG: Duration = Duration::from_secs(2);
 
 fn run_interpreter(source: &str) -> Output {
+    support::warm_evocc();
     let mut child = Command::new(env!("CARGO_BIN_EXE_evocc"))
         .args([
             "--target=aarch64-unknown-linux-gnu",

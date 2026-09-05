@@ -1,3 +1,5 @@
+mod support;
+
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
@@ -82,6 +84,7 @@ impl Drop for TempSource {
 }
 
 fn run(args: &[&str]) -> Output {
+    support::warm_evocc();
     let mut child = Command::new(env!("CARGO_BIN_EXE_evocc"))
         .args(args)
         .stdin(Stdio::null())

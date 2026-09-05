@@ -1,3 +1,5 @@
+mod support;
+
 use std::collections::HashSet;
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -345,6 +347,7 @@ const G2_CASES: &[Case] = &[
 ];
 
 fn run_parse_only(source: &str) -> Observation {
+    support::warm_evocc();
     let mut child = Command::new(env!("CARGO_BIN_EXE_evocc"))
         .args([
             "--parse-only",

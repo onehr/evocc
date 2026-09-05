@@ -1,3 +1,5 @@
+mod support;
+
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -17,6 +19,7 @@ fn unique_source_path() -> PathBuf {
 
 #[test]
 fn parse_only_stops_after_exact_first_error_before_large_valid_tail() {
+    support::warm_evocc();
     let source_path = unique_source_path();
     let mut source = String::from("int +;\n");
     for index in 0..20_000 {
