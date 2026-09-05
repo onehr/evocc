@@ -113,6 +113,9 @@ def main() -> int:
     receipts = gate.get("receipt", {})
     closed_mid = sum(1 for key in gate.get("rulings", {}) if key.endswith("Closed"))
     closed_front = sum(1 for key in front.get("rulings", {}) if key.endswith("Closed"))
+    closed_scopes = [name for name, state in front.get("scopeClosures", {}).items()
+                     if state.get("status") == "CLOSED"]
+    closure_note = f"; {'/'.join(closed_scopes)}" if closed_scopes else ""
 
     parse_clean, parse_total = fraction(newest_survey("full-config-parse-survey"))
     lower_clean, lower_total = fraction(newest_survey("full-config-lowering-survey"))
@@ -137,7 +140,7 @@ def main() -> int:
             f" {parse_clean:,}/{parse_total:,} {bar(parse_clean, parse_total)} ",
             f" {parse_clean:,}/{parse_total:,} {bar(parse_clean, parse_total)} ",
             f" {lower_clean:,}/{lower_total:,} {bar(lower_clean, lower_total)} ",
-            f"{closed_front} , AA, AB",
+            f"{closed_front} {closure_note}",
         ],
     )
     right = box(
@@ -168,7 +171,7 @@ def main() -> int:
         [
             f"fail-closed {len(debts)} :{' '.join(debts[: len(debts) // 2])}",
             f"{' ' * 18}{' '.join(debts[len(debts) // 2 :])}",
-            "asm (EvoIR 3.11 / EvoMIR 0.8),",
+            "asm EvoIR 3.11 / EvoMIR receipt",
             "K1 ░░░░ C1 ░░░░ C2 vmlinux ░░░░ G1 ░░░░",
         ],
         span,

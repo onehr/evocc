@@ -2,14 +2,271 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "bdb9781df4fc3601fbc3ee8c42a02884a783e49f7afe523684e80d9a83d96579"
+    "sha256": "c6dd88f84c32c23477496662c5345d6b8e027a803e511151bad8d6ed51327cb9"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.63",
-    "sha256": "a2671b37957e05c14aa81e2bbb703c9177380e3a41e6c019400f19b6fc086986"
+    "revision": "1.9.66",
+    "sha256": "1e633554e61b8637885b142704eee2612873271282665276ec8024f35d81d8ae"
   },
-  "cutLine": "Current implementation cb0e83d completes the granted library-prototype namespace repair. All 28 previous manifest residuals were classified: 21 isdigit and 7 memset uses, one shared scope rule. The unchanged-input 57-unit targeted replay now has E3033 30, E3030 26, E3021 1, E3101 zero, zero timeout and panic; it is not a full survey. Focused tests are 38/38. AA remains OPEN pending its full gate and isolated replay; AB implementation dfbd2f1 remains OPEN pending completion of its fc138c6 isolated replay and refreshed full survey. The last sealed full parse/lowering surveys remain the historical runs recorded below; AC is not opened.",
+  "cutLine": "AC and scalar variadic access AD are closed by the measured runs and completed gate/replay below. AD removes E3030 from the first-error frontier but does not increase clean units: 6 clean, 2792 diagnosed. The next measured defect is function-parameter adjustment (2464 E3101), followed by checked arithmetic (303 E3020). AE2 and AF remain OPEN. Older sections below are historical checkpoints, not current status.",
+  "latestExecution": {
+    "commits": {
+      "wideRed": "8773a0b",
+      "wideImplementation": "a6ffb76",
+      "launchAssessment": "36e4a57",
+      "variadicRed": "7da14de",
+      "variadicImplementation": "3718ee8"
+    },
+    "red": {
+      "variadicDeclaredFailures": 4,
+      "buildErrors": 0
+    },
+    "surveys": {
+      "AC": {
+        "runId": "20260905T162725Z-3971",
+        "subjectCommit": "36e4a57cc3aa57cc369c86507f42a05f48cc6710",
+        "capture": ".evidence/full-config-lowering-survey/20260905T162725Z-3971",
+        "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --action lower --evocc target/frontend/release/evocc --jobs 4 --timeout 60",
+        "classifications": {
+          "clean": 6,
+          "diagnosed": 2792,
+          "unavailable": 0,
+          "timeout": 0,
+          "panic": 0
+        },
+        "diagnosedByCode": {
+          "E3030": 2737,
+          "E3020": 30,
+          "E3036": 4,
+          "E3026": 8,
+          "E3021": 6,
+          "E3023": 7
+        },
+        "atRootTop15": [
+          {
+            "exampleRecord": "arch/arm64/crypto/.aes-ce-ccm-glue.o.cmd",
+            "exampleUnit": "arch/arm64/crypto/aes-ce-ccm-glue.c",
+            "finding": "E3030 evoir-lowering-failed",
+            "units": 2737
+          },
+          {
+            "exampleRecord": "drivers/acpi/apei/.ghes_helpers.o.cmd",
+            "exampleUnit": "drivers/acpi/apei/ghes_helpers.c",
+            "finding": "E3020 evoir-lowering-failed",
+            "units": 30
+          },
+          {
+            "exampleRecord": "crypto/asymmetric_keys/.pkcs7.asn1.o.cmd",
+            "exampleUnit": "crypto/asymmetric_keys/pkcs7.asn1.c",
+            "finding": "E3026 evoir-lowering-failed",
+            "units": 8
+          },
+          {
+            "exampleRecord": "lib/zstd/common/.entropy_common.o.cmd",
+            "exampleUnit": "lib/zstd/common/entropy_common.c",
+            "finding": "E3023 evoir-lowering-failed",
+            "units": 7
+          },
+          {
+            "exampleRecord": "kernel/time/.timecounter.o.cmd",
+            "exampleUnit": "kernel/time/timecounter.c",
+            "finding": "E3021 evoir-lowering-failed",
+            "units": 6
+          },
+          {
+            "exampleRecord": "crypto/.jitterentropy.o.cmd",
+            "exampleUnit": "crypto/jitterentropy.c",
+            "finding": "E3036 evoir-lowering-failed",
+            "units": 4
+          }
+        ],
+        "timing": {
+          "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c",
+          "maximumWallMilliseconds": 18902.43,
+          "medianWallMilliseconds": 2433.637,
+          "note": "Per-process wall time was observed under concurrent host load; it is coarse telemetry, not a benchmark.",
+          "parallelism": 4,
+          "perUnitTimeoutSeconds": 60
+        },
+        "resultsSha256": "6b6355feef3b0493672055d79f4e00d25c9ac79016e3d7d293df39bb4c85b80a",
+        "summarySha256": "55c95d830becd1e7dfcc965f27c807512edff3dc6affc22e32e3b68c112800fa",
+        "sealSha256": "67eb7a4f636af3cd2fa6ca87b307b1bbfc3f851f5c5c3b7fec15676819e866b2"
+      },
+      "AD": {
+        "runId": "20260905T175021Z-94287",
+        "subjectCommit": "3718ee837dc7c289b7b9ddd328bb96915dc747a5",
+        "capture": ".evidence/full-config-lowering-survey/20260905T175021Z-94287",
+        "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --action lower --evocc target/frontend/release/evocc --jobs 4 --timeout 60",
+        "classifications": {
+          "clean": 6,
+          "diagnosed": 2792,
+          "unavailable": 0,
+          "timeout": 0,
+          "panic": 0
+        },
+        "diagnosedByCode": {
+          "E3101": 2464,
+          "E3020": 303,
+          "E3036": 4,
+          "E3026": 8,
+          "E3021": 6,
+          "E3023": 7
+        },
+        "atRootTop15": [
+          {
+            "exampleRecord": "arch/arm64/crypto/.aes-ce-ccm-glue.o.cmd",
+            "exampleUnit": "arch/arm64/crypto/aes-ce-ccm-glue.c",
+            "finding": "E3101 evoir-lowering-failed",
+            "units": 2464
+          },
+          {
+            "exampleRecord": "arch/arm64/kernel/.io.o.cmd",
+            "exampleUnit": "arch/arm64/kernel/io.c",
+            "finding": "E3020 evoir-lowering-failed",
+            "units": 303
+          },
+          {
+            "exampleRecord": "crypto/asymmetric_keys/.pkcs7.asn1.o.cmd",
+            "exampleUnit": "crypto/asymmetric_keys/pkcs7.asn1.c",
+            "finding": "E3026 evoir-lowering-failed",
+            "units": 8
+          },
+          {
+            "exampleRecord": "lib/zstd/common/.entropy_common.o.cmd",
+            "exampleUnit": "lib/zstd/common/entropy_common.c",
+            "finding": "E3023 evoir-lowering-failed",
+            "units": 7
+          },
+          {
+            "exampleRecord": "kernel/time/.timecounter.o.cmd",
+            "exampleUnit": "kernel/time/timecounter.c",
+            "finding": "E3021 evoir-lowering-failed",
+            "units": 6
+          },
+          {
+            "exampleRecord": "crypto/.jitterentropy.o.cmd",
+            "exampleUnit": "crypto/jitterentropy.c",
+            "finding": "E3036 evoir-lowering-failed",
+            "units": 4
+          }
+        ],
+        "timing": {
+          "maximumUnit": "net/ethtool/ioctl.c",
+          "maximumWallMilliseconds": 30435.54,
+          "medianWallMilliseconds": 3467.711,
+          "note": "Per-process wall time was observed under concurrent host load; it is coarse telemetry, not a benchmark.",
+          "parallelism": 4,
+          "perUnitTimeoutSeconds": 60
+        },
+        "resultsSha256": "aef01300a52927c2a9e98acb0a4d495f30b306b62d23c50bf01c1df16796afc7",
+        "summarySha256": "1364b16242e5ccd31640ba30e903173a2c0e5cb818265ca7354e4dedb32634f4",
+        "sealSha256": "69219b59ac7a117125381340f714d40b820ad229ca8d018906bb17d43f0ec9ee"
+      },
+      "parse": {
+        "runId": "20260905T175158Z-291",
+        "subjectCommit": "3718ee837dc7c289b7b9ddd328bb96915dc747a5",
+        "capture": ".evidence/full-config-parse-survey/20260905T175158Z-291",
+        "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --action parse --evocc target/frontend/release/evocc --jobs 4 --timeout 60",
+        "classifications": {
+          "clean": 2798,
+          "diagnosed": 0,
+          "unavailable": 0,
+          "timeout": 0,
+          "panic": 0
+        },
+        "diagnosedByCode": {},
+        "atRootTop15": [],
+        "timing": {
+          "maximumUnit": "net/ipv4/udp.c",
+          "maximumWallMilliseconds": 37066.962,
+          "medianWallMilliseconds": 3043.245,
+          "note": "Per-process wall time was observed under concurrent host load; it is coarse telemetry, not a benchmark.",
+          "parallelism": 4,
+          "perUnitTimeoutSeconds": 60
+        },
+        "resultsSha256": "97e8624a18c68edd18972ea7082bd0de79e1a8311be68cac3a07139de98ec709",
+        "summarySha256": "133ac64ef0499e5006fddfc0b0a493baa8a9b4800655d2b5445304cd1ea1a1da",
+        "sealSha256": "67ef2c24420a17760b1debf65e03289d8c7e941690852765f0d194bb0b69e503"
+      }
+    },
+    "dashboard": {
+      "runId": "20260905T184422Z-99139",
+      "previousRunId": "20260905T122412Z-75602",
+      "command": "python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260905T122412Z-75602/results.jsonl",
+      "lanes": {
+        "evocpp-raw": {
+          "clean": 16,
+          "failed": 0
+        },
+        "gcc-preprocessed-parser": {
+          "clean": 16,
+          "failed": 0
+        },
+        "clang-preprocessed-parser": {
+          "clean": 16,
+          "failed": 0
+        }
+      },
+      "clean": 48,
+      "regressions": 0
+    },
+    "gate": {
+      "workspace": {
+        "command": "CARGO_TARGET_DIR=target/frontend cargo test --workspace --no-fail-fast --locked --offline -j 2",
+        "passed": 1602,
+        "failed": 0,
+        "ignored": 4,
+        "completedTargets": 244,
+        "exitCode": 0,
+        "aggregation": "Sum of every test result line; existing ignored tests remain counted as ignored."
+      },
+      "clippy": {
+        "command": "CARGO_TARGET_DIR=target/frontend cargo clippy --workspace --all-targets --offline -- -D warnings",
+        "exitCode": 0
+      },
+      "fmt": {
+        "command": "cargo fmt --all -- --check",
+        "exitCode": 0
+      },
+      "ruff": {
+        "command": "ruff check tools tests/acceptance",
+        "exitCode": 0
+      },
+      "layout": {
+        "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+        "capture": ".evidence/day5-layout/20260905T175250Z-2750",
+        "mismatchCount": 0,
+        "mismatches": [],
+        "status": "PASS",
+        "total": 128
+      },
+      "attributedLayout": {
+        "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=\"$PWD/tests/contracts/layout-attributed-cases.json\" bash tests/acceptance/day5-layout-conformance.sh --subject",
+        "capture": ".evidence/day5-layout/20260905T175725Z-12970",
+        "mismatchCount": 0,
+        "mismatches": [],
+        "status": "PASS",
+        "total": 22
+      },
+      "offlineReplay": {
+        "command": "git -C .build/ac-replay-36e4a57 pull --ff-only; cd .build/ac-replay-36e4a57; cargo test --workspace --no-fail-fast --locked --offline -j 2",
+        "subjectCommit": "3718ee837dc7c289b7b9ddd328bb96915dc747a5",
+        "passed": 1602,
+        "failed": 0,
+        "ignored": 4,
+        "completedTargets": 244,
+        "exitCode": 0,
+        "isolation": "Existing no-local clone, fast-forwarded to the measured subject; independent target and object store, no alternates. Not claimed as a fresh target.",
+        "priorAttempt": "The first replay at 36e4a57 failed the stale int128 uninitialized-read assertion. It was corrected to E3001 in 3718ee8; only this completed replay is PASS."
+      }
+    },
+    "limits": [
+      "Machine variadic save area and calling convention are backend work, not implemented here.",
+      "The broader floating execution profile remains excluded by 10.1.17; scalar list typing includes f64.",
+      "No backend bits<128> interpreter implementation was duplicated; the incoming backend merge has not landed."
+    ]
+  },
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "b8688e0",

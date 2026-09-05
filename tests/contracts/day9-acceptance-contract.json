@@ -106,5 +106,21 @@
   ],
   "receipt": "tests/contracts/day9-acceptance-receipt.json: per item above, the command and the number",
   "cutLine": "A and B are closed. The typeof + _Generic portion of C is open by architecture-owner instruction on 2026-08-25; the rest of C and all of D remain deferred and their red sets are not opened.",
-  "reviewRequested": "2026-08-25, revision 1.9 sections 10.1.9 and 8.10-8.11/11.3; one round; findings land as amendments"
+  "reviewRequested": "2026-08-25, revision 1.9 sections 10.1.9 and 8.10-8.11/11.3; one round; findings land as amendments",
+  "scopeClosures": {
+    "AC": {
+      "status": "CLOSED",
+      "subjectCommit": "36e4a57cc3aa57cc369c86507f42a05f48cc6710",
+      "runId": "20260905T162725Z-3971",
+      "E3033": 0,
+      "gateSubject": "3718ee837dc7c289b7b9ddd328bb96915dc747a5"
+    },
+    "AD": {
+      "status": "CLOSED",
+      "subjectCommit": "3718ee837dc7c289b7b9ddd328bb96915dc747a5",
+      "runId": "20260905T175021Z-94287",
+      "E3030": 0,
+      "remainingFrontier": "2464 E3101 from function-parameter adjustment; 303 checked arithmetic and the other measured classes are subsequent work. No claim of overall lowering closure."
+    }
+  }
 }
