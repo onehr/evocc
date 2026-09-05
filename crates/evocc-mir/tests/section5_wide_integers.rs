@@ -14,9 +14,8 @@
 
 use evocc_evoir::parse_section9_module;
 use evocc_mir::{
-    allocate, compile_module_for, lower_module, out_of_ssa, validate_module,
-    MTerm,
-    verify_allocation, MInst, RegClass, Target,
+    allocate, compile_module_for, lower_module, out_of_ssa, validate_module, verify_allocation,
+    MInst, MTerm, RegClass, Target,
 };
 
 /// A function over `param_tys` returning `results`, with `body` between.
@@ -346,14 +345,17 @@ fn division_remainder_and_the_signed_predicates_stay_e4003_at_this_width() {
     for operation in ["sdiv", "udiv", "srem", "urem"] {
         // Division may trap, so its function carries the Section 4.6 summary
         // that says so.
-        let text = format!(
-            "func @main(%arg0: bits<128>, %arg1: bits<128>, %arg2: mem<all>, %arg3: world) \
--> (bits<128>, mem<all>, world) cc = target_default\n    \
-effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, \
-may_trap=true, may_unwind=false }}\n{{\n\
-^entry(%v0: bits<128>, %v1: bits<128>, %v90: mem<all>, %v91: world):\n\
-\x20   %v2 = {operation}.bits<128> %v0, %v1\n    ret %v2, %v90, %v91\n}}\n"
-        );
+        let text = [
+            "func @main(%arg0: bits<128>, %arg1: bits<128>, %arg2: mem<all>, %arg3: world) -> (bits<128>, mem<all>, world) cc = target_default".to_owned(),
+            "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }".to_owned(),
+            "{".to_owned(),
+            "^entry(%v0: bits<128>, %v1: bits<128>, %v90: mem<all>, %v91: world):".to_owned(),
+            format!("    %v2 = {operation}.bits<128> %v0, %v1"),
+            "    ret %v2, %v90, %v91".to_owned(),
+            "}".to_owned(),
+            String::new(),
+        ]
+        .join("\n");
         let module = parse_section9_module(text.as_bytes()).expect("canonical EvoIR");
         let refusals = lower_module(&module).expect_err("division at 128 is not lowered");
         assert!(
@@ -453,10 +455,7 @@ fn sums_both_halves(before: &[&str]) -> String {
         .iter()
         .enumerate()
         .map(|(index, ty)| format!("%v{index}: {ty}"))
-        .chain(std::iter::once(format!(
-            "%v{}: bits<128>",
-            before.len()
-        )))
+        .chain(std::iter::once(format!("%v{}: bits<128>", before.len())))
         .collect();
     let wide = before.len();
     let mut body = format!(
@@ -662,5 +661,45 @@ fn the_allocator_and_the_verifier_see_only_sixty_four_bit_registers() {
             let allocated = allocate(&resolved).expect("the pair allocates as two registers");
             verify_allocation(&allocated).expect("the allocation verifies");
         }
+    }
+}
+
+/// Section 5 fuses a comparison into the branch that consumes it: "when the
+/// only consumer is a `cond_br` in the same block, `cmp` then `b.cond` with no
+/// `cset`". The borrow-aware form leaves the flags in the second of two
+/// instructions, so the fusion has to reach past the first.
+#[test]
+fn a_wide_comparison_fuses_into_the_branch_that_consumes_it() {
+    for operation in ["eq", "ne", "ult", "ule", "slt", "sle"] {
+        let text = [
+            "func @main(%arg0: bits<128>, %arg1: bits<128>, %arg2: mem<all>, %arg3: world) -> (bits<64>, mem<all>, world) cc = target_default".to_owned(),
+            "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }".to_owned(),
+            "{".to_owned(),
+            "^entry(%v0: bits<128>, %v1: bits<128>, %v90: mem<all>, %v91: world):".to_owned(),
+            format!("    %v2 = icmp.{operation} %v0, %v1"),
+            "    cond_br %v2, ^b1(%v90, %v91), ^b2(%v90, %v91)".to_owned(),
+            String::new(),
+            "^b1(%v5: mem<all>, %v6: world):".to_owned(),
+            "    %v3 = const.bits<64> 1".to_owned(),
+            "    ret %v3, %v5, %v6".to_owned(),
+            String::new(),
+            "^b2(%v7: mem<all>, %v8: world):".to_owned(),
+            "    %v4 = const.bits<64> 0".to_owned(),
+            "    ret %v4, %v7, %v8".to_owned(),
+            "}".to_owned(),
+            String::new(),
+        ]
+        .join("\n");
+        let module = parse_section9_module(text.as_bytes()).expect("canonical EvoIR");
+        let lowered = lower_module(&module).expect("a fused wide comparison lowers");
+        validate_module(&lowered).expect("and keeps the flags adjacency rule");
+        every_register_is_narrow(&lowered);
+        let names = mnemonics(&lowered);
+        assert!(
+            !names.iter().any(|name| name == "cset"),
+            "{operation}: the fused form writes no cset: {names:?}"
+        );
+        compile_module_for(Target::Linux, &module, &|_| true)
+            .unwrap_or_else(|stop| panic!("{operation}: {stop:?}"));
     }
 }

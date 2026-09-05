@@ -817,7 +817,15 @@ fn lower_function(
 
     for (index, block) in function.blocks.iter().enumerate() {
         let id = ids[&block.id];
-        lower_block(&mut lowerer, function, block, id, &ids, external, index == 0)?;
+        lower_block(
+            &mut lowerer,
+            function,
+            block,
+            id,
+            &ids,
+            external,
+            index == 0,
+        )?;
     }
     for (imm, id) in lowerer.traps.clone() {
         lowerer.blocks.push(MBlock {
@@ -1914,11 +1922,7 @@ fn unlowered_at_the_widest_scalar(inst: &Inst) -> Option<String> {
 /// Every sequence here is the one both sealed oracles emit for the same C,
 /// recorded in `.evidence/builtin-probes/20260902-2c23684c/p34-p35.out` and
 /// `.evidence/builtin-probes/20260905-b6/b6-probes.out`.
-fn lower_pair(
-    lowerer: &mut Lowerer,
-    insts: &mut Vec<MInst>,
-    inst: &Inst,
-) -> Result<bool, String> {
+fn lower_pair(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Result<bool, String> {
     match inst {
         // A `bits<128>` constant carries its immediate in the same 64-bit
         // field every other constant does, so the high half is zero.

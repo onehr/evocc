@@ -79,7 +79,11 @@ fn module_text() -> String {
     // The pair crosses the boundary in both directions: two `bits<128>`
     // arguments in `x0`:`x1` and `x2`:`x3`, one `bits<128>` result in
     // `x0`:`x1`.
-    for (name, operation) in [("wide_add", "add"), ("wide_sub", "sub"), ("wide_mul", "mul")] {
+    for (name, operation) in [
+        ("wide_add", "add"),
+        ("wide_sub", "sub"),
+        ("wide_mul", "mul"),
+    ] {
         text.push_str(&func(
             name,
             &["bits<128>", "bits<128>"],
@@ -352,8 +356,7 @@ fn the_wide_integer_forms_agree_with_the_host_compiler() {
     let assembly = compile_module_for(Target::Darwin, &module, &|_| true)
         .expect("every wide-integer function lowers, allocates, verifies and emits");
 
-    let directory =
-        std::env::temp_dir().join(format!("evocc-wide-probe-{}", std::process::id()));
+    let directory = std::env::temp_dir().join(format!("evocc-wide-probe-{}", std::process::id()));
     std::fs::create_dir_all(&directory).expect("a working directory");
     let assembly_path = directory.join("wide.s");
     let driver_path = directory.join("wide-driver.c");
@@ -454,7 +457,13 @@ fn stack_argument_text() -> String {
     text.push_str(&func(
         "wide_after_seven",
         &[
-            "bits<64>", "bits<64>", "bits<64>", "bits<64>", "bits<64>", "bits<64>", "bits<64>",
+            "bits<64>",
+            "bits<64>",
+            "bits<64>",
+            "bits<64>",
+            "bits<64>",
+            "bits<64>",
+            "bits<64>",
             "bits<128>",
         ],
         "bits<64>",
@@ -610,4 +619,3 @@ fn darwin_still_refuses_more_than_eight_arguments() {
     codes.dedup();
     assert_eq!(codes, vec!["E4010"], "{refusals:?}");
 }
-
