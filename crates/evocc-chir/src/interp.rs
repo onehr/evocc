@@ -4151,6 +4151,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 declaration.ty,
                 declaration.return_specifier.type_id(),
                 Some(&declaration.parameters),
+                false,
             )
         {
             return Err(InterpreterError::UnsupportedFunctionSignature {
@@ -4209,6 +4210,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                             parameter.ty,
                             parameter.specifier.type_id(),
                             None,
+                            true,
                         )
                         || symbol.kind() != SymbolKind::Parameter
                         || symbol.spelling() != parameter_name.spelling
@@ -4280,6 +4282,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         mut current: TypeId,
         terminal: TypeId,
         function_syntax: Option<&ParameterSyntax>,
+        adjusted_parameter: bool,
     ) -> bool {
         if function_syntax.is_some()
             && !matches!(
@@ -4314,6 +4317,18 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     TypeKind::Pointer(pointee),
                 ) if canonical.qualifiers == *qualifiers => *pointee,
                 (
+                    WrittenDeclaratorLayer::Array {
+                        parameter_qualifiers,
+                        ..
+                    },
+                    TypeKind::Pointer(pointee),
+                ) if adjusted_parameter
+                    && index == 0
+                    && canonical.qualifiers == *parameter_qualifiers =>
+                {
+                    *pointee
+                }
+                (
                     WrittenDeclaratorLayer::Array { bound, .. },
                     TypeKind::Array {
                         element,
@@ -4324,6 +4339,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             };
         }
         current == terminal
+            || (adjusted_parameter
+                && written.layers.is_empty()
+                && matches!(
+                    (self.unit.types().get(current).map(|ty| &ty.kind), self.unit.types().get(terminal).map(|ty| &ty.kind)),
+                    (Some(TypeKind::Pointer(pointee)), Some(TypeKind::Array { element, .. })) if pointee == element
+                ))
     }
 
     fn function_definition(

@@ -5517,3 +5517,18 @@ availability of an implementation in this executor.
 The original oracle-table fixture is unchanged; its interpreter test now
 pins the explicit refusal, while front-end admission and typing are unchanged.
 Full-configuration impact has not yet been measured.
+
+### Array parameter identity checks
+
+Identity checks apply Section 10.1.18's outermost array-to-pointer adjustment
+when comparing a parameter's preserved written declarator with its canonical
+type, including a typedef naming an array; remaining array layers, element
+types and qualifiers are still checked without adjustment.
+Both sealed oracles compile the four type assertions in
+`.evidence/builtin-probes/20260905-external-parameters/parameters.c` and print
+`7 7 7 7` in `parameters.out`.
+This removes the existing E3101 identity refusal rather than introducing a
+new code, and affects one first-error unit in sealed lowering run
+`20260905T113121Z-43616` (`lib/crypto/chacha-block-generic.c`).
+The normalization is restricted to parameter checks and does not relax
+ordinary object or nested-array identity checks.

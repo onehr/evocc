@@ -1783,6 +1783,7 @@ fn function_info(
             function.return_specifier.type_id(),
             Some(&function.parameters),
             false,
+            false,
         )
     {
         return Err(LowerError::MalformedFunction {
@@ -1888,6 +1889,7 @@ fn function_info(
                             parameter.specifier.type_id(),
                             None,
                             false,
+                            true,
                         )
                         || symbol.kind() != SymbolKind::Parameter
                         || symbol.spelling() != parameter_name.spelling
@@ -2267,6 +2269,7 @@ fn written_declarator_matches(
     terminal: TypeId,
     function_syntax: Option<&ParameterSyntax>,
     initialized_object: bool,
+    adjusted_parameter: bool,
 ) -> bool {
     if let Some(syntax) = function_syntax {
         if !matches!(
@@ -2310,6 +2313,18 @@ fn written_declarator_matches(
                 *pointee
             }
             (
+                WrittenDeclaratorLayer::Array {
+                    parameter_qualifiers,
+                    ..
+                },
+                TypeKind::Pointer(pointee),
+            ) if adjusted_parameter
+                && index == 0
+                && canonical.qualifiers == *parameter_qualifiers =>
+            {
+                *pointee
+            }
+            (
                 WrittenDeclaratorLayer::Array { bound, .. },
                 TypeKind::Array {
                     element,
@@ -2327,6 +2342,12 @@ fn written_declarator_matches(
         };
     }
     current == terminal
+        || (adjusted_parameter
+            && written.layers.is_empty()
+            && matches!(
+                (types.get(current).map(|ty| &ty.kind), types.get(terminal).map(|ty| &ty.kind)),
+                (Some(TypeKind::Pointer(pointee)), Some(TypeKind::Array { element, .. })) if pointee == element
+            ))
 }
 
 fn validate_object_declaration_for_lowering(
@@ -2371,6 +2392,7 @@ fn validate_object_declaration_for_lowering(
             object.specifier.type_id(),
             None,
             object.initializer.is_some(),
+            false,
         )
     {
         return Err(LowerError::UnsupportedStatement {
@@ -9318,14 +9340,14 @@ mod tests {
             span,
         };
         assert!(written_declarator_matches(
-            &types, &written, array, int, None, true
+            &types, &written, array, int, None, true, false
         ));
         assert!(!written_declarator_matches(
-            &types, &written, array, int, None, false
+            &types, &written, array, int, None, false, false
         ));
         written.layers[0] = layer(ArrayBound::Fixed(3));
         assert!(!written_declarator_matches(
-            &types, &written, array, int, None, true
+            &types, &written, array, int, None, true, false
         ));
         let nested = types.intern(CanonicalType {
             kind: TypeKind::Array {
@@ -9336,7 +9358,7 @@ mod tests {
         });
         written.layers = vec![layer(ArrayBound::Fixed(2)), layer(ArrayBound::Unbounded)];
         assert!(!written_declarator_matches(
-            &types, &written, nested, int, None, true
+            &types, &written, nested, int, None, true, false
         ));
     }
 
