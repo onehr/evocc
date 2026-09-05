@@ -9153,7 +9153,7 @@ fn pop_machine_value(
 fn machine_truth(value: CValue, _span: SourceSpan) -> Result<bool, InterpreterError> {
     match value {
         CValue::Integer(value) => Ok(value.truth()),
-        CValue::Pointer { value, .. } => Ok(!value.object().is_null()),
+        CValue::Pointer { value, .. } => Ok(value != Pointer::NULL),
         CValue::FunctionPointer { value, .. } => Ok(value != PointerValue::Null),
         CValue::Aggregate { .. } => Err(InterpreterError::UnsupportedExpression {
             feature: "aggregate controlling expression",
