@@ -300,6 +300,29 @@ impl FunctionRenderer {
 
     fn instruction(&self, inst: &Inst) -> String {
         match inst {
+            Inst::VaAccess(access) => {
+                let results = access
+                    .results()
+                    .into_iter()
+                    .map(render_value)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let list = render_value(&access.list);
+                let mem = render_value(&access.mem_in);
+                let world = render_value(&access.world_in);
+                match &access.op {
+                    crate::VariadicOp::Start => {
+                        format!("({results}) = va_start {list}, {mem}, {world}")
+                    }
+                    crate::VariadicOp::End => {
+                        format!("({results}) = va_end {list}, {mem}, {world}")
+                    }
+                    crate::VariadicOp::Arg(value) => format!(
+                        "({results}) = va_arg.{} {list}, {mem}, {world}",
+                        render_type(&value.ty)
+                    ),
+                }
+            }
             Inst::Asm(assembly) => self.assembly(assembly, false),
             Inst::AsmGoto {
                 assembly,
@@ -528,17 +551,18 @@ impl FunctionRenderer {
                 mem_out,
                 world_out,
                 layout,
-            } => format!(
-                "({}, {}) = copy {}, {}, {}, {} [size={}, align={}]",
-                render_value(mem_out),
-                render_value(world_out),
-                render_value(mem_in),
-                render_value(world_in),
-                render_value(destination),
-                render_value(source),
-                layout.size_bytes,
-                layout.align_bytes
-            ),
+            } => {
+                let results = render_values(&[mem_out.clone(), world_out.clone()]);
+                format!(
+                    "({results}) = copy {}, {}, {}, {} [size={}, align={}]",
+                    render_value(mem_in),
+                    render_value(world_in),
+                    render_value(destination),
+                    render_value(source),
+                    layout.size_bytes,
+                    layout.align_bytes
+                )
+            }
             Inst::PtrOffset {
                 result,
                 base,

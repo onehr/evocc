@@ -208,6 +208,11 @@ fn remap(value: &mut Value, aliases: &HashMap<u32, Value>) {
 #[allow(clippy::too_many_lines)]
 fn remap_uses(instruction: &mut Inst, aliases: &HashMap<u32, Value>) {
     match instruction {
+        Inst::VaAccess(access) => {
+            remap(&mut access.list, aliases);
+            remap(&mut access.mem_in, aliases);
+            remap(&mut access.world_in, aliases);
+        }
         Inst::Asm(assembly) => {
             for value in assembly.operands_mut() {
                 remap(value, aliases);
@@ -408,6 +413,19 @@ fn remap_identity(value: &mut Value, identities: &HashMap<u32, u32>) -> Result<(
 #[allow(clippy::too_many_lines)]
 fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
     match instruction {
+        Inst::VaAccess(access) => {
+            let mut values = vec![
+                &mut access.list,
+                &mut access.mem_in,
+                &mut access.world_in,
+                &mut access.mem_out,
+                &mut access.world_out,
+            ];
+            if let evocc_evoir::VariadicOp::Arg(result) = &mut access.op {
+                values.push(result);
+            }
+            values
+        }
         Inst::Asm(assembly) => assembly.values_mut(),
         Inst::AsmGoto {
             assembly,

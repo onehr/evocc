@@ -241,6 +241,7 @@ fn cross(
 /// here too, because a value passed on an edge is used at the terminator.
 fn operands(instruction: &Inst) -> Vec<&Value> {
     match instruction {
+        Inst::VaAccess(access) => vec![&access.list, &access.mem_in, &access.world_in],
         Inst::Asm(assembly) | Inst::AsmGoto { assembly, .. } => assembly.operands(),
         Inst::Const(..)
         | Inst::Uninitialized(..)

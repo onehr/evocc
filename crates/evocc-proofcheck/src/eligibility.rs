@@ -436,6 +436,7 @@ fn packed_type(ty: &EvoIRType) -> String {
 #[allow(clippy::too_many_lines)]
 fn inst_operands(instruction: &Inst) -> Vec<&Value> {
     match instruction {
+        Inst::VaAccess(access) => vec![&access.list, &access.mem_in, &access.world_in],
         Inst::Asm(assembly) | Inst::AsmGoto { assembly, .. } => assembly.operands(),
         Inst::Const(..)
         | Inst::Uninitialized(..)

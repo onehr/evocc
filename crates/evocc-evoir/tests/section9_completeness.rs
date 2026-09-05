@@ -324,6 +324,10 @@ fn sentinel_module() -> Module {
 
 fn inst_schema(inst: &Inst) -> &'static str {
     match inst {
+        Inst::VaAccess(access) => {
+            let _ = access;
+            "Inst.VaAccess(access)"
+        }
         Inst::Asm(assembly) => {
             let _ = assembly;
             "Inst.Asm(assembly)"

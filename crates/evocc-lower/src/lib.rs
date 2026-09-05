@@ -580,7 +580,12 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
         if let CHirDecl::Object(object) = declaration {
             let is_aggregate = matches!(
                 unit.types().get(object.ty).map(|ty| &ty.kind),
-                Some(TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_))
+                Some(
+                    TypeKind::Array { .. }
+                        | TypeKind::Struct(_)
+                        | TypeKind::Union(_)
+                        | TypeKind::BuiltinVaList
+                )
             );
             let is_qualified_memory = unit
                 .types()
@@ -611,7 +616,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                 for parameter in parameters {
                     if matches!(
                         unit.types().get(parameter.ty).map(|ty| &ty.kind),
-                        Some(TypeKind::Struct(_) | TypeKind::Union(_))
+                        Some(TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList)
                     ) {
                         if let Some(symbol) = parameter.symbol {
                             out.insert(symbol);
@@ -1599,7 +1604,13 @@ fn prevalidate_expr_for_lowering(
             Err(LowerError::CheckedArithmetic { span: *span })
         }
         CHirExpr::BitBuiltin { span, .. } => Err(LowerError::BitBuiltin { span: *span }),
-        CHirExpr::BuiltinVarArgs { span, .. } => Err(LowerError::VarArgs { span: *span }),
+        CHirExpr::BuiltinVarArgs { first, second, .. } => {
+            prevalidate_expr_for_lowering(unit, first, global_register_symbols)?;
+            if let Some(second) = second {
+                prevalidate_expr_for_lowering(unit, second, global_register_symbols)?;
+            }
+            Ok(())
+        }
         CHirExpr::BuiltinReturnAddress { span, .. } => {
             Err(LowerError::ReturnAddress { span: *span })
         }
@@ -1984,12 +1995,13 @@ fn function_value_type(
                 integer,
             })
         }
-        Some(TypeKind::Struct(_) | TypeKind::Union(_)) => Ok(FunctionValueType {
-            source: ty,
-            ir: EvoIRType::Ptr(AddressSpace::Generic),
-            integer: CIntegerType::ULONG,
-        }),
-        Some(TypeKind::BuiltinVaList) => Err(LowerError::VarArgs { span }),
+        Some(TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList) => {
+            Ok(FunctionValueType {
+                source: ty,
+                ir: EvoIRType::Ptr(AddressSpace::Generic),
+                integer: CIntegerType::ULONG,
+            })
+        }
         _ => Err(LowerError::UnsupportedType {
             ty,
             span,
@@ -2072,7 +2084,7 @@ fn function_pointer_ir_type(
 fn is_aggregate_type(types: &TypeInterner, ty: TypeId) -> bool {
     matches!(
         types.get(ty).map(|canonical| &canonical.kind),
-        Some(TypeKind::Struct(_) | TypeKind::Union(_))
+        Some(TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList)
     )
 }
 
@@ -2355,12 +2367,6 @@ fn validate_object_declaration_for_lowering(
     unit: &CHirUnit<'_>,
     object: &ObjectDecl<'_>,
 ) -> Result<(), LowerError> {
-    if matches!(
-        unit.types().get(object.ty).map(|canonical| &canonical.kind),
-        Some(TypeKind::BuiltinVaList)
-    ) {
-        return Err(LowerError::VarArgs { span: object.span });
-    }
     let symbol = unit
         .symbols()
         .symbol(object.symbol)
@@ -5743,7 +5749,12 @@ impl<'a> FunctionLowerer<'a> {
                     let address = self.object_address(*symbol, *span, state)?;
                     if matches!(
                         self.unit.types().get(facts.ty()).map(|ty| &ty.kind),
-                        Some(TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_))
+                        Some(
+                            TypeKind::Array { .. }
+                                | TypeKind::Struct(_)
+                                | TypeKind::Union(_)
+                                | TypeKind::BuiltinVaList
+                        )
                     ) {
                         return Ok(ExprValue {
                             value: address,
@@ -5780,7 +5791,19 @@ impl<'a> FunctionLowerer<'a> {
                 Err(LowerError::CheckedArithmetic { span: *span })
             }
             CHirExpr::BitBuiltin { span, .. } => Err(LowerError::BitBuiltin { span: *span }),
-            CHirExpr::BuiltinVarArgs { span, .. } => Err(LowerError::VarArgs { span: *span }),
+            CHirExpr::BuiltinVarArgs {
+                op,
+                first,
+                second,
+                requested_ty,
+                span,
+                ..
+            } => self
+                .lower_varargs(*op, first, *second, *requested_ty, *span, state)?
+                .ok_or(LowerError::UnsupportedExpression {
+                    span: *span,
+                    feature: "void variadic operation used as a value",
+                }),
             CHirExpr::BuiltinReturnAddress { span, .. } => {
                 Err(LowerError::ReturnAddress { span: *span })
             }
@@ -5807,7 +5830,12 @@ impl<'a> FunctionLowerer<'a> {
                 let address = self.lower_compound_literal_address(expression, state)?;
                 if matches!(
                     self.unit.types().get(*ty).map(|canonical| &canonical.kind),
-                    Some(TypeKind::Array { .. } | TypeKind::Struct(_) | TypeKind::Union(_))
+                    Some(
+                        TypeKind::Array { .. }
+                            | TypeKind::Struct(_)
+                            | TypeKind::Union(_)
+                            | TypeKind::BuiltinVaList
+                    )
                 ) {
                     Ok(ExprValue {
                         value: address,
@@ -7160,6 +7188,16 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<(), LowerError> {
         match expression {
+            CHirExpr::BuiltinVarArgs {
+                op,
+                first,
+                second,
+                requested_ty,
+                span,
+                ..
+            } => {
+                self.lower_varargs(*op, first, *second, *requested_ty, *span, state)?;
+            }
             CHirExpr::Call(callee, arguments, span) => {
                 let _ = self.emit_call(callee, arguments, *span, state)?;
             }
@@ -7181,6 +7219,81 @@ impl<'a> FunctionLowerer<'a> {
             }
         }
         Ok(())
+    }
+
+    fn lower_varargs(
+        &mut self,
+        op: evocc_chir::VarArgsBuiltinOp,
+        first: &'a CHirExpr<'a>,
+        second: Option<&'a CHirExpr<'a>>,
+        requested_ty: Option<TypeId>,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<Option<ExprValue>, LowerError> {
+        use evocc_chir::VarArgsBuiltinOp;
+        use evocc_evoir::{VariadicAccess, VariadicOp};
+        let list = self.lower_expr(first, state)?.value;
+        if op == VarArgsBuiltinOp::Copy {
+            let source = second.ok_or(LowerError::VarArgs { span })?;
+            let source = self.lower_expr(source, state)?.value;
+            let mem_in = self.token(state, EnvKey::Memory)?.value;
+            let world_in = self.token(state, EnvKey::World)?.value;
+            let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+            let world_out = self.fresh_value(EvoIRType::World);
+            self.emit(
+                state,
+                Inst::Copy {
+                    destination: list,
+                    source,
+                    mem_in,
+                    world_in,
+                    mem_out: mem_out.clone(),
+                    world_out: world_out.clone(),
+                    layout: AccessLayout {
+                        size_bytes: 32,
+                        align_bytes: 8,
+                    },
+                },
+            )?;
+            self.replace_effect_tokens(state, mem_out, Some(world_out));
+            return Ok(None);
+        }
+        let result = if op == VarArgsBuiltinOp::Arg {
+            let ty = requested_ty.ok_or(LowerError::VarArgs { span })?;
+            if self.is_aggregate_type(ty) {
+                return Err(LowerError::VarArgs { span });
+            }
+            let value_type = function_value_type(self.unit.types(), self.target, ty, span)?;
+            Some(ExprValue {
+                value: self.fresh_value(value_type.ir),
+                integer: value_type.integer,
+            })
+        } else {
+            None
+        };
+        let op = match op {
+            VarArgsBuiltinOp::Start => VariadicOp::Start,
+            VarArgsBuiltinOp::End => VariadicOp::End,
+            VarArgsBuiltinOp::Arg => VariadicOp::Arg(result.as_ref().unwrap().value.clone()),
+            VarArgsBuiltinOp::Copy => unreachable!("copy returned above"),
+        };
+        let mem_in = self.token(state, EnvKey::Memory)?.value;
+        let world_in = self.token(state, EnvKey::World)?.value;
+        let mem_out = self.fresh_value(EvoIRType::Mem(Region::All));
+        let world_out = self.fresh_value(EvoIRType::World);
+        self.emit(
+            state,
+            Inst::VaAccess(VariadicAccess {
+                op,
+                list,
+                mem_in,
+                world_in,
+                mem_out: mem_out.clone(),
+                world_out: world_out.clone(),
+            }),
+        )?;
+        self.replace_effect_tokens(state, mem_out, Some(world_out));
+        Ok(result)
     }
 
     fn lower_assignment(
@@ -9146,6 +9259,19 @@ fn remap_inst(
 #[allow(clippy::too_many_lines)]
 fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
     match instruction {
+        Inst::VaAccess(access) => {
+            let mut values = vec![
+                &mut access.list,
+                &mut access.mem_in,
+                &mut access.world_in,
+                &mut access.mem_out,
+                &mut access.world_out,
+            ];
+            if let evocc_evoir::VariadicOp::Arg(result) = &mut access.op {
+                values.push(result);
+            }
+            values
+        }
         Inst::Asm(assembly) => assembly.values_mut(),
         Inst::AsmGoto {
             assembly,

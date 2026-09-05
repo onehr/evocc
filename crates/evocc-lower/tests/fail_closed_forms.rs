@@ -196,23 +196,15 @@ fn wide_integer_division_fails_closed_with_only_e3033() {
 }
 
 #[test]
-fn variable_arguments_fail_closed_with_only_e3030() {
+fn aggregate_variable_arguments_fail_closed_with_only_e3030() {
     for (ordinal, source) in [
         (
             5,
-            "int main(void) { __builtin_va_list ap; __builtin_va_end(ap); return 0; }\n",
+            "struct S { int x; }; int f(int n, ...); int main(void) { struct S s = {7}; return f(1, s); }\n",
         ),
         (
             6,
-            "int main(void) { __builtin_va_list ap; return 0; }\n",
-        ),
-        (
-            7,
-            "int f(int last, ...) { __builtin_va_list ap; __builtin_va_start(ap, last); return 0; }\n",
-        ),
-        (
-            11,
-            "int f(int last, ...) { __builtin_va_list ap; __builtin_va_start(ap, last); return __builtin_va_arg(ap, int); }\n",
+            "struct S { int x; }; int f(int n, ...) { __builtin_va_list ap; __builtin_va_start(ap, n); struct S s = __builtin_va_arg(ap, struct S); return s.x; }\n",
         ),
     ] {
         assert_lowering_error(

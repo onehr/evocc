@@ -10073,6 +10073,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2909", "builtin-arity", keyword.span);
             return None;
         }
+        let type_span = self.peek()?.span;
         let (requested_ty, tag_event) = self.parse_type_name()?;
         if self.peek_kind() != Some(TokenKind::RParen) {
             self.report("E2909", "builtin-arity", keyword.span);
@@ -10097,6 +10098,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 list.span()
             };
             self.report("E2913", "builtin-operand-not-convertible", diagnostic_span);
+            return None;
+        }
+        let changed_by_promotion =
+            match self.operand_type_class(InferredType::Canonical(requested_ty)) {
+                OperandTypeClass::Integer(integer) => {
+                    CInteger::new(0, integer).promoted().ty() != integer
+                }
+                OperandTypeClass::Real(FloatKind::F32) => true,
+                _ => false,
+            };
+        if changed_by_promotion {
+            self.report("E2929", "unpromoted-va-arg-type", type_span);
             return None;
         }
         Some(self.alloc_node(CHirExpr::BuiltinVarArgs {

@@ -701,6 +701,36 @@ fn parse_tuple_instruction(
         .ok_or_else(|| "malformed multi-result instruction".to_owned())?;
     let result_ids = parse_result_ids(&body[1..close])?;
     let rhs = &body[close + 4..];
+    if rhs.starts_with("va_start ") || rhs.starts_with("va_end ") || rhs.starts_with("va_arg.") {
+        let (opcode, operands) = rhs.split_once(' ').ok_or("malformed variadic access")?;
+        let operands = parse_values(operands, values, false)?;
+        require_count(&operands, 3, "variadic access operands")?;
+        let result_type = opcode.strip_prefix("va_arg.").map(parse_type).transpose()?;
+        let offset = usize::from(result_type.is_some());
+        require_count(&result_ids, offset + 2, "variadic access results")?;
+        let op = match result_type {
+            Some(ty) => crate::VariadicOp::Arg(Value {
+                id: result_ids[0],
+                ty,
+            }),
+            None if opcode == "va_start" => crate::VariadicOp::Start,
+            None => crate::VariadicOp::End,
+        };
+        return Ok(Inst::VaAccess(crate::VariadicAccess {
+            op,
+            list: operands[0].clone(),
+            mem_in: operands[1].clone(),
+            world_in: operands[2].clone(),
+            mem_out: Value {
+                id: result_ids[offset],
+                ty: operands[1].ty.clone(),
+            },
+            world_out: Value {
+                id: result_ids[offset + 1],
+                ty: EvoIRType::World,
+            },
+        }));
+    }
     if rhs.starts_with("asm ") || rhs.starts_with("asm.goto ") {
         return parse_assembly(rhs, &result_ids, values);
     }

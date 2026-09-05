@@ -526,6 +526,7 @@ fn invalid_initializer_target(target: InitializerTarget<'_>, span: SourceSpan) -
 
 #[derive(Debug)]
 struct MemoryFrame {
+    anonymous: Vec<CValue>,
     id: FrameId,
     root_scope: MemoryScopeId,
     current_scope: MemoryScopeId,
@@ -572,6 +573,11 @@ struct ValidatedFunctionSignature {
 
 #[derive(Debug)]
 enum MachineTask<'arena> {
+    ApplyVarArgs {
+        op: crate::VarArgsBuiltinOp,
+        requested_ty: Option<TypeId>,
+        span: SourceSpan,
+    },
     FunctionEnd(FunctionEnd),
     RestoreSlots(Vec<(SymbolId, Slot)>),
     ExitMemoryScope(MemoryScopeExit),
@@ -880,6 +886,7 @@ struct SymbolOrder {
 }
 
 struct Interpreter<'unit, 'arena> {
+    argument_lists: evocc_memory::ArgumentLists<CValue>,
     unit: &'unit CHirUnit<'arena>,
     target: TargetDataLayout,
     slots: HashMap<SymbolId, Slot>,
@@ -920,6 +927,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             max_volatile_events: MAX_VOLATILE_EVENTS,
         });
         Ok(Self {
+            argument_lists: evocc_memory::ArgumentLists::default(),
             unit,
             target: *target,
             slots: HashMap::new(),
@@ -1497,6 +1505,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
 
         while let Some(task) = tasks.pop() {
             let outcome = match task {
+                MachineTask::ApplyVarArgs {
+                    op,
+                    requested_ty,
+                    span,
+                } => {
+                    self.apply_varargs(op, requested_ty, span, &mut values)?;
+                    None
+                }
                 MachineTask::FunctionEnd(end) => {
                     self.finish_function(end, FunctionExit::FellOffEnd, &mut values)?
                 }
@@ -3139,6 +3155,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expression: &'arena CHirExpr<'arena>,
         tasks: &mut Vec<MachineTask<'arena>>,
     ) -> Result<(), InterpreterError> {
+        if let CHirExpr::BuiltinVarArgs { op, .. } = expression {
+            if *op != crate::VarArgsBuiltinOp::Arg {
+                self.schedule_varargs(expression, tasks)?;
+                return Ok(());
+            }
+        }
         if let CHirExpr::Call(callee, arguments, call_span) = expression {
             if self.call_designator_returns_void(callee) {
                 tasks.push(MachineTask::EvalCallArguments {
@@ -3208,6 +3230,126 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             value,
             span,
         });
+        Ok(())
+    }
+
+    fn schedule_varargs(
+        &mut self,
+        expression: &'arena CHirExpr<'arena>,
+        tasks: &mut Vec<MachineTask<'arena>>,
+    ) -> Result<(), InterpreterError> {
+        let CHirExpr::BuiltinVarArgs {
+            op,
+            first,
+            second,
+            requested_ty,
+            span,
+            ..
+        } = expression
+        else {
+            return Err(InterpreterError::VarArgs {
+                span: expression.span(),
+            });
+        };
+        tasks.push(MachineTask::ApplyVarArgs {
+            op: *op,
+            requested_ty: *requested_ty,
+            span: *span,
+        });
+        if *op == crate::VarArgsBuiltinOp::Copy {
+            let source = second.ok_or(InterpreterError::VarArgs { span: *span })?;
+            tasks.push(MachineTask::EvalExpression {
+                expression: source,
+                allow_root_mutation: true,
+            });
+        }
+        tasks.push(MachineTask::EvalExpression {
+            expression: first,
+            allow_root_mutation: true,
+        });
+        Ok(())
+    }
+
+    fn apply_varargs(
+        &mut self,
+        op: crate::VarArgsBuiltinOp,
+        requested_ty: Option<TypeId>,
+        span: SourceSpan,
+        values: &mut Vec<CValue>,
+    ) -> Result<(), InterpreterError> {
+        use crate::VarArgsBuiltinOp;
+        let fault = |error| InterpreterError::Memory { error, span };
+        let address = |value| match value {
+            CValue::Aggregate { address, .. } => Ok(address),
+            _ => Err(fault(MemoryFault::InvalidArgumentList)),
+        };
+        let source = if op == VarArgsBuiltinOp::Copy {
+            Some(address(pop_machine_value(values, span)?)?)
+        } else {
+            None
+        };
+        let list = address(pop_machine_value(values, span)?)?;
+        if let Some(source) = source {
+            self.memory = self
+                .memory
+                .copy_bytes(
+                    list,
+                    source,
+                    AccessLayout {
+                        size_bytes: 32,
+                        align_bytes: 8,
+                    },
+                )
+                .map_err(fault)?;
+            return Ok(());
+        }
+        let identity = match op {
+            VarArgsBuiltinOp::Start => {
+                let arguments = self
+                    .memory_frame
+                    .as_ref()
+                    .ok_or_else(|| fault(MemoryFault::InvalidArgumentList))?
+                    .anonymous
+                    .clone();
+                Some(self.argument_lists.start(arguments))
+            }
+            VarArgsBuiltinOp::End => None,
+            VarArgsBuiltinOp::Arg => {
+                let target = self.value_type(
+                    requested_ty.ok_or(InterpreterError::VarArgs { span })?,
+                    span,
+                )?;
+                if matches!(target, ValueType::Aggregate(_)) {
+                    return Err(InterpreterError::VarArgs { span });
+                }
+                let identity = self.memory.argument_list(list).map_err(fault)?;
+                let value = *self.argument_lists.read(identity).map_err(fault)?;
+                let matches = match (value, target) {
+                    (CValue::Integer(value), ValueType::Integer(ty)) => {
+                        value.ty().bits() == ty.bits()
+                    }
+                    (CValue::Pointer { .. }, ValueType::Pointer(ty)) => !matches!(
+                        self.unit.types().get(ty.pointee()).map(|ty| &ty.kind),
+                        Some(TypeKind::Function { .. })
+                    ),
+                    (CValue::FunctionPointer { .. }, ValueType::Pointer(ty)) => matches!(
+                        self.unit.types().get(ty.pointee()).map(|ty| &ty.kind),
+                        Some(TypeKind::Function { .. })
+                    ),
+                    _ => false,
+                };
+                if !matches {
+                    return Err(fault(MemoryFault::InvalidArgumentList));
+                }
+                values.push(cast_machine_value(value, target, span, self.unit.types())?);
+                Some(self.argument_lists.advance(identity).map_err(fault)?)
+            }
+            VarArgsBuiltinOp::Copy => unreachable!("copy returned above"),
+        };
+        self.memory = self
+            .memory
+            .with_argument_list(list, identity)
+            .map_err(fault)?;
         Ok(())
     }
 
@@ -3380,9 +3522,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     span,
                 });
             }
-            CHirExpr::BuiltinVarArgs { .. } => {
-                return Err(InterpreterError::VarArgs { span });
-            }
+            CHirExpr::BuiltinVarArgs { .. } => self.schedule_varargs(expression, tasks)?,
             CHirExpr::LabelAddress { .. } => {
                 return Err(InterpreterError::ComputedGoto { span });
             }
@@ -3953,6 +4093,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             });
         }
         let binding_span = call_span.unwrap_or(declaration.span);
+        let mut arguments = arguments;
+        let anonymous = arguments.split_off(signature.parameters.len());
+        if anonymous
+            .iter()
+            .any(|value| matches!(value, CValue::Aggregate { .. }))
+        {
+            return Err(InterpreterError::VarArgs { span: binding_span });
+        }
         let mut parameter_bindings = Vec::with_capacity(arguments.len());
         for ((symbol, ty), argument) in signature.parameters.into_iter().zip(arguments) {
             let argument = cast_machine_value(argument, ty, binding_span, self.unit.types())?;
@@ -4030,6 +4178,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 .map_err(|error| self.memory_error(error, binding_span))?;
             self.memory = memory;
             self.memory_frame = Some(MemoryFrame {
+                anonymous,
                 id: frame,
                 root_scope,
                 current_scope: root_scope,
@@ -4136,14 +4285,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span: declaration.span,
             });
         };
-        if matches!(
-            canonical_parameters,
-            FunctionParameters::Prototype { variadic: true, .. }
-        ) {
-            return Err(InterpreterError::VarArgs {
-                span: declaration.span,
-            });
-        }
         if symbol.kind() != SymbolKind::Function
             || symbol.spelling() != declaration.name.spelling
             || !self.function_types_compatible(symbol.ty(), declaration.ty)
@@ -4171,15 +4312,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 Vec::new()
             }
             (
-                FunctionParameters::Prototype {
-                    types,
-                    variadic: false,
-                },
+                FunctionParameters::Prototype { types, variadic },
                 ParameterSyntax::Prototype {
                     parameters,
-                    variadic: false,
+                    variadic: written_variadic,
                 },
-            ) if types.len() == parameters.len() && types.len() == argument_count => {
+            ) if variadic == written_variadic
+                && types.len() == parameters.len()
+                && (types.len() == argument_count
+                    || (*variadic && types.len() <= argument_count)) =>
+            {
                 let mut validated = Vec::with_capacity(parameters.len());
                 let mut parameter_ids = BTreeSet::new();
                 let mut parameter_spellings = BTreeSet::new();
@@ -4572,7 +4714,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     fn value_type(&self, ty: TypeId, span: SourceSpan) -> Result<ValueType, InterpreterError> {
         match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
             Some(TypeKind::Void) => Ok(ValueType::Void),
-            Some(TypeKind::Struct(_) | TypeKind::Union(_)) => Ok(ValueType::Aggregate(ty)),
+            Some(TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList) => {
+                Ok(ValueType::Aggregate(ty))
+            }
             Some(TypeKind::Pointer(_)) => {
                 PointerTypeDesc::from_canonical_pointer(self.unit.types(), ty)
                     .map(ValueType::Pointer)
@@ -4609,12 +4753,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         ty: TypeId,
         span: SourceSpan,
     ) -> Result<AccessLayout, InterpreterError> {
-        if matches!(
-            self.unit.types().get(ty).map(|canonical| &canonical.kind),
-            Some(TypeKind::BuiltinVaList)
-        ) {
-            return Err(InterpreterError::VarArgs { span });
-        }
         self.target
             .layout_of(self.unit.types(), ty)
             .map(AccessLayout::from_type_layout)
@@ -4797,11 +4935,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ty: declaration.ty,
                     span: declaration.span,
                 })?;
-        if matches!(canonical.kind, TypeKind::BuiltinVaList) {
-            return Err(InterpreterError::VarArgs {
-                span: declaration.span,
-            });
-        }
         // Aggregates are storage like any other object here: the interpreter
         // never materialises one as a value, it only ever accesses subobjects
         // through a place, so admitting them costs nothing in the value model.
@@ -4815,6 +4948,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     | TypeKind::Array { .. }
                     | TypeKind::Struct(_)
                     | TypeKind::Union(_)
+                    | TypeKind::BuiltinVaList
             )
         {
             return Err(InterpreterError::UnsupportedType {
@@ -5902,7 +6036,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         matches!(
             (self.unit.types().get(left), self.unit.types().get(right)),
             (Some(left), Some(right))
-                if matches!(left.kind, TypeKind::Struct(_) | TypeKind::Union(_))
+                if matches!(left.kind, TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList)
                     && left.kind == right.kind
         )
     }
@@ -8886,8 +9020,10 @@ fn cast_machine_value(
             .get(ty)
             .zip(types.get(target))
             .is_some_and(|(source, target)| {
-                matches!(source.kind, TypeKind::Struct(_) | TypeKind::Union(_))
-                    && source.kind == target.kind
+                matches!(
+                    source.kind,
+                    TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList
+                ) && source.kind == target.kind
             }) =>
         {
             Ok(CValue::Aggregate {

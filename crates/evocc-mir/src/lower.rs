@@ -281,6 +281,12 @@ fn scan_inst(
 
     match inst {
         // The Section 5 table, row by row.
+        Inst::VaAccess(_) => report(
+            E4009,
+            block,
+            index,
+            "variadic instruction selection is not implemented".into(),
+        ),
         Inst::Asm(_) | Inst::AsmGoto { .. } => report(
             E4009,
             block,

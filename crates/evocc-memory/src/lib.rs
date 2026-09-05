@@ -12,6 +12,43 @@ use evocc_types::{TargetDataLayout, TypeLayout};
 use std::collections::BTreeMap;
 use std::ops::Range;
 
+/// Immutable cursor states make a byte copy of a list independent on advancement.
+pub struct ArgumentLists<T> {
+    states: Vec<(std::sync::Arc<[T]>, usize)>,
+}
+
+impl<T> Default for ArgumentLists<T> {
+    fn default() -> Self {
+        Self { states: Vec::new() }
+    }
+}
+
+impl<T> ArgumentLists<T> {
+    pub fn start(&mut self, arguments: Vec<T>) -> usize {
+        let identity = self.states.len();
+        self.states.push((arguments.into(), 0));
+        identity
+    }
+
+    pub fn read(&self, identity: usize) -> Result<&T, MemoryFault> {
+        let (arguments, position) = self
+            .states
+            .get(identity)
+            .ok_or(MemoryFault::InvalidArgumentList)?;
+        arguments
+            .get(*position)
+            .ok_or(MemoryFault::InvalidArgumentList)
+    }
+
+    pub fn advance(&mut self, identity: usize) -> Result<usize, MemoryFault> {
+        self.read(identity)?;
+        let (arguments, position) = &self.states[identity];
+        let next = self.states.len();
+        self.states.push((arguments.clone(), position + 1));
+        Ok(next)
+    }
+}
+
 /// Stable identity for one allocated object. Zero is reserved for null.
 ///
 /// IDs are capabilities local to the [`MemoryState`] lineage that produced
@@ -488,6 +525,7 @@ pub struct VolatileEvent {
 /// Stable semantic category used by interpreter diagnostic mappings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MemoryFaultKind {
+    InvalidArgumentList,
     ExternalObject,
     ExternalFunction,
     InvalidAlignment,
@@ -534,6 +572,7 @@ pub enum MemoryFaultKind {
 /// selection, but deliberately owns no source span or IR obligation type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MemoryFault {
+    InvalidArgumentList,
     ExternalObject {
         object: ObjectId,
     },
@@ -669,6 +708,7 @@ impl MemoryFault {
     #[must_use]
     pub const fn kind(&self) -> MemoryFaultKind {
         match self {
+            Self::InvalidArgumentList => MemoryFaultKind::InvalidArgumentList,
             Self::ExternalObject { .. } => MemoryFaultKind::ExternalObject,
             Self::ExternalFunction { .. } => MemoryFaultKind::ExternalFunction,
             Self::InvalidAlignment { .. } => MemoryFaultKind::InvalidAlignment,
@@ -720,6 +760,10 @@ impl MemoryFault {
     #[must_use]
     pub const fn runtime_diagnostic(&self) -> Option<MemoryDiagnostic> {
         let diagnostic = match self {
+            Self::InvalidArgumentList => MemoryDiagnostic {
+                code: "E3038",
+                message: "va-arg-mismatch",
+            },
             Self::ExternalObject { .. } => MemoryDiagnostic {
                 code: "E3040",
                 message: "external-object-not-executable",
@@ -808,6 +852,7 @@ enum AllocationContents<'a> {
 /// Immutable snapshot of objects, bytes, initialization, and lifetimes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemoryState {
+    argument_lists: BTreeMap<Pointer, usize>,
     config: MemoryConfig,
     objects: BTreeMap<ObjectId, ObjectRecord>,
     frames: BTreeMap<FrameId, FrameRecord>,
@@ -822,6 +867,7 @@ pub struct MemoryState {
 impl MemoryState {
     pub fn new(config: MemoryConfig) -> Result<Self, MemoryFault> {
         Ok(Self {
+            argument_lists: BTreeMap::new(),
             config,
             objects: BTreeMap::new(),
             frames: BTreeMap::new(),
@@ -1285,6 +1331,7 @@ impl MemoryState {
         address: Pointer,
         access: AccessLayout,
     ) -> Result<ByteSequence, MemoryFault> {
+        self.check_argument_list_access(address, access, false)?;
         let range = self.checked_range(address, access)?;
         let object = self
             .objects
@@ -1319,6 +1366,7 @@ impl MemoryState {
         access: AccessLayout,
         value: &ByteSequence,
     ) -> Result<Self, MemoryFault> {
+        self.check_argument_list_access(address, access, false)?;
         let actual = u64::try_from(value.len()).map_err(|_| MemoryFault::HostSizeExceeded {
             size_bytes: u64::MAX,
         })?;
@@ -1463,6 +1511,8 @@ impl MemoryState {
 
         let destination_range = self.checked_store_range(destination, access)?;
         let source_range = self.checked_range(source, access)?;
+        self.check_argument_list_access(source, access, true)?;
+        self.check_argument_list_access(destination, access, true)?;
         if !overlap_allowed
             && destination.object == source.object
             && destination_range != source_range
@@ -1509,6 +1559,90 @@ impl MemoryState {
         destination_object.initialized[destination_range.clone()].copy_from_slice(&initialized);
         destination_object.pointer_fragments[destination_range]
             .clone_from_slice(&pointer_fragments);
+        let end = i128::from(destination.byte_offset) + i128::from(access.size_bytes);
+        next.argument_lists.retain(|pointer, _| {
+            pointer.object != destination.object
+                || i128::from(pointer.byte_offset) < i128::from(destination.byte_offset)
+                || i128::from(pointer.byte_offset) >= end
+        });
+        for (pointer, identity) in &self.argument_lists {
+            if pointer.object == source.object
+                && pointer.byte_offset >= source.byte_offset
+                && i128::from(pointer.byte_offset) + 32
+                    <= i128::from(source.byte_offset) + i128::from(access.size_bytes)
+            {
+                let relocated =
+                    destination.checked_offset(pointer.byte_offset - source.byte_offset)?;
+                next.argument_lists.insert(relocated, *identity);
+            }
+        }
+        Ok(next)
+    }
+
+    fn check_argument_list_access(
+        &self,
+        address: Pointer,
+        access: AccessLayout,
+        copying: bool,
+    ) -> Result<(), MemoryFault> {
+        let start = i128::from(address.byte_offset);
+        let end = start + i128::from(access.size_bytes);
+        for pointer in self
+            .argument_lists
+            .keys()
+            .filter(|pointer| pointer.object == address.object)
+        {
+            let list_start = i128::from(pointer.byte_offset);
+            let list_end = list_start + 32;
+            if start < list_end
+                && list_start < end
+                && (!copying || start > list_start || end < list_end)
+            {
+                return Err(MemoryFault::InvalidArgumentList);
+            }
+        }
+        Ok(())
+    }
+
+    /// The list representation is opaque; ordinary complete copies preserve its identity.
+    pub fn argument_list(&self, address: Pointer) -> Result<usize, MemoryFault> {
+        self.checked_range(
+            address,
+            AccessLayout {
+                size_bytes: 32,
+                align_bytes: 8,
+            },
+        )?;
+        self.argument_lists
+            .get(&address)
+            .copied()
+            .ok_or(MemoryFault::InvalidArgumentList)
+    }
+
+    pub fn with_argument_list(
+        &self,
+        address: Pointer,
+        identity: Option<usize>,
+    ) -> Result<Self, MemoryFault> {
+        let access = AccessLayout {
+            size_bytes: 32,
+            align_bytes: 8,
+        };
+        let range = self.checked_store_range(address, access)?;
+        self.check_argument_list_access(address, access, true)?;
+        let mut next = self.clone();
+        let object = next
+            .objects
+            .get_mut(&address.object)
+            .ok_or(MemoryFault::InvalidArgumentList)?;
+        object.bytes[range.clone()].fill(0);
+        object.initialized[range.clone()].fill(true);
+        object.pointer_fragments[range].fill(None);
+        if let Some(identity) = identity {
+            next.argument_lists.insert(address, identity);
+        } else {
+            next.argument_lists.remove(&address);
+        }
         Ok(next)
     }
 
@@ -2169,6 +2303,50 @@ mod tests {
         let fault = result.expect_err("operation must fail");
         assert_eq!(fault.kind(), expected, "wrong fault: {fault:?}");
         fault
+    }
+
+    #[test]
+    fn argument_lists_copy_whole_cursors_but_refuse_partial_representation_access() {
+        let layout = AccessLayout::new(32, 8);
+        let (memory, first) = little_memory()
+            .allocate_static(1, layout, InitialState::Zeroed)
+            .unwrap();
+        let (memory, second) = memory
+            .allocate_static(2, layout, InitialState::Zeroed)
+            .unwrap();
+        let mut lists = ArgumentLists::default();
+        let initial = lists.start(vec![7, 9]);
+        let memory = memory.with_argument_list(first, Some(initial)).unwrap();
+        let copied = memory.copy_bytes(second, first, layout).unwrap();
+        let advanced = lists.advance(initial).unwrap();
+        let changed = copied.with_argument_list(first, Some(advanced)).unwrap();
+        assert_eq!(
+            *lists.read(changed.argument_list(first).unwrap()).unwrap(),
+            9
+        );
+        assert_eq!(
+            *lists.read(changed.argument_list(second).unwrap()).unwrap(),
+            7
+        );
+        assert_eq!(copied.argument_list(first).unwrap(), initial);
+        assert_fault(
+            changed.load_integer(first, U32),
+            MemoryFaultKind::InvalidArgumentList,
+        );
+        assert_fault(
+            changed.store_integer(first, U32, 0),
+            MemoryFaultKind::InvalidArgumentList,
+        );
+        assert_fault(
+            changed.copy_bytes(second, first, U32),
+            MemoryFaultKind::InvalidArgumentList,
+        );
+        let ended = changed.with_argument_list(first, None).unwrap();
+        assert_fault(
+            ended.argument_list(first),
+            MemoryFaultKind::InvalidArgumentList,
+        );
+        assert_eq!(ended.argument_list(second).unwrap(), initial);
     }
 
     #[test]
