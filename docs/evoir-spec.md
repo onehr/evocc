@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.61** | **Authoritative reference** | **2026-09-05**
+**Revision 1.9.62** | **Authoritative reference** | **2026-09-05**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1513,6 +1513,7 @@ twice would let a reader think two conditions are the same finding.
 | `E2927` | `builtin-library-declaration-incompatible` | front end |
 | `E2928` | `address-of-register-object` | front end |
 | `E2929` | `unpromoted-va-arg-type` | front end |
+| `E2930` | `use-with-incomplete-enumeration` | front end |
 | `E0102` | `unmatched-conditional` | preprocessor |
 | `E0104` | `error-directive` | preprocessor |
 | `E0105` | `include-not-found` | preprocessor |
@@ -2881,6 +2882,28 @@ EvoIR lowering consume this same manifest for `ObjectOrigin.site`; neither may
 derive origins from raw declaration count or its own materialized-object
 sequence.
 
+**Alignment is an object property, not a type (revision 1.9.62).** A
+declared alignment (`aligned(N)`, `_Alignas`) never enters the type of an
+object and therefore never enters the manifest's or any redeclaration's type
+identity: `extern long a[1]; long a[1] __attribute__((aligned(16)));` is one
+object of type `long[1]`, compatible with `long[1]`, whose alignment is the
+maximum over every declaration of it in the unit, in either order (measured,
+both oracles: 16, and 32 when only the `extern` declaration carries
+`aligned(32)`; `.evidence/builtin-probes/20260902-2c23684c/p36-aa-tail.c`,
+`p36.out`). A manifest type comparison that reads alignment is a defect.
+
+**Declarations with an incomplete enumeration return type (revision
+1.9.62).** `enum e f(unsigned int);` with `e` not yet complete is an
+accepted declaration (both oracles). A function that is only declared and
+never defined, called or address-taken produces nothing in EvoIR, because
+EvoIR carries definitions and the calls that name them, not declarations
+(Section 3.10, revision 0.7). A call or `func_addr` whose function type
+still names an incomplete enumeration at that point is `E2002`'s neighbour
+`E2930` (`use-with-incomplete-enumeration`) at the use; both oracles
+reject it (`p36-use-never.c`, GCC "invalid use of undefined type",
+Clang "calling with incomplete return type"). An enumeration completed
+before the use has its completed type there, as usual.
+
 **Arithmetic on `void *`.** `void *` participates in pointer arithmetic with
 scale 1 (`sizeof(void)` is 1, 10.1.19), in every form: `p + n`, `p += n`,
 `p++`, `--p`, subtraction of two `void *`. Measured, both oracles: `p += 3`
@@ -3273,6 +3296,7 @@ front end that still emits it is defective.
 | `E2927` | a library builtin's non-constant form used where a visible declaration of the library function has an incompatible type |
 | `E2928` | the address of a `register` object is taken |
 | `E2929` | `__builtin_va_arg` names a type the default argument promotions change (`char`, `short`, `_Bool`, `float`, an enumeration narrower than `int`) |
+| `E2930` | a call or address-of names a function whose type contains an enumeration still incomplete at that point |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -5264,6 +5288,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.62 | 2026-09-05 | Rules the two declaration-identity questions of the lowering frontier: declared alignment is an object property, the maximum over a unit's declarations, and never part of a type identity; a declaration-only function with an incomplete enumeration in its type produces nothing, and a use while it is incomplete is `E2930`. Both measured under the sealed oracles (`p36-*`). |
 | 1.9.61 | 2026-09-05 | Opens the two classes the sixth lowering survey put first (1,697 and 1,022 of 2,792 diagnosed units): `bits<128>` executes in every scalar form but division (10.1.19), and variadic signatures, anonymous arguments and the three list instructions `va_start`, `va_arg`, `va_end` enter Sections 1.1, 3.10, 3.12 and 9, with `va_copy` a 32-byte `copy`. Both are measured against the sealed oracles (`p34-*`, `p35-*`: fourteen `va_arg` items and eight `__int128` ABI shapes, GCC-14 and Clang-19 agreeing); the register-level procedures are EvoMIR's. New codes `E3037`, `E3038`; `E3030` narrows to aggregates; `E3033` narrows to division and remainder. |
 | 1.9.60 | 2026-09-05 | Under the user's authorization to close the two reported blockers, defines the missing assembly interchange grammar and output/effect edge bindings. Both-successor output availability is measured with the sealed oracles; the explicit SSA and byte encoding are compiler contract choices. No production code is changed by this specification revision. |
 | 1.9.59 | 2026-09-04 | Gives poison a pointer form (`uninitialized.ptr`, `uninitialized.fnptr`), so a pointer local without an initializer lowers rather than stopping the unit, and allocates `E3036` to pointer and integer conversions in either direction, which revision 1.7 deferred and the wrapper `E3101` had been carrying. Both classes were reduced to one line each by the architect. |
