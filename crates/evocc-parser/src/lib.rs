@@ -7960,15 +7960,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         )
                     }
                     UnaryOp::BitNot => {
-                        let OperandTypeClass::Integer(integer) =
-                            self.operand_type_class(operand.ty)
-                        else {
-                            return None;
+                        let promoted = match self.operand_type_class(operand.ty) {
+                            OperandTypeClass::Integer(integer) => {
+                                InferredType::Integer(CInteger::new(0, integer).promoted().ty())
+                            }
+                            OperandTypeClass::WideInteger { ty, .. } => InferredType::Canonical(ty),
+                            _ => return None,
                         };
-                        (
-                            InferredType::Integer(CInteger::new(0, integer).promoted().ty()),
-                            ExprCategory::Value,
-                        )
+                        (promoted, ExprCategory::Value)
                     }
                     UnaryOp::AddrOf => {
                         let InferredType::Canonical(pointee) = operand.ty else {

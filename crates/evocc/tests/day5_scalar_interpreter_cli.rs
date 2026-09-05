@@ -1,3 +1,5 @@
+mod support;
+
 use std::io::Write;
 use std::process::{Command, Output, Stdio};
 use std::thread;
@@ -6,6 +8,7 @@ use std::time::{Duration, Instant};
 const WATCHDOG: Duration = Duration::from_secs(2);
 
 fn run_interpreter(source: &str) -> Output {
+    support::warm_evocc();
     let mut child = Command::new(env!("CARGO_BIN_EXE_evocc"))
         .args([
             "--target=aarch64-unknown-linux-gnu",
@@ -73,4 +76,29 @@ fn scalar_interpreter_cli_reports_runtime_error() {
         output.stderr,
         b"/dev/stdin:1:53: error[E3002]: integer-division-by-zero\n"
     );
+}
+
+#[test]
+fn scalar_interpreter_cli_prints_the_complete_wide_result() {
+    for (source, expected) in [
+        (
+            "unsigned __int128 main(void){return ~(unsigned __int128)0;}",
+            "340282366920938463463374607431768211455\n",
+        ),
+        (
+            "__int128 main(void){return -((__int128)1<<100);}",
+            "-1267650600228229401496703205376\n",
+        ),
+    ] {
+        let output = run_interpreter(source);
+        assert_no_panic(&output);
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, expected.as_bytes());
+        assert!(output.stderr.is_empty());
+    }
 }

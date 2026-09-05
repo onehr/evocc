@@ -1,0 +1,83 @@
+use evocc_chir::interp::{interpret_scalar_function, InterpreterLimits};
+use evocc_chir::{CHirDecl, CHirUnit};
+use evocc_common::{Arena, FileId};
+use evocc_evoir::{interpret_module, RuntimeValue};
+use evocc_lex::{Lexer, TokenKind};
+use evocc_parser::Parser;
+use evocc_types::{EvoIRType, Region, TargetDataLayout};
+
+fn parse<'a>(source: &str, arena: &'a Arena) -> CHirUnit<'a> {
+    let file = FileId::new(45_004);
+    let mut lexer = Lexer::new(file, source);
+    let tokens = std::iter::from_fn(|| lexer.next()).collect::<Vec<_>>();
+    assert!(tokens.iter().all(|token| token.kind != TokenKind::Error));
+    let mut parser = Parser::new(tokens, file, source);
+    let unit = parser.parse_translation_unit_in(arena);
+    assert!(!parser.had_error(), "{:?}: {source}", parser.diagnostic());
+    unit
+}
+
+const COPIED: &str = "int forwarded(__builtin_va_list ap){return __builtin_va_arg(ap,int);} int take(int n,...){__builtin_va_list ap,bp; __builtin_va_start(ap,n); int a=__builtin_va_arg(ap,int); __builtin_va_copy(bp,ap); int b=forwarded(bp); int c=__builtin_va_arg(ap,int); __builtin_va_end(bp); __builtin_va_end(ap); return a+10*b+100*c;} int main(void){signed char a=7; short b=9; return take(2,a,b);}";
+
+#[test]
+fn variadic_lowering_promotes_arguments_and_copies_list_state() {
+    let arena = Arena::default();
+    let unit = parse(COPIED, &arena);
+    let module = evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+        .expect("scalar variadic operations lower");
+    let text = evocc_evoir::render_module(&module);
+    for form in ["...", "va_start ", "va_arg.bits<32> ", "va_end ", "copy "] {
+        assert!(text.contains(form), "missing {form}: {text}");
+    }
+    let parsed = evocc_evoir::parse_section9_module(text.as_bytes()).unwrap();
+    assert_eq!(evocc_evoir::render_module(&parsed), text);
+    let result = interpret_module(
+        &module,
+        "main",
+        &[
+            RuntimeValue::new(EvoIRType::Mem(Region::All), 0),
+            RuntimeValue::new(EvoIRType::World, 0),
+        ],
+        evocc_evoir::InterpreterLimits::new(100_000),
+    )
+    .unwrap();
+    assert_eq!(result.return_values[0].raw_bits, 997);
+}
+
+#[test]
+fn chir_executes_variadic_lists_and_reports_mismatched_reads() {
+    for (source, expected) in [
+        (COPIED.to_owned(), Ok(997)),
+        ("int f(int n,...){__builtin_va_list ap; __builtin_va_start(ap,n); return __builtin_va_arg(ap,int);} int main(void){return f(0);}".to_owned(), Err("E3038")),
+        ("int f(int n,...){__builtin_va_list ap; __builtin_va_start(ap,n); return __builtin_va_arg(ap,int);} int main(void){return f(1,7L);}".to_owned(), Err("E3038")),
+        ("int f(int n,...){__builtin_va_list ap; __builtin_va_start(ap,n); __builtin_va_end(ap); return __builtin_va_arg(ap,int);} int main(void){return f(1,7);}".to_owned(), Err("E3038")),
+    ] {
+        let arena = Arena::default();
+        let unit = parse(&source, &arena);
+        let symbol = unit.iter().find_map(|decl| match decl {
+            CHirDecl::Function(f) if f.name.spelling == "main" => Some(f.symbol),
+            _ => None,
+        }).unwrap();
+        let result = interpret_scalar_function(&unit, symbol, InterpreterLimits::new(100_000));
+        match expected {
+            Ok(value) => assert_eq!(result.unwrap().return_value.unwrap().raw_bits, value),
+            Err(code) => assert_eq!(result.unwrap_err().code(), code),
+        }
+    }
+}
+
+#[test]
+fn unpromoted_va_arg_types_are_front_end_errors() {
+    for ty in ["char", "short", "_Bool", "float"] {
+        let source = format!("int f(int n,...){{__builtin_va_list ap; __builtin_va_start(ap,n); return __builtin_va_arg(ap,{ty});}}");
+        let arena = Arena::default();
+        let file = FileId::new(45_004);
+        let mut lexer = Lexer::new(file, &source);
+        let tokens = std::iter::from_fn(|| lexer.next()).collect::<Vec<_>>();
+        assert!(tokens.iter().all(|token| token.kind != TokenKind::Error));
+        let mut parser = Parser::new(tokens, file, &source);
+        parser.parse_translation_unit_in(&arena);
+        assert!(parser.had_error(), "unpromoted {ty} was accepted");
+        assert_eq!(parser.diagnostic().unwrap().code, "E2929");
+    }
+}

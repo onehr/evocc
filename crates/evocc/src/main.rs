@@ -701,7 +701,10 @@ fn interpret_chir(
         return ExitCode::from(1);
     };
     let mathematical = match value.mathematical_value(unit.types()) {
-        Ok(value) => value,
+        Ok(value) => value.to_string(),
+        Err(evocc_chir::interp::ScalarValueError::OutsideSignedCarrier) => {
+            value.raw_bits.to_string()
+        }
         Err(_) => {
             emit_error(
                 &options.input,

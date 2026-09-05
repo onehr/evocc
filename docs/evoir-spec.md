@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.65** | **Authoritative reference** | **2026-09-05**
+**Revision 1.9.66** | **Authoritative reference** | **2026-09-06**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -197,7 +197,17 @@ return values from calls. A `tuple<>` (empty tuple) is equivalent to `void`.
 
 An EvoIR module contains an ordered global-object table, an ordered
 **external-object table**, an ordered **external-function table** and an
-ordered function table (the two external tables since revision 1.9.64). An
+ordered function table (the two external tables since revision 1.9.64),
+followed by an ordered **module assembly table** (revision 1.9.66): each
+entry is one file-scope `asm("template")` of the unit, its template text
+kept verbatim in the escaping of Section 9. Module assembly defines
+nothing EvoIR can see: the interpreters skip it, and a symbol it defines
+that C code uses is an external symbol under the rules below. The machine
+lane emits every entry verbatim, in table order, after all functions and
+data (EvoMIR Section 8); the reference compilers also place file-scope
+assembly at their own discretion relative to functions, so an entry may not
+depend on what surrounds it, only on the symbols it names. The kernel's
+`EXPORT_SYMBOL` is such an entry in nearly every unit. An
 external object binds a symbol this module uses but does not define to a size
 (or `unknown`, for an incomplete type) and an alignment; it has no bytes and
 no initializedness here, because another unit supplies them. An external
@@ -486,6 +496,30 @@ malformed or unguarded path. For an amount at least `N`, `shl` and `lshr`
 produce zero; `ashr` produces all zeroes or all ones according to the sign bit.
 Those fallback values are not C semantics: a valid C lowering dominates the
 instruction with the typed invalid-count assumption.
+
+**Bit counting and byte swap (revision 1.9.66).**
+
+```
+%v = ctlz.bits<N> %a
+%v = cttz.bits<N> %a
+%v = ctpop.bits<N> %a
+%v = bswap.bits<N> %a
+```
+
+`ctlz` counts the leading zero bits of `%a`, `cttz` the trailing zero bits,
+`ctpop` the set bits; each is total, answers `N` (or `0` for `ctpop`) for
+`%a = 0`, and yields `bits<N>`. `bswap` reverses the byte order of `%a`;
+`N` is 16, 32 or 64. None is in the Section 8.5 allowlist. They are the
+lowering of the bit builtins of 10.1.14: `__builtin_clz(x)` is
+`trunc.bits<32>` of `ctlz` after the front end asserts
+`ub.assume.bit_builtin_zero_operand` on `icmp.ne %x, 0` (the C builtin is
+undefined at zero, `E3022`); `__builtin_ffs(x)` is `0` when `%x` is zero
+and `cttz + 1` otherwise, written with a `cond_br`; `__builtin_popcount`
+is `ctpop`; `__builtin_bswap16/32/64` are `bswap`. Reference values, both
+oracles (`.evidence/builtin-probes/20260902-2c23684c/p39-bits.c`, `p39.out`):
+`clz(1u) = 31`, `ctz(8u) = 3`, `clzll(1ull) = 63`, `popcountll(~0ull) = 64`,
+`ffs(0) = 0`, `ffs(16) = 5`, `bswap32(0x11223344) = 0x44332211`,
+`bswap16(0x1234) = 0x3412`.
 
 ### 3.5 Comparisons
 
@@ -1072,6 +1106,7 @@ EffectSummary {
 | integer UB predicates | `{}` | `{}` | false | false | false | false | false |
 | `ub.assume.<reason>` | `{}` | `{}` | false | false | false | true | false |
 | `and`, `or`, `xor` | `{}` | `{}` | false | false | false | false | false |
+| `ctlz`, `cttz`, `ctpop`, `bswap` | `{}` | `{}` | false | false | false | false | false |
 | `shl`, `lshr`, `ashr` | `{}` | `{}` | false | false | false | false | false |
 | `icmp.*` | `{}` | `{}` | false | false | false | false | false |
 | `sext`, `zext`, `trunc` | `{}` | `{}` | false | false | false | false | false |
@@ -1590,10 +1625,10 @@ twice would let a reader think two conditions are the same finding.
 | `E0112` | `stray-token` | front end |
 | `E3018` | `invalid-lifetime-end` | runtime |
 | `E3019` | `function-pointer-target-signature-mismatch` | runtime |
-| `E3020` | `not-lowered: checked-arithmetic` | lowering |
+| `E3020` | `not-lowered: checked-arithmetic` | lowering — **withdrawn at 1.9.66** |
 | `E3021` | `not-lowered: asm` | lowering |
 | `E3022` | `bit-builtin-zero-operand` | runtime |
-| `E3023` | `not-lowered: bit-builtin` | lowering |
+| `E3023` | `not-lowered: bit-builtin` | lowering — **withdrawn at 1.9.66** |
 | `E3024` | `unreachable-reached` | runtime |
 | `E3025` | `not-lowered: return-address` | lowering |
 | `E3026` | `not-lowered: static-relocation` | lowering |
@@ -2443,7 +2478,7 @@ digested.
 ```text
 module          := ε | segment (newline segment)*
                    -- at most one of each, in this order:
-                   -- global_seq, extern_seq, declare_seq, function_seq
+                   -- global_seq, extern_seq, declare_seq, function_seq, module_asm_seq
 global_seq      := global+
 extern_seq      := extern_object+
 extern_object   := "extern " symbol " size=" (integer | "unknown")
@@ -2452,6 +2487,8 @@ declare_seq     := declare+
 declare         := "declare " symbol "(" type_list [", ..."] ")"
                    " -> (" type_list ")" " cc = " ident newline
 function_seq    := function (newline function)*
+module_asm_seq  := module_asm+
+module_asm      := "asm " quoted_string newline
 
 global          := "global " symbol " origin=" integer
                    " kind=" global_kind " visibility=" visibility
@@ -2513,6 +2550,7 @@ inst_body :=
   | value_name " = " arith_op "." type " " value_name ", " value_name
   | value_name " = icmp." cmp_op " " value_name ", " value_name
   | value_name " = " cast_op "." type " " value_name
+  | value_name " = " bit_op "." type " " value_name
   | value_name " = " binary_predicate " " value_name ", " value_name
   | value_name " = divisor_nonzero " value_name
   | value_name " = " shift_predicate "." index_signedness " "
@@ -2561,11 +2599,13 @@ arith_op         := "add" | "sub" | "mul" | "sdiv" | "udiv" | "srem" | "urem"
                   | "shl" | "ashr" | "lshr" | "and" | "or" | "xor"
 cmp_op           := "eq" | "ne" | "slt" | "sle" | "ult" | "ule"
 cast_op          := "sext" | "zext" | "trunc"
+bit_op           := "ctlz" | "cttz" | "ctpop" | "bswap"
 binary_predicate := "signed_add_defined" | "signed_sub_defined"
                   | "signed_mul_defined" | "signed_div_rem_no_overflow"
 shift_predicate  := "shift_count_defined" | "signed_shl_defined"
 ub_reason        := "division_by_zero" | "remainder_by_zero" | "signed_overflow"
                   | "invalid_shift_count" | "invalid_signed_left_shift"
+                  | "bit_builtin_zero_operand"
 trap_reason      := "scalar_function_fell_off_end" | "unreachable_reached"
 volatile_marker  := ε | " volatile"
 direction        := "add" | "sub"
@@ -3716,10 +3756,21 @@ with `44`; `sub(4000000000u, -1) -> long long` is `0`; `add(-1, 0) -> unsigned`
 is `1`.
 
 The front end type-checks the call and keeps it in C-HIR as a checked
-arithmetic node; the C-HIR interpreter implements the rule above. Lowering to
-EvoIR is a separate stage: until an EvoIR checked-arithmetic form is specified
-(Section 4), lowering reports `E3020` (`not-lowered: checked-arithmetic`) and
-fails closed. Parse-level acceptance is what the kernel parse lanes need now.
+arithmetic node; the C-HIR interpreter implements the rule above. Lowering
+(revision 1.9.66) computes the mathematical result exactly and then asks
+whether it fits: let `W` be the smallest of 32, 64 and 128 in which every
+mathematical result of the operation on the operands' types is
+representable as a signed value (`add`/`sub`: one more than the wider
+operand, counting an unsigned operand as one bit wider; `mul`: the sum of
+the two widths so counted; every cohort use fits 128). Each operand is
+`sext` or `zext` to `bits<W>` by its own signedness, the operation is
+performed in `bits<W>`, the stored value is `trunc` to the result type
+`R`, and the builtin's value is `icmp.ne` between the `bits<W>` result and
+the `sext`/`zext` (by `R`'s signedness) of that truncation: 1 exactly when
+the mathematical result is not representable in `R`, which is the C rule
+above. No UB predicate is involved, because the arithmetic in `bits<W>`
+cannot overflow by construction. `E3020` (`not-lowered: checked-arithmetic`)
+is withdrawn.
 
 #### 10.1.16 GNU `asm` at the front-end boundary
 
@@ -3745,7 +3796,10 @@ validated in this revision. `asm` has maximal effects: it reads and writes
 Lowering produces the `asm` instruction of Section 3.11 when every operand
 constraint, clobber and template reference is in the vocabulary that section
 admits, and reports `E3021` (`not-lowered: asm`) naming the offending
-constraint, clobber or reference otherwise. An output operand lowers to a
+constraint, clobber or reference otherwise. A file-scope `asm("template")`
+lowers to one entry of the module assembly table (Section 2.1, revision
+1.9.66) and is never `E3021`; the sixth full-configuration survey showed
+`EXPORT_SYMBOL` as the whole of that residue. An output operand lowers to a
 result of the operand's lowered type followed by a store to the operand's
 place; an input operand lowers to the loaded value; a `+` operand lowers to
 both, tied; a `Q` operand lowers to the address of its place, and the place
@@ -3900,9 +3954,10 @@ and Clang-19 agree on every row.
   `bit-builtin-zero-operand`); an integer-constant-expression operand makes the
   call an integer constant expression (both oracles accept them in
   `_Static_assert`). The front end folds constant operands; non-constant
-  operands become a C-HIR intrinsic that lowers to EvoIR bit operations
-  (Section 3) when they exist and otherwise reports `E3023`
-  (`not-lowered: bit-builtin`) and fails closed.
+  operands become a C-HIR intrinsic that lowers to the `ctlz`, `cttz`,
+  `ctpop` and `bswap` instructions of Section 3.4 (revision 1.9.66; the
+  zero-operand obligation is `ub.assume.bit_builtin_zero_operand`). `E3023`
+  (`not-lowered: bit-builtin`) is withdrawn.
 - `__builtin_unreachable()`: a statement-expression of type `void`; reaching
   it is undefined behaviour reported as `E3024` (`unreachable-reached`) by the
   interpreters and lowered to `trap.unreachable_reached` (Section 3).
@@ -5340,6 +5395,7 @@ certificate and should pass.
 | | `shift_count_defined.signed` / `.unsigned` | `bits<1>` | `%shifted` : `bits<N>`, `%amount` : `bits<M>` | no |
 | | `signed_shl_defined.signed` / `.unsigned` | `bits<1>` | `%shifted` : `bits<N>`, `%amount` : `bits<M>` | no |
 | Bitwise | `and.bits<N>` | `bits<N>` | `%a`, `%b` : `bits<N>` | no |
+| | `ctlz.bits<N>`, `cttz.bits<N>`, `ctpop.bits<N>`, `bswap.bits<N>` | `bits<N>` | `%a` : `bits<N>` | no |
 | | `or.bits<N>` | `bits<N>` | `%a`, `%b` : `bits<N>` | no |
 | | `xor.bits<N>` | `bits<N>` | `%a`, `%b` : `bits<N>` | no |
 | | `shl.bits<N>` | `bits<N>` | `%a` : `bits<N>`, `%b` : `bits<M>` | no |
@@ -5415,6 +5471,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.66 | 2026-09-06 | Rules the three classes the seventh survey (6 clean, `E3033` gone, `E3030` 2,737) leaves under varargs: file-scope `asm` becomes the module assembly table (2.1, Section 9; `EXPORT_SYMBOL` in nearly every unit), checked arithmetic lowers exactly in the smallest of 32, 64 and 128 bits with a representability test (`E3020` withdrawn), and the bit builtins lower to new total instructions `ctlz`, `cttz`, `ctpop`, `bswap` (3.4; `E3023` withdrawn; `bit_builtin_zero_operand` obligation). |
 | 1.9.65 | 2026-09-05 | Rules the two lowering classes still hidden behind the survey's face so no window stops on them: static pointer initializers are relocations `(offset, @symbol, addend)` on a global (2.1, Section 9; `E3026` narrows to non-symbolic initializers), and pointer-integer conversions are `ptr.to_int` / `ptr.from_int` with exposed-address provenance and the oracles' measured extension and truncation (3.7; `E3036` withdrawn). |
 | 1.9.64 | 2026-09-05 | Gives the module external-object and external-function tables (`extern`, `declare`), so a unit that calls or reads what another unit defines lowers instead of stopping at a missing callee: top effect summary for external functions, distinct provenance for external objects, interpreters execute only the 10.1.14 library set (`E3039`, `E3040` otherwise), `E3041` for a symbol both declared and defined, `E2931` for inconsistent unprototyped calls. This was a gap of the specification, not of the executor: revision 0.7 of EvoMIR had assumed every callee is defined beside its caller, which is true of the generated corpora and of no kernel unit. |
 | 1.9.63 | 2026-09-05 | A library builtin's synthesized prototype is a unit-level symbol in the builtin namespace: it introduces no ordinary identifier and belongs to no function scope (both oracles, `p37-*`). |
@@ -5517,3 +5574,18 @@ availability of an implementation in this executor.
 The original oracle-table fixture is unchanged; its interpreter test now
 pins the explicit refusal, while front-end admission and typing are unchanged.
 Full-configuration impact has not yet been measured.
+
+### Array parameter identity checks
+
+Identity checks apply Section 10.1.18's outermost array-to-pointer adjustment
+when comparing a parameter's preserved written declarator with its canonical
+type, including a typedef naming an array; remaining array layers, element
+types and qualifiers are still checked without adjustment.
+Both sealed oracles compile the four type assertions in
+`.evidence/builtin-probes/20260905-external-parameters/parameters.c` and print
+`7 7 7 7` in `parameters.out`.
+This removes the existing E3101 identity refusal rather than introducing a
+new code, and affects one first-error unit in sealed lowering run
+`20260905T113121Z-43616` (`lib/crypto/chacha-block-generic.c`).
+The normalization is restricted to parameter checks and does not relax
+ordinary object or nested-array identity checks.

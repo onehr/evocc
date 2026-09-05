@@ -2663,7 +2663,7 @@ fn calls_compose_with_initialization_mutation_loops_switch_and_labels() {
             outcome.return_value,
             Some(ScalarValue {
                 ty: program.int,
-                raw_bits: expected,
+                raw_bits: u128::from(expected),
             }),
             "select_default={select_default}"
         );

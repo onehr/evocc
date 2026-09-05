@@ -1,3 +1,5 @@
+mod support;
+
 use std::collections::HashSet;
 use std::io::Write;
 use std::process::{Command, Output, Stdio};
@@ -64,6 +66,7 @@ fn evocc() -> &'static str {
 }
 
 fn run_parse_only(source: &str) -> Output {
+    support::warm_evocc();
     let mut child = Command::new(evocc())
         .args(["--parse-only", "/dev/stdin"])
         .stdin(Stdio::piped())

@@ -182,12 +182,12 @@ fn function_pointer_arithmetic_fails_closed_with_only_e3034() {
 }
 
 #[test]
-fn wide_integer_execution_fails_closed_with_only_e3033() {
+fn wide_integer_division_fails_closed_with_only_e3033() {
     assert_lowering_error(
         concat!(
             "unsigned long f(void) { ",
             "__uint128_t u = ((__uint128_t)1 << 100) + 7; ",
-            "return (unsigned long)((u * 3) >> 100); }\n",
+            "return (unsigned long)(u / 3); }\n",
         ),
         10,
         "E3033",
