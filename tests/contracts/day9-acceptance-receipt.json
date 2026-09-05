@@ -1188,7 +1188,39 @@
     "closure": "AA_OPEN_WITH_MEASURED_MANIFEST_RESIDUE; AB_IMPLEMENTED_CLOSURE_PENDING"
   },
   "declarationFrontierReductions": {
-    "status": "AWAITING_ARCHITECTURE_RULINGS_NO_PRODUCTION_FIX",
+    "status": "TWO_RULINGS_IMPLEMENTED_SYNTHETIC_LIBRARY_SCOPE_UNRESOLVED",
+    "authority": "docs/evoir-spec.md 1.9.62, c518a7d",
+    "redCommit": "f24ea67",
+    "implementationCommit": "8772b33",
+    "focused": { "command": "CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo test -p evocc --test declaration_identity --no-fail-fast", "redPassed": 4, "redFailed": 3, "buildErrors": 0, "greenPassed": 7, "greenFailed": 0, "log": ".evidence/declaration-frontier/20260905T074500Z/focused.log" },
+    "libraryTests": { "command": "CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo test -p evocc-parser -p evocc-chir -p evocc-lower --lib --no-fail-fast", "passed": 65, "failed": 0, "log": ".evidence/declaration-frontier/20260905T074500Z/library-tests.log" },
+    "checks": { "clippy": "CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo clippy --workspace --all-targets -- -D warnings: PASS", "fmt": "cargo fmt --all -- --check: PASS", "ruff": "ruff check tests/acceptance tools: PASS", "diff": "git diff --check: PASS" },
+    "targetedReplay": {
+      "baselineRun": "20260905T041551Z-61762",
+      "selection": "Every baseline row whose firstDiagnostic.code is E3101; execute its frozen projectedArgv with the release binary built from the implementation, four workers, unchanged 60s wall-clock limit",
+      "buildCommand": "CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo build --release -p evocc --locked --offline",
+      "records": 57,
+      "oldDiagnosticCleared": 29,
+      "firstCodes": { "E3033": 17, "E3030": 11, "E3021": 1, "E3101": 28 },
+      "timeouts": 0,
+      "results": ".evidence/declaration-frontier/20260905T074500Z/results.jsonl",
+      "rejectedAttempt": "Initial targeted replay raised TimeoutExpired at its 60s limit and produced no complete result set. The complete replay above is a separate attempt; no timeout limit was raised.",
+      "claimCeiling": "Targeted replay only, not the sealed full-configuration survey and not AA closure. All 28 remaining rows produce FileScopeMismatch when the C-HIR diagnostic probe supplies an entry point; these modified-input probes are diagnostic only."
+    },
+    "newGap": {
+      "name": "SYNTHETIC_LIBRARY_DECLARATION_SCOPE",
+      "minimalSource": "void f(void *p) { __builtin_memset(p, 0, 1); }",
+      "observed": "E3101: cannot derive the authoritative allocation-site manifest",
+      "cause": "The parser appends a synthesized library prototype to the TU but declares its symbol in the current function scope. Section 10.1.14 does not settle whether this synthesized prototype introduces an ordinary identifier and its visibility scope. No validator relaxation or new scope rule is implemented.",
+      "source": ".evidence/declaration-frontier/20260905T074500Z/library-scope.c",
+      "diagnosticProbes": ".evidence/declaration-frontier/20260905T074500Z/residue-diagnostics.json"
+    },
+    "backgroundVerification": {
+      "ordinaryAssemblyWorkspace": "INTERRUPTED, not acceptance evidence: redundant with the retained isolated full workspace replay; terminated only its cargo/test/child processes 18042, 26612, 54246",
+      "isolatedAssemblyReplay": "RUNNING at fc138c6 in /private/tmp/c30-assembly-replay.IZedjG/repo, fresh target and no object alternates; covers AB implementation, not 8772b33",
+      "currentLoweringTests": "RUNNING; CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo test -p evocc-lower --tests --no-fail-fast",
+      "hostObservation": "One-second /usr/bin/sample of the waiting native corpus child recorded 891/891 samples at _dyld_start; the corpus advanced between process inspections. No runner or macOS metadata workaround added."
+    },
     "subject": "3bc968d",
     "manifest": {
       "unit": "arch/arm64/kernel/traps.c",
@@ -1196,14 +1228,14 @@
       "minimalSource": "extern long a[1]; long a[1] __attribute__((aligned(16)));",
       "command": "/private/tmp/c30-aa/target/release/evocc --emit=evoir --target=aarch64-unknown-linux-gnu /private/tmp/c30-array-alignment-redeclaration.c",
       "observed": "E3101: cannot derive the authoritative allocation-site manifest; the second declaration alone lowers successfully",
-      "question": "Section 10.1.18 accumulates declaration attributes: how should cumulative object alignment relate to manifest semantic type identity?"
+      "resolution": "1.9.62: object alignment is the maximum over declarations and is excluded from type identity; implemented in 8772b33"
     },
     "incompleteEnum": {
       "sourceSite": "arch/arm64/include/asm/insn.h:557",
       "minimalSource": "enum aarch64_insn_encoding_class aarch64_get_insn_class(unsigned int insn);",
       "command": "/private/tmp/c30-aa/target/release/evocc --emit=evoir --target=aarch64-unknown-linux-gnu /private/tmp/c30-insn-enum.c",
       "observed": "E3101: incomplete or non-enum scalar type",
-      "question": "How should an unused function declaration with an incomplete enum return type enter EvoIR? No representation or rejection code is chosen here."
+      "resolution": "1.9.62: unused prototypes produce no EvoIR; calls and address-of with an incomplete enum return report E2930 at use; implemented in 8772b33"
     }
   },
   "subjectCommit": "3bc968de89e3061095fb5ec863bd6ea8e634443a",
