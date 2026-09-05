@@ -2833,6 +2833,18 @@ mod tests {
     }
 
     #[test]
+    fn initialized_zero_pointer_bytes_decode_as_null() {
+        let memory = little_memory();
+        let (memory, slot) = memory
+            .allocate_static(10, PTR, InitialState::Zeroed)
+            .unwrap();
+        assert_eq!(
+            memory.load_pointer_value(slot, PTR).unwrap(),
+            PointerValue::Null
+        );
+    }
+
+    #[test]
     fn full_pointer_sized_byte_copy_preserves_provenance() {
         let memory = little_memory();
         let (memory, target) = memory
