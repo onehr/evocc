@@ -1,0 +1,112 @@
+{
+  "bisection": {
+    "allowlistSize": null,
+    "minimalFailingSet": null,
+    "result": "no-failure",
+    "rounds": null,
+    "runDirectory": ".evidence/k1/bisect-clean6"
+  },
+  "emulator": {
+    "contractSha256": "af7f6f87c135fa5f08652cda8bc79c01ee560f2ce8e5666c964ad9dda5884232",
+    "matchesContract": false,
+    "path": "/opt/homebrew/bin/qemu-system-aarch64",
+    "sha256": "45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e"
+  },
+  "failingUnits": [],
+  "generatedAt": "2026-09-05T10:39:03Z",
+  "measurement": "translation units compiled by EvoCC in a kernel that boots",
+  "mixedLink": {
+    "allowSymbolDrift": true,
+    "boot": {
+      "imageSha256": "14bed2cf4ab07a97478036995e5a350549d39ee0e4be462b1dee7ca12a97efe3",
+      "nonce": "k1-20260905T103810Z-34fe13b3",
+      "runDirectory": ".evidence/k1/measurement/boot",
+      "serialLog": ".evidence/k1/measurement/boot/boot.log",
+      "serialLogSha256": "fdabf6865472cd7200eff20e83d5d2765b447c3b27d18f7deff901cb8fa909fd",
+      "verdict": "PASS"
+    },
+    "imageSha256": "14bed2cf4ab07a97478036995e5a350549d39ee0e4be462b1dee7ca12a97efe3",
+    "outcomeCounts": {
+      "substituted": 6
+    },
+    "provenVmlinuxSha256": "2f30116b9c502722018bdbafd7714cfca470f5b20640c4b32e02f1fb9875014a",
+    "relinkExitCode": 0,
+    "requestedUnits": 6,
+    "runDirectory": ".evidence/k1/measurement",
+    "substitutedUnits": [
+      "drivers/tty/vt/consolemap_deftbl.o",
+      "lib/bitrev.o",
+      "lib/clz_tab.o",
+      "lib/union_find.o",
+      "lib/zstd/common/debug.o",
+      "scripts/mod/empty.o"
+    ],
+    "vmlinuxSha256": "2f30116b9c502722018bdbafd7714cfca470f5b20640c4b32e02f1fb9875014a"
+  },
+  "proofOfSubstitution": {
+    "commentStrings": [
+      "EvoCC 0.0.0 aarch64-unknown-linux-gnu",
+      "GCC: (Debian 14.2.0-19) 14.2.0"
+    ],
+    "producerNoteInMixedVmlinux": true,
+    "producerNoteInReferenceVmlinux": false,
+    "unitsDefiningNoSymbol": [
+      "lib/bitrev.o",
+      "lib/zstd/common/debug.o"
+    ],
+    "unitsLinkedIntoVmlinux": [
+      "drivers/tty/vt/consolemap_deftbl.o",
+      "lib/bitrev.o",
+      "lib/clz_tab.o",
+      "lib/union_find.o",
+      "lib/zstd/common/debug.o"
+    ],
+    "unitsNotLinkedIntoVmlinux": [
+      "scripts/mod/empty.o"
+    ],
+    "unitsProvenByteIdenticalInVmlinux": [
+      "drivers/tty/vt/consolemap_deftbl.o",
+      "lib/clz_tab.o",
+      "lib/union_find.o"
+    ],
+    "verdictCounts": {
+      "no-symbols": 2,
+      "not-linked": 1,
+      "proven": 2,
+      "proven-modulo-relocations": 1
+    }
+  },
+  "reference": {
+    "image": ".build/k1/out/arch/arm64/boot/Image",
+    "imageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
+    "initramfsSha256": "07772533d8bb83e20c46cbd4b5263a53153ffdae2d7d91219d3ff9c67df02433",
+    "nonce": "k1-20260905T091456Z-5b591b4f",
+    "referenceImage": ".build/reference/gcc-lane-1/arch/arm64/boot/Image",
+    "referenceImageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
+    "runDirectory": ".evidence/k1/20260905T091456Z-82467",
+    "serialLog": ".evidence/k1/20260905T091456Z-82467/reference-boot.log",
+    "serialLogSha256": "6f154a1f1790b4f4f1a4180401e2a57e0f43b127736b05429b884721338e4d6a",
+    "verdict": "PASS"
+  },
+  "schemaVersion": 1,
+  "survey": {
+    "outcomeCounts": {
+      "assembled": 6,
+      "refused": 2793
+    },
+    "refusalCodeCounts": {
+      "E3020": 18,
+      "E3021": 6,
+      "E3026": 7,
+      "E3030": 770,
+      "E3033": 1987,
+      "E3036": 4,
+      "E3101": 1
+    },
+    "requestedUnits": 2799,
+    "runDirectory": ".evidence/k1/survey-all"
+  },
+  "unitsCompiledByEvoccInABootingKernel": 5,
+  "unitsProvenPresentInVmlinux": 3,
+  "unitsSubstituted": 6
+}

@@ -145,6 +145,22 @@ impl Target {
         }
     }
 
+    /// The producer note this backend leaves in the object.
+    ///
+    /// ELF keeps `.ident` strings in a `.comment` section that survives into
+    /// a linked image, so an image can be asked which compiler produced the
+    /// code inside it. Mach-O has no counterpart, so Darwin emits none.
+    const fn producer_ident(self) -> Option<&'static str> {
+        match self {
+            Self::Darwin => None,
+            Self::Linux => Some(concat!(
+                ".ident \"EvoCC ",
+                env!("CARGO_PKG_VERSION"),
+                " aarch64-unknown-linux-gnu\""
+            )),
+        }
+    }
+
     const fn text_section(self) -> &'static str {
         match self {
             Self::Darwin => ".section __TEXT,__text,regular,pure_instructions",
@@ -235,6 +251,9 @@ pub fn emit_module_for(
                 let _ = writeln!(text, "    .space {}", global.layout.size_bytes);
             }
         }
+    }
+    if let Some(ident) = target.producer_ident() {
+        let _ = writeln!(text, "\n{ident}");
     }
     text
 }

@@ -34,3 +34,7 @@ target-*/
 # OS noise.
 .DS_Store
 .claude/worktrees/
+
+# Python bytecode caches.
+__pycache__/
+*.pyc

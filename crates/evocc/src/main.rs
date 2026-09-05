@@ -1,8 +1,8 @@
 //! evocc: equality-native, self-contained C compiler.
 //!
 //! The driver supports preprocessing, C-HIR validation, both scalar Day-6
-//! interpreters, and canonical EvoIR text emission. Later optimization and
-//! code-generation stages remain NOT_IMPLEMENTED.
+//! interpreters, canonical EvoIR text emission, and AArch64 assembly emission
+//! through EvoMIR. Later stages remain NOT_IMPLEMENTED.
 //!
 //! The shell delegates real work to the crates built in Day 2-3:
 //!   -E           → evocc-lex → evocc-cpp → token text output
@@ -28,6 +28,7 @@ use evocc_evoir::{
 };
 use evocc_lex::{Lexer, TokenKind};
 use evocc_lower::lower_unit;
+use evocc_mir::{compile_module_for, NativeStop, Target as MirTarget};
 use evocc_parser::Parser;
 use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
@@ -38,6 +39,7 @@ enum DriverMode {
     InterpretCHir,
     EmitCHir,
     EmitEvoIr,
+    EmitAsm,
     InterpretEvoIr,
 }
 
@@ -47,6 +49,7 @@ enum ParsedAction {
     InterpretCHir,
     EmitCHir,
     EmitEvoIr,
+    EmitAsm,
     InterpretEvoIr,
 }
 
@@ -92,6 +95,7 @@ const CAPABILITIES: &[&str] = &[
     "c-hir-emit",
     "evoir-emit",
     "evoir-interpret",
+    "asm-emit",
     "eqsat-optimize",
     "eq-scalar-optimize",
 ];
@@ -102,6 +106,7 @@ const FLAG_MAP: &[(&str, &str)] = &[
     ("--interpret-c-hir", "interpret-c-hir"),
     ("--emit=c-hir", "c-hir-emit"),
     ("--emit=evoir", "evoir-emit"),
+    ("--emit=asm", "asm-emit"),
     ("--interpret-evoir", "evoir-interpret"),
     ("-Oeq", "eqsat-optimize"),
     ("-Oeq-scalar", "eq-scalar-optimize"),
@@ -110,7 +115,9 @@ const FLAG_MAP: &[(&str, &str)] = &[
 const IMPLEMENTED_EVOIR_PROBES: &[&str] = &[
     "evoir-emit",
     "evoir-interpret",
+    "asm-emit",
     "--emit=evoir",
+    "--emit=asm",
     "--interpret-evoir",
     "eq-scalar-optimize",
     "-Oeq-scalar",
@@ -136,6 +143,7 @@ fn main() -> ExitCode {
         eprintln!("       evocc --parse-only [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --interpret-c-hir [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --emit=evoir [--target={SUPPORTED_TARGET}] <file>");
+        eprintln!("       evocc --emit=asm [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --interpret-evoir [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("evocc: unrecognized invocation is NOT_IMPLEMENTED");
         return ExitCode::from(NOT_IMPLEMENTED_EXIT);
@@ -178,6 +186,7 @@ fn main() -> ExitCode {
         DriverMode::InterpretCHir => run_parsed(&options, ParsedAction::InterpretCHir),
         DriverMode::EmitCHir => run_parsed(&options, ParsedAction::EmitCHir),
         DriverMode::EmitEvoIr => run_parsed(&options, ParsedAction::EmitEvoIr),
+        DriverMode::EmitAsm => run_parsed(&options, ParsedAction::EmitAsm),
         DriverMode::InterpretEvoIr => run_parsed(&options, ParsedAction::InterpretEvoIr),
     }
 }
@@ -203,6 +212,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "--interpret-c-hir" => set_mode(&mut mode, DriverMode::InterpretCHir)?,
             "--emit=c-hir" => set_mode(&mut mode, DriverMode::EmitCHir)?,
             "--emit=evoir" => set_mode(&mut mode, DriverMode::EmitEvoIr)?,
+            "--emit=asm" => set_mode(&mut mode, DriverMode::EmitAsm)?,
             "--interpret-evoir" => set_mode(&mut mode, DriverMode::InterpretEvoIr)?,
             "-Oeq-scalar" => optimize_scalar_evoir = true,
             "--target" => {
@@ -273,12 +283,18 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     }
 
     let mode = mode.ok_or_else(|| {
-            "exactly one of -E, --parse-only, --interpret-c-hir, --emit=evoir, or --interpret-evoir is required"
+            "exactly one of -E, --parse-only, --interpret-c-hir, --emit=evoir, --emit=asm, or --interpret-evoir is required"
                 .to_string()
         })?;
-    if optimize_scalar_evoir && !matches!(mode, DriverMode::EmitEvoIr | DriverMode::InterpretEvoIr)
+    if optimize_scalar_evoir
+        && !matches!(
+            mode,
+            DriverMode::EmitEvoIr | DriverMode::EmitAsm | DriverMode::InterpretEvoIr
+        )
     {
-        return Err("-Oeq-scalar requires --emit=evoir or --interpret-evoir".to_owned());
+        return Err(
+            "-Oeq-scalar requires --emit=evoir, --emit=asm or --interpret-evoir".to_owned(),
+        );
     }
     Ok(DriverOptions {
         mode,
@@ -313,7 +329,7 @@ fn set_target(slot: &mut Option<DriverTarget>, target: DriverTarget) -> Result<(
 fn set_mode(slot: &mut Option<DriverMode>, mode: DriverMode) -> Result<(), String> {
     if slot.replace(mode).is_some() {
         return Err(
-            "exactly one of -E, --parse-only, --interpret-c-hir, --emit=evoir, or --interpret-evoir is required"
+            "exactly one of -E, --parse-only, --interpret-c-hir, --emit=evoir, --emit=asm, or --interpret-evoir is required"
                 .into(),
         );
     }
@@ -587,7 +603,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
         ParsedAction::Validate => ExitCode::SUCCESS,
         ParsedAction::InterpretCHir => interpret_chir(options, &pp, &unit),
         ParsedAction::EmitCHir => emit_chir(&unit),
-        ParsedAction::EmitEvoIr | ParsedAction::InterpretEvoIr => {
+        ParsedAction::EmitEvoIr | ParsedAction::EmitAsm | ParsedAction::InterpretEvoIr => {
             let target = match options.target {
                 DriverTarget::Aarch64UnknownLinuxGnu => {
                     TargetDataLayout::aarch64_unknown_linux_gnu()
@@ -615,6 +631,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
             };
             match action {
                 ParsedAction::EmitEvoIr => emit_evoir(&module),
+                ParsedAction::EmitAsm => emit_asm(options, &module),
                 ParsedAction::InterpretEvoIr => interpret_evoir(options, &module),
                 ParsedAction::Validate | ParsedAction::InterpretCHir | ParsedAction::EmitCHir => {
                     unreachable!("matched EvoIR action")
@@ -715,6 +732,47 @@ fn emit_chir(unit: &evocc_chir::CHirUnit<'_>) -> ExitCode {
 fn emit_evoir(module: &Module) -> ExitCode {
     let mut stdout = std::io::stdout().lock();
     if write!(stdout, "{}", render_module(module)).is_err() {
+        return ExitCode::from(1);
+    }
+    ExitCode::SUCCESS
+}
+
+/// Emit the module as target assembly, or report why the backend stopped.
+///
+/// A refusal is a named diagnostic in the same shape as every other stage, so
+/// a survey over the kernel can count what stopped each translation unit.
+/// Lowering refusals carry their own EvoMIR codes; the remaining stops are
+/// driver-level reports of an internal stage that declined.
+fn emit_asm(options: &DriverOptions, module: &Module) -> ExitCode {
+    let target = match options.target {
+        DriverTarget::Aarch64UnknownLinuxGnu => MirTarget::Linux,
+    };
+    let text = match compile_module_for(target, module, &|_| true) {
+        Ok(text) => text,
+        Err(stop) => {
+            match &stop {
+                NativeStop::Lowering(codes) => {
+                    for code in codes {
+                        emit_error(&options.input, 1, 1, code, "evomir-lowering-refused");
+                    }
+                }
+                other => emit_error(
+                    &options.input,
+                    1,
+                    1,
+                    "E0004",
+                    &format!(
+                        "native-emission-stopped: {}: {}",
+                        other.component(),
+                        other.detail()
+                    ),
+                ),
+            }
+            return ExitCode::from(1);
+        }
+    };
+    let mut stdout = std::io::stdout().lock();
+    if write!(stdout, "{text}").is_err() {
         return ExitCode::from(1);
     }
     ExitCode::SUCCESS
