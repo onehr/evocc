@@ -903,6 +903,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn add_entity_attributes(&mut self, symbol: SymbolId, attributes: &[Attribute]) {
+        if self
+            .symbols
+            .symbol(symbol)
+            .is_ok_and(|entry| matches!(entry.kind(), SymbolKind::Object | SymbolKind::Parameter))
+        {
+            for attribute in attributes {
+                if let Some(AppliedAttribute::Aligned(bytes)) = attribute.applied {
+                    self.symbols
+                        .raise_object_alignment(symbol, bytes)
+                        .expect("declared object exists");
+                }
+            }
+        }
         if attributes.is_empty() {
             return;
         }
@@ -1423,7 +1436,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         };
         attributes.extend(self.parse_attribute_specifiers(trailing_placement));
         let mut full_type = self.apply_declarator(specifier.surface.type_id(), &declarator.derived);
-        full_type = self.apply_attributes_to_type(full_type, &mut attributes);
+        full_type = self.apply_declaration_attributes(
+            full_type,
+            &mut attributes,
+            storage == StorageClass::Typedef,
+        );
         let written = self.written_declarator(&declarator);
 
         if (context != DeclarationContext::File && storage == StorageClass::ThreadLocal)
@@ -1711,7 +1728,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             next_attributes
                 .extend(self.parse_attribute_specifiers(AttributePlacement::AfterDeclarator));
             let mut next_type = self.apply_declarator(specifier.surface.type_id(), &next.derived);
-            next_type = self.apply_attributes_to_type(next_type, &mut next_attributes);
+            next_type = self.apply_declaration_attributes(
+                next_type,
+                &mut next_attributes,
+                storage == StorageClass::Typedef,
+            );
             written = self.written_declarator(&next);
             declarator = next;
             full_type = next_type;
@@ -4225,6 +4246,31 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
+    fn apply_declaration_attributes(
+        &mut self,
+        ty: TypeId,
+        attributes: &mut [Attribute],
+        typedef: bool,
+    ) -> TypeId {
+        if typedef
+            || matches!(
+                self.types.get(ty).map(|ty| &ty.kind),
+                Some(TypeKind::Function { .. })
+            )
+        {
+            return self.apply_attributes_to_type(ty, attributes);
+        }
+        let mut ty = ty;
+        for attribute in attributes {
+            if attribute.name == "aligned" {
+                attribute.applied = self.aligned_bytes(attribute).map(AppliedAttribute::Aligned);
+            } else {
+                ty = self.apply_attributes_to_type(ty, std::slice::from_mut(attribute));
+            }
+        }
+        ty
+    }
+
     /// Apply `aligned` to a type, yielding the (possibly re-interned) type and
     /// marking the attribute applied. `packed` on a record type is forwarded to
     /// the tag; on anything else it is preserved without effect, which is what
@@ -6074,7 +6120,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let mut parameter_attributes = specifier_attributes;
             parameter_attributes
                 .extend(self.parse_attribute_specifiers(AttributePlacement::Parameter));
-            let ty = self.apply_attributes_to_type(ty, &mut parameter_attributes);
+            let ty = self.apply_declaration_attributes(ty, &mut parameter_attributes, false);
             params.push(ParameterDecl {
                 attributes: parameter_attributes,
                 symbol: None,
@@ -8668,6 +8714,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2928", "address-of-register-object", token.span);
                 return None;
             }
+            if op == UnaryOp::AddrOf && self.function_has_incomplete_enum_return(operand) {
+                self.report("E2930", "use-with-incomplete-enumeration", token.span);
+                return None;
+            }
             let span = self.merge_span(token.span, operand.span());
             return Some(self.alloc_node(CHirExpr::Unary(op, operand, span)));
         }
@@ -8722,7 +8772,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.report("E1003", "expected-expression", operand.span());
                     None
                 })?;
-                let ty = self.materialize_inferred_type(inferred.ty, Some(operand))?;
+                let mut ty = self.materialize_inferred_type(inferred.ty, Some(operand))?;
+                if let CHirExpr::Ident { symbol, .. } = operand {
+                    let alignment = self.symbols.symbol(*symbol).ok()?.declared_alignment();
+                    if alignment > 1 {
+                        let canonical = self.types.get(ty)?.clone();
+                        ty = self.intern(
+                            canonical.kind,
+                            Qualifiers {
+                                aligned: Some(
+                                    canonical.qualifiers.aligned.unwrap_or(1).max(alignment),
+                                ),
+                                ..canonical.qualifiers
+                            },
+                        );
+                    }
+                }
                 Some((ty, None))
             }?;
             if self.peek_kind() != Some(TokenKind::RParen) {
@@ -8795,6 +8860,26 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.parse_postfix_tail(expression)
     }
 
+    fn function_has_incomplete_enum_return(&self, expression: &CHirExpr<'arena>) -> bool {
+        let Some(inferred) = self.converted_expression_type(expression) else {
+            return false;
+        };
+        let OperandTypeClass::Pointer(pointer) = self.operand_type_class(inferred.ty) else {
+            return false;
+        };
+        let Some(TypeKind::Function { return_type, .. }) =
+            self.types.get(pointer.pointee).map(|ty| &ty.kind)
+        else {
+            return false;
+        };
+        let Some(TypeKind::Enum(tag)) = self.types.get(*return_type).map(|ty| &ty.kind) else {
+            return false;
+        };
+        self.types
+            .tag(*tag)
+            .is_some_and(|tag| matches!(tag.state, TagState::Incomplete))
+    }
+
     fn parse_postfix_tail(
         &mut self,
         mut expression: &'arena CHirExpr<'arena>,
@@ -8802,6 +8887,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         loop {
             match self.peek_kind() {
                 Some(TokenKind::LParen) => {
+                    if self.function_has_incomplete_enum_return(expression) {
+                        self.report(
+                            "E2930",
+                            "use-with-incomplete-enumeration",
+                            expression.span(),
+                        );
+                        return None;
+                    }
                     self.advance();
                     let mut arguments = Vec::new();
                     if self.peek_kind() != Some(TokenKind::RParen) {

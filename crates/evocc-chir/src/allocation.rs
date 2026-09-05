@@ -1653,7 +1653,9 @@ fn types_compatible(types: &TypeInterner, left: TypeId, right: TypeId) -> bool {
         if left_id == right_id {
             continue;
         }
-        if !ignore_top_qualifiers && left.qualifiers != right.qualifiers {
+        if !ignore_top_qualifiers
+            && left.qualifiers.compatibility() != right.qualifiers.compatibility()
+        {
             return false;
         }
         match (&left.kind, &right.kind) {

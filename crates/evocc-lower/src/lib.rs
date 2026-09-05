@@ -850,7 +850,10 @@ fn lower_globals(
                 } else {
                     GlobalVisibility::Internal
                 },
-                layout: AccessLayout::new(object_size, layout.align_bytes),
+                layout: AccessLayout::new(
+                    object_size,
+                    layout.align_bytes.max(symbol.declared_alignment()),
+                ),
                 bytes,
                 initialized: vec![true; size],
             })
@@ -1552,11 +1555,26 @@ fn index_functions(
     target: &TargetDataLayout,
     memory_participant: bool,
 ) -> Result<BTreeMap<SymbolId, FunctionInfo>, LowerError> {
+    let mut required = BTreeSet::new();
+    for declaration in unit.iter() {
+        let mut references = CallSites::default();
+        collect_calls_decl(declaration, &mut references);
+        if let CHirDecl::Function(function) = declaration {
+            if let Some(body) = function.body {
+                required.insert(function.symbol);
+                collect_calls_stmt(body, &mut references);
+            }
+        }
+        required.extend(references.direct);
+    }
     let mut definitions = BTreeMap::new();
     for declaration in unit.iter() {
         let CHirDecl::Function(function) = declaration else {
             continue;
         };
+        if !required.contains(&function.symbol) {
+            continue;
+        }
         let info = function_info(unit, target, function)?;
         definitions
             .entry(function.symbol)
@@ -4256,7 +4274,17 @@ impl<'a> FunctionLowerer<'a> {
         object: &'a ObjectDecl<'a>,
         state: &mut State,
     ) -> Result<(), LowerError> {
-        let layout = self.access_layout(object.ty, object.span)?;
+        let mut layout = self.access_layout(object.ty, object.span)?;
+        layout.align_bytes = layout.align_bytes.max(
+            self.unit
+                .symbols()
+                .symbol(object.symbol)
+                .map_err(|_| LowerError::UnknownSymbol {
+                    symbol: object.symbol,
+                    span: object.span,
+                })?
+                .declared_alignment(),
+        );
         let origin = *self.allocation_origins.get(&object.symbol).ok_or(
             LowerError::InvalidGeneratedSsa {
                 message: format!(
@@ -8313,11 +8341,15 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
             }
         }
         CHirExpr::StatementExpr { body, .. } => collect_calls_stmt(body, calls),
+        CHirExpr::Ident { symbol, facts, .. } => {
+            if facts.category() == ExprCategory::FunctionDesignator {
+                calls.direct.insert(*symbol);
+            }
+        }
         CHirExpr::Lit(..)
         | CHirExpr::FloatLit(..)
         | CHirExpr::CharLit(..)
         | CHirExpr::StringLit(..)
-        | CHirExpr::Ident { .. }
         | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(..)
         | CHirExpr::SizeOfExpr(..)

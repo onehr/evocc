@@ -99,7 +99,7 @@ fn object_alignment_accumulates_without_changing_type_identity() {
             16,
         ),
     ] {
-        let source = format!("{declarations} int main(void) {{ return sizeof(a); }}");
+        let source = format!("{declarations} _Static_assert(__alignof__(a) == {alignment}, \"object alignment\"); _Static_assert(__alignof__(__typeof__(a)) == 8, \"type alignment\"); int main(void) {{ return sizeof(a); }}");
         let ir = lowers(&source);
         assert!(
             ir.lines().any(|line| line.starts_with("global @a ")

@@ -104,6 +104,7 @@ pub struct Symbol {
     spelling: String,
     data: SymbolData,
     ty: TypeId,
+    declared_alignment: u32,
     span: SourceSpan,
 }
 
@@ -146,6 +147,12 @@ impl Symbol {
     #[must_use]
     pub fn ty(&self) -> TypeId {
         self.ty
+    }
+
+    /// Maximum alignment written on this object's declarations, independent of its type.
+    #[must_use]
+    pub fn declared_alignment(&self) -> u32 {
+        self.declared_alignment
     }
 
     #[must_use]
@@ -342,6 +349,10 @@ enum SymbolTableUndo {
         symbol: SymbolId,
         previous: TypeId,
     },
+    SymbolAlignmentUpdated {
+        symbol: SymbolId,
+        previous: u32,
+    },
     FunctionScopeBound {
         scope: ScopeId,
         previous: Option<SymbolId>,
@@ -485,6 +496,7 @@ impl SymbolTable {
             spelling,
             data,
             ty,
+            declared_alignment: 1,
             span,
         });
         self.scopes[scope_index].symbols.push(id);
@@ -546,6 +558,24 @@ impl SymbolTable {
             previous
         };
         self.record_undo(SymbolTableUndo::SymbolTypeUpdated { symbol, previous });
+        Ok(())
+    }
+
+    /// Accumulate object alignment without changing canonical type identity.
+    pub fn raise_object_alignment(
+        &mut self,
+        symbol: SymbolId,
+        alignment: u32,
+    ) -> Result<(), SymbolTableError> {
+        let declaration = self
+            .symbols
+            .get_mut(symbol.raw() as usize)
+            .ok_or(SymbolTableError::UnknownSymbol(symbol))?;
+        let previous = declaration.declared_alignment;
+        if alignment > previous {
+            declaration.declared_alignment = alignment;
+            self.record_undo(SymbolTableUndo::SymbolAlignmentUpdated { symbol, previous });
+        }
         Ok(())
     }
 
@@ -797,6 +827,9 @@ impl SymbolTable {
             }
             SymbolTableUndo::SymbolTypeUpdated { symbol, previous } => {
                 self.symbols[symbol.raw() as usize].ty = previous;
+            }
+            SymbolTableUndo::SymbolAlignmentUpdated { symbol, previous } => {
+                self.symbols[symbol.raw() as usize].declared_alignment = previous;
             }
             SymbolTableUndo::FunctionScopeBound {
                 scope,

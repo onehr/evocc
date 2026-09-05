@@ -1008,11 +1008,21 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         }
 
         for (declaration, site) in &plans {
-            let layout = self.object_access_layout(
+            let mut layout = self.object_access_layout(
                 declaration.ty,
                 declaration.initializer.as_ref(),
                 declaration.span,
             )?;
+            layout.align_bytes = layout.align_bytes.max(
+                self.unit
+                    .symbols()
+                    .symbol(declaration.symbol)
+                    .map_err(|_| InterpreterError::MalformedObjectDeclaration {
+                        symbol: declaration.symbol,
+                        span: declaration.span,
+                    })?
+                    .declared_alignment(),
+            );
             let (memory, address) = self
                 .memory
                 .allocate_static(*site, layout, InitialState::Zeroed)
@@ -4592,7 +4602,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .ok_or(InterpreterError::MalformedObjectDeclaration { symbol, span })?
             .ordinal()
             .raw();
-        let layout = self.object_access_layout(ty, initializer, span)?;
+        let mut layout = self.object_access_layout(ty, initializer, span)?;
+        layout.align_bytes = layout.align_bytes.max(
+            self.unit
+                .symbols()
+                .symbol(symbol)
+                .map_err(|_| InterpreterError::MalformedObjectDeclaration { symbol, span })?
+                .declared_alignment(),
+        );
         let (frame, scope) = self
             .memory_frame
             .as_ref()
