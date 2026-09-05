@@ -68,6 +68,18 @@ fn discarded_pointer_expressions_keep_their_side_effects() {
 }
 
 #[test]
+fn address_taken_scalar_parameters_own_frame_local_storage() {
+    for (source, expected) in [
+        ("int f(int x){int *p=&x; return *p;} int main(void){return f(7);}", 7),
+        ("int f(int x){if(x<0)return 0; return *(&x);} int main(void){return f(7);}", 7),
+        ("int f(int *p){int **q=&p; return **q;} int main(void){int x=7; return f(&x);}", 7),
+        ("int f(int x){int *p=&x; if(x)return f(x-1)+*p; return *p;} int main(void){return f(3);}", 6),
+    ] {
+        check(source, expected);
+    }
+}
+
+#[test]
 fn block_scope_external_function_addresses_use_the_unit_symbol() {
     check("int main(void){typedef int fn(void); extern fn f; fn *p=f; return p();} int f(void){return 7;}", 7);
 }
