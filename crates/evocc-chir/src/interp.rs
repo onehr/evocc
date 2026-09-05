@@ -23,7 +23,8 @@ use evocc_types::{
 
 use crate::{
     integer::{
-        eval_binary_integer, eval_bit_builtin, eval_checked_arithmetic, eval_unary_integer,
+        eval_binary_integer, eval_bit_builtin, eval_checked_arithmetic,
+        eval_constant_binary_integer, eval_constant_unary_integer, eval_unary_integer,
         integer_literal_value, integer_type_for_rank, usual_arithmetic_type, BitBuiltinOp,
         CInteger, CIntegerType, IntegerError,
     },
@@ -844,6 +845,20 @@ pub fn interpret_scalar_function_with_target(
     }
 }
 
+/// Evaluate a static integer initializer through the C-HIR interpreter's
+/// existing expression semantics. This is also the lowering entry point for
+/// integer object bytes, so lowering must not grow a separate toy evaluator.
+/// Runtime expressions continue to use checked integer arithmetic.
+pub fn interpret_static_integer_expression<'arena>(
+    unit: &CHirUnit<'arena>,
+    expression: &'arena CHirExpr<'arena>,
+    target: &TargetDataLayout,
+) -> Result<CInteger, InterpreterError> {
+    let mut interpreter = Interpreter::new(unit, target, InterpreterLimits::default(), false)?;
+    interpreter.guard_static_initializer_evaluation(expression)?;
+    interpreter.eval_static_integer_expression(expression)
+}
+
 struct Interpreter<'unit, 'arena> {
     unit: &'unit CHirUnit<'arena>,
     target: TargetDataLayout,
@@ -859,6 +874,7 @@ struct Interpreter<'unit, 'arena> {
     consumed: u64,
     fuel_anchor: Option<SourceSpan>,
     nested_mutation_depth: usize,
+    static_integer_evaluation: bool,
     temporary_origin_site: u64,
 }
 
@@ -896,6 +912,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             consumed: 0,
             fuel_anchor: None,
             nested_mutation_depth: 0,
+            static_integer_evaluation: false,
             temporary_origin_site: 0,
         })
     }
@@ -1170,8 +1187,20 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     self.unit.types(),
                 )
             }
-            _ => self.eval_expr(expression, false).map(CValue::Integer),
+            _ => self
+                .eval_static_integer_expression(expression)
+                .map(CValue::Integer),
         }
+    }
+
+    fn eval_static_integer_expression(
+        &mut self,
+        expression: &'arena CHirExpr<'arena>,
+    ) -> Result<CInteger, InterpreterError> {
+        let previous = std::mem::replace(&mut self.static_integer_evaluation, true);
+        let result = self.eval_expr(expression, false);
+        self.static_integer_evaluation = previous;
+        result
     }
 
     fn static_compound_pointer(
@@ -7058,7 +7087,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             CHirExpr::Unary(operator, operand, _) => {
                 let operand = self.eval_expr(operand, false)?;
-                eval_unary_integer(*operator, operand).map_err(|error| {
+                let result = if self.static_integer_evaluation {
+                    eval_constant_unary_integer(*operator, operand)
+                } else {
+                    eval_unary_integer(*operator, operand)
+                };
+                result.map_err(|error| {
                     let error_span = if *operator == crate::UnaryOp::Neg {
                         unary_operator_span(span, expression_operand_span(expression))
                     } else {
@@ -7396,8 +7430,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             _ => {
                 let left = self.eval_expr(left, false)?;
                 let right = self.eval_expr(right, false)?;
-                eval_binary_integer(operator, left, right)
-                    .map_err(|error| self.integer_error(error, span))
+                let result = if self.static_integer_evaluation {
+                    eval_constant_binary_integer(operator, left, right)
+                } else {
+                    eval_binary_integer(operator, left, right)
+                };
+                result.map_err(|error| self.integer_error(error, span))
             }
         }
     }

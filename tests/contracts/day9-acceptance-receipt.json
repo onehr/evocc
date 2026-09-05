@@ -1123,9 +1123,35 @@
     },
     "outstanding": [
       "New dashboard, full parse/lowering surveys and isolated offline replay have NOT RUN for this continuation; the published counts elsewhere in this receipt still refer to their named historical subjects.",
-      "AA-NEXT-GLOBAL-CONSTANT-LOWERING: const unsigned char a[] = {32 | 8}; parses but lowering emits E3101 global initializer is not an admitted integer constant. The two affected old-class records are libstub/lib-ctype and lib/compat_audit. No code or profile refusal was invented for this legal expression; the next repair scope or diagnostic ruling is pending.",
+      "AA-NEXT-GLOBAL-CONSTANT-LOWERING is resolved by staticIntegerInitializerContinuation below. A new full survey is still required; the two targeted records now reach E3036 rather than this initializer failure.",
       "AB-ASM-TEXT-EDGE-CONTRACT: section 3.11 has schematic asm forms, but the exhaustive section 9 grammar omits asm/asm.goto and does not define template escaping or asm.goto result/mem/world binders and output availability across successor edges. No asm RED or implementation was invented before that authority is supplied."
     ]
+  },
+  "staticIntegerInitializerContinuation": {
+    "status": "IMPLEMENTED_AND_GATED_NOT_YET_PUBLISHED",
+    "authority": "User authorization on 2026-09-05; docs/evoir-spec.md 1.9.59 Sections 2.1 and 10.1.19",
+    "testsOnlyRedCommit": "539900cb2e6ff48cbdbcd33fae39ac39674c13bc",
+    "sourcePatch": { "base": "539900cb2e6ff48cbdbcd33fae39ac39674c13bc", "path": ".evidence/static-initializers/20260905T030307Z/source.patch", "sha256": "7a31a8f9a7e83d46615c34a7f73c3bb46f85f7896a325ea1e09c7f00261ceea0", "command": "git diff --binary -- crates/evocc-chir/src/interp.rs crates/evocc-lower/src/lib.rs" },
+    "workspace": { "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet", "exitCode": 0, "passed": 1562, "failed": 0, "ignored": 4, "targets": 236, "log": ".evidence/static-initializers/20260905T030307Z/workspace.log", "sha256": "46f97ffd167b4565b46af63b16be3f86fe254728150f14f74daa6d4af240c2e1" },
+    "focused": { "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test -p evocc --test static_integer_initializers -- --nocapture", "passed": 9, "failed": 0, "redPassed": 1, "redFailed": 8, "buildErrors": 0 },
+    "otherGates": {
+      "clippy": { "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target cargo clippy --workspace --all-targets -- -D warnings", "exitCode": 0, "log": ".evidence/static-initializers/20260905T030307Z/clippy.log", "sha256": "f088d2116f41b37f92094d04cf1d27e50ad697e0455f6010b2ce8b4498074ee2" },
+      "fmt": { "command": "cargo fmt --all -- --check", "exitCode": 0 },
+      "ruff": { "command": "ruff check tests/acceptance tools", "exitCode": 0 },
+      "baseLayout": { "command": "bash tests/acceptance/day5-layout-conformance.sh --subject", "runId": "20260905T024629Z-44402", "passed": 128, "mismatches": 0 },
+      "attributedLayout": { "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject", "runId": "20260905T024638Z-44393", "passed": 22, "mismatches": 0 }
+    },
+    "targetedCorpus": {
+      "command": "Select each record's captured argv[1:] from .evidence/declaration-identity/20260905T020200Z/corpus.jsonl using jq, then invoke /Users/onehrxn/dev/30days/c30/target/debug/evocc via xargs -0 with those unchanged arguments",
+      "binarySha256": "6473512c22065ffd2b15116d85f62a19ddd5802a16b57b5aef1fd489f859af20",
+      "records": ["drivers/firmware/efi/libstub/.lib-ctype.o.cmd", "lib/.compat_audit.o.cmd"],
+      "oldGlobalInitializerFailures": 0,
+      "nextFirstErrors": { "E3036": 2 },
+      "location": "include/linux/compiler.h:267:18",
+      "claimCeiling": "Two targeted debug-binary replays, not a full survey or throughput benchmark. Both advance past the real initializer failure."
+    },
+    "scope": "Reuse C-HIR static integer evaluation and the shared constant integer kernel; cast to destination type before serialization; preserve runtime E3006 and refuse raw static pointer bytes with E3026. No new diagnostic code or relocation representation.",
+    "outstanding": ["Release dashboard guard, full parse/lowering surveys and isolated offline replay for this subject have not run."]
   },
   "subjectCommit": "a0157ce",
   "gate": {

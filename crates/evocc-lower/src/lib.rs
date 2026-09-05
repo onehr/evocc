@@ -950,19 +950,22 @@ fn apply_static_initializer(
             }
         }
         InitAction::StoreScalar { value, .. } => {
-            let raw = constant_integer_expression(value).ok_or_else(|| {
-                if matches!(
-                    unit.types().get(destination).map(|ty| &ty.kind),
-                    Some(TypeKind::Pointer(_))
-                ) {
-                    LowerError::StaticRelocation { span }
-                } else {
-                    LowerError::UnsupportedExpression {
+            // A numeric cast is not a pointer relocation. Section 2.1 keeps
+            // pointer-valued static initializers outside the byte-only schema.
+            if matches!(
+                unit.types().get(destination).map(|ty| &ty.kind),
+                Some(TypeKind::Pointer(_))
+            ) {
+                return Err(LowerError::StaticRelocation { span });
+            }
+            let integer =
+                evocc_chir::interp::interpret_static_integer_expression(unit, value, target)
+                    .map_err(|_| LowerError::UnsupportedExpression {
                         span,
                         feature: "global initializer is not an admitted integer constant",
-                    }
-                }
-            })?;
+                    })?;
+            let destination_integer = canonical_integer(unit.types(), target, destination, span)?;
+            let raw = integer.cast(destination_integer).raw_bits();
             let byte_len = target_bytes.len();
             for (index, byte) in target_bytes.iter_mut().enumerate() {
                 let shift = match target.byte_order() {
@@ -982,19 +985,6 @@ fn apply_static_initializer(
         }
     }
     Ok(())
-}
-
-fn constant_integer_expression(expression: &CHirExpr<'_>) -> Option<u64> {
-    match expression {
-        CHirExpr::Lit(literal, _) => Some(literal.value),
-        CHirExpr::CharLit(literal, _) => Some(u64::from(literal.value)),
-        CHirExpr::Cast(_, operand, _) => constant_integer_expression(operand),
-        CHirExpr::Unary(UnaryOp::Neg, operand, _) => {
-            Some(0_u64.wrapping_sub(constant_integer_expression(operand)?))
-        }
-        CHirExpr::Unary(UnaryOp::Plus, operand, _) => constant_integer_expression(operand),
-        _ => None,
-    }
 }
 
 fn subobject_offset(
