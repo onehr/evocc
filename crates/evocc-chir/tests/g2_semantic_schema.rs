@@ -112,6 +112,91 @@ fn duplicate_declaration_fails_transactionally() {
 }
 
 #[test]
+fn function_scope_ownership_is_checked_and_rolled_back() {
+    let mut types = TypeInterner::new();
+    let int = int_type(&mut types);
+    let function_type = types.intern(CanonicalType {
+        kind: TypeKind::Function {
+            return_type: int,
+            parameters: FunctionParameters::Prototype {
+                types: vec![],
+                variadic: false,
+            },
+        },
+        qualifiers: Qualifiers::default(),
+    });
+    let mut symbols = SymbolTable::new();
+    let file = symbols.file_scope();
+    let function = symbols
+        .declare(
+            file,
+            "f",
+            SymbolData::Function {
+                storage: StorageClass::None,
+            },
+            function_type,
+            span(1),
+        )
+        .unwrap();
+    let other = symbols
+        .declare(
+            file,
+            "g",
+            SymbolData::Function {
+                storage: StorageClass::None,
+            },
+            function_type,
+            span(1),
+        )
+        .unwrap();
+    let object = symbols
+        .declare(
+            file,
+            "x",
+            SymbolData::Object {
+                storage: StorageClass::None,
+            },
+            int,
+            span(1),
+        )
+        .unwrap();
+    let scope = symbols
+        .create_scope(file, ScopeKind::FunctionPrototype, Some(span(1)))
+        .unwrap();
+    assert!(symbols.bind_function_scope(file, function).is_err());
+    assert!(symbols.bind_function_scope(scope, object).is_err());
+    let checkpoint = symbols.checkpoint();
+    let transaction = symbols.begin_transaction();
+    symbols.bind_function_scope(scope, function).unwrap();
+    symbols.bind_function_scope(scope, function).unwrap();
+    assert_eq!(symbols.scope(scope).unwrap().kind(), ScopeKind::Function);
+    assert_eq!(
+        symbols.scope(scope).unwrap().function_owner(),
+        Some(function)
+    );
+    assert_eq!(
+        symbols.bind_function_scope(scope, other),
+        Err(SymbolTableError::InvalidFunctionScope {
+            scope,
+            function: other
+        })
+    );
+    symbols.rollback_transaction(&transaction).unwrap();
+    assert_eq!(symbols.scope(scope).unwrap().function_owner(), None);
+    assert_eq!(
+        symbols.scope(scope).unwrap().kind(),
+        ScopeKind::FunctionPrototype
+    );
+    symbols.bind_function_scope(scope, other).unwrap();
+    symbols.rollback(checkpoint).unwrap();
+    assert_eq!(symbols.scope(scope).unwrap().function_owner(), None);
+    assert_eq!(
+        symbols.scope(scope).unwrap().kind(),
+        ScopeKind::FunctionPrototype
+    );
+}
+
+#[test]
 fn expression_facts_enforce_c_value_category_invariants() {
     let mut types = TypeInterner::new();
     let int = int_type(&mut types);

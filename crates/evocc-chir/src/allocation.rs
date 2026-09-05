@@ -761,6 +761,12 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                 span: function.span,
             });
         };
+        let has_bound_scope = self
+            .unit
+            .symbols()
+            .scopes_in_source_order()
+            .iter()
+            .any(|scope| scope.function_owner() == Some(function.symbol));
         let matches = self
             .unit
             .symbols()
@@ -769,10 +775,18 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             .filter(|scope| {
                 scope.kind() == ScopeKind::Function
                     && scope.parent() == Some(self.unit.symbols().file_scope())
-                    && scope.span().is_some_and(|scope_span| {
-                        scope_span.file == declarator_span.file
-                            && scope_span.byte_start == declarator_span.byte_start
-                    })
+                    && match scope.function_owner() {
+                        Some(owner) => owner == function.symbol,
+                        // Legacy, manually constructed C-HIR may omit the
+                        // binding. Accept only an unambiguous location match.
+                        None => {
+                            !has_bound_scope
+                                && scope.span().is_some_and(|scope_span| {
+                                    scope_span.file == declarator_span.file
+                                        && scope_span.byte_start == declarator_span.byte_start
+                                })
+                        }
+                    }
             })
             .map(crate::Scope::id)
             .collect::<Vec<_>>();

@@ -1618,6 +1618,7 @@ fn function_info(
             function.ty,
             function.return_specifier.type_id(),
             Some(&function.parameters),
+            false,
         )
     {
         return Err(LowerError::MalformedFunction {
@@ -1729,6 +1730,7 @@ fn function_info(
                             parameter.ty,
                             parameter.specifier.type_id(),
                             None,
+                            false,
                         )
                         || symbol.kind() != SymbolKind::Parameter
                         || symbol.spelling() != parameter_name.spelling
@@ -2096,6 +2098,7 @@ fn written_declarator_matches(
     mut current: TypeId,
     terminal: TypeId,
     function_syntax: Option<&ParameterSyntax>,
+    initialized_object: bool,
 ) -> bool {
     if let Some(syntax) = function_syntax {
         if !matches!(
@@ -2144,7 +2147,14 @@ fn written_declarator_matches(
                     element,
                     bound: canonical_bound,
                 },
-            ) if bound == canonical_bound => *element,
+            ) if bound == canonical_bound
+                || (initialized_object
+                    && index == 0
+                    && *bound == ArrayBound::Unbounded
+                    && matches!(canonical_bound, ArrayBound::Fixed(_))) =>
+            {
+                *element
+            }
             _ => return false,
         };
     }
@@ -2184,13 +2194,15 @@ fn validate_object_declaration_for_lowering(
     if symbol.kind() != SymbolKind::Object
         || symbol.spelling() != object.name.spelling
         || !unit.types().compatible(symbol.ty(), object.ty)
-        || symbol.storage_class() != Some(object.storage)
+        // AllocationSiteManifest has already checked storage compatibility
+        // with lexical context, including an extern followed by a definition.
         || !written_declarator_matches(
             unit.types(),
             &object.written,
             object.ty,
             object.specifier.type_id(),
             None,
+            object.initializer.is_some(),
         )
     {
         return Err(LowerError::UnsupportedStatement {
@@ -8762,6 +8774,56 @@ fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn array_completion_only_relaxes_the_initialized_outermost_bound() {
+        use evocc_types::{CanonicalType, IntRank, Qualifiers};
+
+        let mut types = TypeInterner::new();
+        let int = types.intern(CanonicalType {
+            kind: TypeKind::Int(IntRank::Int),
+            qualifiers: Qualifiers::default(),
+        });
+        let array = types.intern(CanonicalType {
+            kind: TypeKind::Array {
+                element: int,
+                bound: ArrayBound::Fixed(4),
+            },
+            qualifiers: Qualifiers::default(),
+        });
+        let span = SourceSpan::new(evocc_common::FileId::new(0), 0, 1, 1, 1);
+        let layer = |bound| WrittenDeclaratorLayer::Array {
+            bound,
+            parameter_qualifiers: Qualifiers::default(),
+            static_bound: false,
+            span,
+        };
+        let mut written = WrittenDeclarator {
+            layers: vec![layer(ArrayBound::Unbounded)],
+            span,
+        };
+        assert!(written_declarator_matches(
+            &types, &written, array, int, None, true
+        ));
+        assert!(!written_declarator_matches(
+            &types, &written, array, int, None, false
+        ));
+        written.layers[0] = layer(ArrayBound::Fixed(3));
+        assert!(!written_declarator_matches(
+            &types, &written, array, int, None, true
+        ));
+        let nested = types.intern(CanonicalType {
+            kind: TypeKind::Array {
+                element: array,
+                bound: ArrayBound::Fixed(2),
+            },
+            qualifiers: Qualifiers::default(),
+        });
+        written.layers = vec![layer(ArrayBound::Fixed(2)), layer(ArrayBound::Unbounded)];
+        assert!(!written_declarator_matches(
+            &types, &written, nested, int, None, true
+        ));
+    }
 
     #[test]
     fn lower_error_is_stable_and_nonempty() {

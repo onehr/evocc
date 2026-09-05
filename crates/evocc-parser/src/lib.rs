@@ -1454,6 +1454,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             if has_body {
                 self.mark_definition(symbol, &declarator.name);
+                if context == DeclarationContext::File {
+                    self.symbols
+                        .bind_function_scope(parameter_scope, symbol)
+                        .expect("a file-scope definition owns its parameter scope");
+                }
             }
             let body = if has_body {
                 let open = self.span();

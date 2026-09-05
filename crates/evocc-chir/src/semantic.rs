@@ -192,6 +192,7 @@ pub struct Scope {
     parent: Option<ScopeId>,
     kind: ScopeKind,
     span: Option<SourceSpan>,
+    function_owner: Option<SymbolId>,
     symbols: Vec<SymbolId>,
     tags: Vec<TagId>,
     tag_names: HashMap<String, TagId>,
@@ -218,6 +219,13 @@ impl Scope {
         self.span
     }
 
+    /// Semantic owner of a definition's parameter scope. Source spans are not
+    /// identities: one macro invocation may produce several function bodies.
+    #[must_use]
+    pub fn function_owner(&self) -> Option<SymbolId> {
+        self.function_owner
+    }
+
     #[must_use]
     pub fn symbols(&self) -> &[SymbolId] {
         &self.symbols
@@ -234,6 +242,10 @@ impl Scope {
 pub enum SymbolTableError {
     UnknownScope(ScopeId),
     UnknownSymbol(SymbolId),
+    InvalidFunctionScope {
+        scope: ScopeId,
+        function: SymbolId,
+    },
     DuplicateInScope {
         scope: ScopeId,
         existing: SymbolId,
@@ -256,6 +268,12 @@ impl fmt::Display for SymbolTableError {
             Self::UnknownSymbol(symbol) => {
                 write!(formatter, "unknown symbol ID {}", symbol.raw())
             }
+            Self::InvalidFunctionScope { scope, function } => write!(
+                formatter,
+                "scope {} cannot belong to function {}",
+                scope.raw(),
+                function.raw()
+            ),
             Self::DuplicateInScope {
                 scope,
                 existing,
@@ -314,10 +332,24 @@ pub struct SymbolTableTransaction {
 #[derive(Debug)]
 enum SymbolTableUndo {
     ScopeCreated,
-    SymbolDeclared { scope: ScopeId },
-    ExistingBound { scope: ScopeId },
-    SymbolTypeUpdated { symbol: SymbolId, previous: TypeId },
-    TagDeclared { scope: ScopeId },
+    SymbolDeclared {
+        scope: ScopeId,
+    },
+    ExistingBound {
+        scope: ScopeId,
+    },
+    SymbolTypeUpdated {
+        symbol: SymbolId,
+        previous: TypeId,
+    },
+    FunctionScopeBound {
+        scope: ScopeId,
+        previous: Option<SymbolId>,
+        previous_kind: ScopeKind,
+    },
+    TagDeclared {
+        scope: ScopeId,
+    },
 }
 
 /// Deterministic lexical-scope and ordinary-identifier table.
@@ -345,6 +377,7 @@ impl SymbolTable {
                 parent: None,
                 kind: ScopeKind::File,
                 span: None,
+                function_owner: None,
                 symbols: Vec::new(),
                 tags: Vec::new(),
                 tag_names: HashMap::new(),
@@ -376,12 +409,47 @@ impl SymbolTable {
             parent: Some(parent),
             kind,
             span,
+            function_owner: None,
             symbols: Vec::new(),
             tags: Vec::new(),
             tag_names: HashMap::new(),
         });
         self.record_undo(SymbolTableUndo::ScopeCreated);
         Ok(id)
+    }
+
+    /// Bind a definition's lexical scope without interpreting source offsets.
+    pub fn bind_function_scope(
+        &mut self,
+        scope: ScopeId,
+        function: SymbolId,
+    ) -> Result<(), SymbolTableError> {
+        let index = self.scope_index(scope)?;
+        let symbol = self.symbol(function)?;
+        let entry = &self.scopes[index];
+        if !matches!(
+            entry.kind,
+            ScopeKind::Function | ScopeKind::FunctionPrototype
+        ) || entry.parent != Some(self.file_scope())
+            || symbol.kind() != SymbolKind::Function
+            || symbol.scope() != self.file_scope()
+            || entry.function_owner.is_some_and(|owner| owner != function)
+        {
+            return Err(SymbolTableError::InvalidFunctionScope { scope, function });
+        }
+        let previous = entry.function_owner;
+        let previous_kind = entry.kind;
+        // A declarator is parsed before trailing attributes or outer layers
+        // reveal the body. Binding its definition completes that provisional
+        // prototype scope, without changing its symbols or identity.
+        self.scopes[index].kind = ScopeKind::Function;
+        self.scopes[index].function_owner = Some(function);
+        self.record_undo(SymbolTableUndo::FunctionScopeBound {
+            scope,
+            previous,
+            previous_kind,
+        });
+        Ok(())
     }
 
     pub fn declare(
@@ -729,6 +797,14 @@ impl SymbolTable {
             }
             SymbolTableUndo::SymbolTypeUpdated { symbol, previous } => {
                 self.symbols[symbol.raw() as usize].ty = previous;
+            }
+            SymbolTableUndo::FunctionScopeBound {
+                scope,
+                previous,
+                previous_kind,
+            } => {
+                self.scopes[scope.raw() as usize].function_owner = previous;
+                self.scopes[scope.raw() as usize].kind = previous_kind;
             }
             SymbolTableUndo::TagDeclared { scope } => {
                 let binding = self.tags.pop().expect("declared tag remains last");

@@ -1085,6 +1085,48 @@
     },
     "result": "PASS_MEASUREMENT_PUBLISHED_WITH_AA1_AND_AA2_OPEN"
   },
+  "declarationIdentityContinuation": {
+    "status": "IMPLEMENTED_AND_GATED_NOT_YET_PUBLISHED",
+    "authority": "docs/evoir-spec.md revision 1.9.59; continuation of the allocation-manifest and object-identity corpus findings",
+    "testsOnlyRedCommit": "690701b348748aeb1a56eb16abed29280aaab764",
+    "sourcePatch": {
+      "base": "690701b348748aeb1a56eb16abed29280aaab764",
+      "path": ".evidence/declaration-identity/20260905T020200Z/source.patch",
+      "sha256": "bbf2fdb7deb5690fc2fa0d4b98c00484efa458e33772c58439f501c5d3269e71",
+      "command": "git diff --binary -- crates/evocc-chir crates/evocc-parser crates/evocc-lower"
+    },
+    "workspace": {
+      "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER=/tmp/c30-cargo-runner.sh cargo test --workspace --no-fail-fast --quiet",
+      "exitCode": 0, "passed": 1553, "failed": 0, "ignored": 4, "targets": 235,
+      "log": ".evidence/declaration-identity/20260905T020200Z/workspace.log",
+      "sha256": "00ec28525273288b3bb70f16d3ac90fe32cbfe915f6ac18aee776c58c67237f6"
+    },
+    "otherGates": {
+      "clippy": { "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/target cargo clippy --workspace --all-targets -- -D warnings", "exitCode": 0, "log": ".evidence/declaration-identity/20260905T020200Z/clippy.log", "sha256": "84597614a5b0c844b8ac8b9c1fd548e1fd286020a93dbb7f5838abe7a3f3f771" },
+      "fmt": { "command": "cargo fmt --all -- --check", "exitCode": 0 },
+      "ruff": { "command": "ruff check tests/acceptance tools", "exitCode": 0 },
+      "baseLayout": { "command": "bash tests/acceptance/day5-layout-conformance.sh --subject", "runId": "20260905T014951Z-55602", "passed": 128, "mismatches": 0 },
+      "attributedLayout": { "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject", "runId": "20260905T015006Z-55585", "passed": 22, "mismatches": 0 }
+    },
+    "targetedCorpusReplay": {
+      "command": "Each captured argv in corpus.jsonl was executed verbatim in /private/tmp/c30-aa via subprocess.run with a 60-second timeout; the record set comes from 20260904T171723Z-48751. This is a targeted replay, not a full survey.",
+      "log": ".evidence/declaration-identity/20260905T020200Z/corpus.jsonl",
+      "sha256": "0eec3668ff56d5f3794cc2611fd75f7a16bbce5d80dc357425fc589c77036704",
+      "binarySha256": "12185e6ee35da6cef84f48c6bebac60bc08322fa582ec63ad46a03f6449ba310",
+      "objectIdentity": { "originalRecords": 12, "oldFirstErrorRemaining": 0, "nextFirstErrors": { "clean": 1, "E3026": 7, "E3036": 1, "E3021": 1, "E3101 global initializer is not an admitted integer constant": 2 } },
+      "manifest": { "sampleRecords": 4, "selection": "first, middle and last old-class records in sealed results order, plus aes-ce-ccm-glue.c", "oldFirstErrorRemaining": 0, "nextFirstErrors": { "E3030": 3, "E3033": 1 }, "claimCeiling": "Does not establish the count for all 2754 original manifest failures." }
+    },
+    "rejectedGate": {
+      "log": ".evidence/declaration-identity/20260905T020200Z/rejected-workspace.log",
+      "sha256": "18fe09a1914eda6957b129a9fa1e9b8f01c67c81e59bea99742018e105b3477b",
+      "reason": "The first implementation assumed a definition's parameter scope was already Function. Four existing parser tests exposed provisional FunctionPrototype scopes after trailing attributes or complex declarators. Definition binding now completes the scope kind, and both transaction and checkpoint rollback restore it. The rejected run is not GREEN evidence."
+    },
+    "outstanding": [
+      "New dashboard, full parse/lowering surveys and isolated offline replay have NOT RUN for this continuation; the published counts elsewhere in this receipt still refer to their named historical subjects.",
+      "AA-NEXT-GLOBAL-CONSTANT-LOWERING: const unsigned char a[] = {32 | 8}; parses but lowering emits E3101 global initializer is not an admitted integer constant. The two affected old-class records are libstub/lib-ctype and lib/compat_audit. No code or profile refusal was invented for this legal expression; the next repair scope or diagnostic ruling is pending.",
+      "AB-ASM-TEXT-EDGE-CONTRACT: section 3.11 has schematic asm forms, but the exhaustive section 9 grammar omits asm/asm.goto and does not define template escaping or asm.goto result/mem/world binders and output availability across successor edges. No asm RED or implementation was invented before that authority is supplied."
+    ]
+  },
   "subjectCommit": "a0157ce",
   "gate": {
     "claim": "Revision 1.9.59 AA3 is implemented and green on the fixed survey subject. Stage F3 remains closed: the dashboard is 48/48 clean and the full-configuration parse measurement is 2798/2798 clean. The lowering result is a measured frontier, not a completeness claim: 5 clean and 2793 typed first diagnostics, with zero unavailable, timeout, panic, or regression. AA1 and AA2 remain open because their corpus classes did not move.",
