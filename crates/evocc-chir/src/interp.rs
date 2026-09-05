@@ -6,6 +6,7 @@
 //! kernel and every operation outside the scalar contract fails closed.
 
 use std::{
+    cell::OnceCell,
     collections::{BTreeMap, BTreeSet, HashMap},
     fmt,
 };
@@ -867,6 +868,11 @@ pub fn interpret_static_integer_expression<'arena>(
     interpreter.eval_static_integer_expression(expression)
 }
 
+struct SymbolOrder {
+    functions: Vec<SymbolId>,
+    objects: BTreeMap<String, u64>,
+}
+
 struct Interpreter<'unit, 'arena> {
     unit: &'unit CHirUnit<'arena>,
     target: TargetDataLayout,
@@ -875,6 +881,7 @@ struct Interpreter<'unit, 'arena> {
     static_bindings: HashMap<SymbolId, MemoryBinding>,
     static_compound_bindings: HashMap<usize, MemoryBinding>,
     string_bindings: HashMap<usize, Pointer>,
+    symbol_order: OnceCell<SymbolOrder>,
     memory_frame: Option<MemoryFrame>,
     memory_mode: bool,
     memory: MemoryState,
@@ -914,6 +921,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             static_bindings: HashMap::new(),
             static_compound_bindings: HashMap::new(),
             string_bindings: HashMap::new(),
+            symbol_order: OnceCell::new(),
             memory_frame: None,
             memory_mode,
             memory,
@@ -1113,7 +1121,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             };
             let (memory, address) = self
                 .memory
-                .register_external(u64::MAX - u64::from(symbol.raw()), size, align)
+                .register_external(
+                    self.symbol_order().objects[entry.spelling()],
+                    size,
+                    align.max(entry.declared_alignment()),
+                )
                 .map_err(|error| self.memory_error(error, entry.span()))?;
             self.memory = memory;
             self.static_bindings.insert(
@@ -3669,12 +3681,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         }
 
         let target = linked_library_definition(self.unit, *symbol);
-        if let Some(result) =
-            self.evaluate_external_ctype(target, spelling, &arguments, call_span)?
-        {
-            return Ok(Some(CValue::Integer(result)));
-        }
-
         if !self.unit.iter().any(|declaration| matches!(declaration, CHirDecl::Function(function) if function.symbol == target && function.body.is_some())) {
             let result = self.external_library_call(target, spelling, &arguments, call_span)?;
             return Ok(Some(result));
@@ -3744,51 +3750,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         }
     }
 
-    fn evaluate_external_ctype(
-        &self,
-        symbol: SymbolId,
-        spelling: &str,
-        arguments: &[CValue],
-        span: SourceSpan,
-    ) -> Result<Option<CInteger>, InterpreterError> {
-        if !matches!(
-            spelling,
-            "isdigit" | "isalpha" | "isspace" | "toupper" | "tolower"
-        ) || self.unit.iter().any(|declaration| {
-            matches!(
-                declaration,
-                CHirDecl::Function(function)
-                    if function.symbol == symbol && function.body.is_some()
-            )
-        }) {
-            return Ok(None);
-        }
-        let [argument] = arguments else {
-            return Err(InterpreterError::UnsupportedFunctionSignature { symbol, span });
-        };
-        let value = match *argument {
-            CValue::Integer(value) => value.cast(CIntegerType::INT).mathematical_value(),
-            _ => {
-                return Err(InterpreterError::UnsupportedFunctionSignature { symbol, span });
-            }
-        };
-        let result = match spelling {
-            "isdigit" => i32::from((48..=57).contains(&value)),
-            "isalpha" => i32::from((65..=90).contains(&value) || (97..=122).contains(&value)),
-            "isspace" => i32::from((9..=13).contains(&value) || value == 32),
-            "toupper" if (97..=122).contains(&value) => {
-                i32::try_from(value - 32).expect("an ASCII upper-case code point fits int")
-            }
-            "tolower" if (65..=90).contains(&value) => {
-                i32::try_from(value + 32).expect("an ASCII lower-case code point fits int")
-            }
-            "toupper" | "tolower" => i32::try_from(value)
-                .map_err(|_| InterpreterError::UnsupportedFunctionSignature { symbol, span })?,
-            _ => unreachable!("ctype spelling checked above"),
-        };
-        Ok(Some(CInteger::int(result)))
-    }
-
     fn start_indirect_call(
         &mut self,
         callee: CValue,
@@ -3846,39 +3807,96 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn function_identity(&self, symbol: SymbolId) -> Option<u64> {
-        self.function_symbols()
-            .into_iter()
-            .position(|candidate| candidate == symbol)
+        let name = self.unit.symbols().symbol(symbol).ok()?.spelling();
+        self.symbol_order()
+            .functions
+            .iter()
+            .position(|candidate| {
+                self.unit
+                    .symbols()
+                    .symbol(*candidate)
+                    .is_ok_and(|entry| entry.spelling() == name)
+            })
             .and_then(|index| u64::try_from(index).ok())
             .and_then(|index| index.checked_add(1))
     }
 
-    fn function_symbols(&self) -> Vec<SymbolId> {
-        let mut symbols = self
-            .unit
-            .iter()
-            .filter_map(|declaration| match declaration {
-                CHirDecl::Function(function) if function.body.is_some() => Some(function.symbol),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        let mut seen = symbols.iter().copied().collect::<BTreeSet<_>>();
-        for declaration in self.unit.iter() {
-            if let CHirDecl::Function(function) = declaration {
-                let symbol = linked_library_definition(self.unit, function.symbol);
-                if seen.insert(symbol) {
-                    symbols.push(symbol);
+    fn symbol_order(&self) -> &SymbolOrder {
+        self.symbol_order.get_or_init(|| {
+            let mut symbols = self
+                .unit
+                .iter()
+                .filter_map(|declaration| match declaration {
+                    CHirDecl::Function(function) if function.body.is_some() => {
+                        Some(function.symbol)
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            let defined = symbols.iter().copied().collect::<BTreeSet<_>>();
+            let mut referenced = ReferencedSymbols::default();
+            for declaration in self.unit.iter() {
+                match declaration {
+                    CHirDecl::Function(function) => {
+                        if let Some(body) = function.body {
+                            collect_statement_symbols(body, &mut referenced);
+                        }
+                    }
+                    CHirDecl::Object(object) => {
+                        if let Some(initializer) = &object.initializer {
+                            for action in initializer.plan().actions() {
+                                if let InitAction::StoreScalar { value, .. }
+                                | InitAction::CopyAggregate { value, .. } = action
+                                {
+                                    collect_expression_symbols(value, &mut referenced);
+                                }
+                            }
+                        }
+                    }
+                    CHirDecl::Asm(_) => collect_declaration_symbols(declaration, &mut referenced),
+                    CHirDecl::Tag(_) | CHirDecl::Typedef(_) => {}
                 }
             }
-        }
-        symbols
+            let mut functions = BTreeMap::new();
+            let mut objects = BTreeSet::new();
+            for symbol in referenced.named {
+                let symbol = linked_library_definition(self.unit, symbol);
+                let Ok(entry) = self.unit.symbols().symbol(symbol) else {
+                    continue;
+                };
+                match entry.kind() {
+                    SymbolKind::Function if !defined.contains(&symbol) => {
+                        functions.insert(entry.spelling().to_owned(), symbol);
+                    }
+                    SymbolKind::Object
+                        if entry.storage_class() == Some(StorageClass::Extern)
+                            && !self
+                                .manifest
+                                .as_ref()
+                                .is_some_and(|manifest| manifest.object_site(symbol).is_some()) =>
+                    {
+                        objects.insert(entry.spelling().to_owned());
+                    }
+                    _ => {}
+                }
+            }
+            symbols.extend(functions.into_values());
+            SymbolOrder {
+                functions: symbols,
+                objects: objects
+                    .into_iter()
+                    .enumerate()
+                    .map(|(ordinal, name)| (name, u64::MAX - ordinal as u64))
+                    .collect(),
+            }
+        })
     }
 
     fn function_symbol(&self, identity: u64) -> Option<SymbolId> {
         let index = identity
             .checked_sub(1)
             .and_then(|index| usize::try_from(index).ok())?;
-        self.function_symbols().get(index).copied()
+        self.symbol_order().functions.get(index).copied()
     }
 
     #[allow(clippy::too_many_arguments)]

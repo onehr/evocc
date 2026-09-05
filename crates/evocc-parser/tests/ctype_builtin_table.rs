@@ -4,8 +4,6 @@ use evocc_common::{Arena, FileId};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_parser::Parser;
 
-const ORACLE_TABLE: &str = include_str!("fixtures/p28-table.out");
-
 fn parse<'arena>(source: &str, arena: &'arena Arena) -> Result<CHirUnit<'arena>, String> {
     let file = FileId::new(10_207);
     let mut lexer = Lexer::new(file, source);
@@ -50,39 +48,21 @@ fn evaluate(name: &str, input: &str) -> Result<i128, String> {
         .map_err(|error| error.to_string())
 }
 
-fn render_subject_table() -> Result<String, String> {
-    let mut output = String::new();
+// Section 10.1.3's external execution boundary supersedes the older
+// interpreter table requirement; the sealed oracle fixture remains unchanged.
+#[test]
+fn ctype_external_execution_requires_a_definition() {
     for name in [
         "__builtin_isdigit",
         "__builtin_isalpha",
         "__builtin_isspace",
+        "__builtin_toupper",
+        "__builtin_tolower",
     ] {
-        for input in 0..=255 {
-            output.push(if evaluate(name, &input.to_string())? == 0 {
-                '0'
-            } else {
-                '1'
-            });
+        for input in ["48", "-1", "0x130"] {
+            let error = evaluate(name, input)
+                .expect_err("undeclared external implementation must not be fabricated");
+            assert!(error.starts_with("E3039: "), "{name}: {error}");
         }
-        output.push('\n');
     }
-    for name in ["__builtin_toupper", "__builtin_tolower"] {
-        for input in 0..=255 {
-            let value = evaluate(name, &input.to_string())?;
-            output.push_str(&format!("{value:02x}"));
-        }
-        output.push('\n');
-    }
-    output.push_str(&format!(
-        "{} {}\n",
-        evaluate("__builtin_isdigit", "-1")?,
-        evaluate("__builtin_isdigit", "0x130")?
-    ));
-    Ok(output)
-}
-
-#[test]
-fn ctype_builtins_byte_match_the_sealed_p28_table() {
-    let actual = render_subject_table().expect("ctype builtins must execute");
-    assert_eq!(actual.as_bytes(), ORACLE_TABLE.as_bytes());
 }

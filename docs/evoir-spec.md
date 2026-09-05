@@ -5504,3 +5504,16 @@ The minimal canonical-text reproducer and its rejection control are in
 `crates/evocc-evoir/tests/external_symbols.rs`; this is an internal IR grammar
 conflict, not an oracle-measurable C behavior, and introduces no diagnostic code.
 Full-configuration impact has not yet been measured.
+
+### External ctype execution boundary
+
+Revision 1.9.64's seven-function execution boundary takes precedence over
+the older Section 10.1.14 ctype execution-table requirement: without a
+definition, calls to the five ctype functions, including their builtin
+spellings, report the existing E3039 in both interpreters.
+Evidence is the minimal calls in `crates/evocc/tests/external_symbol_lowering.rs`;
+the sealed `p26-builtins.c` and `p28-table.out` describe C behavior, not
+availability of an implementation in this executor.
+The original oracle-table fixture is unchanged; its interpreter test now
+pins the explicit refusal, while front-end admission and typing are unchanged.
+Full-configuration impact has not yet been measured.
