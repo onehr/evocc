@@ -112,6 +112,22 @@ fn pointer_integer_round_trip_retains_live_exposed_provenance() {
 }
 
 #[test]
+fn direct_object_function_pointer_conversion_keeps_the_distinct_ir_boundary() {
+    let arena = Arena::default();
+    let unit = parse(
+        "typedef int (*callback)(void); callback recover(void *p){return p;}",
+        &arena,
+    );
+    let error =
+        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap_err();
+    assert_eq!(error.code(), "E3043");
+    assert_eq!(
+        error.to_string(),
+        "not-lowered: object-function-pointer-conversion"
+    );
+}
+
+#[test]
 fn integer_addresses_resolve_only_live_exposed_storage() {
     check(
         "int main(void){unsigned long n=1; return *(int *)n;}",
