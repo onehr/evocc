@@ -91,6 +91,12 @@ pub enum LowerError {
     VarArgs {
         span: SourceSpan,
     },
+    CheckedArithmeticWidth {
+        span: SourceSpan,
+    },
+    ObjectFunctionPointerConversion {
+        span: SourceSpan,
+    },
     MalformedFunction {
         function: String,
         span: SourceSpan,
@@ -137,6 +143,12 @@ impl fmt::Display for LowerError {
             Self::Asm { .. } => formatter.write_str("not-lowered: asm"),
             Self::AsmOperand { reason, .. } => write!(formatter, "not-lowered: asm: {reason}"),
             Self::VarArgs { .. } => formatter.write_str("not-lowered: varargs"),
+            Self::CheckedArithmeticWidth { .. } => {
+                formatter.write_str("not-lowered: checked-arithmetic-width")
+            }
+            Self::ObjectFunctionPointerConversion { .. } => {
+                formatter.write_str("not-lowered: object-function-pointer-conversion")
+            }
             Self::MalformedFunction {
                 function, reason, ..
             } => write!(formatter, "malformed function {function}: {reason}"),
@@ -169,6 +181,8 @@ impl LowerError {
             Self::WideInteger { .. } => "E3033",
             Self::FunctionPointerArithmetic { .. } => "E3034",
             Self::GlobalRegisterVariable { .. } => "E3035",
+            Self::CheckedArithmeticWidth { .. } => "E3042",
+            Self::ObjectFunctionPointerConversion { .. } => "E3043",
             _ => "E3101",
         }
     }
@@ -196,6 +210,8 @@ impl LowerError {
             | Self::Asm { span }
             | Self::AsmOperand { span, .. }
             | Self::VarArgs { span }
+            | Self::CheckedArithmeticWidth { span }
+            | Self::ObjectFunctionPointerConversion { span }
             | Self::MalformedFunction { span, .. }
             | Self::InvalidControlFlow { span, .. }
             | Self::Layout { span, .. } => Some(*span),
@@ -1141,6 +1157,45 @@ fn symbolic_address(
                 .ok_or_else(error)?;
             Ok((format!("__evocc.compound.{origin}"), 0))
         }
+        CHirExpr::Member(base, name, _) | CHirExpr::PtrMember(base, name, _) => {
+            let direct = matches!(expression, CHirExpr::Member(..));
+            let addressed = CHirExpr::Unary(UnaryOp::AddrOf, base, span);
+            let record = evocc_chir::PointerTypeDesc::from_expression(
+                unit.symbols(),
+                unit.types(),
+                if direct { &addressed } else { base },
+            )
+            .map_err(|_| error())?
+            .pointee();
+            let path =
+                evocc_chir::record_member_path(unit.types(), record, name).ok_or_else(error)?;
+            let member = path.last().ok_or_else(error)?.field_ty();
+            if !address_of
+                && !unit
+                    .types()
+                    .get(member)
+                    .is_some_and(|ty| matches!(ty.kind, TypeKind::Array { .. }))
+            {
+                return Err(error());
+            }
+            let (symbol, mut offset) =
+                symbolic_address(unit, target, base, direct, origins, strings)?;
+            for field in path {
+                let layout = target
+                    .record_layout(unit.types(), field.tag())
+                    .map_err(|_| error())?;
+                let delta = layout
+                    .fields
+                    .iter()
+                    .find(|entry| entry.field_index == field.field_index())
+                    .ok_or_else(error)?
+                    .byte_offset;
+                offset = offset
+                    .checked_add(i64::try_from(delta).map_err(|_| error())?)
+                    .ok_or_else(error)?;
+            }
+            Ok((symbol, offset))
+        }
         CHirExpr::MemoryRead { place, .. }
             if address_of
                 || unit
@@ -1369,13 +1424,13 @@ fn apply_static_initializer(
             }
         }
         InitAction::StoreScalar { value, .. } => {
-            // A numeric cast is not a pointer relocation. Section 2.1 keeps
-            // pointer-valued static initializers outside the byte-only schema.
+            // Null uses the static zero representation; a non-null address
+            // needs a symbolic relocation, not fabricated pointer bytes.
             if matches!(
                 unit.types().get(destination).map(|ty| &ty.kind),
                 Some(TypeKind::Pointer(_))
             ) {
-                if null_pointer_constant(unit, target, value) {
+                if static_null_pointer(unit, target, value) {
                     target_bytes.fill(0);
                     return Ok(());
                 }
@@ -2880,16 +2935,57 @@ impl<'a> FunctionLowerer<'a> {
         self.next_block = 1;
 
         let locals = self.info.parameter_symbols.iter().copied().collect();
-        let flow = self.lower_stmt(
-            body,
-            State {
-                block: 0,
-                env,
-                locals,
-            },
-            &BTreeSet::new(),
-            &ControlTargets::default(),
-        )?;
+        let mut entry = State {
+            block: 0,
+            env,
+            locals,
+        };
+        // The call interface supplies scalar values, but an addressed parameter
+        // is an automatic object owned by this invocation, just like a local.
+        for (symbol, value_type) in self
+            .info
+            .parameter_symbols
+            .iter()
+            .copied()
+            .zip(self.info.parameter_types.iter())
+        {
+            if !self.memory_symbols.contains(&symbol) || self.is_aggregate_type(value_type.source) {
+                continue;
+            }
+            let value = entry.env.remove(&EnvKey::Local(symbol)).ok_or(
+                LowerError::InvalidGeneratedSsa {
+                    message: format!("parameter {} has no incoming scalar value", symbol.raw()),
+                },
+            )?;
+            let origin =
+                *self
+                    .allocation_origins
+                    .get(&symbol)
+                    .ok_or(LowerError::InvalidGeneratedSsa {
+                        message: format!("parameter {} has no allocation origin", symbol.raw()),
+                    })?;
+            let address =
+                self.emit_alloca(value_type.source, declaration.span, origin, &mut entry)?;
+            self.emit_memory_store(
+                address.clone(),
+                ExprValue {
+                    value: value.value,
+                    integer: value_type.integer,
+                },
+                value_type.source,
+                false,
+                declaration.span,
+                &mut entry,
+            )?;
+            entry.env.insert(
+                EnvKey::Address(symbol),
+                BoundValue {
+                    value: address,
+                    integer: None,
+                },
+            );
+        }
+        let flow = self.lower_stmt(body, entry, &BTreeSet::new(), &ControlTargets::default())?;
         if !self.pending_gotos.is_empty() {
             return Err(LowerError::InvalidControlFlow {
                 span: self.info.span,
@@ -4559,6 +4655,13 @@ impl<'a> FunctionLowerer<'a> {
                         value: result,
                         integer: CIntegerType::ULONG,
                     });
+                }
+                if matches!(
+                    (&value.value.ty, &expected),
+                    (EvoIRType::Ptr(_), EvoIRType::FnPtr { .. })
+                        | (EvoIRType::FnPtr { .. }, EvoIRType::Ptr(_))
+                ) {
+                    return Err(LowerError::ObjectFunctionPointerConversion { span });
                 }
                 Err(LowerError::UnsupportedExpression {
                     span,
@@ -7067,12 +7170,7 @@ impl<'a> FunctionLowerer<'a> {
             0..=32 => CIntegerType::INT,
             33..=64 => CIntegerType::LONG,
             65..=128 => CIntegerType::INT128,
-            _ => {
-                return Err(LowerError::UnsupportedExpression {
-                    span,
-                    feature: "checked arithmetic requires more than 128 exact bits",
-                })
-            }
+            _ => return Err(LowerError::CheckedArithmeticWidth { span }),
         };
         let left_value = state
             .env
@@ -8861,6 +8959,31 @@ fn constant_truth(
     expression: &CHirExpr<'_>,
 ) -> Option<bool> {
     constant_integer(unit, target, expression).map(CInteger::truth)
+}
+
+fn static_null_pointer(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    expression: &CHirExpr<'_>,
+) -> bool {
+    if null_pointer_constant(unit, target, expression) {
+        return true;
+    }
+    match expression {
+        CHirExpr::Cast(ty, operand, _)
+            if unit
+                .types()
+                .get(*ty)
+                .is_some_and(|ty| matches!(ty.kind, TypeKind::Pointer(_))) =>
+        {
+            static_null_pointer(unit, target, operand)
+        }
+        CHirExpr::Ternary(condition, left, right, _) => constant_truth(unit, target, condition)
+            .is_some_and(|condition| {
+                static_null_pointer(unit, target, if condition { left } else { right })
+            }),
+        _ => false,
+    }
 }
 
 fn null_pointer_constant(

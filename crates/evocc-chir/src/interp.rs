@@ -1233,25 +1233,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         self.unit.types(),
                         &mut self.memory,
                     )?;
-                    self.store_memory_value(
-                        address,
-                        *destination_type,
-                        Qualifiers::default(),
-                        value,
-                        span,
-                    )?;
+                    self.store_static_scalar(address, *destination_type, value, span)?;
                 }
                 InitAction::ZeroScalar {
                     destination_type, ..
                 } => {
                     let value = self.zero_value(*destination_type, span)?;
-                    self.store_memory_value(
-                        address,
-                        *destination_type,
-                        Qualifiers::default(),
-                        value,
-                        span,
-                    )?;
+                    self.store_static_scalar(address, *destination_type, value, span)?;
                 }
                 InitAction::StoreString {
                     destination_type,
@@ -1316,6 +1304,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 self.static_address_value(expression, true)
             }
             CHirExpr::StringLit(..) => self.static_address_value(expression, true),
+            CHirExpr::Member(..) | CHirExpr::PtrMember(..) => {
+                self.static_address_value(expression, true)
+            }
             CHirExpr::CompoundLit(_, _, span) => {
                 self.static_compound_pointer(expression, *span, true)
             }
@@ -1436,6 +1427,42 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 Ok(CValue::Pointer { value, ty })
             }
             CHirExpr::CompoundLit(..) => self.static_compound_pointer(expression, span, decay),
+            CHirExpr::Member(base, name, _) | CHirExpr::PtrMember(base, name, _) => {
+                let base = if matches!(expression, CHirExpr::Member(..)) {
+                    self.static_address_value(base, false)?
+                } else {
+                    self.eval_static_initializer_value(base)?
+                };
+                let (mut address, base_ty) = expect_machine_pointer(base, span)?;
+                let path = crate::record_member_path(self.unit.types(), base_ty.pointee(), name)
+                    .ok_or_else(unsupported)?;
+                let mut ty = path.last().ok_or_else(unsupported)?.field_ty();
+                for field in path {
+                    let layout = self
+                        .target
+                        .record_layout(self.unit.types(), field.tag())
+                        .map_err(|_| unsupported())?;
+                    let offset = layout
+                        .fields
+                        .iter()
+                        .find(|entry| entry.field_index == field.field_index())
+                        .ok_or_else(unsupported)?
+                        .byte_offset;
+                    address = address
+                        .checked_offset(i64::try_from(offset).map_err(|_| unsupported())?)
+                        .map_err(|error| self.memory_error(error, span))?;
+                }
+                if decay {
+                    ty = match self.unit.types().get(ty).map(|ty| &ty.kind) {
+                        Some(TypeKind::Array { element, .. }) => *element,
+                        _ => return Err(unsupported()),
+                    };
+                }
+                Ok(CValue::Pointer {
+                    value: address,
+                    ty: pointer_type(ty)?,
+                })
+            }
             CHirExpr::Unary(UnaryOp::Deref, operand, _) => {
                 self.eval_static_initializer_value(operand)
             }
@@ -6151,6 +6178,40 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             });
         }
         let layout = self.access_layout(ty, span)?;
+        self.store_memory_value_with_layout(address, ty, qualifiers, value, span, layout)
+    }
+
+    fn store_static_scalar(
+        &mut self,
+        address: Pointer,
+        ty: TypeId,
+        value: CValue,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        let mut layout = self.access_layout(ty, span)?;
+        let object = self
+            .memory
+            .object_info(address.object())
+            .map_err(|error| self.memory_error(error, span))?;
+        layout.align_bytes = layout.align_bytes.min(object.layout.align_bytes);
+        let offset = address.byte_offset().unsigned_abs();
+        if offset != 0 {
+            layout.align_bytes = layout
+                .align_bytes
+                .min(1_u32 << offset.trailing_zeros().min(31));
+        }
+        self.store_memory_value_with_layout(address, ty, Qualifiers::default(), value, span, layout)
+    }
+
+    fn store_memory_value_with_layout(
+        &mut self,
+        address: Pointer,
+        ty: TypeId,
+        qualifiers: Qualifiers,
+        value: CValue,
+        span: SourceSpan,
+        layout: AccessLayout,
+    ) -> Result<CValue, InterpreterError> {
         match (self.value_type(ty, span)?, value) {
             (ValueType::Integer(integer_type), CValue::Integer(value)) => {
                 let value = value.cast(integer_type);

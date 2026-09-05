@@ -5552,6 +5552,33 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Checked arithmetic outside the signed exact-width bound
+
+Section 10.1.15's signed-width formula remains authoritative: two unsigned 64-bit operands require 130 counted bits for multiplication, contradicting its claim that every cohort use fits 128.
+Both sealed oracles print `0 4900000000`, `1 18446744073709551614`, and `1 1` for `.evidence/builtin-probes/20260906-checked-width/width.c`, recorded in `width.out`; this does not authorize replacing the body's signed exact representation with an unsigned one.
+The existing refusal is named E3042 (`not-lowered: checked-arithmetic-width`), rather than hidden under E3101.
+This construct is the first error in 47 units of sealed run `20260905T201056Z-67314`.
+
+### Direct object/function pointer conversion boundary
+
+Section 10.1.18 admits the C conversion, but Section 3.10 explicitly keeps `ptr<AS>` and `fnptr<Sig>` distinct without a direct conversion; this boundary is retained as E3043 (`not-lowered: object-function-pointer-conversion`).
+Both sealed oracles print `7` for `.evidence/builtin-probes/20260906-function-pointer-conversion/conversion.c`, recorded in `conversion.out`; the front end still accepts that source, while an explicit whole-pointer integer round trip uses the separately specified Section 3 conversions.
+No pointer retyping, invented callee, or validator relaxation is introduced.
+Seven units first encounter the direct conversion in sealed run `20260905T201056Z-67314`.
+
+### Assembly immediates before specialization
+
+Section 3.11's `i` operand must be a proved integer constant, and Section 10.1.9 preserves `always_inline` without applying it, so an unspecialized parameter retains E3021 with constraint name `i`.
+Both sealed oracles accept the constant-specialized form and reject the dynamic form in `.evidence/builtin-probes/20260906-immediate-parameter/immediate.c`, recorded in `immediate.out`.
+No inlining promise is inferred from a preserved attribute and no new diagnostic is allocated.
+This is the first error in three units of sealed run `20260905T201056Z-67314`.
+
+### Pointer difference remains a separate execution obligation
+
+The new pointer/integer casts do not discharge the same-object obligation of pointer subtraction, whose existing body-required lowering refusal remains E3032.
+The measured value and type are retained in `.evidence/builtin-probes/20260901-2c23684c/p11.c` and `p11.out`, with a lowering-refusal control in `crates/evocc-lower/tests/fail_closed_forms.rs`.
+Eight zstd units first encounter this construct in sealed run `20260905T201056Z-67314`; no diagnostic or pointer-difference instruction is invented.
+
 ### Static compound storage and block linkage
 
 Both sealed oracles compile `.evidence/builtin-probes/20260906-static-storage/storage.c`
