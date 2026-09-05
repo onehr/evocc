@@ -4861,7 +4861,7 @@ fn read_pointer_value(
         }
         InternalValue::Bits(_) => Err(InterpreterError::InvalidFunction {
             message: format!(
-                    "block {block} consumes non-pointer v{} as a pointer value",
+                "block {block} consumes non-pointer v{} as a pointer value",
                 value.id
             ),
         }),
