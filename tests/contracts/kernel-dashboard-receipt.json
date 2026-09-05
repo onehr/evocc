@@ -1,8 +1,8 @@
 {
   "receiptId": "c30.kernel-dashboard",
-  "subjectCommit": "860eace",
-  "publishedFromRun": "20260905T193450Z-81402",
-  "previousRun": "20260905T184422Z-99139",
+  "subjectCommit": "5fb654a",
+  "publishedFromRun": "20260905T220441Z-5219",
+  "previousRun": "20260905T193450Z-81402",
   "cohortSha256": "09d0e2eaf0734949164a491d30df640bf396ff7586ef495f938f565b8879a306",
   "observer": {
     "path": "tests/acceptance/day5-kernel-reductions-observer.py",
@@ -13,7 +13,7 @@
     "environmentSha256": "3a82229be390ec5113ea554a496314b41727c040450d12f3f58881a4aa7c0bed",
     "returnCode": 0,
     "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "stdoutSha256": "92bea83e53af1993b1c6f6072581de1da0741e0895ef746ef5788fb9f77de818",
+    "stdoutSha256": "cd0c8d11f1a89a374fce3546f3ecc370b7ee235c7ff6c0e2975120339533cf7a",
     "timedOut": false
   },
   "command": "tests/acceptance/day5-kernel-reconnaissance.py --timeout 120 --parser-timeout 10 --parser-jobs 4 --subject-profile release",
@@ -23,7 +23,7 @@
     "parserJobs": 4,
     "change": "subject compiler changed from debug to release; timeout remained 10 seconds",
     "runConfig": {
-      "path": ".evidence/day5-kernel-reconnaissance/20260905T193450Z-81402/run-config.json",
+      "path": ".evidence/day5-kernel-reconnaissance/20260905T220441Z-5219/run-config.json",
       "sha256": "b0e05c674acdc96b948c3ea99ef0015e9e933148c6ada5afc15c677f63543907"
     }
   },
@@ -50,16 +50,16 @@
   "regressionsAgainstPrevious": [],
   "artifacts": {
     "results": {
-      "path": ".evidence/day5-kernel-reconnaissance/20260905T193450Z-81402/results.jsonl",
-      "sha256": "8e38e1b2d47bc49409f30f53cb07e5e2a53cb686f329077b6563935ac8441c71"
+      "path": ".evidence/day5-kernel-reconnaissance/20260905T220441Z-5219/results.jsonl",
+      "sha256": "a9c2687397057886775924ec660ad94b6ac4067de46a4dd6784eca545783e7ab"
     },
     "routing": {
-      "path": ".evidence/kernel-dashboard/860eace/routing.json",
+      "path": ".evidence/kernel-dashboard/5fb654a/routing.json",
       "sha256": "b85ebfa02174bf2d841feacc1f16029006c9750b824f442068ec332b2752c06c"
     },
     "captureStatus": {
-      "path": ".evidence/kernel-dashboard/860eace/reconnaissance.status",
-      "sha256": "7168b7194ecc859d3377b49c7964ec41168ba8a59d067de37655249b4b45b845"
+      "path": ".evidence/kernel-dashboard/5fb654a/reconnaissance.status",
+      "sha256": "6113f56dfa8ec5d7ca02cc42294574c175841ba7a35963499b233013d9422def"
     }
   }
 }

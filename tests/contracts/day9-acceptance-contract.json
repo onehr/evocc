@@ -105,7 +105,7 @@
     "workspace, clippy -D warnings, fmt, diff-check green; one isolated offline clone replay"
   ],
   "receipt": "tests/contracts/day9-acceptance-receipt.json: per item above, the command and the number",
-  "cutLine": "A and B are closed. The typeof + _Generic portion of C is open by architecture-owner instruction on 2026-08-25; the rest of C and all of D remain deferred and their red sets are not opened.",
+  "cutLine": "Historical entries retain their original authority. AC, AD and AF are verified closed at their stated boundaries. AE2's earlier closure is reopened by the measured signed exact-width conflict. The overall lowering finish criterion is not met: body-required refusals remain and take precedence under the delegated gap protocol.",
   "reviewRequested": "2026-08-25, revision 1.9 sections 10.1.9 and 8.10-8.11/11.3; one round; findings land as amendments",
   "scopeClosures": {
     "AC": {
@@ -123,14 +123,24 @@
       "remainingFrontier": "2464 E3101 from function-parameter adjustment; 303 checked arithmetic and the other measured classes are subsequent work. No claim of overall lowering closure."
     },
     "AE2": {
-      "status": "CLOSED",
-      "subjectCommit": "9475b5a8cdce3791714a4ad7f58d33ecfe89f49a",
-      "runId": "20260905T185525Z-27277",
-      "gateSubject": "860eace",
+      "status": "OPEN_BODY_CONFLICT",
+      "historicalClosureRun": "20260905T185525Z-27277",
+      "subjectCommit": "5fb654a1750b758c42fbec91903fc66c0d629960",
+      "runId": "20260905T213244Z-60582",
+      "gateSubject": "5fb654a1750b758c42fbec91903fc66c0d629960",
       "E3020": 0,
       "E3023": 0,
-      "E3021": 0,
-      "remainingFrontier": "2700 E3035; 43 E3026; 33 E3036; 14 E3101; 2 E3029. No overall lowering closure."
+      "E3042": 48,
+      "remainingFrontier": "Module assembly and bit instructions are implemented. The body's signed exact-width formula requires more than 128 counted bits for unsigned-long multiplication; Appendix D records the conflict and E3042. Removing the older error codes was not sufficient evidence of complete checked arithmetic."
+    },
+    "AF": {
+      "status": "CLOSED",
+      "subjectCommit": "5fb654a1750b758c42fbec91903fc66c0d629960",
+      "runId": "20260905T213244Z-60582",
+      "gateSubject": "5fb654a1750b758c42fbec91903fc66c0d629960",
+      "E3026": 0,
+      "E3036": 0,
+      "remainingFrontier": "19 clean; 2779 diagnosed: E3035 2711, E3042 48, E3032 8, E3043 7, E3021 3, E3029 2. These are outside the requested terminal residual whitelist; no overall closure is claimed."
     }
   }
 }
