@@ -130,12 +130,7 @@ pub fn render_module(module: &Module) -> String {
         rendered.push_str(&format!(
             "declare @{}({}) -> ({}) cc = target_default\n",
             declaration.name,
-            declaration
-                .params
-                .iter()
-                .map(render_type)
-                .collect::<Vec<_>>()
-                .join(", "),
+            render_parameter_types(&declaration.params, declaration.variadic),
             declaration
                 .ret_tys
                 .iter()
@@ -171,13 +166,13 @@ fn render_type(ty: &EvoIRType) -> String {
                 AddressSpace::ThreadLocal => "threadlocal",
             }
         ),
-        EvoIRType::FnPtr { params, results } => format!(
+        EvoIRType::FnPtr {
+            params,
+            results,
+            variadic,
+        } => format!(
             "fnptr<({})->({})>",
-            params
-                .iter()
-                .map(render_type)
-                .collect::<Vec<_>>()
-                .join(", "),
+            render_parameter_types(params, *variadic),
             results
                 .iter()
                 .map(render_type)
@@ -644,16 +639,29 @@ impl FunctionRenderer {
     }
 }
 
+fn render_parameter_types(params: &[EvoIRType], variadic: bool) -> String {
+    render_parameters(params.iter().map(render_type).collect(), variadic)
+}
+
+fn render_parameters(mut parameters: Vec<String>, variadic: bool) -> String {
+    if variadic {
+        parameters.insert(parameters.len().saturating_sub(2), "...".into());
+    }
+    parameters.join(", ")
+}
+
 fn render_function(function: &Function) -> String {
     let mut rendered = String::new();
     let calling_convention = "target_default";
-    let parameters = function
-        .params
-        .iter()
-        .enumerate()
-        .map(|(index, parameter)| format!("%arg{index}: {}", render_type(&parameter.ty)))
-        .collect::<Vec<_>>()
-        .join(", ");
+    let parameters = render_parameters(
+        function
+            .params
+            .iter()
+            .enumerate()
+            .map(|(index, parameter)| format!("%arg{index}: {}", render_type(&parameter.ty)))
+            .collect::<Vec<_>>(),
+        function.variadic,
+    );
     let returns = function
         .ret_tys
         .iter()
@@ -732,6 +740,7 @@ mod tests {
             declares: Vec::new(),
             globals: vec![],
             functions: vec![Function {
+                variadic: false,
                 name: "stopped".to_owned(),
                 params: Vec::new(),
                 ret_tys: vec![EvoIRType::Bits(32)],
@@ -798,6 +807,7 @@ mod tests {
             ),
             (
                 EvoIRType::FnPtr {
+                    variadic: false,
                     params: vec![
                         EvoIRType::Bits(32),
                         EvoIRType::Mem(Region::All),
@@ -839,6 +849,7 @@ mod tests {
             value(
                 id,
                 EvoIRType::FnPtr {
+                    variadic: false,
                     params: vec![
                         EvoIRType::Bits(32),
                         EvoIRType::Mem(Region::All),

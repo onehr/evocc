@@ -120,6 +120,7 @@ fn counted_loop(remask: bool) -> Module {
     let carried_on = if remask { remasked } else { stepped };
 
     let function = Function {
+        variadic: false,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {
@@ -473,6 +474,7 @@ fn a_xor_of_two_fully_known_arguments_folds_on_its_fact() {
     let other = bits(6);
     let result = bits(9);
     let function = Function {
+        variadic: false,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {
@@ -584,6 +586,7 @@ fn a_comparison_the_sweep_folded_is_stated_as_the_rule_the_region_can_prove() {
         ty: EvoIRType::Bits(1),
     };
     let function = Function {
+        variadic: false,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {
@@ -697,6 +700,7 @@ fn double_negation(derived: bool) -> Module {
         )
     };
     let function = Function {
+        variadic: false,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {

@@ -51,6 +51,7 @@ fn probe(insts: Vec<Inst>, root: Value) -> Module {
         ty: EvoIRType::World,
     };
     let function = Function {
+        variadic: false,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {

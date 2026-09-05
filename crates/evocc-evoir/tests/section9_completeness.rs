@@ -35,6 +35,7 @@ fn function_pointer(id: u32) -> Value {
     value(
         id,
         EvoIRType::FnPtr {
+            variadic: false,
             params: vec![
                 EvoIRType::Bits(37),
                 EvoIRType::Mem(Region::All),
@@ -59,6 +60,7 @@ fn sentinel_types() -> Vec<EvoIRType> {
         EvoIRType::Ptr(AddressSpace::Stack),
         EvoIRType::Ptr(AddressSpace::ThreadLocal),
         EvoIRType::FnPtr {
+            variadic: false,
             params: vec![
                 EvoIRType::Bits(13),
                 EvoIRType::Mem(Region::All),
@@ -291,6 +293,7 @@ fn sentinel_module() -> Module {
             },
         ],
         functions: vec![Function {
+            variadic: false,
             name: "sentinel_function".to_owned(),
             params,
             ret_tys: vec![EvoIRType::F64, EvoIRType::Mem(Region::Escaped)],
@@ -616,9 +619,13 @@ fn type_schema(ty: &EvoIRType) -> &'static str {
             let _ = address_space;
             "EvoIRType.Ptr(address_space)"
         }
-        EvoIRType::FnPtr { params, results } => {
-            let _ = (params, results);
-            "EvoIRType.FnPtr(params,results)"
+        EvoIRType::FnPtr {
+            params,
+            results,
+            variadic,
+        } => {
+            let _ = (params, results, variadic);
+            "EvoIRType.FnPtr(params,results,variadic)"
         }
         EvoIRType::Vec(count, element) => {
             let _ = (count, element);
@@ -669,12 +676,13 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
         let Function {
             name,
             params,
+            variadic,
             ret_tys,
             effects,
             blocks,
         } = function;
-        let _ = (name, ret_tys);
-        keys.insert("Function(name,params,ret_tys,effects,blocks)");
+        let _ = (name, ret_tys, variadic);
+        keys.insert("Function(name,params,variadic,ret_tys,effects,blocks)");
         for param in params {
             let FunctionParam { name, ty } = param;
             let _ = (name, ty);

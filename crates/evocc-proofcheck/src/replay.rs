@@ -1628,6 +1628,7 @@ mod tests {
             declares: Vec::new(),
             globals: Vec::new(),
             functions: vec![Function {
+                variadic: false,
                 name: "main".to_owned(),
                 params: if with_input {
                     vec![FunctionParam {

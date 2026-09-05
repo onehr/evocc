@@ -22,6 +22,7 @@ fn evoir_refuses_executed_bits128_arithmetic_with_e3033() {
         declares: Vec::new(),
         globals: vec![],
         functions: vec![Function {
+            variadic: false,
             name: "main".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(128)],

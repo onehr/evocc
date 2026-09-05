@@ -670,6 +670,7 @@ impl EffectSummary {
 pub struct Function {
     pub name: String,
     pub params: Vec<FunctionParam>,
+    pub variadic: bool,
     pub ret_tys: Vec<EvoIRType>,
     pub effects: EffectSummary,
     pub blocks: Vec<Block>,
@@ -697,6 +698,7 @@ pub struct ExternalObject {
 pub struct FunctionDeclaration {
     pub name: String,
     pub params: Vec<EvoIRType>,
+    pub variadic: bool,
     pub ret_tys: Vec<EvoIRType>,
 }
 
@@ -704,6 +706,7 @@ impl FunctionDeclaration {
     fn signature(&self) -> Function {
         Function {
             name: self.name.clone(),
+            variadic: self.variadic,
             params: self
                 .params
                 .iter()
@@ -904,6 +907,9 @@ pub struct GlobalObject {
 /// or an instruction result defined earlier in that same block.  Values that
 /// cross a CFG edge must be passed explicitly to the destination arguments.
 pub fn validate_ssa(func: &Function) -> Result<(), String> {
+    if func.variadic {
+        callable_signature(func)?;
+    }
     let Some(entry) = func.blocks.first() else {
         return Err(format!("function '{}' has no entry block", func.name));
     };
@@ -1443,6 +1449,7 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
 fn function_pointer_type(function: &Function) -> Result<EvoIRType, String> {
     callable_signature(function)?;
     Ok(EvoIRType::FnPtr {
+        variadic: function.variadic,
         params: function
             .params
             .iter()
@@ -1533,7 +1540,9 @@ fn validate_call_signature(
             caller.name, block, instruction
         )
     })?;
-    if args.len() != signature.ordinary_params.len() {
+    if args.len() < signature.ordinary_params.len()
+        || (!callee.variadic && args.len() != signature.ordinary_params.len())
+    {
         return Err(format!(
             "call from '{}' to '{}' has {} ordinary arguments, expected {}",
             caller.name,
@@ -1541,6 +1550,17 @@ fn validate_call_signature(
             args.len(),
             signature.ordinary_params.len()
         ));
+    }
+    for argument in &args[signature.ordinary_params.len()..] {
+        if !matches!(
+            argument.ty,
+            EvoIRType::Bits(32 | 64 | 128)
+                | EvoIRType::F64
+                | EvoIRType::Ptr(_)
+                | EvoIRType::FnPtr { .. }
+        ) {
+            return Err("anonymous argument is not a promoted scalar type".into());
+        }
     }
     for (index, (argument, parameter)) in args.iter().zip(signature.ordinary_params).enumerate() {
         if argument.ty != parameter.ty {
@@ -2224,6 +2244,7 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             let EvoIRType::FnPtr {
                 params,
                 results: returns,
+                variadic,
             } = &callee.ty
             else {
                 return Err(format!(
@@ -2243,10 +2264,31 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
                 .collect::<Vec<_>>();
             actual_returns.push(mem_out.ty.clone());
             actual_returns.push(world_out.ty.clone());
-            if actual_params != *params || actual_returns != *returns {
+            let fixed = params.len().saturating_sub(2);
+            let parameters_match = if *variadic {
+                args.len() >= fixed
+                    && actual_params[..fixed] == params[..fixed]
+                    && actual_params[actual_params.len() - 2..] == params[fixed..]
+            } else {
+                actual_params == *params
+            };
+            if !parameters_match || actual_returns != *returns {
                 return Err(format!(
                     "E3017: indirect-call-signature-mismatch in block {block}"
                 ));
+            }
+            if *variadic
+                && args[fixed..].iter().any(|argument| {
+                    !matches!(
+                        argument.ty,
+                        EvoIRType::Bits(32 | 64 | 128)
+                            | EvoIRType::F64
+                            | EvoIRType::Ptr(_)
+                            | EvoIRType::FnPtr { .. }
+                    )
+                })
+            {
+                return Err("anonymous argument is not a promoted scalar type".into());
             }
             expect_effect_tokens(mem_in, world_in, mem_out, world_out, "indirect call", block)
         }
@@ -2484,7 +2526,9 @@ pub fn validate_type_well_formed(ty: &EvoIRType) -> Result<(), String> {
             EvoIRType::Tuple(elements) => {
                 pending.extend(elements.iter().map(|element| (element, depth + 1)));
             }
-            EvoIRType::FnPtr { params, results } => {
+            EvoIRType::FnPtr {
+                params, results, ..
+            } => {
                 if params.len() < 2 || results.len() < 2 {
                     return Err("fnptr signature lacks trailing mem<R>, world interface".to_owned());
                 }
@@ -5130,6 +5174,7 @@ mod tests {
         let one = bits(2, 32);
         let result = bits(3, 32);
         Function {
+            variadic: false,
             name: "threaded".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
@@ -5164,6 +5209,7 @@ mod tests {
         let global_out = value(3, mem_global.clone());
         let world_out = value(4, world.clone());
         Function {
+            variadic: false,
             name: "tokens".to_owned(),
             params: vec![
                 FunctionParam {
@@ -5208,6 +5254,7 @@ mod tests {
         let one = bits(1, 32);
         let result = bits(2, 32);
         let function = Function {
+            variadic: false,
             name: "increment".to_owned(),
             params: vec![FunctionParam {
                 name: "x".to_owned(),
@@ -5265,6 +5312,7 @@ mod tests {
         let pointer_type = EvoIRType::Ptr(AddressSpace::Stack);
         let pointer = value(10, pointer_type.clone());
         let pointer_function = Function {
+            variadic: false,
             name: "pointer_passthrough".to_owned(),
             params: vec![FunctionParam {
                 name: "pointer".to_owned(),
@@ -5343,6 +5391,7 @@ mod tests {
         let left = bits(31, 32);
         let right = bits(32, 32);
         let bad_condition = Function {
+            variadic: false,
             name: "bad_condition".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
@@ -5404,6 +5453,7 @@ mod tests {
         let left = bits(0, 32);
         let right = bits(1, 32);
         let mut deep_result = Function {
+            variadic: false,
             name: "deep_result".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
@@ -5515,6 +5565,7 @@ mod tests {
         let next_n = bits(10, 32);
         let returned = bits(11, 32);
         let function = Function {
+            variadic: false,
             name: "loop_sum".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
@@ -5585,6 +5636,7 @@ mod tests {
         let out_a = bits(7, 32);
         let out_b = bits(8, 32);
         let function = Function {
+            variadic: false,
             name: "swap_once".to_owned(),
             params: vec![
                 FunctionParam {
@@ -5654,6 +5706,7 @@ mod tests {
         let raw = bits(0, 64);
         let same = bits(1, 64);
         let function = Function {
+            variadic: false,
             name: "raw".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(64)],
@@ -5682,6 +5735,7 @@ mod tests {
         let zero = bits(1, 32);
         let quotient = bits(2, 32);
         let division = Function {
+            variadic: false,
             name: "division".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
@@ -5750,6 +5804,7 @@ mod tests {
         let memory = value(1, memory_ty.clone());
         let world = value(2, EvoIRType::World);
         Function {
+            variadic: false,
             name: name.to_owned(),
             params: vec![
                 FunctionParam {
@@ -5789,6 +5844,7 @@ mod tests {
         let memory_out = value(4, memory_ty.clone());
         let world_out = value(5, EvoIRType::World);
         let main = Function {
+            variadic: false,
             name: "main".to_owned(),
             params: vec![
                 FunctionParam {
@@ -5839,6 +5895,7 @@ mod tests {
     fn indirect_call_module(null: bool) -> Module {
         let memory_ty = EvoIRType::Mem(Region::All);
         let signature = EvoIRType::FnPtr {
+            variadic: false,
             params: vec![EvoIRType::Bits(32), memory_ty.clone(), EvoIRType::World],
             results: vec![EvoIRType::Bits(32), memory_ty.clone(), EvoIRType::World],
         };
@@ -5858,6 +5915,7 @@ mod tests {
             }
         };
         let main = Function {
+            variadic: false,
             name: "main".to_owned(),
             params: vec![
                 FunctionParam {
@@ -5925,6 +5983,7 @@ mod tests {
         let memory_out = value(14, memory_ty.clone());
         let world_out = value(15, EvoIRType::World);
         let countdown = Function {
+            variadic: false,
             name: "countdown".to_owned(),
             params: vec![
                 FunctionParam {
@@ -6344,6 +6403,7 @@ mod tests {
         let add_ok = bits(2, 1);
         let sum = bits(3, 8);
         let function = Function {
+            variadic: false,
             name: "defined_add".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(8)],
@@ -6406,6 +6466,7 @@ mod tests {
         let one = bits(11, 8);
         let add_ok = bits(12, 1);
         let overflow = Function {
+            variadic: false,
             name: "overflow".to_owned(),
             params: vec![],
             ret_tys: vec![],
@@ -6435,6 +6496,7 @@ mod tests {
         let sub_ok = bits(22, 1);
         let mul_ok = bits(23, 1);
         let predicates = Function {
+            variadic: false,
             name: "predicates".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(1), EvoIRType::Bits(1)],
@@ -6478,6 +6540,7 @@ mod tests {
         let xor = bits(14, 8);
         let invalid_shl = bits(15, 8);
         let operations = Function {
+            variadic: false,
             name: "extended_integer_ops".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(8); 9],
@@ -6533,6 +6596,7 @@ mod tests {
         let seven = bits(27, 8);
         let predicates: Vec<Value> = (30..=40).map(|id| bits(id, 1)).collect();
         let predicate_function = Function {
+            variadic: false,
             name: "separated_predicates".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(1); predicates.len()],
@@ -6633,6 +6697,7 @@ mod tests {
         let mixed_predicates: Vec<Value> = (54..=58).map(|id| bits(id, 1)).collect();
         let shifted_result = bits(59, 64);
         let mixed_width_shifts = Function {
+            variadic: false,
             name: "mixed_width_shifts".to_owned(),
             params: vec![],
             ret_tys: vec![
@@ -6804,6 +6869,7 @@ mod tests {
             instructions.push(Inst::UbAssume(condition, reason));
             let budget = instructions.len() as u64 + 1;
             let function = Function {
+                variadic: false,
                 name: "typed_ub".to_owned(),
                 params: vec![],
                 ret_tys: vec![],
@@ -6841,6 +6907,7 @@ mod tests {
         assert!(inst_uses(&instruction).is_empty());
 
         let function = Function {
+            variadic: false,
             name: "uninitialized_scalar".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
@@ -6856,6 +6923,7 @@ mod tests {
 
         let pointer = value(71, EvoIRType::Ptr(AddressSpace::Stack));
         let pointer_function = Function {
+            variadic: false,
             name: "uninitialized_pointer".to_owned(),
             params: vec![],
             ret_tys: vec![],
@@ -6879,6 +6947,7 @@ mod tests {
             ]),
         ] {
             let invalid = Function {
+                variadic: false,
                 name: "uninitialized_effect_token".to_owned(),
                 params: vec![],
                 ret_tys: vec![],
@@ -6900,6 +6969,7 @@ mod tests {
         }
 
         let invalid_void = Function {
+            variadic: false,
             name: "uninitialized_void".to_owned(),
             params: vec![],
             ret_tys: vec![],
@@ -6920,6 +6990,7 @@ mod tests {
         let carried = bits(101, 32);
         let replacement = bits(102, 32);
         let function = Function {
+            variadic: false,
             name: "propagate_uninitialized".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
@@ -7002,6 +7073,7 @@ mod tests {
         let next_i = bits(120, 32);
         let exit_x = bits(121, 32);
         let function = Function {
+            variadic: false,
             name: "definite_assignment_loop".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
@@ -7081,6 +7153,7 @@ mod tests {
     fn uninitialized_return_traps_with_e3001_in_function_and_module_interpreters() {
         let result = bits(100, 32);
         let function = Function {
+            variadic: false,
             name: "uninitialized_read".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
@@ -7161,6 +7234,7 @@ mod tests {
         let cases = vec![
             (
                 Function {
+                    variadic: false,
                     name: "uninitialized_arithmetic".to_owned(),
                     params: vec![],
                     ret_tys: vec![EvoIRType::Bits(32)],
@@ -7180,6 +7254,7 @@ mod tests {
             ),
             (
                 Function {
+                    variadic: false,
                     name: "uninitialized_comparison".to_owned(),
                     params: vec![],
                     ret_tys: vec![EvoIRType::Bits(1)],
@@ -7199,6 +7274,7 @@ mod tests {
             ),
             (
                 Function {
+                    variadic: false,
                     name: "uninitialized_cast".to_owned(),
                     params: vec![],
                     ret_tys: vec![EvoIRType::Bits(64)],
@@ -7217,6 +7293,7 @@ mod tests {
             ),
             (
                 Function {
+                    variadic: false,
                     name: "uninitialized_zero_extend".to_owned(),
                     params: vec![],
                     ret_tys: vec![EvoIRType::Bits(32)],
@@ -7235,6 +7312,7 @@ mod tests {
             ),
             (
                 Function {
+                    variadic: false,
                     name: "uninitialized_truncate".to_owned(),
                     params: vec![],
                     ret_tys: vec![EvoIRType::Bits(8)],
@@ -7253,6 +7331,7 @@ mod tests {
             ),
             (
                 Function {
+                    variadic: false,
                     name: "uninitialized_shifted_predicate_operand".to_owned(),
                     params: vec![],
                     ret_tys: vec![EvoIRType::Bits(1)],
@@ -7290,6 +7369,7 @@ mod tests {
 
         let poison_condition = bits(150, 1);
         let condition_function = Function {
+            variadic: false,
             name: "uninitialized_condition".to_owned(),
             params: vec![],
             ret_tys: vec![],
@@ -7394,6 +7474,7 @@ mod tests {
         assert!(is_terminator(&trap));
 
         let function = Function {
+            variadic: false,
             name: "fallthrough".to_owned(),
             params: vec![],
             ret_tys: vec![EvoIRType::Bits(32)],
@@ -7418,6 +7499,7 @@ mod tests {
         let safe_value = bits(161, 32);
         let returned = bits(162, 32);
         let function = Function {
+            variadic: false,
             name: "conditional_fallthrough".to_owned(),
             params: vec![FunctionParam {
                 name: "take_safe_return".to_owned(),

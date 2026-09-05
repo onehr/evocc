@@ -8950,6 +8950,31 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         .unwrap_or_else(|| self.span());
                     self.expect(TokenKind::RParen)?;
                     let span = self.merge_span(expression.span(), end);
+                    let variadic_fixed =
+                        self.converted_expression_type(expression)
+                            .and_then(|inferred| {
+                                let OperandTypeClass::Pointer(pointer) =
+                                    self.operand_type_class(inferred.ty)
+                                else {
+                                    return None;
+                                };
+                                match self.types.get(pointer.pointee).map(|ty| &ty.kind) {
+                                    Some(TypeKind::Function {
+                                        parameters:
+                                            FunctionParameters::Prototype {
+                                                types,
+                                                variadic: true,
+                                            },
+                                        ..
+                                    }) => Some(types.len()),
+                                    _ => None,
+                                }
+                            });
+                    if let Some(fixed) = variadic_fixed {
+                        if fixed < arguments.len() {
+                            self.promote_call_arguments(&mut arguments[fixed..])?;
+                        }
+                    }
                     if let CHirExpr::Ident { symbol, facts, .. } = expression {
                         if matches!(
                             self.types.get(facts.ty()).map(|ty| &ty.kind),
@@ -8958,24 +8983,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                                 ..
                             })
                         ) {
-                            let mut parameters = Vec::new();
-                            for argument in &mut arguments {
-                                let inferred = self.converted_expression_type(argument)?.ty;
-                                let promoted = match self.operand_type_class(inferred) {
-                                    OperandTypeClass::Integer(integer) => InferredType::Integer(
-                                        CInteger::new(0, integer).promoted().ty(),
-                                    ),
-                                    OperandTypeClass::Real(FloatKind::F32) => {
-                                        InferredType::Real(FloatKind::F64)
-                                    }
-                                    _ => inferred,
-                                };
-                                let ty =
-                                    self.materialize_inferred_type(promoted, Some(argument))?;
-                                parameters.push(ty);
-                                *argument =
-                                    self.alloc_node(CHirExpr::Cast(ty, argument, argument.span()));
-                            }
+                            let parameters = self.promote_call_arguments(&mut arguments)?;
                             self.unprototyped_calls.push((*symbol, parameters, span));
                         }
                     }
@@ -9573,6 +9581,27 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         ))
     }
 
+    fn promote_call_arguments(
+        &mut self,
+        arguments: &mut [&'arena CHirExpr<'arena>],
+    ) -> Option<Vec<TypeId>> {
+        let mut parameters = Vec::with_capacity(arguments.len());
+        for argument in arguments {
+            let inferred = self.converted_expression_type(argument)?.ty;
+            let promoted = match self.operand_type_class(inferred) {
+                OperandTypeClass::Integer(integer) => {
+                    InferredType::Integer(CInteger::new(0, integer).promoted().ty())
+                }
+                OperandTypeClass::Real(FloatKind::F32) => InferredType::Real(FloatKind::F64),
+                _ => inferred,
+            };
+            let ty = self.materialize_inferred_type(promoted, Some(argument))?;
+            parameters.push(ty);
+            *argument = self.alloc_node(CHirExpr::Cast(ty, argument, argument.span()));
+        }
+        Some(parameters)
+    }
+
     fn parse_builtin_strlen(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
         self.parse_builtin_library_call(keyword)
     }
@@ -9639,6 +9668,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         {
             self.report("E2913", "builtin-operand-not-convertible", invalid.span());
             return None;
+        }
+        if variable_prefetch_arity {
+            self.promote_call_arguments(&mut arguments[1..])?;
         }
         let function_ty = self.intern(
             TypeKind::Function {

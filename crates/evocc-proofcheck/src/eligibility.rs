@@ -556,6 +556,7 @@ mod tests {
 
     fn function(blocks: Vec<Block>) -> Function {
         Function {
+            variadic: false,
             name: "f".to_owned(),
             params: vec![FunctionParam {
                 name: "x".to_owned(),

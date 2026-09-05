@@ -53,6 +53,7 @@ fn module() -> Module {
     let world = value(6, EvoIRType::World);
 
     let function = Function {
+        variadic: false,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {

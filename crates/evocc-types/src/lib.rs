@@ -1002,6 +1002,7 @@ pub enum EvoIRType {
     FnPtr {
         params: Vec<EvoIRType>,
         results: Vec<EvoIRType>,
+        variadic: bool,
     },
     /// Packed SIMD vector: N elements of element type.
     Vec(u16, Box<EvoIRType>),

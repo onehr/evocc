@@ -30,6 +30,7 @@ fn argument(name: &str, value: Value) -> BlockArg {
 
 fn signature(width: u16) -> EvoIRType {
     EvoIRType::FnPtr {
+        variadic: false,
         params: vec![
             EvoIRType::Bits(width),
             EvoIRType::Mem(Region::All),
@@ -48,6 +49,7 @@ fn identity(width: u16) -> Function {
     let memory = mem(1);
     let ordered = world(2);
     Function {
+        variadic: false,
         name: format!("identity{width}"),
         params: vec![
             FunctionParam {
@@ -86,6 +88,7 @@ fn caller(insts: Vec<Inst>, result: Value, memory: Value, ordered: Value) -> Fun
     let memory_in = mem(0);
     let world_in = world(1);
     Function {
+        variadic: false,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {

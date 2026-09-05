@@ -545,6 +545,7 @@ fn observe_evoir(functions: &[Function]) -> Result<EvoExecutionObservation, Stri
                 &entry_arguments,
                 evocc_evoir::InterpreterLimits::new(100_000),
             )
+            .map_err(Box::new)
         }))
         .map_err(|_| "EvoIR interpreter panicked".to_owned());
         let _ = sender.send(evaluated);
@@ -602,7 +603,9 @@ fn render_type(ty: &EvoIRType) -> String {
                 AddressSpace::ThreadLocal => "threadlocal",
             }
         ),
-        EvoIRType::FnPtr { params, results } => format!(
+        EvoIRType::FnPtr {
+            params, results, ..
+        } => format!(
             "fnptr<({})->({})>",
             params
                 .iter()
@@ -1940,6 +1943,7 @@ fn main() {
     let left = value(2, bits32.clone());
     let right = value(3, bits32.clone());
     let valid = Function {
+        variadic: false,
         name: "block_arg_identity".to_owned(),
         params: Vec::new(),
         ret_tys: vec![bits32.clone()],

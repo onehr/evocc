@@ -17,6 +17,7 @@ type BinaryConstructor = fn(Value, Value, Value) -> Inst;
 struct Signature {
     params: Vec<EvoIRType>,
     results: Vec<EvoIRType>,
+    variadic: bool,
 }
 
 struct Header {
@@ -141,6 +142,7 @@ impl ModuleParser<'_> {
         {
             let header = parse_declaration_header(self.lines[self.position])?;
             declares.push(FunctionDeclaration {
+                variadic: header.signature.variadic,
                 name: header.name,
                 params: header.signature.params,
                 ret_tys: header.signature.results,
@@ -211,6 +213,7 @@ impl ModuleParser<'_> {
         self.position += 1;
 
         Ok(Function {
+            variadic: header.signature.variadic,
             name: header.name,
             params: header
                 .signature
@@ -337,7 +340,7 @@ fn parse_declaration_header(line: &str) -> Result<Header, String> {
     cursor.expect("declare @")?;
     let name = cursor.ident()?.to_owned();
     cursor.expect("(")?;
-    let params = cursor.type_list(")")?;
+    let (params, variadic) = cursor.parameter_types()?;
     cursor.expect(") -> (")?;
     let results = cursor.type_list(")")?;
     cursor.expect(") cc = target_default")?;
@@ -345,7 +348,11 @@ fn parse_declaration_header(line: &str) -> Result<Header, String> {
     Ok(Header {
         name,
         convention: "target_default".to_owned(),
-        signature: Signature { params, results },
+        signature: Signature {
+            params,
+            results,
+            variadic,
+        },
     })
 }
 
@@ -356,8 +363,15 @@ fn parse_function_header(line: &str) -> Result<Header, String> {
     cursor.expect("(")?;
     let mut params = Vec::new();
     let mut index = 0_u64;
+    let mut marker = None;
     if !cursor.at(")") {
         loop {
+            if cursor.at("...") {
+                if marker.replace(params.len()).is_some() {
+                    return Err("duplicate variadic marker".into());
+                }
+                cursor.expect("..., ")?;
+            }
             cursor.expect("%arg")?;
             let actual = cursor.index()?;
             if actual != index {
@@ -373,6 +387,9 @@ fn parse_function_header(line: &str) -> Result<Header, String> {
         }
     }
     cursor.expect(") -> (")?;
+    if marker.is_some_and(|position| position.checked_add(2) != Some(params.len())) {
+        return Err("variadic marker must precede mem<R>, world".into());
+    }
     let results = cursor.type_list(")")?;
     cursor.expect(") cc = ")?;
     let convention = cursor.ident()?.to_owned();
@@ -380,7 +397,11 @@ fn parse_function_header(line: &str) -> Result<Header, String> {
     Ok(Header {
         name,
         convention,
-        signature: Signature { params, results },
+        signature: Signature {
+            params,
+            results,
+            variadic: marker.is_some(),
+        },
     })
 }
 
@@ -811,10 +832,16 @@ fn parse_tuple_instruction(
             return build_direct_call(result_ids, symbol, args, signature);
         }
         let callee = use_value(callee_text, values)?;
-        let EvoIRType::FnPtr { params, results } = &callee.ty else {
+        let EvoIRType::FnPtr {
+            params,
+            results,
+            variadic,
+        } = &callee.ty
+        else {
             return Err("indirect callee is not a function pointer".to_owned());
         };
         let signature = Signature {
+            variadic: *variadic,
             params: params.clone(),
             results: results.clone(),
         };
@@ -885,7 +912,10 @@ fn call_args(
     args: Vec<Value>,
     signature: &Signature,
 ) -> Result<(Vec<Value>, Value, Value), String> {
-    if signature.params.len() < 2 || args.len() != signature.params.len() {
+    if signature.params.len() < 2
+        || args.len() < signature.params.len()
+        || (!signature.variadic && args.len() != signature.params.len())
+    {
         return Err("call argument count disagrees with callee signature".to_owned());
     }
     let split = args.len() - 2;
@@ -1522,6 +1552,28 @@ impl<'a> Cursor<'a> {
         }
     }
 
+    fn parameter_types(&mut self) -> Result<(Vec<EvoIRType>, bool), String> {
+        let mut types = Vec::new();
+        let mut marker = None;
+        while !self.at(")") {
+            if self.at("...") {
+                if marker.replace(types.len()).is_some() {
+                    return Err("duplicate variadic marker".into());
+                }
+                self.expect("...")?;
+            } else {
+                types.push(self.ty()?);
+            }
+            if !self.at(")") {
+                self.expect(", ")?;
+            }
+        }
+        if marker.is_some_and(|position| position.checked_add(2) != Some(types.len())) {
+            return Err("variadic marker must precede mem<R>, world".into());
+        }
+        Ok((types, marker.is_some()))
+    }
+
     fn ty(&mut self) -> Result<EvoIRType, String> {
         if self.at("bits<") {
             self.expect("bits<")?;
@@ -1590,11 +1642,15 @@ impl<'a> Cursor<'a> {
         }
         if self.at("fnptr<(") {
             self.expect("fnptr<(")?;
-            let params = self.type_list(")")?;
+            let (params, variadic) = self.parameter_types()?;
             self.expect(")->(")?;
             let results = self.type_list(")")?;
             self.expect(")>")?;
-            return Ok(EvoIRType::FnPtr { params, results });
+            return Ok(EvoIRType::FnPtr {
+                params,
+                results,
+                variadic,
+            });
         }
         Err(format!("unknown EvoIR type at byte {}", self.position))
     }

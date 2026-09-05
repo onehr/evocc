@@ -52,6 +52,7 @@ fn chain() -> Module {
     let doubled = fresh(bits.clone());
 
     let function = Function {
+        variadic: false,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {

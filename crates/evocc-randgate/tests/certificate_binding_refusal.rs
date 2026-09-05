@@ -72,6 +72,7 @@ fn module() -> Module {
     let world = value(7, EvoIRType::World);
 
     let function = Function {
+        variadic: false,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {
@@ -155,6 +156,7 @@ fn sparsely_numbered_module() -> Module {
     let result = value(6, EvoIRType::Bits(32));
 
     let function = Function {
+        variadic: false,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {
@@ -266,6 +268,7 @@ fn aliasing_module() -> Module {
     let world = value(7, EvoIRType::World);
 
     let function = Function {
+        variadic: false,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {
@@ -379,6 +382,7 @@ fn nested_negation_module() -> Module {
     let world = value(9, EvoIRType::World);
 
     let function = Function {
+        variadic: false,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {

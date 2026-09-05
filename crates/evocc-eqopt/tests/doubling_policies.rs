@@ -43,6 +43,7 @@ fn module_of(insts: Vec<Inst>, result: Value) -> Module {
         ty: EvoIRType::World,
     };
     let function = Function {
+        variadic: false,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {

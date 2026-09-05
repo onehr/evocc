@@ -235,6 +235,7 @@ impl LowerError {
 #[derive(Debug, Clone)]
 struct FunctionInfo {
     name: String,
+    variadic: bool,
     ordinal: u32,
     parameter_symbols: Vec<SymbolId>,
     parameter_types: Vec<FunctionValueType>,
@@ -484,6 +485,7 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
             info.name.clone(),
             FunctionDeclaration {
                 name: info.name.clone(),
+                variadic: info.variadic,
                 params,
                 ret_tys,
             },
@@ -1825,15 +1827,7 @@ fn function_info(
         )?),
     };
     let types: &[TypeId] = match parameters {
-        FunctionParameters::Prototype {
-            types,
-            variadic: false,
-        } => types,
-        FunctionParameters::Prototype { variadic: true, .. } => {
-            return Err(LowerError::VarArgs {
-                span: function.span,
-            });
-        }
+        FunctionParameters::Prototype { types, .. } => types,
         FunctionParameters::Unspecified if function.body.is_none() => {
             unit.unprototyped_parameters(function.symbol).unwrap_or(&[])
         }
@@ -1850,10 +1844,9 @@ fn function_info(
         .map(|ty| function_value_type(unit.types(), target, *ty, function.span))
         .collect::<Result<Vec<_>, _>>()?;
     let parameter_symbols = match &function.parameters {
-        ParameterSyntax::Prototype {
-            parameters,
-            variadic: false,
-        } if function.body.is_some() && parameters.len() == parameter_types.len() => {
+        ParameterSyntax::Prototype { parameters, .. }
+            if function.body.is_some() && parameters.len() == parameter_types.len() =>
+        {
             let mut ids = BTreeSet::new();
             let mut spellings = BTreeSet::new();
             let mut function_scope = None;
@@ -1934,11 +1927,18 @@ fn function_info(
     };
     Ok(FunctionInfo {
         name: function.name.spelling.clone(),
+        variadic: matches!(
+            parameters,
+            FunctionParameters::Prototype { variadic: true, .. }
+        ),
         ordinal: 0,
         parameter_symbols,
         parameter_types,
         return_type,
-        participant: false,
+        participant: matches!(
+            parameters,
+            FunctionParameters::Prototype { variadic: true, .. }
+        ),
         span: function.span,
     })
 }
@@ -2021,15 +2021,12 @@ fn function_pointer_ir_type(
         });
     };
     let parameter_types = match parameters {
-        FunctionParameters::Prototype {
-            types,
-            variadic: false,
-        } => types,
+        FunctionParameters::Prototype { types, .. } => types,
         _ => {
             return Err(LowerError::UnsupportedType {
                 ty: function_ty,
                 span,
-                feature: "fnptr requires a non-variadic prototype",
+                feature: "fnptr requires a prototype",
             });
         }
     };
@@ -2061,7 +2058,14 @@ fn function_pointer_ir_type(
         .unwrap_or_default();
     results.push(EvoIRType::Mem(Region::All));
     results.push(EvoIRType::World);
-    Ok(EvoIRType::FnPtr { params, results })
+    Ok(EvoIRType::FnPtr {
+        params,
+        results,
+        variadic: matches!(
+            parameters,
+            FunctionParameters::Prototype { variadic: true, .. }
+        ),
+    })
 }
 
 fn is_aggregate_type(types: &TypeInterner, ty: TypeId) -> bool {
@@ -2595,6 +2599,7 @@ impl<'a> FunctionLowerer<'a> {
         self.eliminate_switch_forwarders()?;
         let mut function = Function {
             name: self.info.name.clone(),
+            variadic: self.info.variadic,
             params,
             ret_tys: self.return_types(),
             effects: Default::default(),
@@ -3637,10 +3642,7 @@ impl<'a> FunctionLowerer<'a> {
             });
         };
         let parameter_types = match parameters {
-            FunctionParameters::Prototype {
-                types,
-                variadic: false,
-            } => types
+            FunctionParameters::Prototype { types, .. } => types
                 .iter()
                 .map(|ty| function_value_type(self.unit.types(), self.target, *ty, span))
                 .collect::<Result<Vec<_>, _>>()?,
@@ -3648,7 +3650,7 @@ impl<'a> FunctionLowerer<'a> {
                 return Err(LowerError::UnsupportedType {
                     ty: function_ty,
                     span,
-                    feature: "call requires a non-variadic prototype",
+                    feature: "call requires a prototype",
                 });
             }
         };
@@ -6944,7 +6946,7 @@ impl<'a> FunctionLowerer<'a> {
                 feature: "indirect call designator has no function signature",
             },
         )?;
-        let (parameter_types, return_type, direct_name) = if let Some(function) = direct {
+        let (mut parameter_types, return_type, direct_name) = if let Some(function) = direct {
             (
                 function.parameter_types.clone(),
                 function.return_type.clone(),
@@ -6954,6 +6956,34 @@ impl<'a> FunctionLowerer<'a> {
             let (parameters, returned) = self.scalar_call_signature(function_ty, span)?;
             (parameters, returned, None)
         };
+        let variadic = matches!(
+            self.unit.types().get(function_ty).map(|ty| &ty.kind),
+            Some(TypeKind::Function {
+                parameters: FunctionParameters::Prototype { variadic: true, .. },
+                ..
+            })
+        );
+        if variadic {
+            for argument in arguments.iter().skip(parameter_types.len()) {
+                let CHirExpr::Cast(ty, _, _) = argument else {
+                    return Err(LowerError::UnsupportedExpression {
+                        span: argument.span(),
+                        feature: "anonymous argument lacks default promotion",
+                    });
+                };
+                if self.is_aggregate_type(*ty) {
+                    return Err(LowerError::VarArgs {
+                        span: argument.span(),
+                    });
+                }
+                parameter_types.push(function_value_type(
+                    self.unit.types(),
+                    self.target,
+                    *ty,
+                    argument.span(),
+                )?);
+            }
+        }
         if arguments.len() != parameter_types.len() {
             return Err(LowerError::MalformedFunction {
                 function: direct_name

@@ -5492,3 +5492,15 @@ Integer    := [1-9] [0-9]*
 | 1.2 | 2026-08-18 | Freezes named memory/world input and output token positions for `load`, `store`, and `call`; makes token flow region-polymorphic while Day 6 lowering uses conservative `mem<all>`; permits equal-width identity conversions; separates function-local SSA/effect validation from module call-signature validation; and records the bounded, typed Day 6 interpreter subset. |
 | 1.1 | 2026-08-18 | Makes formal parameters non-SSA call-interface binders, requires real unique `Value` IDs on entry and non-entry block arguments, requires all cross-block values to be passed explicitly, types the signed add/subtract/multiply definedness predicates used by lowering, and corrects the Section 9 examples. |
 | 1.0 | 2026-08-10 | Initial specification. Defines the complete EvoIR semantic contract for Day 4 of the 30-day EvoCC build. |
+
+## Appendix D: Exhitect review
+
+### Variadic marker placement
+
+Section 1.1's explicit placement rule takes precedence over the abbreviated
+Section 9 productions: `...` appears immediately before `mem<R>, world`,
+never after the effect-token parameters.
+The minimal canonical-text reproducer and its rejection control are in
+`crates/evocc-evoir/tests/external_symbols.rs`; this is an internal IR grammar
+conflict, not an oracle-measurable C behavior, and introduces no diagnostic code.
+Full-configuration impact has not yet been measured.

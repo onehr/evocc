@@ -15,6 +15,7 @@ fn pointer_poison_validates_and_round_trips_in_both_pointer_namespaces() {
     let function_pointer = value(
         1,
         EvoIRType::FnPtr {
+            variadic: false,
             params: vec![
                 EvoIRType::Bits(32),
                 EvoIRType::Mem(Region::All),
@@ -28,6 +29,7 @@ fn pointer_poison_validates_and_round_trips_in_both_pointer_namespaces() {
         },
     );
     let function = Function {
+        variadic: false,
         name: "poison_forms".to_owned(),
         params: vec![],
         ret_tys: vec![],

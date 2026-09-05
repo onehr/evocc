@@ -67,6 +67,7 @@ fn input_module() -> Module {
         declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![Function {
+            variadic: false,
             name: "main".to_owned(),
             params: vec![FunctionParam {
                 name: "x".to_owned(),

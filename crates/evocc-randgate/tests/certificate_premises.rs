@@ -73,6 +73,7 @@ fn covering_module() -> Module {
     let seven = bits(10);
 
     let function = Function {
+        variadic: false,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {

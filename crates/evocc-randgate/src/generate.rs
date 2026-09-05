@@ -284,6 +284,7 @@ impl Signature {
     /// The complete lowered signature `func_addr` must write.
     fn pointer_type(&self) -> EvoIRType {
         EvoIRType::FnPtr {
+            variadic: false,
             params: self
                 .params
                 .iter()
@@ -393,6 +394,7 @@ fn recursive_helper(rng: &mut Rng) -> (Signature, Function) {
     let addend = u64::from(rng.next_u64() as u8);
 
     let function = Function {
+        variadic: false,
         name: "r0".to_owned(),
         params: vec![
             FunctionParam {
@@ -584,6 +586,7 @@ fn generate_function(
     generator.close(block, Inst::Ret(returned));
 
     Function {
+        variadic: false,
         name: signature.name.clone(),
         params,
         ret_tys: signature
