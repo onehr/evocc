@@ -476,7 +476,29 @@ struct PointerFragment {
     byte_index: u64,
 }
 
+impl PointerFragment {
+    // Static zero initialization denotes null independently of a slot's offset.
+    // Ordinary byte stores never manufacture this provenance marker.
+    const STATIC_NULL: Self = Self {
+        pointer: PointerValue::Null,
+        slot_size: 0,
+        byte_index: 0,
+    };
+}
+
 impl ByteSequence {
+    /// Decode module initializer bytes, retaining the target's static null form.
+    /// This is not a constructor for ordinary runtime byte writes.
+    pub fn try_from_static_initializer(bytes: Vec<u8>) -> Result<Self, MemoryFault> {
+        let mut value = Self::try_from_bytes(bytes)?;
+        for (byte, fragment) in value.bytes.iter().zip(&mut value.pointer_fragments) {
+            if *byte == 0 {
+                *fragment = Some(PointerFragment::STATIC_NULL);
+            }
+        }
+        Ok(value)
+    }
+
     pub fn try_from_bytes(bytes: Vec<u8>) -> Result<Self, MemoryFault> {
         let size_bytes = u64::try_from(bytes.len()).map_err(|_| MemoryFault::HostSizeExceeded {
             size_bytes: u64::MAX,
@@ -2021,7 +2043,11 @@ impl MemoryState {
             AllocationContents::InitialState(initial) => (
                 repeat_value(length, 0_u8, layout.size_bytes)?,
                 repeat_value(length, initial == InitialState::Zeroed, layout.size_bytes)?,
-                repeat_value(length, None, layout.size_bytes)?,
+                repeat_value(
+                    length,
+                    (initial == InitialState::Zeroed).then_some(PointerFragment::STATIC_NULL),
+                    layout.size_bytes,
+                )?,
             ),
             AllocationContents::Bytes(value) => {
                 let actual =
@@ -2198,6 +2224,14 @@ impl MemoryState {
         access: AccessLayout,
         representation: &ByteSequence,
     ) -> Result<PointerValue, MemoryFault> {
+        if !representation.pointer_fragments.is_empty()
+            && representation
+                .pointer_fragments
+                .iter()
+                .all(|part| *part == Some(PointerFragment::STATIC_NULL))
+        {
+            return Ok(PointerValue::Null);
+        }
         let first = representation
             .pointer_fragments
             .first()

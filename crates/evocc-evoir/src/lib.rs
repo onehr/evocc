@@ -4943,8 +4943,9 @@ fn initialize_globals(module: &Module, state: &mut ExecutionState) -> Result<(),
                     u64::try_from(end - start).map_err(|_| InterpreterError::InvalidModule {
                         message: format!("global '{}' range exceeds u64", global.symbol),
                     })?;
-                let bytes = ByteSequence::try_from_bytes(global.bytes[start..end].to_vec())
-                    .map_err(|error| InterpreterError::MemorySetup { error })?;
+                let bytes =
+                    ByteSequence::try_from_static_initializer(global.bytes[start..end].to_vec())
+                        .map_err(|error| InterpreterError::MemorySetup { error })?;
                 state.memory = state
                     .memory
                     .store_bytes(address, AccessLayout::new(size, 1), &bytes)
