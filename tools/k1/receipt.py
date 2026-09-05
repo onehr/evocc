@@ -66,17 +66,20 @@ def main() -> int:
 
     booted = boot["verdict"] == "PASS"
     substituted = substitution["substitutedUnits"]
-    proven = sorted(
-        row["unit"] for row in proof["units"] if row["verdict"] == "proven"
-    )
+    proven = sorted(row["unit"] for row in proof["units"] if row["verdict"] == "proven")
     contributing_no_symbols = sorted(
         row["unit"] for row in proof["units"] if row["verdict"] == "no-symbols"
     )
+    not_linked = sorted(row["unit"] for row in proof["units"] if row["verdict"] == "not-linked")
+    # The measurement counts units of the kernel. An object Kbuild builds but
+    # does not link into vmlinux, such as a compiler feature probe, is not one.
+    in_kernel = sorted(proof["unitsLinkedIntoVmlinux"])
 
     receipt = {
         "schemaVersion": 1,
         "measurement": "translation units compiled by EvoCC in a kernel that boots",
-        "unitsCompiledByEvoccInABootingKernel": len(substituted) if booted else 0,
+        "unitsCompiledByEvoccInABootingKernel": len(in_kernel) if booted else 0,
+        "unitsSubstituted": len(substituted),
         "unitsProvenPresentInVmlinux": len(proven) if booted else 0,
         "generatedAt": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "reference": {
@@ -121,8 +124,10 @@ def main() -> int:
             "producerNoteInReferenceVmlinux": proof["producerNote"]["identInReferenceVmlinux"],
             "commentStrings": proof["producerNote"]["mixedCommentStrings"],
             "verdictCounts": proof["counts"],
+            "unitsLinkedIntoVmlinux": in_kernel,
             "unitsProvenByteIdenticalInVmlinux": proven,
             "unitsDefiningNoSymbol": contributing_no_symbols,
+            "unitsNotLinkedIntoVmlinux": not_linked,
         },
         "failingUnits": failing,
         "bisection": (
@@ -144,6 +149,7 @@ def main() -> int:
         {
             "unitsCompiledByEvoccInABootingKernel":
                 receipt["unitsCompiledByEvoccInABootingKernel"],
+            "unitsSubstituted": receipt["unitsSubstituted"],
             "unitsProvenPresentInVmlinux": receipt["unitsProvenPresentInVmlinux"],
             "surveyOutcomeCounts": receipt["survey"]["outcomeCounts"],
         },

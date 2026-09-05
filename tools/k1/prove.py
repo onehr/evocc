@@ -15,7 +15,10 @@ Two independent witnesses, both read out of the linked image:
 
 A substituted object that defines no symbol contributes no bytes and is
 reported as ``no-symbols``: there is nothing of it in vmlinux to find, and
-counting it as proven would be a lie.
+counting it as proven would be a lie. Membership of the link is read
+separately from ``vmlinux.a``, which names every object the image is built
+from; an object outside it is not part of the kernel however well it
+compiled.
 
 Section layout is read with the sealed container's readelf; the byte slicing
 is done here, against the same files.
@@ -152,6 +155,14 @@ def main() -> int:
     asm_root = args.k1_root / "evocc-out"
     pristine = args.k1_root / "pristine"
 
+    membership = subprocess.run(
+        [CONTAINER_BIN, "run", "--rm", "--platform", "linux/arm64", "--network", "none",
+         "-v", f"{out_root}:/work/out:ro", "evo-flight-lab:sealed",
+         "sh", "-c", "cd /work/out && ar t vmlinux.a"],
+        capture_output=True, text=True, check=False,
+    )
+    linked = {line.strip() for line in membership.stdout.splitlines() if line.strip()}
+
     ident_probe = subprocess.run(
         [CONTAINER_BIN, "run", "--rm", "--platform", "linux/arm64", "--network", "none",
          "-v", f"{out_root}:/work/out:ro", "-v", f"{pristine}:/work/ref:ro",
@@ -186,8 +197,12 @@ def main() -> int:
     for unit in units:
         table = tables.get(f"/work/asm/{unit}")
         object_path = asm_root / unit
+        in_link = unit in linked
         if table is None:
-            rows.append({"unit": unit, "verdict": "unreadable"})
+            rows.append({"unit": unit, "verdict": "unreadable", "linkedIntoVmlinux": in_link})
+            continue
+        if not in_link:
+            rows.append({"unit": unit, "verdict": "not-linked", "linkedIntoVmlinux": False})
             continue
         reference = tables.get(f"/work/ref/{unit}", {"symbols": {}, "sections": {}})
         names = sorted(
@@ -202,7 +217,10 @@ def main() -> int:
         }
         names = [name for name in names if sizes[name] > 0]
         if not names:
-            rows.append({"unit": unit, "verdict": "no-symbols", "symbols": []})
+            rows.append({
+                "unit": unit, "verdict": "no-symbols", "symbols": [],
+                "linkedIntoVmlinux": True,
+            })
             continue
         symbols = []
         for name in names:
@@ -217,7 +235,9 @@ def main() -> int:
                 "identical": mine is not None and mine == theirs,
             })
         verdict = "proven" if all(entry["identical"] for entry in symbols) else "mismatch"
-        rows.append({"unit": unit, "verdict": verdict, "symbols": symbols})
+        rows.append({
+            "unit": unit, "verdict": verdict, "symbols": symbols, "linkedIntoVmlinux": True,
+        })
 
     counts: dict[str, int] = {}
     for row in rows:
@@ -225,6 +245,7 @@ def main() -> int:
     report = {
         "producerNote": producer_note,
         "counts": counts,
+        "unitsLinkedIntoVmlinux": sorted(row["unit"] for row in rows if row["linkedIntoVmlinux"]),
         "units": rows,
         "vmlinux": str(vmlinux_path),
     }
