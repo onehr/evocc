@@ -22,7 +22,14 @@ fn symbolic_relocations_round_trip_and_validate_their_byte_ranges() {
     let text = "global @a origin=0 kind=file visibility=external size=4 align=4 bytes=07000000 initialized=1111\nglobal @p origin=1 kind=file visibility=internal size=8 align=8 bytes=0000000000000000 initialized=11111111 relocs=[(0, @a, 0)]\n";
     let module = parse_section9_module(text.as_bytes()).expect("symbolic relocation syntax");
     assert_eq!(render_module(&module), text);
+    let negative = text.replace("(0, @a, 0)", "(0, @a, -4)");
+    assert_eq!(
+        render_module(&parse_section9_module(negative.as_bytes()).unwrap()),
+        negative
+    );
     for invalid in [
+        text.replace("(0, @a, 0)", "(0, @a, -0)"),
+        text.replace("(0, @a, 0)", "(0, @a, +1)"),
         text.replace("(0, @a, 0)", "(1, @a, 0)"),
         text.replace("(0, @a, 0)", "(8, @a, 0)"),
         text.replace("(0, @a, 0)", "(0, @absent, 0)"),

@@ -137,6 +137,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
         })
         .collect::<Result<Vec<bool>, String>>()?;
     Ok(GlobalObject {
+        relocs: Vec::new(),
         symbol,
         origin,
         kind,

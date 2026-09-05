@@ -95,8 +95,7 @@ fn automatic_null_pointers_remain_supported() {
 fn static_pointer_bits_are_not_fabricated_without_relocations() {
     for source in [
         "void *p = (void *)1;",
-        "void *p = (void *)0;",
-        "int *p = 0;",
+        "void *p = (void *)(unsigned long)2;",
     ] {
         let output = run(source, "--emit=evoir");
         assert!(
@@ -109,4 +108,8 @@ fn static_pointer_bits_are_not_fabricated_without_relocations() {
             String::from_utf8_lossy(&output.stderr)
         );
     }
+    agrees(
+        "void *p = (void *)0; int *q = 0; int main(void) { return p == 0 && q == 0; }",
+        1,
+    );
 }

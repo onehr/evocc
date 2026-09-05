@@ -245,15 +245,15 @@ fn file_scope_compound_pointer_fails_closed_without_a_global_identity() {
 }
 
 #[test]
-fn an_integer_round_trip_address_stops_at_the_static_relocation_boundary() {
+fn an_integer_round_trip_address_relocates_an_external_function() {
     let arena = Arena::default();
     let unit = parse(
         "typedef unsigned long uintptr_t; int k(char *s); static void *p = (void *)(uintptr_t)&k;\n",
         &arena,
         33,
     );
-    let error = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
-        .expect_err("the deferred relocation must fail closed");
-    assert_eq!(error.code(), "E3026");
-    assert_eq!(error.to_string(), "not-lowered: static-relocation");
+    let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+    assert_eq!(module.globals[0].relocs[0].symbol, "k");
+    assert!(module.declares.iter().any(|function| function.name == "k"));
+    validate_module(&module).unwrap();
 }

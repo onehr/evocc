@@ -54,7 +54,10 @@ fn check(source: &str, expected: Result<u64, &str>, forms: &[&str]) {
     match expected {
         Ok(value) => {
             assert_eq!(
-                chir.unwrap().return_value.unwrap().raw_bits,
+                chir.unwrap_or_else(|error| panic!("{source}: {error:?}"))
+                    .return_value
+                    .unwrap()
+                    .raw_bits,
                 u128::from(value)
             );
             assert_eq!(ir.unwrap().return_values[0].raw_bits, value);
@@ -69,10 +72,21 @@ fn check(source: &str, expected: Result<u64, &str>, forms: &[&str]) {
 #[test]
 fn static_addresses_relocate_objects_members_and_functions() {
     check("int a[4]={1,2,3,7}; int f(void){return 9;} struct s {char c; long n;} s={.n=11}; static int *p=&a[3]; static long *q=&s.n; static int (*r)(void)=(int (*)(void))(unsigned long)&f; int main(void){return *p+*q+r();}", Ok(27), &["relocs=[", "@a, 12", "@s, 8", "@f, 0"]);
+    check(
+        "extern int a; int *p=&a; int main(void){return *p;}",
+        Err("E3040"),
+        &["extern @a", "relocs=[(0, @a, 0)]"],
+    );
 }
 
 #[test]
 fn pointer_integer_round_trip_retains_live_exposed_provenance() {
+    check(
+        "int main(void){int x=4; int *p=&x; int *q=(int *)(unsigned long)p; return p==q && *q==4;}",
+        Ok(1),
+        &["ptr.to_int", "ptr.from_int"],
+    );
+    check("int f(void){return 7;} int main(void){int (*p)(void)=f; int (*q)(void)=(int (*)(void))(unsigned long)p; return p==q && q()==7;}", Ok(1), &["ptr.to_int", "ptr.from_int.fnptr"]);
     check("int main(void){int a[3]={2,5,9}; unsigned long n=(unsigned long)&a[0]; int *p=(int *)(n+sizeof(int)); return *p;}", Ok(5), &["ptr.to_int", "ptr.from_int.ptr<generic>"]);
     check("int main(void){int n=-1; unsigned u=0xffffffffu; return (unsigned long)(void *)n == ~0ul && (unsigned long)(void *)u == 0xfffffffful;}", Ok(1), &["sext.bits<64>", "zext.bits<64>", "ptr.from_int"]);
     check("int main(void){int x; int *p=&x; return (unsigned short)p == (unsigned short)(unsigned long)p;}", Ok(1), &["ptr.to_int", "trunc.bits<16>"]);

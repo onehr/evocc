@@ -30,7 +30,8 @@ FunctionParam(name[omitted],ty)|%arg17: void
 GlobalKind.File|kind=file
 GlobalKind.FunctionStatic|kind=function_static
 GlobalKind.StringLiteral|kind=string_literal
-GlobalObject(symbol,origin,kind,visibility,layout,bytes,initialized)|global @__evocc.static.sentinel.7002 origin=7002 kind=function_static visibility=internal size=2 align=8 bytes=d4e5 initialized=01
+GlobalObject(symbol,origin,kind,visibility,layout,bytes,initialized,relocs)|global @sentinel_relocation origin=7004 kind=file visibility=internal size=16 align=8 bytes=00000000000000000000000000000000 initialized=1111111111111111 relocs=[(8, @sentinel_file, -3)]
+Inst.PointerCast(result,operand)|%v1430 = ptr.to_int %v1431
 GlobalVisibility.External|visibility=external
 GlobalVisibility.Internal|visibility=internal
 IndexSignedness.Signed|%v1370 = ptr.offset.sub.signed %v1371, %v1372 [scale=61]

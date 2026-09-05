@@ -615,6 +615,7 @@ enum Identity {
     Object(Pointer),
     Function(u64),
     Bits(u64),
+    ExposedAddress(u64),
 }
 
 fn identity(value: MirValue) -> Identity {
@@ -626,6 +627,7 @@ fn identity(value: MirValue) -> Identity {
         MirValue::Fn(PointerValue::Null) => Identity::Null,
         MirValue::Fn(PointerValue::Function(id)) => Identity::Function(id),
         MirValue::Fn(PointerValue::Object(pointer)) => Identity::Object(pointer),
+        MirValue::Fn(PointerValue::Exposed(address)) => Identity::ExposedAddress(address),
     }
 }
 

@@ -72,9 +72,6 @@ pub enum LowerError {
     GlobalRegisterVariable {
         span: SourceSpan,
     },
-    PointerIntegerConversion {
-        span: SourceSpan,
-    },
     WideInteger {
         span: SourceSpan,
     },
@@ -134,9 +131,6 @@ impl fmt::Display for LowerError {
             Self::GlobalRegisterVariable { .. } => {
                 formatter.write_str("not-lowered: global-register-variable")
             }
-            Self::PointerIntegerConversion { .. } => {
-                formatter.write_str("not-lowered: pointer-integer-conversion")
-            }
             Self::WideInteger { .. } => formatter.write_str("not-executed: wide-integer"),
             Self::StaticRelocation { .. } => formatter.write_str("not-lowered: static-relocation"),
             Self::ComputedGoto { .. } => formatter.write_str("not-lowered: computed-goto"),
@@ -175,7 +169,6 @@ impl LowerError {
             Self::WideInteger { .. } => "E3033",
             Self::FunctionPointerArithmetic { .. } => "E3034",
             Self::GlobalRegisterVariable { .. } => "E3035",
-            Self::PointerIntegerConversion { .. } => "E3036",
             _ => "E3101",
         }
     }
@@ -197,7 +190,6 @@ impl LowerError {
             | Self::PointerDifference { span }
             | Self::FunctionPointerArithmetic { span }
             | Self::GlobalRegisterVariable { span }
-            | Self::PointerIntegerConversion { span }
             | Self::WideInteger { span }
             | Self::StaticRelocation { span }
             | Self::ComputedGoto { span }
@@ -359,6 +351,12 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
         })
         .collect::<BTreeMap<_, _>>();
     let memory_profile = !memory_symbols.is_empty()
+        || unit.iter().any(|declaration| match declaration {
+            CHirDecl::Function(function) => function
+                .body
+                .is_some_and(|body| evocc_chir::interp::statement_requires_memory(unit, body)),
+            _ => false,
+        })
         || manifest.sites().iter().any(|site| {
             site.kind().object_symbol().is_some_and(|symbol| {
                 unit.symbols()
@@ -378,7 +376,7 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
         });
     let functions = index_functions(unit, target, memory_profile)?;
     prevalidate_unit_for_lowering(unit, target, &global_register_symbols)?;
-    let mut globals = lower_globals(unit, target, &memory_symbols, &allocation_origins)?;
+    let mut globals = Vec::new();
     let mut string_origins = BTreeMap::new();
     for site in manifest.sites() {
         let Some(expression) = site.kind().string_literal() else {
@@ -397,6 +395,7 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
         let origin = site.ordinal().raw();
         string_origins.insert(expression as *const CHirExpr<'_> as usize, origin);
         globals.push(GlobalObject {
+            relocs: Vec::new(),
             symbol: format!("__evocc.string.{origin}"),
             origin,
             kind: GlobalKind::StringLiteral,
@@ -406,6 +405,13 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
             bytes,
         });
     }
+    globals.extend(lower_globals(
+        unit,
+        target,
+        &memory_symbols,
+        &allocation_origins,
+        &string_origins,
+    )?);
     let mut lowered = Vec::new();
     for declaration in unit.iter() {
         let CHirDecl::Function(function) = declaration else {
@@ -491,6 +497,15 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
             }
             _ => None,
         })
+        .chain(
+            globals
+                .iter()
+                .flat_map(|global| global.relocs.iter())
+                .filter_map(|relocation| {
+                    (!global_names.contains(relocation.symbol.as_str()))
+                        .then_some(relocation.symbol.as_str())
+                }),
+        )
         .collect::<BTreeSet<_>>();
     let mut extern_objects = BTreeMap::new();
     for symbol in &memory_symbols {
@@ -500,7 +515,12 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
                 .map_err(|_| LowerError::InvalidGeneratedSsa {
                     message: "external object has no symbol".into(),
                 })?;
-        if !referenced_objects.contains(entry.spelling()) {
+        if !referenced_objects.contains(entry.spelling())
+            || matches!(
+                unit.types().get(entry.ty()).map(|ty| &ty.kind),
+                Some(TypeKind::Function { .. })
+            )
+        {
             continue;
         }
         let (size, align) = match target.layout_of(unit.types(), entry.ty()) {
@@ -819,6 +839,7 @@ fn lower_globals(
     target: &TargetDataLayout,
     memory_symbols: &BTreeSet<SymbolId>,
     origins: &BTreeMap<SymbolId, u64>,
+    strings: &BTreeMap<usize, u64>,
 ) -> Result<Vec<GlobalObject>, LowerError> {
     fn collect_nested<'a>(
         statement: &'a CHirStmt<'a>,
@@ -953,11 +974,22 @@ fn lower_globals(
                 feature: "global object exceeds host representation",
             })?;
             let mut bytes = vec![0_u8; size];
+            let mut relocs = Vec::new();
             if let Some(initializer) = &object.initializer {
                 for action in initializer.plan().actions() {
-                    apply_static_initializer(unit, target, object.ty, action, &mut bytes)?;
+                    apply_static_initializer(
+                        unit,
+                        target,
+                        object.ty,
+                        action,
+                        &mut bytes,
+                        &mut relocs,
+                        origins,
+                        strings,
+                    )?;
                 }
             }
+            relocs.sort_by_key(|relocation: &evocc_evoir::Relocation| relocation.offset);
             let origin = *origins
                 .get(&object.symbol)
                 .ok_or(LowerError::InvalidGeneratedSsa {
@@ -965,6 +997,7 @@ fn lower_globals(
                 })?;
             let file_scope = symbol.scope() == unit.symbols().file_scope();
             Ok(GlobalObject {
+                relocs,
                 symbol: if file_scope {
                     symbol.spelling().to_owned()
                 } else {
@@ -992,12 +1025,182 @@ fn lower_globals(
         .collect()
 }
 
+/// Resolve an admitted static address without inventing a runtime object.
+fn symbolic_address(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    expression: &CHirExpr<'_>,
+    address_of: bool,
+    origins: &BTreeMap<SymbolId, u64>,
+    strings: &BTreeMap<usize, u64>,
+) -> Result<(String, i64), LowerError> {
+    let span = expression.span();
+    let error = || LowerError::StaticRelocation { span };
+    let symbol_address = |id: SymbolId| -> Result<(String, i64), LowerError> {
+        let symbol = unit.symbols().symbol(id).map_err(|_| error())?;
+        if symbol.kind() == SymbolKind::Function || symbol.scope() == unit.symbols().file_scope() {
+            Ok((symbol.spelling().to_owned(), 0))
+        } else if symbol.storage_class() == Some(StorageClass::Static) {
+            Ok((
+                format!("__evocc.static.{}", origins.get(&id).ok_or_else(error)?),
+                0,
+            ))
+        } else {
+            Err(error())
+        }
+    };
+    match expression {
+        CHirExpr::Cast(ty, operand, _) => {
+            let canonical = unit.types().get(*ty).ok_or_else(error)?;
+            if !matches!(canonical.kind, TypeKind::Pointer(_))
+                && target
+                    .layout_of(unit.types(), *ty)
+                    .map_err(|_| error())?
+                    .size_bytes
+                    < 8
+            {
+                return Err(error());
+            }
+            symbolic_address(unit, target, operand, false, origins, strings)
+        }
+        CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => {
+            symbolic_address(unit, target, operand, true, origins, strings)
+        }
+        CHirExpr::Unary(UnaryOp::Deref, operand, _) if address_of => {
+            symbolic_address(unit, target, operand, false, origins, strings)
+        }
+        CHirExpr::Ident { symbol, facts, .. }
+            if address_of
+                || unit.types().get(facts.ty()).is_some_and(|ty| {
+                    matches!(ty.kind, TypeKind::Array { .. } | TypeKind::Function { .. })
+                }) =>
+        {
+            symbol_address(*symbol)
+        }
+        CHirExpr::StringLit(..) => {
+            let origin = strings
+                .get(&(expression as *const CHirExpr<'_> as usize))
+                .ok_or_else(error)?;
+            Ok((format!("__evocc.string.{origin}"), 0))
+        }
+        CHirExpr::MemoryRead { place, .. }
+            if address_of
+                || unit
+                    .types()
+                    .get(place.value_ty())
+                    .is_some_and(|ty| matches!(ty.kind, TypeKind::Array { .. })) =>
+        {
+            let (symbol, mut offset) = match place.root() {
+                PlaceRoot::Object { symbol } => symbol_address(*symbol)?,
+                PlaceRoot::PointerExpression { pointer, .. } => {
+                    symbolic_address(unit, target, pointer, false, origins, strings)?
+                }
+                PlaceRoot::CompoundLiteral { .. } => return Err(error()),
+            };
+            for projection in place.projections() {
+                let delta = match projection {
+                    PlaceProjection::Field(field) => {
+                        let layout = target
+                            .record_layout(unit.types(), field.tag())
+                            .map_err(|_| error())?;
+                        i64::try_from(
+                            layout
+                                .fields
+                                .iter()
+                                .find(|entry| entry.field_index == field.field_index())
+                                .ok_or_else(error)?
+                                .byte_offset,
+                        )
+                        .map_err(|_| error())?
+                    }
+                    PlaceProjection::Index(index) => {
+                        let value = evocc_chir::interp::interpret_static_integer_expression(
+                            unit,
+                            index.index(),
+                            target,
+                        )
+                        .map_err(|_| error())?;
+                        let signed = value.cast(CIntegerType::LONG).raw_bits() as i64;
+                        let size = target
+                            .layout_of(unit.types(), index.element_ty())
+                            .map_err(|_| error())?
+                            .size_bytes;
+                        signed
+                            .checked_mul(i64::try_from(size).map_err(|_| error())?)
+                            .ok_or_else(error)?
+                    }
+                };
+                offset = offset.checked_add(delta).ok_or_else(error)?;
+            }
+            Ok((symbol, offset))
+        }
+        CHirExpr::Binary(op @ (BinaryOp::Add | BinaryOp::Sub), pointer, index, _) => {
+            let (symbol, offset) =
+                symbolic_address(unit, target, pointer, false, origins, strings)?;
+            let value =
+                evocc_chir::interp::interpret_static_integer_expression(unit, index, target)
+                    .map_err(|_| error())?;
+            let scale =
+                evocc_chir::PointerTypeDesc::from_expression(unit.symbols(), unit.types(), pointer)
+                    .ok()
+                    .and_then(|ty| target.layout_of(unit.types(), ty.pointee()).ok())
+                    .map_or(1, |layout| layout.size_bytes);
+            let delta = (value.cast(CIntegerType::LONG).raw_bits() as i64)
+                .checked_mul(i64::try_from(scale).map_err(|_| error())?)
+                .ok_or_else(error)?;
+            let offset = if *op == BinaryOp::Add {
+                offset.checked_add(delta)
+            } else {
+                offset.checked_sub(delta)
+            }
+            .ok_or_else(error)?;
+            Ok((symbol, offset))
+        }
+        CHirExpr::Ternary(condition, left, right, _) => {
+            let condition = if let Ok(value) =
+                evocc_chir::interp::interpret_static_integer_expression(unit, condition, target)
+            {
+                value.raw_bits() != 0
+            } else if let CHirExpr::Binary(op @ (BinaryOp::Eq | BinaryOp::Ne), a, b, _) = condition
+            {
+                let a = if null_pointer_constant(unit, target, a) {
+                    None
+                } else {
+                    Some(symbolic_address(unit, target, a, false, origins, strings)?)
+                };
+                let b = if null_pointer_constant(unit, target, b) {
+                    None
+                } else {
+                    Some(symbolic_address(unit, target, b, false, origins, strings)?)
+                };
+                (a == b) == (*op == BinaryOp::Eq)
+            } else {
+                symbolic_address(unit, target, condition, false, origins, strings)?;
+                true
+            };
+            symbolic_address(
+                unit,
+                target,
+                if condition { left } else { right },
+                address_of,
+                origins,
+                strings,
+            )
+        }
+        _ => Err(error()),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn apply_static_initializer(
     unit: &CHirUnit<'_>,
     target: &TargetDataLayout,
     object_ty: TypeId,
     action: &InitAction<'_>,
     bytes: &mut [u8],
+    relocs: &mut Vec<evocc_evoir::Relocation>,
+    origins: &BTreeMap<SymbolId, u64>,
+    strings: &BTreeMap<usize, u64>,
 ) -> Result<(), LowerError> {
     let span = action
         .span()
@@ -1033,6 +1236,8 @@ fn apply_static_initializer(
             span,
             feature: "initializer range lies outside global object",
         })?;
+    relocs
+        .retain(|relocation| relocation.offset < offset as u64 || relocation.offset >= end as u64);
     match action {
         InitAction::ZeroScalar { .. } => target_bytes.fill(0),
         InitAction::StoreString { literal, .. } => {
@@ -1110,7 +1315,22 @@ fn apply_static_initializer(
                 unit.types().get(destination).map(|ty| &ty.kind),
                 Some(TypeKind::Pointer(_))
             ) {
-                return Err(LowerError::StaticRelocation { span });
+                if null_pointer_constant(unit, target, value) {
+                    target_bytes.fill(0);
+                    return Ok(());
+                }
+                let (symbol, addend) =
+                    symbolic_address(unit, target, value, false, origins, strings)?;
+                if target_bytes.len() != 8 {
+                    return Err(LowerError::StaticRelocation { span });
+                }
+                target_bytes.fill(0);
+                relocs.push(evocc_evoir::Relocation {
+                    offset: offset as u64,
+                    symbol,
+                    addend,
+                });
+                return Ok(());
             }
             let integer =
                 evocc_chir::interp::interpret_static_integer_expression(unit, value, target)
@@ -4263,7 +4483,19 @@ impl<'a> FunctionLowerer<'a> {
                     });
                 }
                 if matches!(value.value.ty, EvoIRType::Bits(_)) {
-                    return Err(LowerError::PointerIntegerConversion { span });
+                    let address = self.cast(value, CIntegerType::ULONG, state)?;
+                    let result = self.fresh_value(expected);
+                    self.emit(
+                        state,
+                        Inst::PointerCast {
+                            result: result.clone(),
+                            operand: address.value,
+                        },
+                    )?;
+                    return Ok(ExprValue {
+                        value: result,
+                        integer: CIntegerType::ULONG,
+                    });
                 }
                 Err(LowerError::UnsupportedExpression {
                     span,
@@ -5892,9 +6124,6 @@ impl<'a> FunctionLowerer<'a> {
                     return self.wide_constant(state, target, converted.raw_bits());
                 }
                 let value = self.lower_expr(operand, state)?;
-                if matches!(value.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }) {
-                    return Err(LowerError::PointerIntegerConversion { span: *span });
-                }
                 self.cast(value, target, state)
             }
             CHirExpr::Assign {
@@ -8131,12 +8360,25 @@ impl<'a> FunctionLowerer<'a> {
                 integer: target,
             });
         }
+        if matches!(value.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }) {
+            let result = self.fresh_value(EvoIRType::Bits(64));
+            self.emit(
+                state,
+                Inst::PointerCast {
+                    result: result.clone(),
+                    operand: value.value,
+                },
+            )?;
+            return self.cast(
+                ExprValue {
+                    value: result,
+                    integer: CIntegerType::ULONG,
+                },
+                target,
+                state,
+            );
+        }
         let EvoIRType::Bits(source_width) = value.value.ty else {
-            if matches!(value.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }) {
-                return Err(LowerError::PointerIntegerConversion {
-                    span: self.info.span,
-                });
-            }
             return Err(LowerError::InvalidControlFlow {
                 span: self.info.span,
                 reason: "integer expression has a non-bit-vector EvoIR value",
@@ -9507,6 +9749,7 @@ fn remap_inst(
 #[allow(clippy::too_many_lines)]
 fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
     match instruction {
+        Inst::PointerCast { result, operand } => vec![result, operand],
         Inst::BitOperation {
             result, operand, ..
         } => vec![result, operand],

@@ -102,6 +102,19 @@ pub fn render_module(module: &Module) -> String {
             bytes,
             initialized
         ));
+        if !global.relocs.is_empty() {
+            rendered.pop();
+            rendered.push_str(" relocs=[");
+            rendered.push_str(
+                &global
+                    .relocs
+                    .iter()
+                    .map(|r| format!("({}, @{}, {})", r.offset, r.symbol, r.addend))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            );
+            rendered.push_str("]\n");
+        }
     }
     if !globals.is_empty()
         && (!module.extern_objects.is_empty()
@@ -306,6 +319,17 @@ impl FunctionRenderer {
 
     fn instruction(&self, inst: &Inst) -> String {
         match inst {
+            Inst::PointerCast { result, operand } if result.ty == EvoIRType::Bits(64) => format!(
+                "{} = ptr.to_int {}",
+                render_value(result),
+                render_value(operand)
+            ),
+            Inst::PointerCast { result, operand } => format!(
+                "{} = ptr.from_int.{} {}",
+                render_value(result),
+                render_type(&result.ty),
+                render_value(operand)
+            ),
             Inst::BitOperation {
                 result,
                 operand,
@@ -819,6 +843,7 @@ mod tests {
             extern_objects: Vec::new(),
             declares: Vec::new(),
             globals: vec![GlobalObject {
+                relocs: Vec::new(),
                 symbol: "__evocc.string.7".to_owned(),
                 origin: 7,
                 kind: GlobalKind::StringLiteral,

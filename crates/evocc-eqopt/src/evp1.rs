@@ -2342,6 +2342,7 @@ fn remap_all(instruction: &mut Inst, identities: &HashMap<u32, u32>) -> Result<(
 #[allow(clippy::too_many_lines)]
 fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
     match instruction {
+        Inst::PointerCast { result, operand } => vec![result, operand],
         Inst::BitOperation {
             result, operand, ..
         } => vec![result, operand],

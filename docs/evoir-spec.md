@@ -5552,6 +5552,29 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Signed relocation addends
+
+Section 2.1 explicitly makes a relocation addend signed, while Section 9's
+abbreviated `reloc` production refers to unsigned `integer` for that field;
+the explicit signed rule takes precedence, with canonical optional `-` and no `-0`.
+The positive, negative and malformed byte-form controls are in
+`crates/evocc-evoir/tests/relocations_and_addresses.rs` and the independent
+Section 9 field sentinel; this IR spelling conflict is not an oracle-measurable
+C behavior, adds no diagnostic, and has no measured cohort count yet.
+
+### Implemented instruction shape corrections
+
+The existing Section 9 `copy` production supplies the omitted canonical shape
+below, and the existing assembly forms are now implemented rather than pending.
+This is instruction-shape metadata only, tested by whole-module text tests,
+not a change to C behavior; it adds no code or affected-unit count.
+
+```text
+(<>) = copy <>, <>, <>, <> [size=<>, align=<>]
+(<>) = asm<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>]
+(<>) = asm.goto<> <> <>, <> outputs [<>] inputs [<>] clobbers [<>] labels [<>] fallthrough <>
+```
+
 ### Negative checked results stored into an unsigned type
 
 Section 10.1.15's mathematical representability rule requires overflow for a negative result stored into an unsigned type, even when that type is as wide as (or wider than) `W`; the abbreviated truncation/extension test alone does not establish this case.

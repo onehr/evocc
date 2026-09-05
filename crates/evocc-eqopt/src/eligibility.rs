@@ -242,6 +242,7 @@ fn cross(
 fn operands(instruction: &Inst) -> Vec<&Value> {
     match instruction {
         Inst::VaAccess(access) => vec![&access.list, &access.mem_in, &access.world_in],
+        Inst::PointerCast { operand, .. } => vec![operand],
         Inst::BitOperation { operand, .. } => vec![operand],
         Inst::Asm(assembly) | Inst::AsmGoto { assembly, .. } => assembly.operands(),
         Inst::Const(..)

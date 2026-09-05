@@ -87,6 +87,10 @@ fn sentinel_types() -> Vec<EvoIRType> {
 
 fn sentinel_instructions() -> Vec<Inst> {
     vec![
+        Inst::PointerCast {
+            result: value(1430, EvoIRType::Bits(64)),
+            operand: pointer(1431),
+        },
         Inst::Const(value(1000, EvoIRType::Bits(37)), 987_654_321),
         Inst::Uninitialized(value(1010, EvoIRType::Bits(29))),
         Inst::Add(bits(1020), bits(1021), bits(1022)),
@@ -266,6 +270,7 @@ fn sentinel_module() -> Module {
         declares: Vec::new(),
         globals: vec![
             GlobalObject {
+                relocs: Vec::new(),
                 symbol: "sentinel_file".to_owned(),
                 origin: 7001,
                 kind: GlobalKind::File,
@@ -275,6 +280,7 @@ fn sentinel_module() -> Module {
                 initialized: vec![true, false, true],
             },
             GlobalObject {
+                relocs: Vec::new(),
                 symbol: "__evocc.static.sentinel.7002".to_owned(),
                 origin: 7002,
                 kind: GlobalKind::FunctionStatic,
@@ -284,6 +290,7 @@ fn sentinel_module() -> Module {
                 initialized: vec![false, true],
             },
             GlobalObject {
+                relocs: Vec::new(),
                 symbol: "__evocc.string.7003".to_owned(),
                 origin: 7003,
                 kind: GlobalKind::StringLiteral,
@@ -291,6 +298,20 @@ fn sentinel_module() -> Module {
                 layout: AccessLayout::new(1, 16),
                 bytes: vec![0xf6],
                 initialized: vec![true],
+            },
+            GlobalObject {
+                symbol: "sentinel_relocation".into(),
+                origin: 7004,
+                kind: GlobalKind::File,
+                visibility: GlobalVisibility::Internal,
+                layout: AccessLayout::new(16, 8),
+                bytes: vec![0; 16],
+                initialized: vec![true; 16],
+                relocs: vec![evocc_evoir::Relocation {
+                    offset: 8,
+                    symbol: "sentinel_file".into(),
+                    addend: -3,
+                }],
             },
         ],
         functions: vec![Function {
@@ -325,6 +346,10 @@ fn sentinel_module() -> Module {
 
 fn inst_schema(inst: &Inst) -> &'static str {
     match inst {
+        Inst::PointerCast { result, operand } => {
+            let _ = (result, operand);
+            "Inst.PointerCast(result,operand)"
+        }
         Inst::BitOperation {
             result,
             operand,
@@ -676,9 +701,19 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
             layout,
             bytes,
             initialized,
+            relocs,
         } = global;
-        let _ = (symbol, origin, kind, visibility, layout, bytes, initialized);
-        keys.insert("GlobalObject(symbol,origin,kind,visibility,layout,bytes,initialized)");
+        let _ = (
+            symbol,
+            origin,
+            kind,
+            visibility,
+            layout,
+            bytes,
+            initialized,
+            relocs,
+        );
+        keys.insert("GlobalObject(symbol,origin,kind,visibility,layout,bytes,initialized,relocs)");
         let AccessLayout {
             size_bytes,
             align_bytes,

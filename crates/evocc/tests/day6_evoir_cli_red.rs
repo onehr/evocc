@@ -223,7 +223,7 @@ fn malformed_lowering_and_runtime_failures_are_diagnostics_not_panics() {
     let malformed = TempSource::new("malformed", "int +;\n");
     let lowering = TempSource::new(
         "lowering",
-        "int main(void) { int x = 1; return (int)&x; }\n",
+        "int main(void) { int x; int *p = &x; return p - p; }\n",
     );
     let runtime = TempSource::new(
         "runtime",
@@ -269,7 +269,7 @@ fn malformed_lowering_and_runtime_failures_are_diagnostics_not_panics() {
             ),
             "lowering" => assert!(
                 stderr.ends_with(
-                    ":1:36: error[E3036]: evoir-lowering-failed: not-lowered: pointer-integer-conversion\n"
+                    "error[E3032]: evoir-lowering-failed: not-lowered: pointer-difference\n"
                 ),
                 "{stderr}"
             ),

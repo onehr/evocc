@@ -9,7 +9,7 @@ pub use evocc_types::ByteOrder;
 
 use evocc_types::{TargetDataLayout, TypeLayout};
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
 
 /// Immutable cursor states make a byte copy of a list independent on advancement.
@@ -103,6 +103,7 @@ impl ScopeId {
 pub struct Pointer {
     object: ObjectId,
     byte_offset: i64,
+    exposed_address: Option<u64>,
 }
 
 /// Out-of-band provenance carried by one complete pointer object
@@ -118,6 +119,7 @@ pub enum PointerValue {
     Null,
     Object(Pointer),
     Function(u64),
+    Exposed(u64),
 }
 
 /// Values admitted by the byte-oriented external C library execution boundary.
@@ -130,7 +132,7 @@ pub enum LibraryValue {
 impl PointerValue {
     #[must_use]
     pub const fn object(pointer: Pointer) -> Self {
-        if pointer.object.is_null() {
+        if pointer.object.is_null() && pointer.exposed_address.is_none() {
             Self::Null
         } else {
             Self::Object(pointer)
@@ -173,6 +175,7 @@ impl Pointer {
     pub const NULL: Self = Self {
         object: ObjectId::NULL,
         byte_offset: 0,
+        exposed_address: None,
     };
 
     pub fn new(object: ObjectId, byte_offset: i64) -> Result<Self, MemoryFault> {
@@ -182,6 +185,7 @@ impl Pointer {
         Ok(Self {
             object,
             byte_offset,
+            exposed_address: None,
         })
     }
 
@@ -190,6 +194,21 @@ impl Pointer {
         Self {
             object,
             byte_offset: 0,
+            exposed_address: None,
+        }
+    }
+
+    /// An integer cast does not recover provenance until an actual access.
+    #[must_use]
+    pub const fn from_address(address: u64) -> Self {
+        if address == 0 {
+            Self::NULL
+        } else {
+            Self {
+                object: ObjectId::NULL,
+                byte_offset: 0,
+                exposed_address: Some(address),
+            }
         }
     }
 
@@ -204,6 +223,9 @@ impl Pointer {
     }
 
     pub fn checked_offset(self, delta: i64) -> Result<Self, MemoryFault> {
+        if let Some(address) = self.exposed_address {
+            return Ok(Self::from_address(address.wrapping_add_signed(delta)));
+        }
         if self.object.is_null() {
             return Err(MemoryFault::NullDereference { access: None });
         }
@@ -225,7 +247,7 @@ impl Pointer {
         direction: OffsetDirection,
         scale_bytes: u64,
     ) -> Result<Self, MemoryFault> {
-        if self.object.is_null() {
+        if self.object.is_null() && self.exposed_address.is_none() {
             return Err(MemoryFault::NullDereference { access: None });
         }
         let operand = OffsetOperand::Scaled {
@@ -268,6 +290,14 @@ impl Pointer {
             operand,
         })?;
         let subtract = negative ^ matches!(direction, OffsetDirection::Subtract);
+        if let Some(address) = self.exposed_address {
+            let delta = scaled as u64;
+            return Ok(Self::from_address(if subtract {
+                address.wrapping_sub(delta)
+            } else {
+                address.wrapping_add(delta)
+            }));
+        }
         let base = i128::from(self.byte_offset);
         let result = if subtract {
             base.checked_sub(scaled)
@@ -497,6 +527,7 @@ pub enum ObservedPointer {
     Function {
         identity: u64,
     },
+    ExposedAddress(u64),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -826,6 +857,7 @@ impl std::error::Error for MemoryFault {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ObjectRecord {
+    address: u64,
     info: ObjectInfo,
     bytes: Vec<u8>,
     initialized: Vec<bool>,
@@ -852,6 +884,8 @@ enum AllocationContents<'a> {
 /// Immutable snapshot of objects, bytes, initialization, and lifetimes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemoryState {
+    exposed_objects: BTreeSet<ObjectId>,
+    exposed_functions: BTreeSet<u64>,
     argument_lists: BTreeMap<Pointer, usize>,
     config: MemoryConfig,
     objects: BTreeMap<ObjectId, ObjectRecord>,
@@ -867,6 +901,8 @@ pub struct MemoryState {
 impl MemoryState {
     pub fn new(config: MemoryConfig) -> Result<Self, MemoryFault> {
         Ok(Self {
+            exposed_objects: BTreeSet::new(),
+            exposed_functions: BTreeSet::new(),
             argument_lists: BTreeMap::new(),
             config,
             objects: BTreeMap::new(),
@@ -883,6 +919,89 @@ impl MemoryState {
     #[must_use]
     pub fn fork(&self) -> Self {
         self.clone()
+    }
+
+    /// Deterministic virtual target addresses, never host addresses.
+    pub fn pointer_address(&self, pointer: PointerValue) -> Result<u64, MemoryFault> {
+        match pointer {
+            PointerValue::Null => Ok(0),
+            PointerValue::Exposed(address) => Ok(address),
+            PointerValue::Function(identity) => identity
+                .checked_mul(16)
+                .filter(|value| identity != 0 && *value < (1_u64 << 63))
+                .map(|value| value | (1_u64 << 63))
+                .ok_or(MemoryFault::InvalidFunctionIdentity { identity }),
+            PointerValue::Object(pointer) => {
+                if let Some(address) = pointer.exposed_address {
+                    return Ok(address);
+                }
+                let object =
+                    self.objects
+                        .get(&pointer.object)
+                        .ok_or(MemoryFault::UnknownObject {
+                            object: pointer.object,
+                        })?;
+                Ok(object.address.wrapping_add_signed(pointer.byte_offset))
+            }
+        }
+    }
+
+    pub fn expose_pointer(&self, pointer: PointerValue) -> Result<(Self, u64), MemoryFault> {
+        let address = self.pointer_address(pointer)?;
+        let mut next = self.clone();
+        match pointer {
+            PointerValue::Object(pointer) if pointer.exposed_address.is_none() => {
+                next.exposed_objects.insert(pointer.object);
+            }
+            PointerValue::Function(identity) => {
+                next.exposed_functions.insert(identity);
+            }
+            _ => {}
+        }
+        Ok((next, address))
+    }
+
+    pub fn resolve_pointer(&self, pointer: Pointer) -> Result<Pointer, MemoryFault> {
+        let Some(address) = pointer.exposed_address else {
+            return Ok(pointer);
+        };
+        let mut matches = self.objects.iter().filter(|(id, object)| {
+            self.exposed_objects.contains(id)
+                && object.info.lifetime.is_alive()
+                && address >= object.address
+                && address - object.address < object.info.layout.size_bytes.max(1)
+        });
+        let Some((id, object)) = matches.next() else {
+            return Err(MemoryFault::InvalidPointerRepresentation {
+                address: pointer,
+                access: self.config.pointer_layout,
+            });
+        };
+        if matches.next().is_some() {
+            return Err(MemoryFault::InvalidPointerRepresentation {
+                address: pointer,
+                access: self.config.pointer_layout,
+            });
+        }
+        Pointer::new(*id, (address - object.address) as i64)
+    }
+
+    pub fn resolve_function_pointer(
+        &self,
+        pointer: PointerValue,
+    ) -> Result<PointerValue, MemoryFault> {
+        let PointerValue::Exposed(address) = pointer else {
+            return Ok(pointer);
+        };
+        for identity in &self.exposed_functions {
+            if self.pointer_address(PointerValue::Function(*identity))? == address {
+                return Ok(PointerValue::Function(*identity));
+            }
+        }
+        Err(MemoryFault::InvalidPointerRepresentation {
+            address: Pointer::from_address(address),
+            access: self.config.pointer_layout,
+        })
     }
 
     /// Iterate over stable object metadata in ascending `ObjectId` order.
@@ -1232,6 +1351,7 @@ impl MemoryState {
     /// Check pointer provenance, lifetime, and offset. A one-past pointer is
     /// valid here because this operation does not dereference it.
     pub fn check_pointer(&self, pointer: Pointer) -> Result<(), MemoryFault> {
+        let pointer = self.resolve_pointer(pointer)?;
         if pointer.object.is_null() {
             return Err(MemoryFault::NullDereference { access: None });
         }
@@ -1263,6 +1383,7 @@ impl MemoryState {
     /// Check a complete non-empty access range and its required alignment.
     /// Initialization is deliberately checked only by loads.
     pub fn check_access(&self, address: Pointer, access: AccessLayout) -> Result<(), MemoryFault> {
+        let address = self.resolve_pointer(address)?;
         if self
             .objects
             .get(&address.object)
@@ -1316,6 +1437,7 @@ impl MemoryState {
         address: Pointer,
         access: AccessLayout,
     ) -> Result<bool, MemoryFault> {
+        let address = self.resolve_pointer(address)?;
         let range = self.checked_range(address, access)?;
         let object = self
             .objects
@@ -1331,6 +1453,7 @@ impl MemoryState {
         address: Pointer,
         access: AccessLayout,
     ) -> Result<ByteSequence, MemoryFault> {
+        let address = self.resolve_pointer(address)?;
         self.check_argument_list_access(address, access, false)?;
         let range = self.checked_range(address, access)?;
         let object = self
@@ -1366,6 +1489,7 @@ impl MemoryState {
         access: AccessLayout,
         value: &ByteSequence,
     ) -> Result<Self, MemoryFault> {
+        let address = self.resolve_pointer(address)?;
         self.check_argument_list_access(address, access, false)?;
         let actual = u64::try_from(value.len()).map_err(|_| MemoryFault::HostSizeExceeded {
             size_bytes: u64::MAX,
@@ -1493,6 +1617,8 @@ impl MemoryState {
         access: AccessLayout,
         overlap_allowed: bool,
     ) -> Result<Self, MemoryFault> {
+        let destination = self.resolve_pointer(destination)?;
+        let source = self.resolve_pointer(source)?;
         if !is_valid_alignment(access.align_bytes) {
             return Err(MemoryFault::InvalidAlignment {
                 align_bytes: access.align_bytes,
@@ -1585,6 +1711,7 @@ impl MemoryState {
         access: AccessLayout,
         copying: bool,
     ) -> Result<(), MemoryFault> {
+        let address = self.resolve_pointer(address)?;
         let start = i128::from(address.byte_offset);
         let end = start + i128::from(access.size_bytes);
         for pointer in self
@@ -1606,6 +1733,7 @@ impl MemoryState {
 
     /// The list representation is opaque; ordinary complete copies preserve its identity.
     pub fn argument_list(&self, address: Pointer) -> Result<usize, MemoryFault> {
+        let address = self.resolve_pointer(address)?;
         self.checked_range(
             address,
             AccessLayout {
@@ -1624,6 +1752,7 @@ impl MemoryState {
         address: Pointer,
         identity: Option<usize>,
     ) -> Result<Self, MemoryFault> {
+        let address = self.resolve_pointer(address)?;
         let access = AccessLayout {
             size_bytes: 32,
             align_bytes: 8,
@@ -1674,6 +1803,7 @@ impl MemoryState {
         match self.load_pointer_value(address, access)? {
             PointerValue::Null => Ok(Pointer::NULL),
             PointerValue::Object(pointer) => Ok(pointer),
+            PointerValue::Exposed(value) => Ok(Pointer::from_address(value)),
             PointerValue::Function(_) => {
                 Err(MemoryFault::InvalidPointerRepresentation { address, access })
             }
@@ -1784,6 +1914,7 @@ impl MemoryState {
         match value {
             PointerValue::Null => Ok((Pointer::NULL, next_world)),
             PointerValue::Object(pointer) => Ok((pointer, next_world)),
+            PointerValue::Exposed(value) => Ok((Pointer::from_address(value), next_world)),
             PointerValue::Function(_) => {
                 Err(MemoryFault::InvalidPointerRepresentation { address, access })
             }
@@ -1913,12 +2044,33 @@ impl MemoryState {
 
         let raw = self.next_object_id.ok_or(MemoryFault::ObjectIdExhausted)?;
         let id = ObjectId(raw);
+        let alignment = u64::from(layout.align_bytes.max(8));
+        // Use semantic allocation origins, not local allocation order, so
+        // equivalent executions retain identical target pointer bytes.
+        let mut hash = origin.site ^ origin.instance.rotate_left(32);
+        hash = (hash ^ (hash >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        hash = (hash ^ (hash >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        hash ^= hash >> 31;
+        let address = ((hash & ((1_u64 << 62) - 1)) & !(alignment - 1)).max(alignment);
+        let end_address = address
+            .checked_add(layout.size_bytes.max(1))
+            .filter(|value| *value < (1_u64 << 63))
+            .ok_or(MemoryFault::ObjectIdExhausted)?;
+        if self.objects.values().any(|record| {
+            let end = record
+                .address
+                .saturating_add(record.bytes.len().max(1) as u64);
+            address < end && record.address < end_address
+        }) {
+            return Err(MemoryFault::ObjectIdExhausted);
+        }
         let mut next = self.clone();
         next.next_object_id = raw.checked_add(1);
         next.total_bytes = total_bytes;
         next.objects.insert(
             id,
             ObjectRecord {
+                address,
                 info: ObjectInfo {
                     id,
                     origin,
@@ -1939,6 +2091,7 @@ impl MemoryState {
         address: Pointer,
         access: AccessLayout,
     ) -> Result<Range<usize>, MemoryFault> {
+        let address = self.resolve_pointer(address)?;
         self.check_access(address, access)?;
         let start =
             usize::try_from(address.byte_offset).map_err(|_| MemoryFault::HostSizeExceeded {
@@ -1961,6 +2114,7 @@ impl MemoryState {
         address: Pointer,
         access: AccessLayout,
     ) -> Result<Range<usize>, MemoryFault> {
+        let address = self.resolve_pointer(address)?;
         let range = self.checked_range(address, access)?;
         let object = self
             .objects
@@ -1987,6 +2141,9 @@ impl MemoryState {
     }
 
     fn check_storable_pointer(&self, pointer: Pointer) -> Result<(), MemoryFault> {
+        if pointer.exposed_address.is_some() {
+            return Ok(());
+        }
         if pointer.object.is_null() {
             if pointer.byte_offset == 0 {
                 return Ok(());
@@ -2006,6 +2163,7 @@ impl MemoryState {
     fn check_storable_pointer_value(&self, pointer: PointerValue) -> Result<(), MemoryFault> {
         match pointer {
             PointerValue::Null => Ok(()),
+            PointerValue::Exposed(_) => Ok(()),
             PointerValue::Object(pointer) => self.check_storable_pointer(pointer),
             PointerValue::Function(identity) if identity != 0 => Ok(()),
             PointerValue::Function(identity) => {
@@ -2015,20 +2173,7 @@ impl MemoryState {
     }
 
     fn encode_pointer_value(&self, pointer: PointerValue) -> Result<ByteSequence, MemoryFault> {
-        let abstract_bits = match self.observe_pointer_value(pointer)? {
-            ObservedPointer::Null => 0,
-            ObservedPointer::Object {
-                origin,
-                byte_offset,
-            } => {
-                u128::from(origin.site)
-                    ^ u128::from(origin.instance).rotate_left(43)
-                    ^ u128::from(byte_offset as u64).rotate_left(79)
-            }
-            ObservedPointer::Function { identity } => {
-                u128::from(identity).rotate_left(17) ^ 0xf17e_c710_5eed_u128
-            }
-        };
+        let abstract_bits = u128::from(self.pointer_address(pointer)?);
         let mut representation = encode_integer(
             self.config.byte_order,
             self.config.pointer_layout.size_bytes,
@@ -2080,6 +2225,7 @@ impl MemoryState {
     fn observe_pointer_value(&self, pointer: PointerValue) -> Result<ObservedPointer, MemoryFault> {
         match pointer {
             PointerValue::Null => Ok(ObservedPointer::Null),
+            PointerValue::Exposed(address) => Ok(ObservedPointer::ExposedAddress(address)),
             PointerValue::Function(identity) if identity != 0 => {
                 Ok(ObservedPointer::Function { identity })
             }
@@ -2087,6 +2233,9 @@ impl MemoryState {
                 Err(MemoryFault::InvalidFunctionIdentity { identity })
             }
             PointerValue::Object(pointer) => {
+                if let Some(address) = pointer.exposed_address {
+                    return Ok(ObservedPointer::ExposedAddress(address));
+                }
                 let object =
                     self.objects
                         .get(&pointer.object)
@@ -2109,6 +2258,7 @@ impl MemoryState {
         access: AccessLayout,
         value: ObservedValue,
     ) -> Result<WorldState, MemoryFault> {
+        let address = self.resolve_pointer(address)?;
         let object = self
             .objects
             .get(&address.object)
@@ -2658,6 +2808,28 @@ mod tests {
             memory.load_integer(dangling, U32),
             MemoryFaultKind::LifetimeEnded,
         );
+    }
+
+    #[test]
+    fn integer_provenance_is_resolved_at_access_in_the_current_snapshot() {
+        let memory = little_memory();
+        let (memory, target) = memory
+            .allocate_static(10, U32, InitialState::Zeroed)
+            .unwrap();
+        let bits = memory
+            .pointer_address(PointerValue::object(target))
+            .unwrap();
+        let recovered = Pointer::from_address(bits);
+        assert!(memory.load_integer(recovered, U32).is_err());
+        let (exposed, address) = memory.expose_pointer(PointerValue::object(target)).unwrap();
+        assert_eq!(bits, address);
+        assert_eq!(exposed.load_integer(recovered, U32).unwrap(), 0);
+        assert!(
+            memory.load_integer(recovered, U32).is_err(),
+            "exposure must not mutate an older snapshot"
+        );
+        let exposed = exposed.store_integer(recovered, U32, 17).unwrap();
+        assert_eq!(exposed.load_integer(target, U32).unwrap(), 17);
     }
 
     #[test]
