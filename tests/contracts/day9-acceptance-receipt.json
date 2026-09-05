@@ -2,14 +2,14 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "c6dd88f84c32c23477496662c5345d6b8e027a803e511151bad8d6ed51327cb9"
+    "sha256": "673de4afee1b5b654820435f876de0d0d9eb592cfe3cfb088f01e2271630de8b"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
     "revision": "1.9.66",
-    "sha256": "1e633554e61b8637885b142704eee2612873271282665276ec8024f35d81d8ae"
+    "sha256": "620ec6f2bdc0cb4769062d7f292ad2e2fdabf2b6590ac6447e2783977d239b60"
   },
-  "cutLine": "AC and scalar variadic access AD are closed by the measured runs and completed gate/replay below. AD removes E3030 from the first-error frontier but does not increase clean units: 6 clean, 2792 diagnosed. The next measured defect is function-parameter adjustment (2464 E3101), followed by checked arithmetic (303 E3020). AE2 and AF remain OPEN. Older sections below are historical checkpoints, not current status.",
+  "cutLine": "AC, AD and AE2 are closed by measured surveys and completed gates/replays. AE2 clears E3020/E3023/E3021, but lowering remains 6 clean and 2792 diagnosed, chiefly 2700 mandatory E3035 refusals. AF is implemented and undergoing its full gate and survey; not yet closed. The overall finish criterion conflicts with body-required E3035/E3029 deferrals, recorded in Appendix D. Older sections are historical checkpoints.",
   "latestExecution": {
     "commits": {
       "wideRed": "8773a0b",
@@ -188,6 +188,59 @@
         "resultsSha256": "97e8624a18c68edd18972ea7082bd0de79e1a8311be68cac3a07139de98ec709",
         "summarySha256": "133ac64ef0499e5006fddfc0b0a493baa8a9b4800655d2b5445304cd1ea1a1da",
         "sealSha256": "67ef2c24420a17760b1debf65e03289d8c7e941690852765f0d194bb0b69e503"
+      },
+      "AE2": {
+        "runId": "20260905T185525Z-27277",
+        "subjectCommit": "9475b5a8cdce3791714a4ad7f58d33ecfe89f49a",
+        "capture": ".evidence/full-config-lowering-survey/20260905T185525Z-27277",
+        "classifications": {
+          "clean": 6,
+          "diagnosed": 2792,
+          "panic": 0,
+          "timeout": 0,
+          "unavailable": 0
+        },
+        "atRootTop15": [
+          {
+            "exampleRecord": "arch/arm64/crypto/.aes-ce-ccm-glue.o.cmd",
+            "exampleUnit": "arch/arm64/crypto/aes-ce-ccm-glue.c",
+            "finding": "E3035 evoir-lowering-failed",
+            "units": 2700
+          },
+          {
+            "exampleRecord": "arch/arm64/kernel/.kaslr.o.cmd",
+            "exampleUnit": "arch/arm64/kernel/kaslr.c",
+            "finding": "E3026 evoir-lowering-failed",
+            "units": 43
+          },
+          {
+            "exampleRecord": "arch/arm64/kernel/.jump_label.o.cmd",
+            "exampleUnit": "arch/arm64/kernel/jump_label.c",
+            "finding": "E3036 evoir-lowering-failed",
+            "units": 33
+          },
+          {
+            "exampleRecord": "arch/arm64/mm/.ioremap.o.cmd",
+            "exampleUnit": "arch/arm64/mm/ioremap.c",
+            "finding": "E3101 evoir-lowering-failed",
+            "units": 14
+          },
+          {
+            "exampleRecord": "arch/arm64/kernel/.fpsimd.o.cmd",
+            "exampleUnit": "arch/arm64/kernel/fpsimd.c",
+            "finding": "E3029 evoir-lowering-failed",
+            "units": 2
+          }
+        ],
+        "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --action lower --evocc target/frontend/release/evocc --jobs 4 --timeout 60",
+        "diagnosedByCode": {
+          "E3035": 2700,
+          "E3029": 2,
+          "E3036": 33,
+          "E3026": 43,
+          "E3101": 14
+        },
+        "sealSha256": "b3927c731c652ad11d04bc894bbaf3adee10e5f614c2344fe74eab2f62100709"
       }
     },
     "dashboard": {
@@ -265,7 +318,73 @@
       "Machine variadic save area and calling convention are backend work, not implemented here.",
       "The broader floating execution profile remains excluded by 10.1.17; scalar list typing includes f64.",
       "No backend bits<128> interpreter implementation was duplicated; the incoming backend merge has not landed."
-    ]
+    ],
+    "gateAE2": {
+      "workspace": {
+        "command": "CARGO_TARGET_DIR=target/frontend cargo test --workspace --no-fail-fast --locked --offline -j 2",
+        "passed": 1608,
+        "failed": 0,
+        "ignored": 4,
+        "completedTargets": 247,
+        "exitCode": 0,
+        "aggregation": "Sum of every test result line; existing ignored tests remain counted as ignored.",
+        "subjectCommit": "9475b5a"
+      },
+      "clippy": {
+        "command": "CARGO_TARGET_DIR=target/frontend cargo clippy --workspace --all-targets --offline -- -D warnings",
+        "exitCode": 0
+      },
+      "fmt": {
+        "command": "cargo fmt --all -- --check",
+        "exitCode": 0
+      },
+      "ruff": {
+        "command": "ruff check tools tests/acceptance",
+        "exitCode": 0
+      },
+      "layout": {
+        "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+        "capture": ".evidence/day5-layout/20260905T193221Z-75704",
+        "mismatchCount": 0,
+        "mismatches": [],
+        "status": "PASS",
+        "total": 128
+      },
+      "attributedLayout": {
+        "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=\"$PWD/tests/contracts/layout-attributed-cases.json\" bash tests/acceptance/day5-layout-conformance.sh --subject",
+        "capture": ".evidence/day5-layout/20260905T193230Z-75703",
+        "mismatchCount": 0,
+        "mismatches": [],
+        "status": "PASS",
+        "total": 22
+      },
+      "offlineReplay": {
+        "command": "git -C .build/ac-replay-36e4a57 pull --ff-only; cd .build/ac-replay-36e4a57; cargo test --workspace --no-fail-fast --locked --offline -j 2",
+        "subjectCommit": "860eace",
+        "passed": 1608,
+        "failed": 0,
+        "ignored": 4,
+        "completedTargets": 247,
+        "exitCode": 0,
+        "isolation": "Existing no-local clone, fast-forwarded to the measured subject; independent target and object store, no alternates. Not claimed as a fresh target.",
+        "priorAttempt": "9475b5a: 1607 passed, 1 failed, 4 ignored. Parallel assembler tests shared and deleted unit.s. 860eace isolates per-invocation names; the entire offline replay was rerun and passed."
+      },
+      "measurementFailures": "Two concurrent layout attempts invalidated one another through temporary oracle image aliases. Neither is PASS. The sequential repeats above passed."
+    },
+    "acceptanceAE2": {
+      "command": "cargo build --release -p evocc --locked --offline -j 2 && python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260905T184422Z-99139/results.jsonl",
+      "runId": "20260905T193450Z-81402",
+      "subjectCommit": "860eace",
+      "clean": 48,
+      "regressions": 0,
+      "parseSurvey": {
+        "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --action parse --evocc target/frontend/release/evocc --jobs 4 --timeout 60",
+        "runId": "20260905T185526Z-27381",
+        "clean": 2798,
+        "other": 0,
+        "sealSha256": "9aaa1689ae3c351da92f83e06595bd7730268bb43cea74a8316f87d642117bb1"
+      }
+    }
   },
   "redWindow": {
     "opened": "ca8127d (tests only)",

@@ -121,6 +121,16 @@
       "runId": "20260905T175021Z-94287",
       "E3030": 0,
       "remainingFrontier": "2464 E3101 from function-parameter adjustment; 303 checked arithmetic and the other measured classes are subsequent work. No claim of overall lowering closure."
+    },
+    "AE2": {
+      "status": "CLOSED",
+      "subjectCommit": "9475b5a8cdce3791714a4ad7f58d33ecfe89f49a",
+      "runId": "20260905T185525Z-27277",
+      "gateSubject": "860eace",
+      "E3020": 0,
+      "E3023": 0,
+      "E3021": 0,
+      "remainingFrontier": "2700 E3035; 43 E3026; 33 E3036; 14 E3101; 2 E3029. No overall lowering closure."
     }
   }
 }
