@@ -82,6 +82,11 @@ fn static_addresses_relocate_objects_members_and_functions() {
 #[test]
 fn pointer_integer_round_trip_retains_live_exposed_provenance() {
     check(
+        "int main(void){int x=4; int *p=(int *)(unsigned long)&x; return p ? 1 : 0;}",
+        Ok(1),
+        &["ptr.from_int"],
+    );
+    check(
         "int main(void){int x=4; int *p=&x; int *q=(int *)(unsigned long)p; return p==q && *q==4;}",
         Ok(1),
         &["ptr.to_int", "ptr.from_int"],
