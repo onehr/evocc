@@ -1,6 +1,17 @@
 use evocc_evoir::{parse_section9_module, render_module};
 
 #[test]
+fn variadic_external_signatures_keep_the_marker_before_effect_tokens() {
+    let text = "declare @log(bits<32>, ..., mem<all>, world) -> (bits<32>, mem<all>, world) cc = target_default\n";
+    let module = parse_section9_module(text.as_bytes()).expect("variadic external signature");
+    assert_eq!(render_module(&module), text);
+    let fixed = text.replace(", ...", "");
+    assert_ne!(module, parse_section9_module(fixed.as_bytes()).unwrap());
+    let malformed = text.replace("..., mem<all>, world", "mem<all>, world, ...");
+    assert!(parse_section9_module(malformed.as_bytes()).is_err());
+}
+
+#[test]
 fn external_tables_round_trip_without_definitions() {
     for source in [
         "extern @counter size=4 align=4\n",

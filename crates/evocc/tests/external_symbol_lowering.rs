@@ -134,3 +134,30 @@ fn unprototyped_external_calls_require_one_promoted_signature() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+#[test]
+fn external_variadic_calls_promote_anonymous_arguments() {
+    let source =
+        "extern int log_value(int, ...); int main(void){return log_value(1, (char)2, (short)3);}";
+    let output = run(source, "--emit=evoir");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        text.contains("declare @log_value(bits<32>, ..., mem<all>, world)"),
+        "{text}"
+    );
+    evocc_evoir::parse_section9_module(text.as_bytes()).expect("promoted variadic call");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = run(source, mode);
+        assert!(!output.status.success());
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("E3039"),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
