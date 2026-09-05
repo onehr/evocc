@@ -102,3 +102,34 @@ fn extract_return_address_has_the_measured_void_pointer_type() {
         "return __builtin_extract_return_addr(address); }\n",
     ));
 }
+
+#[test]
+fn synthesized_library_prototypes_are_unique_and_in_no_lexical_scope() {
+    let arena = Arena::default();
+    let unit = parse("void f(void *p) { __builtin_memset(p, 0, 1); } void g(void *p) { __builtin_memset(p, 0, 2); }", &arena).unwrap();
+    let symbols: Vec<_> = unit
+        .symbols()
+        .symbols_in_source_order()
+        .iter()
+        .filter(|symbol| symbol.spelling() == "memset")
+        .collect();
+    assert_eq!(symbols.len(), 1);
+    assert!(unit
+        .symbols()
+        .scopes_in_source_order()
+        .iter()
+        .all(|scope| !scope.symbols().contains(&symbols[0].id())));
+    evocc_chir::AllocationSiteManifest::derive(&unit).unwrap();
+}
+
+#[test]
+fn library_builtins_do_not_declare_or_shadow_ordinary_identifiers() {
+    accepts("void f(void *p) { __builtin_memset(p, 0, 1); } static int memset = 3; int g(void) { return memset; } void h(void *p) { __builtin_memset(p, 0, 2); }");
+    let arena = Arena::default();
+    let error = parse(
+        "void f(void *p) { __builtin_memset(p, 0, 1); memset(p, 0, 1); }",
+        &arena,
+    )
+    .unwrap_err();
+    assert_eq!(error.code, "E2001");
+}
