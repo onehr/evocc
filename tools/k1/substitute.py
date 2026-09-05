@@ -64,6 +64,14 @@ from cmdrecord import (  # noqa: E402
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def default_evocc() -> Path:
+    """The release driver, honoring a shared CARGO_TARGET_DIR."""
+    target = os.environ.get("CARGO_TARGET_DIR")
+    if target:
+        return Path(target) / "release/evocc"
+    return REPO_ROOT / "target/release/evocc"
 CONTAINER_BIN = "/usr/local/bin/container"
 DIAGNOSTIC = re.compile(r"^.+:[0-9]+:[0-9]+: error\[(?P<code>[^]]+)\]: (?P<message>.*)$")
 TARGET_COMPILER = "gcc-14"
@@ -360,7 +368,7 @@ def main() -> int:
     parser.add_argument("--all", action="store_true", help="every target C compilation")
     parser.add_argument("--k1-root", type=Path, default=REPO_ROOT / ".build/k1")
     parser.add_argument("--src-root", type=Path, default=REPO_ROOT / ".build/linux-src")
-    parser.add_argument("--evocc", type=Path, default=REPO_ROOT / "target/release/evocc")
+    parser.add_argument("--evocc", type=Path, default=default_evocc())
     parser.add_argument("--evidence-root", type=Path, default=REPO_ROOT / ".evidence/k1")
     parser.add_argument("--run-id", default=None)
     parser.add_argument("--jobs", type=int, default=8)

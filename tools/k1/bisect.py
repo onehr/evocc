@@ -16,12 +16,21 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 from typing import Callable, Iterable, Sequence
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def default_evocc() -> Path:
+    """The release driver, honoring a shared CARGO_TARGET_DIR."""
+    target = os.environ.get("CARGO_TARGET_DIR")
+    if target:
+        return Path(target) / "release/evocc"
+    return REPO_ROOT / "target/release/evocc"
 K1_DIR = Path(__file__).resolve().parent
 
 PASS = "PASS"
@@ -161,7 +170,7 @@ def main() -> int:
     parser.add_argument("allowlist", type=Path, help="the failing allowlist")
     parser.add_argument("--k1-root", type=Path, default=REPO_ROOT / ".build/k1")
     parser.add_argument("--src-root", type=Path, default=REPO_ROOT / ".build/linux-src")
-    parser.add_argument("--evocc", type=Path, default=REPO_ROOT / "target/release/evocc")
+    parser.add_argument("--evocc", type=Path, default=default_evocc())
     parser.add_argument("--evidence-root", type=Path, default=REPO_ROOT / ".evidence/k1")
     parser.add_argument("--run-id", default=None)
     parser.add_argument("--jobs", type=int, default=8)
