@@ -4430,6 +4430,31 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         function_syntax: Option<&ParameterSyntax>,
         adjusted_parameter: bool,
     ) -> bool {
+        if adjusted_parameter
+            && (matches!(
+                written.layers.first(),
+                Some(WrittenDeclaratorLayer::Function { .. })
+            ) || (written.layers.is_empty()
+                && self
+                    .unit
+                    .types()
+                    .get(terminal)
+                    .is_some_and(|ty| matches!(ty.kind, TypeKind::Function { .. }))))
+        {
+            if let Some(canonical) = self.unit.types().get(current) {
+                if let TypeKind::Pointer(pointee) = canonical.kind {
+                    if canonical.qualifiers == Qualifiers::default()
+                        && self
+                            .unit
+                            .types()
+                            .get(pointee)
+                            .is_some_and(|ty| matches!(ty.kind, TypeKind::Function { .. }))
+                    {
+                        current = pointee;
+                    }
+                }
+            }
+        }
         if function_syntax.is_some()
             && !matches!(
                 written.layers.first(),

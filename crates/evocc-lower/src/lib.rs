@@ -2279,6 +2279,28 @@ fn written_declarator_matches(
     initialized_object: bool,
     adjusted_parameter: bool,
 ) -> bool {
+    // Undo only the outer function-to-pointer parameter adjustment.
+    if adjusted_parameter
+        && (matches!(
+            written.layers.first(),
+            Some(WrittenDeclaratorLayer::Function { .. })
+        ) || (written.layers.is_empty()
+            && types
+                .get(terminal)
+                .is_some_and(|ty| matches!(ty.kind, TypeKind::Function { .. }))))
+    {
+        if let Some(canonical) = types.get(current) {
+            if let TypeKind::Pointer(pointee) = canonical.kind {
+                if canonical.qualifiers == evocc_types::Qualifiers::default()
+                    && types
+                        .get(pointee)
+                        .is_some_and(|ty| matches!(ty.kind, TypeKind::Function { .. }))
+                {
+                    current = pointee;
+                }
+            }
+        }
+    }
     if let Some(syntax) = function_syntax {
         if !matches!(
             written.layers.first(),
