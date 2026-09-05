@@ -112,6 +112,24 @@ fn pointer_integer_round_trip_retains_live_exposed_provenance() {
 }
 
 #[test]
+fn static_typed_null_addresses_are_representable() {
+    check(
+        "struct s {int n;}; struct d {const struct s *p;}; static struct d d={(const struct s *)0}; int main(void){return d.p==0;}",
+        Ok(1),
+        &[],
+    );
+}
+
+#[test]
+fn static_flexible_array_member_addresses_are_representable() {
+    check(
+        "struct font {unsigned h[4]; const unsigned char data[];} __attribute__((packed)); static const struct font f={{0,0,2,0},{7,9}}; const unsigned char *p=f.data; int main(void){return p[1];}",
+        Ok(9),
+        &["@f, 16"],
+    );
+}
+
+#[test]
 fn direct_object_function_pointer_conversion_keeps_the_distinct_ir_boundary() {
     let arena = Arena::default();
     let unit = parse(
