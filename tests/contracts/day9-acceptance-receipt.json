@@ -6,10 +6,10 @@
   },
   "specification": {
     "path": "docs/evoir-spec.md",
-    "revision": "1.9.60",
-    "sha256": "5d4e4d7463629aba53583cf2487c64a8c367e78f1700dc79124c6a334328ea4b"
+    "revision": "1.9.63",
+    "sha256": "a2671b37957e05c14aa81e2bbb703c9177380e3a41e6c019400f19b6fc086986"
   },
-  "cutLine": "Fixed subject 3bc968d implements declaration-identity and static-integer repairs and specifies assembly edge semantics in revision 1.9.60. Dashboard 20260905T033631Z-41221 is 48/48 clean; parse survey 20260905T034102Z-58950 is 2798/2798 clean; lowering survey 20260905T041551Z-61762 is 6 clean and 2792 diagnosed, with no unavailable, timeout, panic or old-clean regression. E3101 falls from 2766 to 57, including 50 remaining manifest failures. AA and AB remain OPEN. Assembly production is unchanged; its uncommitted RED draft has focused evidence but the full workspace run stalled before executable startup. Isolated replay has not run for this subject.",
+  "cutLine": "Current implementation cb0e83d completes the granted library-prototype namespace repair. All 28 previous manifest residuals were classified: 21 isdigit and 7 memset uses, one shared scope rule. The unchanged-input 57-unit targeted replay now has E3033 30, E3030 26, E3021 1, E3101 zero, zero timeout and panic; it is not a full survey. Focused tests are 38/38. AA remains OPEN pending its full gate and isolated replay; AB implementation dfbd2f1 remains OPEN pending completion of its fc138c6 isolated replay and refreshed full survey. The last sealed full parse/lowering surveys remain the historical runs recorded below; AC is not opened.",
   "redWindow": {
     "opened": "ca8127d (tests only)",
     "closed": "b8688e0",
@@ -1188,7 +1188,7 @@
     "closure": "AA_OPEN_WITH_MEASURED_MANIFEST_RESIDUE; AB_IMPLEMENTED_CLOSURE_PENDING"
   },
   "declarationFrontierReductions": {
-    "status": "TWO_RULINGS_IMPLEMENTED_SYNTHETIC_LIBRARY_SCOPE_UNRESOLVED",
+    "status": "DECLARATION_REPAIRS_IMPLEMENTED_TARGETED_REPLAY_CLEARS_ALL_57_FULL_CLOSURE_PENDING",
     "authority": "docs/evoir-spec.md 1.9.62, c518a7d",
     "redCommit": "f24ea67",
     "implementationCommit": "8772b33",
@@ -1207,19 +1207,33 @@
       "rejectedAttempt": "Initial targeted replay raised TimeoutExpired at its 60s limit and produced no complete result set. The complete replay above is a separate attempt; no timeout limit was raised.",
       "claimCeiling": "Targeted replay only, not the sealed full-configuration survey and not AA closure. All 28 remaining rows produce FileScopeMismatch when the C-HIR diagnostic probe supplies an entry point; these modified-input probes are diagnostic only."
     },
-    "newGap": {
+    "resolvedGap": {
       "name": "SYNTHETIC_LIBRARY_DECLARATION_SCOPE",
       "minimalSource": "void f(void *p) { __builtin_memset(p, 0, 1); }",
       "observed": "E3101: cannot derive the authoritative allocation-site manifest",
-      "cause": "The parser appends a synthesized library prototype to the TU but declares its symbol in the current function scope. Section 10.1.14 does not settle whether this synthesized prototype introduces an ordinary identifier and its visibility scope. No validator relaxation or new scope rule is implemented.",
+      "cause": "The parser appended a synthesized library prototype to the TU but declared its symbol in the current function scope. Revision 1.9.63 resolves its identity and visibility; cb0e83d implements the unit-owned builtin namespace without weakening lexical manifest checks.",
       "source": ".evidence/declaration-frontier/20260905T074500Z/library-scope.c",
       "diagnosticProbes": ".evidence/declaration-frontier/20260905T074500Z/residue-diagnostics.json"
     },
     "backgroundVerification": {
       "ordinaryAssemblyWorkspace": "INTERRUPTED, not acceptance evidence: redundant with the retained isolated full workspace replay; terminated only its cargo/test/child processes 18042, 26612, 54246",
       "isolatedAssemblyReplay": "RUNNING at fc138c6 in /private/tmp/c30-assembly-replay.IZedjG/repo, fresh target and no object alternates; covers AB implementation, not 8772b33",
-      "currentLoweringTests": "RUNNING; CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo test -p evocc-lower --tests --no-fail-fast",
+      "currentLoweringTests": "PASS 81/81 at 8772b33; CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo test -p evocc-lower --tests --no-fail-fast; not the later cb0e83d full gate",
       "hostObservation": "One-second /usr/bin/sample of the waiting native corpus child recorded 891/891 samples at _dyld_start; the corpus advanced between process inspections. No runner or macOS metadata workaround added."
+    },
+    "libraryPrototypeResolution": {
+      "authority": "docs/evoir-spec.md 1.9.63, 2eac5c1",
+      "redCommit": "88f8ac6",
+      "implementationCommit": "cb0e83d",
+      "report": ".evidence/declaration-frontier/20260905T074500Z/review.md",
+      "classification": { "path": ".evidence/declaration-frontier/20260905T074500Z/construct-classification.json", "units": 28, "sourceConstructClasses": 1, "builtinSpellings": { "isdigit": 21, "memset": 7 }, "probe": ".evidence/builtin-probes/20260902-2c23684c/p37.out", "additionalRulingsNeededForThese28": 0 },
+      "focused": { "command": "CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo test -p evocc-parser --test library_builtin_typing --test builtin_strlen -p evocc-lower --test front_end_resolved_forms -p evocc-chir --test g2_semantic_schema --no-fail-fast", "passed": 38, "failed": 0, "log": ".evidence/declaration-frontier/20260905T074500Z/builtin-namespace-focused.log" },
+      "targetedReplay": { "command": "Execute every exact argv from .evidence/declaration-frontier/20260905T074500Z/results.jsonl with the freshly built release subject; four subprocess workers, timeout=60", "buildCommand": "CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo build --release -p evocc --locked --offline", "binarySha256": "a4a6fbe38bfcbabee0d6cca55ebd1c7773ca70ee9e88db2b76bf7ee3a0532400", "results": ".evidence/declaration-frontier/20260905T074500Z/builtin-namespace-replay-final.jsonl", "units": 57, "firstCodes": { "E3033": 30, "E3030": 26, "E3021": 1, "E3101": 0 }, "timeouts": 0, "panics": 0, "claimCeiling": "Targeted replay, not full survey or scope closure" },
+      "checks": { "clippy": "CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo clippy --workspace --all-targets -- -D warnings: PASS", "fmt": "cargo fmt --all -- --check: PASS", "ruff": "ruff check tests/acceptance tools: PASS", "diff": "git diff --check: PASS" },
+      "layout": { "base": { "command": "bash tests/acceptance/day5-layout-conformance.sh --subject", "runId": "20260905T082605Z-48573", "passed": 128, "mismatches": 0, "cutLine": "Measured before the final unit-level declaration-queue correction" }, "attributed": { "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=tests/contracts/layout-attributed-cases.json bash tests/acceptance/day5-layout-conformance.sh --subject", "runId": "20260905T083240Z-73905", "passed": 22, "mismatches": 0 }, "rejectedAttempt": "20260905T082703Z-48572: omitted C30_LAYOUT_CASE_SET=attributed; manifest caseCount differs, no cases executed" },
+      "latentSpecGap": "EXTERNAL-CALLEE-REPRESENTATION: both builtin and explicit extern calls without a TU body reach E3101 missing callee; no external declaration/effect representation is invented. This is not a remaining first-error class in the 57-unit replay; full batch report above.",
+      "workspace": { "subject": "cb0e83d", "command": "CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo build --workspace --bins --locked --offline && CARGO_TARGET_DIR=/private/tmp/c30-aa/target cargo test --workspace --no-fail-fast --locked --offline", "status": "RUNNING", "log": "/private/tmp/c30-builtin-namespace-workspace.log" },
+      "isolatedReplay": "NOT_RUN for cb0e83d; the retained AB replay is at fc138c6 and cannot certify these later changes"
     },
     "subject": "3bc968d",
     "manifest": {
