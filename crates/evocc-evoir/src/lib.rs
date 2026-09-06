@@ -4224,7 +4224,7 @@ fn execute_instruction(
             operand,
             op,
         } => {
-            let raw = u128::from(read_value(values, operand, block)?);
+            let raw = read_value(values, operand, block)?;
             let EvoIRType::Bits(width) = result.ty else {
                 unreachable!("validated bit type")
             };
