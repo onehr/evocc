@@ -126,7 +126,11 @@ def main() -> int:
 
     spec = (ROOT / "docs" / "evoir-spec.md").read_text()
     debts = sorted(
-        set(re.findall(r"\| `(E30\d\d)` \| `not-(?:lowered|executed)", spec))
+        code
+        for code, rest in re.findall(
+            r"\| `(E30\d\d)` \| `not-(?:lowered|executed)[^\n]*?\| ([^\n]*)", spec
+        )
+        if "withdrawn" not in rest
     )
 
     b1 = receipts.get("b1", {}).get("campaign", {})
@@ -166,13 +170,19 @@ def main() -> int:
         ],
         span,
     )
+    k1 = contract("k1-mixed-link-receipt.json")
+    k1_boot = k1.get("reference", {}).get("verdict", "?")
+    k1_units = k1.get("unitsCompiledByEvoccInABootingKernel", 0)
+    k1_survey = k1.get("survey", {}).get("outcomeCounts", {})
+    k1_asm = k1_survey.get("assembled", 0)
+    k1_total = k1_asm + k1_survey.get("refused", 0)
     kernel = box(
         " ── ",
         [
-            f"fail-closed {len(debts)} :{' '.join(debts[: len(debts) // 2])}",
-            f"{' ' * 18}{' '.join(debts[len(debts) // 2 :])}",
-            "asm EvoIR 3.11 / EvoMIR receipt",
-            "K1 ░░░░ C1 ░░░░ C2 vmlinux ░░░░ G1 ░░░░",
+            f" {k1_boot} {bar(1 if k1_boot == 'PASS' else 0, 1)} GCC ,EvoCC , ",
+            f" EvoCC {k1_units} ; {k1_asm:,}/{k1_total:,} {bar(k1_asm, k1_total)}",
+            f"fail-closed {len(debts)} :{' '.join(debts)}",
+            "C1 EvoCC ░░░░ C2 vmlinux ░░░░ G1 ░░░░",
         ],
         span,
     )
