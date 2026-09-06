@@ -881,7 +881,8 @@ impl<'src> Lexer<'src> {
         let bytes = self.source.as_bytes();
         loop {
             // Whitespace
-            while self.pos < bytes.len() && matches!(bytes[self.pos], b' ' | b'\t' | b'\r' | b'\n')
+            while self.pos < bytes.len()
+                && matches!(bytes[self.pos], b' ' | b'\t' | b'\r' | b'\n' | 0x0b | 0x0c)
             {
                 self.preceded_by_whitespace = true;
                 if bytes[self.pos] == b'\n' {

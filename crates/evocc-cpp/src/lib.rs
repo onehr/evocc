@@ -620,6 +620,7 @@ pub struct Preprocessor {
     include_guard_seen: bool,
     pragma_once_files: HashSet<String>,
     include_paths: Vec<String>,
+    current_include_path: Option<usize>,
     forced_includes: Vec<String>,
     macro_prefix_maps: Vec<(String, String)>,
     cond_stack: Vec<CondState>,
@@ -653,6 +654,7 @@ impl Preprocessor {
             include_guard_seen: false,
             pragma_once_files: HashSet::new(),
             include_paths: Vec::new(),
+            current_include_path: None,
             forced_includes: Vec::new(),
             macro_prefix_maps: Vec::new(),
             cond_stack: Vec::new(),
@@ -1247,9 +1249,10 @@ impl Preprocessor {
                 && is_start_of_line(&raw, i, source)
             {
                 i += 1;
-                if i >= len {
-                    output.push(tok.clone());
-                    break;
+                if i >= len || raw[i].kind == TokenKind::Eof || is_start_of_line(&raw, i, source) {
+                    // A null directive ends at its own logical newline. The
+                    // next token may be the start of a conditional directive.
+                    continue;
                 }
                 let dir_name = token_lexeme(&raw[i], source).to_string();
                 i += 1;
@@ -1268,7 +1271,7 @@ impl Preprocessor {
                         }
                         skip_line(&raw, &mut i, source);
                     }
-                    "include" => {
+                    "include" | "include_next" => {
                         if self.cond_active() {
                             let directive_span = tok.span;
                             let argument = collect_line_tokens(&raw, &mut i, source);
@@ -1288,19 +1291,30 @@ impl Preprocessor {
                                 parse_header_name(&expanded, source)
                             };
                             if let Some((include_text, include_kind)) = header {
-                                let path = resolve_include(
+                                let path = resolve_include_with_origin(
                                     &include_text,
                                     include_kind,
                                     &self.current_file,
                                     &self.include_paths,
                                     self.standard_includes,
+                                    (dir_name == "include_next").then_some(
+                                        self.current_include_path.map_or(0, |index| index + 1),
+                                    ),
                                 );
-                                if let Some(resolved) = path {
+                                if let Some((resolved, origin)) = path {
                                     if !self.pragma_once_files.contains(&resolved) {
-                                        if let Ok(processed) =
-                                            self.process_resolved_source(&resolved, expanding)
-                                        {
-                                            output.extend(processed.into_vec());
+                                        let previous_origin = self.current_include_path;
+                                        self.current_include_path = origin.or(previous_origin);
+                                        let processed =
+                                            self.process_resolved_source(&resolved, expanding);
+                                        self.current_include_path = previous_origin;
+                                        match processed {
+                                            Ok(processed) => output.extend(processed.into_vec()),
+                                            Err(error) => self.errors.push(PreprocessError {
+                                                code: if error.kind() == std::io::ErrorKind::InvalidData { "E0002" } else { "E0003" },
+                                                span: directive_span,
+                                                message: format!("cannot read included source {resolved}: {error}"),
+                                            }),
                                         }
                                     }
                                 } else {
@@ -1548,6 +1562,7 @@ impl Preprocessor {
                                 &raw[i + 1..],
                                 source,
                                 expanding,
+                                &name,
                             );
                             output.extend(processed);
                             expanding.remove(&name);
@@ -1629,6 +1644,7 @@ impl Preprocessor {
                                     &raw[i..],
                                     source,
                                     expanding,
+                                    &name,
                                 );
                                 output.extend(processed);
                                 expanding.remove(&name);
@@ -1675,7 +1691,13 @@ impl Preprocessor {
         following: &[Token],
         source: &str,
         expanding: &mut HashSet<String>,
+        replacement_owner: &str,
     ) -> (Vec<Token>, usize) {
+        // This invocation closes outside the replacement list. Its owner is
+        // enabled again, but earlier output must not be rescanned: that output
+        // may contain self-references that were disabled when encountered.
+        let mut invocation_scope = expanding.clone();
+        invocation_scope.remove(replacement_owner);
         let mut consumed = 0;
         while let Some(last) = replacement.last() {
             if last.kind != TokenKind::Identifier {
@@ -1693,11 +1715,19 @@ impl Preprocessor {
             let Some(invocation_len) = complete_parenthesized_prefix(&following[consumed..]) else {
                 break;
             };
-            replacement.extend_from_slice(&following[consumed..consumed + invocation_len]);
+            let mut invocation = vec![replacement.pop().expect("checked final macro name")];
+            invocation.extend_from_slice(&following[consumed..consumed + invocation_len]);
             consumed += invocation_len;
-            replacement = self
-                .process_impl(TokenStream::new(replacement), source, expanding, false, 0)
-                .into_vec();
+            replacement.extend(
+                self.process_impl(
+                    TokenStream::new(invocation),
+                    source,
+                    &mut invocation_scope,
+                    false,
+                    0,
+                )
+                .into_vec(),
+            );
         }
         (replacement, consumed)
     }
@@ -2208,34 +2238,49 @@ fn resolve_include(
     include_paths: &[String],
     standard_includes: bool,
 ) -> Option<String> {
+    resolve_include_with_origin(
+        name,
+        kind,
+        current_file,
+        include_paths,
+        standard_includes,
+        None,
+    )
+    .map(|(path, _)| path)
+}
+
+fn resolve_include_with_origin(
+    name: &str,
+    kind: IncludeKind,
+    current_file: &str,
+    include_paths: &[String],
+    standard_includes: bool,
+    search_start: Option<usize>,
+) -> Option<(String, Option<usize>)> {
     // Quoted include: try beside the active source, then the process working
     // directory. `read_include_argument` has already removed the delimiters.
-    if kind == IncludeKind::Quote && !name.starts_with('/') {
+    if search_start.is_none() && kind == IncludeKind::Quote && !name.starts_with('/') {
         if let Some(parent) = std::path::Path::new(current_file).parent() {
             let candidate = parent.join(name);
             if let Some(resolved) = resolved_existing_path(&candidate) {
-                return Some(resolved);
+                return Some((resolved, None));
             }
         }
         let local = std::path::Path::new(name);
         if let Some(resolved) = resolved_existing_path(local) {
-            return Some(resolved);
+            return Some((resolved, None));
         }
     }
     // Search include paths.
-    for dir in include_paths {
+    let system_paths = ["/usr/include", "/usr/local/include"];
+    let search_paths = include_paths
+        .iter()
+        .map(String::as_str)
+        .chain(system_paths.into_iter().filter(|_| standard_includes));
+    for (index, dir) in search_paths.enumerate().skip(search_start.unwrap_or(0)) {
         let candidate = std::path::Path::new(dir).join(name);
         if let Some(resolved) = resolved_existing_path(&candidate) {
-            return Some(resolved);
-        }
-    }
-    // Angle-bracket system includes: try well-known paths.
-    if standard_includes {
-        for sys_path in &["/usr/include", "/usr/local/include"] {
-            let candidate = std::path::Path::new(sys_path).join(name);
-            if let Some(resolved) = resolved_existing_path(&candidate) {
-                return Some(resolved);
-            }
+            return Some((resolved, Some(index)));
         }
     }
     None

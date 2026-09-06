@@ -3,22 +3,23 @@
  "rung": "E2",
  "subject": "zstd",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260906T132406Z",
+ "run": "20260906T170414Z",
  "pin": "v1.5.7 (2025-02-19, github.com/facebook/zstd)",
  "url": "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz",
  "tarballSha256": "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3",
  "tarball": "zstd-1.5.7.tar.gz",
- "driverSha256": "ab9da087a09c2d0cb66dea8b4db3dbef142ff9171e35a03b0e80312ddcb0d34c",
+ "driverSha256": "6b714dfcbb41add018c77e79842e6307429df205592e9c475eb064d8707c71e9",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 44,
  "unitsEvoccCompiled": 2,
- "unitsSubstituted": 1,
+ "unitsSubstituted": 2,
  "unitsRebuiltByMake": [],
  "substitutedUnits": [
-  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/debug.o"
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/debug.o",
+  "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/timefn.o"
  ],
  "unitsExcluded": 0,
- "unitsInPassingBuild": 1,
+ "unitsInPassingBuild": 2,
  "outcomes": {
   "assembled": 2,
   "refused": 42
@@ -283,13 +284,7 @@
   }
  ],
  "excludedUnits": [],
- "failingUnits": [
-  {
-   "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/timefn.o",
-   "stage": "test",
-   "signature": "Segmentation fault | make[1]: *** [Makefile:356: test-zstd] Error 139 | make[1]: Leaving directory '/tmp/zstd-check/tests' | make: *** [Makefile:91: check] Error 2"
-  }
- ],
+ "failingUnits": [],
  "baselineTest": {
   "passed": true,
   "status": 0
@@ -302,9 +297,9 @@
  },
  "attempts": [
   {
-   "passed": false,
-   "stage": "test",
-   "signature": "Segmentation fault | make[1]: *** [Makefile:356: test-zstd] Error 139 | make[1]: Leaving directory '/tmp/zstd-check/tests' | make: *** [Makefile:91: check] Error 2",
+   "passed": true,
+   "stage": "pass",
+   "signature": "",
    "unitCount": 2
   }
  ],
@@ -321,9 +316,9 @@
    "includeNext": "`#include_next <x>` resolved to the next header in the search order"
   },
   "includeOrder": [
-   "-I/Users/onehrxn/dev/30days/c30/.claude/worktrees/l1/.build/ladder/sysroot-adjusted/usr/lib/gcc/aarch64-linux-gnu/14/include",
-   "-I/Users/onehrxn/dev/30days/c30/.claude/worktrees/l1/.build/ladder/sysroot-adjusted/usr/include/aarch64-linux-gnu",
-   "-I/Users/onehrxn/dev/30days/c30/.claude/worktrees/l1/.build/ladder/sysroot-adjusted/usr/include"
+   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include/aarch64-linux-gnu",
+   "-I/Users/onehrxn/dev/30days/c30/.build/ladder/sysroot-adjusted/usr/include"
   ],
   "configure": "",
   "subject": [
@@ -504,6 +499,6 @@
    "shownBy": "compile the three lines with EvoCC, call get() and span() from a GCC-compiled main, link and run: it faults where the GCC-compiled unit prints 42"
   }
  ],
- "evidence": ".evidence/ladder/zstd/20260906T132406Z",
- "summaryLine": "zstd: 1 of 44 units by EvoCC in a passing build; refused by code {'E0105': 37, 'E2921': 4, 'E1001': 1}"
+ "evidence": ".evidence/ladder/zstd/20260906T170414Z",
+ "summaryLine": "zstd: 2 of 44 units by EvoCC in a passing build; refused by code {'E0105': 37, 'E2921': 4, 'E1001': 1}"
 }
