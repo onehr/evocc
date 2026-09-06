@@ -49,11 +49,42 @@ int helper(int x) { return x * 3; }
 unsigned char narrow(unsigned char c) { return (unsigned char)(c + 1u); }
 "#;
 
-const PROGRAMS: &[Program] = &[Program {
-    name: "external-symbols",
-    unit: EXTERNAL_UNIT,
-    other: Some(EXTERNAL_OTHER),
-}];
+/// A static table of pointers and function pointers with addends, and the two
+/// pointer-integer conversions (EvoMIR revision 0.12).
+const RELOCATION_UNIT: &str = r#"static int table[4] = {10, 20, 30, 40};
+static int twice(int x) { return x + x; }
+static int thrice(int x) { return x * 3; }
+
+struct pair { int a; long b; };
+static struct pair sv = {1, 2};
+
+static int *pointers[3] = { &table[0], &table[2], table + 3 };
+static int (*funcs[2])(int) = { twice, thrice };
+static long *inner = &sv.b;
+
+int main(void) {
+    int total = *pointers[0] + *pointers[1] + *pointers[2];
+    total += funcs[0](5) + funcs[1](5);
+    total += (int)*inner;
+    unsigned long address = (unsigned long)(void *)&table[1];
+    int *back = (int *)address;
+    total += *back;
+    return total & 0xff;
+}
+"#;
+
+const PROGRAMS: &[Program] = &[
+    Program {
+        name: "external-symbols",
+        unit: EXTERNAL_UNIT,
+        other: Some(EXTERNAL_OTHER),
+    },
+    Program {
+        name: "static-relocations",
+        unit: RELOCATION_UNIT,
+        other: None,
+    },
+];
 
 fn workspace() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

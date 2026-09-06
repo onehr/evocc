@@ -344,12 +344,6 @@ fn scan_inst(
             index,
             "bit operation instruction selection is not implemented".into(),
         ),
-        Inst::PointerCast { .. } => report(
-            E4009,
-            block,
-            index,
-            "pointer conversion instruction selection is not implemented".into(),
-        ),
         Inst::VaAccess(_) => report(
             E4009,
             block,
@@ -362,7 +356,10 @@ fn scan_inst(
             index,
             "inline assembly selection is not implemented".into(),
         ),
-        Inst::Const(..)
+        // Section 5 (revision 0.12): "`ptr.to_int`, `ptr.from_int.*` |
+        // nothing: the value is the same 64-bit register".
+        Inst::PointerCast { .. }
+        | Inst::Const(..)
         | Inst::Uninitialized(_)
         | Inst::Add(..)
         | Inst::Sub(..)
@@ -1321,6 +1318,14 @@ fn lower_inst(
             let dst = lowerer.fresh(RegClass::Gpr64);
             insts.push(MInst::MovImm { dst, imm: 0 });
             lowerer.bind(result, dst);
+        }
+        // Section 5 (revision 0.12): "`ptr.to_int`, `ptr.from_int.*` |
+        // nothing: the value is the same 64-bit register". A pointer and a
+        // `bits<64>` are both `gpr64`, so the conversion is an alias and emits
+        // no instruction at all.
+        Inst::PointerCast { result, operand } => {
+            let src = lowerer.reg(operand)?;
+            lowerer.bind(result, src);
         }
         Inst::GlobalAddr { result, symbol } => {
             address_of(lowerer, insts, result, symbol, SymbolKind::Global);

@@ -253,18 +253,56 @@ pub fn emit_module_for(
             );
             let _ = writeln!(text, ".globl {prefix}{}", global.symbol);
             let _ = writeln!(text, "{prefix}{}:", global.symbol);
-            for byte in &global.bytes {
-                let _ = writeln!(text, "    .byte {byte}");
-            }
-            if global.bytes.is_empty() {
-                let _ = writeln!(text, "    .space {}", global.layout.size_bytes);
-            }
+            emit_initializer(&mut text, prefix, global);
         }
     }
     if let Some(ident) = target.producer_ident() {
         let _ = writeln!(text, "\n{ident}");
     }
     text
+}
+
+/// One global's initial bytes, with the relocations of EvoIR 2.1 written into
+/// them.
+///
+/// Section 10, `E4005` withdrawn at revision 0.12: "a relocation `(offset,
+/// @symbol, addend)` is emitted as `.xword symbol+addend` at its offset, the
+/// surrounding bytes as before". EvoIR sorts the list by offset, forbids
+/// overlap and keeps every entry inside the size, so one walk suffices.
+fn emit_initializer(text: &mut String, prefix: &str, global: &GlobalObject) {
+    if global.bytes.is_empty() {
+        let _ = writeln!(text, "    .space {}", global.layout.size_bytes);
+        return;
+    }
+    let mut offset = 0_u64;
+    let mut relocations = global.relocs.iter().peekable();
+    while offset < global.bytes.len() as u64 {
+        if let Some(relocation) = relocations.peek() {
+            if relocation.offset == offset {
+                let addend = relocation.addend;
+                let sign = if addend < 0 { '-' } else { '+' };
+                let magnitude = addend.unsigned_abs();
+                if addend == 0 {
+                    let _ = writeln!(text, "    .xword {prefix}{}", relocation.symbol);
+                } else {
+                    let _ = writeln!(
+                        text,
+                        "    .xword {prefix}{}{sign}{magnitude}",
+                        relocation.symbol
+                    );
+                }
+                offset += 8;
+                relocations.next();
+                continue;
+            }
+        }
+        let _ = writeln!(
+            text,
+            "    .byte {}",
+            global.bytes[usize::try_from(offset).unwrap_or(usize::MAX)]
+        );
+        offset += 1;
+    }
 }
 
 fn label(target: Target, function: &str, block: u32) -> String {
