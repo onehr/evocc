@@ -1136,6 +1136,9 @@ fn emit_inst(
         // The area itself is reserved by the frame layout and filled by the
         // prologue, so the marker emits nothing of its own.
         MInst::VaSaveArea { .. } => {}
+        // Section 6 (revision 0.18): allocation has already pinned the
+        // register the marker names to `x8`, so emission writes nothing.
+        MInst::IndirectResult => {}
         // Section 6: "one slot per `frame.slot` (its declared size, rounded to
         // its declared alignment ...)".
         MInst::FrameSlot { dst, origin, .. } => {

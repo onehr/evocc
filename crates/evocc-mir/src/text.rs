@@ -568,6 +568,11 @@ pub fn render_inst(inst: &MInst) -> String {
         MInst::SpillReload { dst, slot } => {
             format!("{}spill.reload [slot #{slot}]", defined(*dst))
         }
+        // Section 6 (revision 0.18): the marker that says the last argument
+        // of the call that follows, or the last parameter of this function,
+        // is the destination a record result above sixteen bytes is written
+        // through, and therefore travels in `x8`.
+        MInst::IndirectResult => "indirect.result".to_owned(),
         MInst::IncomingArg { dst, slot } => {
             format!("{}arg.incoming [slot #{slot}]", defined(*dst))
         }

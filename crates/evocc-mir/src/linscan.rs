@@ -36,6 +36,10 @@ pub const SCRATCH: u8 = 16;
 /// Section 6: arguments and results occupy `x0` to `x7`.
 const BOUNDARY: u8 = 8;
 
+/// Section 6 (revision 0.18): "above 16 bytes the destination pointer travels
+/// in `x8`, not in an argument register".
+const INDIRECT_RESULT: u8 = 8;
+
 /// Virtual registers this pass creates start above the out-of-SSA scratch
 /// range, so that a boundary copy is never mistaken for a cycle break.
 const FRESH_BASE: u32 = regalloc::SCRATCH_LIMIT;
@@ -61,6 +65,9 @@ pub struct Allocated {
     /// Section 6's frame layout reserves at the bottom of the frame (Linux
     /// only, revision 0.10).
     pub outgoing: u64,
+    /// Whether the last parameter is the destination of a record result above
+    /// sixteen bytes and therefore arrives in `x8` (Section 6, revision 0.18).
+    pub indirect_result: bool,
     /// Whether the EvoIR function this was allocated from has internal
     /// linkage (Section 8, revision 0.16), which emission answers by writing
     /// no `.globl` for its symbol.
@@ -84,6 +91,12 @@ pub fn allocate(function: &MFunction) -> Result<Allocated, String> {
 pub fn allocate_for(target: Target, function: &MFunction) -> Result<Allocated, String> {
     let mut next = FRESH_BASE;
     let parameters = function.blocks.first().map_or(0, |block| block.args.len());
+    let indirect_result = function.blocks.first().is_some_and(|block| {
+        block
+            .insts
+            .first()
+            .is_some_and(|inst| matches!(inst, MInst::IndirectResult))
+    });
     let (mut current, pins, outgoing) = pin_boundaries(target, function, &mut next);
     let mut slots: BTreeMap<u32, u32> = BTreeMap::new();
 
@@ -110,6 +123,7 @@ pub fn allocate_for(target: Target, function: &MFunction) -> Result<Allocated, S
                     frame_slots: u32::try_from(slots.len()).unwrap_or(u32::MAX),
                     used_callee_saved,
                     outgoing,
+                    indirect_result,
                     internal: false,
                 });
             }
@@ -150,9 +164,28 @@ fn pin_boundaries(
         let mut insts = Vec::new();
 
         if index == 0 {
+            // Section 6 (revision 0.18): an `indirect.result` opening the
+            // entry block says the last parameter is the destination a record
+            // result above sixteen bytes is written through, and that it
+            // arrives in `x8` rather than in an argument register. Every other
+            // position is unchanged, because the destination is last.
+            let indirect = block
+                .insts
+                .first()
+                .is_some_and(|inst| matches!(inst, MInst::IndirectResult))
+                .then(|| block.args.len().saturating_sub(1));
             // Section 6: the parameters arrive in x0 to x7. Each is copied out
             // at once, so the boundary register is live over one move.
             for (position, parameter) in block.args.iter().enumerate() {
+                if indirect == Some(position) {
+                    let incoming = fresh(next, parameter.class);
+                    pins.insert(incoming.id, INDIRECT_RESULT);
+                    insts.push(MInst::Mov {
+                        dst: *parameter,
+                        src: incoming,
+                    });
+                    continue;
+                }
                 // Section 6: an argument past the eighth "goes to the stack in
                 // an 8-byte slot ... the callee reads slot `i` at `x29 + 16 +
                 // 8 * i`". Darwin refuses those in lowering, so `position` is
@@ -173,8 +206,19 @@ fn pin_boundaries(
             }
         }
 
-        for inst in &block.insts {
+        let mut indirect_call = false;
+        for (offset, inst) in block.insts.iter().enumerate() {
+            // The entry block's own marker names this function's last
+            // parameter, not the next call's, and it was read above.
+            if index == 0 && offset == 0 && matches!(inst, MInst::IndirectResult) {
+                insts.push(inst.clone());
+                continue;
+            }
             match inst {
+                MInst::IndirectResult => {
+                    indirect_call = true;
+                    insts.push(inst.clone());
+                }
                 MInst::Bl {
                     symbol,
                     args,
@@ -188,6 +232,7 @@ fn pin_boundaries(
                         next,
                         &mut pins,
                         &mut outgoing_slots,
+                        std::mem::take(&mut indirect_call),
                     );
                     insts.push(MInst::Bl {
                         symbol: symbol.clone(),
@@ -214,6 +259,7 @@ fn pin_boundaries(
                         next,
                         &mut pins,
                         &mut outgoing_slots,
+                        std::mem::take(&mut indirect_call),
                     );
                     insts.push(MInst::Blr {
                         target: *target,
@@ -296,6 +342,7 @@ const MAX_REGISTER_ARGUMENTS: usize = 8;
 
 type PinnedResults = Vec<(VReg, VReg)>;
 
+#[allow(clippy::too_many_arguments)]
 fn pin_call(
     platform: Target,
     insts: &mut Vec<MInst>,
@@ -304,9 +351,23 @@ fn pin_call(
     next: &mut u32,
     pins: &mut BTreeMap<u32, u8>,
     outgoing_slots: &mut u32,
+    indirect_result: bool,
 ) -> (Vec<VReg>, PinnedResults) {
+    // Section 6 (revision 0.18): with the marker, the call's last argument is
+    // the destination of a record result above sixteen bytes and goes to `x8`.
+    let indirect = indirect_result.then(|| args.len().saturating_sub(1));
     let mut moved = Vec::new();
     for (position, arg) in args.iter().enumerate() {
+        if indirect == Some(position) {
+            let outgoing = fresh(next, arg.class);
+            pins.insert(outgoing.id, INDIRECT_RESULT);
+            insts.push(MInst::Mov {
+                dst: outgoing,
+                src: *arg,
+            });
+            moved.push(outgoing);
+            continue;
+        }
         // Section 6: the slots are "assigned in argument order at increasing
         // addresses from the caller's `sp` at the call".
         if let Some(slot) = stack_slot(platform, position) {
@@ -945,7 +1006,7 @@ fn operand_slots(inst: &mut MInst, definitions: bool) -> Vec<&mut VReg> {
                 Vec::new()
             }
         }
-        MInst::VaSaveArea { .. } => Vec::new(),
+        MInst::VaSaveArea { .. } | MInst::IndirectResult => Vec::new(),
         MInst::AddPageOff { dst, src, .. }
         | MInst::Extend { dst, src, .. }
         | MInst::Unary { dst, src, .. } => {

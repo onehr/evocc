@@ -1400,6 +1400,11 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                 detail: "a spill access exists only after allocation".to_owned(),
             });
         }
+        // Section 6 (revision 0.18): a marker for allocation. Before it, the
+        // destination pointer of a record result above sixteen bytes is an
+        // ordinary last argument, which is what the interpreter passes, so
+        // there is nothing here to do.
+        MInst::IndirectResult => {}
         // Which arguments find no register is what allocation decides, so a
         // stack argument, like a spill, exists only after it.
         MInst::IncomingArg { .. } | MInst::OutgoingArg { .. } => {

@@ -869,6 +869,11 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
                 align: u32::try_from(align).map_err(|_| "an alignment is small".to_owned())?,
             }));
         }
+        // Section 6 (revision 0.18): the `x8` marker carries no operand.
+        if mnemonic == "indirect.result" {
+            scan.finish()?;
+            return Ok(Parsed::Inst(MInst::IndirectResult));
+        }
         if mnemonic == "va.save" {
             scan.expect("[named=")?;
             let named: u8 = scan

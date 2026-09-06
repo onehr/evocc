@@ -135,6 +135,10 @@ fn verify_assembly(
 type State = BTreeMap<u8, Option<u32>>;
 
 /// The registers a call destroys: Section 6's caller-saved set.
+/// Section 6 (revision 0.18): the register the destination of a record result
+/// above sixteen bytes arrives in.
+const INDIRECT_RESULT: u8 = 8;
+
 const CLOBBERED: [u8; 18] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
 
 /// Check an allocated function.
@@ -166,7 +170,14 @@ pub fn verify_allocation(allocated: &Allocated) -> Result<(), VerifierRefusal> {
     // fixes is where an argument arrives, not that the body reads it. Two
     // values arriving in one register would still be two arguments in one
     // place, which is refused here rather than left to the meet below.
-    let limit = u8::try_from(allocated.parameters).unwrap_or(u8::MAX);
+    // Section 6 (revision 0.18): the destination of a record result above
+    // sixteen bytes is the last parameter and arrives in `x8`, which is not an
+    // argument register, so it is admitted beside the argument registers
+    // rather than counted among them.
+    let ordinary = allocated
+        .parameters
+        .saturating_sub(usize::from(allocated.indirect_result));
+    let limit = u8::try_from(ordinary).unwrap_or(u8::MAX);
     for value in &boundary {
         let Some(number) = allocated.assignment.get(value).copied() else {
             return Err(refuse(
@@ -174,6 +185,17 @@ pub fn verify_allocation(allocated: &Allocated) -> Result<(), VerifierRefusal> {
                 format!("%v{value} is live when the function is entered and was never assigned"),
             ));
         };
+        if allocated.indirect_result && number == INDIRECT_RESULT {
+            if entry.insert(number, Some(*value)).is_some() {
+                return Err(refuse(
+                    0,
+                    format!(
+                        "two arguments are live when the function is entered in register {number}"
+                    ),
+                ));
+            }
+            continue;
+        }
         if number >= limit {
             return Err(refuse(
                 0,

@@ -91,6 +91,7 @@ fn mnemonics_with_boundary(module: &evocc_mir::MModule) -> Vec<String> {
                         format!("frame.address.{}", place.mnemonic())
                     }
                     MInst::VaSaveArea { .. } => "va.save".to_owned(),
+                    MInst::IndirectResult => "indirect.result".to_owned(),
                 });
             }
         }

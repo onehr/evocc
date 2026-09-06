@@ -910,6 +910,19 @@ pub enum MInst {
         dst: VReg,
         place: FramePlace,
     },
+    /// Section 6 (revision 0.18): "above 16 bytes the destination pointer
+    /// travels in `x8`, not in an argument register, and the callee writes
+    /// through `x8`".
+    ///
+    /// A marker, not a value. In the entry block it says the function's last
+    /// parameter is that destination; immediately before a call it says the
+    /// call's last argument is. Allocation reads it and pins that one register
+    /// to `x8` instead of to its argument position; every other position is
+    /// unchanged, because the destination is last. Emission writes nothing,
+    /// and the interpreters pass the pointer as the ordinary argument it is in
+    /// the pre-allocation form, which is why nothing else in the machine has
+    /// to know about `x8`.
+    IndirectResult,
     /// The register save area of a variadic callee (Section 6): a marker the
     /// frame layout reads and the prologue expands.
     ///
@@ -1440,6 +1453,7 @@ pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
         | MInst::SpillStore { .. }
         | MInst::OutgoingArg { .. }
         | MInst::VaSaveArea { .. }
+        | MInst::IndirectResult
         | MInst::Stp { .. } => Vec::new(),
         MInst::Bl { results, .. } | MInst::Blr { results, .. } => results.clone(),
         MInst::Asm(body) => body.defined(),
@@ -1461,6 +1475,7 @@ pub fn inst_uses(inst: &MInst) -> Vec<VReg> {
         | MInst::Adr { .. }
         | MInst::FrameSlot { .. }
         | MInst::FrameAddress { .. }
+        | MInst::IndirectResult
         | MInst::VaSaveArea { .. } => Vec::new(),
         MInst::Load { base, .. } => vec![*base],
         MInst::Store { src, base, .. } => vec![*src, *base],

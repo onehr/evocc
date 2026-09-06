@@ -16,12 +16,12 @@ use evocc_evoir::{
     inst_results, inst_uses, BitOp, Block, CmpOp, Function, InlineAssembly, Inst, Module,
     TrapReason, UbReason, Value, VariadicOp,
 };
-use evocc_types::EvoIRType;
+use evocc_types::{param_mark, EvoIRType, ParamMark, RecordShape};
 
 use crate::{
-    AsmBody, AsmClobber, AsmConstraint, AsmOperand, AsmValue, BinOp, CarryOp, Cond, ExtOp, FlagOp,
-    FramePlace, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass, StoreKind,
-    SymbolKind, Target, UnaryOp, VReg, WideMul, Width,
+    inst_defs, AsmBody, AsmClobber, AsmConstraint, AsmOperand, AsmValue, BinOp, CarryOp, Cond,
+    ExtOp, FlagOp, FramePlace, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass,
+    StoreKind, SymbolKind, Target, UnaryOp, VReg, WideMul, Width,
 };
 
 /// One EvoIR form this revision does not lower, reported at the instruction.
@@ -110,10 +110,11 @@ pub fn lower_module_for(
         .map(|declaration| declaration.name.as_str())
         .collect();
     let crosses = |name: &str| external(name) || declared.contains(name);
+    let signatures = Signatures::of(module);
 
     let mut functions = Vec::new();
     for function in &module.functions {
-        match lower_function(function, &crosses) {
+        match lower_function(target, &signatures, function, &crosses) {
             Ok(lowered) => functions.push(lowered),
             Err(detail) => refusals.push(Refusal {
                 function: function.name.clone(),
@@ -237,15 +238,44 @@ fn scan_function(
         .map(|param| &param.ty)
         .filter(|ty| is_register_type(ty))
         .collect();
-    if params.len() > MAX_REGISTER_ARGUMENTS && refuses_stack_arguments(target) {
+    // Section 6 (revision 0.18): a record spends the registers its chunks take
+    // and a record above sixteen bytes spends one, so the count that matters
+    // is the convention's, not the parameter list's.
+    let declared: Vec<EvoIRType> = function
+        .params
+        .iter()
+        .map(|param| param.ty.clone())
+        .collect();
+    let marked = marked_types(&declared, &function.param_marks);
+    let plan = record_plan(target, &marked, true);
+    if plan.positions > MAX_REGISTER_ARGUMENTS && refuses_stack_arguments(target) {
         report(
             E4010,
             entry_block,
             0,
             format!(
                 "@{} takes {} register arguments",
+                function.name, plan.positions
+            ),
+        );
+    }
+    // Section 6 puts the destination pointer of a record result above sixteen
+    // bytes in `x8`, which the machine reaches through the call's last
+    // argument, and EvoIR 10.1.3 already puts it "after every declared
+    // parameter". A mark anywhere else is a form this revision does not lower.
+    if let Some(position) = marked
+        .iter()
+        .position(|(_, mark)| mark.is_sret())
+        .filter(|position| *position + 1 != marked.len())
+    {
+        report(
+            E4009,
+            entry_block,
+            0,
+            format!(
+                "@{} names its record return destination at parameter {position} of {}",
                 function.name,
-                params.len()
+                marked.len()
             ),
         );
     }
@@ -445,12 +475,27 @@ fn scan_inst(
             callee,
             ..
         } => {
-            if args.len() > MAX_REGISTER_ARGUMENTS && refuses_stack_arguments(target) {
+            let marks = module
+                .functions
+                .iter()
+                .find(|function| &function.name == callee)
+                .map(|function| function.param_marks.as_slice())
+                .or_else(|| {
+                    module
+                        .declares
+                        .iter()
+                        .find(|declaration| &declaration.name == callee)
+                        .map(|declaration| declaration.param_marks.as_slice())
+                })
+                .unwrap_or(&[]);
+            let positions =
+                record_plan(target, &marked_types(&arg_types(args), marks), true).positions;
+            if positions > MAX_REGISTER_ARGUMENTS && refuses_stack_arguments(target) {
                 report(
                     E4010,
                     block,
                     index,
-                    format!("a call to @{callee} passes {} arguments", args.len()),
+                    format!("a call to @{callee} passes {positions} arguments"),
                 );
             }
             if results.len() > MAX_REGISTER_RESULTS {
@@ -478,13 +523,24 @@ fn scan_inst(
                 report(E4009, block, index, format!("a call to absent @{callee}"));
             }
         }
-        Inst::IndirectCall { results, args, .. } => {
-            if args.len() > MAX_REGISTER_ARGUMENTS && refuses_stack_arguments(target) {
+        Inst::IndirectCall {
+            results,
+            args,
+            callee,
+            ..
+        } => {
+            let marks: Vec<ParamMark> = match &callee.ty {
+                EvoIRType::FnPtr { marks, .. } => marks.clone(),
+                _ => Vec::new(),
+            };
+            let positions =
+                record_plan(target, &marked_types(&arg_types(args), &marks), true).positions;
+            if positions > MAX_REGISTER_ARGUMENTS && refuses_stack_arguments(target) {
                 report(
                     E4010,
                     block,
                     index,
-                    format!("an indirect call passes {} arguments", args.len()),
+                    format!("an indirect call passes {positions} arguments"),
                 );
             }
             if results.len() > MAX_REGISTER_RESULTS {
@@ -543,6 +599,14 @@ struct Lowerer {
     /// prior definition in the same function, and this is where an assembly
     /// operand finds it.
     constants: HashMap<u32, u64>,
+    /// Section 6 (revision 0.18): the shape of the record result this function
+    /// returns in `x0`/`x1`, and the frame slot the entry block gave it.
+    destination: Option<(RecordShape, VReg)>,
+    /// The register each block's `ret` reads the record result out of, which
+    /// `thread_destination` turns into that block's extra argument.
+    destination_readers: HashMap<u32, VReg>,
+    /// How many record frame slots this function has taken an origin for.
+    record_origins: u64,
 }
 
 impl Lowerer {
@@ -932,6 +996,8 @@ impl Lowerer {
 }
 
 fn lower_function(
+    target: Target,
+    signatures: &Signatures<'_>,
     function: &Function,
     external: &dyn Fn(&str) -> bool,
 ) -> Result<MFunction, String> {
@@ -958,11 +1024,16 @@ fn lower_function(
             .variadic
             .then(|| named_argument_registers(&function.params)),
         constants: HashMap::new(),
+        destination: None,
+        destination_readers: HashMap::new(),
+        record_origins: 0,
     };
 
     for (index, block) in function.blocks.iter().enumerate() {
         let id = ids[&block.id];
         lower_block(
+            target,
+            signatures,
             &mut lowerer,
             function,
             block,
@@ -980,10 +1051,46 @@ fn lower_function(
             term: MTerm::Brk { imm },
         });
     }
+    // Section 6 (revision 0.18): a record result of at most sixteen bytes is
+    // loaded into `x0`/`x1` "by the callee ... before `ret`", out of the frame
+    // slot the entry block gave the destination. Every block that returns
+    // needs that address, so it is threaded through the block arguments the
+    // Section 2 discipline requires.
+    if let Some((_, slot)) = lowerer.destination {
+        let readers = lowerer.destination_readers.clone();
+        let mut next = lowerer.next_vreg;
+        thread_destination(&mut lowerer.blocks, slot, &readers, &mut next);
+        lowerer.next_vreg = next;
+    }
     Ok(MFunction {
         name: function.name.clone(),
         blocks: lowerer.blocks,
     })
+}
+
+/// The record marks of every callee this module can name.
+pub(crate) struct Signatures<'a> {
+    functions: HashMap<&'a str, &'a [ParamMark]>,
+}
+
+impl<'a> Signatures<'a> {
+    fn of(module: &'a Module) -> Self {
+        let mut functions: HashMap<&'a str, &'a [ParamMark]> = HashMap::new();
+        for function in &module.functions {
+            functions.insert(function.name.as_str(), function.param_marks.as_slice());
+        }
+        for declaration in &module.declares {
+            functions.insert(
+                declaration.name.as_str(),
+                declaration.param_marks.as_slice(),
+            );
+        }
+        Self { functions }
+    }
+
+    fn marks(&self, callee: &str) -> &[ParamMark] {
+        self.functions.get(callee).copied().unwrap_or(&[])
+    }
 }
 
 /// The register-typed values an edge passes.
@@ -995,7 +1102,10 @@ fn edge_args(lowerer: &Lowerer, values: &[Value]) -> Result<Vec<VReg>, String> {
     Ok(registers)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn lower_block(
+    target: Target,
+    signatures: &Signatures<'_>,
     lowerer: &mut Lowerer,
     function: &Function,
     block: &Block,
@@ -1004,10 +1114,87 @@ fn lower_block(
     external: &dyn Fn(&str) -> bool,
     entry: bool,
 ) -> Result<(), String> {
+    // Section 6 (revision 0.18): the entry block's arguments are the
+    // function's parameters "in the same order and with the same type", so the
+    // marks apply to them position by position.
+    let marked = entry.then(|| {
+        marked_types(
+            &block
+                .args
+                .iter()
+                .map(|arg| arg.value.ty.clone())
+                .collect::<Vec<_>>(),
+            &function.param_marks,
+        )
+    });
+    let plan = marked
+        .as_ref()
+        .map(|marked| record_plan(target, marked, true));
     let mut args = Vec::new();
-    for arg in &block.args {
+    let mut prologue: Vec<MInst> = Vec::new();
+    let mut indirect_result = false;
+    let mut ordinary = 0_usize;
+    for (index, arg) in block.args.iter().enumerate() {
         if !is_register_type(&arg.value.ty) {
             continue;
+        }
+        let placement = plan.as_ref().map(|plan| plan.items[ordinary].clone());
+        ordinary += 1;
+        if let Some(Placed { fillers, passing }) = placement {
+            for _ in 0..fillers {
+                args.push(lowerer.fresh(RegClass::Gpr64));
+            }
+            match passing {
+                // Section 6: "the callee stores them into a frame slot that
+                // becomes the parameter's place".
+                Passing::Chunks(chunks) => {
+                    let slot = lowerer.fresh(RegClass::Gpr64);
+                    let shape = param_mark(&function.param_marks, index)
+                        .shape()
+                        .expect("a chunked argument is a marked record");
+                    prologue.push(MInst::FrameSlot {
+                        dst: slot,
+                        origin: RECORD_ORIGIN_BASE + lowerer.record_origins,
+                        size: shape.size,
+                        align: shape.align,
+                    });
+                    lowerer.record_origins += 1;
+                    let mut offset = 0;
+                    for size in chunks {
+                        let chunk = lowerer.fresh(RegClass::Gpr64);
+                        args.push(chunk);
+                        store_chunk(lowerer, &mut prologue, chunk, slot, offset, size);
+                        offset += size;
+                    }
+                    lowerer.bind(&arg.value, slot);
+                    continue;
+                }
+                // Section 6: at most sixteen bytes the destination is the
+                // callee's own, and `ret` loads the result out of it; above
+                // sixteen the caller's pointer arrives in `x8`, which the
+                // marker names and allocation pins.
+                Passing::Destination(shape) => {
+                    if shape.size <= RECORD_REGISTER_LIMIT {
+                        let slot = lowerer.fresh(RegClass::Gpr64);
+                        prologue.push(MInst::FrameSlot {
+                            dst: slot,
+                            origin: RECORD_ORIGIN_BASE + lowerer.record_origins,
+                            size: shape.size,
+                            align: shape.align,
+                        });
+                        lowerer.record_origins += 1;
+                        lowerer.bind(&arg.value, slot);
+                        lowerer.destination = Some((shape, slot));
+                        continue;
+                    }
+                    indirect_result = true;
+                    let reg = lowerer.fresh(RegClass::Gpr64);
+                    lowerer.bind(&arg.value, reg);
+                    args.push(reg);
+                    continue;
+                }
+                Passing::Pointer | Passing::Value => {}
+            }
         }
         if is_pair(&arg.value.ty) {
             // Section 6 rounds the next register number up to even before a
@@ -1015,7 +1202,7 @@ fn lower_block(
             // that Section 7's positional pinning gives the halves the numbers
             // the convention names. Inside the function the rule has no
             // meaning, so only the entry block carries it.
-            if entry && args.len() % 2 == 1 {
+            if entry && plan.is_none() && args.len() % 2 == 1 {
                 args.push(lowerer.fresh(RegClass::Gpr64));
             }
             let (low, high) = lowerer.fresh_pair();
@@ -1033,6 +1220,11 @@ fn lower_block(
     let mut current_id = id;
     let mut current_args = args;
     let mut insts: Vec<MInst> = Vec::new();
+    // Section 6 (revision 0.18): the marker allocation reads is the first
+    // thing in the entry block, before the register save area.
+    if indirect_result {
+        insts.push(MInst::IndirectResult);
+    }
     // Section 6: the register save area is filled "in the prologue", before
     // anything writes an argument register. The marker is the first thing in
     // the entry block, which is where the frame layout finds it.
@@ -1041,6 +1233,7 @@ fn lower_block(
             insts.push(MInst::VaSaveArea { named });
         }
     }
+    insts.extend(prologue);
     // Set when an `icmp` was fused into the block's `cond_br`.
     let mut fused: Option<(VReg, Cond)> = None;
 
@@ -1346,10 +1539,10 @@ fn lower_block(
             }
         }
 
-        lower_inst(lowerer, &mut insts, inst, external)?;
+        lower_inst(target, signatures, lowerer, &mut insts, inst, external)?;
     }
 
-    let term = lower_terminator(lowerer, &mut insts, function, block, ids, fused)?;
+    let term = lower_terminator(lowerer, &mut insts, function, block, current_id, ids, fused)?;
     lowerer.blocks.push(MBlock {
         id: current_id,
         args: current_args,
@@ -1464,6 +1657,7 @@ fn lower_terminator(
     insts: &mut Vec<MInst>,
     function: &Function,
     block: &Block,
+    current_id: u32,
     ids: &HashMap<u32, u32>,
     fused: Option<(VReg, Cond)>,
 ) -> Result<MTerm, String> {
@@ -1532,6 +1726,19 @@ fn lower_terminator(
                 }
                 slot += 1;
             }
+            // Section 6 (revision 0.18): "An `sret` result of at most 16
+            // bytes is loaded by the callee into `x0` and `x1` before `ret`".
+            // The address comes in as this block's threaded argument.
+            if let Some((shape, _)) = lowerer.destination {
+                let base = lowerer.fresh(RegClass::Gpr64);
+                lowerer.destination_readers.insert(current_id, base);
+                let mut offset = 0;
+                for size in record_chunks(shape.size) {
+                    let chunk = load_chunk(lowerer, insts, base, offset, size);
+                    results.push(chunk);
+                    offset += size;
+                }
+            }
             Ok(MTerm::Ret { values: results })
         }
         Inst::Trap(reason) => Ok(MTerm::Brk {
@@ -1543,6 +1750,8 @@ fn lower_terminator(
 
 #[allow(clippy::too_many_lines)]
 fn lower_inst(
+    target: Target,
+    signatures: &Signatures<'_>,
     lowerer: &mut Lowerer,
     insts: &mut Vec<MInst>,
     inst: &Inst,
@@ -1891,7 +2100,9 @@ fn lower_inst(
             args,
             ..
         } => {
-            let mut arguments = call_args(lowerer, insts, args)?;
+            let marks = signatures.marks(callee);
+            let plan = record_plan(target, &marked_types(&arg_types(args), marks), true);
+            let (mut arguments, returned) = call_arguments(lowerer, insts, args, marks, &plan)?;
             if external(callee) {
                 // Section 6, revision 0.5: across the host boundary "a caller
                 // extends an argument narrower than 32 bits to 32 bits". The
@@ -1902,29 +2113,40 @@ fn lower_inst(
                 // gap: a signed host parameter narrower than 32 bits is not
                 // reachable from EvoIR alone.
                 let mut slot = 0;
-                for value in args.iter().filter(|value| is_register_type(&value.ty)) {
-                    if is_pair(&value.ty) {
-                        if slot % 2 == 1 {
+                let ordinary = args.iter().filter(|value| is_register_type(&value.ty));
+                for (value, placed) in ordinary.zip(&plan.items) {
+                    slot += placed.fillers;
+                    match placed.passing {
+                        Passing::Chunks(ref chunks) => slot += chunks.len(),
+                        Passing::Pointer => slot += 1,
+                        Passing::Destination(_) => {}
+                        Passing::Value => {
+                            if is_pair(&value.ty) {
+                                slot += 2;
+                                continue;
+                            }
+                            if let EvoIRType::Bits(bits) = value.ty {
+                                if bits < 32 {
+                                    arguments[slot] =
+                                        lowerer.zero_extend(insts, arguments[slot], bits, Width::W);
+                                }
+                            }
                             slot += 1;
                         }
-                        slot += 2;
-                        continue;
                     }
-                    if let EvoIRType::Bits(bits) = value.ty {
-                        if bits < 32 {
-                            arguments[slot] =
-                                lowerer.zero_extend(insts, arguments[slot], bits, Width::W);
-                        }
-                    }
-                    slot += 1;
                 }
             }
-            let outputs = call_results(lowerer, results)?;
+            let mut outputs = call_results(lowerer, results)?;
+            let after = call_record_result(lowerer, &mut outputs, returned);
+            if plan.indirect_result {
+                insts.push(MInst::IndirectResult);
+            }
             insts.push(MInst::Bl {
                 symbol: callee.clone(),
                 args: arguments,
                 results: outputs,
             });
+            insts.extend(after);
         }
         Inst::IndirectCall {
             results,
@@ -1932,14 +2154,27 @@ fn lower_inst(
             args,
             ..
         } => {
-            let target = lowerer.reg(callee)?;
-            let arguments = call_args(lowerer, insts, args)?;
-            let outputs = call_results(lowerer, results)?;
+            // Revision 1.9.73 puts the marks inside the pointer's own type,
+            // "part of the signature for equality", so an indirect call reads
+            // them where it reads everything else about its callee.
+            let marks: Vec<ParamMark> = match &callee.ty {
+                EvoIRType::FnPtr { marks, .. } => marks.clone(),
+                _ => Vec::new(),
+            };
+            let plan = record_plan(target, &marked_types(&arg_types(args), &marks), true);
+            let pointer = lowerer.reg(callee)?;
+            let (arguments, returned) = call_arguments(lowerer, insts, args, &marks, &plan)?;
+            let mut outputs = call_results(lowerer, results)?;
+            let after = call_record_result(lowerer, &mut outputs, returned);
+            if plan.indirect_result {
+                insts.push(MInst::IndirectResult);
+            }
             insts.push(MInst::Blr {
-                target,
+                target: pointer,
                 args: arguments,
                 results: outputs,
             });
+            insts.extend(after);
         }
         // --- the undefined-behaviour predicates of Section 5 ----------------
         //
@@ -3132,4 +3367,440 @@ fn lower_pair_compare(
             ))
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Section 6: records (revision 0.18)
+// ---------------------------------------------------------------------------
+
+/// The origins the machine gives the frame slots the record convention needs.
+///
+/// EvoIR's `alloca` origins come from the unit; these are the machine's own and
+/// are taken from the top of the ordinal space so that the two never meet.
+const RECORD_ORIGIN_BASE: u64 = 1 << 62;
+
+/// Section 6: "a `byval` record of at most 16 bytes is loaded from the copy
+/// into the next one or two general registers as 8-byte chunks ... a `byval`
+/// record above 16 bytes stays a pointer to the caller's copy".
+const RECORD_REGISTER_LIMIT: u64 = 16;
+
+/// The eight-byte chunks a record of `size` bytes travels in.
+fn record_chunks(size: u64) -> Vec<u64> {
+    let mut chunks = Vec::new();
+    let mut left = size;
+    while left > 0 {
+        let take = left.min(8);
+        chunks.push(take);
+        left -= take;
+    }
+    chunks
+}
+
+/// The accesses one chunk of `size` bytes decomposes into, as `(offset, width)`
+/// pairs of descending power-of-two widths.
+///
+/// A record's size is not a multiple of eight in general (`struct { int a, b,
+/// c; }` is twelve), and the oracles read exactly the bytes the record has:
+/// `pass4` moves a word, `pass12` a doubleword and a word
+/// (`.evidence/builtin-probes/20260906-b10/b10-callsites-linux-gcc14.s`). Every
+/// other size follows from the same rule, so a chunk of three bytes is a
+/// halfword and a byte and nothing is read past the object.
+fn chunk_pieces(size: u64) -> Vec<(u64, u64)> {
+    let mut pieces = Vec::new();
+    let mut offset = 0;
+    let mut left = size;
+    for width in [8_u64, 4, 2, 1] {
+        while left >= width {
+            pieces.push((offset, width));
+            offset += width;
+            left -= width;
+        }
+    }
+    pieces
+}
+
+fn piece_load(width: u64) -> LoadKind {
+    match width {
+        1 => LoadKind::B,
+        2 => LoadKind::H,
+        4 => LoadKind::W,
+        _ => LoadKind::X,
+    }
+}
+
+fn piece_store(width: u64) -> StoreKind {
+    match width {
+        1 => StoreKind::B,
+        2 => StoreKind::H,
+        4 => StoreKind::W,
+        _ => StoreKind::X,
+    }
+}
+
+/// Load one chunk of `size` bytes at `offset` from `base` into one register.
+///
+/// The bytes a chunk does not have are unspecified in the convention: both
+/// oracles leave whatever the register held there, and the callee reads only
+/// the width its member has.
+fn load_chunk(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    base: VReg,
+    offset: u64,
+    size: u64,
+) -> VReg {
+    let mut accumulated: Option<VReg> = None;
+    for (piece, width) in chunk_pieces(size) {
+        let dst = lowerer.fresh(RegClass::Gpr64);
+        insts.push(MInst::Load {
+            dst,
+            base,
+            offset: i64::try_from(offset + piece).unwrap_or(0),
+            kind: piece_load(width),
+            volatile: false,
+        });
+        let placed = if piece == 0 {
+            dst
+        } else {
+            lowerer.word_binary_imm(insts, BinOp::Lsl, dst, piece * 8)
+        };
+        accumulated = Some(match accumulated {
+            None => placed,
+            Some(low) => lowerer.word_binary(insts, BinOp::Orr, low, placed),
+        });
+    }
+    accumulated.expect("a record chunk has at least one byte")
+}
+
+/// Store one chunk of `size` bytes held in `src` at `offset` from `base`.
+fn store_chunk(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    src: VReg,
+    base: VReg,
+    offset: u64,
+    size: u64,
+) {
+    for (piece, width) in chunk_pieces(size) {
+        let value = if piece == 0 {
+            src
+        } else {
+            lowerer.word_binary_imm(insts, BinOp::Lsr, src, piece * 8)
+        };
+        insts.push(MInst::Store {
+            src: value,
+            base,
+            offset: i64::try_from(offset + piece).unwrap_or(0),
+            kind: piece_store(width),
+            volatile: false,
+        });
+    }
+}
+
+/// What the convention does with one argument.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Passing {
+    /// An ordinary value: one register, or two for a `bits<128>`.
+    Value,
+    /// The eight-byte chunks a `byval` record of at most sixteen bytes travels
+    /// in, each entry that chunk's own byte count.
+    Chunks(Vec<u64>),
+    /// A `byval` record above sixteen bytes: a pointer to the copy.
+    Pointer,
+    /// The destination of a record result. It takes no argument position: at
+    /// most sixteen bytes the result comes back in `x0`/`x1`, and above that
+    /// the pointer travels in `x8`.
+    Destination(RecordShape),
+}
+
+/// One argument's placement.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Placed {
+    /// Positions skipped before this argument: Section 6's even-register
+    /// rounding, and the rule that sends a whole record to the stack rather
+    /// than splitting it across the last register and the stack.
+    fillers: usize,
+    passing: Passing,
+}
+
+/// Section 6 applied to one argument list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RecordPlan {
+    items: Vec<Placed>,
+    /// Positions consumed, fillers included. A position at or above eight is a
+    /// stack slot, which Darwin refuses (`E4010`).
+    positions: usize,
+    /// Whether the list ends with a destination pointer that goes to `x8`.
+    indirect_result: bool,
+}
+
+impl RecordPlan {
+    /// Whether any argument needs the record convention at all.
+    fn plain(&self) -> bool {
+        self.items
+            .iter()
+            .all(|item| matches!(item.passing, Passing::Value))
+    }
+}
+
+/// Where each ordinary argument of a signature goes.
+///
+/// `pair_rounding` is the `bits<128>` rule as the two call sites already apply
+/// it: the entry block rounds only there, because "inside the function the rule
+/// has no meaning", and a call site always does.
+fn record_plan(
+    target: Target,
+    arguments: &[(EvoIRType, ParamMark)],
+    pair_rounding: bool,
+) -> RecordPlan {
+    let mut items = Vec::new();
+    let mut next = 0_usize;
+    let mut indirect_result = false;
+    for (ty, mark) in arguments {
+        match mark {
+            ParamMark::Sret(shape) => {
+                if shape.size > RECORD_REGISTER_LIMIT {
+                    indirect_result = true;
+                }
+                items.push(Placed {
+                    fillers: 0,
+                    passing: Passing::Destination(*shape),
+                });
+            }
+            ParamMark::ByVal(shape) if shape.size <= RECORD_REGISTER_LIMIT => {
+                let chunks = record_chunks(shape.size);
+                let mut fillers = 0;
+                // Section 6: "a record whose alignment is 16 starts at an even
+                // register on Linux, as a `bits<128>` does"; Apple does not
+                // round (measured: `after_one_16a16` takes `x1`:`x2` under
+                // clang and `x2`:`x3` under GCC-14,
+                // `.evidence/builtin-probes/20260906-b10/`).
+                if matches!(target, Target::Linux) && shape.align == 16 && next % 2 == 1 {
+                    fillers += 1;
+                }
+                // AAPCS64 never splits a record between the last register and
+                // the stack: when the chunks do not all fit, the whole record
+                // goes to the stack and the remaining register is unused
+                // (measured: `after_seven_16` reads `ldp ..., [sp]` and leaves
+                // `x7` alone under both oracles).
+                if next + fillers + chunks.len() > MAX_REGISTER_ARGUMENTS
+                    && next + fillers < MAX_REGISTER_ARGUMENTS
+                {
+                    fillers = MAX_REGISTER_ARGUMENTS - next;
+                    if matches!(target, Target::Linux)
+                        && shape.align == 16
+                        && (next + fillers) % 2 == 1
+                    {
+                        fillers += 1;
+                    }
+                }
+                next += fillers + chunks.len();
+                items.push(Placed {
+                    fillers,
+                    passing: Passing::Chunks(chunks),
+                });
+            }
+            ParamMark::ByVal(_) => {
+                items.push(Placed {
+                    fillers: 0,
+                    passing: Passing::Pointer,
+                });
+                next += 1;
+            }
+            ParamMark::None => {
+                let count = usize::from(is_pair(ty)) + 1;
+                let fillers = usize::from(count == 2 && pair_rounding && next % 2 == 1);
+                next += fillers + count;
+                items.push(Placed {
+                    fillers,
+                    passing: Passing::Value,
+                });
+            }
+        }
+    }
+    RecordPlan {
+        items,
+        positions: next,
+        indirect_result,
+    }
+}
+
+/// The ordinary arguments of a call or an entry block, paired with their marks.
+fn marked_types(types: &[EvoIRType], marks: &[ParamMark]) -> Vec<(EvoIRType, ParamMark)> {
+    types
+        .iter()
+        .enumerate()
+        .filter(|(_, ty)| is_register_type(ty))
+        .map(|(index, ty)| (ty.clone(), param_mark(marks, index)))
+        .collect()
+}
+
+/// Section 2's block-argument discipline applied to the record destination:
+/// give every block the address of the frame slot the result is written to.
+///
+/// The slot is allocated once, in the entry block, and a `ret` that must read
+/// the record out of it is in some other block, whose "arguments are its only
+/// inputs". Threading it as one more argument of every block and one more
+/// value on every edge is what the discipline admits.
+fn thread_destination(
+    blocks: &mut [MBlock],
+    entry_slot: VReg,
+    readers: &HashMap<u32, VReg>,
+    next_vreg: &mut u32,
+) {
+    let mut available: HashMap<u32, VReg> = HashMap::new();
+    for (index, block) in blocks.iter_mut().enumerate() {
+        if index == 0 {
+            available.insert(block.id, entry_slot);
+            if let Some(reader) = readers.get(&block.id) {
+                // The entry block reads the slot it defines, so the copy goes
+                // where the definition is, not where the loads are.
+                let at = block
+                    .insts
+                    .iter()
+                    .position(|inst| inst_defs(inst).contains(&entry_slot))
+                    .map_or(0, |position| position + 1);
+                block.insts.insert(
+                    at,
+                    MInst::Mov {
+                        dst: *reader,
+                        src: entry_slot,
+                    },
+                );
+            }
+            continue;
+        }
+        let reg = readers.get(&block.id).copied().unwrap_or_else(|| {
+            let reg = VReg::new(*next_vreg, RegClass::Gpr64);
+            *next_vreg += 1;
+            reg
+        });
+        block.args.push(reg);
+        available.insert(block.id, reg);
+    }
+    for block in blocks.iter_mut() {
+        let source = available[&block.id];
+        for args in term_edge_args(&mut block.term) {
+            args.push(source);
+        }
+    }
+}
+
+/// Mutable access to the argument list of every edge a terminator has.
+fn term_edge_args(term: &mut MTerm) -> Vec<&mut Vec<VReg>> {
+    match term {
+        MTerm::B { args, .. } => vec![args],
+        MTerm::BCond {
+            taken_args,
+            untaken_args,
+            ..
+        }
+        | MTerm::Cb {
+            taken_args,
+            untaken_args,
+            ..
+        }
+        | MTerm::Tb {
+            taken_args,
+            untaken_args,
+            ..
+        } => vec![taken_args, untaken_args],
+        MTerm::AsmGoto {
+            labels,
+            fallthrough_args,
+            ..
+        } => {
+            let mut slots: Vec<&mut Vec<VReg>> = labels.iter_mut().map(|(_, args)| args).collect();
+            slots.push(fallthrough_args);
+            slots
+        }
+        MTerm::Ret { .. } | MTerm::Brk { .. } => Vec::new(),
+    }
+}
+
+/// The types of a call's arguments, in order.
+fn arg_types(args: &[Value]) -> Vec<EvoIRType> {
+    args.iter().map(|value| value.ty.clone()).collect()
+}
+
+/// The registers a call passes and, when it has one, the destination a record
+/// result of at most sixteen bytes is stored into when the call returns.
+type CallArguments = (Vec<VReg>, Option<(RecordShape, VReg)>);
+
+/// The registers a call passes, with the record convention applied.
+///
+/// Returns the argument registers and, when the callee writes its result
+/// through a destination of at most sixteen bytes, that destination's shape and
+/// pointer: the caller passes no argument for it and stores the result into it
+/// when the call returns.
+fn call_arguments(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    args: &[Value],
+    marks: &[ParamMark],
+    plan: &RecordPlan,
+) -> Result<CallArguments, String> {
+    let _ = marks;
+    if plan.plain() {
+        return Ok((call_args(lowerer, insts, args)?, None));
+    }
+    let mut registers: Vec<VReg> = Vec::new();
+    let mut returned = None;
+    let ordinary = args.iter().filter(|value| is_register_type(&value.ty));
+    for (value, placed) in ordinary.zip(&plan.items) {
+        for _ in 0..placed.fillers {
+            // The skipped register is passed as zero rather than left
+            // undefined, so that two lowerings of one unit agree byte for byte.
+            let filler = lowerer.word(insts, 0);
+            registers.push(filler);
+        }
+        match &placed.passing {
+            // Section 6: "loaded from the copy into the next one or two
+            // general registers as 8-byte chunks".
+            Passing::Chunks(chunks) => {
+                let base = lowerer.reg(value)?;
+                let mut offset = 0;
+                for size in chunks {
+                    let chunk = load_chunk(lowerer, insts, base, offset, *size);
+                    registers.push(chunk);
+                    offset += size;
+                }
+            }
+            // Above sixteen bytes the pointer to the caller's copy is the
+            // argument, "which is what AAPCS64 does too".
+            Passing::Pointer => registers.push(lowerer.reg(value)?),
+            Passing::Destination(shape) => {
+                if shape.size > RECORD_REGISTER_LIMIT {
+                    // Above sixteen bytes the destination travels in `x8`, as
+                    // the call's last argument, which the marker names.
+                    registers.push(lowerer.reg(value)?);
+                } else {
+                    returned = Some((*shape, lowerer.reg(value)?));
+                }
+            }
+            Passing::Value => registers.extend(lowerer.registers(value)?),
+        }
+    }
+    Ok((registers, returned))
+}
+
+/// Section 6: a record result of at most sixteen bytes comes back in `x0` and
+/// `x1`, and "stored by the caller into its destination".
+fn call_record_result(
+    lowerer: &mut Lowerer,
+    outputs: &mut Vec<VReg>,
+    returned: Option<(RecordShape, VReg)>,
+) -> Vec<MInst> {
+    let Some((shape, destination)) = returned else {
+        return Vec::new();
+    };
+    let mut after = Vec::new();
+    let mut offset = 0;
+    for size in record_chunks(shape.size) {
+        let chunk = lowerer.fresh(RegClass::Gpr64);
+        outputs.push(chunk);
+        store_chunk(lowerer, &mut after, chunk, destination, offset, size);
+        offset += size;
+    }
+    after
 }
