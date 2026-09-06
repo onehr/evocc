@@ -4,7 +4,7 @@
   "whatAContractIs": "The middle-end stream's frozen scope, gate and rulings. The specification is the only authority; this file records what the stream is allowed to change and what it must measure.",
   "authority": {
     "spec": "docs/evoir-spec.md",
-    "revision": "1.9.72",
+    "revision": "1.9.73",
     "crates": [
       "evocc-egraph",
       "evocc-eqopt",
@@ -24,7 +24,7 @@
       "evocc-lower",
       "tests/contracts/day9-acceptance-contract.json"
     ],
-    "evomirSpec": "docs/evomir-spec.md revision 0.17"
+    "evomirSpec": "docs/evomir-spec.md revision 0.18"
   },
   "scope": [
     "S1 randomized semantic gate: deterministic generator of validator-clean EvoIR, differential interpretation of original versus scalar-optimized module under an explicit budget, EVP1 replay through evo-proofcheck for every trial, shrinker to a minimal reproducer. Gate: 1000 programs in the workspace test with 0 mismatches and 0 refusals; 20,000 in the ignored long run.",
@@ -778,6 +778,47 @@
         "lastLine": "gate-changed: green for [evocc evocc-eqopt evocc-evoir evocc-lower evocc-mir evocc-policy evocc-proofcheck evocc-randgate] against main",
         "skip": "crates/evocc-lower/tests/function_linkage.rs::static_definitions_keep_internal_linkage_in_the_ir_header is the RED test B8 recorded: it waits for evocc-lower to write ` visibility=internal`, that crate is must-not-touch here, and it fails identically at main. Without the skip the script stops at that one target and never reaches clippy or fmt; both were also run over the whole workspace by hand and are clean.",
         "workspaceTotal": "not taken: the branch touched six crates and the script tests those plus their dependents; unchanged crates keep their last green run"
+      }
+    },
+    "b10": {
+      "branchHead": "774928c",
+      "commits": [
+        "bba947d Mark record parameters and return destinations in the IR text",
+        "926240b Pass and return records the way the platform does",
+        "9358ea2 Count a variadic callee's named registers by the record convention",
+        "774928c Give the out-of-tree probe clients the new field"
+      ],
+      "evoir": "EvoIR 10.1.3 (revision 1.9.73) marks the pointers a record travels behind: `%argN: ptr<generic> byval(size, align)` for a record parameter and `%argN: ptr<generic> sret(size, align)` for the return destination, in the function header, in every `declare` and in every `fnptr<Sig>` naming the signature. The mark list is canonical -- empty when nothing is marked -- so every module text written before the revision parses, renders and digests unchanged, and two mark lists compare exactly when their signatures do. Refused: a mark on anything but `ptr<generic>`, a second `sret` in one signature, a record of no bytes, an alignment that is not a power of two, and a mark list whose length is neither zero nor the parameter count. The marks live inside `EvoIRType::FnPtr`, so `func_addr` of a marked function produces a marked pointer and an indirect call through an unmarked one is the ordinary signature disagreement.",
+      "interpreters": "unchanged, and deliberately so: EvoIR still passes a pointer to a caller-allocated copy and the pointer form is what both interpreters execute. The marked and the unmarked spelling of one unit return the same value on the same inputs.",
+      "evomir": "EvoMIR Section 6 (revision 0.18). A `byval` record of at most sixteen bytes is loaded from the copy into one or two eight-byte chunks and the callee stores them into a `frame.slot` that becomes the parameter's place; above sixteen bytes the pointer to the copy is the argument. An `sret` result of at most sixteen bytes is the callee's own frame slot, loaded into `x0`/`x1` before `ret` and stored by the caller into its destination; above sixteen bytes the destination pointer travels in `x8`. A chunk that is not eight bytes is read and written as the descending power-of-two widths it decomposes into, so nothing is touched past the object: a twelve-byte record is a doubleword and a word, which is what both oracles do.",
+      "registerRules": "three rules, each read off the oracles' assembly before it was written. (1) A record whose alignment is sixteen starts at an even register on Linux and takes the next two on Darwin, which is the 0.13 split the pair rule already has. (2) AAPCS64 never splits a record between the last register and the stack: when the chunks do not all fit, the whole record goes to the stack and the register left over is unused. (3) The destination pointer is never an argument register; a marker instruction (`indirect.result`) tells allocation which one register to pin to `x8`, and emission writes nothing for it.",
+      "blockArguments": "a record result of at most sixteen bytes is loaded out of the callee's own frame slot at every `ret`, and Section 2 puts the machine in block-argument SSA, so a `ret` in a block other than the entry cannot read a value the entry defined. The slot's address is threaded as one more argument of every block and one more value on every edge, which is what the discipline admits; a function with no record result is untouched.",
+      "probe": {
+        "sources": ".evidence/builtin-probes/20260906-b10/b10-records.c and b10-callsites.c",
+        "outputs": "b10-records-darwin-clang.s, b10-records-darwin-clang-noinline.s, b10-callsites-darwin-clang.s (Apple clang 21.0.0); b10-records-linux-gcc14.s, b10-callsites-linux-gcc14.s, b10-records-linux-clang19.s, b10-callsites-linux-clang19.s (GCC 14.2.0 and clang 19.1.7 in evo-flight-lab:sealed)",
+        "read": "`take4` w0; `take8` x0; `take12` x0 and w1; `take16` x0:x1; `take24` and `take32` a pointer in x0; `after_one_16` x1:x2 on both; `after_one_16a16` x1:x2 under clang and x2:x3 under GCC-14, the even rounding; `after_two_16a16` x2:x3 on both; `after_seven_8` x7; `after_seven_16` `[sp]` and `[sp+8]` with x7 unused on both; `ret4` and `ret8` x0; `ret12` x0 and w1; `ret16` and `ret16a16` x0:x1; `ret24` and `ret32` through x8; `pass24`/`pass32` a pointer to the caller's copy; `want24`/`want32` set x8 before the call. `span(T a, T b)` is `sub x0, x1, x0`: two eight-byte records in two registers, which is the shape the zstd rung faulted on."
+      },
+      "endToEnd": {
+        "program": "hand-written EvoIR -- the front end does not emit the marks yet -- for seven records of 4, 8, 12, 16, 16 at alignment 16 (an `__int128`), 24 and 32 bytes. Each has an EvoCC-compiled callee that checksums a record argument, one that writes a record result, one that does both, an EvoCC-compiled caller that hands a copy to a host callee, one that asks a host callee for a record, and the same two through a function pointer whose own type carries the marks. Each record appears first, after one scalar and after two, and on Linux after seven as well.",
+        "host": "the host compiler's build of the same C, on both sides of every call",
+        "darwin": "308 comparisons, 0 failures, under Apple clang 21.0.0 at -O2",
+        "linux": "364 comparisons, 0 failures, under gcc (Debian 14.2.0-19) 14.2.0 in evo-flight-lab:sealed at -O2",
+        "zstd": "`typedef struct { unsigned long long t; } T; T get(void); unsigned long long span(T a, T b);` compiled from hand-written EvoIR and called from a GCC-built `main` in the sealed container: 2 comparisons, 0 failures, and the emitted text names no indirect result, which is the defect the ladder receipt recorded",
+        "machineChecks": "the register assignment itself is asserted on the emitted text for both targets: the chunks of an eight- and a sixteen-byte record, the pointer of a twenty-four-byte one, the even rounding on Linux and its absence on Darwin, `x8` on both sides of a twenty-four-byte result and its absence for a sixteen-byte one"
+      },
+      "e4011": "withdrawn with the rows, as Section 10 says. No code emitted it: it was a name in the diagnostics table and in this receipt's earlier rankings. Every record shape now lowers on both targets.",
+      "e4010": "narrowed to what the convention actually spends: the Darwin refusal counts the positions a signature takes, so a sixteen-byte record after seven scalars is refused there (nine positions) and lowered on Linux. The same count now also sees a `bits<128>` parameter as the two registers it is, which is stricter than the parameter count it replaced and which no test depended on.",
+      "specGap": "none",
+      "scopeNote": "the two new fields reached one file in a crate this contract lists as must-not-touch: crates/evocc-lower/src/lib.rs gained three mechanical initializers -- `param_marks: Vec::new()` on the `FunctionDeclaration` and the `Function` it builds, and `marks: Vec::new()` on the `EvoIRType::FnPtr` it builds -- because the front end does not emit the marks yet and the canonical empty list is what it means. No evocc-lower test needed a change and no front-end behaviour changed. The other mechanical initializers are in evocc-eqopt, evocc-evoir, evocc-mir, evocc-proofcheck, evocc-randgate and evocc-types, all inside scope. One more reached crates/evocc-lower/tests/day6_g1_equivalence_red.rs, whose probe builds a small crate of its own from source the test carries: the same `param_marks: Vec::new()`, alongside the same line in the probe clients of evocc-eqopt and evocc-proofcheck.",
+      "architectGate": {
+        "script": "tools/gate-changed.sh main -- --skip static_definitions_keep_internal_linkage_in_the_ir_header",
+        "crates": "evocc evocc-chir evocc-eqopt evocc-evoir evocc-lower evocc-memory evocc-mir evocc-parser evocc-policy evocc-proofcheck evocc-randgate evocc-types",
+        "tests": "1442 passed, 0 failed, 4 ignored across 239 test binaries",
+        "clippy": 0,
+        "fmt": "clean",
+        "lastLine": "gate-changed: green for [evocc evocc-chir evocc-eqopt evocc-evoir evocc-lower evocc-memory evocc-mir evocc-parser evocc-policy evocc-proofcheck evocc-randgate evocc-types] against main",
+        "skip": "crates/evocc-lower/tests/function_linkage.rs::static_definitions_keep_internal_linkage_in_the_ir_header is the RED test B8 recorded: it waits for evocc-lower to write ` visibility=internal`, that crate is must-not-touch here, and it fails identically at main. Without the skip the script stops at that one target and never reaches clippy or fmt.",
+        "crateSet": "the marks live in evocc-types, which every crate depends on, so the script chose the whole workspace rather than the six crates the branch edits."
       }
     }
   }
