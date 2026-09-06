@@ -4742,7 +4742,13 @@ impl<'a> FunctionLowerer<'a> {
         for projection in place.projections() {
             match projection {
                 PlaceProjection::Index(projection) => {
+                    let address_key = self.retain_temporary(address, state);
                     let index = self.lower_expr(projection.index(), state)?;
+                    address = state
+                        .env
+                        .remove(&address_key)
+                        .expect("retained indexed address")
+                        .value;
                     let promoted = self.cast(index, projection.promoted_index(), state)?;
                     let layout = self.access_layout(projection.element_ty(), span)?;
                     address = self.offset_address(
@@ -6694,6 +6700,11 @@ impl<'a> FunctionLowerer<'a> {
         }
         if operator == UnaryOp::Deref {
             let pointer = self.lower_expr(operand, state)?;
+            if matches!(pointer.value.ty, EvoIRType::FnPtr { .. }) {
+                // Dereferencing a function pointer produces a designator;
+                // unlike an object dereference, it performs no memory load.
+                return Ok(pointer);
+            }
             if !matches!(pointer.value.ty, EvoIRType::Ptr(_)) {
                 return Err(LowerError::UnsupportedExpression {
                     span,

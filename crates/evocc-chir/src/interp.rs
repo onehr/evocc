@@ -3587,7 +3587,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             CHirExpr::Unary(UnaryOp::Deref, operand, _) if self.memory_mode => {
                 let pointer_type = self.pointer_type_of_expression(operand)?;
-                tasks.push(MachineTask::LoadDereference { pointer_type, span });
+                if !matches!(
+                    self.unit
+                        .types()
+                        .get(pointer_type.pointee())
+                        .map(|ty| &ty.kind),
+                    Some(TypeKind::Function { .. })
+                ) {
+                    tasks.push(MachineTask::LoadDereference { pointer_type, span });
+                }
                 tasks.push(MachineTask::EvalExpression {
                     expression: operand,
                     // A postfix or prefix update is part of the pointer
@@ -4005,8 +4013,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         Ok(())
     }
 
-    fn mutation_allowed(&self, allow_root_mutation: bool) -> bool {
-        allow_root_mutation || self.nested_mutation_depth != 0
+    fn mutation_allowed(&self, _allow_root_mutation: bool) -> bool {
+        // An executed operand may itself be an assignment or update. The
+        // constant-initializer evaluator is the separate non-mutating path.
+        !self.static_integer_evaluation
     }
 
     fn start_call(
