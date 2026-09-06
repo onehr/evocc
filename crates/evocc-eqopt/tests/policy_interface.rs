@@ -86,6 +86,7 @@ fn sample_module() -> Module {
             insts,
             terminator: Inst::Ret(vec![bits(10), memory, world]),
         }],
+        param_marks: Vec::new(),
     };
     let mut module = Module {
         assembly: Vec::new(),

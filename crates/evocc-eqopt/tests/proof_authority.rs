@@ -43,6 +43,7 @@ fn identity_module() -> Module {
                 ],
                 terminator: Inst::Ret(vec![bits(4)]),
             }],
+            param_marks: Vec::new(),
         }],
     }
 }

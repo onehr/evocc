@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use evocc_memory::{AccessLayout, IndexSignedness, OffsetDirection};
-use evocc_types::{AddressSpace, EvoIRType, Region};
+use evocc_types::{canonical_marks, AddressSpace, EvoIRType, ParamMark, RecordShape, Region};
 
 use crate::{
     validate_module, validate_section9_bytes, Block, BlockArg, BlockId, CmpOp, EffectSummary,
@@ -16,6 +16,9 @@ type BinaryConstructor = fn(Value, Value, Value) -> Inst;
 #[derive(Clone)]
 struct Signature {
     params: Vec<EvoIRType>,
+    /// The record marks of Section 10.1.3 (revision 1.9.73), canonical: empty
+    /// when the text spells none.
+    marks: Vec<ParamMark>,
     results: Vec<EvoIRType>,
     variadic: bool,
 }
@@ -146,6 +149,7 @@ impl ModuleParser<'_> {
                 variadic: header.signature.variadic,
                 name: header.name,
                 params: header.signature.params,
+                param_marks: header.signature.marks,
                 ret_tys: header.signature.results,
             });
             self.position += 1;
@@ -242,6 +246,7 @@ impl ModuleParser<'_> {
                     ty,
                 })
                 .collect(),
+            param_marks: header.signature.marks,
             ret_tys: header.signature.results,
             effects,
             visibility: header.visibility,
@@ -400,11 +405,12 @@ fn parse_declaration_header(line: &str) -> Result<Header, String> {
     cursor.expect("declare @")?;
     let name = cursor.ident()?.to_owned();
     cursor.expect("(")?;
-    let (params, variadic) = cursor.parameter_types()?;
+    let (params, marks, variadic) = cursor.parameter_types()?;
     cursor.expect(") -> (")?;
     let results = cursor.type_list(")")?;
     cursor.expect(") cc = target_default")?;
     cursor.finish()?;
+    check_marks(&params, &marks)?;
     Ok(Header {
         name,
         convention: "target_default".to_owned(),
@@ -413,6 +419,7 @@ fn parse_declaration_header(line: &str) -> Result<Header, String> {
         visibility: GlobalVisibility::External,
         signature: Signature {
             params,
+            marks,
             results,
             variadic,
         },
@@ -425,6 +432,7 @@ fn parse_function_header(line: &str) -> Result<Header, String> {
     let name = cursor.ident()?.to_owned();
     cursor.expect("(")?;
     let mut params = Vec::new();
+    let mut marks = Vec::new();
     let mut index = 0_u64;
     let mut marker = None;
     if !cursor.at(")") {
@@ -442,6 +450,7 @@ fn parse_function_header(line: &str) -> Result<Header, String> {
             }
             cursor.expect(": ")?;
             params.push(cursor.ty()?);
+            marks.push(cursor.record_mark()?);
             index += 1;
             if cursor.at(")") {
                 break;
@@ -453,6 +462,8 @@ fn parse_function_header(line: &str) -> Result<Header, String> {
     if marker.is_some_and(|position| position.checked_add(2) != Some(params.len())) {
         return Err("variadic marker must precede mem<R>, world".into());
     }
+    let marks = canonical_marks(marks, params.len());
+    check_marks(&params, &marks)?;
     let results = cursor.type_list(")")?;
     cursor.expect(") cc = ")?;
     let convention = cursor.ident()?.to_owned();
@@ -473,10 +484,53 @@ fn parse_function_header(line: &str) -> Result<Header, String> {
         visibility,
         signature: Signature {
             params,
+            marks,
             results,
             variadic: marker.is_some(),
         },
     })
+}
+
+/// Section 10.1.3 (revision 1.9.73): a mark rides on a `ptr<generic>`, and a
+/// signature carries "at most one `sret`".
+///
+/// The size and alignment are a record's, so the alignment is a power of two
+/// and neither is zero; a mark list is canonical, so it is empty or exactly as
+/// long as the parameter list.
+fn check_marks(params: &[EvoIRType], marks: &[ParamMark]) -> Result<(), String> {
+    if marks.is_empty() {
+        return Ok(());
+    }
+    if marks.len() != params.len() {
+        return Err("a record mark list must be as long as the parameter list".to_owned());
+    }
+    let mut destinations = 0_usize;
+    for (index, mark) in marks.iter().enumerate() {
+        let Some(shape) = mark.shape() else {
+            continue;
+        };
+        if params[index] != EvoIRType::Ptr(AddressSpace::Generic) {
+            return Err(format!(
+                "parameter {index} carries a record mark but is not ptr<generic>"
+            ));
+        }
+        if shape.size == 0 {
+            return Err(format!("parameter {index} marks a record of no bytes"));
+        }
+        if shape.align == 0 || !shape.align.is_power_of_two() {
+            return Err(format!(
+                "parameter {index} marks a record whose alignment {} is not a power of two",
+                shape.align
+            ));
+        }
+        if mark.is_sret() {
+            destinations += 1;
+        }
+    }
+    if destinations > 1 {
+        return Err("a signature carries at most one sret parameter".to_owned());
+    }
+    Ok(())
 }
 
 fn parse_effects(line: &str) -> Result<EffectSummary, String> {
@@ -1012,6 +1066,7 @@ fn parse_tuple_instruction(
             params,
             results,
             variadic,
+            marks,
         } = &callee.ty
         else {
             return Err("indirect callee is not a function pointer".to_owned());
@@ -1019,6 +1074,7 @@ fn parse_tuple_instruction(
         let signature = Signature {
             variadic: *variadic,
             params: params.clone(),
+            marks: marks.clone(),
             results: results.clone(),
         };
         return build_indirect_call(result_ids, callee, args, &signature);
@@ -1732,8 +1788,9 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    fn parameter_types(&mut self) -> Result<(Vec<EvoIRType>, bool), String> {
+    fn parameter_types(&mut self) -> Result<(Vec<EvoIRType>, Vec<ParamMark>, bool), String> {
         let mut types = Vec::new();
+        let mut marks = Vec::new();
         let mut marker = None;
         while !self.at(")") {
             if self.at("...") {
@@ -1743,6 +1800,7 @@ impl<'a> Cursor<'a> {
                 self.expect("...")?;
             } else {
                 types.push(self.ty()?);
+                marks.push(self.record_mark()?);
             }
             if !self.at(")") {
                 self.expect(", ")?;
@@ -1751,7 +1809,29 @@ impl<'a> Cursor<'a> {
         if marker.is_some_and(|position| position.checked_add(2) != Some(types.len())) {
             return Err("variadic marker must precede mem<R>, world".into());
         }
-        Ok((types, marker.is_some()))
+        let count = types.len();
+        Ok((types, canonical_marks(marks, count), marker.is_some()))
+    }
+
+    /// Section 9: the optional `byval(size, align)` or `sret(size, align)`
+    /// that follows a parameter's type (revision 1.9.73).
+    fn record_mark(&mut self) -> Result<ParamMark, String> {
+        for (keyword, wrap) in [
+            (" byval(", ParamMark::ByVal as fn(RecordShape) -> ParamMark),
+            (" sret(", ParamMark::Sret as fn(RecordShape) -> ParamMark),
+        ] {
+            if !self.at(keyword) {
+                continue;
+            }
+            self.expect(keyword)?;
+            let size = self.index()?;
+            self.expect(", ")?;
+            let align = u32::try_from(self.index()?)
+                .map_err(|_| "record alignment exceeds u32".to_owned())?;
+            self.expect(")")?;
+            return Ok(wrap(RecordShape { size, align }));
+        }
+        Ok(ParamMark::None)
     }
 
     fn ty(&mut self) -> Result<EvoIRType, String> {
@@ -1822,14 +1902,16 @@ impl<'a> Cursor<'a> {
         }
         if self.at("fnptr<(") {
             self.expect("fnptr<(")?;
-            let (params, variadic) = self.parameter_types()?;
+            let (params, marks, variadic) = self.parameter_types()?;
             self.expect(")->(")?;
             let results = self.type_list(")")?;
             self.expect(")>")?;
+            check_marks(&params, &marks)?;
             return Ok(EvoIRType::FnPtr {
                 params,
                 results,
                 variadic,
+                marks,
             });
         }
         Err(format!("unknown EvoIR type at byte {}", self.position))

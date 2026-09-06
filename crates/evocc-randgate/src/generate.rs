@@ -298,6 +298,7 @@ impl Signature {
                 .cloned()
                 .chain([memory_type(), world_type()])
                 .collect(),
+            marks: Vec::new(),
         }
     }
 }
@@ -465,6 +466,7 @@ fn recursive_helper(rng: &mut Rng) -> (Signature, Function) {
                 terminator: Inst::Ret(vec![total, call_memory, call_world]),
             },
         ],
+        param_marks: Vec::new(),
     };
 
     (
@@ -600,6 +602,7 @@ fn generate_function(
             .collect(),
         effects: EffectSummary::default(),
         blocks: generator.blocks,
+        param_marks: Vec::new(),
     }
 }
 

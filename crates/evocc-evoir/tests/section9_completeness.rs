@@ -7,7 +7,7 @@ use evocc_evoir::{
     GlobalKind, GlobalObject, GlobalVisibility, IndexSignedness, Inst, Module, OffsetDirection,
     TrapReason, UbReason, Value,
 };
-use evocc_types::{AddressSpace, EvoIRType, Region};
+use evocc_types::{AddressSpace, EvoIRType, ParamMark, RecordShape, Region};
 
 const MANIFEST: &str = include_str!("../../../tests/contracts/day8-section9-coverage.txt");
 
@@ -46,6 +46,7 @@ fn function_pointer(id: u32) -> Value {
                 EvoIRType::Mem(Region::All),
                 EvoIRType::World,
             ],
+            marks: Vec::new(),
         },
     )
 }
@@ -62,7 +63,7 @@ fn sentinel_types() -> Vec<EvoIRType> {
         EvoIRType::FnPtr {
             variadic: false,
             params: vec![
-                EvoIRType::Bits(13),
+                EvoIRType::Ptr(AddressSpace::Generic),
                 EvoIRType::Mem(Region::All),
                 EvoIRType::World,
             ],
@@ -70,6 +71,16 @@ fn sentinel_types() -> Vec<EvoIRType> {
                 EvoIRType::Bits(17),
                 EvoIRType::Mem(Region::Escaped),
                 EvoIRType::World,
+            ],
+            // Revision 1.9.73: a `fnptr<Sig>` naming a signature with a record
+            // return destination spells the mark.
+            marks: vec![
+                ParamMark::Sret(RecordShape {
+                    size: 16,
+                    align: 16,
+                }),
+                ParamMark::None,
+                ParamMark::None,
             ],
         },
         EvoIRType::Vec(7, Box::new(EvoIRType::F32)),
@@ -256,7 +267,8 @@ fn sentinel_instructions() -> Vec<Inst> {
 
 fn sentinel_module() -> Module {
     let types = sentinel_types();
-    let params = types
+    let count = types.len();
+    let params: Vec<FunctionParam> = types
         .into_iter()
         .enumerate()
         .map(|(index, ty)| FunctionParam {
@@ -264,6 +276,10 @@ fn sentinel_module() -> Module {
             ty,
         })
         .collect();
+    // Revision 1.9.73: the third parameter is the `ptr<generic>` of the type
+    // list, so it is the one a record argument can ride on.
+    let mut param_marks = vec![ParamMark::None; count];
+    param_marks[3] = ParamMark::ByVal(RecordShape { size: 24, align: 8 });
     Module {
         assembly: vec![".globl sentinel_asm\n".into()],
         extern_objects: Vec::new(),
@@ -341,6 +357,7 @@ fn sentinel_module() -> Module {
                     terminator: Inst::Trap(TrapReason::ScalarFunctionFellOffEnd),
                 },
             ],
+            param_marks,
         }],
     }
 }
@@ -674,9 +691,10 @@ fn type_schema(ty: &EvoIRType) -> &'static str {
             params,
             results,
             variadic,
+            marks,
         } => {
-            let _ = (params, results, variadic);
-            "EvoIRType.FnPtr(params,results,variadic)"
+            let _ = (params, results, variadic, marks);
+            "EvoIRType.FnPtr(params,results,variadic,marks)"
         }
         EvoIRType::Vec(count, element) => {
             let _ = (count, element);
@@ -738,6 +756,7 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
         let Function {
             name,
             params,
+            param_marks,
             variadic,
             ret_tys,
             effects,
@@ -745,7 +764,13 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
             blocks,
         } = function;
         let _ = (name, ret_tys, variadic, visibility);
-        keys.insert("Function(name,params,variadic,ret_tys,effects,visibility,blocks)");
+        keys.insert("Function(name,params,param_marks,variadic,ret_tys,effects,visibility,blocks)");
+        for mark in param_marks {
+            if let Some(RecordShape { size, align }) = mark.shape() {
+                let _ = (size, align);
+                keys.insert("RecordShape(size,align)");
+            }
+        }
         for param in params {
             let FunctionParam { name, ty } = param;
             let _ = (name, ty);
@@ -831,6 +856,14 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
         GlobalKind::CompoundLiteral,
     ];
     let visibility = [GlobalVisibility::External, GlobalVisibility::Internal];
+    let marks = [
+        ParamMark::None,
+        ParamMark::ByVal(RecordShape { size: 24, align: 8 }),
+        ParamMark::Sret(RecordShape {
+            size: 16,
+            align: 16,
+        }),
+    ];
 
     let mut keys = BTreeSet::new();
     for value in addresses {
@@ -904,6 +937,13 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
         keys.insert(match value {
             GlobalVisibility::External => "GlobalVisibility.External",
             GlobalVisibility::Internal => "GlobalVisibility.Internal",
+        });
+    }
+    for value in marks {
+        keys.insert(match value {
+            ParamMark::None => "ParamMark.None",
+            ParamMark::ByVal(_) => "ParamMark.ByVal(shape)",
+            ParamMark::Sret(_) => "ParamMark.Sret(shape)",
         });
     }
     keys

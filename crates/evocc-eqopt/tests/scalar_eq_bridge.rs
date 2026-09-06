@@ -45,6 +45,7 @@ fn module(insts: Vec<Inst>, returns: Vec<Value>, return_types: Vec<EvoIRType>) -
                 insts,
                 terminator: Inst::Ret(returns),
             }],
+            param_marks: Vec::new(),
         }],
     }
 }
@@ -287,6 +288,7 @@ fn a_trapping_successor_never_licenses_predecessor_edge_strengthening() {
                     terminator: Inst::Ret(vec![bits(4)]),
                 },
             ],
+            param_marks: Vec::new(),
         }],
     };
     validate_module(&input).expect("input module is valid");

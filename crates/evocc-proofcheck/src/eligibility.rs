@@ -572,6 +572,7 @@ mod tests {
             ret_tys: vec![EvoIRType::Bits(32)],
             effects: Default::default(),
             blocks,
+            param_marks: Vec::new(),
         }
     }
 

@@ -1,6 +1,6 @@
 //! Canonical EvoIR Section 9 text rendering.
 
-use evocc_types::{AddressSpace, EvoIRType, Region};
+use evocc_types::{param_mark, AddressSpace, EvoIRType, ParamMark, Region};
 
 use evocc_memory::{IndexSignedness, OffsetDirection};
 
@@ -144,7 +144,11 @@ pub fn render_module(module: &Module) -> String {
         rendered.push_str(&format!(
             "declare @{}({}) -> ({}) cc = target_default\n",
             declaration.name,
-            render_parameter_types(&declaration.params, declaration.variadic),
+            render_parameter_types(
+                &declaration.params,
+                &declaration.param_marks,
+                declaration.variadic
+            ),
             declaration
                 .ret_tys
                 .iter()
@@ -190,9 +194,10 @@ fn render_type(ty: &EvoIRType) -> String {
             params,
             results,
             variadic,
+            marks,
         } => format!(
             "fnptr<({})->({})>",
-            render_parameter_types(params, *variadic),
+            render_parameter_types(params, marks, *variadic),
             results
                 .iter()
                 .map(render_type)
@@ -721,8 +726,33 @@ impl FunctionRenderer {
     }
 }
 
-fn render_parameter_types(params: &[EvoIRType], variadic: bool) -> String {
-    render_parameters(params.iter().map(render_type).collect(), variadic)
+fn render_parameter_types(params: &[EvoIRType], marks: &[ParamMark], variadic: bool) -> String {
+    render_parameters(
+        params
+            .iter()
+            .enumerate()
+            .map(|(index, ty)| {
+                format!(
+                    "{}{}",
+                    render_type(ty),
+                    render_mark(param_mark(marks, index))
+                )
+            })
+            .collect(),
+        variadic,
+    )
+}
+
+/// Section 9: `[" byval(" integer ", " integer ")" | " sret(" integer ", " integer ")"]`.
+///
+/// The canonical text of a parameter with no mark is the type alone, so every
+/// module written before revision 1.9.73 renders unchanged.
+fn render_mark(mark: ParamMark) -> String {
+    match mark {
+        ParamMark::None => String::new(),
+        ParamMark::ByVal(shape) => format!(" byval({}, {})", shape.size, shape.align),
+        ParamMark::Sret(shape) => format!(" sret({}, {})", shape.size, shape.align),
+    }
 }
 
 fn render_parameters(mut parameters: Vec<String>, variadic: bool) -> String {
@@ -740,7 +770,13 @@ fn render_function(function: &Function) -> String {
             .params
             .iter()
             .enumerate()
-            .map(|(index, parameter)| format!("%arg{index}: {}", render_type(&parameter.ty)))
+            .map(|(index, parameter)| {
+                format!(
+                    "%arg{index}: {}{}",
+                    render_type(&parameter.ty),
+                    render_mark(param_mark(&function.param_marks, index))
+                )
+            })
             .collect::<Vec<_>>(),
         function.variadic,
     );
@@ -844,6 +880,7 @@ mod tests {
                     insts: Vec::new(),
                     terminator: Inst::Trap(TrapReason::ScalarFunctionFellOffEnd),
                 }],
+                param_marks: Vec::new(),
             }],
         };
 
@@ -910,6 +947,7 @@ mod tests {
                         EvoIRType::Mem(Region::All),
                         EvoIRType::World,
                     ],
+                    marks: Vec::new(),
                 },
                 "fnptr<(bits<32>, mem<all>, world)->(bits<32>, mem<all>, world)>",
             ),
@@ -952,6 +990,7 @@ mod tests {
                         EvoIRType::Mem(Region::All),
                         EvoIRType::World,
                     ],
+                    marks: Vec::new(),
                 },
             )
         };

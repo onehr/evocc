@@ -74,6 +74,7 @@ fn input() -> Module {
                     bits(12),
                 ]),
             }],
+            param_marks: Vec::new(),
         }],
     }
 }

@@ -98,6 +98,7 @@ fn probe(insts: Vec<Inst>, root: Value) -> Module {
             insts,
             terminator: Inst::Ret(vec![root, memory, world]),
         }],
+        param_marks: Vec::new(),
     };
     let mut module = Module {
         assembly: Vec::new(),

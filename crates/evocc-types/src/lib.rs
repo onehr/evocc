@@ -981,6 +981,73 @@ pub enum Region {
     Escaped,
 }
 
+/// The size and alignment of the record a `byval` or `sret` mark names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RecordShape {
+    pub size: u64,
+    pub align: u32,
+}
+
+/// What EvoIR 10.1.3 (revision 1.9.73) says about one `ptr<generic>`
+/// parameter: nothing, that it holds a record passed by value, or that it is
+/// the destination a record result is written through.
+///
+/// EvoIR has no record-typed value, so a record crosses a call as a pointer to
+/// a copy; the mark tells the machine which pointers those are, so that it can
+/// apply the platform's composite convention (EvoMIR Section 6) instead of
+/// leaving every record behind a hidden pointer.
+///
+/// A list of marks is **canonical** when it is either empty, meaning no
+/// parameter carries a mark, or exactly as long as the parameter list. Text
+/// without marks therefore parses to an empty list and renders back
+/// unchanged, and two signatures compare equal exactly when their marks do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum ParamMark {
+    /// An ordinary parameter.
+    #[default]
+    None,
+    /// `byval(size, align)`: a pointer to the caller's copy of a record
+    /// argument.
+    ByVal(RecordShape),
+    /// `sret(size, align)`: the destination a record result is written to.
+    Sret(RecordShape),
+}
+
+impl ParamMark {
+    /// The record's shape, for either mark.
+    #[must_use]
+    pub const fn shape(self) -> Option<RecordShape> {
+        match self {
+            Self::None => None,
+            Self::ByVal(shape) | Self::Sret(shape) => Some(shape),
+        }
+    }
+
+    /// Whether this is the record return destination.
+    #[must_use]
+    pub const fn is_sret(self) -> bool {
+        matches!(self, Self::Sret(_))
+    }
+}
+
+/// The mark at one parameter position of a canonical mark list.
+#[must_use]
+pub fn param_mark(marks: &[ParamMark], index: usize) -> ParamMark {
+    marks.get(index).copied().unwrap_or(ParamMark::None)
+}
+
+/// The canonical form of a mark list for `count` parameters: empty when every
+/// mark is [`ParamMark::None`], and otherwise the list itself.
+#[must_use]
+pub fn canonical_marks(marks: Vec<ParamMark>, count: usize) -> Vec<ParamMark> {
+    if marks.iter().all(|mark| matches!(mark, ParamMark::None)) {
+        return Vec::new();
+    }
+    let mut marks = marks;
+    marks.resize(count, ParamMark::None);
+    marks
+}
+
 /// EvoIR type: the narrowing of C's rich type system into bit-level and
 /// memory-level representations suitable for equality saturation.
 ///
@@ -999,10 +1066,16 @@ pub enum EvoIRType {
     Ptr(AddressSpace),
     /// Pointer to one complete lowered function interface. The final
     /// `mem<...>` and `world` entries are part of the signature identity.
+    ///
+    /// `marks` carries the record marks of EvoIR 10.1.3 (revision 1.9.73),
+    /// which "the attribute is part of the signature for equality" puts inside
+    /// the type. It is empty when no parameter carries one and otherwise as
+    /// long as `params`, which is the canonical form [`ParamMark`] describes.
     FnPtr {
         params: Vec<EvoIRType>,
         results: Vec<EvoIRType>,
         variadic: bool,
+        marks: Vec<ParamMark>,
     },
     /// Packed SIMD vector: N elements of element type.
     Vec(u16, Box<EvoIRType>),

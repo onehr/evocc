@@ -184,6 +184,7 @@ fn counted_loop(remask: bool) -> Module {
                 terminator: Inst::Ret(vec![bits(15), memory(16), world(17)]),
             },
         ],
+        param_marks: Vec::new(),
     };
     let mut module = Module {
         assembly: Vec::new(),
@@ -522,6 +523,7 @@ fn a_xor_of_two_fully_known_arguments_folds_on_its_fact() {
                 terminator: Inst::Ret(vec![result, memory(7), world(8)]),
             },
         ],
+        param_marks: Vec::new(),
     };
     let mut module = Module {
         assembly: Vec::new(),
@@ -639,6 +641,7 @@ fn a_comparison_the_sweep_folded_is_stated_as_the_rule_the_region_can_prove() {
                 terminator: Inst::Ret(vec![compared, memory(5), world(6)]),
             },
         ],
+        param_marks: Vec::new(),
     };
     let mut module = Module {
         assembly: Vec::new(),
@@ -752,6 +755,7 @@ fn double_negation(derived: bool) -> Module {
                 terminator: Inst::Ret(vec![restored, memory(6), world(7)]),
             },
         ],
+        param_marks: Vec::new(),
     };
     let mut module = Module {
         assembly: Vec::new(),

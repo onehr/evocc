@@ -110,6 +110,7 @@ fn chain() -> Module {
                 terminator: Inst::Ret(vec![last_value, last_memory, last_world]),
             },
         ],
+        param_marks: Vec::new(),
     };
 
     let mut module = Module {

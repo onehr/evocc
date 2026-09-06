@@ -41,6 +41,7 @@ fn signature(width: u16) -> EvoIRType {
             EvoIRType::Mem(Region::All),
             EvoIRType::World,
         ],
+        marks: Vec::new(),
     }
 }
 
@@ -82,6 +83,7 @@ fn identity(width: u16) -> Function {
             insts: vec![],
             terminator: Inst::Ret(vec![input, memory, ordered]),
         }],
+        param_marks: Vec::new(),
     }
 }
 
@@ -114,6 +116,7 @@ fn caller(insts: Vec<Inst>, result: Value, memory: Value, ordered: Value) -> Fun
             insts,
             terminator: Inst::Ret(vec![result, memory, ordered]),
         }],
+        param_marks: Vec::new(),
     }
 }
 

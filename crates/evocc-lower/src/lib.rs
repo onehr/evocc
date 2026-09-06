@@ -549,6 +549,7 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
                 variadic: info.variadic,
                 params,
                 ret_tys,
+                param_marks: Vec::new(),
             },
         );
     }
@@ -2577,6 +2578,7 @@ fn function_pointer_ir_type(
             parameters,
             FunctionParameters::Prototype { variadic: true, .. }
         ),
+        marks: Vec::new(),
     })
 }
 
@@ -3176,6 +3178,7 @@ impl<'a> FunctionLowerer<'a> {
             // external, which is what omitting the field means.
             visibility: evocc_evoir::GlobalVisibility::External,
             blocks: self.finish_blocks()?,
+            param_marks: Vec::new(),
         };
         renumber_function(&mut function)?;
         Ok((function, label_addresses))

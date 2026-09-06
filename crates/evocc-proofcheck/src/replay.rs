@@ -1655,6 +1655,7 @@ mod tests {
                     insts,
                     terminator: Inst::Ret(vec![root]),
                 }],
+                param_marks: Vec::new(),
             }],
         }
     }

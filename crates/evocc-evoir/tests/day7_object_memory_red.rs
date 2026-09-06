@@ -43,6 +43,7 @@ fn token_function(name: &str, insts: Vec<Inst>, returned: Vec<Value>) -> Functio
             insts,
             terminator: Inst::Ret(returned),
         }],
+        param_marks: Vec::new(),
     };
     let mut module = Module {
         assembly: Vec::new(),

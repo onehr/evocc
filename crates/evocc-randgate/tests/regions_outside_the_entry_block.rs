@@ -127,6 +127,7 @@ fn later_block(insts: Vec<Inst>, root: Value) -> Module {
                 terminator: Inst::Ret(vec![root, memory(6), world(7)]),
             },
         ],
+        param_marks: Vec::new(),
     };
     let mut module = Module {
         assembly: Vec::new(),
@@ -324,6 +325,7 @@ fn a_region_two_edges_from_the_entry_block_is_admitted() {
                 terminator: Inst::Ret(vec![sum, memory(7), world(8)]),
             },
         ],
+        param_marks: Vec::new(),
     };
     let mut module = Module {
         assembly: Vec::new(),
@@ -401,6 +403,7 @@ fn a_tainted_edge_argument_keeps_a_later_block_ineligible() {
                 terminator: Inst::Ret(vec![sum, memory(7), world(8)]),
             },
         ],
+        param_marks: Vec::new(),
     };
     let mut module = Module {
         assembly: Vec::new(),
@@ -523,6 +526,7 @@ fn a_value_wider_than_the_profiles_bound_is_an_excluded_seed() {
             ],
             terminator: Inst::Ret(vec![flag, memory(1), world(2)]),
         }],
+        param_marks: Vec::new(),
     };
     let mut module = Module {
         assembly: Vec::new(),

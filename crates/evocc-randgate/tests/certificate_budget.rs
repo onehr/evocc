@@ -84,6 +84,7 @@ fn module() -> Module {
             ],
             terminator: Inst::Ret(vec![same, memory, world]),
         }],
+        param_marks: Vec::new(),
     };
 
     let mut module = Module {

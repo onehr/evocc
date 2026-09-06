@@ -286,6 +286,7 @@ fn fold_function(name: &str, shapes: &[Shape]) -> Function {
             insts: builder.insts,
             terminator: Inst::Ret(vec![acc, mem_out, world_out]),
         }],
+        param_marks: Vec::new(),
     }
 }
 
@@ -347,6 +348,7 @@ fn forwarder(name: &str, callee: &str, shapes: &[Shape]) -> Function {
             insts: builder.insts,
             terminator: Inst::Ret(vec![result, mem_out, world_out]),
         }],
+        param_marks: Vec::new(),
     }
 }
 
@@ -672,6 +674,7 @@ fn narrow_result_function(name: &str, width: u16) -> Function {
             insts: builder.insts,
             terminator: Inst::Ret(vec![negated, mem, world]),
         }],
+        param_marks: Vec::new(),
     }
 }
 

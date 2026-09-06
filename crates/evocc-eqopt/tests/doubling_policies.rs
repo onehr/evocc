@@ -72,6 +72,7 @@ fn module_of(insts: Vec<Inst>, result: Value) -> Module {
             insts,
             terminator: Inst::Ret(vec![result, memory, world]),
         }],
+        param_marks: Vec::new(),
     };
     let mut module = Module {
         assembly: Vec::new(),

@@ -104,6 +104,7 @@ fn module() -> Module {
             ],
             terminator: Inst::Ret(vec![identity, memory.clone(), world.clone()]),
         }],
+        param_marks: Vec::new(),
     };
 
     let mut module = Module {
@@ -187,6 +188,7 @@ fn sparsely_numbered_module() -> Module {
             insts: vec![Inst::Xor(result.clone(), input.clone(), input)],
             terminator: Inst::Ret(vec![result, memory, world]),
         }],
+        param_marks: Vec::new(),
     };
 
     let mut module = Module {
@@ -304,6 +306,7 @@ fn aliasing_module() -> Module {
             ],
             terminator: Inst::Ret(vec![scaled, memory.clone(), world.clone()]),
         }],
+        param_marks: Vec::new(),
     };
 
     let mut module = Module {
@@ -422,6 +425,7 @@ fn nested_negation_module() -> Module {
             ],
             terminator: Inst::Ret(vec![total, memory, world]),
         }],
+        param_marks: Vec::new(),
     };
 
     let mut module = Module {

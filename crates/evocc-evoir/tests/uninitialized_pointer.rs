@@ -26,6 +26,7 @@ fn pointer_poison_validates_and_round_trips_in_both_pointer_namespaces() {
                 EvoIRType::Mem(Region::All),
                 EvoIRType::World,
             ],
+            marks: Vec::new(),
         },
     );
     let function = Function {
@@ -44,6 +45,7 @@ fn pointer_poison_validates_and_round_trips_in_both_pointer_namespaces() {
             ],
             terminator: Inst::Ret(vec![]),
         }],
+        param_marks: Vec::new(),
     };
     validate_ssa(&function).expect("pointer poison must be an ordinary typed definition");
 

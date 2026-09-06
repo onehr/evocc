@@ -11,8 +11,8 @@ use evocc_memory::{
     ByteSequence, FrameId, InitialState, LibraryValue, MemoryConfig, MemoryFault, MemoryLimits,
     MemoryState, Pointer, PointerValue, ScopeId, WorldLimits, WorldState,
 };
-pub use evocc_types::EvoIRType;
-use evocc_types::{Region, TargetDataLayout};
+pub use evocc_types::{canonical_marks, param_mark, EvoIRType, ParamMark, RecordShape};
+use evocc_types::{AddressSpace, Region, TargetDataLayout};
 
 mod assembly;
 mod text;
@@ -743,6 +743,10 @@ impl EffectSummary {
 pub struct Function {
     pub name: String,
     pub params: Vec<FunctionParam>,
+    /// The record marks of Section 10.1.3 (revision 1.9.73), one per
+    /// parameter, in the canonical form [`ParamMark`] describes: empty when no
+    /// parameter carries one.
+    pub param_marks: Vec<ParamMark>,
     pub variadic: bool,
     pub ret_tys: Vec<EvoIRType>,
     pub effects: EffectSummary,
@@ -782,6 +786,9 @@ pub struct ExternalObject {
 pub struct FunctionDeclaration {
     pub name: String,
     pub params: Vec<EvoIRType>,
+    /// The record marks of Section 10.1.3, one per parameter, canonical as on
+    /// [`Function`].
+    pub param_marks: Vec<ParamMark>,
     pub variadic: bool,
     pub ret_tys: Vec<EvoIRType>,
 }
@@ -804,6 +811,7 @@ impl FunctionDeclaration {
             effects: EffectSummary::top(),
             visibility: GlobalVisibility::External,
             blocks: Vec::new(),
+            param_marks: self.param_marks.clone(),
         }
     }
 }
@@ -1342,6 +1350,52 @@ fn evoir_access_layout(ty: &EvoIRType) -> Result<Option<AccessLayout>, String> {
 }
 
 /// Validate every function and all inter-function call signatures.
+/// Section 10.1.3 (revision 1.9.73): a `byval` or `sret` mark rides on a
+/// `ptr<generic>`, a signature carries at most one `sret`, and the mark list is
+/// canonical, so it is empty or exactly as long as the parameter list.
+///
+/// The size and alignment are a record type's, so neither is zero and the
+/// alignment is a power of two. The interpreters read none of this: they
+/// execute the pointer form, which the mark does not change.
+pub fn validate_record_marks(params: &[EvoIRType], marks: &[ParamMark]) -> Result<(), String> {
+    if marks.is_empty() {
+        return Ok(());
+    }
+    if marks.len() != params.len() {
+        return Err("a record mark list must be as long as the parameter list".to_owned());
+    }
+    if marks.iter().all(|mark| matches!(mark, ParamMark::None)) {
+        return Err("a record mark list with no mark is spelled by its absence".to_owned());
+    }
+    let mut destinations = 0_usize;
+    for (index, mark) in marks.iter().enumerate() {
+        let Some(shape) = mark.shape() else {
+            continue;
+        };
+        if params[index] != EvoIRType::Ptr(AddressSpace::Generic) {
+            return Err(format!(
+                "parameter {index} carries a record mark but is not ptr<generic>"
+            ));
+        }
+        if shape.size == 0 {
+            return Err(format!("parameter {index} marks a record of no bytes"));
+        }
+        if shape.align == 0 || !shape.align.is_power_of_two() {
+            return Err(format!(
+                "parameter {index} marks a record whose alignment {} is not a power of two",
+                shape.align
+            ));
+        }
+        if mark.is_sret() {
+            destinations += 1;
+        }
+    }
+    if destinations > 1 {
+        return Err("a signature carries at most one sret parameter".to_owned());
+    }
+    Ok(())
+}
+
 pub fn validate_module(module: &Module) -> Result<(), String> {
     let mut functions = HashMap::new();
     let mut symbols = HashSet::new();
@@ -1361,8 +1415,21 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
         if functions.insert(function.name.as_str(), function).is_some() {
             return Err(format!("duplicate function symbol '{}'", function.name));
         }
+        validate_record_marks(
+            &function
+                .params
+                .iter()
+                .map(|parameter| parameter.ty.clone())
+                .collect::<Vec<_>>(),
+            &function.param_marks,
+        )
+        .map_err(|message| format!("function '{}': {message}", function.name))?;
         validate_ssa(function)
             .map_err(|message| format!("function '{}': {message}", function.name))?;
+    }
+    for declaration in &module.declares {
+        validate_record_marks(&declaration.params, &declaration.param_marks)
+            .map_err(|message| format!("declare '{}': {message}", declaration.name))?;
     }
     let declarations = module
         .declares
@@ -1636,6 +1703,10 @@ fn function_pointer_type(function: &Function) -> Result<EvoIRType, String> {
             .map(|parameter| parameter.ty.clone())
             .collect(),
         results: function.ret_tys.clone(),
+        // Revision 1.9.73: "the attribute is part of the signature for
+        // equality", so the pointer a function's address produces carries the
+        // function's marks and compares unequal to an unmarked signature.
+        marks: function.param_marks.clone(),
     })
 }
 
@@ -2486,6 +2557,9 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
                 params,
                 results: returns,
                 variadic,
+                // The marks ride inside the type, so the equality below already
+                // compares them; nothing else here reads one.
+                marks: _,
             } = &callee.ty
             else {
                 return Err(format!(
@@ -3154,10 +3228,13 @@ pub enum InterpreterError {
         expected: usize,
         actual: usize,
     },
+    /// The two types are boxed so that the error stays small: an `EvoIRType`
+    /// carries a whole signature, including its record marks (revision
+    /// 1.9.73), and a `Result` pays for the largest variant at every call.
     EntryArgumentType {
         index: usize,
-        expected: EvoIRType,
-        actual: EvoIRType,
+        expected: Box<EvoIRType>,
+        actual: Box<EvoIRType>,
     },
     InvalidEntryArgument {
         index: usize,
@@ -5348,8 +5425,8 @@ fn normalize_runtime_input(
     if &value.ty != expected {
         return Err(InterpreterError::EntryArgumentType {
             index,
-            expected: expected.clone(),
-            actual: value.ty.clone(),
+            expected: Box::new(expected.clone()),
+            actual: Box::new(value.ty.clone()),
         });
     }
     match expected {
@@ -5910,6 +5987,7 @@ mod tests {
                     terminator: Inst::Ret(vec![result]),
                 },
             ],
+            param_marks: Vec::new(),
         }
     }
 
@@ -5960,6 +6038,7 @@ mod tests {
                 }],
                 terminator: Inst::Ret(vec![global_out, stack_in, world_out]),
             }],
+            param_marks: Vec::new(),
         }
     }
 
@@ -5987,6 +6066,7 @@ mod tests {
                 ],
                 terminator: Inst::Ret(vec![result]),
             }],
+            param_marks: Vec::new(),
         };
         validate_ssa(&function).expect("valid entry correspondence");
         let outcome = eval_function(
@@ -6043,6 +6123,7 @@ mod tests {
                 insts: vec![],
                 terminator: Inst::Ret(vec![pointer]),
             }],
+            param_marks: Vec::new(),
         };
         validate_ssa(&pointer_function).expect("pointer IR is structurally valid");
         assert!(matches!(
@@ -6134,6 +6215,7 @@ mod tests {
                     terminator: Inst::Ret(vec![right]),
                 },
             ],
+            param_marks: Vec::new(),
         };
         reject(&bad_condition, "expected bits<1>");
 
@@ -6187,6 +6269,7 @@ mod tests {
                 ],
                 terminator: Inst::Ret(vec![left.clone()]),
             }],
+            param_marks: Vec::new(),
         };
         reject(&deep_result, "nesting exceeds");
 
@@ -6329,6 +6412,7 @@ mod tests {
                     terminator: Inst::Ret(vec![returned]),
                 },
             ],
+            param_marks: Vec::new(),
         };
         let outcome = eval_function(&function, &[], InterpreterLimits::new(42))
             .expect("loop must terminate within its exact budget");
@@ -6404,6 +6488,7 @@ mod tests {
                     terminator: Inst::Ret(vec![out_a, out_b]),
                 },
             ],
+            param_marks: Vec::new(),
         };
         let outcome = eval_function(
             &function,
@@ -6442,6 +6527,7 @@ mod tests {
                 ],
                 terminator: Inst::Ret(vec![same]),
             }],
+            param_marks: Vec::new(),
         };
         let outcome = eval_function(&function, &[], InterpreterLimits::new(3))
             .expect("raw pattern must not be host-i64 constrained");
@@ -6473,6 +6559,7 @@ mod tests {
                 ],
                 terminator: Inst::Ret(vec![quotient]),
             }],
+            param_marks: Vec::new(),
         };
         let division_error = eval_function(&division, &[], InterpreterLimits::new(4))
             .expect_err("zero divisor must fail");
@@ -6556,6 +6643,7 @@ mod tests {
                 insts: vec![],
                 terminator: Inst::Ret(vec![input, memory, world]),
             }],
+            param_marks: Vec::new(),
         }
     }
 
@@ -6603,6 +6691,7 @@ mod tests {
                 ],
                 terminator: Inst::Ret(vec![result, memory_out, world_out]),
             }],
+            param_marks: Vec::new(),
         };
         let mut module = Module {
             assembly: Vec::new(),
@@ -6624,6 +6713,7 @@ mod tests {
             variadic: false,
             params: vec![EvoIRType::Bits(32), memory_ty.clone(), EvoIRType::World],
             results: vec![EvoIRType::Bits(32), memory_ty.clone(), EvoIRType::World],
+            marks: Vec::new(),
         };
         let memory_in = value(0, memory_ty.clone());
         let world_in = value(1, EvoIRType::World);
@@ -6677,6 +6767,7 @@ mod tests {
                 ],
                 terminator: Inst::Ret(vec![result, memory_out, world_out]),
             }],
+            param_marks: Vec::new(),
         };
         let mut module = Module {
             assembly: Vec::new(),
@@ -6783,6 +6874,7 @@ mod tests {
                     terminator: Inst::Ret(vec![result, memory_out, world_out]),
                 },
             ],
+            param_marks: Vec::new(),
         };
 
         let mut module = direct_call_module();
@@ -7151,6 +7243,7 @@ mod tests {
                 ],
                 terminator: Inst::Ret(vec![sum]),
             }],
+            param_marks: Vec::new(),
         };
         let outcome = eval_function(&function, &[], InterpreterLimits::new(6))
             .expect("defined signed addition");
@@ -7214,6 +7307,7 @@ mod tests {
                 ],
                 terminator: Inst::Ret(vec![]),
             }],
+            param_marks: Vec::new(),
         };
         assert!(matches!(
             eval_function(&overflow, &[], InterpreterLimits::new(5)),
@@ -7245,6 +7339,7 @@ mod tests {
                 ],
                 terminator: Inst::Ret(vec![sub_ok, mul_ok]),
             }],
+            param_marks: Vec::new(),
         };
         let outcome = eval_function(&predicates, &[], InterpreterLimits::new(5))
             .expect("definedness predicates execute");
@@ -7302,6 +7397,7 @@ mod tests {
                 ],
                 terminator: Inst::Ret(vec![srem, urem, shl, ashr, lshr, and, or, xor, invalid_shl]),
             }],
+            param_marks: Vec::new(),
         };
         let outcome = eval_function(&operations, &[], InterpreterLimits::new(17))
             .expect("extended integer operations execute");
@@ -7401,6 +7497,7 @@ mod tests {
                 ],
                 terminator: Inst::Ret(predicates.clone()),
             }],
+            param_marks: Vec::new(),
         };
         let outcome = eval_function(&predicate_function, &[], InterpreterLimits::new(20))
             .expect("separated UB predicates execute without host panics");
@@ -7491,6 +7588,7 @@ mod tests {
                         .collect(),
                 ),
             }],
+            param_marks: Vec::new(),
         };
         let outcome = eval_function(&mixed_width_shifts, &[], InterpreterLimits::new(11))
             .expect("mixed-width shift predicates and operation execute");
@@ -7617,6 +7715,7 @@ mod tests {
                     insts: instructions,
                     terminator: Inst::Ret(vec![]),
                 }],
+                param_marks: Vec::new(),
             };
             let error = eval_function(&function, &[], InterpreterLimits::new(budget))
                 .expect_err("a false typed UB obligation must fail");
@@ -7656,6 +7755,7 @@ mod tests {
                 insts: vec![instruction],
                 terminator: Inst::Ret(vec![result]),
             }],
+            param_marks: Vec::new(),
         };
         validate_ssa(&function).expect("ordinary typed uninitialized values are valid SSA");
 
@@ -7673,6 +7773,7 @@ mod tests {
                 insts: vec![Inst::Uninitialized(pointer)],
                 terminator: Inst::Ret(vec![]),
             }],
+            param_marks: Vec::new(),
         };
         validate_ssa(&pointer_function)
             .expect("an ordinary pointer is a supported uninitialized value type");
@@ -7698,6 +7799,7 @@ mod tests {
                     insts: vec![Inst::Uninitialized(value(80, forbidden))],
                     terminator: Inst::Ret(vec![]),
                 }],
+                param_marks: Vec::new(),
             };
             let error = validate_ssa(&invalid)
                 .expect_err("effect tokens cannot masquerade as uninitialized ordinary data");
@@ -7721,6 +7823,7 @@ mod tests {
                 insts: vec![Inst::Uninitialized(value(90, EvoIRType::Void))],
                 terminator: Inst::Ret(vec![]),
             }],
+            param_marks: Vec::new(),
         };
         reject(&invalid_void, "void is not an SSA value type");
     }
@@ -7751,6 +7854,7 @@ mod tests {
                     terminator: Inst::Ret(vec![replacement]),
                 },
             ],
+            param_marks: Vec::new(),
         };
 
         let outcome = interpret_function(&function, &[], InterpreterLimits::new(4))
@@ -7868,6 +7972,7 @@ mod tests {
                     terminator: Inst::Ret(vec![exit_x]),
                 },
             ],
+            param_marks: Vec::new(),
         };
 
         let outcome = interpret_function(&function, &[], InterpreterLimits::new(14))
@@ -7911,6 +8016,7 @@ mod tests {
                 insts: vec![Inst::Uninitialized(result.clone())],
                 terminator: Inst::Ret(vec![result]),
             }],
+            param_marks: Vec::new(),
         };
 
         assert!(matches!(
@@ -7998,6 +8104,7 @@ mod tests {
                         ],
                         terminator: Inst::Ret(vec![arithmetic_result]),
                     }],
+                    param_marks: Vec::new(),
                 },
                 3,
             ),
@@ -8019,6 +8126,7 @@ mod tests {
                         ],
                         terminator: Inst::Ret(vec![comparison_result]),
                     }],
+                    param_marks: Vec::new(),
                 },
                 3,
             ),
@@ -8039,6 +8147,7 @@ mod tests {
                         ],
                         terminator: Inst::Ret(vec![cast_result]),
                     }],
+                    param_marks: Vec::new(),
                 },
                 2,
             ),
@@ -8059,6 +8168,7 @@ mod tests {
                         ],
                         terminator: Inst::Ret(vec![zext_result]),
                     }],
+                    param_marks: Vec::new(),
                 },
                 2,
             ),
@@ -8079,6 +8189,7 @@ mod tests {
                         ],
                         terminator: Inst::Ret(vec![trunc_result]),
                     }],
+                    param_marks: Vec::new(),
                 },
                 2,
             ),
@@ -8105,6 +8216,7 @@ mod tests {
                         ],
                         terminator: Inst::Ret(vec![shift_predicate]),
                     }],
+                    param_marks: Vec::new(),
                 },
                 3,
             ),
@@ -8149,6 +8261,7 @@ mod tests {
                     terminator: Inst::Ret(vec![]),
                 },
             ],
+            param_marks: Vec::new(),
         };
         assert!(matches!(
             interpret_function(&condition_function, &[], InterpreterLimits::new(1)),
@@ -8241,6 +8354,7 @@ mod tests {
                 insts: vec![],
                 terminator: trap.clone(),
             }],
+            param_marks: Vec::new(),
         };
         validate_ssa(&function).expect("a typed trap is a valid CFG sink without a fake return");
 
@@ -8287,6 +8401,7 @@ mod tests {
                     terminator: Inst::Trap(TrapReason::ScalarFunctionFellOffEnd),
                 },
             ],
+            param_marks: Vec::new(),
         };
         validate_ssa(&function).expect("return and fallthrough paths are both well formed");
 

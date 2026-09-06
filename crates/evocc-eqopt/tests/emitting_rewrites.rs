@@ -79,6 +79,7 @@ fn module_of(insts: Vec<Inst>, result: Value) -> Module {
             insts,
             terminator: Inst::Ret(vec![result, memory, world]),
         }],
+        param_marks: Vec::new(),
     };
     let mut module = Module {
         assembly: Vec::new(),
@@ -350,6 +351,7 @@ fn width_min_excludes_a_one_bit_value() {
             insts: vec![Inst::Add(result.clone(), x.clone(), x)],
             terminator: Inst::Ret(vec![result, memory, world]),
         }],
+        param_marks: Vec::new(),
     };
     let mut module = Module {
         assembly: Vec::new(),

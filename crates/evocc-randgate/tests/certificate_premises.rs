@@ -119,6 +119,7 @@ fn covering_module() -> Module {
             ],
             terminator: Inst::Ret(vec![result, memory, world]),
         }],
+        param_marks: Vec::new(),
     };
     let mut module = Module {
         assembly: Vec::new(),
