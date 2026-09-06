@@ -178,6 +178,17 @@ fn initializer_addresses_survive_branches_and_later_actions() {
 }
 
 #[test]
+fn addresses_of_aggregate_subobjects_use_the_resolved_place() {
+    for source in [
+        "struct S{int v;}; int main(void){struct S a[2]={{3},{7}}; struct S *p=&a[1]; return p->v;}",
+        "struct S{int v;}; struct O{struct S s;}; int main(void){struct O o={{7}}; struct S *p=&o.s; return p->v;}",
+        "struct S{int v;}; struct O{struct S s;}; int main(void){struct O o={{7}}; struct O *q=&o; struct S *p=&q->s; return p->v;}",
+    ] {
+        check(source, Ok(7), &["load", "store"]);
+    }
+}
+
+#[test]
 fn integer_addresses_resolve_only_live_exposed_storage() {
     check(
         "int main(void){unsigned long n=1; return *(int *)n;}",
