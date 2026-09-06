@@ -88,9 +88,6 @@ pub enum LowerError {
     CheckedArithmeticWidth {
         span: SourceSpan,
     },
-    OrderedPointerComparison {
-        span: SourceSpan,
-    },
     MalformedFunction {
         function: String,
         span: SourceSpan,
@@ -134,9 +131,6 @@ impl fmt::Display for LowerError {
             Self::CheckedArithmeticWidth { .. } => {
                 formatter.write_str("not-lowered: checked-arithmetic-exceeds-128-bits")
             }
-            Self::OrderedPointerComparison { .. } => {
-                formatter.write_str("not-lowered: ordered-pointer-comparison")
-            }
             Self::MalformedFunction {
                 function, reason, ..
             } => write!(formatter, "malformed function {function}: {reason}"),
@@ -168,7 +162,6 @@ impl LowerError {
             Self::WideInteger { .. } => "E3033",
             Self::FunctionPointerArithmetic { .. } => "E3034",
             Self::CheckedArithmeticWidth { .. } => "E3044",
-            Self::OrderedPointerComparison { .. } => "E3045",
             _ => "E3101",
         }
     }
@@ -195,7 +188,6 @@ impl LowerError {
             | Self::AsmOperand { span, .. }
             | Self::VarArgs { span }
             | Self::CheckedArithmeticWidth { span }
-            | Self::OrderedPointerComparison { span }
             | Self::MalformedFunction { span, .. }
             | Self::InvalidControlFlow { span, .. }
             | Self::Layout { span, .. } => Some(*span),
@@ -6697,8 +6689,34 @@ impl<'a> FunctionLowerer<'a> {
         if matches!(
             operator,
             BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
-        ) {
-            return Err(LowerError::OrderedPointerComparison { span });
+        ) && left_pointer
+            && right_pointer
+        {
+            let left = self.cast(left, CIntegerType::ULONG, state)?;
+            let right = self.cast(right, CIntegerType::ULONG, state)?;
+            let (left, right) = if matches!(operator, BinaryOp::Gt | BinaryOp::Ge) {
+                (right.value, left.value)
+            } else {
+                (left.value, right.value)
+            };
+            let result = self.fresh_value(EvoIRType::Bits(1));
+            self.emit(
+                state,
+                Inst::ICmp(
+                    result.clone(),
+                    if matches!(operator, BinaryOp::Lt | BinaryOp::Gt) {
+                        CmpOp::ULt
+                    } else {
+                        CmpOp::ULe
+                    },
+                    left,
+                    right,
+                ),
+            )?;
+            return Ok(ExprValue {
+                value: result,
+                integer: CIntegerType::INT,
+            });
         }
         if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) {
             let (left, right) = match (left_pointer, right_pointer) {

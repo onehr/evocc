@@ -6813,6 +6813,37 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     value: right,
                     ty: right_ty,
                 },
+            ) if matches!(
+                operator,
+                BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+            ) && PointerTypeDesc::composite(self.unit.types(), left_ty, right_ty).is_ok() =>
+            {
+                // Ordering carries the same live, same-object obligation as
+                // subtraction; lowering compares the corresponding addresses.
+                self.subtract_pointer_values(left, right, left_ty, span)?;
+                let left = left.byte_offset();
+                let right = right.byte_offset();
+                let result = match operator {
+                    BinaryOp::Lt => left < right,
+                    BinaryOp::Le => left <= right,
+                    BinaryOp::Gt => left > right,
+                    BinaryOp::Ge => left >= right,
+                    _ => unreachable!(),
+                };
+                Ok(CValue::Integer(CInteger::new(
+                    u64::from(result),
+                    CIntegerType::INT,
+                )))
+            }
+            (
+                CValue::Pointer {
+                    value: left,
+                    ty: left_ty,
+                },
+                CValue::Pointer {
+                    value: right,
+                    ty: right_ty,
+                },
             ) if matches!(operator, BinaryOp::Eq | BinaryOp::Ne)
                 && PointerTypeDesc::composite(self.unit.types(), left_ty, right_ty).is_ok() =>
             {
