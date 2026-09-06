@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.18** | **Authoritative reference** | **2026-09-06**
+**Revision 0.19** | **Authoritative reference** | **2026-09-07**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -610,6 +610,13 @@ sides, and are never emitted today.
 
 ## Appendix A. Textual Form
 
+**`indirect.result` (revision 0.19).** A zero-operand marker that names the
+virtual register carrying an `sret` destination above 16 bytes, so that
+allocation pins it to `x8` for the call it belongs to (Section 6, revision
+0.18). It is written `%v = indirect.result` at the call's program point,
+emits no instruction, and is the executor's spelling recorded here after the
+record-convention window, as revision 0.8 did for assembly.
+
 The textual form is canonical (one rendering per function, the EvoIR
 Section 9.4 byte rules: four-space indent, `", "` between operands, one
 blank line between blocks and between functions, one final newline) and
@@ -676,6 +683,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.19 | 2026-09-07 | Records the `indirect.result` marker the record-convention window introduced for the `x8` destination register. |
 | 0.18 | 2026-09-06 | Records marked `byval`/`sret` follow AAPCS64: up to 16 bytes in general registers, larger by pointer, results in `x0`/`x1` or through `x8` (EvoIR 1.9.73). |
 | 0.17 | 2026-09-06 | The return address is the saved link register of the frame record and the frame address is the frame pointer (EvoIR 1.9.72). |
 | 0.16 | 2026-09-06 | Internal functions and globals are emitted as local symbols, and internal functions nothing references are dropped before emission (EvoIR 1.9.70). |
