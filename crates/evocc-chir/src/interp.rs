@@ -4015,6 +4015,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             });
         }
 
+        if spelling == "__builtin_prefetch" && self.unit.symbols().is_builtin_function(*symbol) {
+            // Argument evaluation has already run through the normal call
+            // continuation; the hint itself performs no abstract memory access.
+            return Ok(None);
+        }
         let target = linked_library_definition(self.unit, *symbol);
         if !self.unit.iter().any(|declaration| matches!(declaration, CHirDecl::Function(function) if function.symbol == target && function.body.is_some())) {
             let result = self.external_library_call(target, spelling, &arguments, call_span)?;

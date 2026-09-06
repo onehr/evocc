@@ -5686,6 +5686,13 @@ Both sealed oracles print `7` for `.evidence/builtin-probes/20260906-function-po
 No pointer retyping, invented callee, or validator relaxation is introduced.
 Seven units first encounter the direct conversion in sealed run `20260905T201056Z-67314`.
 
+### Compiler hints and dynamic stack allocation
+
+Per the 2026-09-06 architecture request, `__builtin_prefetch` emits no memory operation or external call, but evaluates its address argument exactly once and preserves those effects.
+Both sealed oracles report `prefetch-evaluations=3 stack-value=7` for `.evidence/builtin-probes/20260906-compiler-hints/hints.c`, recorded in `hints.out`; stack allocation is valid C but remains an explicit profile deferral rather than an unresolved library call.
+Lowering a call to the synthesized `__builtin_alloca` prototype reports E3046 (`not-lowered: dynamic-stack-allocation`), while an ordinary user-defined function named `alloca` is unaffected.
+The baseline torture run `20260906T070921Z` reports five prefetch link failures and four alloca link failures; this is not a new whole-kernel measurement.
+
 ### Assembly immediates before specialization
 
 Section 3.11's `i` operand must be a proved integer constant, and Section 10.1.9 preserves `always_inline` without applying it, so an unspecialized parameter retains E3021 with constraint name `i`.

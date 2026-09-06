@@ -63,6 +63,9 @@ pub enum LowerError {
     FrameAddress {
         span: SourceSpan,
     },
+    DynamicStackAllocation {
+        span: SourceSpan,
+    },
     FunctionPointerArithmetic {
         span: SourceSpan,
     },
@@ -119,6 +122,9 @@ impl fmt::Display for LowerError {
             | Self::UnsupportedStatement { feature, .. } => formatter.write_str(feature),
             Self::ReturnAddress { .. } => formatter.write_str("not-lowered: return-address"),
             Self::FrameAddress { .. } => formatter.write_str("not-lowered: frame-address"),
+            Self::DynamicStackAllocation { .. } => {
+                formatter.write_str("not-lowered: dynamic-stack-allocation")
+            }
             Self::FunctionPointerArithmetic { .. } => {
                 formatter.write_str("not-lowered: function-pointer-arithmetic")
             }
@@ -162,6 +168,7 @@ impl LowerError {
             Self::WideInteger { .. } => "E3033",
             Self::FunctionPointerArithmetic { .. } => "E3034",
             Self::CheckedArithmeticWidth { .. } => "E3044",
+            Self::DynamicStackAllocation { .. } => "E3046",
             _ => "E3101",
         }
     }
@@ -180,6 +187,7 @@ impl LowerError {
             | Self::UnsupportedStatement { span, .. }
             | Self::ReturnAddress { span }
             | Self::FrameAddress { span }
+            | Self::DynamicStackAllocation { span }
             | Self::FunctionPointerArithmetic { span }
             | Self::WideInteger { span }
             | Self::StaticRelocation { span }
@@ -7690,6 +7698,22 @@ impl<'a> FunctionLowerer<'a> {
                             span: *designator_span,
                             feature: "function designator disagrees with its semantic identity",
                         });
+                    }
+                    if self.unit.symbols().is_builtin_function(*symbol) {
+                        match spelling.as_str() {
+                            "__builtin_prefetch" => {
+                                // A target hint is optional; evaluating its
+                                // operands is not. Keep their effects once.
+                                for argument in arguments {
+                                    self.lower_discarded_expr(argument, state)?;
+                                }
+                                return Ok(None);
+                            }
+                            "alloca" => {
+                                return Err(LowerError::DynamicStackAllocation { span });
+                            }
+                            _ => {}
+                        }
                     }
                     Some(
                         self.functions
