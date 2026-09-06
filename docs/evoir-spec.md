@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.67** | **Authoritative reference** | **2026-09-06**
+**Revision 1.9.68** | **Authoritative reference** | **2026-09-06**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -534,7 +534,7 @@ oracles (`.evidence/builtin-probes/20260902-2c23684c/p39-bits.c`, `p39.out`):
 
 | Field | Description |
 |---|---|
-| `%a`, `%b` | For `eq`/`ne`, identical `bits<N>`, `ptr<AS>`, or `fnptr<Sig>` types. For ordered comparisons, `bits<N>` operands of the same width. |
+| `%a`, `%b` | For `eq`/`ne`, identical `bits<N>`, `ptr<AS>`, or `fnptr<Sig>` types. For ordered comparisons, `bits<N>` operands of the same width; an ordered comparison of two pointers is written by the front end as `ptr.to_int` of each followed by `icmp.ult`/`icmp.ule` on the addresses (revision 1.9.68: C's same-array obligation is carried by the C-HIR interpreter, as for pointer difference; both oracles print `15` for the same-array cases in `.evidence/builtin-probes/20260906-pointer-ordering/order.c`; `E3045`, the executor's fail-closed name, is withdrawn). |
 
 **Semantics.** Integer comparison producing a `bits<1>` value: `1` if the
 condition is true, `0` otherwise.
@@ -678,6 +678,25 @@ extension and the truncation, `p38.out`). `E3036`
 (`not-lowered: pointer-integer-conversion`) is withdrawn and no longer
 reported. A null pointer constant
 converted to a pointer is not this conversion and stays admitted.
+
+**Label addresses (revision 1.9.68).**
+
+```text
+%p = block_addr ^label : ptr<generic>
+```
+
+`block_addr` yields the address of the first instruction of block `^label`
+of the current function as a `ptr<generic>` with *code* provenance: two
+`block_addr` of the same block are equal, of different blocks unequal, and
+a load, store or `access_in_bounds` through one is `E3013`. It is pure,
+consumes no tokens, is not in the Section 8.5 allowlist, and `ptr.to_int`
+of it is an ordinary integer that names no object. It exists because the
+kernel writes `({ __label__ __here; __here: (unsigned long)&&__here; })`
+in `local_bh_disable` and its relatives to record an instruction address
+for lock and trace bookkeeping (the ninth survey put it first in 1,040
+units); the value is only ever compared, stored and printed. Jumping to
+one (`goto *`) remains `E3029`: the two units that write it are the
+allowed residue of 1.9.67.
 
 **Pointer and integer conversions (revision 1.9.65).**
 
@@ -1121,6 +1140,7 @@ EffectSummary {
 | `ptr.null`, `global_addr`, `func_addr` | `{}` | `{}` | false | false | false | false | false |
 | `ptr.offset.*.*` | `{}` | `{}` | false | false | false | true | false |
 | `ptr.to_int`, `ptr.from_int.*` | `{}` | `{}` | false | false | false | false | false |
+| `block_addr` | `{}` | `{}` | false | false | false | false | false |
 | `asm`, `asm.goto` | `{all}` | `{all}` | true | false | true | true | false |
 | `va_start`, `va_arg.*`, `va_end` | `{All}` | `{All}` | false | false | false | true | false |
 | `alloca`, `lifetime.end` | `{All}` | `{All}` | false | false | false | true | false |
@@ -1655,7 +1675,8 @@ twice would let a reader think two conditions are the same finding.
 | `E3039` | `external-call-not-executable` | runtime |
 | `E3040` | `external-object-not-executable` | runtime |
 | `E3041` | `symbol-declared-and-defined` | module validation |
-| `E3029` | `not-lowered: computed-goto` | lowering |
+| `E3029` | `not-lowered: computed-goto` | lowering (`goto *` only since 1.9.68) |
+| `E3045` | `not-lowered: ordered-pointer-comparison` | lowering — executor-allocated, **withdrawn at 1.9.68** |
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
 symbol selected by that value to the same type. The separation is deliberate:
@@ -2586,6 +2607,7 @@ inst_body :=
         " [size=" integer ", align=" integer "]"
   | value_name " = ptr.offset." direction "." index_signedness " "
   | value_name " = ptr.to_int " value_name
+  | value_name " = block_addr " block_label " : " type
   | value_name " = ptr.from_int." type " " value_name
         value_name ", " value_name " [scale=" integer "]"
   | "(" result_list ") = call " callee "(" arg_list ")"
@@ -2702,6 +2724,7 @@ ub.assume.<> <>
 (<>, <>) = store<> <>, <>, <>, <>
 <> = ptr.offset.<>.<> <>, <> [scale=<>]
 <> = ptr.to_int <>
+<> = block_addr <> : <>
 <> = ptr.from_int.<> <>
 (<>) = call @<>(<>)
 (<>) = call <>(<>)
@@ -4108,10 +4131,11 @@ and Clang-19 agree on every row.
   cohort needs it: the kernel writes `({ __label__ __here; __here:
   (unsigned long)&&__here; })` to capture an instruction address, whose cast to an
   integer is `ptrtoint` and already outside this profile (Section 5.3), and
-  writes no `goto *` at all. Lowering and both interpreters therefore report
-  `E3029` (`not-lowered: computed-goto`) for a label address that is used and
-  for `goto *`, and fail closed; the receipt counts each occurrence. The
-  measurement that opens this is a lane whose first error is `E3029`.
+  writes no `goto *` at all. Since revision 1.9.68 the label address is
+  `block_addr` and its cast is `ptr.to_int`; only `goto *` reports `E3029`
+  (`not-lowered: computed-goto`) and fails closed. The measurement that
+  opened this was the ninth survey, whose first error was `E3029` in 1,040
+  units through `local_bh_disable`.
 
 **Function names.** Inside every function body the identifiers `__func__`
 and `__FUNCTION__` denote one implicitly declared object of type
@@ -4390,8 +4414,10 @@ oracles warn `-Waddress` and compile). Measured defect at revision 1.9.47:
 **Label addresses.** `&&label` is an address constant of type `void *`
 usable in static initializers, including range designators
 (`[0 ... 255] = &&dflt`); `goto *expr` is accepted by the front end with
-`expr` of pointer type, and lowering stays `E3029` (evidence
-`p29-residue.c`, `lab`). Measured defect at revision 1.9.47: the BPF
+`expr` of pointer type. A used `&&label` lowers to `block_addr` of the
+label's block (Section 3.7, revision 1.9.68), and as a static initializer
+to a relocation against a local code symbol the backend emits for that
+block; `goto *expr` alone stays `E3029` (evidence `p29-residue.c`, `lab`). Measured defect at revision 1.9.47: the BPF
 interpreter's jump table was `E2208`, `E2001` and `E1003`.
 
 **`_Pragma`, spellings and attribute placement.** `_Pragma("...")` is handled
@@ -5461,6 +5487,7 @@ certificate and should pass.
 | | `asm.goto [volatile]` | register outputs and tokens, bound on successor edges | same payload, named label edges, fallthrough edge | yes; interpreter E3021 |
 | Pointer | `func_addr @symbol` | `fnptr<Sig>` | symbol | no |
 | | `ptr.to_int %p` | `bits<64>` | pointer | no |
+| | `block_addr ^b : ptr<generic>` | `ptr<generic>` | block label | on dereference (`E3013`) |
 | | `ptr.from_int.ptr<AS> %i` | `ptr<AS>` | `bits<64>` | on dereference (`E3013`) |
 | Calls | `call @callee(args..., %m, %w)` | ret values, `mem`, `world` | callee, args, memory, world | depends |
 | | `call %fptr(args..., %m, %w)` | ret values, `mem`, `world` | callee value, args, memory, world | depends |
@@ -5505,6 +5532,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.68 | 2026-09-06 | Rules the ninth survey's face (30 clean): a used label address is `block_addr` with code provenance (`local_bh_disable` in 1,040 units; `goto *` alone stays `E3029`), and ordered pointer comparisons compare the addresses (`E3045` withdrawn, 19 units). The `i` constraint fed by a parameter now stands at 35 units through `alternative_has_cap_likely` and stays the allowed residue until an inliner exists. |
 | 1.9.67 | 2026-09-06 | Rules the eighth survey's face (19 clean; `E3030`, `E3033`, `E3020`, `E3023`, `E3026`, `E3036`, `E3101` all at zero): a global register variable is read and written through an implicit `asm` (`E3035` withdrawn, 2,711 units); checked multiplication of two unsigned operands computes unsigned (`E3042` withdrawn, 48); pointer difference is integer subtraction and exact division (`E3032` withdrawn, 8); object and function pointers convert through `ptr.to_int`/`ptr.from_int` with a `fnptr` form (`E3043` withdrawn, 7). Accepts the Appendix D rulings on compound storage, block linkage and parameter qualifiers as written. Names the two allowed residues of the finish line: an `i` assembly constraint whose operand is a parameter (`E3021`, 3 units, needs inlining) and computed goto (`E3029`, 2 units). |
 | 1.9.66 | 2026-09-06 | Rules the three classes the seventh survey (6 clean, `E3033` gone, `E3030` 2,737) leaves under varargs: file-scope `asm` becomes the module assembly table (2.1, Section 9; `EXPORT_SYMBOL` in nearly every unit), checked arithmetic lowers exactly in the smallest of 32, 64 and 128 bits with a representability test (`E3020` withdrawn), and the bit builtins lower to new total instructions `ctlz`, `cttz`, `ctpop`, `bswap` (3.4; `E3023` withdrawn; `bit_builtin_zero_operand` obligation). |
 | 1.9.65 | 2026-09-05 | Rules the two lowering classes still hidden behind the survey's face so no window stops on them: static pointer initializers are relocations `(offset, @symbol, addend)` on a global (2.1, Section 9; `E3026` narrows to non-symbolic initializers), and pointer-integer conversions are `ptr.to_int` / `ptr.from_int` with exposed-address provenance and the oracles' measured extension and truncation (3.7; `E3036` withdrawn). |
