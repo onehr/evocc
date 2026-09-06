@@ -179,6 +179,12 @@ def main() -> int:
     e0 = contract("ladder-e0-receipt.json").get("latest", {}).get("suites", {})
     e0c = e0.get("ctest", {}).get("outcomes", {})
     e0t = e0.get("torture", {}).get("outcomes", {})
+    cs = contract("ladder-csmith-receipt.json").get("latest", {})
+    subjects = [
+        (name, contract(f"ladder-{name}-receipt.json"))
+        for name in ("zlib", "zstd", "cjson", "tinycc", "toybox", "musl")
+        if (ROOT / "tests" / "contracts" / f"ladder-{name}-receipt.json").exists()
+    ]
     e0c_label = f"{e0c.get('pass', 0)}/{sum(e0c.values())}" if e0c else ""
     e0t_label = f"{e0t.get('pass', 0)}/{sum(e0t.values())}" if e0t else ""
     kernel = box(
@@ -188,6 +194,8 @@ def main() -> int:
             f" EvoCC {k1_units} ; {k1_asm:,}/{k1_total:,} {bar(k1_asm, k1_total)}",
             f"fail-closed {len(debts)} :{' '.join(debts)}",
             f" E0 c-testsuite {e0c_label} {bar(e0c.get('pass', 0), sum(e0c.values()))} torture {e0t_label} {bar(e0t.get('pass', 0), sum(e0t.values()))}",
+            f" Csmith {cs.get('agreeing', 0)}/{cs.get('programs', 0)}, {len(cs.get('miscompiles') or [])};"
+            + " ".join(f"{name} {r.get('unitsInPassingBuild', 0)}/{r.get('unitsTotal', 0)}" for name, r in subjects),
             "C1 EvoCC ░░░░ C2 vmlinux ░░░░ G1 ░░░░",
         ],
         span,
