@@ -390,6 +390,20 @@ fn scan_inst(
             index,
             "an `asm.goto` terminator has no row in Section 5".into(),
         ),
+        // EvoIR 1.9.72 gives the two activation addresses their forms; Section
+        // 5 has no row for either yet.
+        Inst::ReturnAddress { .. } => report(
+            E4009,
+            block,
+            index,
+            "a `return_address` has no row in Section 5".into(),
+        ),
+        Inst::FrameAddress { .. } => report(
+            E4009,
+            block,
+            index,
+            "a `frame_address` has no row in Section 5".into(),
+        ),
         // Section 5 (revision 0.12): "`ptr.to_int`, `ptr.from_int.*` |
         // nothing: the value is the same 64-bit register".
         Inst::PointerCast { .. }
