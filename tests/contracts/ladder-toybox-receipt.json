@@ -3,7 +3,7 @@
  "rung": "E6",
  "subject": "toybox",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260906T164947Z",
+ "run": "20260906T182112Z",
  "pin": {
   "subject": "toybox",
   "rung": "E6",
@@ -12,7 +12,7 @@
   "origin": "https://github.com/landley/toybox/archive/refs/tags/0.8.14.tar.gz",
   "sha256": "082df8cfd76135ce3c4820c8cf4c0081d61491e0990aff2da48e21fc9bbb24d1"
  },
- "driverSha256": "4b695125c959a6e2af946afa6042d5364e4e119f60a9e3200abbf0734aaeac32",
+ "driverSha256": "d9cf5ac900706043eb8be139ac1ef753ac35729bc38ca65b9e36213562e3f233",
  "target": "aarch64-unknown-linux-gnu",
  "baselineTest": {
   "tests": 56,
@@ -20,13 +20,12 @@
    "chattr immutable"
   ]
  },
- "units": 203,
- "unitsCompiledByEvocc": 161,
- "unitsInPassingBuild": 161,
+ "units": 201,
+ "unitsCompiledByEvocc": 164,
+ "unitsInPassingBuild": 164,
  "refusalsByCode": {
-  "E3101": 37,
-  "E1001": 4,
-  "E2001": 1
+  "E3101": 33,
+  "E1001": 4
  },
  "testResult": "no-regression",
  "failingUnits": [],
@@ -79,20 +78,20 @@
   ]
  },
  "unconsumedGccOptions": {
-  "-Os": 203,
-  "-Wall": 203,
-  "-Werror=implicit-function-declaration": 203,
-  "-Wno-char-subscripts": 203,
-  "-Wno-format-overflow": 203,
-  "-Wno-pointer-sign": 203,
-  "-Wno-restrict": 203,
-  "-Wundef": 203,
-  "-fdata-sections": 203,
-  "-ffunction-sections": 203,
-  "-fno-asynchronous-unwind-tables": 203,
-  "-fno-strict-aliasing": 203,
-  "-funsigned-char": 203,
-  "-o": 203
+  "-Os": 201,
+  "-Wall": 201,
+  "-Werror=implicit-function-declaration": 201,
+  "-Wno-char-subscripts": 201,
+  "-Wno-format-overflow": 201,
+  "-Wno-pointer-sign": 201,
+  "-Wno-restrict": 201,
+  "-Wundef": 201,
+  "-fdata-sections": 201,
+  "-ffunction-sections": 201,
+  "-fno-asynchronous-unwind-tables": 201,
+  "-fno-strict-aliasing": 201,
+  "-funsigned-char": 201,
+  "-o": 201
  },
- "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260906T164947Z"
+ "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260906T182112Z"
 }
