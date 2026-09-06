@@ -6236,7 +6236,12 @@ impl<'a> FunctionLowerer<'a> {
                 place, target_span, ..
             } => {
                 let address = self.lower_place_address(place, *target_span, state)?;
-                if self.is_aggregate_type(place.value_ty()) {
+                if self.is_aggregate_type(place.value_ty())
+                    || matches!(
+                        self.unit.types().get(place.value_ty()).map(|ty| &ty.kind),
+                        Some(TypeKind::Array { .. })
+                    )
+                {
                     return Ok(ExprValue {
                         value: address,
                         integer: CIntegerType::ULONG,
