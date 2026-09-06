@@ -860,7 +860,6 @@ pub fn interpret_scalar_function_with_target(
         || function_has_call(unit, function)
         || function_has_goto(unit, function)
     {
-        interpreter.initialize_function_addresses()?;
         interpreter.run_with_calls(function)
     } else {
         interpreter.run(function)
@@ -4122,6 +4121,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         ) {
             return Err(InterpreterError::CallThroughNonFunctionPointer { span: call_span });
         }
+        let value = if let PointerValue::Exposed(address) = value {
+            (1..=self.symbol_order().functions.len() as u64)
+                .map(PointerValue::Function)
+                .find(|candidate| self.memory.pointer_address(*candidate) == Ok(address))
+                .unwrap_or(value)
+        } else {
+            value
+        };
         let value = self
             .memory
             .resolve_function_pointer(value)
@@ -4162,19 +4169,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             tasks,
         )?;
         Ok(None)
-    }
-
-    fn initialize_function_addresses(&mut self) -> Result<(), InterpreterError> {
-        for index in 0..self.symbol_order().functions.len() {
-            let pointer = PointerValue::function(index as u64 + 1)
-                .map_err(|error| InterpreterError::MemorySetup { error })?;
-            let (memory, _) = self
-                .memory
-                .expose_pointer(pointer)
-                .map_err(|error| InterpreterError::MemorySetup { error })?;
-            self.memory = memory;
-        }
-        Ok(())
     }
 
     fn function_identity(&self, symbol: SymbolId) -> Option<u64> {
