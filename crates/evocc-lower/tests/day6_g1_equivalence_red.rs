@@ -670,8 +670,10 @@ fn render_inst(inst: &Inst) -> String {
         | Inst::AsmGoto { .. }
         | Inst::VaAccess(_)
         | Inst::BitOperation { .. }
+        | Inst::ReturnAddress { .. }
+        | Inst::FrameAddress { .. }
         | Inst::PointerCast { .. } => {
-            panic!("assembly and variadic lists are outside these scalar golden fixtures")
+            panic!("assembly, variadic lists and activation addresses are outside these scalar golden fixtures")
         }
         Inst::Const(result, immediate) => format!(
             "{} = const.{} {immediate}",

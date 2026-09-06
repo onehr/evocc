@@ -66,6 +66,8 @@ fn family(inst: &Inst) -> &'static str {
         Inst::GlobalAddr { .. } => "global_addr",
         Inst::FuncAddr { .. } => "func_addr",
         Inst::BlockAddr { .. } => "block_addr",
+        Inst::ReturnAddress { .. } => "return_address",
+        Inst::FrameAddress { .. } => "frame_address",
         Inst::Alloca { .. } => "alloca",
         Inst::LifetimeEnd { .. } => "lifetime.end",
         Inst::PointerValid { .. } => "pointer_valid",

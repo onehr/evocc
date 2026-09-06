@@ -933,7 +933,11 @@ pub enum MInst {
 // Inline assembly (EvoIR Section 3.11, EvoMIR Section 4)
 // ---------------------------------------------------------------------------
 
-/// One of the two frame places Section 6's variadic rules name.
+/// One place in Section 6's frame that only the frame layout can name.
+///
+/// The first two belong to the variadic rules; the last two are Section 5's
+/// activation-address rows (revision 0.17), which read the frame record every
+/// prologue writes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum FramePlace {
     /// `stack`: "the first incoming stack slot", which Section 6 spells
@@ -941,6 +945,12 @@ pub enum FramePlace {
     IncomingStack,
     /// `gr_top`: "save area + 64", the top of the register save area.
     RegisterSaveTop,
+    /// `saved_lr`: Section 5's `return_address` row, "`ldr rd, [x29, #8]`: the
+    /// saved link register of this frame record, valid anywhere in the body
+    /// because every function keeps a frame pointer".
+    SavedLinkRegister,
+    /// `fp`: Section 5's `frame_address` row, "`mov rd, x29`".
+    FramePointer,
 }
 
 impl FramePlace {
@@ -949,6 +959,8 @@ impl FramePlace {
         match self {
             Self::IncomingStack => "incoming",
             Self::RegisterSaveTop => "gr_top",
+            Self::SavedLinkRegister => "saved_lr",
+            Self::FramePointer => "fp",
         }
     }
 
@@ -957,6 +969,8 @@ impl FramePlace {
         match text {
             "incoming" => Some(Self::IncomingStack),
             "gr_top" => Some(Self::RegisterSaveTop),
+            "saved_lr" => Some(Self::SavedLinkRegister),
+            "fp" => Some(Self::FramePointer),
             _ => None,
         }
     }

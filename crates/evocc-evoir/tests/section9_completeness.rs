@@ -513,6 +513,14 @@ fn inst_schema(inst: &Inst) -> &'static str {
             let _ = (result, block);
             "Inst.BlockAddr(result,block)"
         }
+        Inst::ReturnAddress { result } => {
+            let _ = result;
+            "Inst.ReturnAddress(result)"
+        }
+        Inst::FrameAddress { result } => {
+            let _ = result;
+            "Inst.FrameAddress(result)"
+        }
         Inst::Alloca {
             result,
             mem_in,

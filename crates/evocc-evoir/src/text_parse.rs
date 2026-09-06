@@ -761,6 +761,25 @@ fn parse_instruction(
             block: parse_block_label(label)?,
         });
     }
+    // `%p = return_address : ptr<generic>` and `%p = frame_address :
+    // ptr<generic>` (Section 3.7, revision 1.9.72). Neither takes an operand,
+    // so all that follows the mnemonic is the result type.
+    if let Some(rest) = rhs.strip_prefix("return_address : ") {
+        return Ok(Inst::ReturnAddress {
+            result: Value {
+                id: result_id,
+                ty: parse_type(rest)?,
+            },
+        });
+    }
+    if let Some(rest) = rhs.strip_prefix("frame_address : ") {
+        return Ok(Inst::FrameAddress {
+            result: Value {
+                id: result_id,
+                ty: parse_type(rest)?,
+            },
+        });
+    }
     if let Some(rest) = rhs.strip_prefix("pointer_valid ") {
         let (memory, pointer) = parse_two_values(rest, values)?;
         return Ok(Inst::PointerValid {

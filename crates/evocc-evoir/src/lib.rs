@@ -323,6 +323,23 @@ pub enum Inst {
     /// ever compared, stored and printed.
     BlockAddr { result: Value, block: BlockId },
 
+    /// Return the address the current activation will return to, with *code*
+    /// provenance (revision 1.9.72).
+    ///
+    /// Section 3.7: "equal to itself within one activation, comparable,
+    /// storable, `ptr.to_int`-able, and `E3013` when dereferenced"; the
+    /// interpreters give each activation a fresh value. It exists because the
+    /// kernel's `_RET_IP_` is `(unsigned long)__builtin_return_address(0)`.
+    ReturnAddress { result: Value },
+
+    /// Return the address of the current activation's frame record, with
+    /// *stack* provenance of an object no load or store may touch (revision
+    /// 1.9.72).
+    ///
+    /// Section 3.7 gives it the same fresh-per-activation identity as
+    /// `return_address`; only `E3013` separates it from an ordinary object.
+    FrameAddress { result: Value },
+
     /// Allocate one fresh automatic object in the current invocation.
     Alloca {
         result: Value,
@@ -476,6 +493,8 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
         Inst::GlobalAddr { result, .. }
         | Inst::FuncAddr { result, .. }
         | Inst::BlockAddr { result, .. }
+        | Inst::ReturnAddress { result }
+        | Inst::FrameAddress { result }
         | Inst::PtrOffset { result, .. } => vec![result],
         Inst::ShiftCountDefined { result, .. } | Inst::SignedShlDefined { result, .. } => {
             vec![result]
@@ -551,7 +570,9 @@ pub fn inst_uses(inst: &Inst) -> Vec<&Value> {
         | Inst::PtrNull(..)
         | Inst::GlobalAddr { .. }
         | Inst::FuncAddr { .. }
-        | Inst::BlockAddr { .. } => vec![],
+        | Inst::BlockAddr { .. }
+        | Inst::ReturnAddress { .. }
+        | Inst::FrameAddress { .. } => vec![],
 
         Inst::Add(_, lhs, rhs)
         | Inst::Sub(_, lhs, rhs)
@@ -928,6 +949,8 @@ fn inst_effect_summary(inst: &Inst) -> EffectSummary {
         | Inst::GlobalAddr { .. }
         | Inst::FuncAddr { .. }
         | Inst::BlockAddr { .. }
+        | Inst::ReturnAddress { .. }
+        | Inst::FrameAddress { .. }
         | Inst::Call { .. }
         | Inst::SExt(..)
         | Inst::ZExt(..)
@@ -2330,6 +2353,23 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
                 result.ty
             )),
         },
+        // Section 3.7 (revision 1.9.72): "`%p = return_address : ptr<generic>`"
+        // and "`%p = frame_address : ptr<generic>`". Neither takes an operand,
+        // and the one address space is the form's.
+        Inst::ReturnAddress { result } => match result.ty {
+            EvoIRType::Ptr(evocc_types::AddressSpace::Generic) => Ok(()),
+            _ => Err(format!(
+                "return-address result in block {block} has type {:?}, expected ptr<generic>",
+                result.ty
+            )),
+        },
+        Inst::FrameAddress { result } => match result.ty {
+            EvoIRType::Ptr(evocc_types::AddressSpace::Generic) => Ok(()),
+            _ => Err(format!(
+                "frame-address result in block {block} has type {:?}, expected ptr<generic>",
+                result.ty
+            )),
+        },
         Inst::Alloca {
             result,
             mem_in,
@@ -3012,6 +3052,22 @@ struct ExecutionState {
     blocks: HashMap<(String, BlockId), u64>,
     access_guards: HashMap<u128, (Pointer, AccessLayout)>,
     next_token: u128,
+    /// The next unused activation-address identity, numbered past the function
+    /// and block identities so no activation address ever equals one of those.
+    next_activation: u64,
+}
+
+/// The two addresses Section 3.7 gives one activation, minted when it begins.
+///
+/// "The interpreters give each activation a fresh value for each": the identity
+/// is the memory model's opaque non-object provenance, which compares equal to
+/// itself, exposes to a distinct address under `ptr.to_int`, and denies every
+/// load and store (`E3013`). One activation holds both for its whole life, so
+/// two readings inside it agree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ActivationAddresses {
+    return_address: u64,
+    frame_address: u64,
 }
 
 impl ExecutionState {
@@ -3039,6 +3095,7 @@ impl ExecutionState {
             blocks: HashMap::new(),
             access_guards: HashMap::new(),
             next_token: 1,
+            next_activation: 1,
         })
     }
 
@@ -3050,6 +3107,27 @@ impl ExecutionState {
                 message: "runtime effect-token identity exhausted".to_owned(),
             })?;
         Ok(token)
+    }
+
+    /// Mint the two addresses of one beginning activation (Section 3.7).
+    fn begin_activation(&mut self) -> Result<ActivationAddresses, InterpreterError> {
+        let return_address = self.next_activation;
+        let frame_address =
+            return_address
+                .checked_add(1)
+                .ok_or_else(|| InterpreterError::InvalidModule {
+                    message: "activation address identity exhausted".to_owned(),
+                })?;
+        self.next_activation =
+            frame_address
+                .checked_add(1)
+                .ok_or_else(|| InterpreterError::InvalidModule {
+                    message: "activation address identity exhausted".to_owned(),
+                })?;
+        Ok(ActivationAddresses {
+            return_address,
+            frame_address,
+        })
     }
 }
 
@@ -3433,6 +3511,7 @@ fn interpret_function_in_state(
     let mut program_counter = entry.id;
     let mut steps = 0;
     let (memory_frame, memory_scope) = begin_function_memory(&mut state, func, entry.id)?;
+    let activation = state.begin_activation()?;
 
     loop {
         let block =
@@ -3462,6 +3541,7 @@ fn interpret_function_in_state(
                 &mut state,
                 memory_frame,
                 memory_scope,
+                activation,
             )?;
         }
 
@@ -3532,9 +3612,12 @@ struct ModuleFrame {
     return_binding: Option<CallReturnBinding>,
     memory_frame: Option<FrameId>,
     memory_scope: Option<ScopeId>,
+    /// Section 3.7: one activation, one pair of addresses, for its whole life.
+    activation: ActivationAddresses,
 }
 
 impl ModuleFrame {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         function_index: usize,
         block: BlockId,
@@ -3543,6 +3626,7 @@ impl ModuleFrame {
         return_binding: Option<CallReturnBinding>,
         memory_frame: Option<FrameId>,
         memory_scope: Option<ScopeId>,
+        activation: ActivationAddresses,
     ) -> Self {
         Self {
             anonymous,
@@ -3555,6 +3639,7 @@ impl ModuleFrame {
             return_binding,
             memory_frame,
             memory_scope,
+            activation,
         }
     }
 }
@@ -3653,6 +3738,14 @@ fn interpret_module_in_state(
         })
         .collect::<Result<_, _>>()?;
     state.blocks = block_identities(module, state.functions.len())?;
+    // Section 3.7: an activation address is fresh, and a fresh identity is one
+    // no function and no block already holds.
+    state.next_activation = u64::try_from(state.functions.len() + state.blocks.len())
+        .ok()
+        .and_then(|used| used.checked_add(1))
+        .ok_or_else(|| InterpreterError::InvalidModule {
+            message: "activation address identity exhausted".to_owned(),
+        })?;
     initialize_globals(module, &mut state)?;
     let entry_index = function_indices.get(entry_name).copied().ok_or_else(|| {
         InterpreterError::MissingEntryFunction {
@@ -3683,6 +3776,7 @@ fn interpret_module_in_state(
         .collect::<Result<Vec<_>, _>>()?;
     let (entry_frame, entry_scope) =
         begin_function_memory(&mut state, entry_function, entry_block.id)?;
+    let entry_activation = state.begin_activation()?;
     let mut frames = vec![ModuleFrame::new(
         entry_index,
         entry_block.id,
@@ -3691,6 +3785,7 @@ fn interpret_module_in_state(
         None,
         entry_frame,
         entry_scope,
+        entry_activation,
     )];
     let mut steps = 0;
 
@@ -3781,6 +3876,7 @@ fn interpret_module_in_state(
                         &args,
                         &mut call_arguments,
                     );
+                    let callee_activation = state.begin_activation()?;
                     frames.push(ModuleFrame::new(
                         callee_index,
                         callee_entry.id,
@@ -3793,6 +3889,7 @@ fn interpret_module_in_state(
                         }),
                         memory_frame,
                         memory_scope,
+                        callee_activation,
                     ));
                 } else if let Inst::IndirectCall {
                     results,
@@ -3946,6 +4043,7 @@ fn interpret_module_in_state(
                         &args,
                         &mut call_arguments,
                     );
+                    let callee_activation = state.begin_activation()?;
                     frames.push(ModuleFrame::new(
                         callee_index,
                         callee_entry.id,
@@ -3958,6 +4056,7 @@ fn interpret_module_in_state(
                         }),
                         memory_frame,
                         memory_scope,
+                        callee_activation,
                     ));
                 } else if let Inst::VaAccess(access) = &instruction {
                     let frame = &mut frames[frame_index];
@@ -3971,6 +4070,7 @@ fn interpret_module_in_state(
                 } else {
                     let memory_frame = frames[frame_index].memory_frame;
                     let memory_scope = frames[frame_index].memory_scope;
+                    let activation = frames[frame_index].activation;
                     let name = module.functions[frames[frame_index].function_index]
                         .name
                         .clone();
@@ -3982,6 +4082,7 @@ fn interpret_module_in_state(
                         &mut state,
                         memory_frame,
                         memory_scope,
+                        activation,
                     )?;
                 }
             }
@@ -4314,6 +4415,7 @@ fn execute_instruction(
     state: &mut ExecutionState,
     memory_frame: Option<FrameId>,
     memory_scope: Option<ScopeId>,
+    activation: ActivationAddresses,
 ) -> Result<(), InterpreterError> {
     match inst {
         Inst::VaAccess(access) => execute_variadic_access(access, &[], block, values, state)?,
@@ -4678,6 +4780,31 @@ fn execute_instruction(
                 result,
                 InternalValue::FunctionPointer(
                     PointerValue::function(identity)
+                        .map_err(|error| InterpreterError::MemoryAccess { block, error })?,
+                ),
+            );
+        }
+        // Section 3.7 (revision 1.9.72): "the interpreters give each activation
+        // a fresh value for each". The identity is the memory model's opaque
+        // non-object provenance: it compares equal to itself, `ptr.to_int`
+        // exposes it to a distinct address that names no object, and every load
+        // and store through it is `E3013`.
+        Inst::ReturnAddress { result } => {
+            write_internal(
+                values,
+                result,
+                InternalValue::FunctionPointer(
+                    PointerValue::function(activation.return_address)
+                        .map_err(|error| InterpreterError::MemoryAccess { block, error })?,
+                ),
+            );
+        }
+        Inst::FrameAddress { result } => {
+            write_internal(
+                values,
+                result,
+                InternalValue::FunctionPointer(
+                    PointerValue::function(activation.frame_address)
                         .map_err(|error| InterpreterError::MemoryAccess { block, error })?,
                 ),
             );
@@ -5577,7 +5704,9 @@ pub fn remap_inst_uses(inst: &mut Inst, aliases: &HashMap<u32, Value>) {
         | Inst::PtrNull(..)
         | Inst::GlobalAddr { .. }
         | Inst::FuncAddr { .. }
-        | Inst::BlockAddr { .. } => {}
+        | Inst::BlockAddr { .. }
+        | Inst::ReturnAddress { .. }
+        | Inst::FrameAddress { .. } => {}
         Inst::Add(_, left, right)
         | Inst::Sub(_, left, right)
         | Inst::Mul(_, left, right)

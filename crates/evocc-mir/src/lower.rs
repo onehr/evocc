@@ -416,6 +416,8 @@ fn scan_inst(
         | Inst::GlobalAddr { .. }
         | Inst::FuncAddr { .. }
         | Inst::BlockAddr { .. }
+        | Inst::ReturnAddress { .. }
+        | Inst::FrameAddress { .. }
         | Inst::PtrOffset { .. }
         | Inst::Alloca { .. }
         | Inst::LifetimeEnd { .. }
@@ -1716,6 +1718,27 @@ fn lower_inst(
         Inst::BlockAddr { result, block } => {
             let dst = lowerer.fresh(RegClass::Gpr64);
             insts.push(MInst::Adr { dst, block: *block });
+            lowerer.bind(result, dst);
+        }
+        // Section 5 (revision 0.17): "`return_address` | `ldr rd, [x29, #8]`:
+        // the saved link register of this frame record, valid anywhere in the
+        // body because every function keeps a frame pointer" and
+        // "`frame_address` | `mov rd, x29`". Both places belong to the frame
+        // layout, so both are the `frame.address` pseudo-form emission expands.
+        Inst::ReturnAddress { result } => {
+            let dst = lowerer.fresh(RegClass::Gpr64);
+            insts.push(MInst::FrameAddress {
+                dst,
+                place: FramePlace::SavedLinkRegister,
+            });
+            lowerer.bind(result, dst);
+        }
+        Inst::FrameAddress { result } => {
+            let dst = lowerer.fresh(RegClass::Gpr64);
+            insts.push(MInst::FrameAddress {
+                dst,
+                place: FramePlace::FramePointer,
+            });
             lowerer.bind(result, dst);
         }
         Inst::PtrOffset {

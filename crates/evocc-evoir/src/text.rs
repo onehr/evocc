@@ -498,6 +498,16 @@ impl FunctionRenderer {
                 self.block_name(*block),
                 render_type(&result.ty)
             ),
+            Inst::ReturnAddress { result } => format!(
+                "{} = return_address : {}",
+                render_value(result),
+                render_type(&result.ty)
+            ),
+            Inst::FrameAddress { result } => format!(
+                "{} = frame_address : {}",
+                render_value(result),
+                render_type(&result.ty)
+            ),
             Inst::Alloca {
                 result,
                 mem_in,
