@@ -34,6 +34,7 @@ fn main() {
             visibility: evocc_evoir::GlobalVisibility::External,
             name: "main".to_owned(),
             params: vec![FunctionParam { name: "x".to_owned(), ty: EvoIRType::Bits(32) }],
+            param_marks: Vec::new(),
             ret_tys: vec![EvoIRType::Bits(32), EvoIRType::Bits(32)],
             effects: Default::default(),
             blocks: vec![Block {

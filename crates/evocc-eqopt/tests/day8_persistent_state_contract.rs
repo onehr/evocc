@@ -75,6 +75,7 @@ fn input_module() -> Module {
                 name: "x".to_owned(),
                 ty: EvoIRType::Bits(32),
             }],
+            param_marks: Vec::new(),
             ret_tys: vec![EvoIRType::Bits(32)],
             effects: Default::default(),
             blocks: vec![Block {

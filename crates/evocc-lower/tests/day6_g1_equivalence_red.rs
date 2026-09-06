@@ -1957,6 +1957,7 @@ fn main() {
         visibility: evocc_evoir::GlobalVisibility::External,
         name: "block_arg_identity".to_owned(),
         params: Vec::new(),
+        param_marks: Vec::new(),
         ret_tys: vec![bits32.clone()],
         effects: Default::default(),
         blocks: vec![
