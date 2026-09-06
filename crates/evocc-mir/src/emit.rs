@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
-use evocc_evoir::GlobalObject;
+use evocc_evoir::{GlobalObject, GlobalVisibility};
 
 use crate::{
     linscan::physical, Allocated, AsmBody, AsmConstraint, AsmOperand, AsmValue, LoadKind, MInst,
@@ -297,7 +297,11 @@ pub fn emit_module_unit(
                 ".p2align {}",
                 global.layout.align_bytes.trailing_zeros()
             );
-            let _ = writeln!(text, ".globl {prefix}{}", global.symbol);
+            // Section 8 (revision 0.16): an internal object's symbol is local
+            // to the object file, so it is defined and never declared global.
+            if global.visibility == GlobalVisibility::External {
+                let _ = writeln!(text, ".globl {prefix}{}", global.symbol);
+            }
             let _ = writeln!(text, "{prefix}{}:", global.symbol);
             emit_initializer(&mut text, prefix, global);
         }
@@ -408,7 +412,16 @@ fn instructions_in(body: &str) -> usize {
 fn emit_function(text: &mut String, target: Target, allocated: &Allocated) {
     let frame = frame_of(allocated);
     let prefix = target.symbol_prefix();
-    let _ = writeln!(text, "\n.globl {prefix}{}", allocated.name);
+    // Section 8 (revision 0.16): "An EvoIR function or global whose
+    // `visibility` is `internal` is emitted without `.globl`, so its symbol is
+    // local to the object." The blank line, the alignment and the label are
+    // unchanged, so a module with no internal function emits the same bytes as
+    // before the revision.
+    if allocated.internal {
+        text.push('\n');
+    } else {
+        let _ = writeln!(text, "\n.globl {prefix}{}", allocated.name);
+    }
     let _ = writeln!(text, ".p2align 2");
     let _ = writeln!(text, "{prefix}{}:", allocated.name);
     emit_prologue(text, &frame);

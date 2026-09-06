@@ -61,6 +61,13 @@ pub struct Allocated {
     /// Section 6's frame layout reserves at the bottom of the frame (Linux
     /// only, revision 0.10).
     pub outgoing: u64,
+    /// Whether the EvoIR function this was allocated from has internal
+    /// linkage (Section 8, revision 0.16), which emission answers by writing
+    /// no `.globl` for its symbol.
+    ///
+    /// Allocation is a property of the body alone, so it never sets this;
+    /// whoever knows the EvoIR function does, before emission.
+    pub internal: bool,
 }
 
 /// Assign a physical register to every virtual register of an out-of-SSA
@@ -103,6 +110,7 @@ pub fn allocate_for(target: Target, function: &MFunction) -> Result<Allocated, S
                     frame_slots: u32::try_from(slots.len()).unwrap_or(u32::MAX),
                     used_callee_saved,
                     outgoing,
+                    internal: false,
                 });
             }
             Err(victims) => {
