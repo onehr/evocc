@@ -7985,6 +7985,7 @@ impl<'a> FunctionLowerer<'a> {
         }
         if self.memory_symbols.contains(&place.symbol()) {
             let address = self.object_address(place.symbol(), span, state)?;
+            let address_key = self.retain_temporary(address.clone(), state);
             let volatile = self
                 .unit
                 .types()
@@ -7995,11 +7996,24 @@ impl<'a> FunctionLowerer<'a> {
             } else {
                 Some(self.emit_memory_load(address.clone(), place.ty(), volatile, span, state)?)
             };
+            let original_key = original
+                .as_ref()
+                .map(|value| self.retain_temporary(value.value.clone(), state));
             let right = self.lower_expr(assigned, state)?;
+            let address = state
+                .env
+                .remove(&address_key)
+                .expect("retained assignment address")
+                .value;
             let result = if operator == AssignmentOp::Simple {
                 self.coerce_to_object_type(right, Some(assigned), place.ty(), span, state)?
             } else {
-                let original = original.expect("compound assignment loaded its object");
+                let mut original = original.expect("compound assignment loaded its object");
+                original.value = state
+                    .env
+                    .remove(&original_key.expect("loaded assignment value"))
+                    .expect("retained assignment value")
+                    .value;
                 if matches!(original.value.ty, EvoIRType::Ptr(_)) {
                     self.compute_pointer_assignment(
                         operator,
@@ -8331,6 +8345,7 @@ impl<'a> FunctionLowerer<'a> {
             return Err(LowerError::FunctionPointerArithmetic { span });
         }
         let address = self.lower_place_address(place, target_span, state)?;
+        let address_key = self.retain_temporary(address.clone(), state);
         let volatile = place.access_qualifiers().is_volatile;
         if self.is_aggregate_type(place.value_ty()) {
             if operator != AssignmentOp::Simple {
@@ -8340,6 +8355,11 @@ impl<'a> FunctionLowerer<'a> {
                 });
             }
             let source = self.lower_expr(assigned, state)?;
+            let address = state
+                .env
+                .remove(&address_key)
+                .expect("retained aggregate assignment address")
+                .value;
             self.emit_aggregate_transfer(
                 address.clone(),
                 source.value,
@@ -8364,11 +8384,24 @@ impl<'a> FunctionLowerer<'a> {
                 state,
             )?)
         };
+        let original_key = original
+            .as_ref()
+            .map(|value| self.retain_temporary(value.value.clone(), state));
         let right = self.lower_expr(assigned, state)?;
+        let address = state
+            .env
+            .remove(&address_key)
+            .expect("retained assignment address")
+            .value;
         let result = if operator == AssignmentOp::Simple {
             self.coerce_to_object_type(right, Some(assigned), place.value_ty(), span, state)?
         } else {
-            let original = original.expect("memory compound assignment loaded its left value");
+            let mut original = original.expect("memory compound assignment loaded its left value");
+            original.value = state
+                .env
+                .remove(&original_key.expect("loaded assignment value"))
+                .expect("retained assignment value")
+                .value;
             if matches!(original.value.ty, EvoIRType::Ptr(_)) {
                 self.compute_pointer_assignment(
                     operator,
