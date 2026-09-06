@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.17** | **Authoritative reference** | **2026-09-06**
+**Revision 0.18** | **Authoritative reference** | **2026-09-06**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -270,6 +270,23 @@ arguments and results, and pointer difference each have a code in Section 10.
 
 The convention is Apple's AArch64 variant of AAPCS64, restricted to what
 this revision lowers; the restriction is refused, never approximated.
+
+**Records (revision 0.18; withdraws `E4011`).** EvoIR passes a record as a
+pointer to a copy marked `byval(size, align)` and returns one through a
+destination pointer marked `sret(size, align)` (EvoIR 10.1.3). The machine
+applies AAPCS64 to those marks on both targets, so an EvoCC object agrees
+with a GCC or clang object on either side of the call: a `byval` record of
+at most 16 bytes is loaded from the copy into the next one or two general
+registers as 8-byte chunks (a record whose alignment is 16 starts at an
+even register on Linux, as a `bits<128>` does) and, in the callee, stored
+into a frame slot that becomes the parameter's place; a `byval` record
+above 16 bytes stays a pointer to the caller's copy in the next register or
+stack slot, which is what AAPCS64 does too. An `sret` result of at most 16
+bytes is loaded by the callee into `x0` and `x1` before `ret` and stored by
+the caller into its destination; above 16 bytes the destination pointer
+travels in `x8`, not in an argument register, and the callee writes through
+`x8`. Measured shapes: `.evidence/builtin-probes/20260902-2c23684c/p35-int128.c`
+(`take_union`, `take_pair`) and the zstd fault (`tests/contracts/ladder-zstd-receipt.json`).
 
 **Arguments and results.** Integer and pointer arguments of at most 64 bits
 go in `x0` to `x7` in order. Between two EvoCC-compiled functions, a
@@ -586,7 +603,7 @@ sides, and are never emitted today.
 | `E4008` | `not-lowered: pointer-difference` | EvoIR `E3032` boundary |
 | `E4009` | `not-lowered: unsupported-form` | any EvoIR instruction absent from Section 5 |
 | `E4010` | `abi: too-many-register-arguments` | more than eight integer arguments on Darwin (Linux lowers stack arguments, revision 0.10) |
-| `E4011` | `abi: aggregate-by-value` | aggregate argument or result |
+| `E4011` | `abi: aggregate-by-value` | withdrawn at revision 0.18: `byval`/`sret` records follow AAPCS64 (Section 6) |
 | `E4012` | `abi: variadic` | withdrawn at revision 0.10: variadic callees and callers lower (Section 6); the name is kept so old receipts read |
 | `E4013` | `abi: too-many-results` | more than eight ordinary results |
 | `E4020` | `allocation: verifier-refused` | the allocation verifier found a violation; internal, must never reach a user of a released build |
@@ -659,6 +676,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.18 | 2026-09-06 | Records marked `byval`/`sret` follow AAPCS64: up to 16 bytes in general registers, larger by pointer, results in `x0`/`x1` or through `x8` (EvoIR 1.9.73). |
 | 0.17 | 2026-09-06 | The return address is the saved link register of the frame record and the frame address is the frame pointer (EvoIR 1.9.72). |
 | 0.16 | 2026-09-06 | Internal functions and globals are emitted as local symbols, and internal functions nothing references are dropped before emission (EvoIR 1.9.70). |
 | 0.15 | 2026-09-06 | A label address is `adr` of the block's local symbol, and a static relocation may name that symbol (EvoIR 1.9.68). |

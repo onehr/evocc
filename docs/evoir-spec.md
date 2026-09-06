@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.72** | **Authoritative reference** | **2026-09-06**
+**Revision 1.9.73** | **Authoritative reference** | **2026-09-06**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -2561,7 +2561,7 @@ extern_seq      := extern_object+
 extern_object   := "extern " symbol " size=" (integer | "unknown")
                    " align=" integer newline
 declare_seq     := declare+
-declare         := "declare " symbol "(" type_list [", ..."] ")"
+declare         := "declare " symbol "(" sig_param_list [", ..."] ")"
                    " -> (" type_list ")" " cc = " ident newline
 function_seq    := function (newline function)*
 module_asm_seq  := module_asm+
@@ -2586,7 +2586,9 @@ type            := "bits<" positive_int ">"
                  | "tuple<" type_list ">"
                  | "fnptr<" signature ">"
                  | "void"
-signature       := "(" type_list [", ..."] ")->(" type_list ")"
+signature       := "(" sig_param_list [", ..."] ")->(" type_list ")"
+sig_param_list  := ε | sig_param ("," " " sig_param)*
+sig_param       := type [" byval(" integer ", " integer ")" | " sret(" integer ", " integer ")"]
 address_space   := "generic" | "global" | "stack" | "threadlocal"
 
 function        := "func " symbol "(" param_list [", ..."] ")"
@@ -2604,7 +2606,7 @@ region_set      := "{}" | "{" region ("," " " region)* "}"
 region          := "all" | "unknown" | "global" | "stack" | "heap" | "escaped"
 bool            := "true" | "false"
 param_list      := ε | param ("," " " param)*
-param           := param_name ": " type
+param           := param_name ": " type [" byval(" integer ", " integer ")" | " sret(" integer ", " integer ")"]
 type_list       := ε | type ("," " " type)*
 
 block           := block_label "(" block_arg_list "):" newline
@@ -3255,7 +3257,16 @@ temporaries for both are ordinary `alloca` sites whose `origin` comes from a
 reserved half of the ordinal space, disjoint from every source-derived
 allocation site, assigned in lowering order so two lowerings of one unit agree
 byte for byte. Register-level classification (which of these copies a target ABI
-may keep in registers) is a backend concern and never changes this form.
+may keep in registers) is a backend concern and never changes this form, but
+the backend must be told which pointers are records (revision 1.9.73): a
+record parameter is written `%argN: ptr<generic> byval(size, align)` and the
+return destination `%argN: ptr<generic> sret(size, align)`, in the function
+header, in every `declare`, and in every `fnptr<Sig>` naming such a
+signature; the attribute is part of the signature for equality. `size` and
+`align` are the record type's. The machine maps these to the platform
+convention (EvoMIR Section 6): the zstd rung found EvoCC-built `timefn.o`
+faulting inside a GCC-built program because a 8-byte record went through a
+hidden pointer where AAPCS64 puts it in a register.
 
 **Flexible array members.** A record whose last member is an array of unknown
 bound may be initialized at file scope with elements for that member; the
@@ -5586,6 +5597,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.73 | 2026-09-06 | Record parameters and the record return destination carry `byval(size, align)` and `sret(size, align)` on their pointer, so the machine can apply the platform's composite convention; found by the zstd rung, where an 8-byte record crossed to GCC-built code through a hidden pointer. |
 | 1.9.72 | 2026-09-06 | `__builtin_return_address(0)` and `__builtin_frame_address(0)` lower to `return_address` and `frame_address`, code- and stack-provenance values the interpreters refresh per activation; the kernel's `_RET_IP_` became the face of 2,714 units once label addresses lowered. Levels above zero stay refused. |
 | 1.9.71 | 2026-09-06 | The reachable end of a non-void function returns poison instead of trapping: C leaves the fall-off undefined only when the value is used, and the first GCC torture run tripped `E3007` in 28 programs that never use it. |
 | 1.9.70 | 2026-09-06 | Functions carry linkage: `visibility=internal` for `static` definitions, omitted otherwise; the machine emits no global symbol for internal functions and drops unreferenced ones. The kernel lane found EvoCC objects colliding on `static inline` helpers from shared headers, which capped the mixed link at 14 units. |
