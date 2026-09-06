@@ -3,7 +3,7 @@
  "rung": "E2",
  "subject": "zstd",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260906T131844Z",
+ "run": "20260906T132406Z",
  "pin": "v1.5.7 (2025-02-19, github.com/facebook/zstd)",
  "url": "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz",
  "tarballSha256": "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3",
@@ -32,212 +32,254 @@
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/entropy_common.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/error_private.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_decompress.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/pool.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/threading.o",
    "code": "E1001",
-   "message": "expected-declaration"
+   "message": "expected-declaration",
+   "at": "include/stdlib.h:141:8"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/xxhash.o",
    "code": "E2921",
-   "message": "pretty-function-unsupported"
+   "message": "pretty-function-unsupported",
+   "at": "common/xxhash.h:2964:20"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_common.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_compress.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/hist.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_compress.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_literals.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_sequences.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_superblock.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_double_fast.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_fast.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_lazy.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ldm.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_opt.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_preSplit.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdmt_compress.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_decompress.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ddict.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress_block.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/cover.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/divsufsort.o",
    "code": "E2921",
-   "message": "pretty-function-unsupported"
+   "message": "pretty-function-unsupported",
+   "at": "dictBuilder/divsufsort.c:418:7"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fastcover.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zdict.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v05.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v06.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v07.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchfn.o",
    "code": "E2921",
-   "message": "pretty-function-unsupported"
+   "message": "pretty-function-unsupported",
+   "at": "programs/benchfn.c:238:17"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchzstd.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/datagen.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/dibio.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio_asyncio.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/lorem.o",
    "code": "E2921",
-   "message": "pretty-function-unsupported"
+   "message": "pretty-function-unsupported",
+   "at": "programs/lorem.c:122:5"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/util.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli_trace.o",
    "code": "E0105",
-   "message": "include-not-found: immintrin.h"
+   "message": "include-not-found: immintrin.h",
+   "at": "common/compiler.h:223:1"
   }
  ],
  "excludedUnits": [],
@@ -462,6 +504,6 @@
    "shownBy": "compile the three lines with EvoCC, call get() and span() from a GCC-compiled main, link and run: it faults where the GCC-compiled unit prints 42"
   }
  ],
- "evidence": ".evidence/ladder/zstd/20260906T131844Z",
+ "evidence": ".evidence/ladder/zstd/20260906T132406Z",
  "summaryLine": "zstd: 1 of 44 units by EvoCC in a passing build; refused by code {'E0105': 37, 'E2921': 4, 'E1001': 1}"
 }

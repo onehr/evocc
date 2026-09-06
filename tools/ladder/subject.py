@@ -95,7 +95,11 @@ IMAGE = e0.IMAGE
 TARGET = e0.TARGET
 CONTAINER_BIN = "container"
 
-DIAGNOSTIC = re.compile(r"error\[(?P<code>[^]]+)\]: (?P<message>[^\n]*)")
+DIAGNOSTIC = re.compile(
+    r"^(?:(?P<where>[^\n:]+(?::[^\n:]+)*?):(?P<line>\d+):(?P<column>\d+): )?"
+    r"error\[(?P<code>[^]]+)\]: (?P<message>.*)$",
+    re.MULTILINE,
+)
 ENTERING = re.compile(r"^make(?:\[\d+\])?: Entering directory '(?P<dir>[^']*)'")
 LEAVING = re.compile(r"^make(?:\[\d+\])?: Leaving directory '(?P<dir>[^']*)'")
 COMPILERS = frozenset({"gcc", "gcc-14", "cc", "g++", "clang"})
@@ -675,9 +679,18 @@ def evocc_argv(
 
 
 def diagnostics(stderr: str) -> list[dict[str, str]]:
+    """Every distinct diagnostic, with where it was raised.
+
+    Where matters as much as what: a refusal raised in the subject's own
+    source is a construct to reduce, and one raised in a system header is a
+    fact about the headers the whole ladder shares.
+    """
     seen: list[dict[str, str]] = []
     for match in DIAGNOSTIC.finditer(stderr):
-        row = {"code": match.group("code"), "message": match.group("message")[:160]}
+        row = {"code": match.group("code"), "message": match.group("message").strip()[:160]}
+        if match.group("where"):
+            where = "/".join(Path(match.group("where")).parts[-2:])
+            row["at"] = f"{where}:{match.group('line')}:{match.group('column')}"
         if row not in seen:
             seen.append(row)
     return seen
@@ -725,6 +738,7 @@ def emit(
                     "diagnostics": found,
                     "code": found[0]["code"] if found else "other",
                     "message": found[0]["message"] if found else completed.stderr.strip()[-160:],
+                    "at": found[0].get("at", "") if found else "",
                 }
             )
             continue
@@ -1112,7 +1126,12 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
         "outcomes": dict(outcomes),
         "refusalsByCode": dict(refusals.most_common()),
         "refusals": [
-            {"unit": row["unit"], "code": row["code"], "message": row["message"]}
+            {
+                "unit": row["unit"],
+                "code": row["code"],
+                "message": row["message"],
+                "at": row.get("at", ""),
+            }
             for row in rows
             if row["outcome"] == "refused"
         ],

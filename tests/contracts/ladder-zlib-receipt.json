@@ -3,7 +3,7 @@
  "rung": "E1",
  "subject": "zlib",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260906T130110Z",
+ "run": "20260906T132342Z",
  "pin": "1.3.2 (2026-02-17, zlib.net)",
  "url": "https://zlib.net/zlib-1.3.2.tar.gz",
  "tarballSha256": "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16",
@@ -31,27 +31,32 @@
   {
    "unit": "deflate.o",
    "code": "E3101",
-   "message": "evoir-lowering-failed: dereference operand did not lower to a pointer"
+   "message": "evoir-lowering-failed: dereference operand did not lower to a pointer",
+   "at": "zlib-1.3.2/deflate.c:440:27"
   },
   {
    "unit": "infback.o",
    "code": "E3101",
-   "message": "evoir-lowering-failed: dereference operand did not lower to a pointer"
+   "message": "evoir-lowering-failed: dereference operand did not lower to a pointer",
+   "at": "zlib-1.3.2/infback.c:51:41"
   },
   {
    "unit": "inflate.o",
    "code": "E3101",
-   "message": "evoir-lowering-failed: dereference operand did not lower to a pointer"
+   "message": "evoir-lowering-failed: dereference operand did not lower to a pointer",
+   "at": "zlib-1.3.2/inflate.c:163:9"
   },
   {
    "unit": "trees.o",
    "code": "E3101",
-   "message": "evoir-lowering-failed: generated invalid EvoIR: function '_tr_tally': value v157 used by instruction in block 5 is not a prior local definition; thread it throu"
+   "message": "evoir-lowering-failed: generated invalid EvoIR: function '_tr_tally': value v157 used by instruction in block 5 is not a prior local definition; thread it throu",
+   "at": "zlib-1.3.2/trees.c:1:1"
   },
   {
    "unit": "zutil.o",
    "code": "E3101",
-   "message": "evoir-lowering-failed: generated invalid EvoIR: function 'zError': value v3 used by instruction in block 6 is not a prior local definition; thread it through a "
+   "message": "evoir-lowering-failed: generated invalid EvoIR: function 'zError': value v3 used by instruction in block 6 is not a prior local definition; thread it through a ",
+   "at": "zlib-1.3.2/zutil.c:1:1"
   }
  ],
  "excludedUnits": [
@@ -458,6 +463,7 @@
    "CFLAGS replaced to drop -fPIC and link -no-pie: EvoCC emits position-dependent code, and Debian's default PIE link refuses an ADRP against an interposable data symbol such as stderr"
   ],
   "buildCommand": "make -j4 CFLAGS='-O3 -D_LARGEFILE64_SOURCE=1 -DHAVE_HIDDEN -no-pie'",
+  "optionsTheDriverRejects": [],
   "omittedFlags": [
    "-O3",
    "-no-pie"
@@ -488,12 +494,46 @@
    "reachedFrom": "the GCC stdint.h and limits.h wrappers, which are nothing but an include_next"
   },
   {
+   "code": "E0102",
+   "construct": "a null directive swallows the line after it",
+   "repro": "#\n#if 0\nint compiled_anyway;\n#endif\n",
+   "effect": "the `#` line is legal and does nothing; here it consumes the next line, so a false conditional is entered and its #endif is then unmatched. A `#` followed by `#define X 1` leaves X undefined with no diagnostic at all.",
+   "reachedFrom": "zstd's lib/common/compiler.h, and so 37 of its units"
+  },
+  {
+   "code": "E1001",
+   "construct": "the built-in vector types a GCC 14 front end promises",
+   "repro": "__Float32x4_t v;  /* also __Float64x2_t, __SVFloat32_t, __SVBool_t */",
+   "reachedFrom": "bits/math-vector.h, and so every <math.h>: the driver defines __GNUC__ 14, so glibc takes the branches that use GCC 14's own vector types"
+  },
+  {
    "code": "linkage",
    "construct": "a static function is defined with external linkage",
    "repro": "static int helper(void){ return 0; } int use(void){ return helper(); }",
    "effect": "two objects that saw the same static collide at link time"
   }
  ],
- "evidence": ".evidence/ladder/zlib/20260906T130110Z",
+ "defects": [
+  {
+   "units": [
+    "deflate.o",
+    "infback.o",
+    "inflate.o"
+   ],
+   "failure": "refused, E3101: dereference operand did not lower to a pointer",
+   "cause": "a call written through an explicit dereference of a function pointer. zlib's ZALLOC and ZFREE are (*((strm)->zalloc))(...); the same call written strm->zalloc(...) compiles.",
+   "repro": "void g(void (*f)(void)) { (*f)(); }\n"
+  },
+  {
+   "units": [
+    "trees.o",
+    "zutil.o"
+   ],
+   "failure": "refused, E3101: generated invalid EvoIR, a value used in a later block is not a prior local definition",
+   "cause": "a subscript whose index expression branches. Any conditional or short-circuit operator inside [] does it, on an array or on a pointer.",
+   "repro": "int g(int *a, int e) { return a[e ? 1 : 0]; }\n"
+  }
+ ],
+ "evidence": ".evidence/ladder/zlib/20260906T132342Z",
  "summaryLine": "zlib: 2 of 19 units by EvoCC in a passing build; refused by code {'E3101': 5}"
 }

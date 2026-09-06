@@ -3,7 +3,7 @@
  "rung": "E3",
  "subject": "cjson",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260906T130702Z",
+ "run": "20260906T132400Z",
  "pin": "v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON)",
  "url": "https://github.com/DaveGamble/cJSON/archive/refs/tags/v1.7.19.tar.gz",
  "tarballSha256": "7fa616e3046edfa7a28a32d5f9eacfd23f92900fe1f8ccd988c1662f30454562",
@@ -27,12 +27,14 @@
   {
    "unit": "cJSON.o",
    "code": "E1001",
-   "message": "expected-declaration"
+   "message": "expected-declaration",
+   "at": "bits/math-vector.h:156:9"
   },
   {
    "unit": "cJSON_Utils.o",
    "code": "E1001",
-   "message": "expected-declaration"
+   "message": "expected-declaration",
+   "at": "bits/math-vector.h:156:9"
   }
  ],
  "excludedUnits": [],
@@ -130,6 +132,13 @@
    "reachedFrom": "the GCC stdint.h and limits.h wrappers, which are nothing but an include_next"
   },
   {
+   "code": "E0102",
+   "construct": "a null directive swallows the line after it",
+   "repro": "#\n#if 0\nint compiled_anyway;\n#endif\n",
+   "effect": "the `#` line is legal and does nothing; here it consumes the next line, so a false conditional is entered and its #endif is then unmatched. A `#` followed by `#define X 1` leaves X undefined with no diagnostic at all.",
+   "reachedFrom": "zstd's lib/common/compiler.h, and so 37 of its units"
+  },
+  {
    "code": "E1001",
    "construct": "the built-in vector types a GCC 14 front end promises",
    "repro": "__Float32x4_t v;  /* also __Float64x2_t, __SVFloat32_t, __SVBool_t */",
@@ -142,6 +151,7 @@
    "effect": "two objects that saw the same static collide at link time"
   }
  ],
- "evidence": ".evidence/ladder/cjson/20260906T130702Z",
+ "defects": [],
+ "evidence": ".evidence/ladder/cjson/20260906T132400Z",
  "summaryLine": "cjson: 0 of 2 units by EvoCC in a passing build; refused by code {'E1001': 2}"
 }

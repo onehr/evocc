@@ -59,6 +59,26 @@ ZLIB = ladder.Subject(
         "position-dependent code, and Debian's default PIE link refuses an "
         "ADRP against an interposable data symbol such as stderr",
     ),
+    defects=(
+        {
+            "units": ["deflate.o", "infback.o", "inflate.o"],
+            "failure": "refused, E3101: dereference operand did not lower to "
+            "a pointer",
+            "cause": "a call written through an explicit dereference of a "
+            "function pointer. zlib's ZALLOC and ZFREE are (*((strm)->zalloc"
+            "))(...); the same call written strm->zalloc(...) compiles.",
+            "repro": "void g(void (*f)(void)) { (*f)(); }\n",
+        },
+        {
+            "units": ["trees.o", "zutil.o"],
+            "failure": "refused, E3101: generated invalid EvoIR, a value used "
+            "in a later block is not a prior local definition",
+            "cause": "a subscript whose index expression branches. Any "
+            "conditional or short-circuit operator inside [] does it, on an "
+            "array or on a pointer.",
+            "repro": "int g(int *a, int e) { return a[e ? 1 : 0]; }\n",
+        },
+    ),
 )
 
 
