@@ -28,7 +28,19 @@ const IMAGE: &str = "evo-flight-lab:sealed";
 struct Program {
     name: &'static str,
     unit: &'static str,
+    /// The unit to use on Darwin, where a C symbol carries the `_` prefix and
+    /// a file-scope `asm` that defines one must spell it.
+    darwin: Option<&'static str>,
     other: Option<&'static str>,
+}
+
+impl Program {
+    const fn source(&self, target: Target) -> &'static str {
+        match (target, self.darwin) {
+            (Target::Darwin, Some(unit)) => unit,
+            _ => self.unit,
+        }
+    }
 }
 
 /// A call to an undefined function and a read of an undefined object, linked
@@ -73,15 +85,47 @@ int main(void) {
 }
 "#;
 
+/// A file-scope `asm` that defines a symbol the C code reads (EvoMIR Section
+/// 8, "Module assembly", revision 0.14).
+const MODULE_ASSEMBLY_UNIT: &str = r#"__asm__(".globl module_value\n"
+        ".data\n"
+        ".p2align 2\n"
+        "module_value: .long 41\n"
+        ".text\n");
+
+extern int module_value;
+
+int main(void) { return module_value + 1; }
+"#;
+
+const MODULE_ASSEMBLY_DARWIN: &str = r#"__asm__(".globl _module_value\n"
+        ".data\n"
+        ".p2align 2\n"
+        "_module_value: .long 41\n"
+        ".text\n");
+
+extern int module_value;
+
+int main(void) { return module_value + 1; }
+"#;
+
 const PROGRAMS: &[Program] = &[
     Program {
         name: "external-symbols",
         unit: EXTERNAL_UNIT,
+        darwin: None,
         other: Some(EXTERNAL_OTHER),
     },
     Program {
         name: "static-relocations",
         unit: RELOCATION_UNIT,
+        darwin: None,
+        other: None,
+    },
+    Program {
+        name: "module-assembly",
+        unit: MODULE_ASSEMBLY_UNIT,
+        darwin: Some(MODULE_ASSEMBLY_DARWIN),
         other: None,
     },
 ];
@@ -116,9 +160,9 @@ fn container() -> Result<String, String> {
 }
 
 /// Write one program's sources into `directory` and return the unit's path.
-fn materialize(directory: &Path, program: &Program) -> PathBuf {
+fn materialize(directory: &Path, program: &Program, target: Target) -> PathBuf {
     let unit = directory.join(format!("{}.c", program.name));
-    std::fs::write(&unit, program.unit).expect("the unit");
+    std::fs::write(&unit, program.source(target)).expect("the unit");
     if let Some(other) = program.other {
         std::fs::write(directory.join(format!("{}-other.c", program.name)), other)
             .expect("the second unit");
@@ -222,7 +266,7 @@ fn the_frontier_corpus_agrees_with_the_host_compiler() {
 
     let mut row = Row::new();
     for program in PROGRAMS {
-        let unit = materialize(&work, program);
+        let unit = materialize(&work, program, Target::Darwin);
         let text = match assembly(&driver, Target::Darwin, &unit) {
             Ok(text) => text,
             Err(reason) => {
@@ -339,7 +383,7 @@ fn the_frontier_corpus_agrees_with_gcc_in_the_sealed_container() {
     let mut row = Row::new();
     let mut expected_names = Vec::new();
     for program in PROGRAMS {
-        let unit = materialize(&work, program);
+        let unit = materialize(&work, program, Target::Linux);
         match assembly(&driver, Target::Linux, &unit) {
             Ok(text) => {
                 row.compiled += 1;

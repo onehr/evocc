@@ -18,7 +18,7 @@ use evocc_types::EvoIRType;
 
 use crate::lane::is_register_type;
 use crate::{
-    allocate_for, emit_module_for, lower_module_for, out_of_ssa, verify_allocation, Target,
+    allocate_for, emit_module_unit, lower_module_for, out_of_ssa, verify_allocation, Target,
 };
 
 /// Where the native pipeline stopped.
@@ -107,7 +107,12 @@ pub fn compile_module_for(
         })?;
         functions.push(allocated);
     }
-    Ok(emit_module_for(target, &functions, &module.globals))
+    Ok(emit_module_unit(
+        target,
+        &functions,
+        &module.globals,
+        &module.assembly,
+    ))
 }
 
 /// Lower, allocate, verify and emit every function of one EvoIR module.

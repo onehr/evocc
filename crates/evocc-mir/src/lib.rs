@@ -31,7 +31,7 @@ pub mod validate;
 use std::fmt;
 
 pub use allocverify::{verify_allocation, VerifierRefusal};
-pub use emit::{emit_module, emit_module_for, frame_of, Frame, Target};
+pub use emit::{emit_module, emit_module_for, emit_module_unit, frame_of, Frame, Target};
 pub use interp::{interpret_module, MirError, MirLimits, MirOutcome, MirValue};
 pub use linscan::{
     allocate, allocate_for, render_allocated, Allocated, CALLEE_SAVED, CALLER_SAVED,

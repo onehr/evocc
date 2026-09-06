@@ -227,12 +227,34 @@ pub fn emit_module(functions: &[Allocated], globals: &[GlobalObject]) -> String 
     emit_module_for(Target::Darwin, functions, globals)
 }
 
-/// Emit one module for `target`.
+/// Emit one module for `target`, with no module assembly table.
 #[must_use]
 pub fn emit_module_for(
     target: Target,
     functions: &[Allocated],
     globals: &[GlobalObject],
+) -> String {
+    emit_module_unit(target, functions, globals, &[])
+}
+
+/// Emit one whole unit for `target`: its functions, its globals and its module
+/// assembly table.
+///
+/// Section 8 (revision 0.14): "Every entry of the EvoIR module assembly table
+/// ... is emitted verbatim, in table order, after the last function and the
+/// last global of the unit. Emission does not parse an entry and substitutes
+/// nothing into it; it precedes the first entry with a `.text` directive and
+/// follows the last with one, so an entry that switches sections cannot change
+/// where a later revision's trailing output lands." The directive written here
+/// is the target's own text-section spelling from Section 8's table, which is
+/// what returns a Mach-O assembly to `__TEXT,__text` after an entry has moved
+/// it; a bare `.text` would name the wrong section there.
+#[must_use]
+pub fn emit_module_unit(
+    target: Target,
+    functions: &[Allocated],
+    globals: &[GlobalObject],
+    assembly: &[String],
 ) -> String {
     let prefix = target.symbol_prefix();
     let mut text = String::new();
@@ -255,6 +277,16 @@ pub fn emit_module_for(
             let _ = writeln!(text, "{prefix}{}:", global.symbol);
             emit_initializer(&mut text, prefix, global);
         }
+    }
+    if !assembly.is_empty() {
+        let _ = writeln!(text, "\n{}", target.text_section());
+        for entry in assembly {
+            text.push_str(entry);
+            if !entry.ends_with('\n') {
+                text.push('\n');
+            }
+        }
+        let _ = writeln!(text, "{}", target.text_section());
     }
     if let Some(ident) = target.producer_ident() {
         let _ = writeln!(text, "\n{ident}");
