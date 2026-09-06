@@ -34,6 +34,28 @@ fn parse<'arena>(arena: &'arena Arena, source: &str, ordinal: u32) -> evocc_chir
 }
 
 #[test]
+fn address_of_forward_declared_object_survives_record_completion() {
+    for (ordinal, kind, member) in [
+        (100, "struct", "int member;"),
+        (101, "union", "int member; long other;"),
+        (102, "struct", "const int member;"),
+    ] {
+        let source = format!(
+            "{kind} item; extern {kind} item object; \
+             {kind} item *address(void) {{ return &object; }} \
+             {kind} item {{ {member} }};"
+        );
+        let arena = Arena::default();
+        let unit = parse(&arena, &source, ordinal);
+        AllocationSiteManifest::derive(&unit)
+            .expect("completing a tag preserves an earlier address");
+        let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+            .expect("address of an external object lowers after tag completion");
+        assert!(render_module(&module).contains("global_addr @object"));
+    }
+}
+
+#[test]
 fn global_register_declaration_has_no_allocation_site_or_global() {
     let source = "register unsigned long sp_var asm(\"sp\");\n";
     let arena = Arena::default();
