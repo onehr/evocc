@@ -38,3 +38,4 @@ target-*/
 # Python bytecode caches.
 __pycache__/
 *.pyc
+output/

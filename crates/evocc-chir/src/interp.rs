@@ -205,6 +205,9 @@ pub enum InterpreterError {
         spelling: String,
         span: SourceSpan,
     },
+    UninitializedValue {
+        span: SourceSpan,
+    },
     OutOfScopeObject {
         symbol: SymbolId,
         spelling: String,
@@ -257,7 +260,7 @@ impl InterpreterError {
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
-            Self::ReadOfUninitializedObject { .. } => "E3001",
+            Self::ReadOfUninitializedObject { .. } | Self::UninitializedValue { .. } => "E3001",
             Self::Integer {
                 error: IntegerError::DivisionByZero,
                 ..
@@ -319,6 +322,7 @@ impl InterpreterError {
     #[must_use]
     pub fn message(&self) -> String {
         match self {
+            Self::UninitializedValue { .. } => "read-of-uninitialized-object".to_owned(),
             Self::IndirectCallDynamicSignatureMismatch { .. } => {
                 "indirect-call-dynamic-signature-mismatch".to_owned()
             }
@@ -437,6 +441,7 @@ impl InterpreterError {
             | Self::InvalidInitializerPlan { span, .. }
             | Self::InvalidScalarPlace { span, .. }
             | Self::ReadOfUninitializedObject { span, .. }
+            | Self::UninitializedValue { span }
             | Self::OutOfScopeObject { span, .. }
             | Self::Integer { span, .. }
             | Self::InvalidControlFlow { span, .. }
@@ -472,6 +477,8 @@ struct Slot {
 /// will attach without changing that path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CValue {
+    /// A missing function result can be discarded without being read.
+    Uninitialized(ValueType),
     Integer(CInteger),
     Pointer {
         value: Pointer,
@@ -1627,7 +1634,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 });
             }
             (Flow::Normal, Some(_)) => {
-                return Err(InterpreterError::MissingReturn { span: body.span() });
+                return Err(InterpreterError::UninitializedValue { span: body.span() });
             }
             (Flow::Break(span), _) => {
                 return Err(InterpreterError::InvalidControlFlow {
@@ -4008,6 +4015,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             });
         }
 
+        if spelling == "__builtin_prefetch" && self.unit.symbols().is_builtin_function(*symbol) {
+            // Argument evaluation has already run through the normal call
+            // continuation; the hint itself performs no abstract memory access.
+            return Ok(None);
+        }
         let target = linked_library_definition(self.unit, *symbol);
         if !self.unit.iter().any(|declaration| matches!(declaration, CHirDecl::Function(function) if function.symbol == target && function.body.is_some())) {
             let result = self.external_library_call(target, spelling, &arguments, call_span)?;
@@ -4775,6 +4787,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         values: &mut Vec<CValue>,
     ) -> Result<Option<MachineOutcome>, InterpreterError> {
         let mut return_value = match (exit, end.return_value_type) {
+            (FunctionExit::Explicit(Some(CValue::Uninitialized(source))), target)
+                if source == target =>
+            {
+                Some(CValue::Uninitialized(target))
+            }
             (FunctionExit::Explicit(Some(value)), ValueType::Integer(return_integer)) => {
                 Some(cast_machine_value(
                     value,
@@ -4825,11 +4842,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             (
                 FunctionExit::FellOffEnd,
                 ValueType::Integer(_) | ValueType::Pointer(_) | ValueType::Aggregate(_),
-            ) => {
-                return Err(InterpreterError::MissingReturn {
-                    span: end.body_span,
-                });
-            }
+            ) => Some(CValue::Uninitialized(end.return_value_type)),
         };
 
         if self.memory_mode {
@@ -4899,6 +4912,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             Ok(None)
         } else {
             let return_value = match return_value {
+                Some(CValue::Uninitialized(_)) => {
+                    return Err(InterpreterError::UninitializedValue {
+                        span: end.body_span,
+                    });
+                }
                 Some(CValue::Integer(value)) => Some(ScalarValue {
                     ty: end.return_type,
                     raw_bits: value.raw_bits(),
@@ -6212,6 +6230,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         layout: AccessLayout,
     ) -> Result<CValue, InterpreterError> {
         match (self.value_type(ty, span)?, value) {
+            (_, CValue::Uninitialized(_)) => Err(InterpreterError::UninitializedValue { span }),
             (ValueType::Integer(integer_type), CValue::Integer(value)) => {
                 let value = value.cast(integer_type);
                 if qualifiers.is_volatile {
@@ -6581,6 +6600,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             UpdateOp::PreDecrement | UpdateOp::PostDecrement => OffsetDirection::Subtract,
         };
         match previous {
+            CValue::Uninitialized(_) => Err(InterpreterError::UninitializedValue { span }),
             CValue::Integer(previous) => {
                 let binary = if direction == OffsetDirection::Add {
                     BinaryOp::Add
@@ -6766,6 +6786,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             });
         }
         match (left, right) {
+            (CValue::Uninitialized(_), _) | (_, CValue::Uninitialized(_)) => {
+                Err(InterpreterError::UninitializedValue { span })
+            }
             (CValue::Integer(left), CValue::Integer(right)) => self
                 .runtime_integer_binary(operator, left, right, span)
                 .map(CValue::Integer),
@@ -9290,6 +9313,7 @@ fn pop_machine_value(
 /// formed rather than an integer-only operation.
 fn machine_truth(value: CValue, _span: SourceSpan) -> Result<bool, InterpreterError> {
     match value {
+        CValue::Uninitialized(_) => Err(InterpreterError::UninitializedValue { span: _span }),
         CValue::Integer(value) => Ok(value.truth()),
         CValue::Pointer { value, .. } => Ok(value != Pointer::NULL),
         CValue::FunctionPointer { value, .. } => Ok(value != PointerValue::Null),
@@ -9310,6 +9334,7 @@ fn machine_equality_result(operator: BinaryOp, equal: bool) -> CValue {
 
 fn expect_machine_integer(value: CValue, span: SourceSpan) -> Result<CInteger, InterpreterError> {
     match value {
+        CValue::Uninitialized(_) => Err(InterpreterError::UninitializedValue { span }),
         CValue::Integer(value) => Ok(value),
         CValue::Pointer { .. } | CValue::FunctionPointer { .. } | CValue::Aggregate { .. } => {
             Err(InterpreterError::UnsupportedExpression {
@@ -9325,6 +9350,7 @@ fn expect_machine_pointer(
     span: SourceSpan,
 ) -> Result<(Pointer, PointerTypeDesc), InterpreterError> {
     match value {
+        CValue::Uninitialized(_) => Err(InterpreterError::UninitializedValue { span }),
         CValue::Pointer { value, ty } => Ok((value, ty)),
         CValue::Integer(_) | CValue::FunctionPointer { .. } | CValue::Aggregate { .. } => {
             Err(InterpreterError::UnsupportedExpression {
@@ -9343,6 +9369,7 @@ fn cast_machine_value(
     memory: &mut MemoryState,
 ) -> Result<CValue, InterpreterError> {
     match (value, target) {
+        (CValue::Uninitialized(_), _) => Err(InterpreterError::UninitializedValue { span }),
         (CValue::Pointer { value, .. }, ValueType::Integer(target)) => {
             if target == CIntegerType::BOOL {
                 return Ok(CValue::Integer(CInteger::from_raw(

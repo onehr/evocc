@@ -176,12 +176,18 @@ def main() -> int:
     k1_survey = k1.get("survey", {}).get("outcomeCounts", {})
     k1_asm = k1_survey.get("assembled", 0)
     k1_total = k1_asm + k1_survey.get("refused", 0)
+    e0 = contract("ladder-e0-receipt.json").get("latest", {}).get("suites", {})
+    e0c = e0.get("ctest", {}).get("outcomes", {})
+    e0t = e0.get("torture", {}).get("outcomes", {})
+    e0c_label = f"{e0c.get('pass', 0)}/{sum(e0c.values())}" if e0c else ""
+    e0t_label = f"{e0t.get('pass', 0)}/{sum(e0t.values())}" if e0t else ""
     kernel = box(
         " ── ",
         [
             f" {k1_boot} {bar(1 if k1_boot == 'PASS' else 0, 1)} GCC ,EvoCC , ",
             f" EvoCC {k1_units} ; {k1_asm:,}/{k1_total:,} {bar(k1_asm, k1_total)}",
             f"fail-closed {len(debts)} :{' '.join(debts)}",
+            f" E0 c-testsuite {e0c_label} {bar(e0c.get('pass', 0), sum(e0c.values()))} torture {e0t_label} {bar(e0t.get('pass', 0), sum(e0t.values()))}",
             "C1 EvoCC ░░░░ C2 vmlinux ░░░░ G1 ░░░░",
         ],
         span,

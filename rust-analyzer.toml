@@ -1,0 +1,5 @@
+# rust-analyzer's check-on-save runs `cargo check --workspace` and holds the
+# cargo lock of the target directory for minutes at a time, which stalls every
+# other build on this machine. Give it its own target directory.
+[cargo]
+targetDir = true

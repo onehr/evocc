@@ -7,13 +7,13 @@
 <text x="97.77777777777777" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#58a6ff" text-anchor="middle" opacity="1.0" letter-spacing="0">E0a</text>
 <text x="97.77777777777777" y="250" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">GCC C torture</text>
 <text x="97.77777777777777" y="268" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">GCC 16.2</text>
-<text x="97.77777777777777" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">637 / 1,692 pass</text>
+<text x="97.77777777777777" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">725 / 1,692 pass</text>
 <circle cx="173.33333333333331" cy="330" r="8" fill="#58a6ff" stroke="#58a6ff" stroke-width="2"/>
 <line x1="173.33333333333331" y1="340" x2="173.33333333333331" y2="360" stroke="#58a6ff" stroke-width="1" opacity="0.6"/>
 <text x="173.33333333333331" y="370" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#58a6ff" text-anchor="middle" opacity="1.0" letter-spacing="0">E0b</text>
 <text x="173.33333333333331" y="390" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">c-testsuite</text>
 <text x="173.33333333333331" y="408" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">5c7275656d75</text>
-<text x="173.33333333333331" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">186 / 220 pass</text>
+<text x="173.33333333333331" y="424" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">187 / 220 pass</text>
 <circle cx="248.88888888888886" cy="330" r="8" fill="#0b1117" stroke="#58a6ff" stroke-width="2"/>
 <line x1="248.88888888888886" y1="320" x2="248.88888888888886" y2="300" stroke="#58a6ff" stroke-width="1" opacity="0.6"/>
 <text x="248.88888888888886" y="230" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#58a6ff" text-anchor="middle" opacity="1.0" letter-spacing="0">E0c</text>

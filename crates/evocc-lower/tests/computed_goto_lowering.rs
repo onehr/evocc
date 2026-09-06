@@ -1,4 +1,4 @@
-//! Front-end preservation and fail-closed execution for GNU computed goto.
+//! Label addresses lower to code pointers; indirect jumps remain fail-closed.
 
 use evocc_chir::interp::{interpret_scalar_function, InterpreterLimits};
 use evocc_chir::{CHirDecl, CHirUnit, SymbolId};
@@ -59,12 +59,47 @@ fn assert_execution_and_lowering_refuse(source: &str) {
     assert_eq!(lowering.to_string(), "not-lowered: computed-goto");
 }
 
+fn check_label_address(source: &str, expected: Result<u64, &str>, forms: &[&str]) {
+    let arena = Arena::default();
+    let unit = parse_valid(source, &arena);
+    let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+        .expect("label addresses have an EvoIR representation");
+    let text = evocc_evoir::render_module(&module);
+    for form in forms {
+        assert!(text.contains(form), "missing {form}: {text}");
+    }
+    let parsed = evocc_evoir::parse_section9_module(text.as_bytes()).unwrap();
+    assert_eq!(evocc_evoir::render_module(&parsed), text);
+    let main = module.functions.iter().find(|f| f.name == "main").unwrap();
+    let arguments = main
+        .params
+        .iter()
+        .map(|p| evocc_evoir::RuntimeValue::new(p.ty.clone(), 0))
+        .collect::<Vec<_>>();
+    let result = evocc_evoir::interpret_module(
+        &module,
+        "main",
+        &arguments,
+        evocc_evoir::InterpreterLimits::new(100_000),
+    );
+    match expected {
+        Ok(value) => assert_eq!(result.unwrap().return_values[0].raw_bits, value),
+        Err(code) => assert_eq!(result.unwrap_err().code(), code),
+    }
+}
+
 #[test]
-fn label_address_is_preserved_but_execution_and_lowering_fail_closed() {
-    assert_execution_and_lowering_refuse(concat!(
-        "int main(void) { void *target = &&done; ",
-        "done: return target != (void *)0; }\n",
-    ));
+fn label_addresses_have_stable_distinct_code_identity() {
+    check_label_address(
+        "int main(void){ void *p=&&first; int n=0; if(n)goto last; first: return p==&&first && p!=&&last; last: return 0; }",
+        Ok(1),
+        &["block_addr"],
+    );
+    check_label_address(
+        "int main(void){ if(0){done:return 0;} return &&done != 0; }",
+        Ok(1),
+        &["block_addr"],
+    );
 }
 
 #[test]
@@ -76,11 +111,36 @@ fn computed_goto_is_preserved_but_execution_and_lowering_fail_closed() {
 }
 
 #[test]
-fn cohort_label_address_form_fails_closed_without_an_evoir_form() {
-    assert_execution_and_lowering_refuse(concat!(
-        "unsigned long main(void) { return ({ __label__ __here; ",
-        "__here: (unsigned long)&&__here; }); }\n",
-    ));
+fn an_address_only_dead_label_keeps_the_reachability_boundary() {
+    // Section 3.7 admits the address, but 2.5 still forbids a validated
+    // block without a terminator-edge path from entry. Do not weaken SSA.
+    let arena = Arena::default();
+    let unit = parse_valid(
+        "unsigned long f(void){return (unsigned long)&&after; after:return 0;}",
+        &arena,
+    );
+    let error = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap_err();
+    assert_eq!(error.code(), "E3101");
+    assert!(error.to_string().contains("unreachable from entry"));
+}
+
+#[test]
+fn cohort_label_address_form_lowers_to_an_integer_address() {
+    check_label_address("int main(void){ unsigned long a=({__label__ __here; __here: (unsigned long)&&__here;}); unsigned long b=({__label__ __here; __here: (unsigned long)&&__here;}); return a!=0 && a!=b; }", Ok(1), &["block_addr", "ptr.to_int"]);
+}
+
+#[test]
+fn static_label_addresses_relocate_to_the_owning_function_block() {
+    check_label_address("int f(void){static void *targets[2]={[0 ... 1]=&&done}; done:return targets[0]==&&done && targets[1]==&&done;} int main(void){static void *p=&&done; done:return f() && p==&&done;}", Ok(1), &["relocs=[", "@f^b", "@main^b"]);
+}
+
+#[test]
+fn code_addresses_do_not_acquire_object_provenance() {
+    check_label_address(
+        "int main(void){here:return *(int *)&&here;}",
+        Err("E3013"),
+        &["block_addr", "load"],
+    );
 }
 
 #[test]

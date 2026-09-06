@@ -1,0 +1,71 @@
+{
+ "schemaVersion": 1,
+ "rung": "E0",
+ "authority": "docs/roadmap.md, milestone ladder",
+ "latest": {
+  "run": "20260906T073553Z",
+  "subject": "82f2cbc",
+  "driverSha256": "a58318568c95c40b6b9d232dd4a003c312cc7a9a255d97841e0ec93664517f0b",
+  "target": "aarch64-unknown-linux-gnu",
+  "suites": {
+   "torture": {
+    "pin": {
+     "repo": "https://github.com/gcc-mirror/gcc.git",
+     "ref": "releases/gcc-16.2.0",
+     "subdir": "gcc/testsuite/gcc.c-torture/execute"
+    },
+    "programs": 1692,
+    "adjustedEmptyParameterLists": 957,
+    "outcomes": {
+     "refused": 900,
+     "pass": 740,
+     "fail": 50,
+     "link-fail": 1,
+     "asm-fail": 1
+    },
+    "refusalsByCode": {
+     "E2001": 404,
+     "E1001": 187,
+     "E3101": 160,
+     "E2201": 21,
+     "E2203": 18,
+     "E2102": 17,
+     "E1205": 15,
+     "E0112": 13,
+     "E3030": 13,
+     "E0105": 12,
+     "E3029": 7,
+     "E2913": 4,
+     "E3046": 4,
+     "E2920": 4,
+     "E3021": 3,
+     "E2202": 3,
+     "E3025": 2,
+     "E1006": 2,
+     "E1007": 2,
+     "E1003": 2,
+     "E1002": 1,
+     "E2927": 1,
+     "E3031": 1,
+     "E4003": 1,
+     "E2208": 1,
+     "E2204": 1,
+     "E2929": 1
+    },
+    "failuresByInterpreterVerdict": {
+     "E3039 external-call-not-executable": 18,
+     "E3006 invalid-signed-left-shift": 10,
+     "E3011 out-of-bounds-memory-access": 6,
+     "E3004 signed-integer-overflow": 6,
+     "E3007 evoir-main-parameters-are-not-canonical": 4,
+     "E3012 misaligned-memory-access": 2,
+     "E3001 read-of-uninitialized-object": 2,
+     "E3008 interpreter-fuel-exhausted": 2,
+     "no-diagnostic exit=0": 1,
+     "E3021 not-lowered": 1
+    }
+   }
+  }
+ },
+ "evidence": ".evidence/ladder/e0/20260906T073553Z"
+}

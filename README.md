@@ -1,4 +1,6 @@
-# EvoCC
+<p align="center"><img src="docs/images/mascot.png" alt="EvoCC mascot, a chameleon holding a wrench" width="200"></p>
+<h1 align="center">EvoCC</h1>
+<p align="center">a C compiler whose optimizer keeps every equivalent form</p>
 
 EvoCC is a C compiler written from scratch in Rust. It has its own preprocessor, parser, IRs, optimizer, register allocator and emitter; the platform assembler and linker are the only outside tools. The optimizer is an [e-graph](https://egraphs-good.github.io/): a rewrite adds an equivalent form instead of replacing code, a cost model picks one form at the end, and every union carries a certificate that a separate program checks. The target is AArch64 (Linux and macOS), and the program it is being brought up on is the Linux 6.18.44 `arm64 virtconfig` kernel.
 
@@ -14,7 +16,7 @@ The compiler is written by AI agents. What keeps that honest:
 
 ![Milestones](docs/images/evocc-milestones.png)
 
-As of 2026-09-06: all 2,798 kernel translation units preprocess and parse; 30 lower to EvoIR with no diagnostic, and the rest stop at constructs that now have rules and are being implemented. 384 C programs compile to native code and agree with clang on macOS and with GCC 14 on Linux. Five EvoCC-compiled units run inside a Linux kernel that boots, with GCC compiling the rest. On the first run of outside test suites, 186 of 220 c-testsuite programs and 637 of 1,692 GCC torture programs pass; the failures are filed as compiler defects. The plan, the evaluation ladder and the pinned versions are in [docs/roadmap.md](docs/roadmap.md).
+As of 2026-09-06: all 2,798 kernel translation units preprocess and parse; 30 lower to EvoIR with no diagnostic, and the rest stop at constructs that now have rules and are being implemented. 384 C programs compile to native code and agree with clang on macOS and with GCC 14 on Linux. Five EvoCC-compiled units run inside a Linux kernel that boots, with GCC compiling the rest. Of the outside test suites, 187 of 220 c-testsuite programs and 725 of 1,692 GCC torture programs pass; every failure is classified by the construct that caused it and filed as a compiler defect. The plan, the evaluation ladder and the pinned versions are in [docs/roadmap.md](docs/roadmap.md).
 
 ## Try it
 
