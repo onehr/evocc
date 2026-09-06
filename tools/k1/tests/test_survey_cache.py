@@ -122,6 +122,14 @@ class CacheFileTest(unittest.TestCase):
         self.path.write_text("{not json", encoding="utf-8")
         self.assertEqual(substitute.load_cache(self.path), {})
 
+    def test_an_interrupted_write_leaves_the_previous_cache_intact(self) -> None:
+        first = {"k": {"unit": "lib/x.o", "outcome": "refused"}}
+        substitute.save_cache(self.path, first)
+        # A checkpoint that dies mid-write leaves its scratch file behind; the
+        # cache itself is only ever replaced whole.
+        self.path.with_name(self.path.name + ".new").write_text("{half", encoding="utf-8")
+        self.assertEqual(substitute.load_cache(self.path), first)
+
     def test_a_cache_of_another_version_is_ignored(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text('{"version": 0, "entries": {"k": {}}}', encoding="utf-8")

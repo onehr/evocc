@@ -112,6 +112,11 @@ CACHE_VERSION = 1
 #: machine was, not what the compiler thinks of the unit.
 CACHEABLE_OUTCOMES = frozenset({"emitted", "refused", "not-a-target-c-compile"})
 
+#: How many units to examine between cache checkpoints. A survey of the whole
+#: kernel takes half an hour, and an interrupted one used to be worth nothing;
+#: checkpointing means a restart picks up where the last one stopped.
+CACHE_CHECKPOINT = 100
+
 
 def cache_key(unit: str, evocc_sha256: str, source_sha256: str, argv: list[str]) -> str:
     """The identity of one survey answer.
@@ -150,12 +155,20 @@ def load_cache(path: Path) -> dict[str, dict]:
 
 
 def save_cache(path: Path, entries: dict[str, dict]) -> None:
+    """Replace the cache in one step.
+
+    The survey checkpoints as it goes, so a write can be interrupted. Writing
+    beside the cache and renaming means an interrupted run leaves the previous
+    cache intact rather than a half-written file the next run must discard.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+    temporary = path.with_name(path.name + ".new")
+    temporary.write_text(
         json.dumps({"version": CACHE_VERSION, "entries": entries}, indent=1, sort_keys=True)
         + "\n",
         encoding="utf-8",
     )
+    os.replace(temporary, path)
 
 
 def assembly_path(asm_root: Path, unit: str) -> Path:
@@ -553,21 +566,28 @@ def main() -> int:
             flush=True,
         )
     print(f"k1: EvoCC over {len(fresh)} units", flush=True)
+    produced: list[dict] = []
+    since_checkpoint = 0
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        produced = list(
-            pool.map(
-                lambda unit: emit_assembly(
-                    unit, records[unit], args.evocc, args.src_root, pristine,
-                    asm_root, args.timeout,
-                ),
-                fresh,
-            )
-        )
-    if not args.no_cache:
-        for row in produced:
+        for row in pool.map(
+            lambda unit: emit_assembly(
+                unit, records[unit], args.evocc, args.src_root, pristine,
+                asm_root, args.timeout,
+            ),
+            fresh,
+        ):
+            produced.append(row)
+            if args.no_cache:
+                continue
             key = keys.get(row["unit"])
             if key is not None and row.get("outcome") in CACHEABLE_OUTCOMES:
                 cache[key] = row
+            since_checkpoint += 1
+            if since_checkpoint >= CACHE_CHECKPOINT:
+                save_cache(cache_path, cache)
+                since_checkpoint = 0
+                print(f"k1: {len(produced)} of {len(fresh)} examined", flush=True)
+    if not args.no_cache:
         save_cache(cache_path, cache)
     rows.extend(produced)
     rows.extend(reused)
