@@ -106,17 +106,31 @@ class TranslateCommand(unittest.TestCase):
         self.assertEqual(omitted, ["-o", "-MF"])
 
 
-class SymbolDrift(unittest.TestCase):
-    def test_units_sharing_a_drifted_symbol_cannot_both_be_installed(self):
+def parity(added=(), missing=()):
+    return {"added": list(added), "missing": list(missing)}
+
+
+class SymbolParity(unittest.TestCase):
+    def test_units_adding_the_same_symbol_cannot_both_be_installed(self):
         keep, excluded = mixed.compatible_units(
-            {"a.o": ["is_space"], "b.o": ["is_space"], "c.o": ["other"]}
+            {
+                "a.o": parity(added=["is_space"]),
+                "b.o": parity(added=["is_space"]),
+                "c.o": parity(added=["other"]),
+            }
         )
         self.assertEqual(keep, ["a.o", "c.o"])
-        self.assertIn("b.o", excluded)
         self.assertIn("a.o", excluded["b.o"])
 
-    def test_a_unit_without_drift_is_always_kept(self):
-        keep, excluded = mixed.compatible_units({"a.o": [], "b.o": []})
+    def test_a_unit_that_loses_a_symbol_is_set_aside(self):
+        keep, excluded = mixed.compatible_units(
+            {"a.o": parity(missing=["environ"]), "b.o": parity()}
+        )
+        self.assertEqual(keep, ["b.o"])
+        self.assertEqual(excluded["a.o"], "does not define environ")
+
+    def test_a_unit_at_parity_is_always_kept(self):
+        keep, excluded = mixed.compatible_units({"a.o": parity(), "b.o": parity()})
         self.assertEqual(keep, ["a.o", "b.o"])
         self.assertEqual(excluded, {})
 
@@ -135,6 +149,43 @@ class Specifiers(unittest.TestCase):
             self.assertTrue(text.startswith(" void die(void);"))
             self.assertIn('"_Noreturn"', text)
             self.assertIn("#define _Noreturn __attribute__", text)
+
+
+class Substitution(unittest.TestCase):
+    def test_every_reference_object_comes_back_whatever_its_suffix(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "tree"
+            (root / "obj").mkdir(parents=True)
+            (root / "obj" / "a.lo").write_bytes(b"reference-lo")
+            (root / "obj" / "b.o").write_bytes(b"reference-o")
+            asm = Path(directory) / "asm"
+            (asm / "obj").mkdir(parents=True)
+            (asm / "obj" / "obj__a.lo.o").write_bytes(b"evocc-lo")
+            (asm / "obj" / "obj__b.o.o").write_bytes(b"evocc-o")
+            tree = mixed.Tree(root, Path(directory) / "pristine")
+            installed = mixed.substitute(tree, ["obj/a.lo", "obj/b.o"], asm)
+            self.assertEqual(installed, ["obj/a.lo", "obj/b.o"])
+            self.assertEqual((root / "obj" / "a.lo").read_bytes(), b"evocc-lo")
+            mixed.substitute(tree, [], asm)
+            self.assertEqual((root / "obj" / "a.lo").read_bytes(), b"reference-lo")
+            self.assertEqual((root / "obj" / "b.o").read_bytes(), b"reference-o")
+
+
+class FlatNames(unittest.TestCase):
+    def test_two_unit_names_can_flatten_to_the_same_spelling(self):
+        self.assertEqual(
+            mixed.flat_name("obj/src/env/__environ.lo"),
+            mixed.flat_name("obj/src/env____environ.lo"),
+        )
+
+    def test_an_assembly_verdict_is_read_back_by_unit_not_by_object(self):
+        verdicts = mixed._assembly_verdicts(
+            "obj/src/env/__environ.lo ok\nobj/src/foo.lo assembler-refused\n"
+        )
+        self.assertEqual(
+            verdicts,
+            {"obj/src/env/__environ.lo": "ok", "obj/src/foo.lo": "assembler-refused"},
+        )
 
 
 class Narrow(unittest.TestCase):

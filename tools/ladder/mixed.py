@@ -456,6 +456,16 @@ def parse_commands(log: Path, root: str = "") -> list[Unit]:
     without ``-c``), links, and ``configure``'s probe compiles into ``a.out``
     are not units of the program and are dropped. The last record for an
     object wins, because a rebuild supersedes what it replaced.
+
+    ``.lo`` counts as an object. It is musl's name for the same compilation
+    with ``-fPIC``, and when musl is configured without a shared library it
+    is what ``libc.a`` is made of, so refusing the suffix would report a libc
+    with three units in it.
+
+    When ``root`` is given, a record that writes its object outside the
+    mounted subject tree is dropped: a subject's own test suite is often
+    built by the same recorded compiler, and its objects are not units of
+    the subject.
     """
     units: dict[str, Unit] = {}
     raw = log.read_bytes()
@@ -476,9 +486,11 @@ def parse_commands(log: Path, root: str = "") -> list[Unit]:
             obj = argv[argv.index("-o") + 1]
         except (ValueError, IndexError):
             continue
-        if not obj.endswith(".o"):
+        if not obj.endswith((".o", ".lo")):
             continue
         unit = Unit(cwd=cwd, argv=argv, source=sources[0], obj=obj, root=root)
+        if root and not unit.obj_container_path().startswith(root.rstrip("/") + "/"):
+            continue
         units[unit.name] = unit
     return sorted(units.values(), key=lambda u: u.name)
 
@@ -597,7 +609,7 @@ def emit_one(unit: Unit, command: list[str], asm_dir: Path, timeout: int = 300) 
         row["outcome"] = "timeout"
         return row
     if done.returncode == 0 and done.stdout.strip():
-        path = asm_dir / (unit.name.replace("/", "__") + ".s")
+        path = asm_dir / (flat_name(unit.name) + ".s")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(done.stdout, encoding="utf-8")
         row["outcome"] = "emitted"
@@ -656,6 +668,19 @@ def emit_all(
 # --------------------------------------------------------------------------
 
 
+def flat_name(unit: str) -> str:
+    """One unit's name as a single path component, for a flat object store.
+
+    The mapping is one-way on purpose. ``obj/src/env/__environ.lo`` and
+    ``obj/src/env/`` + ``__environ.lo`` flatten to the same spelling, so a
+    verdict must be reported against the unit's real name rather than
+    recovered by undoing the substitution; musl has ninety-odd units whose
+    basename starts with two underscores, and reading them back wrongly
+    reported every one of them as assembly the assembler refused.
+    """
+    return unit.replace("/", "__")
+
+
 def assembler_flags(unit: Unit) -> list[str]:
     """The flags addressed to the assembler for this unit."""
     return [a for a in unit.argv if a.startswith("-Wa,")]
@@ -664,14 +689,12 @@ def assembler_flags(unit: Unit) -> list[str]:
 ASSEMBLE = r"""#!/bin/sh
 cd /work/asm || exit 1
 : > assemble.log
-fail=0
-while IFS='|' read -r name asmfile obj flags; do
-  [ -n "$name" ] || continue
-  if gcc-14 $flags -c -x assembler "$asmfile" -o "obj/$name" 2>> assemble.log; then
-    echo "$name ok"
+while IFS='|' read -r unit obj asmfile flags; do
+  [ -n "$unit" ] || continue
+  if gcc-14 $flags -c -x assembler "$asmfile" -o "obj/$obj" 2>> assemble.log; then
+    echo "$unit ok"
   else
-    echo "$name assembler-refused"
-    fail=1
+    echo "$unit assembler-refused"
   fi
 done < plan.txt
 exit 0
@@ -690,17 +713,23 @@ def assemble(rows: list[dict], units: dict[str, Unit], asm_dir: Path) -> dict[st
     (asm_dir / "obj").mkdir(exist_ok=True)
     plan = []
     for row in emitted:
-        flat = row["unit"].replace("/", "__")
         flags = " ".join(assembler_flags(units[row["unit"]]))
-        plan.append(f"{flat}.o|{row['assembly']}|{flat}.o|{flags}")
+        plan.append(
+            f"{row['unit']}|{flat_name(row['unit'])}.o|{row['assembly']}|{flags}"
+        )
     (asm_dir / "plan.txt").write_text("\n".join(plan) + "\n", encoding="utf-8")
     (asm_dir / "assemble.sh").write_text(ASSEMBLE, encoding="utf-8")
     done = container({"asm": asm_dir}, "sh /work/asm/assemble.sh", timeout=3600)
+    return _assembly_verdicts(done.stdout)
+
+
+def _assembly_verdicts(output: str) -> dict[str, str]:
+    """One verdict per unit, keyed by the unit name the script echoed back."""
     verdicts = {}
-    for line in done.stdout.splitlines():
+    for line in output.splitlines():
         parts = line.split()
-        if len(parts) == 2 and parts[0].endswith(".o"):
-            verdicts[parts[0][:-2].replace("__", "/")] = parts[1]
+        if len(parts) == 2 and parts[1] in ("ok", "assembler-refused"):
+            verdicts[parts[0]] = parts[1]
     return verdicts
 
 
@@ -721,20 +750,26 @@ done < symbols.txt
 """
 
 
-def symbol_drift(rows: list[dict], tree: Path, asm_dir: Path) -> dict[str, list[str]]:
-    """Global symbols an EvoCC object defines that the reference one does not.
+def symbol_parity(rows: list[dict], tree: Path, asm_dir: Path) -> dict[str, dict]:
+    """How each EvoCC object's global symbols differ from the reference one's.
 
-    The front end does not yet emit the visibility marker, so a ``static``
-    function -- typically a ``static inline`` helper out of a shared header --
-    reaches the object file as a global symbol. One such object links; two of
-    them, defining the same helper, do not. Knowing which symbols drifted is
-    what lets the harness pick a set that links without asking the linker
-    about every subset.
+    ``added`` is a symbol the EvoCC object defines and the reference object
+    does not. The front end does not yet emit the visibility marker, so a
+    ``static`` function -- typically a ``static inline`` helper out of a
+    shared header -- reaches the object file as a global symbol. One such
+    object links; two of them, defining the same helper, do not.
+
+    ``missing`` is a symbol the reference object defines and the EvoCC object
+    does not. Every one of them found so far is an alias: musl writes
+    ``weak_alias(__environ, environ)`` and the front end emits the target
+    without the alias, so the object links but ``environ`` is never defined
+    by it. A unit like that is not a substitution, it is a different program,
+    and it is set aside rather than measured.
     """
     assembled = [row for row in rows if row["outcome"] == "assembled"]
     if not assembled:
         return {}
-    plan = [f"{row['unit']}|{row['unit'].replace('/', '__')}.o|{row['unit']}" for row in assembled]
+    plan = [f"{row['unit']}|{flat_name(row['unit'])}.o|{row['unit']}" for row in assembled]
     (asm_dir / "symbols.txt").write_text("\n".join(plan) + "\n", encoding="utf-8")
     (asm_dir / "symbols.sh").write_text(SYMBOLS, encoding="utf-8")
     done = container({"asm": asm_dir, "tree": tree}, "sh /work/asm/symbols.sh", timeout=1800)
@@ -746,31 +781,42 @@ def symbol_drift(rows: list[dict], tree: Path, asm_dir: Path) -> dict[str, list[
             continue
         unit, side, symbol = parts
         (evocc if side == "E" else reference).setdefault(unit, set()).add(symbol)
-    return {
-        unit: sorted(evocc.get(unit, set()) - reference.get(unit, set()))
-        for unit in (row["unit"] for row in assembled)
-    }
+    parity = {}
+    for unit in (row["unit"] for row in assembled):
+        mine, theirs = evocc.get(unit, set()), reference.get(unit, set())
+        parity[unit] = {
+            "added": sorted(mine - theirs),
+            "missing": sorted(theirs - mine),
+        }
+    return parity
 
 
-def compatible_units(drift: dict[str, list[str]]) -> tuple[list[str], dict[str, str]]:
+def compatible_units(parity: dict[str, dict]) -> tuple[list[str], dict[str, str]]:
     """Split the assembled units into a set that can link and the rest.
 
-    Two units that drifted the same symbol cannot both be installed, so the
+    A unit that does not define everything the reference object defined is
+    set aside first: the link would silently lose a symbol. Of what is left,
+    two units that added the same symbol cannot both be installed, so the
     units are taken in order and one is set aside as soon as a symbol it
-    drifted has already been claimed. This counts the visibility gap instead
-    of bisecting it: the link error it causes is understood, and delta
-    debugging would only rediscover that any two such units conflict.
+    added has already been claimed. This counts the visibility gap instead of
+    bisecting it: the link error it causes is understood, and delta debugging
+    would only rediscover that any two such units conflict.
     """
     claimed: dict[str, str] = {}
     keep: list[str] = []
     excluded: dict[str, str] = {}
-    for unit in sorted(drift):
-        clash = next((s for s in drift[unit] if s in claimed), None)
+    for unit in sorted(parity):
+        missing = parity[unit].get("missing") or []
+        if missing:
+            excluded[unit] = f"does not define {missing[0]}"
+            continue
+        added = parity[unit].get("added") or []
+        clash = next((s for s in added if s in claimed), None)
         if clash is not None:
             excluded[unit] = f"{clash} also defined by {claimed[clash]}"
             continue
         keep.append(unit)
-        for symbol in drift[unit]:
+        for symbol in added:
             claimed[symbol] = unit
     return keep, excluded
 
@@ -809,9 +855,18 @@ class Tree:
         destination.write_bytes(obj.read_bytes())
 
     def restore_all(self) -> None:
-        for saved in self.pristine.rglob("*.o"):
-            unit = saved.relative_to(self.pristine)
-            (self.root / unit).write_bytes(saved.read_bytes())
+        """Put every reference object back, whatever the suffix is.
+
+        musl's objects end in ``.lo``; a glob for ``*.o`` misses them, and a
+        restore that misses an object leaves the previous round's EvoCC code
+        in the archive, which makes every candidate set look guilty of the
+        same failure.
+        """
+        for saved in self.pristine.rglob("*"):
+            if saved.is_file():
+                (self.root / saved.relative_to(self.pristine)).write_bytes(
+                    saved.read_bytes()
+                )
 
     def touch(self, unit: str) -> None:
         """Make the installed object newer than everything it depends on."""
@@ -823,7 +878,7 @@ def substitute(tree: Tree, units: list[str], asm_dir: Path) -> list[str]:
     tree.restore_all()
     installed = []
     for unit in units:
-        obj = asm_dir / "obj" / (unit.replace("/", "__") + ".o")
+        obj = asm_dir / "obj" / (flat_name(unit) + ".o")
         if not obj.exists():
             continue
         tree.install(unit, obj)

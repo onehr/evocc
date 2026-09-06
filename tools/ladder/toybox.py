@@ -93,6 +93,9 @@ def prepare(build: Path, source: Path) -> tuple[Path, list[str], list[str]]:
     if tree.exists():
         shutil.rmtree(tree)
     shutil.copytree(source, tree)
+    pristine = build / "toybox-pristine"
+    if pristine.exists():
+        shutil.rmtree(pristine)
     stripped = mixed.strip_page_breaks(tree)
     specifiers = mixed.strip_specifiers(tree)
     mixed.install_recorder(tree)
@@ -177,8 +180,8 @@ def main() -> int:
             )
 
     assembled = [row["unit"] for row in rows if row["outcome"] == "assembled"]
-    drift = mixed.symbol_drift(rows, tree, asm_dir)
-    candidates, excluded = mixed.compatible_units(drift)
+    parity = mixed.symbol_parity(rows, tree, asm_dir)
+    candidates, excluded = mixed.compatible_units(parity)
     print(f"toybox: {len(assembled)} units assembled, {len(candidates)} can link together")
     substituted: list[str] = []
     failing: list[str] = []
@@ -239,8 +242,12 @@ def main() -> int:
         "refusalsByCode": refusals,
         "testResult": test_result,
         "failingUnits": failing,
-        "excludedForSymbolDrift": excluded,
-        "symbolDrift": {unit: names for unit, names in drift.items() if names},
+        "excludedForSymbolParity": excluded,
+        "symbolParity": {
+            unit: sides
+            for unit, sides in parity.items()
+            if sides["added"] or sides["missing"]
+        },
         "adjustments": {
             "sourcePageBreaksStripped": stripped,
             "noreturnSpecifiersRemoved": specifiers,
@@ -262,8 +269,9 @@ def main() -> int:
     print(mixed.summary_line("toybox", len(substituted), len(units), refusals))
     print(
         f"toybox: {len(assembled)} units compiled and assembled by EvoCC; "
-        f"{len(excluded)} of them cannot be installed together because static"
-        " functions reach the object file as global symbols"
+        f"{len(excluded)} of them are set aside for symbol parity: a static"
+        " function that reached the object file as a global symbol, or an"
+        " alias the object never defined"
     )
     print(f"toybox: receipt {path}")
     return 0
