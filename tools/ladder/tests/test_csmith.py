@@ -113,6 +113,69 @@ def verdict_of(row: dict) -> str:
     return csmith.verdict(row)[0]
 
 
+class InterestingTest(unittest.TestCase):
+    def test_a_reduction_keeps_the_outcome_it_started_from(self):
+        row = VerdictTest.runs("ac", "ab")
+        self.assertTrue(csmith.interesting(row, "mismatch"))
+        self.assertFalse(csmith.interesting(row, "no-checksum"))
+
+    def test_a_candidate_that_stopped_disagreeing_is_not_interesting(self):
+        self.assertFalse(csmith.interesting(VerdictTest.runs("ab", "ab"), "mismatch"))
+
+    def test_a_candidate_whose_oracles_stopped_agreeing_is_not_interesting(self):
+        row = VerdictTest.runs("ac", "ab", split="cd")
+        self.assertFalse(csmith.interesting(row, "mismatch"))
+
+
+class SummaryTest(unittest.TestCase):
+    ROWS = [
+        {"program": "s1", "outcome": "agree"},
+        {"program": "s2", "outcome": "agree"},
+        {"program": "s3", "outcome": "refused", "code": "E2102", "message": "invalid-update-operands"},
+        {"program": "s4", "outcome": "refused", "code": "E2102", "message": "invalid-update-operands"},
+        {"program": "s5", "outcome": "refused", "code": "E3101", "message": "bit-field zero initialization"},
+        {"program": "s6", "outcome": "mismatch", "reference": "ab", "evocc": "ac"},
+        {"program": "s7", "outcome": "no-checksum", "reference": "ab", "runs": {"evocc": {"exit": csmith.TRAP_EXIT}}},
+        {"program": "s8", "outcome": "oracle-split"},
+    ]
+
+    def test_only_matching_checksums_count_as_agreement(self):
+        self.assertEqual(csmith.summarise("base", self.ROWS)["agreeing"], 2)
+
+    def test_every_program_is_accounted_for(self):
+        summary = csmith.summarise("base", self.ROWS)
+        self.assertEqual(summary["programs"], len(self.ROWS))
+        self.assertEqual(sum(summary["outcomes"].values()), len(self.ROWS))
+
+    def test_refusals_rank_by_code_and_by_message(self):
+        summary = csmith.summarise("base", self.ROWS)
+        self.assertEqual(summary["refusalsByCode"], {"E2102": 2, "E3101": 1})
+        self.assertEqual(
+            list(summary["refusalsByMessage"])[0], "E2102 invalid-update-operands"
+        )
+
+    def test_only_a_checksum_disagreement_is_a_miscompile(self):
+        summary = csmith.summarise("base", self.ROWS)
+        self.assertEqual([m["program"] for m in summary["miscompiles"]], ["s6"])
+
+    def test_a_run_that_trapped_is_tracked_apart_from_a_miscompile(self):
+        summary = csmith.summarise("base", self.ROWS)
+        self.assertEqual(summary["trappedOnUndefinedBehaviour"], ["s7"])
+
+    def test_a_run_that_printed_nothing_without_trapping_is_neither(self):
+        rows = self.ROWS + [
+            {"program": "s9", "outcome": "no-checksum", "runs": {"evocc": {"exit": 0}}}
+        ]
+        summary = csmith.summarise("base", rows)
+        self.assertNotIn("s9", summary["trappedOnUndefinedBehaviour"])
+        self.assertNotIn("s9", [m["program"] for m in summary["miscompiles"]])
+
+    def test_an_undefined_program_is_neither_agreement_nor_miscompile(self):
+        summary = csmith.summarise("base", self.ROWS)
+        self.assertEqual(summary["outcomes"]["oracle-split"], 1)
+        self.assertNotIn("s8", [m["program"] for m in summary["miscompiles"]])
+
+
 class DiagnosticTest(unittest.TestCase):
     def test_the_first_code_is_taken(self):
         text = "a.c:3:1: error[E2202]: invalid-initializer-type\nb.c: error[E1001]: x\n"

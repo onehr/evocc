@@ -12,7 +12,16 @@ A program counts as agreeing when EvoCC's checksum equals the checksum every
 oracle prints. When the two oracles disagree with each other the program is
 undefined, is recorded as an oracle split and is excluded from the count. Every
 other outcome is recorded: a refusal by diagnostic code, an assembler or linker
-failure, a timeout, or a checksum mismatch, which is a miscompile report.
+failure, a timeout, a run that trapped, or a checksum mismatch, which is the
+miscompile report.
+
+Agreeing oracles are not a proof that a program is defined. Csmith's safe-math
+macros build their overflow guard out of `((int64_t)1) << (sizeof(int64_t) *
+CHAR_BIT - 1)`, a signed left shift into the sign bit, which ISO C leaves
+undefined; GCC and Clang both fold it to INT64_MIN, EvoCC's undefined-behaviour
+obligation traps on it, and the run dies without printing anything. Those runs
+are counted separately from checksum mismatches, because the disagreement is
+about an undefined program, not about its value.
 
 Csmith's runtime header needs a hosted libc that EvoCC does not yet parse
 (glibc's <math.h> declares vector types EvoCC has no model for), so the
@@ -50,6 +59,7 @@ _spec.loader.exec_module(e0)
 BUILD = ROOT / ".build" / "ladder"
 EVIDENCE = ROOT / ".evidence" / "ladder" / "csmith"
 RECEIPT = ROOT / "tests" / "contracts" / "ladder-csmith-receipt.json"
+REDUCTIONS = ROOT / "tests" / "fixtures" / "csmith-reductions"
 IMAGE = "evo-flight-lab:sealed"
 TARGET = "aarch64-unknown-linux-gnu"
 
@@ -171,52 +181,61 @@ def generate(binary: Path, campaign: str, seeds: range, work: Path) -> list[int]
 
 def emit(evocc: Path, work: Path, seeds: list[int], inc: list[str]) -> dict[int, dict]:
     """EvoCC emits AArch64 assembly on the host, four programs at a time."""
-    (work / "asm").mkdir(parents=True, exist_ok=True)
-    inc = [f"-I{work / 'runtime'}", *inc]
+    rows = emit_by_stem(evocc, work, [f"s{seed}" for seed in seeds], inc)
+    return {seed: rows[f"s{seed}"] for seed in seeds}
 
-    def one(seed: int) -> tuple[int, dict]:
-        src = work / "src" / f"s{seed}.c"
+
+def emit_by_stem(evocc: Path, work: Path, names: list[str], inc: list[str]) -> dict[str, dict]:
+    """The same emission, addressed by file stem, which reduction also uses."""
+    (work / "asm").mkdir(parents=True, exist_ok=True)
+    flags = [f"-I{work / 'runtime'}", *inc]
+
+    def one(name: str) -> tuple[str, dict]:
+        src = work / "src" / f"{name}.c"
         try:
             p = e0.sh(
-                [str(evocc), f"--target={TARGET}", *RUNTIME_DEFINES, *inc, "--emit=asm", str(src)],
+                [str(evocc), f"--target={TARGET}", *RUNTIME_DEFINES, *flags, "--emit=asm", str(src)],
                 timeout=120,
             )
         except subprocess.TimeoutExpired:
-            return seed, {"emit": "timeout"}
+            return name, {"emit": "timeout"}
         if p.returncode == 0 and p.stdout.strip():
-            (work / "asm" / f"s{seed}.s").write_text(p.stdout)
-            return seed, {"emit": "emitted"}
+            (work / "asm" / f"{name}.s").write_text(p.stdout)
+            return name, {"emit": "emitted"}
         code, message = diagnostic_code(p.stderr)
-        return seed, {"emit": "refused", "code": code, "message": message}
+        return name, {"emit": "refused", "code": code, "message": message}
 
-    rows: dict[int, dict] = {}
+    rows: dict[str, dict] = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        for seed, row in pool.map(one, seeds):
-            rows[seed] = row
+        for name, row in pool.map(one, names):
+            rows[name] = row
     return rows
 
 
 RUNNER = r"""#!/bin/sh
 # One program: assemble EvoCC's output, build both oracles at both levels,
-# run everything, and print `<name> <config> <status> [checksum]` per line.
+# run everything, and print `<name> <config> <status> [value]` per line, where
+# the value is the checksum of a run that printed one and the exit status of a
+# run that did not.
 b="$1"
 cd /work/run
 D="-DCSMITH_MINIMAL -DUSE_MATH_MACROS_NOTMP -DINT_MAX=2147483647 -I/work/run/runtime"
+report() { # report <config> <exit status> <output file>
+  if [ "$2" -eq 124 ]; then echo "$b $1 timeout $2"; return; fi
+  s=$(grep -o 'checksum = [0-9a-fA-F]*' "$3" | tail -1 | awk '{print $3}')
+  if [ -n "$s" ]; then echo "$b $1 ran $s"; else echo "$b $1 no-checksum $2"; fi
+}
 if gcc -c asm/$b.s -o bin/$b.evocc.o 2>out/$b.evocc.err; then
   if gcc -static -o bin/$b.evocc bin/$b.evocc.o 2>>out/$b.evocc.err; then
     timeout 10 ./bin/$b.evocc > out/$b.evocc.txt 2>/dev/null
-    if [ $? -eq 124 ]; then echo "$b evocc timeout"; else
-      echo "$b evocc ran $(grep -o 'checksum = [0-9a-fA-F]*' out/$b.evocc.txt | tail -1 | awk '{print $3}')"
-    fi
+    report evocc $? out/$b.evocc.txt
   else echo "$b evocc link-fail"; fi
 else echo "$b evocc asm-fail"; fi
 for cc in gcc clang-19; do
   for o in O0 O2; do
     if $cc -$o -static -w $D -o bin/$b.$cc.$o src/$b.c 2>out/$b.$cc.$o.err; then
       timeout 10 ./bin/$b.$cc.$o > out/$b.$cc.$o.txt 2>/dev/null
-      if [ $? -eq 124 ]; then echo "$b $cc.$o timeout"; else
-        echo "$b $cc.$o ran $(grep -o 'checksum = [0-9a-fA-F]*' out/$b.$cc.$o.txt | tail -1 | awk '{print $3}')"
-      fi
+      report $cc.$o $? out/$b.$cc.$o.txt
     else echo "$b $cc.$o compile-fail"; fi
   done
 done
@@ -252,6 +271,8 @@ def run_in_container(work: Path, names: list[str], timeout: int = 7200) -> dict[
             row["checksum"] = parse_checksum("checksum = " + parts[3]) if len(parts) > 3 else None
             if row["checksum"] is None:
                 row["status"] = "no-checksum"
+        elif status in ("no-checksum", "timeout") and len(parts) > 3:
+            row["exit"] = int(parts[3])
         out[name][config] = row
     return dict(out)
 
@@ -277,6 +298,154 @@ def verdict(row: dict) -> tuple[str, dict]:
     return "mismatch", {"reference": reference, "evocc": mine["checksum"]}
 
 
+# --- reduction -------------------------------------------------------------
+#
+# C-Reduce is not installed on this host, so a mismatch is reduced by deleting
+# lines. One pass over a granularity deletes every chunk of that size in turn;
+# all the candidates of a pass are emitted on the host and then compiled and
+# run inside a single container invocation, so a pass costs one container run
+# rather than one per candidate. A candidate is kept when EvoCC still emits
+# assembly for it, both oracles still agree with each other at both levels,
+# and EvoCC's checksum still differs from theirs.
+
+
+def interesting(runs: dict, target: str) -> bool:
+    """The reduced program must still show the same disagreement."""
+    return verdict(runs)[0] == target
+
+
+def reduction_pass(
+    evocc: Path, work: Path, lines: list[str], chunks: int, inc: list[str], target: str
+) -> list[str] | None:
+    """Delete one chunk in turn, `chunks` chunks over the whole program, and
+    return the shortest deletion that keeps the disagreement, or None when no
+    deletion at this granularity keeps it. One pass costs one container run."""
+    for name in ("src", "asm"):
+        shutil.rmtree(work / name, ignore_errors=True)
+        (work / name).mkdir(parents=True)
+    size = max(1, -(-len(lines) // chunks))
+    candidates = {}
+    for index in range(0, len(lines), size):
+        kept = lines[:index] + lines[index + size :]
+        if not kept:
+            continue
+        name = f"c{index}"
+        (work / "src" / f"{name}.c").write_text("".join(kept))
+        candidates[name] = kept
+    if not candidates:
+        return None
+    rows = emit_by_stem(evocc, work, sorted(candidates), inc)
+    emitted = [n for n in sorted(candidates) if rows[n]["emit"] == "emitted"]
+    if not emitted:
+        return None
+    runs = run_in_container(work, emitted, timeout=3600)
+    keepers = [n for n in emitted if interesting(runs.get(n, {}), target)]
+    if not keepers:
+        return None
+    return min((candidates[n] for n in keepers), key=len)
+
+
+def reduce_program(evocc: Path, source: Path, inc: list[str], budget: float) -> tuple[Path, dict]:
+    """Shrink one disagreeing program within `budget` seconds of wall time.
+
+    C-Reduce is not on this host, so the reduction deletes lines: a pass over a
+    granularity tries every single-chunk deletion, and the granularity doubles
+    until a pass finds nothing or the budget runs out. Candidates that stop
+    compiling, that stop being emitted, or whose oracles stop agreeing are not
+    interesting, so the program stays well defined all the way down.
+    """
+    work = BUILD / "run-csmith-reduce"
+    shutil.rmtree(work, ignore_errors=True)
+    (work / "runtime").mkdir(parents=True)
+    for header in sorted((BUILD / "csmith" / "runtime").glob("*.h")):
+        shutil.copy(header, work / "runtime" / header.name)
+    lines = source.read_text().splitlines(keepends=True)
+    started = dt.datetime.now(dt.timezone.utc)
+
+    def spent() -> float:
+        return (dt.datetime.now(dt.timezone.utc) - started).total_seconds()
+
+    def measure(body: list[str]) -> tuple[str, dict]:
+        for name in ("src", "asm"):
+            shutil.rmtree(work / name, ignore_errors=True)
+            (work / name).mkdir(parents=True)
+        (work / "src" / "probe.c").write_text("".join(body))
+        rows = emit_by_stem(evocc, work, ["probe"], inc)
+        names = ["probe"] if rows["probe"]["emit"] == "emitted" else []
+        return verdict(run_in_container(work, names, timeout=900).get("probe", {}))
+
+    target, detail = measure(lines)
+    if target not in DISAGREEMENT:
+        return source, {"source": str(source), "outcome": target, **detail}
+    chunks = 2
+    while chunks <= 128 and spent() < budget:
+        shorter = reduction_pass(evocc, work, lines, chunks, inc, target)
+        if shorter is not None and len(shorter) < len(lines):
+            lines = shorter
+            chunks = 2
+            continue
+        chunks *= 2
+    reduced = source.with_name(source.stem + "-reduced.c")
+    reduced.write_text("".join(lines))
+    outcome, detail = measure(lines)
+    return reduced, {
+        "source": str(source),
+        "reduced": str(reduced),
+        "lines": len(lines),
+        "bytes": reduced.stat().st_size,
+        "seconds": round(spent(), 1),
+        "outcome": outcome,
+        **detail,
+    }
+
+# A miscompile report is a program whose binaries all ran and whose checksums
+# disagree. A run that trapped is tracked apart from it: SIGTRAP means EvoCC's
+# generated code reached an undefined-behaviour check, which says the program
+# was undefined, not that the compiler computed the wrong value.
+MISCOMPILE = ("mismatch",)
+TRAP_EXIT = 133  # 128 + SIGTRAP
+# What reduction preserves: EvoCC's binary did not produce the checksum both
+# oracles agreed on, whether it printed a different one or none at all.
+DISAGREEMENT = ("mismatch", "no-checksum")
+
+
+def summarise(name: str, rows: list[dict]) -> dict:
+    """The campaign's reading, derived only from the recorded per-program rows."""
+    counts = collections.Counter(row["outcome"] for row in rows)
+    refusals = collections.Counter(
+        row["code"] for row in rows if row["outcome"] == "refused"
+    )
+    messages = collections.Counter(
+        f"{row['code']} {row['message']}" for row in rows if row["outcome"] == "refused"
+    )
+    miscompiles = [
+        {
+            "program": row["program"],
+            "reference": row.get("reference"),
+            "evocc": row.get("evocc"),
+        }
+        for row in rows
+        if row["outcome"] in MISCOMPILE
+    ]
+    trapped = [
+        row["program"]
+        for row in rows
+        if row["outcome"] == "no-checksum"
+        and row.get("runs", {}).get("evocc", {}).get("exit") == TRAP_EXIT
+    ]
+    return {
+        "options": csmith_options(name),
+        "defines": RUNTIME_DEFINES,
+        "programs": len(rows),
+        "agreeing": counts["agree"],
+        "outcomes": dict(counts.most_common()),
+        "refusalsByCode": dict(refusals.most_common()),
+        "refusalsByMessage": dict(messages.most_common()),
+        "miscompiles": miscompiles,
+        "trappedOnUndefinedBehaviour": trapped,
+    }
+
+
 def campaign(evocc: Path, binary: Path, name: str, count: int, inc: list[str], out_dir: Path, results) -> dict:
     work = BUILD / f"run-csmith-{name}"
     if work.exists():
@@ -285,39 +454,80 @@ def campaign(evocc: Path, binary: Path, name: str, count: int, inc: list[str], o
     for header in sorted((BUILD / "csmith" / "runtime").glob("*.h")):
         shutil.copy(header, work / "runtime" / header.name)
     seeds = generate(binary, name, range(1, count + 1), work)
-    rows = emit(evocc, work, seeds, inc)
-    emitted = [f"s{seed}" for seed in seeds if rows[seed]["emit"] == "emitted"]
+    emitted_rows = emit(evocc, work, seeds, inc)
+    emitted = [f"s{seed}" for seed in seeds if emitted_rows[seed]["emit"] == "emitted"]
     runs = run_in_container(work, emitted) if emitted else {}
-    counts = collections.Counter()
-    refusals = collections.Counter()
-    mismatches = []
+    rows = []
     for seed in seeds:
         program = f"s{seed}"
-        row = {"campaign": name, "seed": seed, "program": program, **rows[seed]}
-        if rows[seed]["emit"] != "emitted":
-            outcome = rows[seed]["emit"]
+        row = {"campaign": name, "seed": seed, "program": program, **emitted_rows[seed]}
+        if emitted_rows[seed]["emit"] != "emitted":
+            row["outcome"] = emitted_rows[seed]["emit"]
         else:
             outcome, extra = verdict(runs.get(program, {}))
             row.update(extra)
             row["runs"] = runs.get(program, {})
-        row["outcome"] = outcome
-        counts[outcome] += 1
-        if outcome == "refused":
-            refusals[row["code"]] += 1
-        if outcome == "mismatch":
-            mismatches.append(program)
+            row["outcome"] = outcome
+        if row["outcome"] in MISCOMPILE:
             shutil.copy(work / "src" / f"{program}.c", out_dir / "mismatch" / f"{name}-{program}.c")
+        rows.append(row)
         results.write(json.dumps(row) + "\n")
-    return {
-        "options": csmith_options(name),
-        "defines": RUNTIME_DEFINES,
-        "programs": len(seeds),
-        "agreeing": counts["agree"],
-        "outcomes": dict(counts.most_common()),
-        "refusalsByCode": dict(refusals.most_common()),
-        "mismatches": mismatches,
-        "work": str(work.relative_to(ROOT)),
+    return {**summarise(name, rows), "work": str(work.relative_to(ROOT))}
+
+
+def seal(summary: dict, out_dir: Path) -> dict:
+    """Roll the campaigns up, write summary.json and refresh the receipt."""
+    campaigns = summary["campaigns"].values()
+    refused = collections.Counter()
+    for one in campaigns:
+        refused.update(one["refusalsByCode"])
+    summary["programs"] = sum(one["programs"] for one in campaigns)
+    summary["agreeing"] = sum(one["agreeing"] for one in campaigns)
+    summary["refusalsByCode"] = dict(refused.most_common())
+    summary["miscompiles"] = sum(len(one["miscompiles"]) for one in campaigns)
+    summary["trappedOnUndefinedBehaviour"] = sum(
+        len(one["trappedOnUndefinedBehaviour"]) for one in campaigns
+    )
+    summary["reductions"] = sorted(
+        str(path.relative_to(ROOT)) for path in REDUCTIONS.glob("*.c")
+    )
+    json.dump(summary, open(out_dir / "summary.json", "w"), indent=1)
+    receipt = {
+        "schemaVersion": 1,
+        "rung": "E0c",
+        "authority": "docs/roadmap.md, milestone ladder",
+        "latest": summary,
+        "evidence": str(out_dir.relative_to(ROOT)),
     }
+    json.dump(receipt, open(RECEIPT, "w"), indent=1)
+    return summary
+
+
+def reseal(out_dir: Path) -> dict:
+    """Recompute a finished run's reading from its recorded rows.
+
+    Classification is a pure function of what each program did, so a run is
+    re-sealed without re-measuring when the classification changes.
+    """
+    out_dir = out_dir.resolve()
+    summary = json.load(open(out_dir / "summary.json"))
+    rows = [json.loads(line) for line in open(out_dir / "results.jsonl")]
+    grouped = collections.defaultdict(list)
+    for row in rows:
+        grouped[row["campaign"]].append(row)
+    for name, group in grouped.items():
+        work = summary["campaigns"].get(name, {}).get("work")
+        summary["campaigns"][name] = summarise(name, group)
+        if work:
+            summary["campaigns"][name]["work"] = work
+    return seal(summary, out_dir)
+
+
+def report_line(summary: dict) -> str:
+    return (
+        f"csmith: {summary['agreeing']} of {summary['programs']} agree; "
+        f"refused {summary['refusalsByCode']}; mismatches {summary['miscompiles']}"
+    )
 
 
 def main() -> int:
@@ -325,11 +535,22 @@ def main() -> int:
     ap.add_argument("--campaign", default="all", choices=["all", *CAMPAIGNS])
     ap.add_argument("--programs", type=int, default=300)
     ap.add_argument("--evocc", default=str(ROOT / "target" / "release" / "evocc"))
+    ap.add_argument("--reduce", help="shrink one disagreeing program instead of running a campaign")
+    ap.add_argument("--reduce-seconds", type=float, default=1800.0)
+    ap.add_argument("--reseal", help="re-derive an existing run's summary and receipt from its rows")
     args = ap.parse_args()
     evocc = Path(args.evocc)
+    if args.reseal:
+        print(report_line(reseal(Path(args.reseal))))
+        return 0
     if not evocc.exists():
         print("build the release driver first: cargo build --release -p evocc", file=sys.stderr)
         return 1
+    if args.reduce:
+        inc = e0.include_flags(e0.sysroot())
+        reduced, report = reduce_program(evocc, Path(args.reduce), inc, args.reduce_seconds)
+        print(json.dumps(report, indent=1))
+        return 0 if report["outcome"] in DISAGREEMENT else 1
     binary = build_csmith()
     run_id = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_dir = EVIDENCE / run_id
@@ -351,25 +572,8 @@ def main() -> int:
                 evocc, binary, name, args.programs, inc, out_dir, results
             )
             print(f"{name}: {summary['campaigns'][name]['outcomes']}")
-    total = sum(c["programs"] for c in summary["campaigns"].values())
-    agreeing = sum(c["agreeing"] for c in summary["campaigns"].values())
-    refused = collections.Counter()
-    for c in summary["campaigns"].values():
-        refused.update(c["refusalsByCode"])
-    summary["programs"] = total
-    summary["agreeing"] = agreeing
-    summary["refusalsByCode"] = dict(refused.most_common())
-    summary["mismatches"] = sum(len(c["mismatches"]) for c in summary["campaigns"].values())
-    json.dump(summary, open(out_dir / "summary.json", "w"), indent=1)
-    receipt = {
-        "schemaVersion": 1,
-        "rung": "E0c",
-        "authority": "docs/roadmap.md, milestone ladder",
-        "latest": summary,
-        "evidence": str(out_dir.relative_to(ROOT)),
-    }
-    json.dump(receipt, open(RECEIPT, "w"), indent=1)
-    print(f"csmith: {agreeing} of {total} agree; refused {dict(refused.most_common())}; mismatches {summary['mismatches']}")
+    seal(summary, out_dir)
+    print(report_line(summary))
     print("receipt:", RECEIPT.relative_to(ROOT), "evidence:", out_dir.relative_to(ROOT))
     return 0
 
