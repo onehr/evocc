@@ -3173,10 +3173,11 @@ impl<'a> FunctionLowerer<'a> {
             params,
             ret_tys: self.return_types(),
             effects: Default::default(),
-            // Revision 1.9.70 gives a function linkage; the front end does not
-            // carry a storage class this far yet, so every lowered function is
-            // external, which is what omitting the field means.
-            visibility: evocc_evoir::GlobalVisibility::External,
+            visibility: if declaration.storage == StorageClass::Static {
+                evocc_evoir::GlobalVisibility::Internal
+            } else {
+                evocc_evoir::GlobalVisibility::External
+            },
             blocks: self.finish_blocks()?,
             param_marks: Vec::new(),
         };
