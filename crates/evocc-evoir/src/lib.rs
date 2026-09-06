@@ -4501,9 +4501,11 @@ fn execute_instruction(
                     .expose_pointer(pointer)
                     .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
                 state.memory = memory;
-                InternalValue::Bits(address)
+                InternalValue::Bits(u128::from(address))
             } else {
-                let address = read_value(values, operand, block)?;
+                // `ptr.from_int` takes a `bits<64>` (Section 3.7); the value model is 128 bits wide.
+                let address = u64::try_from(read_value(values, operand, block)?)
+                    .map_err(|_| InterpreterError::InvalidPointerRepresentation { block })?;
                 if matches!(result.ty, EvoIRType::FnPtr { .. }) {
                     InternalValue::FunctionPointer(if address == 0 {
                         PointerValue::Null
