@@ -224,6 +224,31 @@ impl Cond {
     pub const fn is_signed(self) -> bool {
         matches!(self, Self::Lt | Self::Le | Self::Gt | Self::Ge)
     }
+
+    /// The condition that holds exactly when this one does not.
+    ///
+    /// The pairs are the architecture's own: the fourteen spellings are seven
+    /// complementary pairs, and `cs`/`cc` are `hs`/`lo` under their carry
+    /// names, so inverting keeps the family the source used.
+    #[must_use]
+    pub const fn inverted(self) -> Self {
+        match self {
+            Self::Eq => Self::Ne,
+            Self::Ne => Self::Eq,
+            Self::Lt => Self::Ge,
+            Self::Ge => Self::Lt,
+            Self::Le => Self::Gt,
+            Self::Gt => Self::Le,
+            Self::Lo => Self::Hs,
+            Self::Hs => Self::Lo,
+            Self::Ls => Self::Hi,
+            Self::Hi => Self::Ls,
+            Self::Vs => Self::Vc,
+            Self::Vc => Self::Vs,
+            Self::Cs => Self::Cc,
+            Self::Cc => Self::Cs,
+        }
+    }
 }
 
 /// The register-register arithmetic and logic forms of Section 4.

@@ -100,8 +100,7 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
         })
     });
     let register_save = named.map(|named| (named, align_up(outgoing, 16)));
-    let above_save = register_save
-        .map_or(outgoing, |(_, base)| base + REGISTER_SAVE_BYTES);
+    let above_save = register_save.map_or(outgoing, |(_, base)| base + REGISTER_SAVE_BYTES);
 
     let mut spills = BTreeMap::new();
     for index in 0..allocated.frame_slots {
@@ -366,6 +365,36 @@ fn label(target: Target, function: &str, block: u32) -> String {
     format!("{}{function}_block{block}", target.label_prefix())
 }
 
+/// Section 8 leaves "the details of instruction selection" to emission, and a
+/// branch it selects has to reach its target.
+///
+/// `tbz`/`tbnz` encode a fourteen-bit signed word displacement, which is 8,192
+/// instructions either way, and `b.cond` a nineteen-bit one. A function longer
+/// than the tighter reach can place a conditional terminator's target past it,
+/// and the assembler answers `conditional branch out of range`. Emission
+/// therefore counts the instructions a function emits with the short forms,
+/// and, at or above this threshold, emits every conditional terminator as the
+/// inverted short branch over an unconditional `b`, whose twenty-six-bit
+/// displacement reaches 128 mebibytes.
+///
+/// The threshold is half the `tbz` reach. The margin covers the two ways the
+/// count can be below the truth: an inline-assembly template line standing for
+/// more than one instruction, and the growth relaxation itself adds.
+const RELAXATION_THRESHOLD: usize = 4_096;
+
+/// The label the inverted short branch of a relaxed terminator jumps over.
+fn relax_label(target: Target, function: &str, index: u32) -> String {
+    format!("{}{function}_relax{index}", target.label_prefix())
+}
+
+/// The instructions in an emitted function body.
+///
+/// Every instruction emission writes is one line indented by four spaces;
+/// labels and directives start at the first column.
+fn instructions_in(body: &str) -> usize {
+    body.lines().filter(|line| line.starts_with(' ')).count()
+}
+
 fn emit_function(text: &mut String, target: Target, allocated: &Allocated) {
     let frame = frame_of(allocated);
     let prefix = target.symbol_prefix();
@@ -391,8 +420,29 @@ fn emit_function(text: &mut String, target: Target, allocated: &Allocated) {
         )
     };
 
+    // The short conditional forms are tried first, and their instruction count
+    // decides whether they reach: a body at or above the threshold is emitted
+    // again with every conditional terminator relaxed.
+    let mut body = String::new();
+    emit_blocks(&mut body, target, allocated, &frame, &spell, false);
+    if instructions_in(&body) >= RELAXATION_THRESHOLD {
+        body.clear();
+        emit_blocks(&mut body, target, allocated, &frame, &spell, true);
+    }
+    text.push_str(&body);
+}
+
+fn emit_blocks(
+    text: &mut String,
+    target: Target,
+    allocated: &Allocated,
+    frame: &Frame,
+    spell: &impl Fn(VReg, RegClass) -> String,
+    relax: bool,
+) {
     let order: Vec<u32> = allocated.blocks.iter().map(|block| block.id).collect();
     let mut copies = 0_u32;
+    let mut relaxations = 0_u32;
     for (index, block) in allocated.blocks.iter().enumerate() {
         let _ = writeln!(text, "{}:", label(target, &allocated.name, block.id));
         for inst in &block.insts {
@@ -400,8 +450,8 @@ fn emit_function(text: &mut String, target: Target, allocated: &Allocated) {
                 text,
                 target,
                 inst,
-                &frame,
-                &spell,
+                frame,
+                spell,
                 &allocated.name,
                 &mut copies,
             );
@@ -412,9 +462,11 @@ fn emit_function(text: &mut String, target: Target, allocated: &Allocated) {
             target,
             &allocated.name,
             &block.term,
-            &frame,
+            frame,
             next,
-            &spell,
+            spell,
+            relax,
+            &mut relaxations,
         );
     }
 }
@@ -1140,6 +1192,7 @@ fn emit_inst(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_term(
     text: &mut String,
     target: Target,
@@ -1148,12 +1201,33 @@ fn emit_term(
     frame: &Frame,
     next: Option<u32>,
     spell: &impl Fn(VReg, RegClass) -> String,
+    relax: bool,
+    relaxations: &mut u32,
 ) {
     let name = |reg: VReg| spell(reg, reg.class);
     let platform = target;
     let branch = |text: &mut String, target: u32| {
         if next != Some(target) {
             let _ = writeln!(text, "    b {}", label(platform, function, target));
+        }
+    };
+    // A relaxed conditional terminator is its own inverse jumping over an
+    // unconditional `b` to the taken block: the short branch then spans two
+    // instructions and always reaches, and the long one reaches the function.
+    // `over` is the label it jumps to; `None` is the unrelaxed spelling, whose
+    // operand is the taken block itself.
+    let over = |relaxations: &mut u32| -> Option<String> {
+        if !relax {
+            return None;
+        }
+        let label = relax_label(platform, function, *relaxations);
+        *relaxations += 1;
+        Some(label)
+    };
+    let close = |text: &mut String, over: Option<String>, taken: u32| {
+        if let Some(over) = over {
+            let _ = writeln!(text, "    b {}", label(platform, function, taken));
+            let _ = writeln!(text, "{over}:");
         }
     };
     match term {
@@ -1164,12 +1238,13 @@ fn emit_term(
             untaken,
             ..
         } => {
-            let _ = writeln!(
-                text,
-                "    b.{} {}",
-                cond.mnemonic(),
-                label(platform, function, *taken)
-            );
+            let over = over(relaxations);
+            let (cond, destination) = match &over {
+                Some(over) => (cond.inverted(), over.clone()),
+                None => (*cond, label(platform, function, *taken)),
+            };
+            let _ = writeln!(text, "    b.{} {destination}", cond.mnemonic());
+            close(text, over, *taken);
             branch(text, *untaken);
         }
         MTerm::Cb {
@@ -1179,13 +1254,18 @@ fn emit_term(
             untaken,
             ..
         } => {
+            let over = over(relaxations);
+            let (nonzero, destination) = match &over {
+                Some(over) => (!*nonzero, over.clone()),
+                None => (*nonzero, label(platform, function, *taken)),
+            };
             let _ = writeln!(
                 text,
-                "    {} {}, {}",
-                if *nonzero { "cbnz" } else { "cbz" },
-                name(*src),
-                label(platform, function, *taken)
+                "    {} {}, {destination}",
+                if nonzero { "cbnz" } else { "cbz" },
+                name(*src)
             );
+            close(text, over, *taken);
             branch(text, *untaken);
         }
         MTerm::Tb {
@@ -1196,13 +1276,18 @@ fn emit_term(
             untaken,
             ..
         } => {
+            let over = over(relaxations);
+            let (nonzero, destination) = match &over {
+                Some(over) => (!*nonzero, over.clone()),
+                None => (*nonzero, label(platform, function, *taken)),
+            };
             let _ = writeln!(
                 text,
-                "    {} {}, #{bit}, {}",
-                if *nonzero { "tbnz" } else { "tbz" },
-                name(*src),
-                label(platform, function, *taken)
+                "    {} {}, #{bit}, {destination}",
+                if nonzero { "tbnz" } else { "tbz" },
+                name(*src)
             );
+            close(text, over, *taken);
             branch(text, *untaken);
         }
         // Section 8: the template first, then the branch its `%l[label]`
