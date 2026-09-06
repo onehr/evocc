@@ -3,12 +3,12 @@
  "rung": "E2",
  "subject": "zstd",
  "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260906T170414Z",
+ "run": "20260906T180150Z",
  "pin": "v1.5.7 (2025-02-19, github.com/facebook/zstd)",
  "url": "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz",
  "tarballSha256": "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3",
  "tarball": "zstd-1.5.7.tar.gz",
- "driverSha256": "6b714dfcbb41add018c77e79842e6307429df205592e9c475eb064d8707c71e9",
+ "driverSha256": "1f833f82d56db291c6933af0f0198b3417f62ea129018a6e422e3eca05983ae1",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 44,
  "unitsEvoccCompiled": 2,
@@ -25,34 +25,33 @@
   "refused": 42
  },
  "refusalsByCode": {
-  "E0105": 37,
-  "E2921": 4,
-  "E1001": 1
+  "E1001": 38,
+  "E2921": 4
  },
  "refusals": [
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/entropy_common.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/error_private.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_decompress.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/pool.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/stdlib.h:141:8"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/threading.o",
@@ -68,123 +67,123 @@
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_common.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fse_compress.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/hist.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_compress.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/stdlib.h:141:8"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_literals.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_sequences.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_compress_superblock.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_double_fast.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_fast.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_lazy.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ldm.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_opt.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_preSplit.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdmt_compress.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/stdlib.h:141:8"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/huf_decompress.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_ddict.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/stdlib.h:141:8"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/stdlib.h:141:8"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_decompress_block.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/cover.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/stdlib.h:141:8"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/divsufsort.o",
@@ -194,33 +193,33 @@
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fastcover.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zdict.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v05.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v06.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstd_v07.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchfn.o",
@@ -230,33 +229,33 @@
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchzstd.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/datagen.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/dibio.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/fileio_asyncio.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/lorem.o",
@@ -266,21 +265,21 @@
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/util.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   },
   {
    "unit": "programs/obj/conf_28368e9f9bca6d6555d75c418f1c1d28/zstdcli_trace.o",
-   "code": "E0105",
-   "message": "include-not-found: immintrin.h",
-   "at": "common/compiler.h:223:1"
+   "code": "E1001",
+   "message": "expected-declaration",
+   "at": "include/arm_neon.h:40:9"
   }
  ],
  "excludedUnits": [],
@@ -499,6 +498,6 @@
    "shownBy": "compile the three lines with EvoCC, call get() and span() from a GCC-compiled main, link and run: it faults where the GCC-compiled unit prints 42"
   }
  ],
- "evidence": ".evidence/ladder/zstd/20260906T170414Z",
- "summaryLine": "zstd: 2 of 44 units by EvoCC in a passing build; refused by code {'E0105': 37, 'E2921': 4, 'E1001': 1}"
+ "evidence": ".evidence/ladder/zstd/20260906T180150Z",
+ "summaryLine": "zstd: 2 of 44 units by EvoCC in a passing build; refused by code {'E1001': 38, 'E2921': 4}"
 }
