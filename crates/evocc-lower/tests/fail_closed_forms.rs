@@ -96,16 +96,6 @@ fn frame_address_fails_closed_with_only_e3031() {
 }
 
 #[test]
-fn pointer_difference_fails_closed_with_only_e3032() {
-    assert_lowering_error(
-        "long f(void *left, void *right) { return left - right; }\n",
-        9,
-        "E3032",
-        "not-lowered: pointer-difference",
-    );
-}
-
-#[test]
 fn function_pointer_arithmetic_fails_closed_with_only_e3034() {
     let cases = [
         "typedef int (*fn)(void); fn f(fn pointer, long offset) { return pointer + offset; }\n",

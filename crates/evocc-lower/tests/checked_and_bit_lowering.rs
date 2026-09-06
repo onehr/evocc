@@ -85,16 +85,17 @@ fn checked_arithmetic_uses_exact_width_and_round_trip_representability() {
 }
 
 #[test]
-fn checked_width_outside_the_signed_exact_profile_has_a_named_boundary() {
-    let arena = Arena::default();
-    let unit = parse(
-        "int product(unsigned long a,unsigned long b,unsigned long *r){return __builtin_mul_overflow(a,b,r);}",
-        &arena,
+fn unsigned_checked_products_use_the_full_unsigned_exact_width() {
+    for (arguments, expected) in [("70000ul,70000ul", 0), ("~0ul,2ul", 1), ("~0ul,~0ul", 1)] {
+        lowered(&format!("int product(unsigned long a,unsigned long b,unsigned long *r){{return __builtin_mul_overflow(a,b,r);}} int main(void){{unsigned long r; return product({arguments},&r);}}"), expected, &["mul.bits<128>", "zext.bits<128>", "trunc.bits<64>"], false);
+    }
+    lowered("int main(void){__uint128_t r; int o=__builtin_mul_overflow(~0ul,~0ul,&r); return o || (r>>64)!=18446744073709551614ul;}", 0, &["mul.bits<128>"], false);
+    lowered(
+        "int main(void){__int128_t r; return __builtin_mul_overflow(~0ul,~0ul,&r);}",
+        1,
+        &["mul.bits<128>"],
+        false,
     );
-    let error =
-        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap_err();
-    assert_eq!(error.code(), "E3042");
-    assert_eq!(error.to_string(), "not-lowered: checked-arithmetic-width");
 }
 
 #[test]
