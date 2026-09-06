@@ -8776,7 +8776,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             // Preserve the resolved place even when the operand's aggregate
             // type does not undergo scalar lvalue conversion. Address-of
             // consumers recover this place without executing a load.
-            let operand = if op == UnaryOp::AddrOf {
+            // A direct object already carries its authoritative symbol. Do not
+            // snapshot its modifiability: its record tag may be completed later.
+            let operand = if op == UnaryOp::AddrOf && !matches!(operand, CHirExpr::Ident { .. }) {
                 if let Some(place) = self
                     .resolve_memory_place(operand)
                     .filter(MemoryPlace::is_addressable)
