@@ -8580,6 +8580,21 @@ impl<'a> FunctionLowerer<'a> {
         if self.global_registers.contains_key(&symbol) {
             return self.register_assembly(symbol, None, span, state);
         }
+        if self.memory_symbols.contains(&symbol) {
+            let declaration = self
+                .unit
+                .symbols()
+                .symbol(symbol)
+                .map_err(|_| LowerError::UnknownSymbol { symbol, span })?;
+            let ty = declaration.ty();
+            let volatile = self
+                .unit
+                .types()
+                .get(ty)
+                .is_some_and(|ty| ty.qualifiers.is_volatile);
+            let address = self.object_address(symbol, span, state)?;
+            return self.emit_memory_load(address, ty, volatile, span, state);
+        }
         let Some(bound) = state.env.get(&EnvKey::Local(symbol)) else {
             let declaration = self
                 .unit
@@ -8609,6 +8624,20 @@ impl<'a> FunctionLowerer<'a> {
     ) -> Result<(), LowerError> {
         if self.global_registers.contains_key(&symbol) {
             self.register_assembly(symbol, Some(value), span, state)?;
+        } else if self.memory_symbols.contains(&symbol) {
+            let declaration = self
+                .unit
+                .symbols()
+                .symbol(symbol)
+                .map_err(|_| LowerError::UnknownSymbol { symbol, span })?;
+            let ty = declaration.ty();
+            let volatile = self
+                .unit
+                .types()
+                .get(ty)
+                .is_some_and(|ty| ty.qualifiers.is_volatile);
+            let address = self.object_address(symbol, span, state)?;
+            self.emit_memory_store(address, value, ty, volatile, span, state)?;
         } else {
             state.env.insert(
                 EnvKey::Local(symbol),

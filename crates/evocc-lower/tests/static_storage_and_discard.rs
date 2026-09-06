@@ -80,6 +80,18 @@ fn conditional_updates_preserve_the_selected_side_effect() {
         "int main(void){int x=3,y=2; int now=x<y?(x+=2):(y+=2); return now*100+x*10+y;}",
         434,
     );
+    check(
+        "int x=3,y=2; int main(void){int old=x<y?x++:y++; return old*100+x*10+y;}",
+        233,
+    );
+    check(
+        "int x=3,y=2; int main(void){if((x<y?x++:y++)!=2)return 1; return x==3 && y==3 ? 0 : 2;}",
+        0,
+    );
+    check(
+        "int main(void){int x=3,y=2; int *p=&x; int old=*p<y?x++:y++; return old*100+x*10+y;}",
+        233,
+    );
 }
 
 #[test]

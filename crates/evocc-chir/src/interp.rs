@@ -744,7 +744,6 @@ enum MachineTask<'arena> {
         then_expression: &'arena CHirExpr<'arena>,
         else_expression: &'arena CHirExpr<'arena>,
         result_type: ValueType,
-        allow_root_mutation: bool,
     },
     SelectElvis {
         else_expression: &'arena CHirExpr<'arena>,
@@ -2154,7 +2153,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     then_expression,
                     else_expression,
                     result_type,
-                    allow_root_mutation,
                 } => {
                     let condition = machine_truth(
                         pop_machine_value(&mut values, then_expression.span())?,
@@ -2170,7 +2168,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         } else {
                             else_expression
                         },
-                        allow_root_mutation,
+                        allow_root_mutation: true,
                     });
                     None
                 }
@@ -3626,11 +3624,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     then_expression,
                     else_expression,
                     result_type,
-                    allow_root_mutation,
                 });
                 tasks.push(MachineTask::EvalExpression {
                     expression: condition,
-                    allow_root_mutation,
+                    allow_root_mutation: true,
                 });
             }
             CHirExpr::Elvis(operand, else_expression, _) => {
@@ -7863,10 +7860,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     CInteger::new(0, then_type).promoted().ty(),
                     CInteger::new(0, else_type).promoted().ty(),
                 );
-                let selected = if self.eval_expr(condition, false)?.truth() {
-                    self.eval_expr(then_expression, false)?
+                let selected = if self.eval_expr(condition, true)?.truth() {
+                    self.eval_expr(then_expression, true)?
                 } else {
-                    self.eval_expr(else_expression, false)?
+                    self.eval_expr(else_expression, true)?
                 };
                 Ok(selected.cast(result_type))
             }
