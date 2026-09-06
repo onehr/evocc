@@ -42,7 +42,18 @@ pub struct Frame {
     /// Bytes of outgoing stack arguments, which Section 6 puts at the bottom
     /// of the frame so that a call writes them at `[sp, #8 * i]`.
     pub outgoing: u64,
+    /// A variadic callee's register save area: the number of argument
+    /// registers its named parameters consumed, and the area's offset above
+    /// `sp`.
+    ///
+    /// Section 6 puts it "then the register save area of a variadic function
+    /// (Section 6, 64 bytes), then outgoing stack arguments", so it sits
+    /// directly above the outgoing area and below every spill.
+    pub register_save: Option<(u8, u64)>,
 }
+
+/// Section 6: the area is "64-byte, 16-byte-aligned".
+const REGISTER_SAVE_BYTES: u64 = 64;
 
 const fn align_up(value: u64, alignment: u64) -> u64 {
     if alignment == 0 {
@@ -79,9 +90,22 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
     // the area and a call writes its arguments at `[sp, #8 * i]`.
     let outgoing = allocated.outgoing;
 
+    // "then the register save area of a variadic function (Section 6, 64
+    // bytes), then outgoing stack arguments". `sp` is sixteen-byte aligned
+    // after the prologue, so an offset a multiple of sixteen aligns the area.
+    let named = allocated.blocks.iter().find_map(|block| {
+        block.insts.iter().find_map(|inst| match inst {
+            MInst::VaSaveArea { named } => Some(*named),
+            _ => None,
+        })
+    });
+    let register_save = named.map(|named| (named, align_up(outgoing, 16)));
+    let above_save = register_save
+        .map_or(outgoing, |(_, base)| base + REGISTER_SAVE_BYTES);
+
     let mut spills = BTreeMap::new();
     for index in 0..allocated.frame_slots {
-        spills.insert(index, outgoing + u64::from(index) * 8);
+        spills.insert(index, above_save + u64::from(index) * 8);
     }
 
     // "one slot per `frame.slot` (its declared size, rounded to its declared
@@ -93,7 +117,7 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
     // the object above it left the cursor, which is what the campaign's first
     // assembler refusal was.
     let mut slots = BTreeMap::new();
-    let mut cursor = outgoing + spill_bytes;
+    let mut cursor = above_save + spill_bytes;
     for (origin, object, align) in automatic.iter().rev() {
         cursor = align_up(cursor, (*align).max(1));
         slots.insert(*origin, cursor);
@@ -119,6 +143,7 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
         spills,
         slots,
         outgoing,
+        register_save,
     }
 }
 
@@ -402,6 +427,19 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
     }
     for (number, offset) in &frame.saved {
         emit_frame_access(text, "str", &format!("x{number}"), *offset);
+    }
+    // Section 6: a variadic callee "stores `x_k` to `x7` into it at offsets
+    // `8 * k` to `56` in the prologue". Nothing before this point writes an
+    // argument register, so the incoming anonymous arguments are still there.
+    if let Some((named, base)) = frame.register_save {
+        for number in named..8 {
+            emit_frame_access(
+                text,
+                "str",
+                &format!("x{number}"),
+                base + u64::from(number) * 8,
+            );
+        }
     }
 }
 
@@ -974,6 +1012,22 @@ fn emit_inst(
         MInst::Blr { target, .. } => {
             let _ = writeln!(text, "    blr {}", name(*target));
         }
+        // Section 6's variadic places: `stack` is "`x29 + 16` (the first
+        // incoming stack slot)" and `gr_top` is "save area + 64".
+        MInst::FrameAddress { dst, place } => match place {
+            crate::FramePlace::IncomingStack => {
+                emit_add_immediate(text, "add", &name(*dst), "x29", 16);
+            }
+            crate::FramePlace::RegisterSaveTop => {
+                let top = frame
+                    .register_save
+                    .map_or(0, |(_, base)| base + REGISTER_SAVE_BYTES);
+                emit_add_immediate(text, "add", &name(*dst), "sp", top);
+            }
+        },
+        // The area itself is reserved by the frame layout and filled by the
+        // prologue, so the marker emits nothing of its own.
+        MInst::VaSaveArea { .. } => {}
         // Section 6: "one slot per `frame.slot` (its declared size, rounded to
         // its declared alignment ...)".
         MInst::FrameSlot { dst, origin, .. } => {

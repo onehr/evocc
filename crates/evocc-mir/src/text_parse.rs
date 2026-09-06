@@ -17,7 +17,7 @@ use evocc_evoir::{AccessLayout, GlobalKind, GlobalObject, GlobalVisibility};
 use crate::{
     AsmBody, AsmClobber, AsmConstraint, AsmOperand, AsmValue, BinOp, CarryOp, Cond, ExtOp, FlagOp,
     LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass, StoreKind, SymbolKind, VReg,
-    UnaryOp, WideMul, Width,
+    FramePlace, UnaryOp, WideMul, Width,
 };
 
 /// Parse canonical Appendix A bytes back into a module.
@@ -869,6 +869,16 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
                 align: u32::try_from(align).map_err(|_| "an alignment is small".to_owned())?,
             }));
         }
+        if mnemonic == "va.save" {
+            scan.expect("[named=")?;
+            let named: u8 = scan
+                .take_while(|character| character.is_ascii_digit())
+                .parse()
+                .map_err(|_| "a named-register count is an unsigned decimal".to_owned())?;
+            scan.expect("]")?;
+            scan.finish()?;
+            return Ok(Parsed::Inst(MInst::VaSaveArea { named }));
+        }
         return Err(format!("unknown form '{body}'"));
     }
 
@@ -910,6 +920,15 @@ fn parse_defining(
             symbol,
             kind,
         });
+    }
+    if mnemonic == "frame.address" {
+        scan.expect("[")?;
+        let name = scan.take_while(|character| character.is_ascii_alphanumeric() || character == '_');
+        let place = FramePlace::from_mnemonic(&name)
+            .ok_or_else(|| format!("unknown frame place '{name}'"))?;
+        scan.expect("]")?;
+        scan.finish()?;
+        return Ok(MInst::FrameAddress { dst, place });
     }
     if mnemonic == "frame.slot" {
         scan.expect("[origin=")?;

@@ -579,6 +579,10 @@ pub fn render_inst(inst: &MInst) -> String {
             "{}frame.slot [origin={origin}, size={size}, align={align}]",
             defined(*dst)
         ),
+        MInst::FrameAddress { dst, place } => {
+            format!("{}frame.address [{}]", defined(*dst), place.mnemonic())
+        }
+        MInst::VaSaveArea { named } => format!("va.save [named={named}]"),
     }
 }
 

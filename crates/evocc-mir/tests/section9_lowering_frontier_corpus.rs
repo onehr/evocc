@@ -32,6 +32,11 @@ struct Program {
     /// a file-scope `asm` that defines one must spell it.
     darwin: Option<&'static str>,
     other: Option<&'static str>,
+    /// Section 6's variadic convention is the AArch64 Linux one, and Apple's
+    /// platform passes every anonymous argument on the stack instead
+    /// (measured: `.evidence/builtin-probes/20260906-b7/b7-darwin-varargs.out`,
+    /// `sizeof(va_list) == 8`), so such a program is a Linux row only.
+    linux_only: bool,
 }
 
 impl Program {
@@ -139,32 +144,103 @@ int main(void) {
 }
 "#;
 
+/// A variadic callee reached from C, with `int`, `long`, `__int128`, a
+/// pointer, more than eight arguments and a `va_copy` (EvoMIR Section 6,
+/// revision 0.10).
+const VARIADIC_UNIT: &str = r#"typedef __builtin_va_list va_list;
+
+static int table[2] = {5, 9};
+
+static long mixed(int n, ...) {
+    va_list ap, copy;
+    long total = 0;
+    __builtin_va_start(ap, n);
+    __builtin_va_copy(copy, ap);
+    total += __builtin_va_arg(ap, int);
+    total += __builtin_va_arg(ap, long);
+    {
+        __int128 wide = __builtin_va_arg(ap, __int128);
+        total += (long)wide + (long)(wide >> 64);
+    }
+    total += *__builtin_va_arg(ap, int *);
+    for (int i = 0; i < n; i++) total += __builtin_va_arg(ap, long);
+    total += __builtin_va_arg(copy, int);
+    __builtin_va_end(copy);
+    __builtin_va_end(ap);
+    return total;
+}
+
+int main(void) {
+    long total = mixed(6, 1, 2L, (__int128)3, &table[0], 4L, 5L, 6L, 7L, 8L, 9L);
+    return (int)(total & 0xff);
+}
+"#;
+
+/// `register unsigned long sp_var asm("sp")`, the kernel's
+/// `current_stack_pointer` idiom, which the front end writes as an implicit
+/// `asm` with the template `mov %0, sp` (EvoIR 1.9.67).
+const REGISTER_VARIABLE_UNIT: &str = r#"register unsigned long sp_var __asm__("sp");
+
+int main(void) {
+    unsigned long here = sp_var;
+    if (here == 0UL) return 1;
+    if ((here & 15UL) != 0UL) return 2;
+    return 42;
+}
+"#;
+
 const PROGRAMS: &[Program] = &[
     Program {
         name: "external-symbols",
         unit: EXTERNAL_UNIT,
         darwin: None,
         other: Some(EXTERNAL_OTHER),
+        linux_only: false,
     },
     Program {
         name: "static-relocations",
         unit: RELOCATION_UNIT,
         darwin: None,
         other: None,
+        linux_only: false,
     },
     Program {
         name: "module-assembly",
         unit: MODULE_ASSEMBLY_UNIT,
         darwin: Some(MODULE_ASSEMBLY_DARWIN),
         other: None,
+        linux_only: false,
     },
     Program {
         name: "bit-builtins",
         unit: BIT_BUILTIN_UNIT,
         darwin: None,
         other: None,
+        linux_only: false,
+    },
+    Program {
+        name: "variadic-callee",
+        unit: VARIADIC_UNIT,
+        darwin: None,
+        other: None,
+        linux_only: true,
+    },
+    Program {
+        name: "register-variable",
+        unit: REGISTER_VARIABLE_UNIT,
+        darwin: None,
+        other: None,
+        linux_only: false,
     },
 ];
+
+/// The programs one lane runs.
+fn programs(target: Target) -> Vec<&'static Program> {
+    PROGRAMS
+        .iter()
+        .filter(|program| !program.linux_only || target == Target::Linux)
+        .collect()
+}
 
 fn workspace() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -225,9 +301,9 @@ struct Row {
 }
 
 impl Row {
-    fn new() -> Self {
+    fn new(target: Target) -> Self {
         Self {
-            programs: PROGRAMS.len(),
+            programs: programs(target).len(),
             refused: BTreeMap::new(),
             compiled: 0,
             ran: 0,
@@ -300,8 +376,8 @@ fn the_frontier_corpus_agrees_with_the_host_compiler() {
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).expect("a working directory");
 
-    let mut row = Row::new();
-    for program in PROGRAMS {
+    let mut row = Row::new(Target::Darwin);
+    for program in programs(Target::Darwin) {
         let unit = materialize(&work, program, Target::Darwin);
         let text = match assembly(&driver, Target::Darwin, &unit) {
             Ok(text) => text,
@@ -416,9 +492,9 @@ fn the_frontier_corpus_agrees_with_gcc_in_the_sealed_container() {
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).expect("a working directory");
 
-    let mut row = Row::new();
+    let mut row = Row::new(Target::Linux);
     let mut expected_names = Vec::new();
-    for program in PROGRAMS {
+    for program in programs(Target::Linux) {
         let unit = materialize(&work, program, Target::Linux);
         match assembly(&driver, Target::Linux, &unit) {
             Ok(text) => {

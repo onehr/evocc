@@ -1316,6 +1316,14 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                 detail: "a stack argument exists only after allocation".to_owned(),
             });
         }
+        // Section 6's variadic places live above and inside the linear stack
+        // the interpreter has no model of, exactly as the prologue does; the
+        // native run judges them.
+        MInst::FrameAddress { .. } | MInst::VaSaveArea { .. } => {
+            return Err(MirError::Invalid {
+                detail: "a variadic frame place exists only in an emitted frame".to_owned(),
+            });
+        }
         MInst::Bl { .. } | MInst::Blr { .. } => {
             return Err(MirError::Invalid {
                 detail: "a call is executed by the frame stack".to_owned(),

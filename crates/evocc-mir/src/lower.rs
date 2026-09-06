@@ -13,14 +13,15 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use evocc_evoir::{
-    inst_results, inst_uses, BitOp, Block, CmpOp, Function, Inst, Module, TrapReason, UbReason,
-    Value,
+    inst_results, inst_uses, BitOp, Block, CmpOp, Function, InlineAssembly, Inst, Module,
+    TrapReason, UbReason, Value, VariadicOp,
 };
 use evocc_types::EvoIRType;
 
 use crate::{
-    BinOp, CarryOp, Cond, ExtOp, FlagOp, LoadKind, MBlock, MFunction, MInst, MModule, MTerm,
-    RegClass, StoreKind, SymbolKind, Target, UnaryOp, VReg, WideMul, Width,
+    AsmBody, AsmClobber, AsmConstraint, AsmOperand, AsmValue, BinOp, CarryOp, Cond, ExtOp, FlagOp,
+    FramePlace, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass, StoreKind,
+    SymbolKind, Target, UnaryOp, VReg, WideMul, Width,
 };
 
 /// One EvoIR form this revision does not lower, reported at the instruction.
@@ -361,17 +362,34 @@ fn scan_inst(
                 );
             }
         }
-        Inst::VaAccess(_) => report(
+        // Section 5's three variadic rows (revision 0.10). Only the promoted
+        // scalar types of EvoIR 3.10 reach `va_arg`, and the ones the machine
+        // has no class for are refused by the operand scan above.
+        Inst::VaAccess(access) => {
+            if let VariadicOp::Arg(result) = &access.op {
+                if variadic_slot(&result.ty).is_none() {
+                    report(
+                        E4009,
+                        block,
+                        index,
+                        format!("a va_arg of {:?} has no Section 6 procedure", result.ty),
+                    );
+                }
+            }
+        }
+        // Section 4 carries an `asm` through unchanged. `asm.goto` is a
+        // terminator whose successors are its labels, and no unit of the
+        // cohort this revision serves reaches one, so it stays refused.
+        Inst::Asm(assembly) => {
+            if let Err(detail) = assembly_vocabulary(assembly) {
+                report(E4009, block, index, detail);
+            }
+        }
+        Inst::AsmGoto { .. } => report(
             E4009,
             block,
             index,
-            "variadic instruction selection is not implemented".into(),
-        ),
-        Inst::Asm(_) | Inst::AsmGoto { .. } => report(
-            E4009,
-            block,
-            index,
-            "inline assembly selection is not implemented".into(),
+            "an `asm.goto` terminator has no row in Section 5".into(),
         ),
         // Section 5 (revision 0.12): "`ptr.to_int`, `ptr.from_int.*` |
         // nothing: the value is the same 64-bit register".
@@ -513,6 +531,16 @@ struct Lowerer {
     high: HashMap<u32, VReg>,
     blocks: Vec<MBlock>,
     traps: Vec<(u16, u32)>,
+    /// Section 6's `k` for a variadic callee: "the number of argument
+    /// registers its named parameters consumed". `None` in a fixed function.
+    named_registers: Option<u8>,
+    /// Every `const` this function has lowered, by value id.
+    ///
+    /// EvoIR Section 3.11 admits immediate assembly operands (`I`, `J`, `K`,
+    /// `L`, `i`, `n`), which emission "writes literally"; the constant is a
+    /// prior definition in the same function, and this is where an assembly
+    /// operand finds it.
+    constants: HashMap<u32, u64>,
 }
 
 impl Lowerer {
@@ -924,6 +952,10 @@ fn lower_function(
         high: HashMap::new(),
         blocks: Vec::new(),
         traps: Vec::new(),
+        named_registers: function
+            .variadic
+            .then(|| named_argument_registers(&function.params)),
+        constants: HashMap::new(),
     };
 
     for (index, block) in function.blocks.iter().enumerate() {
@@ -999,6 +1031,14 @@ fn lower_block(
     let mut current_id = id;
     let mut current_args = args;
     let mut insts: Vec<MInst> = Vec::new();
+    // Section 6: the register save area is filled "in the prologue", before
+    // anything writes an argument register. The marker is the first thing in
+    // the entry block, which is where the frame layout finds it.
+    if entry {
+        if let Some(named) = lowerer.named_registers {
+            insts.push(MInst::VaSaveArea { named });
+        }
+    }
     // Set when an `icmp` was fused into the block's `cond_br`.
     let mut fused: Option<(VReg, Cond)> = None;
 
@@ -1042,6 +1082,249 @@ fn lower_block(
             current_id = continuation;
             current_args = continuation_args;
             continue;
+        }
+
+        // Section 6's `va_arg`: "the register-then-stack procedure of Section 6
+        // for `T`'s size and alignment, ending in a load of `T` from the
+        // computed address". The procedure branches, so it is written here,
+        // where a block can be split, exactly as the `ub.assume` row above is.
+        if let Inst::VaAccess(access) = inst {
+            if let VariadicOp::Arg(result) = &access.op {
+                let (slot, alignment) = variadic_slot(&result.ty)
+                    .ok_or_else(|| format!("a va_arg of {:?}", result.ty))?;
+                let ap = lowerer.reg(&access.list)?;
+                let carried = live_across(lowerer, block, index + 1);
+                let width = carried.len();
+
+                let from_registers = lowerer.fresh_block();
+                let taken_from_registers = lowerer.fresh_block();
+                let to_the_stack = lowerer.fresh_block();
+                let from_the_stack = lowerer.fresh_block();
+                let merge = lowerer.fresh_block();
+
+                // `offs = gr_offs; if offs < 0:` -- the field is a signed
+                // thirty-two-bit integer, so it is read sign-extended.
+                let offs = lowerer.fresh(RegClass::Gpr64);
+                insts.push(MInst::Load {
+                    dst: offs,
+                    base: ap,
+                    offset: VA_GR_OFFS,
+                    kind: LoadKind::Sw,
+                    volatile: false,
+                });
+                let flags = lowerer.fresh(RegClass::Flags);
+                insts.push(MInst::CmpImm {
+                    dst: flags,
+                    lhs: offs,
+                    imm: 0,
+                    width: Width::X,
+                });
+                let mut with_offset = carried.clone();
+                with_offset.push(ap);
+                with_offset.push(offs);
+                let mut with_list = carried.clone();
+                with_list.push(ap);
+                lowerer.blocks.push(MBlock {
+                    id: current_id,
+                    args: std::mem::take(&mut current_args),
+                    insts: std::mem::take(&mut insts),
+                    term: MTerm::BCond {
+                        flags,
+                        cond: Cond::Lt,
+                        taken: from_registers,
+                        taken_args: with_offset.clone(),
+                        untaken: from_the_stack,
+                        untaken_args: with_list.clone(),
+                    },
+                });
+
+                // `if A == 16: offs = (offs + 15) & ~15; next = offs + S8;
+                //  if next <= 0: ...`
+                let params = fresh_like(lowerer, &with_offset);
+                let list = params[width];
+                let offset = params[width + 1];
+                let mut body = Vec::new();
+                let aligned = if alignment == 16 {
+                    round_to_sixteen(lowerer, &mut body, offset)
+                } else {
+                    offset
+                };
+                let next = lowerer.binary_imm(&mut body, BinOp::Add, aligned, slot, Width::X);
+                let decided = lowerer.fresh(RegClass::Flags);
+                body.push(MInst::CmpImm {
+                    dst: decided,
+                    lhs: next,
+                    imm: 0,
+                    width: Width::X,
+                });
+                let mut inside = params[..width].to_vec();
+                inside.push(list);
+                inside.push(aligned);
+                inside.push(next);
+                let mut outside = params[..width].to_vec();
+                outside.push(list);
+                lowerer.blocks.push(MBlock {
+                    id: from_registers,
+                    args: params,
+                    insts: body,
+                    term: MTerm::BCond {
+                        flags: decided,
+                        cond: Cond::Le,
+                        taken: taken_from_registers,
+                        taken_args: inside.clone(),
+                        untaken: to_the_stack,
+                        untaken_args: outside,
+                    },
+                });
+
+                // `gr_offs = next; address = gr_top + offs; done`
+                let params = fresh_like(lowerer, &inside);
+                let list = params[width];
+                let aligned = params[width + 1];
+                let next = params[width + 2];
+                let mut body = Vec::new();
+                body.push(MInst::Store {
+                    src: next,
+                    base: list,
+                    offset: VA_GR_OFFS,
+                    kind: StoreKind::W,
+                    volatile: false,
+                });
+                let top = lowerer.fresh(RegClass::Gpr64);
+                body.push(MInst::Load {
+                    dst: top,
+                    base: list,
+                    offset: VA_GR_TOP,
+                    kind: LoadKind::P,
+                    volatile: false,
+                });
+                let address = lowerer.binary(&mut body, BinOp::Add, top, aligned, Width::X);
+                let mut reached = params[..width].to_vec();
+                reached.push(address);
+                lowerer.blocks.push(MBlock {
+                    id: taken_from_registers,
+                    args: params,
+                    insts: body,
+                    term: MTerm::B {
+                        target: merge,
+                        args: reached,
+                    },
+                });
+
+                // `gr_offs = 0`, then the stack path.
+                let params = fresh_like(lowerer, &with_list);
+                let list = params[width];
+                let zero = lowerer.fresh(RegClass::Gpr32);
+                let mut body = vec![
+                    MInst::MovImm { dst: zero, imm: 0 },
+                    MInst::Store {
+                        src: zero,
+                        base: list,
+                        offset: VA_GR_OFFS,
+                        kind: StoreKind::W,
+                        volatile: false,
+                    },
+                ];
+                let mut onward = params[..width].to_vec();
+                onward.push(list);
+                let _ = &mut body;
+                lowerer.blocks.push(MBlock {
+                    id: to_the_stack,
+                    args: params,
+                    insts: body,
+                    term: MTerm::B {
+                        target: from_the_stack,
+                        args: onward,
+                    },
+                });
+
+                // `address = stack; if A == 16: address = (address + 15) &
+                //  ~15; stack = address + S8`
+                let params = fresh_like(lowerer, &with_list);
+                let list = params[width];
+                let mut body = Vec::new();
+                let raw = lowerer.fresh(RegClass::Gpr64);
+                body.push(MInst::Load {
+                    dst: raw,
+                    base: list,
+                    offset: VA_STACK,
+                    kind: LoadKind::P,
+                    volatile: false,
+                });
+                let address = if alignment == 16 {
+                    round_to_sixteen(lowerer, &mut body, raw)
+                } else {
+                    raw
+                };
+                let bumped = lowerer.binary_imm(&mut body, BinOp::Add, address, slot, Width::X);
+                body.push(MInst::Store {
+                    src: bumped,
+                    base: list,
+                    offset: VA_STACK,
+                    kind: StoreKind::P,
+                    volatile: false,
+                });
+                let mut reached = params[..width].to_vec();
+                reached.push(address);
+                lowerer.blocks.push(MBlock {
+                    id: from_the_stack,
+                    args: params,
+                    insts: body,
+                    term: MTerm::B {
+                        target: merge,
+                        args: reached,
+                    },
+                });
+
+                // "then loads `T` from `address`."
+                let mut shape = carried.clone();
+                shape.push(VReg::new(0, RegClass::Gpr64));
+                let params = fresh_like(lowerer, &shape);
+                let address = params[width];
+                let mut body = Vec::new();
+                if is_pair(&result.ty) {
+                    let (low, high) = lowerer.fresh_pair();
+                    body.push(MInst::Ldp {
+                        rt1: low,
+                        rt2: high,
+                        base: address,
+                        offset: 0,
+                        writeback: false,
+                        volatile: false,
+                    });
+                    lowerer.bind_pair(result, low, high);
+                } else {
+                    let kind = load_kind(&result.ty)?;
+                    let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
+                    let dst = lowerer.fresh(class);
+                    body.push(MInst::Load {
+                        dst,
+                        base: address,
+                        offset: 0,
+                        kind,
+                        volatile: false,
+                    });
+                    lowerer.bind(result, dst);
+                }
+                let mut rebind: HashMap<u32, VReg> = HashMap::new();
+                for (old, fresh) in carried.iter().zip(params.iter()) {
+                    rebind.insert(old.id, *fresh);
+                }
+                for reg in lowerer.map.values_mut() {
+                    if let Some(fresh) = rebind.get(&reg.id) {
+                        *reg = *fresh;
+                    }
+                }
+                for reg in lowerer.high.values_mut() {
+                    if let Some(fresh) = rebind.get(&reg.id) {
+                        *reg = *fresh;
+                    }
+                }
+                current_id = merge;
+                current_args = params;
+                insts = body;
+                continue;
+            }
         }
 
         // Section 5: an `icmp` "when the only consumer is a cond_br in the same
@@ -1274,6 +1557,7 @@ fn lower_inst(
             let dst = lowerer.fresh(class);
             insts.push(MInst::MovImm { dst, imm: *bits });
             lowerer.bind(result, dst);
+            lowerer.constants.insert(result.id, *bits);
         }
         // Section 5: "any value is permitted; zero is chosen so the output is
         // deterministic".
@@ -1387,6 +1671,22 @@ fn lower_inst(
             let dst = lowerer.fresh(RegClass::Gpr64);
             insts.push(MInst::MovImm { dst, imm: 0 });
             lowerer.bind(result, dst);
+        }
+        // Section 5's `va_start` and `va_end` rows. `va_arg` needs branches,
+        // so it splits the block and is lowered where the blocks are built.
+        Inst::VaAccess(access) => match &access.op {
+            VariadicOp::Start => lower_va_start(lowerer, insts, &access.list)?,
+            VariadicOp::End => {}
+            VariadicOp::Arg(_) => {
+                return Err("a va_arg is lowered with its block".to_owned());
+            }
+        },
+        // Section 4: the `asm` of EvoIR Section 3.11, "carried through
+        // unchanged: the template, its operands with their constraints, its
+        // clobbers".
+        Inst::Asm(assembly) => {
+            let body = lower_assembly(lowerer, insts, assembly)?;
+            insts.push(MInst::Asm(body));
         }
         // Section 5's bit-counting and byte-swap row (revision 0.14).
         Inst::BitOperation { result, operand, op } => {
@@ -2141,6 +2441,272 @@ fn population_count(
     });
     let product = lowerer.binary(insts, BinOp::Mul, octets, factor, width);
     lowerer.binary_imm(insts, BinOp::Lsr, product, u64::from(width.bits() - 8), width)
+}
+
+
+// ---------------------------------------------------------------------------
+// Section 4: inline assembly (EvoIR Section 3.11)
+// ---------------------------------------------------------------------------
+
+/// Whether every constraint and clobber of one `asm` is in the closed
+/// vocabulary EvoMIR carries.
+///
+/// EvoIR has already refused anything outside its own table (`E3021`); this is
+/// the machine side of the same closure, so a constraint EvoMIR cannot spell
+/// is named rather than approximated.
+fn assembly_vocabulary(assembly: &InlineAssembly) -> Result<(), String> {
+    for output in &assembly.outputs {
+        if AsmConstraint::parse(&output.constraint).is_none() {
+            return Err(format!("an assembly output constraint '{}'", output.constraint));
+        }
+    }
+    for input in &assembly.inputs {
+        if AsmConstraint::parse(&input.constraint).is_none() {
+            return Err(format!("an assembly input constraint '{}'", input.constraint));
+        }
+    }
+    for clobber in &assembly.clobbers {
+        if AsmClobber::parse(clobber).is_none() {
+            return Err(format!("an assembly clobber '{clobber}'"));
+        }
+    }
+    Ok(())
+}
+
+/// Carry one EvoIR `asm` into its EvoMIR body.
+///
+/// EvoIR Section 3.11: "Each register output defines one fresh SSA result, in
+/// output-list order. A memory output instead carries its place's pointer as
+/// the incoming value and its type is that pointer's type; it defines no
+/// scalar result". A read-write output and a tied input each name one
+/// register the template both reads and writes, so the incoming value is moved
+/// into it before the assembly, which is the form Section 4's own fixtures
+/// use.
+fn lower_assembly(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    assembly: &InlineAssembly,
+) -> Result<AsmBody, String> {
+    let named = |name: &str| -> Option<String> {
+        (!name.is_empty()).then(|| name.to_owned())
+    };
+    let mut outputs: Vec<AsmOperand> = Vec::new();
+    let mut results = assembly.results.iter();
+    for output in &assembly.outputs {
+        let constraint = AsmConstraint::parse(&output.constraint)
+            .ok_or_else(|| format!("an assembly output constraint '{}'", output.constraint))?;
+        if let AsmConstraint::Memory { .. } = constraint {
+            let place = output
+                .incoming
+                .as_ref()
+                .ok_or_else(|| "a memory output with no place".to_owned())?;
+            outputs.push(AsmOperand {
+                constraint,
+                name: named(&output.name),
+                value: AsmValue::Reg(lowerer.reg(place)?),
+            });
+            continue;
+        }
+        let result = results
+            .next()
+            .ok_or_else(|| "a register assembly output with no result".to_owned())?;
+        let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
+        let register = lowerer.fresh(class);
+        if let Some(incoming) = &output.incoming {
+            let src = lowerer.reg(incoming)?;
+            insts.push(MInst::Mov {
+                dst: register,
+                src,
+            });
+        }
+        lowerer.bind(result, register);
+        outputs.push(AsmOperand {
+            constraint,
+            name: named(&output.name),
+            value: AsmValue::Reg(register),
+        });
+    }
+
+    let mut inputs: Vec<AsmOperand> = Vec::new();
+    for input in &assembly.inputs {
+        let constraint = AsmConstraint::parse(&input.constraint)
+            .ok_or_else(|| format!("an assembly input constraint '{}'", input.constraint))?;
+        let value = match constraint {
+            AsmConstraint::Immediate(_) => {
+                let literal = lowerer.constants.get(&input.value.id).copied().ok_or_else(|| {
+                    format!(
+                        "an immediate assembly operand whose value v{} is not a constant",
+                        input.value.id
+                    )
+                })?;
+                AsmValue::Imm(literal as i64)
+            }
+            AsmConstraint::RegisterOrZero => {
+                // "a general register, or the zero register when the operand
+                // is the constant zero".
+                if lowerer.constants.get(&input.value.id) == Some(&0) {
+                    let class = class_of(&input.value.ty).map_err(|(code, _)| code.to_owned())?;
+                    AsmValue::Zero(class)
+                } else {
+                    AsmValue::Reg(lowerer.reg(&input.value)?)
+                }
+            }
+            AsmConstraint::Tied(digit) => {
+                let output = outputs
+                    .get(usize::from(digit))
+                    .ok_or_else(|| format!("a tied operand names output {digit}, which is absent"))?;
+                let register = output
+                    .register()
+                    .ok_or_else(|| format!("a tied operand names output {digit}, which holds no register"))?;
+                let src = lowerer.reg(&input.value)?;
+                insts.push(MInst::Mov {
+                    dst: register,
+                    src,
+                });
+                AsmValue::Reg(register)
+            }
+            _ => AsmValue::Reg(lowerer.reg(&input.value)?),
+        };
+        inputs.push(AsmOperand {
+            constraint,
+            name: named(&input.name),
+            value,
+        });
+    }
+
+    let mut clobbers = Vec::new();
+    for clobber in &assembly.clobbers {
+        clobbers.push(
+            AsmClobber::parse(clobber).ok_or_else(|| format!("an assembly clobber '{clobber}'"))?,
+        );
+    }
+
+    Ok(AsmBody {
+        template: assembly.template.clone(),
+        volatile: assembly.volatile,
+        outputs,
+        inputs,
+        clobbers,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Section 6: variadic functions (revision 0.10)
+// ---------------------------------------------------------------------------
+
+/// Section 6: "the number of argument registers its named parameters
+/// consumed (a `bits<128>` parameter consumes two and the rounding above)".
+fn named_argument_registers(params: &[evocc_evoir::FunctionParam]) -> u8 {
+    let mut used = 0_usize;
+    for param in params.iter().filter(|param| is_register_type(&param.ty)) {
+        if is_pair(&param.ty) {
+            if used % 2 == 1 {
+                used += 1;
+            }
+            used += 2;
+        } else {
+            used += 1;
+        }
+    }
+    u8::try_from(used.min(MAX_REGISTER_ARGUMENTS)).unwrap_or(8)
+}
+
+/// The size rounded up to eight (`S8`) and the alignment (`A`) of one
+/// `va_arg` type, or nothing when the type has no Section 6 procedure.
+fn variadic_slot(ty: &EvoIRType) -> Option<(u64, u64)> {
+    match ty {
+        EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => Some((8, 8)),
+        EvoIRType::Bits(128) => Some((16, 16)),
+        EvoIRType::Bits(width) if *width <= 64 => Some((8, 8)),
+        _ => None,
+    }
+}
+
+/// The offsets of the list object's five fields (Section 6).
+const VA_STACK: i64 = 0;
+const VA_GR_TOP: i64 = 8;
+const VA_VR_TOP: i64 = 16;
+const VA_GR_OFFS: i64 = 24;
+const VA_VR_OFFS: i64 = 28;
+
+/// `va_start`: "stores `stack = x29 + 16` (the first incoming stack slot),
+/// `gr_top = save area + 64`, `vr_top = gr_top` (never read ...), `gr_offs =
+/// -8 * (8 - k)` and `vr_offs = 0`".
+fn lower_va_start(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    list: &Value,
+) -> Result<(), String> {
+    let named = lowerer
+        .named_registers
+        .ok_or_else(|| "a va_start outside a variadic function".to_owned())?;
+    let ap = lowerer.reg(list)?;
+
+    let stack = lowerer.fresh(RegClass::Gpr64);
+    insts.push(MInst::FrameAddress {
+        dst: stack,
+        place: FramePlace::IncomingStack,
+    });
+    insts.push(MInst::Store {
+        src: stack,
+        base: ap,
+        offset: VA_STACK,
+        kind: StoreKind::P,
+        volatile: false,
+    });
+
+    let top = lowerer.fresh(RegClass::Gpr64);
+    insts.push(MInst::FrameAddress {
+        dst: top,
+        place: FramePlace::RegisterSaveTop,
+    });
+    for offset in [VA_GR_TOP, VA_VR_TOP] {
+        insts.push(MInst::Store {
+            src: top,
+            base: ap,
+            offset,
+            kind: StoreKind::P,
+            volatile: false,
+        });
+    }
+
+    let offs = -8 * (8 - i64::from(named));
+    let gr_offs = lowerer.fresh(RegClass::Gpr32);
+    insts.push(MInst::MovImm {
+        dst: gr_offs,
+        imm: u64::from(offs as u32),
+    });
+    insts.push(MInst::Store {
+        src: gr_offs,
+        base: ap,
+        offset: VA_GR_OFFS,
+        kind: StoreKind::W,
+        volatile: false,
+    });
+    let vr_offs = lowerer.fresh(RegClass::Gpr32);
+    insts.push(MInst::MovImm { dst: vr_offs, imm: 0 });
+    insts.push(MInst::Store {
+        src: vr_offs,
+        base: ap,
+        offset: VA_VR_OFFS,
+        kind: StoreKind::W,
+        volatile: false,
+    });
+    Ok(())
+}
+
+/// One fresh register per entry of `shape`, in the same classes.
+fn fresh_like(lowerer: &mut Lowerer, shape: &[VReg]) -> Vec<VReg> {
+    shape
+        .iter()
+        .map(|reg| lowerer.fresh(reg.class))
+        .collect()
+}
+
+/// Round a 64-bit value up to sixteen: `(value + 15) & ~15`.
+fn round_to_sixteen(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, value: VReg) -> VReg {
+    let raised = lowerer.binary_imm(insts, BinOp::Add, value, 15, Width::X);
+    lowerer.binary_imm(insts, BinOp::And, raised, !15_u64, Width::X)
 }
 
 /// The forms Section 10 keeps refused at width 128.

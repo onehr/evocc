@@ -865,6 +865,24 @@ pub enum MInst {
         size: u64,
         align: u32,
     },
+    /// Which part of Section 6's frame an address names.
+    ///
+    /// Both are places only the frame layout knows, so like `frame.slot` they
+    /// are pseudo-forms emission expands.
+    FrameAddress {
+        dst: VReg,
+        place: FramePlace,
+    },
+    /// The register save area of a variadic callee (Section 6): a marker the
+    /// frame layout reads and the prologue expands.
+    ///
+    /// "A variadic **callee** reserves a 64-byte, 16-byte-aligned **register
+    /// save area** in its frame and stores `x_k` to `x7` into it at offsets
+    /// `8 * k` to `56` in the prologue, where `k` is the number of argument
+    /// registers its named parameters consumed."
+    VaSaveArea {
+        named: u8,
+    },
     /// The `asm` of EvoIR Section 3.11, "carried through unchanged: the
     /// template, its operands with their constraints, its clobbers".
     ///
@@ -877,6 +895,35 @@ pub enum MInst {
 // ---------------------------------------------------------------------------
 // Inline assembly (EvoIR Section 3.11, EvoMIR Section 4)
 // ---------------------------------------------------------------------------
+
+/// One of the two frame places Section 6's variadic rules name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum FramePlace {
+    /// `stack`: "the first incoming stack slot", which Section 6 spells
+    /// `x29 + 16` because "the prologue saves the pair first".
+    IncomingStack,
+    /// `gr_top`: "save area + 64", the top of the register save area.
+    RegisterSaveTop,
+}
+
+impl FramePlace {
+    #[must_use]
+    pub const fn mnemonic(self) -> &'static str {
+        match self {
+            Self::IncomingStack => "incoming",
+            Self::RegisterSaveTop => "gr_top",
+        }
+    }
+
+    #[must_use]
+    pub fn from_mnemonic(text: &str) -> Option<Self> {
+        match text {
+            "incoming" => Some(Self::IncomingStack),
+            "gr_top" => Some(Self::RegisterSaveTop),
+            _ => None,
+        }
+    }
+}
 
 /// Which way an assembly operand moves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -1332,6 +1379,7 @@ pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
         | MInst::FrameSlot { dst, .. }
         | MInst::SpillReload { dst, .. }
         | MInst::IncomingArg { dst, .. }
+        | MInst::FrameAddress { dst, .. }
         | MInst::WideMultiply { dst, .. } => vec![*dst],
         MInst::Ldp { rt1, rt2, .. } => vec![*rt1, *rt2],
         MInst::FlagBinary { dst, flags, .. } => vec![*dst, *flags],
@@ -1339,6 +1387,7 @@ pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
         | MInst::MemCopy { .. }
         | MInst::SpillStore { .. }
         | MInst::OutgoingArg { .. }
+        | MInst::VaSaveArea { .. }
         | MInst::Stp { .. } => Vec::new(),
         MInst::Bl { results, .. } | MInst::Blr { results, .. } => results.clone(),
         MInst::Asm(body) => body.defined(),
@@ -1355,7 +1404,11 @@ pub fn inst_uses(inst: &MInst) -> Vec<VReg> {
         | MInst::Unary { src, .. } => {
             vec![*src]
         }
-        MInst::MovImm { .. } | MInst::Adrp { .. } | MInst::FrameSlot { .. } => Vec::new(),
+        MInst::MovImm { .. }
+        | MInst::Adrp { .. }
+        | MInst::FrameSlot { .. }
+        | MInst::FrameAddress { .. }
+        | MInst::VaSaveArea { .. } => Vec::new(),
         MInst::Load { base, .. } => vec![*base],
         MInst::Store { src, base, .. } => vec![*src, *base],
         MInst::Binary { lhs, rhs, .. }

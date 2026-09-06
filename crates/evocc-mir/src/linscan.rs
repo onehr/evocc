@@ -926,13 +926,17 @@ fn operand_slots(inst: &mut MInst, definitions: bool) -> Vec<&mut VReg> {
                 vec![src]
             }
         }
-        MInst::MovImm { dst, .. } | MInst::Adrp { dst, .. } | MInst::FrameSlot { dst, .. } => {
+        MInst::MovImm { dst, .. }
+        | MInst::Adrp { dst, .. }
+        | MInst::FrameSlot { dst, .. }
+        | MInst::FrameAddress { dst, .. } => {
             if definitions {
                 vec![dst]
             } else {
                 Vec::new()
             }
         }
+        MInst::VaSaveArea { .. } => Vec::new(),
         MInst::AddPageOff { dst, src, .. }
         | MInst::Extend { dst, src, .. }
         | MInst::Unary { dst, src, .. } => {
