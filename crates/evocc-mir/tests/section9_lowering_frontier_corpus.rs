@@ -285,10 +285,10 @@ fn materialize(directory: &Path, program: &Program, target: Target) -> PathBuf {
 /// The assembly EvoCC emits for one program's own unit.
 fn assembly(driver: &Driver, target: Target, unit: &Path) -> Result<String, String> {
     let evoir = driver.emit_evoir(unit, false)?;
-    let module = parse_section9_module(evoir.as_bytes()).map_err(|error| format!("E0000 {error}"))?;
-    compile_module_for(target, &module, &|_| true).map_err(|stop: NativeStop| {
-        format!("stopped at {}: {}", stop.component(), stop.detail())
-    })
+    let module =
+        parse_section9_module(evoir.as_bytes()).map_err(|error| format!("E0000 {error}"))?;
+    compile_module_for(target, &module, &|_| true)
+        .map_err(|stop: NativeStop| format!("stopped at {}: {}", stop.component(), stop.detail()))
 }
 
 struct Row {

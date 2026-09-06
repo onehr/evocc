@@ -16,8 +16,8 @@ use evocc_evoir::{AccessLayout, GlobalKind, GlobalObject, GlobalVisibility};
 
 use crate::{
     AsmBody, AsmClobber, AsmConstraint, AsmOperand, AsmValue, BinOp, CarryOp, Cond, ExtOp, FlagOp,
-    LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass, StoreKind, SymbolKind, VReg,
-    FramePlace, UnaryOp, WideMul, Width,
+    FramePlace, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass, StoreKind,
+    SymbolKind, UnaryOp, VReg, WideMul, Width,
 };
 
 /// Parse canonical Appendix A bytes back into a module.
@@ -923,7 +923,8 @@ fn parse_defining(
     }
     if mnemonic == "frame.address" {
         scan.expect("[")?;
-        let name = scan.take_while(|character| character.is_ascii_alphanumeric() || character == '_');
+        let name =
+            scan.take_while(|character| character.is_ascii_alphanumeric() || character == '_');
         let place = FramePlace::from_mnemonic(&name)
             .ok_or_else(|| format!("unknown frame place '{name}'"))?;
         scan.expect("]")?;
@@ -1046,7 +1047,8 @@ fn parse_defining(
             })
         }
         "clz" | "rbit" | "rev16" | "rev" => {
-            let op = UnaryOp::from_mnemonic(head).ok_or_else(|| format!("unknown form '{head}'"))?;
+            let op =
+                UnaryOp::from_mnemonic(head).ok_or_else(|| format!("unknown form '{head}'"))?;
             let src = scan.use_of()?;
             scan.finish()?;
             Ok(MInst::Unary {

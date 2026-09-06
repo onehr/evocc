@@ -56,7 +56,11 @@ fn emitted(target: Target, text: &str) -> String {
     let module = parse_section9_module(text.as_bytes()).expect("the unit parses");
     match compile_module_for(target, &module, &|_| true) {
         Ok(assembly) => assembly,
-        Err(stop) => panic!("the unit stopped at {}: {}", stop.component(), stop.detail()),
+        Err(stop) => panic!(
+            "the unit stopped at {}: {}",
+            stop.component(),
+            stop.detail()
+        ),
     }
 }
 

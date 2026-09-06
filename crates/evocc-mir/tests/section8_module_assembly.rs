@@ -26,10 +26,18 @@ asm ".section .rodata\x0a.globl second\x0asecond: .quad 2\x0a"
 
 fn emitted(target: Target) -> String {
     let module = parse_section9_module(UNIT.as_bytes()).expect("the unit parses");
-    assert_eq!(module.assembly.len(), 2, "the module assembly table is read");
+    assert_eq!(
+        module.assembly.len(),
+        2,
+        "the module assembly table is read"
+    );
     match compile_module_for(target, &module, &|_| true) {
         Ok(assembly) => assembly,
-        Err(stop) => panic!("the unit stopped at {}: {}", stop.component(), stop.detail()),
+        Err(stop) => panic!(
+            "the unit stopped at {}: {}",
+            stop.component(),
+            stop.detail()
+        ),
     }
 }
 

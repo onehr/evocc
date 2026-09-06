@@ -351,8 +351,7 @@ fn scan_inst(
                     index,
                     format!("{} at bits<128>", op.mnemonic()),
                 );
-            } else if *op == BitOp::ByteSwap
-                && !matches!(result.ty, EvoIRType::Bits(16 | 32 | 64))
+            } else if *op == BitOp::ByteSwap && !matches!(result.ty, EvoIRType::Bits(16 | 32 | 64))
             {
                 report(
                     E4009,
@@ -1689,7 +1688,11 @@ fn lower_inst(
             insts.push(MInst::Asm(body));
         }
         // Section 5's bit-counting and byte-swap row (revision 0.14).
-        Inst::BitOperation { result, operand, op } => {
+        Inst::BitOperation {
+            result,
+            operand,
+            op,
+        } => {
             lower_bit_operation(lowerer, insts, result, operand, *op)?;
         }
         // Section 5 (revision 0.12): "`ptr.to_int`, `ptr.from_int.*` |
@@ -2440,9 +2443,14 @@ fn population_count(
         imm: bytes,
     });
     let product = lowerer.binary(insts, BinOp::Mul, octets, factor, width);
-    lowerer.binary_imm(insts, BinOp::Lsr, product, u64::from(width.bits() - 8), width)
+    lowerer.binary_imm(
+        insts,
+        BinOp::Lsr,
+        product,
+        u64::from(width.bits() - 8),
+        width,
+    )
 }
-
 
 // ---------------------------------------------------------------------------
 // Section 4: inline assembly (EvoIR Section 3.11)
@@ -2457,12 +2465,18 @@ fn population_count(
 fn assembly_vocabulary(assembly: &InlineAssembly) -> Result<(), String> {
     for output in &assembly.outputs {
         if AsmConstraint::parse(&output.constraint).is_none() {
-            return Err(format!("an assembly output constraint '{}'", output.constraint));
+            return Err(format!(
+                "an assembly output constraint '{}'",
+                output.constraint
+            ));
         }
     }
     for input in &assembly.inputs {
         if AsmConstraint::parse(&input.constraint).is_none() {
-            return Err(format!("an assembly input constraint '{}'", input.constraint));
+            return Err(format!(
+                "an assembly input constraint '{}'",
+                input.constraint
+            ));
         }
     }
     for clobber in &assembly.clobbers {
@@ -2487,9 +2501,7 @@ fn lower_assembly(
     insts: &mut Vec<MInst>,
     assembly: &InlineAssembly,
 ) -> Result<AsmBody, String> {
-    let named = |name: &str| -> Option<String> {
-        (!name.is_empty()).then(|| name.to_owned())
-    };
+    let named = |name: &str| -> Option<String> { (!name.is_empty()).then(|| name.to_owned()) };
     let mut outputs: Vec<AsmOperand> = Vec::new();
     let mut results = assembly.results.iter();
     for output in &assembly.outputs {
@@ -2514,10 +2526,7 @@ fn lower_assembly(
         let register = lowerer.fresh(class);
         if let Some(incoming) = &output.incoming {
             let src = lowerer.reg(incoming)?;
-            insts.push(MInst::Mov {
-                dst: register,
-                src,
-            });
+            insts.push(MInst::Mov { dst: register, src });
         }
         lowerer.bind(result, register);
         outputs.push(AsmOperand {
@@ -2533,12 +2542,16 @@ fn lower_assembly(
             .ok_or_else(|| format!("an assembly input constraint '{}'", input.constraint))?;
         let value = match constraint {
             AsmConstraint::Immediate(_) => {
-                let literal = lowerer.constants.get(&input.value.id).copied().ok_or_else(|| {
-                    format!(
-                        "an immediate assembly operand whose value v{} is not a constant",
-                        input.value.id
-                    )
-                })?;
+                let literal = lowerer
+                    .constants
+                    .get(&input.value.id)
+                    .copied()
+                    .ok_or_else(|| {
+                        format!(
+                            "an immediate assembly operand whose value v{} is not a constant",
+                            input.value.id
+                        )
+                    })?;
                 AsmValue::Imm(literal as i64)
             }
             AsmConstraint::RegisterOrZero => {
@@ -2552,17 +2565,14 @@ fn lower_assembly(
                 }
             }
             AsmConstraint::Tied(digit) => {
-                let output = outputs
-                    .get(usize::from(digit))
-                    .ok_or_else(|| format!("a tied operand names output {digit}, which is absent"))?;
-                let register = output
-                    .register()
-                    .ok_or_else(|| format!("a tied operand names output {digit}, which holds no register"))?;
+                let output = outputs.get(usize::from(digit)).ok_or_else(|| {
+                    format!("a tied operand names output {digit}, which is absent")
+                })?;
+                let register = output.register().ok_or_else(|| {
+                    format!("a tied operand names output {digit}, which holds no register")
+                })?;
                 let src = lowerer.reg(&input.value)?;
-                insts.push(MInst::Mov {
-                    dst: register,
-                    src,
-                });
+                insts.push(MInst::Mov { dst: register, src });
                 AsmValue::Reg(register)
             }
             _ => AsmValue::Reg(lowerer.reg(&input.value)?),
@@ -2684,7 +2694,10 @@ fn lower_va_start(
         volatile: false,
     });
     let vr_offs = lowerer.fresh(RegClass::Gpr32);
-    insts.push(MInst::MovImm { dst: vr_offs, imm: 0 });
+    insts.push(MInst::MovImm {
+        dst: vr_offs,
+        imm: 0,
+    });
     insts.push(MInst::Store {
         src: vr_offs,
         base: ap,
@@ -2697,10 +2710,7 @@ fn lower_va_start(
 
 /// One fresh register per entry of `shape`, in the same classes.
 fn fresh_like(lowerer: &mut Lowerer, shape: &[VReg]) -> Vec<VReg> {
-    shape
-        .iter()
-        .map(|reg| lowerer.fresh(reg.class))
-        .collect()
+    shape.iter().map(|reg| lowerer.fresh(reg.class)).collect()
 }
 
 /// Round a 64-bit value up to sixteen: `(value + 15) & ~15`.
