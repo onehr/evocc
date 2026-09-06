@@ -1,10 +1,13 @@
 {
   "bisection": {
-    "allowlistSize": null,
-    "minimalFailingSet": null,
-    "result": "no-failure",
-    "rounds": null,
-    "runDirectory": ".evidence/k1/bisect-clean6"
+    "allowlistSize": 16,
+    "minimalFailingSet": [
+      "crypto/jitterentropy.o",
+      "lib/math/int_pow.o"
+    ],
+    "result": "minimal-failing-set",
+    "rounds": 22,
+    "runDirectory": ".evidence/k1/measure-e26a13b/bisection-4"
   },
   "emulator": {
     "contractSha256": "af7f6f87c135fa5f08652cda8bc79c01ee560f2ce8e5666c964ad9dda5884232",
@@ -12,36 +15,53 @@
     "path": "/opt/homebrew/bin/qemu-system-aarch64",
     "sha256": "45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e"
   },
-  "failingUnits": [],
-  "generatedAt": "2026-09-05T10:39:03Z",
+  "failingUnits": [
+    "drivers/video/logo/logo_linux_clut224.o",
+    "kernel/time/timecounter.o",
+    "drivers/tty/vt/ucs.o",
+    "lib/bcd.o",
+    "lib/compat_audit.o",
+    "lib/ctype.o",
+    "crypto/jitterentropy.o",
+    "lib/math/int_pow.o"
+  ],
+  "generatedAt": "2026-09-06T05:57:12Z",
   "measurement": "translation units compiled by EvoCC in a kernel that boots",
   "mixedLink": {
     "allowSymbolDrift": true,
     "boot": {
-      "imageSha256": "14bed2cf4ab07a97478036995e5a350549d39ee0e4be462b1dee7ca12a97efe3",
-      "nonce": "k1-20260905T103810Z-34fe13b3",
-      "runDirectory": ".evidence/k1/measurement/boot",
-      "serialLog": ".evidence/k1/measurement/boot/boot.log",
-      "serialLogSha256": "fdabf6865472cd7200eff20e83d5d2765b447c3b27d18f7deff901cb8fa909fd",
+      "imageSha256": "a1ca4993408523ec2a6b783c53d435caabacc93610667e7bdf01f6cab9dc7021",
+      "nonce": "k1-20260906T055702Z-150860db",
+      "runDirectory": ".evidence/k1/measure-e26a13b/attempt-05/boot",
+      "serialLog": ".evidence/k1/measure-e26a13b/attempt-05/boot/boot.log",
+      "serialLogSha256": "ac60abe6a545764d361e290b58cbd2748d665e6bc4dcf8714ed2ac5bbf20948b",
       "verdict": "PASS"
     },
-    "imageSha256": "14bed2cf4ab07a97478036995e5a350549d39ee0e4be462b1dee7ca12a97efe3",
+    "imageSha256": "a1ca4993408523ec2a6b783c53d435caabacc93610667e7bdf01f6cab9dc7021",
     "outcomeCounts": {
-      "substituted": 6
+      "substituted": 14
     },
-    "provenVmlinuxSha256": "2f30116b9c502722018bdbafd7714cfca470f5b20640c4b32e02f1fb9875014a",
+    "provenVmlinuxSha256": "96b190f144f7713076488cef3d2d704d2c05a216649f27eec2888908d8f604ed",
     "relinkExitCode": 0,
-    "requestedUnits": 6,
-    "runDirectory": ".evidence/k1/measurement",
+    "requestedUnits": 14,
+    "runDirectory": ".evidence/k1/measure-e26a13b/attempt-05/substitution",
     "substitutedUnits": [
+      "crypto/asymmetric_keys/pkcs7.asn1.o",
+      "crypto/asymmetric_keys/x509.asn1.o",
+      "crypto/asymmetric_keys/x509_akid.asn1.o",
+      "crypto/rsaprivkey.asn1.o",
+      "crypto/rsapubkey.asn1.o",
+      "drivers/firmware/efi/libstub/lib-ctype.o",
       "drivers/tty/vt/consolemap_deftbl.o",
       "lib/bitrev.o",
       "lib/clz_tab.o",
+      "lib/fonts/font_8x8.o",
       "lib/union_find.o",
       "lib/zstd/common/debug.o",
+      "lib/zstd/common/error_private.o",
       "scripts/mod/empty.o"
     ],
-    "vmlinuxSha256": "2f30116b9c502722018bdbafd7714cfca470f5b20640c4b32e02f1fb9875014a"
+    "vmlinuxSha256": "96b190f144f7713076488cef3d2d704d2c05a216649f27eec2888908d8f604ed"
   },
   "proofOfSubstitution": {
     "commentStrings": [
@@ -55,58 +75,105 @@
       "lib/zstd/common/debug.o"
     ],
     "unitsLinkedIntoVmlinux": [
+      "crypto/asymmetric_keys/pkcs7.asn1.o",
+      "crypto/asymmetric_keys/x509.asn1.o",
+      "crypto/asymmetric_keys/x509_akid.asn1.o",
+      "crypto/rsaprivkey.asn1.o",
+      "crypto/rsapubkey.asn1.o",
       "drivers/tty/vt/consolemap_deftbl.o",
       "lib/bitrev.o",
       "lib/clz_tab.o",
+      "lib/fonts/font_8x8.o",
       "lib/union_find.o",
-      "lib/zstd/common/debug.o"
+      "lib/zstd/common/debug.o",
+      "lib/zstd/common/error_private.o"
     ],
     "unitsNotLinkedIntoVmlinux": [
+      "drivers/firmware/efi/libstub/lib-ctype.o",
       "scripts/mod/empty.o"
     ],
     "unitsProvenByteIdenticalInVmlinux": [
+      "crypto/asymmetric_keys/pkcs7.asn1.o",
+      "crypto/asymmetric_keys/x509.asn1.o",
+      "crypto/asymmetric_keys/x509_akid.asn1.o",
+      "crypto/rsaprivkey.asn1.o",
+      "crypto/rsapubkey.asn1.o",
       "drivers/tty/vt/consolemap_deftbl.o",
       "lib/clz_tab.o",
-      "lib/union_find.o"
+      "lib/fonts/font_8x8.o",
+      "lib/union_find.o",
+      "lib/zstd/common/error_private.o"
     ],
     "verdictCounts": {
       "no-symbols": 2,
-      "not-linked": 1,
+      "not-linked": 2,
       "proven": 2,
-      "proven-modulo-relocations": 1
+      "proven-modulo-relocations": 8
     }
   },
   "reference": {
-    "image": ".build/k1/out/arch/arm64/boot/Image",
+    "image": ".build/k1/pristine/arch/arm64/boot/Image",
     "imageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
     "initramfsSha256": "07772533d8bb83e20c46cbd4b5263a53153ffdae2d7d91219d3ff9c67df02433",
-    "nonce": "k1-20260905T091456Z-5b591b4f",
+    "nonce": "k1-20260906T032009Z-d7692fb5",
     "referenceImage": ".build/reference/gcc-lane-1/arch/arm64/boot/Image",
     "referenceImageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
-    "runDirectory": ".evidence/k1/20260905T091456Z-82467",
-    "serialLog": ".evidence/k1/20260905T091456Z-82467/reference-boot.log",
-    "serialLogSha256": "6f154a1f1790b4f4f1a4180401e2a57e0f43b127736b05429b884721338e4d6a",
+    "runDirectory": ".evidence/k1/20260906T032009Z-44268",
+    "serialLog": ".evidence/k1/20260906T032009Z-44268/reference-boot.log",
+    "serialLogSha256": "820af952c3ebd740c3a2462fe49bb3ca2a9a86fa631f5e3641320935a4ffad30",
     "verdict": "PASS"
   },
   "schemaVersion": 1,
   "survey": {
+    "assemblingUnits": 22,
     "outcomeCounts": {
-      "assembled": 6,
-      "refused": 2793
+      "assembled": 22,
+      "refused": 2777
     },
     "refusalCodeCounts": {
-      "E3020": 18,
-      "E3021": 6,
-      "E3026": 7,
-      "E3030": 770,
-      "E3033": 1987,
-      "E3036": 4,
-      "E3101": 1
+      "E3021": 36,
+      "E3029": 1041,
+      "E3045": 19,
+      "E3101": 1673,
+      "E4009": 8
+    },
+    "refusalsByCode": {
+      "E3021": {
+        "owner": "front-end",
+        "units": 36
+      },
+      "E3029": {
+        "owner": "front-end",
+        "units": 1041
+      },
+      "E3045": {
+        "owner": "front-end",
+        "units": 19
+      },
+      "E3101": {
+        "owner": "front-end",
+        "units": 1673
+      },
+      "E4009": {
+        "owner": "machine",
+        "units": 8
+      }
+    },
+    "refusalsByFirstCode": {
+      "E3021": 36,
+      "E3029": 1041,
+      "E3045": 19,
+      "E3101": 1673,
+      "E4009": 8
+    },
+    "refusalsByOwner": {
+      "front-end": 2769,
+      "machine": 8
     },
     "requestedUnits": 2799,
-    "runDirectory": ".evidence/k1/survey-all"
+    "runDirectory": ".evidence/k1/measure-e26a13b/survey"
   },
-  "unitsCompiledByEvoccInABootingKernel": 5,
-  "unitsProvenPresentInVmlinux": 3,
-  "unitsSubstituted": 6
+  "unitsCompiledByEvoccInABootingKernel": 12,
+  "unitsProvenPresentInVmlinux": 10,
+  "unitsSubstituted": 14
 }
