@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.66** | **Authoritative reference** | **2026-09-06**
+**Revision 1.9.67** | **Authoritative reference** | **2026-09-06**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -697,7 +697,15 @@ moment to the unique live, exposed allocation (a global, external object, or
 a still-live `alloca`) whose byte range contains the address, and proceeds
 with that object's provenance; when no such allocation exists the access is
 `E3013`, exactly as through a dangling pointer. A zero yields the null
-pointer. `ptr.from_int` from a narrower integer does not exist: the front end
+pointer. `ptr.from_int.fnptr<Sig>` is the function form (revision 1.9.67):
+a call through it resolves at that moment to the function whose address
+the integer is (every function's address counts as exposed), and to no
+function otherwise (`E3016`). A C conversion between an object pointer and
+a function pointer, in either direction, is `ptr.to_int` followed by
+`ptr.from_int` of the target type; both oracles execute the direct form
+(`.evidence/builtin-probes/20260906-function-pointer-conversion/conversion.c`,
+`7`). `E3043` (`not-lowered: object-function-pointer-conversion`, the
+executor's fail-closed name) is withdrawn. `ptr.from_int` from a narrower integer does not exist: the front end
 extends first, and the extension follows the integer's signedness (measured,
 both oracles: `(void *)(int)-1` is `0xffffffffffffffff`, `(void *)(unsigned)-1`
 is `0xffffffff`; `p38.out`). A conversion to a narrower integer is
@@ -1635,10 +1643,12 @@ twice would let a reader think two conditions are the same finding.
 | `E3027` | `overlapping-copy` | runtime |
 | `E3030` | `not-lowered: varargs` | lowering |
 | `E3031` | `not-lowered: frame-address` | lowering |
-| `E3032` | `not-lowered: pointer-difference` | lowering |
+| `E3032` | `not-lowered: pointer-difference` | lowering — **withdrawn at 1.9.67** |
 | `E3033` | `not-executed: wide-integer` | lowering (division and remainder only, revision 1.9.61) |
 | `E3034` | `not-lowered: function-pointer-arithmetic` | lowering |
-| `E3035` | `not-lowered: global-register-variable` | lowering |
+| `E3035` | `not-lowered: global-register-variable` | lowering — **withdrawn at 1.9.67** (implicit `asm`) |
+| `E3042` | `not-lowered: checked-arithmetic-width` | lowering — executor-allocated, **withdrawn at 1.9.67** |
+| `E3043` | `not-lowered: object-function-pointer-conversion` | lowering — executor-allocated, **withdrawn at 1.9.67** |
 | `E3036` | `not-lowered: pointer-integer-conversion` | lowering — **withdrawn at 1.9.65**, never reported |
 | `E3037` | `va-start-outside-variadic-signature` | validation |
 | `E3038` | `va-arg-mismatch` | runtime |
@@ -3093,11 +3103,16 @@ three pointee types have identical size, alignment and representation, so no
 access changes meaning. Measured defect at revision 1.9.28: six lanes stopped
 on `E2202` for exactly that initializer.
 
-**Difference of two `void *`.** `a - b` on two `void *` has type `long`
-(`ptrdiff_t`) with scale 1 (measured: `10`, type `long`, both oracles). The
-front end accepts it and the C-HIR interpreter executes the same-object form;
-Section 3 has no pointer-difference instruction, so lowering reports `E3032`
-(`not-lowered: pointer-difference`) and fails closed until one is specified.
+**Pointer difference.** `a - b` on two pointers to `T` has type `long`
+(`ptrdiff_t`); on two `void *` the scale is 1 (measured: `10`, type `long`,
+both oracles). Lowering (revision 1.9.67): `ptr.to_int` of each operand,
+`sub.bits<64>`, then `sdiv.bits<64>` by `sizeof(T)` (1 for `void`), which
+is exact whenever the program is defined. C's same-object obligation is
+not a value the EvoIR interpreters can check after `ptr.to_int`, so it is
+carried by the C-HIR interpreter alone, which executes the same-object
+form and reports `E3013` otherwise; the machine computes the subtraction.
+`E3032` (`not-lowered: pointer-difference`) is withdrawn. The cohort's
+eight units are zstd.
 
 **128-bit execution (revision 1.9.61).** `__int128` and `unsigned __int128`
 values are `bits<128>` scalars, which Section 1.1 has always admitted;
@@ -3758,19 +3773,29 @@ is `1`.
 The front end type-checks the call and keeps it in C-HIR as a checked
 arithmetic node; the C-HIR interpreter implements the rule above. Lowering
 (revision 1.9.66) computes the mathematical result exactly and then asks
-whether it fits: let `W` be the smallest of 32, 64 and 128 in which every
-mathematical result of the operation on the operands' types is
-representable as a signed value (`add`/`sub`: one more than the wider
-operand, counting an unsigned operand as one bit wider; `mul`: the sum of
-the two widths so counted; every cohort use fits 128). Each operand is
+whether it fits: the `bits<W>` arithmetic is **unsigned** when the
+operation is `mul` and both operands are unsigned, and **signed**
+otherwise (revision 1.9.67: the executor found that `unsigned long *
+unsigned long` needs 129 signed bits, `E3042` in 48 units; as an unsigned
+product it needs exactly 128). Let `W` be the smallest of 32, 64 and 128 in
+which every mathematical result of the operation on the operands' types is
+representable under that signedness (`add`/`sub`: one more than the wider
+operand, counting an unsigned operand as one bit wider; signed `mul`: the
+sum of the two widths so counted; unsigned `mul`: the sum of the two
+widths; every cohort use fits 128). Each operand is
 `sext` or `zext` to `bits<W>` by its own signedness, the operation is
 performed in `bits<W>`, the stored value is `trunc` to the result type
 `R`, and the builtin's value is `icmp.ne` between the `bits<W>` result and
 the `sext`/`zext` (by `R`'s signedness) of that truncation: 1 exactly when
 the mathematical result is not representable in `R`, which is the C rule
-above. No UB predicate is involved, because the arithmetic in `bits<W>`
-cannot overflow by construction. `E3020` (`not-lowered: checked-arithmetic`)
-is withdrawn.
+above (with unsigned `bits<W>` arithmetic the comparison is against the
+`zext`/`sext` of the truncation read as a `W`-bit pattern, and a value at
+or above `2^(W-1)` compares unequal to any sign extension, which is the
+right answer because no signed `R` holds it). No UB predicate is involved,
+because the arithmetic in `bits<W>` cannot overflow by construction.
+`E3020` (`not-lowered: checked-arithmetic`) and `E3042`
+(`not-lowered: checked-arithmetic-width`, the executor's fail-closed name
+for the 129-bit case) are withdrawn.
 
 #### 10.1.16 GNU `asm` at the front-end boundary
 
@@ -4385,11 +4410,20 @@ declares no object and supplies no storage: it has no allocation site, and
 the allocation-site manifest of 10.1.6 passes over it rather than failing to
 derive one. Its type is `T`, `sizeof` and `_Alignof` are `T`'s (measured 8
 and 8 for `unsigned long`), and `&name` is `E2928`. A read yields the
-current value of the named machine register and a write sets it; EvoIR has
-no machine-register value, so a use is `E3035`
-(`not-lowered: global-register-variable`) at the use, while the declaration
-alone is accepted (evidence `p32-register-variables.out`, both oracles
-compile the reads and refuse the addresses). A block-scope
+current value of the named machine register and a write sets it. EvoIR has
+no machine-register value, and does not need one: a read lowers to the
+`asm` instruction of Section 3.11 with the template `mov %0, reg`, one
+`=r` output of `T`'s lowered type, no inputs and the `volatile` qualifier;
+a write lowers to `asm volatile "mov reg, %0"` with one `r` input (revision
+1.9.67, after the eighth survey put the read of `current_stack_pointer`
+first in 2,711 units). The asm is *implicit*: it is a lowering artefact, not
+source text, and it carries every property of Section 3.11, so the value
+is opaque to the equality database, ordered by the effect tokens, and
+executed only by the machine; both interpreters report `E3021` when they
+reach it, as for any assembly. `E3035`
+(`not-lowered: global-register-variable`) is withdrawn. The declaration
+alone was already accepted (evidence `p32-register-variables.out`, both
+oracles compile the reads and refuse the addresses). A block-scope
 `register T name asm("reg")` is an ordinary automatic object whose register
 binding matters only when it is an `asm` operand, where `E3021` already
 applies; its value behaves as any automatic object's (measured, both
@@ -5471,6 +5505,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.67 | 2026-09-06 | Rules the eighth survey's face (19 clean; `E3030`, `E3033`, `E3020`, `E3023`, `E3026`, `E3036`, `E3101` all at zero): a global register variable is read and written through an implicit `asm` (`E3035` withdrawn, 2,711 units); checked multiplication of two unsigned operands computes unsigned (`E3042` withdrawn, 48); pointer difference is integer subtraction and exact division (`E3032` withdrawn, 8); object and function pointers convert through `ptr.to_int`/`ptr.from_int` with a `fnptr` form (`E3043` withdrawn, 7). Accepts the Appendix D rulings on compound storage, block linkage and parameter qualifiers as written. Names the two allowed residues of the finish line: an `i` assembly constraint whose operand is a parameter (`E3021`, 3 units, needs inlining) and computed goto (`E3029`, 2 units). |
 | 1.9.66 | 2026-09-06 | Rules the three classes the seventh survey (6 clean, `E3033` gone, `E3030` 2,737) leaves under varargs: file-scope `asm` becomes the module assembly table (2.1, Section 9; `EXPORT_SYMBOL` in nearly every unit), checked arithmetic lowers exactly in the smallest of 32, 64 and 128 bits with a representability test (`E3020` withdrawn), and the bit builtins lower to new total instructions `ctlz`, `cttz`, `ctpop`, `bswap` (3.4; `E3023` withdrawn; `bit_builtin_zero_operand` obligation). |
 | 1.9.65 | 2026-09-05 | Rules the two lowering classes still hidden behind the survey's face so no window stops on them: static pointer initializers are relocations `(offset, @symbol, addend)` on a global (2.1, Section 9; `E3026` narrows to non-symbolic initializers), and pointer-integer conversions are `ptr.to_int` / `ptr.from_int` with exposed-address provenance and the oracles' measured extension and truncation (3.7; `E3036` withdrawn). |
 | 1.9.64 | 2026-09-05 | Gives the module external-object and external-function tables (`extern`, `declare`), so a unit that calls or reads what another unit defines lowers instead of stopping at a missing callee: top effect summary for external functions, distinct provenance for external objects, interpreters execute only the 10.1.14 library set (`E3039`, `E3040` otherwise), `E3041` for a symbol both declared and defined, `E2931` for inconsistent unprototyped calls. This was a gap of the specification, not of the executor: revision 0.7 of EvoMIR had assumed every callee is defined beside its caller, which is true of the generated corpora and of no kernel unit. |
