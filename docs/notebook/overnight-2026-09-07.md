@@ -30,3 +30,6 @@ Each entry is one check by the architect session while the user sleeps.
 ## tick 6 (05:43)
 - No new front-end commits since the bit-field one (f727f39); Codex's working tree holds 10 modified tracked files (their work in progress). always_inline substitution not landed yet: the probe still reports E3021 for an immediate constraint fed through a parameter.
 - musl re-run at 1 h, container active. Load 45, free memory 0.3 GB (the Docker VM is still resident).
+
+## tick 7 (06:44, musl again)
+- The musl re-run hit the lane's 2 h container timeout a second time, this time at load 10 to 45 with host free memory near zero (the Docker VM still holds about 15 GB compressed). The earlier lane run succeeded with the same script, so the difference is the machine, not the code. Not retrying tonight; the receipt keeps the 178 reading. To do in the morning with Docker Desktop off: python3 tools/ladder/musl.py --budget 45 --jobs 4.
