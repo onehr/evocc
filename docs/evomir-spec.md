@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.14** | **Authoritative reference** | **2026-09-06**
+**Revision 0.15** | **Authoritative reference** | **2026-09-06**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -253,6 +253,7 @@ in the table is refused with the diagnostic named in Section 10.
 | `call @f(args, %m, %w)` / `call %p(...)` | `bl`/`blr` with explicit argument and result registers (Section 6) |
 | `uninitialized.bits<N>` | `mov #0` (any value is permitted; zero is chosen so the output is deterministic) |
 | `ptr.to_int`, `ptr.from_int.*` | nothing: the value is the same 64-bit register (revision 0.12) |
+| `block_addr ^b` | `adr rd, <label of block b>` (revision 0.15); a static relocation against a block uses a local symbol `.L<function>.<block>` the emitter places at the block's first instruction |
 | `ctlz`, `cttz`, `ctpop`, `bswap` (revision 0.14) | `ctlz`: zero-extend per Section 3, `clz` at the register width, then subtract `32 - N` or `64 - N` for a narrower `N`; `cttz`: `rbit` then `clz`, and for a narrower `N` the result capped at `N` with `cmp`/`csel`, since the unspecified upper bits may hold a set bit; `ctpop`: the general-register sequence both oracles use without SIMD (`p39.out`, Clang-19; GCC-14 calls `__popcountdi2`, which the kernel does not provide): `x - ((x >> 1) & 0x5555...)`, `(x & 0x3333...) + ((x >> 2) & 0x3333...)`, `(x + (x >> 4)) & 0x0f0f...`, multiply by `0x0101...` and `lsr` by the register width minus 8, after zero extension; `bswap`: `rev16` (16, upper bits unspecified per Section 3), `rev` at 32 or 64 |
 
 The UB predicates were absent from revision 0.1's table, which refused
@@ -645,6 +646,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.15 | 2026-09-06 | A label address is `adr` of the block's local symbol, and a static relocation may name that symbol (EvoIR 1.9.68). |
 | 0.14 | 2026-09-06 | Bit counting and byte swap lower to `clz`, `rbit`, `rev` and the general-register population-count sequence; module assembly is emitted verbatim after all code and data (EvoIR 1.9.66). |
 | 0.13 | 2026-09-05 | Corrects the 128-bit argument rule for Darwin: Apple clang does not round the register number to even, so the pair takes the next two registers; Linux keeps the AAPCS64 rounding. Measured by the executor of the register-pair window. |
 | 0.12 | 2026-09-05 | Pointer-integer conversions lower to nothing; static relocations are emitted as `.xword symbol+addend` inside the global's bytes (`E4005` withdrawn), matching EvoIR 1.9.65. |

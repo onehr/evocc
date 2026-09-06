@@ -2,35 +2,35 @@
 
 ## Executive summary
 
-The correct architecture is **not** “C → conventional SSA → bolt on an e-graph optimizer → backend.” If equality saturation is genuinely the primary optimization paradigm, the compiler should treat **equivalence as persistent compiler state**: semantic lowering creates a typed, effect-aware representation; optimization accumulates alternatives rather than destructively choosing them; lowering to target instructions adds more equivalent alternatives; extraction is the point where the compiler finally commits to one implementation. That interpretation is closest to the original equality-saturation vision, to `egg`’s modern engineering techniques, and to the 2026 work on persistent e-graphs. citeturn18search1turn18search0turn19search1
+The correct architecture is **not** “C → conventional SSA → bolt on an e-graph optimizer → backend.” If equality saturation is genuinely the primary optimization paradigm, the compiler should treat **equivalence as persistent compiler state**: semantic lowering creates a typed, effect-aware representation; optimization accumulates alternatives rather than destructively choosing them; lowering to target instructions adds more equivalent alternatives; extraction is the point where the compiler finally commits to one implementation. That interpretation is closest to the original equality-saturation vision, to `egg`’s modern engineering techniques, and to the 2026 work on persistent e-graphs.
 
 My recommended architecture is:
 
 ```mermaid
 flowchart TD
-    A[C / GNU C11 Source] --> B[EvoCPP]
-    B --> C[C-HIR<br/>source semantics preserved]
-    C --> D[Semantic lowering<br/>explicit UB obligations + layout]
-    D --> E[EvoIR<br/>typed block-argument SSA]
-    E <-->|stable EClass IDs| F[Persistent Equivalence DB]
-    F <--> G[EqSat + analyses<br/>regional / contextual]
-    G --> H[Target-aware EqSat<br/>legalization + instruction alternatives]
-    H --> I[Feasible extraction]
-    I --> J[EvoMIR]
-    J --> K[Register allocation / scheduling]
-    K --> L{Target}
-    L --> M[Apple AArch64 assembly]
-    L --> N[Linux AArch64 assembly]
-    L --> O[x86-64 assembly]
-    M --> P[Mach-O toolchain boundary]
-    N --> Q[ELF toolchain boundary]
-    O --> Q
+ A[C / GNU C11 Source] --> B[EvoCPP]
+ B --> C[C-HIR<br/>source semantics preserved]
+ C --> D[Semantic lowering<br/>explicit UB obligations + layout]
+ D --> E[EvoIR<br/>typed block-argument SSA]
+ E <-->|stable EClass IDs| F[Persistent Equivalence DB]
+ F <--> G[EqSat + analyses<br/>regional / contextual]
+ G --> H[Target-aware EqSat<br/>legalization + instruction alternatives]
+ H --> I[Feasible extraction]
+ I --> J[EvoMIR]
+ J --> K[Register allocation / scheduling]
+ K --> L{Target}
+ L --> M[Apple AArch64 assembly]
+ L --> N[Linux AArch64 assembly]
+ L --> O[x86-64 assembly]
+ M --> P[Mach-O toolchain boundary]
+ N --> Q[ELF toolchain boundary]
+ O --> Q
 
-    C --> V[Semantic interpreter]
-    E --> W[EvoIR interpreter]
-    F --> X[Proof certificate]
-    X --> Y[Independent proof checker]
-    I --> Z[Translation validator]
+ C --> V[Semantic interpreter]
+ E --> W[EvoIR interpreter]
+ F --> X[Proof certificate]
+ X --> Y[Independent proof checker]
+ I --> Z[Translation validator]
 ```
 
 The architectural philosophy should be:
@@ -41,15 +41,15 @@ Five decisions follow from that.
 
 First, use **block-argument SSA** for EvoIR, but do not identify “SSA” with an LLVM-like IR. SSA gives every value a functional identity, which is extremely convenient for congruence, rewriting, proof tracking, and extraction. Memory and externally visible effects should be represented through explicit state/token dependencies. Non-SSA mutable temporaries should exist only in C-HIR before lowering.
 
-Second, do **not** attempt whole-program/whole-CFG saturation in the first 30 days. Expression e-graphs are mature; general control-flow/effect saturation remains active research. Cranelift has successfully deployed an acyclic e-graph optimizer in production, while recent Julia work adds special machinery for control flow and side effects, and the May 2026 E-Path paper is explicitly a prototype for equivalence over CFG instruction sequences. citeturn19search32turn19search3turn19search2 The launch architecture should therefore keep the CFG structurally explicit and apply EqSat **regionally** to pure computations, state-threaded memory expressions, guarded regions, and later machine-instruction selection.
+Second, do **not** attempt whole-program/whole-CFG saturation in the first 30 days. Expression e-graphs are mature; general control-flow/effect saturation remains active research. Cranelift has successfully deployed an acyclic e-graph optimizer in production, while recent Julia work adds special machinery for control flow and side effects, and the May 2026 E-Path paper is explicitly a prototype for equivalence over CFG instruction sequences. The launch architecture should therefore keep the CFG structurally explicit and apply EqSat **regionally** to pure computations, state-threaded memory expressions, guarded regions, and later machine-instruction selection.
 
-Third, **C definedness, effects, pointer provenance, volatile behavior, atomics, and alias facts must be in the semantics before EqSat sees the program**. ISO/IEC TS 6010:2025 formalizes provenance precisely because two pointers with the same concrete address need not be semantically interchangeable; provenance is relevant to alias reasoning and optimization. citeturn21search3 An e-graph that simply treats a pointer as a 64-bit integer will eventually produce attractive but unsound rewrites.
+Third, **C definedness, effects, pointer provenance, volatile behavior, atomics, and alias facts must be in the semantics before EqSat sees the program**. ISO/IEC TS 6010:2025 formalizes provenance precisely because two pointers with the same concrete address need not be semantically interchangeable; provenance is relevant to alias reasoning and optimization. An e-graph that simply treats a pointer as a 64-bit integer will eventually produce attractive but unsound rewrites.
 
-Fourth, never run “all rewrites until saturation” as the production scheduling strategy. `egg` solved important implementation bottlenecks with rebuilding and e-class analyses, but later research shows that complex optimization spaces still explode: sketch-guided EqSat reports five of seven matrix optimizations failing under unguided saturation even after an hour and 60 GB, while a handful of guides reduced those searches to seconds and under 1 GB. citeturn18search0turn20search1 EvoCC should therefore use **bounded, staged, guided saturation epochs** with node budgets, match fuel, profitability feedback, and extraction/re-seeding.
+Fourth, never run “all rewrites until saturation” as the production scheduling strategy. `egg` solved important implementation bottlenecks with rebuilding and e-class analyses, but later research shows that complex optimization spaces still explode: sketch-guided EqSat reports five of seven matrix optimizations failing under unguided saturation even after an hour and 60 GB, while a handful of guides reduced those searches to seconds and under 1 GB. EvoCC should therefore use **bounded, staged, guided saturation epochs** with node budgets, match fuel, profitability feedback, and extraction/re-seeding.
 
-Fifth, make **proofs a first-class product**. The 2022 “Small Proofs from Congruence Closure” work added practical proof generation to `egg`, describing it as the first certifying equality-saturation engine and reporting substantially smaller certificates than Z3 on its benchmark corpus. citeturn18search2 For a compiler whose rewrite library will be partially generated by AI agents, this is not an optional research feature; it is the trust boundary.
+Fifth, make **proofs a first-class product**. The 2022 “Small Proofs from Congruence Closure” work added practical proof generation to `egg`, describing it as the first certifying equality-saturation engine and reporting substantially smaller certificates than Z3 on its benchmark corpus. For a compiler whose rewrite library will be partially generated by AI agents, this is not an optional research feature; it is the trust boundary.
 
-The 30-day target needs one scope clarification. The phrase “self-contained C compiler” is clear about **not delegating the frontend, IR, optimizer, instruction selection, register allocation, or code generation to LLVM or GCC**. Whether it also prohibits the platform assembler, linker, archiver, `objcopy`, and related binary utilities is **unspecified**. The plan below assumes the compiler itself is self-contained while Apple `ld`/assembler tools and GNU binutils may be used as non-compiler toolchain components. This matters because the Linux tree contains architecture assembly and Kbuild uses a family of tools beyond `CC`; the kernel's own documentation exposes `CC`, `LD`, `AR`, `NM`, `STRIP`, `OBJCOPY`, `OBJDUMP`, `READELF`, host compiler variables, and related tooling separately. citeturn22search3 If “self-contained” means *no external assembler/linker/binutils either*, add an assembler, static linker, archive writer, symbol utilities, and significant ELF/Mach-O relocation support; that should be treated as a separate toolchain project rather than silently hidden inside this 30-day estimate.
+The 30-day target needs one scope clarification. The phrase “self-contained C compiler” is clear about **not delegating the frontend, IR, optimizer, instruction selection, register allocation, or code generation to LLVM or GCC**. Whether it also prohibits the platform assembler, linker, archiver, `objcopy`, and related binary utilities is **unspecified**. The plan below assumes the compiler itself is self-contained while Apple `ld`/assembler tools and GNU binutils may be used as non-compiler toolchain components. This matters because the Linux tree contains architecture assembly and Kbuild uses a family of tools beyond `CC`; the kernel's own documentation exposes `CC`, `LD`, `AR`, `NM`, `STRIP`, `OBJCOPY`, `OBJDUMP`, `READELF`, host compiler variables, and related tooling separately. If “self-contained” means *no external assembler/linker/binutils either*, add an assembler, static linker, archive writer, symbol utilities, and significant ELF/Mach-O relocation support; that should be treated as a separate toolchain project rather than silently hidden inside this 30-day estimate.
 
 There is also one hard specification conflict: **literal compiler self-hosting is impossible if EvoCC is implemented in Rust**, because a C compiler cannot compile its own Rust source. Under the requested Rust assumption, Day 30 can demonstrate a reproducible bootstrap, an EvoCC-compiled C runtime/test suite, and a compiler built on both macOS and Linux, but not literal self-hosting. If “EvoCC compiles EvoCC” is a hard requirement, the implementation language must be changed to C on Day 1.
 
@@ -65,33 +65,33 @@ The realistic flight plan is therefore:
 | Secondary vehicle | x86-64 backend reuses EvoMIR/extraction infrastructure; userspace is a Day-30 target, full x86 kernel is a stretch |
 | Research payload | `evo explain`, e-graph visualization, proof inspection, optimizer statistics and agent-generated-but-machine-checked rewrite proposals |
 
-The Linux kernel officially uses the GNU dialect of ISO C11 and routinely depends on GNU extensions and attributes, so “supports C11” alone is not a sufficient frontend gate. citeturn17search0 The primary Day-30 success criterion should consequently be **a booting Linux ARM64 kernel generated by EvoCC**, not merely compiling toy C programs. x86-64 kernel support is worth starting in parallel behind a gated branch, but it should not be allowed to steal the critical path from ARM64 boot.
+The Linux kernel officially uses the GNU dialect of ISO C11 and routinely depends on GNU extensions and attributes, so “supports C11” alone is not a sufficient frontend gate. The primary Day-30 success criterion should consequently be **a booting Linux ARM64 kernel generated by EvoCC**, not merely compiling toy C programs. x86-64 kernel support is worth starting in parallel behind a gated branch, but it should not be allowed to steal the critical path from ARM64 boot.
 
 ## Research landscape and what it implies for EvoCC
 
-The foundational EqSat proposal by Tate, Stepp, Tatlock, and Lerner replaces destructive optimization sequences with equality analyses that accumulate equivalent representations and defer the final choice until extraction. citeturn18search1turn18search9 That is still the right conceptual starting point, but the research since 2020 makes clear that three additional issues—**scalability, effects/control, and extraction**—have become at least as important as the core congruence data structure.
+The foundational EqSat proposal by Tate, Stepp, Tatlock, and Lerner replaces destructive optimization sequences with equality analyses that accumulate equivalent representations and defer the final choice until extraction. That is still the right conceptual starting point, but the research since 2020 makes clear that three additional issues—**scalability, effects/control, and extraction**—have become at least as important as the core congruence data structure.
 
 | Work / system | Status and main contribution | Direct lesson for EvoCC |
 |---|---|---|
-| Equality Saturation, Tate et al. | Foundational POPL work: accumulate equalities instead of destructively ordering optimizations. citeturn18search1 | Make equivalence persistent knowledge, not a temporary peephole pass. |
-| `egg`, Willsey et al. | Rebuilding amortizes e-graph invariant restoration; e-class analyses integrate domain analysis into EqSat. citeturn18search0 | Copy the *architecture*, not the library: custom union-find/hashcons/rebuild plus lattice analyses. |
-| Small Proofs | Practical proof-certificate generation for congruence closure and EqSat. citeturn18search2 | Every trusted merge gets a justification; extracted code must be explainable from source roots. |
-| `egglog` | Combines EqSat with Datalog-style fixed-point reasoning, efficient incremental execution, and lattice analyses. citeturn18search3 | Treat analysis facts and equality as cooperating fixed-point computations rather than separate passes. |
-| Guided / sketch-guided EqSat | Demonstrates catastrophic unguided growth on complex optimization sequences and large improvements from staged guidance. citeturn20search0turn20search1 | “Saturation” must be budgeted and phased in production. |
-| Sparse/treewidth extraction | Recent work exploits low treewidth/sparsity for efficient optimal extraction; related work connects e-graphs and circuits. citeturn20search4turn20search3 | Keep e-graphs sparse and implement a fast extractor first; exact extraction is a targeted second tier. |
-| Cranelift ægraphs | Cranelift describes itself as the first production compiler using e-graphs as a unified optimization framework; its implementation emphasizes compile-time and memory efficiency. citeturn19search32turn19search28 | Production EqSat should be constrained; a kernel compiler cannot tolerate unbounded optimizer explosions. |
-| Julia high-level EqSat | Handles high-level IR with control flow and side effects and uses type-aware rewrites plus a global extraction formulation. citeturn19search3 | Effects and global code placement cannot be an afterthought. |
-| Persistent compiler e-graphs | 2026 work proposes representing e-graphs natively so equality information survives ordinary compiler transformations and abstraction-level changes. citeturn19search1 | Give EvoIR values stable equality identities that survive lowering instead of serialize→optimize→discard. |
-| E-Path | 2026 prototype records equivalences among CFG instruction sequences rather than only expressions. citeturn19search2turn19search6 | Very interesting post-launch direction; too experimental to be the Day-30 CFG foundation. |
-| Herbie / Ruler | Herbie's ecosystem shows EqSat applied to numerical rewriting; Ruler uses EqSat to infer compact rewrite sets automatically. citeturn21search0 | Agents can propose/discover rewrites, but rule discovery and rule trust must remain separate. |
-| Souper | SMT-based superoptimizer that finds missing LLVM IR peepholes; its repository was archived in October 2025. citeturn21search1 | Automated optimization discovery is valuable, but EvoCC should internalize the idea, not depend on Souper or LLVM. |
+| Equality Saturation, Tate et al. | Foundational POPL work: accumulate equalities instead of destructively ordering optimizations. | Make equivalence persistent knowledge, not a temporary peephole pass. |
+| `egg`, Willsey et al. | Rebuilding amortizes e-graph invariant restoration; e-class analyses integrate domain analysis into EqSat. | Copy the *architecture*, not the library: custom union-find/hashcons/rebuild plus lattice analyses. |
+| Small Proofs | Practical proof-certificate generation for congruence closure and EqSat. | Every trusted merge gets a justification; extracted code must be explainable from source roots. |
+| `egglog` | Combines EqSat with Datalog-style fixed-point reasoning, efficient incremental execution, and lattice analyses. | Treat analysis facts and equality as cooperating fixed-point computations rather than separate passes. |
+| Guided / sketch-guided EqSat | Demonstrates catastrophic unguided growth on complex optimization sequences and large improvements from staged guidance. | “Saturation” must be budgeted and phased in production. |
+| Sparse/treewidth extraction | Recent work exploits low treewidth/sparsity for efficient optimal extraction; related work connects e-graphs and circuits. | Keep e-graphs sparse and implement a fast extractor first; exact extraction is a targeted second tier. |
+| Cranelift ægraphs | Cranelift describes itself as the first production compiler using e-graphs as a unified optimization framework; its implementation emphasizes compile-time and memory efficiency. | Production EqSat should be constrained; a kernel compiler cannot tolerate unbounded optimizer explosions. |
+| Julia high-level EqSat | Handles high-level IR with control flow and side effects and uses type-aware rewrites plus a global extraction formulation. | Effects and global code placement cannot be an afterthought. |
+| Persistent compiler e-graphs | 2026 work proposes representing e-graphs natively so equality information survives ordinary compiler transformations and abstraction-level changes. | Give EvoIR values stable equality identities that survive lowering instead of serialize→optimize→discard. |
+| E-Path | 2026 prototype records equivalences among CFG instruction sequences rather than only expressions. | Very interesting post-launch direction; too experimental to be the Day-30 CFG foundation. |
+| Herbie / Ruler | Herbie's ecosystem shows EqSat applied to numerical rewriting; Ruler uses EqSat to infer compact rewrite sets automatically. | Agents can propose/discover rewrites, but rule discovery and rule trust must remain separate. |
+| Souper | SMT-based superoptimizer that finds missing LLVM IR peepholes; its repository was archived in October 2025. | Automated optimization discovery is valuable, but EvoCC should internalize the idea, not depend on Souper or LLVM. |
 
 A particularly useful conclusion comes from comparing these systems: **EqSat works best when the represented objects behave like mathematical terms.** C initially does not. C has mutable storage, overlapping objects, unspecified sequencing, volatile access, atomics, inline assembly, implementation-defined layout, GNU extensions, and undefined behavior. Therefore the frontend's most important job is not merely parsing. Its job is to transform hostile C semantics into a representation on which equality is meaningful.
 
 The right way to do that is to make **definedness contextual**. Let `Γ` denote facts known at a program point: branch conditions, non-zero facts, alignment, lifetime facts, no-overflow obligations, provenance constraints, and other assumptions. EvoIR equality should mean:
 
 ```text
-Γ ⊢ A ≡ B : τ
+Γ ⊢ A ≡ B: τ
 ```
 
 meaning that for every execution satisfying `Γ`, `A` and `B` have the same semantic value and observable effects.
@@ -107,27 +107,27 @@ into conceptually:
 ```text
 %ok = signed_add_defined %x, %y
 ub.assume %ok
-%z  = add.bits %x, %y
+%z = add.bits %x, %y
 ```
 
 Inside the dominated context containing `%ok`, arithmetic rewriting can reason over a total bit-vector operation. A rule that needs a stronger condition simply carries that condition:
 
 ```text
 rule reassociate_signed_add
-    add(add(?a, ?b), ?c)
+ add(add(?a, ?b), ?c)
  => add(?a, add(?b, ?c))
 requires
-    SignedAddTreeNoOverflow(?a, ?b, ?c)
+ SignedAddTreeNoOverflow(?a, ?b, ?c)
 ```
 
 That makes rule legality visible to the e-graph instead of embedding C-language folklore inside optimizer code.
 
-Pointer semantics require the same treatment. ISO's provenance work explicitly distinguishes storage instances even when concrete addresses coincide; an executable semantics is also available through the Cerberus project. citeturn21search3 EvoCC should consequently define the *semantic* pointer as something like:
+Pointer semantics require the same treatment. ISO's provenance work explicitly distinguishes storage instances even when concrete addresses coincide; an executable semantics is also available through the Cerberus project. EvoCC should consequently define the *semantic* pointer as something like:
 
 ```text
 Ptr {
-    address: Bits<PTR_WIDTH>,
-    provenance: Provenance,
+ address: Bits<PTR_WIDTH>,
+ provenance: Provenance,
 }
 ```
 
@@ -159,7 +159,7 @@ For EvoCC, SSA is the clear baseline.
 | **Block-argument SSA** | Single definitions, explicit CFG edges, no special phi instruction, easy use-def indexing | Still needs effect/state modelling | **Recommended** |
 | Full functional IR with memory passed everywhere | Beautiful semantics for EqSat | Can become enormous; code placement and state threading become cumbersome | Use selectively through memory-state SSA, not as the sole surface syntax |
 
-Souper's success as an automated optimizer is another indication that single-assignment, expression-like representations are friendly to automated reasoning, even though Souper itself is not an EqSat system and is not suitable as EvoCC's backend. citeturn21search1
+Souper's success as an automated optimizer is another indication that single-assignment, expression-like representations are friendly to automated reasoning, even though Souper itself is not an EqSat system and is not suitable as EvoCC's backend.
 
 The integration point for e-graphs is equally consequential.
 
@@ -168,10 +168,10 @@ The integration point for e-graphs is equally consequential.
 | Convert function to e-graph → optimize → extract → discard | One pass | Low | Too conventional for this project |
 | Independent e-graph sidecar per basic block | Short | Low | Good bootstrap architecture |
 | **Persistent equality database attached to SSA values** | Across optimization/lowering phases | Medium | **Recommended Day-30 architecture** |
-| E-graph encoded directly as ordinary compiler IR operations | Across the compiler | High | Research target inspired by 2026 persistent-egraph work citeturn19search1 |
-| Full CFG equivalence graph | Across control-flow variants | Very high | Post-launch research; E-Path shows the direction but remains a prototype. citeturn19search2 |
+| E-graph encoded directly as ordinary compiler IR operations | Across the compiler | High | Research target inspired by 2026 persistent-egraph work |
+| Full CFG equivalence graph | Across control-flow variants | Very high | Post-launch research; E-Path shows the direction but remains a prototype. |
 
-I therefore recommend a **persistent sidecar architecture** for v1. EvoIR remains pleasant to inspect, serialize, interpret, and code-generate, but each eligible SSA value has a stable `EClassId`. Transformations may add representations to its equivalence class without discarding the previous ones. Later, if the architecture proves itself, the representation can move toward a fully persistent compiler-level e-graph similar to the 2026 research direction. citeturn19search1
+I therefore recommend a **persistent sidecar architecture** for v1. EvoIR remains pleasant to inspect, serialize, interpret, and code-generate, but each eligible SSA value has a stable `EClassId`. Transformations may add representations to its equivalence class without discarding the previous ones. Later, if the architecture proves itself, the representation can move toward a fully persistent compiler-level e-graph similar to the 2026 research direction.
 
 ## EvoIR semantics and concrete specification
 
@@ -181,21 +181,21 @@ The compiler should contain two semantically distinct high-level IRs.
 
 **EvoIR** is optimization-facing. Aggregates have mostly been lowered to explicit layouts and offsets; lvalues become pointers plus memory operations; sequencing has become data/control/effect dependencies; integer operations are explicit bit-vector operations; undefined-behavior assumptions are explicit; and calls have effect summaries.
 
-The kernel requirement is important here. Linux documents its source language as GNU C11 and states that GNU extensions are used routinely; attributes are particularly common. citeturn17search0 EvoCPP and C-HIR therefore need to understand the dialect expected by kernel headers rather than merely accepting ISO syntax.
+The kernel requirement is important here. Linux documents its source language as GNU C11 and states that GNU extensions are used routinely; attributes are particularly common. EvoCPP and C-HIR therefore need to understand the dialect expected by kernel headers rather than merely accepting ISO syntax.
 
 A compact EvoIR type universe can be:
 
 ```text
-Type ::=
-      bits<N>
-    | f32 | f64
-    | ptr<AddressSpace>
-    | vec<N, Type>
-    | mem<Region>
-    | world
-    | atomic_world
-    | tuple<Type...>
-    | void
+Type::=
+ bits<N>
+ | f32 | f64
+ | ptr<AddressSpace>
+ | vec<N, Type>
+ | mem<Region>
+ | world
+ | atomic_world
+ | tuple<Type...>
+ | void
 ```
 
 Signedness belongs primarily to operations rather than integer storage types:
@@ -214,63 +214,63 @@ That representation is much friendlier to bit-vector reasoning than carrying sig
 C aggregates stay richer in C-HIR:
 
 ```text
-CType ::=
-      CInt(rank, signedness)
-    | CFloat(kind)
-    | CPointer(CType, qualifiers)
-    | CArray(CType, bound)
-    | CStruct(fields, attrs)
-    | CUnion(fields, attrs)
-    | CFunction(params, variadic, attrs)
-    | ...
+CType::=
+ CInt(rank, signedness)
+ | CFloat(kind)
+ | CPointer(CType, qualifiers)
+ | CArray(CType, bound)
+ | CStruct(fields, attrs)
+ | CUnion(fields, attrs)
+ | CFunction(params, variadic, attrs)
+ |...
 ```
 
 A target data-layout service lowers these types:
 
 ```rust
 trait TargetLayout {
-    fn size_of(&self, ty: CTypeId) -> u64;
-    fn align_of(&self, ty: CTypeId) -> u32;
-    fn field_offset(&self, aggregate: CTypeId, field: FieldId) -> u64;
-    fn bitfield_layout(&self, field: FieldId) -> BitFieldLayout;
+ fn size_of(&self, ty: CTypeId) -> u64;
+ fn align_of(&self, ty: CTypeId) -> u32;
+ fn field_offset(&self, aggregate: CTypeId, field: FieldId) -> u64;
+ fn bitfield_layout(&self, field: FieldId) -> BitFieldLayout;
 }
 ```
 
-That service must be target-specific. Apple publishes a platform-specific ARM64 ABI, while Arm maintains AAPCS64 and the AArch64 ELF ABI for environments such as Linux; x86-64 System V has its own maintained psABI. citeturn22search1turn22search0turn22search4turn22search2 Therefore “ARM64” alone is not a complete ABI target.
+That service must be target-specific. Apple publishes a platform-specific ARM64 ABI, while Arm maintains AAPCS64 and the AArch64 ELF ABI for environments such as Linux; x86-64 System V has its own maintained psABI. Therefore “ARM64” alone is not a complete ABI target.
 
 A function could look like:
 
 ```text
 func @sum(
-    %p: ptr<generic>,
-    %n: bits<64>,
-    %m0: mem<all>,
-    %w0: world
+ %p: ptr<generic>,
+ %n: bits<64>,
+ %m0: mem<all>,
+ %w0: world
 ) -> (bits<32>, mem<all>, world)
-    cc = target_default
+ cc = target_default
 {
 ^entry:
-    %zero = const.bits<64> 0
-    br ^loop(%zero, 0, %m0, %w0)
+ %zero = const.bits<64> 0
+ br ^loop(%zero, 0, %m0, %w0)
 
 ^loop(%i: bits<64>, %acc: bits<32>,
-      %m: mem<all>, %w: world):
+ %m: mem<all>, %w: world):
 
-    %done = icmp.uge %i, %n
-    cond_br %done, ^exit(%acc, %m, %w), ^body(%i, %acc, %m, %w)
+ %done = icmp.uge %i, %n
+ cond_br %done, ^exit(%acc, %m, %w), ^body(%i, %acc, %m, %w)
 
 ^body(%i: bits<64>, %acc: bits<32>,
-      %m: mem<all>, %w: world):
+ %m: mem<all>, %w: world):
 
-    %q = ptr.offset %p, %i scale 4
-    %x = mem.load %m, %q : bits<32>
-         [region=unknown, align=4]
-    %acc1 = add.bits %acc, %x
-    %i1 = add.bits %i, 1
-    br ^loop(%i1, %acc1, %m, %w)
+ %q = ptr.offset %p, %i scale 4
+ %x = mem.load %m, %q: bits<32>
+ [region=unknown, align=4]
+ %acc1 = add.bits %acc, %x
+ %i1 = add.bits %i, 1
+ br ^loop(%i1, %acc1, %m, %w)
 
 ^exit(%r: bits<32>, %m: mem<all>, %w: world):
-    ret %r, %m, %w
+ ret %r, %m, %w
 }
 ```
 
@@ -291,31 +291,31 @@ That is the essential MemorySSA-like structure.
 The minimal memory vocabulary should be:
 
 ```text
-mem.alloca       : (size, align, lifetime) -> (ptr, mem')
-mem.global_addr  : Symbol -> ptr
+mem.alloca: (size, align, lifetime) -> (ptr, mem')
+mem.global_addr: Symbol -> ptr
 
-mem.load         : (mem<R>, ptr) -> T
-mem.store        : (mem<R>, ptr, T) -> mem<R>
+mem.load: (mem<R>, ptr) -> T
+mem.store: (mem<R>, ptr, T) -> mem<R>
 
-mem.memcpy       : (mem<R>, dst, src, size) -> mem<R>
-mem.memmove      : (mem<R>, dst, src, size) -> mem<R>
-mem.memset       : (mem<R>, dst, byte, size) -> mem<R>
+mem.memcpy: (mem<R>, dst, src, size) -> mem<R>
+mem.memmove: (mem<R>, dst, src, size) -> mem<R>
+mem.memset: (mem<R>, dst, byte, size) -> mem<R>
 
-mem.vload        : (mem<R>, world, ptr) -> (T, world')
-mem.vstore       : (mem<R>, world, ptr, T) -> (mem<R>, world')
+mem.vload: (mem<R>, world, ptr) -> (T, world')
+mem.vstore: (mem<R>, world, ptr, T) -> (mem<R>, world')
 
-atomic.load      : (...)
-atomic.store     : (...)
-atomic.rmw       : (...)
-atomic.cmpxchg   : (...)
-atomic.fence     : (...)
+atomic.load: (...)
+atomic.store: (...)
+atomic.rmw: (...)
+atomic.cmpxchg: (...)
+atomic.fence: (...)
 ```
 
 Atomic operators carry at least:
 
 ```text
 MemoryOrder =
-    Relaxed | Acquire | Release | AcqRel | SeqCst
+ Relaxed | Acquire | Release | AcqRel | SeqCst
 ```
 
 and a scope field should exist even if the first implementation supports only system scope.
@@ -324,17 +324,17 @@ The abstract machine used by the verifier/interpreter should conceptually mainta
 
 ```text
 State {
-    objects: ObjectId -> {
-        bytes,
-        lifetime,
-        alignment,
-    },
+ objects: ObjectId -> {
+ bytes,
+ lifetime,
+ alignment,
+ },
 
-    volatile_trace,
-    atomic_trace,
-    io_trace,
+ volatile_trace,
+ atomic_trace,
+ io_trace,
 
-    path_facts,
+ path_facts,
 }
 ```
 
@@ -342,8 +342,8 @@ and:
 
 ```text
 Pointer {
-    abstract_address,
-    provenance,
+ abstract_address,
+ provenance,
 }
 ```
 
@@ -353,21 +353,21 @@ Regions are optimization metadata, not a replacement for provenance:
 
 ```text
 Region =
-    StackObject(ObjectId)
-  | Global(Symbol)
-  | HeapFamily(Id)
-  | Escaped
-  | Unknown
-  | All
+ StackObject(ObjectId)
+ | Global(Symbol)
+ | HeapFamily(Id)
+ | Escaped
+ | Unknown
+ | All
 ```
 
 Alias analysis returns a proof-carrying lattice:
 
 ```text
 AliasResult =
-    MustAlias
-  | NoAlias
-  | MayAlias
+ MustAlias
+ | NoAlias
+ | MayAlias
 ```
 
 The safe starting point is **one global memory region**. Region splitting is an optimization. Any rewrite depending on `NoAlias(p,q)` records the alias fact as a proof premise.
@@ -375,7 +375,7 @@ The safe starting point is **one global memory region**. Region splitting is an 
 That gives useful rules such as:
 
 ```text
-load(store(M, p, x), p)  -> x
+load(store(M, p, x), p) -> x
 ```
 
 provided the accesses have compatible width/alignment/provenance and are not volatile or atomic.
@@ -400,16 +400,16 @@ The effects model should be explicit even though tokens already capture ordering
 
 ```text
 EffectSummary {
-    reads: RegionSet,
-    writes: RegionSet,
+ reads: RegionSet,
+ writes: RegionSet,
 
-    volatile: bool,
-    atomic: bool,
-    io: bool,
-    may_trap: bool,
-    may_unwind: bool,
+ volatile: bool,
+ atomic: bool,
+ io: bool,
+ may_trap: bool,
+ may_unwind: bool,
 
-    control: ControlEffect,
+ control: ControlEffect,
 }
 ```
 
@@ -425,54 +425,54 @@ Calls stay target-independent in EvoIR:
 
 ```text
 (%ret, %m1, %w1) =
-    call @foo(%a, %b, %m0, %w0)
-    effects {
-        read = {R1},
-        write = {R2},
-        volatile = false
-    }
+ call @foo(%a, %b, %m0, %w0)
+ effects {
+ read = {R1},
+ write = {R2},
+ volatile = false
+ }
 ```
 
 Target ABI lowering happens after extraction through an interface such as:
 
 ```rust
 trait TargetAbi {
-    fn classify_argument(&self, ty: CTypeId) -> AbiValue;
-    fn classify_return(&self, ty: CTypeId) -> AbiValue;
-    fn lower_varargs(&self, sig: FunctionSig) -> VarArgPlan;
-    fn callee_saved(&self) -> RegSet;
-    fn caller_saved(&self) -> RegSet;
-    fn stack_alignment(&self) -> u32;
-    fn symbol_name(&self, symbol: &str) -> String;
+ fn classify_argument(&self, ty: CTypeId) -> AbiValue;
+ fn classify_return(&self, ty: CTypeId) -> AbiValue;
+ fn lower_varargs(&self, sig: FunctionSig) -> VarArgPlan;
+ fn callee_saved(&self) -> RegSet;
+ fn caller_saved(&self) -> RegSet;
+ fn stack_alignment(&self) -> u32;
+ fn symbol_name(&self, symbol: &str) -> String;
 }
 ```
 
-For Apple native code this uses Apple's ARM64 conventions; for Linux AArch64 it uses AAPCS64 plus the relevant platform/ELF rules; x86 uses the x86-64 psABI. citeturn22search1turn22search4turn22search6
+For Apple native code this uses Apple's ARM64 conventions; for Linux AArch64 it uses AAPCS64 plus the relevant platform/ELF rules; x86 uses the x86-64 psABI.
 
 Inline assembly must not be parsed as an ordinary pure expression. A suitable representation is:
 
 ```text
 asm.opaque {
-    template = "...",
-    inputs   = [(constraint, Value)...],
-    outputs  = [(constraint, Type)...],
-    clobbers = [...],
-    memory_clobber = true|false,
-    volatile = true|false,
-    goto_targets = [...]
+ template = "...",
+ inputs = [(constraint, Value)...],
+ outputs = [(constraint, Type)...],
+ clobbers = [...],
+ memory_clobber = true|false,
+ volatile = true|false,
+ goto_targets = [...]
 }
 ```
 
 It consumes and produces the appropriate `world`/memory state and is a scheduling barrier according to its clobbers.
 
-`asm goto` is not optional for serious kernel work. Linux explicitly documents using `asm goto` for static keys so assembly can branch directly to C labels. citeturn17search3 The IR representation should therefore make it a terminator-like operation with explicit CFG successors rather than trying to hide it inside an expression:
+`asm goto` is not optional for serious kernel work. Linux explicitly documents using `asm goto` for static keys so assembly can branch directly to C labels. The IR representation should therefore make it a terminator-like operation with explicit CFG successors rather than trying to hide it inside an expression:
 
 ```text
 asm.goto "...":
-    inputs(...)
-    clobbers(...)
-    fallthrough ^bb1
-    targets [^slow_path]
+ inputs(...)
+ clobbers(...)
+ fallthrough ^bb1
+ targets [^slow_path]
 ```
 
 For the first 30 days, inline assembly should be **opaque to EqSat**. Its surrounding dataflow may still be optimized subject to constraints, but the e-graph does not reinterpret its machine instructions.
@@ -483,33 +483,33 @@ The persistent equality database can be quite small conceptually:
 
 ```rust
 struct ENode {
-    op: OpId,
-    children: SmallVec<[EClassId; 4]>,
-    sort: SortId,
-    attrs: AttrSetId,
+ op: OpId,
+ children: SmallVec<[EClassId; 4]>,
+ sort: SortId,
+ attrs: AttrSetId,
 }
 
 struct EClass {
-    id: EClassId,
-    nodes: Vec<ENodeId>,
-    facts: AnalysisFacts,
-    parents: Vec<ParentUse>,
+ id: EClassId,
+ nodes: Vec<ENodeId>,
+ facts: AnalysisFacts,
+ parents: Vec<ParentUse>,
 }
 
 struct EquivDb {
-    revision: u64,
+ revision: u64,
 
-    classes: Arena<EClass>,
-    nodes: Arena<ENode>,
+ classes: Arena<EClass>,
+ nodes: Arena<ENode>,
 
-    union_find: UnionFind<EClassId>,
-    hashcons: HashMap<ENodeKey, EClassId>,
-    dirty: VecDeque<EClassId>,
+ union_find: UnionFind<EClassId>,
+ hashcons: HashMap<ENodeKey, EClassId>,
+ dirty: VecDeque<EClassId>,
 
-    proofs: ProofDb,
+ proofs: ProofDb,
 
-    evo_value_to_class: HashMap<ValueId, EClassId>,
-    mir_value_to_class: HashMap<MirValueId, EClassId>,
+ evo_value_to_class: HashMap<ValueId, EClassId>,
+ mir_value_to_class: HashMap<MirValueId, EClassId>,
 }
 ```
 
@@ -546,36 +546,36 @@ That is what it means in practice for EqSat to remain the primary optimization p
 
 ## Equality engine, extraction, and verification
 
-EvoCC should implement its own EqSat engine in Rust rather than embedding `egg`. `egg` is an exceptionally useful architectural reference—especially rebuilding and e-class analyses—but using the engine itself would make one of the project's main research artifacts somebody else's component. `egg`'s paper specifically identifies rebuilding and e-class analyses as its two key engineering contributions. citeturn18search0
+EvoCC should implement its own EqSat engine in Rust rather than embedding `egg`. `egg` is an exceptionally useful architectural reference—especially rebuilding and e-class analyses—but using the engine itself would make one of the project's main research artifacts somebody else's component. `egg`'s paper specifically identifies rebuilding and e-class analyses as its two key engineering contributions.
 
 The internal engine should begin with five standard structures:
 
 ```text
 UnionFind
-    canonical EClass identity
+ canonical EClass identity
 
 HashCons
-    canonical ENode(op, canonical_children, attrs)
+ canonical ENode(op, canonical_children, attrs)
 
 EClass
-    equivalent ENodes + analysis facts
+ equivalent ENodes + analysis facts
 
 ParentIndex
-    children -> parent uses
+ children -> parent uses
 
 DirtyQueue
-    incremental rebuilding
+ incremental rebuilding
 ```
 
 Insertion is:
 
 ```text
 canonicalize children
-        ↓
+ ↓
 hash-cons lookup
-        ↓
+ ↓
 create/reuse e-class
-        ↓
+ ↓
 update parent indexes
 ```
 
@@ -583,17 +583,17 @@ Union is:
 
 ```text
 union classes
-      ↓
+ ↓
 record justification
-      ↓
+ ↓
 enqueue affected parents
-      ↓
+ ↓
 rebuild later
 ```
 
-The deliberate “later” is the rebuilding strategy popularized by `egg`: expensive congruence restoration is amortized rather than performed eagerly after every merge. citeturn18search0
+The deliberate “later” is the rebuilding strategy popularized by `egg`: expensive congruence restoration is amortized rather than performed eagerly after every merge.
 
-The analysis layer should look more like a small incremental logic system than a series of optimizer passes. `egglog` is especially relevant here because it combines equality with lattice-valued analyses and incremental fixed-point computation. citeturn18search3
+The analysis layer should look more like a small incremental logic system than a series of optimizer passes. `egglog` is especially relevant here because it combines equality with lattice-valued analyses and incremental fixed-point computation.
 
 For every e-class, EvoCC should eventually maintain:
 
@@ -625,9 +625,9 @@ Facts form lattices. For example:
 
 ```text
 Unknown
-  ⊒
+ ⊒
 Range[-32, 71]
-  ⊒
+ ⊒
 Constant(7)
 ```
 
@@ -637,14 +637,14 @@ The rewrite language should encode legality directly:
 
 ```text
 rule add-zero {
-    lhs: (add ?x (const 0))
-    rhs: ?x
+ lhs: (add ?x (const 0))
+ rhs: ?x
 
-    requires:
-        SameBitsType(?x)
+ requires:
+ SameBitsType(?x)
 
-    proof:
-        bitvector.add_identity
+ proof:
+ bitvector.add_identity
 }
 ```
 
@@ -652,17 +652,17 @@ A more interesting one:
 
 ```text
 rule load-after-store {
-    lhs: (load (store ?m ?p ?v) ?p)
-    rhs: ?v
+ lhs: (load (store ?m ?p ?v) ?p)
+ rhs: ?v
 
-    requires:
-        SameAccessWidth(?p, ?v),
-        NonVolatile(?p),
-        NonAtomic(?p),
-        AccessDefined(?p)
+ requires:
+ SameAccessWidth(?p, ?v),
+ NonVolatile(?p),
+ NonAtomic(?p),
+ AccessDefined(?p)
 
-    proof:
-        memory.store_forward
+ proof:
+ memory.store_forward
 }
 ```
 
@@ -670,18 +670,18 @@ And:
 
 ```text
 rule bypass-nonalias-store {
-    lhs: (load (store ?m ?p ?v) ?q)
-    rhs: (load ?m ?q)
+ lhs: (load (store ?m ?p ?v) ?q)
+ rhs: (load ?m ?q)
 
-    requires:
-        NoAlias(?p, ?q),
-        NonVolatile(?p),
-        NonVolatile(?q),
-        NonAtomic(?p),
-        NonAtomic(?q)
+ requires:
+ NoAlias(?p, ?q),
+ NonVolatile(?p),
+ NonVolatile(?q),
+ NonAtomic(?p),
+ NonAtomic(?q)
 
-    proof:
-        memory.nonalias_store_bypass
+ proof:
+ memory.nonalias_store_bypass
 }
 ```
 
@@ -695,30 +695,30 @@ Rules should belong to trust classes:
 | `Candidate` | Agent/Ruler-like discovery | CI only |
 | `Experimental` | Performance hypothesis | Benchmark/evaluator only |
 
-This is where agents can be aggressive without making the compiler unsafe. Ruler demonstrates that EqSat can itself help synthesize smaller rewrite sets, while recent LLM-guided EqSat work explores language models as search guides; neither observation justifies trusting generated equalities without an independent correctness boundary. citeturn21search0turn20search15
+This is where agents can be aggressive without making the compiler unsafe. Ruler demonstrates that EqSat can itself help synthesize smaller rewrite sets, while recent LLM-guided EqSat work explores language models as search guides; neither observation justifies trusting generated equalities without an independent correctness boundary.
 
 A proof record can be tiny:
 
 ```rust
 enum Justification {
-    Rewrite {
-        rule: RuleId,
-        subst: SubstitutionId,
-        premises: SmallVec<[FactProofId; 4]>,
-    },
+ Rewrite {
+ rule: RuleId,
+ subst: SubstitutionId,
+ premises: SmallVec<[FactProofId; 4]>,
+ },
 
-    Congruence {
-        lhs: ENodeId,
-        rhs: ENodeId,
-    },
+ Congruence {
+ lhs: ENodeId,
+ rhs: ENodeId,
+ },
 
-    Reflexive,
+ Reflexive,
 }
 
 struct ProofEdge {
-    lhs: EClassId,
-    rhs: EClassId,
-    why: Justification,
+ lhs: EClassId,
+ rhs: EClassId,
+ why: Justification,
 }
 ```
 
@@ -740,7 +740,7 @@ VALID
 
 or rejects the compilation in verification mode.
 
-The small-proofs research is directly relevant because naive congruence explanations can become unnecessarily large even when the actual optimization is simple. The published greedy algorithm adds no asymptotic overhead to congruence closure while producing much smaller practical certificates. citeturn18search2 EvoCC does not need its most sophisticated proof minimizer on Day 1, but it should retain enough justification information that such minimization remains possible.
+The small-proofs research is directly relevant because naive congruence explanations can become unnecessarily large even when the actual optimization is simple. The published greedy algorithm adds no asymptotic overhead to congruence closure while producing much smaller practical certificates. EvoCC does not need its most sophisticated proof minimizer on Day 1, but it should retain enough justification information that such minimization remains possible.
 
 ### Saturation should be guided, not suicidal
 
@@ -748,59 +748,59 @@ The production loop should be:
 
 ```mermaid
 flowchart TD
-    A[Seed EvoIR roots] --> B[Rebuild]
-    B --> C[Run lattice analyses]
-    C --> D[Cheap canonical rules]
-    D --> E[Rebuild + facts]
-    E --> F{Budget left?}
-    F -- no --> K[Extract]
-    F -- yes --> G[Opportunity rules]
-    G --> H[Target / memory rules]
-    H --> I[Evaluate best known cost]
-    I --> J{Useful progress?}
-    J -- yes --> B
-    J -- no --> K
-    K --> L[Validate feasibility]
-    L --> M[Generate proof certificate]
-    M --> N{Hot / important region?}
-    N -- no --> O[EvoMIR]
-    N -- yes --> P[Optional bounded exact extraction]
-    P --> O
+ A[Seed EvoIR roots] --> B[Rebuild]
+ B --> C[Run lattice analyses]
+ C --> D[Cheap canonical rules]
+ D --> E[Rebuild + facts]
+ E --> F{Budget left?}
+ F -- no --> K[Extract]
+ F -- yes --> G[Opportunity rules]
+ G --> H[Target / memory rules]
+ H --> I[Evaluate best known cost]
+ I --> J{Useful progress?}
+ J -- yes --> B
+ J -- no --> K
+ K --> L[Validate feasibility]
+ L --> M[Generate proof certificate]
+ M --> N{Hot / important region?}
+ N -- no --> O[EvoMIR]
+ N -- yes --> P[Optional bounded exact extraction]
+ P --> O
 ```
 
-Do not equate “EqSat compiler” with “wait for mathematical saturation.” Guided EqSat's results are an unusually strong warning: naïve saturation can run out of tens of gigabytes while a small number of phase guides finds the intended result almost immediately. citeturn20search1
+Do not equate “EqSat compiler” with “wait for mathematical saturation.” Guided EqSat's results are an unusually strong warning: naïve saturation can run out of tens of gigabytes while a small number of phase guides finds the intended result almost immediately.
 
 A reasonable **initial engineering budget**, to be tuned empirically rather than treated as research fact, is:
 
 ```text
 max_egraph_nodes(function):
-    min(50_000, 40 * original_nodes + 2_000)
+ min(50_000, 40 * original_nodes + 2_000)
 
 max_enodes_per_eclass:
-    64
+ 64
 
 max_matches_per_rule_per_epoch:
-    max(256, 8 * original_nodes)
+ max(256, 8 * original_nodes)
 
 max_epochs:
-    6
+ 6
 
 stop_if:
-    no new best extraction for 2 consecutive epochs
+ no new best extraction for 2 consecutive epochs
 
 hard memory limit:
-    configurable per compilation
+ configurable per compilation
 ```
 
 Rules should be scheduled in tiers:
 
 ```text
-Tier A  reductions / canonical identities
-Tier B  constant, known-bits and range-driven rules
-Tier C  guarded algebraic alternatives
-Tier D  memory/alias alternatives
-Tier E  target instruction alternatives
-Tier F  high-expansion exploratory rules
+Tier A reductions / canonical identities
+Tier B constant, known-bits and range-driven rules
+Tier C guarded algebraic alternatives
+Tier D memory/alias alternatives
+Tier E target instruction alternatives
+Tier F high-expansion exploratory rules
 ```
 
 Associativity and commutativity deserve special treatment. Blindly adding:
@@ -812,7 +812,7 @@ a+b = b+a
 
 can generate enormous redundant spaces. Prefer AC-aware canonical representation, variadic normalized nodes, or tightly fuelled AC rules rather than treating every permutation as an ordinary alternative.
 
-Incremental EqSat should be built in from the beginning. `egglog` demonstrates the value of efficient incremental fixed-point execution, while the recent persistent-egraph architecture explicitly motivates preserving equalities across conventional compiler transformations. citeturn18search3turn19search1 EvoCC should therefore keep:
+Incremental EqSat should be built in from the beginning. `egglog` demonstrates the value of efficient incremental fixed-point execution, while the recent persistent-egraph architecture explicitly motivates preserving equalities across conventional compiler transformations. EvoCC should therefore keep:
 
 ```text
 revision numbers
@@ -833,7 +833,7 @@ cost(add) = 1
 cost(mul) = 3
 ```
 
-is useful but insufficient because compiled code is a **DAG**, not a tree. Shared subexpressions, placement, register pressure, effects, target addressing modes, and proof requirements can all make a locally cheap representative globally poor. Current extraction research specifically studies sparse/low-treewidth e-graphs, and high-level Julia EqSat uses global extraction machinery to exploit code reuse while respecting control-flow structure. citeturn20search4turn19search3
+is useful but insufficient because compiled code is a **DAG**, not a tree. Shared subexpressions, placement, register pressure, effects, target addressing modes, and proof requirements can all make a locally cheap representative globally poor. Current extraction research specifically studies sparse/low-treewidth e-graphs, and high-level Julia EqSat uses global extraction machinery to exploit code reuse while respecting control-flow structure.
 
 The extraction alternatives should be treated as follows:
 
@@ -843,20 +843,20 @@ The extraction alternatives should be treated as follows:
 | Iterative DAG-aware greedy | Low | Better | Moderate | **Default v1** |
 | Bounded branch-and-bound | Medium/high | Potentially exact for small regions | Good | **Hot/small regions** |
 | ILP | High + solver dependency | Strong global solution | Excellent | Research/reference mode; not self-contained |
-| Sparse/treewidth exact algorithms | Attractive on suitable e-graphs | Optimal under model | Good | Post-launch implementation, inspired by 2024 results citeturn20search4turn20search3 |
+| Sparse/treewidth exact algorithms | Attractive on suitable e-graphs | Optimal under model | Good | Post-launch implementation, inspired by 2024 results |
 
 Extraction begins with **hard feasibility**, not cost:
 
 ```text
 Feasible(candidate) =
-    target operators legal
-    ∧ types legal
-    ∧ no cyclic value dependency
-    ∧ effect ordering respected
-    ∧ no duplicated impure operation
-    ∧ dominance satisfied
-    ∧ inline-asm constraints satisfiable
-    ∧ ABI boundaries legal
+ target operators legal
+ ∧ types legal
+ ∧ no cyclic value dependency
+ ∧ effect ordering respected
+ ∧ no duplicated impure operation
+ ∧ dominance satisfied
+ ∧ inline-asm constraints satisfiable
+ ∧ ABI boundaries legal
 ```
 
 Only then compare costs.
@@ -875,12 +875,12 @@ I would encode the default cost lexicographically:
 ```text
 Cost =
 (
-    semantic_or_target_illegality,  // must be zero
-    predicted_spills,
-    estimated_cycles,
-    weighted_code_bytes,
-    register_pressure,
-    proof_complexity
+ semantic_or_target_illegality, // must be zero
+ predicted_spills,
+ estimated_cycles,
+ weighted_code_bytes,
+ register_pressure,
+ proof_complexity
 )
 ```
 
@@ -890,15 +890,15 @@ For `-Os`:
 
 ```text
 code_bytes ↑ weight
-cycles     ↓ weight
+cycles ↓ weight
 ```
 
 For `-O2`:
 
 ```text
-cycles          ↑ weight
+cycles ↑ weight
 register_pressure ↑ weight
-size              moderate
+size moderate
 ```
 
 Proof complexity should initially be a tie-breaker rather than something allowed to select obviously slower code. Its primary purpose is keeping certificates tractable.
@@ -907,13 +907,13 @@ After register allocation, one **feedback re-extraction** is worth supporting:
 
 ```text
 extract
-  ↓
+ ↓
 register allocate
-  ↓
+ ↓
 observe spills / pressure
-  ↓
+ ↓
 update cost feedback
-  ↓
+ ↓
 incrementally re-extract hot regions once
 ```
 
@@ -927,36 +927,36 @@ The stack should be:
 
 ```text
 C source
-  │
-  ├── C-HIR semantic interpreter / frontend tests
-  │
-  ▼
+ │
+ ├── C-HIR semantic interpreter / frontend tests
+ │
+ ▼
 EvoIR before optimization
-  │
-  ├── evo-run reference interpreter
-  │
-  ▼
+ │
+ ├── evo-run reference interpreter
+ │
+ ▼
 EqSat + extraction
-  │
-  ├── equality proof certificate
-  ├── independent certificate checker
-  └── per-function translation validation
-  │
-  ▼
+ │
+ ├── equality proof certificate
+ ├── independent certificate checker
+ └── per-function translation validation
+ │
+ ▼
 EvoMIR
-  │
-  ├── MIR structural verifier
-  └── ABI/regalloc property tests
-  │
-  ▼
+ │
+ ├── MIR structural verifier
+ └── ABI/regalloc property tests
+ │
+ ▼
 machine code
-  │
-  ├── differential execution
-  ├── randomized ABI tests
-  └── kernel boot / KUnit / kselftest
+ │
+ ├── differential execution
+ ├── randomized ABI tests
+ └── kernel boot / KUnit / kselftest
 ```
 
-Csmith should be a major launch harness. Its project describes it explicitly as a random C generator intended to find compiler bugs through differential testing and aims to generate programs without undefined behavior. citeturn21search2 In development, invoking Clang or GCC as a **test oracle only** does not compromise the architectural goal—none of their frontend, optimization, IR, or code generation is linked into EvoCC. If even test-only use is considered forbidden, compare EvoIR interpreter output against EvoCC `-O0` and `-Oeq` native output instead.
+Csmith should be a major launch harness. Its project describes it explicitly as a random C generator intended to find compiler bugs through differential testing and aims to generate programs without undefined behavior. In development, invoking Clang or GCC as a **test oracle only** does not compromise the architectural goal—none of their frontend, optimization, IR, or code generation is linked into EvoCC. If even test-only use is considered forbidden, compare EvoIR interpreter output against EvoCC `-O0` and `-Oeq` native output instead.
 
 A typical fuzz gate can be:
 
@@ -986,15 +986,15 @@ For every EqSat test, also check:
 
 ```bash
 evocc --emit-evoir-before t.c > before.evo
-evocc --emit-evoir-after  t.c > after.evo
-evocc --emit-proof        t.c > proof.evp
+evocc --emit-evoir-after t.c > after.evo
+evocc --emit-proof t.c > proof.evp
 
 evo-proofcheck before.evo after.evo proof.evp
 ```
 
-Translation validation should borrow the architectural lesson of systems such as Alive2—validate particular transformations rather than assuming an entire optimizer is correct—but EvoCC should target EvoIR's own semantics rather than importing LLVM's. The Alive2 work demonstrates the practical value of translation validation for compiler transformations and memory semantics. citeturn9search2turn9search14
+Translation validation should borrow the architectural lesson of systems such as Alive2—validate particular transformations rather than assuming an entire optimizer is correct—but EvoCC should target EvoIR's own semantics rather than importing LLVM's. The Alive2 work demonstrates the practical value of translation validation for compiler transformations and memory semantics.
 
-Kernel-level verification comes later. Linux provides both KUnit and kselftest infrastructures; the kernel testing documentation describes those as its principal testing frameworks, and KUnit can run quickly on supported kernel architectures. citeturn16search5turn16search21
+Kernel-level verification comes later. Linux provides both KUnit and kselftest infrastructures; the kernel testing documentation describes those as its principal testing frameworks, and KUnit can run quickly on supported kernel architectures.
 
 The most important launch invariant is:
 
@@ -1008,28 +1008,28 @@ The full pipeline should have contracts narrow enough that agents can work indep
 
 ```mermaid
 flowchart LR
-    SRC[C source] --> CPP[EvoCPP]
-    CPP --> PARSE[Parser]
-    PARSE --> CHIR[C-HIR]
-    CHIR --> SEMA[Semantic / layout]
-    SEMA --> EVO[EvoIR SSA]
-    EVO <--> EQ[Equivalence DB]
-    EQ --> SAT[EqSat]
-    SAT --> EXT[Extractor]
-    EXT --> MIR[EvoMIR]
-    MIR --> SEL[Target lowering]
-    SEL --> RA[Linear-scan RA]
-    RA --> ASM[Assembly emitter]
+ SRC[C source] --> CPP[EvoCPP]
+ CPP --> PARSE[Parser]
+ PARSE --> CHIR[C-HIR]
+ CHIR --> SEMA[Semantic / layout]
+ SEMA --> EVO[EvoIR SSA]
+ EVO <--> EQ[Equivalence DB]
+ EQ --> SAT[EqSat]
+ SAT --> EXT[Extractor]
+ EXT --> MIR[EvoMIR]
+ MIR --> SEL[Target lowering]
+ SEL --> RA[Linear-scan RA]
+ RA --> ASM[Assembly emitter]
 
-    CPP -. verifier .-> VC[CPP regression suite]
-    CHIR -. interpreter .-> VH[C semantic tests]
-    EVO -. interpreter .-> VI[EvoVM]
-    EQ -. certificate .-> VP[Proof checker]
-    EXT -. validation .-> VT[Translation validator]
-    MIR -. verifier .-> VM[MIR checker]
+ CPP -. verifier.-> VC[CPP regression suite]
+ CHIR -. interpreter.-> VH[C semantic tests]
+ EVO -. interpreter.-> VI[EvoVM]
+ EQ -. certificate.-> VP[Proof checker]
+ EXT -. validation.-> VT[Translation validator]
+ MIR -. verifier.-> VM[MIR checker]
 ```
 
-The frontend deserves far more schedule priority than most hobby-compiler plans give it. Linux's documented baseline is GNU C11, not a small pedagogical C subset. citeturn17search0 EvoCPP therefore needs, early:
+The frontend deserves far more schedule priority than most hobby-compiler plans give it. Linux's documented baseline is GNU C11, not a small pedagogical C subset. EvoCPP therefore needs, early:
 
 ```text
 object-like macros
@@ -1054,7 +1054,7 @@ predefined target macros
 
 __has_attribute
 __has_builtin
-__has_feature        where needed by headers
+__has_feature where needed by headers
 
 correct token rescanning
 ```
@@ -1209,9 +1209,9 @@ atomics or compiler builtins where required
 inline-asm constraint plumbing
 ```
 
-The Arm-maintained ABI repository provides AAPCS64, ELF, atomics ABI, and related specifications; Apple's ARM64 documentation defines the platform ABI expected on the Mac. citeturn22search0turn22search1
+The Arm-maintained ABI repository provides AAPCS64, ELF, atomics ABI, and related specifications; Apple's ARM64 documentation defines the platform ABI expected on the Mac.
 
-For Linux, object-level conventions are ELF64/AArch64. Arm's AAELF64 document explicitly specifies how ELF is used by the AArch64 ABI. citeturn22search4
+For Linux, object-level conventions are ELF64/AArch64. Arm's AAELF64 document explicitly specifies how ELF is used by the AArch64 ABI.
 
 For x86-64, reuse all target-independent machinery and add:
 
@@ -1227,7 +1227,7 @@ ELF relocations
 x86 asm constraints/clobbers
 ```
 
-The maintained x86-64 psABI repository is the authoritative backend reference. citeturn22search2turn22search6
+The maintained x86-64 psABI repository is the authoritative backend reference.
 
 ### Assembly and object-format boundary
 
@@ -1235,17 +1235,17 @@ For the 30-day mission, I recommend:
 
 ```text
 EvoMIR
-   ↓
+ ↓
 your instruction selection
-   ↓
+ ↓
 your register allocation
-   ↓
+ ↓
 your assembly emission
-   ↓
+ ↓
 platform assembler
-   ↓
+ ↓
 Mach-O / ELF object
-   ↓
+ ↓
 platform linker
 ```
 
@@ -1253,46 +1253,46 @@ That still means **all compiler decisions are yours**. The assembler is an encod
 
 It also solves a nontrivial problem: kernel inline assembly and `.S` files already contain architecture assembly. Writing a complete AArch64 assembler and then an x86 assembler simply to avoid `as` would consume critical-path time without advancing the EqSat research.
 
-A direct Mach-O/ELF relocatable writer is a valuable post-launch/parallel feature. Apple confirms Mach-O is the standard packaging format for its executables and object files, while the Arm ABI specifies ELF for AArch64. citeturn16search35turn22search4 But it should not prevent the kernel launch.
+A direct Mach-O/ELF relocatable writer is a valuable post-launch/parallel feature. Apple confirms Mach-O is the standard packaging format for its executables and object files, while the Arm ABI specifies ELF for AArch64. But it should not prevent the kernel launch.
 
 This gives a precise definition:
 
 ```text
 Self-contained compiler:
-    YES
-    frontend
-    preprocessor
-    semantic analysis
-    IR
-    EqSat
-    extraction
-    instruction selection
-    register allocation
-    assembly generation
+ YES
+ frontend
+ preprocessor
+ semantic analysis
+ IR
+ EqSat
+ extraction
+ instruction selection
+ register allocation
+ assembly generation
 
 Self-contained complete Unix toolchain:
-    UNSPECIFIED
-    assembler
-    linker
-    ar
-    nm
-    strip
-    objcopy
-    objdump
-    readelf
+ UNSPECIFIED
+ assembler
+ linker
+ ar
+ nm
+ strip
+ objcopy
+ objdump
+ readelf
 ```
 
 If the latter is also required, update the mission definition before Day 1.
 
 ### Linux integration
 
-Do Linux integration inside an **ARM64 Linux environment** after Mac-native bring-up rather than making macOS-host Kbuild quirks part of compiler debugging. The kernel's build system uses GNU Make and many host/build utilities; its own Makefile documentation notes reliance on GNU Make features. citeturn17search12
+Do Linux integration inside an **ARM64 Linux environment** after Mac-native bring-up rather than making macOS-host Kbuild quirks part of compiler debugging. The kernel's build system uses GNU Make and many host/build utilities; its own Makefile documentation notes reliance on GNU Make features.
 
 Use the M2 Max for an ARM64 Linux VM. The target remains essentially:
 
 ```text
 host compiler binary: aarch64-linux
-kernel target:         arm64-linux
+kernel target: arm64-linux
 ```
 
 which eliminates an unnecessary ISA cross-compilation variable during first boot.
@@ -1300,8 +1300,8 @@ which eliminates an unnecessary ISA cross-compilation variable during first boot
 Pin on Day 1:
 
 ```text
-Linux revision:        UNSPECIFIED
-Kernel configuration:  UNSPECIFIED
+Linux revision: UNSPECIFIED
+Kernel configuration: UNSPECIFIED
 ```
 
 Do **not** track `master` for 30 days. Freeze a commit and configuration so the compiler target does not move underneath the team.
@@ -1312,15 +1312,15 @@ A first kernel build gate inside the ARM64 Linux environment should resemble:
 make O=out-evo ARCH=arm64 defconfig
 
 make O=out-evo -j"$(nproc)" ARCH=arm64 \
-    CC=/opt/evo/bin/evocc \
-    HOSTCC=/opt/evo/bin/evocc \
-    LD=ld \
-    AR=ar \
-    NM=nm \
-    STRIP=strip \
-    OBJCOPY=objcopy \
-    OBJDUMP=objdump \
-    READELF=readelf
+ CC=/opt/evo/bin/evocc \
+ HOSTCC=/opt/evo/bin/evocc \
+ LD=ld \
+ AR=ar \
+ NM=nm \
+ STRIP=strip \
+ OBJCOPY=objcopy \
+ OBJDUMP=objdump \
+ READELF=readelf
 ```
 
 This intentionally contains no GCC or LLVM compiler.
@@ -1363,25 +1363,25 @@ The same `CC` command path may be asked to preprocess assembly. EvoCC therefore 
 
 that runs **EvoCPP** and then hands the resulting architecture assembly to the allowed assembler.
 
-For boot, QEMU officially provides `qemu-system-aarch64` for emulating 64-bit Arm and supports its generic `virt` platform. citeturn16search10 A launch command can be:
+For boot, QEMU officially provides `qemu-system-aarch64` for emulating 64-bit Arm and supports its generic `virt` platform. A launch command can be:
 
 ```bash
 qemu-system-aarch64 \
-    -M virt \
-    -cpu max \
-    -smp 4 \
-    -m 2048 \
-    -kernel out-evo/arch/arm64/boot/Image \
-    -initrd evo-rootfs.cpio.gz \
-    -append 'console=ttyAMA0 panic=-1' \
-    -nographic \
-    -no-reboot
+ -M virt \
+ -cpu max \
+ -smp 4 \
+ -m 2048 \
+ -kernel out-evo/arch/arm64/boot/Image \
+ -initrd evo-rootfs.cpio.gz \
+ -append 'console=ttyAMA0 panic=-1' \
+ -nographic \
+ -no-reboot
 ```
 
 The ideal `evo-rootfs.cpio.gz` contains a tiny `/init` **also compiled by EvoCC**, so the boot marker validates both the kernel and a freestanding userspace program:
 
 ```text
-[... kernel boot ...]
+[... kernel boot...]
 EVO INIT: compiler launch successful
 ```
 
@@ -1410,22 +1410,22 @@ Every agent PR should satisfy:
 
 ```text
 spec change?
-    → spec test required
+ → spec test required
 
 new EvoIR op?
-    → verifier + interpreter semantics required
+ → verifier + interpreter semantics required
 
 new rewrite?
-    → proof/test required
+ → proof/test required
 
 new backend instruction?
-    → encoder/assembly fixture + ABI test required
+ → encoder/assembly fixture + ABI test required
 
 kernel bug fix?
-    → reduced reproducer required
+ → reduced reproducer required
 
 optimization?
-    → correctness test before benchmark
+ → correctness test before benchmark
 ```
 
 The dashboard should expose five numbers every hour:
@@ -1456,36 +1456,36 @@ Assuming an illustrative start on August 10, 2026—the actual start date is **u
 
 ```mermaid
 gantt
-    title EvoCC launch campaign
-    dateFormat  YYYY-MM-DD
-    axisFormat  %b %d
+ title EvoCC launch campaign
+ dateFormat YYYY-MM-DD
+ axisFormat %b %d
 
-    section Semantics
-    Architecture and semantic freeze      :a1, 2026-08-10, 3d
-    EvoCPP and GNU C frontend             :a2, 2026-08-11, 10d
-    Kernel parse hardening                :a3, 2026-08-15, 17d
+ section Semantics
+ Architecture and semantic freeze:a1, 2026-08-10, 3d
+ EvoCPP and GNU C frontend:a2, 2026-08-11, 10d
+ Kernel parse hardening:a3, 2026-08-15, 17d
 
-    section Equality
-    E-graph core and proof system         :b1, 2026-08-12, 7d
-    Analyses and extraction               :b2, 2026-08-15, 10d
-    Memory and target rewrites            :b3, 2026-08-22, 13d
+ section Equality
+ E-graph core and proof system:b1, 2026-08-12, 7d
+ Analyses and extraction:b2, 2026-08-15, 10d
+ Memory and target rewrites:b3, 2026-08-22, 13d
 
-    section Apple ARM64
-    EvoMIR and register allocation        :c1, 2026-08-20, 5d
-    Apple AArch64 backend                 :c2, 2026-08-21, 5d
-    Native validation                     :c3, 2026-08-24, 4d
+ section Apple ARM64
+ EvoMIR and register allocation:c1, 2026-08-20, 5d
+ Apple AArch64 backend:c2, 2026-08-21, 5d
+ Native validation:c3, 2026-08-24, 4d
 
-    section Linux ARM64
-    ELF/Linux ABI bring-up                :d1, 2026-08-28, 4d
-    Kbuild compatibility                  :d2, 2026-08-30, 6d
-    Kernel link and boot                  :crit, d3, 2026-09-03, 4d
+ section Linux ARM64
+ ELF/Linux ABI bring-up:d1, 2026-08-28, 4d
+ Kbuild compatibility:d2, 2026-08-30, 6d
+ Kernel link and boot:crit, d3, 2026-09-03, 4d
 
-    section Hardening
-    Csmith proofs and kernel tests        :e1, 2026-09-05, 3d
+ section Hardening
+ Csmith proofs and kernel tests:e1, 2026-09-05, 3d
 
-    section x86
-    x86 backend integration               :e2, 2026-09-07, 2d
-    Release and flight review             :e3, 2026-09-08, 1d
+ section x86
+ x86 backend integration:e2, 2026-09-07, 2d
+ Release and flight review:e3, 2026-09-08, 1d
 ```
 
 ## Launch logic (re-plan of 2026-08-25)
@@ -1500,28 +1500,28 @@ sealed evidence; nothing else counts. Stages with no arrow between them may run 
 second executor exists; with one executor, run them in the listed order.
 
 ```text
-                 F: front end            B: backend               K: kernel lab
-F1 parse cohort 16/16 [CLOSED 2026-09-02, run 20260901T185119Z-83939] ──┐         B1 EvoMIR + RA            K1 flight lab (VM, Kbuild, QEMU, initramfs)
-F2 preprocess 16/16 (no diagnostics; fidelity measured by F3) ┤         B2 Mac scalar ABI              │
-                        │         B3 spills, globals, fnptr      │
-                        │         B4 aggregates, varargs         │
-                        │         B5 MAC FLIGHT GATE (Csmith)    │
-                        │         B6 Linux ELF/ABI               │
-                        │         B7 LINUX USERSPACE GATE        │
-                        └────────────┬───────────────────────────┘
-                     F3 full-config parse 2,798/2,798 [CLOSED 2026-09-04, run 20260903T162825Z-96918; 34 HOSTCC records excluded; Kbuild-driven telemetry replaces the cohort)
-                     F4 full-config lowering N/N  (survey-ranked; first run 4/2,798, the frontier)
-                     C1 kernel codegen: asm, asm goto, atomics, sections, relocations
-                     C2 KERNEL OBJECT GATE: TUs compiling N/N, vmlinux links (baseline extraction)
-                     G1 BASELINE BOOT: marker printed under QEMU
-                                     │
-   S: semantics and equality         │
-   S1 STANDING SEMANTIC GATE: random EvoIR differential + proof replay, before any rewrite family ships
-   S2 lattices + scheduler with deterministic budgets (iterations/nodes, never wall clock)
-   S3 memory rewrites with proof facts
-                                     │
-                     G2 EQSAT BOOT: same image built twice byte-identical, every optimized TU proof-checked
-                     H  hardening; x86 userspace; x86 kernel is stretch
+ F: front end B: backend K: kernel lab
+F1 parse cohort 16/16 [CLOSED 2026-09-02, run 20260901T185119Z-83939] ──┐ B1 EvoMIR + RA K1 flight lab (VM, Kbuild, QEMU, initramfs)
+F2 preprocess 16/16 (no diagnostics; fidelity measured by F3) ┤ B2 Mac scalar ABI │
+ │ B3 spills, globals, fnptr │
+ │ B4 aggregates, varargs │
+ │ B5 MAC FLIGHT GATE (Csmith) │
+ │ B6 Linux ELF/ABI │
+ │ B7 LINUX USERSPACE GATE │
+ └────────────┬───────────────────────────┘
+ F3 full-config parse 2,798/2,798 [CLOSED 2026-09-04, run 20260903T162825Z-96918; 34 HOSTCC records excluded; Kbuild-driven telemetry replaces the cohort)
+ F4 full-config lowering N/N (survey-ranked; first run 4/2,798, the frontier)
+ C1 kernel codegen: asm, asm goto, atomics, sections, relocations
+ C2 KERNEL OBJECT GATE: TUs compiling N/N, vmlinux links (baseline extraction)
+ G1 BASELINE BOOT: marker printed under QEMU
+ │
+ S: semantics and equality │
+ S1 STANDING SEMANTIC GATE: random EvoIR differential + proof replay, before any rewrite family ships
+ S2 lattices + scheduler with deterministic budgets (iterations/nodes, never wall clock)
+ S3 memory rewrites with proof facts
+ │
+ G2 EQSAT BOOT: same image built twice byte-identical, every optimized TU proof-checked
+ H hardening; x86 userspace; x86 kernel is stretch
 ```
 
 | Stage | Requires | Gate: number / command / threshold / oracle |
@@ -1594,47 +1594,47 @@ The semantic gate should look roughly like:
 cargo test --workspace --release
 
 ./target/release/evocc \
-    --emit=evoir tests/fib.c \
-    -o /tmp/fib.evo
+ --emit=evoir tests/fib.c \
+ -o /tmp/fib.evo
 
 ./target/release/evo-run /tmp/fib.evo
 
 ./target/release/evocc \
-    -Oeq \
-    --emit-proof=/tmp/fib.evp \
-    --emit=evoir \
-    tests/fib.c \
-    -o /tmp/fib.opt.evo
+ -Oeq \
+ --emit-proof=/tmp/fib.evp \
+ --emit=evoir \
+ tests/fib.c \
+ -o /tmp/fib.opt.evo
 
 ./target/release/evo-proofcheck \
-    /tmp/fib.evo \
-    /tmp/fib.opt.evo \
-    /tmp/fib.evp
+ /tmp/fib.evo \
+ /tmp/fib.opt.evo \
+ /tmp/fib.evp
 ```
 
 The M2 Max gate becomes deliberately boring:
 
 ```bash
 ./target/release/evocc \
-    --target arm64-apple-darwin \
-    -Oeq \
-    tests/native.c \
-    -o /tmp/evo-native
+ --target arm64-apple-darwin \
+ -Oeq \
+ tests/native.c \
+ -o /tmp/evo-native
 
 /tmp/evo-native
 echo $?
 ```
 
-The compiler driver is responsible for invoking the permitted Apple assembly/link boundary. Apple documents its platform-specific ARM64 ABI and Mach-O environment; code built for one Apple platform cannot simply be assumed portable because the processor ISA happens to match. citeturn22search1turn16search35
+The compiler driver is responsible for invoking the permitted Apple assembly/link boundary. Apple documents its platform-specific ARM64 ABI and Mach-O environment; code built for one Apple platform cannot simply be assumed portable because the processor ISA happens to match.
 
 The Linux ARM64 compiler gate:
 
 ```bash
 evocc \
-    --target aarch64-linux-gnu \
-    -Oeq \
-    tests/linux_abi.c \
-    -o /tmp/linux_abi
+ --target aarch64-linux-gnu \
+ -Oeq \
+ tests/linux_abi.c \
+ -o /tmp/linux_abi
 
 /tmp/linux_abi
 ```
@@ -1645,35 +1645,35 @@ The kernel gate:
 make O=out-evo ARCH=arm64 defconfig
 
 make O=out-evo -j"$(nproc)" ARCH=arm64 \
-    CC=/opt/evo/bin/evocc \
-    HOSTCC=/opt/evo/bin/evocc \
-    LD=ld \
-    AR=ar \
-    NM=nm \
-    STRIP=strip \
-    OBJCOPY=objcopy \
-    OBJDUMP=objdump \
-    READELF=readelf
+ CC=/opt/evo/bin/evocc \
+ HOSTCC=/opt/evo/bin/evocc \
+ LD=ld \
+ AR=ar \
+ NM=nm \
+ STRIP=strip \
+ OBJCOPY=objcopy \
+ OBJDUMP=objdump \
+ READELF=readelf
 ```
 
 And launch:
 
 ```bash
 qemu-system-aarch64 \
-    -M virt \
-    -cpu max \
-    -smp 4 \
-    -m 2048 \
-    -kernel out-evo/arch/arm64/boot/Image \
-    -initrd evo-rootfs.cpio.gz \
-    -append 'console=ttyAMA0 panic=-1' \
-    -nographic \
-    -no-reboot
+ -M virt \
+ -cpu max \
+ -smp 4 \
+ -m 2048 \
+ -kernel out-evo/arch/arm64/boot/Image \
+ -initrd evo-rootfs.cpio.gz \
+ -append 'console=ttyAMA0 panic=-1' \
+ -nographic \
+ -no-reboot
 ```
 
-QEMU's official Arm documentation confirms that `qemu-system-aarch64` is the 64-bit Arm system emulator and that the generic `virt` machine is available for this purpose. citeturn16search10
+QEMU's official Arm documentation confirms that `qemu-system-aarch64` is the 64-bit Arm system emulator and that the generic `virt` machine is available for this purpose.
 
-After boot, target kernel tests can begin with KUnit and selected kselftests rather than attempting the entire test universe. Linux documents both frameworks and supports selecting kselftest subsets. citeturn16search1turn16search5
+After boot, target kernel tests can begin with KUnit and selected kselftests rather than attempting the entire test universe. Linux documents both frameworks and supports selecting kselftest subsets.
 
 ### Mission abort and de-scope rules
 
@@ -1715,7 +1715,7 @@ The project's core implementation checklist should be ruthlessly ordered.
 [ ] Kbuild command-line compatibility
 ```
 
-Linux's documentation makes the GNU C11 requirement explicit, while its static-key documentation provides a concrete example of why `asm goto` is real kernel language surface rather than an exotic compiler feature. citeturn17search0turn17search3
+Linux's documentation makes the GNU C11 requirement explicit, while its static-key documentation provides a concrete example of why `asm goto` is real kernel language surface rather than an exotic compiler feature.
 
 **Launch-critical EqSat**
 
@@ -1738,7 +1738,7 @@ Linux's documentation makes the GNU C11 requirement explicit, while its static-k
 [ ] fallback extraction
 ```
 
-The combination of `egg`, `egglog`, guided EqSat, and proof-carrying e-graphs gives unusually clear evidence for those priorities: efficient invariant rebuilding, integrated analyses, bounded/guided search, and certifiable equality are all already established concerns in modern EqSat systems. citeturn18search0turn18search3turn20search1turn18search2
+The combination of `egg`, `egglog`, guided EqSat, and proof-carrying e-graphs gives unusually clear evidence for those priorities: efficient invariant rebuilding, integrated analyses, bounded/guided search, and certifiable equality are all already established concerns in modern EqSat systems.
 
 **Launch-critical analyses**
 
@@ -1776,7 +1776,7 @@ The combination of `egg`, `egglog`, guided EqSat, and proof-carrying e-graphs gi
 [ ] minimum x86 integer backend
 ```
 
-Arm's maintained ABI specifications and Apple's platform documentation should be treated as executable backend requirements, not informal references. citeturn22search0turn22search1turn22search4
+Arm's maintained ABI specifications and Apple's platform documentation should be treated as executable backend requirements, not informal references.
 
 After launch, the research roadmap becomes considerably more interesting than “add more optimization passes.”
 
@@ -1787,19 +1787,19 @@ A first extension is **contextual equality**. Instead of every function having o
 Γ2 ⊢ x != 0
 ```
 
-Colored e-graphs are one recent attempt to represent congruence relations under different conditions compactly. citeturn18search30 This maps naturally onto C branch facts and definedness obligations.
+Colored e-graphs are one recent attempt to represent congruence relations under different conditions compactly. This maps naturally onto C branch facts and definedness obligations.
 
-A second extension is **whole-CFG equivalence**. E-Path's 2026 prototype moves from expression equivalence to equivalence between instruction sequences in CFGs. citeturn19search2 EvoCC could eventually explore an E-Path-like layer for loop unswitching, LICM, control-flow simplification, branch fusion and if-conversion while retaining several CFG variants simultaneously. That should happen only after the region/effect semantics are trustworthy.
+A second extension is **whole-CFG equivalence**. E-Path's 2026 prototype moves from expression equivalence to equivalence between instruction sequences in CFGs. EvoCC could eventually explore an E-Path-like layer for loop unswitching, LICM, control-flow simplification, branch fusion and if-conversion while retaining several CFG variants simultaneously. That should happen only after the region/effect semantics are trustworthy.
 
-A third is **machine-level persistent equality**. The 2026 persistent-egraph work specifically argues for retaining equality information across abstraction levels. citeturn19search1 In EvoCC this could mean:
+A third is **machine-level persistent equality**. The 2026 persistent-egraph work specifically argues for retaining equality information across abstraction levels. In EvoCC this could mean:
 
 ```text
 EvoIR arithmetic
-      ≡
+ ≡
 legalized arithmetic
-      ≡
+ ≡
 AArch64 addressing idiom
-      ≡
+ ≡
 machine instruction candidate
 ```
 
@@ -1824,17 +1824,17 @@ cost-model correction
 saturation guide
 ```
 
-Ruler is evidence that rule synthesis can produce compact useful rulesets, and recent LLM-guided EqSat work explores using language models to guide formal search. citeturn21search0turn20search15 EvoCC's stronger version would be:
+Ruler is evidence that rule synthesis can produce compact useful rulesets, and recent LLM-guided EqSat work explores using language models to guide formal search. EvoCC's stronger version would be:
 
 ```text
 agent proposes
-     ↓
+ ↓
 formal/semantic checker evaluates
-     ↓
+ ↓
 fuzzer attacks
-     ↓
+ ↓
 proof certificate created
-     ↓
+ ↓
 human approves trust promotion
 ```
 
@@ -1842,7 +1842,7 @@ not:
 
 ```text
 agent writes optimizer code
-     ↓
+ ↓
 merge
 ```
 
@@ -1856,26 +1856,26 @@ could report:
 
 ```text
 Selected:
-    a64.add_shifted
+ a64.add_shifted
 
 Source equivalence:
-    add(x, shl(y,3))
+ add(x, shl(y,3))
 
 Alternatives explored:
-    17
+ 17
 
 Selected cost:
-    cycles=1
-    bytes=4
-    estimated_pressure=2
+ cycles=1
+ bytes=4
+ estimated_pressure=2
 
 Rejected:
-    shift + add
-        cycles=2
-        temporary_registers=1
+ shift + add
+ cycles=2
+ temporary_registers=1
 
 Proof:
-    #418 target.a64.add_shifted_equivalence
+ #418 target.a64.add_shifted_equivalence
 ```
 
 and:
@@ -1890,58 +1890,112 @@ could visualize the e-classes, analysis facts, rule firings, selected representa
 
 | Topic | Primary / official source |
 |---|---|
-| Foundational equality saturation | Tate et al., *Equality Saturation: A New Approach to Optimization*: https://dl.acm.org/doi/10.1145/1480881.1480915 citeturn18search1 |
-| `egg` | Willsey et al., *egg: Fast and Extensible Equality Saturation*: https://arxiv.org/abs/2004.03082 citeturn18search0 |
-| `egglog` | Zhang et al., *Better Together: Unifying Datalog and Equality Saturation*: https://arxiv.org/abs/2304.04332 citeturn18search3 |
-| Proof-carrying e-graphs | Flatt et al., *Small Proofs from Congruence Closure*: https://arxiv.org/abs/2209.03398 citeturn18search2 |
-| Guided EqSat | Koehler et al., *Guided Equality Saturation*: https://dl.acm.org/doi/10.1145/3632900 citeturn20search0 |
-| Sketch-guided EqSat | https://arxiv.org/abs/2111.13040 citeturn20search1 |
-| Sparse optimal extraction | Goharshady, Lam, Parreaux: https://cse.hkust.edu.hk/~parreaux/publication/oopsla24a/ citeturn20search4 |
-| Treewidth/circuit extraction | Sun, Zhang, Ni: https://arxiv.org/abs/2408.17042 citeturn20search3 |
-| Production Cranelift e-graphs | Cranelift RFC: https://github.com/bytecodealliance/rfcs/blob/main/accepted/cranelift-egraph.md citeturn19search0 |
-| Cranelift project | https://cranelift.dev/ citeturn19search32 |
-| High-level EqSat with effects/CFG | *Equality Saturation for Optimizing High-Level Julia IR*: https://arxiv.org/abs/2502.17075 citeturn19search3 |
-| Persistent compiler e-graphs | Merckx et al., *E-Graphs as a Persistent Compiler Abstraction*: https://arxiv.org/abs/2602.16707 citeturn19search1 |
-| CFG EqSat research | Garcia, *E-Path*: https://arxiv.org/abs/2605.28694 citeturn19search2 |
-| Herbie/Ruler research | https://herbie.uwplse.org/papers.html citeturn21search0 |
-| Souper | https://github.com/google/souper citeturn21search1 |
-| C provenance / Cerberus / TS 6010 | https://www.cl.cam.ac.uk/~pes20/papers/topic.Cerberus_abstracts.html citeturn21search3 |
-| Csmith | https://github.com/csmith-project/csmith citeturn21search2 |
-| Linux C language requirements | https://docs.kernel.org/process/programming-language.html citeturn17search0 |
-| Linux Kbuild structure | https://docs.kernel.org/kbuild/makefiles.html citeturn17search12 |
-| Linux kernel tests | https://docs.kernel.org/dev-tools/kselftest.html and https://docs.kernel.org/dev-tools/kunit/ citeturn16search1turn16search21 |
-| Arm ABI specifications | https://github.com/ARM-software/abi-aa citeturn22search0 |
-| AArch64 ELF ABI | https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst citeturn22search4 |
-| Apple ARM64 ABI | https://developer.apple.com/documentation/xcode/writing-arm64-code-for-apple-platforms citeturn22search1 |
-| x86-64 psABI | https://gitlab.com/x86-psABIs/x86-64-ABI citeturn22search6 |
-| QEMU Arm system emulation | https://www.qemu.org/docs/master/system/target-arm.html citeturn16search10 |
+| Foundational equality saturation | Tate et al., *Equality Saturation: A New Approach to Optimization*: https://dl.acm.org/doi/10.1145/1480881.1480915 |
+| `egg` | Willsey et al., *egg: Fast and Extensible Equality Saturation*: https://arxiv.org/abs/2004.03082 |
+| `egglog` | Zhang et al., *Better Together: Unifying Datalog and Equality Saturation*: https://arxiv.org/abs/2304.04332 |
+| Proof-carrying e-graphs | Flatt et al., *Small Proofs from Congruence Closure*: https://arxiv.org/abs/2209.03398 |
+| Guided EqSat | Koehler et al., *Guided Equality Saturation*: https://dl.acm.org/doi/10.1145/3632900 |
+| Sketch-guided EqSat | https://arxiv.org/abs/2111.13040 |
+| Sparse optimal extraction | Goharshady, Lam, Parreaux: https://cse.hkust.edu.hk/~parreaux/publication/oopsla24a/ |
+| Treewidth/circuit extraction | Sun, Zhang, Ni: https://arxiv.org/abs/2408.17042 |
+| Production Cranelift e-graphs | Cranelift RFC: https://github.com/bytecodealliance/rfcs/blob/main/accepted/cranelift-egraph.md |
+| Cranelift project | https://cranelift.dev/ |
+| High-level EqSat with effects/CFG | *Equality Saturation for Optimizing High-Level Julia IR*: https://arxiv.org/abs/2502.17075 |
+| Persistent compiler e-graphs | Merckx et al., *E-Graphs as a Persistent Compiler Abstraction*: https://arxiv.org/abs/2602.16707 |
+| CFG EqSat research | Garcia, *E-Path*: https://arxiv.org/abs/2605.28694 |
+| Herbie/Ruler research | https://herbie.uwplse.org/papers.html |
+| Souper | https://github.com/google/souper |
+| C provenance / Cerberus / TS 6010 | https://www.cl.cam.ac.uk/~pes20/papers/topic.Cerberus_abstracts.html |
+| Csmith | https://github.com/csmith-project/csmith |
+| Linux C language requirements | https://docs.kernel.org/process/programming-language.html |
+| Linux Kbuild structure | https://docs.kernel.org/kbuild/makefiles.html |
+| Linux kernel tests | https://docs.kernel.org/dev-tools/kselftest.html and https://docs.kernel.org/dev-tools/kunit/ |
+| Arm ABI specifications | https://github.com/ARM-software/abi-aa |
+| AArch64 ELF ABI | https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst |
+| Apple ARM64 ABI | https://developer.apple.com/documentation/xcode/writing-arm64-code-for-apple-platforms |
+| x86-64 psABI | https://gitlab.com/x86-psABIs/x86-64-ABI |
+| QEMU Arm system emulation | https://www.qemu.org/docs/master/system/target-arm.html |
 
 The resulting design is materially different from both LLVM and a traditional “toy compiler plus e-graph pass.” LLVM's narrow waist is essentially one chosen SSA program. EvoCC's narrow waist should instead be:
 
 ```text
-                 Context Γ
-                    │
-                    ▼
-       ┌─────────────────────────┐
-       │    Persistent equality   │
-       │                         │
-       │ EClass A                │
-       │   ├─ generic expression │
-       │   ├─ simplified form    │
-       │   ├─ memory-aware form  │
-       │   ├─ AArch64 form       │
-       │   └─ x86 form           │
-       │                         │
-       │ + analysis facts        │
-       │ + proof history         │
-       └─────────────────────────┘
-                    │
-              feasible extract
-                    │
-                    ▼
-                 EvoMIR
+ Context Γ
+ │
+ ▼
+ ┌─────────────────────────┐
+ │ Persistent equality │
+ │ │
+ │ EClass A │
+ │ ├─ generic expression │
+ │ ├─ simplified form │
+ │ ├─ memory-aware form │
+ │ ├─ AArch64 form │
+ │ └─ x86 form │
+ │ │
+ │ + analysis facts │
+ │ + proof history │
+ └─────────────────────────┘
+ │
+ feasible extract
+ │
+ ▼
+ EvoMIR
 ```
 
 That is the central research bet: **optimization is not a sequence of mutations but an expanding, mechanically justified knowledge base of ways to implement a computation**. The compiler frontend establishes the semantic universe; the EqSat engine accumulates alternatives; analyses establish the conditions under which alternatives are legal; extraction chooses according to target reality; proof machinery explains why the choice is valid.
 
 For the 30-day campaign, the discipline is equally important: **Mac-native execution by the midpoint, Linux AArch64 kernel boot as the primary launch, proof-carrying EqSat enabled for that launch, and x86 only after ARM64 is green.** That keeps the project ambitious enough to be genuinely new without spending the month accidentally rebuilding an assembler, an ILP solver, a whole-CFG research prototype, and two production backends before the first real program runs.
+
+## Milestone ladder for end-to-end evaluation (added 2026-09-06)
+
+The kernel is the launch target, but "the kernel boots" is a single bit that
+arrives late. The ladder below gives Q1 (correct on real code) a reading at
+every step, with the same method the kernel lane already uses: a reference
+compiler builds the whole program, EvoCC replaces translation units one at a
+time, the program's own test suite is the oracle, and a receipt records how
+many units EvoCC compiled in a build that passes. Every subject is pinned to
+a release looked up on the date above; a milestone is re-pinned only by a
+roadmap change, never by "whatever is newest today".
+
+Rules that hold for every rung:
+
+- **Pinned source.** The tarball or tag and its date are recorded here and in
+  the milestone's receipt with a SHA-256 of what was actually built.
+- **The subject's own oracle judges.** A rung passes when the subject's test
+  suite passes with every unit EvoCC can compile substituted; a failing test
+  is bisected to a unit and filed as a compiler defect, never as a test defect.
+- **Mixed link is the ramp, not the goal.** The receipt reports both numbers:
+  units compiled by EvoCC in a passing build, and units still supplied by the
+  reference compiler with the diagnostic code that kept them out.
+- **Floating point is a backend rung of its own.** EvoMIR refuses `f32`/`f64`
+  (E4001) because the kernel is built with general registers only; subjects
+  marked FP below wait for that rung and are not evidence of anything before it.
+
+| Rung | Subject | Pinned release (date, source) | Size | Oracle | Needs |
+|---|---|---|---|---|---|
+| E0a | GCC C torture, `gcc/testsuite/gcc.c-torture/execute` | GCC 16.2 (2026-08-07, gcc.gnu.org/releases.html) | ~1,800 programs | self-checking: `abort()` fails | integer subset first; FP cases after the FP rung |
+| E0b | c-testsuite | git `5c7275656d75` (2020-03-08, github.com/c-testsuite/c-testsuite) | ~220 programs | expected-output files | none beyond today's profile |
+| E0c | Csmith differential, `--no-float` | git master `0cdc710315cf` (2026-03-02, github.com/csmith-project/csmith; the last tag `csmith-2.3.0` is `192c7862ab69`) | unbounded | GCC-14, Clang-19 and EvoCC agree on the checksum | the sealed container as oracle host |
+| E1 | zlib | 1.3.2 (2026-02-17, zlib.net) | ~30 TU | `make test`, `minigzip` round trip | variadic calls, external symbols |
+| E2 | zstd | v1.5.7 (2025-02-19, github.com/facebook/zstd) | ~90 TU | `make check`, round trip | bit counting, 128-bit, pointer ordering |
+| E3 | cJSON | v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON) | 2 TU + tests | `make test` (Unity suite); number parsing needs FP | FP for the number tests |
+| E4 | Mbed TLS | 4.2.0 (2026-07-07, github.com/Mbed-TLS/mbedtls, `mbedtls-4.2.0.tar.bz2`) | ~200 TU | `programs/test/selftest` and `tests/` | 64-bit multiply, constant-time code; the best miscompile detector on the ladder |
+| E5 | TinyCC | 0.9.27 (2017-12-17, download.savannah.gnu.org/releases/tinycc) with `mob` `0fb54300b565` for AArch64 fixes | ~30 TU | `make test`; tcc built by EvoCC builds and runs its own tests | a compiler compiling a compiler |
+| E6 | toybox | 0.8.14 (2026-06-22, github.com/landley/toybox) | ~400 TU | `make tests` per applet | `printf` FP paths disabled or after the FP rung |
+| E7 | musl + libc-test | musl 1.2.6 (2026-03-20, musl.libc.org/releases.html); libc-test from git.musl-libc.org/git/libc-test at the HEAD recorded in the first receipt (no releases exist) | ~1,000 TU | libc-test | variadic callees, aggregate ABI, TLS; the bridge to the kernel ABI |
+| F1 | Floating-point backend rung | EvoMIR revision to be written | | E0a FP cases, E3 numbers | `f32`/`f64` registers, calls, comparisons |
+| E8 | PolyBench/C | 4.2.1-beta (2016-05-20, sourceforge.net/projects/polybench) | 30 kernels | reference outputs (`-DPOLYBENCH_DUMP_ARRAYS`) | FP; the loop-optimization reading for Q2 |
+| E9 | llvm-test-suite `SingleSource` | tag `llvmorg-23.1.0` (2026-07-14, github.com/llvm/llvm-test-suite) | ~500 programs | reference outputs | mixed integer and FP |
+| E10 | jq | jq-1.8.2 (2026-06-20, github.com/jqlang/jq) | ~40 TU | `make check` | FP (numbers are doubles), external libs |
+| E11 | Lua | 5.5.1 (2026-07-24, lua.org/download.html) | ~35 TU | official test suite | FP |
+| E12 | SQLite | 3.53.4 (`sqlite-autoconf-3530400.tar.gz`, sqlite.org/download.html) | amalgamation + `testfixture` | TH3 or the public TCL suite | FP, varargs, the largest single C program on the ladder |
+| K5 | Linux `lib/` and `kernel/` | 6.18.44 as pinned by the flight lab | ~400 TU | mixed-link boot (the K1 lane) | every front-end construct |
+| K6 | Linux full configuration, EvoCC alone | 6.18.44 | 2,799 TU | link without reference objects, boot to `init` | an inliner for `i` assembly constraints, computed goto, aggregate ABI parity |
+| K7 | K6 plus kselftest in the initramfs | 6.18.44 | | kselftest pass rate | runtime correctness beyond boot |
+
+Order of attack: E0a/E0b/E0c first, because they are cheap and they find
+miscompiles; then E1, E2, E4, E5, E7 in that order (integer-only, strong
+oracles, each a superset of the previous rung's demands); the kernel rungs
+K5 to K7 run in parallel on the K1 lane throughout; F1 opens E3's numbers,
+E8, E9, E10, E11 and E12. Each rung gets one receipt under
+`tests/contracts/` and one line in `docs/status.md`.
