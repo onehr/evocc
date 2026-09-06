@@ -1,57 +1,42 @@
 {
-  "bisection": {
-    "allowlistSize": 16,
-    "minimalFailingSet": [
-      "crypto/jitterentropy.o",
-      "lib/math/int_pow.o"
-    ],
-    "result": "minimal-failing-set",
-    "rounds": 22,
-    "runDirectory": ".evidence/k1/measure-e26a13b/bisection-4"
-  },
+  "bisection": null,
   "emulator": {
     "contractSha256": "af7f6f87c135fa5f08652cda8bc79c01ee560f2ce8e5666c964ad9dda5884232",
     "matchesContract": false,
     "path": "/opt/homebrew/bin/qemu-system-aarch64",
     "sha256": "45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e"
   },
-  "failingUnits": [
-    "drivers/video/logo/logo_linux_clut224.o",
-    "kernel/time/timecounter.o",
-    "drivers/tty/vt/ucs.o",
-    "lib/bcd.o",
-    "lib/compat_audit.o",
-    "lib/ctype.o",
-    "crypto/jitterentropy.o",
-    "lib/math/int_pow.o"
-  ],
-  "generatedAt": "2026-09-06T05:57:12Z",
+  "failingUnits": [],
+  "failingUnitsByReason": {
+    "multiple-definition": 0,
+    "other": 0
+  },
+  "generatedAt": "2026-09-06T11:48:38Z",
   "measurement": "translation units compiled by EvoCC in a kernel that boots",
   "mixedLink": {
     "allowSymbolDrift": true,
     "boot": {
-      "imageSha256": "a1ca4993408523ec2a6b783c53d435caabacc93610667e7bdf01f6cab9dc7021",
-      "nonce": "k1-20260906T055702Z-150860db",
-      "runDirectory": ".evidence/k1/measure-e26a13b/attempt-05/boot",
-      "serialLog": ".evidence/k1/measure-e26a13b/attempt-05/boot/boot.log",
-      "serialLogSha256": "ac60abe6a545764d361e290b58cbd2748d665e6bc4dcf8714ed2ac5bbf20948b",
+      "imageSha256": "98151c70fb302d0ebfb0e3a2d0e5be157aa1545cbf1f8e039e1d81799d6cf0fb",
+      "nonce": "k1-20260906T114833Z-23bb2944",
+      "runDirectory": ".evidence/k1/measure-a614bd7/attempt-01/boot",
+      "serialLog": ".evidence/k1/measure-a614bd7/attempt-01/boot/boot.log",
+      "serialLogSha256": "a4fd2f516503921c9d9ff753fbda97190ba96b0a3f7d747bafc36b032e484f7a",
       "verdict": "PASS"
     },
-    "imageSha256": "a1ca4993408523ec2a6b783c53d435caabacc93610667e7bdf01f6cab9dc7021",
+    "imageSha256": "98151c70fb302d0ebfb0e3a2d0e5be157aa1545cbf1f8e039e1d81799d6cf0fb",
     "outcomeCounts": {
-      "substituted": 14
+      "substituted": 13
     },
-    "provenVmlinuxSha256": "96b190f144f7713076488cef3d2d704d2c05a216649f27eec2888908d8f604ed",
+    "provenVmlinuxSha256": "7ae8bf886bef154a5e4293c9145c54fa61003efaed11d1cf69421ae5913448b5",
     "relinkExitCode": 0,
-    "requestedUnits": 14,
-    "runDirectory": ".evidence/k1/measure-e26a13b/attempt-05/substitution",
+    "requestedUnits": 13,
+    "runDirectory": ".evidence/k1/measure-a614bd7/attempt-01/substitution",
     "substitutedUnits": [
       "crypto/asymmetric_keys/pkcs7.asn1.o",
       "crypto/asymmetric_keys/x509.asn1.o",
       "crypto/asymmetric_keys/x509_akid.asn1.o",
       "crypto/rsaprivkey.asn1.o",
       "crypto/rsapubkey.asn1.o",
-      "drivers/firmware/efi/libstub/lib-ctype.o",
       "drivers/tty/vt/consolemap_deftbl.o",
       "lib/bitrev.o",
       "lib/clz_tab.o",
@@ -61,7 +46,7 @@
       "lib/zstd/common/error_private.o",
       "scripts/mod/empty.o"
     ],
-    "vmlinuxSha256": "96b190f144f7713076488cef3d2d704d2c05a216649f27eec2888908d8f604ed"
+    "vmlinuxSha256": "7ae8bf886bef154a5e4293c9145c54fa61003efaed11d1cf69421ae5913448b5"
   },
   "proofOfSubstitution": {
     "commentStrings": [
@@ -89,7 +74,6 @@
       "lib/zstd/common/error_private.o"
     ],
     "unitsNotLinkedIntoVmlinux": [
-      "drivers/firmware/efi/libstub/lib-ctype.o",
       "scripts/mod/empty.o"
     ],
     "unitsProvenByteIdenticalInVmlinux": [
@@ -106,7 +90,7 @@
     ],
     "verdictCounts": {
       "no-symbols": 2,
-      "not-linked": 2,
+      "not-linked": 1,
       "proven": 2,
       "proven-modulo-relocations": 8
     }
@@ -125,55 +109,110 @@
   },
   "schemaVersion": 1,
   "survey": {
-    "assemblingUnits": 22,
+    "assemblingUnits": 42,
+    "linkCollisions": {
+      "groups": [
+        [
+          "arch/arm64/kernel/pi/lib-fdt.o",
+          "arch/arm64/kernel/pi/lib-fdt_ro.o",
+          "crypto/jitterentropy.o",
+          "drivers/firmware/efi/libstub/lib-ctype.o",
+          "drivers/firmware/efi/libstub/lib-fdt.o",
+          "drivers/firmware/efi/libstub/lib-fdt_empty_tree.o",
+          "drivers/firmware/efi/libstub/lib-fdt_ro.o",
+          "drivers/firmware/efi/libstub/lib-fdt_rw.o",
+          "drivers/firmware/efi/libstub/lib-fdt_sw.o",
+          "drivers/firmware/efi/libstub/lib-fdt_wip.o",
+          "drivers/firmware/efi/libstub/skip_spaces.o",
+          "drivers/tty/vt/ucs.o",
+          "drivers/video/logo/logo_linux_clut224.o",
+          "drivers/video/screen_info_generic.o",
+          "kernel/range.o",
+          "kernel/time/timecounter.o",
+          "lib/bcd.o",
+          "lib/compat_audit.o",
+          "lib/ctype.o",
+          "lib/decompress.o",
+          "lib/fdt.o",
+          "lib/fdt_addresses.o",
+          "lib/fdt_empty_tree.o",
+          "lib/fdt_ro.o",
+          "lib/fdt_rw.o",
+          "lib/fdt_strerror.o",
+          "lib/fdt_sw.o",
+          "lib/fdt_wip.o",
+          "lib/math/int_pow.o"
+        ]
+      ],
+      "symbolsDefinedTwice": 255,
+      "units": [
+        "arch/arm64/kernel/pi/lib-fdt.o",
+        "arch/arm64/kernel/pi/lib-fdt_ro.o",
+        "crypto/jitterentropy.o",
+        "drivers/firmware/efi/libstub/lib-ctype.o",
+        "drivers/firmware/efi/libstub/lib-fdt.o",
+        "drivers/firmware/efi/libstub/lib-fdt_empty_tree.o",
+        "drivers/firmware/efi/libstub/lib-fdt_ro.o",
+        "drivers/firmware/efi/libstub/lib-fdt_rw.o",
+        "drivers/firmware/efi/libstub/lib-fdt_sw.o",
+        "drivers/firmware/efi/libstub/lib-fdt_wip.o",
+        "drivers/firmware/efi/libstub/skip_spaces.o",
+        "drivers/tty/vt/ucs.o",
+        "drivers/video/logo/logo_linux_clut224.o",
+        "drivers/video/screen_info_generic.o",
+        "kernel/range.o",
+        "kernel/time/timecounter.o",
+        "lib/bcd.o",
+        "lib/compat_audit.o",
+        "lib/ctype.o",
+        "lib/decompress.o",
+        "lib/fdt.o",
+        "lib/fdt_addresses.o",
+        "lib/fdt_empty_tree.o",
+        "lib/fdt_ro.o",
+        "lib/fdt_rw.o",
+        "lib/fdt_strerror.o",
+        "lib/fdt_sw.o",
+        "lib/fdt_wip.o",
+        "lib/math/int_pow.o"
+      ]
+    },
     "outcomeCounts": {
-      "assembled": 22,
-      "refused": 2777
+      "assembled": 42,
+      "refused": 2757
     },
     "refusalCodeCounts": {
       "E3021": 36,
-      "E3029": 1041,
-      "E3045": 19,
-      "E3101": 1673,
-      "E4009": 8
+      "E3025": 2714,
+      "E3101": 7
     },
     "refusalsByCode": {
       "E3021": {
         "owner": "front-end",
         "units": 36
       },
-      "E3029": {
+      "E3025": {
         "owner": "front-end",
-        "units": 1041
-      },
-      "E3045": {
-        "owner": "front-end",
-        "units": 19
+        "units": 2714
       },
       "E3101": {
         "owner": "front-end",
-        "units": 1673
-      },
-      "E4009": {
-        "owner": "machine",
-        "units": 8
+        "units": 7
       }
     },
     "refusalsByFirstCode": {
       "E3021": 36,
-      "E3029": 1041,
-      "E3045": 19,
-      "E3101": 1673,
-      "E4009": 8
+      "E3025": 2714,
+      "E3101": 7
     },
     "refusalsByOwner": {
-      "front-end": 2769,
-      "machine": 8
+      "front-end": 2757
     },
     "requestedUnits": 2799,
-    "runDirectory": ".evidence/k1/measure-e26a13b/survey"
+    "runDirectory": ".evidence/k1/measure-a614bd7/survey"
   },
   "unitsCompiledByEvoccInABootingKernel": 12,
+  "unitsExcludedForMultipleDefinition": 29,
   "unitsProvenPresentInVmlinux": 10,
-  "unitsSubstituted": 14
+  "unitsSubstituted": 13
 }
