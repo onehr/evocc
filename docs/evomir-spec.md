@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.19** | **Authoritative reference** | **2026-09-07**
+**Revision 0.20** | **Authoritative reference** | **2026-09-07**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -534,6 +534,26 @@ symbol named in a module assembly entry counts as referenced. This is
 what lets two EvoCC objects that share a header link together (EvoIR
 1.9.70).
 
+**Data spelling (revision 0.20).** A global whose bytes are all zero,
+whose EvoIR 2.1 `initialized=` bits are all set and which carries no
+relocation is emitted in the target's zero-filled section (`.bss`;
+`.section __DATA,__bss,zerofill` on Darwin) as alignment, symbol and one
+`.zero N`, and emission returns to the text section after the last global
+when that global was zero-filled. Every other global is emitted in the data
+section, where a run of at least sixteen zero bytes is one `.zero N` and
+the bytes between runs are `.byte` lists of at most sixteen; a run never
+crosses a relocation, which keeps the `.xword symbol+addend` at its own
+offset. A byte whose `initialized=` bit is clear is emitted as the zero
+EvoIR stores for it, and a global that is not fully initialized is never
+zero-filled. Measured: a 1,000,001-byte zero array went from 1,000,003
+assembly lines to 4 and the static image to within 56 bytes of GCC's.
+
+**Darwin variadic note (revision 0.20).** Apple's AArch64 variant passes
+every anonymous argument on the stack, where Linux uses the same registers
+as for named arguments (Section 6, revision 0.10). The Darwin lane still
+judges by exit status only; `printf` through a Darwin build prints wrong
+values until a Darwin variadic rule is measured and written.
+
 **Module assembly (revision 0.14).** Every entry of the EvoIR module
 assembly table (EvoIR 2.1, revision 1.9.66) is emitted verbatim, in table
 order, after the last function and the last global of the unit. Emission
@@ -683,6 +703,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.20 | 2026-09-07 | Zero data goes to the zero-filled section and zero runs are `.zero` (the record of the emitter's run encoding); notes the Darwin variadic gap. |
 | 0.19 | 2026-09-07 | Records the `indirect.result` marker the record-convention window introduced for the `x8` destination register. |
 | 0.18 | 2026-09-06 | Records marked `byval`/`sret` follow AAPCS64: up to 16 bytes in general registers, larger by pointer, results in `x0`/`x1` or through `x8` (EvoIR 1.9.73). |
 | 0.17 | 2026-09-06 | The return address is the saved link register of the frame record and the frame address is the frame pointer (EvoIR 1.9.72). |
