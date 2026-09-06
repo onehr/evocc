@@ -13,3 +13,8 @@ Each entry is one check by the architect session while the user sleeps.
 - zlib re-run: 17 of 19 units in a passing build (was 2). toybox re-run: 164 units compiled, none set aside for symbol collisions any more; passing-build count in the receipt. musl re-run and the kernel measurement still running (K1 at 1 h, second evidence directory measure-20260906T181955Z).
 - B11 (zero data to .bss) has two commits on backend-b11, still running.
 - Load average around 170: the two ladder lanes, the kernel relink and the backend gate overlap. Memory compressed 15.8 GB, free 2.1 GB.
+
+## tick 3 (03:29, kernel measurement finished)
+- Kernel mixed link at the current front end: 26 units substituted, boot PASS on the first attempt, 24 units by EvoCC proven inside a booting kernel (was 12). 16 units still excluded for duplicate symbols, but the groups are the fdt/ctype sources the kernel compiles three times for three link targets (pi, EFI stub, lib) which never share an image; the lane's collision check should scope by link target.
+- The survey's face after return_address is E3021 (inline asm), 2,734 units; the constraint or feature named is being classified for the next rule.
+- Codex re-ran E0 (torture 1,055 of 1,692, was 740) and Csmith (396 agree); status refreshed (590f1d3). toybox 164/201.
