@@ -820,6 +820,48 @@
         "skip": "crates/evocc-lower/tests/function_linkage.rs::static_definitions_keep_internal_linkage_in_the_ir_header is the RED test B8 recorded: it waits for evocc-lower to write ` visibility=internal`, that crate is must-not-touch here, and it fails identically at main. Without the skip the script stops at that one target and never reaches clippy or fmt.",
         "crateSet": "the marks live in evocc-types, which every crate depends on, so the script chose the whole workspace rather than the six crates the branch edits."
       }
+    },
+    "b11": {
+      "branchHead": "6affa57",
+      "commits": [
+        "e2c6718 Emit a global's zero bytes as runs and reserve the all-zero ones",
+        "6affa57 Run the zero-run globals on the host and compare with its compiler"
+      ],
+      "evomir": "EvoMIR Section 8. A global's initial bytes were one `.byte` line each, so a megabyte of static zeros cost a megabyte of assembly lines and a megabyte of stored zeros in the image. They are now a run-length encoding. A global whose bytes are all zero, whose EvoIR 2.1 `initialized=` bits are all set and which carries no relocation is emitted in the target's zero-filled section -- `.bss` on Linux, `.section __DATA,__bss,zerofill` on Darwin, which is the only spelling Mach-O has for one -- as `.p2align`, the symbol and one `.zero N`; a global with no bytes at all is the same case and keeps its `.space N`. Every other global stays in the data section, where a run of at least sixteen zero bytes is one `.zero N` and the bytes between runs are `.byte` lists of at most sixteen. Relocations keep the `.xword symbol+addend` of Section 10 at their own offsets and a run never crosses one, so a relocated word still replaces its bytes and nothing else. Internal and external symbol handling is unchanged from revision 0.16: an internal global is defined and never declared `.globl`, in either section.",
+      "sectionSwitching": "a global names its section only when the section changes, so a unit whose globals all hold content emits the single `.data` directive it always did and one whose globals alternate emits `.text .bss .data .bss .text`. Emission returns to the text section after the last global when that global was zero-filled, so the trailing output of Section 8 -- the module assembly table and the `.ident` -- lands where it did before.",
+      "uninitializedBytes": "unchanged, and stated here because the encoding could have hidden it: a byte whose `initialized=` bit is clear is emitted as the zero EvoIR stores for it, exactly as before. An object file has no way to spell an uninitialized byte, and the EvoIR interpreter, not the image, is what diagnoses a read of one. The `.bss` predicate therefore requires every bit set: a global that is all zero but not fully initialized stays in `.data` with its run encoding, so nothing about its bytes changes, only how many lines they take.",
+      "benchmark": {
+        "source": "/tmp/evobench/sieve.c, a 1,000,001-byte zero-initialized static array and forty sieve passes over it",
+        "assemblyLines": "1,000,289 before, 287 after, for the whole unit; the array's own global was 1,000,003 lines (`.p2align`, the label and 1,000,001 `.byte`) and is now 4 (`.bss`, `.p2align 0`, `s:`, `.zero 1000001`), well under the hundred the window asked for",
+        "assemblyBytes": "12,005,227 before, 5,203 after",
+        "assemblerTime": "GNU as 2.44 in the sealed container, assemble only, best of three: 211 ms before, 5 ms after; the object it writes is 1,002,216 bytes before and 2,240 after. `gcc -static` for the whole build, one run: 1,067 ms before, 621 ms after",
+        "binarySize": "1,705,048 bytes before, 705,072 after; `.data` 1,022,492 -> 22,492 and `.bss` 21,760 -> 1,021,760. GCC-14.2 `-O0 -static` builds the same source at 705,016 bytes with `.data` 22,476 and `.bss` 1,021,760, so the image is now within 56 bytes of the reference compiler's where it was a megabyte larger",
+        "output": "3139920 from the emitted program before and after, and from gcc -O0, gcc -O2 and clang-19",
+        "companions": "the same measurement over the other three benchmarks in that directory, assembly lines only: matmul 1,080,426 -> 427, crc 1,048,830 -> 253, vm 961 -> 874 (vm has no large zero object; its saving is the `.byte` packing alone)"
+      },
+      "endToEnd": {
+        "source": ".evidence/builtin-probes/20260907-b11/b11-zero-runs.c: a megabyte of zeros no line writes before it is read, a 65,536-byte array that is zero then four values then zero again, a 256-byte sparse array, a string with three interior nul bytes, and a table of four pointers into the rest, three of them relocations and one a null. The program prints an FNV-1a digest of every object before it writes to any of them, then writes to the ends of two and prints the digests again, so a byte the encoding got wrong shows up in the output rather than only in the file",
+        "linux": "sealed container, GCC 14.2.0 and clang 19.1.7, GNU as 2.44. Assembly 1,114,939 lines before and 392 after; assemble only, best of three, 141 ms before and 5 ms after; object 1,119,096 -> 70,544 bytes; static image 1,820,128 -> 771,576 bytes with `.data` 1,137,084 -> 88,508 and `.bss` 21,760 -> 1,070,336, against gcc -O2's 770,936 bytes and its identical `.bss` of 1,070,336. The whole standard output of the emitted program is identical before and after and identical to gcc -O0's, gcc -O2's and clang-19's builds of the same source",
+        "darwin": "crates/evocc-mir/tests/section8_zero_runs_natively.rs, Apple clang 21.0.0. The same objects, folded into an exit status rather than printed: the emitted program's status equals clang -O0's and clang -O2's on the same source, and the program reports a wrong relocated pointer as a status of its own (201 to 204) rather than a digest",
+        "darwinOutputNote": "standard output is not the instrument on Darwin, and the reason predates this window: a variadic call lowered from this front end passes its arguments the Linux AArch64 way, and Darwin passes them on the stack, so `printf(\"%d %d %d\\n\", 11, 22, 33)` through this path already prints three wrong numbers. The exit status travels in `w0` and is unaffected. Nothing about static data is involved; it is recorded here so the next window that wants printed output on Darwin knows what it will meet"
+      },
+      "byteIdentity": {
+        "method": ".evidence/builtin-probes/20260907-b11/byte-identity.py reads each object's address out of the linked image's symbol table and its length out of the compiler's own EvoIR global table -- emission writes no `.size` for a global, so the symbol table carries none -- and compares the bytes the loader will see, taking a NOBITS section as the zeros it supplies. Comparing the `.data` section itself cannot answer the question, because an object that moves to `.bss` leaves `.data` by construction; the extracted `.data` is 1,006,428 bytes before and 6,428 after for the sieve and 1,121,020 before and 72,444 after for the probe",
+        "sieve": "2 objects, 0 differing: `s` (1,000,001 bytes, .data -> .bss) and the format string (5 bytes, .data)",
+        "probe": "14 objects, 0 differing. The one object whose stored words change is `table`, which holds absolute addresses of `partial` and `scattered`; `big` left `.data` and moved the image under them, so its words change by construction. The program checks at run time that each entry still names the object it was written from and prints `table   1 1 1` and `null    1`"
+      },
+      "specGap": "Section 8 lists `.bss` among the sections a global may land in but does not say which global lands there or how a global's bytes are spelled, and the encoding is now a choice a reader cannot derive from the text. Three sentences are reported in the window's report rather than written into the specification, which this contract does not authorize this branch to edit.",
+      "scopeNote": "one file of one crate changed: crates/evocc-mir/src/emit.rs. The four test files beside it are new or were updated where they asserted a byte a line: section8_zero_runs.rs and section8_zero_runs_natively.rs are new; section8_emission.rs and section8_relocations.rs now expect the packed `.byte` line; section8_module_assembly.rs gained one non-zero byte in its global so that its `.byte` probe still has something to find, since an all-zero global is now reserved rather than stored. No front-end crate, no tools/k1, no tools/ladder and no day9 contract was touched.",
+      "architectGate": {
+        "script": "tools/gate-changed.sh main -- --skip static_definitions_keep_internal_linkage_in_the_ir_header",
+        "crates": "evocc evocc-mir evocc-policy evocc-proofcheck evocc-randgate",
+        "tests": "489 passed, 0 failed, 4 ignored across 95 test binaries",
+        "clippy": 0,
+        "fmt": "clean",
+        "lastLine": "gate-changed: green for [evocc evocc-mir evocc-policy evocc-proofcheck evocc-randgate] against main",
+        "skip": "the `--skip static_definitions_keep_internal_linkage_in_the_ir_header` the window allows was passed and skipped nothing: 0 filtered out in all 95 test binaries. The B8 RED test lives in evocc-lower, and only evocc-mir changed, so the reverse-dependency set the script chose does not include that crate."
+      },
+      "receiptCommit": "the commit that carries this entry and the rendered docs/status.md follows the two above; branchHead names the last commit the entry describes, as B10's does"
     }
   }
 }
