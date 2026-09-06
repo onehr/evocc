@@ -55,6 +55,34 @@ fn check(source: &str, expected: u64) {
 }
 
 #[test]
+fn static_local_updates_persist_across_calls() {
+    check(
+        "int f(void){ static int c = 5; c++; return c; } int main(void){ f(); return f(); }",
+        7,
+    );
+    check(
+        "int f(void){ static int c = 5; c += 1; return c; } int main(void){ f(); return f(); }",
+        7,
+    );
+}
+
+#[test]
+fn conditional_updates_preserve_the_selected_side_effect() {
+    check(
+        "extern void abort(void); int main(void){ int x = 3, y = 2; if ((x < y ? x++ : y++) != 2) abort(); if (x != 3 || y != 3) abort(); return 0; }",
+        0,
+    );
+    check(
+        "int main(void){int x=2,y=3; int old=x<y?x++:y++; return old*100+x*10+y;}",
+        233,
+    );
+    check(
+        "int main(void){int x=3,y=2; int now=x<y?(x+=2):(y+=2); return now*100+x*10+y;}",
+        434,
+    );
+}
+
+#[test]
 fn static_compound_literals_have_storage_and_copy_their_initializer() {
     check("struct s {int n;}; struct s x=(struct s){.n=7}; int *p=(int[]){2,5}; int main(void){return x.n+p[1];}", 12);
 }
