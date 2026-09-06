@@ -234,7 +234,7 @@ def overview() -> None:
         ("30 / 2,798", "kernel units lower to EvoIR with no diagnostic; the rest stop at a known construct", CYAN),
         ("384 + 384", "C programs agree with clang on Darwin and with GCC-14 on Linux, source to native", GREEN),
         ("12", "kernel units compiled by EvoCC inside a kernel that boots; GCC compiled the rest", BLUE),
-        ("186 / 220", "c-testsuite programs pass; 637 of 1,692 GCC torture programs pass on the first run", GREEN),
+        ("187 / 220", "c-testsuite programs pass; 725 of 1,692 GCC torture programs pass; failures are filed by construct", GREEN),
     ]
     sw = (1480 - 4 * 16) / 5
     for i, (big, small, col) in enumerate(stats):
@@ -253,7 +253,7 @@ def ladder() -> None:
     c.text(60, 64, "The evaluation ladder", 34, TEXT, "700")
     c.text(60, 96, "each program is pinned to a release and judged by its own test suite", 17, MUTED)
     groups = [
-        ("compiler test suites", BLUE, [("E0a", "GCC C torture", "GCC 16.2", "637 / 1,692 pass"), ("E0b", "c-testsuite", "5c7275656d75", "186 / 220 pass"), ("E0c", "Csmith, no float", "0cdc710315cf", "differential")]),
+        ("compiler test suites", BLUE, [("E0a", "GCC C torture", "GCC 16.2", "725 / 1,692 pass"), ("E0b", "c-testsuite", "5c7275656d75", "187 / 220 pass"), ("E0c", "Csmith, no float", "0cdc710315cf", "differential")]),
         ("integer programs", CYAN, [("E1", "zlib", "1.3.2", "make test"), ("E2", "zstd", "1.5.7", "make check"), ("E4", "Mbed TLS", "4.2.0", "selftest"), ("E5", "TinyCC", "0.9.27", "self-hosted tests"), ("E6", "toybox", "0.8.14", "make tests"), ("E7", "musl + libc-test", "1.2.6", "libc-test")]),
         ("after the floating-point rung F1", GRAY, [("E3", "cJSON", "1.7.19", "Unity"), ("E8", "PolyBench/C", "4.2.1-beta", "reference outputs"), ("E9", "llvm-test-suite", "llvmorg-23.1.0", "SingleSource"), ("E10", "jq", "1.8.2", "make check"), ("E11", "Lua", "5.5.1", "official suite"), ("E12", "SQLite", "3.53.4", "TH3 / TCL")]),
         ("Linux 6.18.44", GREEN, [("K5", "lib/ + kernel/", "mixed link", "boots"), ("K6", "full configuration", "EvoCC alone", "boots to init"), ("K7", "kselftest", "in initramfs", "pass rate")]),

@@ -1,0 +1,100 @@
+{
+ "schemaVersion": 1,
+ "rung": "E0",
+ "authority": "docs/roadmap.md, milestone ladder",
+ "latest": {
+  "run": "20260906T070921Z",
+  "subject": "8c3183b",
+  "driverSha256": "4f761522ca37f99b2052cc43fc1247831bde83153756a5de5177e29804913e3d",
+  "target": "aarch64-unknown-linux-gnu",
+  "suites": {
+   "ctest": {
+    "pin": {
+     "repo": "https://github.com/c-testsuite/c-testsuite.git",
+     "commit": "5c7275656d75",
+     "subdir": "tests/single-exec"
+    },
+    "programs": 220,
+    "adjustedEmptyParameterLists": 198,
+    "outcomes": {
+     "pass": 187,
+     "refused": 31,
+     "fail": 2
+    },
+    "refusalsByCode": {
+     "E3101": 16,
+     "E1001": 5,
+     "E2001": 2,
+     "E1003": 2,
+     "E3030": 1,
+     "E2102": 1,
+     "E0104": 1,
+     "E2203": 1,
+     "E0112": 1,
+     "E2202": 1
+    },
+    "failuresByInterpreterVerdict": {
+     "E3007 evoir-main-parameters-are-not-canonical": 1,
+     "E3039 external-call-not-executable": 1
+    }
+   },
+   "torture": {
+    "pin": {
+     "repo": "https://github.com/gcc-mirror/gcc.git",
+     "ref": "releases/gcc-16.2.0",
+     "subdir": "gcc/testsuite/gcc.c-torture/execute"
+    },
+    "programs": 1692,
+    "adjustedEmptyParameterLists": 957,
+    "outcomes": {
+     "refused": 898,
+     "pass": 725,
+     "fail": 59,
+     "link-fail": 10
+    },
+    "refusalsByCode": {
+     "E2001": 404,
+     "E1001": 187,
+     "E3101": 161,
+     "E2201": 21,
+     "E2203": 18,
+     "E2102": 17,
+     "E1205": 15,
+     "E0112": 13,
+     "E3030": 12,
+     "E0105": 12,
+     "E3029": 9,
+     "E2913": 4,
+     "E2920": 4,
+     "E3021": 3,
+     "E2202": 3,
+     "E3025": 2,
+     "E1006": 2,
+     "E1007": 2,
+     "E1003": 2,
+     "E1002": 1,
+     "E2927": 1,
+     "E3031": 1,
+     "E4003": 1,
+     "E2208": 1,
+     "E2204": 1,
+     "E2929": 1
+    },
+    "failuresByInterpreterVerdict": {
+     "E3039 external-call-not-executable": 26,
+     "E3006 invalid-signed-left-shift": 10,
+     "E3007 scalar-function-fell-off-end": 7,
+     "E3011 out-of-bounds-memory-access": 6,
+     "E3004 signed-integer-overflow": 6,
+     "E3007 evoir-main-parameters-are-not-canonical": 5,
+     "E3012 misaligned-memory-access": 3,
+     "E3001 read-of-uninitialized-object": 2,
+     "E3008 interpreter-fuel-exhausted": 2,
+     "no-diagnostic exit=0": 1,
+     "E3021 not-lowered": 1
+    }
+   }
+  }
+ },
+ "evidence": ".evidence/ladder/e0/20260906T070921Z"
+}

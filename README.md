@@ -16,7 +16,7 @@ The compiler is written by AI agents. What keeps that honest:
 
 ![Milestones](docs/images/evocc-milestones.png)
 
-As of 2026-09-06: all 2,798 kernel translation units preprocess and parse; 30 lower to EvoIR with no diagnostic, and the rest stop at constructs that now have rules and are being implemented. 384 C programs compile to native code and agree with clang on macOS and with GCC 14 on Linux. Five EvoCC-compiled units run inside a Linux kernel that boots, with GCC compiling the rest. On the first run of outside test suites, 186 of 220 c-testsuite programs and 637 of 1,692 GCC torture programs pass; the failures are filed as compiler defects. The plan, the evaluation ladder and the pinned versions are in [docs/roadmap.md](docs/roadmap.md).
+As of 2026-09-06: all 2,798 kernel translation units preprocess and parse; 30 lower to EvoIR with no diagnostic, and the rest stop at constructs that now have rules and are being implemented. 384 C programs compile to native code and agree with clang on macOS and with GCC 14 on Linux. Five EvoCC-compiled units run inside a Linux kernel that boots, with GCC compiling the rest. Of the outside test suites, 187 of 220 c-testsuite programs and 725 of 1,692 GCC torture programs pass; every failure is classified by the construct that caused it and filed as a compiler defect. The plan, the evaluation ladder and the pinned versions are in [docs/roadmap.md](docs/roadmap.md).
 
 ## Try it
 
