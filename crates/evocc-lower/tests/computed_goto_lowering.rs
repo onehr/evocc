@@ -91,7 +91,7 @@ fn check_label_address(source: &str, expected: Result<u64, &str>, forms: &[&str]
 #[test]
 fn label_addresses_have_stable_distinct_code_identity() {
     check_label_address(
-        "int main(void){ void *p=&&first; first: return p==&&first && p!=&&last; last: return 0; }",
+        "int main(void){ void *p=&&first; int n=0; if(n)goto last; first: return p==&&first && p!=&&last; last: return 0; }",
         Ok(1),
         &["block_addr"],
     );
@@ -108,6 +108,20 @@ fn computed_goto_is_preserved_but_execution_and_lowering_fail_closed() {
         "int main(void) { void *target = &&done; goto *target; ",
         "done: return 0; }\n",
     ));
+}
+
+#[test]
+fn an_address_only_dead_label_keeps_the_reachability_boundary() {
+    // Section 3.7 admits the address, but 2.5 still forbids a validated
+    // block without a terminator-edge path from entry. Do not weaken SSA.
+    let arena = Arena::default();
+    let unit = parse_valid(
+        "unsigned long f(void){return (unsigned long)&&after; after:return 0;}",
+        &arena,
+    );
+    let error = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap_err();
+    assert_eq!(error.code(), "E3101");
+    assert!(error.to_string().contains("unreachable from entry"));
 }
 
 #[test]

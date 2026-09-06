@@ -1369,6 +1369,18 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
         }
         let mut previous_end = 0;
         for relocation in &global.relocs {
+            let code_target = relocation
+                .symbol
+                .split_once("^b")
+                .and_then(|(name, block)| {
+                    let id = block.parse::<BlockId>().ok()?;
+                    (id.to_string() == block).then_some((name, id))
+                });
+            let valid_code_target = code_target.is_some_and(|(name, id)| {
+                module.functions.iter().any(|function| {
+                    function.name == name && function.blocks.iter().any(|block| block.id == id)
+                })
+            });
             let end = relocation
                 .offset
                 .checked_add(8)
@@ -1381,7 +1393,7 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                 })?;
             if relocation.offset % 8 != 0
                 || relocation.offset < previous_end
-                || !symbols.contains(relocation.symbol.as_str())
+                || !(symbols.contains(relocation.symbol.as_str()) || valid_code_target)
                 || (functions.contains_key(relocation.symbol.as_str()) && relocation.addend != 0)
                 || global.bytes[relocation.offset as usize..end as usize]
                     .iter()
@@ -5114,6 +5126,29 @@ fn initialize_globals(module: &Module, state: &mut ExecutionState) -> Result<(),
                     });
                 }
                 PointerValue::Function(*identity)
+            } else if let Some((name, block)) = relocation.symbol.split_once("^b") {
+                let identity = block
+                    .parse::<BlockId>()
+                    .ok()
+                    .and_then(|block| state.blocks.get(&(name.to_owned(), block)))
+                    .copied()
+                    .ok_or_else(|| InterpreterError::InvalidModule {
+                        message: "relocation names an absent block".into(),
+                    })?;
+                let value = PointerValue::Function(identity);
+                if relocation.addend == 0 {
+                    value
+                } else {
+                    // A nonzero code addend is an integer address, not the
+                    // identity of another block or an object allocation.
+                    let address = state
+                        .memory
+                        .pointer_address(value)
+                        .map_err(|error| InterpreterError::MemorySetup { error })?;
+                    PointerValue::object(Pointer::from_address(
+                        address.wrapping_add_signed(relocation.addend),
+                    ))
+                }
             } else {
                 return Err(InterpreterError::InvalidModule {
                     message: "relocation names an absent symbol".into(),

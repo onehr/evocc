@@ -303,6 +303,7 @@ struct FunctionLowerer<'a> {
     next_placeholder: BlockId,
     goto_names: BTreeSet<String>,
     labels: BTreeMap<String, JumpTarget>,
+    address_labels: BTreeMap<String, BlockId>,
     pending_gotos: BTreeMap<String, Vec<State>>,
     active_control: ControlTargets,
 }
@@ -418,6 +419,38 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
             );
         }
     }
+    let mut lowered = Vec::new();
+    let mut label_addresses = BTreeMap::new();
+    for declaration in unit.iter() {
+        let CHirDecl::Function(function) = declaration else {
+            continue;
+        };
+        if function.body.is_none() {
+            continue;
+        }
+        let info =
+            functions
+                .get(&function.symbol)
+                .ok_or_else(|| LowerError::MalformedFunction {
+                    function: function.name.spelling.clone(),
+                    span: function.span,
+                    reason: "definition is absent from the function index",
+                })?;
+        let (function, addresses) = FunctionLowerer::new(
+            unit,
+            target,
+            &functions,
+            info,
+            &memory_symbols,
+            &global_registers,
+            &allocation_origins,
+            &compound_origins,
+            &string_origins,
+        )
+        .lower(function)?;
+        lowered.push(function);
+        label_addresses.extend(addresses);
+    }
     for site in manifest.sites() {
         let Some((CHirExpr::CompoundLit(ty, initializer, span), true)) =
             site.kind().compound_literal()
@@ -447,6 +480,7 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
                 &mut relocs,
                 &allocation_origins,
                 &static_literal_origins,
+                &label_addresses,
             )?;
         }
         relocs.sort_by_key(|relocation| relocation.offset);
@@ -467,38 +501,8 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
         &memory_symbols,
         &allocation_origins,
         &static_literal_origins,
+        &label_addresses,
     )?);
-    let mut lowered = Vec::new();
-    for declaration in unit.iter() {
-        let CHirDecl::Function(function) = declaration else {
-            continue;
-        };
-        if function.body.is_none() {
-            continue;
-        }
-        let info =
-            functions
-                .get(&function.symbol)
-                .ok_or_else(|| LowerError::MalformedFunction {
-                    function: function.name.spelling.clone(),
-                    span: function.span,
-                    reason: "definition is absent from the function index",
-                })?;
-        lowered.push(
-            FunctionLowerer::new(
-                unit,
-                target,
-                &functions,
-                info,
-                &memory_symbols,
-                &global_registers,
-                &allocation_origins,
-                &compound_origins,
-                &string_origins,
-            )
-            .lower(function)?,
-        );
-    }
     let defined = lowered
         .iter()
         .map(|function| function.name.as_str())
@@ -897,6 +901,7 @@ fn lower_globals(
     memory_symbols: &BTreeSet<SymbolId>,
     origins: &BTreeMap<SymbolId, u64>,
     strings: &BTreeMap<usize, u64>,
+    label_addresses: &BTreeMap<usize, String>,
 ) -> Result<Vec<GlobalObject>, LowerError> {
     fn collect_nested<'a>(
         statement: &'a CHirStmt<'a>,
@@ -1043,6 +1048,7 @@ fn lower_globals(
                         &mut relocs,
                         origins,
                         strings,
+                        label_addresses,
                     )?;
                 }
             }
@@ -1090,6 +1096,7 @@ fn symbolic_address(
     address_of: bool,
     origins: &BTreeMap<SymbolId, u64>,
     strings: &BTreeMap<usize, u64>,
+    label_addresses: &BTreeMap<usize, String>,
 ) -> Result<(String, i64), LowerError> {
     let span = expression.span();
     let error = || LowerError::StaticRelocation { span };
@@ -1107,6 +1114,11 @@ fn symbolic_address(
         }
     };
     match expression {
+        CHirExpr::LabelAddress { .. } => label_addresses
+            .get(&(expression as *const CHirExpr<'_> as usize))
+            .cloned()
+            .map(|symbol| (symbol, 0))
+            .ok_or_else(error),
         CHirExpr::Cast(ty, operand, _) => {
             let canonical = unit.types().get(*ty).ok_or_else(error)?;
             if !matches!(canonical.kind, TypeKind::Pointer(_))
@@ -1118,14 +1130,34 @@ fn symbolic_address(
             {
                 return Err(error());
             }
-            symbolic_address(unit, target, operand, false, origins, strings)
+            symbolic_address(
+                unit,
+                target,
+                operand,
+                false,
+                origins,
+                strings,
+                label_addresses,
+            )
         }
-        CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => {
-            symbolic_address(unit, target, operand, true, origins, strings)
-        }
-        CHirExpr::Unary(UnaryOp::Deref, operand, _) if address_of => {
-            symbolic_address(unit, target, operand, false, origins, strings)
-        }
+        CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => symbolic_address(
+            unit,
+            target,
+            operand,
+            true,
+            origins,
+            strings,
+            label_addresses,
+        ),
+        CHirExpr::Unary(UnaryOp::Deref, operand, _) if address_of => symbolic_address(
+            unit,
+            target,
+            operand,
+            false,
+            origins,
+            strings,
+            label_addresses,
+        ),
         CHirExpr::Ident { symbol, facts, .. }
             if address_of
                 || unit.types().get(facts.ty()).is_some_and(|ty| {
@@ -1167,8 +1199,15 @@ fn symbolic_address(
             {
                 return Err(error());
             }
-            let (symbol, mut offset) =
-                symbolic_address(unit, target, base, direct, origins, strings)?;
+            let (symbol, mut offset) = symbolic_address(
+                unit,
+                target,
+                base,
+                direct,
+                origins,
+                strings,
+                label_addresses,
+            )?;
             for field in path {
                 let layout = target
                     .record_layout(unit.types(), field.tag())
@@ -1194,12 +1233,24 @@ fn symbolic_address(
         {
             let (symbol, mut offset) = match place.root() {
                 PlaceRoot::Object { symbol } => symbol_address(*symbol)?,
-                PlaceRoot::PointerExpression { pointer, .. } => {
-                    symbolic_address(unit, target, pointer, false, origins, strings)?
-                }
-                PlaceRoot::CompoundLiteral { expression, .. } => {
-                    symbolic_address(unit, target, expression, true, origins, strings)?
-                }
+                PlaceRoot::PointerExpression { pointer, .. } => symbolic_address(
+                    unit,
+                    target,
+                    pointer,
+                    false,
+                    origins,
+                    strings,
+                    label_addresses,
+                )?,
+                PlaceRoot::CompoundLiteral { expression, .. } => symbolic_address(
+                    unit,
+                    target,
+                    expression,
+                    true,
+                    origins,
+                    strings,
+                    label_addresses,
+                )?,
             };
             for projection in place.projections() {
                 let delta = match projection {
@@ -1239,8 +1290,15 @@ fn symbolic_address(
             Ok((symbol, offset))
         }
         CHirExpr::Binary(op @ (BinaryOp::Add | BinaryOp::Sub), pointer, index, _) => {
-            let (symbol, offset) =
-                symbolic_address(unit, target, pointer, false, origins, strings)?;
+            let (symbol, offset) = symbolic_address(
+                unit,
+                target,
+                pointer,
+                false,
+                origins,
+                strings,
+                label_addresses,
+            )?;
             let value =
                 evocc_chir::interp::interpret_static_integer_expression(unit, index, target)
                     .map_err(|_| error())?;
@@ -1270,16 +1328,40 @@ fn symbolic_address(
                 let a = if null_pointer_constant(unit, target, a) {
                     None
                 } else {
-                    Some(symbolic_address(unit, target, a, false, origins, strings)?)
+                    Some(symbolic_address(
+                        unit,
+                        target,
+                        a,
+                        false,
+                        origins,
+                        strings,
+                        label_addresses,
+                    )?)
                 };
                 let b = if null_pointer_constant(unit, target, b) {
                     None
                 } else {
-                    Some(symbolic_address(unit, target, b, false, origins, strings)?)
+                    Some(symbolic_address(
+                        unit,
+                        target,
+                        b,
+                        false,
+                        origins,
+                        strings,
+                        label_addresses,
+                    )?)
                 };
                 (a == b) == (*op == BinaryOp::Eq)
             } else {
-                symbolic_address(unit, target, condition, false, origins, strings)?;
+                symbolic_address(
+                    unit,
+                    target,
+                    condition,
+                    false,
+                    origins,
+                    strings,
+                    label_addresses,
+                )?;
                 true
             };
             symbolic_address(
@@ -1289,6 +1371,7 @@ fn symbolic_address(
                 address_of,
                 origins,
                 strings,
+                label_addresses,
             )
         }
         _ => Err(error()),
@@ -1305,6 +1388,7 @@ fn apply_static_initializer(
     relocs: &mut Vec<evocc_evoir::Relocation>,
     origins: &BTreeMap<SymbolId, u64>,
     strings: &BTreeMap<usize, u64>,
+    label_addresses: &BTreeMap<usize, String>,
 ) -> Result<(), LowerError> {
     let span = action
         .span()
@@ -1423,8 +1507,15 @@ fn apply_static_initializer(
                     target_bytes.fill(0);
                     return Ok(());
                 }
-                let (symbol, addend) =
-                    symbolic_address(unit, target, value, false, origins, strings)?;
+                let (symbol, addend) = symbolic_address(
+                    unit,
+                    target,
+                    value,
+                    false,
+                    origins,
+                    strings,
+                    label_addresses,
+                )?;
                 if target_bytes.len() != 8 {
                     return Err(LowerError::StaticRelocation { span });
                 }
@@ -1471,6 +1562,7 @@ fn apply_static_initializer(
                     &mut copied_relocs,
                     origins,
                     strings,
+                    label_addresses,
                 )?;
             }
             for mut relocation in copied_relocs {
@@ -1949,7 +2041,7 @@ fn prevalidate_expr_for_lowering(
             Err(LowerError::ReturnAddress { span: *span })
         }
         CHirExpr::BuiltinFrameAddress { span, .. } => Err(LowerError::FrameAddress { span: *span }),
-        CHirExpr::LabelAddress { span, .. } => Err(LowerError::ComputedGoto { span: *span }),
+        CHirExpr::LabelAddress { .. } => Ok(()),
         CHirExpr::BuiltinUnreachable { .. } => Ok(()),
         CHirExpr::CompoundLit(_, initializer, _) => {
             for action in initializer.plan().actions() {
@@ -2035,12 +2127,12 @@ fn index_functions(
 ) -> Result<BTreeMap<SymbolId, FunctionInfo>, LowerError> {
     let mut required = BTreeSet::new();
     for declaration in unit.iter() {
-        let mut references = CallSites::default();
-        collect_calls_decl(declaration, &mut references);
+        let mut references = FunctionReferences::default();
+        collect_references_decl(declaration, &mut references);
         if let CHirDecl::Function(function) = declaration {
             if let Some(body) = function.body {
                 required.insert(function.symbol);
-                collect_calls_stmt(body, &mut references);
+                collect_references_stmt(body, &mut references);
             }
         }
         required.extend(references.direct);
@@ -2137,8 +2229,8 @@ fn index_functions(
         let Some(body) = function.body else {
             continue;
         };
-        let mut calls = CallSites::default();
-        collect_calls_stmt(body, &mut calls);
+        let mut calls = FunctionReferences::default();
+        collect_references_stmt(body, &mut calls);
         if calls.any {
             participants.insert(function.symbol);
         }
@@ -2790,12 +2882,16 @@ impl<'a> FunctionLowerer<'a> {
             next_placeholder: BREAK_TARGET_BASE,
             goto_names: BTreeSet::new(),
             labels: BTreeMap::new(),
+            address_labels: BTreeMap::new(),
             pending_gotos: BTreeMap::new(),
             active_control: ControlTargets::default(),
         }
     }
 
-    fn lower(mut self, declaration: &FunctionDecl<'a>) -> Result<Function, LowerError> {
+    fn lower(
+        mut self,
+        declaration: &FunctionDecl<'a>,
+    ) -> Result<(Function, BTreeMap<usize, String>), LowerError> {
         let body = declaration
             .body
             .ok_or_else(|| LowerError::MalformedFunction {
@@ -2804,6 +2900,13 @@ impl<'a> FunctionLowerer<'a> {
                 reason: "attempted to lower a declaration without a body",
             })?;
         collect_goto_names(body, &mut self.goto_names);
+        let mut references = FunctionReferences::default();
+        collect_references_stmt(body, &mut references);
+        for name in references.labels.values().collect::<BTreeSet<_>>() {
+            let id = self.fresh_placeholder();
+            self.address_labels.insert(name.clone(), id);
+            self.goto_names.insert(name.clone());
+        }
         let mut params = Vec::new();
         let mut env = Environment::new();
         let mut entry_args = Vec::new();
@@ -3001,6 +3104,24 @@ impl<'a> FunctionLowerer<'a> {
                 self.terminate(state, Inst::Trap(TrapReason::ScalarFunctionFellOffEnd))?;
             }
         }
+        let mut address_remap = BTreeMap::new();
+        for (name, placeholder) in &self.address_labels {
+            let target = self
+                .labels
+                .get(name)
+                .ok_or(LowerError::InvalidControlFlow {
+                    span: self.info.span,
+                    reason: "addressed label was not lowered",
+                })?;
+            address_remap.insert(*placeholder, target.id);
+        }
+        for block in &mut self.blocks {
+            for instruction in &mut block.insts {
+                if let Inst::BlockAddr { block, .. } = instruction {
+                    *block = address_remap[block];
+                }
+            }
+        }
         self.prune_unreachable_blocks()?;
         if self.blocks.iter().any(|block| block.terminator.is_none()) {
             return Err(LowerError::InvalidControlFlow {
@@ -3009,6 +3130,20 @@ impl<'a> FunctionLowerer<'a> {
             });
         }
         self.eliminate_switch_forwarders()?;
+        let label_addresses = references
+            .labels
+            .into_iter()
+            .map(|(expression, name)| {
+                let id = self.labels[&name].id;
+                let position = self.blocks.iter().position(|block| block.id == id).ok_or(
+                    LowerError::InvalidControlFlow {
+                        span: self.info.span,
+                        reason: "addressed block was removed",
+                    },
+                )?;
+                Ok((expression, format!("{}^b{position}", self.info.name)))
+            })
+            .collect::<Result<BTreeMap<_, _>, LowerError>>()?;
         let mut function = Function {
             name: self.info.name.clone(),
             variadic: self.info.variadic,
@@ -3018,7 +3153,7 @@ impl<'a> FunctionLowerer<'a> {
             blocks: self.finish_blocks()?,
         };
         renumber_function(&mut function)?;
-        Ok(function)
+        Ok((function, label_addresses))
     }
 
     fn return_types(&self) -> Vec<EvoIRType> {
@@ -3053,7 +3188,12 @@ impl<'a> FunctionLowerer<'a> {
 
     fn prune_unreachable_blocks(&mut self) -> Result<(), LowerError> {
         let mut reachable = BTreeSet::from([0]);
-        let mut pending = vec![0];
+        reachable.extend(
+            self.address_labels
+                .keys()
+                .filter_map(|name| self.labels.get(name).map(|label| label.id)),
+        );
+        let mut pending = reachable.iter().copied().collect::<Vec<_>>();
         while let Some(id) = pending.pop() {
             let block = self.blocks.iter().find(|block| block.id == id).ok_or(
                 LowerError::InvalidControlFlow {
@@ -3874,11 +4014,25 @@ impl<'a> FunctionLowerer<'a> {
         &mut self,
         name: &str,
         nested: &'a CHirStmt<'a>,
-        mut incoming: Vec<State>,
+        incoming: Vec<State>,
         template: Option<State>,
         live_after: &BTreeSet<SymbolId>,
         control: &ControlTargets,
     ) -> Result<Flow, LowerError> {
+        let Some(state) = self.enter_label(name, nested, incoming, template, live_after)? else {
+            return Ok(Flow::default());
+        };
+        self.lower_stmt(nested, state, live_after, control)
+    }
+
+    fn enter_label(
+        &mut self,
+        name: &str,
+        nested: &'a CHirStmt<'a>,
+        mut incoming: Vec<State>,
+        template: Option<State>,
+        live_after: &BTreeSet<SymbolId>,
+    ) -> Result<Option<State>, LowerError> {
         if self.labels.contains_key(name) {
             return Err(LowerError::InvalidControlFlow {
                 span: nested.span(),
@@ -3893,7 +4047,7 @@ impl<'a> FunctionLowerer<'a> {
                     reason: "targeted label has no environment template",
                 });
             }
-            return Ok(Flow::default());
+            return Ok(None);
         };
         let symbols = live_before_stmt(nested, live_after.clone());
         let keys = self.keys_for(&template, &symbols, &[]);
@@ -3906,7 +4060,7 @@ impl<'a> FunctionLowerer<'a> {
         for predecessor in incoming {
             self.branch(&predecessor, label_state.block, &keys)?;
         }
-        self.lower_stmt(nested, label_state, live_after, control)
+        Ok(Some(label_state))
     }
 
     fn lower_declaration(
@@ -6065,7 +6219,26 @@ impl<'a> FunctionLowerer<'a> {
             CHirExpr::BuiltinFrameAddress { span, .. } => {
                 Err(LowerError::FrameAddress { span: *span })
             }
-            CHirExpr::LabelAddress { span, .. } => Err(LowerError::ComputedGoto { span: *span }),
+            CHirExpr::LabelAddress { label, span, .. } => {
+                let block = *self.address_labels.get(&label.spelling).ok_or(
+                    LowerError::InvalidControlFlow {
+                        span: *span,
+                        reason: "label address has no function-local identity",
+                    },
+                )?;
+                let result = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
+                self.emit(
+                    state,
+                    Inst::BlockAddr {
+                        result: result.clone(),
+                        block,
+                    },
+                )?;
+                Ok(ExprValue {
+                    value: result,
+                    integer: CIntegerType::ULONG,
+                })
+            }
             CHirExpr::BuiltinUnreachable { span, .. } => Err(LowerError::UnsupportedExpression {
                 span: *span,
                 feature: "unreachable builtin must be a discarded expression",
@@ -6301,6 +6474,22 @@ impl<'a> FunctionLowerer<'a> {
             });
         };
 
+        // The final statement supplies the value, but its label prefixes
+        // still establish distinct code identities before that value runs.
+        if value.is_some() {
+            if let Some(CHirBlockItem::Statement(statement)) = items.last() {
+                let mut statement = *statement;
+                while let CHirStmt::Label(label, nested, _) = statement {
+                    continued = self
+                        .enter_label(&label.spelling, nested, vec![continued], None, &live)?
+                        .ok_or(LowerError::InvalidControlFlow {
+                            span,
+                            reason: "terminal label has no value path",
+                        })?;
+                    statement = nested;
+                }
+            }
+        }
         let result = value
             .map(|value| self.lower_expr(value, &mut continued))
             .transpose()?;
@@ -9189,75 +9378,78 @@ fn collect_goto_names(statement: &CHirStmt<'_>, names: &mut BTreeSet<String>) {
 }
 
 #[derive(Default)]
-struct CallSites {
+struct FunctionReferences {
     direct: BTreeSet<SymbolId>,
     any: bool,
+    labels: BTreeMap<usize, String>,
 }
 
-fn collect_calls_stmt(statement: &CHirStmt<'_>, calls: &mut CallSites) {
+fn collect_references_stmt(statement: &CHirStmt<'_>, calls: &mut FunctionReferences) {
     match statement {
         CHirStmt::Asm(assembly) => {
             calls.any = true;
             for operand in assembly.outputs.iter().chain(&assembly.inputs) {
-                collect_calls_expr(operand.expression, calls);
+                collect_references_expr(operand.expression, calls);
             }
         }
         CHirStmt::Expr(expression, _) | CHirStmt::Return(Some(expression), _) => {
-            collect_calls_expr(expression, calls)
+            collect_references_expr(expression, calls)
         }
-        CHirStmt::ComputedGoto(expression, _) => collect_calls_expr(expression, calls),
+        CHirStmt::ComputedGoto(expression, _) => collect_references_expr(expression, calls),
         CHirStmt::If(condition, then_branch, else_branch, _) => {
-            collect_calls_expr(condition, calls);
-            collect_calls_stmt(then_branch, calls);
+            collect_references_expr(condition, calls);
+            collect_references_stmt(then_branch, calls);
             if let Some(branch) = else_branch {
-                collect_calls_stmt(branch, calls);
+                collect_references_stmt(branch, calls);
             }
         }
         CHirStmt::Switch(expression, body, _)
         | CHirStmt::While(expression, body, _)
         | CHirStmt::Case(expression, body, _) => {
-            collect_calls_expr(expression, calls);
-            collect_calls_stmt(body, calls);
+            collect_references_expr(expression, calls);
+            collect_references_stmt(body, calls);
         }
         CHirStmt::CaseRange(first, last, body, _) => {
-            collect_calls_expr(first, calls);
-            collect_calls_expr(last, calls);
-            collect_calls_stmt(body, calls);
+            collect_references_expr(first, calls);
+            collect_references_expr(last, calls);
+            collect_references_stmt(body, calls);
         }
         CHirStmt::DoWhile(body, expression, _) => {
-            collect_calls_stmt(body, calls);
-            collect_calls_expr(expression, calls);
+            collect_references_stmt(body, calls);
+            collect_references_expr(expression, calls);
         }
         CHirStmt::For(initializer, condition, step, body, _) => {
             match initializer {
                 CHirForInit::Empty => {}
-                CHirForInit::Expression(expression) => collect_calls_expr(expression, calls),
+                CHirForInit::Expression(expression) => collect_references_expr(expression, calls),
                 CHirForInit::Declaration(declarations) => {
                     for declaration in declarations {
-                        collect_calls_decl(declaration, calls);
+                        collect_references_decl(declaration, calls);
                     }
                 }
             }
             if let Some(condition) = condition {
-                collect_calls_expr(condition, calls);
+                collect_references_expr(condition, calls);
             }
             if let Some(step) = step {
-                collect_calls_expr(step, calls);
+                collect_references_expr(step, calls);
             }
-            collect_calls_stmt(body, calls);
+            collect_references_stmt(body, calls);
         }
         CHirStmt::Compound(items, _) => {
             for item in items {
                 match item {
                     CHirBlockItem::Declaration(declaration) => {
-                        collect_calls_decl(declaration, calls)
+                        collect_references_decl(declaration, calls)
                     }
-                    CHirBlockItem::Statement(statement) => collect_calls_stmt(statement, calls),
+                    CHirBlockItem::Statement(statement) => {
+                        collect_references_stmt(statement, calls)
+                    }
                 }
             }
         }
         CHirStmt::Label(_, statement, _) | CHirStmt::Default(statement, _) => {
-            collect_calls_stmt(statement, calls)
+            collect_references_stmt(statement, calls)
         }
         CHirStmt::Return(None, _)
         | CHirStmt::Break(_)
@@ -9268,22 +9460,28 @@ fn collect_calls_stmt(statement: &CHirStmt<'_>, calls: &mut CallSites) {
     }
 }
 
-fn collect_calls_decl(declaration: &CHirDecl<'_>, calls: &mut CallSites) {
+fn collect_references_decl(declaration: &CHirDecl<'_>, calls: &mut FunctionReferences) {
     if let CHirDecl::Object(object) = declaration {
         if let Some(initializer) = &object.initializer {
             for action in initializer.plan.actions() {
                 if let InitAction::StoreScalar { value, .. }
                 | InitAction::CopyAggregate { value, .. } = action
                 {
-                    collect_calls_expr(value, calls);
+                    collect_references_expr(value, calls);
                 }
             }
         }
     }
 }
 
-fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
+fn collect_references_expr(expression: &CHirExpr<'_>, calls: &mut FunctionReferences) {
     match expression {
+        CHirExpr::LabelAddress { label, .. } => {
+            calls.labels.insert(
+                expression as *const CHirExpr<'_> as usize,
+                label.spelling.clone(),
+            );
+        }
         CHirExpr::Call(callee, arguments, _) => {
             calls.any = true;
             if let CHirExpr::Ident { symbol, facts, .. } = callee {
@@ -9291,22 +9489,22 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
                     calls.direct.insert(*symbol);
                 }
             }
-            collect_calls_expr(callee, calls);
+            collect_references_expr(callee, calls);
             for argument in arguments {
-                collect_calls_expr(argument, calls);
+                collect_references_expr(argument, calls);
             }
         }
         CHirExpr::CheckedArithmetic {
             lhs, rhs, target, ..
         } => {
-            collect_calls_expr(lhs, calls);
-            collect_calls_expr(rhs, calls);
-            collect_calls_expr(target, calls);
+            collect_references_expr(lhs, calls);
+            collect_references_expr(rhs, calls);
+            collect_references_expr(target, calls);
         }
         CHirExpr::BuiltinVarArgs { first, second, .. } => {
-            collect_calls_expr(first, calls);
+            collect_references_expr(first, calls);
             if let Some(second) = second {
-                collect_calls_expr(second, calls);
+                collect_references_expr(second, calls);
             }
         }
         CHirExpr::Unary(_, operand, _)
@@ -9314,40 +9512,40 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
         | CHirExpr::Cast(_, operand, _)
         | CHirExpr::BitBuiltin { operand, .. }
         | CHirExpr::Member(operand, _, _)
-        | CHirExpr::PtrMember(operand, _, _) => collect_calls_expr(operand, calls),
+        | CHirExpr::PtrMember(operand, _, _) => collect_references_expr(operand, calls),
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Index(left, right, _)
         | CHirExpr::Comma(left, right, _)
         | CHirExpr::Elvis(left, right, _) => {
-            collect_calls_expr(left, calls);
-            collect_calls_expr(right, calls);
+            collect_references_expr(left, calls);
+            collect_references_expr(right, calls);
         }
         CHirExpr::Ternary(condition, then_value, else_value, _) => {
-            collect_calls_expr(condition, calls);
-            collect_calls_expr(then_value, calls);
-            collect_calls_expr(else_value, calls);
+            collect_references_expr(condition, calls);
+            collect_references_expr(then_value, calls);
+            collect_references_expr(else_value, calls);
         }
         CHirExpr::Assign { target, value, .. } => {
-            collect_calls_expr(target, calls);
-            collect_calls_expr(value, calls);
+            collect_references_expr(target, calls);
+            collect_references_expr(value, calls);
         }
         CHirExpr::MemoryAssign { place, value, .. } => {
             for source in place.source_expressions() {
-                collect_calls_expr(source, calls);
+                collect_references_expr(source, calls);
             }
-            collect_calls_expr(value, calls);
+            collect_references_expr(value, calls);
         }
         CHirExpr::MemoryRead { place, .. } => {
             for source in place.source_expressions() {
-                collect_calls_expr(source, calls);
+                collect_references_expr(source, calls);
             }
         }
         CHirExpr::Update { target, .. } => {
-            collect_calls_expr(target, calls);
+            collect_references_expr(target, calls);
         }
         CHirExpr::MemoryUpdate { place, .. } => {
             for source in place.source_expressions() {
-                collect_calls_expr(source, calls);
+                collect_references_expr(source, calls);
             }
         }
         CHirExpr::CompoundLit(_, initializer, _) => {
@@ -9355,11 +9553,11 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
                 if let InitAction::StoreScalar { value, .. }
                 | InitAction::CopyAggregate { value, .. } = action
                 {
-                    collect_calls_expr(value, calls);
+                    collect_references_expr(value, calls);
                 }
             }
         }
-        CHirExpr::StatementExpr { body, .. } => collect_calls_stmt(body, calls),
+        CHirExpr::StatementExpr { body, .. } => collect_references_stmt(body, calls),
         CHirExpr::Ident { symbol, facts, .. } => {
             if facts.category() == ExprCategory::FunctionDesignator {
                 calls.direct.insert(*symbol);
@@ -9369,7 +9567,6 @@ fn collect_calls_expr(expression: &CHirExpr<'_>, calls: &mut CallSites) {
         | CHirExpr::FloatLit(..)
         | CHirExpr::CharLit(..)
         | CHirExpr::StringLit(..)
-        | CHirExpr::LabelAddress { .. }
         | CHirExpr::SizeOf(..)
         | CHirExpr::SizeOfExpr(..)
         | CHirExpr::AlignOf(..)
@@ -9922,6 +10119,13 @@ fn remap_inst(
         remap_value(value, value_map)?;
     }
     match instruction {
+        Inst::BlockAddr { block, .. } => {
+            *block = *block_map
+                .get(block)
+                .ok_or_else(|| LowerError::InvalidGeneratedSsa {
+                    message: "code address has no final block identity".into(),
+                })?;
+        }
         Inst::AsmGoto {
             labels,
             fallthrough,

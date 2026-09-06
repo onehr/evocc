@@ -320,7 +320,16 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
             let offset = fields[0]
                 .parse::<u64>()
                 .map_err(|_| "invalid relocation offset")?;
-            let symbol = parse_symbol(fields[1])?.to_owned();
+            let symbol = if let Some((function, block)) = fields[1].split_once('^') {
+                parse_symbol(function)?;
+                parse_block_label(&format!("^{block}"))?;
+                fields[1]
+                    .strip_prefix('@')
+                    .ok_or("malformed code symbol")?
+                    .to_owned()
+            } else {
+                parse_symbol(fields[1])?.to_owned()
+            };
             let addend = fields[2]
                 .parse::<i64>()
                 .map_err(|_| "invalid relocation addend")?;

@@ -5645,6 +5645,12 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Address-only blocks versus terminator-edge reachability
+
+Section 3.7 admits label addresses, but Section 2.5 still requires every validated block to be reachable by terminator edges; `unsigned long f(void){return (unsigned long)&&after; after:return 0;}` exposes the conflict.
+Both sealed oracles produce a nonzero address (`.evidence/builtin-probes/20260906-code-addresses/address.c`, `address.out`); the body's reachability invariant takes precedence, so this form remains an existing E3101 validation refusal, with no fabricated edge or validator relaxation.
+No new code is assigned; affected full-configuration unit count is not yet measured, and this is not an allowed completion residual.
+
 ### Ordered pointer comparisons remain excluded by the body
 
 Sections 3.4 and 3.7 explicitly exclude ordered pointer comparisons; revision 1.9.67 admits pointer subtraction but does not override that separate exclusion.
