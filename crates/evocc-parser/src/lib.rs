@@ -7535,10 +7535,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     /// Convert a projected lvalue to a value where C requires it.
     ///
-    /// Only loadable scalars are converted here. An aggregate or array place is
-    /// left as written syntax so a following projection can continue the chain;
-    /// if such a node instead reaches a consumer, that consumer reports the
-    /// aggregate boundary it actually hit.
+    /// Scalar loads and array decay both retain the checked place. Further
+    /// projections extend that place rather than recovering discarded syntax.
+    /// Record values retain their value-producing expression below.
     fn convert_projected_lvalue(
         &mut self,
         expression: &'arena CHirExpr<'arena>,
@@ -7574,7 +7573,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 value_ty
             }
         };
-        if !self.is_loadable_scalar(value_ty) {
+        if !self.is_loadable_scalar(value_ty)
+            && !matches!(
+                self.types.get(value_ty).map(|ty| &ty.kind),
+                Some(TypeKind::Array { .. })
+            )
+        {
             return expression;
         }
         let Some(place) = self.resolve_memory_place(expression) else {
@@ -8769,6 +8773,28 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2930", "use-with-incomplete-enumeration", token.span);
                 return None;
             }
+            // Preserve the resolved place even when the operand's aggregate
+            // type does not undergo scalar lvalue conversion. Address-of
+            // consumers recover this place without executing a load.
+            let operand = if op == UnaryOp::AddrOf {
+                if let Some(place) = self
+                    .resolve_memory_place(operand)
+                    .filter(MemoryPlace::is_addressable)
+                    .filter(|place| !self.is_loadable_scalar(place.value_ty()))
+                {
+                    let facts = ExprFacts::value(place.value_ty());
+                    self.alloc_node(CHirExpr::MemoryRead {
+                        place,
+                        facts,
+                        target_span: operand.span(),
+                        span: operand.span(),
+                    })
+                } else {
+                    operand
+                }
+            } else {
+                operand
+            };
             let span = self.merge_span(token.span, operand.span());
             return Some(self.alloc_node(CHirExpr::Unary(op, operand, span)));
         }

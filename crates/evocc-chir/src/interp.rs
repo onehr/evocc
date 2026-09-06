@@ -6075,6 +6075,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         qualifiers: Qualifiers,
         span: SourceSpan,
     ) -> Result<CValue, InterpreterError> {
+        // Array-to-pointer conversion does not access the array object or
+        // produce a volatile event, even when it is a projected subobject.
+        if let Some(TypeKind::Array { element, .. }) = self.unit.types().get(ty).map(|ty| &ty.kind)
+        {
+            let pointer_type = PointerTypeDesc::to_object(self.unit.types(), *element)
+                .ok_or(InterpreterError::UnsupportedType { ty, span })?;
+            return Ok(CValue::Pointer {
+                value: address,
+                ty: pointer_type,
+            });
+        }
         if qualifiers.is_atomic {
             return Err(InterpreterError::UnsupportedExpression {
                 feature: "atomic memory access",

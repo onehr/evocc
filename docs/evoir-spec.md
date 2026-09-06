@@ -5587,6 +5587,13 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Ordered pointer comparisons remain excluded by the body
+
+Sections 3.4 and 3.7 explicitly exclude ordered pointer comparisons; revision 1.9.67 admits pointer subtraction but does not override that separate exclusion.
+Both sealed oracles print `15` for the same-array `<`, `<=`, `>`, `>=` cases in `.evidence/builtin-probes/20260906-pointer-ordering/order.c`, recorded in `order.out`; this does not authorize broadening the body's IR profile.
+The existing lowering refusal is named E3045 (`not-lowered: ordered-pointer-comparison`) without changing front-end acceptance or inventing a pointer-ordering rewrite.
+The construct has been located at `fdt.c:321` and `fdt_ro.c:276`; final unit counts must come from the sealed full-configuration survey, and E3045 is not part of the architecture's allowed terminal residuals.
+
 ### Checked-product representability at the signed boundary
 
 Section 10.1.15's mathematical representability rule takes precedence over its claim that a high-bit-set unsigned result always compares unequal to a sign extension: equal-width extension preserves exactly those bits, whereas a wider signed destination can hold them.

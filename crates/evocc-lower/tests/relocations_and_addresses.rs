@@ -155,6 +155,41 @@ fn pointer_differences_lower_to_signed_element_counts() {
 }
 
 #[test]
+fn assignment_addresses_and_loaded_values_survive_rhs_branches() {
+    for source in [
+        "int main(void){int n=3; int *p=&n; *p=n?5:6; return n;}",
+        "int main(void){int n=3; int *p=&n; *p+=n?2:6; return n;}",
+        "int n=3; int main(void){n=n?5:6; return n;}",
+        "int n=3; int main(void){n+=n?2:6; return n;}",
+    ] {
+        check(source, Ok(5), &["cond_br", "store"]);
+    }
+}
+
+#[test]
+fn initializer_addresses_survive_branches_and_later_actions() {
+    for source in [
+        "int main(void){int c=1; int v=c?5:6; int *p=&v; return *p;}",
+        "struct S{int a,b;}; int main(void){int c=1; struct S s={c?2:3,c?3:4}; return s.a+s.b;}",
+        "struct S{int a,b;}; int main(void){int c=1; struct S *p=&(struct S){c?2:3,c?3:4}; return p->a+p->b;}",
+    ] {
+        check(source, Ok(5), &["cond_br", "store"]);
+    }
+}
+
+#[test]
+fn addresses_of_aggregate_subobjects_use_the_resolved_place() {
+    for source in [
+        "struct S{int v;}; int main(void){struct S a[2]={{3},{7}}; struct S *p=&a[1]; return p->v;}",
+        "struct S{int v;}; struct O{struct S s;}; int main(void){struct O o={{7}}; struct S *p=&o.s; return p->v;}",
+        "struct S{int v;}; struct O{struct S s;}; int main(void){struct O o={{7}}; struct O *q=&o; struct S *p=&q->s; return p->v;}",
+        "struct S{int v;}; int main(void){int n=6; struct S *p=&(struct S){++n}; return p->v+n-7;}",
+    ] {
+        check(source, Ok(7), &["load", "store"]);
+    }
+}
+
+#[test]
 fn integer_addresses_resolve_only_live_exposed_storage() {
     check(
         "int main(void){unsigned long n=1; return *(int *)n;}",
@@ -167,4 +202,15 @@ fn integer_addresses_resolve_only_live_exposed_storage() {
         Ok(1),
         &["ptr.null"],
     );
+}
+
+#[test]
+fn array_members_decay_to_addresses_at_call_sites() {
+    for source in [
+        "int first(const unsigned char *p){return *p;} struct S{unsigned char magic[2];}; int main(void){struct S s={{7,8}}; struct S *p=&s; return first(p->magic);}",
+        "int first(const unsigned char *p){return *p;} struct S{unsigned char magic[2];}; int main(void){struct S s={{7,8}}; return first(s.magic);}",
+        "int first(const int *p){return *p;} int main(void){int a[2][2]={{7,8},{9,10}}; return first(a[0]);}",
+    ] {
+        check(source, Ok(7), &["load", "call"]);
+    }
 }

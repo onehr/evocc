@@ -88,6 +88,9 @@ pub enum LowerError {
     CheckedArithmeticWidth {
         span: SourceSpan,
     },
+    OrderedPointerComparison {
+        span: SourceSpan,
+    },
     MalformedFunction {
         function: String,
         span: SourceSpan,
@@ -131,6 +134,9 @@ impl fmt::Display for LowerError {
             Self::CheckedArithmeticWidth { .. } => {
                 formatter.write_str("not-lowered: checked-arithmetic-exceeds-128-bits")
             }
+            Self::OrderedPointerComparison { .. } => {
+                formatter.write_str("not-lowered: ordered-pointer-comparison")
+            }
             Self::MalformedFunction {
                 function, reason, ..
             } => write!(formatter, "malformed function {function}: {reason}"),
@@ -162,6 +168,7 @@ impl LowerError {
             Self::WideInteger { .. } => "E3033",
             Self::FunctionPointerArithmetic { .. } => "E3034",
             Self::CheckedArithmeticWidth { .. } => "E3044",
+            Self::OrderedPointerComparison { .. } => "E3045",
             _ => "E3101",
         }
     }
@@ -188,6 +195,7 @@ impl LowerError {
             | Self::AsmOperand { span, .. }
             | Self::VarArgs { span }
             | Self::CheckedArithmeticWidth { span }
+            | Self::OrderedPointerComparison { span }
             | Self::MalformedFunction { span, .. }
             | Self::InvalidControlFlow { span, .. }
             | Self::Layout { span, .. } => Some(*span),
@@ -4905,180 +4913,8 @@ impl<'a> FunctionLowerer<'a> {
         let Some(initializer) = &object.initializer else {
             return Ok(());
         };
-        if initializer.plan().zero_fills_unwritten() {
-            self.emit_zero_initializer_at(
-                address.clone(),
-                object.ty,
-                SubobjectPath::root(),
-                initializer.plan().actions(),
-                object.span,
-                state,
-            )?;
-        }
-        for action in initializer.plan().actions() {
-            let action_span = action.span().unwrap_or(object.span);
-            let (offset, actual_ty) = subobject_offset(
-                self.unit,
-                self.target,
-                object.ty,
-                action.path(),
-                action_span,
-            )?;
-            if actual_ty != action.destination_type() {
-                return Err(LowerError::UnsupportedStatement {
-                    span: action_span,
-                    feature: "initializer destination type does not match subobject path",
-                });
-            }
-            let action_address = self.constant_offset_address(
-                address.clone(),
-                u64::try_from(offset).map_err(|_| LowerError::UnsupportedStatement {
-                    span: action_span,
-                    feature: "initializer has a negative object offset",
-                })?,
-                state,
-            )?;
-            match action {
-                InitAction::StoreScalar {
-                    destination_type,
-                    value,
-                    ..
-                } => {
-                    let lowered = self.lower_expr(value, state)?;
-                    let lowered = self.coerce_to_object_type(
-                        lowered,
-                        Some(value),
-                        *destination_type,
-                        action_span,
-                        state,
-                    )?;
-                    let volatile = self
-                        .unit
-                        .types()
-                        .get(*destination_type)
-                        .is_some_and(|ty| ty.qualifiers.is_volatile);
-                    self.emit_memory_store(
-                        action_address,
-                        lowered,
-                        *destination_type,
-                        volatile,
-                        action_span,
-                        state,
-                    )?;
-                }
-                InitAction::ZeroScalar {
-                    destination_type, ..
-                } => {
-                    let zero = match self.unit.types().get(*destination_type).map(|ty| &ty.kind) {
-                        Some(TypeKind::Pointer(_)) => {
-                            let pointer = self
-                                .fresh_value(self.c_value_type(*destination_type, action_span)?.0);
-                            self.emit(state, Inst::PtrNull(pointer.clone()))?;
-                            ExprValue {
-                                value: pointer,
-                                integer: CIntegerType::ULONG,
-                            }
-                        }
-                        _ => {
-                            let integer = canonical_integer(
-                                self.unit.types(),
-                                self.target,
-                                *destination_type,
-                                action_span,
-                            )?;
-                            self.constant(state, integer, 0)?
-                        }
-                    };
-                    self.emit_memory_store(
-                        action_address,
-                        zero,
-                        *destination_type,
-                        false,
-                        action_span,
-                        state,
-                    )?;
-                }
-                InitAction::StoreString {
-                    destination_type,
-                    literal,
-                    ..
-                } => {
-                    let (element, count) =
-                        match self.unit.types().get(*destination_type).map(|ty| &ty.kind) {
-                            Some(TypeKind::Array {
-                                element,
-                                bound: ArrayBound::Fixed(count),
-                            }) => (*element, *count),
-                            _ => {
-                                return Err(LowerError::UnsupportedStatement {
-                                    span: action_span,
-                                    feature: "string initializer destination is not a fixed array",
-                                });
-                            }
-                        };
-                    let mut units =
-                        literal
-                            .decoded_units()
-                            .ok_or(LowerError::UnsupportedStatement {
-                                span: action_span,
-                                feature: "string initializer decoding failed",
-                            })?;
-                    let count =
-                        usize::try_from(count).map_err(|_| LowerError::UnsupportedType {
-                            ty: *destination_type,
-                            span: action_span,
-                            feature: "string destination length exceeds host representation",
-                        })?;
-                    units.resize(count, 0);
-                    let element_layout = self.access_layout(element, action_span)?;
-                    for (index, unit) in units.into_iter().take(count).enumerate() {
-                        let address = self.constant_offset_address(
-                            action_address.clone(),
-                            u64::try_from(index)
-                                .ok()
-                                .and_then(|index| index.checked_mul(element_layout.size_bytes))
-                                .ok_or(LowerError::UnsupportedType {
-                                    ty: element,
-                                    span: action_span,
-                                    feature: "string element offset overflow",
-                                })?,
-                            state,
-                        )?;
-                        let integer = canonical_integer(
-                            self.unit.types(),
-                            self.target,
-                            element,
-                            action_span,
-                        )?;
-                        let value = self.constant(state, integer, u64::from(unit))?;
-                        self.emit_memory_store(address, value, element, false, action_span, state)?;
-                    }
-                }
-                InitAction::CopyAggregate {
-                    destination_type,
-                    value,
-                    span,
-                    ..
-                } => {
-                    let source = self.lower_expr(value, state)?;
-                    let volatile = self
-                        .unit
-                        .types()
-                        .get(*destination_type)
-                        .is_some_and(|ty| ty.qualifiers.is_volatile)
-                        || self.aggregate_source_is_volatile(value);
-                    self.emit_aggregate_transfer(
-                        action_address,
-                        source.value,
-                        *destination_type,
-                        volatile,
-                        *span,
-                        state,
-                    )?;
-                }
-            }
-        }
-        Ok(())
+        self.lower_initializer_at(address, object.ty, initializer, object.span, state)
+            .map(|_| ())
     }
 
     fn lower_initializer_at(
@@ -5088,7 +4924,8 @@ impl<'a> FunctionLowerer<'a> {
         initializer: &ObjectInitializer<'a>,
         object_span: SourceSpan,
         state: &mut State,
-    ) -> Result<(), LowerError> {
+    ) -> Result<Value, LowerError> {
+        let address_key = self.retain_temporary(address.clone(), state);
         if initializer.plan().zero_fills_unwritten() {
             self.emit_zero_initializer_at(
                 address.clone(),
@@ -5115,7 +4952,7 @@ impl<'a> FunctionLowerer<'a> {
                 });
             }
             let action_address = self.constant_offset_address(
-                address.clone(),
+                self.token(state, address_key)?.value,
                 u64::try_from(offset).map_err(|_| LowerError::UnsupportedStatement {
                     span: action_span,
                     feature: "initializer has a negative object offset",
@@ -5128,7 +4965,13 @@ impl<'a> FunctionLowerer<'a> {
                     value,
                     ..
                 } => {
+                    let action_key = self.retain_temporary(action_address, state);
                     let lowered = self.lower_expr(value, state)?;
+                    let action_address = state
+                        .env
+                        .remove(&action_key)
+                        .expect("retained initializer destination")
+                        .value;
                     let lowered = self.coerce_to_object_type(
                         lowered,
                         Some(value),
@@ -5244,7 +5087,13 @@ impl<'a> FunctionLowerer<'a> {
                     span,
                     ..
                 } => {
+                    let action_key = self.retain_temporary(action_address, state);
                     let source = self.lower_expr(value, state)?;
+                    let action_address = state
+                        .env
+                        .remove(&action_key)
+                        .expect("retained initializer destination")
+                        .value;
                     let volatile = self
                         .unit
                         .types()
@@ -5262,7 +5111,11 @@ impl<'a> FunctionLowerer<'a> {
                 }
             }
         }
-        Ok(())
+        Ok(state
+            .env
+            .remove(&address_key)
+            .expect("retained initializer root")
+            .value)
     }
 
     fn lower_compound_literal_address(
@@ -5318,8 +5171,7 @@ impl<'a> FunctionLowerer<'a> {
             },
         )?;
         self.replace_effect_tokens(state, mem_out, Some(world_out));
-        self.lower_initializer_at(address.clone(), *ty, initializer, *span, state)?;
-        Ok(address)
+        self.lower_initializer_at(address, *ty, initializer, *span, state)
     }
 
     fn end_object_lifetime(
@@ -6384,7 +6236,12 @@ impl<'a> FunctionLowerer<'a> {
                 place, target_span, ..
             } => {
                 let address = self.lower_place_address(place, *target_span, state)?;
-                if self.is_aggregate_type(place.value_ty()) {
+                if self.is_aggregate_type(place.value_ty())
+                    || matches!(
+                        self.unit.types().get(place.value_ty()).map(|ty| &ty.kind),
+                        Some(TypeKind::Array { .. })
+                    )
+                {
                     return Ok(ExprValue {
                         value: address,
                         integer: CIntegerType::ULONG,
@@ -6836,6 +6693,12 @@ impl<'a> FunctionLowerer<'a> {
                 value: result,
                 integer: CIntegerType::LONG,
             });
+        }
+        if matches!(
+            operator,
+            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+        ) {
+            return Err(LowerError::OrderedPointerComparison { span });
         }
         if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) {
             let (left, right) = match (left_pointer, right_pointer) {
@@ -7971,6 +7834,7 @@ impl<'a> FunctionLowerer<'a> {
         }
         if self.memory_symbols.contains(&place.symbol()) {
             let address = self.object_address(place.symbol(), span, state)?;
+            let address_key = self.retain_temporary(address.clone(), state);
             let volatile = self
                 .unit
                 .types()
@@ -7981,11 +7845,24 @@ impl<'a> FunctionLowerer<'a> {
             } else {
                 Some(self.emit_memory_load(address.clone(), place.ty(), volatile, span, state)?)
             };
+            let original_key = original
+                .as_ref()
+                .map(|value| self.retain_temporary(value.value.clone(), state));
             let right = self.lower_expr(assigned, state)?;
+            let address = state
+                .env
+                .remove(&address_key)
+                .expect("retained assignment address")
+                .value;
             let result = if operator == AssignmentOp::Simple {
                 self.coerce_to_object_type(right, Some(assigned), place.ty(), span, state)?
             } else {
-                let original = original.expect("compound assignment loaded its object");
+                let mut original = original.expect("compound assignment loaded its object");
+                original.value = state
+                    .env
+                    .remove(&original_key.expect("loaded assignment value"))
+                    .expect("retained assignment value")
+                    .value;
                 if matches!(original.value.ty, EvoIRType::Ptr(_)) {
                     self.compute_pointer_assignment(
                         operator,
@@ -8317,6 +8194,7 @@ impl<'a> FunctionLowerer<'a> {
             return Err(LowerError::FunctionPointerArithmetic { span });
         }
         let address = self.lower_place_address(place, target_span, state)?;
+        let address_key = self.retain_temporary(address.clone(), state);
         let volatile = place.access_qualifiers().is_volatile;
         if self.is_aggregate_type(place.value_ty()) {
             if operator != AssignmentOp::Simple {
@@ -8326,6 +8204,11 @@ impl<'a> FunctionLowerer<'a> {
                 });
             }
             let source = self.lower_expr(assigned, state)?;
+            let address = state
+                .env
+                .remove(&address_key)
+                .expect("retained aggregate assignment address")
+                .value;
             self.emit_aggregate_transfer(
                 address.clone(),
                 source.value,
@@ -8350,11 +8233,24 @@ impl<'a> FunctionLowerer<'a> {
                 state,
             )?)
         };
+        let original_key = original
+            .as_ref()
+            .map(|value| self.retain_temporary(value.value.clone(), state));
         let right = self.lower_expr(assigned, state)?;
+        let address = state
+            .env
+            .remove(&address_key)
+            .expect("retained assignment address")
+            .value;
         let result = if operator == AssignmentOp::Simple {
             self.coerce_to_object_type(right, Some(assigned), place.value_ty(), span, state)?
         } else {
-            let original = original.expect("memory compound assignment loaded its left value");
+            let mut original = original.expect("memory compound assignment loaded its left value");
+            original.value = state
+                .env
+                .remove(&original_key.expect("loaded assignment value"))
+                .expect("retained assignment value")
+                .value;
             if matches!(original.value.ty, EvoIRType::Ptr(_)) {
                 self.compute_pointer_assignment(
                     operator,
