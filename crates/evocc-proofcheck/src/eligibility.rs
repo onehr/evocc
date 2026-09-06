@@ -560,6 +560,7 @@ mod tests {
 
     fn function(blocks: Vec<Block>) -> Function {
         Function {
+            visibility: evocc_evoir::GlobalVisibility::External,
             variadic: false,
             name: "f".to_owned(),
             params: vec![FunctionParam {

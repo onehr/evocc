@@ -29,6 +29,7 @@ fn pointer_poison_validates_and_round_trips_in_both_pointer_namespaces() {
         },
     );
     let function = Function {
+        visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
         name: "poison_forms".to_owned(),
         params: vec![],

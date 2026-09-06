@@ -186,6 +186,7 @@ fn probe(insts: Vec<Inst>, root: Value) -> Module {
         ty: EvoIRType::World,
     };
     let function = Function {
+        visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
         name: "main".to_owned(),
         params: vec![

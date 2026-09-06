@@ -740,8 +740,14 @@ fn render_function(function: &Function) -> String {
         .map(render_type)
         .collect::<Vec<_>>()
         .join(", ");
+    // Revision 1.9.70: the field is written only for an internal function, so
+    // every module text that predates the revision renders unchanged.
+    let visibility = match function.visibility {
+        GlobalVisibility::External => "",
+        GlobalVisibility::Internal => " visibility=internal",
+    };
     rendered.push_str(&format!(
-        "func @{}({parameters}) -> ({returns}) cc = {calling_convention}\n",
+        "func @{}({parameters}) -> ({returns}) cc = {calling_convention}{visibility}\n",
         function.name,
     ));
     rendered.push_str(&format!(
@@ -813,6 +819,7 @@ mod tests {
             declares: Vec::new(),
             globals: vec![],
             functions: vec![Function {
+                visibility: crate::GlobalVisibility::External,
                 variadic: false,
                 name: "stopped".to_owned(),
                 params: Vec::new(),

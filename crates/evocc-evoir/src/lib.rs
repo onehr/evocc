@@ -725,6 +725,15 @@ pub struct Function {
     pub variadic: bool,
     pub ret_tys: Vec<EvoIRType>,
     pub effects: EffectSummary,
+    /// Link visibility (revision 1.9.70).
+    ///
+    /// `Internal` is the linkage of a C definition whose storage class is
+    /// `static`, including `static inline`; every other function is
+    /// `External`, which is what the canonical text spells by omitting the
+    /// field.  The machine emits no global symbol for an internal function
+    /// and drops one nothing in the module references; the interpreters are
+    /// indifferent to it, since a module is executed whole.
+    pub visibility: GlobalVisibility,
     pub blocks: Vec<Block>,
 }
 
@@ -772,6 +781,7 @@ impl FunctionDeclaration {
                 .collect(),
             ret_tys: self.ret_tys.clone(),
             effects: EffectSummary::top(),
+            visibility: GlobalVisibility::External,
             blocks: Vec::new(),
         }
     }
@@ -934,9 +944,13 @@ pub enum GlobalKind {
     CompoundLiteral,
 }
 
-/// Link visibility of one module global.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// Link visibility of one module global or function.
+///
+/// `External` is the default because the canonical Section 9 text omits the
+/// field for an external function (revision 1.9.70).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum GlobalVisibility {
+    #[default]
     External,
     Internal,
 }
@@ -5712,6 +5726,7 @@ mod tests {
         let one = bits(2, 32);
         let result = bits(3, 32);
         Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "threaded".to_owned(),
             params: vec![],
@@ -5747,6 +5762,7 @@ mod tests {
         let global_out = value(3, mem_global.clone());
         let world_out = value(4, world.clone());
         Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "tokens".to_owned(),
             params: vec![
@@ -5792,6 +5808,7 @@ mod tests {
         let one = bits(1, 32);
         let result = bits(2, 32);
         let function = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "increment".to_owned(),
             params: vec![FunctionParam {
@@ -5850,6 +5867,7 @@ mod tests {
         let pointer_type = EvoIRType::Ptr(AddressSpace::Stack);
         let pointer = value(10, pointer_type.clone());
         let pointer_function = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "pointer_passthrough".to_owned(),
             params: vec![FunctionParam {
@@ -5929,6 +5947,7 @@ mod tests {
         let left = bits(31, 32);
         let right = bits(32, 32);
         let bad_condition = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "bad_condition".to_owned(),
             params: vec![],
@@ -5991,6 +6010,7 @@ mod tests {
         let left = bits(0, 32);
         let right = bits(1, 32);
         let mut deep_result = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "deep_result".to_owned(),
             params: vec![],
@@ -6103,6 +6123,7 @@ mod tests {
         let next_n = bits(10, 32);
         let returned = bits(11, 32);
         let function = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "loop_sum".to_owned(),
             params: vec![],
@@ -6174,6 +6195,7 @@ mod tests {
         let out_a = bits(7, 32);
         let out_b = bits(8, 32);
         let function = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "swap_once".to_owned(),
             params: vec![
@@ -6244,6 +6266,7 @@ mod tests {
         let raw = bits(0, 64);
         let same = bits(1, 64);
         let function = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "raw".to_owned(),
             params: vec![],
@@ -6273,6 +6296,7 @@ mod tests {
         let zero = bits(1, 32);
         let quotient = bits(2, 32);
         let division = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "division".to_owned(),
             params: vec![],
@@ -6342,6 +6366,7 @@ mod tests {
         let memory = value(1, memory_ty.clone());
         let world = value(2, EvoIRType::World);
         Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: name.to_owned(),
             params: vec![
@@ -6382,6 +6407,7 @@ mod tests {
         let memory_out = value(4, memory_ty.clone());
         let world_out = value(5, EvoIRType::World);
         let main = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "main".to_owned(),
             params: vec![
@@ -6454,6 +6480,7 @@ mod tests {
             }
         };
         let main = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "main".to_owned(),
             params: vec![
@@ -6523,6 +6550,7 @@ mod tests {
         let memory_out = value(14, memory_ty.clone());
         let world_out = value(15, EvoIRType::World);
         let countdown = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "countdown".to_owned(),
             params: vec![
@@ -6944,6 +6972,7 @@ mod tests {
         let add_ok = bits(2, 1);
         let sum = bits(3, 8);
         let function = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "defined_add".to_owned(),
             params: vec![],
@@ -7007,6 +7036,7 @@ mod tests {
         let one = bits(11, 8);
         let add_ok = bits(12, 1);
         let overflow = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "overflow".to_owned(),
             params: vec![],
@@ -7037,6 +7067,7 @@ mod tests {
         let sub_ok = bits(22, 1);
         let mul_ok = bits(23, 1);
         let predicates = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "predicates".to_owned(),
             params: vec![],
@@ -7081,6 +7112,7 @@ mod tests {
         let xor = bits(14, 8);
         let invalid_shl = bits(15, 8);
         let operations = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "extended_integer_ops".to_owned(),
             params: vec![],
@@ -7137,6 +7169,7 @@ mod tests {
         let seven = bits(27, 8);
         let predicates: Vec<Value> = (30..=40).map(|id| bits(id, 1)).collect();
         let predicate_function = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "separated_predicates".to_owned(),
             params: vec![],
@@ -7238,6 +7271,7 @@ mod tests {
         let mixed_predicates: Vec<Value> = (54..=58).map(|id| bits(id, 1)).collect();
         let shifted_result = bits(59, 64);
         let mixed_width_shifts = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "mixed_width_shifts".to_owned(),
             params: vec![],
@@ -7410,6 +7444,7 @@ mod tests {
             instructions.push(Inst::UbAssume(condition, reason));
             let budget = instructions.len() as u64 + 1;
             let function = Function {
+                visibility: crate::GlobalVisibility::External,
                 variadic: false,
                 name: "typed_ub".to_owned(),
                 params: vec![],
@@ -7448,6 +7483,7 @@ mod tests {
         assert!(inst_uses(&instruction).is_empty());
 
         let function = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "uninitialized_scalar".to_owned(),
             params: vec![],
@@ -7464,6 +7500,7 @@ mod tests {
 
         let pointer = value(71, EvoIRType::Ptr(AddressSpace::Stack));
         let pointer_function = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "uninitialized_pointer".to_owned(),
             params: vec![],
@@ -7488,6 +7525,7 @@ mod tests {
             ]),
         ] {
             let invalid = Function {
+                visibility: crate::GlobalVisibility::External,
                 variadic: false,
                 name: "uninitialized_effect_token".to_owned(),
                 params: vec![],
@@ -7510,6 +7548,7 @@ mod tests {
         }
 
         let invalid_void = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "uninitialized_void".to_owned(),
             params: vec![],
@@ -7531,6 +7570,7 @@ mod tests {
         let carried = bits(101, 32);
         let replacement = bits(102, 32);
         let function = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "propagate_uninitialized".to_owned(),
             params: vec![],
@@ -7616,6 +7656,7 @@ mod tests {
         let next_i = bits(120, 32);
         let exit_x = bits(121, 32);
         let function = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "definite_assignment_loop".to_owned(),
             params: vec![],
@@ -7697,6 +7738,7 @@ mod tests {
     fn uninitialized_return_traps_with_e3001_in_function_and_module_interpreters() {
         let result = bits(100, 32);
         let function = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "uninitialized_read".to_owned(),
             params: vec![],
@@ -7779,6 +7821,7 @@ mod tests {
         let cases = vec![
             (
                 Function {
+                    visibility: crate::GlobalVisibility::External,
                     variadic: false,
                     name: "uninitialized_arithmetic".to_owned(),
                     params: vec![],
@@ -7799,6 +7842,7 @@ mod tests {
             ),
             (
                 Function {
+                    visibility: crate::GlobalVisibility::External,
                     variadic: false,
                     name: "uninitialized_comparison".to_owned(),
                     params: vec![],
@@ -7819,6 +7863,7 @@ mod tests {
             ),
             (
                 Function {
+                    visibility: crate::GlobalVisibility::External,
                     variadic: false,
                     name: "uninitialized_cast".to_owned(),
                     params: vec![],
@@ -7838,6 +7883,7 @@ mod tests {
             ),
             (
                 Function {
+                    visibility: crate::GlobalVisibility::External,
                     variadic: false,
                     name: "uninitialized_zero_extend".to_owned(),
                     params: vec![],
@@ -7857,6 +7903,7 @@ mod tests {
             ),
             (
                 Function {
+                    visibility: crate::GlobalVisibility::External,
                     variadic: false,
                     name: "uninitialized_truncate".to_owned(),
                     params: vec![],
@@ -7876,6 +7923,7 @@ mod tests {
             ),
             (
                 Function {
+                    visibility: crate::GlobalVisibility::External,
                     variadic: false,
                     name: "uninitialized_shifted_predicate_operand".to_owned(),
                     params: vec![],
@@ -7914,6 +7962,7 @@ mod tests {
 
         let poison_condition = bits(150, 1);
         let condition_function = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "uninitialized_condition".to_owned(),
             params: vec![],
@@ -8019,6 +8068,7 @@ mod tests {
         assert!(is_terminator(&trap));
 
         let function = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "fallthrough".to_owned(),
             params: vec![],
@@ -8044,6 +8094,7 @@ mod tests {
         let safe_value = bits(161, 32);
         let returned = bits(162, 32);
         let function = Function {
+            visibility: crate::GlobalVisibility::External,
             variadic: false,
             name: "conditional_fallthrough".to_owned(),
             params: vec![FunctionParam {

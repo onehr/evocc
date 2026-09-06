@@ -53,6 +53,7 @@ fn module() -> Module {
         value: value.clone(),
     };
     let function = Function {
+        visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
         name: "main".to_owned(),
         params: vec![

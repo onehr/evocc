@@ -396,6 +396,7 @@ fn recursive_helper(rng: &mut Rng) -> (Signature, Function) {
 
     let function = Function {
         variadic: false,
+        visibility: evocc_evoir::GlobalVisibility::External,
         name: "r0".to_owned(),
         params: vec![
             FunctionParam {
@@ -588,6 +589,7 @@ fn generate_function(
 
     Function {
         variadic: false,
+        visibility: evocc_evoir::GlobalVisibility::External,
         name: signature.name.clone(),
         params,
         ret_tys: signature

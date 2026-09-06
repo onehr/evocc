@@ -73,6 +73,7 @@ fn module() -> Module {
 
     let function = Function {
         variadic: false,
+        visibility: evocc_evoir::GlobalVisibility::External,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {
@@ -158,6 +159,7 @@ fn sparsely_numbered_module() -> Module {
 
     let function = Function {
         variadic: false,
+        visibility: evocc_evoir::GlobalVisibility::External,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {
@@ -271,6 +273,7 @@ fn aliasing_module() -> Module {
 
     let function = Function {
         variadic: false,
+        visibility: evocc_evoir::GlobalVisibility::External,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {
@@ -386,6 +389,7 @@ fn nested_negation_module() -> Module {
 
     let function = Function {
         variadic: false,
+        visibility: evocc_evoir::GlobalVisibility::External,
         name: "main".to_owned(),
         params: vec![
             FunctionParam {

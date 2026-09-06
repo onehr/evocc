@@ -23,6 +23,7 @@ struct Signature {
 struct Header {
     name: String,
     convention: String,
+    visibility: GlobalVisibility,
     signature: Signature,
 }
 
@@ -243,6 +244,7 @@ impl ModuleParser<'_> {
                 .collect(),
             ret_tys: header.signature.results,
             effects,
+            visibility: header.visibility,
             blocks,
         })
     }
@@ -397,6 +399,9 @@ fn parse_declaration_header(line: &str) -> Result<Header, String> {
     Ok(Header {
         name,
         convention: "target_default".to_owned(),
+        // A `declare` names a symbol this module does not define, so it has no
+        // linkage of its own and Section 9 gives it no visibility field.
+        visibility: GlobalVisibility::External,
         signature: Signature {
             params,
             results,
@@ -442,10 +447,21 @@ fn parse_function_header(line: &str) -> Result<Header, String> {
     let results = cursor.type_list(")")?;
     cursor.expect(") cc = ")?;
     let convention = cursor.ident()?.to_owned();
+    // Revision 1.9.70: the trailing field is optional and has exactly one
+    // spelling.  Absence means external, and `visibility=external` is not a
+    // canonical text, so the cursor admits only the internal form and
+    // `finish` refuses anything else that follows the convention.
+    let visibility = if cursor.at(" visibility=internal") {
+        cursor.expect(" visibility=internal")?;
+        GlobalVisibility::Internal
+    } else {
+        GlobalVisibility::External
+    };
     cursor.finish()?;
     Ok(Header {
         name,
         convention,
+        visibility,
         signature: Signature {
             params,
             results,

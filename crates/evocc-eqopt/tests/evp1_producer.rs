@@ -27,6 +27,7 @@ fn input() -> Module {
         declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![Function {
+            visibility: evocc_evoir::GlobalVisibility::External,
             variadic: false,
             name: "main".to_owned(),
             params: vec![FunctionParam {

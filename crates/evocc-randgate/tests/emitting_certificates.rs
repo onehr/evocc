@@ -64,6 +64,7 @@ fn module_of(insts: Vec<Inst>, result: Value) -> Module {
     };
     let result_ty = result.ty.clone();
     let function = Function {
+        visibility: evocc_evoir::GlobalVisibility::External,
         variadic: false,
         name: "main".to_owned(),
         params: vec![

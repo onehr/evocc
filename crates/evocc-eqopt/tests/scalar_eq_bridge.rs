@@ -27,6 +27,7 @@ fn module(insts: Vec<Inst>, returns: Vec<Value>, return_types: Vec<EvoIRType>) -
         declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![Function {
+            visibility: evocc_evoir::GlobalVisibility::External,
             variadic: false,
             name: "main".to_owned(),
             params: vec![FunctionParam {
@@ -233,6 +234,7 @@ fn a_trapping_successor_never_licenses_predecessor_edge_strengthening() {
         declares: Vec::new(),
         globals: Vec::new(),
         functions: vec![Function {
+            visibility: evocc_evoir::GlobalVisibility::External,
             variadic: false,
             name: "branch_to_report".to_owned(),
             params: vec![

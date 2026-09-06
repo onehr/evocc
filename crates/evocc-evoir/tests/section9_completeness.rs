@@ -315,6 +315,7 @@ fn sentinel_module() -> Module {
             },
         ],
         functions: vec![Function {
+            visibility: evocc_evoir::GlobalVisibility::External,
             variadic: false,
             name: "sentinel_function".to_owned(),
             params,
@@ -732,10 +733,11 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
             variadic,
             ret_tys,
             effects,
+            visibility,
             blocks,
         } = function;
-        let _ = (name, ret_tys, variadic);
-        keys.insert("Function(name,params,variadic,ret_tys,effects,blocks)");
+        let _ = (name, ret_tys, variadic, visibility);
+        keys.insert("Function(name,params,variadic,ret_tys,effects,visibility,blocks)");
         for param in params {
             let FunctionParam { name, ty } = param;
             let _ = (name, ty);
