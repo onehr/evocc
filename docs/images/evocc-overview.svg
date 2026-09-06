@@ -1,153 +1,153 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="960" viewBox="0 0 1600 960"><defs><marker id="arr-1f2a37" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1f2a37"/></marker><marker id="arr-4f8cff" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4f8cff"/></marker><marker id="arr-38bdf8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#38bdf8"/></marker><marker id="arr-34d399" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#34d399"/></marker><marker id="arr-55606e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#55606e"/></marker><linearGradient id="hair" x1="0" x2="1"><stop offset="0" stop-color="#4f8cff"/><stop offset="0.55" stop-color="#38bdf8"/><stop offset="1" stop-color="#34d399"/></linearGradient><radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#4f8cff" stop-opacity="0.16"/><stop offset="1" stop-color="#4f8cff" stop-opacity="0"/></radialGradient></defs><rect width="1600" height="960" fill="#0a0e14"/>
-<text x="60" y="70" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="44" font-weight="700" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="0">EvoCC</text>
-<text x="60" y="100" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">a C compiler written from scratch in Rust; e-graph optimizer with certificates; target AArch64 and the Linux 6.18 kernel</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="960" viewBox="0 0 1600 960"><defs><marker id="arr-232d3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#232d3a"/></marker><marker id="arr-58a6ff" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#58a6ff"/></marker><marker id="arr-79c0ff" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#79c0ff"/></marker><marker id="arr-3fb950" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#3fb950"/></marker><marker id="arr-4a5462" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4a5462"/></marker><linearGradient id="hair" x1="0" x2="1"><stop offset="0" stop-color="#58a6ff"/><stop offset="0.55" stop-color="#79c0ff"/><stop offset="1" stop-color="#3fb950"/></linearGradient><radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#58a6ff" stop-opacity="0.16"/><stop offset="1" stop-color="#58a6ff" stop-opacity="0"/></radialGradient></defs><rect width="1600" height="960" fill="#0b1117"/>
+<text x="60" y="70" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="44" font-weight="700" fill="#f0f3f6" text-anchor="start" opacity="1.0" letter-spacing="0">EvoCC</text>
+<text x="60" y="100" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">a C compiler written from scratch in Rust; e-graph optimizer with certificates; target AArch64 and the Linux 6.18 kernel</text>
 <rect x="60" y="116" width="1480" height="2" fill="url(#hair)" opacity="0.8"/>
-<rect x="60" y="132" width="241.0" height="28" rx="14" fill="#38bdf8" fill-opacity="0.12" stroke="#38bdf8" stroke-opacity="0.5"/>
-<text x="180.5" y="151" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="500" fill="#38bdf8" text-anchor="middle" opacity="1.0" letter-spacing="0">Rust workspace, 16 crates</text>
-<rect x="313.0" y="132" width="292.59999999999997" height="28" rx="14" fill="#4f8cff" fill-opacity="0.12" stroke="#4f8cff" stroke-opacity="0.5"/>
-<text x="459.29999999999995" y="151" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="500" fill="#4f8cff" text-anchor="middle" opacity="1.0" letter-spacing="0">no LLVM, no GCC in the pipeline</text>
-<rect x="617.5999999999999" y="132" width="223.79999999999998" height="28" rx="14" fill="#4f8cff" fill-opacity="0.12" stroke="#4f8cff" stroke-opacity="0.5"/>
-<text x="729.4999999999999" y="151" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="500" fill="#4f8cff" text-anchor="middle" opacity="1.0" letter-spacing="0">AArch64: Linux + Darwin</text>
-<rect x="853.3999999999999" y="132" width="284.0" height="28" rx="14" fill="#34d399" fill-opacity="0.12" stroke="#34d399" stroke-opacity="0.5"/>
-<text x="995.3999999999999" y="151" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="500" fill="#34d399" text-anchor="middle" opacity="1.0" letter-spacing="0">each rewrite has a certificate</text>
-<rect x="1149.3999999999999" y="132" width="249.6" height="28" rx="14" fill="#34d399" fill-opacity="0.12" stroke="#34d399" stroke-opacity="0.5"/>
-<text x="1274.1999999999998" y="151" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="500" fill="#34d399" text-anchor="middle" opacity="1.0" letter-spacing="0">numbers come from receipts</text>
-<line x1="250" y1="204" x2="590" y2="204" stroke="#4f8cff" stroke-width="1" opacity="0.6"/>
-<text x="420.0" y="196" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#4f8cff" text-anchor="middle" opacity="1.0" letter-spacing="0">front end</text>
-<line x1="630" y1="204" x2="970" y2="204" stroke="#38bdf8" stroke-width="1" opacity="0.6"/>
-<text x="800.0" y="196" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#38bdf8" text-anchor="middle" opacity="1.0" letter-spacing="0">semantics and equality</text>
-<line x1="1010" y1="204" x2="1350" y2="204" stroke="#34d399" stroke-width="1" opacity="0.6"/>
-<text x="1180.0" y="196" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#34d399" text-anchor="middle" opacity="1.0" letter-spacing="0">backend</text>
-<rect x="60" y="216" width="150" height="132" rx="12" fill="#0f1620" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<rect x="72" y="216" width="126" height="3" rx="1.5" fill="#55606e"/>
-<text x="135.0" y="258" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">C / GNU C11</text>
-<text x="135.0" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">Linux 6.18.44</text>
-<text x="135.0" y="303" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">2,798 translation units</text>
-<line x1="214" y1="282.0" x2="246" y2="282.0" stroke="#1f2a37" stroke-width="1.6" opacity="1.0" marker-end="url(#arr-1f2a37)"/>
-<rect x="250" y="216" width="150" height="132" rx="12" fill="#0f1620" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<rect x="262" y="216" width="126" height="3" rx="1.5" fill="#4f8cff"/>
-<text x="325.0" y="258" font-family="JetBrains Mono, Menlo, monospace" font-size="21" font-weight="700" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">EvoCPP</text>
-<text x="325.0" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">preprocessor</text>
-<text x="325.0" y="303" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">C11 pp-tokens</text>
-<text x="325.0" y="322" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">the GCC dialect</text>
-<line x1="404" y1="282.0" x2="436" y2="282.0" stroke="#4f8cff" stroke-width="1.6" opacity="1.0" marker-end="url(#arr-4f8cff)"/>
-<rect x="440" y="216" width="150" height="132" rx="12" fill="#0f1620" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<rect x="452" y="216" width="126" height="3" rx="1.5" fill="#4f8cff"/>
-<text x="515.0" y="258" font-family="JetBrains Mono, Menlo, monospace" font-size="21" font-weight="700" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">C-HIR</text>
-<text x="515.0" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">checked high-level IR</text>
-<text x="515.0" y="303" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">typed UB, provenance,</text>
-<text x="515.0" y="322" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">per-byte initializedness</text>
-<line x1="594" y1="282.0" x2="626" y2="282.0" stroke="#4f8cff" stroke-width="1.6" opacity="1.0" marker-end="url(#arr-4f8cff)"/>
-<rect x="630" y="216" width="150" height="132" rx="12" fill="#0f1620" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<rect x="642" y="216" width="126" height="3" rx="1.5" fill="#38bdf8"/>
-<text x="705.0" y="258" font-family="JetBrains Mono, Menlo, monospace" font-size="21" font-weight="700" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">EvoIR</text>
-<text x="705.0" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">block-argument SSA</text>
-<text x="705.0" y="303" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">mem / world tokens</text>
-<text x="705.0" y="322" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">ub.assume obligations</text>
-<line x1="784" y1="282.0" x2="816" y2="282.0" stroke="#38bdf8" stroke-width="1.6" opacity="1.0" marker-end="url(#arr-38bdf8)"/>
-<rect x="820" y="216" width="150" height="132" rx="12" fill="#0f1620" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<rect x="832" y="216" width="126" height="3" rx="1.5" fill="#38bdf8"/>
-<text x="895.0" y="258" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">e-graph</text>
-<text x="895.0" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">rewrites add forms,</text>
-<text x="895.0" y="303" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">never replace them</text>
-<text x="895.0" y="322" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">cost is a policy</text>
-<line x1="974" y1="282.0" x2="1006" y2="282.0" stroke="#38bdf8" stroke-width="1.6" opacity="1.0" marker-end="url(#arr-38bdf8)"/>
-<rect x="1010" y="216" width="150" height="132" rx="12" fill="#0f1620" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<rect x="1022" y="216" width="126" height="3" rx="1.5" fill="#34d399"/>
-<text x="1085.0" y="258" font-family="JetBrains Mono, Menlo, monospace" font-size="21" font-weight="700" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">EvoMIR</text>
-<text x="1085.0" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">AArch64 machine IR</text>
-<text x="1085.0" y="303" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">linear scan + verifier</text>
-<text x="1085.0" y="322" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">128-bit, varargs, asm</text>
-<line x1="1164" y1="282.0" x2="1196" y2="282.0" stroke="#34d399" stroke-width="1.6" opacity="1.0" marker-end="url(#arr-34d399)"/>
-<rect x="1200" y="216" width="150" height="132" rx="12" fill="#0f1620" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<rect x="1212" y="216" width="126" height="3" rx="1.5" fill="#34d399"/>
-<text x="1275.0" y="258" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">Assembly</text>
-<text x="1275.0" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">platform as and ld</text>
-<text x="1275.0" y="303" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">nothing else outside</text>
-<line x1="1354" y1="282.0" x2="1386" y2="282.0" stroke="#34d399" stroke-width="1.6" opacity="1.0" marker-end="url(#arr-34d399)"/>
-<rect x="1390" y="216" width="150" height="132" rx="12" fill="#0f1620" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<rect x="1402" y="216" width="126" height="3" rx="1.5" fill="#55606e"/>
-<text x="1465.0" y="258" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">Runs</text>
-<text x="1465.0" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">Linux AArch64 in QEMU</text>
-<text x="1465.0" y="303" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">Darwin arm64 natively</text>
-<text x="60" y="432" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" font-weight="600" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="0">Three</text>
-<text x="60" y="454" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" font-weight="600" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="0">checks</text>
-<text x="60" y="480" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">independent of</text>
-<text x="60" y="496" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">the optimizer</text>
-<text x="60" y="512" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">and of each other</text>
-<rect x="440" y="400" width="340" height="110" rx="12" fill="#0c121b" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<rect x="449" y="414" width="3" height="82" rx="1.5" fill="#34d399"/>
-<text x="464" y="428" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="0">Two interpreters must agree</text>
-<text x="464" y="452" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">C-HIR interpreter and EvoIR interpreter are</text>
-<text x="464" y="470" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">separate implementations; every corpus program</text>
-<text x="464" y="488" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">runs through both, and a difference is a defect</text>
-<line x1="515.0" y1="352" x2="515.0" y2="394" stroke="#34d399" stroke-width="1.4" opacity="1.0" marker-end="url(#arr-34d399)"/>
-<line x1="705.0" y1="352" x2="705.0" y2="394" stroke="#34d399" stroke-width="1.4" opacity="1.0" marker-end="url(#arr-34d399)"/>
-<rect x="820" y="400" width="340" height="110" rx="12" fill="#0c121b" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<rect x="829" y="414" width="3" height="82" rx="1.5" fill="#34d399"/>
-<text x="844" y="428" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="0">Certificates, checked independently</text>
-<text x="844" y="452" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">each e-graph union emits an EVP2 certificate;</text>
-<text x="844" y="470" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">evo-proofcheck replays it against the before and</text>
-<text x="844" y="488" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">after programs and shares no code with the optimizer</text>
-<line x1="895.0" y1="352" x2="895.0" y2="394" stroke="#34d399" stroke-width="1.4" opacity="1.0" marker-end="url(#arr-34d399)"/>
-<rect x="1200" y="400" width="340" height="110" rx="12" fill="#0c121b" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<rect x="1209" y="414" width="3" height="82" rx="1.5" fill="#34d399"/>
-<text x="1224" y="428" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="0">Random programs, four ways</text>
-<text x="1224" y="452" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">21,000 generated programs, 0 mismatches, run as</text>
-<text x="1224" y="470" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">source IR, optimized IR, machine IR and native</text>
-<text x="1224" y="488" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">binary on both targets</text>
-<line x1="1085.0" y1="352" x2="1085.0" y2="394" stroke="#34d399" stroke-width="1.4" opacity="1.0" marker-end="url(#arr-34d399)"/>
-<line x1="1465.0" y1="352" x2="1465.0" y2="394" stroke="#34d399" stroke-width="1.4" opacity="1.0" marker-end="url(#arr-34d399)"/>
-<text x="60" y="546" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" font-weight="600" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="0">How the work is done</text>
-<rect x="60.0" y="560" width="477.3333333333333" height="166" rx="12" fill="#0c121b" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<rect x="69.0" y="574" width="3" height="138" rx="1.5" fill="#4f8cff"/>
-<text x="86.0" y="590" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="0">Rules come from the specification</text>
-<text x="86.0" y="615" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">EvoIR spec 1.9.68 and EvoMIR spec 0.15 hold every rule</text>
-<text x="86.0" y="636" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">before a rule is written, the behaviour is checked in a</text>
-<text x="86.0" y="657" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">sealed container with GCC 14.2 and Clang 19.1</text>
-<text x="86.0" y="678" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">when the two disagree, the rule refuses the construct</text>
-<text x="86.0" y="699" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">anything unspecified is refused with a numbered diagnostic</text>
-<rect x="561.3333333333333" y="560" width="477.3333333333333" height="166" rx="12" fill="#0c121b" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<rect x="570.3333333333333" y="574" width="3" height="138" rx="1.5" fill="#38bdf8"/>
-<text x="587.3333333333333" y="590" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="0">How the AI agents work</text>
-<text x="587.3333333333333" y="615" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">tests first: a commit whose failures are listed in advance,</text>
-<text x="587.3333333333333" y="636" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">then the implementation, then a receipt with the numbers</text>
-<text x="587.3333333333333" y="657" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">an agent that finds a gap in the spec stops and reports;</text>
-<text x="587.3333333333333" y="678" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">it can run the reference compilers, it cannot guess</text>
-<text x="587.3333333333333" y="699" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">every status number is produced by a script</text>
-<rect x="1062.6666666666665" y="560" width="477.3333333333333" height="166" rx="12" fill="#0c121b" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<rect x="1071.6666666666665" y="574" width="3" height="138" rx="1.5" fill="#34d399"/>
-<text x="1088.6666666666665" y="590" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="0">How it is measured</text>
-<text x="1088.6666666666665" y="615" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">survey: compile all 2,798 kernel units, group them by the</text>
-<text x="1088.6666666666665" y="636" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">first diagnostic, write one rule per group, repeat</text>
-<text x="1088.6666666666665" y="657" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">kernel: GCC builds it, EvoCC replaces units, kbuild relinks,</text>
-<text x="1088.6666666666665" y="678" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">QEMU boots it, a failure is bisected to one unit</text>
-<text x="1088.6666666666665" y="699" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">programs: c-testsuite, GCC torture, zlib, zstd, Mbed TLS, musl</text>
-<text x="60" y="760" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" font-weight="600" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="0">Numbers on 2026-09-06</text>
-<rect x="60.0" y="774" width="283.2" height="112" rx="12" fill="#0c121b" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<text x="78.0" y="814" font-family="JetBrains Mono, Menlo, monospace" font-size="27" font-weight="700" fill="#4f8cff" text-anchor="start" opacity="1.0" letter-spacing="0">2,798 / 2,798</text>
-<text x="78.0" y="837" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">kernel units preprocess and parse</text>
-<text x="78.0" y="854" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">clean</text>
-<rect x="359.2" y="774" width="283.2" height="112" rx="12" fill="#0c121b" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<text x="377.2" y="814" font-family="JetBrains Mono, Menlo, monospace" font-size="27" font-weight="700" fill="#38bdf8" text-anchor="start" opacity="1.0" letter-spacing="0">30 / 2,798</text>
-<text x="377.2" y="837" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">kernel units lower to EvoIR with no</text>
-<text x="377.2" y="854" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">diagnostic; the rest stop at a known</text>
-<text x="377.2" y="871" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">construct</text>
-<rect x="658.4" y="774" width="283.2" height="112" rx="12" fill="#0c121b" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<text x="676.4" y="814" font-family="JetBrains Mono, Menlo, monospace" font-size="27" font-weight="700" fill="#34d399" text-anchor="start" opacity="1.0" letter-spacing="0">384 + 384</text>
-<text x="676.4" y="837" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">C programs agree with clang on</text>
-<text x="676.4" y="854" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">Darwin and with GCC-14 on Linux,</text>
-<text x="676.4" y="871" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">source to native</text>
-<rect x="957.5999999999999" y="774" width="283.2" height="112" rx="12" fill="#0c121b" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<text x="975.5999999999999" y="814" font-family="JetBrains Mono, Menlo, monospace" font-size="27" font-weight="700" fill="#4f8cff" text-anchor="start" opacity="1.0" letter-spacing="0">5</text>
-<text x="975.5999999999999" y="837" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">kernel units compiled by EvoCC</text>
-<text x="975.5999999999999" y="854" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">inside a kernel that boots; GCC</text>
-<text x="975.5999999999999" y="871" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">compiled the rest</text>
-<rect x="1256.8" y="774" width="283.2" height="112" rx="12" fill="#0c121b" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
-<text x="1274.8" y="814" font-family="JetBrains Mono, Menlo, monospace" font-size="27" font-weight="700" fill="#34d399" text-anchor="start" opacity="1.0" letter-spacing="0">186 / 220</text>
-<text x="1274.8" y="837" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">c-testsuite programs pass; 637 of</text>
-<text x="1274.8" y="854" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">1,692 GCC torture programs pass on</text>
-<text x="1274.8" y="871" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">the first run</text>
-<text x="60" y="930" font-family="JetBrains Mono, Menlo, monospace" font-size="14" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">github.com/onehr/evocc</text>
-<text x="1540" y="930" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="end" opacity="1.0" letter-spacing="0">docs/status.md is rendered from the receipts</text>
+<rect x="60" y="132" width="241.0" height="28" rx="14" fill="#79c0ff" fill-opacity="0.12" stroke="#79c0ff" stroke-opacity="0.5"/>
+<text x="180.5" y="151" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="500" fill="#79c0ff" text-anchor="middle" opacity="1.0" letter-spacing="0">Rust workspace, 16 crates</text>
+<rect x="313.0" y="132" width="292.59999999999997" height="28" rx="14" fill="#58a6ff" fill-opacity="0.12" stroke="#58a6ff" stroke-opacity="0.5"/>
+<text x="459.29999999999995" y="151" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="500" fill="#58a6ff" text-anchor="middle" opacity="1.0" letter-spacing="0">no LLVM, no GCC in the pipeline</text>
+<rect x="617.5999999999999" y="132" width="223.79999999999998" height="28" rx="14" fill="#58a6ff" fill-opacity="0.12" stroke="#58a6ff" stroke-opacity="0.5"/>
+<text x="729.4999999999999" y="151" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="500" fill="#58a6ff" text-anchor="middle" opacity="1.0" letter-spacing="0">AArch64: Linux + Darwin</text>
+<rect x="853.3999999999999" y="132" width="284.0" height="28" rx="14" fill="#3fb950" fill-opacity="0.12" stroke="#3fb950" stroke-opacity="0.5"/>
+<text x="995.3999999999999" y="151" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="500" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">each rewrite has a certificate</text>
+<rect x="1149.3999999999999" y="132" width="249.6" height="28" rx="14" fill="#3fb950" fill-opacity="0.12" stroke="#3fb950" stroke-opacity="0.5"/>
+<text x="1274.1999999999998" y="151" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="500" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">numbers come from receipts</text>
+<line x1="250" y1="204" x2="590" y2="204" stroke="#58a6ff" stroke-width="1" opacity="0.6"/>
+<text x="420.0" y="196" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#58a6ff" text-anchor="middle" opacity="1.0" letter-spacing="0">front end</text>
+<line x1="630" y1="204" x2="970" y2="204" stroke="#79c0ff" stroke-width="1" opacity="0.6"/>
+<text x="800.0" y="196" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#79c0ff" text-anchor="middle" opacity="1.0" letter-spacing="0">semantics and equality</text>
+<line x1="1010" y1="204" x2="1350" y2="204" stroke="#3fb950" stroke-width="1" opacity="0.6"/>
+<text x="1180.0" y="196" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#3fb950" text-anchor="middle" opacity="1.0" letter-spacing="0">backend</text>
+<rect x="60" y="216" width="150" height="132" rx="12" fill="#111925" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<rect x="72" y="216" width="126" height="3" rx="1.5" fill="#4a5462"/>
+<text x="135.0" y="258" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">C / GNU C11</text>
+<text x="135.0" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">Linux 6.18.44</text>
+<text x="135.0" y="303" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">2,798 translation units</text>
+<line x1="214" y1="282.0" x2="246" y2="282.0" stroke="#232d3a" stroke-width="1.6" opacity="1.0" marker-end="url(#arr-232d3a)"/>
+<rect x="250" y="216" width="150" height="132" rx="12" fill="#111925" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<rect x="262" y="216" width="126" height="3" rx="1.5" fill="#58a6ff"/>
+<text x="325.0" y="258" font-family="JetBrains Mono, Menlo, monospace" font-size="21" font-weight="700" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">EvoCPP</text>
+<text x="325.0" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">preprocessor</text>
+<text x="325.0" y="303" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">C11 pp-tokens</text>
+<text x="325.0" y="322" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">the GCC dialect</text>
+<line x1="404" y1="282.0" x2="436" y2="282.0" stroke="#58a6ff" stroke-width="1.6" opacity="1.0" marker-end="url(#arr-58a6ff)"/>
+<rect x="440" y="216" width="150" height="132" rx="12" fill="#111925" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<rect x="452" y="216" width="126" height="3" rx="1.5" fill="#58a6ff"/>
+<text x="515.0" y="258" font-family="JetBrains Mono, Menlo, monospace" font-size="21" font-weight="700" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">C-HIR</text>
+<text x="515.0" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">checked high-level IR</text>
+<text x="515.0" y="303" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">typed UB, provenance,</text>
+<text x="515.0" y="322" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">per-byte initializedness</text>
+<line x1="594" y1="282.0" x2="626" y2="282.0" stroke="#58a6ff" stroke-width="1.6" opacity="1.0" marker-end="url(#arr-58a6ff)"/>
+<rect x="630" y="216" width="150" height="132" rx="12" fill="#111925" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<rect x="642" y="216" width="126" height="3" rx="1.5" fill="#79c0ff"/>
+<text x="705.0" y="258" font-family="JetBrains Mono, Menlo, monospace" font-size="21" font-weight="700" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">EvoIR</text>
+<text x="705.0" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">block-argument SSA</text>
+<text x="705.0" y="303" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">mem / world tokens</text>
+<text x="705.0" y="322" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">ub.assume obligations</text>
+<line x1="784" y1="282.0" x2="816" y2="282.0" stroke="#79c0ff" stroke-width="1.6" opacity="1.0" marker-end="url(#arr-79c0ff)"/>
+<rect x="820" y="216" width="150" height="132" rx="12" fill="#111925" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<rect x="832" y="216" width="126" height="3" rx="1.5" fill="#79c0ff"/>
+<text x="895.0" y="258" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">e-graph</text>
+<text x="895.0" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">rewrites add forms,</text>
+<text x="895.0" y="303" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">never replace them</text>
+<text x="895.0" y="322" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">cost is a policy</text>
+<line x1="974" y1="282.0" x2="1006" y2="282.0" stroke="#79c0ff" stroke-width="1.6" opacity="1.0" marker-end="url(#arr-79c0ff)"/>
+<rect x="1010" y="216" width="150" height="132" rx="12" fill="#111925" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<rect x="1022" y="216" width="126" height="3" rx="1.5" fill="#3fb950"/>
+<text x="1085.0" y="258" font-family="JetBrains Mono, Menlo, monospace" font-size="21" font-weight="700" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">EvoMIR</text>
+<text x="1085.0" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">AArch64 machine IR</text>
+<text x="1085.0" y="303" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">linear scan + verifier</text>
+<text x="1085.0" y="322" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">128-bit, varargs, asm</text>
+<line x1="1164" y1="282.0" x2="1196" y2="282.0" stroke="#3fb950" stroke-width="1.6" opacity="1.0" marker-end="url(#arr-3fb950)"/>
+<rect x="1200" y="216" width="150" height="132" rx="12" fill="#111925" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<rect x="1212" y="216" width="126" height="3" rx="1.5" fill="#3fb950"/>
+<text x="1275.0" y="258" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">Assembly</text>
+<text x="1275.0" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">platform as and ld</text>
+<text x="1275.0" y="303" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">nothing else outside</text>
+<line x1="1354" y1="282.0" x2="1386" y2="282.0" stroke="#3fb950" stroke-width="1.6" opacity="1.0" marker-end="url(#arr-3fb950)"/>
+<rect x="1390" y="216" width="150" height="132" rx="12" fill="#111925" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<rect x="1402" y="216" width="126" height="3" rx="1.5" fill="#4a5462"/>
+<text x="1465.0" y="258" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#f0f3f6" text-anchor="middle" opacity="1.0" letter-spacing="0">Runs</text>
+<text x="1465.0" y="284" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">Linux AArch64 in QEMU</text>
+<text x="1465.0" y="303" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="middle" opacity="1.0" letter-spacing="0">Darwin arm64 natively</text>
+<text x="60" y="432" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" font-weight="600" fill="#f0f3f6" text-anchor="start" opacity="1.0" letter-spacing="0">Three</text>
+<text x="60" y="454" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" font-weight="600" fill="#f0f3f6" text-anchor="start" opacity="1.0" letter-spacing="0">checks</text>
+<text x="60" y="480" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">independent of</text>
+<text x="60" y="496" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">the optimizer</text>
+<text x="60" y="512" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">and of each other</text>
+<rect x="440" y="400" width="340" height="110" rx="12" fill="#0e151f" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<rect x="449" y="414" width="3" height="82" rx="1.5" fill="#3fb950"/>
+<text x="464" y="428" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#f0f3f6" text-anchor="start" opacity="1.0" letter-spacing="0">Two interpreters must agree</text>
+<text x="464" y="452" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">C-HIR interpreter and EvoIR interpreter are</text>
+<text x="464" y="470" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">separate implementations; every corpus program</text>
+<text x="464" y="488" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">runs through both, and a difference is a defect</text>
+<line x1="515.0" y1="352" x2="515.0" y2="394" stroke="#3fb950" stroke-width="1.4" opacity="1.0" marker-end="url(#arr-3fb950)"/>
+<line x1="705.0" y1="352" x2="705.0" y2="394" stroke="#3fb950" stroke-width="1.4" opacity="1.0" marker-end="url(#arr-3fb950)"/>
+<rect x="820" y="400" width="340" height="110" rx="12" fill="#0e151f" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<rect x="829" y="414" width="3" height="82" rx="1.5" fill="#3fb950"/>
+<text x="844" y="428" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#f0f3f6" text-anchor="start" opacity="1.0" letter-spacing="0">Certificates, checked independently</text>
+<text x="844" y="452" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">each e-graph union emits an EVP2 certificate;</text>
+<text x="844" y="470" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">evo-proofcheck replays it against the before and</text>
+<text x="844" y="488" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">after programs and shares no code with the optimizer</text>
+<line x1="895.0" y1="352" x2="895.0" y2="394" stroke="#3fb950" stroke-width="1.4" opacity="1.0" marker-end="url(#arr-3fb950)"/>
+<rect x="1200" y="400" width="340" height="110" rx="12" fill="#0e151f" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<rect x="1209" y="414" width="3" height="82" rx="1.5" fill="#3fb950"/>
+<text x="1224" y="428" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#f0f3f6" text-anchor="start" opacity="1.0" letter-spacing="0">Random programs, four ways</text>
+<text x="1224" y="452" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">21,000 generated programs, 0 mismatches, run as</text>
+<text x="1224" y="470" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">source IR, optimized IR, machine IR and native</text>
+<text x="1224" y="488" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">binary on both targets</text>
+<line x1="1085.0" y1="352" x2="1085.0" y2="394" stroke="#3fb950" stroke-width="1.4" opacity="1.0" marker-end="url(#arr-3fb950)"/>
+<line x1="1465.0" y1="352" x2="1465.0" y2="394" stroke="#3fb950" stroke-width="1.4" opacity="1.0" marker-end="url(#arr-3fb950)"/>
+<text x="60" y="546" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" font-weight="600" fill="#f0f3f6" text-anchor="start" opacity="1.0" letter-spacing="0">How the work is done</text>
+<rect x="60.0" y="560" width="477.3333333333333" height="166" rx="12" fill="#0e151f" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<rect x="69.0" y="574" width="3" height="138" rx="1.5" fill="#58a6ff"/>
+<text x="86.0" y="590" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#f0f3f6" text-anchor="start" opacity="1.0" letter-spacing="0">Rules come from the specification</text>
+<text x="86.0" y="615" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">EvoIR spec 1.9.68 and EvoMIR spec 0.15 hold every rule</text>
+<text x="86.0" y="636" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">before a rule is written, the behaviour is checked in a</text>
+<text x="86.0" y="657" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">sealed container with GCC 14.2 and Clang 19.1</text>
+<text x="86.0" y="678" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">when the two disagree, the rule refuses the construct</text>
+<text x="86.0" y="699" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">anything unspecified is refused with a numbered diagnostic</text>
+<rect x="561.3333333333333" y="560" width="477.3333333333333" height="166" rx="12" fill="#0e151f" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<rect x="570.3333333333333" y="574" width="3" height="138" rx="1.5" fill="#79c0ff"/>
+<text x="587.3333333333333" y="590" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#f0f3f6" text-anchor="start" opacity="1.0" letter-spacing="0">How the AI agents work</text>
+<text x="587.3333333333333" y="615" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">tests first: a commit whose failures are listed in advance,</text>
+<text x="587.3333333333333" y="636" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">then the implementation, then a receipt with the numbers</text>
+<text x="587.3333333333333" y="657" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">an agent that finds a gap in the spec stops and reports;</text>
+<text x="587.3333333333333" y="678" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">it can run the reference compilers, it cannot guess</text>
+<text x="587.3333333333333" y="699" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">every status number is produced by a script</text>
+<rect x="1062.6666666666665" y="560" width="477.3333333333333" height="166" rx="12" fill="#0e151f" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<rect x="1071.6666666666665" y="574" width="3" height="138" rx="1.5" fill="#3fb950"/>
+<text x="1088.6666666666665" y="590" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#f0f3f6" text-anchor="start" opacity="1.0" letter-spacing="0">How it is measured</text>
+<text x="1088.6666666666665" y="615" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">survey: compile all 2,798 kernel units, group them by the</text>
+<text x="1088.6666666666665" y="636" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">first diagnostic, write one rule per group, repeat</text>
+<text x="1088.6666666666665" y="657" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">kernel: GCC builds it, EvoCC replaces units, kbuild relinks,</text>
+<text x="1088.6666666666665" y="678" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">QEMU boots it, a failure is bisected to one unit</text>
+<text x="1088.6666666666665" y="699" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">programs: c-testsuite, GCC torture, zlib, zstd, Mbed TLS, musl</text>
+<text x="60" y="760" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" font-weight="600" fill="#f0f3f6" text-anchor="start" opacity="1.0" letter-spacing="0">Numbers on 2026-09-06</text>
+<rect x="60.0" y="774" width="283.2" height="112" rx="12" fill="#0e151f" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<text x="78.0" y="814" font-family="JetBrains Mono, Menlo, monospace" font-size="27" font-weight="700" fill="#58a6ff" text-anchor="start" opacity="1.0" letter-spacing="0">2,798 / 2,798</text>
+<text x="78.0" y="837" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">kernel units preprocess and parse</text>
+<text x="78.0" y="854" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">clean</text>
+<rect x="359.2" y="774" width="283.2" height="112" rx="12" fill="#0e151f" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<text x="377.2" y="814" font-family="JetBrains Mono, Menlo, monospace" font-size="27" font-weight="700" fill="#79c0ff" text-anchor="start" opacity="1.0" letter-spacing="0">30 / 2,798</text>
+<text x="377.2" y="837" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">kernel units lower to EvoIR with no</text>
+<text x="377.2" y="854" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">diagnostic; the rest stop at a known</text>
+<text x="377.2" y="871" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">construct</text>
+<rect x="658.4" y="774" width="283.2" height="112" rx="12" fill="#0e151f" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<text x="676.4" y="814" font-family="JetBrains Mono, Menlo, monospace" font-size="27" font-weight="700" fill="#3fb950" text-anchor="start" opacity="1.0" letter-spacing="0">384 + 384</text>
+<text x="676.4" y="837" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">C programs agree with clang on</text>
+<text x="676.4" y="854" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">Darwin and with GCC-14 on Linux,</text>
+<text x="676.4" y="871" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">source to native</text>
+<rect x="957.5999999999999" y="774" width="283.2" height="112" rx="12" fill="#0e151f" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<text x="975.5999999999999" y="814" font-family="JetBrains Mono, Menlo, monospace" font-size="27" font-weight="700" fill="#58a6ff" text-anchor="start" opacity="1.0" letter-spacing="0">5</text>
+<text x="975.5999999999999" y="837" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">kernel units compiled by EvoCC</text>
+<text x="975.5999999999999" y="854" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">inside a kernel that boots; GCC</text>
+<text x="975.5999999999999" y="871" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">compiled the rest</text>
+<rect x="1256.8" y="774" width="283.2" height="112" rx="12" fill="#0e151f" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
+<text x="1274.8" y="814" font-family="JetBrains Mono, Menlo, monospace" font-size="27" font-weight="700" fill="#3fb950" text-anchor="start" opacity="1.0" letter-spacing="0">186 / 220</text>
+<text x="1274.8" y="837" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">c-testsuite programs pass; 637 of</text>
+<text x="1274.8" y="854" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">1,692 GCC torture programs pass on</text>
+<text x="1274.8" y="871" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">the first run</text>
+<text x="60" y="930" font-family="JetBrains Mono, Menlo, monospace" font-size="14" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">github.com/onehr/evocc</text>
+<text x="1540" y="930" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="end" opacity="1.0" letter-spacing="0">docs/status.md is rendered from the receipts</text>
 </svg>

@@ -15,9 +15,9 @@ from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / "docs" / "images"
 
-BG, PANEL, PANEL2, STROKE = "#0a0e14", "#0f1620", "#0c121b", "#1f2a37"
-TEXT, MUTED, GRAY = "#e6edf3", "#8b98a5", "#55606e"
-BLUE, CYAN, GREEN = "#4f8cff", "#38bdf8", "#34d399"
+BG, PANEL, PANEL2, STROKE = "#0b1117", "#111925", "#0e151f", "#232d3a"
+TEXT, MUTED, GRAY = "#f0f3f6", "#9aa4b2", "#4a5462"
+BLUE, CYAN, GREEN = "#58a6ff", "#79c0ff", "#3fb950"
 SANS = "Helvetica Neue, Helvetica, Arial, sans-serif"
 MONO = "JetBrains Mono, Menlo, monospace"
 
@@ -116,49 +116,47 @@ def wrap(s: str, width: int) -> list[str]:
 
 
 def concept() -> None:
-    c = Canvas(1600, 900)
-    c.text(80, 118, "EvoCC", 54, TEXT, "700", spacing=-1)
-    c.text(80, 180, "a C compiler whose optimizer keeps every equivalent form", 30, TEXT, "500")
-    c.text(82, 228, "Written from scratch in Rust; no LLVM or GCC inside. The optimizer is an e-graph: a rewrite adds a form,", 18, MUTED)
-    c.text(82, 254, "a checker verifies each union, and a cost model picks one at the end. Target: AArch64, Linux 6.18 kernel.", 18, MUTED)
-    lx = 330
-    c.text(lx, 336, "a pass-based compiler", 14, MUTED, "500", SANS, "middle", 1, 1)
-    chain = ["x * 2", "x + x", "x << 1", "(x << 1) | 0", "x << 1"]
-    ys = [396, 466, 536, 606, 676]
+    c = Canvas(1200, 640)
+    c.text(60, 84, "EvoCC", 46, TEXT, "700", spacing=-1)
+    c.text(60, 128, "a C compiler whose optimizer keeps every equivalent form", 26, TEXT, "500")
+    c.text(60, 162, "Written from scratch in Rust, no LLVM or GCC inside. A rewrite adds a form, a separate checker", 16, MUTED)
+    c.text(60, 184, "verifies each union, and a cost model picks one at the end. Target: AArch64, the Linux 6.18 kernel.", 16, MUTED)
+    lx = 220
+    c.text(lx, 250, "a pass-based compiler", 14, MUTED, "500", SANS, "middle", 1, 1)
+    chain = ["x * 2", "x + x", "(x << 1) | 0", "x << 1"]
+    ys = [300, 366, 432, 498]
     for i, (s, y) in enumerate(zip(chain, ys)):
         last = i == len(chain) - 1
-        w, h = c.pill(lx, y, s, GRAY, 1.0 if last else 0.28 + 0.13 * i, strike=not last)
+        w, h = c.pill(lx, y, s, GRAY, 1.0 if last else 0.3 + 0.18 * i, 18, strike=not last)
         if not last:
-            c.arrow(lx, y + h / 2 + 2, lx, ys[i + 1] - h / 2 - 4, GRAY, 1.4, 0.35 + 0.15 * i)
-    c.text(lx, 744, "each pass replaces the last form;", 15, MUTED, "normal", SANS, "middle")
-    c.text(lx, 766, "the others are gone", 15, MUTED, "normal", SANS, "middle")
-    c.line(600, 330, 600, 780, STROKE)
-    cx, cy, r = 1000, 560, 190
-    c.raw(f'<circle cx="{cx}" cy="{cy}" r="{r + 90}" fill="url(#glow)"/>')
-    c.text(cx, 336, "EvoCC", 14, BLUE, "600", SANS, "middle", 1, 1)
-    forms = ["x * 2", "x + x", "x << 1", "(x << 1) | 0", "2 * x", "x * 1 + x"]
+            c.arrow(lx, y + h / 2 + 2, lx, ys[i + 1] - h / 2 - 4, GRAY, 1.4, 0.4 + 0.15 * i)
+    c.text(lx, 560, "each pass replaces the last form", 14, MUTED, "normal", SANS, "middle")
+    c.text(lx, 580, "the others are gone", 14, MUTED, "normal", SANS, "middle")
+    c.line(430, 250, 430, 590, STROKE)
+    cx, cy, r = 760, 420, 138
+    c.raw(f'<circle cx="{cx}" cy="{cy}" r="{r + 80}" fill="url(#glow)"/>')
+    c.text(cx, 250, "EvoCC", 14, BLUE, "600", SANS, "middle", 1, 1)
+    forms = ["x * 2", "x + x", "x << 1", "(x << 1) | 0", "2 * x"]
     n, chosen = len(forms), 2
     c.raw(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{BLUE}" stroke-opacity="0.35" stroke-width="1.2" stroke-dasharray="3 6"/>')
     c.raw(f'<circle cx="{cx}" cy="{cy}" r="7" fill="{BLUE}"/>')
-    c.text(cx + 18, cy + 28, "one e-class, all forms kept", 13, BLUE, "500")
+    c.text(cx, cy + 32, "one e-class", 13, BLUE, "500", SANS, "middle")
     for i, s in enumerate(forms):
         ang = -math.pi / 2 + i * 2 * math.pi / n
         px, py = cx + r * math.cos(ang), cy + r * math.sin(ang)
-        c.line(cx + 12 * math.cos(ang), cy + 12 * math.sin(ang), cx + (r - 36) * math.cos(ang), cy + (r - 36) * math.sin(ang), BLUE, 1.2, 0.7)
-        c.seal(cx + (r / 2) * math.cos(ang), cy + (r / 2) * math.sin(ang))
-        c.pill(px, py, s, GREEN if i == chosen else "#2b4a7a", 1.0, 17, "#0f1f1a" if i == chosen else PANEL, sw=1.8 if i == chosen else 1.4)
+        c.line(cx + 12 * math.cos(ang), cy + 12 * math.sin(ang), cx + (r - 34) * math.cos(ang), cy + (r - 34) * math.sin(ang), BLUE, 1.2, 0.7)
+        c.seal(cx + (r / 2) * math.cos(ang), cy + (r / 2) * math.sin(ang), 8)
+        c.pill(px, py, s, GREEN if i == chosen else "#2f4f7f", 1.0, 18, "#10231a" if i == chosen else PANEL, sw=2 if i == chosen else 1.4)
     ang = -math.pi / 2 + chosen * 2 * math.pi / n
     px, py = cx + r * math.cos(ang), cy + r * math.sin(ang)
-    bx, by = 1330, py - 4
-    c.arrow(px + 62, py, bx - 16, py, GREEN, 1.6)
-    c.rect(bx, by - 36, 210, 96, PANEL, CYAN, 12, 1.4)
-    c.text(bx + 16, by - 10, "picked by the cost model", 13, MUTED)
-    c.text(bx + 16, by + 16, "lsl  x0, x0, #1", 17, CYAN, "normal", MONO)
-    c.text(bx + 16, by + 42, "AArch64", 13, MUTED)
-    c.seal(720, 825)
-    c.text(738, 830, "each union has a certificate; evo-proofcheck, a separate program, re-checks it", 15, MUTED)
-    c.text(80, 866, "github.com/onehr/evocc", 14, MUTED, "normal", MONO)
-    c.text(1540, 866, "docs/evoir-spec.md defines the IR; docs/roadmap.md has the plan", 13, MUTED, "normal", SANS, "end")
+    bx, by = 1000, py - 4
+    c.arrow(px + 52, py, bx - 14, py, GREEN, 1.6)
+    c.rect(bx, by - 34, 150, 88, PANEL, GREEN, 10, 1.4)
+    c.text(bx + 14, by - 10, "picked by cost", 12, MUTED)
+    c.text(bx + 14, by + 14, "lsl x0, x0, #1", 15, GREEN, "normal", MONO)
+    c.text(bx + 14, by + 38, "AArch64", 12, MUTED)
+    c.seal(470, 611, 8)
+    c.text(486, 616, "each union has a certificate; evo-proofcheck, a separate program, re-checks it", 14, MUTED)
     c.write("evocc-concept")
 
 
@@ -291,26 +289,24 @@ def ladder() -> None:
 
 
 def milestones() -> None:
-    c = Canvas(1600, 430)
-    c.text(60, 60, "Milestones, in order", 30, TEXT, "700")
-    c.text(60, 90, "no dates; each one is done when its receipt says so", 16, MUTED)
+    c = Canvas(1200, 330)
+    c.text(60, 52, "Milestones, in order", 26, TEXT, "700")
+    c.text(60, 78, "no dates; each is done when its receipt says so", 15, MUTED)
     items = [
-        ("preprocess and parse", "every kernel unit", "done"),
+        ("parse the kernel", "2,798 / 2,798", "done"),
         ("backend", "AArch64, two targets", "done"),
         ("kernel objects boot", "5 units by EvoCC", "done"),
-        ("lower every unit", "30 of 2,798 so far", "now"),
+        ("lower every unit", "30 / 2,798 so far", "now"),
         ("machine forms", "varargs, asm, relocs", "now"),
-        ("test suites", "c-testsuite, torture", "now"),
-        ("programs", "zlib, zstd, Mbed TLS, musl", "next"),
+        ("outside programs", "c-testsuite, torture, zlib", "now"),
         ("most kernel units", "by EvoCC, boots", "next"),
         ("whole kernel", "EvoCC alone, boots", "later"),
-        ("kselftest", "passes in initramfs", "later"),
         ("floating point", "then SQLite, Lua", "later"),
     ]
-    x0, x1, y = 150, 1450, 230
+    x0, x1, y = 120, 1080, 190
     step = (x1 - x0) / (len(items) - 1)
     c.line(x0, y, x1, y, STROKE, 2)
-    colors = {"done": GREEN, "now": CYAN, "next": BLUE, "later": GRAY}
+    colors = {"done": GREEN, "now": BLUE, "next": BLUE, "later": GRAY}
     for i, (title, sub, state) in enumerate(items):
         x = x0 + i * step
         col = colors[state]
@@ -321,16 +317,18 @@ def milestones() -> None:
         else:
             c.raw(f'<circle cx="{x}" cy="{y}" r="9" fill="{BG}" stroke="{col}" stroke-width="2"/>')
         above = i % 2 == 0
-        ty = y - 46 if above else y + 44
+        ty = y - 44 if above else y + 44
         c.line(x, y - 11 if above else y + 11, x, y - 26 if above else y + 26, col, 1, 0.7)
         c.text(x, ty, title, 15, TEXT, "600", SANS, "middle")
         c.text(x, ty + 20, sub, 12.5, MUTED, "normal", SANS, "middle")
     lx = 60
-    for label, col in (("done", GREEN), ("in progress", CYAN), ("next", BLUE), ("later", GRAY)):
-        c.raw(f'<circle cx="{lx + 8}" cy="356" r="6" fill="{col if label == "done" else BG}" stroke="{col}" stroke-width="2"/>')
-        c.text(lx + 22, 361, label, 13, MUTED)
-        lx += 110
-    c.text(1540, 361, "docs/roadmap.md", 13, MUTED, "normal", MONO, "end")
+    for label, col, filled in (("done", GREEN, True), ("in progress", BLUE, False), ("next", BLUE, False), ("later", GRAY, False)):
+        c.raw(f'<circle cx="{lx + 8}" cy="292" r="6" fill="{col if filled else BG}" stroke="{col}" stroke-width="2"/>')
+        if label == "in progress":
+            c.raw(f'<circle cx="{lx + 8}" cy="292" r="2.5" fill="{col}"/>')
+        c.text(lx + 22, 297, label, 13, MUTED)
+        lx += 105
+    c.text(1140, 297, "docs/roadmap.md", 13, MUTED, "normal", MONO, "end")
     c.write("evocc-milestones")
 
 
