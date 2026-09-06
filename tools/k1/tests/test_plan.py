@@ -101,6 +101,64 @@ class SummaryTest(unittest.TestCase):
         self.assertIn(": 0 ", plan.summary_line(0, 40, 2799))
 
 
+class LinkCollisionTest(unittest.TestCase):
+    def rows(self, table: dict[str, list[str]], outcome: str = "assembled") -> list[dict]:
+        return [
+            {"unit": unit, "outcome": outcome, "definedSymbols": symbols}
+            for unit, symbols in table.items()
+        ]
+
+    def test_objects_defining_distinct_symbols_do_not_collide(self) -> None:
+        found = plan.link_collisions(self.rows({"a.o": ["one"], "b.o": ["two"]}))
+        self.assertEqual(found["units"], [])
+        self.assertEqual(found["groups"], [])
+        self.assertEqual(found["symbolsDefinedTwice"], 0)
+
+    def test_a_symbol_defined_twice_names_both_objects(self) -> None:
+        found = plan.link_collisions(self.rows({"a.o": ["dup"], "b.o": ["dup"]}))
+        self.assertEqual(found["units"], ["a.o", "b.o"])
+        self.assertEqual(found["groups"], [["a.o", "b.o"]])
+        self.assertEqual(found["symbolsDefinedTwice"], 1)
+
+    def test_conflicts_that_share_an_object_are_one_group(self) -> None:
+        found = plan.link_collisions(
+            self.rows({"a.o": ["x"], "b.o": ["x", "y"], "c.o": ["y"]})
+        )
+        self.assertEqual(found["groups"], [["a.o", "b.o", "c.o"]])
+
+    def test_separate_conflicts_stay_separate_groups(self) -> None:
+        found = plan.link_collisions(
+            self.rows({"a.o": ["x"], "b.o": ["x"], "c.o": ["y"], "d.o": ["y"]})
+        )
+        self.assertEqual(found["groups"], [["a.o", "b.o"], ["c.o", "d.o"]])
+
+    def test_an_object_that_never_reached_the_link_is_not_counted(self) -> None:
+        rows = self.rows({"a.o": ["dup"]}) + self.rows({"b.o": ["dup"]}, outcome="refused")
+        self.assertEqual(plan.link_collisions(rows)["units"], [])
+
+    def test_an_object_defining_nothing_collides_with_nothing(self) -> None:
+        found = plan.link_collisions(self.rows({"a.o": [], "b.o": []}))
+        self.assertEqual(found["units"], [])
+
+    def test_a_removed_unit_is_blamed_on_the_collision_only_when_it_has_one(self) -> None:
+        rows = self.rows({"a.o": ["dup"], "b.o": ["dup"], "c.o": ["own"]})
+        self.assertEqual(
+            plan.failures_by_reason(["a.o", "c.o"], rows),
+            {"multiple-definition": 1, "other": 1},
+        )
+
+    def test_nothing_removed_blames_nothing(self) -> None:
+        rows = self.rows({"a.o": ["dup"], "b.o": ["dup"]})
+        self.assertEqual(
+            plan.failures_by_reason([], rows), {"multiple-definition": 0, "other": 0}
+        )
+
+    def test_the_reasons_sum_to_the_units_removed(self) -> None:
+        rows = self.rows({"a.o": ["dup"], "b.o": ["dup"], "c.o": ["own"]})
+        removed = ["a.o", "b.o", "c.o"]
+        self.assertEqual(sum(plan.failures_by_reason(removed, rows).values()), len(removed))
+
+
 class ReferenceBootTest(unittest.TestCase):
     SHA = "b6f206de"
 

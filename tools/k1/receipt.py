@@ -148,6 +148,10 @@ def main() -> int:
             "refusalsByCode": plan.refusal_table(survey_rows),
             "refusalsByFirstCode": plan.first_code_table(survey_rows),
             "refusalsByOwner": plan.owner_totals(survey_rows),
+            # Objects the linker cannot take together, read off the survey's
+            # symbol tables. These bound the measurement without refusing a
+            # single unit, so they are counted apart from the refusals.
+            "linkCollisions": plan.link_collisions(survey_rows),
             "runDirectory": relative(str(args.survey.parent)),
         },
         "mixedLink": {
@@ -180,6 +184,7 @@ def main() -> int:
             "unitsNotLinkedIntoVmlinux": not_linked,
         },
         "failingUnits": failing,
+        "failingUnitsByReason": plan.failures_by_reason(failing, survey_rows),
         "bisection": (
             {
                 "result": bisection["result"],

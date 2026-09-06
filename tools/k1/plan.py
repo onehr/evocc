@@ -81,6 +81,65 @@ def owner_totals(rows: list[dict]) -> dict[str, int]:
     return dict(sorted(totals.items()))
 
 
+def link_collisions(rows: list[dict]) -> dict:
+    """The candidate objects that cannot share a link with each other.
+
+    A symbol defined by two objects is a multiple definition, and the linker
+    refuses the whole vmlinux over it. The survey already records what each
+    object defines, so the objects that can never be substituted together are
+    named here, before any link is attempted, rather than discovered one
+    reduction at a time. Units are grouped into the sets that conflict, so a
+    group of size n costs at least n-1 units of the measurement.
+    """
+    defined = {
+        row["unit"]: set(row["definedSymbols"])
+        for row in rows
+        if row.get("outcome") in ASSEMBLING_OUTCOMES and row.get("definedSymbols")
+    }
+    owners: dict[str, list[str]] = {}
+    for unit, symbols in defined.items():
+        for symbol in symbols:
+            owners.setdefault(symbol, []).append(unit)
+    shared = {symbol: units for symbol, units in owners.items() if len(units) > 1}
+
+    parent: dict[str, str] = {}
+
+    def find(unit: str) -> str:
+        parent.setdefault(unit, unit)
+        while parent[unit] != unit:
+            parent[unit] = parent[parent[unit]]
+            unit = parent[unit]
+        return unit
+
+    for units in shared.values():
+        first = find(units[0])
+        for other in units[1:]:
+            parent[find(other)] = first
+
+    groups: dict[str, list[str]] = {}
+    for unit in parent:
+        groups.setdefault(find(unit), []).append(unit)
+    return {
+        "symbolsDefinedTwice": len(shared),
+        "units": sorted(parent),
+        "groups": sorted((sorted(group) for group in groups.values()), key=lambda g: g[0]),
+    }
+
+
+def failures_by_reason(failing: list[str], rows: list[dict]) -> dict[str, int]:
+    """How many removed units the link refused for a multiple definition.
+
+    A unit that shares a defined symbol with another candidate was removed for
+    a reason the linker states; anything else was removed for a reason the
+    measurement has yet to explain, and the two must not be added together.
+    """
+    colliding = set(link_collisions(rows)["units"])
+    counts = {"multiple-definition": 0, "other": 0}
+    for unit in failing:
+        counts["multiple-definition" if unit in colliding else "other"] += 1
+    return counts
+
+
 def reusable_reference_boot(receipts: list[tuple[str, dict]], image_sha256: str) -> str | None:
     """The newest reference-boot receipt that still speaks for this reference.
 
@@ -144,6 +203,9 @@ def main() -> int:
     refusals = sub.add_parser("refusals", help="the refusal table as JSON")
     refusals.add_argument("units_jsonl", type=Path)
 
+    clash = sub.add_parser("collisions", help="candidates that cannot share a link")
+    clash.add_argument("units_jsonl", type=Path)
+
     minus = sub.add_parser("subtract", help="an allowlist without a bisection's verdict")
     minus.add_argument("allowlist", type=Path)
     minus.add_argument("bisection", type=Path)
@@ -174,6 +236,9 @@ def main() -> int:
             indent=2,
             sort_keys=True,
         ))
+        return 0
+    if args.command == "collisions":
+        print(json.dumps(link_collisions(load_rows(args.units_jsonl)), indent=2, sort_keys=True))
         return 0
     if args.command == "subtract":
         bisection = json.loads(args.bisection.read_text(encoding="utf-8"))
