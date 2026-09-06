@@ -3995,12 +3995,9 @@ fn interpret_module_in_state(
                 Inst::Ret(returned) => {
                     let returned_values =
                         copy_values(&returned, block_id, &frames[frame_index].values)?;
-                    if returned_values
-                        .iter()
-                        .any(|value| matches!(value, InternalValue::Uninitialized))
-                    {
-                        return Err(InterpreterError::UninitializedRead { block: block_id });
-                    }
+                    // A callee may fall off its end and return poison. Binding
+                    // that result is transport, not a read: a discarding caller
+                    // must still observe the callee's effects without a trap.
                     let returned_types = module.functions[frames[frame_index].function_index]
                         .ret_tys
                         .clone();
@@ -8034,10 +8031,10 @@ mod tests {
             &callee_return_module,
             "main",
             &entry_args,
-            InterpreterLimits::new(4),
+            InterpreterLimits::new(5),
         )
-        .expect_err("callee ordinary returns consume poison before caller binding");
-        assert_eq!(error, InterpreterError::UninitializedRead { block: 9 });
+        .expect_err("observing the caller's result consumes the transported poison");
+        assert_eq!(error, InterpreterError::UninitializedRead { block: 0 });
         assert_eq!(error.code(), "E3001");
         assert_eq!(error.message(), "read-of-uninitialized-object");
     }

@@ -3101,7 +3101,14 @@ impl<'a> FunctionLowerer<'a> {
                 }
                 self.terminate(state, Inst::Ret(returned))?;
             } else {
-                self.terminate(state, Inst::Trap(TrapReason::ScalarFunctionFellOffEnd))?;
+                let value = self.fresh_value(self.info.return_type.as_ref().unwrap().ir.clone());
+                self.emit(state, Inst::Uninitialized(value.clone()))?;
+                let mut returned = vec![value];
+                if self.info.participant {
+                    returned.push(self.token(state, EnvKey::Memory)?.value);
+                    returned.push(self.token(state, EnvKey::World)?.value);
+                }
+                self.terminate(state, Inst::Ret(returned))?;
             }
         }
         let mut address_remap = BTreeMap::new();
