@@ -101,6 +101,46 @@ class SummaryTest(unittest.TestCase):
         self.assertIn(": 0 ", plan.summary_line(0, 40, 2799))
 
 
+class ReferenceBootTest(unittest.TestCase):
+    SHA = "b6f206de"
+
+    def receipt(self, **overrides) -> dict:
+        fields = {"verdict": "PASS", "referenceImageSha256": self.SHA, "imageSha256": self.SHA}
+        fields.update(overrides)
+        return fields
+
+    def test_a_pass_on_the_same_image_may_be_reused(self) -> None:
+        self.assertEqual(
+            plan.reusable_reference_boot([("a.json", self.receipt())], self.SHA), "a.json"
+        )
+
+    def test_the_newest_matching_receipt_wins(self) -> None:
+        receipts = [("new.json", self.receipt()), ("old.json", self.receipt())]
+        self.assertEqual(plan.reusable_reference_boot(receipts, self.SHA), "new.json")
+
+    def test_a_failure_is_never_reused(self) -> None:
+        for verdict in ("TIMEOUT", "MARKERS_MISSING", "NO_POWERDOWN"):
+            receipts = [("a.json", self.receipt(verdict=verdict))]
+            self.assertIsNone(plan.reusable_reference_boot(receipts, self.SHA))
+
+    def test_a_pass_on_a_different_image_is_not_this_gate(self) -> None:
+        receipts = [("a.json", self.receipt(referenceImageSha256="other", imageSha256="other"))]
+        self.assertIsNone(plan.reusable_reference_boot(receipts, self.SHA))
+
+    def test_a_receipt_that_booted_something_else_is_refused(self) -> None:
+        # The gate boots the pristine copy; a receipt whose booted Image is not
+        # the reference Image says nothing about the reference.
+        receipts = [("a.json", self.receipt(imageSha256="other"))]
+        self.assertIsNone(plan.reusable_reference_boot(receipts, self.SHA))
+
+    def test_a_stale_receipt_is_skipped_for_a_matching_one(self) -> None:
+        receipts = [("stale.json", self.receipt(verdict="TIMEOUT")), ("good.json", self.receipt())]
+        self.assertEqual(plan.reusable_reference_boot(receipts, self.SHA), "good.json")
+
+    def test_no_receipts_means_the_gate_must_be_flown(self) -> None:
+        self.assertIsNone(plan.reusable_reference_boot([], self.SHA))
+
+
 class ReadUnitsTest(unittest.TestCase):
     def test_comments_blank_lines_and_duplicates_are_dropped(self) -> None:
         import tempfile

@@ -34,6 +34,14 @@ Per-unit outcomes are closed and mutually exclusive:
 
 A refused unit is never quietly replaced by its GCC object: the GCC object is
 what is already there, and the unit is simply not counted.
+
+The front-end pass over every unit is the slow part of a survey and its answer
+depends on three things only: the driver binary, the unit's source, and the
+command the record dictates. Those three are hashed into a cache key, so a
+re-run examines the units whose inputs changed and reuses the rest. A timeout
+is never cached, because it is a fact about the machine rather than about the
+unit, and an emitted answer is reused only while its assembly is still on
+disk. ``--no-cache`` examines everything.
 """
 
 from __future__ import annotations
@@ -61,6 +69,7 @@ from cmdrecord import (  # noqa: E402
     is_target_c_compile,
     parse_record,
     record_path,
+    source_path,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -92,6 +101,84 @@ def diagnostic_codes(stderr: str) -> list[str]:
         if match and match.group("code") not in codes:
             codes.append(match.group("code"))
     return codes
+
+
+#: Bumped when the shape of a cached answer changes, so an old cache is
+#: ignored rather than misread.
+CACHE_VERSION = 1
+
+#: Outcomes of the front-end pass that are a function of the inputs alone and
+#: may therefore be reused. A ``timeout`` is not: it says how loaded the
+#: machine was, not what the compiler thinks of the unit.
+CACHEABLE_OUTCOMES = frozenset({"emitted", "refused", "not-a-target-c-compile"})
+
+
+def cache_key(unit: str, evocc_sha256: str, source_sha256: str, argv: list[str]) -> str:
+    """The identity of one survey answer.
+
+    Everything the front-end pass reads is in the key: which driver ran, which
+    source it read, and the command it was given. Two runs that agree on all
+    three must get the same answer, and a run that differs in any of them gets
+    a miss rather than a stale row.
+    """
+    payload = json.dumps(
+        {
+            "version": CACHE_VERSION,
+            "unit": unit,
+            "evocc": evocc_sha256,
+            "source": source_sha256,
+            "argv": list(argv),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def load_cache(path: Path) -> dict[str, dict]:
+    """A previous run's answers, or nothing at all if they cannot be read."""
+    if not path.is_file():
+        return {}
+    try:
+        stored = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(stored, dict) or stored.get("version") != CACHE_VERSION:
+        return {}
+    entries = stored.get("entries")
+    return entries if isinstance(entries, dict) else {}
+
+
+def save_cache(path: Path, entries: dict[str, dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"version": CACHE_VERSION, "entries": entries}, indent=1, sort_keys=True)
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def assembly_path(asm_root: Path, unit: str) -> Path:
+    return asm_root / f"{unit[:-2]}.s"
+
+
+def reusable(entry: dict | None, unit: str, asm_root: Path) -> dict | None:
+    """The cached answer for a unit, if it can still stand for a fresh run.
+
+    An answer that says assembly was emitted is only good while that assembly
+    is still on disk: the later steps assemble the file, not the record of it.
+    """
+    if not isinstance(entry, dict):
+        return None
+    outcome = entry.get("outcome")
+    if outcome not in CACHEABLE_OUTCOMES:
+        return None
+    if outcome == "emitted" and not assembly_path(asm_root, unit).is_file():
+        return None
+    row = dict(entry)
+    row["unit"] = unit
+    row["fromCache"] = True
+    return row
 
 
 def target_c_records(pristine: Path) -> list[tuple[str, Record]]:
@@ -148,7 +235,7 @@ def emit_assembly(
             "diagnosticCodes": diagnostic_codes(completed.stderr),
             "firstDiagnostic": completed.stderr.strip().splitlines()[:1],
         }
-    assembly = asm_root / f"{unit[:-2]}.s"
+    assembly = assembly_path(asm_root, unit)
     assembly.parent.mkdir(parents=True, exist_ok=True)
     assembly.write_text(completed.stdout, encoding="utf-8")
     return {
@@ -377,6 +464,15 @@ def main() -> int:
     parser.add_argument("--no-install", action="store_true", help="survey only; change nothing")
     parser.add_argument("--no-relink", action="store_true")
     parser.add_argument("--allow-symbol-drift", action="store_true")
+    parser.add_argument(
+        "--cache",
+        type=Path,
+        default=None,
+        help="survey cache file (default <k1-root>/survey-cache.json)",
+    )
+    parser.add_argument(
+        "--no-cache", action="store_true", help="examine every unit even if unchanged"
+    )
     args = parser.parse_args()
 
     if not args.allowlist and not args.all:
@@ -426,7 +522,37 @@ def main() -> int:
     asm_root = args.k1_root / "evocc-out"
     asm_root.mkdir(parents=True, exist_ok=True)
 
-    print(f"k1: EvoCC over {len(pending)} units", flush=True)
+    cache_path = args.cache or (args.k1_root / "survey-cache.json")
+    cache = {} if args.no_cache else load_cache(cache_path)
+    evocc_sha256 = sha256_file(args.evocc)
+    keys: dict[str, str] = {}
+    reused: list[dict] = []
+    fresh: list[str] = []
+    for unit in pending:
+        if args.no_cache:
+            fresh.append(unit)
+            continue
+        try:
+            argv, _ = evocc_argv(records[unit], args.evocc, args.src_root, pristine)
+            source_sha256 = sha256_file(source_path(records[unit], args.src_root, pristine))
+        except (RecordError, OSError):
+            fresh.append(unit)
+            continue
+        key = cache_key(unit, evocc_sha256, source_sha256, argv)
+        keys[unit] = key
+        answer = reusable(cache.get(key), unit, asm_root)
+        if answer is None:
+            fresh.append(unit)
+        else:
+            reused.append(answer)
+
+    if reused:
+        print(
+            f"k1: survey cache: {len(reused)} units unchanged since the last survey,"
+            f" {len(fresh)} to examine",
+            flush=True,
+        )
+    print(f"k1: EvoCC over {len(fresh)} units", flush=True)
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         produced = list(
             pool.map(
@@ -434,10 +560,17 @@ def main() -> int:
                     unit, records[unit], args.evocc, args.src_root, pristine,
                     asm_root, args.timeout,
                 ),
-                pending,
+                fresh,
             )
         )
+    if not args.no_cache:
+        for row in produced:
+            key = keys.get(row["unit"])
+            if key is not None and row.get("outcome") in CACHEABLE_OUTCOMES:
+                cache[key] = row
+        save_cache(cache_path, cache)
     rows.extend(produced)
+    rows.extend(reused)
 
     print("k1: assembling with the reference GCC in the sealed container", flush=True)
     assemble_batch(rows, records, asm_root)
@@ -483,6 +616,8 @@ def main() -> int:
     summary = {
         "runId": run_id,
         "requestedUnits": len(wanted),
+        "evoccSha256": evocc_sha256,
+        "cacheHits": len(reused),
         "counts": counts,
         "refusalCodeCounts": dict(sorted(refusal_codes.items())),
         "substitutedUnits": sorted(substituted),

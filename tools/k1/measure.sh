@@ -10,6 +10,13 @@
 #                           the reference object's
 #     --max-bisections N    give up after N reductions (default 3)
 #     --jobs N              host compiler processes (default 10)
+#     --refresh-reference   boot the reference kernel again even when this
+#                           machine has already passed it on the same Image
+#
+# The survey keeps a cache keyed by the driver binary, the unit's source and
+# its compile command, so a re-run examines only the units whose inputs
+# changed. The reference boot is reused on the same terms: a PASS recorded for
+# the very Image on disk is not flown again unless --refresh-reference asks.
 #
 # The emulator digest is checked against the kernel contract; when the pinned
 # binary has drifted on this machine the run refuses until the drift is
@@ -50,6 +57,7 @@ REUSE_SURVEY=""
 STRICT_SYMBOLS=0
 MAX_BISECTIONS=3
 JOBS=10
+REFRESH_REFERENCE=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -58,7 +66,8 @@ while [ "$#" -gt 0 ]; do
     --strict-symbols) STRICT_SYMBOLS=1; shift ;;
     --max-bisections) MAX_BISECTIONS="$2"; shift 2 ;;
     --jobs) JOBS="$2"; shift 2 ;;
-    -h|--help) sed -n '3,40p' "$0"; exit 0 ;;
+    --refresh-reference) REFRESH_REFERENCE=1; shift ;;
+    -h|--help) sed -n '3,42p' "$0"; exit 0 ;;
     *) k1_die "unknown option: $1" ;;
   esac
 done
@@ -74,9 +83,29 @@ DRIFT_FLAG="--allow-symbol-drift"
 step() { printf '\n== %s ==\n' "$1"; }
 
 # --- 1. the reference must still boot -------------------------------------
+#
+# The gate is about one Image. When this machine has already booted exactly
+# that Image and passed, the recorded verdict still holds and is reused; the
+# working copy must exist for that shortcut, since the copy is what the gate
+# script also makes.
 step "reference kernel"
-"$SCRIPT_DIR/reproduce-reference.sh" | tee "$RUN_DIR/reference.log"
-REFERENCE_BOOT="$(awk '/^evidence: /{print $2}' "$RUN_DIR/reference.log")/reference-boot.json"
+REFERENCE_BOOT=""
+REFERENCE_IMAGE="${K1_REFERENCE:-$REPO_ROOT/.build/reference/gcc-lane-1}/arch/arm64/boot/Image"
+if [ "$REFRESH_REFERENCE" -eq 0 ] && [ -f "$REFERENCE_IMAGE" ] \
+   && [ -d "$K1_ROOT/out" ] && [ -f "$K1_ROOT/pristine/arch/arm64/boot/Image" ]; then
+  REFERENCE_SHA="$(k1_sha256 "$REFERENCE_IMAGE")"
+  if [ "$REFERENCE_SHA" = "$(k1_sha256 "$K1_ROOT/pristine/arch/arm64/boot/Image")" ]; then
+    REFERENCE_BOOT="$("$PYTHON" "$SCRIPT_DIR/plan.py" reference-boot \
+      "$EVIDENCE_ROOT" "$REFERENCE_SHA" || true)"
+  fi
+fi
+if [ -n "$REFERENCE_BOOT" ]; then
+  printf 'k1: reusing the reference boot of Image %s: %s\n' "$REFERENCE_SHA" "$REFERENCE_BOOT" \
+    | tee "$RUN_DIR/reference.log"
+else
+  "$SCRIPT_DIR/reproduce-reference.sh" | tee "$RUN_DIR/reference.log"
+  REFERENCE_BOOT="$(awk '/^evidence: /{print $2}' "$RUN_DIR/reference.log")/reference-boot.json"
+fi
 [ -f "$REFERENCE_BOOT" ] || k1_die "the reference boot left no receipt at $REFERENCE_BOOT"
 
 # --- 2. the per-unit survey -----------------------------------------------

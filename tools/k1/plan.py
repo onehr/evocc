@@ -81,6 +81,37 @@ def owner_totals(rows: list[dict]) -> dict[str, int]:
     return dict(sorted(totals.items()))
 
 
+def reusable_reference_boot(receipts: list[tuple[str, dict]], image_sha256: str) -> str | None:
+    """The newest reference-boot receipt that still speaks for this reference.
+
+    The gate it stands for is "the untouched reference kernel boots on this
+    machine". That verdict is about one Image, so a receipt may only be reused
+    when it passed and when the Image it booted is the one on disk now. The
+    receipts are taken newest first; the caller supplies that order.
+    """
+    for path, receipt in receipts:
+        if receipt.get("verdict") != "PASS":
+            continue
+        if receipt.get("referenceImageSha256") != image_sha256:
+            continue
+        if receipt.get("imageSha256") != image_sha256:
+            continue
+        return path
+    return None
+
+
+def reference_boots(evidence_root: Path) -> list[tuple[str, dict]]:
+    """Every reference-boot receipt under the evidence root, newest first."""
+    found = []
+    for path in evidence_root.glob("*/reference-boot.json"):
+        try:
+            found.append((path, json.loads(path.read_text(encoding="utf-8"))))
+        except (OSError, ValueError):
+            continue
+    found.sort(key=lambda item: item[0].stat().st_mtime, reverse=True)
+    return [(str(path), receipt) for path, receipt in found]
+
+
 def subtract(units: list[str], removed: list[str]) -> list[str]:
     """The allowlist without the units a bisection blamed, order preserved."""
     blamed = set(removed)
@@ -120,6 +151,12 @@ def main() -> int:
     line = sub.add_parser("summary", help="the one-line summary of a receipt")
     line.add_argument("receipt", type=Path)
 
+    gate = sub.add_parser(
+        "reference-boot", help="a reusable reference-boot receipt for this Image"
+    )
+    gate.add_argument("evidence_root", type=Path)
+    gate.add_argument("image_sha256")
+
     args = parser.parse_args()
 
     if args.command == "allowlist":
@@ -150,6 +187,12 @@ def main() -> int:
             receipt["survey"]["assemblingUnits"],
             receipt["survey"]["requestedUnits"],
         ))
+        return 0
+    if args.command == "reference-boot":
+        path = reusable_reference_boot(reference_boots(args.evidence_root), args.image_sha256)
+        if path is None:
+            return 1
+        print(path)
         return 0
     print(f"k1: unknown command {args.command}", file=sys.stderr)
     return 2
