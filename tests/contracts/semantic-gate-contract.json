@@ -4,7 +4,7 @@
   "whatAContractIs": "The middle-end stream's frozen scope, gate and rulings. The specification is the only authority; this file records what the stream is allowed to change and what it must measure.",
   "authority": {
     "spec": "docs/evoir-spec.md",
-    "revision": "1.9.61",
+    "revision": "1.9.68",
     "crates": [
       "evocc-egraph",
       "evocc-eqopt",
@@ -24,7 +24,7 @@
       "evocc-lower",
       "tests/contracts/day9-acceptance-contract.json"
     ],
-    "evomirSpec": "docs/evomir-spec.md revision 0.10"
+    "evomirSpec": "docs/evomir-spec.md revision 0.15"
   },
   "scope": [
     "S1 randomized semantic gate: deterministic generator of validator-clean EvoIR, differential interpretation of original versus scalar-optimized module under an explicit budget, EVP1 replay through evo-proofcheck for every trial, shrinker to a minimal reproducer. Gate: 1000 programs in the workspace test with 0 mismatches and 0 refusals; 20,000 in the ignored long run.",
@@ -642,6 +642,71 @@
         "clippy": 0,
         "fmt": "clean",
         "workspaceTotal": "not taken: three worktrees share one cargo target directory and serialised for over two hours without completing"
+      }
+    },
+    "b7": {
+      "branchHead": "6528047",
+      "commits": [
+        "350fb35 Emit undefined references for declared functions and external objects",
+        "a2b4ab2 Write static relocations into a global's bytes and drop pointer casts",
+        "ceb00be Emit the module assembly table after the last function and global",
+        "db2eb40 Lower bit counting and byte swap to the measured machine sequences",
+        "f014a6a Lower variadic callees and inline assembly to the machine",
+        "a33847f Merge branch 'main' into backend-b7",
+        "13a29e3 Bring the machine crate back to the canonical formatting",
+        "6c1b5ea Emit a conditional branch only where its displacement reaches",
+        "c41477c Give a label address a machine form and place its block symbol",
+        "6528047 Answer the linter in the machine crate's parser and its new test"
+      ],
+      "labelAddress": {
+        "evoir": "block_addr ^b : ptr<generic>, a pure form with code provenance and no tokens (EvoIR 1.9.68, Section 3.7); the block it names must belong to the function, and the result type is exactly ptr<generic>",
+        "evomir": "one adr of a local symbol the emitter places at the block's first instruction: Lmain.1 on Darwin, .Lmain.1 on Linux (EvoMIR 0.15). A block no adr names keeps only its branch label, so every function that takes no block address emits exactly the text it did before.",
+        "provenance": "both interpreters number one identity per block, starting past the function identities: two addresses of one block are equal, of two blocks unequal, and a load, store or access_in_bounds through one is E3013",
+        "program": "the kernel's own idiom, `({ __label__ here; here: (unsigned long)&&here; })` read twice, reporting whether the address is null and whether the two readings differ, never the address itself",
+        "darwin": "agrees with Apple clang version 21.0.0 (clang-2100.1.1.101)",
+        "linux": "agrees with gcc-14 (Debian 14.2.0-19) in evo-flight-lab:sealed",
+        "frontEnd": "not reached: evocc-lower still reports E3029 for a used &&label, and the front-end crates are outside this contract's scope, so the two lanes' C sources contain none. The end-to-end evidence is hand-written EvoIR compiled, linked and run against both oracles' builds of the C program."
+      },
+      "branchRelaxation": {
+        "measurement": "the c-testsuite's twenty-four-thousand-line function put a tbz target past its reach and the assembler answered `Error: conditional branch out of range`",
+        "reach": "tbz/tbnz carry a fourteen-bit signed word displacement (8,192 instructions either way), b.cond a nineteen-bit one, b a twenty-six-bit one (128 mebibytes)",
+        "threshold": 4096,
+        "thresholdUnit": "instructions in the function's body, counted from an emission that uses the short forms; four thousand and ninety-six is half the tbz reach, and the margin covers an inline-assembly template line standing for more than one instruction and the growth relaxation itself adds",
+        "longForm": "the inverted short branch over an unconditional b to the taken block, then the untaken edge as before; b.cond, cbz/cbnz and tbz/tbnz all take it",
+        "belowThreshold": "untouched: no relaxation label is emitted and the short branch names the taken block",
+        "evidence": "a generated branch twelve thousand instructions from its target, refused by both assemblers before and taken by both after"
+      },
+      "cCorpus": {
+        "darwinPrograms": 384,
+        "darwinAgreeing": 384,
+        "linuxPrograms": 384,
+        "linuxAgreeing": 384,
+        "frontEndRefused": "none",
+        "loweringRefused": "none",
+        "oracles": "Apple clang version 21.0.0 (clang-2100.1.1.101) on the host; gcc-14 (Debian 14.2.0-19) in evo-flight-lab:sealed"
+      },
+      "refusals": {
+        "E3029": "goto * only, since EvoIR 1.9.68; a used &&label is block_addr and lowers. The front end has not yet made that change, so it still reports E3029 for both.",
+        "E4001": "f32/f64 operand or result",
+        "E4002": "vec operand or result",
+        "E4003": "bits<N> with 64 < N < 128 or N > 128; at N = 128, division, remainder and the signed UB predicates",
+        "E4004": "tuple-typed value",
+        "E4006": "computed goto, the EvoIR E3029 boundary",
+        "E4007": "frame address, the EvoIR E3031 boundary",
+        "E4008": "pointer difference, the EvoIR E3032 boundary",
+        "E4009": "any EvoIR instruction absent from Section 5",
+        "E4010": "more than eight integer arguments on darwin-arm64",
+        "E4011": "aggregate argument or result",
+        "E4013": "more than eight ordinary results"
+      },
+      "specGap": "EvoMIR 0.15 says a static relocation may name a block's local symbol and EvoIR 1.9.68 Section 5.3 says a static `&&label` initializer lowers to one, but EvoIR Section 2.1's `reloc := \"(\" integer \", \" symbol \", \" integer \")\"` admits only a symbol from the four module tables and the module validator rejects anything else, so a relocation against a block has no EvoIR spelling. The emitter half is done — the local block symbol is placed at the block's first instruction and an `.xword` can name it — and the EvoIR representation was left to the specification.",
+      "scopeNote": "adding the EvoIR variant broke two exhaustive matches in evocc-lower, a crate this contract lists as must-not-touch: one arm in inst_values_mut and one in day6_g1_equivalence_red.rs::render_inst. Both are mechanical, name the new variant's result only, and change no front-end behaviour.",
+      "architectGate": {
+        "script": "tools/gate-changed.sh main",
+        "crates": "evocc evocc-eqopt evocc-evoir evocc-lower evocc-mir evocc-policy evocc-proofcheck evocc-randgate",
+        "clippy": 0,
+        "fmt": "clean",
+        "workspaceTotal": "not taken: the branch touched six crates and the script tests those plus their dependents; unchanged crates keep their last green run"
       }
     }
   }
