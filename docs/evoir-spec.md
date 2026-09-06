@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.70** | **Authoritative reference** | **2026-09-06**
+**Revision 1.9.71** | **Authoritative reference** | **2026-09-06**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1163,7 +1163,7 @@ reports its reason's diagnostic and ends execution. Two reasons exist:
 
 | Reason | Diagnostic | Emitted for |
 |---|---|---|
-| `scalar_function_fell_off_end` | `E3007` | the reachable end of a non-`main`, non-void function |
+| `scalar_function_fell_off_end` | `E3007` | **withdrawn at 1.9.71**: the reachable end of a non-void function now returns poison (10.1.3); the reason stays in the grammar so old modules parse |
 | `unreachable_reached` | `E3024` | `__builtin_unreachable()` (10.1.17) |
 
 A trap terminator is a report, never a licence. No analysis may treat a block
@@ -1626,7 +1626,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3004` | `signed-integer-overflow` | runtime |
 | `E3005` | `invalid-shift-count` | runtime |
 | `E3006` | `invalid-signed-left-shift` | runtime |
-| `E3007` | `scalar-function-fell-off-end` | runtime |
+| `E3007` | `scalar-function-fell-off-end` | runtime — **withdrawn at 1.9.71** (poison instead) |
 | `E3008` | `interpreter-fuel-exhausted` | host resource |
 | `E3009` | `null-pointer-access` | runtime |
 | `E3010` | `dangling-pointer-access` | runtime |
@@ -3302,7 +3302,7 @@ before a total operation:
 | any shift | `shift_count_defined.<signedness>(x, y)` → `ub.assume.invalid_shift_count` → shift operation |
 | signed `x << y` | count obligation; `signed_shl_defined.<signedness>(x, y)` → `ub.assume.invalid_signed_left_shift`; then `shl.bits<N> x, y` |
 | read of an uninitialized scalar local | `uninitialized.bits<N>` is threaded through SSA until a semantic consumer reports `E3001` |
-| reachable end of a non-`main`, non-void function | `trap.scalar_function_fell_off_end` reports `E3007` |
+| reachable end of a non-`main`, non-void function | `ret` of `uninitialized.T` for the return type `T` (revision 1.9.71): C makes the fall-off undefined only when the caller uses the value, so the value is poison and its use is the ordinary poison report; the reference compilers return whatever the register holds. A non-void `main` still returns 0 at its end |
 | `__builtin_unreachable()` | `trap.unreachable_reached` reports `E3024` |
 | pointer arithmetic | `ptr.offset.<direction>.<signedness>` with target scale → `pointer_valid` on current `mem<all>` |
 | `*p` (read) | `access_in_bounds` with target size/alignment → `load` |
@@ -5559,6 +5559,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.71 | 2026-09-06 | The reachable end of a non-void function returns poison instead of trapping: C leaves the fall-off undefined only when the value is used, and the first GCC torture run tripped `E3007` in 28 programs that never use it. |
 | 1.9.70 | 2026-09-06 | Functions carry linkage: `visibility=internal` for `static` definitions, omitted otherwise; the machine emits no global symbol for internal functions and drops unreferenced ones. The kernel lane found EvoCC objects colliding on `static inline` helpers from shared headers, which capped the mixed link at 14 units. |
 | 1.9.69 | 2026-09-06 | A relocation may target a block of a function of the module, written `@function^block`, so a static `&&label` initializer has a spelling (the backend executor found 2.1's target set closed to blocks after 0.15 had promised the emitter half). |
 | 1.9.68 | 2026-09-06 | Rules the ninth survey's face (30 clean): a used label address is `block_addr` with code provenance (`local_bh_disable` in 1,040 units; `goto *` alone stays `E3029`), and ordered pointer comparisons compare the addresses (`E3045` withdrawn, 19 units). The `i` constraint fed by a parameter now stands at 35 units through `alternative_has_cap_likely` and stays the allowed residue until an inliner exists. |
