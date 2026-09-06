@@ -51,9 +51,49 @@ fn unreadable_include_is_diagnosed_instead_of_becoming_empty() {
     let header = tree.root.join("bytes.h");
     fs::write(&header, b"#define LOST \"\xff\"\n").unwrap();
     let main = tree.write("main.c", "#include \"bytes.h\"\nint kept;\n");
-    let (pp, _) = preprocess(&main, "#include \"bytes.h\"\nint kept;\n", FileId::new(94003));
+    let (pp, _) = preprocess(
+        &main,
+        "#include \"bytes.h\"\nint kept;\n",
+        FileId::new(94003),
+    );
     assert_eq!(pp.errors().len(), 1, "{:?}", pp.errors());
     assert_eq!(pp.errors()[0].code, "E0002");
+}
+
+#[test]
+fn include_next_resumes_after_the_directory_that_found_the_wrapper() {
+    let tree = TempTree::new("include-next");
+    for dir in ["first", "second", "first/nested"] {
+        fs::create_dir_all(tree.root.join(dir)).unwrap();
+    }
+    tree.write(
+        "first/wrap.h",
+        "#include \"nested/part.h\"\n#include_next <wrap.h>\n",
+    );
+    tree.write("first/nested/part.h", "#include_next <value.h>\n");
+    tree.write("first/value.h", "wrong\n");
+    tree.write("second/value.h", "value\n");
+    tree.write("second/wrap.h", "wrapped\n");
+    let source = "#include <wrap.h>\n";
+    let mut pp = Preprocessor::new();
+    pp.current_file = tree.root.join("main.c").to_string_lossy().into_owned();
+    pp.set_standard_includes_enabled(false);
+    for dir in ["first", "second"] {
+        pp.add_include_path(tree.root.join(dir).to_string_lossy().into_owned());
+    }
+    let output = pp
+        .process(TokenStream::new(lex(FileId::new(94004), source)), source)
+        .into_vec();
+    assert!(pp.errors().is_empty(), "{:?}", pp.errors());
+    let text = output
+        .iter()
+        .filter(|t| t.kind != TokenKind::Eof)
+        .filter_map(|t| match &t.text {
+            TokenText::Decoded(s) => Some(s.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(text, ["value", "wrapped"]);
 }
 
 fn preprocess(main_path: &Path, source: &str, main_file: FileId) -> (Preprocessor, Vec<Token>) {

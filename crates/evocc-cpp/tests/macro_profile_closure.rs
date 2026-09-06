@@ -78,6 +78,10 @@ fn form_feed_and_vertical_tab_are_preprocessing_whitespace() {
 fn expanded_macro_names_do_not_suppress_expansion_in_their_arguments() {
     assert_expands("#define I(x) x\n#define M I\nM(M(7))\n", "7");
     assert_expands("#define I(x) x\n#define M I\nM(I(7))\n", "7");
+    assert_expands("#define I(x) M\n#define M I\nM(7)\n", "I");
+    assert_expands("#define F() G\n#define G(x) F()\nF()(0)\n", "G");
+    assert_expands("#define F(x) x\nF(F(7))\n", "7");
+    assert_expands("#define X Y\n#define Y X\nX\n", "X");
 }
 
 #[test]
