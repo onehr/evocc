@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="430" viewBox="0 0 1600 430"><defs><marker id="arr-1f2a37" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1f2a37"/></marker><marker id="arr-4f8cff" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4f8cff"/></marker><marker id="arr-38bdf8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#38bdf8"/></marker><marker id="arr-34d399" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#34d399"/></marker><marker id="arr-55606e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#55606e"/></marker><linearGradient id="hair" x1="0" x2="1"><stop offset="0" stop-color="#4f8cff"/><stop offset="0.55" stop-color="#38bdf8"/><stop offset="1" stop-color="#34d399"/></linearGradient><radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#4f8cff" stop-opacity="0.16"/><stop offset="1" stop-color="#4f8cff" stop-opacity="0"/></radialGradient></defs><rect width="1600" height="430" fill="#0a0e14"/>
+<text x="60" y="60" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="0">Milestones, in order</text>
+<text x="60" y="90" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="16" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">no dates; each one is done when its receipt says so</text>
+<line x1="150" y1="230" x2="1450" y2="230" stroke="#1f2a37" stroke-width="2" opacity="1.0"/>
+<circle cx="150.0" cy="230" r="9" fill="#34d399"/>
+<line x1="150.0" y1="219" x2="150.0" y2="204" stroke="#34d399" stroke-width="1" opacity="0.7"/>
+<text x="150.0" y="184" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">preprocess and parse</text>
+<text x="150.0" y="204" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">every kernel unit</text>
+<circle cx="280.0" cy="230" r="9" fill="#34d399"/>
+<line x1="280.0" y1="241" x2="280.0" y2="256" stroke="#34d399" stroke-width="1" opacity="0.7"/>
+<text x="280.0" y="274" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">backend</text>
+<text x="280.0" y="294" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">AArch64, two targets</text>
+<circle cx="410.0" cy="230" r="9" fill="#34d399"/>
+<line x1="410.0" y1="219" x2="410.0" y2="204" stroke="#34d399" stroke-width="1" opacity="0.7"/>
+<text x="410.0" y="184" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">kernel objects boot</text>
+<text x="410.0" y="204" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">5 units by EvoCC</text>
+<circle cx="540.0" cy="230" r="9" fill="#0a0e14" stroke="#38bdf8" stroke-width="2.5"/><circle cx="540.0" cy="230" r="4" fill="#38bdf8"/>
+<line x1="540.0" y1="241" x2="540.0" y2="256" stroke="#38bdf8" stroke-width="1" opacity="0.7"/>
+<text x="540.0" y="274" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">lower every unit</text>
+<text x="540.0" y="294" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">30 of 2,798 so far</text>
+<circle cx="670.0" cy="230" r="9" fill="#0a0e14" stroke="#38bdf8" stroke-width="2.5"/><circle cx="670.0" cy="230" r="4" fill="#38bdf8"/>
+<line x1="670.0" y1="219" x2="670.0" y2="204" stroke="#38bdf8" stroke-width="1" opacity="0.7"/>
+<text x="670.0" y="184" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">machine forms</text>
+<text x="670.0" y="204" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">varargs, asm, relocs</text>
+<circle cx="800.0" cy="230" r="9" fill="#0a0e14" stroke="#38bdf8" stroke-width="2.5"/><circle cx="800.0" cy="230" r="4" fill="#38bdf8"/>
+<line x1="800.0" y1="241" x2="800.0" y2="256" stroke="#38bdf8" stroke-width="1" opacity="0.7"/>
+<text x="800.0" y="274" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">test suites</text>
+<text x="800.0" y="294" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">c-testsuite, torture</text>
+<circle cx="930.0" cy="230" r="9" fill="#0a0e14" stroke="#4f8cff" stroke-width="2"/>
+<line x1="930.0" y1="219" x2="930.0" y2="204" stroke="#4f8cff" stroke-width="1" opacity="0.7"/>
+<text x="930.0" y="184" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">programs</text>
+<text x="930.0" y="204" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">zlib, zstd, Mbed TLS, musl</text>
+<circle cx="1060.0" cy="230" r="9" fill="#0a0e14" stroke="#4f8cff" stroke-width="2"/>
+<line x1="1060.0" y1="241" x2="1060.0" y2="256" stroke="#4f8cff" stroke-width="1" opacity="0.7"/>
+<text x="1060.0" y="274" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">most kernel units</text>
+<text x="1060.0" y="294" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">by EvoCC, boots</text>
+<circle cx="1190.0" cy="230" r="9" fill="#0a0e14" stroke="#55606e" stroke-width="2"/>
+<line x1="1190.0" y1="219" x2="1190.0" y2="204" stroke="#55606e" stroke-width="1" opacity="0.7"/>
+<text x="1190.0" y="184" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">whole kernel</text>
+<text x="1190.0" y="204" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">EvoCC alone, boots</text>
+<circle cx="1320.0" cy="230" r="9" fill="#0a0e14" stroke="#55606e" stroke-width="2"/>
+<line x1="1320.0" y1="241" x2="1320.0" y2="256" stroke="#55606e" stroke-width="1" opacity="0.7"/>
+<text x="1320.0" y="274" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">kselftest</text>
+<text x="1320.0" y="294" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">passes in initramfs</text>
+<circle cx="1450.0" cy="230" r="9" fill="#0a0e14" stroke="#55606e" stroke-width="2"/>
+<line x1="1450.0" y1="219" x2="1450.0" y2="204" stroke="#55606e" stroke-width="1" opacity="0.7"/>
+<text x="1450.0" y="184" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#e6edf3" text-anchor="middle" opacity="1.0" letter-spacing="0">floating point</text>
+<text x="1450.0" y="204" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">then SQLite, Lua</text>
+<circle cx="68" cy="356" r="6" fill="#34d399" stroke="#34d399" stroke-width="2"/>
+<text x="82" y="361" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">done</text>
+<circle cx="178" cy="356" r="6" fill="#0a0e14" stroke="#38bdf8" stroke-width="2"/>
+<text x="192" y="361" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">in progress</text>
+<circle cx="288" cy="356" r="6" fill="#0a0e14" stroke="#4f8cff" stroke-width="2"/>
+<text x="302" y="361" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">next</text>
+<circle cx="398" cy="356" r="6" fill="#0a0e14" stroke="#55606e" stroke-width="2"/>
+<text x="412" y="361" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">later</text>
+<text x="1540" y="361" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="end" opacity="1.0" letter-spacing="0">docs/roadmap.md</text>
+</svg>

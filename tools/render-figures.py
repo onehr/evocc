@@ -117,12 +117,12 @@ def wrap(s: str, width: int) -> list[str]:
 
 def concept() -> None:
     c = Canvas(1600, 900)
-    c.text(80, 118, "Every equivalent form, kept.", 54, TEXT, "700", spacing=-1)
-    c.text(80, 180, "Every rewrite, proved.", 54, TEXT, "700", spacing=-1)
-    c.text(82, 228, "EvoCC is a C compiler that optimizes by remembering instead of rewriting.", 20, MUTED)
-    c.text(82, 256, "No LLVM. No GCC. Written from scratch, aimed at booting Linux.", 20, MUTED)
+    c.text(80, 118, "EvoCC", 54, TEXT, "700", spacing=-1)
+    c.text(80, 180, "a C compiler whose optimizer keeps every equivalent form", 30, TEXT, "500")
+    c.text(82, 228, "Written from scratch in Rust; no LLVM or GCC inside. The optimizer is an e-graph: a rewrite adds a form,", 18, MUTED)
+    c.text(82, 254, "a checker verifies each union, and a cost model picks one at the end. Target: AArch64, Linux 6.18 kernel.", 18, MUTED)
     lx = 330
-    c.text(lx, 336, "a conventional compiler", 14, MUTED, "500", SANS, "middle", 1, 1)
+    c.text(lx, 336, "a pass-based compiler", 14, MUTED, "500", SANS, "middle", 1, 1)
     chain = ["x * 2", "x + x", "x << 1", "(x << 1) | 0", "x << 1"]
     ys = [396, 466, 536, 606, 676]
     for i, (s, y) in enumerate(zip(chain, ys)):
@@ -130,8 +130,8 @@ def concept() -> None:
         w, h = c.pill(lx, y, s, GRAY, 1.0 if last else 0.28 + 0.13 * i, strike=not last)
         if not last:
             c.arrow(lx, y + h / 2 + 2, lx, ys[i + 1] - h / 2 - 4, GRAY, 1.4, 0.35 + 0.15 * i)
-    c.text(lx, 744, "each pass replaces the last.", 15, MUTED, "normal", SANS, "middle")
-    c.text(lx, 766, "the alternatives are gone.", 15, MUTED, "normal", SANS, "middle")
+    c.text(lx, 744, "each pass replaces the last form;", 15, MUTED, "normal", SANS, "middle")
+    c.text(lx, 766, "the others are gone", 15, MUTED, "normal", SANS, "middle")
     c.line(600, 330, 600, 780, STROKE)
     cx, cy, r = 1000, 560, 190
     c.raw(f'<circle cx="{cx}" cy="{cy}" r="{r + 90}" fill="url(#glow)"/>')
@@ -140,7 +140,7 @@ def concept() -> None:
     n, chosen = len(forms), 2
     c.raw(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{BLUE}" stroke-opacity="0.35" stroke-width="1.2" stroke-dasharray="3 6"/>')
     c.raw(f'<circle cx="{cx}" cy="{cy}" r="7" fill="{BLUE}"/>')
-    c.text(cx + 18, cy + 28, "one e-class", 13, BLUE, "500")
+    c.text(cx + 18, cy + 28, "one e-class, all forms kept", 13, BLUE, "500")
     for i, s in enumerate(forms):
         ang = -math.pi / 2 + i * 2 * math.pi / n
         px, py = cx + r * math.cos(ang), cy + r * math.sin(ang)
@@ -152,23 +152,23 @@ def concept() -> None:
     bx, by = 1330, py - 4
     c.arrow(px + 62, py, bx - 16, py, GREEN, 1.6)
     c.rect(bx, by - 36, 210, 96, PANEL, CYAN, 12, 1.4)
-    c.text(bx + 16, by - 10, "chosen by cost", 13, MUTED)
+    c.text(bx + 16, by - 10, "picked by the cost model", 13, MUTED)
     c.text(bx + 16, by + 16, "lsl  x0, x0, #1", 17, CYAN, "normal", MONO)
-    c.text(bx + 16, by + 42, "AArch64 · boots Linux", 13, MUTED)
+    c.text(bx + 16, by + 42, "AArch64", 13, MUTED)
     c.seal(720, 825)
-    c.text(738, 830, "every union carries a certificate; a checker that shares no code with the optimizer replays it.", 15, MUTED)
+    c.text(738, 830, "each union has a certificate; evo-proofcheck, a separate program, re-checks it", 15, MUTED)
     c.text(80, 866, "github.com/onehr/evocc", 14, MUTED, "normal", MONO)
-    c.text(1540, 866, "a 30-day experiment in letting a specification, two oracles and a proof checker govern an AI that writes a compiler", 13, MUTED, "normal", SANS, "end")
+    c.text(1540, 866, "docs/evoir-spec.md defines the IR; docs/roadmap.md has the plan", 13, MUTED, "normal", SANS, "end")
     c.write("evocc-concept")
 
 
 def overview() -> None:
     c = Canvas(1600, 960)
     c.text(60, 70, "EvoCC", 44, TEXT, "700")
-    c.text(60, 100, "an equality-native C compiler, written from scratch, aimed at the Linux kernel", 20, MUTED)
+    c.text(60, 100, "a C compiler written from scratch in Rust; e-graph optimizer with certificates; target AArch64 and the Linux 6.18 kernel", 18, MUTED)
     c.raw('<rect x="60" y="116" width="1480" height="2" fill="url(#hair)" opacity="0.8"/>')
     x = 60
-    for s, col in (("Rust workspace, 16 crates", CYAN), ("no LLVM, no GCC in the pipeline", BLUE), ("AArch64: Linux + Darwin", BLUE), ("every rewrite carries a proof", GREEN), ("every number from a sealed receipt", GREEN)):
+    for s, col in (("Rust workspace, 16 crates", CYAN), ("no LLVM, no GCC in the pipeline", BLUE), ("AArch64: Linux + Darwin", BLUE), ("each rewrite has a certificate", GREEN), ("numbers come from receipts", GREEN)):
         x += c.chip(x, 132, s, col) + 12
     nodes = [
         ("C / GNU C11", ["Linux 6.18.44", "2,798 translation units"], GRAY, SANS),
@@ -195,14 +195,14 @@ def overview() -> None:
         if i < len(nodes) - 1:
             c.arrow(x + nw + 4, ny + nh / 2, x + nw + gap - 4, ny + nh / 2, col if col != GRAY else STROKE)
     ty = 392
-    c.text(60, ty + 40, "Nothing is", 17, TEXT, "600")
-    c.text(60, ty + 62, "trusted", 17, TEXT, "600")
-    for j, s in enumerate(("three independent", "checks under the", "pipeline")):
+    c.text(60, ty + 40, "Three", 17, TEXT, "600")
+    c.text(60, ty + 62, "checks", 17, TEXT, "600")
+    for j, s in enumerate(("independent of", "the optimizer", "and of each other")):
         c.text(60, ty + 88 + j * 16, s, 12.5, MUTED)
     boxes = [
         (2, "Two interpreters must agree", ["C-HIR interpreter and EvoIR interpreter are", "separate implementations; every corpus program", "runs through both, and a difference is a defect"], [2, 3]),
         (4, "Certificates, checked independently", ["each e-graph union emits an EVP2 certificate;", "evo-proofcheck replays it against the before and", "after programs and shares no code with the optimizer"], [4]),
-        (6, "Randomized differential gate", ["21,000 generated programs, 0 mismatches, across", "four lanes: source IR, optimized IR, machine IR,", "and the native binary on both targets"], [5, 7]),
+        (6, "Random programs, four ways", ["21,000 generated programs, 0 mismatches, run as", "source IR, optimized IR, machine IR and native", "binary on both targets"], [5, 7]),
     ]
     for first, title, lines_, feeds in boxes:
         bx, bw = nx + first * (nw + gap), 2 * nw + gap
@@ -215,11 +215,11 @@ def overview() -> None:
             sx = nx + ni * (nw + gap) + nw / 2
             c.arrow(sx, ny + nh + 4, sx, ty + 2, GREEN, 1.4)
     by = 552
-    c.text(60, by - 6, "How it is built", 17, TEXT, "600")
+    c.text(60, by - 6, "How the work is done", 17, TEXT, "600")
     cols = [
-        ("The specification is the only authority", BLUE, ["EvoIR spec 1.9.68 and EvoMIR spec 0.15 freeze every rule", "a rule about observable behaviour is measured in a sealed", "GCC-14.2 / Clang-19.1 container before it is written down", "when the two disagree, the spec takes the answer that refuses", "anything unspecified fails closed with a named diagnostic"]),
-        ("AI executors work under contract", CYAN, ["a window opens with a tests-only commit whose failures", "are declared in advance, and closes with a sealed receipt", "an executor that meets a gap in the spec stops and reports;", "it may probe the oracles, never guess", "no status exists that a command did not produce"]),
-        ("Measured against the real thing", GREEN, ["full-configuration surveys: every kernel unit, first diagnostic", "ranked, one rule per class, re-surveyed until the face changes", "mixed-link lane: GCC builds the kernel, EvoCC replaces units,", "kbuild relinks, QEMU boots, a failure bisects to one unit", "ladder: c-testsuite, GCC torture, zlib, zstd, Mbed TLS, musl, Linux"]),
+        ("Rules come from the specification", BLUE, ["EvoIR spec 1.9.68 and EvoMIR spec 0.15 hold every rule", "before a rule is written, the behaviour is checked in a", "sealed container with GCC 14.2 and Clang 19.1", "when the two disagree, the rule refuses the construct", "anything unspecified is refused with a numbered diagnostic"]),
+        ("How the AI agents work", CYAN, ["tests first: a commit whose failures are listed in advance,", "then the implementation, then a receipt with the numbers", "an agent that finds a gap in the spec stops and reports;", "it can run the reference compilers, it cannot guess", "every status number is produced by a script"]),
+        ("How it is measured", GREEN, ["survey: compile all 2,798 kernel units, group them by the", "first diagnostic, write one rule per group, repeat", "kernel: GCC builds it, EvoCC replaces units, kbuild relinks,", "QEMU boots it, a failure is bisected to one unit", "programs: c-testsuite, GCC torture, zlib, zstd, Mbed TLS, musl"]),
     ]
     cw = (1480 - 2 * 24) / 3
     for i, (title, col, lines_) in enumerate(cols):
@@ -230,12 +230,12 @@ def overview() -> None:
         for j, s in enumerate(lines_):
             c.text(cx + 26, by + 63 + j * 21, s, 13.5, MUTED)
     sy = 766
-    c.text(60, sy - 6, "Where it stands (2026-09-06, from the receipts)", 17, TEXT, "600")
+    c.text(60, sy - 6, "Numbers on 2026-09-06", 17, TEXT, "600")
     stats = [
         ("2,798 / 2,798", "kernel units preprocess and parse clean", BLUE),
-        ("30 / 2,798", "kernel units lower to EvoIR with no diagnostic; the rest stop at a named class, one rule each", CYAN),
+        ("30 / 2,798", "kernel units lower to EvoIR with no diagnostic; the rest stop at a known construct", CYAN),
         ("384 + 384", "C programs agree with clang on Darwin and with GCC-14 on Linux, source to native", GREEN),
-        ("5", "EvoCC-compiled units inside a Linux kernel that boots; GCC supplies the rest", BLUE),
+        ("5", "kernel units compiled by EvoCC inside a kernel that boots; GCC compiled the rest", BLUE),
         ("186 / 220", "c-testsuite programs pass; 637 of 1,692 GCC torture programs pass on the first run", GREEN),
     ]
     sw = (1480 - 4 * 16) / 5
@@ -246,14 +246,14 @@ def overview() -> None:
         for j, s in enumerate(wrap(small, 36)[:3]):
             c.text(sx + 18, sy + 71 + j * 17, s, 12.5, MUTED)
     c.text(60, 930, "github.com/onehr/evocc", 14, MUTED, "normal", MONO)
-    c.text(1540, 930, "written by AI agents; the specification, the oracles and the checker decide what is true", 13, MUTED, "normal", SANS, "end")
+    c.text(1540, 930, "docs/status.md is rendered from the receipts", 13, MUTED, "normal", SANS, "end")
     c.write("evocc-overview")
 
 
 def ladder() -> None:
     c = Canvas(1600, 620)
     c.text(60, 64, "The evaluation ladder", 34, TEXT, "700")
-    c.text(60, 96, "every rung is a pinned release with its own test suite as the judge; the kernel is the top, not the only reading", 17, MUTED)
+    c.text(60, 96, "each program is pinned to a release and judged by its own test suite", 17, MUTED)
     groups = [
         ("compiler test suites", BLUE, [("E0a", "GCC C torture", "GCC 16.2", "637 / 1,692 pass"), ("E0b", "c-testsuite", "5c7275656d75", "186 / 220 pass"), ("E0c", "Csmith, no float", "0cdc710315cf", "differential")]),
         ("integer programs", CYAN, [("E1", "zlib", "1.3.2", "make test"), ("E2", "zstd", "1.5.7", "make check"), ("E4", "Mbed TLS", "4.2.0", "selftest"), ("E5", "TinyCC", "0.9.27", "self-hosted tests"), ("E6", "toybox", "0.8.14", "make tests"), ("E7", "musl + libc-test", "1.2.6", "libc-test")]),
@@ -284,10 +284,54 @@ def ladder() -> None:
         c.line(gx0 + 6, y_track + 120, x - 6, y_track + 120, col, 1.2, 0.8)
         c.text((gx0 + x) / 2, y_track + 142, name, 13, col, "600", SANS, "middle", 1, 1)
         x += 40
-    c.text(60, 520, "filled rung: measured at least once.   ladder rules: pinned source with SHA-256, the subject's own suite judges, mixed link is the ramp (units by EvoCC in a passing build, the rest by the reference compiler with the code that kept them out).", 13, MUTED)
-    c.text(60, 544, "floating point is a backend rung of its own; subjects behind it are not evidence before it exists.", 13, MUTED)
+    c.text(60, 520, "filled: run at least once. For each program the receipt records the units EvoCC compiled in a passing build and, for the rest, the diagnostic that kept them out.", 13, MUTED)
+    c.text(60, 544, "the backend has no floating point yet; the programs after F1 wait for it.", 13, MUTED)
     c.text(60, 590, "github.com/onehr/evocc  ·  docs/roadmap.md", 14, MUTED, "normal", MONO)
     c.write("evocc-ladder")
+
+
+def milestones() -> None:
+    c = Canvas(1600, 430)
+    c.text(60, 60, "Milestones, in order", 30, TEXT, "700")
+    c.text(60, 90, "no dates; each one is done when its receipt says so", 16, MUTED)
+    items = [
+        ("preprocess and parse", "every kernel unit", "done"),
+        ("backend", "AArch64, two targets", "done"),
+        ("kernel objects boot", "5 units by EvoCC", "done"),
+        ("lower every unit", "30 of 2,798 so far", "now"),
+        ("machine forms", "varargs, asm, relocs", "now"),
+        ("test suites", "c-testsuite, torture", "now"),
+        ("programs", "zlib, zstd, Mbed TLS, musl", "next"),
+        ("most kernel units", "by EvoCC, boots", "next"),
+        ("whole kernel", "EvoCC alone, boots", "later"),
+        ("kselftest", "passes in initramfs", "later"),
+        ("floating point", "then SQLite, Lua", "later"),
+    ]
+    x0, x1, y = 150, 1450, 230
+    step = (x1 - x0) / (len(items) - 1)
+    c.line(x0, y, x1, y, STROKE, 2)
+    colors = {"done": GREEN, "now": CYAN, "next": BLUE, "later": GRAY}
+    for i, (title, sub, state) in enumerate(items):
+        x = x0 + i * step
+        col = colors[state]
+        if state == "done":
+            c.raw(f'<circle cx="{x}" cy="{y}" r="9" fill="{col}"/>')
+        elif state == "now":
+            c.raw(f'<circle cx="{x}" cy="{y}" r="9" fill="{BG}" stroke="{col}" stroke-width="2.5"/><circle cx="{x}" cy="{y}" r="4" fill="{col}"/>')
+        else:
+            c.raw(f'<circle cx="{x}" cy="{y}" r="9" fill="{BG}" stroke="{col}" stroke-width="2"/>')
+        above = i % 2 == 0
+        ty = y - 46 if above else y + 44
+        c.line(x, y - 11 if above else y + 11, x, y - 26 if above else y + 26, col, 1, 0.7)
+        c.text(x, ty, title, 15, TEXT, "600", SANS, "middle")
+        c.text(x, ty + 20, sub, 12.5, MUTED, "normal", SANS, "middle")
+    lx = 60
+    for label, col in (("done", GREEN), ("in progress", CYAN), ("next", BLUE), ("later", GRAY)):
+        c.raw(f'<circle cx="{lx + 8}" cy="356" r="6" fill="{col if label == "done" else BG}" stroke="{col}" stroke-width="2"/>')
+        c.text(lx + 22, 361, label, 13, MUTED)
+        lx += 110
+    c.text(1540, 361, "docs/roadmap.md", 13, MUTED, "normal", MONO, "end")
+    c.write("evocc-milestones")
 
 
 if __name__ == "__main__":
@@ -295,4 +339,5 @@ if __name__ == "__main__":
     concept()
     overview()
     ladder()
+    milestones()
     print("rendered:", ", ".join(p.name for p in sorted(OUT.iterdir()) if p.suffix in (".svg", ".png")))

@@ -1946,6 +1946,10 @@ That is the central research bet: **optimization is not a sequence of mutations 
 
 For the 30-day campaign, the discipline is equally important: **Mac-native execution by the midpoint, Linux AArch64 kernel boot as the primary launch, proof-carrying EqSat enabled for that launch, and x86 only after ARM64 is green.** That keeps the project ambitious enough to be genuinely new without spending the month accidentally rebuilding an assembler, an ILP solver, a whole-CFG research prototype, and two production backends before the first real program runs.
 
+## Milestones, in order
+
+![Milestones](images/evocc-milestones.png)
+
 ## The whole design in one picture
 
 ![EvoCC: pipeline, checks, governance and current readings](images/evocc-overview.png)

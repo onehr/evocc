@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900"><defs><marker id="arr-1f2a37" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1f2a37"/></marker><marker id="arr-4f8cff" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4f8cff"/></marker><marker id="arr-38bdf8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#38bdf8"/></marker><marker id="arr-34d399" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#34d399"/></marker><marker id="arr-55606e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#55606e"/></marker><linearGradient id="hair" x1="0" x2="1"><stop offset="0" stop-color="#4f8cff"/><stop offset="0.55" stop-color="#38bdf8"/><stop offset="1" stop-color="#34d399"/></linearGradient><radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#4f8cff" stop-opacity="0.16"/><stop offset="1" stop-color="#4f8cff" stop-opacity="0"/></radialGradient></defs><rect width="1600" height="900" fill="#0a0e14"/>
-<text x="80" y="118" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="54" font-weight="700" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="-1">Every equivalent form, kept.</text>
-<text x="80" y="180" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="54" font-weight="700" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="-1">Every rewrite, proved.</text>
-<text x="82" y="228" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="20" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">EvoCC is a C compiler that optimizes by remembering instead of rewriting.</text>
-<text x="82" y="256" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="20" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">No LLVM. No GCC. Written from scratch, aimed at booting Linux.</text>
-<text x="330" y="336" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="14" font-weight="500" fill="#8b98a5" text-anchor="middle" opacity="1" letter-spacing="1">a conventional compiler</text>
+<text x="80" y="118" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="54" font-weight="700" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="-1">EvoCC</text>
+<text x="80" y="180" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="30" font-weight="500" fill="#e6edf3" text-anchor="start" opacity="1.0" letter-spacing="0">a C compiler whose optimizer keeps every equivalent form</text>
+<text x="82" y="228" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">Written from scratch in Rust; no LLVM or GCC inside. The optimizer is an e-graph: a rewrite adds a form,</text>
+<text x="82" y="254" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">a checker verifies each union, and a cost model picks one at the end. Target: AArch64, Linux 6.18 kernel.</text>
+<text x="330" y="336" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="14" font-weight="500" fill="#8b98a5" text-anchor="middle" opacity="1" letter-spacing="1">a pass-based compiler</text>
 <g opacity="0.28">
 <rect x="286.5" y="376.0" width="87.0" height="40" rx="20" fill="#0f1620" stroke="#55606e" stroke-width="1.4"/>
 <text x="330" y="402" font-family="JetBrains Mono, Menlo, monospace" font-size="17" fill="#e6edf3" text-anchor="middle">x * 2</text>
@@ -32,14 +32,14 @@
 <rect x="281.2" y="656.0" width="97.6" height="40" rx="20" fill="#0f1620" stroke="#55606e" stroke-width="1.4"/>
 <text x="330" y="682" font-family="JetBrains Mono, Menlo, monospace" font-size="17" fill="#e6edf3" text-anchor="middle">x &lt;&lt; 1</text>
 </g>
-<text x="330" y="744" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">each pass replaces the last.</text>
-<text x="330" y="766" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">the alternatives are gone.</text>
+<text x="330" y="744" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">each pass replaces the last form;</text>
+<text x="330" y="766" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="normal" fill="#8b98a5" text-anchor="middle" opacity="1.0" letter-spacing="0">the others are gone</text>
 <line x1="600" y1="330" x2="600" y2="780" stroke="#1f2a37" stroke-width="1.2" opacity="1.0"/>
 <circle cx="1000" cy="560" r="280" fill="url(#glow)"/>
 <text x="1000" y="336" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#4f8cff" text-anchor="middle" opacity="1" letter-spacing="1">EvoCC</text>
 <circle cx="1000" cy="560" r="190" fill="none" stroke="#4f8cff" stroke-opacity="0.35" stroke-width="1.2" stroke-dasharray="3 6"/>
 <circle cx="1000" cy="560" r="7" fill="#4f8cff"/>
-<text x="1018" y="588" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="500" fill="#4f8cff" text-anchor="start" opacity="1.0" letter-spacing="0">one e-class</text>
+<text x="1018" y="588" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="500" fill="#4f8cff" text-anchor="start" opacity="1.0" letter-spacing="0">one e-class, all forms kept</text>
 <line x1="1000.0" y1="548.0" x2="1000.0" y2="406.0" stroke="#4f8cff" stroke-width="1.2" opacity="0.7"/>
 <circle cx="1000.0" cy="465.0" r="9" fill="#0a0e14" stroke="#34d399" stroke-width="1.4"/><path d="M996.0 465.0 L999.0 468.0 L1004.5 461.5" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
 <g opacity="1.0">
@@ -78,11 +78,11 @@
 </g>
 <line x1="1226.5448267190434" y1="655.0" x2="1314" y2="655.0" stroke="#34d399" stroke-width="1.6" opacity="1.0" marker-end="url(#arr-34d399)"/>
 <rect x="1330" y="615.0" width="210" height="96" rx="12" fill="#0f1620" stroke="#38bdf8" stroke-width="1.4" opacity="1.0"/>
-<text x="1346" y="641.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">chosen by cost</text>
+<text x="1346" y="641.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">picked by the cost model</text>
 <text x="1346" y="667.0" font-family="JetBrains Mono, Menlo, monospace" font-size="17" font-weight="normal" fill="#38bdf8" text-anchor="start" opacity="1.0" letter-spacing="0">lsl  x0, x0, #1</text>
-<text x="1346" y="693.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">AArch64 · boots Linux</text>
+<text x="1346" y="693.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">AArch64</text>
 <circle cx="720" cy="825" r="9" fill="#0a0e14" stroke="#34d399" stroke-width="1.4"/><path d="M716 825 L719 828 L724.5 821.5" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="738" y="830" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">every union carries a certificate; a checker that shares no code with the optimizer replays it.</text>
+<text x="738" y="830" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">each union has a certificate; evo-proofcheck, a separate program, re-checks it</text>
 <text x="80" y="866" font-family="JetBrains Mono, Menlo, monospace" font-size="14" font-weight="normal" fill="#8b98a5" text-anchor="start" opacity="1.0" letter-spacing="0">github.com/onehr/evocc</text>
-<text x="1540" y="866" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="end" opacity="1.0" letter-spacing="0">a 30-day experiment in letting a specification, two oracles and a proof checker govern an AI that writes a compiler</text>
+<text x="1540" y="866" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#8b98a5" text-anchor="end" opacity="1.0" letter-spacing="0">docs/evoir-spec.md defines the IR; docs/roadmap.md has the plan</text>
 </svg>
