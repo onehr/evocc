@@ -70,6 +70,20 @@ fn check(source: &str, expected: Result<u64, &str>, forms: &[&str]) {
 }
 
 #[test]
+fn ordered_pointer_comparisons_use_unsigned_addresses() {
+    check(
+        "int main(void) { int a[3]; int *p=a, *q=a+2; return (p<q) | ((p<=q)<<1) | ((q>p)<<2) | ((q>=p)<<3); }",
+        Ok(15),
+        &["ptr.to_int", "icmp.ult", "icmp.ule"],
+    );
+    check(
+        "int main(void) { int a[3]; int *p=a+1; return (p<p) | ((p<=p)<<1) | ((p>p)<<2) | ((p>=p)<<3); }",
+        Ok(10),
+        &["ptr.to_int", "icmp.ult", "icmp.ule"],
+    );
+}
+
+#[test]
 fn static_addresses_relocate_objects_members_and_functions() {
     check("int a[4]={1,2,3,7}; int f(void){return 9;} struct s {char c; long n;} s={.n=11}; static int *p=&a[3]; static long *q=&s.n; static int (*r)(void)=(int (*)(void))(unsigned long)&f; int main(void){return *p+*q+r();}", Ok(27), &["relocs=[", "@a, 12", "@s, 8", "@f, 0"]);
     check(

@@ -66,18 +66,6 @@ fn extended_asm_lowers_and_execution_fails_closed() {
 }
 
 #[test]
-fn ordered_pointer_comparisons_name_the_deferred_class() {
-    for (ordinal, operator) in ["<", "<=", ">", ">="].into_iter().enumerate() {
-        assert_lowering_error(
-            &format!("int f(char *p, char *q) {{ return p {operator} q; }}"),
-            20 + ordinal as u32,
-            "E3045",
-            "not-lowered: ordered-pointer-comparison",
-        );
-    }
-}
-
-#[test]
 fn asm_goto_lowers_and_execution_fails_closed() {
     assert_lowering_error(
         "int h(void) { asm goto(\"b %l[o]\" : : : : o); return 0; o: return 1; }\n",
