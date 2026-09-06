@@ -130,18 +130,27 @@ fn static_flexible_array_member_addresses_are_representable() {
 }
 
 #[test]
-fn direct_object_function_pointer_conversion_keeps_the_distinct_ir_boundary() {
-    let arena = Arena::default();
-    let unit = parse(
-        "typedef int (*callback)(void); callback recover(void *p){return p;}",
-        &arena,
+fn object_and_function_pointers_convert_through_integer_forms() {
+    check(
+        "int f(void){return 7;} int main(void){return ((int (*)(void))((1ul<<63)|16ul))();}",
+        Ok(7),
+        &["ptr.from_int.fnptr"],
     );
-    let error =
-        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap_err();
-    assert_eq!(error.code(), "E3043");
-    assert_eq!(
-        error.to_string(),
-        "not-lowered: object-function-pointer-conversion"
+    check("typedef int (*callback)(void); int f(void){return 7;} callback recover(void *p){return p;} int main(void){void *p=f; return recover(p)();}", Ok(7), &["ptr.to_int", "ptr.from_int.fnptr"]);
+    check("typedef int (*callback)(void); int main(void){int object=0; callback p=(callback)(void *)&object; return p();}", Err("E3016"), &["ptr.to_int", "ptr.from_int.fnptr"]);
+}
+
+#[test]
+fn pointer_differences_lower_to_signed_element_counts() {
+    check(
+        "long f(int *a,int *b){return a-b;} int main(void){int a[4]; return f(a+3,a);}",
+        Ok(3),
+        &["ptr.to_int", "sub.bits<64>", "sdiv.bits<64>"],
+    );
+    check(
+        "long f(void *a,void *b){return a-b;} int main(void){char a[11]; return f(a,a+10)==-10;}",
+        Ok(1),
+        &["ptr.to_int", "sub.bits<64>", "sdiv.bits<64>"],
     );
 }
 

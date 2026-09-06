@@ -3711,19 +3711,32 @@ fn interpret_module_in_state(
                 {
                     let callee_value =
                         read_internal(&frames[frame_index].values, &callee, block_id)?;
-                    let callee_value =
-                        if let InternalValue::FunctionPointer(pointer) = callee_value {
-                            InternalValue::FunctionPointer(
-                                state.memory.resolve_function_pointer(pointer).map_err(
-                                    |error| InterpreterError::MemoryAccess {
-                                        block: block_id,
-                                        error,
-                                    },
-                                )?,
-                            )
+                    let callee_value = if let InternalValue::FunctionPointer(pointer) = callee_value
+                    {
+                        let pointer = if let PointerValue::Exposed(address) = pointer {
+                            state
+                                .functions
+                                .values()
+                                .copied()
+                                .map(PointerValue::Function)
+                                .find(|candidate| {
+                                    state.memory.pointer_address(*candidate) == Ok(address)
+                                })
+                                .unwrap_or(pointer)
                         } else {
-                            callee_value
+                            pointer
                         };
+                        InternalValue::FunctionPointer(
+                            state
+                                .memory
+                                .resolve_function_pointer(pointer)
+                                .map_err(|_| InterpreterError::CallThroughNonFunctionPointer {
+                                    block: block_id,
+                                })?,
+                        )
+                    } else {
+                        callee_value
+                    };
                     let identity = match callee_value {
                         InternalValue::FunctionPointer(PointerValue::Function(identity)) => {
                             identity

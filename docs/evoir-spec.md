@@ -5587,6 +5587,20 @@ Integer    := [1-9] [0-9]*
 
 ## Appendix D: Exhitect review
 
+### Checked-product representability at the signed boundary
+
+Section 10.1.15's mathematical representability rule takes precedence over its claim that a high-bit-set unsigned result always compares unequal to a sign extension: equal-width extension preserves exactly those bits, whereas a wider signed destination can hold them.
+Both sealed oracles at `-O2` report overflow for `~0ul * ~0ul` stored in signed 128 bits and no overflow for two unsigned 16-bit maxima stored in signed 64 bits (`.evidence/builtin-probes/20260906-unsigned-result/representability.c` and `representability.out`, including the initial Clang runtime-helper link failure).
+The predicate therefore also rejects negative signed exact results stored unsigned, and high-bit-set unsigned exact results stored signed when the destination is no wider; no diagnostic is added.
+This refines the 48 unsigned-product first-error units in sealed run `20260905T213244Z-60582`; subsequent impact must be measured.
+
+### Checked operands beyond the available exact representation
+
+All integer operand types are admitted by Section 10.1.15, including 128-bit operands, and the C-HIR interpreter computes their wrapped result and overflow flag without host overflow.
+The same sealed `representability.c` probe yields overflow and wrapped limbs `18446744073709551615 18446744073709551614` for unsigned 128-bit maximum multiplied by two.
+Where the body's exact-width formula requires more than 128 bits, its available `bits<W>` set takes precedence: lowering remains fail-closed as E3044 (`not-lowered: checked-arithmetic-exceeds-128-bits`), not either withdrawn E3042 or a wrapping substitute for exact arithmetic.
+The prior sealed survey identifies all 48 width refusals as unsigned 64-bit multiplication, so this new boundary has no identified first-error unit there; its next-run count must be measured.
+
 ### Checked arithmetic outside the signed exact-width bound
 
 Section 10.1.15's signed-width formula remains authoritative: two unsigned 64-bit operands require 130 counted bits for multiplication, contradicting its claim that every cohort use fits 128.

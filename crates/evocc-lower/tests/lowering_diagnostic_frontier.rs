@@ -2,7 +2,7 @@
 
 use evocc_chir::interp::{interpret_scalar_function, InterpreterLimits as ChirLimits};
 use evocc_chir::{AllocationSiteManifest, CHirDecl, SymbolId};
-use evocc_common::{Arena, FileId, SourceSpan};
+use evocc_common::{Arena, FileId};
 use evocc_evoir::{
     interpret_module, render_module, InterpreterLimits as EvoIrLimits, RuntimeValue,
 };
@@ -33,24 +33,6 @@ fn parse<'arena>(arena: &'arena Arena, source: &str, ordinal: u32) -> evocc_chir
     unit
 }
 
-fn expected_use_span(source: &str, spelling: &str, ordinal: u32) -> SourceSpan {
-    let byte_start = source
-        .rfind(spelling)
-        .unwrap_or_else(|| panic!("case {ordinal} has no `{spelling}` use"));
-    let prefix = &source[..byte_start];
-    let line_start = 1 + u32::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count())
-        .expect("small fixture");
-    let line_byte_start = prefix.rfind('\n').map_or(0, |index| index + 1);
-    let column_start = 1 + u32::try_from(byte_start - line_byte_start).expect("small fixture");
-    SourceSpan::new(
-        FileId::new(10_200 + ordinal),
-        u32::try_from(byte_start).expect("small fixture"),
-        u32::try_from(byte_start + spelling.len()).expect("small fixture"),
-        line_start,
-        column_start,
-    )
-}
-
 #[test]
 fn global_register_declaration_has_no_allocation_site_or_global() {
     let source = "register unsigned long sp_var asm(\"sp\");\n";
@@ -73,7 +55,7 @@ fn global_register_declaration_has_no_allocation_site_or_global() {
 }
 
 #[test]
-fn global_register_reads_and_writes_fail_closed_at_the_use() {
+fn global_register_reads_and_writes_lower_to_ordered_assembly() {
     let cases = [
         (
             "register unsigned long sp_var asm(\"sp\"); unsigned long read_sp(void) { return sp_var; }\n",
@@ -87,14 +69,101 @@ fn global_register_reads_and_writes_fail_closed_at_the_use() {
     for (source, ordinal) in cases {
         let arena = Arena::default();
         let unit = parse(&arena, source, ordinal);
-        let error = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
-            .expect_err("a machine-register use must fail closed before EvoIR");
-        assert_eq!(error.code(), "E3035", "wrong diagnostic: {error}");
-        assert_eq!(error.to_string(), "not-lowered: global-register-variable");
-        assert_eq!(
-            error.span(),
-            Some(expected_use_span(source, "sp_var", ordinal))
+        let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+            .expect("machine-register use lowers through the assembly family");
+        assert!(module.globals.is_empty());
+        let text = render_module(&module);
+        assert!(
+            text.contains(if ordinal == 1 {
+                "mov %0, sp"
+            } else {
+                "mov sp, %0"
+            }),
+            "{text}"
         );
+        assert!(text.contains("volatile"), "{text}");
+        assert_eq!(
+            evocc_evoir::render_module(
+                &evocc_evoir::parse_section9_module(text.as_bytes()).unwrap()
+            ),
+            text
+        );
+        let function = &module.functions[0];
+        let args = function
+            .params
+            .iter()
+            .map(|p| RuntimeValue::new(p.ty.clone(), 0))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            interpret_module(&module, &function.name, &args, EvoIrLimits::new(1000))
+                .unwrap_err()
+                .code(),
+            "E3021"
+        );
+    }
+}
+
+#[test]
+fn global_register_execution_is_an_assembly_boundary_only_when_reached() {
+    for (source, expected) in [
+        (
+            "register unsigned long p asm(\"sp\"); int main(void){return p!=0;}",
+            Some("E3021"),
+        ),
+        (
+            "register unsigned long p asm(\"sp\"); int main(void){p=7; return 0;}",
+            Some("E3021"),
+        ),
+        (
+            "register unsigned long p asm(\"sp\"); int main(void){if(0)return p; return 7;}",
+            None,
+        ),
+    ] {
+        let arena = Arena::default();
+        let unit = parse(&arena, source, 12);
+        let symbol = unit
+            .iter()
+            .find_map(|d| match d {
+                CHirDecl::Function(f) if f.name.spelling == "main" => Some(f.symbol),
+                _ => None,
+            })
+            .unwrap();
+        let result = interpret_scalar_function(&unit, symbol, ChirLimits::new(1000));
+        if let Some(code) = expected {
+            assert_eq!(result.unwrap_err().code(), code);
+        } else {
+            assert_eq!(result.unwrap().return_value.unwrap().raw_bits, 7);
+        }
+    }
+}
+
+#[test]
+fn register_updates_and_switch_selection_do_not_duplicate_reads() {
+    for (body, expected) in [
+        (
+            "p += 7; return p++;",
+            vec!["mov %0, sp", "mov sp, %0", "mov %0, sp", "mov sp, %0"],
+        ),
+        (
+            "switch(p){case 1: return 2; case 3: return 4; default: return 0;}",
+            vec!["mov %0, sp"],
+        ),
+    ] {
+        let source =
+            format!("register unsigned long p asm(\"sp\"); unsigned long f(void){{{body}}}");
+        let arena = Arena::default();
+        let unit = parse(&arena, &source, 15);
+        let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+        let templates = module.functions[0]
+            .blocks
+            .iter()
+            .flat_map(|block| &block.insts)
+            .filter_map(|inst| match inst {
+                evocc_evoir::Inst::Asm(assembly) => Some(assembly.template.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(templates, expected);
     }
 }
 

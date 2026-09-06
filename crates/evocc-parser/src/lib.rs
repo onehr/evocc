@@ -10351,10 +10351,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2913", "builtin-operand-not-convertible", operand.span());
                 return None;
             };
-            if !matches!(
-                self.operand_type_class(inferred.ty),
-                OperandTypeClass::Integer(_)
-            ) {
+            if !is_integer_class(self.operand_type_class(inferred.ty)) {
                 self.report("E2913", "builtin-operand-not-convertible", operand.span());
                 return None;
             }
