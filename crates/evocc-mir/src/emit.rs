@@ -6,7 +6,7 @@
 //! globals as data ... with their EvoIR initial bytes; symbols get the
 //! platform prefix (`_` on Darwin)."
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use evocc_evoir::GlobalObject;
@@ -42,7 +42,18 @@ pub struct Frame {
     /// Bytes of outgoing stack arguments, which Section 6 puts at the bottom
     /// of the frame so that a call writes them at `[sp, #8 * i]`.
     pub outgoing: u64,
+    /// A variadic callee's register save area: the number of argument
+    /// registers its named parameters consumed, and the area's offset above
+    /// `sp`.
+    ///
+    /// Section 6 puts it "then the register save area of a variadic function
+    /// (Section 6, 64 bytes), then outgoing stack arguments", so it sits
+    /// directly above the outgoing area and below every spill.
+    pub register_save: Option<(u8, u64)>,
 }
+
+/// Section 6: the area is "64-byte, 16-byte-aligned".
+const REGISTER_SAVE_BYTES: u64 = 64;
 
 const fn align_up(value: u64, alignment: u64) -> u64 {
     if alignment == 0 {
@@ -79,9 +90,21 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
     // the area and a call writes its arguments at `[sp, #8 * i]`.
     let outgoing = allocated.outgoing;
 
+    // "then the register save area of a variadic function (Section 6, 64
+    // bytes), then outgoing stack arguments". `sp` is sixteen-byte aligned
+    // after the prologue, so an offset a multiple of sixteen aligns the area.
+    let named = allocated.blocks.iter().find_map(|block| {
+        block.insts.iter().find_map(|inst| match inst {
+            MInst::VaSaveArea { named } => Some(*named),
+            _ => None,
+        })
+    });
+    let register_save = named.map(|named| (named, align_up(outgoing, 16)));
+    let above_save = register_save.map_or(outgoing, |(_, base)| base + REGISTER_SAVE_BYTES);
+
     let mut spills = BTreeMap::new();
     for index in 0..allocated.frame_slots {
-        spills.insert(index, outgoing + u64::from(index) * 8);
+        spills.insert(index, above_save + u64::from(index) * 8);
     }
 
     // "one slot per `frame.slot` (its declared size, rounded to its declared
@@ -93,7 +116,7 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
     // the object above it left the cursor, which is what the campaign's first
     // assembler refusal was.
     let mut slots = BTreeMap::new();
-    let mut cursor = outgoing + spill_bytes;
+    let mut cursor = above_save + spill_bytes;
     for (origin, object, align) in automatic.iter().rev() {
         cursor = align_up(cursor, (*align).max(1));
         slots.insert(*origin, cursor);
@@ -119,6 +142,7 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
         spills,
         slots,
         outgoing,
+        register_save,
     }
 }
 
@@ -227,12 +251,34 @@ pub fn emit_module(functions: &[Allocated], globals: &[GlobalObject]) -> String 
     emit_module_for(Target::Darwin, functions, globals)
 }
 
-/// Emit one module for `target`.
+/// Emit one module for `target`, with no module assembly table.
 #[must_use]
 pub fn emit_module_for(
     target: Target,
     functions: &[Allocated],
     globals: &[GlobalObject],
+) -> String {
+    emit_module_unit(target, functions, globals, &[])
+}
+
+/// Emit one whole unit for `target`: its functions, its globals and its module
+/// assembly table.
+///
+/// Section 8 (revision 0.14): "Every entry of the EvoIR module assembly table
+/// ... is emitted verbatim, in table order, after the last function and the
+/// last global of the unit. Emission does not parse an entry and substitutes
+/// nothing into it; it precedes the first entry with a `.text` directive and
+/// follows the last with one, so an entry that switches sections cannot change
+/// where a later revision's trailing output lands." The directive written here
+/// is the target's own text-section spelling from Section 8's table, which is
+/// what returns a Mach-O assembly to `__TEXT,__text` after an entry has moved
+/// it; a bare `.text` would name the wrong section there.
+#[must_use]
+pub fn emit_module_unit(
+    target: Target,
+    functions: &[Allocated],
+    globals: &[GlobalObject],
+    assembly: &[String],
 ) -> String {
     let prefix = target.symbol_prefix();
     let mut text = String::new();
@@ -253,13 +299,18 @@ pub fn emit_module_for(
             );
             let _ = writeln!(text, ".globl {prefix}{}", global.symbol);
             let _ = writeln!(text, "{prefix}{}:", global.symbol);
-            for byte in &global.bytes {
-                let _ = writeln!(text, "    .byte {byte}");
-            }
-            if global.bytes.is_empty() {
-                let _ = writeln!(text, "    .space {}", global.layout.size_bytes);
+            emit_initializer(&mut text, prefix, global);
+        }
+    }
+    if !assembly.is_empty() {
+        let _ = writeln!(text, "\n{}", target.text_section());
+        for entry in assembly {
+            text.push_str(entry);
+            if !entry.ends_with('\n') {
+                text.push('\n');
             }
         }
+        let _ = writeln!(text, "{}", target.text_section());
     }
     if let Some(ident) = target.producer_ident() {
         let _ = writeln!(text, "\n{ident}");
@@ -267,8 +318,91 @@ pub fn emit_module_for(
     text
 }
 
+/// One global's initial bytes, with the relocations of EvoIR 2.1 written into
+/// them.
+///
+/// Section 10, `E4005` withdrawn at revision 0.12: "a relocation `(offset,
+/// @symbol, addend)` is emitted as `.xword symbol+addend` at its offset, the
+/// surrounding bytes as before". EvoIR sorts the list by offset, forbids
+/// overlap and keeps every entry inside the size, so one walk suffices.
+fn emit_initializer(text: &mut String, prefix: &str, global: &GlobalObject) {
+    if global.bytes.is_empty() {
+        let _ = writeln!(text, "    .space {}", global.layout.size_bytes);
+        return;
+    }
+    let mut offset = 0_u64;
+    let mut relocations = global.relocs.iter().peekable();
+    while offset < global.bytes.len() as u64 {
+        if let Some(relocation) = relocations.peek() {
+            if relocation.offset == offset {
+                let addend = relocation.addend;
+                let sign = if addend < 0 { '-' } else { '+' };
+                let magnitude = addend.unsigned_abs();
+                if addend == 0 {
+                    let _ = writeln!(text, "    .xword {prefix}{}", relocation.symbol);
+                } else {
+                    let _ = writeln!(
+                        text,
+                        "    .xword {prefix}{}{sign}{magnitude}",
+                        relocation.symbol
+                    );
+                }
+                offset += 8;
+                relocations.next();
+                continue;
+            }
+        }
+        let _ = writeln!(
+            text,
+            "    .byte {}",
+            global.bytes[usize::try_from(offset).unwrap_or(usize::MAX)]
+        );
+        offset += 1;
+    }
+}
+
 fn label(target: Target, function: &str, block: u32) -> String {
     format!("{}{function}_block{block}", target.label_prefix())
+}
+
+/// Section 8 leaves "the details of instruction selection" to emission, and a
+/// branch it selects has to reach its target.
+///
+/// `tbz`/`tbnz` encode a fourteen-bit signed word displacement, which is 8,192
+/// instructions either way, and `b.cond` a nineteen-bit one. A function longer
+/// than the tighter reach can place a conditional terminator's target past it,
+/// and the assembler answers `conditional branch out of range`. Emission
+/// therefore counts the instructions a function emits with the short forms,
+/// and, at or above this threshold, emits every conditional terminator as the
+/// inverted short branch over an unconditional `b`, whose twenty-six-bit
+/// displacement reaches 128 mebibytes.
+///
+/// The threshold is half the `tbz` reach. The margin covers the two ways the
+/// count can be below the truth: an inline-assembly template line standing for
+/// more than one instruction, and the growth relaxation itself adds.
+const RELAXATION_THRESHOLD: usize = 4_096;
+
+/// The local symbol a `block_addr` names.
+///
+/// Section 5, revision 0.15: "a static relocation against a block uses a local
+/// symbol `.L<function>.<block>` the emitter places at the block's first
+/// instruction". The prefix is the platform's own local one, `L` on Darwin and
+/// `.L` on Linux, so the symbol stays out of the symbol table on both.
+fn block_symbol(target: Target, function: &str, block: u32) -> String {
+    format!("{}{function}.{block}", target.label_prefix())
+}
+
+/// The label the inverted short branch of a relaxed terminator jumps over.
+fn relax_label(target: Target, function: &str, index: u32) -> String {
+    format!("{}{function}_relax{index}", target.label_prefix())
+}
+
+/// The instructions in an emitted function body.
+///
+/// Every instruction emission writes is one line indented by four spaces;
+/// labels and directives start at the first column.
+fn instructions_in(body: &str) -> usize {
+    body.lines().filter(|line| line.starts_with(' ')).count()
 }
 
 fn emit_function(text: &mut String, target: Target, allocated: &Allocated) {
@@ -296,17 +430,54 @@ fn emit_function(text: &mut String, target: Target, allocated: &Allocated) {
         )
     };
 
+    // The short conditional forms are tried first, and their instruction count
+    // decides whether they reach: a body at or above the threshold is emitted
+    // again with every conditional terminator relaxed.
+    let mut body = String::new();
+    emit_blocks(&mut body, target, allocated, &frame, &spell, false);
+    if instructions_in(&body) >= RELAXATION_THRESHOLD {
+        body.clear();
+        emit_blocks(&mut body, target, allocated, &frame, &spell, true);
+    }
+    text.push_str(&body);
+}
+
+fn emit_blocks(
+    text: &mut String,
+    target: Target,
+    allocated: &Allocated,
+    frame: &Frame,
+    spell: &impl Fn(VReg, RegClass) -> String,
+    relax: bool,
+) {
     let order: Vec<u32> = allocated.blocks.iter().map(|block| block.id).collect();
+    // The blocks some `adr` in this function names. Their local symbol is
+    // placed at the first instruction; every other block keeps only the
+    // branch label, so the text of a function that takes no block address is
+    // exactly what it was.
+    let addressed: BTreeSet<u32> = allocated
+        .blocks
+        .iter()
+        .flat_map(|block| block.insts.iter())
+        .filter_map(|inst| match inst {
+            MInst::Adr { block, .. } => Some(*block),
+            _ => None,
+        })
+        .collect();
     let mut copies = 0_u32;
+    let mut relaxations = 0_u32;
     for (index, block) in allocated.blocks.iter().enumerate() {
         let _ = writeln!(text, "{}:", label(target, &allocated.name, block.id));
+        if addressed.contains(&block.id) {
+            let _ = writeln!(text, "{}:", block_symbol(target, &allocated.name, block.id));
+        }
         for inst in &block.insts {
             emit_inst(
                 text,
                 target,
                 inst,
-                &frame,
-                &spell,
+                frame,
+                spell,
                 &allocated.name,
                 &mut copies,
             );
@@ -317,9 +488,11 @@ fn emit_function(text: &mut String, target: Target, allocated: &Allocated) {
             target,
             &allocated.name,
             &block.term,
-            &frame,
+            frame,
             next,
-            &spell,
+            spell,
+            relax,
+            &mut relaxations,
         );
     }
 }
@@ -332,6 +505,19 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
     }
     for (number, offset) in &frame.saved {
         emit_frame_access(text, "str", &format!("x{number}"), *offset);
+    }
+    // Section 6: a variadic callee "stores `x_k` to `x7` into it at offsets
+    // `8 * k` to `56` in the prologue". Nothing before this point writes an
+    // argument register, so the incoming anonymous arguments are still there.
+    if let Some((named, base)) = frame.register_save {
+        for number in named..8 {
+            emit_frame_access(
+                text,
+                "str",
+                &format!("x{number}"),
+                base + u64::from(number) * 8,
+            );
+        }
     }
 }
 
@@ -640,6 +826,14 @@ fn emit_inst(
             }
         }
         MInst::MovImm { dst, imm } => emit_immediate(text, &name(*dst), dst.class, *imm),
+        MInst::Adr { dst, block } => {
+            let _ = writeln!(
+                text,
+                "    adr {}, {}",
+                name(*dst),
+                block_symbol(target, function, *block)
+            );
+        }
         MInst::Adrp { dst, symbol, kind } => {
             let page = match kind {
                 SymbolKind::Global | SymbolKind::Function => "PAGE",
@@ -837,6 +1031,21 @@ fn emit_inst(
                 spell(*src, RegClass::Gpr32)
             );
         }
+        MInst::Unary {
+            op,
+            dst,
+            src,
+            width,
+        } => {
+            let operands = width.class();
+            let _ = writeln!(
+                text,
+                "    {} {}, {}",
+                op.mnemonic(),
+                spell(*dst, operands),
+                spell(*src, operands)
+            );
+        }
         MInst::Bfx {
             signed,
             dst,
@@ -889,6 +1098,22 @@ fn emit_inst(
         MInst::Blr { target, .. } => {
             let _ = writeln!(text, "    blr {}", name(*target));
         }
+        // Section 6's variadic places: `stack` is "`x29 + 16` (the first
+        // incoming stack slot)" and `gr_top` is "save area + 64".
+        MInst::FrameAddress { dst, place } => match place {
+            crate::FramePlace::IncomingStack => {
+                emit_add_immediate(text, "add", &name(*dst), "x29", 16);
+            }
+            crate::FramePlace::RegisterSaveTop => {
+                let top = frame
+                    .register_save
+                    .map_or(0, |(_, base)| base + REGISTER_SAVE_BYTES);
+                emit_add_immediate(text, "add", &name(*dst), "sp", top);
+            }
+        },
+        // The area itself is reserved by the frame layout and filled by the
+        // prologue, so the marker emits nothing of its own.
+        MInst::VaSaveArea { .. } => {}
         // Section 6: "one slot per `frame.slot` (its declared size, rounded to
         // its declared alignment ...)".
         MInst::FrameSlot { dst, origin, .. } => {
@@ -1001,6 +1226,7 @@ fn emit_inst(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_term(
     text: &mut String,
     target: Target,
@@ -1009,12 +1235,33 @@ fn emit_term(
     frame: &Frame,
     next: Option<u32>,
     spell: &impl Fn(VReg, RegClass) -> String,
+    relax: bool,
+    relaxations: &mut u32,
 ) {
     let name = |reg: VReg| spell(reg, reg.class);
     let platform = target;
     let branch = |text: &mut String, target: u32| {
         if next != Some(target) {
             let _ = writeln!(text, "    b {}", label(platform, function, target));
+        }
+    };
+    // A relaxed conditional terminator is its own inverse jumping over an
+    // unconditional `b` to the taken block: the short branch then spans two
+    // instructions and always reaches, and the long one reaches the function.
+    // `over` is the label it jumps to; `None` is the unrelaxed spelling, whose
+    // operand is the taken block itself.
+    let over = |relaxations: &mut u32| -> Option<String> {
+        if !relax {
+            return None;
+        }
+        let label = relax_label(platform, function, *relaxations);
+        *relaxations += 1;
+        Some(label)
+    };
+    let close = |text: &mut String, over: Option<String>, taken: u32| {
+        if let Some(over) = over {
+            let _ = writeln!(text, "    b {}", label(platform, function, taken));
+            let _ = writeln!(text, "{over}:");
         }
     };
     match term {
@@ -1025,12 +1272,13 @@ fn emit_term(
             untaken,
             ..
         } => {
-            let _ = writeln!(
-                text,
-                "    b.{} {}",
-                cond.mnemonic(),
-                label(platform, function, *taken)
-            );
+            let over = over(relaxations);
+            let (cond, destination) = match &over {
+                Some(over) => (cond.inverted(), over.clone()),
+                None => (*cond, label(platform, function, *taken)),
+            };
+            let _ = writeln!(text, "    b.{} {destination}", cond.mnemonic());
+            close(text, over, *taken);
             branch(text, *untaken);
         }
         MTerm::Cb {
@@ -1040,13 +1288,18 @@ fn emit_term(
             untaken,
             ..
         } => {
+            let over = over(relaxations);
+            let (nonzero, destination) = match &over {
+                Some(over) => (!*nonzero, over.clone()),
+                None => (*nonzero, label(platform, function, *taken)),
+            };
             let _ = writeln!(
                 text,
-                "    {} {}, {}",
-                if *nonzero { "cbnz" } else { "cbz" },
-                name(*src),
-                label(platform, function, *taken)
+                "    {} {}, {destination}",
+                if nonzero { "cbnz" } else { "cbz" },
+                name(*src)
             );
+            close(text, over, *taken);
             branch(text, *untaken);
         }
         MTerm::Tb {
@@ -1057,13 +1310,18 @@ fn emit_term(
             untaken,
             ..
         } => {
+            let over = over(relaxations);
+            let (nonzero, destination) = match &over {
+                Some(over) => (!*nonzero, over.clone()),
+                None => (*nonzero, label(platform, function, *taken)),
+            };
             let _ = writeln!(
                 text,
-                "    {} {}, #{bit}, {}",
-                if *nonzero { "tbnz" } else { "tbz" },
-                name(*src),
-                label(platform, function, *taken)
+                "    {} {}, #{bit}, {destination}",
+                if nonzero { "tbnz" } else { "tbz" },
+                name(*src)
             );
+            close(text, over, *taken);
             branch(text, *untaken);
         }
         // Section 8: the template first, then the branch its `%l[label]`

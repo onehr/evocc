@@ -445,7 +445,8 @@ fn inst_operands(instruction: &Inst) -> Vec<&Value> {
         | Inst::Trap(..)
         | Inst::PtrNull(..)
         | Inst::GlobalAddr { .. }
-        | Inst::FuncAddr { .. } => Vec::new(),
+        | Inst::FuncAddr { .. }
+        | Inst::BlockAddr { .. } => Vec::new(),
         Inst::Add(_, left, right)
         | Inst::Sub(_, left, right)
         | Inst::Mul(_, left, right)

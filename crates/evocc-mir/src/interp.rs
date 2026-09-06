@@ -31,7 +31,7 @@ use evocc_types::TargetDataLayout;
 
 use crate::{
     BinOp, CarryOp, Cond, FlagOp, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass,
-    StoreKind, SymbolKind, VReg, WideMul, Width,
+    StoreKind, SymbolKind, UnaryOp, VReg, WideMul, Width,
 };
 
 // The same host-resource policy the EvoIR interpreter runs under, so that a
@@ -160,6 +160,21 @@ struct State {
     world: WorldState,
     globals: HashMap<String, Pointer>,
     identities: HashMap<String, u64>,
+    /// The code provenance of every block, keyed by its function's position
+    /// and its own identifier, numbered past the function identities so a
+    /// block address never equals a function address.
+    blocks: HashMap<(usize, u32), u64>,
+}
+
+impl State {
+    fn block_identity(&self, function: usize, block: u32) -> Result<u64, MirError> {
+        self.blocks
+            .get(&(function, block))
+            .copied()
+            .ok_or_else(|| MirError::Invalid {
+                detail: format!("address of block {block} outside its function"),
+            })
+    }
 }
 
 struct Frame {
@@ -198,6 +213,7 @@ pub fn interpret_module(
         }),
         globals: HashMap::new(),
         identities: HashMap::new(),
+        blocks: HashMap::new(),
     };
     initialize_globals(module, &mut state)?;
     for (index, function) in module.functions.iter().enumerate() {
@@ -208,6 +224,20 @@ pub fn interpret_module(
                 detail: "function provenance identity exhausted".to_owned(),
             })?;
         state.identities.insert(function.name.clone(), identity);
+    }
+    let mut next = u64::try_from(module.functions.len())
+        .ok()
+        .and_then(|count| count.checked_add(1))
+        .ok_or_else(|| MirError::Invalid {
+            detail: "block provenance identity exhausted".to_owned(),
+        })?;
+    for (index, function) in module.functions.iter().enumerate() {
+        for block in &function.blocks {
+            state.blocks.insert((index, block.id), next);
+            next = next.checked_add(1).ok_or_else(|| MirError::Invalid {
+                detail: "block provenance identity exhausted".to_owned(),
+            })?;
+        }
     }
 
     let entry_index = module
@@ -754,6 +784,19 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             write(frame, *dst, value);
         }
         MInst::MovImm { dst, imm } => write(frame, *dst, MirValue::Int(*imm)),
+        MInst::Adr { dst, block } => {
+            // The address of a block is code provenance, like a function's:
+            // it compares, it stores through `str.p`, and every attempt to
+            // read or write memory through it is E3013.
+            let identity = state.block_identity(frame.function, *block)?;
+            write(
+                frame,
+                *dst,
+                MirValue::Fn(
+                    PointerValue::function(identity).map_err(|error| memory_error(&error))?,
+                ),
+            );
+        }
         MInst::Adrp { dst, symbol, kind }
         | MInst::AddPageOff {
             dst, symbol, kind, ..
@@ -1050,6 +1093,52 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             };
             write(frame, *dst, MirValue::Int(value));
         }
+        // Section 5's bit-counting and byte-swap row (revision 0.14). Each
+        // form reads and writes the whole register at its own width, exactly
+        // as the machine does; the lowering is what makes the answer the
+        // EvoIR one for a narrower `N`.
+        MInst::Unary {
+            op,
+            dst,
+            src,
+            width,
+        } => {
+            let raw = read_bits(frame, *src)? & width.mask();
+            let bits = u32::from(width.bits());
+            let value = match op {
+                UnaryOp::Clz => {
+                    if *width == Width::W {
+                        u64::from((raw as u32).leading_zeros())
+                    } else {
+                        u64::from(raw.leading_zeros())
+                    }
+                }
+                UnaryOp::Rbit => {
+                    if *width == Width::W {
+                        u64::from((raw as u32).reverse_bits())
+                    } else {
+                        raw.reverse_bits()
+                    }
+                }
+                UnaryOp::Rev16 => {
+                    let mut value = 0_u64;
+                    for halfword in 0..bits / 16 {
+                        let shift = halfword * 16;
+                        let half = (raw >> shift) & 0xffff;
+                        value |= (((half & 0xff) << 8) | (half >> 8)) << shift;
+                    }
+                    value
+                }
+                UnaryOp::Rev => {
+                    if *width == Width::W {
+                        u64::from((raw as u32).swap_bytes())
+                    } else {
+                        raw.swap_bytes()
+                    }
+                }
+            };
+            write(frame, *dst, MirValue::Int(value & width.mask()));
+        }
         MInst::Bfx {
             signed: is_signed,
             dst,
@@ -1268,6 +1357,14 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
         MInst::IncomingArg { .. } | MInst::OutgoingArg { .. } => {
             return Err(MirError::Invalid {
                 detail: "a stack argument exists only after allocation".to_owned(),
+            });
+        }
+        // Section 6's variadic places live above and inside the linear stack
+        // the interpreter has no model of, exactly as the prologue does; the
+        // native run judges them.
+        MInst::FrameAddress { .. } | MInst::VaSaveArea { .. } => {
+            return Err(MirError::Invalid {
+                detail: "a variadic frame place exists only in an emitted frame".to_owned(),
             });
         }
         MInst::Bl { .. } | MInst::Blr { .. } => {

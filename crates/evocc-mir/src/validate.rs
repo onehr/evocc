@@ -328,7 +328,7 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
             }
             Ok(())
         }
-        MInst::Adrp { dst, .. } | MInst::FrameSlot { dst, .. } => {
+        MInst::Adrp { dst, .. } | MInst::Adr { dst, .. } | MInst::FrameSlot { dst, .. } => {
             if dst.class != RegClass::Gpr64 {
                 return Err(format!(
                     "@{name} block {block}: an address is a gpr64 value"

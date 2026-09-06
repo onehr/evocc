@@ -267,6 +267,10 @@ pub fn render_inst(inst: &MInst) -> String {
         MInst::Adrp { dst, symbol, kind } => {
             format!("{}adrp @{symbol}@{}PAGE", defined(*dst), page_prefix(*kind))
         }
+        // An instruction is rendered without its function, so the block is
+        // always spelled by its identifier; only a terminator, which is
+        // rendered with the function, can tell the entry block by name.
+        MInst::Adr { dst, block } => format!("{}adr ^b{block}", defined(*dst)),
         MInst::AddPageOff {
             dst,
             src,
@@ -403,6 +407,18 @@ pub fn render_inst(inst: &MInst) -> String {
         MInst::Extend { op, dst, src } => {
             format!("{}{} {}", defined(*dst), op.mnemonic(), use_of(*src))
         }
+        MInst::Unary {
+            op,
+            dst,
+            src,
+            width,
+        } => format!(
+            "{}{}.{} {}",
+            defined(*dst),
+            op.mnemonic(),
+            width.mnemonic(),
+            use_of(*src)
+        ),
         MInst::Bfx {
             signed,
             dst,
@@ -567,6 +583,10 @@ pub fn render_inst(inst: &MInst) -> String {
             "{}frame.slot [origin={origin}, size={size}, align={align}]",
             defined(*dst)
         ),
+        MInst::FrameAddress { dst, place } => {
+            format!("{}frame.address [{}]", defined(*dst), place.mnemonic())
+        }
+        MInst::VaSaveArea { named } => format!("va.save [named={named}]"),
     }
 }
 

@@ -250,6 +250,7 @@ fn operands(instruction: &Inst) -> Vec<&Value> {
         | Inst::PtrNull(..)
         | Inst::GlobalAddr { .. }
         | Inst::FuncAddr { .. }
+        | Inst::BlockAddr { .. }
         | Inst::Trap(..) => Vec::new(),
         Inst::Add(_, left, right)
         | Inst::Sub(_, left, right)

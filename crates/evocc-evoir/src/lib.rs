@@ -313,6 +313,16 @@ pub enum Inst {
     /// Return one function's stable provenance with its complete signature.
     FuncAddr { result: Value, symbol: String },
 
+    /// Return the address of the first instruction of one block of the
+    /// current function, with *code* provenance (revision 1.9.68).
+    ///
+    /// Two of the same block are equal, of different blocks unequal, and a
+    /// load, store or `access_in_bounds` through one is `E3013`. It exists
+    /// because the kernel writes `({ __label__ __here; __here: (unsigned
+    /// long)&&__here; })` to record an instruction address; the value is only
+    /// ever compared, stored and printed.
+    BlockAddr { result: Value, block: BlockId },
+
     /// Allocate one fresh automatic object in the current invocation.
     Alloca {
         result: Value,
@@ -465,6 +475,7 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
         | Inst::Trunc(v, ..) => vec![v],
         Inst::GlobalAddr { result, .. }
         | Inst::FuncAddr { result, .. }
+        | Inst::BlockAddr { result, .. }
         | Inst::PtrOffset { result, .. } => vec![result],
         Inst::ShiftCountDefined { result, .. } | Inst::SignedShlDefined { result, .. } => {
             vec![result]
@@ -539,7 +550,8 @@ pub fn inst_uses(inst: &Inst) -> Vec<&Value> {
         | Inst::Trap(..)
         | Inst::PtrNull(..)
         | Inst::GlobalAddr { .. }
-        | Inst::FuncAddr { .. } => vec![],
+        | Inst::FuncAddr { .. }
+        | Inst::BlockAddr { .. } => vec![],
 
         Inst::Add(_, lhs, rhs)
         | Inst::Sub(_, lhs, rhs)
@@ -905,6 +917,7 @@ fn inst_effect_summary(inst: &Inst) -> EffectSummary {
         | Inst::PtrNull(..)
         | Inst::GlobalAddr { .. }
         | Inst::FuncAddr { .. }
+        | Inst::BlockAddr { .. }
         | Inst::Call { .. }
         | Inst::SExt(..)
         | Inst::ZExt(..)
@@ -1511,6 +1524,17 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                                 caller.name, block.id, index, result.ty, symbol, expected
                             ));
                         }
+                    }
+                    Inst::BlockAddr { block: target, .. }
+                        if !caller
+                            .blocks
+                            .iter()
+                            .any(|candidate| candidate.id == *target) =>
+                    {
+                        return Err(format!(
+                            "function '{}' block {} instruction {} takes the address of absent block {}",
+                            caller.name, block.id, index, target
+                        ));
                     }
                     Inst::Alloca { origin, .. } if !origins.insert(*origin) => {
                         return Err(format!("duplicate allocation origin {origin}"));
@@ -2271,6 +2295,15 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
                 result.ty
             )),
         },
+        // Section 3.7: "`%p = block_addr ^label : ptr<generic>`". The one
+        // address space is the form's, not a choice the writer has.
+        Inst::BlockAddr { result, .. } => match result.ty {
+            EvoIRType::Ptr(evocc_types::AddressSpace::Generic) => Ok(()),
+            _ => Err(format!(
+                "block-address result in block {block} has type {:?}, expected ptr<generic>",
+                result.ty
+            )),
+        },
         Inst::Alloca {
             result,
             mem_in,
@@ -2948,6 +2981,9 @@ struct ExecutionState {
     world: WorldState,
     globals: HashMap<String, Pointer>,
     functions: HashMap<String, u64>,
+    /// The code provenance of every block a `block_addr` can name, numbered
+    /// past the function identities so the two never collide.
+    blocks: HashMap<(String, BlockId), u64>,
     access_guards: HashMap<u128, (Pointer, AccessLayout)>,
     next_token: u128,
 }
@@ -2974,6 +3010,7 @@ impl ExecutionState {
             world,
             globals: HashMap::new(),
             functions: HashMap::new(),
+            blocks: HashMap::new(),
             access_guards: HashMap::new(),
             next_token: 1,
         })
@@ -3306,6 +3343,36 @@ pub fn interpret_function_with_target(
     interpret_function_in_state(func, entry_args, limits, state)
 }
 
+/// One provenance identity per block, numbered after the function identities.
+///
+/// Section 3.7 asks only that two `block_addr` of the same block be equal and
+/// of different blocks unequal; a dense numbering in declaration order is the
+/// deterministic way to say that, and starting past the function identities
+/// keeps a block address from ever equalling a function address.
+fn block_identities(
+    module: &Module,
+    functions: usize,
+) -> Result<HashMap<(String, BlockId), u64>, InterpreterError> {
+    let mut identities = HashMap::new();
+    let mut next = u64::try_from(functions)
+        .ok()
+        .and_then(|count| count.checked_add(1))
+        .ok_or_else(|| InterpreterError::InvalidModule {
+            message: "block provenance identity exhausted".to_owned(),
+        })?;
+    for function in &module.functions {
+        for block in &function.blocks {
+            identities.insert((function.name.clone(), block.id), next);
+            next = next
+                .checked_add(1)
+                .ok_or_else(|| InterpreterError::InvalidModule {
+                    message: "block provenance identity exhausted".to_owned(),
+                })?;
+        }
+    }
+    Ok(identities)
+}
+
 fn interpret_function_in_state(
     func: &Function,
     entry_args: &[RuntimeValue],
@@ -3363,6 +3430,7 @@ fn interpret_function_in_state(
             charge_step(&mut steps, limits, block.id)?;
             execute_instruction(
                 inst,
+                &func.name,
                 block.id,
                 &mut values,
                 &mut state,
@@ -3558,6 +3626,7 @@ fn interpret_module_in_state(
             Ok((name.to_owned(), identity))
         })
         .collect::<Result<_, _>>()?;
+    state.blocks = block_identities(module, state.functions.len())?;
     initialize_globals(module, &mut state)?;
     let entry_index = function_indices.get(entry_name).copied().ok_or_else(|| {
         InterpreterError::MissingEntryFunction {
@@ -3876,8 +3945,12 @@ fn interpret_module_in_state(
                 } else {
                     let memory_frame = frames[frame_index].memory_frame;
                     let memory_scope = frames[frame_index].memory_scope;
+                    let name = module.functions[frames[frame_index].function_index]
+                        .name
+                        .clone();
                     execute_instruction(
                         &instruction,
+                        &name,
                         block_id,
                         &mut frames[frame_index].values,
                         &mut state,
@@ -4209,8 +4282,10 @@ fn execute_variadic_access(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_instruction(
     inst: &Inst,
+    function: &str,
     block: BlockId,
     values: &mut HashMap<u32, InternalValue>,
     state: &mut ExecutionState,
@@ -4553,6 +4628,28 @@ fn execute_instruction(
                     message: format!("func_addr refers to missing function '{symbol}'"),
                 }
             })?;
+            write_internal(
+                values,
+                result,
+                InternalValue::FunctionPointer(
+                    PointerValue::function(identity)
+                        .map_err(|error| InterpreterError::MemoryAccess { block, error })?,
+                ),
+            );
+        }
+        Inst::BlockAddr {
+            result,
+            block: target,
+        } => {
+            let identity = state
+                .blocks
+                .get(&(function.to_owned(), *target))
+                .copied()
+                .ok_or_else(|| InterpreterError::InvalidModule {
+                    message: format!(
+                        "block_addr refers to missing block {target} of function '{function}'"
+                    ),
+                })?;
             write_internal(
                 values,
                 result,
@@ -5433,7 +5530,8 @@ pub fn remap_inst_uses(inst: &mut Inst, aliases: &HashMap<u32, Value>) {
         | Inst::Trap(..)
         | Inst::PtrNull(..)
         | Inst::GlobalAddr { .. }
-        | Inst::FuncAddr { .. } => {}
+        | Inst::FuncAddr { .. }
+        | Inst::BlockAddr { .. } => {}
         Inst::Add(_, left, right)
         | Inst::Sub(_, left, right)
         | Inst::Mul(_, left, right)

@@ -492,6 +492,12 @@ impl FunctionRenderer {
                 render_value(result),
                 render_type(&result.ty)
             ),
+            Inst::BlockAddr { result, block } => format!(
+                "{} = block_addr {} : {}",
+                render_value(result),
+                self.block_name(*block),
+                render_type(&result.ty)
+            ),
             Inst::Alloca {
                 result,
                 mem_in,

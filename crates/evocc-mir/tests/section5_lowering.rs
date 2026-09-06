@@ -56,6 +56,7 @@ fn mnemonics_with_boundary(module: &evocc_mir::MModule) -> Vec<String> {
                     MInst::Mov { .. } => "mov".to_owned(),
                     MInst::MovImm { .. } => "mov#".to_owned(),
                     MInst::Adrp { .. } => "adrp".to_owned(),
+                    MInst::Adr { .. } => "adr".to_owned(),
                     MInst::AddPageOff { .. } => "add@".to_owned(),
                     MInst::Load { kind, .. } => kind.mnemonic().to_owned(),
                     MInst::Store { kind, .. } => kind.mnemonic().to_owned(),
@@ -69,6 +70,7 @@ fn mnemonics_with_boundary(module: &evocc_mir::MModule) -> Vec<String> {
                     MInst::SubCarryFlags { .. } => "sbcs".to_owned(),
                     MInst::TstImm { .. } => "tst".to_owned(),
                     MInst::Extend { op, .. } => op.mnemonic().to_owned(),
+                    MInst::Unary { op, .. } => op.mnemonic().to_owned(),
                     MInst::Bfx { signed: true, .. } => "sbfx".to_owned(),
                     MInst::Bfx { signed: false, .. } => "ubfx".to_owned(),
                     MInst::Cmp { .. } => "cmp".to_owned(),
@@ -85,6 +87,10 @@ fn mnemonics_with_boundary(module: &evocc_mir::MModule) -> Vec<String> {
                     MInst::SpillStore { .. } => "spill.store".to_owned(),
                     MInst::SpillReload { .. } => "spill.reload".to_owned(),
                     MInst::FrameSlot { .. } => "frame.slot".to_owned(),
+                    MInst::FrameAddress { place, .. } => {
+                        format!("frame.address.{}", place.mnemonic())
+                    }
+                    MInst::VaSaveArea { .. } => "va.save".to_owned(),
                 });
             }
         }

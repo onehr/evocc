@@ -16,8 +16,8 @@ use evocc_evoir::{AccessLayout, GlobalKind, GlobalObject, GlobalVisibility};
 
 use crate::{
     AsmBody, AsmClobber, AsmConstraint, AsmOperand, AsmValue, BinOp, CarryOp, Cond, ExtOp, FlagOp,
-    LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass, StoreKind, SymbolKind, VReg,
-    WideMul, Width,
+    FramePlace, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass, StoreKind,
+    SymbolKind, UnaryOp, VReg, WideMul, Width,
 };
 
 /// Parse canonical Appendix A bytes back into a module.
@@ -869,6 +869,16 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
                 align: u32::try_from(align).map_err(|_| "an alignment is small".to_owned())?,
             }));
         }
+        if mnemonic == "va.save" {
+            scan.expect("[named=")?;
+            let named: u8 = scan
+                .take_while(|character| character.is_ascii_digit())
+                .parse()
+                .map_err(|_| "a named-register count is an unsigned decimal".to_owned())?;
+            scan.expect("]")?;
+            scan.finish()?;
+            return Ok(Parsed::Inst(MInst::VaSaveArea { named }));
+        }
         return Err(format!("unknown form '{body}'"));
     }
 
@@ -898,6 +908,15 @@ fn parse_defining(
         scan.finish()?;
         return Ok(MInst::Adrp { dst, symbol, kind });
     }
+    if mnemonic == "adr" {
+        scan.expect("^b")?;
+        let digits = scan.take_while(|character| character.is_ascii_digit());
+        let block: u32 = digits
+            .parse()
+            .map_err(|_| format!("not a block identifier: '{digits}'"))?;
+        scan.finish()?;
+        return Ok(MInst::Adr { dst, block });
+    }
     if mnemonic == "add" {
         let src = scan.use_of()?;
         scan.expect(", ")?;
@@ -910,6 +929,16 @@ fn parse_defining(
             symbol,
             kind,
         });
+    }
+    if mnemonic == "frame.address" {
+        scan.expect("[")?;
+        let name =
+            scan.take_while(|character| character.is_ascii_alphanumeric() || character == '_');
+        let place = FramePlace::from_mnemonic(name)
+            .ok_or_else(|| format!("unknown frame place '{name}'"))?;
+        scan.expect("]")?;
+        scan.finish()?;
+        return Ok(MInst::FrameAddress { dst, place });
     }
     if mnemonic == "frame.slot" {
         scan.expect("[origin=")?;
@@ -1023,6 +1052,18 @@ fn parse_defining(
                 flags_in,
                 lhs,
                 rhs,
+                width,
+            })
+        }
+        "clz" | "rbit" | "rev16" | "rev" => {
+            let op =
+                UnaryOp::from_mnemonic(head).ok_or_else(|| format!("unknown form '{head}'"))?;
+            let src = scan.use_of()?;
+            scan.finish()?;
+            Ok(MInst::Unary {
+                op,
+                dst,
+                src,
                 width,
             })
         }
