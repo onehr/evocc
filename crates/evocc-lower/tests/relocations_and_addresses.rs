@@ -167,6 +167,17 @@ fn assignment_addresses_and_loaded_values_survive_rhs_branches() {
 }
 
 #[test]
+fn initializer_addresses_survive_branches_and_later_actions() {
+    for source in [
+        "int main(void){int c=1; int v=c?5:6; int *p=&v; return *p;}",
+        "struct S{int a,b;}; int main(void){int c=1; struct S s={c?2:3,c?3:4}; return s.a+s.b;}",
+        "struct S{int a,b;}; int main(void){int c=1; struct S *p=&(struct S){c?2:3,c?3:4}; return p->a+p->b;}",
+    ] {
+        check(source, Ok(5), &["cond_br", "store"]);
+    }
+}
+
+#[test]
 fn integer_addresses_resolve_only_live_exposed_storage() {
     check(
         "int main(void){unsigned long n=1; return *(int *)n;}",
