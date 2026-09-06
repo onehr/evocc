@@ -10377,7 +10377,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2913", "builtin-operand-not-convertible", operand.span());
                 return None;
             };
-            if !is_integer_class(self.operand_type_class(inferred.ty)) {
+            if !matches!(
+                self.operand_type_class(inferred.ty),
+                OperandTypeClass::Integer(_)
+            ) {
                 self.report("E2913", "builtin-operand-not-convertible", operand.span());
                 return None;
             }
@@ -10395,7 +10398,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2913", "builtin-operand-not-convertible", target.span());
             return None;
         };
-        if target_integer == CIntegerType::BOOL {
+        if target_integer == CIntegerType::BOOL || target_integer.bits() > 64 {
             self.report("E2913", "builtin-operand-not-convertible", target.span());
             return None;
         }

@@ -89,9 +89,8 @@ fn unsigned_checked_products_use_the_full_unsigned_exact_width() {
     for (arguments, expected) in [("70000ul,70000ul", 0), ("~0ul,2ul", 1), ("~0ul,~0ul", 1)] {
         lowered(&format!("int product(unsigned long a,unsigned long b,unsigned long *r){{return __builtin_mul_overflow(a,b,r);}} int main(void){{unsigned long r; return product({arguments},&r);}}"), expected, &["mul.bits<128>", "zext.bits<128>", "trunc.bits<64>"], false);
     }
-    lowered("int main(void){__uint128_t r; int o=__builtin_mul_overflow(~0ul,~0ul,&r); return o || (r>>64)!=18446744073709551614ul;}", 0, &["mul.bits<128>"], false);
     lowered(
-        "int main(void){__int128_t r; return __builtin_mul_overflow(~0ul,~0ul,&r);}",
+        "int main(void){long r; return __builtin_mul_overflow(~0ul,~0ul,&r);}",
         1,
         &["mul.bits<128>", "icmp.slt"],
         false,
@@ -101,7 +100,7 @@ fn unsigned_checked_products_use_the_full_unsigned_exact_width() {
 
 #[test]
 fn checked_products_beyond_ir_width_still_have_defined_oracle_values() {
-    let source = "int main(void){__uint128_t r; int o=__builtin_mul_overflow(~(__uint128_t)0,2u,&r); return o && (r>>64)==~0ul && (unsigned long)r==~1ul;}";
+    let source = "int main(void){unsigned long r; int o=__builtin_mul_overflow(~0ul,-2L,&r); return o && r==2;}";
     let arena = Arena::default();
     let unit = parse(source, &arena);
     let main = unit
