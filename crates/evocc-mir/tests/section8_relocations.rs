@@ -66,14 +66,7 @@ fn a_relocation_is_a_symbol_and_an_addend_inside_the_bytes_on_darwin() {
         vec![
             ".xword _table+8".to_owned(),
             ".xword _twice".to_owned(),
-            ".byte 123".to_owned(),
-            ".byte 0".to_owned(),
-            ".byte 0".to_owned(),
-            ".byte 0".to_owned(),
-            ".byte 0".to_owned(),
-            ".byte 0".to_owned(),
-            ".byte 0".to_owned(),
-            ".byte 0".to_owned(),
+            ".byte 123, 0, 0, 0, 0, 0, 0, 0".to_owned(),
         ],
         "the relocated words replace their bytes and nothing else:\n{text}"
     );
@@ -85,7 +78,7 @@ fn a_relocation_is_a_symbol_and_an_addend_inside_the_bytes_on_linux() {
     let body = body_of(&text, "pointers");
     assert_eq!(body[0], ".xword table+8");
     assert_eq!(body[1], ".xword twice");
-    assert_eq!(body[2], ".byte 123");
+    assert_eq!(body[2], ".byte 123, 0, 0, 0, 0, 0, 0, 0");
 }
 
 #[test]

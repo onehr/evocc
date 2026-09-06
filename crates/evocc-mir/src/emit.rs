@@ -208,6 +208,20 @@ impl Target {
         }
     }
 
+    /// Section 8's third data section: the one whose contents an object file
+    /// does not store, only reserves.
+    ///
+    /// ELF spells it `.bss`. Mach-O has no directive of that name; the
+    /// zero-filled section of `__DATA` is named the same way any other section
+    /// is, with the `zerofill` attribute that tells the assembler to reserve
+    /// the space instead of writing it.
+    const fn bss_section(self) -> &'static str {
+        match self {
+            Self::Darwin => ".section __DATA,__bss,zerofill",
+            Self::Linux => ".bss",
+        }
+    }
+
     /// The name a target is selected by.
     #[must_use]
     pub const fn mnemonic(self) -> &'static str {
@@ -288,10 +302,22 @@ pub fn emit_module_unit(
         emit_function(&mut text, target, function);
     }
     if !globals.is_empty() {
-        let _ = writeln!(text, "\n{}", target.data_section());
         let mut ordered: Vec<&GlobalObject> = globals.iter().collect();
         ordered.sort_by_key(|global| global.origin);
+        // A global names its section only when the section changes, so a unit
+        // whose globals all hold content emits the one `.data` it always did.
+        let mut section = "";
         for global in ordered {
+            let zero_filled = is_zero_filled(global);
+            let wanted = if zero_filled {
+                target.bss_section()
+            } else {
+                target.data_section()
+            };
+            if wanted != section {
+                let _ = writeln!(text, "\n{wanted}");
+                section = wanted;
+            }
             let _ = writeln!(
                 text,
                 ".p2align {}",
@@ -303,7 +329,13 @@ pub fn emit_module_unit(
                 let _ = writeln!(text, ".globl {prefix}{}", global.symbol);
             }
             let _ = writeln!(text, "{prefix}{}:", global.symbol);
-            emit_initializer(&mut text, prefix, global);
+            emit_initializer(&mut text, prefix, global, zero_filled);
+        }
+        // Leave the assembler where it was before the globals: the trailing
+        // output of Section 8 belongs to the text section, and a unit whose
+        // last global was zero-filled would otherwise leave it in `.bss`.
+        if section == target.bss_section() {
+            let _ = writeln!(text, "\n{}", target.text_section());
         }
     }
     if !assembly.is_empty() {
@@ -329,16 +361,31 @@ pub fn emit_module_unit(
 /// @symbol, addend)` is emitted as `.xword symbol+addend` at its offset, the
 /// surrounding bytes as before". EvoIR sorts the list by offset, forbids
 /// overlap and keeps every entry inside the size, so one walk suffices.
-fn emit_initializer(text: &mut String, prefix: &str, global: &GlobalObject) {
+///
+/// The bytes around the relocations are a run-length encoding, because the
+/// alternative is a line per byte and a benchmark with a megabyte of static
+/// zeros then costs a megabyte of lines and tens of seconds of assembly. A run
+/// of zeros at least a line long is one `.zero N`; every other byte joins a
+/// `.byte` list of at most a line's worth. A byte whose `initialized=` bit is
+/// clear is emitted as the zero EvoIR stores for it, as it was before: the
+/// object file has no way to spell an uninitialized byte, and the EvoIR
+/// interpreter, not the image, is what diagnoses a read of one.
+fn emit_initializer(text: &mut String, prefix: &str, global: &GlobalObject, zero_filled: bool) {
     if global.bytes.is_empty() {
         let _ = writeln!(text, "    .space {}", global.layout.size_bytes);
         return;
     }
-    let mut offset = 0_u64;
+    if zero_filled {
+        let _ = writeln!(text, "    .zero {}", global.bytes.len());
+        return;
+    }
+    let mut pending: Vec<u8> = Vec::new();
+    let mut offset = 0_usize;
     let mut relocations = global.relocs.iter().peekable();
-    while offset < global.bytes.len() as u64 {
+    while offset < global.bytes.len() {
         if let Some(relocation) = relocations.peek() {
-            if relocation.offset == offset {
+            if relocation.offset == offset as u64 {
+                flush_bytes(text, &mut pending);
                 let addend = relocation.addend;
                 let sign = if addend < 0 { '-' } else { '+' };
                 let magnitude = addend.unsigned_abs();
@@ -356,13 +403,67 @@ fn emit_initializer(text: &mut String, prefix: &str, global: &GlobalObject) {
                 continue;
             }
         }
-        let _ = writeln!(
-            text,
-            "    .byte {}",
-            global.bytes[usize::try_from(offset).unwrap_or(usize::MAX)]
-        );
+        // A run of zeros may not swallow the offset of the next relocation:
+        // the relocated word replaces its bytes and nothing else.
+        let limit = relocations
+            .peek()
+            .map_or(global.bytes.len(), |relocation| {
+                usize::try_from(relocation.offset).unwrap_or(usize::MAX)
+            })
+            .min(global.bytes.len())
+            .max(offset);
+        let run = global.bytes[offset..limit]
+            .iter()
+            .take_while(|byte| **byte == 0)
+            .count();
+        if run >= BYTES_PER_LINE {
+            flush_bytes(text, &mut pending);
+            let _ = writeln!(text, "    .zero {run}");
+            offset += run;
+            continue;
+        }
+        pending.push(global.bytes[offset]);
         offset += 1;
     }
+    flush_bytes(text, &mut pending);
+}
+
+/// How many bytes one `.byte` directive carries.
+///
+/// It is also the shortest run of zeros worth collapsing: a run this long or
+/// longer costs one line as `.zero N` and would have cost at least one line as
+/// bytes, so the encoding never makes the text longer than the byte list it
+/// replaces, and a run shorter than a line rides along inside one.
+const BYTES_PER_LINE: usize = 16;
+
+/// Write the bytes gathered so far as `.byte` lists, at most a line's worth
+/// each, and empty the buffer.
+fn flush_bytes(text: &mut String, pending: &mut Vec<u8>) {
+    for chunk in pending.chunks(BYTES_PER_LINE) {
+        let _ = write!(text, "    .byte {}", chunk[0]);
+        for byte in &chunk[1..] {
+            let _ = write!(text, ", {byte}");
+        }
+        text.push('\n');
+    }
+    pending.clear();
+}
+
+/// Whether a global reserves space rather than storing bytes.
+///
+/// Every byte is zero, EvoIR 2.1's `initialized=` bits are all set so no byte
+/// is a poisoned value some later revision might have to spell differently,
+/// and no relocation writes an address into the object. Such a global has the
+/// same content wherever the loader's zero page puts it, so it belongs in the
+/// section that reserves space without storing it. A global with no bytes at
+/// all is the same case: it reserves its size and stores nothing.
+fn is_zero_filled(global: &GlobalObject) -> bool {
+    global.relocs.is_empty()
+        && (global.bytes.is_empty()
+            || (global.bytes.len() as u64 == global.layout.size_bytes
+                && global.initialized.len() == global.bytes.len()
+                && global.bytes.iter().all(|byte| *byte == 0)
+                && global.initialized.iter().all(|bit| *bit)))
 }
 
 fn label(target: Target, function: &str, block: u32) -> String {

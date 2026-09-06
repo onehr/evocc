@@ -10,7 +10,9 @@
 use evocc_evoir::parse_section9_module;
 use evocc_mir::{compile_module_for, Target};
 
-const UNIT: &str = r#"global @seen origin=0 kind=file visibility=external size=4 align=4 bytes=00000000 initialized=1111
+/// The global holds a non-zero byte so that the `.byte` probe below has
+/// something to find: an all-zero global is reserved, not stored.
+const UNIT: &str = r#"global @seen origin=0 kind=file visibility=external size=4 align=4 bytes=01000000 initialized=1111
 
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
     effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
