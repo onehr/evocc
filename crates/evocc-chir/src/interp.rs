@@ -1231,26 +1231,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         self.value_type(*destination_type, span)?,
                         span,
                         self.unit.types(),
+                        &mut self.memory,
                     )?;
-                    self.store_memory_value(
-                        address,
-                        *destination_type,
-                        Qualifiers::default(),
-                        value,
-                        span,
-                    )?;
+                    self.store_static_scalar(address, *destination_type, value, span)?;
                 }
                 InitAction::ZeroScalar {
                     destination_type, ..
                 } => {
                     let value = self.zero_value(*destination_type, span)?;
-                    self.store_memory_value(
-                        address,
-                        *destination_type,
-                        Qualifiers::default(),
-                        value,
-                        span,
-                    )?;
+                    self.store_static_scalar(address, *destination_type, value, span)?;
                 }
                 InitAction::StoreString {
                     destination_type,
@@ -1264,11 +1253,26 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         .store_bytes(address, layout, &value)
                         .map_err(|error| self.memory_error(error, span))?;
                 }
-                InitAction::CopyAggregate { span, .. } => {
-                    return Err(InterpreterError::UnsupportedExpression {
-                        feature: "aggregate copy in static initializer",
-                        span: *span,
-                    });
+                InitAction::CopyAggregate { value, span, .. } => {
+                    let CHirExpr::CompoundLit(ty, initializer, _) = value else {
+                        return Err(InterpreterError::UnsupportedExpression {
+                            feature: "nonconstant aggregate copy in static initializer",
+                            span: *span,
+                        });
+                    };
+                    self.guard_static_initializer_evaluation(value)?;
+                    let layout = self.access_layout(*ty, *span)?;
+                    let zero = ByteSequence::try_from_bytes(vec![0; layout.size_bytes as usize])
+                        .map_err(|error| self.memory_error(error, *span))?;
+                    self.memory = self
+                        .memory
+                        .store_bytes(address, layout, &zero)
+                        .map_err(|error| self.memory_error(error, *span))?;
+                    self.initialize_static_plan(
+                        MemoryBinding { address, ty: *ty },
+                        initializer,
+                        *span,
+                    )?;
                 }
             }
         }
@@ -1280,31 +1284,189 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expression: &'arena CHirExpr<'arena>,
     ) -> Result<CValue, InterpreterError> {
         match expression {
-            CHirExpr::Unary(UnaryOp::AddrOf, operand, span)
-                if matches!(operand, CHirExpr::CompoundLit(_, _, _)) =>
+            CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => {
+                self.static_address_value(operand, false)
+            }
+            CHirExpr::Ident { facts, .. }
+                if self.unit.types().get(facts.ty()).is_some_and(|ty| {
+                    matches!(ty.kind, TypeKind::Array { .. } | TypeKind::Function { .. })
+                }) =>
             {
-                self.static_compound_pointer(operand, *span, false)
+                self.static_address_value(expression, true)
+            }
+            CHirExpr::MemoryRead { place, .. }
+                if self
+                    .unit
+                    .types()
+                    .get(place.value_ty())
+                    .is_some_and(|ty| matches!(ty.kind, TypeKind::Array { .. })) =>
+            {
+                self.static_address_value(expression, true)
+            }
+            CHirExpr::StringLit(..) => self.static_address_value(expression, true),
+            CHirExpr::Member(..) | CHirExpr::PtrMember(..) => {
+                self.static_address_value(expression, true)
             }
             CHirExpr::CompoundLit(_, _, span) => {
                 self.static_compound_pointer(expression, *span, true)
             }
-            CHirExpr::Cast(ty, operand, span)
-                if matches!(
-                    self.unit.types().get(*ty).map(|canonical| &canonical.kind),
-                    Some(TypeKind::Pointer(_))
-                ) =>
-            {
+            CHirExpr::Cast(ty, operand, span) => {
                 let value = self.eval_static_initializer_value(operand)?;
                 cast_machine_value(
                     value,
                     self.value_type(*ty, *span)?,
                     *span,
                     self.unit.types(),
+                    &mut self.memory,
                 )
             }
             _ => self
                 .eval_static_integer_expression(expression)
                 .map(CValue::Integer),
+        }
+    }
+
+    fn static_address_value(
+        &mut self,
+        expression: &'arena CHirExpr<'arena>,
+        decay: bool,
+    ) -> Result<CValue, InterpreterError> {
+        let span = expression.span();
+        let unsupported = || InterpreterError::UnsupportedExpression {
+            feature: "static initializer is not an address constant",
+            span,
+        };
+        let pointer_type =
+            |ty| PointerTypeDesc::to_object(self.unit.types(), ty).ok_or_else(unsupported);
+        match expression {
+            CHirExpr::Ident { symbol, facts, .. } => {
+                if self
+                    .unit
+                    .types()
+                    .get(facts.ty())
+                    .is_some_and(|ty| matches!(ty.kind, TypeKind::Function { .. }))
+                {
+                    return Ok(CValue::FunctionPointer {
+                        value: PointerValue::Function(
+                            self.function_identity(*symbol).ok_or_else(unsupported)?,
+                        ),
+                        ty: PointerTypeDesc::from_expression(
+                            self.unit.symbols(),
+                            self.unit.types(),
+                            expression,
+                        )
+                        .map_err(|_| unsupported())?,
+                    });
+                }
+                let binding = self.require_memory_binding(*symbol, span)?;
+                let ty = if decay {
+                    match self.unit.types().get(binding.ty).map(|ty| &ty.kind) {
+                        Some(TypeKind::Array { element, .. }) => *element,
+                        _ => binding.ty,
+                    }
+                } else {
+                    binding.ty
+                };
+                Ok(CValue::Pointer {
+                    value: binding.address,
+                    ty: pointer_type(ty)?,
+                })
+            }
+            CHirExpr::MemoryRead { place, .. } => {
+                place
+                    .validate_against(self.unit.symbols(), self.unit.types())
+                    .map_err(|_| unsupported())?;
+                let root = match place.root() {
+                    PlaceRoot::Object { symbol } => {
+                        self.require_memory_binding(*symbol, span)?.address
+                    }
+                    PlaceRoot::PointerExpression { pointer, .. } => {
+                        expect_machine_pointer(self.eval_static_initializer_value(pointer)?, span)?
+                            .0
+                    }
+                    PlaceRoot::CompoundLiteral { expression, .. } => {
+                        expect_machine_pointer(
+                            self.static_compound_pointer(expression, span, false)?,
+                            span,
+                        )?
+                        .0
+                    }
+                };
+                let mut indices = Vec::new();
+                for projection in place.projections() {
+                    if let PlaceProjection::Index(index) = projection {
+                        indices.push(self.eval_static_integer_expression(index.index())?);
+                    }
+                }
+                let value = self.project_place_address(root, place, &indices, span)?;
+                let ty = if decay {
+                    match self.unit.types().get(place.value_ty()).map(|ty| &ty.kind) {
+                        Some(TypeKind::Array { element, .. }) => *element,
+                        _ => place.value_ty(),
+                    }
+                } else {
+                    place.value_ty()
+                };
+                Ok(CValue::Pointer {
+                    value,
+                    ty: PointerTypeDesc::to_object(self.unit.types(), ty)
+                        .ok_or_else(unsupported)?,
+                })
+            }
+            CHirExpr::StringLit(..) => {
+                let value = *self
+                    .string_bindings
+                    .get(&(expression as *const CHirExpr<'_> as usize))
+                    .ok_or_else(unsupported)?;
+                let ty = PointerTypeDesc::from_expression(
+                    self.unit.symbols(),
+                    self.unit.types(),
+                    expression,
+                )
+                .map_err(|_| unsupported())?;
+                Ok(CValue::Pointer { value, ty })
+            }
+            CHirExpr::CompoundLit(..) => self.static_compound_pointer(expression, span, decay),
+            CHirExpr::Member(base, name, _) | CHirExpr::PtrMember(base, name, _) => {
+                let base = if matches!(expression, CHirExpr::Member(..)) {
+                    self.static_address_value(base, false)?
+                } else {
+                    self.eval_static_initializer_value(base)?
+                };
+                let (mut address, base_ty) = expect_machine_pointer(base, span)?;
+                let path = crate::record_member_path(self.unit.types(), base_ty.pointee(), name)
+                    .ok_or_else(unsupported)?;
+                let mut ty = path.last().ok_or_else(unsupported)?.field_ty();
+                for field in path {
+                    let layout = self
+                        .target
+                        .record_layout(self.unit.types(), field.tag())
+                        .map_err(|_| unsupported())?;
+                    let offset = layout
+                        .fields
+                        .iter()
+                        .find(|entry| entry.field_index == field.field_index())
+                        .ok_or_else(unsupported)?
+                        .byte_offset;
+                    address = address
+                        .checked_offset(i64::try_from(offset).map_err(|_| unsupported())?)
+                        .map_err(|error| self.memory_error(error, span))?;
+                }
+                if decay {
+                    ty = match self.unit.types().get(ty).map(|ty| &ty.kind) {
+                        Some(TypeKind::Array { element, .. }) => *element,
+                        _ => return Err(unsupported()),
+                    };
+                }
+                Ok(CValue::Pointer {
+                    value: address,
+                    ty: pointer_type(ty)?,
+                })
+            }
+            CHirExpr::Unary(UnaryOp::Deref, operand, _) => {
+                self.eval_static_initializer_value(operand)
+            }
+            _ => Err(unsupported()),
         }
     }
 
@@ -1788,6 +1950,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         self.value_type(ty, *span)?,
                         *span,
                         self.unit.types(),
+                        &mut self.memory,
                     )?;
                     self.store_memory_value(address, ty, Qualifiers::default(), value, *span)?;
                     None
@@ -2023,6 +2186,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                             result_type,
                             span,
                             self.unit.types(),
+                            &mut self.memory,
                         )?);
                     } else {
                         tasks.push(MachineTask::CastValue {
@@ -2038,7 +2202,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
                 MachineTask::CastValue { target, span } => {
                     let value = pop_machine_value(&mut values, span)?;
-                    values.push(cast_machine_value(value, target, span, self.unit.types())?);
+                    values.push(cast_machine_value(
+                        value,
+                        target,
+                        span,
+                        self.unit.types(),
+                        &mut self.memory,
+                    )?);
                     None
                 }
                 MachineTask::ApplyAssignment {
@@ -2444,6 +2614,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let declaration = match declaration {
             CHirDecl::Object(declaration) => declaration,
             CHirDecl::Asm(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) => return Ok(()),
+            CHirDecl::Function(function) if function.body.is_none() => return Ok(()),
             CHirDecl::Function(declaration) => {
                 return Err(InterpreterError::UnsupportedDeclaration {
                     feature: "block function declaration",
@@ -3155,6 +3326,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expression: &'arena CHirExpr<'arena>,
         tasks: &mut Vec<MachineTask<'arena>>,
     ) -> Result<(), InterpreterError> {
+        if let CHirExpr::Cast(ty, operand, _) = expression {
+            if self
+                .unit
+                .types()
+                .get(*ty)
+                .is_some_and(|ty| matches!(ty.kind, TypeKind::Void))
+            {
+                return self.schedule_discarded_expression(operand, tasks);
+            }
+        }
         if let CHirExpr::BuiltinVarArgs { op, .. } = expression {
             if *op != crate::VarArgsBuiltinOp::Arg {
                 self.schedule_varargs(expression, tasks)?;
@@ -3341,7 +3522,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 if !matches {
                     return Err(fault(MemoryFault::InvalidArgumentList));
                 }
-                values.push(cast_machine_value(value, target, span, self.unit.types())?);
+                values.push(cast_machine_value(
+                    value,
+                    target,
+                    span,
+                    self.unit.types(),
+                    &mut self.memory,
+                )?);
                 Some(self.argument_lists.advance(identity).map_err(fault)?)
             }
             VarArgsBuiltinOp::Copy => unreachable!("copy returned above"),
@@ -3386,6 +3573,26 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirExpr::Unary(UnaryOp::AddrOf, operand, _) if self.memory_mode => {
                 if matches!(operand, CHirExpr::CompoundLit(_, _, _)) {
                     self.schedule_compound_literal(operand, true, tasks)?;
+                } else if let CHirExpr::MemoryRead {
+                    place, target_span, ..
+                } = operand
+                {
+                    place
+                        .validate_against(self.unit.symbols(), self.unit.types())
+                        .map_err(|_| InterpreterError::UnsupportedExpression {
+                            feature: "invalid addressed memory place",
+                            span,
+                        })?;
+                    tasks.push(MachineTask::FoldPlaceAddress {
+                        place,
+                        span: *target_span,
+                    });
+                    self.schedule_place_operands(place, *target_span, tasks, values)?;
+                } else if let CHirExpr::Unary(UnaryOp::Deref, pointer, _) = operand {
+                    tasks.push(MachineTask::EvalExpression {
+                        expression: pointer,
+                        allow_root_mutation: true,
+                    });
                 } else {
                     values.push(self.address_of_expression(operand, span)?);
                 }
@@ -3882,6 +4089,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         self.value_type(*ty, span)?,
                         span,
                         self.unit.types(),
+                        &mut self.memory,
                     )?,
                     None => *value,
                 };
@@ -3933,11 +4141,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         ) {
             return Err(InterpreterError::CallThroughNonFunctionPointer { span: call_span });
         }
+        let value = self
+            .memory
+            .resolve_function_pointer(value)
+            .map_err(|error| self.memory_error(error, call_span))?;
         let identity = match value {
             PointerValue::Null => {
                 return Err(InterpreterError::CallThroughNullFunctionPointer { span: call_span });
             }
-            PointerValue::Object(_) => {
+            PointerValue::Object(_) | PointerValue::Exposed(_) => {
                 return Err(InterpreterError::CallThroughNonFunctionPointer { span: call_span });
             }
             PointerValue::Function(identity) => identity,
@@ -4103,7 +4315,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         }
         let mut parameter_bindings = Vec::with_capacity(arguments.len());
         for ((symbol, ty), argument) in signature.parameters.into_iter().zip(arguments) {
-            let argument = cast_machine_value(argument, ty, binding_span, self.unit.types())?;
+            let argument = cast_machine_value(
+                argument,
+                ty,
+                binding_span,
+                self.unit.types(),
+                &mut self.memory,
+            )?;
             match (ty, argument) {
                 (ValueType::Integer(ty), CValue::Integer(value)) => {
                     parameter_bindings.push((
@@ -4476,8 +4694,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     },
                 ) => {
                     if index == 0
-                        && function_syntax
-                            .is_some_and(|syntax| !function_parameters_match(parameters, syntax))
+                        && function_syntax.is_some_and(|syntax| {
+                            !function_parameters_match(self.unit.types(), parameters, syntax)
+                        })
                     {
                         return false;
                     }
@@ -4577,6 +4796,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ValueType::Integer(return_integer),
                     end.body_span,
                     self.unit.types(),
+                    &mut self.memory,
                 )?)
             }
             (FunctionExit::Explicit(Some(value)), ValueType::Pointer(return_type)) => {
@@ -4585,6 +4805,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ValueType::Pointer(return_type),
                     end.body_span,
                     self.unit.types(),
+                    &mut self.memory,
                 )?)
             }
             (FunctionExit::Explicit(Some(value)), ValueType::Aggregate(return_type)) => {
@@ -4593,6 +4814,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ValueType::Aggregate(return_type),
                     end.body_span,
                     self.unit.types(),
+                    &mut self.memory,
                 )?)
             }
             (FunctionExit::Explicit(None), ValueType::Void)
@@ -5956,6 +6178,40 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             });
         }
         let layout = self.access_layout(ty, span)?;
+        self.store_memory_value_with_layout(address, ty, qualifiers, value, span, layout)
+    }
+
+    fn store_static_scalar(
+        &mut self,
+        address: Pointer,
+        ty: TypeId,
+        value: CValue,
+        span: SourceSpan,
+    ) -> Result<CValue, InterpreterError> {
+        let mut layout = self.access_layout(ty, span)?;
+        let object = self
+            .memory
+            .object_info(address.object())
+            .map_err(|error| self.memory_error(error, span))?;
+        layout.align_bytes = layout.align_bytes.min(object.layout.align_bytes);
+        let offset = address.byte_offset().unsigned_abs();
+        if offset != 0 {
+            layout.align_bytes = layout
+                .align_bytes
+                .min(1_u32 << offset.trailing_zeros().min(31));
+        }
+        self.store_memory_value_with_layout(address, ty, Qualifiers::default(), value, span, layout)
+    }
+
+    fn store_memory_value_with_layout(
+        &mut self,
+        address: Pointer,
+        ty: TypeId,
+        qualifiers: Qualifiers,
+        value: CValue,
+        span: SourceSpan,
+        layout: AccessLayout,
+    ) -> Result<CValue, InterpreterError> {
         match (self.value_type(ty, span)?, value) {
             (ValueType::Integer(integer_type), CValue::Integer(value)) => {
                 let value = value.cast(integer_type);
@@ -6555,6 +6811,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             ) if matches!(operator, BinaryOp::Eq | BinaryOp::Ne)
                 && PointerTypeDesc::composite(self.unit.types(), left_ty, right_ty).is_ok() =>
             {
+                let left = self
+                    .memory
+                    .pointer_address(PointerValue::object(left))
+                    .map_err(|error| InterpreterError::Memory { span, error })?;
+                let right = self
+                    .memory
+                    .pointer_address(PointerValue::object(right))
+                    .map_err(|error| InterpreterError::Memory { span, error })?;
                 Ok(machine_equality_result(operator, left == right))
             }
             (CValue::Pointer { value, .. }, CValue::Integer(zero))
@@ -6573,6 +6837,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ty: right_ty,
                 },
             ) if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) && left_ty == right_ty => {
+                let left = self
+                    .memory
+                    .pointer_address(left)
+                    .map_err(|error| InterpreterError::Memory { span, error })?;
+                let right = self
+                    .memory
+                    .pointer_address(right)
+                    .map_err(|error| InterpreterError::Memory { span, error })?;
                 Ok(machine_equality_result(operator, left == right))
             }
             (CValue::FunctionPointer { value, .. }, CValue::Pointer { value: null, .. })
@@ -6707,8 +6979,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             // Simple assignment converts its right operand to the type of the
             // designated object, which is where a null pointer constant becomes
             // a null pointer and a narrower integer is truncated.
-            let right =
-                cast_machine_value(right, self.value_type(ty, span)?, span, self.unit.types())?;
+            let right = cast_machine_value(
+                right,
+                self.value_type(ty, span)?,
+                span,
+                self.unit.types(),
+                &mut self.memory,
+            )?;
             return self.store_memory_value(address, ty, qualifiers, right, span);
         }
         let left = self.load_memory_value(address, ty, qualifiers, target_span)?;
@@ -6940,6 +7217,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 Ok(())
             }
             CHirDecl::Asm(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) => Ok(()),
+            CHirDecl::Function(function) if function.body.is_none() => Ok(()),
             CHirDecl::Function(declaration) => Err(InterpreterError::UnsupportedDeclaration {
                 feature: "block function declaration",
                 span: declaration.span,
@@ -7114,6 +7392,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         match declaration {
             CHirDecl::Object(declaration) => self.exec_object_decl(declaration),
             CHirDecl::Asm(_) | CHirDecl::Tag(_) | CHirDecl::Typedef(_) => Ok(()),
+            CHirDecl::Function(function) if function.body.is_none() => Ok(()),
             CHirDecl::Function(declaration) => Err(InterpreterError::UnsupportedDeclaration {
                 feature: "block function declaration",
                 span: declaration.span,
@@ -8501,7 +8780,8 @@ fn collect_place_symbols<'arena>(place: &MemoryPlace<'arena>, output: &mut Refer
     }
 }
 
-fn statement_requires_memory(unit: &CHirUnit<'_>, statement: &CHirStmt<'_>) -> bool {
+/// Whether execution needs object state, including places rooted at integer casts.
+pub fn statement_requires_memory(unit: &CHirUnit<'_>, statement: &CHirStmt<'_>) -> bool {
     match statement {
         CHirStmt::Asm(_) => true,
         CHirStmt::Expr(expression, _) => expression_requires_memory(unit, expression),
@@ -8610,8 +8890,10 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         | CHirExpr::CompoundLit(_, _, _) => true,
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::EvaluateOnce(operand, _)
-        | CHirExpr::Cast(_, operand, _)
         | CHirExpr::BitBuiltin { operand, .. } => expression_requires_memory(unit, operand),
+        CHirExpr::Cast(ty, operand, _) => {
+            type_requires_memory(unit.types(), *ty) || expression_requires_memory(unit, operand)
+        }
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Comma(left, right, _)
         | CHirExpr::Elvis(left, right, _) => {
@@ -8961,7 +9243,7 @@ fn pop_machine_value(
 fn machine_truth(value: CValue, _span: SourceSpan) -> Result<bool, InterpreterError> {
     match value {
         CValue::Integer(value) => Ok(value.truth()),
-        CValue::Pointer { value, .. } => Ok(!value.object().is_null()),
+        CValue::Pointer { value, .. } => Ok(value != Pointer::NULL),
         CValue::FunctionPointer { value, .. } => Ok(value != PointerValue::Null),
         CValue::Aggregate { .. } => Err(InterpreterError::UnsupportedExpression {
             feature: "aggregate controlling expression",
@@ -9010,8 +9292,39 @@ fn cast_machine_value(
     target: ValueType,
     span: SourceSpan,
     types: &TypeInterner,
+    memory: &mut MemoryState,
 ) -> Result<CValue, InterpreterError> {
     match (value, target) {
+        (CValue::Pointer { value, .. }, ValueType::Integer(target)) => {
+            if target == CIntegerType::BOOL {
+                return Ok(CValue::Integer(CInteger::from_raw(
+                    u128::from(value != Pointer::NULL),
+                    target,
+                )));
+            }
+            let (next, address) = memory
+                .expose_pointer(PointerValue::object(value))
+                .map_err(|error| InterpreterError::Memory { error, span })?;
+            *memory = next;
+            Ok(CValue::Integer(
+                CInteger::from_raw(u128::from(address), CIntegerType::ULONG).cast(target),
+            ))
+        }
+        (CValue::FunctionPointer { value, .. }, ValueType::Integer(target)) => {
+            if target == CIntegerType::BOOL {
+                return Ok(CValue::Integer(CInteger::from_raw(
+                    u128::from(value != PointerValue::Null),
+                    target,
+                )));
+            }
+            let (next, address) = memory
+                .expose_pointer(value)
+                .map_err(|error| InterpreterError::Memory { error, span })?;
+            *memory = next;
+            Ok(CValue::Integer(
+                CInteger::from_raw(u128::from(address), CIntegerType::ULONG).cast(target),
+            ))
+        }
         (CValue::Integer(value), ValueType::Integer(target)) => {
             Ok(CValue::Integer(value.cast(target)))
         }
@@ -9074,10 +9387,21 @@ fn cast_machine_value(
                 })
             }
         }
-        (CValue::Integer(_), ValueType::Pointer(_))
-        | (CValue::Pointer { .. }, ValueType::Integer(_))
-        | (CValue::Pointer { .. }, ValueType::Pointer(_))
-        | (CValue::FunctionPointer { .. }, ValueType::Integer(_))
+        (CValue::Integer(value), ValueType::Pointer(target)) => {
+            let address = value.cast(CIntegerType::ULONG).raw_bits() as u64;
+            Ok(if pointer_type_is_function(types, target) {
+                CValue::FunctionPointer {
+                    value: PointerValue::Exposed(address),
+                    ty: target,
+                }
+            } else {
+                CValue::Pointer {
+                    value: Pointer::from_address(address),
+                    ty: target,
+                }
+            })
+        }
+        (CValue::Pointer { .. }, ValueType::Pointer(_))
         | (CValue::FunctionPointer { .. }, ValueType::Pointer(_))
         | (CValue::Aggregate { .. }, ValueType::Integer(_) | ValueType::Pointer(_))
         | (
@@ -9152,7 +9476,11 @@ fn assignment_binary(operator: AssignmentOp) -> Option<BinaryOp> {
     }
 }
 
-fn function_parameters_match(canonical: &FunctionParameters, written: &ParameterSyntax) -> bool {
+fn function_parameters_match(
+    interner: &TypeInterner,
+    canonical: &FunctionParameters,
+    written: &ParameterSyntax,
+) -> bool {
     match (canonical, written) {
         (FunctionParameters::Unspecified, ParameterSyntax::Unspecified) => true,
         (
@@ -9164,10 +9492,9 @@ fn function_parameters_match(canonical: &FunctionParameters, written: &Parameter
         ) => {
             variadic == written_variadic
                 && types.len() == parameters.len()
-                && types
-                    .iter()
-                    .zip(parameters)
-                    .all(|(canonical, parameter)| *canonical == parameter.ty)
+                && types.iter().zip(parameters).all(|(canonical, parameter)| {
+                    interner.compatible_ignoring_top_qualifiers(*canonical, parameter.ty)
+                })
         }
         _ => false,
     }

@@ -2,15 +2,424 @@
   "receiptId": "c30.day9.v2",
   "contract": {
     "path": "tests/contracts/day9-acceptance-contract.json",
-    "sha256": "c6dd88f84c32c23477496662c5345d6b8e027a803e511151bad8d6ed51327cb9"
+    "sha256": "6bbe4813f40d59f7772151720f5e52f679143e4c4a017eefed1cf707ff4b73d6"
   },
   "specification": {
     "path": "docs/evoir-spec.md",
     "revision": "1.9.66",
-    "sha256": "1e633554e61b8637885b142704eee2612873271282665276ec8024f35d81d8ae"
+    "sha256": "2b3103794a6a4a75025809700f9c5b20e051b3ca3591864fe0c305fc085d837f"
   },
-  "cutLine": "AC and scalar variadic access AD are closed by the measured runs and completed gate/replay below. AD removes E3030 from the first-error frontier but does not increase clean units: 6 clean, 2792 diagnosed. The next measured defect is function-parameter adjustment (2464 E3101), followed by checked arithmetic (303 E3020). AE2 and AF remain OPEN. Older sections below are historical checkpoints, not current status.",
+  "cutLine": "AD and AF are closed at their declared boundaries. AE2 is reopened by the signed exact-width conflict recorded in Appendix D. Final lowering: 19 clean, 2779 diagnosed; parse: 2798 clean; both workspace and isolated replay: 1626 passed, 0 failed, 4 ignored. All six remaining lowering classes fall outside the terminal whitelist, so the overall finish criterion remains unmet. Historical sections retain their original measurements, not current authority.",
   "latestExecution": {
+    "subjectCommit": "5fb654a1750b758c42fbec91903fc66c0d629960",
+    "status": "PARTIAL_BODY_CONFLICT",
+    "scopes": {
+      "AD": "CLOSED",
+      "AE2": "OPEN_BODY_CONFLICT",
+      "AF": "CLOSED"
+    },
+    "scopeClaim": "AF's symbolic relocations and integer/pointer forms are verified; this is not whole-module lowering closure. AE2's historical closure is superseded because generic unsigned-long checked multiplication remains outside the body's signed exact-width bound.",
+    "commits": [
+      "7da14de101b9dc8ce4b5712035c7dd8a92d4b582 Test variadic list syntax, execution and promoted access types",
+      "3718ee837dc7c289b7b9ddd328bb96915dc747a5 Lower and execute scalar variadic argument lists",
+      "3a97c03aa392aaf3a56fdfe9894e86b2f48c2f03 Record completed wide and variadic execution measurements",
+      "3f98ddbadc63dcd041162717d7c1e72ecc7e632e Test module assembly and executable integer builtins",
+      "19a9c61dfb8b4fca2fc1be65e569609d4800d9ad Preserve module assembly and lower checked integer builtins",
+      "442863a2196de2fba7661809815cd1d13c4900d4 Test function parameter adjustment during identity checks",
+      "9475b5a8cdce3791714a4ad7f58d33ecfe89f49a Validate function parameters after their pointer adjustment",
+      "860eace547a3af9f92bceda35872cc20ba206291 Isolate temporary assembly files between parallel tests",
+      "721fbc8455137f67444209092c16d16865928984 Record unchanged full-cohort parser acceptance",
+      "a83401cb7c3f659944c12cdd96143b2710307abd Test symbolic relocations and exposed-address conversions",
+      "a50c4dc739d2e188dee3d965371f5126427cfd3b Represent symbolic relocations and exposed-address pointer conversions",
+      "695bd392257281f476c2dde897f8fb820f45e313 Test compatible qualifiers in function parameter declarations",
+      "7268a5523cff8bc49574d740f4f080838f0035a7 Test recovered pointers in controlling expressions",
+      "1c0b66f5ea5e7d55b444d031dd489632d7e7864c Preserve nonzero truth for exposed-address pointers",
+      "0f29c25d53eafcdd26e655eb02d5ee29d0bd229c Use canonical compatibility for function parameter identities",
+      "a2b7d33033d73d736ff67c81980acf29711d5aa3 Test static compound storage and discarded pointer expressions",
+      "86c3140178111ce35a239cc858ba4692e221a20e Lower static compound storage and canonical block function references",
+      "420e535b4ff230742d78b54aa671c9dca0a7064b Record executable builtin measurements and remaining lowering frontiers",
+      "b5341366ac365692335e9540ca40d7e6bd9459cc Test decoding of zero-initialized pointer storage",
+      "1beede48655657c0df1c4e8b910e88cbc37bb0df Preserve null provenance in static zero initialization",
+      "b4dd238d4f48004019f085e3f0c57c0635ca2d36 Test function relocations transported through object pointers",
+      "200fa5be715d0a09692f1cb5bb08bb001b1f1935 Retain function provenance through pointer storage and comparison",
+      "a439513ff0b822d55a43a20aff39efe4e80db25d Format pointer value diagnostics",
+      "cbd4f14d0968ff57962ee0a67ca9a4e8d39a61c3 Test the diagnostic for unsupported exact arithmetic widths",
+      "2e7e2be348e4372c15def3538c428675d7b46775 Test the object and function pointer conversion boundary",
+      "97bd87dfa52e8484c515a8463b9e437ff35bb7c1 Test storage for address-taken scalar parameters",
+      "42e01c187199c2b928c7ac47c7c1cfe5897dbafe Test typed null and flexible-member static addresses",
+      "c8441b54cbcf370a925d11e155e097cb80d294ef Initialize addressed parameters and resolve static pointer forms",
+      "7ad5792f84f2f20e941900518b69adcb0e373ff2 Test control flow preceding automatic storage declarations",
+      "5fb654a1750b758c42fbec91903fc66c0d629960 Carry automatic addresses only after their allocation executes"
+    ],
+    "surveys": {
+      "AF": {
+        "runId": "20260905T213244Z-60582",
+        "subjectCommit": "5fb654a1750b758c42fbec91903fc66c0d629960",
+        "capture": ".evidence/full-config-lowering-survey/20260905T213244Z-60582",
+        "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --evocc .build/builtin-lowering/target/release/evocc --action lower --jobs 8 --timeout 60",
+        "enumeration": {
+          "commandRecords": 2944,
+          "excluded": 146,
+          "exclusionsByReason": {
+            "assembly-source": 67,
+            "host-compiler-program": 34,
+            "link-or-binary-transform": 43,
+            "vmlinux-synthetic-target": 2
+          },
+          "includedCUnits": 2798,
+          "recordsByTool": {
+            "gcc": 34,
+            "gcc-14": 2866,
+            "ld": 3,
+            "objcopy": 8,
+            "strip": 33
+          }
+        },
+        "classifications": {
+          "clean": 19,
+          "diagnosed": 2779,
+          "panic": 0,
+          "timeout": 0,
+          "unavailable": 0
+        },
+        "diagnosedByCode": {
+          "E3035": 2711,
+          "E3029": 2,
+          "E3042": 48,
+          "E3043": 7,
+          "E3021": 3,
+          "E3032": 8
+        },
+        "atRootTop15": [
+          {
+            "exampleRecord": "arch/arm64/crypto/.aes-ce-ccm-glue.o.cmd",
+            "exampleUnit": "arch/arm64/crypto/aes-ce-ccm-glue.c",
+            "finding": "E3035 evoir-lowering-failed",
+            "units": 2711
+          },
+          {
+            "exampleRecord": "arch/arm64/kernel/.jump_label.o.cmd",
+            "exampleUnit": "arch/arm64/kernel/jump_label.c",
+            "finding": "E3042 evoir-lowering-failed",
+            "units": 48
+          },
+          {
+            "exampleRecord": "lib/zstd/common/.entropy_common.o.cmd",
+            "exampleUnit": "lib/zstd/common/entropy_common.c",
+            "finding": "E3032 evoir-lowering-failed",
+            "units": 8
+          },
+          {
+            "exampleRecord": "drivers/acpi/apei/.ghes_helpers.o.cmd",
+            "exampleUnit": "drivers/acpi/apei/ghes_helpers.c",
+            "finding": "E3043 evoir-lowering-failed",
+            "units": 7
+          },
+          {
+            "exampleRecord": "kernel/.sys_ni.o.cmd",
+            "exampleUnit": "kernel/sys_ni.c",
+            "finding": "E3021 evoir-lowering-failed",
+            "units": 3
+          },
+          {
+            "exampleRecord": "arch/arm64/kernel/.fpsimd.o.cmd",
+            "exampleUnit": "arch/arm64/kernel/fpsimd.c",
+            "finding": "E3029 evoir-lowering-failed",
+            "units": 2
+          }
+        ],
+        "timing": {
+          "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c",
+          "maximumWallMilliseconds": 36236.682,
+          "medianWallMilliseconds": 4424.222,
+          "note": "Per-process wall time was observed under concurrent host load; it is coarse telemetry, not a benchmark.",
+          "parallelism": 8,
+          "perUnitTimeoutSeconds": 60
+        },
+        "resultsSha256": "a8072d6b9fc8fcb27211d27fa3791dd7bc314276e7b5694f1daed0a0cfdea396",
+        "summarySha256": "cb9edea300e7873a48a6c82607dd8708521b90961bdb9605298cc335b0bebdaf",
+        "sealSha256": "e6f3a527b62c6f34325ec7005fd152b1c9b4a3f40f6411c18f78a46f63485270",
+        "runconfigSha256": "5388d12337ced21130cf327b612b314d7239565c518632dfedd1947a90cae3b3"
+      },
+      "parse": {
+        "runId": "20260905T213249Z-60810",
+        "subjectCommit": "5fb654a1750b758c42fbec91903fc66c0d629960",
+        "capture": ".evidence/full-config-parse-survey/20260905T213249Z-60810",
+        "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --evocc .build/builtin-lowering/target/release/evocc --action parse --jobs 8 --timeout 60",
+        "enumeration": {
+          "commandRecords": 2944,
+          "excluded": 146,
+          "exclusionsByReason": {
+            "assembly-source": 67,
+            "host-compiler-program": 34,
+            "link-or-binary-transform": 43,
+            "vmlinux-synthetic-target": 2
+          },
+          "includedCUnits": 2798,
+          "recordsByTool": {
+            "gcc": 34,
+            "gcc-14": 2866,
+            "ld": 3,
+            "objcopy": 8,
+            "strip": 33
+          }
+        },
+        "classifications": {
+          "clean": 2798,
+          "diagnosed": 0,
+          "panic": 0,
+          "timeout": 0,
+          "unavailable": 0
+        },
+        "diagnosedByCode": {},
+        "atRootTop15": [],
+        "timing": {
+          "maximumUnit": "drivers/net/ethernet/hisilicon/hns3/hns3_enet.c",
+          "maximumWallMilliseconds": 30622.88,
+          "medianWallMilliseconds": 4080.974,
+          "note": "Per-process wall time was observed under concurrent host load; it is coarse telemetry, not a benchmark.",
+          "parallelism": 8,
+          "perUnitTimeoutSeconds": 60
+        },
+        "resultsSha256": "0419e4c74a1ba758d527e2c4301a85de319706f7fea654bf3766b00e7c04784c",
+        "summarySha256": "021750b058ff15809606b137bf73cf15f62ee56d5134516f065945a0ebbbf288",
+        "sealSha256": "61a33ca9413cfd026d6f7dc1dcfca820605b2ba54dcc42bf5f315f71375f95c5",
+        "runconfigSha256": "73a0f0ad170b01007007d5f74af6d3e033de22bdb2dd29edc545187919bc27e5"
+      }
+    },
+    "comparisons": {
+      "command": "Recompute classification by unitId from the sealed results.jsonl files; compare every previously clean build record.",
+      "unitIdentity": "2798 compilation records, not distinct source paths; different records may name the same source.",
+      "runs": [
+        {
+          "previousRunId": "20260905T162725Z-3971",
+          "cleanBefore": 6,
+          "cleanAfter": 19,
+          "regressions": 0,
+          "newlyClean": 13
+        },
+        {
+          "previousRunId": "20260905T185525Z-27277",
+          "cleanBefore": 6,
+          "cleanAfter": 19,
+          "regressions": 0,
+          "newlyClean": 13
+        },
+        {
+          "previousRunId": "20260905T201056Z-67314",
+          "cleanBefore": 17,
+          "cleanAfter": 19,
+          "regressions": 0,
+          "newlyClean": 2
+        },
+        {
+          "previousRunId": "20260905T205545Z-6762",
+          "cleanBefore": 18,
+          "cleanAfter": 19,
+          "regressions": 0,
+          "newlyClean": 1
+        }
+      ]
+    },
+    "allowedResidualCounts": {
+      "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --evocc .build/builtin-lowering/target/release/evocc --action lower --jobs 8 --timeout 60",
+      "runId": "20260905T213244Z-60582",
+      "E3030": 0,
+      "E3033": 0,
+      "E3026": 0,
+      "interpretation": "First lowering diagnostics only; zeros do not prove that no later occurrence exists."
+    },
+    "residuals": {
+      "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --source-root .build/linux-src --evocc .build/builtin-lowering/target/release/evocc --action lower --jobs 8 --timeout 60",
+      "runId": "20260905T213244Z-60582",
+      "classes": [
+        {
+          "code": "E3035",
+          "units": 2711,
+          "reason": "global-register-variable",
+          "minimal": "register unsigned long sp_var asm(\"sp\"); unsigned long f(void){return sp_var;}",
+          "control": "crates/evocc-lower/tests/lowering_diagnostic_frontier.rs",
+          "authority": "10.1.18 Global register variables; Appendix D Completion target versus explicit execution deferrals",
+          "allowedByFinishCriterion": false
+        },
+        {
+          "code": "E3042",
+          "units": 48,
+          "reason": "checked-arithmetic-width",
+          "minimal": "int f(unsigned long a,unsigned long b,unsigned long *r){return __builtin_mul_overflow(a,b,r);}",
+          "control": "crates/evocc-lower/tests/checked_and_bit_lowering.rs",
+          "probe": ".evidence/builtin-probes/20260906-checked-width/width.c",
+          "oracleOutput": ".evidence/builtin-probes/20260906-checked-width/width.out",
+          "authority": "10.1.15 signed exact-width formula takes precedence; Appendix D Checked arithmetic outside the signed exact-width bound",
+          "allowedByFinishCriterion": false
+        },
+        {
+          "code": "E3032",
+          "units": 8,
+          "reason": "pointer-difference",
+          "minimal": "long f(void *a,void *b){return a-b;}",
+          "control": "crates/evocc-lower/tests/fail_closed_forms.rs",
+          "probe": ".evidence/builtin-probes/20260901-2c23684c/p11.c",
+          "oracleOutput": ".evidence/builtin-probes/20260901-2c23684c/p11.out",
+          "authority": "10.1.3 Difference of two void pointers; Appendix D Pointer difference remains a separate execution obligation",
+          "allowedByFinishCriterion": false
+        },
+        {
+          "code": "E3043",
+          "units": 7,
+          "reason": "object-function-pointer-conversion",
+          "minimal": "typedef int (*callback)(void); callback f(void *p){return p;}",
+          "control": "crates/evocc-lower/tests/relocations_and_addresses.rs",
+          "probe": ".evidence/builtin-probes/20260906-function-pointer-conversion/conversion.c",
+          "oracleOutput": ".evidence/builtin-probes/20260906-function-pointer-conversion/conversion.out",
+          "authority": "3.10 excludes direct ptr/fnptr conversion; Appendix D Direct object/function pointer conversion boundary",
+          "allowedByFinishCriterion": false
+        },
+        {
+          "code": "E3021",
+          "units": 3,
+          "reason": "constraint i requires a proved immediate",
+          "minimal": "void f(int capability){asm volatile(\"hint %0\" : : \"i\"(capability));}",
+          "probe": ".evidence/builtin-probes/20260906-immediate-parameter/immediate.c",
+          "oracleOutput": ".evidence/builtin-probes/20260906-immediate-parameter/immediate.out",
+          "authority": "3.11 immediate constraint; 10.1.9 preserves but does not apply always_inline; Appendix D Assembly immediates before specialization",
+          "allowedByFinishCriterion": false
+        },
+        {
+          "code": "E3029",
+          "units": 2,
+          "reason": "computed-goto",
+          "minimal": "void *f(void){return &&label; label:return 0;}",
+          "control": "crates/evocc-lower/tests/computed_goto_lowering.rs",
+          "authority": "10.1.18 Label addresses; Appendix D Completion target versus explicit execution deferrals",
+          "allowedByFinishCriterion": false
+        }
+      ]
+    },
+    "gate": {
+      "subjectCommit": "5fb654a1750b758c42fbec91903fc66c0d629960",
+      "workspace": {
+        "command": "CARGO_TARGET_DIR=target/frontend cargo test --workspace --no-fail-fast --locked --offline -j 2",
+        "passed": 1626,
+        "failed": 0,
+        "ignored": 4,
+        "completedTargets": 250,
+        "exitCode": 0
+      },
+      "offlineReplay": {
+        "command": "cargo test --workspace --no-fail-fast --locked --offline -j 2",
+        "cwd": ".build/ac-replay-36e4a57",
+        "subjectCommit": "5fb654a1750b758c42fbec91903fc66c0d629960",
+        "passed": 1626,
+        "failed": 0,
+        "ignored": 4,
+        "completedTargets": 250,
+        "exitCode": 0,
+        "isolation": "Existing independent no-local clone, fetched the exact subject commit into its own object store; no alternates; its own target was reused. Separate execution from the primary workspace gate, not a fresh-target claim."
+      },
+      "clippy": {
+        "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/.build/builtin-lowering/target cargo clippy --workspace --all-targets --locked --offline -j 2 -- -D warnings",
+        "cwd": ".build/checked-width",
+        "subjectCommit": "5fb654a1750b758c42fbec91903fc66c0d629960",
+        "exitCode": 0
+      },
+      "fmt": {
+        "command": "cargo fmt --all -- --check",
+        "exitCode": 0
+      },
+      "ruff": {
+        "command": "ruff check tools tests/acceptance",
+        "exitCode": 0
+      },
+      "textualShapes": {
+        "command": "python3 tools/check-textual-grammar.py",
+        "renderer": 39,
+        "specified": 39,
+        "disagreements": 0,
+        "exitCode": 0,
+        "limit": "Instruction-shape audit only, not a parser-completeness proof."
+      },
+      "layout": {
+        "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+        "capture": ".evidence/day5-layout/20260905T213316Z-62139",
+        "total": 128,
+        "mismatchCount": 0,
+        "status": "PASS"
+      },
+      "attributedLayout": {
+        "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=\"$PWD/tests/contracts/layout-attributed-cases.json\" bash tests/acceptance/day5-layout-conformance.sh --subject",
+        "capture": ".evidence/day5-layout/20260905T213401Z-62131",
+        "total": 22,
+        "mismatchCount": 0,
+        "status": "PASS"
+      },
+      "diffCheck": {
+        "command": "git diff --check",
+        "exitCode": 0
+      }
+    },
+    "acceptance": {
+      "command": "cargo build --release -p evocc --locked --offline -j 2; python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260905T193450Z-81402/results.jsonl",
+      "runId": "20260905T220441Z-5219",
+      "previousRunId": "20260905T193450Z-81402",
+      "subjectCommit": "5fb654a",
+      "dashboard": {
+        "lanes": {
+          "evocpp-raw": {
+            "clean": 16,
+            "failed": 0
+          },
+          "gcc-preprocessed-parser": {
+            "clean": 16,
+            "failed": 0
+          },
+          "clang-preprocessed-parser": {
+            "clean": 16,
+            "failed": 0
+          }
+        },
+        "dualOracleCleanParseTus": "16/16"
+      },
+      "clean": 48,
+      "regressions": 0,
+      "results": {
+        "path": ".evidence/day5-kernel-reconnaissance/20260905T220441Z-5219/results.jsonl",
+        "sha256": "a9c2687397057886775924ec660ad94b6ac4067de46a4dd6784eca545783e7ab"
+      }
+    },
+    "finalRegression": {
+      "testsOnlyCommit": "7ad5792",
+      "implementationCommit": "5fb654a",
+      "command": "CARGO_TARGET_DIR=/Users/onehrxn/dev/30days/c30/.build/builtin-lowering/target cargo test -p evocc-lower --test static_storage_and_discard control_flow_before_a_declaration --locked --offline -j 2",
+      "red": {
+        "failed": 1,
+        "buildErrors": 0,
+        "diagnostic": "E3101: effect or temporary edge uses an unavailable environment value"
+      },
+      "green": "All evocc-lower tests passed, including the three record/array/address cases; both interpreter results are asserted.",
+      "oracleCommand": "container run --rm --platform linux/arm64 --network none -v \"$PWD/.evidence/builtin-probes/20260906-deferred-allocation:/work/probes\" evo-flight-lab:sealed sh -c 'set -e; for cc in gcc-14 clang-19; do \"$cc\" -std=gnu11 /work/probes/declarations.c -o /tmp/declarations; /tmp/declarations; done'",
+      "probe": ".evidence/builtin-probes/20260906-deferred-allocation/declarations.c",
+      "output": ".evidence/builtin-probes/20260906-deferred-allocation/declarations.out",
+      "oracleRows": [
+        "7 9 7",
+        "7 9 7"
+      ],
+      "realUnit": "drivers/tty/vt/ucs.c",
+      "measuredBy": "20260905T213244Z-60582",
+      "classification": "clean",
+      "cwd": ".build/checked-width"
+    },
+    "limits": [
+      "The terminal whitelist allows only aggregate varargs, 128-bit division/remainder and non-symbol-plus-addend static initializers. Every measured residual is outside that whitelist, so the requested overall finish line remains unmet.",
+      "Appendix D records the conflicts; the normative body still takes precedence. No validator relaxation, fabricated callee or skipped function body is used to improve the count.",
+      "Variadic machine save areas and the calling convention remain backend work. No backend bits<128> interpreter implementation was duplicated or claimed before its pending merge.",
+      "Four existing ignored tests are reported as ignored; neither workspace run counts them as passes. Surveys contain no skipped units.",
+      "Only mandatory existing captures and small probes were retained; no new runner or RED sealing framework was introduced.",
+      "Final surveys used eight workers each instead of four, with the same 60-second limit and concurrent gate load; wall times are not a performance comparison.",
+      "The requested status renderer was rerun. Its legacy diagnostic-table debt list still includes withdrawn E3020/E3023/E3036 rows; that list is not the current measured frontier, which is recorded above. No new reporting framework was added."
+    ]
+  },
+  "historicalExecutionThroughAE2": {
     "commits": {
       "wideRed": "8773a0b",
       "wideImplementation": "a6ffb76",
@@ -188,6 +597,59 @@
         "resultsSha256": "97e8624a18c68edd18972ea7082bd0de79e1a8311be68cac3a07139de98ec709",
         "summarySha256": "133ac64ef0499e5006fddfc0b0a493baa8a9b4800655d2b5445304cd1ea1a1da",
         "sealSha256": "67ef2c24420a17760b1debf65e03289d8c7e941690852765f0d194bb0b69e503"
+      },
+      "AE2": {
+        "runId": "20260905T185525Z-27277",
+        "subjectCommit": "9475b5a8cdce3791714a4ad7f58d33ecfe89f49a",
+        "capture": ".evidence/full-config-lowering-survey/20260905T185525Z-27277",
+        "classifications": {
+          "clean": 6,
+          "diagnosed": 2792,
+          "panic": 0,
+          "timeout": 0,
+          "unavailable": 0
+        },
+        "atRootTop15": [
+          {
+            "exampleRecord": "arch/arm64/crypto/.aes-ce-ccm-glue.o.cmd",
+            "exampleUnit": "arch/arm64/crypto/aes-ce-ccm-glue.c",
+            "finding": "E3035 evoir-lowering-failed",
+            "units": 2700
+          },
+          {
+            "exampleRecord": "arch/arm64/kernel/.kaslr.o.cmd",
+            "exampleUnit": "arch/arm64/kernel/kaslr.c",
+            "finding": "E3026 evoir-lowering-failed",
+            "units": 43
+          },
+          {
+            "exampleRecord": "arch/arm64/kernel/.jump_label.o.cmd",
+            "exampleUnit": "arch/arm64/kernel/jump_label.c",
+            "finding": "E3036 evoir-lowering-failed",
+            "units": 33
+          },
+          {
+            "exampleRecord": "arch/arm64/mm/.ioremap.o.cmd",
+            "exampleUnit": "arch/arm64/mm/ioremap.c",
+            "finding": "E3101 evoir-lowering-failed",
+            "units": 14
+          },
+          {
+            "exampleRecord": "arch/arm64/kernel/.fpsimd.o.cmd",
+            "exampleUnit": "arch/arm64/kernel/fpsimd.c",
+            "finding": "E3029 evoir-lowering-failed",
+            "units": 2
+          }
+        ],
+        "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --action lower --evocc target/frontend/release/evocc --jobs 4 --timeout 60",
+        "diagnosedByCode": {
+          "E3035": 2700,
+          "E3029": 2,
+          "E3036": 33,
+          "E3026": 43,
+          "E3101": 14
+        },
+        "sealSha256": "b3927c731c652ad11d04bc894bbaf3adee10e5f614c2344fe74eab2f62100709"
       }
     },
     "dashboard": {
@@ -265,7 +727,73 @@
       "Machine variadic save area and calling convention are backend work, not implemented here.",
       "The broader floating execution profile remains excluded by 10.1.17; scalar list typing includes f64.",
       "No backend bits<128> interpreter implementation was duplicated; the incoming backend merge has not landed."
-    ]
+    ],
+    "gateAE2": {
+      "workspace": {
+        "command": "CARGO_TARGET_DIR=target/frontend cargo test --workspace --no-fail-fast --locked --offline -j 2",
+        "passed": 1608,
+        "failed": 0,
+        "ignored": 4,
+        "completedTargets": 247,
+        "exitCode": 0,
+        "aggregation": "Sum of every test result line; existing ignored tests remain counted as ignored.",
+        "subjectCommit": "9475b5a"
+      },
+      "clippy": {
+        "command": "CARGO_TARGET_DIR=target/frontend cargo clippy --workspace --all-targets --offline -- -D warnings",
+        "exitCode": 0
+      },
+      "fmt": {
+        "command": "cargo fmt --all -- --check",
+        "exitCode": 0
+      },
+      "ruff": {
+        "command": "ruff check tools tests/acceptance",
+        "exitCode": 0
+      },
+      "layout": {
+        "command": "bash tests/acceptance/day5-layout-conformance.sh --subject",
+        "capture": ".evidence/day5-layout/20260905T193221Z-75704",
+        "mismatchCount": 0,
+        "mismatches": [],
+        "status": "PASS",
+        "total": 128
+      },
+      "attributedLayout": {
+        "command": "C30_LAYOUT_CASE_SET=attributed C30_LAYOUT_MANIFEST=\"$PWD/tests/contracts/layout-attributed-cases.json\" bash tests/acceptance/day5-layout-conformance.sh --subject",
+        "capture": ".evidence/day5-layout/20260905T193230Z-75703",
+        "mismatchCount": 0,
+        "mismatches": [],
+        "status": "PASS",
+        "total": 22
+      },
+      "offlineReplay": {
+        "command": "git -C .build/ac-replay-36e4a57 pull --ff-only; cd .build/ac-replay-36e4a57; cargo test --workspace --no-fail-fast --locked --offline -j 2",
+        "subjectCommit": "860eace",
+        "passed": 1608,
+        "failed": 0,
+        "ignored": 4,
+        "completedTargets": 247,
+        "exitCode": 0,
+        "isolation": "Existing no-local clone, fast-forwarded to the measured subject; independent target and object store, no alternates. Not claimed as a fresh target.",
+        "priorAttempt": "9475b5a: 1607 passed, 1 failed, 4 ignored. Parallel assembler tests shared and deleted unit.s. 860eace isolates per-invocation names; the entire offline replay was rerun and passed."
+      },
+      "measurementFailures": "Two concurrent layout attempts invalidated one another through temporary oracle image aliases. Neither is PASS. The sequential repeats above passed."
+    },
+    "acceptanceAE2": {
+      "command": "cargo build --release -p evocc --locked --offline -j 2 && python3 tests/acceptance/publish-kernel-dashboard.py --previous .evidence/day5-kernel-reconnaissance/20260905T184422Z-99139/results.jsonl",
+      "runId": "20260905T193450Z-81402",
+      "subjectCommit": "860eace",
+      "clean": 48,
+      "regressions": 0,
+      "parseSurvey": {
+        "command": "python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --action parse --evocc target/frontend/release/evocc --jobs 4 --timeout 60",
+        "runId": "20260905T185526Z-27381",
+        "clean": 2798,
+        "other": 0,
+        "sealSha256": "9aaa1689ae3c351da92f83e06595bd7730268bb43cea74a8316f87d642117bb1"
+      }
+    }
   },
   "redWindow": {
     "opened": "ca8127d (tests only)",

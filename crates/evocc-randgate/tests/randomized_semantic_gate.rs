@@ -79,6 +79,13 @@ fn family(inst: &Inst) -> &'static str {
         Inst::Store { volatile: true, .. } => "store.volatile",
         Inst::Copy { .. } => "copy",
         Inst::PtrOffset { .. } => "ptr.offset",
+        Inst::PointerCast { result, .. } => {
+            if result.ty == evocc_evoir::EvoIRType::Bits(64) {
+                "ptr.to_int"
+            } else {
+                "ptr.from_int"
+            }
+        }
         Inst::Call { .. } => "call",
         Inst::IndirectCall { .. } => "indirect_call",
         Inst::Br(..) => "br",

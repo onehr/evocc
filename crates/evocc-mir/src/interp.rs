@@ -507,7 +507,7 @@ fn allocate_global(state: &mut State, global: &GlobalObject) -> Result<Pointer, 
                 .allocate_string_literal(global.origin, global.layout, &bytes)
                 .map_err(|error| memory_error(&error))?
         }
-        GlobalKind::File | GlobalKind::FunctionStatic => state
+        GlobalKind::File | GlobalKind::FunctionStatic | GlobalKind::CompoundLiteral => state
             .memory
             .allocate_static(global.origin, global.layout, InitialState::Uninitialized)
             .map_err(|error| memory_error(&error))?,
@@ -615,6 +615,7 @@ enum Identity {
     Object(Pointer),
     Function(u64),
     Bits(u64),
+    ExposedAddress(u64),
 }
 
 fn identity(value: MirValue) -> Identity {
@@ -626,6 +627,7 @@ fn identity(value: MirValue) -> Identity {
         MirValue::Fn(PointerValue::Null) => Identity::Null,
         MirValue::Fn(PointerValue::Function(id)) => Identity::Function(id),
         MirValue::Fn(PointerValue::Object(pointer)) => Identity::Object(pointer),
+        MirValue::Fn(PointerValue::Exposed(address)) => Identity::ExposedAddress(address),
     }
 }
 

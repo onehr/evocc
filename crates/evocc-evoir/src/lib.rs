@@ -304,6 +304,8 @@ pub enum Inst {
 
     /// Construct the canonical null pointer.
     PtrNull(Value),
+    /// Integer addresses and pointer provenance are bridged only by these forms.
+    PointerCast { result: Value, operand: Value },
 
     /// Return the stable address of one module global.
     GlobalAddr { result: Value, symbol: String },
@@ -432,6 +434,7 @@ pub enum Inst {
 #[must_use]
 pub fn inst_results(inst: &Inst) -> Vec<&Value> {
     match inst {
+        Inst::PointerCast { result, .. } => vec![result],
         Inst::BitOperation { result, .. } => vec![result],
         Inst::VaAccess(access) => access.results(),
         Inst::Asm(assembly) | Inst::AsmGoto { assembly, .. } => assembly.results(),
@@ -515,6 +518,7 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
 #[must_use]
 pub fn inst_uses(inst: &Inst) -> Vec<&Value> {
     match inst {
+        Inst::PointerCast { operand, .. } => vec![operand],
         Inst::BitOperation { operand, .. } => vec![operand],
         Inst::VaAccess(access) => vec![&access.list, &access.mem_in, &access.world_in],
         Inst::Asm(assembly) => assembly.operands(),
@@ -826,6 +830,7 @@ fn local_effect_summary(function: &Function) -> EffectSummary {
 #[allow(clippy::too_many_lines)]
 fn inst_effect_summary(inst: &Inst) -> EffectSummary {
     match inst {
+        Inst::PointerCast { .. } => EffectSummary::default(),
         Inst::BitOperation { .. } => EffectSummary::default(),
         Inst::Asm(_) | Inst::AsmGoto { .. } => EffectSummary {
             reads_all: true,
@@ -913,6 +918,7 @@ pub enum GlobalKind {
     File,
     FunctionStatic,
     StringLiteral,
+    CompoundLiteral,
 }
 
 /// Link visibility of one module global.
@@ -925,6 +931,7 @@ pub enum GlobalVisibility {
 /// One eagerly allocated module object and its byte initialization state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlobalObject {
+    pub relocs: Vec<Relocation>,
     pub symbol: String,
     pub origin: u64,
     pub kind: GlobalKind,
@@ -932,6 +939,13 @@ pub struct GlobalObject {
     pub layout: AccessLayout,
     pub bytes: Vec<u8>,
     pub initialized: Vec<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Relocation {
+    pub offset: u64,
+    pub symbol: String,
+    pub addend: i64,
 }
 
 // ---------------------------------------------------------------------------
@@ -1340,6 +1354,36 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                 global.symbol, global.layout.size_bytes
             ));
         }
+        let mut previous_end = 0;
+        for relocation in &global.relocs {
+            let end = relocation
+                .offset
+                .checked_add(8)
+                .filter(|end| *end <= global.layout.size_bytes)
+                .ok_or_else(|| {
+                    format!(
+                        "global '{}' relocation is outside its object",
+                        global.symbol
+                    )
+                })?;
+            if relocation.offset % 8 != 0
+                || relocation.offset < previous_end
+                || !symbols.contains(relocation.symbol.as_str())
+                || (functions.contains_key(relocation.symbol.as_str()) && relocation.addend != 0)
+                || global.bytes[relocation.offset as usize..end as usize]
+                    .iter()
+                    .any(|b| *b != 0)
+                || global.initialized[relocation.offset as usize..end as usize]
+                    .iter()
+                    .any(|b| !*b)
+            {
+                return Err(format!(
+                    "global '{}' has a malformed relocation",
+                    global.symbol
+                ));
+            }
+            previous_end = end;
+        }
         if global.kind == GlobalKind::StringLiteral && global.initialized.iter().any(|bit| !*bit) {
             return Err(format!(
                 "string-literal global '{}' must be fully initialized",
@@ -1369,6 +1413,15 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                 if global.symbol != expected || global.visibility != GlobalVisibility::Internal {
                     return Err(format!(
                         "string-literal global '{}' must be internal symbol '{expected}'",
+                        global.symbol
+                    ));
+                }
+            }
+            GlobalKind::CompoundLiteral => {
+                let expected = format!("__evocc.compound.{}", global.origin);
+                if global.symbol != expected || global.visibility != GlobalVisibility::Internal {
+                    return Err(format!(
+                        "compound-literal global '{}' must be internal symbol '{expected}'",
                         global.symbol
                     ));
                 }
@@ -2192,6 +2245,19 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
                     Ok(())
                 }
                 _ => expect_bits(&lhs.ty, "icmp operand", block),
+            }
+        }
+        Inst::PointerCast { result, operand } => {
+            let valid = (result.ty == EvoIRType::Bits(64)
+                && matches!(operand.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }))
+                || (operand.ty == EvoIRType::Bits(64)
+                    && matches!(result.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }));
+            if valid {
+                Ok(())
+            } else {
+                Err(format!(
+                    "invalid pointer-integer conversion in block {block}"
+                ))
             }
         }
         Inst::PtrNull(result) => expect_pointer_value(&result.ty, "null-pointer result", block),
@@ -3465,7 +3531,6 @@ fn interpret_module_in_state(
     mut state: ExecutionState,
 ) -> Result<InterpreterOutcome, InterpreterError> {
     validate_module(module).map_err(|message| InterpreterError::InvalidModule { message })?;
-    initialize_globals(module, &mut state)?;
     let function_indices: HashMap<&str, usize> = module
         .functions
         .iter()
@@ -3493,6 +3558,7 @@ fn interpret_module_in_state(
             Ok((name.to_owned(), identity))
         })
         .collect::<Result<_, _>>()?;
+    initialize_globals(module, &mut state)?;
     let entry_index = function_indices.get(entry_name).copied().ok_or_else(|| {
         InterpreterError::MissingEntryFunction {
             name: entry_name.to_owned(),
@@ -3643,29 +3709,44 @@ fn interpret_module_in_state(
                     world_out,
                 } = instruction
                 {
-                    let identity =
-                        match read_internal(&frames[frame_index].values, &callee, block_id)? {
-                            InternalValue::FunctionPointer(PointerValue::Function(identity)) => {
-                                identity
-                            }
-                            InternalValue::FunctionPointer(PointerValue::Null) => {
-                                return Err(InterpreterError::CallThroughNullFunctionPointer {
-                                    block: block_id,
-                                });
-                            }
-                            InternalValue::FunctionPointer(PointerValue::Object(_))
-                            | InternalValue::Pointer(_)
-                            | InternalValue::Bits(_) => {
-                                return Err(InterpreterError::CallThroughNonFunctionPointer {
-                                    block: block_id,
-                                });
-                            }
-                            InternalValue::Uninitialized => {
-                                return Err(InterpreterError::InvalidPointerRepresentation {
-                                    block: block_id,
-                                });
-                            }
+                    let callee_value =
+                        read_internal(&frames[frame_index].values, &callee, block_id)?;
+                    let callee_value =
+                        if let InternalValue::FunctionPointer(pointer) = callee_value {
+                            InternalValue::FunctionPointer(
+                                state.memory.resolve_function_pointer(pointer).map_err(
+                                    |error| InterpreterError::MemoryAccess {
+                                        block: block_id,
+                                        error,
+                                    },
+                                )?,
+                            )
+                        } else {
+                            callee_value
                         };
+                    let identity = match callee_value {
+                        InternalValue::FunctionPointer(PointerValue::Function(identity)) => {
+                            identity
+                        }
+                        InternalValue::FunctionPointer(PointerValue::Null) => {
+                            return Err(InterpreterError::CallThroughNullFunctionPointer {
+                                block: block_id,
+                            });
+                        }
+                        InternalValue::FunctionPointer(PointerValue::Object(_))
+                        | InternalValue::FunctionPointer(PointerValue::Exposed(_))
+                        | InternalValue::Pointer(_)
+                        | InternalValue::Bits(_) => {
+                            return Err(InterpreterError::CallThroughNonFunctionPointer {
+                                block: block_id,
+                            });
+                        }
+                        InternalValue::Uninitialized => {
+                            return Err(InterpreterError::InvalidPointerRepresentation {
+                                block: block_id,
+                            });
+                        }
+                    };
                     let identity_index = identity
                         .checked_sub(1)
                         .and_then(|identity| usize::try_from(identity).ok());
@@ -4328,8 +4409,16 @@ fn execute_instruction(
         }
         Inst::ICmp(result, operation, lhs, rhs) => {
             if matches!(lhs.ty, EvoIRType::Ptr(_)) {
-                let left = read_pointer(values, lhs, block)?;
-                let right = read_pointer(values, rhs, block)?;
+                let left = read_pointer_value(values, lhs, block)?;
+                let right = read_pointer_value(values, rhs, block)?;
+                let left = state
+                    .memory
+                    .pointer_address(left)
+                    .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                let right = state
+                    .memory
+                    .pointer_address(right)
+                    .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
                 let comparison = match operation {
                     CmpOp::Eq => left == right,
                     CmpOp::Ne => left != right,
@@ -4343,8 +4432,16 @@ fn execute_instruction(
                 return Ok(());
             }
             if matches!(lhs.ty, EvoIRType::FnPtr { .. }) {
-                let left = read_function_pointer(values, lhs, block)?;
-                let right = read_function_pointer(values, rhs, block)?;
+                let left = read_pointer_value(values, lhs, block)?;
+                let right = read_pointer_value(values, rhs, block)?;
+                let left = state
+                    .memory
+                    .pointer_address(left)
+                    .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                let right = state
+                    .memory
+                    .pointer_address(right)
+                    .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
                 let comparison = match operation {
                     CmpOp::Eq => left == right,
                     CmpOp::Ne => left != right,
@@ -4391,6 +4488,33 @@ fn execute_instruction(
                 result,
                 target_kernel.normalize(source_kernel.normalize(raw)),
             );
+        }
+        Inst::PointerCast { result, operand } => {
+            let value = if result.ty == EvoIRType::Bits(64) {
+                let pointer = match read_internal(values, operand, block)? {
+                    InternalValue::Pointer(pointer) => PointerValue::object(pointer),
+                    InternalValue::FunctionPointer(pointer) => pointer,
+                    _ => return Err(InterpreterError::InvalidPointerRepresentation { block }),
+                };
+                let (memory, address) = state
+                    .memory
+                    .expose_pointer(pointer)
+                    .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                state.memory = memory;
+                InternalValue::Bits(address)
+            } else {
+                let address = read_value(values, operand, block)?;
+                if matches!(result.ty, EvoIRType::FnPtr { .. }) {
+                    InternalValue::FunctionPointer(if address == 0 {
+                        PointerValue::Null
+                    } else {
+                        PointerValue::Exposed(address)
+                    })
+                } else {
+                    InternalValue::Pointer(Pointer::from_address(address))
+                }
+            };
+            write_internal(values, result, value);
         }
         Inst::PtrNull(result) => match result.ty {
             EvoIRType::FnPtr { .. } => write_internal(
@@ -4533,23 +4657,7 @@ fn execute_instruction(
                     };
                     InternalValue::Bits(raw)
                 }
-                EvoIRType::Ptr(_) => {
-                    let pointer = if *volatile {
-                        let (pointer, world) = state
-                            .memory
-                            .volatile_load_pointer(&state.world, address, layout)
-                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
-                        state.world = world;
-                        pointer
-                    } else {
-                        state
-                            .memory
-                            .load_pointer(address, layout)
-                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?
-                    };
-                    InternalValue::Pointer(pointer)
-                }
-                EvoIRType::FnPtr { .. } => {
+                EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => {
                     let pointer = if *volatile {
                         let (pointer, world) = state
                             .memory
@@ -4563,7 +4671,18 @@ fn execute_instruction(
                             .load_pointer_value(address, layout)
                             .map_err(|error| InterpreterError::MemoryAccess { block, error })?
                     };
-                    InternalValue::FunctionPointer(pointer)
+                    match (&result.ty, pointer) {
+                        (EvoIRType::Ptr(_), PointerValue::Null) => {
+                            InternalValue::Pointer(Pointer::NULL)
+                        }
+                        (EvoIRType::Ptr(_), PointerValue::Object(pointer)) => {
+                            InternalValue::Pointer(pointer)
+                        }
+                        (EvoIRType::Ptr(_), PointerValue::Exposed(address)) => {
+                            InternalValue::Pointer(Pointer::from_address(address))
+                        }
+                        _ => InternalValue::FunctionPointer(pointer),
+                    }
                 }
                 _ => {
                     return Err(InterpreterError::UnsupportedInstruction {
@@ -4754,35 +4873,35 @@ fn read_pointer(
         InternalValue::Uninitialized => {
             Err(InterpreterError::InvalidPointerRepresentation { block })
         }
-        InternalValue::Bits(_) | InternalValue::FunctionPointer(_) => {
-            Err(InterpreterError::InvalidFunction {
-                message: format!(
-                    "block {block} consumes non-pointer v{} as pointer",
-                    value.id
-                ),
-            })
+        InternalValue::FunctionPointer(_) => {
+            Err(InterpreterError::InvalidPointerRepresentation { block })
         }
+        InternalValue::Bits(_) => Err(InterpreterError::InvalidFunction {
+            message: format!(
+                "block {block} consumes non-pointer v{} as pointer",
+                value.id
+            ),
+        }),
     }
 }
 
-fn read_function_pointer(
+fn read_pointer_value(
     values: &HashMap<u32, InternalValue>,
     value: &Value,
     block: BlockId,
 ) -> Result<PointerValue, InterpreterError> {
     match read_internal(values, value, block)? {
         InternalValue::FunctionPointer(pointer) => Ok(pointer),
+        InternalValue::Pointer(pointer) => Ok(PointerValue::object(pointer)),
         InternalValue::Uninitialized => {
             Err(InterpreterError::InvalidPointerRepresentation { block })
         }
-        InternalValue::Bits(_) | InternalValue::Pointer(_) => {
-            Err(InterpreterError::InvalidFunction {
-                message: format!(
-                    "block {block} consumes non-function-pointer v{} as fnptr",
-                    value.id
-                ),
-            })
-        }
+        InternalValue::Bits(_) => Err(InterpreterError::InvalidFunction {
+            message: format!(
+                "block {block} consumes non-pointer v{} as a pointer value",
+                value.id
+            ),
+        }),
     }
 }
 
@@ -4829,7 +4948,7 @@ fn initialize_globals(module: &Module, state: &mut ExecutionState) -> Result<(),
                     .allocate_string_literal(global.origin, global.layout, &bytes)
                     .map_err(|error| InterpreterError::MemorySetup { error })?
             }
-            GlobalKind::File | GlobalKind::FunctionStatic => state
+            GlobalKind::File | GlobalKind::FunctionStatic | GlobalKind::CompoundLiteral => state
                 .memory
                 .allocate_static(global.origin, global.layout, InitialState::Uninitialized)
                 .map_err(|error| InterpreterError::MemorySetup { error })?,
@@ -4856,8 +4975,9 @@ fn initialize_globals(module: &Module, state: &mut ExecutionState) -> Result<(),
                     u64::try_from(end - start).map_err(|_| InterpreterError::InvalidModule {
                         message: format!("global '{}' range exceeds u64", global.symbol),
                     })?;
-                let bytes = ByteSequence::try_from_bytes(global.bytes[start..end].to_vec())
-                    .map_err(|error| InterpreterError::MemorySetup { error })?;
+                let bytes =
+                    ByteSequence::try_from_static_initializer(global.bytes[start..end].to_vec())
+                        .map_err(|error| InterpreterError::MemorySetup { error })?;
                 state.memory = state
                     .memory
                     .store_bytes(address, AccessLayout::new(size, 1), &bytes)
@@ -4866,6 +4986,35 @@ fn initialize_globals(module: &Module, state: &mut ExecutionState) -> Result<(),
             }
         }
         state.globals.insert(global.symbol.clone(), pointer);
+    }
+    for global in &module.globals {
+        for relocation in &global.relocs {
+            let pointer = if let Some(pointer) = state.globals.get(&relocation.symbol) {
+                PointerValue::object(
+                    pointer
+                        .checked_offset(relocation.addend)
+                        .map_err(|error| InterpreterError::MemorySetup { error })?,
+                )
+            } else if let Some(identity) = state.functions.get(&relocation.symbol) {
+                if relocation.addend != 0 {
+                    return Err(InterpreterError::InvalidModule {
+                        message: "function relocation has a nonzero addend".into(),
+                    });
+                }
+                PointerValue::Function(*identity)
+            } else {
+                return Err(InterpreterError::InvalidModule {
+                    message: "relocation names an absent symbol".into(),
+                });
+            };
+            let destination = state.globals[&global.symbol]
+                .checked_offset(relocation.offset as i64)
+                .map_err(|error| InterpreterError::MemorySetup { error })?;
+            state.memory = state
+                .memory
+                .store_pointer_value(destination, AccessLayout::new(8, 8), pointer)
+                .map_err(|error| InterpreterError::MemorySetup { error })?;
+        }
     }
     Ok(())
 }
@@ -5234,6 +5383,7 @@ fn remap(value: &mut Value, aliases: &HashMap<u32, Value>) {
 #[allow(clippy::too_many_lines)]
 pub fn remap_inst_uses(inst: &mut Inst, aliases: &HashMap<u32, Value>) {
     match inst {
+        Inst::PointerCast { operand, .. } => remap(operand, aliases),
         Inst::BitOperation { operand, .. } => remap(operand, aliases),
         Inst::VaAccess(access) => {
             remap(&mut access.list, aliases);

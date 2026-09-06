@@ -235,25 +235,39 @@ fn designated_and_positional_forms_lower_to_identical_bytes() {
 }
 
 #[test]
-fn file_scope_compound_pointer_fails_closed_without_a_global_identity() {
+fn file_scope_compound_pointer_uses_its_manifest_global_identity() {
     let arena = Arena::default();
     let unit = parse("int *values = (int[]){ 1, 2 };\n", &arena, 32);
-    let error = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
-        .expect_err("an unspecified relocation identity must not produce dangling global_addr");
-    assert_eq!(error.code(), "E3026");
-    assert_eq!(error.to_string(), "not-lowered: static-relocation");
+    let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+    let object = module
+        .globals
+        .iter()
+        .find(|g| g.kind == evocc_evoir::GlobalKind::CompoundLiteral)
+        .unwrap();
+    assert_eq!(object.bytes, [1, 0, 0, 0, 2, 0, 0, 0]);
+    assert_eq!(
+        module
+            .globals
+            .iter()
+            .find(|g| g.symbol == "values")
+            .unwrap()
+            .relocs[0]
+            .symbol,
+        object.symbol
+    );
+    validate_module(&module).unwrap();
 }
 
 #[test]
-fn an_integer_round_trip_address_stops_at_the_static_relocation_boundary() {
+fn an_integer_round_trip_address_relocates_an_external_function() {
     let arena = Arena::default();
     let unit = parse(
         "typedef unsigned long uintptr_t; int k(char *s); static void *p = (void *)(uintptr_t)&k;\n",
         &arena,
         33,
     );
-    let error = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
-        .expect_err("the deferred relocation must fail closed");
-    assert_eq!(error.code(), "E3026");
-    assert_eq!(error.to_string(), "not-lowered: static-relocation");
+    let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+    assert_eq!(module.globals[0].relocs[0].symbol, "k");
+    assert!(module.declares.iter().any(|function| function.name == "k"));
+    validate_module(&module).unwrap();
 }

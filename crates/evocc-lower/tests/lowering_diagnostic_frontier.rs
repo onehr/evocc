@@ -7,7 +7,7 @@ use evocc_evoir::{
     interpret_module, render_module, InterpreterLimits as EvoIrLimits, RuntimeValue,
 };
 use evocc_lex::{Lexer, TokenKind};
-use evocc_lower::{lower_unit, LowerError};
+use evocc_lower::lower_unit;
 use evocc_parser::Parser;
 use evocc_types::{EvoIRType, TargetDataLayout};
 
@@ -149,13 +149,6 @@ fn completed_array_redeclaration_uses_its_composite_identity() {
     assert!(module.functions.is_empty());
 }
 
-fn lowering_error(source: &str, ordinal: u32) -> LowerError {
-    let arena = Arena::default();
-    let unit = parse(&arena, source, ordinal);
-    lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
-        .expect_err("frontier fixture must remain fail-closed")
-}
-
 fn function_symbol(unit: &evocc_chir::CHirUnit<'_>, name: &str) -> SymbolId {
     unit.iter()
         .find_map(|declaration| match declaration {
@@ -177,30 +170,24 @@ fn entry_arguments(module: &evocc_evoir::Module) -> Vec<RuntimeValue> {
 }
 
 #[test]
-fn pointer_integer_conversions_have_one_typed_lowering_boundary() {
+fn pointer_integer_conversions_lower_to_explicit_forms() {
     let cases = [
         (
             "unsigned long bits(int *pointer) { return (unsigned long)pointer; }\n",
-            "(unsigned long)pointer",
+            "ptr.to_int",
             6,
         ),
         (
             "int *pointer(unsigned long bits) { return (int *)bits; }\n",
-            "(int *)bits",
+            "ptr.from_int.ptr<generic>",
             7,
         ),
     ];
     for (source, conversion, ordinal) in cases {
-        let error = lowering_error(source, ordinal);
-        assert_eq!(error.code(), "E3036", "wrong diagnostic: {error}");
-        assert_eq!(error.to_string(), "not-lowered: pointer-integer-conversion");
-        let start = source
-            .find(conversion)
-            .expect("fixture contains conversion");
-        assert_eq!(
-            error.span().expect("typed error has span").byte_start,
-            start as u32
-        );
+        let arena = Arena::default();
+        let unit = parse(&arena, source, ordinal);
+        let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+        assert!(evocc_evoir::render_module(&module).contains(conversion));
     }
 
     let source = "int *null_pointer(void) { return (int *)0; }\n";

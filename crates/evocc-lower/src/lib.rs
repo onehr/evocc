@@ -72,9 +72,6 @@ pub enum LowerError {
     GlobalRegisterVariable {
         span: SourceSpan,
     },
-    PointerIntegerConversion {
-        span: SourceSpan,
-    },
     WideInteger {
         span: SourceSpan,
     },
@@ -92,6 +89,12 @@ pub enum LowerError {
         reason: String,
     },
     VarArgs {
+        span: SourceSpan,
+    },
+    CheckedArithmeticWidth {
+        span: SourceSpan,
+    },
+    ObjectFunctionPointerConversion {
         span: SourceSpan,
     },
     MalformedFunction {
@@ -134,15 +137,18 @@ impl fmt::Display for LowerError {
             Self::GlobalRegisterVariable { .. } => {
                 formatter.write_str("not-lowered: global-register-variable")
             }
-            Self::PointerIntegerConversion { .. } => {
-                formatter.write_str("not-lowered: pointer-integer-conversion")
-            }
             Self::WideInteger { .. } => formatter.write_str("not-executed: wide-integer"),
             Self::StaticRelocation { .. } => formatter.write_str("not-lowered: static-relocation"),
             Self::ComputedGoto { .. } => formatter.write_str("not-lowered: computed-goto"),
             Self::Asm { .. } => formatter.write_str("not-lowered: asm"),
             Self::AsmOperand { reason, .. } => write!(formatter, "not-lowered: asm: {reason}"),
             Self::VarArgs { .. } => formatter.write_str("not-lowered: varargs"),
+            Self::CheckedArithmeticWidth { .. } => {
+                formatter.write_str("not-lowered: checked-arithmetic-width")
+            }
+            Self::ObjectFunctionPointerConversion { .. } => {
+                formatter.write_str("not-lowered: object-function-pointer-conversion")
+            }
             Self::MalformedFunction {
                 function, reason, ..
             } => write!(formatter, "malformed function {function}: {reason}"),
@@ -175,7 +181,8 @@ impl LowerError {
             Self::WideInteger { .. } => "E3033",
             Self::FunctionPointerArithmetic { .. } => "E3034",
             Self::GlobalRegisterVariable { .. } => "E3035",
-            Self::PointerIntegerConversion { .. } => "E3036",
+            Self::CheckedArithmeticWidth { .. } => "E3042",
+            Self::ObjectFunctionPointerConversion { .. } => "E3043",
             _ => "E3101",
         }
     }
@@ -197,13 +204,14 @@ impl LowerError {
             | Self::PointerDifference { span }
             | Self::FunctionPointerArithmetic { span }
             | Self::GlobalRegisterVariable { span }
-            | Self::PointerIntegerConversion { span }
             | Self::WideInteger { span }
             | Self::StaticRelocation { span }
             | Self::ComputedGoto { span }
             | Self::Asm { span }
             | Self::AsmOperand { span, .. }
             | Self::VarArgs { span }
+            | Self::CheckedArithmeticWidth { span }
+            | Self::ObjectFunctionPointerConversion { span }
             | Self::MalformedFunction { span, .. }
             | Self::InvalidControlFlow { span, .. }
             | Self::Layout { span, .. } => Some(*span),
@@ -359,6 +367,12 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
         })
         .collect::<BTreeMap<_, _>>();
     let memory_profile = !memory_symbols.is_empty()
+        || unit.iter().any(|declaration| match declaration {
+            CHirDecl::Function(function) => function
+                .body
+                .is_some_and(|body| evocc_chir::interp::statement_requires_memory(unit, body)),
+            _ => false,
+        })
         || manifest.sites().iter().any(|site| {
             site.kind().object_symbol().is_some_and(|symbol| {
                 unit.symbols()
@@ -378,7 +392,7 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
         });
     let functions = index_functions(unit, target, memory_profile)?;
     prevalidate_unit_for_lowering(unit, target, &global_register_symbols)?;
-    let mut globals = lower_globals(unit, target, &memory_symbols, &allocation_origins)?;
+    let mut globals = Vec::new();
     let mut string_origins = BTreeMap::new();
     for site in manifest.sites() {
         let Some(expression) = site.kind().string_literal() else {
@@ -397,6 +411,7 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
         let origin = site.ordinal().raw();
         string_origins.insert(expression as *const CHirExpr<'_> as usize, origin);
         globals.push(GlobalObject {
+            relocs: Vec::new(),
             symbol: format!("__evocc.string.{origin}"),
             origin,
             kind: GlobalKind::StringLiteral,
@@ -406,6 +421,65 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
             bytes,
         });
     }
+    let mut static_literal_origins = string_origins.clone();
+    for site in manifest.sites() {
+        if let Some((expression, true)) = site.kind().compound_literal() {
+            static_literal_origins.insert(
+                expression as *const CHirExpr<'_> as usize,
+                site.ordinal().raw(),
+            );
+        }
+    }
+    for site in manifest.sites() {
+        let Some((CHirExpr::CompoundLit(ty, initializer, span), true)) =
+            site.kind().compound_literal()
+        else {
+            continue;
+        };
+        let layout = target
+            .layout_of(unit.types(), *ty)
+            .map_err(|source| LowerError::Layout {
+                ty: *ty,
+                span: *span,
+                source,
+            })?;
+        let mut bytes = vec![
+            0;
+            usize::try_from(layout.size_bytes)
+                .map_err(|_| LowerError::StaticRelocation { span: *span })?
+        ];
+        let mut relocs = Vec::new();
+        for action in initializer.plan().actions() {
+            apply_static_initializer(
+                unit,
+                target,
+                *ty,
+                action,
+                &mut bytes,
+                &mut relocs,
+                &allocation_origins,
+                &static_literal_origins,
+            )?;
+        }
+        relocs.sort_by_key(|relocation| relocation.offset);
+        globals.push(GlobalObject {
+            symbol: format!("__evocc.compound.{}", site.ordinal().raw()),
+            origin: site.ordinal().raw(),
+            kind: GlobalKind::CompoundLiteral,
+            visibility: GlobalVisibility::Internal,
+            layout: AccessLayout::new(layout.size_bytes, layout.align_bytes),
+            initialized: vec![true; bytes.len()],
+            bytes,
+            relocs,
+        });
+    }
+    globals.extend(lower_globals(
+        unit,
+        target,
+        &memory_symbols,
+        &allocation_origins,
+        &static_literal_origins,
+    )?);
     let mut lowered = Vec::new();
     for declaration in unit.iter() {
         let CHirDecl::Function(function) = declaration else {
@@ -491,6 +565,15 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
             }
             _ => None,
         })
+        .chain(
+            globals
+                .iter()
+                .flat_map(|global| global.relocs.iter())
+                .filter_map(|relocation| {
+                    (!global_names.contains(relocation.symbol.as_str()))
+                        .then_some(relocation.symbol.as_str())
+                }),
+        )
         .collect::<BTreeSet<_>>();
     let mut extern_objects = BTreeMap::new();
     for symbol in &memory_symbols {
@@ -500,7 +583,12 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
                 .map_err(|_| LowerError::InvalidGeneratedSsa {
                     message: "external object has no symbol".into(),
                 })?;
-        if !referenced_objects.contains(entry.spelling()) {
+        if !referenced_objects.contains(entry.spelling())
+            || matches!(
+                unit.types().get(entry.ty()).map(|ty| &ty.kind),
+                Some(TypeKind::Function { .. })
+            )
+        {
             continue;
         }
         let (size, align) = match target.layout_of(unit.types(), entry.ty()) {
@@ -819,6 +907,7 @@ fn lower_globals(
     target: &TargetDataLayout,
     memory_symbols: &BTreeSet<SymbolId>,
     origins: &BTreeMap<SymbolId, u64>,
+    strings: &BTreeMap<usize, u64>,
 ) -> Result<Vec<GlobalObject>, LowerError> {
     fn collect_nested<'a>(
         statement: &'a CHirStmt<'a>,
@@ -953,11 +1042,22 @@ fn lower_globals(
                 feature: "global object exceeds host representation",
             })?;
             let mut bytes = vec![0_u8; size];
+            let mut relocs = Vec::new();
             if let Some(initializer) = &object.initializer {
                 for action in initializer.plan().actions() {
-                    apply_static_initializer(unit, target, object.ty, action, &mut bytes)?;
+                    apply_static_initializer(
+                        unit,
+                        target,
+                        object.ty,
+                        action,
+                        &mut bytes,
+                        &mut relocs,
+                        origins,
+                        strings,
+                    )?;
                 }
             }
+            relocs.sort_by_key(|relocation: &evocc_evoir::Relocation| relocation.offset);
             let origin = *origins
                 .get(&object.symbol)
                 .ok_or(LowerError::InvalidGeneratedSsa {
@@ -965,6 +1065,7 @@ fn lower_globals(
                 })?;
             let file_scope = symbol.scope() == unit.symbols().file_scope();
             Ok(GlobalObject {
+                relocs,
                 symbol: if file_scope {
                     symbol.spelling().to_owned()
                 } else {
@@ -992,12 +1093,229 @@ fn lower_globals(
         .collect()
 }
 
+/// Resolve an admitted static address without inventing a runtime object.
+fn symbolic_address(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    expression: &CHirExpr<'_>,
+    address_of: bool,
+    origins: &BTreeMap<SymbolId, u64>,
+    strings: &BTreeMap<usize, u64>,
+) -> Result<(String, i64), LowerError> {
+    let span = expression.span();
+    let error = || LowerError::StaticRelocation { span };
+    let symbol_address = |id: SymbolId| -> Result<(String, i64), LowerError> {
+        let symbol = unit.symbols().symbol(id).map_err(|_| error())?;
+        if symbol.kind() == SymbolKind::Function || symbol.scope() == unit.symbols().file_scope() {
+            Ok((symbol.spelling().to_owned(), 0))
+        } else if symbol.storage_class() == Some(StorageClass::Static) {
+            Ok((
+                format!("__evocc.static.{}", origins.get(&id).ok_or_else(error)?),
+                0,
+            ))
+        } else {
+            Err(error())
+        }
+    };
+    match expression {
+        CHirExpr::Cast(ty, operand, _) => {
+            let canonical = unit.types().get(*ty).ok_or_else(error)?;
+            if !matches!(canonical.kind, TypeKind::Pointer(_))
+                && target
+                    .layout_of(unit.types(), *ty)
+                    .map_err(|_| error())?
+                    .size_bytes
+                    < 8
+            {
+                return Err(error());
+            }
+            symbolic_address(unit, target, operand, false, origins, strings)
+        }
+        CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => {
+            symbolic_address(unit, target, operand, true, origins, strings)
+        }
+        CHirExpr::Unary(UnaryOp::Deref, operand, _) if address_of => {
+            symbolic_address(unit, target, operand, false, origins, strings)
+        }
+        CHirExpr::Ident { symbol, facts, .. }
+            if address_of
+                || unit.types().get(facts.ty()).is_some_and(|ty| {
+                    matches!(ty.kind, TypeKind::Array { .. } | TypeKind::Function { .. })
+                }) =>
+        {
+            symbol_address(*symbol)
+        }
+        CHirExpr::StringLit(..) => {
+            let origin = strings
+                .get(&(expression as *const CHirExpr<'_> as usize))
+                .ok_or_else(error)?;
+            Ok((format!("__evocc.string.{origin}"), 0))
+        }
+        CHirExpr::CompoundLit(..) => {
+            let origin = strings
+                .get(&(expression as *const CHirExpr<'_> as usize))
+                .ok_or_else(error)?;
+            Ok((format!("__evocc.compound.{origin}"), 0))
+        }
+        CHirExpr::Member(base, name, _) | CHirExpr::PtrMember(base, name, _) => {
+            let direct = matches!(expression, CHirExpr::Member(..));
+            let addressed = CHirExpr::Unary(UnaryOp::AddrOf, base, span);
+            let record = evocc_chir::PointerTypeDesc::from_expression(
+                unit.symbols(),
+                unit.types(),
+                if direct { &addressed } else { base },
+            )
+            .map_err(|_| error())?
+            .pointee();
+            let path =
+                evocc_chir::record_member_path(unit.types(), record, name).ok_or_else(error)?;
+            let member = path.last().ok_or_else(error)?.field_ty();
+            if !address_of
+                && !unit
+                    .types()
+                    .get(member)
+                    .is_some_and(|ty| matches!(ty.kind, TypeKind::Array { .. }))
+            {
+                return Err(error());
+            }
+            let (symbol, mut offset) =
+                symbolic_address(unit, target, base, direct, origins, strings)?;
+            for field in path {
+                let layout = target
+                    .record_layout(unit.types(), field.tag())
+                    .map_err(|_| error())?;
+                let delta = layout
+                    .fields
+                    .iter()
+                    .find(|entry| entry.field_index == field.field_index())
+                    .ok_or_else(error)?
+                    .byte_offset;
+                offset = offset
+                    .checked_add(i64::try_from(delta).map_err(|_| error())?)
+                    .ok_or_else(error)?;
+            }
+            Ok((symbol, offset))
+        }
+        CHirExpr::MemoryRead { place, .. }
+            if address_of
+                || unit
+                    .types()
+                    .get(place.value_ty())
+                    .is_some_and(|ty| matches!(ty.kind, TypeKind::Array { .. })) =>
+        {
+            let (symbol, mut offset) = match place.root() {
+                PlaceRoot::Object { symbol } => symbol_address(*symbol)?,
+                PlaceRoot::PointerExpression { pointer, .. } => {
+                    symbolic_address(unit, target, pointer, false, origins, strings)?
+                }
+                PlaceRoot::CompoundLiteral { expression, .. } => {
+                    symbolic_address(unit, target, expression, true, origins, strings)?
+                }
+            };
+            for projection in place.projections() {
+                let delta = match projection {
+                    PlaceProjection::Field(field) => {
+                        let layout = target
+                            .record_layout(unit.types(), field.tag())
+                            .map_err(|_| error())?;
+                        i64::try_from(
+                            layout
+                                .fields
+                                .iter()
+                                .find(|entry| entry.field_index == field.field_index())
+                                .ok_or_else(error)?
+                                .byte_offset,
+                        )
+                        .map_err(|_| error())?
+                    }
+                    PlaceProjection::Index(index) => {
+                        let value = evocc_chir::interp::interpret_static_integer_expression(
+                            unit,
+                            index.index(),
+                            target,
+                        )
+                        .map_err(|_| error())?;
+                        let signed = value.cast(CIntegerType::LONG).raw_bits() as i64;
+                        let size = target
+                            .layout_of(unit.types(), index.element_ty())
+                            .map_err(|_| error())?
+                            .size_bytes;
+                        signed
+                            .checked_mul(i64::try_from(size).map_err(|_| error())?)
+                            .ok_or_else(error)?
+                    }
+                };
+                offset = offset.checked_add(delta).ok_or_else(error)?;
+            }
+            Ok((symbol, offset))
+        }
+        CHirExpr::Binary(op @ (BinaryOp::Add | BinaryOp::Sub), pointer, index, _) => {
+            let (symbol, offset) =
+                symbolic_address(unit, target, pointer, false, origins, strings)?;
+            let value =
+                evocc_chir::interp::interpret_static_integer_expression(unit, index, target)
+                    .map_err(|_| error())?;
+            let scale =
+                evocc_chir::PointerTypeDesc::from_expression(unit.symbols(), unit.types(), pointer)
+                    .ok()
+                    .and_then(|ty| target.layout_of(unit.types(), ty.pointee()).ok())
+                    .map_or(1, |layout| layout.size_bytes);
+            let delta = (value.cast(CIntegerType::LONG).raw_bits() as i64)
+                .checked_mul(i64::try_from(scale).map_err(|_| error())?)
+                .ok_or_else(error)?;
+            let offset = if *op == BinaryOp::Add {
+                offset.checked_add(delta)
+            } else {
+                offset.checked_sub(delta)
+            }
+            .ok_or_else(error)?;
+            Ok((symbol, offset))
+        }
+        CHirExpr::Ternary(condition, left, right, _) => {
+            let condition = if let Ok(value) =
+                evocc_chir::interp::interpret_static_integer_expression(unit, condition, target)
+            {
+                value.raw_bits() != 0
+            } else if let CHirExpr::Binary(op @ (BinaryOp::Eq | BinaryOp::Ne), a, b, _) = condition
+            {
+                let a = if null_pointer_constant(unit, target, a) {
+                    None
+                } else {
+                    Some(symbolic_address(unit, target, a, false, origins, strings)?)
+                };
+                let b = if null_pointer_constant(unit, target, b) {
+                    None
+                } else {
+                    Some(symbolic_address(unit, target, b, false, origins, strings)?)
+                };
+                (a == b) == (*op == BinaryOp::Eq)
+            } else {
+                symbolic_address(unit, target, condition, false, origins, strings)?;
+                true
+            };
+            symbolic_address(
+                unit,
+                target,
+                if condition { left } else { right },
+                address_of,
+                origins,
+                strings,
+            )
+        }
+        _ => Err(error()),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn apply_static_initializer(
     unit: &CHirUnit<'_>,
     target: &TargetDataLayout,
     object_ty: TypeId,
     action: &InitAction<'_>,
     bytes: &mut [u8],
+    relocs: &mut Vec<evocc_evoir::Relocation>,
+    origins: &BTreeMap<SymbolId, u64>,
+    strings: &BTreeMap<usize, u64>,
 ) -> Result<(), LowerError> {
     let span = action
         .span()
@@ -1033,6 +1351,8 @@ fn apply_static_initializer(
             span,
             feature: "initializer range lies outside global object",
         })?;
+    relocs
+        .retain(|relocation| relocation.offset < offset as u64 || relocation.offset >= end as u64);
     match action {
         InitAction::ZeroScalar { .. } => target_bytes.fill(0),
         InitAction::StoreString { literal, .. } => {
@@ -1104,13 +1424,28 @@ fn apply_static_initializer(
             }
         }
         InitAction::StoreScalar { value, .. } => {
-            // A numeric cast is not a pointer relocation. Section 2.1 keeps
-            // pointer-valued static initializers outside the byte-only schema.
+            // Null uses the static zero representation; a non-null address
+            // needs a symbolic relocation, not fabricated pointer bytes.
             if matches!(
                 unit.types().get(destination).map(|ty| &ty.kind),
                 Some(TypeKind::Pointer(_))
             ) {
-                return Err(LowerError::StaticRelocation { span });
+                if static_null_pointer(unit, target, value) {
+                    target_bytes.fill(0);
+                    return Ok(());
+                }
+                let (symbol, addend) =
+                    symbolic_address(unit, target, value, false, origins, strings)?;
+                if target_bytes.len() != 8 {
+                    return Err(LowerError::StaticRelocation { span });
+                }
+                target_bytes.fill(0);
+                relocs.push(evocc_evoir::Relocation {
+                    offset: offset as u64,
+                    symbol,
+                    addend,
+                });
+                return Ok(());
             }
             let integer =
                 evocc_chir::interp::interpret_static_integer_expression(unit, value, target)
@@ -1131,11 +1466,28 @@ fn apply_static_initializer(
                     .unwrap_or(0) as u8;
             }
         }
-        InitAction::CopyAggregate { span, .. } => {
-            return Err(LowerError::UnsupportedExpression {
-                span: *span,
-                feature: "global aggregate copy initializer",
-            });
+        InitAction::CopyAggregate { value, span, .. } => {
+            let CHirExpr::CompoundLit(ty, initializer, _) = value else {
+                return Err(LowerError::StaticRelocation { span: *span });
+            };
+            let mut copied_relocs = Vec::new();
+            target_bytes.fill(0);
+            for action in initializer.plan().actions() {
+                apply_static_initializer(
+                    unit,
+                    target,
+                    *ty,
+                    action,
+                    target_bytes,
+                    &mut copied_relocs,
+                    origins,
+                    strings,
+                )?;
+            }
+            for mut relocation in copied_relocs {
+                relocation.offset += offset as u64;
+                relocs.push(relocation);
+            }
         }
     }
     Ok(())
@@ -1318,6 +1670,7 @@ fn prevalidate_decl_for_lowering(
             Ok(())
         }
         CHirDecl::Tag(_) | CHirDecl::Typedef(_) => Ok(()),
+        CHirDecl::Function(function) if function.body.is_none() => Ok(()),
         CHirDecl::Function(function) => Err(LowerError::UnsupportedStatement {
             span: function.span,
             feature: "block function declaration is outside scalar lowering",
@@ -1725,6 +2078,71 @@ fn index_functions(
             .or_insert(info);
     }
 
+    // A used function may have its only declaration inside a block. Its
+    // canonical linkage symbol is still the unit-level callable authority.
+    for symbol in required {
+        if definitions.contains_key(&symbol) {
+            continue;
+        }
+        let entry = unit
+            .symbols()
+            .symbol(symbol)
+            .map_err(|_| LowerError::InvalidGeneratedSsa {
+                message: "required function symbol is absent".into(),
+            })?;
+        let Some(TypeKind::Function {
+            return_type,
+            parameters,
+        }) = unit.types().get(entry.ty()).map(|ty| &ty.kind)
+        else {
+            return Err(LowerError::UnknownSymbol {
+                symbol,
+                span: entry.span(),
+            });
+        };
+        if entry.kind() != SymbolKind::Function {
+            return Err(LowerError::UnknownSymbol {
+                symbol,
+                span: entry.span(),
+            });
+        }
+        let (types, variadic) = match parameters {
+            FunctionParameters::Prototype { types, variadic } => (types.as_slice(), *variadic),
+            FunctionParameters::Unspecified => {
+                (unit.unprototyped_parameters(symbol).unwrap_or(&[]), false)
+            }
+        };
+        let return_type = if unit
+            .types()
+            .get(*return_type)
+            .is_some_and(|ty| matches!(ty.kind, TypeKind::Void))
+        {
+            None
+        } else {
+            Some(function_value_type(
+                unit.types(),
+                target,
+                *return_type,
+                entry.span(),
+            )?)
+        };
+        definitions.insert(
+            symbol,
+            FunctionInfo {
+                name: entry.spelling().into(),
+                variadic,
+                ordinal: 0,
+                parameter_symbols: Vec::new(),
+                parameter_types: types
+                    .iter()
+                    .map(|ty| function_value_type(unit.types(), target, *ty, entry.span()))
+                    .collect::<Result<Vec<_>, _>>()?,
+                return_type,
+                participant: variadic,
+                span: entry.span(),
+            },
+        );
+    }
     let mut participants = BTreeSet::new();
     for declaration in unit.iter() {
         let CHirDecl::Function(function) = declaration else {
@@ -1778,7 +2196,7 @@ fn function_info(
         })?;
     if symbol.kind() != SymbolKind::Function
         || symbol.spelling() != function.name.spelling
-        || !function_types_compatible(unit.types(), symbol.ty(), function.ty)
+        || !unit.types().compatible(symbol.ty(), function.ty)
         || !symbol
             .storage_class()
             .is_some_and(|storage| function_storage_compatible(storage, function.storage))
@@ -2149,90 +2567,6 @@ fn canonical_integer(
     Ok(integer)
 }
 
-fn function_types_compatible(types: &TypeInterner, left: TypeId, right: TypeId) -> bool {
-    if left == right {
-        return true;
-    }
-    let (Some(left), Some(right)) = (types.get(left), types.get(right)) else {
-        return false;
-    };
-    let (
-        TypeKind::Function {
-            return_type: left_return,
-            parameters: left_parameters,
-        },
-        TypeKind::Function {
-            return_type: right_return,
-            parameters: right_parameters,
-        },
-    ) = (&left.kind, &right.kind)
-    else {
-        return false;
-    };
-    left_return == right_return
-        && function_parameters_compatible(types, left_parameters, right_parameters)
-}
-
-fn function_parameters_compatible(
-    types: &TypeInterner,
-    left: &FunctionParameters,
-    right: &FunctionParameters,
-) -> bool {
-    match (left, right) {
-        (FunctionParameters::Unspecified, FunctionParameters::Unspecified) => true,
-        (
-            FunctionParameters::Prototype {
-                types: left_types,
-                variadic: left_variadic,
-            },
-            FunctionParameters::Prototype {
-                types: right_types,
-                variadic: right_variadic,
-            },
-        ) => left_variadic == right_variadic && left_types == right_types,
-        (
-            FunctionParameters::Unspecified,
-            FunctionParameters::Prototype {
-                types: prototype,
-                variadic,
-            },
-        )
-        | (
-            FunctionParameters::Prototype {
-                types: prototype,
-                variadic,
-            },
-            FunctionParameters::Unspecified,
-        ) => {
-            !variadic
-                && prototype.iter().all(|ty| {
-                    canonical_integer_for_compatibility(types, *ty)
-                        .is_some_and(|integer| integer_promotion(integer) == integer)
-                })
-        }
-    }
-}
-
-fn canonical_integer_for_compatibility(types: &TypeInterner, ty: TypeId) -> Option<CIntegerType> {
-    match &types.get(ty)?.kind {
-        TypeKind::Int(rank) => Some(integer_type_for_rank(*rank)),
-        TypeKind::Enum(tag) => {
-            let tag = types.tag(*tag)?;
-            let TagState::Complete(TagDefinition::Enum(constants)) = &tag.state else {
-                return None;
-            };
-            let minimum = constants.iter().map(|constant| constant.value).min()?;
-            let maximum = constants.iter().map(|constant| constant.value).max()?;
-            Some(integer_type_for_rank(enum_integer_rank(
-                minimum,
-                maximum,
-                tag.layout.packed,
-            )))
-        }
-        _ => None,
-    }
-}
-
 fn function_storage_compatible(entity: StorageClass, written: StorageClass) -> bool {
     match entity {
         StorageClass::Static => matches!(
@@ -2249,7 +2583,11 @@ fn function_storage_compatible(entity: StorageClass, written: StorageClass) -> b
     }
 }
 
-fn function_parameters_match(canonical: &FunctionParameters, written: &ParameterSyntax) -> bool {
+fn function_parameters_match(
+    interner: &TypeInterner,
+    canonical: &FunctionParameters,
+    written: &ParameterSyntax,
+) -> bool {
     match (canonical, written) {
         (FunctionParameters::Unspecified, ParameterSyntax::Unspecified) => true,
         (
@@ -2261,10 +2599,9 @@ fn function_parameters_match(canonical: &FunctionParameters, written: &Parameter
         ) => {
             variadic == written_variadic
                 && types.len() == parameters.len()
-                && types
-                    .iter()
-                    .zip(parameters)
-                    .all(|(canonical, parameter)| *canonical == parameter.ty)
+                && types.iter().zip(parameters).all(|(canonical, parameter)| {
+                    interner.compatible_ignoring_top_qualifiers(*canonical, parameter.ty)
+                })
         }
         _ => false,
     }
@@ -2312,7 +2649,7 @@ fn written_declarator_matches(
                     matches!(
                         &canonical.kind,
                         TypeKind::Function { parameters, .. }
-                            if function_parameters_match(parameters, syntax)
+                            if function_parameters_match(types, parameters, syntax)
                     )
                 });
         }
@@ -2331,7 +2668,7 @@ fn written_declarator_matches(
             ) => {
                 if index == 0
                     && function_syntax
-                        .is_some_and(|syntax| !function_parameters_match(parameters, syntax))
+                        .is_some_and(|syntax| !function_parameters_match(types, parameters, syntax))
                 {
                     return false;
                 }
@@ -2598,16 +2935,57 @@ impl<'a> FunctionLowerer<'a> {
         self.next_block = 1;
 
         let locals = self.info.parameter_symbols.iter().copied().collect();
-        let flow = self.lower_stmt(
-            body,
-            State {
-                block: 0,
-                env,
-                locals,
-            },
-            &BTreeSet::new(),
-            &ControlTargets::default(),
-        )?;
+        let mut entry = State {
+            block: 0,
+            env,
+            locals,
+        };
+        // The call interface supplies scalar values, but an addressed parameter
+        // is an automatic object owned by this invocation, just like a local.
+        for (symbol, value_type) in self
+            .info
+            .parameter_symbols
+            .iter()
+            .copied()
+            .zip(self.info.parameter_types.iter())
+        {
+            if !self.memory_symbols.contains(&symbol) || self.is_aggregate_type(value_type.source) {
+                continue;
+            }
+            let value = entry.env.remove(&EnvKey::Local(symbol)).ok_or(
+                LowerError::InvalidGeneratedSsa {
+                    message: format!("parameter {} has no incoming scalar value", symbol.raw()),
+                },
+            )?;
+            let origin =
+                *self
+                    .allocation_origins
+                    .get(&symbol)
+                    .ok_or(LowerError::InvalidGeneratedSsa {
+                        message: format!("parameter {} has no allocation origin", symbol.raw()),
+                    })?;
+            let address =
+                self.emit_alloca(value_type.source, declaration.span, origin, &mut entry)?;
+            self.emit_memory_store(
+                address.clone(),
+                ExprValue {
+                    value: value.value,
+                    integer: value_type.integer,
+                },
+                value_type.source,
+                false,
+                declaration.span,
+                &mut entry,
+            )?;
+            entry.env.insert(
+                EnvKey::Address(symbol),
+                BoundValue {
+                    value: address,
+                    integer: None,
+                },
+            );
+        }
+        let flow = self.lower_stmt(body, entry, &BTreeSet::new(), &ControlTargets::default())?;
         if !self.pending_gotos.is_empty() {
             return Err(LowerError::InvalidControlFlow {
                 span: self.info.span,
@@ -2775,11 +3153,19 @@ impl<'a> FunctionLowerer<'a> {
     ) -> Vec<EnvKey> {
         let mut keys = Vec::new();
         let mut seen = BTreeSet::new();
-        for symbol in preferred {
-            let key = if self.memory_symbols.contains(symbol) {
-                EnvKey::Address(*symbol)
+        let local_key = |symbol: SymbolId| {
+            if self.memory_symbols.contains(&symbol) {
+                let key = EnvKey::Address(symbol);
+                // Lexical visibility includes later declarations, but their
+                // allocation has not executed and has no address to transmit.
+                state.env.contains_key(&key).then_some(key)
             } else {
-                EnvKey::Local(*symbol)
+                Some(EnvKey::Local(symbol))
+            }
+        };
+        for symbol in preferred {
+            let Some(key) = local_key(*symbol) else {
+                continue;
             };
             if symbols.contains(symbol) && state.locals.contains(symbol) && seen.insert(key) {
                 keys.push(key);
@@ -2803,10 +3189,8 @@ impl<'a> FunctionLowerer<'a> {
             }
         }
         for symbol in symbols {
-            let key = if self.memory_symbols.contains(symbol) {
-                EnvKey::Address(*symbol)
-            } else {
-                EnvKey::Local(*symbol)
+            let Some(key) = local_key(*symbol) else {
+                continue;
             };
             if seen.contains(&key) {
                 continue;
@@ -3550,6 +3934,7 @@ impl<'a> FunctionLowerer<'a> {
                 });
             }
             CHirDecl::Tag(_) | CHirDecl::Typedef(_) => return Ok(()),
+            CHirDecl::Function(function) if function.body.is_none() => return Ok(()),
             CHirDecl::Function(_) => {
                 return Err(LowerError::UnsupportedStatement {
                     span: declaration.span(),
@@ -4263,7 +4648,26 @@ impl<'a> FunctionLowerer<'a> {
                     });
                 }
                 if matches!(value.value.ty, EvoIRType::Bits(_)) {
-                    return Err(LowerError::PointerIntegerConversion { span });
+                    let address = self.cast(value, CIntegerType::ULONG, state)?;
+                    let result = self.fresh_value(expected);
+                    self.emit(
+                        state,
+                        Inst::PointerCast {
+                            result: result.clone(),
+                            operand: address.value,
+                        },
+                    )?;
+                    return Ok(ExprValue {
+                        value: result,
+                        integer: CIntegerType::ULONG,
+                    });
+                }
+                if matches!(
+                    (&value.value.ty, &expected),
+                    (EvoIRType::Ptr(_), EvoIRType::FnPtr { .. })
+                        | (EvoIRType::FnPtr { .. }, EvoIRType::Ptr(_))
+                ) {
+                    return Err(LowerError::ObjectFunctionPointerConversion { span });
                 }
                 Err(LowerError::UnsupportedExpression {
                     span,
@@ -4912,11 +5316,14 @@ impl<'a> FunctionLowerer<'a> {
         )?;
         let address = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
         if static_storage {
-            return Err(LowerError::UnsupportedExpression {
-                span: *span,
-                feature:
-                    "file-scope compound-literal relocation has no specified EvoIR global identity",
-            });
+            self.emit(
+                state,
+                Inst::GlobalAddr {
+                    result: address.clone(),
+                    symbol: format!("__evocc.compound.{origin}"),
+                },
+            )?;
+            return Ok(address);
         }
         let mem_in = self.token(state, EnvKey::Memory)?.value;
         let world_in = self.token(state, EnvKey::World)?.value;
@@ -5892,9 +6299,6 @@ impl<'a> FunctionLowerer<'a> {
                     return self.wide_constant(state, target, converted.raw_bits());
                 }
                 let value = self.lower_expr(operand, state)?;
-                if matches!(value.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }) {
-                    return Err(LowerError::PointerIntegerConversion { span: *span });
-                }
                 self.cast(value, target, state)
             }
             CHirExpr::Assign {
@@ -6772,12 +7176,7 @@ impl<'a> FunctionLowerer<'a> {
             0..=32 => CIntegerType::INT,
             33..=64 => CIntegerType::LONG,
             65..=128 => CIntegerType::INT128,
-            _ => {
-                return Err(LowerError::UnsupportedExpression {
-                    span,
-                    feature: "checked arithmetic requires more than 128 exact bits",
-                })
-            }
+            _ => return Err(LowerError::CheckedArithmeticWidth { span }),
         };
         let left_value = state
             .env
@@ -7436,6 +7835,14 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<(), LowerError> {
         match expression {
+            CHirExpr::Cast(ty, operand, _)
+                if matches!(
+                    self.unit.types().get(*ty).map(|ty| &ty.kind),
+                    Some(TypeKind::Void)
+                ) =>
+            {
+                self.lower_discarded_expr(operand, state)?;
+            }
             CHirExpr::BuiltinVarArgs {
                 op,
                 first,
@@ -8131,12 +8538,25 @@ impl<'a> FunctionLowerer<'a> {
                 integer: target,
             });
         }
+        if matches!(value.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }) {
+            let result = self.fresh_value(EvoIRType::Bits(64));
+            self.emit(
+                state,
+                Inst::PointerCast {
+                    result: result.clone(),
+                    operand: value.value,
+                },
+            )?;
+            return self.cast(
+                ExprValue {
+                    value: result,
+                    integer: CIntegerType::ULONG,
+                },
+                target,
+                state,
+            );
+        }
         let EvoIRType::Bits(source_width) = value.value.ty else {
-            if matches!(value.value.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. }) {
-                return Err(LowerError::PointerIntegerConversion {
-                    span: self.info.span,
-                });
-            }
             return Err(LowerError::InvalidControlFlow {
                 span: self.info.span,
                 reason: "integer expression has a non-bit-vector EvoIR value",
@@ -8545,6 +8965,31 @@ fn constant_truth(
     expression: &CHirExpr<'_>,
 ) -> Option<bool> {
     constant_integer(unit, target, expression).map(CInteger::truth)
+}
+
+fn static_null_pointer(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    expression: &CHirExpr<'_>,
+) -> bool {
+    if null_pointer_constant(unit, target, expression) {
+        return true;
+    }
+    match expression {
+        CHirExpr::Cast(ty, operand, _)
+            if unit
+                .types()
+                .get(*ty)
+                .is_some_and(|ty| matches!(ty.kind, TypeKind::Pointer(_))) =>
+        {
+            static_null_pointer(unit, target, operand)
+        }
+        CHirExpr::Ternary(condition, left, right, _) => constant_truth(unit, target, condition)
+            .is_some_and(|condition| {
+                static_null_pointer(unit, target, if condition { left } else { right })
+            }),
+        _ => false,
+    }
 }
 
 fn null_pointer_constant(
@@ -9507,6 +9952,7 @@ fn remap_inst(
 #[allow(clippy::too_many_lines)]
 fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
     match instruction {
+        Inst::PointerCast { result, operand } => vec![result, operand],
         Inst::BitOperation {
             result, operand, ..
         } => vec![result, operand],

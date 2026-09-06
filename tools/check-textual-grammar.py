@@ -107,6 +107,15 @@ def renderer_shapes(source: str) -> set[str]:
         for line in rendered.splitlines():
             if is_rendered_form(line):
                 shapes.add(collapse(line.strip()))
+    # asm.goto composes the common assembly template with an edge suffix.
+    # Inspect that actual composition; do not infer emission from the spec.
+    goto = re.search(r'Inst::AsmGoto[\s\S]*?format!\(\s*"([^"]+)",\s*'
+                     r'self\.assembly\(assembly, true\)', source)
+    if goto and re.search(r'if is_goto\s*\{\s*"\.goto"', source):
+        suffix = unescape(PLACEHOLDER.sub(HOLE, goto[1]))
+        for base in tuple(shapes):
+            if " = asm<> " in base:
+                shapes.add(suffix.replace(HOLE, base.replace(" = asm", " = asm.goto"), 1))
     return shapes
 
 
@@ -125,6 +134,9 @@ def main() -> int:
     emitted = renderer_shapes(source)
     specified = spec_block("#### 9.3.1 Canonical Shapes")
     pending = spec_block("#### 9.3.2 Shapes Not Yet Emitted")
+    corrections = spec_block("### Implemented instruction shape corrections")
+    specified |= corrections
+    pending -= corrections
     superseded = spec_block("The form each replaces is **superseded**")
 
     undescribed = sorted(s for s in emitted if s not in specified | superseded)

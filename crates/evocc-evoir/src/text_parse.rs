@@ -303,6 +303,37 @@ impl ModuleParser<'_> {
 }
 
 fn parse_global(line: &str) -> Result<GlobalObject, String> {
+    let (line, relocations) = line
+        .split_once(" relocs=")
+        .map_or((line, None), |(line, rest)| (line, Some(rest)));
+    let mut relocs = Vec::new();
+    if let Some(text) = relocations {
+        let text = text
+            .strip_prefix("[(")
+            .and_then(|t| t.strip_suffix(")]"))
+            .ok_or("malformed relocation list")?;
+        for entry in text.split("), (") {
+            let fields = entry.split(", ").collect::<Vec<_>>();
+            if fields.len() != 3 {
+                return Err("malformed relocation".to_owned());
+            }
+            let offset = fields[0]
+                .parse::<u64>()
+                .map_err(|_| "invalid relocation offset")?;
+            let symbol = parse_symbol(fields[1])?.to_owned();
+            let addend = fields[2]
+                .parse::<i64>()
+                .map_err(|_| "invalid relocation addend")?;
+            if offset.to_string() != fields[0] || addend.to_string() != fields[2] {
+                return Err("noncanonical relocation integer".to_owned());
+            }
+            relocs.push(crate::Relocation {
+                offset,
+                symbol,
+                addend,
+            });
+        }
+    }
     let fields = line.split(' ').collect::<Vec<_>>();
     if fields.len() != 9 || fields[0] != "global" {
         return Err("malformed module global".to_owned());
@@ -313,6 +344,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
         "file" => GlobalKind::File,
         "function_static" => GlobalKind::FunctionStatic,
         "string_literal" => GlobalKind::StringLiteral,
+        "compound_literal" => GlobalKind::CompoundLiteral,
         _ => return Err("unknown module-global kind".to_owned()),
     };
     let visibility = match parse_named(fields[4], "visibility")? {
@@ -341,6 +373,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(GlobalObject {
+        relocs,
         symbol,
         origin,
         kind,
@@ -642,6 +675,24 @@ fn parse_instruction(
                 ty,
             ));
         }
+    }
+    if let Some(rest) = rhs.strip_prefix("ptr.to_int ") {
+        return Ok(Inst::PointerCast {
+            result: Value {
+                id: result_id,
+                ty: EvoIRType::Bits(64),
+            },
+            operand: use_value(rest, values)?,
+        });
+    }
+    if let Some(rest) = rhs.strip_prefix("ptr.from_int.") {
+        let mut cursor = Cursor::new(rest);
+        let ty = cursor.ty()?;
+        cursor.expect(" ")?;
+        return Ok(Inst::PointerCast {
+            result: Value { id: result_id, ty },
+            operand: use_value(cursor.remaining(), values)?,
+        });
     }
     if let Some(rest) = rhs.strip_prefix("ptr.null : ") {
         return Ok(Inst::PtrNull(Value {

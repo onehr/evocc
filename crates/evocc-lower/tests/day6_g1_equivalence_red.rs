@@ -666,7 +666,11 @@ fn branch_target(id: BlockId, args: &[Value]) -> String {
 
 fn render_inst(inst: &Inst) -> String {
     match inst {
-        Inst::Asm(_) | Inst::AsmGoto { .. } | Inst::VaAccess(_) | Inst::BitOperation { .. } => {
+        Inst::Asm(_)
+        | Inst::AsmGoto { .. }
+        | Inst::VaAccess(_)
+        | Inst::BitOperation { .. }
+        | Inst::PointerCast { .. } => {
             panic!("assembly and variadic lists are outside these scalar golden fixtures")
         }
         Inst::Const(result, immediate) => format!(

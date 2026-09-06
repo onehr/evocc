@@ -194,6 +194,7 @@ fn initialized_global_and_volatile_trace_are_observable() {
         extern_objects: Vec::new(),
         declares: Vec::new(),
         globals: vec![GlobalObject {
+            relocs: Vec::new(),
             symbol: "counter".to_owned(),
             origin: 20,
             kind: GlobalKind::File,

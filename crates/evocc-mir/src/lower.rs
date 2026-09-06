@@ -332,6 +332,12 @@ fn scan_inst(
             index,
             "bit operation instruction selection is not implemented".into(),
         ),
+        Inst::PointerCast { .. } => report(
+            E4009,
+            block,
+            index,
+            "pointer conversion instruction selection is not implemented".into(),
+        ),
         Inst::VaAccess(_) => report(
             E4009,
             block,
