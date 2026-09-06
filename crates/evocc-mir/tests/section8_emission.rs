@@ -244,7 +244,7 @@ fn a_global_is_emitted_as_data_with_its_initial_bytes() {
     let text = emit_module(&build(EVERY_SHAPE), &module.globals);
     assert!(text.contains(".section __DATA,__data\n"), "{text}");
     assert!(text.contains(".globl _counter\n_counter:\n"), "{text}");
-    assert!(text.contains("    .byte 7\n"), "{text}");
+    assert!(text.contains("    .byte 7, 0, 0, 0\n"), "{text}");
 }
 
 #[test]
