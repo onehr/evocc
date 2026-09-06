@@ -22,3 +22,7 @@ Each entry is one check by the architect session while the user sleeps.
 
 ## tick 4 (03:38, B11 finished)
 - Landed backend-b11: zero data to .bss, zero runs as .zero; sieve's assembly 1,000,289 lines to 287, static image 1.71 MB to 705 KB (GCC: 705 KB). Spec 0.20 records it and a Darwin variadic gap the window found (anonymous arguments go on the stack on Darwin; the Darwin lane judges exit status only).
+
+## tick 5 (04:41, musl re-run)
+- The musl re-run timed out in a container step while the machine sat at load 170 (Codex's survey and the kernel relink at the same time); its receipt still shows the earlier 178. Relaunching it alone now that the load has dropped.
+- toybox 164/201 and zlib 17/19 receipts committed; tracker refreshed.
