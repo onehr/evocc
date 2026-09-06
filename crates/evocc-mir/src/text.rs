@@ -403,6 +403,18 @@ pub fn render_inst(inst: &MInst) -> String {
         MInst::Extend { op, dst, src } => {
             format!("{}{} {}", defined(*dst), op.mnemonic(), use_of(*src))
         }
+        MInst::Unary {
+            op,
+            dst,
+            src,
+            width,
+        } => format!(
+            "{}{}.{} {}",
+            defined(*dst),
+            op.mnemonic(),
+            width.mnemonic(),
+            use_of(*src)
+        ),
         MInst::Bfx {
             signed,
             dst,

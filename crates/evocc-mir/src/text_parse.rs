@@ -17,7 +17,7 @@ use evocc_evoir::{AccessLayout, GlobalKind, GlobalObject, GlobalVisibility};
 use crate::{
     AsmBody, AsmClobber, AsmConstraint, AsmOperand, AsmValue, BinOp, CarryOp, Cond, ExtOp, FlagOp,
     LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass, StoreKind, SymbolKind, VReg,
-    WideMul, Width,
+    UnaryOp, WideMul, Width,
 };
 
 /// Parse canonical Appendix A bytes back into a module.
@@ -1023,6 +1023,17 @@ fn parse_defining(
                 flags_in,
                 lhs,
                 rhs,
+                width,
+            })
+        }
+        "clz" | "rbit" | "rev16" | "rev" => {
+            let op = UnaryOp::from_mnemonic(head).ok_or_else(|| format!("unknown form '{head}'"))?;
+            let src = scan.use_of()?;
+            scan.finish()?;
+            Ok(MInst::Unary {
+                op,
+                dst,
+                src,
                 width,
             })
         }

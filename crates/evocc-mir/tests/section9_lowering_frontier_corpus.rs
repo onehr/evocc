@@ -109,6 +109,36 @@ extern int module_value;
 int main(void) { return module_value + 1; }
 "#;
 
+/// The bit builtins on EvoIR 3.4's measured reference values (EvoMIR revision
+/// 0.14). Every operand is `volatile` so that neither compiler folds the
+/// answer and the emitted sequences are the ones that run.
+const BIT_BUILTIN_UNIT: &str = r#"static volatile unsigned one = 1u;
+static volatile unsigned eight = 8u;
+static volatile unsigned long long one_long = 1ull;
+static volatile unsigned long long every = ~0ull;
+static volatile int sixteen = 16;
+static volatile int zero = 0;
+static volatile unsigned word = 0x11223344u;
+static volatile unsigned short half = 0x1234;
+static volatile unsigned long long wide = 0x0102030405060708ull;
+static volatile unsigned char byte = 0xf0u;
+
+int main(void) {
+    int total = 0;
+    total += __builtin_clz(one);
+    total += __builtin_ctz(eight);
+    total += __builtin_clzll(one_long);
+    total += __builtin_popcountll(every);
+    total += __builtin_ffs(zero);
+    total += __builtin_ffs(sixteen);
+    total += __builtin_popcount(byte);
+    total += __builtin_bswap32(word) == 0x44332211u;
+    total += __builtin_bswap16(half) == (unsigned short)0x3412;
+    total += __builtin_bswap64(wide) == 0x0807060504030201ull;
+    return total & 0xff;
+}
+"#;
+
 const PROGRAMS: &[Program] = &[
     Program {
         name: "external-symbols",
@@ -126,6 +156,12 @@ const PROGRAMS: &[Program] = &[
         name: "module-assembly",
         unit: MODULE_ASSEMBLY_UNIT,
         darwin: Some(MODULE_ASSEMBLY_DARWIN),
+        other: None,
+    },
+    Program {
+        name: "bit-builtins",
+        unit: BIT_BUILTIN_UNIT,
+        darwin: None,
         other: None,
     },
 ];

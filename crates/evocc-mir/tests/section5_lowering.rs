@@ -69,6 +69,7 @@ fn mnemonics_with_boundary(module: &evocc_mir::MModule) -> Vec<String> {
                     MInst::SubCarryFlags { .. } => "sbcs".to_owned(),
                     MInst::TstImm { .. } => "tst".to_owned(),
                     MInst::Extend { op, .. } => op.mnemonic().to_owned(),
+                    MInst::Unary { op, .. } => op.mnemonic().to_owned(),
                     MInst::Bfx { signed: true, .. } => "sbfx".to_owned(),
                     MInst::Bfx { signed: false, .. } => "ubfx".to_owned(),
                     MInst::Cmp { .. } => "cmp".to_owned(),

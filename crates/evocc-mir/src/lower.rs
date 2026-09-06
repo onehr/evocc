@@ -13,13 +13,14 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use evocc_evoir::{
-    inst_results, inst_uses, Block, CmpOp, Function, Inst, Module, TrapReason, UbReason, Value,
+    inst_results, inst_uses, BitOp, Block, CmpOp, Function, Inst, Module, TrapReason, UbReason,
+    Value,
 };
 use evocc_types::EvoIRType;
 
 use crate::{
     BinOp, CarryOp, Cond, ExtOp, FlagOp, LoadKind, MBlock, MFunction, MInst, MModule, MTerm,
-    RegClass, StoreKind, SymbolKind, Target, VReg, WideMul, Width,
+    RegClass, StoreKind, SymbolKind, Target, UnaryOp, VReg, WideMul, Width,
 };
 
 /// One EvoIR form this revision does not lower, reported at the instruction.
@@ -338,12 +339,28 @@ fn scan_inst(
 
     match inst {
         // The Section 5 table, row by row.
-        Inst::BitOperation { .. } => report(
-            E4009,
-            block,
-            index,
-            "bit operation instruction selection is not implemented".into(),
-        ),
+        // Section 5's bit-counting and byte-swap row (revision 0.14). EvoIR
+        // 3.4 fixes `bswap` at 16, 32 or 64; the counting forms take any `N`
+        // the register classes hold, and width 128 has no row.
+        Inst::BitOperation { result, op, .. } => {
+            if is_pair(&result.ty) {
+                report(
+                    E4003,
+                    block,
+                    index,
+                    format!("{} at bits<128>", op.mnemonic()),
+                );
+            } else if *op == BitOp::ByteSwap
+                && !matches!(result.ty, EvoIRType::Bits(16 | 32 | 64))
+            {
+                report(
+                    E4009,
+                    block,
+                    index,
+                    format!("bswap of {:?}, which is not 16, 32 or 64", result.ty),
+                );
+            }
+        }
         Inst::VaAccess(_) => report(
             E4009,
             block,
@@ -580,6 +597,58 @@ impl Lowerer {
             lhs,
             imm,
             width: Width::X,
+        });
+        dst
+    }
+
+    /// One register-register form at `width`.
+    fn binary(
+        &mut self,
+        insts: &mut Vec<MInst>,
+        op: BinOp,
+        lhs: VReg,
+        rhs: VReg,
+        width: Width,
+    ) -> VReg {
+        let dst = self.fresh(width.class());
+        insts.push(MInst::Binary {
+            op,
+            dst,
+            lhs,
+            rhs,
+            width,
+        });
+        dst
+    }
+
+    /// One register-immediate form at `width`.
+    fn binary_imm(
+        &mut self,
+        insts: &mut Vec<MInst>,
+        op: BinOp,
+        lhs: VReg,
+        imm: u64,
+        width: Width,
+    ) -> VReg {
+        let dst = self.fresh(width.class());
+        insts.push(MInst::BinaryImm {
+            op,
+            dst,
+            lhs,
+            imm,
+            width,
+        });
+        dst
+    }
+
+    /// One of Section 5's one-operand bit forms at `width`.
+    fn unary(&mut self, insts: &mut Vec<MInst>, op: UnaryOp, src: VReg, width: Width) -> VReg {
+        let dst = self.fresh(width.class());
+        insts.push(MInst::Unary {
+            op,
+            dst,
+            src,
+            width,
         });
         dst
     }
@@ -1319,6 +1388,10 @@ fn lower_inst(
             insts.push(MInst::MovImm { dst, imm: 0 });
             lowerer.bind(result, dst);
         }
+        // Section 5's bit-counting and byte-swap row (revision 0.14).
+        Inst::BitOperation { result, operand, op } => {
+            lower_bit_operation(lowerer, insts, result, operand, *op)?;
+        }
         // Section 5 (revision 0.12): "`ptr.to_int`, `ptr.from_int.*` |
         // nothing: the value is the same 64-bit register". A pointer and a
         // `bits<64>` are both `gpr64`, so the conversion is an alias and emits
@@ -1939,6 +2012,135 @@ fn divide(
         lowerer.bind(result, quotient);
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Section 5: bit counting and byte swap (revision 0.14)
+// ---------------------------------------------------------------------------
+
+/// The row, sequence by sequence.
+///
+/// "`ctlz`: zero-extend per Section 3, `clz` at the register width, then
+/// subtract `32 - N` or `64 - N` for a narrower `N`; `cttz`: `rbit` then
+/// `clz`, and for a narrower `N` the result capped at `N` with `cmp`/`csel`,
+/// since the unspecified upper bits may hold a set bit; `ctpop`: the
+/// general-register sequence both oracles use without SIMD (`p39.out`,
+/// Clang-19; GCC-14 calls `__popcountdi2`, which the kernel does not provide)
+/// ... after zero extension; `bswap`: `rev16` (16, upper bits unspecified per
+/// Section 3), `rev` at 32 or 64."
+fn lower_bit_operation(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    result: &Value,
+    operand: &Value,
+    op: BitOp,
+) -> Result<(), String> {
+    let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
+    let width = width_of(class);
+    let bits = significant_bits(&result.ty);
+    let src = lowerer.reg(operand)?;
+
+    let value = match op {
+        BitOp::LeadingZeros => {
+            let extended = lowerer.zero_extend(insts, src, bits, width);
+            let counted = lowerer.unary(insts, UnaryOp::Clz, extended, width);
+            if bits < width.bits() {
+                lowerer.binary_imm(
+                    insts,
+                    BinOp::Sub,
+                    counted,
+                    u64::from(width.bits() - bits),
+                    width,
+                )
+            } else {
+                counted
+            }
+        }
+        BitOp::TrailingZeros => {
+            // The operand is not extended: `rbit` then `clz` answers the
+            // trailing zero count of whatever the register holds, and only the
+            // all-zero low `N` bits need the cap, which is what a garbage bit
+            // above `N` would otherwise shorten.
+            let reversed = lowerer.unary(insts, UnaryOp::Rbit, src, width);
+            let counted = lowerer.unary(insts, UnaryOp::Clz, reversed, width);
+            if bits < width.bits() {
+                let cap = lowerer.fresh(class);
+                insts.push(MInst::MovImm {
+                    dst: cap,
+                    imm: u64::from(bits),
+                });
+                let flags = lowerer.fresh(RegClass::Flags);
+                insts.push(MInst::CmpImm {
+                    dst: flags,
+                    lhs: counted,
+                    imm: u64::from(bits),
+                    width,
+                });
+                let capped = lowerer.fresh(class);
+                insts.push(MInst::Csel {
+                    dst: capped,
+                    flags,
+                    lhs: cap,
+                    rhs: counted,
+                    cond: Cond::Hs,
+                    width,
+                });
+                capped
+            } else {
+                counted
+            }
+        }
+        BitOp::Population => {
+            let extended = lowerer.zero_extend(insts, src, bits, width);
+            population_count(lowerer, insts, extended, width)
+        }
+        BitOp::ByteSwap => match bits {
+            16 => lowerer.unary(insts, UnaryOp::Rev16, src, width),
+            32 | 64 => lowerer.unary(insts, UnaryOp::Rev, src, width),
+            other => return Err(format!("bswap at bits<{other}>")),
+        },
+    };
+    lowerer.bind(result, value);
+    Ok(())
+}
+
+/// The SIMD-free population count both oracles emit (`p39.out`, Clang-19).
+///
+/// `x - ((x >> 1) & 0x5555...)`, `(x & 0x3333...) + ((x >> 2) & 0x3333...)`,
+/// `(x + (x >> 4)) & 0x0f0f...`, multiply by `0x0101...` and `lsr` by the
+/// register width minus 8.
+fn population_count(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    value: VReg,
+    width: Width,
+) -> VReg {
+    let mask = |pattern: u64| pattern & width.mask();
+    let ones = mask(0x5555_5555_5555_5555);
+    let twos = mask(0x3333_3333_3333_3333);
+    let nibbles = mask(0x0f0f_0f0f_0f0f_0f0f);
+    let bytes = mask(0x0101_0101_0101_0101);
+
+    let halved = lowerer.binary_imm(insts, BinOp::Lsr, value, 1, width);
+    let odd = lowerer.binary_imm(insts, BinOp::And, halved, ones, width);
+    let pairs = lowerer.binary(insts, BinOp::Sub, value, odd, width);
+
+    let low = lowerer.binary_imm(insts, BinOp::And, pairs, twos, width);
+    let shifted = lowerer.binary_imm(insts, BinOp::Lsr, pairs, 2, width);
+    let high = lowerer.binary_imm(insts, BinOp::And, shifted, twos, width);
+    let quads = lowerer.binary(insts, BinOp::Add, low, high, width);
+
+    let folded = lowerer.binary_imm(insts, BinOp::Lsr, quads, 4, width);
+    let summed = lowerer.binary(insts, BinOp::Add, quads, folded, width);
+    let octets = lowerer.binary_imm(insts, BinOp::And, summed, nibbles, width);
+
+    let factor = lowerer.fresh(width.class());
+    insts.push(MInst::MovImm {
+        dst: factor,
+        imm: bytes,
+    });
+    let product = lowerer.binary(insts, BinOp::Mul, octets, factor, width);
+    lowerer.binary_imm(insts, BinOp::Lsr, product, u64::from(width.bits() - 8), width)
 }
 
 /// The forms Section 10 keeps refused at width 128.

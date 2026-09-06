@@ -907,6 +907,21 @@ fn emit_inst(
                 spell(*src, RegClass::Gpr32)
             );
         }
+        MInst::Unary {
+            op,
+            dst,
+            src,
+            width,
+        } => {
+            let operands = width.class();
+            let _ = writeln!(
+                text,
+                "    {} {}, {}",
+                op.mnemonic(),
+                spell(*dst, operands),
+                spell(*src, operands)
+            );
+        }
         MInst::Bfx {
             signed,
             dst,

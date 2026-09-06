@@ -933,7 +933,9 @@ fn operand_slots(inst: &mut MInst, definitions: bool) -> Vec<&mut VReg> {
                 Vec::new()
             }
         }
-        MInst::AddPageOff { dst, src, .. } | MInst::Extend { dst, src, .. } => {
+        MInst::AddPageOff { dst, src, .. }
+        | MInst::Extend { dst, src, .. }
+        | MInst::Unary { dst, src, .. } => {
             if definitions {
                 vec![dst]
             } else {

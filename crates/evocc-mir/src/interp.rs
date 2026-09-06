@@ -31,7 +31,7 @@ use evocc_types::TargetDataLayout;
 
 use crate::{
     BinOp, CarryOp, Cond, FlagOp, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass,
-    StoreKind, SymbolKind, VReg, WideMul, Width,
+    StoreKind, SymbolKind, UnaryOp, VReg, WideMul, Width,
 };
 
 // The same host-resource policy the EvoIR interpreter runs under, so that a
@@ -1049,6 +1049,52 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                 raw & mask(bits)
             };
             write(frame, *dst, MirValue::Int(value));
+        }
+        // Section 5's bit-counting and byte-swap row (revision 0.14). Each
+        // form reads and writes the whole register at its own width, exactly
+        // as the machine does; the lowering is what makes the answer the
+        // EvoIR one for a narrower `N`.
+        MInst::Unary {
+            op,
+            dst,
+            src,
+            width,
+        } => {
+            let raw = read_bits(frame, *src)? & width.mask();
+            let bits = u32::from(width.bits());
+            let value = match op {
+                UnaryOp::Clz => {
+                    if *width == Width::W {
+                        u64::from((raw as u32).leading_zeros())
+                    } else {
+                        u64::from(raw.leading_zeros())
+                    }
+                }
+                UnaryOp::Rbit => {
+                    if *width == Width::W {
+                        u64::from((raw as u32).reverse_bits())
+                    } else {
+                        raw.reverse_bits()
+                    }
+                }
+                UnaryOp::Rev16 => {
+                    let mut value = 0_u64;
+                    for halfword in 0..bits / 16 {
+                        let shift = halfword * 16;
+                        let half = (raw >> shift) & 0xffff;
+                        value |= (((half & 0xff) << 8) | (half >> 8)) << shift;
+                    }
+                    value
+                }
+                UnaryOp::Rev => {
+                    if *width == Width::W {
+                        u64::from((raw as u32).swap_bytes())
+                    } else {
+                        raw.swap_bytes()
+                    }
+                }
+            };
+            write(frame, *dst, MirValue::Int(value & width.mask()));
         }
         MInst::Bfx {
             signed: is_signed,

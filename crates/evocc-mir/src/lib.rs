@@ -353,6 +353,44 @@ impl FlagOp {
     }
 }
 
+/// The one-operand forms Section 5's bit-counting and byte-swap row names
+/// (revision 0.14).
+///
+/// Each reads and writes one register at the instruction's width. `rev16`
+/// reverses the bytes inside every halfword, which at the low sixteen bits is
+/// the byte swap of a `bits<16>`; `rev` reverses the bytes of the whole
+/// register.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum UnaryOp {
+    Clz,
+    Rbit,
+    Rev16,
+    Rev,
+}
+
+impl UnaryOp {
+    #[must_use]
+    pub const fn mnemonic(self) -> &'static str {
+        match self {
+            Self::Clz => "clz",
+            Self::Rbit => "rbit",
+            Self::Rev16 => "rev16",
+            Self::Rev => "rev",
+        }
+    }
+
+    #[must_use]
+    pub fn from_mnemonic(text: &str) -> Option<Self> {
+        Some(match text {
+            "clz" => Self::Clz,
+            "rbit" => Self::Rbit,
+            "rev16" => Self::Rev16,
+            "rev" => Self::Rev,
+            _ => return None,
+        })
+    }
+}
+
 /// The two wide signed multiplies of Section 4.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum WideMul {
@@ -691,6 +729,13 @@ pub enum MInst {
         dst: VReg,
         lhs: VReg,
         imm: u64,
+        width: Width,
+    },
+    /// `clz`, `rbit`, `rev16`, `rev`: one operand, one result, one width.
+    Unary {
+        op: UnaryOp,
+        dst: VReg,
+        src: VReg,
         width: Width,
     },
     /// `sxtb`, `sxth`, `sxtw`, `uxtb`, `uxth`.
@@ -1278,6 +1323,7 @@ pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
         | MInst::SubCarryFlags { dst, .. }
         | MInst::TstImm { dst, .. }
         | MInst::Extend { dst, .. }
+        | MInst::Unary { dst, .. }
         | MInst::Bfx { dst, .. }
         | MInst::Cmp { dst, .. }
         | MInst::CmpImm { dst, .. }
@@ -1303,7 +1349,10 @@ pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
 #[must_use]
 pub fn inst_uses(inst: &MInst) -> Vec<VReg> {
     match inst {
-        MInst::Mov { src, .. } | MInst::AddPageOff { src, .. } | MInst::Extend { src, .. } => {
+        MInst::Mov { src, .. }
+        | MInst::AddPageOff { src, .. }
+        | MInst::Extend { src, .. }
+        | MInst::Unary { src, .. } => {
             vec![*src]
         }
         MInst::MovImm { .. } | MInst::Adrp { .. } | MInst::FrameSlot { .. } => Vec::new(),
