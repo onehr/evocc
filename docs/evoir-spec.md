@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.73** | **Authoritative reference** | **2026-09-06**
+**Revision 1.9.74** | **Authoritative reference** | **2026-09-07**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1687,6 +1687,7 @@ twice would let a reader think two conditions are the same finding.
 | `E2929` | `unpromoted-va-arg-type` | front end |
 | `E2930` | `use-with-incomplete-enumeration` | front end |
 | `E2931` | `unprototyped-call-mismatch` | front end |
+| `E2932` | `always-inline-cycle` | front end |
 | `E0102` | `unmatched-conditional` | preprocessor |
 | `E0104` | `error-directive` | preprocessor |
 | `E0105` | `include-not-found` | preprocessor |
@@ -3522,10 +3523,40 @@ is never resolved by choosing one.
 **Everything else** is preserved and not applied. The receipt lists, by name,
 every attribute the cohort presented that this profile did not apply, so the
 size of that set is measured rather than assumed. In particular `section`,
-`noreturn`, `unused`, `always_inline`, `gnu_inline`, `no_instrument_function`,
+`noreturn`, `unused`, `gnu_inline`, `no_instrument_function`,
 `cold`, `pure`, `const` and `weak` are preserved without effect here; they carry
 linkage, effect or backend semantics that belong to later stages, and applying
 a partial reading now would create a second source of truth for each.
+`always_inline` has an effect since revision 1.9.74, stated next.
+
+**`always_inline` (revision 1.9.74).** A call whose callee is a function
+defined in this unit with the `always_inline` attribute is replaced, in
+C-HIR before lowering, by the callee's body: each parameter becomes a fresh
+automatic object of the parameter's type initialized with the corresponding
+argument after the conversions a call performs; `return e;` becomes an
+assignment of `e` to a fresh result object followed by a jump to the end of
+the substituted body, and the call expression's value is that object; labels
+are renamed so two substitutions of one callee do not collide; a
+function-scope `static` object of the callee stays the one object of that
+function, shared by every substitution and by the out-of-line body;
+`__func__` keeps the callee's name; the effect ordering of the body is the
+call's. Substitution proceeds callee-first, so an `always_inline` callee
+inside an inlined body is substituted too. A variadic callee, a callee whose
+address the unit also takes, and a cycle of `always_inline` calls are not
+substituted: the first two are lowered as ordinary calls, the cycle is
+`E2932` (`always-inline-cycle`; GCC and Clang both refuse it as "inlining
+failed"). After substitution the front end folds constants again, so an
+`asm` operand under an immediate constraint (`i`, `n`, `I`, `J`, `K`, `L`)
+whose expression was a parameter now bound to an integer constant
+expression is a constant, and 3.11 admits it; the operand that is still
+not constant stays `E3021`. The out-of-line body of a `static` `always_inline`
+function is still lowered, internal, and dropped when unreferenced (EvoMIR
+0.16), so the machine sees nothing new. The kernel needs this in 2,727 of
+2,799 units: `alternative_has_cap_likely` is `static __always_inline` and
+feeds its `cpucap` parameter to `asm goto` under `"i"`, and every caller
+passes a constant; the reference compilers see the constant only because
+they inline. This is the last construct between the front end and nearly
+every kernel unit, measured at the tenth survey.
 
 **Diagnostics introduced.** Messages live in Section 6.3, the single authority;
 this table gives conditions only. `E2902`, which rejected compound literals as
@@ -3562,6 +3593,7 @@ front end that still emits it is defective.
 | `E2929` | `__builtin_va_arg` names a type the default argument promotions change (`char`, `short`, `_Bool`, `float`, an enumeration narrower than `int`) |
 | `E2930` | a call or address-of names a function whose type contains an enumeration still incomplete at that point |
 | `E2931` | a function declared without a prototype and not defined in the unit is called with promoted argument types that differ from those of its first call |
+| `E2932` | a cycle of `always_inline` calls, which no substitution order can eliminate |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -5597,6 +5629,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.74 | 2026-09-07 | `always_inline` definitions are substituted at their calls in C-HIR (parameters as fresh objects, returns as a result object, statics shared, callee-first, cycles `E2932`), and constants are folded again afterwards so immediate `asm` operands fed through a parameter become constant. The tenth kernel survey put that construct first in 2,727 units. |
 | 1.9.73 | 2026-09-06 | Record parameters and the record return destination carry `byval(size, align)` and `sret(size, align)` on their pointer, so the machine can apply the platform's composite convention; found by the zstd rung, where an 8-byte record crossed to GCC-built code through a hidden pointer. |
 | 1.9.72 | 2026-09-06 | `__builtin_return_address(0)` and `__builtin_frame_address(0)` lower to `return_address` and `frame_address`, code- and stack-provenance values the interpreters refresh per activation; the kernel's `_RET_IP_` became the face of 2,714 units once label addresses lowered. Levels above zero stay refused. |
 | 1.9.71 | 2026-09-06 | The reachable end of a non-void function returns poison instead of trapping: C leaves the fall-off undefined only when the value is used, and the first GCC torture run tripped `E3007` in 28 programs that never use it. |
@@ -5684,6 +5717,27 @@ Integer    := [1-9] [0-9]*
 | 1.0 | 2026-08-10 | Initial specification. Defines the complete EvoIR semantic contract for Day 4 of the 30-day EvoCC build. |
 
 ## Appendix D: Exhitect review
+
+### Termination builtins and the existing external-call boundary
+
+`__builtin_abort()` has prototype `void (void)` and resolves to the ordinary external `abort` call, with the same compatible-declaration check and no invented interpreter library model.
+Both sealed oracles compile and execute the unreachable-abort control in `.evidence/builtin-probes/20260907-function-specifiers/abort.c`; GCC accepts `termination.c`, but Clang-19 rejects `__builtin_exit` and `__builtin__Exit` as unknown builtins, so those spellings remain refused as E2933 (`unsupported-termination-builtin`).
+The result is recorded in `termination.out`; reached external `abort` still has the body's E3039 interpreter boundary and machine execution delegates to the linked library.
+The architecture's preceding torture inventory counted 404 termination-builtin refusals without a spelling split; the next lane reports the actual effect rather than attributing all 404 to this one accepted spelling.
+
+### Linkage attributes still conflict with the preserved-only body
+
+Both sealed oracles make `alternative` an alias of `value` and emit `fallback` as a weak symbol in `.evidence/builtin-probes/20260907-function-specifiers/linkage.c`, recorded in `termination.out`.
+Section 10.1.9 explicitly says `weak` and other non-layout attributes are preserved without effect; this body constraint takes precedence over inventing linker semantics in Appendix D, so the execution request's applied alias/weak feature is not closed.
+No validator is loosened, alias body fabricated, or new diagnostic allocated; C-HIR retains the attributes, but linked program behavior is not claimed equivalent.
+The supplied musl inventory identifies 108 affected symbols, not a measured first-error unit count; this remains an explicit incomplete requirement.
+
+### C11 function specifiers and the variable-length-array capability
+
+`_Noreturn` is accepted on function declarations and definitions, retained as a `noreturn` attribute with written spelling `_Noreturn`, and supplies no new dead-code or control-flow licence.
+Both sealed oracles accept the valid forms in `.evidence/builtin-probes/20260907-function-specifiers/valid.c`; GCC warns but accepts the object/typedef probes while Clang rejects them, so the profile refuses those placements with E2932 (`function-specifier-on-non-function`), as recorded in `results.out`.
+The 2026-09-07 execution request adds the truthful profile capability `__STDC_NO_VLA__=1` after the unchanged sealed predefined baseline and before command-line overrides; this is an EvoCC profile declaration, not a claim that the VLA-supporting oracles define it.
+No full-configuration first-error count is yet measured; the toybox lane currently strips this specifier from two files, so an adjusted lane alone cannot prove native acceptance.
 
 ### Address-only blocks versus terminator-edge reachability
 
