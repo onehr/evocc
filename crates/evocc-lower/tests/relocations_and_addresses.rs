@@ -203,3 +203,14 @@ fn integer_addresses_resolve_only_live_exposed_storage() {
         &["ptr.null"],
     );
 }
+
+#[test]
+fn array_members_decay_to_addresses_at_call_sites() {
+    for source in [
+        "int first(const unsigned char *p){return *p;} struct S{unsigned char magic[2];}; int main(void){struct S s={{7,8}}; struct S *p=&s; return first(p->magic);}",
+        "int first(const unsigned char *p){return *p;} struct S{unsigned char magic[2];}; int main(void){struct S s={{7,8}}; return first(s.magic);}",
+        "int first(const int *p){return *p;} int main(void){int a[2][2]={{7,8},{9,10}}; return first(a[0]);}",
+    ] {
+        check(source, Ok(7), &["load", "call"]);
+    }
+}
