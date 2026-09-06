@@ -13,6 +13,7 @@ dependencies = [
  "evocc-evoir",
  "evocc-lex",
  "evocc-lower",
+ "evocc-mir",
  "evocc-parser",
  "evocc-types",
 ]

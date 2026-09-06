@@ -18,8 +18,8 @@ use evocc_evoir::{
 use evocc_types::EvoIRType;
 
 use crate::{
-    BinOp, Cond, ExtOp, FlagOp, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass,
-    StoreKind, SymbolKind, VReg, WideMul, Width,
+    BinOp, CarryOp, Cond, ExtOp, FlagOp, LoadKind, MBlock, MFunction, MInst, MModule, MTerm,
+    RegClass, StoreKind, SymbolKind, Target, VReg, WideMul, Width,
 };
 
 /// One EvoIR form this revision does not lower, reported at the instruction.
@@ -75,9 +75,24 @@ pub fn lower_module_with(
     module: &Module,
     external: &dyn Fn(&str) -> bool,
 ) -> Result<MModule, Vec<Refusal>> {
+    lower_module_for(Target::Darwin, module, external)
+}
+
+/// The same, for a named target.
+///
+/// Section 6 (revision 0.10): on Linux "an argument that finds no register
+/// goes to the stack in an 8-byte slot", while "on Darwin the platform packs
+/// stack arguments by natural alignment instead; that rule is still
+/// unmeasured, so more than eight integer arguments stay `E4010` there". The
+/// target is the only thing the two lowerings differ by.
+pub fn lower_module_for(
+    target: Target,
+    module: &Module,
+    external: &dyn Fn(&str) -> bool,
+) -> Result<MModule, Vec<Refusal>> {
     let mut refusals = Vec::new();
     for function in &module.functions {
-        scan_function(module, function, &mut refusals);
+        scan_function(target, module, function, &mut refusals);
     }
     if !refusals.is_empty() {
         return Err(refusals);
@@ -119,9 +134,12 @@ fn is_register_type(ty: &EvoIRType) -> bool {
 /// for.
 fn class_of(ty: &EvoIRType) -> Result<RegClass, (&'static str, &'static str)> {
     match ty {
+        // Section 2: "A `bits<128>` EvoIR value has no class of its own:
+        // lowering represents it as two `gpr64` virtual registers, the low
+        // half first." The class named here is each half's.
         EvoIRType::Bits(width) => match width {
             1..=32 => Ok(RegClass::Gpr32),
-            33..=64 => Ok(RegClass::Gpr64),
+            33..=64 | 128 => Ok(RegClass::Gpr64),
             _ => Err(E4003),
         },
         EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => Ok(RegClass::Gpr64),
@@ -130,6 +148,11 @@ fn class_of(ty: &EvoIRType) -> Result<RegClass, (&'static str, &'static str)> {
         EvoIRType::Tuple(_) => Err(E4004),
         _ => Err(E4009),
     }
+}
+
+/// Whether a type is the one Section 2 represents as a register pair.
+fn is_pair(ty: &EvoIRType) -> bool {
+    matches!(ty, EvoIRType::Bits(128))
 }
 
 /// The number of significant bits a value carries: Section 3's `N`.
@@ -175,7 +198,12 @@ fn ordinary_types(types: &[EvoIRType]) -> Vec<&EvoIRType> {
     types.iter().filter(|ty| is_register_type(ty)).collect()
 }
 
-fn scan_function(module: &Module, function: &Function, refusals: &mut Vec<Refusal>) {
+fn scan_function(
+    target: Target,
+    module: &Module,
+    function: &Function,
+    refusals: &mut Vec<Refusal>,
+) {
     let entry_block = function.blocks.first().map_or(0, |block| block.id);
     let mut report =
         |code: (&'static str, &'static str), block: u32, index: usize, detail: String| {
@@ -195,7 +223,7 @@ fn scan_function(module: &Module, function: &Function, refusals: &mut Vec<Refusa
         .map(|param| &param.ty)
         .filter(|ty| is_register_type(ty))
         .collect();
-    if params.len() > MAX_REGISTER_ARGUMENTS {
+    if params.len() > MAX_REGISTER_ARGUMENTS && refuses_stack_arguments(target) {
         report(
             E4010,
             entry_block,
@@ -245,9 +273,10 @@ fn scan_function(module: &Module, function: &Function, refusals: &mut Vec<Refusa
             }
         }
         for (index, inst) in block.insts.iter().enumerate() {
-            scan_inst(module, inst, block.id, index, &mut report);
+            scan_inst(target, module, inst, block.id, index, &mut report);
         }
         scan_inst(
+            target,
             module,
             &block.terminator,
             block.id,
@@ -257,7 +286,16 @@ fn scan_function(module: &Module, function: &Function, refusals: &mut Vec<Refusa
     }
 }
 
+/// Whether more than eight register arguments are refused rather than lowered.
+///
+/// Section 10: `E4010` is "more than eight integer arguments on Darwin (Linux
+/// lowers stack arguments, revision 0.10)".
+const fn refuses_stack_arguments(target: Target) -> bool {
+    matches!(target, Target::Darwin)
+}
+
 fn scan_inst(
+    target: Target,
     module: &Module,
     inst: &Inst,
     block: u32,
@@ -277,6 +315,13 @@ fn scan_inst(
                 );
             }
         }
+    }
+
+    // Section 10: "at `N = 128`, division, remainder and the signed UB
+    // predicates" have no row. The cohort has none of them, and EvoIR keeps
+    // division `E3033`.
+    if let Some(detail) = unlowered_at_the_widest_scalar(inst) {
+        report(E4003, block, index, detail);
     }
 
     match inst {
@@ -354,7 +399,7 @@ fn scan_inst(
             callee,
             ..
         } => {
-            if args.len() > MAX_REGISTER_ARGUMENTS {
+            if args.len() > MAX_REGISTER_ARGUMENTS && refuses_stack_arguments(target) {
                 report(
                     E4010,
                     block,
@@ -379,7 +424,7 @@ fn scan_inst(
             }
         }
         Inst::IndirectCall { results, args, .. } => {
-            if args.len() > MAX_REGISTER_ARGUMENTS {
+            if args.len() > MAX_REGISTER_ARGUMENTS && refuses_stack_arguments(target) {
                 report(
                     E4010,
                     block,
@@ -414,7 +459,8 @@ fn scan_inst(
 fn unsupported_access(ty: &EvoIRType) -> Option<String> {
     match ty {
         EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => None,
-        EvoIRType::Bits(width) if matches!(width.div_ceil(8), 1 | 2 | 4 | 8) => None,
+        // Sixteen is the pair Section 5 accesses with `ldp`/`stp`.
+        EvoIRType::Bits(width) if matches!(width.div_ceil(8), 1 | 2 | 4 | 8 | 16) => None,
         other => Some(format!("an access of type {other:?} has no matching width")),
     }
 }
@@ -427,6 +473,9 @@ struct Lowerer {
     next_vreg: u32,
     next_block: u32,
     map: HashMap<u32, VReg>,
+    /// The high half of every value Section 2 represents as a pair; `map`
+    /// holds the low half, which is the half every ordinary row already reads.
+    high: HashMap<u32, VReg>,
     blocks: Vec<MBlock>,
     traps: Vec<(u16, u32)>,
 }
@@ -453,6 +502,101 @@ impl Lowerer {
 
     fn bind(&mut self, value: &Value, reg: VReg) {
         self.map.insert(value.id, reg);
+    }
+
+    /// Both halves of a pair, low first.
+    fn pair(&self, value: &Value) -> Result<(VReg, VReg), String> {
+        let low = self.reg(value)?;
+        let high = self
+            .high
+            .get(&value.id)
+            .copied()
+            .ok_or_else(|| format!("v{} has no high half", value.id))?;
+        Ok((low, high))
+    }
+
+    fn bind_pair(&mut self, value: &Value, low: VReg, high: VReg) {
+        self.map.insert(value.id, low);
+        self.high.insert(value.id, high);
+    }
+
+    /// Every register a value occupies, low half first.
+    fn registers(&self, value: &Value) -> Result<Vec<VReg>, String> {
+        if is_pair(&value.ty) {
+            let (low, high) = self.pair(value)?;
+            Ok(vec![low, high])
+        } else {
+            Ok(vec![self.reg(value)?])
+        }
+    }
+
+    fn fresh_pair(&mut self) -> (VReg, VReg) {
+        (self.fresh(RegClass::Gpr64), self.fresh(RegClass::Gpr64))
+    }
+
+    fn word(&mut self, insts: &mut Vec<MInst>, imm: u64) -> VReg {
+        let dst = self.fresh(RegClass::Gpr64);
+        insts.push(MInst::MovImm { dst, imm });
+        dst
+    }
+
+    /// One 64-bit register-register form.
+    fn word_binary(&mut self, insts: &mut Vec<MInst>, op: BinOp, lhs: VReg, rhs: VReg) -> VReg {
+        let dst = self.fresh(RegClass::Gpr64);
+        insts.push(MInst::Binary {
+            op,
+            dst,
+            lhs,
+            rhs,
+            width: Width::X,
+        });
+        dst
+    }
+
+    /// One 64-bit register-immediate form.
+    fn word_binary_imm(&mut self, insts: &mut Vec<MInst>, op: BinOp, lhs: VReg, imm: u64) -> VReg {
+        let dst = self.fresh(RegClass::Gpr64);
+        insts.push(MInst::BinaryImm {
+            op,
+            dst,
+            lhs,
+            imm,
+            width: Width::X,
+        });
+        dst
+    }
+
+    /// `tst s, #64` then `csel dst, taken, untaken, eq`.
+    ///
+    /// Section 5 selects the 64-or-more case with "two `csel` on `tst s,
+    /// #64`". Section 2 admits a `flags` value only in the instruction that
+    /// immediately follows its producer, so the test is written once per
+    /// select rather than once per shift. It reads one register and writes
+    /// only flags, so recomputing it is the same program.
+    fn select_on_wide_amount(
+        &mut self,
+        insts: &mut Vec<MInst>,
+        amount: VReg,
+        taken: VReg,
+        untaken: VReg,
+    ) -> VReg {
+        let flags = self.fresh(RegClass::Flags);
+        insts.push(MInst::TstImm {
+            dst: flags,
+            lhs: amount,
+            imm: 64,
+            width: Width::X,
+        });
+        let dst = self.fresh(RegClass::Gpr64);
+        insts.push(MInst::Csel {
+            dst,
+            flags,
+            lhs: taken,
+            rhs: untaken,
+            cond: Cond::Eq,
+            width: Width::X,
+        });
+        dst
     }
 
     /// The block holding `brk` for one reason, created on first use.
@@ -690,13 +834,22 @@ fn lower_function(
         next_vreg: 0,
         next_block: u32::try_from(function.blocks.len()).unwrap_or(u32::MAX),
         map: HashMap::new(),
+        high: HashMap::new(),
         blocks: Vec::new(),
         traps: Vec::new(),
     };
 
-    for block in &function.blocks {
+    for (index, block) in function.blocks.iter().enumerate() {
         let id = ids[&block.id];
-        lower_block(&mut lowerer, function, block, id, &ids, external)?;
+        lower_block(
+            &mut lowerer,
+            function,
+            block,
+            id,
+            &ids,
+            external,
+            index == 0,
+        )?;
     }
     for (imm, id) in lowerer.traps.clone() {
         lowerer.blocks.push(MBlock {
@@ -714,11 +867,11 @@ fn lower_function(
 
 /// The register-typed values an edge passes.
 fn edge_args(lowerer: &Lowerer, values: &[Value]) -> Result<Vec<VReg>, String> {
-    values
-        .iter()
-        .filter(|value| is_register_type(&value.ty))
-        .map(|value| lowerer.reg(value))
-        .collect()
+    let mut registers = Vec::new();
+    for value in values.iter().filter(|value| is_register_type(&value.ty)) {
+        registers.extend(lowerer.registers(value)?);
+    }
+    Ok(registers)
 }
 
 fn lower_block(
@@ -728,10 +881,26 @@ fn lower_block(
     id: u32,
     ids: &HashMap<u32, u32>,
     external: &dyn Fn(&str) -> bool,
+    entry: bool,
 ) -> Result<(), String> {
     let mut args = Vec::new();
     for arg in &block.args {
         if !is_register_type(&arg.value.ty) {
+            continue;
+        }
+        if is_pair(&arg.value.ty) {
+            // Section 6 rounds the next register number up to even before a
+            // pair. The skipped position is a real argument nothing reads, so
+            // that Section 7's positional pinning gives the halves the numbers
+            // the convention names. Inside the function the rule has no
+            // meaning, so only the entry block carries it.
+            if entry && args.len() % 2 == 1 {
+                args.push(lowerer.fresh(RegClass::Gpr64));
+            }
+            let (low, high) = lowerer.fresh_pair();
+            lowerer.bind_pair(&arg.value, low, high);
+            args.push(low);
+            args.push(high);
             continue;
         }
         let class = class_of(&arg.value.ty).map_err(|(code, _)| code.to_owned())?;
@@ -846,6 +1015,9 @@ fn live_across(lowerer: &Lowerer, block: &Block, from: usize) -> Vec<VReg> {
         if let Some(reg) = lowerer.map.get(&value) {
             carried.insert(*reg);
         }
+        if let Some(reg) = lowerer.high.get(&value) {
+            carried.insert(*reg);
+        }
     }
     carried.into_iter().collect()
 }
@@ -881,6 +1053,9 @@ fn lower_compare(
     lhs: &Value,
     rhs: &Value,
 ) -> Result<(VReg, Cond), String> {
+    if is_pair(&lhs.ty) {
+        return lower_pair_compare(lowerer, insts, operation, lhs, rhs);
+    }
     let left = lowerer.reg(lhs)?;
     let right = lowerer.reg(rhs)?;
     let cond = condition_of(operation);
@@ -969,16 +1144,21 @@ fn lower_terminator(
             // rule leaves those bits unspecified, so specifying them breaks
             // nothing. Zero, because EvoIR carries no result signedness, which
             // is the rule revision 0.7 already ruled for arguments.
-            let register: Vec<&Value> = values
-                .iter()
-                .filter(|value| is_register_type(&value.ty))
-                .collect();
-            for (slot, value) in results.iter_mut().zip(register) {
+            // A pair occupies two result registers, so the walk counts
+            // registers rather than values; neither half of a `bits<128>` is
+            // narrow, so neither is extended.
+            let mut slot = 0;
+            for value in values.iter().filter(|value| is_register_type(&value.ty)) {
+                if is_pair(&value.ty) {
+                    slot += 2;
+                    continue;
+                }
                 if let EvoIRType::Bits(bits) = value.ty {
                     if bits < 32 {
-                        *slot = lowerer.zero_extend(insts, *slot, bits, Width::W);
+                        results[slot] = lowerer.zero_extend(insts, results[slot], bits, Width::W);
                     }
                 }
+                slot += 1;
             }
             Ok(MTerm::Ret { values: results })
         }
@@ -996,6 +1176,11 @@ fn lower_inst(
     inst: &Inst,
     external: &dyn Fn(&str) -> bool,
 ) -> Result<(), String> {
+    // Section 5's `bits<128>` row expands each form over the halves, so it is
+    // consulted before the rows that assume one register per value.
+    if lower_pair(lowerer, insts, inst)? {
+        return Ok(());
+    }
     match inst {
         Inst::Const(result, bits) => {
             let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
@@ -1272,7 +1457,7 @@ fn lower_inst(
             args,
             ..
         } => {
-            let mut arguments = edge_args(lowerer, args)?;
+            let mut arguments = call_args(lowerer, insts, args)?;
             if external(callee) {
                 // Section 6, revision 0.5: across the host boundary "a caller
                 // extends an argument narrower than 32 bits to 32 bits". The
@@ -1282,16 +1467,22 @@ fn lower_inst(
                 // extraction boundary and which EvoIR does not carry. Recorded
                 // gap: a signed host parameter narrower than 32 bits is not
                 // reachable from EvoIR alone.
-                let register: Vec<&Value> = args
-                    .iter()
-                    .filter(|value| is_register_type(&value.ty))
-                    .collect();
-                for (slot, value) in arguments.iter_mut().zip(register) {
+                let mut slot = 0;
+                for value in args.iter().filter(|value| is_register_type(&value.ty)) {
+                    if is_pair(&value.ty) {
+                        if slot % 2 == 1 {
+                            slot += 1;
+                        }
+                        slot += 2;
+                        continue;
+                    }
                     if let EvoIRType::Bits(bits) = value.ty {
                         if bits < 32 {
-                            *slot = lowerer.zero_extend(insts, *slot, bits, Width::W);
+                            arguments[slot] =
+                                lowerer.zero_extend(insts, arguments[slot], bits, Width::W);
                         }
                     }
+                    slot += 1;
                 }
             }
             let outputs = call_results(lowerer, results)?;
@@ -1308,7 +1499,7 @@ fn lower_inst(
             ..
         } => {
             let target = lowerer.reg(callee)?;
-            let arguments = edge_args(lowerer, args)?;
+            let arguments = call_args(lowerer, insts, args)?;
             let outputs = call_results(lowerer, results)?;
             insts.push(MInst::Blr {
                 target,
@@ -1551,9 +1742,41 @@ fn lower_inst(
     Ok(())
 }
 
+/// The registers a call passes, in the positions Section 6 assigns them.
+fn call_args(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    args: &[Value],
+) -> Result<Vec<VReg>, String> {
+    let ordinary: Vec<&Value> = args
+        .iter()
+        .filter(|value| is_register_type(&value.ty))
+        .collect();
+    let mut registers: Vec<VReg> = Vec::new();
+    for value in ordinary {
+        if is_pair(&value.ty) && registers.len() % 2 == 1 {
+            // The skipped register is passed as zero rather than left
+            // undefined, so that two lowerings of one unit agree byte for byte.
+            let filler = lowerer.word(insts, 0);
+            registers.push(filler);
+        }
+        registers.extend(lowerer.registers(value)?);
+    }
+    Ok(registers)
+}
+
 fn call_results(lowerer: &mut Lowerer, results: &[Value]) -> Result<Vec<VReg>, String> {
     let mut outputs = Vec::new();
     for value in results.iter().filter(|value| is_register_type(&value.ty)) {
+        if is_pair(&value.ty) {
+            // Section 6: "A `bits<128>` result is `x0`:`x1`, low half in
+            // `x0`."
+            let (low, high) = lowerer.fresh_pair();
+            lowerer.bind_pair(value, low, high);
+            outputs.push(low);
+            outputs.push(high);
+            continue;
+        }
         let class = class_of(&value.ty).map_err(|(code, _)| code.to_owned())?;
         let reg = lowerer.fresh(class);
         lowerer.bind(value, reg);
@@ -1690,4 +1913,387 @@ fn divide(
         lowerer.bind(result, quotient);
     }
     Ok(())
+}
+
+/// The forms Section 10 keeps refused at width 128.
+///
+/// Every one of them needs an arithmetic wider than the value to answer, which
+/// the machine has no register pair for: a 128-bit quotient, and the signed
+/// predicates whose definition compares a product or a sum against the range
+/// of the type it was computed in.
+fn unlowered_at_the_widest_scalar(inst: &Inst) -> Option<String> {
+    let (name, ty) = match inst {
+        Inst::SDiv(_, lhs, _) => ("sdiv", &lhs.ty),
+        Inst::UDiv(_, lhs, _) => ("udiv", &lhs.ty),
+        Inst::SRem(_, lhs, _) => ("srem", &lhs.ty),
+        Inst::URem(_, lhs, _) => ("urem", &lhs.ty),
+        Inst::SignedAddDefined(_, lhs, _) => ("signed_add_defined", &lhs.ty),
+        Inst::SignedSubDefined(_, lhs, _) => ("signed_sub_defined", &lhs.ty),
+        Inst::SignedMulDefined(_, lhs, _) => ("signed_mul_defined", &lhs.ty),
+        Inst::SignedDivRemNoOverflow(_, lhs, _) => ("signed_div_rem_no_overflow", &lhs.ty),
+        Inst::SignedShlDefined { shifted, .. } => ("signed_shl_defined", &shifted.ty),
+        _ => return None,
+    };
+    is_pair(ty).then(|| format!("{name} at bits<128>"))
+}
+
+// ---------------------------------------------------------------------------
+// Section 5: the `bits<128>` forms
+// ---------------------------------------------------------------------------
+
+/// Lower one form over a register pair, answering whether it did.
+///
+/// Every sequence here is the one both sealed oracles emit for the same C,
+/// recorded in `.evidence/builtin-probes/20260902-2c23684c/p34-p35.out` and
+/// `.evidence/builtin-probes/20260905-b6/b6-probes.out`.
+fn lower_pair(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Result<bool, String> {
+    match inst {
+        // A `bits<128>` constant carries its immediate in the same 64-bit
+        // field every other constant does, so the high half is zero.
+        Inst::Const(result, bits) if is_pair(&result.ty) => {
+            let low = lowerer.word(insts, *bits);
+            let high = lowerer.word(insts, 0);
+            lowerer.bind_pair(result, low, high);
+        }
+        // Section 5: "any value is permitted; zero is chosen so the output is
+        // deterministic."
+        Inst::Uninitialized(result) if is_pair(&result.ty) => {
+            let low = lowerer.word(insts, 0);
+            let high = lowerer.word(insts, 0);
+            lowerer.bind_pair(result, low, high);
+        }
+        // "add: `adds lo` then `adc hi`; sub: `subs lo` then `sbc hi`."
+        Inst::Add(result, lhs, rhs) | Inst::Sub(result, lhs, rhs) if is_pair(&result.ty) => {
+            let (a_low, a_high) = lowerer.pair(lhs)?;
+            let (b_low, b_high) = lowerer.pair(rhs)?;
+            let subtract = matches!(inst, Inst::Sub(..));
+            let low = lowerer.fresh(RegClass::Gpr64);
+            let flags = lowerer.fresh(RegClass::Flags);
+            insts.push(MInst::FlagBinary {
+                op: if subtract { FlagOp::Subs } else { FlagOp::Adds },
+                dst: low,
+                flags,
+                lhs: a_low,
+                rhs: b_low,
+                width: Width::X,
+            });
+            let high = lowerer.fresh(RegClass::Gpr64);
+            insts.push(MInst::CarryBinary {
+                op: if subtract { CarryOp::Sbc } else { CarryOp::Adc },
+                dst: high,
+                flags,
+                lhs: a_high,
+                rhs: b_high,
+                width: Width::X,
+            });
+            lowerer.bind_pair(result, low, high);
+        }
+        // "mul: `mul lo, alo, blo`, `umulh hi, alo, blo`,
+        // `madd hi, alo, bhi, hi`, `madd hi, ahi, blo, hi`."
+        Inst::Mul(result, lhs, rhs) if is_pair(&result.ty) => {
+            let (a_low, a_high) = lowerer.pair(lhs)?;
+            let (b_low, b_high) = lowerer.pair(rhs)?;
+            let low = lowerer.word_binary(insts, BinOp::Mul, a_low, b_low);
+            let carried = lowerer.fresh(RegClass::Gpr64);
+            insts.push(MInst::WideMultiply {
+                op: WideMul::Umulh,
+                dst: carried,
+                lhs: a_low,
+                rhs: b_low,
+            });
+            let first = lowerer.fresh(RegClass::Gpr64);
+            insts.push(MInst::Madd {
+                dst: first,
+                n: a_low,
+                m: b_high,
+                a: carried,
+                width: Width::X,
+            });
+            let high = lowerer.fresh(RegClass::Gpr64);
+            insts.push(MInst::Madd {
+                dst: high,
+                n: a_high,
+                m: b_low,
+                a: first,
+                width: Width::X,
+            });
+            lowerer.bind_pair(result, low, high);
+        }
+        // "`and`, `or`, `xor`: halfwise."
+        Inst::And(result, lhs, rhs) | Inst::Or(result, lhs, rhs) | Inst::Xor(result, lhs, rhs)
+            if is_pair(&result.ty) =>
+        {
+            let op = match inst {
+                Inst::And(..) => BinOp::And,
+                Inst::Or(..) => BinOp::Orr,
+                _ => BinOp::Eor,
+            };
+            let (a_low, a_high) = lowerer.pair(lhs)?;
+            let (b_low, b_high) = lowerer.pair(rhs)?;
+            let low = lowerer.word_binary(insts, op, a_low, b_low);
+            let high = lowerer.word_binary(insts, op, a_high, b_high);
+            lowerer.bind_pair(result, low, high);
+        }
+        Inst::Shl(result, lhs, rhs) if is_pair(&result.ty) => {
+            let pair = lower_pair_shift(lowerer, insts, lhs, rhs, PairShift::Left)?;
+            lowerer.bind_pair(result, pair.0, pair.1);
+        }
+        Inst::LShr(result, lhs, rhs) if is_pair(&result.ty) => {
+            let pair = lower_pair_shift(lowerer, insts, lhs, rhs, PairShift::Logical)?;
+            lowerer.bind_pair(result, pair.0, pair.1);
+        }
+        Inst::AShr(result, lhs, rhs) if is_pair(&result.ty) => {
+            let pair = lower_pair_shift(lowerer, insts, lhs, rhs, PairShift::Arithmetic)?;
+            lowerer.bind_pair(result, pair.0, pair.1);
+        }
+        // "zext to 128: `hi = 0`; sext to 128: `hi = asr lo, #63`."
+        Inst::ZExt(result, source, _) | Inst::SExt(result, source, _) if is_pair(&result.ty) => {
+            let signed = matches!(inst, Inst::SExt(..));
+            let (low, high) = if is_pair(&source.ty) {
+                lowerer.pair(source)?
+            } else {
+                let bits = significant_bits(&source.ty);
+                let src = lowerer.reg(source)?;
+                let low = if signed {
+                    lowerer.sign_extend(insts, src, bits, Width::X)
+                } else {
+                    lowerer.zero_extend(insts, src, bits, Width::X)
+                };
+                let low = if low.class == RegClass::Gpr64 {
+                    low
+                } else {
+                    let dst = lowerer.fresh(RegClass::Gpr64);
+                    insts.push(MInst::Mov { dst, src: low });
+                    dst
+                };
+                let high = if signed {
+                    lowerer.word_binary_imm(insts, BinOp::Asr, low, 63)
+                } else {
+                    lowerer.word(insts, 0)
+                };
+                (low, high)
+            };
+            lowerer.bind_pair(result, low, high);
+        }
+        // A widening that is no widening still names a pair.
+        Inst::Trunc(result, source, _) if is_pair(&result.ty) => {
+            let (low, high) = lowerer.pair(source)?;
+            lowerer.bind_pair(result, low, high);
+        }
+        // "`shift_count_defined` compares the amount with `#128`."
+        Inst::ShiftCountDefined {
+            result,
+            shifted,
+            amount,
+            ..
+        } if is_pair(&shifted.ty) => {
+            let amount = lowerer.reg(amount)?;
+            let flags = lowerer.fresh(RegClass::Flags);
+            insts.push(MInst::CmpImm {
+                dst: flags,
+                lhs: amount,
+                imm: 128,
+                width: Width::X,
+            });
+            let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
+            let dst = lowerer.fresh(class);
+            insts.push(MInst::Cset {
+                dst,
+                flags,
+                cond: Cond::Lo,
+            });
+            lowerer.bind(result, dst);
+        }
+        // "`load`/`store`: `ldp`/`stp` of the halves at the address, which is
+        // not single-copy atomic, exactly as both oracles emit for a
+        // `volatile u128`."
+        Inst::Load {
+            result,
+            address,
+            volatile,
+            ..
+        } if is_pair(&result.ty) => {
+            let base = lowerer.reg(address)?;
+            let (low, high) = lowerer.fresh_pair();
+            insts.push(MInst::Ldp {
+                rt1: low,
+                rt2: high,
+                base,
+                offset: 0,
+                writeback: false,
+                volatile: *volatile,
+            });
+            lowerer.bind_pair(result, low, high);
+        }
+        Inst::Store {
+            address,
+            value,
+            volatile,
+            ..
+        } if is_pair(&value.ty) => {
+            let base = lowerer.reg(address)?;
+            let (low, high) = lowerer.pair(value)?;
+            insts.push(MInst::Stp {
+                rt1: low,
+                rt2: high,
+                base,
+                offset: 0,
+                writeback: false,
+                volatile: *volatile,
+            });
+        }
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
+/// Which of the three shifts a pair is being given.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PairShift {
+    Left,
+    Logical,
+    Arithmetic,
+}
+
+/// Section 5's branch-free variable shift of a pair.
+///
+/// "the 64-bit shifts of both halves, the cross term `lsl`/`lsr` of the other
+/// half by `63 - s` after a one-bit pre-shift, combined by `orr`, and two
+/// `csel` on `tst s, #64` selecting the 64-or-more case". The front end has
+/// asserted `s < 128`, so only bit 6 of the amount distinguishes the two
+/// cases and the machine's own masking supplies `s mod 64`.
+///
+/// The arithmetic form's 64-or-more case takes the sign fill rather than zero,
+/// which GCC-14 spells with a different comparison; the sequence written here
+/// was measured against the C operator over 8,192 operand and count pairs
+/// under both oracles (`b6-cmp-sbcs.c`).
+fn lower_pair_shift(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    value: &Value,
+    amount: &Value,
+    kind: PairShift,
+) -> Result<(VReg, VReg), String> {
+    let (low, high) = lowerer.pair(value)?;
+    let count = lowerer.reg(amount)?;
+    let bound = lowerer.word(insts, 63);
+    let complement = lowerer.word_binary(insts, BinOp::Sub, bound, count);
+
+    if kind == PairShift::Left {
+        let pre = lowerer.word_binary_imm(insts, BinOp::Lsr, low, 1);
+        let cross = lowerer.word_binary(insts, BinOp::Lsr, pre, complement);
+        let shifted_high = lowerer.word_binary(insts, BinOp::Lsl, high, count);
+        let combined = lowerer.word_binary(insts, BinOp::Orr, cross, shifted_high);
+        let shifted_low = lowerer.word_binary(insts, BinOp::Lsl, low, count);
+        let zero = lowerer.word(insts, 0);
+        let result_high = lowerer.select_on_wide_amount(insts, count, combined, shifted_low);
+        let result_low = lowerer.select_on_wide_amount(insts, count, shifted_low, zero);
+        return Ok((result_low, result_high));
+    }
+
+    let arithmetic = kind == PairShift::Arithmetic;
+    let pre = lowerer.word_binary_imm(insts, BinOp::Lsl, high, 1);
+    let cross = lowerer.word_binary(insts, BinOp::Lsl, pre, complement);
+    let shifted_low = lowerer.word_binary(insts, BinOp::Lsr, low, count);
+    let combined = lowerer.word_binary(insts, BinOp::Orr, cross, shifted_low);
+    let shifted_high = lowerer.word_binary(
+        insts,
+        if arithmetic { BinOp::Asr } else { BinOp::Lsr },
+        high,
+        count,
+    );
+    let beyond = if arithmetic {
+        lowerer.word_binary_imm(insts, BinOp::Asr, high, 63)
+    } else {
+        lowerer.word(insts, 0)
+    };
+    let result_low = lowerer.select_on_wide_amount(insts, count, combined, shifted_high);
+    let result_high = lowerer.select_on_wide_amount(insts, count, shifted_high, beyond);
+    Ok((result_low, result_high))
+}
+
+/// Section 5's comparison of two pairs.
+///
+/// "`icmp.eq`/`ne`: `eor` each half pair, `orr`, compare with zero; ordered
+/// `icmp`: `cmp alo, blo` then `sbcs xzr, ahi, bhi` and `cset` with the 64-bit
+/// form's condition (`lo` for `ult`, `lt` for `slt`; `ule` and `sle` compute
+/// the swapped subtraction and take `hs` and `ge`)."
+fn lower_pair_compare(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    operation: CmpOp,
+    lhs: &Value,
+    rhs: &Value,
+) -> Result<(VReg, Cond), String> {
+    let (a_low, a_high) = lowerer.pair(lhs)?;
+    let (b_low, b_high) = lowerer.pair(rhs)?;
+    match operation {
+        CmpOp::Eq | CmpOp::Ne => {
+            let low = lowerer.word_binary(insts, BinOp::Eor, a_low, b_low);
+            let high = lowerer.word_binary(insts, BinOp::Eor, a_high, b_high);
+            let difference = lowerer.word_binary(insts, BinOp::Orr, low, high);
+            let flags = lowerer.fresh(RegClass::Flags);
+            insts.push(MInst::CmpImm {
+                dst: flags,
+                lhs: difference,
+                imm: 0,
+                width: Width::X,
+            });
+            Ok((flags, condition_of(operation)))
+        }
+        // The two "or equal" forms subtract the other way and read the
+        // complementary condition, because the machine has no borrow-aware
+        // `ls` or `le` over a pair.
+        CmpOp::ULe | CmpOp::SLe => {
+            let (low, high, other_low, other_high) = (b_low, b_high, a_low, a_high);
+            let borrow = lowerer.fresh(RegClass::Flags);
+            insts.push(MInst::Cmp {
+                dst: borrow,
+                lhs: low,
+                rhs: other_low,
+                width: Width::X,
+            });
+            let flags = lowerer.fresh(RegClass::Flags);
+            insts.push(MInst::SubCarryFlags {
+                dst: flags,
+                flags_in: borrow,
+                lhs: high,
+                rhs: other_high,
+                width: Width::X,
+            });
+            Ok((
+                flags,
+                if operation == CmpOp::ULe {
+                    Cond::Hs
+                } else {
+                    Cond::Ge
+                },
+            ))
+        }
+        CmpOp::ULt | CmpOp::SLt => {
+            let borrow = lowerer.fresh(RegClass::Flags);
+            insts.push(MInst::Cmp {
+                dst: borrow,
+                lhs: a_low,
+                rhs: b_low,
+                width: Width::X,
+            });
+            let flags = lowerer.fresh(RegClass::Flags);
+            insts.push(MInst::SubCarryFlags {
+                dst: flags,
+                flags_in: borrow,
+                lhs: a_high,
+                rhs: b_high,
+                width: Width::X,
+            });
+            Ok((
+                flags,
+                if operation == CmpOp::ULt {
+                    Cond::Lo
+                } else {
+                    Cond::Lt
+                },
+            ))
+        }
+    }
 }

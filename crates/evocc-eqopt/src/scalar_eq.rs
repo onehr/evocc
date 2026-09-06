@@ -429,7 +429,7 @@ impl CandidateGraph {
     }
 
     fn constant(&mut self, raw: u64, ty: &EvoIRType) -> (EClassId, evocc_egraph::NodeId) {
-        let raw = mask_raw(raw, ty);
+        let raw = mask_raw(raw, ty).unwrap_or(raw);
         let key = (ty.clone(), raw);
         if let Some(existing) = self.constants.get(&key) {
             return *existing;
@@ -886,7 +886,7 @@ pub(crate) fn node_fact(inst: &Inst, known: &KnownEnv) -> Option<KnownBits> {
     let result = inst_results(inst).first().copied()?;
     let fact = match inst {
         Inst::Const(_, raw) => {
-            KnownBits::constant(scalar_width(&result.ty)?, mask_raw(*raw, &result.ty))
+            KnownBits::constant(scalar_width(&result.ty)?, mask_raw(*raw, &result.ty)?)
         }
         Inst::And(_, left, right) => known_of(left, known)?.transfer_and(known_of(right, known)?),
         Inst::Or(_, left, right) => known_of(left, known)?.transfer_or(known_of(right, known)?),
@@ -1166,7 +1166,7 @@ pub(crate) fn fold_raw(
         ScalarOperator::Or => left | right,
         ScalarOperator::Xor => left ^ right,
         ScalarOperator::ICmp(comparison) => {
-            u64::from(fold_comparison(comparison, left, right, operand_ty))
+            u64::from(fold_comparison(comparison, left, right, operand_ty)?)
         }
         // `p0.scalar.v3` gives the shifts and width changes a fact-driven fold
         // and no `all_const` one, so there is no fold to compute here; their
@@ -1179,21 +1179,21 @@ pub(crate) fn fold_raw(
         | ScalarOperator::SExt
         | ScalarOperator::Trunc => return None,
     };
-    Some(mask_raw(folded, result_ty))
+    mask_raw(folded, result_ty)
 }
 
-fn fold_comparison(comparison: CmpOp, left: u64, right: u64, ty: &EvoIRType) -> bool {
-    let width = bit_width(ty);
+fn fold_comparison(comparison: CmpOp, left: u64, right: u64, ty: &EvoIRType) -> Option<bool> {
+    let width = scalar_width(ty)?;
     let left = mask_to_width(left, width);
     let right = mask_to_width(right, width);
-    match comparison {
+    Some(match comparison {
         CmpOp::Eq => left == right,
         CmpOp::Ne => left != right,
         CmpOp::ULt => left < right,
         CmpOp::ULe => left <= right,
         CmpOp::SLt => signed_value(left, width) < signed_value(right, width),
         CmpOp::SLe => signed_value(left, width) <= signed_value(right, width),
-    }
+    })
 }
 
 fn signed_value(raw: u64, width: u16) -> i128 {
@@ -1208,17 +1208,22 @@ fn signed_value(raw: u64, width: u16) -> i128 {
 /// A constant's payload, which is the one attribute a P0 node carries.
 fn constant_payload(instruction: &Inst) -> Option<u64> {
     match instruction {
-        Inst::Const(value, raw) => Some(mask_raw(*raw, &value.ty)),
+        Inst::Const(value, raw) => mask_raw(*raw, &value.ty),
         _ => None,
     }
 }
 
 pub(crate) fn record_fact(inst: &Inst, facts: &mut HashMap<u32, ScalarFact>) {
     if let Inst::Const(result, raw) = inst {
+        // A width outside the profile's bound records no fact, which is what
+        // leaves the value excluded rather than folded.
+        let Some(raw) = mask_raw(*raw, &result.ty) else {
+            return;
+        };
         facts.insert(
             result.id,
             ScalarFact::Constant {
-                raw: mask_raw(*raw, &result.ty),
+                raw,
                 ty: result.ty.clone(),
             },
         );
@@ -1239,7 +1244,8 @@ pub(crate) fn record_negation(
 }
 
 fn is_constant(value: &Value, facts: &HashMap<u32, ScalarFact>, expected: u64) -> bool {
-    constant_raw(value, facts).is_some_and(|raw| raw == mask_raw(expected, &value.ty))
+    mask_raw(expected, &value.ty)
+        .is_some_and(|expected| constant_raw(value, facts) == Some(expected))
 }
 
 fn constant_raw(value: &Value, facts: &HashMap<u32, ScalarFact>) -> Option<u64> {
@@ -1322,15 +1328,18 @@ pub(crate) fn scalar_width(ty: &EvoIRType) -> Option<u16> {
     }
 }
 
-fn bit_width(ty: &EvoIRType) -> u16 {
-    match ty {
-        EvoIRType::Bits(width @ 1..=64) => *width,
-        _ => unreachable!("P0 scalar operator carries a non-bit-vector type"),
-    }
-}
-
-pub(crate) fn mask_raw(raw: u64, ty: &EvoIRType) -> u64 {
-    mask_to_width(raw, bit_width(ty))
+/// The bit pattern a constant of `ty` carries, or `None` for a width this
+/// profile has no representation for.
+///
+/// Section 11 bounds every root and witness to "`bits<N>` with `1 <= N <= 64`"
+/// and adds that "silently truncating a wider constant to the host's integer
+/// width is invalid". `bits<128>` is an executed type since EvoIR 1.9.61, so a
+/// module reaches here holding one; the eligibility fixed point already
+/// excludes it, but a constant's width is read before that runs. Declining is
+/// the answer the bound already gives; truncating and aborting are both
+/// wrong.
+pub(crate) fn mask_raw(raw: u64, ty: &EvoIRType) -> Option<u64> {
+    Some(mask_to_width(raw, scalar_width(ty)?))
 }
 
 fn mask_to_width(raw: u64, width: u16) -> u64 {

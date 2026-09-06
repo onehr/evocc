@@ -15,9 +15,9 @@ use std::collections::HashMap;
 use evocc_evoir::{AccessLayout, GlobalKind, GlobalObject, GlobalVisibility};
 
 use crate::{
-    AsmBody, AsmClobber, AsmConstraint, AsmOperand, AsmValue, BinOp, Cond, ExtOp, FlagOp, LoadKind,
-    MBlock, MFunction, MInst, MModule, MTerm, RegClass, StoreKind, SymbolKind, VReg, WideMul,
-    Width,
+    AsmBody, AsmClobber, AsmConstraint, AsmOperand, AsmValue, BinOp, CarryOp, Cond, ExtOp, FlagOp,
+    LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass, StoreKind, SymbolKind, VReg,
+    WideMul, Width,
 };
 
 /// Parse canonical Appendix A bytes back into a module.
@@ -705,6 +705,11 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
     if let Some(inst) = parse_flag_binary(body, classes)? {
         return Ok(Parsed::Inst(inst));
     }
+    // `ldp` likewise defines two registers, and `stp` defines none while its
+    // mnemonic still leads the body.
+    if let Some(inst) = parse_pair(body, classes)? {
+        return Ok(Parsed::Inst(inst));
+    }
     let (dst, rest) = match body.split_once(" = ") {
         Some((head, tail)) if head.starts_with("%v") => (Some(parse_definition(head)?), tail),
         _ => (None, body),
@@ -988,6 +993,66 @@ fn parse_defining(
                 width,
             })
         }
+        "adc" | "sbc" => {
+            let op =
+                CarryOp::from_mnemonic(head).ok_or_else(|| format!("unknown form '{mnemonic}'"))?;
+            let flags = scan.use_of()?;
+            scan.expect(", ")?;
+            let lhs = scan.use_of()?;
+            scan.expect(", ")?;
+            let rhs = scan.use_of()?;
+            scan.finish()?;
+            Ok(MInst::CarryBinary {
+                op,
+                dst,
+                flags,
+                lhs,
+                rhs,
+                width,
+            })
+        }
+        "sbcs" => {
+            let flags_in = scan.use_of()?;
+            scan.expect(", ")?;
+            let lhs = scan.use_of()?;
+            scan.expect(", ")?;
+            let rhs = scan.use_of()?;
+            scan.finish()?;
+            Ok(MInst::SubCarryFlags {
+                dst,
+                flags_in,
+                lhs,
+                rhs,
+                width,
+            })
+        }
+        "tst" => {
+            let lhs = scan.use_of()?;
+            scan.expect(", ")?;
+            let imm = scan.immediate()?;
+            scan.finish()?;
+            Ok(MInst::TstImm {
+                dst,
+                lhs,
+                imm,
+                width,
+            })
+        }
+        "madd" => {
+            let n = scan.use_of()?;
+            scan.expect(", ")?;
+            let m = scan.use_of()?;
+            scan.expect(", ")?;
+            let a = scan.use_of()?;
+            scan.finish()?;
+            Ok(MInst::Madd {
+                dst,
+                n,
+                m,
+                a,
+                width,
+            })
+        }
         "sbfx" | "ubfx" => {
             let src = scan.use_of()?;
             scan.expect(", ")?;
@@ -1109,5 +1174,69 @@ fn parse_flag_binary(
         lhs,
         rhs,
         width,
+    }))
+}
+
+/// `ldp`/`stp`, the two forms whose destinations are a register pair.
+///
+/// Section 5's `bits<128>` row loads and stores the halves with them, so they
+/// reach the textual form outside the prologue and must read back.
+fn parse_pair(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Option<MInst>, String> {
+    let (head, tail) = match body.split_once(" = ") {
+        Some((head, tail)) if head.starts_with("%v") && head.contains(", ") => (Some(head), tail),
+        _ if body.starts_with("stp ") => (None, body),
+        _ => return Ok(None),
+    };
+    let (mnemonic, arguments) = tail
+        .split_once(' ')
+        .ok_or_else(|| format!("unknown form '{body}'"))?;
+    if mnemonic != "ldp" && mnemonic != "stp" {
+        return Ok(None);
+    }
+    let mut scan = Scan::new(arguments, classes);
+    let volatile = arguments.starts_with("volatile ");
+    if volatile {
+        scan.expect("volatile ")?;
+    }
+    let (rt1, rt2) = if let Some(head) = head {
+        let (left, right) = head
+            .split_once(", ")
+            .ok_or_else(|| format!("unknown form '{body}'"))?;
+        (parse_definition(left)?, parse_definition(right)?)
+    } else {
+        let rt1 = scan.use_of()?;
+        scan.expect(", ")?;
+        let rt2 = scan.use_of()?;
+        scan.expect(", ")?;
+        (rt1, rt2)
+    };
+    scan.expect("[")?;
+    let base = scan.use_of()?;
+    scan.expect(", ")?;
+    let offset = scan.signed_immediate()?;
+    scan.expect("]")?;
+    let writeback = scan.text == "!";
+    if writeback {
+        scan.expect("!")?;
+    }
+    scan.finish()?;
+    Ok(Some(if mnemonic == "ldp" {
+        MInst::Ldp {
+            rt1,
+            rt2,
+            base,
+            offset,
+            writeback,
+            volatile,
+        }
+    } else {
+        MInst::Stp {
+            rt1,
+            rt2,
+            base,
+            offset,
+            writeback,
+            volatile,
+        }
     }))
 }

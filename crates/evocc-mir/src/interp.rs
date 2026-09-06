@@ -30,8 +30,8 @@ use evocc_memory::{
 use evocc_types::TargetDataLayout;
 
 use crate::{
-    BinOp, Cond, FlagOp, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass, StoreKind,
-    SymbolKind, VReg, WideMul, Width,
+    BinOp, CarryOp, Cond, FlagOp, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass,
+    StoreKind, SymbolKind, VReg, WideMul, Width,
 };
 
 // The same host-resource policy the EvoIR interpreter runs under, so that a
@@ -702,19 +702,26 @@ fn evaluate(flags: Flags, cond: Cond) -> Result<bool, MirError> {
 ///
 /// The machine computes a subtraction as `rn + !rm + 1`, so one addition
 /// produces the value, the carry and the overflow for both forms.
-fn arithmetic_flags(left: u64, right: u64, width: Width, subtract: bool) -> (u64, Flags) {
+fn arithmetic_flags(
+    left: u64,
+    right: u64,
+    width: Width,
+    subtract: bool,
+    carry_in: bool,
+) -> (u64, Flags) {
     let mask = width.mask();
     let (left, right) = (left & mask, right & mask);
     let addend = if subtract { !right & mask } else { right };
-    let carry_in = u128::from(subtract);
+    let carry_in = u128::from(carry_in);
     let wide = u128::from(left) + u128::from(addend) + carry_in;
     let value = (wide & u128::from(mask)) as u64;
     let carry = wide >> width.bits() != 0;
-    let exact = if subtract {
-        wide_signed(left, width) - wide_signed(right, width)
-    } else {
-        wide_signed(left, width) + wide_signed(right, width)
-    };
+    // The machine reads overflow off the adder, so the exact sum is the one
+    // the adder was given: the two operands as the form spells them and the
+    // carry it was handed. For `subs` that is `left + !right + 1`, which is
+    // `left - right`, and for `sbc` it is the same with the borrow the
+    // preceding form left.
+    let exact = wide_signed(left, width) + wide_signed(addend, width) + carry_in as i128;
     (
         value,
         Flags::Arithmetic {
@@ -973,6 +980,66 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             let value = a.wrapping_sub(n.wrapping_mul(m)) & width.mask();
             write(frame, *dst, MirValue::Int(value));
         }
+        MInst::Madd {
+            dst,
+            n,
+            m,
+            a,
+            width,
+        } => {
+            let n = read_bits(frame, *n)? & width.mask();
+            let m = read_bits(frame, *m)? & width.mask();
+            let a = read_bits(frame, *a)? & width.mask();
+            let value = a.wrapping_add(n.wrapping_mul(m)) & width.mask();
+            write(frame, *dst, MirValue::Int(value));
+        }
+        MInst::CarryBinary {
+            op,
+            dst,
+            flags,
+            lhs,
+            rhs,
+            width,
+        } => {
+            let carry = evaluate(read_flags(frame, *flags)?, Cond::Cs)?;
+            let left = read_bits(frame, *lhs)?;
+            let right = read_bits(frame, *rhs)?;
+            let subtract = *op == CarryOp::Sbc;
+            let (value, _) = arithmetic_flags(left, right, *width, subtract, carry);
+            write(frame, *dst, MirValue::Int(value));
+        }
+        MInst::SubCarryFlags {
+            dst,
+            flags_in,
+            lhs,
+            rhs,
+            width,
+        } => {
+            let carry = evaluate(read_flags(frame, *flags_in)?, Cond::Cs)?;
+            let left = read_bits(frame, *lhs)?;
+            let right = read_bits(frame, *rhs)?;
+            let (_, set) = arithmetic_flags(left, right, *width, true, carry);
+            frame.regs.insert(dst.id, Slot::Flags(set));
+        }
+        // `tst rn, #imm` is `ands` into the zero register: the logical flags
+        // set `n` and `z` from the result and clear `c` and `v`.
+        MInst::TstImm {
+            dst,
+            lhs,
+            imm,
+            width,
+        } => {
+            let value = (read_bits(frame, *lhs)? & *imm) & width.mask();
+            frame.regs.insert(
+                dst.id,
+                Slot::Flags(Flags::Arithmetic {
+                    negative: signed(value, *width) < 0,
+                    zero: value == 0,
+                    carry: false,
+                    overflow: false,
+                }),
+            );
+        }
         MInst::Extend { op, dst, src } => {
             let raw = read_bits(frame, *src)?;
             let bits = op.source_bits();
@@ -1063,7 +1130,8 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
         } => {
             let left = read_bits(frame, *lhs)?;
             let right = read_bits(frame, *rhs)?;
-            let (value, set) = arithmetic_flags(left, right, *width, *op == FlagOp::Subs);
+            let subtract = *op == FlagOp::Subs;
+            let (value, set) = arithmetic_flags(left, right, *width, subtract, subtract);
             write(frame, *dst, MirValue::Int(value));
             frame.regs.insert(flags.id, Slot::Flags(set));
         }
@@ -1080,6 +1148,12 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                     let left = i128::from(read_bits(frame, *lhs)? as i64);
                     let right = i128::from(read_bits(frame, *rhs)? as i64);
                     ((left * right) >> 64) as i64 as u64
+                }
+                // `umulh xd, xn, xm`: the high half of the unsigned product.
+                WideMul::Umulh => {
+                    let left = u128::from(read_bits(frame, *lhs)?);
+                    let right = u128::from(read_bits(frame, *rhs)?);
+                    ((left * right) >> 64) as u64
                 }
             };
             write(frame, *dst, MirValue::Int(value));
@@ -1107,6 +1181,7 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             base,
             offset,
             writeback,
+            volatile,
         } => {
             let address = read_pointer(frame, *base)?;
             let at = if *writeback {
@@ -1125,10 +1200,19 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                 let slot = at
                     .checked_offset(index)
                     .map_err(|error| memory_error(&error))?;
-                let raw = state
-                    .memory
-                    .load_integer(slot, access)
-                    .map_err(|error| memory_error(&error))?;
+                let raw = if *volatile {
+                    let (raw, world) = state
+                        .memory
+                        .volatile_load_integer(&state.world, slot, access)
+                        .map_err(|error| memory_error(&error))?;
+                    state.world = world;
+                    raw
+                } else {
+                    state
+                        .memory
+                        .load_integer(slot, access)
+                        .map_err(|error| memory_error(&error))?
+                };
                 let raw = u64::try_from(raw).map_err(|_| MirError::Invalid {
                     detail: "an access wider than a register".to_owned(),
                 })?;
@@ -1141,6 +1225,7 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             base,
             offset,
             writeback,
+            volatile,
         } => {
             let address = read_pointer(frame, *base)?;
             let at = address
@@ -1154,11 +1239,20 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                 let slot = at
                     .checked_offset(index)
                     .map_err(|error| memory_error(&error))?;
-                let value = read_bits(frame, src)?;
-                state.memory = state
-                    .memory
-                    .store_integer(slot, access, u128::from(value))
-                    .map_err(|error| memory_error(&error))?;
+                let value = u128::from(read_bits(frame, src)?);
+                if *volatile {
+                    let (memory, world) = state
+                        .memory
+                        .volatile_store_integer(&state.world, slot, access, value)
+                        .map_err(|error| memory_error(&error))?;
+                    state.memory = memory;
+                    state.world = world;
+                } else {
+                    state.memory = state
+                        .memory
+                        .store_integer(slot, access, value)
+                        .map_err(|error| memory_error(&error))?;
+                }
             }
         }
         // The spill pair is expanded by emission against the frame layout of
@@ -1167,6 +1261,13 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
         MInst::SpillStore { .. } | MInst::SpillReload { .. } => {
             return Err(MirError::Invalid {
                 detail: "a spill access exists only after allocation".to_owned(),
+            });
+        }
+        // Which arguments find no register is what allocation decides, so a
+        // stack argument, like a spill, exists only after it.
+        MInst::IncomingArg { .. } | MInst::OutgoingArg { .. } => {
+            return Err(MirError::Invalid {
+                detail: "a stack argument exists only after allocation".to_owned(),
             });
         }
         MInst::Bl { .. } | MInst::Blr { .. } => {

@@ -254,7 +254,9 @@ impl EqualityState {
 
     fn ingest_instruction(&mut self, function: &str, inst: &Inst) -> Result<(), String> {
         if let Inst::Const(result, raw) = inst {
-            let binding = self.constant(*raw, &result.ty)?;
+            let Some(binding) = self.constant(*raw, &result.ty)? else {
+                return Ok(());
+            };
             return self.bind_value(function, result, binding);
         }
         let Ok(operator) = ingest_scalar_inst(inst) else {
@@ -329,11 +331,18 @@ impl EqualityState {
         Ok(binding)
     }
 
-    fn constant(&mut self, raw: u64, ty: &EvoIRType) -> Result<ValueBinding, String> {
+    fn constant(&mut self, raw: u64, ty: &EvoIRType) -> Result<Option<ValueBinding>, String> {
+        // A width the P0 profile has no representation for binds no leaf; the
+        // eligibility fixed point already excludes such a value, and the
+        // constant environment is folded before that runs.
+        let Some(raw) = mask_raw(raw, ty) else {
+            return Ok(None);
+        };
         self.leaf(LeafKey::Constant {
             ty: type_identity(ty),
-            raw: mask_raw(raw, ty),
+            raw,
         })
+        .map(Some)
     }
 
     fn apply(&mut self, instance: AppliedRewrite) -> Result<bool, String> {
@@ -363,7 +372,14 @@ impl EqualityState {
                         instance.function, value.id
                     )
                 })?,
-            Replacement::Constant(raw) => self.constant(*raw, &instance.result.ty)?,
+            Replacement::Constant(raw) => {
+                self.constant(*raw, &instance.result.ty)?.ok_or_else(|| {
+                    format!(
+                        "@{} replacement constant has a width outside the profile",
+                        instance.function
+                    )
+                })?
+            }
             // Section 11.6 "Emitting right-hand sides": the node the rule
             // builds joins the persistent graph like any other, so a later
             // phase asking what else is equal to this value finds it. Its
@@ -383,7 +399,14 @@ impl EqualityState {
                                     instance.function, value.id
                                 )
                             })?,
-                        EmittedOperand::Constant(raw) => self.constant(*raw, &term.result_ty)?,
+                        EmittedOperand::Constant(raw) => {
+                            self.constant(*raw, &term.result_ty)?.ok_or_else(|| {
+                                format!(
+                                    "@{} emitted constant has a width outside the profile",
+                                    instance.function
+                                )
+                            })?
+                        }
                     };
                     children.push(binding.class);
                 }

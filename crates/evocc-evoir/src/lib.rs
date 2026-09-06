@@ -1283,11 +1283,11 @@ fn evoir_access_layout(ty: &EvoIRType) -> Result<Option<AccessLayout>, String> {
             ))
         }
     };
-    let align = if *ty == EvoIRType::Bits(128) {
-        16
-    } else {
-        u32::try_from(size.min(8)).map_err(|_| "invalid access alignment".to_owned())?
-    };
+    // EvoIR 10.1.19: a `bits<128>` is accessed "at 16 bytes and alignment 16",
+    // so the natural alignment is capped at the widest executed scalar rather
+    // than at a register. Every narrower width is unchanged, its size being at
+    // most eight bytes already.
+    let align = u32::try_from(size.min(16)).map_err(|_| "invalid access alignment".to_owned())?;
     Ok(Some(AccessLayout::new(size, align)))
 }
 
@@ -2881,17 +2881,44 @@ impl InterpreterLimits {
 pub struct RuntimeValue {
     pub ty: EvoIRType,
     pub raw_bits: u64,
+    /// The bits above 64 of a `bits<128>` value, zero for every narrower type.
+    ///
+    /// EvoIR 10.1.19 (revision 1.9.61) makes `bits<128>` an executed scalar
+    /// type, so the boundary carries 128 bits. It carries them as two halves
+    /// rather than one `u128` so that every reader of `raw_bits` keeps
+    /// reading exactly the low 64 bits it always read.
+    pub high_bits: u64,
 }
 
 impl RuntimeValue {
     #[must_use]
     pub const fn new(ty: EvoIRType, raw_bits: u64) -> Self {
-        Self { ty, raw_bits }
+        Self {
+            ty,
+            raw_bits,
+            high_bits: 0,
+        }
     }
 
     #[must_use]
     pub const fn bits(width: u16, raw_bits: u64) -> Self {
         Self::new(EvoIRType::Bits(width), raw_bits)
+    }
+
+    /// One value of any executed width, split into its two halves.
+    #[must_use]
+    pub const fn wide(ty: EvoIRType, value: u128) -> Self {
+        Self {
+            ty,
+            raw_bits: value as u64,
+            high_bits: (value >> 64) as u64,
+        }
+    }
+
+    /// The whole bit pattern this value carries.
+    #[must_use]
+    pub const fn value(&self) -> u128 {
+        ((self.high_bits as u128) << 64) | self.raw_bits as u128
     }
 }
 
@@ -2900,7 +2927,7 @@ impl RuntimeValue {
 /// interpreter is executing validated EvoIR.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InternalValue {
-    Bits(u64),
+    Bits(u128),
     Pointer(Pointer),
     FunctionPointer(PointerValue),
     Uninitialized,
@@ -2921,8 +2948,8 @@ struct ExecutionState {
     world: WorldState,
     globals: HashMap<String, Pointer>,
     functions: HashMap<String, u64>,
-    access_guards: HashMap<u64, (Pointer, AccessLayout)>,
-    next_token: u64,
+    access_guards: HashMap<u128, (Pointer, AccessLayout)>,
+    next_token: u128,
 }
 
 impl ExecutionState {
@@ -2952,7 +2979,7 @@ impl ExecutionState {
         })
     }
 
-    fn fresh_token(&mut self) -> Result<u64, InterpreterError> {
+    fn fresh_token(&mut self) -> Result<u128, InterpreterError> {
         let token = self.next_token;
         self.next_token = token
             .checked_add(1)
@@ -3081,7 +3108,7 @@ impl InterpreterError {
             Self::CallThroughNullFunctionPointer { .. } => "E3015",
             Self::CallThroughNonFunctionPointer { .. } => "E3016",
             Self::IndirectCallDynamicSignatureMismatch { .. } => "E3019",
-            Self::UnsupportedBitWidth { width: 128, .. } => "E3033",
+            Self::UnsupportedBitWidth { .. } => "E3033",
             _ => "E3007",
         }
     }
@@ -3118,7 +3145,7 @@ impl InterpreterError {
             Self::IndirectCallDynamicSignatureMismatch { .. } => {
                 "indirect-call-dynamic-signature-mismatch".to_owned()
             }
-            Self::UnsupportedBitWidth { width: 128, .. } => "not-executed: wide-integer".to_owned(),
+            Self::UnsupportedBitWidth { .. } => "not-executed: wide-integer".to_owned(),
             _ => self.to_string(),
         }
     }
@@ -3948,17 +3975,25 @@ fn execute_external_call(
         .ok_or_else(|| InterpreterError::InvalidModule {
             message: "external call lacks memory".into(),
         })?;
-    let arguments = arguments
-        .into_iter()
-        .map(|value| match value {
-            InternalValue::Bits(value) => Ok(LibraryValue::Integer(value)),
-            InternalValue::Pointer(value) => Ok(LibraryValue::Pointer(value)),
-            _ => Err(InterpreterError::MemoryAccess {
-                block,
-                error: MemoryFault::ExternalFunction { name: name.into() },
-            }),
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let arguments =
+        arguments
+            .into_iter()
+            .map(|value| match value {
+                // The library boundary of 10.1.14 takes C `int` and `size_t`
+                // arguments only; a wider value cannot name a library argument.
+                InternalValue::Bits(value) => u64::try_from(value)
+                    .map(LibraryValue::Integer)
+                    .map_err(|_| InterpreterError::MemoryAccess {
+                        block,
+                        error: MemoryFault::ExternalFunction { name: name.into() },
+                    }),
+                InternalValue::Pointer(value) => Ok(LibraryValue::Pointer(value)),
+                _ => Err(InterpreterError::MemoryAccess {
+                    block,
+                    error: MemoryFault::ExternalFunction { name: name.into() },
+                }),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
     let (next, result) = state
         .memory
         .call_library(name, &arguments)
@@ -3969,7 +4004,9 @@ fn execute_external_call(
             [result @ Value {
                 ty: EvoIRType::Bits(_),
                 ..
-            }] => InternalValue::Bits(IntegerKernel::for_value(result, block)?.normalize(value)),
+            }] => InternalValue::Bits(
+                IntegerKernel::for_value(result, block)?.normalize(u128::from(value)),
+            ),
             _ => {
                 return Err(InterpreterError::MemoryAccess {
                     block,
@@ -4079,7 +4116,7 @@ fn public_return_values(
         .zip(types)
         .enumerate()
         .map(|(index, (value, ty))| match value {
-            InternalValue::Bits(raw_bits) => Ok(RuntimeValue { ty, raw_bits }),
+            InternalValue::Bits(raw_bits) => Ok(RuntimeValue::wide(ty, raw_bits)),
             InternalValue::Pointer(_) | InternalValue::FunctionPointer(_) => {
                 Err(InterpreterError::UnsupportedRuntimeType { index, ty })
             }
@@ -4113,7 +4150,7 @@ fn charge_step(
     Ok(())
 }
 
-fn write_value(values: &mut HashMap<u32, InternalValue>, result: &Value, raw_bits: u64) {
+fn write_value(values: &mut HashMap<u32, InternalValue>, result: &Value, raw_bits: u128) {
     values.insert(result.id, InternalValue::Bits(raw_bits));
 }
 
@@ -4187,21 +4224,23 @@ fn execute_instruction(
             operand,
             op,
         } => {
-            let raw = u128::from(read_value(values, operand, block)?);
+            let raw = read_value(values, operand, block)?;
             let EvoIRType::Bits(width) = result.ty else {
                 unreachable!("validated bit type")
             };
-            let result_bits = match op {
-                BitOp::LeadingZeros => u64::from(raw.leading_zeros() - (128 - u32::from(width))),
-                BitOp::TrailingZeros => u64::from(raw.trailing_zeros().min(u32::from(width))),
-                BitOp::Population => u64::from(raw.count_ones()),
-                BitOp::ByteSwap => (raw.swap_bytes() >> (128 - width)) as u64,
+            // The value model is 128 bits wide (revision 1.9.61); the counts
+            // are answered at the instruction's own width.
+            let result_bits: u128 = match op {
+                BitOp::LeadingZeros => u128::from(raw.leading_zeros() - (128 - u32::from(width))),
+                BitOp::TrailingZeros => u128::from(raw.trailing_zeros().min(u32::from(width))),
+                BitOp::Population => u128::from(raw.count_ones()),
+                BitOp::ByteSwap => raw.swap_bytes() >> (128 - width),
             };
             write_value(values, result, result_bits);
         }
         Inst::Const(result, immediate) => {
             let kernel = IntegerKernel::for_value(result, block)?;
-            write_value(values, result, kernel.normalize(*immediate));
+            write_value(values, result, kernel.normalize(u128::from(*immediate)));
         }
         Inst::Uninitialized(result) => {
             values.insert(result.id, InternalValue::Uninitialized);
@@ -4279,7 +4318,7 @@ fn execute_instruction(
             write_value(
                 values,
                 result,
-                u64::from(kernel.signed_add_defined(left, right)),
+                u128::from(kernel.signed_add_defined(left, right)),
             );
         }
         Inst::SignedSubDefined(result, lhs, rhs) => {
@@ -4289,7 +4328,7 @@ fn execute_instruction(
             write_value(
                 values,
                 result,
-                u64::from(kernel.signed_sub_defined(left, right)),
+                u128::from(kernel.signed_sub_defined(left, right)),
             );
         }
         Inst::SignedMulDefined(result, lhs, rhs) => {
@@ -4299,13 +4338,13 @@ fn execute_instruction(
             write_value(
                 values,
                 result,
-                u64::from(kernel.signed_mul_defined(left, right)),
+                u128::from(kernel.signed_mul_defined(left, right)),
             );
         }
         Inst::DivisorNonZero(result, divisor) => {
             let kernel = IntegerKernel::for_value(divisor, block)?;
             let divisor = read_value(values, divisor, block)?;
-            write_value(values, result, u64::from(kernel.normalize(divisor) != 0));
+            write_value(values, result, u128::from(kernel.normalize(divisor) != 0));
         }
         Inst::SignedDivRemNoOverflow(result, lhs, rhs) => {
             let kernel = IntegerKernel::for_value(lhs, block)?;
@@ -4314,7 +4353,7 @@ fn execute_instruction(
             write_value(
                 values,
                 result,
-                u64::from(kernel.signed_div_rem_no_overflow(left, right)),
+                u128::from(kernel.signed_div_rem_no_overflow(left, right)),
             );
         }
         Inst::ShiftCountDefined {
@@ -4330,7 +4369,7 @@ fn execute_instruction(
             write_value(
                 values,
                 result,
-                u64::from(shifted_kernel.shift_count_defined(
+                u128::from(shifted_kernel.shift_count_defined(
                     amount_kernel,
                     amount_raw,
                     *amount_signed,
@@ -4350,7 +4389,7 @@ fn execute_instruction(
             write_value(
                 values,
                 result,
-                u64::from(shifted_kernel.signed_shl_defined(
+                u128::from(shifted_kernel.signed_shl_defined(
                     shifted,
                     amount_kernel,
                     amount,
@@ -4402,7 +4441,7 @@ fn execute_instruction(
                         });
                     }
                 };
-                write_value(values, result, u64::from(comparison));
+                write_value(values, result, u128::from(comparison));
                 return Ok(());
             }
             if matches!(lhs.ty, EvoIRType::FnPtr { .. }) {
@@ -4427,7 +4466,7 @@ fn execute_instruction(
                         });
                     }
                 };
-                write_value(values, result, u64::from(comparison));
+                write_value(values, result, u128::from(comparison));
                 return Ok(());
             }
             let kernel = IntegerKernel::for_value(lhs, block)?;
@@ -4441,7 +4480,7 @@ fn execute_instruction(
                 CmpOp::ULt => kernel.normalize(left) < kernel.normalize(right),
                 CmpOp::ULe => kernel.normalize(left) <= kernel.normalize(right),
             };
-            write_value(values, result, u64::from(comparison));
+            write_value(values, result, u128::from(comparison));
         }
         Inst::SExt(result, source, _) => {
             let source_kernel = IntegerKernel::for_value(source, block)?;
@@ -4475,9 +4514,11 @@ fn execute_instruction(
                     .expose_pointer(pointer)
                     .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
                 state.memory = memory;
-                InternalValue::Bits(address)
+                InternalValue::Bits(u128::from(address))
             } else {
-                let address = read_value(values, operand, block)?;
+                // `ptr.from_int` takes a `bits<64>` (Section 3.7); the value model is 128 bits wide.
+                let address = u64::try_from(read_value(values, operand, block)?)
+                    .map_err(|_| InterpreterError::InvalidPointerRepresentation { block })?;
                 if matches!(result.ty, EvoIRType::FnPtr { .. }) {
                     InternalValue::FunctionPointer(if address == 0 {
                         PointerValue::Null
@@ -4629,8 +4670,6 @@ fn execute_instruction(
                             .load_integer(address, layout)
                             .map_err(|error| InterpreterError::MemoryAccess { block, error })?
                     };
-                    let raw = u64::try_from(raw)
-                        .map_err(|_| InterpreterError::UnsupportedBitWidth { block, width: 128 })?;
                     InternalValue::Bits(raw)
                 }
                 EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => {
@@ -4691,14 +4730,14 @@ fn execute_instruction(
                     if *volatile {
                         let (memory, world) = state
                             .memory
-                            .volatile_store_integer(&state.world, address, layout, u128::from(raw))
+                            .volatile_store_integer(&state.world, address, layout, raw)
                             .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
                         state.memory = memory;
                         state.world = world;
                     } else {
                         state.memory = state
                             .memory
-                            .store_integer(address, layout, u128::from(raw))
+                            .store_integer(address, layout, raw)
                             .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
                     }
                 }
@@ -4787,7 +4826,7 @@ fn execute_instruction(
                 });
             };
             let pointer = base
-                .checked_scaled_offset(u128::from(raw), width, *signedness, *direction, *scale)
+                .checked_scaled_offset(raw, width, *signedness, *direction, *scale)
                 .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
             write_internal(values, result, InternalValue::Pointer(pointer));
         }
@@ -4804,7 +4843,7 @@ fn read_value(
     values: &HashMap<u32, InternalValue>,
     value: &Value,
     block: BlockId,
-) -> Result<u64, InterpreterError> {
+) -> Result<u128, InterpreterError> {
     match values
         .get(&value.id)
         .copied()
@@ -4883,7 +4922,7 @@ fn read_pointer_value(
 
 fn matching_guard(
     state: &ExecutionState,
-    memory_token: u64,
+    memory_token: u128,
     pointer: Pointer,
     block: BlockId,
 ) -> Result<AccessLayout, InterpreterError> {
@@ -5045,9 +5084,9 @@ fn normalize_runtime_input(
     }
     match expected {
         EvoIRType::Bits(_) => Ok(InternalValue::Bits(
-            IntegerKernel::for_type(expected, block)?.normalize(value.raw_bits),
+            IntegerKernel::for_type(expected, block)?.normalize(value.value()),
         )),
-        EvoIRType::Mem(_) | EvoIRType::World => Ok(InternalValue::Bits(value.raw_bits)),
+        EvoIRType::Mem(_) | EvoIRType::World => Ok(InternalValue::Bits(value.value())),
         _ => Err(InterpreterError::UnsupportedRuntimeType {
             index,
             ty: expected.clone(),
@@ -5056,10 +5095,16 @@ fn normalize_runtime_input(
 }
 
 /// One width-aware bit-vector kernel shared by every executed integer opcode.
+///
+/// The carrier is `u128` because EvoIR 10.1.19 (revision 1.9.61) makes
+/// `bits<128>` an executed scalar type: "Both interpreters extend their
+/// scalar value model to 128 bits for these forms." Every narrower width
+/// still answers exactly what it answered before, because the mask is the
+/// only thing the width decides.
 #[derive(Clone, Copy)]
 struct IntegerKernel {
     width: u16,
-    mask: u64,
+    mask: u128,
 }
 
 impl IntegerKernel {
@@ -5067,18 +5112,24 @@ impl IntegerKernel {
         Self::for_type(&value.ty, block)
     }
 
+    /// The executed widths are 1 to 64 and 128, and nothing between.
+    ///
+    /// Section 1.1 admits every positive width; execution admits the two
+    /// ranges a value model exists for. A width outside them is reported as
+    /// `not-executed: wide-integer`, which is the only diagnostic the
+    /// specification names for the case.
     fn for_type(ty: &EvoIRType, block: BlockId) -> Result<Self, InterpreterError> {
-        let EvoIRType::Bits(width @ 1..=64) = ty else {
+        let EvoIRType::Bits(width @ (1..=64 | 128)) = ty else {
             let width = match ty {
                 EvoIRType::Bits(width) => *width,
                 _ => 0,
             };
             return Err(InterpreterError::UnsupportedBitWidth { block, width });
         };
-        let mask = if *width == 64 {
-            u64::MAX
+        let mask = if *width >= 128 {
+            u128::MAX
         } else {
-            (1_u64 << width) - 1
+            (1_u128 << width) - 1
         };
         Ok(Self {
             width: *width,
@@ -5086,40 +5137,55 @@ impl IntegerKernel {
         })
     }
 
-    fn normalize(self, value: u64) -> u64 {
+    /// Division and remainder have no value model at the widest width.
+    ///
+    /// EvoIR 10.1.19: "`sdiv`, `udiv`, `srem` and `urem` on `bits<128>` stay
+    /// `E3033` (`not-executed: wide-integer`) until a unit needs one; the
+    /// cohort's `mul_u64_u64_div_u64` divides the halves by hand."
+    fn division_is_executed(self, block: BlockId) -> Result<(), InterpreterError> {
+        if self.width > 64 {
+            return Err(InterpreterError::UnsupportedBitWidth {
+                block,
+                width: self.width,
+            });
+        }
+        Ok(())
+    }
+
+    fn normalize(self, value: u128) -> u128 {
         value & self.mask
     }
 
-    fn add(self, left: u64, right: u64) -> u64 {
+    fn add(self, left: u128, right: u128) -> u128 {
         self.normalize(left.wrapping_add(right))
     }
 
-    fn sub(self, left: u64, right: u64) -> u64 {
+    fn sub(self, left: u128, right: u128) -> u128 {
         self.normalize(left.wrapping_sub(right))
     }
 
-    fn mul(self, left: u64, right: u64) -> u64 {
+    fn mul(self, left: u128, right: u128) -> u128 {
         self.normalize(left.wrapping_mul(right))
     }
 
-    fn shl(self, left: u64, amount: u64) -> u64 {
-        if amount >= u64::from(self.width) {
+    fn shl(self, left: u128, amount: u128) -> u128 {
+        if amount >= u128::from(self.width) {
             0
         } else {
             self.normalize(self.normalize(left) << amount)
         }
     }
 
-    fn lshr(self, left: u64, amount: u64) -> u64 {
-        if amount >= u64::from(self.width) {
+    fn lshr(self, left: u128, amount: u128) -> u128 {
+        if amount >= u128::from(self.width) {
             0
         } else {
             self.normalize(left) >> amount
         }
     }
 
-    fn ashr(self, left: u64, amount: u64) -> u64 {
-        if amount >= u64::from(self.width) {
+    fn ashr(self, left: u128, amount: u128) -> u128 {
+        if amount >= u128::from(self.width) {
             if self.signed(left) < 0 {
                 self.mask
             } else {
@@ -5130,33 +5196,46 @@ impl IntegerKernel {
         }
     }
 
-    fn signed_add_defined(self, left: u64, right: u64) -> bool {
-        self.signed_fits(self.signed(left) + self.signed(right))
+    fn signed_add_defined(self, left: u128, right: u128) -> bool {
+        self.signed(left)
+            .checked_add(self.signed(right))
+            .is_some_and(|sum| self.signed_fits(sum))
     }
 
-    fn signed_sub_defined(self, left: u64, right: u64) -> bool {
-        self.signed_fits(self.signed(left) - self.signed(right))
+    fn signed_sub_defined(self, left: u128, right: u128) -> bool {
+        self.signed(left)
+            .checked_sub(self.signed(right))
+            .is_some_and(|difference| self.signed_fits(difference))
     }
 
-    fn signed_mul_defined(self, left: u64, right: u64) -> bool {
-        self.signed_fits(self.signed(left) * self.signed(right))
+    fn signed_mul_defined(self, left: u128, right: u128) -> bool {
+        self.signed(left)
+            .checked_mul(self.signed(right))
+            .is_some_and(|product| self.signed_fits(product))
     }
 
-    fn signed_div_rem_no_overflow(self, left: u64, right: u64) -> bool {
-        let minimum = -(1_i128 << (self.width - 1));
-        !(self.signed(left) == minimum && self.signed(right) == -1)
+    fn signed_minimum(self) -> i128 {
+        if self.width >= 128 {
+            i128::MIN
+        } else {
+            -(1_i128 << (self.width - 1))
+        }
+    }
+
+    fn signed_div_rem_no_overflow(self, left: u128, right: u128) -> bool {
+        !(self.signed(left) == self.signed_minimum() && self.signed(right) == -1)
     }
 
     fn decoded_shift_amount(
         self,
         amount_kernel: Self,
-        amount: u64,
+        amount: u128,
         amount_signed: bool,
     ) -> Option<u64> {
         let mathematical = if amount_signed {
             amount_kernel.signed(amount)
         } else {
-            i128::from(amount_kernel.normalize(amount))
+            i128::try_from(amount_kernel.normalize(amount)).ok()?
         };
         if mathematical < 0 || mathematical >= i128::from(self.width) {
             None
@@ -5165,46 +5244,65 @@ impl IntegerKernel {
         }
     }
 
-    fn shift_count_defined(self, amount_kernel: Self, amount: u64, amount_signed: bool) -> bool {
+    fn shift_count_defined(self, amount_kernel: Self, amount: u128, amount_signed: bool) -> bool {
         self.decoded_shift_amount(amount_kernel, amount, amount_signed)
             .is_some()
     }
 
+    /// EvoIR 3.3.1: a valid count, a non-negative left operand, and a shifted
+    /// result representable in signed `bits<N>`.
+    ///
+    /// The representability test is the round trip rather than a widened
+    /// product, because at `N = 128` there is no wider signed type to compute
+    /// the product in. For a non-negative operand the two agree exactly: the
+    /// shift loses no bit and leaves the sign clear precisely when the value
+    /// is below `2^(N - 1 - amount)`.
     fn signed_shl_defined(
         self,
-        left: u64,
+        left: u128,
         amount_kernel: Self,
-        amount: u64,
+        amount: u128,
         amount_signed: bool,
     ) -> bool {
         let Some(amount) = self.decoded_shift_amount(amount_kernel, amount, amount_signed) else {
             return false;
         };
-        let left = self.signed(left);
-        left >= 0 && self.signed_fits(left << amount)
+        if self.signed(left) < 0 {
+            return false;
+        }
+        let amount = u128::from(amount);
+        let shifted = self.shl(left, amount);
+        self.signed(shifted) >= 0 && self.lshr(shifted, amount) == self.normalize(left)
     }
 
     fn signed_fits(self, value: i128) -> bool {
+        if self.width >= 128 {
+            return true;
+        }
         let minimum = -(1_i128 << (self.width - 1));
         let maximum = (1_i128 << (self.width - 1)) - 1;
         (minimum..=maximum).contains(&value)
     }
 
-    fn signed(self, value: u64) -> i128 {
+    fn signed(self, value: u128) -> i128 {
         let value = self.normalize(value);
-        let sign_bit = 1_u64 << (self.width - 1);
+        if self.width >= 128 {
+            return value as i128;
+        }
+        let sign_bit = 1_u128 << (self.width - 1);
         if value & sign_bit == 0 {
-            i128::from(value)
+            value as i128
         } else {
-            i128::from(value) - (1_i128 << self.width)
+            (value as i128) - (1_i128 << self.width)
         }
     }
 
-    fn encode_signed(self, value: i128) -> u64 {
-        self.normalize(value as u64)
+    fn encode_signed(self, value: i128) -> u128 {
+        self.normalize(value as u128)
     }
 
-    fn sdiv(self, left: u64, right: u64, block: BlockId) -> Result<u64, InterpreterError> {
+    fn sdiv(self, left: u128, right: u128, block: BlockId) -> Result<u128, InterpreterError> {
+        self.division_is_executed(block)?;
         let left = self.signed(left);
         let right = self.signed(right);
         if right == 0 {
@@ -5213,8 +5311,7 @@ impl IntegerKernel {
                 operation: "signed division",
             });
         }
-        let minimum = -(1_i128 << (self.width - 1));
-        if left == minimum && right == -1 {
+        if left == self.signed_minimum() && right == -1 {
             return Err(InterpreterError::SignedDivisionOverflow {
                 block,
                 width: self.width,
@@ -5223,7 +5320,8 @@ impl IntegerKernel {
         Ok(self.encode_signed(left / right))
     }
 
-    fn udiv(self, left: u64, right: u64, block: BlockId) -> Result<u64, InterpreterError> {
+    fn udiv(self, left: u128, right: u128, block: BlockId) -> Result<u128, InterpreterError> {
+        self.division_is_executed(block)?;
         let left = self.normalize(left);
         let right = self.normalize(right);
         if right == 0 {
@@ -5235,7 +5333,8 @@ impl IntegerKernel {
         Ok(left / right)
     }
 
-    fn srem(self, left: u64, right: u64, block: BlockId) -> Result<u64, InterpreterError> {
+    fn srem(self, left: u128, right: u128, block: BlockId) -> Result<u128, InterpreterError> {
+        self.division_is_executed(block)?;
         let left = self.signed(left);
         let right = self.signed(right);
         if right == 0 {
@@ -5244,8 +5343,7 @@ impl IntegerKernel {
                 operation: "signed remainder",
             });
         }
-        let minimum = -(1_i128 << (self.width - 1));
-        if left == minimum && right == -1 {
+        if left == self.signed_minimum() && right == -1 {
             return Err(InterpreterError::SignedRemainderOverflow {
                 block,
                 width: self.width,
@@ -5254,7 +5352,8 @@ impl IntegerKernel {
         Ok(self.encode_signed(left % right))
     }
 
-    fn urem(self, left: u64, right: u64, block: BlockId) -> Result<u64, InterpreterError> {
+    fn urem(self, left: u128, right: u128, block: BlockId) -> Result<u128, InterpreterError> {
+        self.division_is_executed(block)?;
         let left = self.normalize(left);
         let right = self.normalize(right);
         if right == 0 {
