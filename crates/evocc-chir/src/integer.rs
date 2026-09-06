@@ -250,9 +250,9 @@ pub fn eval_bit_builtin(op: BitBuiltinOp, operand: CInteger) -> Option<CInteger>
 
 /// Evaluate a checked-arithmetic builtin without inheriting host overflow.
 ///
-/// Supported C operands are at most 64 bits. Their exact signed magnitude,
-/// including the product of two `unsigned long` values, fits in `u128` even
-/// when its mathematical value does not fit in Rust's `i128`.
+/// A signed magnitude carries the low 128 bits and an overflow flag. When
+/// the magnitude exceeds 128 bits no target integer can hold it, but the low
+/// bits still give the specified wrapped store without host overflow.
 #[must_use]
 pub fn eval_checked_arithmetic(
     op: CheckedArithmeticOp,
@@ -269,7 +269,7 @@ pub fn eval_checked_arithmetic(
     };
     let representable = exact.is_representable(target);
     (
-        CInteger::new(exact.wrapped_bits(target), target),
+        CInteger::from_raw(exact.wrapped_bits(target), target),
         !representable,
     )
 }
@@ -278,22 +278,29 @@ pub fn eval_checked_arithmetic(
 struct SignedMagnitude {
     negative: bool,
     magnitude: u128,
+    overflow: bool,
 }
 
 impl SignedMagnitude {
     fn from_integer(value: CInteger) -> Self {
-        let mathematical = value.mathematical_value();
+        let negative = value.ty().is_signed() && value.mathematical_value() < 0;
         Self {
-            negative: mathematical < 0,
-            magnitude: mathematical.unsigned_abs(),
+            negative,
+            magnitude: if negative {
+                value.mathematical_value().unsigned_abs()
+            } else {
+                value.raw_bits()
+            },
+            overflow: false,
         }
         .normalized()
     }
 
     fn normalized(self) -> Self {
         Self {
-            negative: self.negative && self.magnitude != 0,
+            negative: self.negative && (self.magnitude != 0 || self.overflow),
             magnitude: self.magnitude,
+            overflow: self.overflow,
         }
     }
 
@@ -301,18 +308,18 @@ impl SignedMagnitude {
         Self {
             negative: !self.negative,
             magnitude: self.magnitude,
+            overflow: self.overflow,
         }
         .normalized()
     }
 
     fn add(self, other: Self) -> Self {
         if self.negative == other.negative {
+            let (magnitude, overflow) = self.magnitude.overflowing_add(other.magnitude);
             return Self {
                 negative: self.negative,
-                magnitude: self
-                    .magnitude
-                    .checked_add(other.magnitude)
-                    .expect("the sum of two 64-bit magnitudes fits u128"),
+                magnitude,
+                overflow,
             }
             .normalized();
         }
@@ -320,29 +327,33 @@ impl SignedMagnitude {
             Self {
                 negative: self.negative,
                 magnitude: self.magnitude - other.magnitude,
+                overflow: false,
             }
             .normalized()
         } else {
             Self {
                 negative: other.negative,
                 magnitude: other.magnitude - self.magnitude,
+                overflow: false,
             }
             .normalized()
         }
     }
 
     fn multiply(self, other: Self) -> Self {
+        let (magnitude, overflow) = self.magnitude.overflowing_mul(other.magnitude);
         Self {
             negative: self.negative != other.negative,
-            magnitude: self
-                .magnitude
-                .checked_mul(other.magnitude)
-                .expect("the product of two 64-bit magnitudes fits u128"),
+            magnitude,
+            overflow,
         }
         .normalized()
     }
 
     fn is_representable(self, target: CIntegerType) -> bool {
+        if self.overflow {
+            return false;
+        }
         if target.is_signed() {
             let negative_limit = 1_u128 << (target.bits() - 1);
             if self.negative {
@@ -355,19 +366,14 @@ impl SignedMagnitude {
         }
     }
 
-    fn wrapped_bits(self, target: CIntegerType) -> u64 {
-        let modulus_mask = if target.bits() == 64 {
-            u128::from(u64::MAX)
-        } else {
-            (1_u128 << target.bits()) - 1
-        };
+    fn wrapped_bits(self, target: CIntegerType) -> u128 {
+        let modulus_mask = target.mask();
         let low = self.magnitude & modulus_mask;
-        let wrapped = if self.negative {
+        if self.negative {
             ((!low).wrapping_add(1)) & modulus_mask
         } else {
             low
-        };
-        u64::try_from(wrapped).expect("target width is at most 64 bits")
+        }
     }
 }
 

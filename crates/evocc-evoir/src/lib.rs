@@ -3684,19 +3684,19 @@ fn interpret_module_in_state(
                 {
                     let callee_value =
                         read_internal(&frames[frame_index].values, &callee, block_id)?;
-                    let callee_value =
-                        if let InternalValue::FunctionPointer(pointer) = callee_value {
-                            InternalValue::FunctionPointer(
-                                state.memory.resolve_function_pointer(pointer).map_err(
-                                    |error| InterpreterError::MemoryAccess {
-                                        block: block_id,
-                                        error,
-                                    },
-                                )?,
-                            )
-                        } else {
-                            callee_value
-                        };
+                    let callee_value = if let InternalValue::FunctionPointer(pointer) = callee_value
+                    {
+                        InternalValue::FunctionPointer(
+                            state
+                                .memory
+                                .resolve_function_pointer(pointer)
+                                .map_err(|_| InterpreterError::CallThroughNonFunctionPointer {
+                                    block: block_id,
+                                })?,
+                        )
+                    } else {
+                        callee_value
+                    };
                     let identity = match callee_value {
                         InternalValue::FunctionPointer(PointerValue::Function(identity)) => {
                             identity
@@ -4893,6 +4893,15 @@ fn matching_guard(
 }
 
 fn initialize_globals(module: &Module, state: &mut ExecutionState) -> Result<(), InterpreterError> {
+    for identity in state.functions.values() {
+        let pointer = PointerValue::function(*identity)
+            .map_err(|error| InterpreterError::MemorySetup { error })?;
+        let (memory, _) = state
+            .memory
+            .expose_pointer(pointer)
+            .map_err(|error| InterpreterError::MemorySetup { error })?;
+        state.memory = memory;
+    }
     for (index, object) in module.extern_objects.iter().enumerate() {
         let (memory, pointer) = state
             .memory

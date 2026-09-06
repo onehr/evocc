@@ -97,6 +97,19 @@
     "Format changes migrate the existing corpus in the same commit.",
     "Review of specification revision 1.9 is one round, PASS or FAIL per section, due within one working day of request. If it does not arrive, the red window opens and review findings land as amendments to it."
   ],
+  "loweringFinishRuling": {
+    "authority": "39fef4e; EvoIR 1.9.67; architecture ruling 2026-09-06",
+    "required": "All 2798 enumerated target C units lower cleanly except the explicitly classified residual constructs below; a code alone is not sufficient classification.",
+    "allowedResiduals": {
+      "E3030": "aggregate anonymous arguments or aggregate va_arg only",
+      "E3033": "128-bit division or remainder only",
+      "E3026": "static initializers not expressible as symbol plus addend only",
+      "E3021": "an immediate i constraint whose operand is an unspecialized function parameter only",
+      "E3029": "computed goto only"
+    },
+    "withdrawnFrontierCodes": ["E3035", "E3042", "E3032", "E3043"],
+    "verification": "Implementation and tests do not close the finish line: require a new sealed full-configuration lowering survey, parse non-regression guard, complete workspace gate, and isolated offline replay."
+  },
   "outOfScope": "E0104 and predefined macros; asm lowering to EvoIR (front-end acceptance is scope F); attribute semantics beyond aligned/packed; variably modified types; range and non-zero lattices; memory rewrites",
   "acceptance": [
     "every lane routed here green, or named as still failing with its root cause",

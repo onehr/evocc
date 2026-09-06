@@ -138,6 +138,36 @@ fn global_register_execution_is_an_assembly_boundary_only_when_reached() {
 }
 
 #[test]
+fn register_updates_and_switch_selection_do_not_duplicate_reads() {
+    for (body, expected) in [
+        (
+            "p += 7; return p++;",
+            vec!["mov %0, sp", "mov sp, %0", "mov %0, sp", "mov sp, %0"],
+        ),
+        (
+            "switch(p){case 1: return 2; case 3: return 4; default: return 0;}",
+            vec!["mov %0, sp"],
+        ),
+    ] {
+        let source =
+            format!("register unsigned long p asm(\"sp\"); unsigned long f(void){{{body}}}");
+        let arena = Arena::default();
+        let unit = parse(&arena, &source, 15);
+        let module = lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).unwrap();
+        let templates = module.functions[0]
+            .blocks
+            .iter()
+            .flat_map(|block| &block.insts)
+            .filter_map(|inst| match inst {
+                evocc_evoir::Inst::Asm(assembly) => Some(assembly.template.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(templates, expected);
+    }
+}
+
+#[test]
 fn register_addresses_remain_a_front_end_error() {
     let source = concat!(
         "register unsigned long sp_var asm(\"sp\"); ",

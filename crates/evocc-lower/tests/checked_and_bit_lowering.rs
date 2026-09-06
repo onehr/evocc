@@ -93,8 +93,41 @@ fn unsigned_checked_products_use_the_full_unsigned_exact_width() {
     lowered(
         "int main(void){__int128_t r; return __builtin_mul_overflow(~0ul,~0ul,&r);}",
         1,
-        &["mul.bits<128>"],
+        &["mul.bits<128>", "icmp.slt"],
         false,
+    );
+    lowered("int main(void){long r; return __builtin_mul_overflow((unsigned short)65535,(unsigned short)65535,&r) || r!=4294836225L;}", 0, &["mul.bits<32>", "zext.bits<64>"], true);
+}
+
+#[test]
+fn checked_products_beyond_ir_width_still_have_defined_oracle_values() {
+    let source = "int main(void){__uint128_t r; int o=__builtin_mul_overflow(~(__uint128_t)0,2u,&r); return o && (r>>64)==~0ul && (unsigned long)r==~1ul;}";
+    let arena = Arena::default();
+    let unit = parse(source, &arena);
+    let main = unit
+        .iter()
+        .find_map(|d| match d {
+            CHirDecl::Function(f) if f.name.spelling == "main" => Some(f.symbol),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(
+        evocc_chir::interp::interpret_scalar_function(
+            &unit,
+            main,
+            evocc_chir::interp::InterpreterLimits::new(10000)
+        )
+        .unwrap()
+        .return_value
+        .unwrap()
+        .raw_bits,
+        1
+    );
+    assert_eq!(
+        evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
+            .unwrap_err()
+            .code(),
+        "E3044"
     );
 }
 

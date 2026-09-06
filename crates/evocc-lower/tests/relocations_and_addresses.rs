@@ -131,6 +131,11 @@ fn static_flexible_array_member_addresses_are_representable() {
 
 #[test]
 fn object_and_function_pointers_convert_through_integer_forms() {
+    check(
+        "int f(void){return 7;} int main(void){return ((int (*)(void))((1ul<<63)|16ul))();}",
+        Ok(7),
+        &["ptr.from_int.fnptr"],
+    );
     check("typedef int (*callback)(void); int f(void){return 7;} callback recover(void *p){return p;} int main(void){void *p=f; return recover(p)();}", Ok(7), &["ptr.to_int", "ptr.from_int.fnptr"]);
     check("typedef int (*callback)(void); int main(void){int object=0; callback p=(callback)(void *)&object; return p();}", Err("E3016"), &["ptr.to_int", "ptr.from_int.fnptr"]);
 }

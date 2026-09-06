@@ -63,13 +63,7 @@ pub enum LowerError {
     FrameAddress {
         span: SourceSpan,
     },
-    PointerDifference {
-        span: SourceSpan,
-    },
     FunctionPointerArithmetic {
-        span: SourceSpan,
-    },
-    GlobalRegisterVariable {
         span: SourceSpan,
     },
     WideInteger {
@@ -92,9 +86,6 @@ pub enum LowerError {
         span: SourceSpan,
     },
     CheckedArithmeticWidth {
-        span: SourceSpan,
-    },
-    ObjectFunctionPointerConversion {
         span: SourceSpan,
     },
     MalformedFunction {
@@ -128,14 +119,8 @@ impl fmt::Display for LowerError {
             | Self::UnsupportedStatement { feature, .. } => formatter.write_str(feature),
             Self::ReturnAddress { .. } => formatter.write_str("not-lowered: return-address"),
             Self::FrameAddress { .. } => formatter.write_str("not-lowered: frame-address"),
-            Self::PointerDifference { .. } => {
-                formatter.write_str("not-lowered: pointer-difference")
-            }
             Self::FunctionPointerArithmetic { .. } => {
                 formatter.write_str("not-lowered: function-pointer-arithmetic")
-            }
-            Self::GlobalRegisterVariable { .. } => {
-                formatter.write_str("not-lowered: global-register-variable")
             }
             Self::WideInteger { .. } => formatter.write_str("not-executed: wide-integer"),
             Self::StaticRelocation { .. } => formatter.write_str("not-lowered: static-relocation"),
@@ -144,10 +129,7 @@ impl fmt::Display for LowerError {
             Self::AsmOperand { reason, .. } => write!(formatter, "not-lowered: asm: {reason}"),
             Self::VarArgs { .. } => formatter.write_str("not-lowered: varargs"),
             Self::CheckedArithmeticWidth { .. } => {
-                formatter.write_str("not-lowered: checked-arithmetic-width")
-            }
-            Self::ObjectFunctionPointerConversion { .. } => {
-                formatter.write_str("not-lowered: object-function-pointer-conversion")
+                formatter.write_str("not-lowered: checked-arithmetic-exceeds-128-bits")
             }
             Self::MalformedFunction {
                 function, reason, ..
@@ -177,12 +159,9 @@ impl LowerError {
             Self::ComputedGoto { .. } => "E3029",
             Self::VarArgs { .. } => "E3030",
             Self::FrameAddress { .. } => "E3031",
-            Self::PointerDifference { .. } => "E3032",
             Self::WideInteger { .. } => "E3033",
             Self::FunctionPointerArithmetic { .. } => "E3034",
-            Self::GlobalRegisterVariable { .. } => "E3035",
-            Self::CheckedArithmeticWidth { .. } => "E3042",
-            Self::ObjectFunctionPointerConversion { .. } => "E3043",
+            Self::CheckedArithmeticWidth { .. } => "E3044",
             _ => "E3101",
         }
     }
@@ -201,9 +180,7 @@ impl LowerError {
             | Self::UnsupportedStatement { span, .. }
             | Self::ReturnAddress { span }
             | Self::FrameAddress { span }
-            | Self::PointerDifference { span }
             | Self::FunctionPointerArithmetic { span }
-            | Self::GlobalRegisterVariable { span }
             | Self::WideInteger { span }
             | Self::StaticRelocation { span }
             | Self::ComputedGoto { span }
@@ -211,7 +188,6 @@ impl LowerError {
             | Self::AsmOperand { span, .. }
             | Self::VarArgs { span }
             | Self::CheckedArithmeticWidth { span }
-            | Self::ObjectFunctionPointerConversion { span }
             | Self::MalformedFunction { span, .. }
             | Self::InvalidControlFlow { span, .. }
             | Self::Layout { span, .. } => Some(*span),
@@ -315,6 +291,7 @@ struct FunctionLowerer<'a> {
     functions: &'a BTreeMap<SymbolId, FunctionInfo>,
     info: &'a FunctionInfo,
     memory_symbols: &'a BTreeSet<SymbolId>,
+    global_registers: &'a BTreeMap<SymbolId, String>,
     allocation_origins: &'a BTreeMap<SymbolId, u64>,
     compound_origins: BTreeMap<usize, (u64, bool)>,
     string_origins: BTreeMap<usize, u64>,
@@ -337,6 +314,16 @@ struct FunctionLowerer<'a> {
 /// Day-6 lowering slice.
 pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Module, LowerError> {
     let global_register_symbols = collect_global_register_symbols(unit);
+    let global_registers = unit
+        .iter()
+        .filter_map(|declaration| match declaration {
+            CHirDecl::Object(object) if global_register_symbols.contains(&object.symbol) => Some((
+                object.symbol,
+                object.asm_label.as_ref().expect("register label").clone(),
+            )),
+            _ => None,
+        })
+        .collect::<BTreeMap<_, _>>();
     let mut memory_symbols = collect_memory_symbols(unit);
     memory_symbols.retain(|symbol| !global_register_symbols.contains(symbol));
     let manifest =
@@ -366,7 +353,8 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
                 })
         })
         .collect::<BTreeMap<_, _>>();
-    let memory_profile = !memory_symbols.is_empty()
+    let memory_profile = !global_registers.is_empty()
+        || !memory_symbols.is_empty()
         || unit.iter().any(|declaration| match declaration {
             CHirDecl::Function(function) => function
                 .body
@@ -503,6 +491,7 @@ pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Modu
                 &functions,
                 info,
                 &memory_symbols,
+                &global_registers,
                 &allocation_origins,
                 &compound_origins,
                 &string_origins,
@@ -1789,9 +1778,6 @@ fn prevalidate_expr_for_lowering(
             facts,
             span,
         } => {
-            if global_register_symbols.contains(symbol) {
-                return Err(LowerError::GlobalRegisterVariable { span: *span });
-            }
             let declaration =
                 unit.symbols()
                     .symbol(*symbol)
@@ -2781,6 +2767,7 @@ impl<'a> FunctionLowerer<'a> {
         functions: &'a BTreeMap<SymbolId, FunctionInfo>,
         info: &'a FunctionInfo,
         memory_symbols: &'a BTreeSet<SymbolId>,
+        global_registers: &'a BTreeMap<SymbolId, String>,
         allocation_origins: &'a BTreeMap<SymbolId, u64>,
         compound_origins: &BTreeMap<usize, (u64, bool)>,
         string_origins: &BTreeMap<usize, u64>,
@@ -2791,6 +2778,7 @@ impl<'a> FunctionLowerer<'a> {
             functions,
             info,
             memory_symbols,
+            global_registers,
             allocation_origins,
             compound_origins: compound_origins.clone(),
             string_origins: string_origins.clone(),
@@ -4023,26 +4011,15 @@ impl<'a> FunctionLowerer<'a> {
     }
 
     fn call_designator_function_type(&self, callee: &CHirExpr<'_>) -> Option<TypeId> {
-        let candidate = match callee {
-            CHirExpr::Ident { facts, .. }
-            | CHirExpr::MemoryRead { facts, .. }
-            | CHirExpr::Assign { facts, .. }
-            | CHirExpr::MemoryAssign { facts, .. }
-            | CHirExpr::Update { facts, .. }
-            | CHirExpr::MemoryUpdate { facts, .. } => facts.ty(),
-            CHirExpr::Cast(ty, _, _) => *ty,
-            _ => return None,
-        };
+        let candidate = evocc_chir::PointerTypeDesc::from_expression(
+            self.unit.symbols(),
+            self.unit.types(),
+            callee,
+        )
+        .ok()?
+        .pointee();
         match self.unit.types().get(candidate).map(|ty| &ty.kind) {
             Some(TypeKind::Function { .. }) => Some(candidate),
-            Some(TypeKind::Pointer(pointee))
-                if matches!(
-                    self.unit.types().get(*pointee).map(|ty| &ty.kind),
-                    Some(TypeKind::Function { .. })
-                ) =>
-            {
-                Some(*pointee)
-            }
             _ => None,
         }
     }
@@ -4647,7 +4624,13 @@ impl<'a> FunctionLowerer<'a> {
                         integer: CIntegerType::ULONG,
                     });
                 }
-                if matches!(value.value.ty, EvoIRType::Bits(_)) {
+                if matches!(value.value.ty, EvoIRType::Bits(_))
+                    || matches!(
+                        (&value.value.ty, &expected),
+                        (EvoIRType::Ptr(_), EvoIRType::FnPtr { .. })
+                            | (EvoIRType::FnPtr { .. }, EvoIRType::Ptr(_))
+                    )
+                {
                     let address = self.cast(value, CIntegerType::ULONG, state)?;
                     let result = self.fresh_value(expected);
                     self.emit(
@@ -4661,13 +4644,6 @@ impl<'a> FunctionLowerer<'a> {
                         value: result,
                         integer: CIntegerType::ULONG,
                     });
-                }
-                if matches!(
-                    (&value.value.ty, &expected),
-                    (EvoIRType::Ptr(_), EvoIRType::FnPtr { .. })
-                        | (EvoIRType::FnPtr { .. }, EvoIRType::Ptr(_))
-                ) {
-                    return Err(LowerError::ObjectFunctionPointerConversion { span });
                 }
                 Err(LowerError::UnsupportedExpression {
                     span,
@@ -5753,7 +5729,9 @@ impl<'a> FunctionLowerer<'a> {
         let selector = self.lower_expr(expression, &mut state)?;
         let selector_type = integer_promotion(selector.integer);
         let selector = self.cast(selector, selector_type, &state)?;
-        let selector_temporary = if matches!(expression, CHirExpr::Ident { .. }) {
+        let selector_temporary = if matches!(expression, CHirExpr::Ident { symbol, .. }
+            if !self.global_registers.contains_key(symbol))
+        {
             None
         } else {
             let key = EnvKey::Temporary(self.next_temporary);
@@ -5904,8 +5882,11 @@ impl<'a> FunctionLowerer<'a> {
                 span: body.span(),
                 reason: "switch dispatch does not reference a case",
             })?;
-            let current_selector = if let CHirExpr::Ident { symbol, span, .. } = expression {
-                self.local(&dispatch, *symbol, *span)?
+            let current_selector = if selector_temporary.is_none() {
+                let CHirExpr::Ident { symbol, span, .. } = expression else {
+                    unreachable!("only a local selector can omit its temporary")
+                };
+                self.local(&mut dispatch, *symbol, *span)?
             } else {
                 let key = selector_temporary.ok_or(LowerError::InvalidControlFlow {
                     span: expression.span(),
@@ -6842,7 +6823,19 @@ impl<'a> FunctionLowerer<'a> {
             });
         }
         if operator == BinaryOp::Sub && left_object_pointer && right_object_pointer {
-            return Err(LowerError::PointerDifference { span });
+            let pointee = self.pointer_pointee_type(left_expression, span)?;
+            let scale = self.pointer_arithmetic_scale(pointee, span)?;
+            let left = self.cast(left, CIntegerType::ULONG, state)?;
+            let right = self.cast(right, CIntegerType::ULONG, state)?;
+            let bytes = self.fresh_value(EvoIRType::Bits(64));
+            self.emit(state, Inst::Sub(bytes.clone(), left.value, right.value))?;
+            let scale = self.constant(state, CIntegerType::LONG, scale)?;
+            let result = self.fresh_value(EvoIRType::Bits(64));
+            self.emit(state, Inst::SDiv(result.clone(), bytes, scale.value))?;
+            return Ok(ExprValue {
+                value: result,
+                integer: CIntegerType::LONG,
+            });
         }
         if matches!(operator, BinaryOp::Eq | BinaryOp::Ne) {
             let (left, right) = match (left_pointer, right_pointer) {
@@ -7166,13 +7159,21 @@ impl<'a> FunctionLowerer<'a> {
         let right = self.lower_expr(rhs, state)?;
         let right_key = self.retain_temporary(right.value, state);
         let address = self.lower_expr(target, state)?.value;
-        let left_width = u16::from(left.integer.bits()) + u16::from(!left.integer.is_signed());
-        let right_width = u16::from(right.integer.bits()) + u16::from(!right.integer.is_signed());
+        let unsigned_product = op == evocc_chir::CheckedArithmeticOp::Mul
+            && !left.integer.is_signed()
+            && !right.integer.is_signed();
+        let left_width = u16::from(left.integer.bits())
+            + u16::from(!unsigned_product && !left.integer.is_signed());
+        let right_width = u16::from(right.integer.bits())
+            + u16::from(!unsigned_product && !right.integer.is_signed());
         let required = match op {
             evocc_chir::CheckedArithmeticOp::Mul => left_width + right_width,
             _ => left_width.max(right_width) + 1,
         };
         let exact_type = match required {
+            0..=32 if unsigned_product => CIntegerType::UINT,
+            33..=64 if unsigned_product => CIntegerType::ULONG,
+            65..=128 if unsigned_product => CIntegerType::UINT128,
             0..=32 => CIntegerType::INT,
             33..=64 => CIntegerType::LONG,
             65..=128 => CIntegerType::INT128,
@@ -7234,7 +7235,11 @@ impl<'a> FunctionLowerer<'a> {
             state,
             Inst::ICmp(result.clone(), CmpOp::Ne, exact.clone(), round_trip.value),
         )?;
-        if !destination.is_signed() {
+        if (exact_type.is_signed() && !destination.is_signed())
+            || (!exact_type.is_signed()
+                && destination.is_signed()
+                && destination.bits() <= exact_type.bits())
+        {
             let zero = self.constant(state, exact_type, 0)?;
             let negative = self.fresh_value(EvoIRType::Bits(1));
             self.emit(
@@ -8016,13 +8021,7 @@ impl<'a> FunctionLowerer<'a> {
                 let original = self.local(state, place.symbol(), span)?;
                 self.compute_pointer_assignment(operator, original, right, place.ty(), span, state)?
             };
-            state.env.insert(
-                EnvKey::Local(place.symbol()),
-                BoundValue {
-                    value: result.value.clone(),
-                    integer: Some(CIntegerType::ULONG),
-                },
-            );
+            self.store_local(place.symbol(), result.clone(), span, state)?;
             return Ok(result);
         }
         let destination = canonical_integer(self.unit.types(), self.target, place.ty(), span)?;
@@ -8110,13 +8109,7 @@ impl<'a> FunctionLowerer<'a> {
             };
             self.cast(computed, destination, state)?
         };
-        state.env.insert(
-            EnvKey::Local(place.symbol()),
-            BoundValue {
-                value: result.value.clone(),
-                integer: Some(destination),
-            },
-        );
+        self.store_local(place.symbol(), result.clone(), span, state)?;
         Ok(result)
     }
 
@@ -8147,13 +8140,7 @@ impl<'a> FunctionLowerer<'a> {
                 span,
                 state,
             )?;
-            state.env.insert(
-                EnvKey::Local(place.symbol()),
-                BoundValue {
-                    value: updated.value.clone(),
-                    integer: Some(CIntegerType::ULONG),
-                },
-            );
+            self.store_local(place.symbol(), updated.clone(), span, state)?;
             return Ok(
                 if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PreDecrement) {
                     updated
@@ -8177,13 +8164,7 @@ impl<'a> FunctionLowerer<'a> {
             promoted_type,
         )?;
         let updated = self.cast(computed, original.integer, state)?;
-        state.env.insert(
-            EnvKey::Local(place.symbol()),
-            BoundValue {
-                value: updated.value.clone(),
-                integer: Some(updated.integer),
-            },
-        );
+        self.store_local(place.symbol(), updated.clone(), span, state)?;
         Ok(
             if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PreDecrement) {
                 updated
@@ -8678,10 +8659,13 @@ impl<'a> FunctionLowerer<'a> {
 
     fn local(
         &mut self,
-        state: &State,
+        state: &mut State,
         symbol: SymbolId,
         span: SourceSpan,
     ) -> Result<ExprValue, LowerError> {
+        if self.global_registers.contains_key(&symbol) {
+            return self.register_assembly(symbol, None, span, state);
+        }
         let Some(bound) = state.env.get(&EnvKey::Local(symbol)) else {
             let declaration = self
                 .unit
@@ -8700,6 +8684,95 @@ impl<'a> FunctionLowerer<'a> {
                 feature: "local does not carry an integer type",
             })?,
         })
+    }
+
+    fn store_local(
+        &mut self,
+        symbol: SymbolId,
+        value: ExprValue,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
+        if self.global_registers.contains_key(&symbol) {
+            self.register_assembly(symbol, Some(value), span, state)?;
+        } else {
+            state.env.insert(
+                EnvKey::Local(symbol),
+                BoundValue {
+                    value: value.value,
+                    integer: Some(value.integer),
+                },
+            );
+        }
+        Ok(())
+    }
+
+    fn register_assembly(
+        &mut self,
+        symbol: SymbolId,
+        assigned: Option<ExprValue>,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let register = &self.global_registers[&symbol];
+        let declaration = self
+            .unit
+            .symbols()
+            .symbol(symbol)
+            .map_err(|_| LowerError::UnknownSymbol { symbol, span })?;
+        let (ty, integer) = self.c_value_type(declaration.ty(), span)?;
+        let (template, outputs, inputs, results, value) = if let Some(value) = assigned {
+            (
+                format!("mov {register}, %0"),
+                vec![],
+                vec![AssemblyInput {
+                    constraint: "r".into(),
+                    name: String::new(),
+                    value: value.value.clone(),
+                }],
+                vec![],
+                value,
+            )
+        } else {
+            let result = self.fresh_value(ty.clone());
+            (
+                format!("mov %0, {register}"),
+                vec![AssemblyOutput {
+                    constraint: "=r".into(),
+                    name: String::new(),
+                    ty,
+                    incoming: None,
+                }],
+                vec![],
+                vec![result.clone()],
+                ExprValue {
+                    value: result,
+                    integer,
+                },
+            )
+        };
+        let assembly = InlineAssembly {
+            template,
+            volatile: true,
+            outputs,
+            inputs,
+            results,
+            clobbers: vec![],
+            mem_in: self.token(state, EnvKey::Memory)?.value,
+            world_in: self.token(state, EnvKey::World)?.value,
+            mem_out: self.fresh_value(EvoIRType::Mem(Region::All)),
+            world_out: self.fresh_value(EvoIRType::World),
+        };
+        assembly
+            .validate(&[])
+            .map_err(|reason| LowerError::AsmOperand { span, reason })?;
+        self.replace_effect_tokens(
+            state,
+            assembly.mem_out.clone(),
+            Some(assembly.world_out.clone()),
+        );
+        self.emit(state, Inst::Asm(assembly))?;
+        Ok(value)
     }
 
     fn token(&self, state: &State, key: EnvKey) -> Result<BoundValue, LowerError> {

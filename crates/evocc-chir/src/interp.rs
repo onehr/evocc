@@ -860,6 +860,7 @@ pub fn interpret_scalar_function_with_target(
         || function_has_call(unit, function)
         || function_has_goto(unit, function)
     {
+        interpreter.initialize_function_addresses()?;
         interpreter.run_with_calls(function)
     } else {
         interpreter.run(function)
@@ -3291,32 +3292,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn call_designator_function_type(&self, callee: &CHirExpr<'arena>) -> Option<TypeId> {
-        let candidate = match callee {
-            CHirExpr::Ident { facts, .. }
-            | CHirExpr::MemoryRead { facts, .. }
-            | CHirExpr::Assign { facts, .. }
-            | CHirExpr::MemoryAssign { facts, .. }
-            | CHirExpr::Update { facts, .. }
-            | CHirExpr::MemoryUpdate { facts, .. } => facts.ty(),
-            CHirExpr::Cast(ty, _, _) => *ty,
-            CHirExpr::Unary(UnaryOp::Deref, operand, _) => {
-                return self
-                    .pointer_type_of_expression(operand)
-                    .ok()
-                    .map(PointerTypeDesc::pointee);
-            }
-            _ => return None,
-        };
+        let candidate =
+            PointerTypeDesc::from_expression(self.unit.symbols(), self.unit.types(), callee)
+                .ok()?
+                .pointee();
         match self.unit.types().get(candidate).map(|ty| &ty.kind) {
             Some(TypeKind::Function { .. }) => Some(candidate),
-            Some(TypeKind::Pointer(pointee))
-                if matches!(
-                    self.unit.types().get(*pointee).map(|ty| &ty.kind),
-                    Some(TypeKind::Function { .. })
-                ) =>
-            {
-                Some(*pointee)
-            }
             _ => None,
         }
     }
@@ -4144,7 +4125,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let value = self
             .memory
             .resolve_function_pointer(value)
-            .map_err(|error| self.memory_error(error, call_span))?;
+            .map_err(|_| InterpreterError::CallThroughNonFunctionPointer { span: call_span })?;
         let identity = match value {
             PointerValue::Null => {
                 return Err(InterpreterError::CallThroughNullFunctionPointer { span: call_span });
@@ -4181,6 +4162,19 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             tasks,
         )?;
         Ok(None)
+    }
+
+    fn initialize_function_addresses(&mut self) -> Result<(), InterpreterError> {
+        for index in 0..self.symbol_order().functions.len() {
+            let pointer = PointerValue::function(index as u64 + 1)
+                .map_err(|error| InterpreterError::MemorySetup { error })?;
+            let (memory, _) = self
+                .memory
+                .expose_pointer(pointer)
+                .map_err(|error| InterpreterError::MemorySetup { error })?;
+            self.memory = memory;
+        }
+        Ok(())
     }
 
     fn function_identity(&self, symbol: SymbolId) -> Option<u64> {
@@ -5512,6 +5506,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span,
             });
         }
+        if is_global_register(self.unit, symbol) {
+            return Err(InterpreterError::Asm { span });
+        }
         if let Some(value) = declaration.enumerator_value() {
             let ty = self.integer_type(declaration.ty(), span)?;
             return Ok(CValue::Integer(CInteger::new(value as u64, ty)));
@@ -6664,6 +6661,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span: *target_span,
             }
         })?;
+        if is_global_register(self.unit, *symbol) {
+            return Err(InterpreterError::Asm { span: *target_span });
+        }
         let binding = self.require_memory_binding(*symbol, *target_span)?;
         if *symbol != place.symbol()
             || !matches!(
@@ -7754,6 +7754,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 facts,
                 span,
             } => {
+                if is_global_register(self.unit, *symbol) {
+                    return Err(InterpreterError::Asm { span: *span });
+                }
                 let declaration = self.unit.symbols().symbol(*symbol).map_err(|_| {
                     InterpreterError::UnsupportedExpression {
                         feature: "unknown identifier",
@@ -8171,6 +8174,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span: *target_span,
             }
         })?;
+        if is_global_register(self.unit, *symbol) {
+            return Err(InterpreterError::Asm { span: *target_span });
+        }
         let slot = self
             .slots
             .get(symbol)
@@ -8333,11 +8339,20 @@ impl ReferencedSymbols {
     }
 }
 
+/// File-scope register bindings execute as assembly, not object accesses.
+fn is_global_register(unit: &CHirUnit<'_>, symbol: SymbolId) -> bool {
+    unit.symbols().symbol(symbol).is_ok_and(|declaration| {
+        declaration.storage_class() == Some(StorageClass::Register)
+            && unit
+                .symbols()
+                .scope(declaration.scope())
+                .is_ok_and(|scope| scope.kind() == ScopeKind::File)
+    })
+}
+
 /// Does this symbol name an object that lives for the whole execution?
 ///
-/// This is the single authority shared by requirement discovery and static
-/// allocation, so the two can never disagree about which objects exist before
-/// the entry function starts.
+/// Shared by requirement discovery and static allocation.
 fn has_static_storage_duration(unit: &CHirUnit<'_>, symbol: SymbolId) -> bool {
     let Ok(declaration) = unit.symbols().symbol(symbol) else {
         return false;
@@ -9327,6 +9342,30 @@ fn cast_machine_value(
         }
         (CValue::Integer(value), ValueType::Integer(target)) => {
             Ok(CValue::Integer(value.cast(target)))
+        }
+        (value @ CValue::Pointer { .. }, ValueType::Pointer(target))
+            if pointer_type_is_function(types, target) =>
+        {
+            let address = cast_machine_value(
+                value,
+                ValueType::Integer(CIntegerType::ULONG),
+                span,
+                types,
+                memory,
+            )?;
+            cast_machine_value(address, ValueType::Pointer(target), span, types, memory)
+        }
+        (value @ CValue::FunctionPointer { .. }, ValueType::Pointer(target))
+            if !pointer_type_is_function(types, target) =>
+        {
+            let address = cast_machine_value(
+                value,
+                ValueType::Integer(CIntegerType::ULONG),
+                span,
+                types,
+                memory,
+            )?;
+            cast_machine_value(address, ValueType::Pointer(target), span, types, memory)
         }
         (CValue::Pointer { value, ty }, ValueType::Pointer(target)) if ty == target => {
             Ok(CValue::Pointer { value, ty: target })
