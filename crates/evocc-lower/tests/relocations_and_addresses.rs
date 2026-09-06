@@ -183,6 +183,7 @@ fn addresses_of_aggregate_subobjects_use_the_resolved_place() {
         "struct S{int v;}; int main(void){struct S a[2]={{3},{7}}; struct S *p=&a[1]; return p->v;}",
         "struct S{int v;}; struct O{struct S s;}; int main(void){struct O o={{7}}; struct S *p=&o.s; return p->v;}",
         "struct S{int v;}; struct O{struct S s;}; int main(void){struct O o={{7}}; struct O *q=&o; struct S *p=&q->s; return p->v;}",
+        "struct S{int v;}; int main(void){int n=6; struct S *p=&(struct S){++n}; return p->v+n-7;}",
     ] {
         check(source, Ok(7), &["load", "store"]);
     }

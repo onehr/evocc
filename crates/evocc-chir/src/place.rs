@@ -151,7 +151,7 @@ impl<'arena> PlaceRoot<'arena> {
         match self {
             Self::Object { .. } => None,
             Self::PointerExpression { pointer, .. } => Some(*pointer),
-            Self::CompoundLiteral { .. } => None,
+            Self::CompoundLiteral { expression, .. } => Some(*expression),
         }
     }
 }

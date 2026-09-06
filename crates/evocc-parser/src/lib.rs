@@ -8769,6 +8769,27 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2930", "use-with-incomplete-enumeration", token.span);
                 return None;
             }
+            // Preserve the resolved place even when the operand's aggregate
+            // type does not undergo scalar lvalue conversion. Address-of
+            // consumers recover this place without executing a load.
+            let operand = if op == UnaryOp::AddrOf {
+                if let Some(place) = self
+                    .resolve_memory_place(operand)
+                    .filter(MemoryPlace::is_addressable)
+                {
+                    let facts = ExprFacts::value(place.value_ty());
+                    self.alloc_node(CHirExpr::MemoryRead {
+                        place,
+                        facts,
+                        target_span: operand.span(),
+                        span: operand.span(),
+                    })
+                } else {
+                    operand
+                }
+            } else {
+                operand
+            };
             let span = self.merge_span(token.span, operand.span());
             return Some(self.alloc_node(CHirExpr::Unary(op, operand, span)));
         }
