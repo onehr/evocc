@@ -58,6 +58,8 @@ fn check(source: &str, expected: Result<u128, &str>, chir: bool) {
 fn discarded(chir: bool) {
     for source in [
         "int f(void){} int main(void){f(); return 0;}",
+        "int f(void){} int g(void){return f();} int main(void){g(); return 0;}",
+        "struct s {int x;}; struct s f(void){} int main(void){f(); return 0;}",
         "int count; int f(void){count++;} int main(void){(void)f(); f(); return count-2;}",
         "int *f(void){} int main(void){f(); return 0;}",
         "__int128 f(void){} int main(void){f(); return 0;}",
