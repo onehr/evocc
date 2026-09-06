@@ -45,6 +45,17 @@ fn lex(file: FileId, source: &str) -> Vec<Token> {
     tokens
 }
 
+#[test]
+fn unreadable_include_is_diagnosed_instead_of_becoming_empty() {
+    let tree = TempTree::new("invalid-encoding");
+    let header = tree.root.join("bytes.h");
+    fs::write(&header, b"#define LOST \"\xff\"\n").unwrap();
+    let main = tree.write("main.c", "#include \"bytes.h\"\nint kept;\n");
+    let (pp, _) = preprocess(&main, "#include \"bytes.h\"\nint kept;\n", FileId::new(94003));
+    assert_eq!(pp.errors().len(), 1, "{:?}", pp.errors());
+    assert_eq!(pp.errors()[0].code, "E0002");
+}
+
 fn preprocess(main_path: &Path, source: &str, main_file: FileId) -> (Preprocessor, Vec<Token>) {
     let mut preprocessor = Preprocessor::new();
     preprocessor.current_file = main_path.to_string_lossy().into_owned();

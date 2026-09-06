@@ -63,6 +63,24 @@ fn assert_expands(source: &str, expansion: &str) {
 }
 
 #[test]
+fn null_directives_do_not_consume_the_next_logical_line() {
+    assert_expands("#\nint keep;\n#\n", "int keep;");
+    assert_expands("#\n#if 0\nwrong\n#else\nright\n#endif\n", "right");
+    assert_expands("# /* ignored */\n#define X 7\nX\n", "7");
+}
+
+#[test]
+fn form_feed_and_vertical_tab_are_preprocessing_whitespace() {
+    assert_expands("\x0c#define\x0bX\x0c7\nint\x0bx=X;\n", "int x=7;");
+}
+
+#[test]
+fn expanded_macro_names_do_not_suppress_expansion_in_their_arguments() {
+    assert_expands("#define I(x) x\n#define M I\nM(M(7))\n", "7");
+    assert_expands("#define I(x) x\n#define M I\nM(I(7))\n", "7");
+}
+
+#[test]
 fn conditional_state_crosses_the_macro_argument_boundary() {
     assert_expands(
         concat!(
