@@ -97,9 +97,21 @@ pub fn lower_module_for(
     if !refusals.is_empty() {
         return Err(refusals);
     }
+    // Section 8, revision 0.11: "Every such call is cross-boundary in the
+    // sense of Section 6, so the platform's extension rule applies to its
+    // narrow arguments." A `declare` is exactly a callee whose definition is
+    // not emitted beside its caller, which is what Section 6 makes the
+    // boundary, so the two ways of naming one are joined here.
+    let declared: HashSet<&str> = module
+        .declares
+        .iter()
+        .map(|declaration| declaration.name.as_str())
+        .collect();
+    let crosses = |name: &str| external(name) || declared.contains(name);
+
     let mut functions = Vec::new();
     for function in &module.functions {
-        match lower_function(function, external) {
+        match lower_function(function, &crosses) {
             Ok(lowered) => functions.push(lowered),
             Err(detail) => refusals.push(Refusal {
                 function: function.name.clone(),
@@ -415,10 +427,19 @@ fn scan_inst(
                     format!("a call to @{callee} takes {} results", results.len()),
                 );
             }
+            // Section 8, revision 0.11: "A `call @f` whose `@f` is an EvoIR
+            // `declare` ... is emitted with exactly the spellings above for a
+            // defined symbol ... the object file carries an undefined symbol
+            // reference and the linker resolves it." A callee that names
+            // neither table is still absent.
             if !module
                 .functions
                 .iter()
                 .any(|function| &function.name == callee)
+                && !module
+                    .declares
+                    .iter()
+                    .any(|declaration| &declaration.name == callee)
             {
                 report(E4009, block, index, format!("a call to absent @{callee}"));
             }
