@@ -4,7 +4,7 @@
 
 Most compilers optimize by rewriting: each pass replaces code with something it believes is better, and the original is gone. EvoCC keeps all of them. Its optimizer is an [e-graph](https://egraphs-good.github.io/): every rewrite *adds* an equivalent form instead of replacing one, a cost model picks the best at the end, and every union carries a certificate that a separate checker replays without trusting the optimizer. The target is a real one: a pinned Linux 6.18.44 `arm64 virtconfig` kernel.
 
-![EvoCC in one picture](docs/images/evocc-overview.png)
+![Every equivalent form, kept. Every rewrite, proved.](docs/images/evocc-concept.png)
 
 - **From scratch.** Preprocessor, parser, IRs, optimizer, register allocator and emitter are all EvoCC's own, in Rust. The platform assembler and linker are the only outside tools.
 - **Built by AI, governed by a specification.** The compiler is written by AI agents that may not guess. Every language rule is frozen in a versioned specification, measured against sealed GCC-14 and Clang-19 before it is written, and a gap in the specification stops the work instead of being papered over.
