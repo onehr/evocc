@@ -233,7 +233,7 @@ def overview() -> None:
         ("2,798 / 2,798", "kernel units preprocess and parse clean", BLUE),
         ("30 / 2,798", "kernel units lower to EvoIR with no diagnostic; the rest stop at a known construct", CYAN),
         ("384 + 384", "C programs agree with clang on Darwin and with GCC-14 on Linux, source to native", GREEN),
-        ("5", "kernel units compiled by EvoCC inside a kernel that boots; GCC compiled the rest", BLUE),
+        ("12", "kernel units compiled by EvoCC inside a kernel that boots; GCC compiled the rest", BLUE),
         ("186 / 220", "c-testsuite programs pass; 637 of 1,692 GCC torture programs pass on the first run", GREEN),
     ]
     sw = (1480 - 4 * 16) / 5
@@ -295,7 +295,7 @@ def milestones() -> None:
     items = [
         ("parse the kernel", "2,798 / 2,798", "done"),
         ("backend", "AArch64, two targets", "done"),
-        ("kernel objects boot", "5 units by EvoCC", "done"),
+        ("kernel objects boot", "12 units by EvoCC", "done"),
         ("lower every unit", "30 / 2,798 so far", "now"),
         ("machine forms", "varargs, asm, relocs", "now"),
         ("outside programs", "c-testsuite, torture, zlib", "now"),

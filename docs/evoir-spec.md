@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.69** | **Authoritative reference** | **2026-09-06**
+**Revision 1.9.70** | **Authoritative reference** | **2026-09-06**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -1388,7 +1388,29 @@ VIS := "external" | "internal"
 
 A `function_static` or `string_literal` global is always `internal`. A `file`
 global is `internal` for a file-scope object declared `static` and `external`
-for a definition without `static`. A `function_static` symbol must equal
+for a definition without `static`.
+
+**Function linkage (revision 1.9.70).** A function carries the same
+distinction, written after the calling convention:
+
+```text
+func @name(...) -> (...) cc = target_default visibility=internal
+```
+
+`visibility=internal` is written for a function whose C definition has
+storage class `static` (including `static inline`); the field is omitted
+for every other function, and its absence means external, so every module
+text written before this revision is unchanged. The machine emits no
+global symbol for an internal function or an internal global, and it omits
+an internal function that nothing in the module references by `call`,
+`func_addr` or a relocation, repeating until nothing more can be omitted,
+exactly as the reference compilers drop an unused `static inline` (EvoMIR
+0.16). The kernel measurement found the need: every kernel unit defines
+hundreds of `static inline` helpers from shared headers, and emitting them
+with external linkage made any two EvoCC objects collide at link time
+(`multiple definition`), which capped the mixed link at 14 units; unused
+stubs also call functions the configuration does not build, so an
+unreferenced internal function must not reach the assembler. A `function_static` symbol must equal
 `__evocc.static.<origin>` and a `string_literal` symbol must equal
 `__evocc.string.<origin>`; a `file` symbol is a source C identifier and therefore
 contains no dot. These are validation rules, not renderer conventions. This is
@@ -2549,7 +2571,7 @@ address_space   := "generic" | "global" | "stack" | "threadlocal"
 
 function        := "func " symbol "(" param_list [", ..."] ")"
                    " -> (" type_list ")"
-                   " cc = " ident newline
+                   " cc = " ident [" visibility=internal"] newline
                    indent effects_clause newline
                    "{" newline
                    block_seq
@@ -5537,6 +5559,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.70 | 2026-09-06 | Functions carry linkage: `visibility=internal` for `static` definitions, omitted otherwise; the machine emits no global symbol for internal functions and drops unreferenced ones. The kernel lane found EvoCC objects colliding on `static inline` helpers from shared headers, which capped the mixed link at 14 units. |
 | 1.9.69 | 2026-09-06 | A relocation may target a block of a function of the module, written `@function^block`, so a static `&&label` initializer has a spelling (the backend executor found 2.1's target set closed to blocks after 0.15 had promised the emitter half). |
 | 1.9.68 | 2026-09-06 | Rules the ninth survey's face (30 clean): a used label address is `block_addr` with code provenance (`local_bh_disable` in 1,040 units; `goto *` alone stays `E3029`), and ordered pointer comparisons compare the addresses (`E3045` withdrawn, 19 units). The `i` constraint fed by a parameter now stands at 35 units through `alternative_has_cap_likely` and stays the allowed residue until an inliner exists. |
 | 1.9.67 | 2026-09-06 | Rules the eighth survey's face (19 clean; `E3030`, `E3033`, `E3020`, `E3023`, `E3026`, `E3036`, `E3101` all at zero): a global register variable is read and written through an implicit `asm` (`E3035` withdrawn, 2,711 units); checked multiplication of two unsigned operands computes unsigned (`E3042` withdrawn, 48); pointer difference is integer subtraction and exact division (`E3032` withdrawn, 8); object and function pointers convert through `ptr.to_int`/`ptr.from_int` with a `fnptr` form (`E3043` withdrawn, 7). Accepts the Appendix D rulings on compound storage, block linkage and parameter qualifiers as written. Names the two allowed residues of the finish line: an `i` assembly constraint whose operand is a parameter (`E3021`, 3 units, needs inlining) and computed goto (`E3029`, 2 units). |

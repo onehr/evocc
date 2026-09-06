@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.15** | **Authoritative reference** | **2026-09-06**
+**Revision 0.16** | **Authoritative reference** | **2026-09-06**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -479,7 +479,7 @@ The target is a parameter of emission (`darwin-arm64`, `linux-aarch64`), not
 a build-time choice.
 
 The assembly text is the platform assembler's syntax. Functions are emitted
-in module order, each as `.globl`/`.p2align 2`/label/body; globals as data
+in module order, each as `.globl` (external functions only, revision 0.16)/`.p2align 2`/label/body; globals as data
 in `.data`/`.bss`/`.rodata` (`__DATA,__data` etc. on Darwin) with their
 EvoIR initial bytes; symbols get the platform prefix (`_` on Darwin). The
 only relocations this revision emits are the page-relative pair for
@@ -503,6 +503,17 @@ of Section 9 may link a program against the host C library for the 10.1.14
 library set and against reference-compiled objects for anything else; the
 interpreter lanes report the EvoIR codes `E3039`/`E3040` and the native
 result decides, exactly as for assembly (revision 0.6).
+
+**Linkage (revision 0.16).** An EvoIR function or global whose
+`visibility` is `internal` is emitted without `.globl`, so its symbol is
+local to the object. Before emission, every internal function that no
+`call`, `func_addr`, `block_addr` relocation or other emitted function
+references is dropped, and the check repeats until no internal function
+is dropped; an internal global is kept, since data is cheap and a
+relocation may name it. Module assembly may reference any symbol, so a
+symbol named in a module assembly entry counts as referenced. This is
+what lets two EvoCC objects that share a header link together (EvoIR
+1.9.70).
 
 **Module assembly (revision 0.14).** Every entry of the EvoIR module
 assembly table (EvoIR 2.1, revision 1.9.66) is emitted verbatim, in table
@@ -646,6 +657,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.16 | 2026-09-06 | Internal functions and globals are emitted as local symbols, and internal functions nothing references are dropped before emission (EvoIR 1.9.70). |
 | 0.15 | 2026-09-06 | A label address is `adr` of the block's local symbol, and a static relocation may name that symbol (EvoIR 1.9.68). |
 | 0.14 | 2026-09-06 | Bit counting and byte swap lower to `clz`, `rbit`, `rev` and the general-register population-count sequence; module assembly is emitted verbatim after all code and data (EvoIR 1.9.66). |
 | 0.13 | 2026-09-05 | Corrects the 128-bit argument rule for Darwin: Apple clang does not round the register number to even, so the pair takes the next two registers; Linux keeps the AAPCS64 rounding. Measured by the executor of the register-pair window. |

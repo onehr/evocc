@@ -139,7 +139,7 @@
 <text x="676.4" y="854" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">Darwin and with GCC-14 on Linux,</text>
 <text x="676.4" y="871" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">source to native</text>
 <rect x="957.5999999999999" y="774" width="283.2" height="112" rx="12" fill="#0e151f" stroke="#232d3a" stroke-width="1.2" opacity="1.0"/>
-<text x="975.5999999999999" y="814" font-family="JetBrains Mono, Menlo, monospace" font-size="27" font-weight="700" fill="#58a6ff" text-anchor="start" opacity="1.0" letter-spacing="0">5</text>
+<text x="975.5999999999999" y="814" font-family="JetBrains Mono, Menlo, monospace" font-size="27" font-weight="700" fill="#58a6ff" text-anchor="start" opacity="1.0" letter-spacing="0">12</text>
 <text x="975.5999999999999" y="837" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">kernel units compiled by EvoCC</text>
 <text x="975.5999999999999" y="854" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">inside a kernel that boots; GCC</text>
 <text x="975.5999999999999" y="871" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">compiled the rest</text>
