@@ -47,6 +47,22 @@ def assembling_units(rows: list[dict]) -> list[str]:
     return [row["unit"] for row in rows if row.get("outcome") in ASSEMBLING_OUTCOMES]
 
 
+def linkable_units(rows: list[dict]) -> list[str]:
+    """The units that produced an object and can be in one link together.
+
+    Two objects that define the same symbol cannot both be linked, and the
+    linker says so before anything boots. Reducing the allowlist one relink at
+    a time would find that out eventually, at the cost of a relink per pair and
+    of both members of every pair; reading it off the survey's symbol tables
+    costs nothing and loses only the one member of each group that could have
+    been kept. The whole group is dropped rather than a representative chosen,
+    because which member survives is worth a unit and nothing here knows which
+    one lands in the image.
+    """
+    colliding = set(link_collisions(rows)["units"])
+    return [unit for unit in assembling_units(rows) if unit not in colliding]
+
+
 def refusal_table(rows: list[dict]) -> dict[str, dict]:
     """Per code: how many units it stopped, and which stage owns it.
 
@@ -199,6 +215,11 @@ def main() -> int:
 
     allow = sub.add_parser("allowlist", help="the units that produced an object")
     allow.add_argument("units_jsonl", type=Path)
+    allow.add_argument(
+        "--allow-collisions",
+        action="store_true",
+        help="keep units that define a symbol another candidate also defines",
+    )
 
     refusals = sub.add_parser("refusals", help="the refusal table as JSON")
     refusals.add_argument("units_jsonl", type=Path)
@@ -222,7 +243,9 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "allowlist":
-        for unit in assembling_units(load_rows(args.units_jsonl)):
+        rows = load_rows(args.units_jsonl)
+        chosen = assembling_units(rows) if args.allow_collisions else linkable_units(rows)
+        for unit in chosen:
             print(unit)
         return 0
     if args.command == "refusals":

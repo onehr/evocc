@@ -121,10 +121,19 @@ fi
 
 ALLOWLIST="$RUN_DIR/allowlist.txt"
 "$PYTHON" "$SCRIPT_DIR/plan.py" allowlist "$SURVEY_DIR/units.jsonl" > "$ALLOWLIST"
+"$PYTHON" "$SCRIPT_DIR/plan.py" allowlist --allow-collisions "$SURVEY_DIR/units.jsonl" \
+  > "$RUN_DIR/assembling.txt"
+"$PYTHON" "$SCRIPT_DIR/plan.py" collisions "$SURVEY_DIR/units.jsonl" \
+  > "$RUN_DIR/collisions.json"
 TOTAL="$(grep -c . < "$SURVEY_DIR/units.jsonl" || true)"
-ASSEMBLING="$(grep -c . < "$ALLOWLIST" || true)"
+ASSEMBLING="$(grep -c . < "$RUN_DIR/assembling.txt" || true)"
+LINKABLE="$(grep -c . < "$ALLOWLIST" || true)"
 printf 'k1: %s of %s units produced an object\n' "$ASSEMBLING" "$TOTAL"
-[ "$ASSEMBLING" -gt 0 ] || k1_die "no unit produced an object; there is nothing to substitute"
+if [ "$LINKABLE" -lt "$ASSEMBLING" ]; then
+  printf 'k1: %s of them define a symbol another one defines and cannot share a link\n' \
+    "$((ASSEMBLING - LINKABLE))"
+fi
+[ "$LINKABLE" -gt 0 ] || k1_die "no unit can be linked; there is nothing to substitute"
 
 # --- 3 and 4. substitute, boot, and reduce a failure ----------------------
 ATTEMPT=0

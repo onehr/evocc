@@ -140,6 +140,22 @@ class LinkCollisionTest(unittest.TestCase):
         found = plan.link_collisions(self.rows({"a.o": [], "b.o": []}))
         self.assertEqual(found["units"], [])
 
+    def test_the_allowlist_drops_every_member_of_a_colliding_group(self) -> None:
+        rows = self.rows({"a.o": ["dup"], "b.o": ["dup"], "c.o": ["own"]})
+        self.assertEqual(plan.linkable_units(rows), ["c.o"])
+
+    def test_the_allowlist_keeps_units_that_collide_with_nothing(self) -> None:
+        rows = self.rows({"a.o": ["one"], "b.o": ["two"]})
+        self.assertEqual(plan.linkable_units(rows), ["a.o", "b.o"])
+
+    def test_a_unit_that_defines_nothing_is_never_dropped(self) -> None:
+        rows = self.rows({"a.o": [], "b.o": [], "c.o": ["dup"], "d.o": ["dup"]})
+        self.assertEqual(plan.linkable_units(rows), ["a.o", "b.o"])
+
+    def test_the_survey_order_survives_the_exclusion(self) -> None:
+        rows = self.rows({"z.o": ["one"], "a.o": ["two"]})
+        self.assertEqual(plan.linkable_units(rows), ["z.o", "a.o"])
+
     def test_a_removed_unit_is_blamed_on_the_collision_only_when_it_has_one(self) -> None:
         rows = self.rows({"a.o": ["dup"], "b.o": ["dup"], "c.o": ["own"]})
         self.assertEqual(

@@ -121,6 +121,12 @@ def main() -> int:
         "measurement": "translation units compiled by EvoCC in a kernel that boots",
         "unitsCompiledByEvoccInABootingKernel": len(in_kernel) if booted else 0,
         "unitsSubstituted": len(substituted),
+        # Units that assembled but were kept out of the link because another
+        # candidate defines a symbol they define. They are not refusals and
+        # not boot failures; they are the linker's objection, counted apart.
+        "unitsExcludedForMultipleDefinition": len(
+            plan.link_collisions(survey_rows)["units"]
+        ),
         "unitsProvenPresentInVmlinux": len(proven) if booted else 0,
         "generatedAt": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "reference": {
