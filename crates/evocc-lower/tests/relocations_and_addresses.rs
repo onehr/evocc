@@ -155,6 +155,18 @@ fn pointer_differences_lower_to_signed_element_counts() {
 }
 
 #[test]
+fn assignment_addresses_and_loaded_values_survive_rhs_branches() {
+    for source in [
+        "int main(void){int n=3; int *p=&n; *p=n?5:6; return n;}",
+        "int main(void){int n=3; int *p=&n; *p+=n?2:6; return n;}",
+        "int n=3; int main(void){n=n?5:6; return n;}",
+        "int n=3; int main(void){n+=n?2:6; return n;}",
+    ] {
+        check(source, Ok(5), &["cond_br", "store"]);
+    }
+}
+
+#[test]
 fn integer_addresses_resolve_only_live_exposed_storage() {
     check(
         "int main(void){unsigned long n=1; return *(int *)n;}",
