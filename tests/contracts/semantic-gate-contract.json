@@ -4,7 +4,7 @@
   "whatAContractIs": "The middle-end stream's frozen scope, gate and rulings. The specification is the only authority; this file records what the stream is allowed to change and what it must measure.",
   "authority": {
     "spec": "docs/evoir-spec.md",
-    "revision": "1.9.70",
+    "revision": "1.9.72",
     "crates": [
       "evocc-egraph",
       "evocc-eqopt",
@@ -24,7 +24,7 @@
       "evocc-lower",
       "tests/contracts/day9-acceptance-contract.json"
     ],
-    "evomirSpec": "docs/evomir-spec.md revision 0.16"
+    "evomirSpec": "docs/evomir-spec.md revision 0.17"
   },
   "scope": [
     "S1 randomized semantic gate: deterministic generator of validator-clean EvoIR, differential interpretation of original versus scalar-optimized module under an explicit budget, EVP1 replay through evo-proofcheck for every trial, shrinker to a minimal reproducer. Gate: 1000 programs in the workspace test with 0 mismatches and 0 refusals; 20,000 in the ignored long run.",
@@ -742,6 +742,42 @@
         "script": "tools/gate-changed.sh main",
         "crates": "PLACEHOLDER",
         "result": "PLACEHOLDER"
+      }
+    },
+    "b9": {
+      "branchHead": "fe4eef0",
+      "commits": [
+        "0448b7e Give the two activation addresses their instructions",
+        "bde6a5e Read the frame record for the two activation addresses",
+        "fe4eef0 Store the two activation addresses as integers and run the probe"
+      ],
+      "evoir": "`%p = return_address : ptr<generic>` and `%p = frame_address : ptr<generic>` (EvoIR 1.9.72, Section 3.7 and the Section 9 grammar). Neither takes an operand or a token, so the parser accepts the mnemonic followed by ` : ` and the result type and nothing else: an operand, a block label and a bare mnemonic are all refused. The result type is the form's own `ptr<generic>`; `ptr<stack>`, `ptr<global>` and `bits<64>` are refused by the type check. tools/check-textual-grammar.py reports 42 renderer shapes against 42 specified shapes with no disagreement, so the 9.3.1 shape check needed no change.",
+      "interpreter": "each activation is given a fresh identity for each form when it begins, past the function and block identities so an activation address never equals a function or a block address. Two readings inside one activation are equal, two activations disagree, the two addresses of one activation differ, `ptr.to_int` exposes each to its own non-zero address, and a load, a store or an `access_in_bounds` through either is E3013. Both are the memory model's opaque non-object provenance, which is the only representation that keeps distinct values distinct, exposes to an address and denies every access; the model has no separate stack-provenance object that no access may touch, and Section 3.7 states only the observable rules, all of which hold.",
+      "equalityProfile": "declines, does not abort. Section 8.5's allowlist is a closed match with no admitting default arm, so both forms fall to `false` and the exclusion fixed point keeps them and their `ptr.to_int` out of every region. The optimizer, the persistent state's `ingest_module` and the certified path all run over a module holding both forms and leave them standing.",
+      "evomir": "`return_address` is `ldr rd, [x29, #8]` and `frame_address` is `mov rd, x29` (EvoMIR 0.17, Section 5). Both are places only the frame layout knows, so both join `FramePlace`, the `frame.address` pseudo-form emission expands, beside the two variadic places; register allocation already treats that form as an ordinary definition. The prologue writes `stp x29, x30, [sp, #-16]!` then `mov x29, sp` in every function, so the saved link register is at `x29 + 8` anywhere in the body, which is why the row is valid without a leaf-function exception.",
+      "machineInterpreter": "the machine interpreter models no linear stack, so it answers both rows the way EvoIR Section 3.7 requires instead: one fresh identity per activation for each, minted past the function and block identities when the frame is pushed. The two variadic frame places stay refused, which is what they were.",
+      "e4007": "withdrawn with the rows. No code emitted it: it was a name in the diagnostics table and in this receipt's B6 ranking, and the lowering refusal scan now lists both forms among the rows that report nothing.",
+      "endToEnd": {
+        "program": "a hand-written EvoIR `@probe` -- the front end does not emit the two forms yet -- that reads the return address and the frame address twice, converts all four with `ptr.to_int`, stores them into one 32-byte automatic object, reads them back and returns a bitmap of failures: bit 0 the two return-address readings disagreeing, bit 1 the two frame-address readings disagreeing, bit 2 the return address being null, bit 3 the frame address being null. A correct build returns 0.",
+        "hostMain": "both builds link against the same `int main(void){return probe();}`, so the probe is a called function with a caller of its own rather than the program's entry",
+        "reference": "the same probe in C, written with `(unsigned long)__builtin_return_address(0)` and `(unsigned long)__builtin_frame_address(0)` into four `unsigned long` locals, built at -O0 by the host compiler",
+        "darwin": "0, agreeing with the host clang's build of the C probe",
+        "linux": "0, agreeing with gcc (Debian 14.2.0-19) 14.2.0 in evo-flight-lab:sealed",
+        "addresses": "never printed and never compared across processes: a return address and a frame address are load-time quantities no two processes share, so only the four facts cross the boundary",
+        "interpreters": "both answer 0 on the same unit, so the probe's meaning is fixed before either toolchain sees it"
+      },
+      "machineStore": "the probe found a gap the machine interpreter had before this window: Section 5 lowers `ptr.to_int` to nothing, so a register a conversion made an integer still carries its provenance, and an integer `str` of one was refused as `an integer store of a pointer-carrying register`. It now writes the register's address bytes and records the exposure the conversion is, which is what the machine does. No test depended on the refusal; the same gap stood for a stored `block_addr`.",
+      "specGap": "none",
+      "scopeNote": "the two new Inst variants reached one file in a crate this contract lists as must-not-touch: evocc-lower/src/lib.rs gained one mechanical arm in `inst_values_mut`, listing the single result each form defines, and evocc-lower/tests/day6_g1_equivalence_red.rs gained the two names in the arm that panics for forms outside its scalar golden fixtures. Neither changes front-end behaviour, and evocc-lower does not yet emit either form. The other mechanical arms are in evocc-eqopt, evocc-evoir, evocc-mir, evocc-proofcheck and evocc-randgate, all inside scope.",
+      "architectGate": {
+        "script": "tools/gate-changed.sh main -- --skip static_definitions_keep_internal_linkage_in_the_ir_header",
+        "crates": "evocc evocc-eqopt evocc-evoir evocc-lower evocc-mir evocc-policy evocc-proofcheck evocc-randgate",
+        "tests": "740 passed, 0 failed, 4 ignored across 147 test binaries",
+        "clippy": 0,
+        "fmt": "clean",
+        "lastLine": "gate-changed: green for [evocc evocc-eqopt evocc-evoir evocc-lower evocc-mir evocc-policy evocc-proofcheck evocc-randgate] against main",
+        "skip": "crates/evocc-lower/tests/function_linkage.rs::static_definitions_keep_internal_linkage_in_the_ir_header is the RED test B8 recorded: it waits for evocc-lower to write ` visibility=internal`, that crate is must-not-touch here, and it fails identically at main. Without the skip the script stops at that one target and never reaches clippy or fmt; both were also run over the whole workspace by hand and are clean.",
+        "workspaceTotal": "not taken: the branch touched six crates and the script tests those plus their dependents; unchanged crates keep their last green run"
       }
     }
   }
