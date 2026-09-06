@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.16** | **Authoritative reference** | **2026-09-06**
+**Revision 0.17** | **Authoritative reference** | **2026-09-06**
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
 between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
@@ -254,6 +254,8 @@ in the table is refused with the diagnostic named in Section 10.
 | `uninitialized.bits<N>` | `mov #0` (any value is permitted; zero is chosen so the output is deterministic) |
 | `ptr.to_int`, `ptr.from_int.*` | nothing: the value is the same 64-bit register (revision 0.12) |
 | `block_addr ^b` | `adr rd, <label of block b>` (revision 0.15); a static relocation against a block uses a local symbol `.L<function>.<block>` the emitter places at the block's first instruction |
+| `return_address` | `ldr rd, [x29, #8]`: the saved link register of this frame record, valid anywhere in the body because every function keeps a frame pointer (revision 0.17) |
+| `frame_address` | `mov rd, x29` (revision 0.17) |
 | `ctlz`, `cttz`, `ctpop`, `bswap` (revision 0.14) | `ctlz`: zero-extend per Section 3, `clz` at the register width, then subtract `32 - N` or `64 - N` for a narrower `N`; `cttz`: `rbit` then `clz`, and for a narrower `N` the result capped at `N` with `cmp`/`csel`, since the unspecified upper bits may hold a set bit; `ctpop`: the general-register sequence both oracles use without SIMD (`p39.out`, Clang-19; GCC-14 calls `__popcountdi2`, which the kernel does not provide): `x - ((x >> 1) & 0x5555...)`, `(x & 0x3333...) + ((x >> 2) & 0x3333...)`, `(x + (x >> 4)) & 0x0f0f...`, multiply by `0x0101...` and `lsr` by the register width minus 8, after zero extension; `bswap`: `rev16` (16, upper bits unspecified per Section 3), `rev` at 32 or 64 |
 
 The UB predicates were absent from revision 0.1's table, which refused
@@ -580,7 +582,7 @@ sides, and are never emitted today.
 | `E4004` | `not-lowered: tuple` | tuple-typed value |
 | `E4005` | `not-lowered: static-pointer-data` | withdrawn at revision 0.12: a relocation `(offset, @symbol, addend)` is emitted as `.xword symbol+addend` at its offset, the surrounding bytes as before |
 | `E4006` | `not-lowered: indirect-branch` | computed goto (EvoIR `E3029` boundary) |
-| `E4007` | `not-lowered: frame-address` | EvoIR `E3031` boundary |
+| `E4007` | `not-lowered: frame-address` | withdrawn at revision 0.17 (EvoIR 1.9.72 lowers level zero) |
 | `E4008` | `not-lowered: pointer-difference` | EvoIR `E3032` boundary |
 | `E4009` | `not-lowered: unsupported-form` | any EvoIR instruction absent from Section 5 |
 | `E4010` | `abi: too-many-register-arguments` | more than eight integer arguments on Darwin (Linux lowers stack arguments, revision 0.10) |
@@ -657,6 +659,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.17 | 2026-09-06 | The return address is the saved link register of the frame record and the frame address is the frame pointer (EvoIR 1.9.72). |
 | 0.16 | 2026-09-06 | Internal functions and globals are emitted as local symbols, and internal functions nothing references are dropped before emission (EvoIR 1.9.70). |
 | 0.15 | 2026-09-06 | A label address is `adr` of the block's local symbol, and a static relocation may name that symbol (EvoIR 1.9.68). |
 | 0.14 | 2026-09-06 | Bit counting and byte swap lower to `clz`, `rbit`, `rev` and the general-register population-count sequence; module assembly is emitted verbatim after all code and data (EvoIR 1.9.66). |

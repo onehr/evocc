@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.71** | **Authoritative reference** | **2026-09-06**
+**Revision 1.9.72** | **Authoritative reference** | **2026-09-06**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -702,6 +702,25 @@ units); the value is only ever compared, stored and printed. Jumping to
 one (`goto *`) remains `E3029`: the two units that write it are the
 allowed residue of 1.9.67.
 
+**Activation addresses (revision 1.9.72).**
+
+```text
+%p = return_address : ptr<generic>
+%p = frame_address : ptr<generic>
+```
+
+`return_address` yields the address the current activation will return
+to, with code provenance like `block_addr`: equal to itself within one
+activation, comparable, storable, `ptr.to_int`-able, and `E3013` when
+dereferenced. `frame_address` yields the address of the current
+activation's frame record (the saved frame-pointer pair, EvoMIR Section 6)
+with stack provenance of an object no load or store may touch (`E3013`).
+Both are pure, consume no tokens, are not in the Section 8.5 allowlist, and
+the interpreters give each activation a fresh value for each. They exist
+because the kernel's `_RET_IP_` is `(unsigned long)__builtin_return_address(0)`,
+first in 2,714 units once label addresses lowered, and its tracing and lock
+helpers pass the value to `printk` and store it, never dereferencing it.
+
 **Pointer and integer conversions (revision 1.9.65).**
 
 ```text
@@ -1145,6 +1164,7 @@ EffectSummary {
 | `ptr.offset.*.*` | `{}` | `{}` | false | false | false | true | false |
 | `ptr.to_int`, `ptr.from_int.*` | `{}` | `{}` | false | false | false | false | false |
 | `block_addr` | `{}` | `{}` | false | false | false | false | false |
+| `return_address`, `frame_address` | `{}` | `{}` | false | false | false | false | false |
 | `asm`, `asm.goto` | `{all}` | `{all}` | true | false | true | true | false |
 | `va_start`, `va_arg.*`, `va_end` | `{All}` | `{All}` | false | false | false | true | false |
 | `alloca`, `lifetime.end` | `{All}` | `{All}` | false | false | false | true | false |
@@ -1684,11 +1704,11 @@ twice would let a reader think two conditions are the same finding.
 | `E3022` | `bit-builtin-zero-operand` | runtime |
 | `E3023` | `not-lowered: bit-builtin` | lowering — **withdrawn at 1.9.66** |
 | `E3024` | `unreachable-reached` | runtime |
-| `E3025` | `not-lowered: return-address` | lowering |
+| `E3025` | `not-lowered: return-address` | lowering (levels above zero only since 1.9.72) |
 | `E3026` | `not-lowered: static-relocation` | lowering |
 | `E3027` | `overlapping-copy` | runtime |
 | `E3030` | `not-lowered: varargs` | lowering |
-| `E3031` | `not-lowered: frame-address` | lowering |
+| `E3031` | `not-lowered: frame-address` | lowering (levels above zero only since 1.9.72) |
 | `E3032` | `not-lowered: pointer-difference` | lowering — **withdrawn at 1.9.67** |
 | `E3033` | `not-executed: wide-integer` | lowering (division and remainder only, revision 1.9.61) |
 | `E3034` | `not-lowered: function-pointer-arithmetic` | lowering |
@@ -2635,6 +2655,8 @@ inst_body :=
   | value_name " = ptr.offset." direction "." index_signedness " "
   | value_name " = ptr.to_int " value_name
   | value_name " = block_addr " block_label " : " type
+  | value_name " = return_address : " type
+  | value_name " = frame_address : " type
   | value_name " = ptr.from_int." type " " value_name
         value_name ", " value_name " [scale=" integer "]"
   | "(" result_list ") = call " callee "(" arg_list ")"
@@ -2752,6 +2774,8 @@ ub.assume.<> <>
 <> = ptr.offset.<>.<> <>, <> [scale=<>]
 <> = ptr.to_int <>
 <> = block_addr <> : <>
+<> = return_address : <>
+<> = frame_address : <>
 <> = ptr.from_int.<> <>
 (<>) = call @<>(<>)
 (<>) = call <>(<>)
@@ -4114,12 +4138,14 @@ and Clang-19 agree on every row.
   earlier rule that required a visible declaration.
 - `__builtin_frame_address(n)`: type `void *`; `n` must be an integer
   constant expression (both oracles reject a non-constant); accepted by the
-  front end for any constant `n` (both accept `1`), and lowering reports
-  `E3031` (`not-lowered: frame-address`) and fails closed, exactly as for
-  `__builtin_return_address`. The cohort writes `(0)` in four lanes.
+  front end for any constant `n` (both accept `1`). `(0)` lowers to
+  `frame_address` (Section 3.7, revision 1.9.72); a level above zero walks
+  the caller's frames and stays `E3031` (`not-lowered: frame-address`). The
+  cohort writes `(0)` in four lanes.
 - `__builtin_return_address(0)`: type `void *`; accepted by the front end;
-  lowering reports `E3025` (`not-lowered: return-address`) and fails closed;
-  an argument other than the constant `0` is `E2913`.
+  lowers to `return_address` (Section 3.7, revision 1.9.72); `E3025`
+  (`not-lowered: return-address`) is withdrawn for level zero, and an
+  argument other than the constant `0` is `E2913`.
 - `__auto_type`: exactly one declarator, which must be a plain identifier (no
   pointer, array or function declarator), and an initializer is required; the
   declared type is the initializer's type after lvalue conversion (qualifiers
@@ -5515,6 +5541,7 @@ certificate and should pass.
 | Pointer | `func_addr @symbol` | `fnptr<Sig>` | symbol | no |
 | | `ptr.to_int %p` | `bits<64>` | pointer | no |
 | | `block_addr ^b : ptr<generic>` | `ptr<generic>` | block label | on dereference (`E3013`) |
+| | `return_address : ptr<generic>`, `frame_address : ptr<generic>` | `ptr<generic>` | none | on dereference (`E3013`) |
 | | `ptr.from_int.ptr<AS> %i` | `ptr<AS>` | `bits<64>` | on dereference (`E3013`) |
 | Calls | `call @callee(args..., %m, %w)` | ret values, `mem`, `world` | callee, args, memory, world | depends |
 | | `call %fptr(args..., %m, %w)` | ret values, `mem`, `world` | callee value, args, memory, world | depends |
@@ -5559,6 +5586,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.72 | 2026-09-06 | `__builtin_return_address(0)` and `__builtin_frame_address(0)` lower to `return_address` and `frame_address`, code- and stack-provenance values the interpreters refresh per activation; the kernel's `_RET_IP_` became the face of 2,714 units once label addresses lowered. Levels above zero stay refused. |
 | 1.9.71 | 2026-09-06 | The reachable end of a non-void function returns poison instead of trapping: C leaves the fall-off undefined only when the value is used, and the first GCC torture run tripped `E3007` in 28 programs that never use it. |
 | 1.9.70 | 2026-09-06 | Functions carry linkage: `visibility=internal` for `static` definitions, omitted otherwise; the machine emits no global symbol for internal functions and drops unreferenced ones. The kernel lane found EvoCC objects colliding on `static inline` helpers from shared headers, which capped the mixed link at 14 units. |
 | 1.9.69 | 2026-09-06 | A relocation may target a block of a function of the module, written `@function^block`, so a static `&&label` initializer has a spelling (the backend executor found 2.1's target set closed to blocks after 0.15 had promised the emitter half). |
