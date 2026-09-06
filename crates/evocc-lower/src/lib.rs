@@ -4913,180 +4913,8 @@ impl<'a> FunctionLowerer<'a> {
         let Some(initializer) = &object.initializer else {
             return Ok(());
         };
-        if initializer.plan().zero_fills_unwritten() {
-            self.emit_zero_initializer_at(
-                address.clone(),
-                object.ty,
-                SubobjectPath::root(),
-                initializer.plan().actions(),
-                object.span,
-                state,
-            )?;
-        }
-        for action in initializer.plan().actions() {
-            let action_span = action.span().unwrap_or(object.span);
-            let (offset, actual_ty) = subobject_offset(
-                self.unit,
-                self.target,
-                object.ty,
-                action.path(),
-                action_span,
-            )?;
-            if actual_ty != action.destination_type() {
-                return Err(LowerError::UnsupportedStatement {
-                    span: action_span,
-                    feature: "initializer destination type does not match subobject path",
-                });
-            }
-            let action_address = self.constant_offset_address(
-                address.clone(),
-                u64::try_from(offset).map_err(|_| LowerError::UnsupportedStatement {
-                    span: action_span,
-                    feature: "initializer has a negative object offset",
-                })?,
-                state,
-            )?;
-            match action {
-                InitAction::StoreScalar {
-                    destination_type,
-                    value,
-                    ..
-                } => {
-                    let lowered = self.lower_expr(value, state)?;
-                    let lowered = self.coerce_to_object_type(
-                        lowered,
-                        Some(value),
-                        *destination_type,
-                        action_span,
-                        state,
-                    )?;
-                    let volatile = self
-                        .unit
-                        .types()
-                        .get(*destination_type)
-                        .is_some_and(|ty| ty.qualifiers.is_volatile);
-                    self.emit_memory_store(
-                        action_address,
-                        lowered,
-                        *destination_type,
-                        volatile,
-                        action_span,
-                        state,
-                    )?;
-                }
-                InitAction::ZeroScalar {
-                    destination_type, ..
-                } => {
-                    let zero = match self.unit.types().get(*destination_type).map(|ty| &ty.kind) {
-                        Some(TypeKind::Pointer(_)) => {
-                            let pointer = self
-                                .fresh_value(self.c_value_type(*destination_type, action_span)?.0);
-                            self.emit(state, Inst::PtrNull(pointer.clone()))?;
-                            ExprValue {
-                                value: pointer,
-                                integer: CIntegerType::ULONG,
-                            }
-                        }
-                        _ => {
-                            let integer = canonical_integer(
-                                self.unit.types(),
-                                self.target,
-                                *destination_type,
-                                action_span,
-                            )?;
-                            self.constant(state, integer, 0)?
-                        }
-                    };
-                    self.emit_memory_store(
-                        action_address,
-                        zero,
-                        *destination_type,
-                        false,
-                        action_span,
-                        state,
-                    )?;
-                }
-                InitAction::StoreString {
-                    destination_type,
-                    literal,
-                    ..
-                } => {
-                    let (element, count) =
-                        match self.unit.types().get(*destination_type).map(|ty| &ty.kind) {
-                            Some(TypeKind::Array {
-                                element,
-                                bound: ArrayBound::Fixed(count),
-                            }) => (*element, *count),
-                            _ => {
-                                return Err(LowerError::UnsupportedStatement {
-                                    span: action_span,
-                                    feature: "string initializer destination is not a fixed array",
-                                });
-                            }
-                        };
-                    let mut units =
-                        literal
-                            .decoded_units()
-                            .ok_or(LowerError::UnsupportedStatement {
-                                span: action_span,
-                                feature: "string initializer decoding failed",
-                            })?;
-                    let count =
-                        usize::try_from(count).map_err(|_| LowerError::UnsupportedType {
-                            ty: *destination_type,
-                            span: action_span,
-                            feature: "string destination length exceeds host representation",
-                        })?;
-                    units.resize(count, 0);
-                    let element_layout = self.access_layout(element, action_span)?;
-                    for (index, unit) in units.into_iter().take(count).enumerate() {
-                        let address = self.constant_offset_address(
-                            action_address.clone(),
-                            u64::try_from(index)
-                                .ok()
-                                .and_then(|index| index.checked_mul(element_layout.size_bytes))
-                                .ok_or(LowerError::UnsupportedType {
-                                    ty: element,
-                                    span: action_span,
-                                    feature: "string element offset overflow",
-                                })?,
-                            state,
-                        )?;
-                        let integer = canonical_integer(
-                            self.unit.types(),
-                            self.target,
-                            element,
-                            action_span,
-                        )?;
-                        let value = self.constant(state, integer, u64::from(unit))?;
-                        self.emit_memory_store(address, value, element, false, action_span, state)?;
-                    }
-                }
-                InitAction::CopyAggregate {
-                    destination_type,
-                    value,
-                    span,
-                    ..
-                } => {
-                    let source = self.lower_expr(value, state)?;
-                    let volatile = self
-                        .unit
-                        .types()
-                        .get(*destination_type)
-                        .is_some_and(|ty| ty.qualifiers.is_volatile)
-                        || self.aggregate_source_is_volatile(value);
-                    self.emit_aggregate_transfer(
-                        action_address,
-                        source.value,
-                        *destination_type,
-                        volatile,
-                        *span,
-                        state,
-                    )?;
-                }
-            }
-        }
-        Ok(())
+        self.lower_initializer_at(address, object.ty, initializer, object.span, state)
+            .map(|_| ())
     }
 
     fn lower_initializer_at(
@@ -5096,7 +4924,8 @@ impl<'a> FunctionLowerer<'a> {
         initializer: &ObjectInitializer<'a>,
         object_span: SourceSpan,
         state: &mut State,
-    ) -> Result<(), LowerError> {
+    ) -> Result<Value, LowerError> {
+        let address_key = self.retain_temporary(address.clone(), state);
         if initializer.plan().zero_fills_unwritten() {
             self.emit_zero_initializer_at(
                 address.clone(),
@@ -5123,7 +4952,7 @@ impl<'a> FunctionLowerer<'a> {
                 });
             }
             let action_address = self.constant_offset_address(
-                address.clone(),
+                self.token(state, address_key)?.value,
                 u64::try_from(offset).map_err(|_| LowerError::UnsupportedStatement {
                     span: action_span,
                     feature: "initializer has a negative object offset",
@@ -5136,7 +4965,13 @@ impl<'a> FunctionLowerer<'a> {
                     value,
                     ..
                 } => {
+                    let action_key = self.retain_temporary(action_address, state);
                     let lowered = self.lower_expr(value, state)?;
+                    let action_address = state
+                        .env
+                        .remove(&action_key)
+                        .expect("retained initializer destination")
+                        .value;
                     let lowered = self.coerce_to_object_type(
                         lowered,
                         Some(value),
@@ -5252,7 +5087,13 @@ impl<'a> FunctionLowerer<'a> {
                     span,
                     ..
                 } => {
+                    let action_key = self.retain_temporary(action_address, state);
                     let source = self.lower_expr(value, state)?;
+                    let action_address = state
+                        .env
+                        .remove(&action_key)
+                        .expect("retained initializer destination")
+                        .value;
                     let volatile = self
                         .unit
                         .types()
@@ -5270,7 +5111,11 @@ impl<'a> FunctionLowerer<'a> {
                 }
             }
         }
-        Ok(())
+        Ok(state
+            .env
+            .remove(&address_key)
+            .expect("retained initializer root")
+            .value)
     }
 
     fn lower_compound_literal_address(
@@ -5326,8 +5171,7 @@ impl<'a> FunctionLowerer<'a> {
             },
         )?;
         self.replace_effect_tokens(state, mem_out, Some(world_out));
-        self.lower_initializer_at(address.clone(), *ty, initializer, *span, state)?;
-        Ok(address)
+        self.lower_initializer_at(address, *ty, initializer, *span, state)
     }
 
     fn end_object_lifetime(
