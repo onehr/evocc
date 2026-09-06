@@ -1022,7 +1022,7 @@ fn lower_function(
         traps: Vec::new(),
         named_registers: function
             .variadic
-            .then(|| named_argument_registers(&function.params)),
+            .then(|| named_argument_registers(target, function)),
         constants: HashMap::new(),
         destination: None,
         destination_readers: HashMap::new(),
@@ -2873,19 +2873,20 @@ fn lower_assembly(
 
 /// Section 6: "the number of argument registers its named parameters
 /// consumed (a `bits<128>` parameter consumes two and the rounding above)".
-fn named_argument_registers(params: &[evocc_evoir::FunctionParam]) -> u8 {
-    let mut used = 0_usize;
-    for param in params.iter().filter(|param| is_register_type(&param.ty)) {
-        if is_pair(&param.ty) {
-            if used % 2 == 1 {
-                used += 1;
-            }
-            used += 2;
-        } else {
-            used += 1;
-        }
-    }
-    u8::try_from(used.min(MAX_REGISTER_ARGUMENTS)).unwrap_or(8)
+fn named_argument_registers(target: Target, function: &Function) -> u8 {
+    // Revision 0.18: a record spends the registers its chunks take, so the
+    // count is the convention's, which is what the plan already answers.
+    let declared: Vec<EvoIRType> = function
+        .params
+        .iter()
+        .map(|param| param.ty.clone())
+        .collect();
+    let plan = record_plan(
+        target,
+        &marked_types(&declared, &function.param_marks),
+        true,
+    );
+    u8::try_from(plan.positions.min(MAX_REGISTER_ARGUMENTS)).unwrap_or(8)
 }
 
 /// The size rounded up to eight (`S8`) and the alignment (`A`) of one
