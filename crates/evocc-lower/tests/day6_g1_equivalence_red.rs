@@ -1952,6 +1952,7 @@ fn main() {
     let right = value(3, bits32.clone());
     let valid = Function {
         variadic: false,
+        visibility: evocc_evoir::GlobalVisibility::External,
         name: "block_arg_identity".to_owned(),
         params: Vec::new(),
         ret_tys: vec![bits32.clone()],
