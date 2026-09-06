@@ -323,6 +323,11 @@ def strip_specifiers(
     and then refuses it in declaration position. As with the page breaks, the
     deletion is applied to the tree the reference compiler builds too, so the
     two compilers still see the same program.
+
+    Two places are left alone, because the token there is data rather than a
+    specifier: a string or character literal, which is how tcc spells its own
+    keyword table, and a preprocessor directive, which is how musl's
+    ``features.h`` defines ``_Noreturn`` for compilers that predate C11.
     """
     pattern = re.compile(r"\b(?:" + "|".join(re.escape(t) for t in tokens) + r")\b")
     touched: list[str] = []
@@ -336,7 +341,7 @@ def strip_specifiers(
         changed = False
         lines = []
         for line in text.split("\n"):
-            if pattern.search(line):
+            if pattern.search(line) and not line.lstrip().startswith("#"):
                 new = pattern.sub(
                     lambda match: "" if not _in_literal(line, match.start()) else match.group(0),
                     line,

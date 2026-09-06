@@ -121,6 +121,22 @@ class SymbolDrift(unittest.TestCase):
         self.assertEqual(excluded, {})
 
 
+class Specifiers(unittest.TestCase):
+    def test_a_declaration_loses_the_specifier_but_data_keeps_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tree = Path(directory)
+            (tree / "a.c").write_text(
+                '_Noreturn void die(void);\n'
+                'const char *name = "_Noreturn";\n'
+                '#define _Noreturn __attribute__((__noreturn__))\n'
+            )
+            self.assertEqual(mixed.strip_specifiers(tree), ["a.c"])
+            text = (tree / "a.c").read_text()
+            self.assertTrue(text.startswith(" void die(void);"))
+            self.assertIn('"_Noreturn"', text)
+            self.assertIn("#define _Noreturn __attribute__", text)
+
+
 class Narrow(unittest.TestCase):
     def journal(self) -> Path:
         handle = tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False)
