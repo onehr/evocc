@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.68** | **Authoritative reference** | **2026-09-06**
+**Revision 1.9.69** | **Authoritative reference** | **2026-09-06**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -227,9 +227,13 @@ the module invalid. Ordinary scalar, array, record, and string/byte
 initializers are represented directly as bytes. A pointer-valued static
 initializer is a **relocation** (revision 1.9.65): the global carries a list
 `relocs=[(offset, @symbol, addend), ...]`, each naming eight bytes at an
-8-aligned `offset` inside the object, a symbol from any of the four tables
-(global, external object, function, external function) and a signed byte
-`addend`. Relocations are sorted by offset, do not overlap, and lie within
+8-aligned `offset` inside the object, a target and a signed byte `addend`.
+A target is a symbol from any of the four tables (global, external object,
+function, external function), or, since revision 1.9.69, a block of a
+function of this module written `@function^block` (for example
+`@main^b3`), whose address is the one `block_addr` yields (Section 3.7):
+this is how a static initializer holding `&&label` lowers, and the machine
+emits it as the block's local symbol (EvoMIR 0.15). Relocations are sorted by offset, do not overlap, and lie within
 the size. At module load the eight bytes of each relocation hold the address
 of the symbol plus the addend with that symbol's provenance (function
 provenance for a function or external function), and are initialized;
@@ -2526,7 +2530,8 @@ global          := "global " symbol " origin=" integer
                    " size=" integer " align=" integer
                    " bytes=" hex_byte+ " initialized=" bit+
                    [" relocs=[" reloc (", " reloc)* "]"] newline
-reloc           := "(" integer ", " symbol ", " integer ")"
+reloc           := "(" integer ", " reloc_target ", " integer ")"
+reloc_target    := symbol | symbol block_label
 global_kind     := "file" | "function_static" | "string_literal"
 visibility      := "external" | "internal"
 
@@ -5532,6 +5537,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.69 | 2026-09-06 | A relocation may target a block of a function of the module, written `@function^block`, so a static `&&label` initializer has a spelling (the backend executor found 2.1's target set closed to blocks after 0.15 had promised the emitter half). |
 | 1.9.68 | 2026-09-06 | Rules the ninth survey's face (30 clean): a used label address is `block_addr` with code provenance (`local_bh_disable` in 1,040 units; `goto *` alone stays `E3029`), and ordered pointer comparisons compare the addresses (`E3045` withdrawn, 19 units). The `i` constraint fed by a parameter now stands at 35 units through `alternative_has_cap_likely` and stays the allowed residue until an inliner exists. |
 | 1.9.67 | 2026-09-06 | Rules the eighth survey's face (19 clean; `E3030`, `E3033`, `E3020`, `E3023`, `E3026`, `E3036`, `E3101` all at zero): a global register variable is read and written through an implicit `asm` (`E3035` withdrawn, 2,711 units); checked multiplication of two unsigned operands computes unsigned (`E3042` withdrawn, 48); pointer difference is integer subtraction and exact division (`E3032` withdrawn, 8); object and function pointers convert through `ptr.to_int`/`ptr.from_int` with a `fnptr` form (`E3043` withdrawn, 7). Accepts the Appendix D rulings on compound storage, block linkage and parameter qualifiers as written. Names the two allowed residues of the finish line: an `i` assembly constraint whose operand is a parameter (`E3021`, 3 units, needs inlining) and computed goto (`E3029`, 2 units). |
 | 1.9.66 | 2026-09-06 | Rules the three classes the seventh survey (6 clean, `E3033` gone, `E3030` 2,737) leaves under varargs: file-scope `asm` becomes the module assembly table (2.1, Section 9; `EXPORT_SYMBOL` in nearly every unit), checked arithmetic lowers exactly in the smallest of 32, 64 and 128 bits with a representability test (`E3020` withdrawn), and the bit builtins lower to new total instructions `ctlz`, `cttz`, `ctpop`, `bswap` (3.4; `E3023` withdrawn; `bit_builtin_zero_operand` obligation). |
